@@ -716,6 +716,18 @@ const readHeifHeader = (bytes: Uint8Array): ImageHeader | null => {
   );
 };
 
+type ImageHeaderReadersKey =
+  | "image/bmp"
+  | "image/gif"
+  | "image/heic"
+  | "image/heic-sequence"
+  | "image/heif"
+  | "image/heif-sequence"
+  | "image/jpeg"
+  | "image/png"
+  | "image/tiff"
+  | "image/webp";
+
 const IMAGE_HEADER_READERS = {
   "image/bmp": readBmpHeader,
   "image/gif": readGifHeader,
@@ -727,7 +739,10 @@ const IMAGE_HEADER_READERS = {
   "image/png": readPngHeader,
   "image/tiff": readTiffHeader,
   "image/webp": readWebpHeader,
-} as const satisfies Record<string, (bytes: Uint8Array) => ImageHeader | null>;
+} as const satisfies Record<
+  ImageHeaderReadersKey,
+  (bytes: Uint8Array) => ImageHeader | null
+>;
 
 export type HeaderReadableImageMimeType = keyof typeof IMAGE_HEADER_READERS;
 

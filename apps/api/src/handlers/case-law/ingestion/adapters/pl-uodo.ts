@@ -1,4 +1,4 @@
-// parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
+// parser-output-unchanged: Map and narrow-union lookup refactor preserves identical runtime output
 // parser-output-unchanged: source-fields-pl: Additional publisher categories and inventory targets leave existing parsed decisions unchanged.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
@@ -834,17 +834,15 @@ export const plUodoLinkedRulings = (row: PlUodoRow): PlUodoLinkedRuling[] => {
 };
 
 /** The Polish function words the courts' bench lists print, and their roles. */
-const BENCH_ROLES: Readonly<
-  Record<string, readonly DecisionJudgeInput["role"][]>
-> = {
-  przewodniczący: [DECISION_JUDGE_ROLE.PRESIDING],
-  sprawozdawca: [DECISION_JUDGE_ROLE.RAPPORTEUR],
-  współsprawozdawca: [DECISION_JUDGE_ROLE.RAPPORTEUR],
-  "przewodniczący sprawozdawca": [
-    DECISION_JUDGE_ROLE.PRESIDING,
-    DECISION_JUDGE_ROLE.RAPPORTEUR,
+const BENCH_ROLES = new Map<string, readonly DecisionJudgeInput["role"][]>([
+  ["przewodniczący", [DECISION_JUDGE_ROLE.PRESIDING]],
+  ["sprawozdawca", [DECISION_JUDGE_ROLE.RAPPORTEUR]],
+  ["współsprawozdawca", [DECISION_JUDGE_ROLE.RAPPORTEUR]],
+  [
+    "przewodniczący sprawozdawca",
+    [DECISION_JUDGE_ROLE.PRESIDING, DECISION_JUDGE_ROLE.RAPPORTEUR],
   ],
-};
+]);
 
 /**
  * The bench a court record names: each judge as a panel member, and again
@@ -858,7 +856,7 @@ export const plUodoBenchOf = (row: PlUodoRow): DecisionJudgeInput[] =>
       return [];
     }
     // A function the table does not name adds no role beyond panel member.
-    const roles = BENCH_ROLES[entity.function ?? ""];
+    const roles = BENCH_ROLES.get(entity.function ?? "");
     return [
       ...(roles === undefined
         ? []

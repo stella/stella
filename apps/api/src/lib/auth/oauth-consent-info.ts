@@ -211,6 +211,8 @@ type FirstPartyOAuthClientEntry = {
  * The desktop app signs in with a device-bound link grant, not OAuth, so it
  * has no entry.
  */
+type FirstPartyOauthClientsKey = "cli" | "mobile" | "outlook" | "mcp_connector";
+
 export const FIRST_PARTY_OAUTH_CLIENTS = {
   cli: {
     documentPath: CLI_CLIENT_METADATA_PATH,
@@ -233,7 +235,10 @@ export const FIRST_PARTY_OAUTH_CLIENTS = {
     redirect: { type: "document_origin", path: "/v1/mcp/oauth/callback" },
     brand: "stella",
   },
-} as const satisfies Record<string, FirstPartyOAuthClientEntry>;
+} as const satisfies Record<
+  FirstPartyOauthClientsKey,
+  FirstPartyOAuthClientEntry
+>;
 
 export type FirstPartyOAuthClient = keyof typeof FIRST_PARTY_OAUTH_CLIENTS;
 

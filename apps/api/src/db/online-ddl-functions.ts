@@ -27,13 +27,15 @@ export type DdlFunctionDeclaration =
       reason: string;
     };
 
+type DdlFunctionsKey = "entity_feature_gate_finish";
+
 export const DDL_FUNCTIONS = {
   entity_feature_gate_finish: {
     online: false,
     reason:
       "Replaces the feature policy on every entity feature gate relation in one call; the online repair replaces each relation's policy on its own through replacePolicy instead.",
   },
-} as const satisfies Record<string, DdlFunctionDeclaration>;
+} as const satisfies Record<DdlFunctionsKey, DdlFunctionDeclaration>;
 
 export type DdlFunctionName = keyof typeof DDL_FUNCTIONS;
 

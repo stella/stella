@@ -6,6 +6,26 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isSyntheticPrincipal, SYNTHETIC_PRINCIPAL } from "./constants";
 import type { SyntheticSessionAuthorityReader } from "./session-authority";
 
+type UserSessionCredentialIssuersKey =
+  | "session"
+  | "cookieCache"
+  | "collabRoom"
+  | "oauth"
+  | "invitation"
+  | "inboundEmail"
+  | "confirmationCode"
+  | "apiKey"
+  | "desktopAccount"
+  | "desktopEdit"
+  | "desktopHandoff"
+  | "pdfSigning"
+  | "signedDownload"
+  | "signedUpload"
+  | "agentRun"
+  | "agentDelegation"
+  | "realtime"
+  | "timerActivity";
+
 export const USER_SESSION_CREDENTIAL_ISSUERS = {
   session: { disposition: "session-bound", owner: "synthetic-principal/store" },
   cookieCache: { disposition: "refused", owner: "auth/session-lifetime" },
@@ -36,7 +56,7 @@ export const USER_SESSION_CREDENTIAL_ISSUERS = {
     owner: "push/timer-activity-devices",
   },
 } as const satisfies Record<
-  string,
+  UserSessionCredentialIssuersKey,
   (
     | { disposition: "refused" | "session-bound" }
     | { disposition: "session-bound-ttl"; maxTtlSeconds: number }

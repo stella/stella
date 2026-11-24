@@ -40,10 +40,13 @@ export const WINDOWED_READ_SURFACE = {
 export type WindowedReadSurface = keyof typeof WINDOWED_READ_SURFACE;
 
 /** Transport and full-reader entry points that delegate their payload read. */
+type WindowedReadDelegatesKey =
+  "mcp/decision-reader-tools.ts" | "handlers/case-law/decisions/get.ts";
+
 export const WINDOWED_READ_DELEGATES = {
   "mcp/decision-reader-tools.ts": "case-law-reader",
   "handlers/case-law/decisions/get.ts": "case-law-reader",
-} as const satisfies Record<string, WindowedReadSurface>;
+} as const satisfies Record<WindowedReadDelegatesKey, WindowedReadSurface>;
 export type CaseLawWindowProfile = {
   [
     Key in WindowedReadSurface

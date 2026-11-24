@@ -20,6 +20,26 @@ export type VersionWriteCapability =
 // verification code that must be globally unique, and the insert owner is where
 // a code collision is detected and redrawn; a second insert site would be a
 // second, unretried code generator.
+type ReviewedVersionMutationOwnersKey =
+  | "handlers/entities/clip.ts"
+  | "handlers/entities/copy-utils.ts"
+  | "handlers/entities/create.ts"
+  | "handlers/entities/versions/delete.ts"
+  | "handlers/entities/finalize-desktop-edit-session.ts"
+  | "lib/entity-versions/publish-folio-collab-checkpoint.ts"
+  | "handlers/entities/versions/restore.ts"
+  | "handlers/entities/upload.ts"
+  | "lib/tasks/create-task-entity.ts"
+  | "handlers/uploads/entity-version.ts"
+  | "handlers/workspaces/duplicate.ts"
+  | "lib/entities/create-from-buffer.ts"
+  | "lib/entity-versions/create-entity-version-from-buffer.ts"
+  | "lib/entity-versions/insert-entity-batch.ts"
+  | "lib/entity-versions/insert-entity-version.ts"
+  | "lib/entity-versions/write-file-version.ts"
+  | "lib/infosoud/agenda-import.ts"
+  | "lib/uploads/entity-create.ts";
+
 export const REVIEWED_VERSION_MUTATION_OWNERS = {
   "handlers/entities/clip.ts": [VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION],
   "handlers/entities/copy-utils.ts": [
@@ -78,4 +98,7 @@ export const REVIEWED_VERSION_MUTATION_OWNERS = {
     VERSION_WRITE_CAPABILITY.REQUEST_NATIVE_EXTRACTION,
     VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
   ],
-} as const satisfies Record<string, readonly VersionWriteCapability[]>;
+} as const satisfies Record<
+  ReviewedVersionMutationOwnersKey,
+  readonly VersionWriteCapability[]
+>;

@@ -74,8 +74,13 @@ export const readProvisionHistoryArgsSchema = nullAsAbsent(
   }),
 );
 
+type ReadProvisionHistoryInputNormalizationKey = "eli";
+
 export const READ_PROVISION_HISTORY_INPUT_NORMALIZATION = {
   eli: ELI_NORMALIZATION,
 } as const satisfies Readonly<
-  Record<string, AgentInputNormalizationAnnotation>
+  Record<
+    ReadProvisionHistoryInputNormalizationKey,
+    AgentInputNormalizationAnnotation
+  >
 >;

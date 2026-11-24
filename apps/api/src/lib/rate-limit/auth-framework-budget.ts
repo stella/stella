@@ -8,6 +8,31 @@ import {
 } from "@/api/lib/rate-limit/budget-observability";
 
 // Exact rules precede wildcard rules; the framework chooses the first match.
+type AuthFrameworkBudgetsKey =
+  | "/sign-in-methods/send-otp"
+  | "/sign-up/email"
+  | "/email-otp/verify-email"
+  | "/email-otp/check-verification-otp"
+  | "/email-otp/reset-password"
+  | "/email-otp/request-email-change"
+  | "/email-otp/change-email"
+  | "/forget-password"
+  | "/reset-password"
+  | "/two-factor/verify-totp"
+  | "/two-factor/verify-backup-code"
+  | "/two-factor/enable"
+  | "/two-factor/disable"
+  | "/two-factor/*"
+  | "/sign-in/*"
+  | "/sign-up/*"
+  | "/change-password*"
+  | "/change-email*"
+  | "/request-password-reset"
+  | "/send-verification-email"
+  | "/forget-password*"
+  | "/email-otp/request-password-reset"
+  | "*";
+
 export const AUTH_FRAMEWORK_BUDGETS = {
   "/sign-in-methods/send-otp": {
     name: "auth.framework.address",
@@ -99,7 +124,7 @@ export const AUTH_FRAMEWORK_BUDGETS = {
   },
   "*": { name: "auth.framework.address", rule: AUTH_RATE_LIMITS.global },
 } as const satisfies Record<
-  string,
+  AuthFrameworkBudgetsKey,
   { name: BudgetName; rule: { max: number; window: number } }
 >;
 

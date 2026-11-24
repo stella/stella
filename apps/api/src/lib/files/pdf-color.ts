@@ -14,6 +14,14 @@ import type { SrgbColor } from "@stll/brand";
 const grey = (level: number): SrgbColor => [level, level, level];
 
 /** The neutrals PDF output draws with, by role. */
+type PdfNeutralsKey =
+  | "black"
+  | "white"
+  | "stampName"
+  | "stampDetail"
+  | "tableRule"
+  | "tableHeaderFill";
+
 export const PDF_NEUTRALS = {
   black: NEUTRAL_SRGB.black,
   white: NEUTRAL_SRGB.white,
@@ -25,7 +33,7 @@ export const PDF_NEUTRALS = {
   tableRule: grey(0.7),
   /** The repeated header row of a table preview. */
   tableHeaderFill: grey(0.93),
-} as const satisfies Record<string, SrgbColor>;
+} as const satisfies Record<PdfNeutralsKey, SrgbColor>;
 
 // A channel as a content-stream number: rounded to three decimals and printed
 // in its shortest form, so `0.35` stays `0.35`, `0.34902` is `0.349` and the

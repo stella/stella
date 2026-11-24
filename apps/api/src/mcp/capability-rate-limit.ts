@@ -65,87 +65,108 @@ const DEFAULT_INVOKE_RATE_LIMIT_POLICY = {
  * so the generic path and the REST route stay in lockstep. A capability absent
  * here uses `DEFAULT_INVOKE_RATE_LIMIT`.
  */
-const INVOKE_RATE_LIMIT_POLICY_BY_CAPABILITY: Readonly<
-  Record<string, InvokeRateLimitPolicy>
-> = {
-  "organizations.create": {
-    budget: "organization-create",
-    limit: {
-      windowMs: API_RATE_LIMITS.organizationCreate.duration,
-      max: API_RATE_LIMITS.organizationCreate.max,
+const INVOKE_RATE_LIMIT_POLICY_BY_CAPABILITY = new Map<
+  string,
+  InvokeRateLimitPolicy
+>([
+  [
+    "organizations.create",
+    {
+      budget: "organization-create",
+      limit: {
+        windowMs: API_RATE_LIMITS.organizationCreate.duration,
+        max: API_RATE_LIMITS.organizationCreate.max,
+      },
     },
-  },
-  "organizations.slug.update": {
-    budget: "organization",
-    name: "mcp.capability.user",
-    limit: ORGANIZATION_SLUG_RATE_LIMIT,
-  },
-  // A translation run ships a document to the provider and spends the org's
-  // paid character quota; a bilingual layout shares the same conversion budget
-  // (REST: translate limiter on both routes).
-  "document-translations.runs.create": {
-    budget: "capability",
-    name: "mcp.translate.user",
-    limit: {
-      windowMs: API_RATE_LIMITS.translate.duration,
-      max: API_RATE_LIMITS.translate.max,
+  ],
+  [
+    "organizations.slug.update",
+    {
+      budget: "organization",
+      name: "mcp.capability.user",
+      limit: ORGANIZATION_SLUG_RATE_LIMIT,
     },
-  },
-  "entities.bilingual.create": {
-    budget: "capability",
-    name: "mcp.translate.user",
-    limit: {
-      windowMs: API_RATE_LIMITS.translate.duration,
-      max: API_RATE_LIMITS.translate.max,
+  ],
+  [
+    "document-translations.runs.create",
+    {
+      budget: "capability",
+      name: "mcp.translate.user",
+      limit: {
+        windowMs: API_RATE_LIMITS.translate.duration,
+        max: API_RATE_LIMITS.translate.max,
+      },
     },
-  },
-  // entities.upload / upload-version: the REST upload limiter (separate budget).
-  "entities.upload": {
-    budget: "capability",
-    name: "mcp.upload.user",
-    limit: {
-      windowMs: API_RATE_LIMITS.upload.duration,
-      max: API_RATE_LIMITS.upload.max,
+  ],
+  [
+    "entities.bilingual.create",
+    {
+      budget: "capability",
+      name: "mcp.translate.user",
+      limit: {
+        windowMs: API_RATE_LIMITS.translate.duration,
+        max: API_RATE_LIMITS.translate.max,
+      },
     },
-  },
-  "entities.versions.upload": {
-    budget: "capability",
-    name: "mcp.upload.user",
-    limit: {
-      windowMs: API_RATE_LIMITS.upload.duration,
-      max: API_RATE_LIMITS.upload.max,
+  ],
+  [
+    "entities.upload",
+    {
+      budget: "capability",
+      name: "mcp.upload.user",
+      limit: {
+        windowMs: API_RATE_LIMITS.upload.duration,
+        max: API_RATE_LIMITS.upload.max,
+      },
     },
-  },
-  // Skill discovery/import fetches third-party URLs. Their REST routes share
-  // the dedicated source-fetch budget; generic capability invocation must not
-  // fall back to the looser default budget and amplify outbound traffic.
-  "skills.discover": {
-    budget: "skill-source",
-    limit: {
-      windowMs: API_RATE_LIMITS.skillSource.duration,
-      max: API_RATE_LIMITS.skillSource.max,
+  ],
+  [
+    "entities.versions.upload",
+    {
+      budget: "capability",
+      name: "mcp.upload.user",
+      limit: {
+        windowMs: API_RATE_LIMITS.upload.duration,
+        max: API_RATE_LIMITS.upload.max,
+      },
     },
-  },
-  "skills.import": {
-    budget: "skill-source",
-    limit: {
-      windowMs: API_RATE_LIMITS.skillSource.duration,
-      max: API_RATE_LIMITS.skillSource.max,
+  ],
+  [
+    "skills.discover",
+    {
+      budget: "skill-source",
+      limit: {
+        windowMs: API_RATE_LIMITS.skillSource.duration,
+        max: API_RATE_LIMITS.skillSource.max,
+      },
     },
-  },
-  "skills.from-url.import": {
-    budget: "skill-source",
-    limit: {
-      windowMs: API_RATE_LIMITS.skillSource.duration,
-      max: API_RATE_LIMITS.skillSource.max,
+  ],
+  [
+    "skills.import",
+    {
+      budget: "skill-source",
+      limit: {
+        windowMs: API_RATE_LIMITS.skillSource.duration,
+        max: API_RATE_LIMITS.skillSource.max,
+      },
     },
-  },
-};
+  ],
+  [
+    "skills.from-url.import",
+    {
+      budget: "skill-source",
+      limit: {
+        windowMs: API_RATE_LIMITS.skillSource.duration,
+        max: API_RATE_LIMITS.skillSource.max,
+      },
+    },
+  ],
+]);
 
 const resolveInvokeRateLimitPolicy = (
   capabilityId: string,
 ): InvokeRateLimitPolicy =>
-  INVOKE_RATE_LIMIT_POLICY_BY_CAPABILITY[capabilityId] ??
+  INVOKE_RATE_LIMIT_POLICY_BY_CAPABILITY.get(capabilityId) ??
   DEFAULT_INVOKE_RATE_LIMIT_POLICY;
 
 export const resolveInvokeRateLimit = (capabilityId: string): InvokeRateLimit =>

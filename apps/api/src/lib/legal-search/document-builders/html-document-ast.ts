@@ -62,6 +62,8 @@ const SKIPPED_TAGS = new Set([
   "hr",
 ]);
 
+type HeadingLevelsKey = "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
+
 const HEADING_LEVELS = {
   h1: 1,
   h2: 2,
@@ -69,7 +71,7 @@ const HEADING_LEVELS = {
   h4: 4,
   h5: 5,
   h6: 6,
-} as const satisfies Record<string, HeadingLevel>;
+} as const satisfies Record<HeadingLevelsKey, HeadingLevel>;
 
 /** Elements whose content is one paragraph unless they hold blocks. */
 const PARAGRAPH_TAGS = new Set([

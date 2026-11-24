@@ -91,11 +91,14 @@ const okResponse = (response: AgentIdentityResponse) => Result.ok(response);
 
 const getClaimVerificationUri = () => `${env.FRONTEND_URL}/agent-claim`;
 
+type IdJagRejectionStatusKey =
+  "issuer_not_enabled" | "login_required" | "invalid_assertion";
+
 const ID_JAG_REJECTION_STATUS = {
   issuer_not_enabled: 403,
   login_required: 401,
   invalid_assertion: 401,
-} as const satisfies Record<string, HandlerErrorStatusCode>;
+} as const satisfies Record<IdJagRejectionStatusKey, HandlerErrorStatusCode>;
 
 /**
  * Map an ID-JAG outcome to a safe-handler Result. `interaction_required`

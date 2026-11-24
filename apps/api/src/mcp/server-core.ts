@@ -416,6 +416,9 @@ const withMcpCors = async (
  * §3.1: only a presented-and-rejected token carries an `error` code, so a probe
  * that sent nothing is not told its credentials were refused.
  */
+type McpAccessDenialsKey =
+  "missing_credentials" | "invalid_token" | "organization_forbidden";
+
 const MCP_ACCESS_DENIALS = {
   missing_credentials: {
     challengeError: "none",
@@ -435,7 +438,7 @@ const MCP_ACCESS_DENIALS = {
     status: 403,
   },
 } as const satisfies Record<
-  string,
+  McpAccessDenialsKey,
   { challengeError: McpChallengeError; message: string; status: 401 | 403 }
 >;
 

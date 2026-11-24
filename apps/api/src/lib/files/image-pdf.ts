@@ -18,10 +18,12 @@ import type {
 import { saveCreatedPdf } from "@/api/lib/files/pdf-signatures";
 
 /** Image formats embedded into a PDF directly, without a converter. */
+type EmbeddableImageMimeTypesKey = "image/jpeg" | "image/png";
+
 const EMBEDDABLE_IMAGE_MIME_TYPES = {
   "image/jpeg": null,
   "image/png": null,
-} as const satisfies Record<string, null>;
+} as const satisfies Record<EmbeddableImageMimeTypesKey, null>;
 
 export type EmbeddableImageMimeType = keyof typeof EMBEDDABLE_IMAGE_MIME_TYPES;
 

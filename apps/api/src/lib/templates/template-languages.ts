@@ -64,7 +64,11 @@ export const normalizeTemplateLanguages = (
  * deliberately omitted so a hit is unambiguous evidence. Diacritics are
  * preserved, which is what separates close pairs like cs "při" / sk "pri".
  */
-export const LANGUAGE_STOPWORDS: Readonly<Record<string, readonly string[]>> = {
+const defineLanguageStopwords = (
+  table: Readonly<Record<string, readonly string[]>>,
+): Readonly<Record<string, readonly string[]>> => table;
+
+export const LANGUAGE_STOPWORDS = defineLanguageStopwords({
   cs: "podle která které který být jsou této nebo pokud již mezi při".split(
     " ",
   ),
@@ -89,7 +93,7 @@ export const LANGUAGE_STOPWORDS: Readonly<Record<string, readonly string[]>> = {
   ),
   pt: "os ao não são uma pelo pela em quando seus também da".split(" "),
   sk: "podľa ktorá ktoré ktorý byť sú tejto alebo ak už medzi pri".split(" "),
-};
+});
 
 const LANGUAGE_BY_STOPWORD: ReadonlyMap<string, string> = new Map(
   Object.entries(LANGUAGE_STOPWORDS).flatMap(([tag, words]) =>

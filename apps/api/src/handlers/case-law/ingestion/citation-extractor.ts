@@ -355,6 +355,14 @@ const HU_REPORTER_PARTS_RE =
  * with the same class the pattern accepts, so every field the pattern reads
  * has an entry here.
  */
+type HuUniformityFieldsKey =
+  | "polgári"
+  | "büntető"
+  | "közigazgatási"
+  | "munkaügyi"
+  | "gazdasági"
+  | "közigazgatási-munkaügyi";
+
 const HU_UNIFORMITY_FIELDS = {
   polgári: "PJE",
   büntető: "BJE",
@@ -362,7 +370,7 @@ const HU_UNIFORMITY_FIELDS = {
   munkaügyi: "MJE",
   gazdasági: "GJE",
   "közigazgatási-munkaügyi": "KMJE",
-} as const satisfies Record<string, string>;
+} as const satisfies Record<HuUniformityFieldsKey, string>;
 
 const HU_UNIFORMITY_ABBREVIATION_SOURCE = String.raw`KMPJE|KMJE|KPJE|PJE|BJE|KJE|MJE|GJE`;
 

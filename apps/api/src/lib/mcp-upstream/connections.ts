@@ -258,6 +258,33 @@ const bindMcpConnection = (
   );
 };
 
+type SelectConnectionFieldsKey =
+  | "responseDisposition"
+  | "userConnectionId"
+  | "connectorId"
+  | "slug"
+  | "displayName"
+  | "description"
+  | "url"
+  | "authType"
+  | "allowedTools"
+  | "accessTokenEncrypted"
+  | "accessTokenIv"
+  | "refreshTokenEncrypted"
+  | "refreshTokenIv"
+  | "staticTokenEncrypted"
+  | "staticTokenIv"
+  | "expiresAt"
+  | "oauthResourceUrl"
+  | "oauthAuthorizationServerUrl"
+  | "oauthConnectorIssuer"
+  | "oauthConnectorConfirmedEndpointOrigins"
+  | "oauthReviewApprovedIssuer"
+  | "oauthReviewApprovedEndpointOrigins"
+  | "oauthClientId"
+  | "oauthClientSecretEncrypted"
+  | "oauthClientSecretIv";
+
 const selectConnectionFields = {
   responseDisposition: mcpUserConnections.responseDisposition,
   userConnectionId: mcpUserConnections.id,
@@ -286,7 +313,7 @@ const selectConnectionFields = {
   oauthClientId: mcpOAuthClients.clientId,
   oauthClientSecretEncrypted: mcpOAuthClients.clientSecretEncrypted,
   oauthClientSecretIv: mcpOAuthClients.clientSecretIv,
-} satisfies Record<string, unknown>;
+} satisfies Record<SelectConnectionFieldsKey, unknown>;
 
 type LoadActiveMcpConnectionsOutcome =
   | { status: "loaded"; connections: LoadedMcpConnection[] }
@@ -524,6 +551,20 @@ export const loadConnectableMcpConnectorsForUser = async ({
  * The credential columns a disconnect deletes and returns in one statement,
  * so revocation uses exactly the credentials of the row that was removed.
  */
+type DeletedMcpConnectionCredentialFieldsKey =
+  | "responseDisposition"
+  | "userConnectionId"
+  | "connectorId"
+  | "accessTokenEncrypted"
+  | "accessTokenIv"
+  | "refreshTokenEncrypted"
+  | "refreshTokenIv"
+  | "staticTokenEncrypted"
+  | "staticTokenIv"
+  | "expiresAt"
+  | "oauthResourceUrl"
+  | "oauthAuthorizationServerUrl";
+
 export const DELETED_MCP_CONNECTION_CREDENTIAL_FIELDS = {
   responseDisposition: mcpUserConnections.responseDisposition,
   userConnectionId: mcpUserConnections.id,
@@ -537,7 +578,7 @@ export const DELETED_MCP_CONNECTION_CREDENTIAL_FIELDS = {
   expiresAt: mcpUserConnections.expiresAt,
   oauthResourceUrl: mcpUserConnections.resourceUrl,
   oauthAuthorizationServerUrl: mcpUserConnections.authorizationServerUrl,
-} satisfies Record<string, unknown>;
+} satisfies Record<DeletedMcpConnectionCredentialFieldsKey, unknown>;
 
 export type DeletedMcpConnectionCredentials = Pick<
   RawConnectionRow,

@@ -1,4 +1,4 @@
-// parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
+// parser-output-unchanged: Map and narrow-union lookup refactor preserves identical runtime output
 /**
  * Polish competition and consumer protection authority (Prezes UOKiK)
  * document reader.
@@ -252,12 +252,12 @@ export type PlUokikRulingHeaderRead =
 /** How far into the file the header's lines may sit. */
 const HEADER_LINES = 16;
 
-const RULING_KINDS: Readonly<Record<string, string>> = {
-  WYROK: "wyrok",
-  POSTANOWIENIE: "postanowienie",
-  UCHWAŁA: "uchwała",
-  ZARZĄDZENIE: "zarządzenie",
-};
+const RULING_KINDS = new Map<string, string>([
+  ["WYROK", "wyrok"],
+  ["POSTANOWIENIE", "postanowienie"],
+  ["UCHWAŁA", "uchwała"],
+  ["ZARZĄDZENIE", "zarządzenie"],
+]);
 
 const RULING_KIND_LINE =
   /^(?<kind>WYROK|POSTANOWIENIE|UCHWAŁA|ZARZĄDZENIE)(?!\p{L})/u;
@@ -395,10 +395,9 @@ export const readPlUokikRulingHeader = (
     return { type: "unread", reason: PL_UOKIK_RULING_UNREAD.NO_TEXT };
   }
   const kindAt = text.findIndex((line) => RULING_KIND_LINE.test(line));
-  const kind =
-    RULING_KINDS[
-      RULING_KIND_LINE.exec(text[kindAt] ?? "")?.groups?.["kind"] ?? ""
-    ];
+  const kind = RULING_KINDS.get(
+    RULING_KIND_LINE.exec(text[kindAt] ?? "")?.groups?.["kind"] ?? "",
+  );
   if (kindAt === -1 || kind === undefined) {
     return { type: "unread", reason: PL_UOKIK_RULING_UNREAD.KIND_NOT_READ };
   }

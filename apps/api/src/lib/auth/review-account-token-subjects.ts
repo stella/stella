@@ -81,9 +81,11 @@ const verificationLinkSubjects = (
   );
 };
 
-export const REVIEW_ACCOUNT_TOKEN_REDEMPTIONS: Readonly<
-  Record<string, TokenSubjectResolver>
-> = {
+const defineTokenRedemptions = (
+  table: Readonly<Record<string, TokenSubjectResolver>>,
+): Readonly<Record<string, TokenSubjectResolver>> => table;
+
+export const REVIEW_ACCOUNT_TOKEN_REDEMPTIONS = defineTokenRedemptions({
   // Password reset: `reset-password:<token>` stores the user id.
   "/reset-password": async (input) => {
     const token = readParameter(input, "token");
@@ -142,7 +144,7 @@ export const REVIEW_ACCOUNT_TOKEN_REDEMPTIONS: Readonly<
         ]
       : [];
   },
-};
+});
 
 /**
  * Whether an auth path matches a route template: segment by segment, with a

@@ -24,23 +24,29 @@ import type {
   LegislationSeries,
 } from "@stll/legal-ast/inline";
 
+type SeriesByEuFormKey = "regulation" | "directive" | "decision";
+
 const SERIES_BY_EU_FORM = {
   regulation: "eu-regulation",
   directive: "eu-directive",
   decision: "eu-decision",
-} as const satisfies Record<string, LegislationSeries>;
+} as const satisfies Record<SeriesByEuFormKey, LegislationSeries>;
+
+type SeriesByCelexTypeKey = "R" | "L" | "D";
 
 const SERIES_BY_CELEX_TYPE = {
   R: "eu-regulation",
   L: "eu-directive",
   D: "eu-decision",
-} as const satisfies Record<string, LegislationSeries>;
+} as const satisfies Record<SeriesByCelexTypeKey, LegislationSeries>;
+
+type SeriesByEliTypeKey = "reg" | "dir" | "dec";
 
 const SERIES_BY_ELI_TYPE = {
   reg: "eu-regulation",
   dir: "eu-directive",
   dec: "eu-decision",
-} as const satisfies Record<string, LegislationSeries>;
+} as const satisfies Record<SeriesByEliTypeKey, LegislationSeries>;
 
 const EARLIEST_YEAR = 1950;
 const LATEST_YEAR = 2099;

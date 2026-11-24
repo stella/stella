@@ -299,12 +299,15 @@ type PlKioListingItem = {
   html?: string | undefined;
 };
 
+type ListingLabelsKey =
+  "Organ wydający" | "Rodzaj dokumentu" | "Sygnatura" | "Data wydania";
+
 const LISTING_LABELS = {
   "Organ wydający": "court",
   "Rodzaj dokumentu": "documentType",
   Sygnatura: "signature",
   "Data wydania": "issueDate",
-} as const satisfies Record<string, keyof PlKioListingItem>;
+} as const satisfies Record<ListingLabelsKey, keyof PlKioListingItem>;
 
 const isListingLabel = (label: string): label is keyof typeof LISTING_LABELS =>
   Object.hasOwn(LISTING_LABELS, label);

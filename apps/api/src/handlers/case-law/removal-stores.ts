@@ -31,6 +31,51 @@ type RemovalStore =
     };
 
 /** The erasure owner executes every removable entry under its decision fence. */
+type CaseLawRemovalStoresKey =
+  | "case_law_decisions"
+  | "case_law_decision_identifiers"
+  | "case_law_decision_anchor_redirects"
+  | "case_law_decision_judges"
+  | "citation_authority"
+  | "case_law_citations"
+  | "case_law_decision_reviews"
+  | "case_law_provision_citations"
+  | "case_law_statute_citation_memberships"
+  | "case_law_citation_reviews"
+  | "case_law_citation_doctrine_reviews"
+  | "case_law_provision_extractions"
+  | "case_law_decision_citation_stats"
+  | "case_law_decision_citation_stats_state"
+  | "case_law_decision_aliases"
+  | "case_law_decision_alias_moved_identities"
+  | "case_law_decision_source_identities"
+  | "case_law_decision_supplements"
+  | "case_law_held_decision_attachments"
+  | "case_law_search_documents"
+  | "case_law_search_document_preview_passages"
+  | "case_law_search_backfill_failures"
+  | "case_law_analysis_failures"
+  | "case_law_index_jobs"
+  | "case_law_corpus_upload_intents"
+  | "case_law_corpus_pack_refs"
+  | "case_law_corpus_tombstones"
+  | "case_law_raw_sweeps"
+  | "corpus_objects"
+  | "raw_objects"
+  | "corpus_index_projection_states"
+  | "corpus_index_projection_intents"
+  | "corpus_index"
+  | "case_law_browse_facet_counts"
+  | "case_law_source_arrivals"
+  | "case_law_sitemap_country_generations"
+  | "case_law_sitemap_shards"
+  | "case_law_sitemap_shard_counts"
+  | "case_law_coverage_summaries"
+  | "case_law_removal_reconciliation_items"
+  | "case_law_reconciliation_items"
+  | "case_law_sources"
+  | "case_law_statute_citation_counts";
+
 export const CASE_LAW_REMOVAL_STORES = {
   case_law_decisions: { type: "tombstone", owner: "erasure" },
   case_law_decision_identifiers: {
@@ -247,7 +292,7 @@ export const CASE_LAW_REMOVAL_STORES = {
     type: "removed-by-owner",
     owner: "statute membership delete triggers",
   },
-} as const satisfies Record<string, RemovalStore>;
+} as const satisfies Record<CaseLawRemovalStoresKey, RemovalStore>;
 
 export const removeCaseLawDerivedRowsTx = async (
   tx: Transaction,

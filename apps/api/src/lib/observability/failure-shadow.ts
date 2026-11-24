@@ -77,11 +77,13 @@ export const legacyChannelOf = ({
 };
 
 /** The sinks graded in shadow, one handle per existing emission site. */
+type ShadowSinksKey = "capture" | "handler" | "framework";
+
 export const SHADOW_SINKS = {
   capture: failureSink({ event: "exception.captured", expected: [] }),
   handler: failureSink({ event: "request.handler_failed", expected: [] }),
   framework: failureSink({ event: "request.framework_failed", expected: [] }),
-} as const satisfies Record<string, FailureSink>;
+} as const satisfies Record<ShadowSinksKey, FailureSink>;
 
 // --- Emitter failure isolation ------------------------------------------------
 

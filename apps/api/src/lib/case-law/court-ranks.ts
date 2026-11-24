@@ -21,6 +21,17 @@ export type CourtRank = { tier: number; tierLabel: string; weight: number };
  * A tier and its weight belong to the label, not to the jurisdiction, so two
  * countries cannot spell the same rank with different numbers.
  */
+type RankKey =
+  | "constitutional"
+  | "supreme"
+  | "regional"
+  | "appeal"
+  | "procurement-review"
+  | "district"
+  | "administrative"
+  | "administrative-labour"
+  | "special";
+
 export const RANK = {
   constitutional: { tier: 4, tierLabel: "constitutional", weight: 10 },
   supreme: { tier: 3, tierLabel: "supreme", weight: 8 },
@@ -35,7 +46,7 @@ export const RANK = {
     weight: 3,
   },
   special: { tier: 1, tierLabel: "special", weight: 3 },
-} as const satisfies Record<string, CourtRank>;
+} as const satisfies Record<RankKey, CourtRank>;
 
 /** The rank each United States directory tier holds. */
 export const US_TIER_RANK = {

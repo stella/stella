@@ -86,11 +86,13 @@ export const resolveLawArgsSchema = nullAsAbsent(
 );
 
 /** The resolver reads a country itself, so an unrecognized one reaches it. */
+type LegalResolveInputNormalizationKey = "country";
+
 export const LEGAL_RESOLVE_INPUT_NORMALIZATION = {
   country: {
     ...countryNormalization({ spelling: "alpha-3" }),
     invalidValueDisposition: "handler-owned",
   },
 } as const satisfies Readonly<
-  Record<string, AgentInputNormalizationAnnotation>
+  Record<LegalResolveInputNormalizationKey, AgentInputNormalizationAnnotation>
 >;

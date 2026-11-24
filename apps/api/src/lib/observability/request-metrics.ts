@@ -413,6 +413,16 @@ export const writeMetricLine = (record: object): void => {
   process.stdout.write(`${line}\n`);
 };
 
+type CaseLawFreshnessMetricKey =
+  | "projectionBacklogItems"
+  | "oldestUnpublishedAgeSeconds"
+  | "sourceSyncAgeSeconds"
+  | "projectionConvergence"
+  | "decisionIdentifierRepairs"
+  | "decisionIdentifierPassAgeSeconds"
+  | "waitingReplacements"
+  | "waitingReplacementOldestSeconds";
+
 export const CASE_LAW_FRESHNESS_METRIC = {
   projectionBacklogItems: "CaseLawProjectionBacklogItems",
   oldestUnpublishedAgeSeconds: "CaseLawOldestUnpublishedAgeSeconds",
@@ -423,7 +433,7 @@ export const CASE_LAW_FRESHNESS_METRIC = {
   waitingReplacements: "CaseLawProjectionWaitingReplacements",
   waitingReplacementOldestSeconds:
     "CaseLawProjectionWaitingReplacementOldestSeconds",
-} as const satisfies Record<string, string>;
+} as const satisfies Record<CaseLawFreshnessMetricKey, string>;
 
 const buildCaseLawMetricRecord = ({
   name,

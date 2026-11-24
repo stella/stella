@@ -21,6 +21,21 @@ const DISSENTING = "dissenting" satisfies DecisionJudgeRole;
  * Every opinion type the snapshot's opinion rows use, spelled as upstream
  * spells them (`015unamimous` included). Any other value is schema drift.
  */
+type OpinionTypesKey =
+  | "010combined"
+  | "015unamimous"
+  | "020lead"
+  | "025plurality"
+  | "030concurrence"
+  | "035concurrenceinpart"
+  | "040dissent"
+  | "050addendum"
+  | "060remittitur"
+  | "070rehearing"
+  | "080onthemerits"
+  | "090onmotiontostrike"
+  | "100trialcourt";
+
 export const OPINION_TYPES = {
   "010combined": { rank: 10, judgeRole: PANEL },
   "015unamimous": { rank: 15, judgeRole: PANEL },
@@ -38,7 +53,7 @@ export const OPINION_TYPES = {
   "080onthemerits": { rank: 80, judgeRole: PANEL },
   "090onmotiontostrike": { rank: 90, judgeRole: PANEL },
   "100trialcourt": { rank: 100, judgeRole: PANEL },
-} as const satisfies Record<string, OpinionTypeDeclaration>;
+} as const satisfies Record<OpinionTypesKey, OpinionTypeDeclaration>;
 
 export type OpinionType = keyof typeof OPINION_TYPES;
 

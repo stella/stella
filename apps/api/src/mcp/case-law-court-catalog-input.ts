@@ -49,6 +49,8 @@ export const listCaseLawCourtsArgsSchema = nullAsAbsent(
   }),
 );
 
+type ListCaseLawCourtsInputNormalizationKey = "country";
+
 export const LIST_CASE_LAW_COURTS_INPUT_NORMALIZATION = {
   country: countryNormalization({
     spelling: "alpha-3",
@@ -56,5 +58,8 @@ export const LIST_CASE_LAW_COURTS_INPUT_NORMALIZATION = {
     tool: LIST_CASE_LAW_COURTS_TOOL,
   }),
 } as const satisfies Readonly<
-  Record<string, AgentInputNormalizationAnnotation>
+  Record<
+    ListCaseLawCourtsInputNormalizationKey,
+    AgentInputNormalizationAnnotation
+  >
 >;

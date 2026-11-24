@@ -36,6 +36,34 @@ type KillSwitchDefinition = {
  * needed. Unknown ids and states refuse startup, so drop an override before
  * removing its switch here.
  */
+type KillSwitchesKey =
+  | "dictation"
+  | "chat"
+  | "editor-autocomplete"
+  | "workflows"
+  | "flows"
+  | "search-assist"
+  | "email-assist"
+  | "case-law-research"
+  | "document-reviews"
+  | "document-translation"
+  | "bilingual-documents"
+  | "bounding-boxes"
+  | "deadline-scan"
+  | "document-naming"
+  | "templates"
+  | "skills"
+  | "clause-rewrite"
+  | "version-summaries"
+  | "billing-drafts"
+  | "time-narratives"
+  | "placement-suggestions"
+  | "contact-extraction"
+  | "list-verification"
+  | "list-fact-extraction"
+  | "report-export"
+  | "mcp-tools";
+
 export const KILL_SWITCHES = {
   dictation: {
     default: KILL_SWITCH_STATE.on,
@@ -192,7 +220,7 @@ export const KILL_SWITCHES = {
     offHint:
       "Tool calls are turned off. Do not retry until they are turned back on.",
   },
-} as const satisfies Record<string, KillSwitchDefinition>;
+} as const satisfies Record<KillSwitchesKey, KillSwitchDefinition>;
 
 export type KillSwitchId = keyof typeof KILL_SWITCHES;
 

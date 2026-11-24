@@ -47,6 +47,44 @@ const NALUS_REQUEST_BUDGET_SHARE = 0.96;
  * waiting. Several adapters may name the same gate: one publisher serving ten
  * Austrian tribunals is one budget, not ten.
  */
+type PublisherGatesKey =
+  | "uoou-cz"
+  | "uoou-sk"
+  | "suip-cz"
+  | "financnisprava-cz"
+  | "mv-cz"
+  | "bfdi-de"
+  | "uohs-cz"
+  | "tjdft-jus-br"
+  | "tst-jus-br"
+  | "edpb-eu"
+  | "commission-eu"
+  | "nalus-usoud"
+  | "ris-bka"
+  | "findok-bmf"
+  | "sn-pl"
+  | "uzp-pl"
+  | "trybunal-pl"
+  | "ms-gov-pl"
+  | "nsoud-cz"
+  | "nsoud-sbirka-cz"
+  | "isir-justice-cz"
+  | "nssoud-cz"
+  | "justice-cz"
+  | "justice-sk"
+  | "nsud-sk"
+  | "nssud-sk"
+  | "usoud-cz"
+  | "ustavnysud-sk"
+  | "saos-pl"
+  | "huggingface-datasets"
+  | "uodo-gov-pl"
+  | "uokik-gov-pl"
+  | "fcl-uk"
+  | "birosag-hu"
+  | "eureka-mf"
+  | "cellar-eu";
+
 export const PUBLISHER_GATES = {
   /**
    * uoou.gov.cz states no limit. A full walk is about a thousand requests;
@@ -308,6 +346,6 @@ export const PUBLISHER_GATES = {
     intervalMs: 1000,
     hosts: ["publications.europa.eu"],
   },
-} as const satisfies Record<string, PublisherGate>;
+} as const satisfies Record<PublisherGatesKey, PublisherGate>;
 
 export type PublisherGateId = keyof typeof PUBLISHER_GATES;

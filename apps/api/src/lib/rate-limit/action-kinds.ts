@@ -40,6 +40,70 @@ const MODEL_BACKGROUND = {
   serviceCredentials: ORGANIZATION_MODEL,
 } as const satisfies ActionKindDefinition;
 
+type ActionKindsKey =
+  | "billing.activity-drafts"
+  | "dictation.transcribe"
+  | "dictation.cleanup"
+  | "chat.send"
+  | "chat.generate-thread-title"
+  | "chat.improve-prompt"
+  | "chat.table-chart"
+  | "chat.span-edit"
+  | "chat.suggest-thread-title"
+  | "chat.suggested-prompts"
+  | "chat.thread-recap"
+  | "chat.background"
+  | "workflow.start"
+  | "flow.start"
+  | "workflow.background"
+  | "flow.background"
+  | "editor.autocomplete"
+  | "contacts.extract-power-of-attorney"
+  | "clauses.rewrite"
+  | "templates.prefill"
+  | "templates.suggest-fields"
+  | "templates.fill"
+  | "skills.rewrite-resource"
+  | "skills.generate-draft"
+  | "skills.draft-from-chat"
+  | "skills.propose-from-comments"
+  | "time-entries.polish-narrative"
+  | "entities.suggest-placements"
+  | "versions.summarize"
+  | "properties.suggest-prompt"
+  | "properties.preview"
+  | "search.refine"
+  | "search.summarize"
+  | "email.summarize"
+  | "email.draft-reply"
+  | "email.ask"
+  | "playbooks.derive-ask"
+  | "case-law.analysis"
+  | "case-law.search-refine"
+  | "case-law.search-expand"
+  | "case-law.research-answers"
+  | "documents.bounding-boxes"
+  | "documents.scan-deadlines"
+  | "documents.suggest-name"
+  | "document-reviews.parties"
+  | "document-reviews.propose-positions"
+  | "document-reviews.start"
+  | "document-reviews.background"
+  | "document-translation.start"
+  | "document-translation.background"
+  | "bilingual.prepare"
+  | "bilingual.start"
+  | "bilingual.background"
+  | "list-verification.start"
+  | "list-verification.background"
+  | "list-verification.recheck"
+  | "list-fact-extraction.start"
+  | "list-fact-extraction.background"
+  | "report-export.start"
+  | "report-export.background"
+  | "mcp.services/call"
+  | "mcp.data/call";
+
 export const ACTION_KINDS = {
   "billing.activity-drafts": MODEL_ACTION,
   "dictation.transcribe": MODEL_ACTION,
@@ -111,7 +175,7 @@ export const ACTION_KINDS = {
     admission: "period",
     serviceCredentials: MANAGED_SERVICE,
   },
-} as const satisfies Record<string, ActionKindDefinition>;
+} as const satisfies Record<ActionKindsKey, ActionKindDefinition>;
 
 export type ActionKind = keyof typeof ACTION_KINDS;
 
@@ -145,15 +209,19 @@ export const ACTION_KIND_COUNTED_BY = {
   "report-export.background": "report-export.start",
 } as const satisfies Record<ConcurrencyOnlyActionKind, PeriodActionKind>;
 
+type QueuedActionKindKey = "extraction" | "flow";
+
 export const QUEUED_ACTION_KIND = {
   extraction: "workflow.start",
   flow: "flow.start",
-} as const satisfies Record<string, PeriodActionKind>;
+} as const satisfies Record<QueuedActionKindKey, PeriodActionKind>;
+
+type BackgroundActionKindKey = "extraction" | "flow";
 
 export const BACKGROUND_ACTION_KIND = {
   extraction: "workflow.background",
   flow: "flow.background",
-} as const satisfies Record<string, ConcurrencyOnlyActionKind>;
+} as const satisfies Record<BackgroundActionKindKey, ConcurrencyOnlyActionKind>;
 
 export type AdmittedActionIdentity = Omit<
   ActionPeriodIdentity,

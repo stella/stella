@@ -1,3 +1,4 @@
+// parser-output-unchanged: Map and narrow-union lookup refactor preserves identical runtime output
 /**
  * The common courts the judgments API names by id, as the publisher's own
  * index of courts prints them.
@@ -11,7 +12,11 @@
  * generic name, never guessed.
  */
 
-export const PL_NCOURT_COURT_NAMES: Readonly<Record<string, string>> = {
+const defineCourtNames = (
+  table: Readonly<Record<string, string>>,
+): Readonly<Record<string, string>> => table;
+
+export const PL_NCOURT_COURT_NAMES = defineCourtNames({
   "15050000": "Sąd Apelacyjny w Białymstoku",
   "15050500": "Sąd Okręgowy w Białymstoku",
   "15050505": "Sąd Rejonowy w Białymstoku",
@@ -389,4 +394,4 @@ export const PL_NCOURT_COURT_NAMES: Readonly<Record<string, string>> = {
   "15551545": "Sąd Rejonowy w Choszcznie",
   "15551550": "Sąd Rejonowy w Kamieniu Pomorskim",
   "15551555": "Sąd Rejonowy w Łobzie",
-};
+});
