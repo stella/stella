@@ -49,26 +49,6 @@ rather than raw colour values.
   shadows are off-limits; they read as consumer/gaming, not
   professional. [review]
 
-### Third-Party Logos
-
-- **Never hand-draw, trace, simplify or recolour a logo.** A provider,
-  harness or company mark (Claude, OpenAI, Gemini, Antigravity, GitHub…)
-  is copied byte for byte from the owner's published asset or a
-  permissively licensed icon set (Simple Icons, LobeHub icons, Primer
-  Octicons), in the owner's colours. If no official asset is available,
-  show the product name or a neutral `@stll/ui/icons` glyph. Never invent
-  a look-alike. [review]
-- **One home, with its source.** Marks live in
-  `packages/ui/src/components/brand-icons.tsx`, each with a comment naming
-  the package, version, licence and file it came from. That file is on
-  `THIRD_PARTY_ARTWORK_FILES` (`scripts/design-lint-policy.ts`), so the
-  owner's colours pass the colour rules there. When a colour lint fires
-  on a logo, the fix is that list, never a redrawn or `currentColor`
-  mark. [review]
-- **Scope internal ids.** A mark with masks, filters or gradients takes
-  its ids from `useId()`, so two copies on one page never share a
-  definition. [review]
-
 ## Core Beliefs
 
 Users notice the little things. Every interaction should feel smooth, good UX
@@ -88,6 +68,11 @@ in doubt, simpler is better, or skip it.
 - `AiActionIcon` (the magic wand) is for AI actions: rewrite, refine,
   redraft, search query refinement, prompt editing, AI rename. Do not
   use generic sparkles for this function, and never for a skill. [review]
+- A third-party logo (Claude, OpenAI, Gemini, Antigravity, GitHub…) is
+  copied from the owner's asset or a licensed icon set (Simple Icons,
+  LobeHub, Octicons) in its own colours, never redrawn, simplified or
+  recoloured. It lives in `@stll/ui/brand-icons` with a comment naming
+  its source; with no official asset, show the name instead. [review]
 
 ## Review chrome
 

@@ -1,0 +1,5 @@
+{
+  "metric": "review-only-instruction-rules",
+  "delta": 1,
+  "reason": "Whether a third-party logo matches its owner's published asset is a visual judgement no lint or test can make; review is the only control."
+}
