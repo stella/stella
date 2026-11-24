@@ -1499,11 +1499,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/legal-search/corpus-index-pagination.test.ts": {
-    "count": 4,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/legal-search/corpus-index-projection-convergence.db.test.ts": {
     "count": 3,
     "owner": "api",
@@ -1526,11 +1521,6 @@
   },
   "apps/api/src/lib/legal-search/corpus-index-projection-store.db.test.ts": {
     "count": 10,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/legal-search/corpus-index-query-features.contract.test.ts": {
-    "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -1716,11 +1706,6 @@
   },
   "apps/api/src/lib/organization-time-zone.db.test.ts": {
     "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/public-law-read-deadline.postgres.test.ts": {
-    "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
