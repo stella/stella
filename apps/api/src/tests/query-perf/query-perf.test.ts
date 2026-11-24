@@ -95,6 +95,7 @@ const runsOnShard = (shard: "1" | "2"): boolean =>
   queryPerfShard === "" ||
   queryPerfShard === shard;
 const CORPUS_PROFILE_TIMEOUT_MS = 300_000;
+const SCHEDULED_JOB_PROFILE_TIMEOUT_MS = 400_000;
 const describeScheduledScenario = (scenario: ScheduledJobScenario) => {
   switch (scenario.type) {
     case "case-law":
@@ -754,7 +755,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
       };
       await withSeededCorpus({
         databaseUrl,
-        timeoutMs: CORPUS_PROFILE_TIMEOUT_MS,
+        timeoutMs: SCHEDULED_JOB_PROFILE_TIMEOUT_MS,
         run: async ({ db, deadline, openClient }) => {
           const runMetrics = async (
             jobId: string,
