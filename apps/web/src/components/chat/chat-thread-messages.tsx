@@ -218,6 +218,7 @@ import {
 } from "@/features/chat/chat-queue.logic";
 import { chatErrorTranslationKey } from "@/features/chat/chat-request-error";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
+import type { ChatThreadRef } from "@/features/chat/chat-thread-ref-types";
 import { SuggestedFollowups } from "@/features/chat/components/suggested-followups";
 import type { SuggestedFollowupsProps } from "@/features/chat/components/suggested-followups";
 import type { ChatComputerWait } from "@/features/chat/desktop-launch.logic";
@@ -229,7 +230,6 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref-types";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { openDesktopUrl } from "@/lib/desktop-bridge";
 import { detached } from "@/lib/detached";

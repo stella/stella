@@ -5,7 +5,7 @@ import { cn } from "@stll/ui/utils";
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
 import { DockedChatStackProvider } from "@/components/chat/docked-chat-stack";
 import { DockedComposerPending } from "@/components/chat/docked-composer";
-import type { ChatThreadId } from "@/lib/chat-thread-ref-types";
+import type { ChatThreadId } from "@/features/chat/chat-thread-ref-types";
 
 import { FileChatOverlayBoundary } from "./file-chat-overlay-boundary";
 import { FILE_CHAT_OVERLAY_ACTIVATION } from "./file-viewer-with-ai-config";

@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import type { ChatThreadRef } from "@/features/chat/chat-thread-ref-types";
 import { ChatTitleRename } from "@/features/chat/components/chat-title-rename";
 import { chatThreadTitleOptions } from "@/features/chat/queries";
 import type { ChatThreadFetched } from "@/features/chat/queries";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref-types";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { queryView } from "@/lib/query-view.logic";
 

@@ -13,8 +13,8 @@ import {
 import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
+import type { ChatThreadRef } from "@/features/chat/chat-thread-ref-types";
 import type { ActiveDocxEditModeState } from "@/lib/chat-edit-mode";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref-types";
 import { type SafeId, toSafeId } from "@/lib/safe-id";
 
 /** The document a composer has open, as its next send carries it. */

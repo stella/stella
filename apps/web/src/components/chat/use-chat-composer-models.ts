@@ -37,6 +37,7 @@ import {
   createComposerChoice,
 } from "@/components/chat/composer-choice";
 import { useEffectiveRunTarget } from "@/components/chat/use-effective-run-target";
+import type { ChatThreadRef } from "@/features/chat/chat-thread-ref-types";
 import { needsDesktopLaunch } from "@/features/chat/desktop-launch.logic";
 import {
   applyChatModelChange,
@@ -48,7 +49,6 @@ import {
 } from "@/features/chat/run-on-preference-store";
 import { useDesktopLaunch } from "@/features/chat/use-desktop-launch";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref-types";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { type QueryView, queryView } from "@/lib/query-view.logic";

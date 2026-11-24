@@ -3,8 +3,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { ChatThreadOptionsContext } from "@/features/chat/chat-query-contract";
 import type { ChatRuntime } from "@/features/chat/chat-runtime";
 import { acquireChatRuntime } from "@/features/chat/chat-runtime-registry";
+import type { ChatThreadRef } from "@/features/chat/chat-thread-ref-types";
 import type { ChatThreadFetched } from "@/features/chat/queries";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref-types";
 
 type UseChatThreadRuntimeArgs = {
   activeOrganizationId: string;

@@ -9,8 +9,8 @@ import type {
   ChatTab,
   InspectorTab,
 } from "@/components/inspector/inspector-store-types";
+import type { ChatThreadId } from "@/features/chat/chat-thread-ref-types";
 import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-key";
-import type { ChatThreadId } from "@/lib/chat-thread-ref-types";
 
 const isLegalDocumentChatTab = (
   tab: InspectorTab,

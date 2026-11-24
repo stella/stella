@@ -1,5 +1,5 @@
 import type { PastedTextAttrs } from "@/components/chat-pasted-text-extension";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref-types";
+import type { ChatThreadRef } from "@/features/chat/chat-thread-ref-types";
 
 /**
  * The chat a transcript belongs to, as a chat branched from it needs it: the

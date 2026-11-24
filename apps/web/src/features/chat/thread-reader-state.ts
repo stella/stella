@@ -15,13 +15,13 @@ import type {
 } from "@stll/api-contract/chat";
 
 import { chatKeys } from "@/features/chat/chat-query-contract";
+import type { ChatThreadRef } from "@/features/chat/chat-thread-ref-types";
 import { groupedChatThreadsOptions } from "@/features/chat/queries";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { WebApiRoutes } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref-types";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";

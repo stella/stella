@@ -3,7 +3,7 @@ import { createContext } from "react";
 import type { LocalRunQuestionPause } from "@stll/api-contract/chat-local-run-question";
 
 import type { ChatRuntime } from "@/features/chat/chat-runtime";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref-types";
+import type { ChatThreadRef } from "@/features/chat/chat-thread-ref-types";
 
 /**
  * The question a run on the member's computer paused the thread's turn on,

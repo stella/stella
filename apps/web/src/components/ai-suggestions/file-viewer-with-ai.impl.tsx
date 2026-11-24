@@ -32,9 +32,9 @@ import {
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import type { DocxEditModeResult } from "@/components/docx/docx-browser-editor.logic";
 import { AIAvailabilityProvider } from "@/components/require-ai-key";
+import type { ChatThreadId } from "@/features/chat/chat-thread-ref-types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { DocxEditSafety } from "@/lib/chat-edit-mode";
-import type { ChatThreadId } from "@/lib/chat-thread-ref-types";
 
 import type { ActiveLegalDocument } from "./active-legal-document";
 import { FileChatOverlay } from "./file-chat-overlay";

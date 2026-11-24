@@ -2,7 +2,7 @@ import type {
   ChatThreadId,
   ChatThreadRef,
   ChatThreadRoute,
-} from "@/lib/chat-thread-ref-types";
+} from "@/features/chat/chat-thread-ref-types";
 import { toSafeId } from "@/lib/safe-id";
 import { createUuid } from "@/lib/uuid";
 

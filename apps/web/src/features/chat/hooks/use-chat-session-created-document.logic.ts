@@ -11,7 +11,7 @@ import {
   setCreateDocumentDraftPayloadStatus,
 } from "@/components/chat/create-document-draft.logic";
 import type { InspectorTabsStore } from "@/components/inspector/inspector-store-types";
-import type { ChatThreadId } from "@/lib/chat-thread-ref-types";
+import type { ChatThreadId } from "@/features/chat/chat-thread-ref-types";
 
 type PromoteCreateDocumentDraftInspectorTabOptions = {
   entityId: string;

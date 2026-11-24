@@ -10,11 +10,11 @@ import {
   AIAvailabilityProvider,
   useAIKeyGate,
 } from "@/components/require-ai-key";
+import type { ChatThreadId } from "@/features/chat/chat-thread-ref-types";
 import { decisionChatThreadOptions } from "@/features/chat/queries";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
-import type { ChatThreadId } from "@/lib/chat-thread-ref-types";
 import type { SafeId } from "@/lib/safe-id";
 
 /** What a member's decision reader asks of this chunk before it runs AI. */
