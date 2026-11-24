@@ -384,7 +384,9 @@ const extractAttachmentPlaintext = async ({
   maxChars: number;
   mimeType: string;
   nestingDepth: number;
-}): Promise<{ status: "ok"; text: string } | { status: "failed" }> => {
+}): Promise<
+  { status: "ok"; text: string } | { status: "failed" } | { status: "no-text" }
+> => {
   const result = (
     await Result.tryPromise({
       try: async () =>
@@ -401,6 +403,9 @@ const extractAttachmentPlaintext = async ({
       ),
     );
     return { status: "failed" };
+  }
+  if (result.value === null) {
+    return { status: "no-text" };
   }
   return { status: "ok", text: result.value };
 };
