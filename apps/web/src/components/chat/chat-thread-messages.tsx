@@ -505,7 +505,6 @@ export const ChatThreadMessages = ({
   activitySession,
   activeFileName,
   assistantTextDensity = "default",
-  approvalPendingMessageId,
   branchSource,
   error,
   followUps,
@@ -588,16 +587,7 @@ export const ChatThreadMessages = ({
         resetOn={message.parts}
         surface="chat-message"
       >
-        <Message
-          className={cn(
-            "transition-opacity duration-200",
-            approvalPendingMessageId &&
-              approvalPendingMessageId !== message.id &&
-              "opacity-40",
-          )}
-          from={message.role}
-          data-chat-message-id={message.id}
-        >
+        <Message from={message.role} data-chat-message-id={message.id}>
           <ChatMessageActionsScope
             canExport={getMessageText(message) !== ""}
             canFork={canFork}
@@ -781,7 +771,6 @@ export const ChatThreadMessages = ({
           }
           return (
             <StickyUserTurn
-              approvalPendingMessageId={approvalPendingMessageId}
               headerIndex={turn.index}
               headerMessage={turn.header}
               isGenerating={generationActive}
@@ -816,7 +805,6 @@ export const ChatThreadMessages = ({
 };
 
 type StickyUserTurnProps = {
-  approvalPendingMessageId: string | null;
   headerIndex: number;
   headerMessage: PersistedChatMessage;
   isGenerating: boolean;
@@ -836,7 +824,6 @@ const STICKY_USER_HEADER_NATURAL_HEIGHT_VAR =
  * turn's header takes over.
  */
 const StickyUserTurn = ({
-  approvalPendingMessageId,
   headerIndex,
   headerMessage,
   isGenerating,
@@ -1004,10 +991,7 @@ const StickyUserTurn = ({
           )}
           <Message
             className={cn(
-              "relative z-10 transition-opacity duration-200",
-              approvalPendingMessageId &&
-                approvalPendingMessageId !== headerMessage.id &&
-                "opacity-40",
+              "relative z-10",
               "group-data-[stuck=true]/sticky:pointer-events-none",
               "group-data-[stuck=true]/sticky:[&_a]:pointer-events-auto",
               "group-data-[stuck=true]/sticky:[&_button]:pointer-events-auto",
@@ -1841,7 +1825,6 @@ type ChatThreadMessagesProps = {
   activeFileName?: string | undefined;
   /** Compact prose is reserved for constrained overlays over a document. */
   assistantTextDensity?: "compact" | "default" | undefined;
-  approvalPendingMessageId: string | null;
   /**
    * What to ask next, drawn at the end of the answer it follows
    * (`followUps.messageId`), after that answer's actions. The one place

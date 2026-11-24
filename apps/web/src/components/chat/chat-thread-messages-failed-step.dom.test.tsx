@@ -76,7 +76,6 @@ const renderTurn = (parts: PersistedChatMessage["parts"]) => {
                     activitySession={{
                       reportedUnknownActivityTypes: new Set<string>(),
                     }}
-                    approvalPendingMessageId={null}
                     messages={projectCanonicalChatUIMessages([
                       { id: "message-turn", parts, role: "assistant" },
                     ])}

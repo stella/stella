@@ -66,7 +66,6 @@ const threadWith = (
                   activitySession={{
                     reportedUnknownActivityTypes: new Set<string>(),
                   }}
-                  approvalPendingMessageId={null}
                   isGenerating={isGenerating}
                   messages={[message]}
                   onAskUserSubmit={() => {}}

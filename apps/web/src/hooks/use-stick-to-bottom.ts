@@ -71,6 +71,18 @@ const isSelectingInside = (scrollEl: HTMLElement | null): boolean => {
 };
 
 /**
+ * Brings an element of a transcript fully into view, the one way content
+ * asks for the reader's eyes. It is an ordinary scroll to the hook below: a
+ * reveal that lands at the end pins the view again, one that lands above it
+ * leaves the view where the reader can see what waits. The element's own
+ * scroll margins keep it clear of what floats over the transcript's edges
+ * (a pinned header, a floating composer).
+ */
+export const revealTranscriptElement = (element: HTMLElement) => {
+  element.scrollIntoView({ behavior: "smooth", block: "nearest" });
+};
+
+/**
  * Minimal stick-to-bottom hook for chat UIs.
  *
  * Watches a scroll container for content resizes and keeps

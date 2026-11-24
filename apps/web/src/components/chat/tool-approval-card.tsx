@@ -1,4 +1,5 @@
 import { useRef, useState, useSyncExternalStore } from "react";
+import type { ReactNode, RefObject } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
@@ -109,6 +110,7 @@ import {
 } from "@/features/chat/browser-control/browser-approval-summary";
 import { useBrowserSiteGrants } from "@/features/chat/browser-control/browser-site-grants";
 import { useMountEffect } from "@/hooks/use-effect";
+import { revealTranscriptElement } from "@/hooks/use-stick-to-bottom";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
@@ -550,6 +552,60 @@ const AlwaysAllowSiteButton = ({
   );
 };
 
+/**
+ * Mounted (keyed by the approval) once a card starts waiting on the member:
+ * the card comes fully into view, above the composer, the moment the turn
+ * stops for it. A card answered on its own never mounts this.
+ */
+const RevealAwaitedApproval = ({
+  cardRef,
+}: {
+  cardRef: RefObject<HTMLDivElement | null>;
+}) => {
+  useMountEffect(() => {
+    const card = cardRef.current;
+    if (card !== null) {
+      revealTranscriptElement(card);
+    }
+  });
+
+  return null;
+};
+
+/**
+ * The card's box. While it waits on the member (`revealKey`, the approval's
+ * id), it comes fully into view the moment the turn stops for it, clear of a
+ * pinned user header above and of a floating composer below.
+ */
+const ApprovalCardFrame = ({
+  asksForDecision,
+  children,
+  revealKey,
+}: {
+  asksForDecision: boolean;
+  children: ReactNode;
+  revealKey: string | null;
+}) => {
+  const cardRef = useRef<HTMLDivElement>(null);
+  return (
+    <div
+      className={cn(
+        "my-1 rounded-lg border text-sm",
+        "scroll-mt-20 scroll-mb-[calc(var(--composer-block-h,0px)+1.5rem)]",
+        asksForDecision
+          ? "border-border bg-muted/30"
+          : "bg-muted/40 border-transparent",
+      )}
+      ref={cardRef}
+    >
+      {revealKey !== null && (
+        <RevealAwaitedApproval cardRef={cardRef} key={revealKey} />
+      )}
+      {children}
+    </div>
+  );
+};
+
 const AutomaticApprovalResponse = ({ respond }: { respond: () => void }) => {
   useMountEffect(() => {
     respond();
@@ -718,13 +774,13 @@ export const ToolApprovalCard = ({
   };
 
   return (
-    <div
-      className={cn(
-        "my-1 rounded-lg border text-sm",
-        asksForDecision
-          ? "border-border bg-muted/30"
-          : "bg-muted/40 border-transparent",
-      )}
+    <ApprovalCardFrame
+      asksForDecision={asksForDecision}
+      revealKey={
+        isAwaitingDecision && !automaticResponse?.shouldRespond
+          ? approvalId
+          : null
+      }
     >
       {automaticResponse?.shouldRespond && (
         <AutomaticApprovalResponse
@@ -892,7 +948,7 @@ export const ToolApprovalCard = ({
           </Button>
         </div>
       )}
-    </div>
+    </ApprovalCardFrame>
   );
 };
 
