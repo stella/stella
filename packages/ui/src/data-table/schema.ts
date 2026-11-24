@@ -95,13 +95,8 @@ export const visibleColumnIds = <TRender>(
 /** The starting width of every column, keyed by id. */
 export const tableColumnSizing = <TRender>(
   schema: TableSchema<TRender>,
-): Record<string, number> => {
-  const sizing: Record<string, number> = {};
-  for (const column of schema.columns) {
-    sizing[column.id] = column.size;
-  }
-  return sizing;
-};
+): Record<string, number> =>
+  Object.fromEntries(schema.columns.map((column) => [column.id, column.size]));
 
 /**
  * A duplicate column id silently drops a column: the table keys by id, so the

@@ -622,6 +622,7 @@ export const TAGGED_FAILURE_REASON = {
   saml_metadata_error: "tagged_failure",
   sso_domain_dns_error: "tagged_failure",
   sso_management_error: "tagged_failure",
+  ScimManagementError: "tagged_failure",
   sso_provisioning_error: "tagged_failure",
   robots_unavailable: "tagged_failure",
 } as const satisfies Record<FailureTag, FailureReason>;

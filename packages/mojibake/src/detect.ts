@@ -1318,7 +1318,10 @@ export const checkTextEncoding = (
   }
 
   if (counters !== undefined) {
-    Object.assign(counters, progress.work);
+    counters.wordsExamined = progress.work.wordsExamined;
+    counters.pairEvaluations = progress.work.pairEvaluations;
+    counters.codeUnits = progress.work.codeUnits;
+    counters.scannedCodeUnits = progress.work.scannedCodeUnits;
   }
   const [first, ...rest] = findings;
   if (first !== undefined) {

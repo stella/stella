@@ -1,4 +1,4 @@
-// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 // parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
 /**
  * Czech Supreme Court (Nejvyšší soud) HTML parser.
@@ -342,12 +342,12 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
               c.plainText.trim().toLowerCase(),
             );
             source.ustavniStiznost = rows.slice(1).map((row) => {
-              const entry: Record<string, NsComplaintCell> = {};
+              const entries = new Map<string, NsComplaintCell>();
               for (let i = 0; i < headers.length; i++) {
                 const h = headers[i] ?? `col${i}`;
-                entry[h] = complaintCell(h, row.at(i)?.plainText ?? "");
+                entries.set(h, complaintCell(h, row.at(i)?.plainText ?? ""));
               }
-              return entry;
+              return Object.fromEntries(entries);
             });
           }
         }

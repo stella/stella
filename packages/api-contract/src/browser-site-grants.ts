@@ -1,3 +1,5 @@
+import * as v from "valibot";
+
 import { BROWSER_CONTROL_LIMITS } from "./browser-control";
 
 /**
@@ -65,3 +67,22 @@ export const isOnGrantedBrowserSite = (
 /** The host people recognise a site grant by, for labels. */
 export const browserSiteGrantHost = (origin: string): string =>
   URL.parse(origin)?.host ?? origin;
+
+/**
+ * The member's website approvals as a run on their computer carries them:
+ * the exact origins, each as `browserSiteGrantOrigin` serializes it, at most
+ * as many as a member may keep.
+ */
+export const browserSiteGrantOriginsSchema = v.pipe(
+  v.array(
+    v.pipe(
+      v.string(),
+      v.maxLength(BROWSER_SITE_GRANT_ORIGIN_CHARS),
+      v.check(
+        (origin) => browserSiteGrantOrigin(origin) === origin,
+        "A website approval is an exact HTTPS origin",
+      ),
+    ),
+  ),
+  v.maxLength(BROWSER_SITE_GRANTS_MAX),
+);

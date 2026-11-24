@@ -99,6 +99,7 @@ const renderCard = (
           handleAllowInConversation: noop,
           handleAlwaysAllow: noop,
           handleApprove: noop,
+          handleApproveForRun: noop,
           handleDeny: noop,
           continueRequestSecret: async () => {},
           continueConnectConnector: async () => {},

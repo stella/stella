@@ -128,7 +128,7 @@ const readCensus = async (
   }
   // One connection, one table at a time: the digest scans are the heavy part
   // and must not contend with each other on the clone.
-  const tables: Census["tables"] = {};
+  const tableEntries = new Map<string, Census["tables"][string]>();
   const tableRows = tablesQueried.value.values();
   const measureNextTable = async (): Promise<
     Result<undefined, DatabaseCensusError>
@@ -176,7 +176,7 @@ const readCensus = async (
     if (measured.value === null) {
       return Result.err(queryFailed(undefined));
     }
-    tables[name] = measured.value;
+    tableEntries.set(name, measured.value);
     return measureNextTable();
   };
   const tablesMeasured = await measureNextTable();
@@ -213,7 +213,7 @@ const readCensus = async (
   if (foreignKeysQueried.value === null) {
     return Result.err(queryFailed(undefined));
   }
-  const foreignKeyOrphans: Census["foreignKeyOrphans"] = {};
+  const foreignKeyOrphanEntries = new Map<string, string>();
   const foreignKeyRows = foreignKeysQueried.value.values();
   const sweepNextForeignKey = async (): Promise<
     Result<undefined, DatabaseCensusError>
@@ -272,7 +272,10 @@ const readCensus = async (
       return Result.err(queryFailed(undefined));
     }
     // Constraint names are unique per table, not per schema.
-    foreignKeyOrphans[`${childTable}.${row["name"]}`] = first["orphans"];
+    foreignKeyOrphanEntries.set(
+      `${childTable}.${row["name"]}`,
+      first["orphans"],
+    );
     return sweepNextForeignKey();
   };
   const foreignKeysSwept = await sweepNextForeignKey();
@@ -280,7 +283,11 @@ const readCensus = async (
     return foreignKeysSwept;
   }
 
-  return Result.ok({ foreignKeyOrphans, formatVersion: 1, tables });
+  return Result.ok({
+    foreignKeyOrphans: Object.fromEntries(foreignKeyOrphanEntries),
+    formatVersion: 1,
+    tables: Object.fromEntries(tableEntries),
+  });
 };
 
 // Identifiers come from the catalog, never from input, and are still quoted

@@ -305,22 +305,21 @@ const databaseColumnType = (
 
 const withPhysicalNames = (
   drafts: Record<string, BetterAuthFieldDraft>,
-): Record<string, BetterAuthFieldContract> => {
-  const result: Record<string, BetterAuthFieldContract> = {};
-  for (const [name, draft] of Object.entries(drafts)) {
-    const type = draft.logical.type;
-    result[name] = {
-      ...draft,
-      database: {
-        ...draft.database,
-        columnName: toSnakeCase(name),
-        columnType: databaseColumnType(type),
-        precision: null,
+): Record<string, BetterAuthFieldContract> =>
+  Object.fromEntries(
+    Object.entries(drafts).map(([name, draft]) => [
+      name,
+      {
+        ...draft,
+        database: {
+          ...draft.database,
+          columnName: toSnakeCase(name),
+          columnType: databaseColumnType(draft.logical.type),
+          precision: null,
+        },
       },
-    };
-  }
-  return result;
-};
+    ]),
+  );
 
 const idField = field("string", {
   default: runtimeDefault,

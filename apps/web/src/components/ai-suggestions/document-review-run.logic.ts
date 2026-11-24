@@ -452,7 +452,17 @@ const tallyReviewDecisions = (
     dismissed: 0,
   };
   for (const { decision } of findings) {
-    counts[decision] += 1;
+    switch (decision) {
+      case "open":
+        counts.open += 1;
+        break;
+      case "accepted":
+        counts.accepted += 1;
+        break;
+      case "dismissed":
+        counts.dismissed += 1;
+        break;
+    }
   }
   return counts;
 };

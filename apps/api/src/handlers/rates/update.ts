@@ -201,17 +201,19 @@ const updateRateTable = createSafeHandler(
             );
         }
 
-        const changes: Record<string, { old: unknown; new: unknown }> = {};
+        const changeEntries = new Map<string, { old: unknown; new: unknown }>();
         for (const field of ["name", "currency", "isDefault"] as const) {
           const next = changedFields[field];
           if (next !== undefined) {
             // Every old value comes from the same locked snapshot as the write.
-            changes[field] = {
+            changeEntries.set(field, {
               old: locked[field],
               new: next,
-            };
+            });
           }
         }
+        const changes: Record<string, { old: unknown; new: unknown }> =
+          Object.fromEntries(changeEntries);
 
         const auditEvents = [
           {

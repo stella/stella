@@ -1729,7 +1729,7 @@ const withInternalFieldNames = ({
     : (unionBranchFor(schema, value) ?? schema);
   const project = alwaysProject || declaresInternalField(node);
   const issues: McpValidationIssue[] = [];
-  const projected: Record<string, unknown> = {};
+  const projected = new Map<string, unknown>();
 
   for (const [name, entry] of Object.entries(value)) {
     const publicName = project ? PUBLIC_FIELD_NAME[name] : undefined;
@@ -1747,12 +1747,12 @@ const withInternalFieldNames = ({
       issues.push(...child.issues);
       continue;
     }
-    projected[internalName] = child.value;
+    projected.set(internalName, child.value);
   }
 
   return issues.length > 0
     ? { ok: false, issues }
-    : { ok: true, value: projected };
+    : { ok: true, value: Object.fromEntries(projected) };
 };
 
 /** Resolve the workspace id for a workspace-kind capability from `input.params.matterId`. */

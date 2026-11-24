@@ -1,4 +1,4 @@
-// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 /**
  * Read the Cellar branch notice the Publications Office serves for one CJEU
  * work, negotiated into one expression's language.
@@ -320,7 +320,7 @@ const reportsReference = (
   work: Selection,
 ): Readonly<Record<string, readonly string[]>> => {
   const container = work.find("WORK_PART_OF_WORK > EMBEDDED_NOTICE > WORK");
-  const reference: Record<string, string[]> = {};
+  const reference = new Map<string, string[]>();
   for (const element of container.children().toArray()) {
     const tag = element.tagName.toUpperCase();
     if (!tag.startsWith("CONTAINER_CASE-LAW_")) {
@@ -329,10 +329,15 @@ const reportsReference = (
     const values = textValues($, $(element));
     if (values.length > 0) {
       const key = tag.slice("CONTAINER_CASE-LAW_".length);
-      (reference[key] ??= []).push(...values);
+      const existing = reference.get(key);
+      if (existing === undefined) {
+        reference.set(key, [...values]);
+      } else {
+        existing.push(...values);
+      }
     }
   }
-  return reference;
+  return Object.fromEntries(reference);
 };
 
 /** The `<national_judgement>` fragment, with its escaped markup stripped. */

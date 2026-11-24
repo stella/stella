@@ -859,7 +859,11 @@ export const summarizeDecisionCitationsHandler = async ({
   };
   const byYear = new Map<number, CitationYearCounts>();
   for (const row of rows satisfies readonly SummaryRow[]) {
-    capped[row.direction] ||= row.capped;
+    if (row.direction === "incoming") {
+      capped.incoming ||= row.capped;
+    } else {
+      capped.outgoing ||= row.capped;
+    }
     if (row.count === 0) {
       continue;
     }

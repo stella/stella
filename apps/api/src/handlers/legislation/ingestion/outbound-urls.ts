@@ -106,7 +106,7 @@ export const restrictLegislationDocumentUrls = ({
   document,
   hostPolicy,
 }: RestrictLegislationDocumentUrlsOptions): LegislationUrlPolicyOutcome => {
-  const applied: Partial<Record<LegislationUrlField, string | null>> = {};
+  const applied = new Map<LegislationUrlField, string | null>();
   const refusals: LegislationUrlRefusal[] = [];
   for (const field of LEGISLATION_URL_FIELDS) {
     const rawUrl = document[field];
@@ -115,11 +115,14 @@ export const restrictLegislationDocumentUrls = ({
     }
     const url = restrictOutboundUrl({ hostPolicy, rawUrl });
     if (url === null) {
-      applied[field] = null;
+      applied.set(field, null);
       refusals.push(refusalOf(field, rawUrl));
       continue;
     }
-    applied[field] = url.href;
+    applied.set(field, url.href);
   }
-  return { document: { ...document, ...applied }, refusals };
+  return {
+    document: { ...document, ...Object.fromEntries(applied) },
+    refusals,
+  };
 };

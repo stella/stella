@@ -13,11 +13,13 @@ import { APPROVAL_DECISION, type BrowserApprovalRequest } from "./tools";
 
 const asking = (
   signal: AbortSignal = new AbortController().signal,
+  site: string | null = null,
 ): BrowserApprovalRequest => ({
   action: "click",
   name: "Send",
   role: "button",
   signal,
+  site,
   url: "https://fixture-library.test/form",
 });
 
@@ -66,6 +68,32 @@ test("asks in the run's stream and reports the step once it ran", async () => {
   expect((await stream.next()).done).toBe(true);
 });
 
+test("on a page that can hold a website approval, approving for the session always allows the website", async () => {
+  const approvals = createActionApprovals();
+  const harness = createEventQueue<HarnessEvent>();
+  const stream = approvals.withEvents(harness.items)[Symbol.asyncIterator]();
+
+  const decided = approvals.request(
+    asking(undefined, "https://fixture-library.test"),
+  );
+  const asked = await stream.next();
+  expect(asked.value).toMatchObject({
+    type: "approval.requested",
+    request: {
+      options: [
+        { decision: "approve" },
+        { decision: "approve_for_session" },
+        { decision: "deny" },
+      ],
+    },
+  });
+  expect(approvals.answer(requestIdOf(asked), "approve_for_session")).toBe(
+    true,
+  );
+  expect((await decided).decision).toBe(APPROVAL_DECISION.approveSite);
+  harness.close();
+});
+
 test("a denied step is reported declined at once", async () => {
   const approvals = createActionApprovals();
   const harness = createEventQueue<HarnessEvent>();
@@ -90,6 +118,7 @@ test("a key press and an option name the key and the option, and chat keeps the 
     name: "Court",
     role: "select",
     signal,
+    site: null,
     url: "https://fixture-library.test/search",
   };
   for (const { request, reason, asked } of [

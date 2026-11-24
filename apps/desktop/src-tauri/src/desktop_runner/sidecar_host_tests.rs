@@ -362,7 +362,12 @@ fn run_start(run_id: &str, model: &str) -> Value {
     "harnessSessionId": null,
     "instructions": "Summarize the matter.",
     "messages": [{"role": "user", "content": "Summarize the matter."}],
-    "policy": {"network": "open", "fs": "workspace", "approvals": "auto"},
+    "policy": {
+      "network": "open",
+      "fs": "workspace",
+      "approvals": "auto",
+      "browserSiteGrants": ["https://example.com"],
+    },
     "mcp": {
       "serverName": "stella",
       "url": "https://api.example.test/mcp",
@@ -539,7 +544,12 @@ fn a_run_streams_through_the_runner_in_its_own_order_and_acks_the_holder_once_jo
   );
   assert_eq!(
     start["policy"],
-    json!({"network": "open", "fs": "workspace", "approvals": "auto"})
+    json!({
+      "network": "open",
+      "fs": "workspace",
+      "approvals": "auto",
+      "browserSiteGrants": ["https://example.com"],
+    })
   );
   assert_eq!(start["reasoningEffort"], "high");
   assert_eq!(start["launch"]["processGrant"], false);

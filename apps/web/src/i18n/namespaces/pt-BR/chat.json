@@ -238,6 +238,13 @@
       },
       "updating": "Atualização do plugin do Chrome pendente."
     },
+    "browserSignIn": {
+      "continue": "Já fiz login",
+      "description": "Uma página aberta em segundo plano pede login. Abra a aba para entrar no Chrome e depois continue.",
+      "openTab": "Abrir aba de login",
+      "title": "Login necessário",
+      "titleWithHost": "Entrar em {host}"
+    },
     "cancelQueuedMessage": "Cancelar mensagem na fila",
     "caseLawGreeting": "Pergunte sobre esta decisão; o texto completo está disponível aqui.",
     "chatAbout": "Converse sobre isso",

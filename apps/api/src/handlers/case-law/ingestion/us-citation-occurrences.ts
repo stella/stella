@@ -521,18 +521,25 @@ const settle = (
 export const countUnresolvedTargets = (
   occurrences: readonly UsCitationOccurrence[],
 ): Record<CitationUnresolvedReason, number> => {
-  const counts: Record<CitationUnresolvedReason, number> = {
-    "missing-antecedent": 0,
-    "ambiguous-antecedent": 0,
-    "ambiguous-reporter": 0,
-    "authority-barrier": 0,
-    "scope-unknown": 0,
-    "conflicting-parallels": 0,
-  };
+  const counts = new Map<CitationUnresolvedReason, number>([
+    ["missing-antecedent", 0],
+    ["ambiguous-antecedent", 0],
+    ["ambiguous-reporter", 0],
+    ["authority-barrier", 0],
+    ["scope-unknown", 0],
+    ["conflicting-parallels", 0],
+  ]);
   for (const { target } of occurrences) {
     if (target.status === "unresolved") {
-      counts[target.reason] += 1;
+      counts.set(target.reason, (counts.get(target.reason) ?? 0) + 1);
     }
   }
-  return counts;
+  return {
+    "missing-antecedent": counts.get("missing-antecedent") ?? 0,
+    "ambiguous-antecedent": counts.get("ambiguous-antecedent") ?? 0,
+    "ambiguous-reporter": counts.get("ambiguous-reporter") ?? 0,
+    "authority-barrier": counts.get("authority-barrier") ?? 0,
+    "scope-unknown": counts.get("scope-unknown") ?? 0,
+    "conflicting-parallels": counts.get("conflicting-parallels") ?? 0,
+  };
 };

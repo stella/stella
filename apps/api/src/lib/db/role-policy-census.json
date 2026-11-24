@@ -12341,6 +12341,106 @@
   },
   {
     "schema": "public",
+    "table": "scim_connection_binding",
+    "policy": "auth_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
+    "table": "scim_group",
+    "policy": "auth_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
+    "table": "scim_group_member",
+    "policy": "auth_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
+    "table": "scim_identity_tombstone",
+    "policy": "auth_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
+    "table": "scim_managed_connection",
+    "policy": "auth_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
+    "table": "scim_managed_connection_event",
+    "policy": "auth_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
+    "table": "scim_managed_credential",
+    "policy": "auth_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
+    "table": "scim_projection_grant",
+    "policy": "auth_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
+    "table": "scim_subject",
+    "policy": "auth_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
+    "table": "scim_user",
+    "policy": "auth_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
     "table": "scout_runs",
     "policy": "organization_delete",
     "command": "DELETE",

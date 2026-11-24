@@ -148,12 +148,19 @@ const addStableKeys = (lines: Token[][]) => {
 const getTokenSignature = ({ content, types }: Token): string =>
   `${types.join(".")}:${content}`;
 
-const getTokenStyle = ({ types }: Token) => {
+const getTokenStyle = ({ types }: Token): CSSProperties => {
   const style: CSSProperties = {};
 
   for (const themeEntry of TOOL_CODE_THEME.styles) {
     if (themeEntry.types.some((type) => types.includes(type))) {
-      Object.assign(style, themeEntry.style);
+      for (const [key, value] of Object.entries(themeEntry.style)) {
+        Object.defineProperty(style, key, {
+          value,
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
+      }
     }
   }
 

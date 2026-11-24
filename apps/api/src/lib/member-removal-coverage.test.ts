@@ -288,6 +288,32 @@ const RETAINED_MEMBER_COLUMNS = {
     "Who added the organization's SSO domain verification record; the domain belongs to the organization, the attribution grants no membership or authority, and account deletion clears it.",
   "organization_sso_pending_member.user_id":
     "Pending SSO access request isolated from organization membership; holds no workspace authority and cascades on user deletion.",
+  "scim_connection_binding.decommission_cursor_user_id":
+    "SCIM decommission cursor managed by @better-auth/scim; grants no organization or matter membership.",
+  "scim_group_member.scim_user_id":
+    "SCIM directory group membership referencing scim_user; grants no direct organization or matter authority.",
+  "scim_managed_connection.created_by":
+    "Audit attribution for who created the organization SCIM connection; grants no membership or authority.",
+  "scim_managed_connection.decommission_started_by":
+    "Audit attribution for who initiated SCIM connection decommission; grants no membership or authority.",
+  "scim_managed_connection.decommissioned_by":
+    "Audit attribution for who completed SCIM connection decommission; grants no membership or authority.",
+  "scim_managed_connection_event.actor_id":
+    "Audit attribution on managed SCIM connection events; grants no membership or authority.",
+  "scim_managed_credential.created_by":
+    "Audit attribution for who created a SCIM bearer credential; grants no membership or authority.",
+  "scim_managed_credential.revoked_by":
+    "Audit attribution for who revoked a SCIM bearer credential; grants no membership or authority.",
+  "scim_projection_grant.scim_user_id":
+    "SCIM role projection reference to scim_user; grants no direct workspace authority and cascades on user deletion.",
+  "scim_identity_tombstone.user_id":
+    "SCIM directory deprovisioning tombstone managed by @better-auth/scim; grants no organization membership and cascades on user deletion.",
+  "scim_subject.user_id":
+    "SCIM subject lifecycle pointer managed by @better-auth/scim; grants no organization membership and cascades on user deletion.",
+  "scim_user.user_id":
+    "SCIM directory user link managed by @better-auth/scim; membership is projected separately and rows cascade on user deletion.",
+  "scim_projection_grant.user_id":
+    "SCIM role projection record managed by @better-auth/scim; grants no direct workspace access and cascades on user deletion.",
   "organization_sso_pending_member.reviewed_by":
     "Who approved or rejected a pending SSO membership request; retained audit attribution granting no membership or authority.",
   "account_exports.attempt_object_keys":

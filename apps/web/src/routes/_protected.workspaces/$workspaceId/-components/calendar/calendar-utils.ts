@@ -117,10 +117,20 @@ const getDateFormatter = (
   options: Intl.DateTimeFormatOptions,
 ): Intl.DateTimeFormat => {
   const cacheKey = `${locale}:${JSON.stringify(options)}`;
-  return (dateFormatterCache[cacheKey] ??= new Intl.DateTimeFormat(
-    locale,
-    options,
-  ));
+  if (Object.hasOwn(dateFormatterCache, cacheKey)) {
+    const cached = dateFormatterCache[cacheKey];
+    if (cached !== undefined) {
+      return cached;
+    }
+  }
+  const formatter = new Intl.DateTimeFormat(locale, options);
+  Object.defineProperty(dateFormatterCache, cacheKey, {
+    value: formatter,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
+  return formatter;
 };
 
 export const getMonthLabels = (

@@ -76,6 +76,7 @@ import type {
   PendingApprovalToolPart,
   SuggestChangesApplyOutput,
 } from "@/components/chat/chat-ui-tools";
+import { localBrowserApprovalSite } from "@/components/chat/local-browser-site";
 import { useLocalRunSubtitleText } from "@/components/chat/local-run-subtitle";
 import { findMcpConnectorIconHref } from "@/components/chat/mcp-connector-icon";
 import {
@@ -448,17 +449,25 @@ export const PendingToolApprovalCard = ({
  * to the member (a sign-in) also goes through, so the executor answers the
  * model with why it did not run. Like a stored tool grant, a website
  * approval the API did not confirm (`unconfirmed`) answers nothing.
+ * A browser step on the member's computer names its website in its question
+ * (`localSite`); always allowing it there approves the step for the rest of
+ * the run, whose later steps on the website then follow at once.
  */
 const useBrowserCardApproval = ({
   browserCommand,
   level,
+  localSite,
   unconfirmed,
 }: {
   browserCommand: BrowserControlCommand | null;
   level: DesktopRunnerApprovalMode;
+  localSite: string | null;
   unconfirmed: boolean;
 }) => {
-  const sites = useBrowserSiteGrants(browserCommand !== null);
+  const { handleApprove, handleApproveForRun } = useChatApproval();
+  const sites = useBrowserSiteGrants(
+    browserCommand !== null || localSite !== null,
+  );
   const decision = useBrowserStepDecision({
     command: browserCommand,
     grantedOrigins: sites.grantedOrigins,
@@ -472,7 +481,19 @@ const useBrowserCardApproval = ({
       : null;
   // The website the question names: the page the step was written for.
   const site = decision?.type === BROWSER_STEP_GATE.ask ? decision.site : null;
+  const offerable = site ?? localSite;
   return {
+    /** Answers the card when the user always allows its website. */
+    approveSite: (approvalId: string, toolName: ApprovalToolName) => {
+      detached(
+        Promise.resolve(
+          localSite === null
+            ? handleApprove(approvalId, toolName)
+            : handleApproveForRun(approvalId),
+        ),
+        "tool-approval-card.approve-site",
+      );
+    },
     /**
      * Whether the API still allows the site, read with a request of its own.
      * The card decides again once that read is back, on what the extension
@@ -509,8 +530,10 @@ const useBrowserCardApproval = ({
         (decision.type === BROWSER_STEP_GATE.run && decision.by === "level")),
     /** The site the card offers to always allow: named, and not yet allowed. */
     offeredSite:
-      site !== null && sites.canGrant && !sites.grantedOrigins.has(site)
-        ? site
+      offerable !== null &&
+      sites.canGrant &&
+      !sites.grantedOrigins.has(offerable)
+        ? offerable
         : null,
     site,
     siteGrantOrigin,
@@ -709,6 +732,7 @@ export const ToolApprovalCard = ({
   const browserApproval = useBrowserCardApproval({
     browserCommand,
     level: browserLevel ?? DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
+    localSite: localBrowserApprovalSite(name, getApprovalPartInput(part)),
     unconfirmed: approvalId === unconfirmedGrantApprovalId,
   });
   // A stored grant or website approval answers a card only once the API
@@ -878,7 +902,7 @@ export const ToolApprovalCard = ({
                 if (!beginManualResponse(approvalId)) {
                   return false;
                 }
-                onApprove(approvalId, name);
+                browserApproval.approveSite(approvalId, name);
                 return true;
               }}
               site={browserApproval.offeredSite}

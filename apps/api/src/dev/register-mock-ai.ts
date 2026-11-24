@@ -1161,7 +1161,7 @@ const synthesizeJsonSchemaObject = (node: unknown): Record<string, unknown> => {
     : {};
   const required = isUnknownArray(node["required"]) ? node["required"] : [];
 
-  const result: Record<string, unknown> = {};
+  const entries = new Map<string, unknown>();
   for (const [key, propertySchema] of Object.entries(properties)) {
     if (!isJsonSchemaNode(propertySchema)) {
       continue;
@@ -1170,15 +1170,15 @@ const synthesizeJsonSchemaObject = (node: unknown): Record<string, unknown> => {
       continue;
     }
     if (isNullable(propertySchema)) {
-      result[key] = null;
+      entries.set(key, null);
       continue;
     }
     if (!required.includes(key)) {
       continue;
     }
-    result[key] = synthesizeJsonSchemaValue(propertySchema);
+    entries.set(key, synthesizeJsonSchemaValue(propertySchema));
   }
-  return result;
+  return Object.fromEntries(entries);
 };
 
 const numberKeyword = (

@@ -104,16 +104,16 @@ type AcceptedCaptureContext = {
 const acceptCaptureContext = (
   context: ErrorTelemetryContext | undefined,
 ): AcceptedCaptureContext => {
-  const accepted: ErrorTelemetryContext = {};
+  const accepted = new Map<string, ErrorTelemetryContext[string]>();
   let rejected = 0;
   for (const [key, value] of Object.entries(context ?? {})) {
     if (RESERVED_CONTEXT_KEY.test(key) || RESERVED_CONTEXT_NAMES.has(key)) {
       rejected += 1;
       continue;
     }
-    accepted[key] = value;
+    accepted.set(key, value);
   }
-  return { context: accepted, rejected };
+  return { context: Object.fromEntries(accepted), rejected };
 };
 
 const SERVER_DISTINCT_ID = "server";

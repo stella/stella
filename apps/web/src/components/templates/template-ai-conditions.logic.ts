@@ -175,16 +175,16 @@ export const effectiveConditionValues = (
   conditions: readonly DecidedCondition[],
   overrides: Readonly<Record<string, boolean>>,
 ): Record<string, boolean> => {
-  const effective: Record<string, boolean> = { ...overrides };
+  const effective = new Map<string, boolean>(Object.entries(overrides));
   for (const condition of conditions) {
-    if (condition.path in effective) {
+    if (effective.has(condition.path)) {
       continue;
     }
     if (condition.decision.state === "decided") {
-      effective[condition.path] = condition.decision.value;
+      effective.set(condition.path, condition.decision.value);
     }
   }
-  return effective;
+  return Object.fromEntries(effective);
 };
 
 /**

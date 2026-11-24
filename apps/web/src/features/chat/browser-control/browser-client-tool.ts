@@ -13,6 +13,7 @@ import {
   currentBrowserStepDecision,
 } from "./browser-approval-state";
 import { executeBrowserExtensionCommand } from "./browser-extension-bridge";
+import { waitForBrowserSignIn } from "./browser-sign-in-handoff";
 import { createBrowserToolExecutionCache } from "./browser-tool-execution";
 import { createTurnStopper } from "./browser-turn";
 
@@ -48,6 +49,7 @@ export const createBrowserExtensionTool = ({
         grantedOrigins: NO_GRANTS,
         level: levelFor(),
       }),
+    waitForBrowserSignIn,
   );
   const stopper = createTurnStopper();
 

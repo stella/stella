@@ -262,6 +262,7 @@ export const localSource =
       resume === undefined
         ? {
             type: "start",
+            browserSiteGrants: [],
             target: {
               kind: "local",
               harness: DESTINATION.harness,

@@ -268,13 +268,22 @@ export type ChatActivitySession = {
   readonly reportedUnknownActivityTypes: Set<string>;
 };
 
+/**
+ * An answer to a tool approval. `scope: "session"` approves a step a run on
+ * the member's computer asks about for the rest of that run (for a browser
+ * step: its website); an approval stella's own models ask for has no run to
+ * keep it, and is answered once.
+ */
+export type ToolApprovalResponse = {
+  approved: boolean;
+  id: string;
+  scope?: "session";
+};
+
 export type ChatRuntime = ChatActivitySession & {
   readonly [CHAT_RUNTIME_BRAND]: true;
   resolveToolApproval: (
-    response: {
-      approved: boolean;
-      id: string;
-    },
+    response: ToolApprovalResponse,
     options?: ChatSendMessageOptions,
   ) => Promise<void>;
   addToolResult: (
@@ -1779,7 +1788,7 @@ export const createChatRuntime = ({
   };
 
   const answerToolApproval = async (
-    response: { approved: boolean; id: string },
+    response: ToolApprovalResponse,
     options: ChatSendMessageOptions | undefined,
   ): Promise<Result<void, ChatRequestError>> => {
     if (!(await awaitRequestEnd())) {
@@ -1853,7 +1862,10 @@ export const createChatRuntime = ({
           {
             interruptId: interrupt.interruptId,
             status: "resolved",
-            payload: { approved: response.approved },
+            payload:
+              response.approved && response.scope === "session"
+                ? { approved: true, scope: "session" }
+                : { approved: response.approved },
           },
         ]);
         if (!sent) {

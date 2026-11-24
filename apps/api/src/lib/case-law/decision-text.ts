@@ -1,4 +1,4 @@
-// parser-output-unchanged: the decision-type availability marker is derived only from metadata a source sets; only cz-uohs sets it, and it bumps its own version.
+// parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 // parser-output-unchanged: the decision-date availability marker is derived only from metadata a source sets; sources that never set it parse as before.
 // parser-output-unchanged: Text and publication absence sidecars change metadata only; canonical documents and replay comparison inputs are unchanged.
 // parser-output-unchanged: The text fidelity check only validates a `textFidelity` entry a source sets and adds, drops or changes nothing; no source's parsed output differs.
@@ -287,17 +287,17 @@ export const storeDecisionTextFields = ({
   checkDecisionTextMetadata(metadata);
   // Spreading an index-signature record beside a computed key drops the index
   // signature from the inferred type; the stored row is an open record.
-  const stored: Record<string, unknown> = {
-    ...metadata,
-    [DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY]:
-      DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
-  };
+  const storedEntries = new Map<string, unknown>(Object.entries(metadata));
+  storedEntries.set(
+    DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
+    DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+  );
   const absent: DecisionTextAbsenceEntry[] = [];
   for (const key of DECISION_TEXT_FIELD_KEYS) {
     const field = textFields[key];
     const value = storeTextField(field);
     if (value !== undefined) {
-      stored[key] = value;
+      storedEntries.set(key, value);
       continue;
     }
     if (field.type === TEXT_FIELD_TYPE.ABSENT) {
@@ -372,9 +372,9 @@ export const storeDecisionTextFields = ({
     }
   }
   if (absent.length > 0) {
-    stored[DECISION_TEXT_ABSENCE_METADATA_KEY] = absent;
+    storedEntries.set(DECISION_TEXT_ABSENCE_METADATA_KEY, absent);
   }
-  return stored;
+  return Object.fromEntries(storedEntries);
 };
 
 export const readTextField = (value: unknown): TextField => {

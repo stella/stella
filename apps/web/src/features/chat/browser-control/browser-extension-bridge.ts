@@ -443,6 +443,22 @@ const postCancel = (controllerId: string, turnId: string): void => {
   });
 };
 
+/** Brings the active controlled tab to the front when the user asks to sign in. */
+export const focusBrowserExtensionTab = (): boolean => {
+  const { controllerId } = getBridgeRuntime();
+  if (controllerId === null) {
+    return false;
+  }
+  postRequest({
+    controllerId,
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    requestId: createUuid(),
+    source: BROWSER_EXTENSION_MESSAGE_SOURCE.web,
+    type: "focus-tab",
+  });
+  return true;
+};
+
 export const executeBrowserExtensionCommand = async (
   rawCommand: unknown,
   toolCallId: string,

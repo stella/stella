@@ -144,11 +144,16 @@ type HandleDeps = {
 
 const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
   const { conn, containerId, workdir } = deps;
-  const envVars: Record<string, string> = {};
+  const envVars = new Map<string, string>();
 
   const abs = (p: string): string => toContainerPath(workdir, p);
-  const envArray = (extra?: Record<string, string>): string[] =>
-    Object.entries({ ...envVars, ...extra }).map(([k, v]) => `${k}=${v}`);
+  const envArray = (extra?: Record<string, string>): string[] => {
+    const merged = new Map(envVars);
+    for (const [k, v] of Object.entries(extra ?? {})) {
+      merged.set(k, v);
+    }
+    return [...merged.entries()].map(([k, v]) => `${k}=${v}`);
+  };
 
   const exec = async (
     command: string,
@@ -306,7 +311,9 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
     env: {
       // oxlint-disable-next-line typescript/promise-function-async -- sync env merge, returns a resolved promise
       set: (vars) => {
-        Object.assign(envVars, vars);
+        for (const [k, v] of Object.entries(vars)) {
+          envVars.set(k, v);
+        }
         return Promise.resolve();
       },
     },

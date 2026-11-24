@@ -190,15 +190,17 @@ const update = async (): Promise<void> => {
     })),
   );
 
-  const files: Record<string, string> = {};
+  const fileEntries = new Map<string, string>();
   for (const { path, result } of fetched) {
     if (!result.ok) {
       console.error(`  ✗ ${path}: ${result.reason}`);
       process.exit(1);
     }
-    files[path] = authSpecContentSha256(result.text);
-    console.log(`  · ${path} → ${files[path].slice(0, 12)}…`);
+    const sha = authSpecContentSha256(result.text);
+    fileEntries.set(path, sha);
+    console.log(`  · ${path} → ${sha.slice(0, 12)}…`);
   }
+  const files = Object.fromEntries(fileEntries);
 
   const changelog = await fetchText(rawUrl("CHANGELOG.md"));
   const version =

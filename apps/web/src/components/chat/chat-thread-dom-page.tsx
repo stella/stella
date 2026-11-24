@@ -158,6 +158,7 @@ const ChatThreadDomPage = ({
           handleAlwaysAllow: session.handleAlwaysAllow,
           handleApprove: session.handleApprove,
           handleDeny: session.handleDeny,
+          handleApproveForRun: session.handleApproveForRun,
           handleRequestSecret: session.handleRequestSecret,
           continueRequestSecret: session.continueRequestSecret,
           handleConnectConnector: session.handleConnectConnector,

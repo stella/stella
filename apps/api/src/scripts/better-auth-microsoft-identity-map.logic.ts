@@ -359,7 +359,11 @@ export const deriveBetterAuthMicrosoftIdentityMap = async ({
     }
     identityKeys.add(identityKey);
     microsoftAccounts.push(identity);
-    verification[sourceVerification] += 1;
+    if (sourceVerification === "signature") {
+      verification.signature += 1;
+    } else {
+      verification["stored-claims"] += 1;
+    }
     return processNextSource();
   };
   const processed = await processNextSource();

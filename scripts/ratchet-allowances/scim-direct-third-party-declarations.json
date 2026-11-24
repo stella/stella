@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "Add @better-auth/scim@1.7.25 to apps/api/package.json for idiomatic Better Auth SCIM 2.0 directory provisioning."
+}

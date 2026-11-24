@@ -365,7 +365,7 @@ const readMetaArgs = (
       outcome: validationError(`${tool} takes a JSON object.`, []),
     };
   }
-  const args: Record<string, unknown> = {};
+  const args = new Map<string, unknown>();
   const issues: { path: string; message: string }[] = [];
   for (const [key, entry] of Object.entries(value ?? {})) {
     const property = schema.properties[key];
@@ -387,10 +387,13 @@ const readMetaArgs = (
       });
       continue;
     }
-    args[key] = entry;
+    args.set(key, entry);
   }
   for (const key of schema.required ?? []) {
-    if (args[key] === undefined && !issues.some(({ path }) => path === key)) {
+    if (
+      args.get(key) === undefined &&
+      !issues.some(({ path }) => path === key)
+    ) {
       issues.push({ path: key, message: `Missing parameter: ${key}` });
     }
   }
@@ -403,7 +406,7 @@ const readMetaArgs = (
           `Accepted parameters: ${Object.keys(schema.properties).join(", ")}.`,
         ),
       }
-    : { ok: true, args };
+    : { ok: true, args: Object.fromEntries(args) };
 };
 
 type ObserveFailureOptions = {

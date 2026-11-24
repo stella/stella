@@ -486,13 +486,8 @@ const bodyToBytes = (
   return body;
 };
 
-const headersToObject = (headers: Headers): Record<string, string> => {
-  const result: Record<string, string> = {};
-  for (const [key, value] of headers.entries()) {
-    result[key] = value;
-  }
-  return result;
-};
+const headersToObject = (headers: Headers): Record<string, string> =>
+  Object.fromEntries(headers.entries());
 
 const headersFromIncoming = (
   headers: Record<string, string | string[] | undefined>,

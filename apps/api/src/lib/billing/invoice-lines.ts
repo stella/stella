@@ -1018,14 +1018,15 @@ export const recalculateInvoiceTotals = async (
     .update(invoices)
     .set({ ...next, updatedAt: now })
     .where(invoiceScope);
-  const changes: FieldDiffs = {};
+  const changeEntries = new Map<string, { old: unknown; new: unknown }>();
   for (const field of ["netAmount", "vatAmount", "totalAmount"] as const) {
     const old = stored[field] ?? null;
     if (old !== next[field]) {
-      changes[field] = { old, new: next[field] };
+      changeEntries.set(field, { old, new: next[field] });
     }
   }
-  if (Object.keys(changes).length > 0) {
+  const changes: FieldDiffs = Object.fromEntries(changeEntries);
+  if (changeEntries.size > 0) {
     await recordAuditEvent(tx, {
       action: AUDIT_ACTION.UPDATE,
       resourceType: AUDIT_RESOURCE_TYPE.INVOICE,

@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { classifyFailure } from "@stll/errors";
 
 import type { SamlMetadataError } from "@/api/lib/auth/saml-metadata";
+import type { ScimManagementError } from "@/api/lib/auth/scim-management";
 import type { OidcDiscoveryError } from "@/api/lib/auth/sso-discovery";
 import type { SsoDomainDnsError } from "@/api/lib/auth/sso-domain-verify";
 import type { SsoManagementError } from "@/api/lib/db/sso-management";
@@ -124,5 +125,36 @@ export const mapSsoProvisioningError = (
     default:
       error.reason satisfies never;
       return panic("Unhandled SSO provisioning error reason");
+  }
+};
+
+export const mapScimManagementError = (
+  error: ScimManagementError,
+): HandlerError => {
+  switch (error.reason) {
+    case "not_found":
+      return new HandlerError({
+        status: 404,
+        code: "scim_token_not_found",
+        message: error.message,
+      });
+    case "token_limit_reached":
+      return new HandlerError({
+        status: 409,
+        code: "scim_token_limit_reached",
+        message: error.message,
+      });
+    case "operation_failed":
+      return classifyFailure(
+        new HandlerError({
+          status: 502,
+          code: "scim_operation_failed",
+          message: error.message,
+        }),
+        "upstream_unavailable",
+      );
+    default:
+      error.reason satisfies never;
+      return panic("Unhandled SCIM management error reason");
   }
 };

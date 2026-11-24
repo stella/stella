@@ -66,6 +66,7 @@
         "@better-auth/cimd": "catalog:",
         "@better-auth/core": "catalog:",
         "@better-auth/oauth-provider": "catalog:",
+        "@better-auth/scim": "catalog:",
         "@better-auth/sso": "catalog:",
         "@embedpdf/pdfium": "2.15.1",
         "@firecrawl/anydoc": "0.2.4",
@@ -2038,6 +2039,7 @@
     "@better-auth/cimd": "1.7.25",
     "@better-auth/core": "1.7.25",
     "@better-auth/oauth-provider": "1.7.25",
+    "@better-auth/scim": "1.7.25",
     "@better-auth/sso": "1.7.25",
     "@libpdf/core": "0.5.3",
     "@mcp-ui/client": "7.1.1",
@@ -2448,6 +2450,8 @@
     "@better-auth/oauth-provider": ["@better-auth/oauth-provider@1.7.25", "", { "dependencies": { "jose": "^6.2.3", "zod": "^4.5.4" }, "peerDependencies": { "@better-auth/core": "^1.7.25", "@better-auth/utils": "^0.4.2 || ^0.5.0", "@better-fetch/fetch": "1.3.3", "better-auth": "^1.7.25", "better-call": "~1.4.5" } }, "sha512-P0KkIkcXBcoMYZTJzKdzmOo2c+AN1ZjIA5C0x/F5E8TBQR4q5STMlfvp1YwfYx8R8e6H9ve7CCOjYwoJX0urVQ=="],
 
     "@better-auth/prisma-adapter": ["@better-auth/prisma-adapter@1.7.25", "", { "peerDependencies": { "@better-auth/core": "^1.7.25", "@better-auth/utils": "^0.4.2 || ^0.5.0", "@prisma/client": "^5.0.0 || ^6.0.0 || ^7.0.0", "prisma": "^5.0.0 || ^6.0.0 || ^7.0.0" }, "optionalPeers": ["@prisma/client", "prisma"] }, "sha512-s3qr9juC+g53/vNWWn5QqqZywg1EiCwfg+E884GRM6Ves+zp8lREjlXAo0E9Sshz5rcw9rxzJDJY7G/vlxhVEA=="],
+
+    "@better-auth/scim": ["@better-auth/scim@1.7.25", "", { "dependencies": { "@noble/hashes": "^2.2.0", "zod": "^4.5.4" }, "peerDependencies": { "@better-auth/core": "^1.7.25", "@better-auth/utils": "^0.4.2 || ^0.5.0", "better-auth": "^1.7.25", "better-call": "~1.4.5" } }, "sha512-kUrcLh0aoSQC48Eeju+ITV+LHzmwfoa0ah4voojNvVU847K8j1G6+pTyTFexnPucRH5ArwDZhs9eommH/Jozkg=="],
 
     "@better-auth/sso": ["@better-auth/sso@1.7.25", "", { "dependencies": { "@xmldom/xmldom": "^0.9.12", "fast-xml-parser": "^5.8.0", "jose": "^6.2.3", "samlify": "^2.13.1", "tldts": "^7.4.3", "zod": "^4.5.4" }, "peerDependencies": { "@better-auth/core": "^1.7.25", "@better-auth/utils": "^0.4.2 || ^0.5.0", "@better-fetch/fetch": "1.3.3", "better-auth": "^1.7.25", "better-call": "~1.4.5" } }, "sha512-hBk7Az8Xe7O6wrvnOs83X2o6/Z3A+BaT7ddnHhF/X0PQB23ESXi/ddI4sSXOjngsfetvAqAQPGSE/woeI7ohyw=="],
 

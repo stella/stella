@@ -114,6 +114,7 @@
     "@better-auth/cimd": "catalog:",
     "@better-auth/core": "catalog:",
     "@better-auth/oauth-provider": "catalog:",
+    "@better-auth/scim": "catalog:",
     "@better-auth/sso": "catalog:",
     "@embedpdf/pdfium": "2.15.1",
     "@firecrawl/anydoc": "0.2.4",

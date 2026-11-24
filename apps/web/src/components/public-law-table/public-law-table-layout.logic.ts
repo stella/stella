@@ -115,13 +115,10 @@ export const publicLawTableLayout = (
 export const publicLawTableLayouts = <TStored, TLayout>(
   stored: Readonly<Record<string, TStored>>,
   read: (value: TStored) => TLayout,
-): Record<string, TLayout> => {
-  const layouts: Record<string, TLayout> = {};
-  for (const [surface, value] of Object.entries(stored)) {
-    layouts[surface] = read(value);
-  }
-  return layouts;
-};
+): Record<string, TLayout> =>
+  Object.fromEntries(
+    Object.entries(stored).map(([surface, value]) => [surface, read(value)]),
+  );
 
 type LayoutForSurfaceOptions<TLayout> = {
   defaults: TLayout;

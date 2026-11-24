@@ -588,6 +588,11 @@ const backRefused = (
 
 export const APPROVAL_DECISION = {
   approve: "approve",
+  /**
+   * Approved, and the member always allows the step's website from now on:
+   * the rest of the run's steps there follow that approval.
+   */
+  approveSite: "approve_site",
   deny: "deny",
 } as const;
 
@@ -617,6 +622,12 @@ type BrowserApprovalQuestion = BrowserApprovalStep & {
 
 /** A browser step that changes the page, as the member is asked about it. */
 export type BrowserApprovalRequest = BrowserApprovalQuestion & {
+  /**
+   * The website the member may always allow with this answer, by exact
+   * origin: the page the chat last read, as the browser reported it. Null
+   * when that page cannot hold an approval.
+   */
+  site: string | null;
   /** Aborts when the agent's call ends; the question is then withdrawn. */
   signal: AbortSignal;
 };
@@ -673,9 +684,6 @@ const reportedPage = (seen: PageSeen | null): BrowserReportedPage | null =>
             .map((element) => element.ref),
         ),
       };
-
-/** The chat's website approvals on this computer; none so far. */
-const NO_SITE_GRANTS: ReadonlySet<string> = new Set();
 
 /**
  * Whether the tab's page waits for the member's sign-in after `result`: a
@@ -758,6 +766,11 @@ type LocalBrowserCallContext = {
   acts: boolean;
   /** The run's approval mode: which steps wait for the member. */
   approvals: DesktopRunnerApprovalMode;
+  /**
+   * The websites the member always allows steps on, by exact origin; an
+   * answer that always allows a website adds it for the rest of the run.
+   */
+  siteGrants: Set<string>;
   approve: ApproveAction;
   /**
    * The chat's downloads since its last result, saved into the run's
@@ -845,6 +858,72 @@ const readOnlyResult = (): LocalBrowserToolResult =>
     },
     true,
   );
+
+/** What the gate made of a step: it runs, or its answer is already known. */
+type GatedStep =
+  /** The member's ticket when they were asked, to report the outcome on. */
+  | { type: "runs"; ticket: ApprovalTicket | null }
+  | { type: "answered"; result: LocalBrowserToolResult };
+
+/**
+ * Runs `step` through the shared browser gate (`decideBrowserStep`), asking
+ * the member when it says so. An answer that always allows the step's
+ * website adds it to the run's approvals: the website the gate named, which
+ * is the page the chat last read, as the browser reported it.
+ */
+const gateStep = async (
+  step: BrowserControlCommand,
+  {
+    approvals,
+    approve,
+    page,
+    signIn,
+    signal,
+    siteGrants,
+  }: Pick<
+    LocalBrowserCallContext,
+    "approvals" | "approve" | "signal" | "siteGrants"
+  > & { page: BrowserReportedPage | null; signIn: boolean },
+): Promise<GatedStep> => {
+  const decision = decideBrowserStep({
+    command: step,
+    grantedOrigins: siteGrants,
+    level: approvals,
+    reportedPage: page,
+    signIn,
+  });
+  switch (decision.type) {
+    case BROWSER_STEP_GATE.run:
+      return { type: "runs", ticket: null };
+    case BROWSER_STEP_GATE.refuse:
+      return { type: "answered", result: readOnlyResult() };
+    case BROWSER_STEP_GATE.needsMember:
+      return { type: "answered", result: signInPendingResult() };
+    case BROWSER_STEP_GATE.ask: {
+      if (!isElementCommand(step)) {
+        return panic("Only a step on an element asks the member");
+      }
+      const ticket = await approve({
+        ...approvalQuestion(step),
+        signal,
+        site: decision.site,
+      });
+      if (ticket.decision === APPROVAL_DECISION.deny) {
+        return { type: "answered", result: declinedResult() };
+      }
+      if (
+        ticket.decision === APPROVAL_DECISION.approveSite &&
+        decision.site !== null
+      ) {
+        siteGrants.add(decision.site);
+      }
+      return { type: "runs", ticket };
+    }
+    default:
+      decision satisfies never;
+      return panic("Unhandled browser step decision");
+  }
+};
 
 /** The element `ref` names in the page the chat last read, as a command addresses it. */
 const addressed = (seen: PageSeen | null, ref: string) => {
@@ -1028,6 +1107,7 @@ export const createLocalBrowserSession = () => {
         downloads,
         send,
         signal,
+        siteGrants,
       }: LocalBrowserCallContext,
     ): Promise<LocalBrowserToolResult> => {
       const next = command(tool, input);
@@ -1039,35 +1119,18 @@ export const createLocalBrowserSession = () => {
       if (!acts && CHANGES_PAGE[step.action]) {
         return notAvailableResult();
       }
-      let ticket: ApprovalTicket | null = null;
-      const decision = decideBrowserStep({
-        command: step,
-        grantedOrigins: NO_SITE_GRANTS,
-        level: approvals,
-        reportedPage: reportedPage(seen),
+      const gated = await gateStep(step, {
+        approvals,
+        approve,
+        page: reportedPage(seen),
         signIn,
+        signal,
+        siteGrants,
       });
-      switch (decision.type) {
-        case BROWSER_STEP_GATE.run:
-          break;
-        case BROWSER_STEP_GATE.refuse:
-          return readOnlyResult();
-        case BROWSER_STEP_GATE.needsMember:
-          return signInPendingResult();
-        case BROWSER_STEP_GATE.ask: {
-          if (!isElementCommand(step)) {
-            return panic("Only a step on an element asks the member");
-          }
-          ticket = await approve({ ...approvalQuestion(step), signal });
-          if (ticket.decision === APPROVAL_DECISION.deny) {
-            return declinedResult();
-          }
-          break;
-        }
-        default:
-          decision satisfies never;
-          return panic("Unhandled browser step decision");
+      if (gated.type === "answered") {
+        return gated.result;
       }
+      const { ticket } = gated;
       const movesBefore = browserMoves();
       // The tabs the chat knew before this step: any other is one it opened.
       const knewTabs = seen === null ? null : new Set(seen.tabs.keys());

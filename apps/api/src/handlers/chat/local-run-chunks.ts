@@ -2308,6 +2308,7 @@ const startRefusalFailure = (
 
 type StartOptions = {
   attachments: readonly LocalRunAttachment[];
+  browserSiteGrants: readonly string[];
   context: LocalRunContext;
   target: LocalRunTarget;
   input: LocalRunStreamInput;
@@ -2322,6 +2323,7 @@ type StartOptions = {
  */
 async function* startLocalRun({
   attachments,
+  browserSiteGrants,
   context,
   target,
   input,
@@ -2375,6 +2377,7 @@ async function* startLocalRun({
       model: destination.model,
       reasoningEffort: destination.reasoningEffort,
       approvals: destination.approvals,
+      browserSiteGrants,
       session: session.value,
       instructions: input.instructions,
       // Copied to plain objects: the wire schema reads them as records.
@@ -2707,7 +2710,12 @@ async function* adoptLocalRun({
  * is, and an adopted turn reads on the run another task released.
  */
 export type LocalRunPlan =
-  | { type: "start"; target: LocalRunTarget }
+  | {
+      type: "start";
+      target: LocalRunTarget;
+      /** The member's website approvals, as stored when the turn starts. */
+      browserSiteGrants: readonly string[];
+    }
   | { type: "resume"; harness: ChatLocalRunHarness }
   | { type: "adopt"; harness: ChatLocalRunHarness };
 
@@ -2728,6 +2736,7 @@ const localChatRun = (
         return resume === undefined || resume.length === 0
           ? startLocalRun({
               attachments,
+              browserSiteGrants: plan.browserSiteGrants,
               context,
               target: plan.target,
               input,

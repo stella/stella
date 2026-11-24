@@ -47,6 +47,11 @@ export const devQuickStartRuntime = (() => {
 if (hot !== undefined) {
   hot.accept();
   hot.dispose((data: Record<string, unknown>) => {
-    data[DEV_QUICK_START_HMR_KEY] = devQuickStartRuntime;
+    Object.defineProperty(data, DEV_QUICK_START_HMR_KEY, {
+      value: devQuickStartRuntime,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
   });
 }

@@ -867,10 +867,19 @@ const browserExtensionCancelRequestSchema = v.strictObject({
   type: v.literal("cancel"),
 });
 
+const browserExtensionFocusTabRequestSchema = v.strictObject({
+  controllerId: controllerIdSchema,
+  protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
+  requestId: requestIdSchema,
+  source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.web),
+  type: v.literal("focus-tab"),
+});
+
 export const browserExtensionRequestSchema = v.variant("type", [
   browserExtensionPingRequestSchema,
   browserExtensionCommandRequestSchema,
   browserExtensionCancelRequestSchema,
+  browserExtensionFocusTabRequestSchema,
 ]);
 
 export type BrowserExtensionRequest = v.InferOutput<

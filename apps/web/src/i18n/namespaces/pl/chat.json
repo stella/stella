@@ -238,6 +238,13 @@
       },
       "updating": "Oczekuje na aktualizację wtyczki Chrome."
     },
+    "browserSignIn": {
+      "continue": "Zalogowałem się",
+      "description": "Strona otwarta w tle wymaga logowania. Otwórz kartę, zaloguj się w Chrome, a następnie kontynuuj.",
+      "openTab": "Otwórz kartę logowania",
+      "title": "Wymagane logowanie",
+      "titleWithHost": "Zaloguj się do {host}"
+    },
     "cancelQueuedMessage": "Anuluj wiadomość w kolejce",
     "caseLawGreeting": "Zapytaj mnie o to orzeczenie; mam dostęp do pełnej treści.",
     "chatAbout": "Omów na czacie",

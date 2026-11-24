@@ -12,6 +12,11 @@ import {
   type BrowserStepDecision,
 } from "@stll/api-contract/browser-step-gate";
 
+import {
+  browserCommandHost,
+  type BrowserSignInDecision,
+} from "./browser-sign-in-handoff";
+
 /** How a command runs: the chat turn it belongs to and its stop signal. */
 export type BrowserCommandRun = {
   signal: AbortSignal;
@@ -86,10 +91,18 @@ const refusalOf = (
  * answered here and never reaches the extension; its card let it through so
  * this answer reaches the model.
  */
+type WaitForSignIn = (options: {
+  host: string | null;
+  signal: AbortSignal;
+}) => Promise<BrowserSignInDecision>;
+
+const MAX_SIGN_IN_RETRIES = 3;
+
 export const createBrowserToolExecutionCache = (
   execute: BrowserCommandExecutor,
   beginCommand: BeginBrowserCommand,
   decide: DecideBrowserCommand,
+  waitForSignIn?: WaitForSignIn,
 ) => {
   const executions = new Map<string, Promise<BrowserControlResult>>();
 
@@ -107,7 +120,31 @@ export const createBrowserToolExecutionCache = (
     const finish = beginCommand();
     let succeeded = false;
     try {
-      const result = await execute(input, toolCallId, commandRun);
+      let result = await execute(input, toolCallId, commandRun);
+      if (waitForSignIn !== undefined) {
+        const host = browserCommandHost(input);
+        for (
+          let attempt = 1;
+          attempt <= MAX_SIGN_IN_RETRIES &&
+          result.status === "error" &&
+          result.code === BROWSER_CONTROL_ERROR_CODE.needsMember;
+          attempt += 1
+        ) {
+          const decision = await waitForSignIn({
+            host,
+            signal: commandRun.signal,
+          });
+          if (decision !== "resume") {
+            break;
+          }
+          // After signing in, read the tab as it now stands without navigating away.
+          result = await execute(
+            { action: "snapshot" },
+            `${toolCallId}:sign-in-${attempt}`,
+            commandRun,
+          );
+        }
+      }
       succeeded = result.status !== "error";
       return result;
     } finally {

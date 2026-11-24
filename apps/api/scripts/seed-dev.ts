@@ -635,7 +635,9 @@ const resolveSeedFileFormat = (fileName: string): SeedFileFormat => {
   if (fileName.endsWith(".docx")) {
     return { type: "docx", extension: "docx", mimeType: DOCX_MIME };
   }
-  const email = seedEmails[fileName];
+  const email = Object.hasOwn(seedEmails, fileName)
+    ? seedEmails[fileName]
+    : undefined;
   if (email !== undefined) {
     return {
       type: "email",
@@ -747,7 +749,9 @@ const FALLBACK_ACTIVITY_BASE_MS = Date.UTC(2026, 1, 2, 8, 0, 0);
 const FALLBACK_ACTIVITY_STEP_MS = HOUR_MS;
 
 const workspaceLastActivityAt = (reference: string, index: number): Date => {
-  const pinned = recentMatterActivity[reference];
+  const pinned = Object.hasOwn(recentMatterActivity, reference)
+    ? recentMatterActivity[reference]
+    : undefined;
   return pinned
     ? new Date(pinned)
     : new Date(FALLBACK_ACTIVITY_BASE_MS + index * FALLBACK_ACTIVITY_STEP_MS);
@@ -1122,7 +1126,9 @@ const buildEntities = (wsId: WorkspaceId, wsLabel: string): EntitySeed[] => {
       });
     }
 
-    const docNames = workspaceDocNames[wsLabel] ?? [];
+    const docNames = Object.hasOwn(workspaceDocNames, wsLabel)
+      ? (workspaceDocNames[wsLabel] ?? [])
+      : [];
     for (let i = 0; i < docNames.length; i++) {
       const { entityId, entityVersionId } = exportReviewDocumentIds(i);
       result.push({
@@ -1157,7 +1163,9 @@ const buildEntities = (wsId: WorkspaceId, wsLabel: string): EntitySeed[] => {
       });
     }
 
-    const docNames = workspaceDocNames[wsLabel] ?? [];
+    const docNames = Object.hasOwn(workspaceDocNames, wsLabel)
+      ? (workspaceDocNames[wsLabel] ?? [])
+      : [];
     for (let i = 0; i < docNames.length; i++) {
       const parentId = at(folderIds, i % folderIds.length);
       result.push({
@@ -1173,7 +1181,9 @@ const buildEntities = (wsId: WorkspaceId, wsLabel: string): EntitySeed[] => {
     return result;
   }
 
-  const docNames = workspaceDocNames[wsLabel] ?? [];
+  const docNames = Object.hasOwn(workspaceDocNames, wsLabel)
+    ? (workspaceDocNames[wsLabel] ?? [])
+    : [];
   const standardEntities: EntitySeed[] = [
     {
       entityId: folderId,

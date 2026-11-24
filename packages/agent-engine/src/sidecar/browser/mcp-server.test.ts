@@ -121,6 +121,7 @@ describe("the local browser MCP endpoint", () => {
     const binding = mcp.register({
       accountOrigin: "https://api.example-stella.com",
       approvals: "auto",
+      siteGrants: new Set<string>(),
       approve,
       stopped: NEVER_STOPPED,
       runId: "run-1",
@@ -202,6 +203,7 @@ describe("the local browser MCP endpoint", () => {
     const first = mcp.register({
       accountOrigin: "https://api.example-stella.com",
       approvals: "auto",
+      siteGrants: new Set<string>(),
       approve,
       stopped: NEVER_STOPPED,
       runId: "run-1",
@@ -211,6 +213,7 @@ describe("the local browser MCP endpoint", () => {
     const second = mcp.register({
       accountOrigin: "https://api.example-stella.com",
       approvals: "auto",
+      siteGrants: new Set<string>(),
       approve,
       stopped: NEVER_STOPPED,
       runId: "run-2",
@@ -237,6 +240,7 @@ describe("the local browser MCP endpoint", () => {
     const run = {
       accountOrigin: "https://api.example-stella.com",
       approvals: "auto",
+      siteGrants: new Set<string>(),
       approve,
       stopped: NEVER_STOPPED,
       threadId: "thread-1",
@@ -343,6 +347,7 @@ describe("downloads of a chat's tab", () => {
     const binding = mcp.register({
       accountOrigin: "https://api.example-stella.com",
       approvals: "auto",
+      siteGrants: new Set<string>(),
       approve,
       runId: "run-1",
       stopped: NEVER_STOPPED,
@@ -436,6 +441,7 @@ describe("a browser call in flight", () => {
     const binding = mcp.register({
       accountOrigin: "https://api.example-stella.com",
       approvals: "auto",
+      siteGrants: new Set<string>(),
       approve,
       runId: "run-1",
       stopped: stop.signal,
@@ -456,6 +462,7 @@ describe("a browser call in flight", () => {
     const binding = mcp.register({
       accountOrigin: "https://api.example-stella.com",
       approvals: "auto",
+      siteGrants: new Set<string>(),
       approve,
       runId: "run-1",
       stopped: stop.signal,

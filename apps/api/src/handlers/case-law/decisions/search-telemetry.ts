@@ -165,20 +165,20 @@ export type CaseLawSearchDbTimer = {
 };
 
 const createCaseLawSearchDbTimer = (): CaseLawSearchDbTimer => {
-  const msByRead: Record<CaseLawSearchDbRead, number> = {
-    alternates: 0,
-    candidates: 0,
-    courtWeights: 0,
-    identity: 0,
-    page: 0,
-    servingGeneration: 0,
-    sourceRegistry: 0,
-  };
+  const msByRead = new Map<CaseLawSearchDbRead, number>([
+    ["alternates", 0],
+    ["candidates", 0],
+    ["courtWeights", 0],
+    ["identity", 0],
+    ["page", 0],
+    ["servingGeneration", 0],
+    ["sourceRegistry", 0],
+  ]);
   let reads = 0;
   const running = new Set<{ read: CaseLawSearchDbRead; startedAt: number }>();
 
   const record = (read: CaseLawSearchDbRead, ms: number): void => {
-    msByRead[read] += ms;
+    msByRead.set(read, (msByRead.get(read) ?? 0) + ms);
     reads += 1;
   };
 
@@ -194,7 +194,18 @@ const createCaseLawSearchDbTimer = (): CaseLawSearchDbTimer => {
       record(read, performance.now() - entry.startedAt);
       return rows;
     },
-    timing: () => ({ reads, msByRead: { ...msByRead } }),
+    timing: () => ({
+      reads,
+      msByRead: {
+        alternates: msByRead.get("alternates") ?? 0,
+        candidates: msByRead.get("candidates") ?? 0,
+        courtWeights: msByRead.get("courtWeights") ?? 0,
+        identity: msByRead.get("identity") ?? 0,
+        page: msByRead.get("page") ?? 0,
+        servingGeneration: msByRead.get("servingGeneration") ?? 0,
+        sourceRegistry: msByRead.get("sourceRegistry") ?? 0,
+      },
+    }),
     unfinished: () =>
       [...running].map(({ read, startedAt }) => ({
         read,
@@ -209,14 +220,14 @@ const createCaseLawSearchDbTimer = (): CaseLawSearchDbTimer => {
  * no breakdown.
  */
 const dbAttributes = (db: CaseLawSearchDbTiming): LoggerAttributes => {
-  const msByAttribute: LoggerAttributes = {};
+  const msByAttribute = new Map<string, number>();
   let dbMs = 0;
   for (const read of Object.values(CASE_LAW_SEARCH_DB_READ)) {
     const ms = Math.round(db.msByRead[read]);
-    msByAttribute[DB_READ_ATTRIBUTE[read]] = ms;
+    msByAttribute.set(DB_READ_ATTRIBUTE[read], ms);
     dbMs += ms;
   }
-  return { dbReads: db.reads, dbMs, ...msByAttribute };
+  return { dbReads: db.reads, dbMs, ...Object.fromEntries(msByAttribute) };
 };
 
 /**

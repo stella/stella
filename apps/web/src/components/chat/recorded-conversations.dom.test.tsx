@@ -1239,6 +1239,9 @@ const QUEUE_ACTION = notRecorded(
 const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "allow-in-conversation": recordedAs(approvedAs("allow-in-conversation")),
   "allow-once": recordedAs(approvedAs("allow-once")),
+  "allow-website-for-run": notRecorded(
+    "Only a run on the member's computer asks it, and the recorder runs cloud turns only; tool-approval-card.dom.test.tsx drives it through the card.",
+  ),
   "always-allow": recordedAs(({ type }) => type === "auto-approve"),
   "answer-local-question": notRecorded(
     "The recorder runs cloud turns only; local-run-question-card.dom.test.tsx drives a local run's question through the page.",

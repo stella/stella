@@ -238,6 +238,13 @@
       },
       "updating": "Gaida Chrome spraudņa atjauninājumu."
     },
+    "browserSignIn": {
+      "continue": "Esmu pieteicies",
+      "description": "Fonā atvērtā lapa pieprasa pieteikšanos. Atveriet cilni, lai pieteiktos Chrome pārlūkā, un pēc tam turpiniet.",
+      "openTab": "Atvērt pieteikšanās cilni",
+      "title": "Nepieciešama pieteikšanās",
+      "titleWithHost": "Pieteikties vietnē {host}"
+    },
     "cancelQueuedMessage": "Atcelt rindā gaidošo ziņojumu",
     "caseLawGreeting": "Uzdodiet jautājumus par šo lēmumu; pilns teksts ir pieejams šeit.",
     "chatAbout": "Ievietot AI tērzēšanā",

@@ -154,6 +154,7 @@ const resolve = async ({
   resumesPausedRun = false,
   readApprovalCeiling = async () =>
     await Promise.resolve(Result.ok(CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS)),
+  readBrowserSiteGrants = async () => await Promise.resolve(Result.ok([])),
 }: {
   /** The send's target; a local one unless the case says otherwise. */
   runTarget?: ChatRunTarget | "none";
@@ -163,6 +164,7 @@ const resolve = async ({
   agentSandboxRequested?: boolean;
   resumesPausedRun?: boolean;
   readApprovalCeiling?: ResolveChatLocalRunOptions["readApprovalCeiling"];
+  readBrowserSiteGrants?: ResolveChatLocalRunOptions["readBrowserSiteGrants"];
 } = {}) => {
   const { control, picks, starts } = startingControl(picked, inserted);
   const resolved = await resolveChatLocalRun({
@@ -175,6 +177,7 @@ const resolve = async ({
     chatThreadId: THREAD_ID,
     workspaceIds: [],
     readApprovalCeiling,
+    readBrowserSiteGrants,
     steeredQueue: unqueuedSteers,
     runtime: { control, runBell: createLocalRunBell() },
   });
@@ -375,6 +378,43 @@ describe("a send for the member's computer, before anything is stored", () => {
         expect(picks).toEqual([]);
       }
     }
+  });
+
+  test("a new turn's run carries the member's website approvals as stored when it starts", async () => {
+    const granted = ["https://fixture-library.test"];
+    const { starts } = await start({
+      readBrowserSiteGrants: async () =>
+        await Promise.resolve(Result.ok(granted)),
+    });
+    expect(starts).toEqual([
+      expect.objectContaining({ browserSiteGrants: granted }),
+    ]);
+  });
+
+  test("a resumed turn's run keeps the approvals it started with, without rereading them", async () => {
+    let reads = 0;
+    const { resolved } = await resolve({
+      resumesPausedRun: true,
+      readBrowserSiteGrants: async () => {
+        reads += 1;
+        return await Promise.resolve(Result.ok([]));
+      },
+    });
+    expect(resolved.isOk()).toBe(true);
+    expect(reads).toBe(0);
+  });
+
+  test("website approvals that cannot be read fail the send", async () => {
+    const failure = new DatabaseError({
+      message: "grants unavailable",
+      cause: undefined,
+    });
+    const { resolved, picks } = await resolve({
+      readBrowserSiteGrants: async () =>
+        await Promise.resolve(Result.err(failure)),
+    });
+    expect(resolved.isErr() && resolved.error).toBe(failure);
+    expect(picks).toEqual([]);
   });
 
   test("a ceiling that cannot be read fails the send", async () => {

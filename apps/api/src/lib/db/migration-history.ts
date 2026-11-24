@@ -37,21 +37,21 @@ type MigrationAliasEntry = {
 export const deriveMigrationAliasHistory = (
   inventory: readonly MigrationAliasEntry[],
 ) => {
-  const histories: Record<
+  const histories = new Map<
     string,
     {
       currentHash: string;
       priorHashes: string[];
       requiredIndexes: RequiredMigrationIndex[];
     }
-  > = {};
+  >();
   const indexesByName = new Map<string, IntroducedMigrationIndex>();
 
   for (const { fileName, priorHash, newHash, repair } of inventory) {
-    let history = histories[fileName];
+    let history = histories.get(fileName);
     if (history === undefined) {
       history = { currentHash: newHash, priorHashes: [], requiredIndexes: [] };
-      histories[fileName] = history;
+      histories.set(fileName, history);
     }
     history.currentHash = newHash;
     history.priorHashes.push(priorHash);
@@ -80,7 +80,10 @@ export const deriveMigrationAliasHistory = (
       indexesByName.set(index.name, { ...index, introducedBy: fileName });
     }
   }
-  return { histories, indexes: [...indexesByName.values()] };
+  return {
+    histories: Object.fromEntries(histories),
+    indexes: [...indexesByName.values()],
+  };
 };
 
 const {
@@ -122,7 +125,9 @@ const acceptedHashesFor = ({
   name,
   hash,
 }: LocalMigration): readonly string[] => {
-  const supportedHistory = REWRITTEN_MIGRATION_HISTORIES[name];
+  const supportedHistory = Object.hasOwn(REWRITTEN_MIGRATION_HISTORIES, name)
+    ? REWRITTEN_MIGRATION_HISTORIES[name]
+    : undefined;
   return supportedHistory?.currentHash === hash
     ? [hash, ...supportedHistory.priorHashes]
     : [hash];

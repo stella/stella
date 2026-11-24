@@ -296,17 +296,17 @@ const parseCatalogObject = (
 const collectTopLevelStringEntries = (
   value: PlainRecord,
 ): Record<string, string> => {
-  const entries: Record<string, string> = {};
+  const entries = new Map<string, string>();
 
   for (const [key, entryValue] of Object.entries(value)) {
     if (!/^[A-Z][A-Z0-9_]{2,}$/u.test(key) || typeof entryValue !== "string") {
       continue;
     }
 
-    entries[key] = entryValue;
+    entries.set(key, entryValue);
   }
 
-  return sortRecord(entries);
+  return sortRecord(Object.fromEntries(entries));
 };
 
 const collectNestedStringEntries = (
