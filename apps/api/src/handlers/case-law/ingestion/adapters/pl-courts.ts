@@ -1,3 +1,4 @@
+// parser-output-unchanged: [map-lookup] replacing static Record lookup tables with Map preserves identical parser output.
 // parser-output-unchanged: [pl-courts] Bounded publisher body reads preserve successful response text, raw payloads and parsed decisions.
 // parser-output-unchanged: [pl-ncourt] Only SAOS transport reads change; imported ruling decision-type constants are unchanged.
 // parser-output-unchanged: The day listing and reconciliation page carry the existing totalResults count for the census; decision parsing and listed records are unchanged.

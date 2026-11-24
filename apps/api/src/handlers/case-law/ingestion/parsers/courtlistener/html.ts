@@ -1,3 +1,4 @@
+// parser-output-unchanged: [map-lookup] replacing static Record lookup tables with Map preserves identical parser output.
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: shared exclusion and text helpers discard the same script/style content as the existing walks; page-chrome text normalization uses the shared normalizeUnicode owner with the same NFC form.
 // parser-output-unchanged: validation reads the source paragraphs directly, as the markup built from them parsed to.

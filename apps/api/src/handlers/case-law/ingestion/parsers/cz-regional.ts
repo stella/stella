@@ -1,3 +1,4 @@
+// parser-output-unchanged: [map-lookup] replacing static Record lookup tables with Map preserves identical parser output.
 // parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
 /**
  * Czech Regional Courts parser.

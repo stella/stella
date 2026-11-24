@@ -1,3 +1,4 @@
+// parser-output-unchanged: [map-lookup] replacing static Record lookup tables with Map preserves identical parser output.
 // parser-output-unchanged: [eu-ecj] bounded response body reads preserve identical payloads; only oversized responses are refused.
 // parser-output-unchanged: [eu-ecj] bounded Formex archive reads yield the same entries in the same order; only oversized archives are refused.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.

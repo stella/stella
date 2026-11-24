@@ -1,3 +1,4 @@
+// parser-output-unchanged: [map-lookup] replacing static Record lookup tables with Map preserves identical parser output.
 // parser-output-unchanged: source-fields-pl: Additional publisher categories and inventory targets leave existing parsed decisions unchanged.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 import { panic, Result } from "better-result";

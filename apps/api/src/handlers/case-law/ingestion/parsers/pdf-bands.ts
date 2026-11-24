@@ -1,3 +1,4 @@
+// parser-output-unchanged: [map-lookup] replacing static Record lookup tables with Map preserves identical parser output.
 // parser-output-unchanged: [pl-sn] the PDF reader moved here from pl-sn.ts; the Supreme Court page reading is the same code, reached the same way.
 // parser-output-unchanged: [pl-kis] the PDF reader moved here from pl-sn.ts; the default reading pl-kis uses is the same code.
 // parser-output-unchanged: [cz-nss] the PDF reader moved here from pl-sn.ts; the default reading the NSS document reader uses is the same code.
