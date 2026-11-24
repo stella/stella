@@ -6,6 +6,7 @@ import {
   fromProseDoc,
   toProseDoc,
 } from "@stll/folio-core/prosemirror/conversion";
+import { createDerivedFieldsPlugin } from "@stll/folio-core/prosemirror/plugins/derivedFields";
 import { schema } from "@stll/folio-core/prosemirror/schema";
 import { createDocx, parseDocx } from "@stll/folio-core/server";
 import { assertProperty } from "@stll/property-testing";
@@ -13,7 +14,7 @@ import { assertProperty } from "@stll/property-testing";
 import {
   collectEvidenceReferences,
   createEvidenceField,
-  createEvidenceReferencesPlugin,
+  EVIDENCE_DERIVED_FIELDS,
   evidenceLabel,
   readEvidenceField,
 } from "./evidence-reference";
@@ -53,7 +54,7 @@ describe("evidence references", () => {
         (ids) => {
           let state = EditorState.create({
             schema,
-            plugins: [createEvidenceReferencesPlugin()],
+            plugins: [createDerivedFieldsPlugin(() => EVIDENCE_DERIVED_FIELDS)],
           });
           state = state.applyTransaction(
             state.tr.replaceWith(
@@ -102,7 +103,10 @@ describe("evidence references", () => {
     const { closeHistory, history, undo } = await import("@tiptap/pm/history");
     let state = EditorState.create({
       schema,
-      plugins: [history(), createEvidenceReferencesPlugin()],
+      plugins: [
+        history(),
+        createDerivedFieldsPlugin(() => EVIDENCE_DERIVED_FIELDS),
+      ],
     });
     state = state.applyTransaction(
       state.tr.replaceWith(

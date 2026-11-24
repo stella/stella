@@ -101,10 +101,12 @@ fn tray_icon_updates_always_restore_template_tinting() {
       "tray icon updates must go through set_tray_icon"
     );
   }
+  // Only macOS tints templates; elsewhere the tray draws the art as given.
   assert!(
-    compact(helper)
-      .contains("tray.set_icon(Some(icon))?;tray.set_icon_as_template(true)"),
-    "setting the tray icon must immediately restore template tinting"
+    compact(helper).contains(
+      "tray.set_icon(Some(icon))?;#[cfg(target_os=\"macos\")]tray.set_icon_as_template(true)?;"
+    ),
+    "setting the tray icon must immediately restore template tinting on macOS"
   );
 }
 

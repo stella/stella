@@ -4,6 +4,7 @@ use objc2_app_kit::{
   NSApplication, NSPanel, NSStatusWindowLevel, NSWindow, NSWindowCollectionBehavior,
   NSWindowStyleMask,
 };
+use std::sync::{Arc, Mutex, PoisonError};
 use tauri::{Runtime, WebviewWindow};
 
 define_class!(
@@ -39,15 +40,51 @@ define_class!(
     /// another window takes key status.
     #[unsafe(method(resignKeyWindow))]
     fn resign_key_window(&self) {
+      // Read before AppKit resigns: a park the app asked for marks the panel
+      // parked before it gives up key status, so a panel still presented
+      // here lost key status to an outside click.
+      let deactivated = panel_presented(self);
       // SAFETY: this forwards the parameter-free NSWindow lifecycle method to
       // NSPanel before changing presentation-only window properties.
       unsafe {
         let () = msg_send![super(self), resignKeyWindow];
       }
       set_panel_parked(self);
+      if deactivated {
+        notify_panel_deactivation();
+      }
     }
   }
 );
+
+type PanelDeactivationObserver = Arc<dyn Fn() + Send + Sync>;
+
+static PANEL_DEACTIVATION_OBSERVER: Mutex<Option<PanelDeactivationObserver>> =
+  Mutex::new(None);
+
+/// Runs `observer` whenever the presented clipboard panel parks itself
+/// because another window took key status (an outside click). A park the app
+/// requested does not reach it. Replaces an earlier observer.
+pub fn observe_panel_deactivation(observer: impl Fn() + Send + Sync + 'static) {
+  *PANEL_DEACTIVATION_OBSERVER
+    .lock()
+    .unwrap_or_else(PoisonError::into_inner) = Some(Arc::new(observer));
+}
+
+fn notify_panel_deactivation() {
+  // Cloned out so the observer runs without the lock held.
+  let observer = PANEL_DEACTIVATION_OBSERVER
+    .lock()
+    .unwrap_or_else(PoisonError::into_inner)
+    .clone();
+  if let Some(observer) = observer {
+    observer();
+  }
+}
+
+fn panel_presented(ns_window: &NSWindow) -> bool {
+  ns_window.alphaValue() > 0.0 && !ns_window.ignoresMouseEvents()
+}
 
 fn set_panel_parked(ns_window: &NSWindow) {
   ns_window.setAlphaValue(0.0);
@@ -250,7 +287,7 @@ pub fn is_panel_presented<R: Runtime>(window: &WebviewWindow<R>) -> bool {
   let Some((_, ns_window)) = ns_window(window) else {
     return false;
   };
-  ns_window.alphaValue() > 0.0 && !ns_window.ignoresMouseEvents()
+  panel_presented(ns_window)
 }
 
 /// Stops the webview from tracking window occlusion, so a parked window

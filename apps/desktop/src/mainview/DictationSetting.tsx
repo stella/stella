@@ -222,56 +222,6 @@ const isDictationSnapshot = (value: unknown): value is DictationSnapshot =>
   "available" in value &&
   typeof value.available === "boolean";
 
-type DictationAvailability = "loading" | "available" | "unavailable";
-
-/**
- * Whether this build and account offer dictation, which decides the
- * Dictation page. Reads the snapshot again on every dictation change, which
- * the native side also sends when the server's decision changes.
- */
-export const useDictationAvailability = () => {
-  const [availability, setAvailability] =
-    useState<DictationAvailability>("loading");
-
-  useEffect(() => {
-    let disposed = false;
-    let request = 0;
-    const read = async () => {
-      request += 1;
-      const current = request;
-      const result = await Result.tryPromise(async () =>
-        invoke<unknown>("dictation_get_snapshot"),
-      );
-      if (disposed || current !== request) {
-        return;
-      }
-      setAvailability(
-        Result.isOk(result) &&
-          isDictationSnapshot(result.value) &&
-          result.value.available
-          ? "available"
-          : "unavailable",
-      );
-    };
-    const stopListening = subscribeDesktopEvent({
-      event: "dictation-changed",
-      handler: () => {
-        void read();
-      },
-      onError: () => {
-        setAvailability("unavailable");
-      },
-    });
-    void read();
-    return () => {
-      disposed = true;
-      stopListening();
-    };
-  }, []);
-
-  return availability;
-};
-
 /** The Dictation page: the switch, where speech is transcribed, AI cleanup,
  *  the speech model and what went wrong. Renders nothing for an account
  *  without the feature. */

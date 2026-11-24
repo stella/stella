@@ -257,6 +257,8 @@
     },
     "members": {
       "billingAccess": "Acesso aos dados de faturamento",
+      "billingAccessDescription": "Permite visualizar taxas, valores e faturas nos casos aos quais este membro tem acesso. Proprietários e administradores sempre têm esse acesso.",
+      "billingAccessIncludedInRole": "Incluído na função",
       "changeRole": "Mudar função",
       "confirmRoleChangeDescription": "A função de {email} mudará {oldRole, select, owner {de proprietário} admin {de administrador} member {de membro} intern {de estagiário} external {de colaborador externo} other {}} {newRole, select, owner {para proprietário} admin {para administrador} member {para membro} intern {para estagiário} external {para colaborador externo} other {}}.",
       "confirmRoleChangeTitle": "Mudar função",
@@ -780,8 +782,10 @@
         "title": "Nome curto da organização"
       },
       "sso": {
+        "acsUrlLabel": "URL de ACS",
         "addDomain": "Adicionar domínio",
         "addProvider": "Adicionar provedor OIDC",
+        "addSamlProvider": "Adicionar provedor SAML 2.0",
         "callbackUrlLabel": "URL de callback",
         "clientIdLabel": "ID do cliente",
         "clientSecretLabel": "Client Secret",
@@ -809,6 +813,10 @@
         "providersTitle": "Provedores de identidade",
         "requireSsoDescription": "Quando ativado, os membros precisam entrar por um provedor de identidade desta organização.",
         "requireSsoTitle": "Exigir SSO nesta organização",
+        "samlCertLabel": "Certificado de assinatura X.509 do IdP (PEM)",
+        "samlEntityIdLabel": "URI do emissor IdP",
+        "samlEntryPointLabel": "URL de SSO do IdP (ponto de entrada)",
+        "spMetadataUrlLabel": "URL de metadados SP",
         "testDiscovery": "Testar descoberta",
         "title": "Logon único (SSO)",
         "verifyDomain": "Verificar agora"

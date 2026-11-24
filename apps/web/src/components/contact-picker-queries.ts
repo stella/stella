@@ -1,11 +1,13 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import type { ContactType } from "@stll/api-contract";
+import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import { api } from "@/lib/api";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import type { QueryOptionsInput } from "@/lib/react-query";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 type ContactPickerOrganizationKey = {
   organizationId: string;
@@ -41,14 +43,20 @@ export const contactPickerSearchOptions = ({
   q,
   type,
 }: ContactPickerSearchOptionsInput) =>
-  queryOptions({
-    queryKey: contactPickerKeys.search({ organizationId, q, type }),
-    queryFn: async ({ signal }) => {
-      const response = await api.contacts.search.get({
-        query: { q, ...(type !== undefined && { type }) },
-        fetch: { signal },
-      });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: contactPickerKeys.search({ organizationId, q, type }),
+      queryFn: async ({ signal }) => {
+        const response = await api.contacts.search.get({
+          query: { q, ...(type !== undefined && { type }) },
+          fetch: { signal },
+        });
 
-      return unwrapApiResponse(response).items;
+        return unwrapApiResponse(response).items;
+      },
+    }),
+    {
+      resources: [RESOURCE_TYPE.CONTACT],
+      scope: { type: "organization", organizationId },
     },
-  });
+  );

@@ -257,6 +257,8 @@
     },
     "members": {
       "billingAccess": "Prístup k fakturačným údajom",
+      "billingAccessDescription": "Umožňuje zobraziť sadzby, sumy a faktúry pri spisoch, ku ktorým má člen prístup. Vlastníci a administrátori majú tento prístup vždy.",
+      "billingAccessIncludedInRole": "Zahrnuté v role",
       "changeRole": "Zmeniť rolu",
       "confirmRoleChangeDescription": "Rola používateľa {email} sa zmení {oldRole, select, owner {z vlastníka} admin {z administrátora} member {z člena} intern {zo stážistu} external {z externého spolupracovníka} other {}} {newRole, select, owner {na vlastníka} admin {na administrátora} member {na člena} intern {na stážistu} external {na externého spolupracovníka} other {}}.",
       "confirmRoleChangeTitle": "Zmeniť rolu",
@@ -780,8 +782,10 @@
         "title": "Krátky názov organizácie"
       },
       "sso": {
+        "acsUrlLabel": "Adresa URL služby ACS",
         "addDomain": "Pridať doménu",
         "addProvider": "Pridať poskytovateľa OIDC",
+        "addSamlProvider": "Pridať poskytovateľa SAML 2.0",
         "callbackUrlLabel": "Adresa URL pre spätné volanie",
         "clientIdLabel": "ID klienta",
         "clientSecretLabel": "Client Secret",
@@ -809,6 +813,10 @@
         "providersTitle": "Poskytovatelia identity",
         "requireSsoDescription": "Po zapnutí sa členovia musia na prístup k spisom a nastaveniam prihlásiť cez poskytovateľa identity tejto organizácie.",
         "requireSsoTitle": "Vyžadovať SSO pre túto organizáciu",
+        "samlCertLabel": "Podpisový certifikát X.509 poskytovateľa (PEM)",
+        "samlEntityIdLabel": "URI vydavateľa IdP",
+        "samlEntryPointLabel": "URL jednotného prihlásenia IdP (vstupný bod)",
+        "spMetadataUrlLabel": "Adresa URL metadát SP",
         "testDiscovery": "Otestovať discovery",
         "title": "Jednotné prihlásenie (SSO)",
         "verifyDomain": "Overiť teraz"

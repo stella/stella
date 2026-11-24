@@ -38,6 +38,7 @@
     "allow-clipboard-open-editor",
     "allow-clipboard-copy-item",
     "allow-clipboard-copy-items",
+    "allow-clipboard-copy-dismissed-selection",
     "allow-clipboard-copy-selection",
     "allow-clipboard-hide",
     "allow-clipboard-open-stella",
@@ -47,6 +48,8 @@
     "allow-account-get-state",
     "allow-account-disconnect",
     "allow-open-stella-account",
-    "allow-shortcut-get-snapshot"
+    "allow-shortcut-get-snapshot",
+    "allow-dictation-get-snapshot",
+    "allow-transcribe-open"
   ]
 }

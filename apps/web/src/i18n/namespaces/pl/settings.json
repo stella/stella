@@ -257,6 +257,8 @@
     },
     "members": {
       "billingAccess": "Dostęp do danych rozliczeniowych",
+      "billingAccessDescription": "Pozwala przeglądać stawki, kwoty i faktury w sprawach, do których ten członek ma dostęp. Właściciele i administratorzy zawsze mają ten dostęp.",
+      "billingAccessIncludedInRole": "Zawarte w roli",
       "changeRole": "Zmień rolę",
       "confirmRoleChangeDescription": "Rola użytkownika {email} zmieni się {oldRole, select, owner {z właściciela} admin {z administratora} member {z członka} intern {z praktykanta} external {ze współpracownika zewnętrznego} other {}} {newRole, select, owner {na właściciela} admin {na administratora} member {na członka} intern {na praktykanta} external {na współpracownika zewnętrznego} other {}}.",
       "confirmRoleChangeTitle": "Zmień rolę",
@@ -780,8 +782,10 @@
         "title": "Krótka nazwa organizacji"
       },
       "sso": {
+        "acsUrlLabel": "Adres URL ACS",
         "addDomain": "Dodaj domenę",
         "addProvider": "Dodaj dostawcę OIDC",
+        "addSamlProvider": "Dodaj dostawcę SAML 2.0",
         "callbackUrlLabel": "Adres URL wywołania zwrotnego",
         "clientIdLabel": "Identyfikator klienta",
         "clientSecretLabel": "Client Secret",
@@ -809,6 +813,10 @@
         "providersTitle": "Dostawcy tożsamości",
         "requireSsoDescription": "Po włączeniu członkowie muszą logować się przez dostawcę tożsamości tej organizacji.",
         "requireSsoTitle": "Wymagaj SSO dla tej organizacji",
+        "samlCertLabel": "Certyfikat podpisu X.509 IdP (PEM)",
+        "samlEntityIdLabel": "URI wystawcy IdP",
+        "samlEntryPointLabel": "Adres URL SSO IdP (punkt wejścia)",
+        "spMetadataUrlLabel": "Adres URL metadanych SP",
         "testDiscovery": "Testuj discovery",
         "title": "Logowanie jednokrotne (SSO)",
         "verifyDomain": "Zweryfikuj teraz"

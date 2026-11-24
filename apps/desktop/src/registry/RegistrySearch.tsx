@@ -77,13 +77,17 @@ const registrySearchHint = (
   registryId: string,
 ) => {
   if (connection?.status !== "connected") {
-    return t("registrySearchHint");
+    return t("registryDisconnected");
   }
-  const capabilities = connection.registries.find(
-    ({ id }) => id === registryId,
-  )?.searchCapabilities;
+  const registry = connection.registries.find(({ id }) => id === registryId);
+  if (!registry) {
+    return t("registrySelect");
+  }
+  const capabilities = registry.searchCapabilities;
   if (capabilities?.nameSearch !== "unsupported") {
-    return t("registrySearchHint");
+    // Isolated so a left-to-right registry name keeps its order in a
+    // right-to-left sentence.
+    return t("registrySearchHint", { registry: `⁨${registry.name}⁩` });
   }
   return t("registryIdentifierSearchHint", {
     identifiers: capabilities.identifierKinds.join(", "),

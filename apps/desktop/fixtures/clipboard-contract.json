@@ -1,4 +1,5 @@
 {
   "editorSessionEvent": "clipboard-editor-session",
-  "historyChangedEvent": "clipboard-history-changed"
+  "historyChangedEvent": "clipboard-history-changed",
+  "windowSessionEvent": "clipboard-window-session"
 }

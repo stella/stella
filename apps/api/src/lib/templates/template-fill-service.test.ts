@@ -581,7 +581,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       aiFill: admittedAiFill(async () => ({
-        adaptAiValue: async () => undefined,
+        adaptAiValue: async () => ({ type: "failed" }),
       })),
     });
 
@@ -1215,7 +1215,10 @@ describe("describeStoredTemplate array shape", () => {
       ]);
       expect(
         result.fields.find(({ path }) => path === "persons.title"),
-      ).toMatchObject({ required: true, visibleWhen: "p.vip" });
+      ).toMatchObject({
+        required: true,
+        visibleWhen: "p.vip",
+      });
     } finally {
       fakeS3.stop();
     }
@@ -3302,7 +3305,10 @@ describe("template fields are required where they render", () => {
     expect(
       await fillWithHeader(
         P("Ref {% if show %}{{ ref | required }}{% endif %}"),
-        { show: true, name: "Acme" },
+        {
+          show: true,
+          name: "Acme",
+        },
       ),
     ).toEqual(rejection("ref"));
   });

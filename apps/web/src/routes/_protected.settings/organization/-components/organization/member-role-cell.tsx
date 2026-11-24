@@ -42,7 +42,7 @@ export const RoleCell = ({
 
   if (!editable) {
     return (
-      <span className="text-foreground">
+      <span className="text-foreground inline-flex h-7 items-center px-2.5 text-sm">
         {t(roleTranslationKeys[memberRole].labelKey)}
       </span>
     );
@@ -72,7 +72,7 @@ export const RoleCell = ({
         }}
         value={memberRole}
       >
-        <SelectTrigger className="min-w-32" size="sm">
+        <SelectTrigger className="w-36" size="sm">
           <SelectValue>
             {t(roleTranslationKeys[memberRole].labelKey)}
           </SelectValue>

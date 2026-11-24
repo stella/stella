@@ -257,6 +257,8 @@
     },
     "members": {
       "billingAccess": "Accès aux données de facturation",
+      "billingAccessDescription": "Permet de consulter les taux, montants et factures des dossiers auxquels ce membre a accès. Les propriétaires et administrateurs ont toujours cet accès.",
+      "billingAccessIncludedInRole": "Inclus dans le rôle",
       "changeRole": "Modifier le rôle",
       "confirmRoleChangeDescription": "Le rôle de {email} passera {oldRole, select, owner {de propriétaire} admin {d'administrateur} member {de membre} intern {de stagiaire} external {de collaborateur externe} other {}} {newRole, select, owner {à propriétaire} admin {à administrateur} member {à membre} intern {à stagiaire} external {à collaborateur externe} other {}}.",
       "confirmRoleChangeTitle": "Changer le rôle",
@@ -780,8 +782,10 @@
         "title": "Nom court de l’organisation"
       },
       "sso": {
+        "acsUrlLabel": "URL ACS",
         "addDomain": "Ajouter un domaine",
         "addProvider": "Ajouter un fournisseur OIDC",
+        "addSamlProvider": "Ajouter un fournisseur SAML 2.0",
         "callbackUrlLabel": "URL de rappel (Callback)",
         "clientIdLabel": "Identifiant client (Client ID)",
         "clientSecretLabel": "Secret client (Client Secret)",
@@ -809,6 +813,10 @@
         "providersTitle": "Fournisseurs d'identité",
         "requireSsoDescription": "Lorsqu'il est activé, les membres doivent se connecter via l'un des fournisseurs d'identité de cette organisation.",
         "requireSsoTitle": "Exiger le SSO pour cette organisation",
+        "samlCertLabel": "Certificat de signature X.509 de l'IdP (PEM)",
+        "samlEntityIdLabel": "URI de l'émetteur IdP",
+        "samlEntryPointLabel": "URL SSO de l'IdP (point d'entrée)",
+        "spMetadataUrlLabel": "URL des métadonnées SP",
         "testDiscovery": "Tester la découverte",
         "title": "Authentification unique (SSO)",
         "verifyDomain": "Vérifier maintenant"

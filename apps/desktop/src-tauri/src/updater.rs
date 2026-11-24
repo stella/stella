@@ -23,6 +23,7 @@
 // whenever the page is opened.
 
 use std::future::Future;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, PoisonError};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -433,7 +434,7 @@ impl UpdaterHost for TauriHost<'_> {
 
 struct Published {
   snapshot: UpdaterSnapshot,
-  announced_at: Option<Instant>,
+  announced_at: Option<Duration>,
 }
 
 /// The updater's one state, and the lock that keeps two checks or installs
@@ -470,7 +471,7 @@ impl UpdaterBoard {
   /// within `PROGRESS_EVENT_INTERVAL` of the last announcement is recorded
   /// but not announced; the last step of a download, and every other change,
   /// always is.
-  fn record(&self, state: UpdaterState, now: Instant) -> Option<UpdaterSnapshot> {
+  fn record(&self, state: UpdaterState, now: Duration) -> Option<UpdaterSnapshot> {
     let mut published = self
       .published
       .lock()
@@ -484,7 +485,7 @@ impl UpdaterBoard {
     );
     let recently_announced = published
       .announced_at
-      .is_some_and(|at| now.saturating_duration_since(at) < PROGRESS_EVENT_INTERVAL);
+      .is_some_and(|at| now.saturating_sub(at) < PROGRESS_EVENT_INTERVAL);
     let revision = published.snapshot.revision + 1;
     published.snapshot = UpdaterSnapshot { revision, state };
     if progress_step && recently_announced {
@@ -494,8 +495,13 @@ impl UpdaterBoard {
     Some(published.snapshot.clone())
   }
 
+  fn monotonic_elapsed() -> Duration {
+    static PROCESS_EPOCH: OnceLock<Instant> = OnceLock::new();
+    PROCESS_EPOCH.get_or_init(Instant::now).elapsed()
+  }
+
   fn set<Host: UpdaterHost>(&self, host: &Host, state: UpdaterState) {
-    if let Some(snapshot) = self.record(state, Instant::now()) {
+    if let Some(snapshot) = self.record(state, Self::monotonic_elapsed()) {
       host.announce(&snapshot);
     }
   }
@@ -1123,8 +1129,7 @@ mod tests {
   #[test]
   fn download_progress_is_announced_at_most_once_per_interval() {
     let board = UpdaterBoard::new();
-    let start = Instant::now();
-    let at = |millis| start + Duration::from_millis(millis);
+    let at = Duration::from_millis;
 
     assert!(board.record(UpdaterState::Checking, at(0)).is_some());
     assert!(

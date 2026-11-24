@@ -121,6 +121,8 @@ export const HANDOFF_AUTH_ENDPOINT_POLICY = {
   "/sign-up/email": "ordinary",
   "/social-link-hint": "ordinary",
   "/sso/callback/:providerId": "step-up-method",
+  "/sso/saml2/sp/acs/:providerId": "step-up-method",
+  "/sso/saml2/sp/metadata": "ordinary",
   "/token": "refused",
   "/two-factor/disable": "refused",
   "/two-factor/enable": "refused",

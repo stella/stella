@@ -37,7 +37,7 @@ const INVITATION_COLUMNS = [
     bar: "w-20",
     className: SECONDARY_COLUMN_CLASS,
   },
-  { id: "actions", placeholder: null },
+  { id: "actions", placeholder: null, className: "w-12" },
 ] as const satisfies readonly InvitationColumn[];
 
 type InvitationColumnId = (typeof INVITATION_COLUMNS)[number]["id"];
@@ -48,22 +48,27 @@ type InvitationColumnLabel = Extract<
 
 const INVITATIONS_SKELETON_ROW_COUNT = 3;
 
-export const InvitationsTableRow = ({
+export const InvitationRowCells = ({
   cells,
 }: {
   cells: Record<InvitationColumnId, ReactNode>;
 }) => (
-  <TableRow>
-    {INVITATION_COLUMNS.map((column) => (
-      <TableCellFace
-        align={column.id === "actions" ? "end" : undefined}
-        className={cn("className" in column && column.className)}
-        key={column.id}
-      >
-        {cells[column.id]}
-      </TableCellFace>
-    ))}
-  </TableRow>
+  <>
+    {INVITATION_COLUMNS.map((column) => {
+      const isDate = column.id === "invited" || column.id === "expires";
+      return (
+        <TableCellFace
+          align={column.id === "actions" ? "end" : undefined}
+          className={cn("className" in column && column.className)}
+          key={column.id}
+          numeric={isDate}
+          tone={isDate ? "muted" : undefined}
+        >
+          {cells[column.id]}
+        </TableCellFace>
+      );
+    })}
+  </>
 );
 
 /** Spanned by the row that replaces invitations when none match. */
