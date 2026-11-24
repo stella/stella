@@ -5,15 +5,9 @@ import { useTranslations } from "use-intl";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { CalendarCell } from "@stll/ui/calendar-primitives";
+import { EntityActions } from "@stll/ui/entity-actions";
 import { PlusIcon, SquareCheckIcon } from "@stll/ui/icons";
-import {
-  Menu,
-  MenuAnchor,
-  MenuItem,
-  MenuPopup,
-  MenuTrigger,
-} from "@stll/ui/menu";
-import { containedEventHandler } from "@stll/ui/use-contained-handler";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { cn } from "@stll/ui/utils";
 
 import { withDropAnnouncementData } from "@/components/drag-and-drop-live-region.logic";
@@ -75,29 +69,6 @@ export const CalendarDayCell = ({
     { dateStyle: "long", timeZone: "UTC" },
   );
 
-  // Context menu state
-  const [ctxOpen, setCtxOpen] = useState(false);
-  const [ctxOpener, setCtxOpener] = useState<HTMLElement | null>(null);
-  const [ctxAnchor, setCtxAnchor] = useState<{
-    getBoundingClientRect: () => DOMRect;
-  } | null>(null);
-
-  const handleContextMenu = (e: React.MouseEvent) => {
-    if (!isEditable) {
-      return;
-    }
-    e.preventDefault();
-    setCtxOpener(
-      e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
-    );
-    const x = e.clientX;
-    const y = e.clientY;
-    setCtxAnchor({
-      getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
-    });
-    setCtxOpen(true);
-  };
-
   const dropRef = useRef<HTMLDivElement>(null);
   const [isDropTarget, setIsDropTarget] = useState(false);
 
@@ -133,19 +104,34 @@ export const CalendarDayCell = ({
   }, [announcementDate, isEditable, handleEntityDrop]);
 
   return (
-    <CalendarCell
-      ref={dropRef}
-      className={cn(
-        "group/day relative flex flex-col gap-0.5",
-        "overflow-hidden p-1",
-        !day.isCurrentMonth && "bg-muted/30",
-        day.monthTone === "muted" && "bg-muted/10",
-        day.isWeekend && day.isCurrentMonth && "bg-muted/15",
-        day.startsMonth && "border-s-foreground/35 border-s-2",
-        mode === "week" && "min-h-[300px]",
-        isDropTarget && "bg-primary/10",
-      )}
-      onContextMenu={containedEventHandler(handleContextMenu)}
+    <EntityActions
+      actions={
+        isEditable
+          ? [
+              {
+                label: t("tasks.newTask"),
+                icon: <SquareCheckIcon />,
+                onClick: () => onCreate("task"),
+              },
+            ]
+          : []
+      }
+      label={t("tasks.newTask")}
+      render={
+        <CalendarCell
+          ref={dropRef}
+          className={cn(
+            "group/day relative flex flex-col gap-0.5",
+            "overflow-hidden p-1",
+            !day.isCurrentMonth && "bg-muted/30",
+            day.monthTone === "muted" && "bg-muted/10",
+            day.isWeekend && day.isCurrentMonth && "bg-muted/15",
+            day.startsMonth && "border-s-foreground/35 border-s-2",
+            mode === "week" && "min-h-[300px]",
+            isDropTarget && "bg-primary/10",
+          )}
+        />
+      }
     >
       {/* Current time indicator (week view, today only) */}
       {mode === "week" && day.isToday && <CurrentTimeIndicator />}
@@ -215,28 +201,6 @@ export const CalendarDayCell = ({
       )}
 
       {/* Right-click context menu */}
-      {isEditable && (
-        <Menu
-          onOpenChange={(o) => {
-            setCtxOpen(o);
-            if (!o) {
-              setCtxAnchor(null);
-            }
-          }}
-          open={ctxOpen}
-        >
-          <MenuAnchor />
-          <MenuPopup
-            anchor={ctxAnchor ?? undefined}
-            finalFocus={() => ctxOpener}
-          >
-            <MenuItem onClick={() => onCreate("task")}>
-              <SquareCheckIcon />
-              {t("tasks.newTask")}
-            </MenuItem>
-          </MenuPopup>
-        </Menu>
-      )}
-    </CalendarCell>
+    </EntityActions>
   );
 };

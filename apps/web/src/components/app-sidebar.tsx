@@ -35,6 +35,8 @@ import {
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { EntityActions } from "@stll/ui/entity-actions";
+import type { EntityAction } from "@stll/ui/entity-actions";
 import {
   ChevronRightIcon,
   CircleHelpIcon,
@@ -53,14 +55,7 @@ import { IdentityText } from "@stll/ui/identity-text";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { InspectorRailIconButton } from "@stll/ui/inspector";
 import { MatterIcon } from "@stll/ui/matter-icon";
-import {
-  Menu,
-  MenuAnchor,
-  MenuItem,
-  MenuPopup,
-  MenuSeparator,
-  MenuTrigger,
-} from "@stll/ui/menu";
+import { Menu, MenuPopup, MenuSeparator, MenuTrigger } from "@stll/ui/menu";
 import { Skeleton } from "@stll/ui/skeleton";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
@@ -996,12 +991,6 @@ const NavContextMenu = ({
   config: NavContextMenuConfig;
   children: React.ReactNode;
 }): React.ReactNode => {
-  const [open, setOpen] = useState(false);
-  const [returnFocus, setReturnFocus] = useState<HTMLElement | null>(null);
-  const [anchor, setAnchor] = useState<{
-    getBoundingClientRect: () => DOMRect;
-  } | null>(null);
-
   const hasRecents = (config.recents?.length ?? 0) > 0;
   const hasContent = config.primaryAction !== undefined || hasRecents;
 
@@ -1009,64 +998,37 @@ const NavContextMenu = ({
     return <SidebarMenuItem>{children}</SidebarMenuItem>;
   }
 
+  const actions: EntityAction[] = [
+    ...(config.primaryAction
+      ? [
+          {
+            label: config.primaryAction.label,
+            icon: config.primaryAction.icon,
+            onClick: () => config.primaryAction?.onClick(undefined),
+          },
+        ]
+      : []),
+    ...(config.recents
+      ? config.recents.map((item, idx) => ({
+          label: item.label,
+          icon: item.icon,
+          ...(item.variant ? { variant: item.variant } : {}),
+          ...(idx === 0 && config.primaryAction !== undefined
+            ? { separatorBefore: true }
+            : {}),
+          onClick: () => item.onClick(undefined),
+        }))
+      : []),
+  ];
+
   return (
-    <SidebarMenuItem
-      onContextMenu={containedEventHandler((e) => {
-        if (!contextMenuBelongsTo(e)) {
-          return;
-        }
-        const control = e.currentTarget.querySelector("button,a[href]");
-        setReturnFocus(control instanceof HTMLElement ? control : null);
-        e.preventDefault();
-        e.stopPropagation();
-        const x = e.clientX;
-        const y = e.clientY;
-        setAnchor({
-          getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
-        });
-        setOpen(true);
-      })}
+    <EntityActions
+      actions={actions}
+      label={config.primaryAction?.label ?? config.recents?.[0]?.label ?? ""}
+      render={<SidebarMenuItem />}
     >
       {children}
-      <Menu
-        onOpenChange={(nextOpen) => {
-          setOpen(nextOpen);
-          if (!nextOpen) {
-            setAnchor(null);
-          }
-        }}
-        open={open}
-      >
-        <MenuAnchor />
-        <MenuPopup anchor={anchor ?? undefined} finalFocus={() => returnFocus}>
-          {config.primaryAction && (
-            <MenuItem
-              onClick={() =>
-                config.primaryAction?.onClick(returnFocus ?? undefined)
-              }
-            >
-              {config.primaryAction.icon}
-              {config.primaryAction.label}
-            </MenuItem>
-          )}
-          {hasRecents && config.primaryAction !== undefined && (
-            <MenuSeparator />
-          )}
-          {config.recents?.map((item) => (
-            <MenuItem
-              className={cn(
-                item.variant === "destructive" && "text-destructive",
-              )}
-              key={item.id}
-              onClick={() => item.onClick(returnFocus ?? undefined)}
-            >
-              {item.icon}
-              {item.label}
-            </MenuItem>
-          ))}
-        </MenuPopup>
-      </Menu>
-    </SidebarMenuItem>
+    </EntityActions>
   );
 };
 
@@ -1993,56 +1955,25 @@ const SidebarContextArea = ({
   children?: React.ReactNode;
 }) => {
   const t = useTranslations();
-  const [returnFocus, setReturnFocus] = useState<HTMLElement | null>(null);
-  const [ctxOpen, setCtxOpen] = useState(false);
-  const [ctxAnchor, setCtxAnchor] = useState<{
-    getBoundingClientRect: () => DOMRect;
-  } | null>(null);
 
   return (
-    <div
-      className="flex min-h-0 flex-1 flex-col"
-      onContextMenu={containedEventHandler((e) => {
-        if (!contextMenuBelongsTo(e)) {
-          return;
-        }
-        const control = e.currentTarget.querySelector("button,a[href]");
-        setReturnFocus(control instanceof HTMLElement ? control : null);
-        e.preventDefault();
-        const x = e.clientX;
-        const y = e.clientY;
-        setCtxAnchor({
-          getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
-        });
-        setCtxOpen(true);
-      })}
+    <EntityActions
+      actions={
+        canCreateWorkspace
+          ? [
+              {
+                label: t("common.newMatter"),
+                icon: <PlusIcon />,
+                onClick: () => onCreateWorkspace(undefined),
+              },
+            ]
+          : []
+      }
+      label={t("common.newMatter")}
+      render={<div className="flex min-h-0 flex-1 flex-col" />}
     >
       {children}
-      <Menu
-        onOpenChange={(open) => {
-          setCtxOpen(open);
-          if (!open) {
-            setCtxAnchor(null);
-          }
-        }}
-        open={ctxOpen}
-      >
-        <MenuAnchor />
-        <MenuPopup
-          anchor={ctxAnchor ?? undefined}
-          finalFocus={() => returnFocus}
-        >
-          {canCreateWorkspace && (
-            <MenuItem
-              onClick={() => onCreateWorkspace(returnFocus ?? undefined)}
-            >
-              <PlusIcon />
-              {t("common.newMatter")}
-            </MenuItem>
-          )}
-        </MenuPopup>
-      </Menu>
-    </div>
+    </EntityActions>
   );
 };
 

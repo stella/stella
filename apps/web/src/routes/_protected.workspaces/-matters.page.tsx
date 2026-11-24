@@ -7,9 +7,8 @@ import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
 import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
+import { EntityActions } from "@stll/ui/entity-actions";
 import { PlusIcon } from "@stll/ui/icons";
-import { Menu, MenuAnchor, MenuItem, MenuPopup } from "@stll/ui/menu";
-import { containedEventHandler } from "@stll/ui/use-contained-handler";
 
 import { EmptyScreen } from "@/components/empty-screen";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
@@ -310,54 +309,38 @@ const MattersPageContextMenu = ({
 }: MattersPageContextMenuProps): ReactNode => {
   const t = useTranslations();
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
-  const [open, setOpen] = useState(false);
-  const [opener, setOpener] = useState<HTMLElement | null>(null);
-  const [anchor, setAnchor] = useState<{
-    getBoundingClientRect: () => DOMRect;
-  } | null>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
 
   if (!canCreateMatter) {
     return children;
   }
 
   return (
-    <div
-      className="contents"
-      onContextMenu={containedEventHandler((event) => {
-        if (event.defaultPrevented) {
-          return;
-        }
-        event.preventDefault();
-        setOpener(captureDialogReturnFocus().current);
-        const x = event.clientX;
-        const y = event.clientY;
-        setAnchor({
-          getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
-        });
-        setOpen(true);
-      })}
+    <EntityActions
+      actions={[
+        {
+          label: t("workspaces.createNewWorkspace"),
+          icon: <PlusIcon />,
+          onClick: () => {
+            const opener = openerRef.current;
+            openCreateMatter(opener === null ? {} : { opener });
+          },
+        },
+      ]}
+      label={t("workspaces.createNewWorkspace")}
+      render={
+        <div
+          className="contents"
+          onPointerDownCapture={(event) => {
+            if (event.button === 2 || (event.button === 0 && event.ctrlKey)) {
+              openerRef.current = captureDialogReturnFocus().current;
+            }
+          }}
+        />
+      }
     >
       {children}
-      <Menu
-        onOpenChange={(nextOpen) => {
-          setOpen(nextOpen);
-          if (!nextOpen) {
-            setAnchor(null);
-          }
-        }}
-        open={open}
-      >
-        <MenuAnchor />
-        <MenuPopup anchor={anchor ?? undefined} finalFocus={() => opener}>
-          <MenuItem
-            onClick={() => openCreateMatter(opener === null ? {} : { opener })}
-          >
-            <PlusIcon />
-            {t("workspaces.createNewWorkspace")}
-          </MenuItem>
-        </MenuPopup>
-      </Menu>
-    </div>
+    </EntityActions>
   );
 };
 
