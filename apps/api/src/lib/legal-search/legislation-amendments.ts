@@ -641,7 +641,19 @@ export const syncLegislationAmendmentsTx = async (
   const retiresLegacy =
     channel !== LEGISLATION_AMENDMENT_LEGACY_CHANNEL &&
     snapshot.coverage.type === "complete";
-  const status = prior?.status ?? "active";
+  // A legacy snapshot arriving after a complete named one is retired as if it
+  // had arrived first, so delivery order cannot revive excluded links.
+  const status =
+    prior?.status ??
+    (channel === LEGISLATION_AMENDMENT_LEGACY_CHANNEL &&
+    channels.some(
+      (item) =>
+        item.status === "active" &&
+        item.channel !== LEGISLATION_AMENDMENT_LEGACY_CHANNEL &&
+        item.coverage.type === "complete",
+    )
+      ? "historical"
+      : "active");
   const nextChannels: LegislationAmendmentChannelSnapshot[] = [
     ...channels
       .filter((item) => item.channel !== channel)

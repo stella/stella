@@ -605,6 +605,31 @@ describe("publisher amendment snapshots", () => {
     expect((await incoming()).items).toEqual([]);
   });
 
+  test("a legacy snapshot delivered after a complete named one is retired as if it came first", async () => {
+    const excluded = {
+      ...relation,
+      publisherId: "publisher:159-2026-2",
+      affectedAnchor: "https://example.test/2012/89#section-1830b",
+    } satisfies LegislationAmendmentRelation;
+    await sync(
+      sanitizeLegislationAmendments({
+        channel: "bulk",
+        observedAt: "2026-10-22T10:00:00Z",
+        relations: [relation],
+        coverage: { type: "complete" },
+      }).unwrap(),
+    );
+    await sync(snapshot("2026-10-20T10:00:00Z", [relation, excluded]));
+    const items = (await incoming()).items;
+    expect(items.map(({ publisherId }) => publisherId)).toEqual([
+      relation.publisherId,
+    ]);
+    expect(items.at(0)?.observations).toMatchObject([
+      { status: "present", channel: "bulk" },
+      { status: "historical", channel: "legacy", relation },
+    ]);
+  });
+
   test("same-channel bare dates retain conditional evidence and expose contradictory claims", async () => {
     const conditional = {
       ...relation,
