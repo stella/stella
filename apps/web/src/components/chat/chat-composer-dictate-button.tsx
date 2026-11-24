@@ -10,10 +10,6 @@ import { Loader } from "@stll/ui/loader";
 
 import type { ChatEditorController } from "@/components/chat-editor-provider";
 import { composerText } from "@/components/chat-editor-source";
-import {
-  DICTATION_MAX_MS,
-  recordingToWav,
-} from "@/components/chat/chat-dictation-audio";
 import type { ComposerContextMenuProps } from "@/components/chat/composer-plus-menu";
 import { getLiveEditor } from "@/components/live-editor";
 import { guideAnchor } from "@/features/guides/guide-anchor";
@@ -113,6 +109,8 @@ export const ChatComposerDictateButton = ({
 
   const transcribe = async (audio: Blob, runGeneration: number) => {
     const result = await Result.tryPromise(async () => {
+      const { recordingToWav } =
+        await import("@/components/chat/chat-dictation-audio");
       const file = await recordingToWav(audio);
       return await invokeCapability("dictation.transcribe", (request) =>
         api.dictation.transcribe.post(
@@ -160,8 +158,8 @@ export const ChatComposerDictateButton = ({
     const streamResult = await Result.tryPromise(
       async () => await navigator.mediaDevices.getUserMedia({ audio: true }),
     );
-    acquiring.current = false;
     if (Result.isError(streamResult)) {
+      acquiring.current = false;
       if (runGeneration === generation.current) {
         setPhase("idle");
         notifyUserProblem(t("chat.dictationDenied"));
@@ -171,9 +169,28 @@ export const ChatComposerDictateButton = ({
 
     const stream = streamResult.value;
     if (runGeneration !== generation.current) {
+      acquiring.current = false;
       stopTracks(stream);
       return;
     }
+
+    const audioModuleResult = await Result.tryPromise(
+      async () => await import("@/components/chat/chat-dictation-audio"),
+    );
+    acquiring.current = false;
+    if (Result.isError(audioModuleResult)) {
+      stopTracks(stream);
+      if (runGeneration === generation.current) {
+        setPhase("idle");
+        notifyUserError(audioModuleResult.error, t("chat.dictationFailed"));
+      }
+      return;
+    }
+    if (runGeneration !== generation.current) {
+      stopTracks(stream);
+      return;
+    }
+    const { DICTATION_MAX_MS } = audioModuleResult.value;
 
     const recorder = new MediaRecorder(stream);
     const chunks: Blob[] = [];
