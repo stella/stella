@@ -4,7 +4,7 @@
 // everything else.
 import { MARKETING_LOCALE_MARKERS } from "@stll/playwright-tools/marketing-locales";
 
-import { seedId } from "../seed-utils";
+import { seedAvatar, seedId } from "../seed-utils";
 import {
   SK_DOCUMENT_TEXTS,
   SK_EMAILS,
@@ -1209,24 +1209,21 @@ export const SK_SEED_CONTENT = {
       id: "test-user-sk-alena-hudecova",
       name: "Alena Hudecová",
       email: "alena.hudecova@stella.dev",
-      image:
-        "https://api.dicebear.com/9.x/avataaars/svg?seed=alena-hudecova&backgroundColor=b6e3f4",
+      image: seedAvatar(0),
       hourlyRate: 180,
     },
     {
       id: "test-user-sk-branislav-mikula",
       name: "Branislav Mikula",
       email: "branislav.mikula@stella.dev",
-      image:
-        "https://api.dicebear.com/9.x/avataaars/svg?seed=branislav-mikula&backgroundColor=d1d4f9",
+      image: seedAvatar(1),
       hourlyRate: 100,
     },
     {
       id: "test-user-sk-klaudia-novotna",
       name: "Klaudia Novotná",
       email: "klaudia.novotna@stella.dev",
-      image:
-        "https://api.dicebear.com/9.x/avataaars/svg?seed=klaudia-novotna&backgroundColor=ffd5dc",
+      image: seedAvatar(2),
       hourlyRate: 180,
     },
   ],

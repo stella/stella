@@ -43,7 +43,7 @@ export type SeedColleague = {
 // the content security policy's `img-src 'self'` allows them and the stored
 // path stays short in every response that lists members.
 const SEED_AVATAR_COUNT = 8;
-const seedAvatar = (index: number): string =>
+export const seedAvatar = (index: number): string =>
   `/seed-avatars/${String((index % SEED_AVATAR_COUNT) + 1)}.svg`;
 
 const BASE_SEED_COLLEAGUES: SeedColleague[] = [

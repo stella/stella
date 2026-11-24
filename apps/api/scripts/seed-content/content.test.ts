@@ -120,4 +120,10 @@ describe.each(MARKETING_LOCALES)("seed content (%s)", (locale) => {
       expect(line).not.toContain("\n");
     }
   });
+
+  test("serves colleague avatars from the app's own origin", () => {
+    for (const colleague of content.colleagues) {
+      expect(colleague.image).toMatch(/^\/seed-avatars\/\d+\.svg$/u);
+    }
+  });
 });
