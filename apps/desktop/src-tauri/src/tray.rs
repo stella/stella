@@ -57,10 +57,12 @@ const TEMPLATE_TRAY_ART: TrayArt = TrayArt {
   recording_ring: image::Rgba([0, 0, 0, 0]),
 };
 
-/// Windows and Linux draw the image as given, so they show the app icon tile
-/// (`assets/render-tray-tile.sh`) and a red dot ringed in white.
+/// Windows and Linux draw the image as given, so they show the 32 px app icon
+/// tile and a red dot ringed in white. Tauri hands the tray one bitmap, which
+/// Windows scales to the slot (16 px at 100% up to 32 px at 200%), so 32 px
+/// only ever downsamples.
 const TILE_TRAY_ART: TrayArt = TrayArt {
-  png: include_bytes!("../icons/tray-icon-32-tile.png"),
+  png: include_bytes!("../icons/32x32.png"),
   recording_dot: image::Rgba([229, 72, 77, 255]),
   recording_ring: image::Rgba([255, 255, 255, 255]),
 };
