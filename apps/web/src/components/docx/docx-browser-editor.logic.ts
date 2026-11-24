@@ -1,5 +1,11 @@
 import { panic } from "better-result";
 
+import type {
+  DocxCompatibility,
+  DocxEditorCollaboration,
+  DocxEditorProps,
+} from "@stll/folio-react";
+
 import type { DocxEditSafety } from "@/lib/chat-edit-mode";
 import { selectStableArrayBuffer } from "@/lib/files/array-buffer-utils";
 
@@ -182,6 +188,40 @@ export const getDocxLeaveAction = (
       return panic("Unsupported DOCX edit-session state");
   }
 };
+
+export type DocxEditorSession = NonNullable<
+  DocxEditorProps["experimentalSession"]
+>;
+
+/**
+ * The engine the editor runs. A canonical room needs the canonical session.
+ * Elsewhere the editor keeps the legacy session: the canonical one refuses a
+ * host's own document edits, such as inserting and renumbering evidence
+ * references.
+ */
+export const selectDocxEditorSession = (
+  collaboration: DocxEditorCollaboration | undefined,
+): DocxEditorSession =>
+  collaboration !== undefined && collaboration.connect !== undefined
+    ? "canonical"
+    : "legacy";
+
+/**
+ * Whether the editor can take an evidence reference. Its insertion and its
+ * renumbering are direct document edits, which the canonical session refuses.
+ */
+export const canInsertEvidenceReference = ({
+  canUnlock,
+  compatibility,
+  editorSession,
+}: {
+  canUnlock: boolean;
+  compatibility: DocxCompatibility | null;
+  editorSession: DocxEditorSession;
+}) =>
+  canUnlock &&
+  compatibility?.canSafelyEdit !== false &&
+  editorSession === "legacy";
 
 type CollaborationPublicationCut = {
   documentMutationRevision: number;

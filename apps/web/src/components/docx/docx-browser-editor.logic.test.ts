@@ -1,10 +1,14 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { Doc } from "yjs";
 
 import {
+  canInsertEvidenceReference,
   getDocxEditBlockReason,
   getDocxLeaveAction,
   isDocxEditorUnlocked,
   selectDocxBrowserEditorBuffer,
+  selectDocxEditorSession,
   selectEditorBuffer,
   selectPreviewFile,
   shouldBlockDocxEdit,
@@ -400,6 +404,62 @@ describe("DOCX browser editor route selection", () => {
       shouldUseDocxBrowserEditor({
         isDocxFile: true,
         hasFilePropertyId: false,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("DOCX editor session", () => {
+  test("an editor outside a room keeps the legacy session", () => {
+    expect(selectDocxEditorSession(undefined)).toBe("legacy");
+  });
+
+  test("a Yjs fragment keeps the legacy session", () => {
+    expect(
+      selectDocxEditorSession({
+        yXmlFragment: new Doc().getXmlFragment("prosemirror"),
+      }),
+    ).toBe("legacy");
+  });
+
+  test("a canonical room runs the canonical session", () => {
+    expect(
+      selectDocxEditorSession({
+        actor: "user-1:editor-1",
+        connect: () => panic("The room is not reached in this test"),
+        snapshot: "snapshot-1",
+      }),
+    ).toBe("canonical");
+  });
+});
+
+describe("evidence reference insertion", () => {
+  test("an editable legacy session takes evidence references", () => {
+    expect(
+      canInsertEvidenceReference({
+        canUnlock: true,
+        compatibility: null,
+        editorSession: "legacy",
+      }),
+    ).toBe(true);
+  });
+
+  test("a canonical session, which refuses direct edits, offers none", () => {
+    expect(
+      canInsertEvidenceReference({
+        canUnlock: true,
+        compatibility: null,
+        editorSession: "canonical",
+      }),
+    ).toBe(false);
+  });
+
+  test("a document the user cannot unlock offers none", () => {
+    expect(
+      canInsertEvidenceReference({
+        canUnlock: false,
+        compatibility: null,
+        editorSession: "legacy",
       }),
     ).toBe(false);
   });

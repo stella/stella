@@ -62,6 +62,7 @@ import {
   editSessionErrorDescriptionKey,
   getDocxEditorBlockingError,
   selectDocxBrowserEditorBuffer,
+  selectDocxEditorSession,
 } from "./docx-browser-editor.logic";
 import type {
   DocxEditorBlockingError,
@@ -285,6 +286,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     previewFile,
   });
   const { isUnlocked, requestEditMode } = opening;
+  const editorSession = selectDocxEditorSession(activeCollaboration);
   const { editorMode, handleEditorModeChange } = useDocxEditorMode(isUnlocked);
 
   useDocxWheelZoom(containerRef, editorRef);
@@ -297,6 +299,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     dialogState: evidenceReferencesDialogState,
     editorMode,
     editorRef,
+    editorSession,
     isUnlocked,
     onDialogStateChange: onEvidenceReferencesDialogStateChange,
     requestEditMode,
@@ -487,6 +490,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
             {...(activeCollaboration !== undefined
               ? { collaboration: activeCollaboration }
               : {})}
+            experimentalSession={editorSession}
             onChange={view.editorChange(isUnlocked ? handleChange : null)}
             onReadonlyEditAttempt={opening.handleLockedEditAttempt}
             {...(initialScrollTop !== undefined ? { initialScrollTop } : {})}

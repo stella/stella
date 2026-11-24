@@ -951,7 +951,7 @@ export const useFolioCollaborationRoom = ({
                 return;
               default: {
                 event satisfies never;
-                return panic("Unhandled collaboration room event");
+                panic("Unhandled collaboration room event");
               }
             }
           },
