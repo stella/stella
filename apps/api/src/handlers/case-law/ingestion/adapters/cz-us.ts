@@ -1,3 +1,4 @@
+// parser-output-unchanged: [cz-us] bounded response body reads preserve identical HTML text; only oversized responses are refused.
 // parser-output-unchanged: source-fields-cz: Inventory-only target changes leave parsed decisions unchanged.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: Reconciliation exposes the existing reported listing count for the census; decision parsing and listed identities are unchanged.
@@ -19,6 +20,7 @@ import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
+import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
 import {
@@ -38,6 +40,7 @@ import {
   readGatedResponseText,
   unreadPublisherError,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
+import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-response-limit";
 import {
   adapterCatch,
   parseCeDate,
@@ -1987,6 +1990,24 @@ type FetchSearchPageOptions = {
   signal?: AbortSignal | undefined;
 };
 
+const readNalusResponseText = async (
+  response: Response,
+  subject: string,
+): Promise<string> => {
+  if (response.body === null) {
+    return "";
+  }
+  const bytes = await readCappedBytes(response.body, PUBLISHER_BODY_MAX_BYTES);
+  if (bytes === null) {
+    return await Promise.reject(
+      new NalusResponseError({
+        message: `NALUS ${subject} body exceeded ${PUBLISHER_BODY_MAX_BYTES} bytes`,
+      }),
+    );
+  }
+  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+};
+
 const fetchSearchPage = async ({
   state,
   pageSize,
@@ -1998,7 +2019,7 @@ const fetchSearchPage = async ({
     url: SEARCH_URL,
     signal,
   });
-  const formHtml = await first.text();
+  const formHtml = await readNalusResponseText(first, "search form");
   const viewState = hiddenField(formHtml, "__VIEWSTATE");
   const validation = hiddenField(formHtml, "__EVENTVALIDATION");
   if (!viewState || !validation) {
@@ -2040,7 +2061,7 @@ const fetchSearchPage = async ({
   });
   if (submit.status !== 302 || !redirectsToResults(submit)) {
     if (submit.ok) {
-      const $ = load(await submit.text());
+      const $ = load(await readNalusResponseText(submit, "search submit"));
       const noResults = visibleHtmlText($("#ctl00_MainContent_lbError")).trim();
       const resultsDisabled =
         $("#ctl00_bResults").attr("disabled") === "disabled";
@@ -2068,7 +2089,7 @@ const fetchSearchPage = async ({
   });
   return {
     ...parseResultPage({
-      html: await results.text(),
+      html: await readNalusResponseText(results, "results"),
       expectedPage: state.page,
       pageSize,
     }),
@@ -2133,7 +2154,7 @@ export const openNalusSession = async (
       message: `NALUS session returned ${httpFailureReason(response, SEARCH_URL)}`,
     });
   }
-  await response.text();
+  await response.body?.cancel();
   return { cookie: cookieHeader([response]) };
 };
 
@@ -3231,7 +3252,10 @@ export const czUsAdapter = defineSourceAdapter({
         .getSetCookie()
         .map((cookie) => cookie.split(";")[0])
         .join("; ");
-      const html = await first.text();
+      const html = await readNalusResponseText(
+        first,
+        "source total search form",
+      );
       const hidden = (name: string): string | null => {
         const match = new RegExp(`id="${name}" value="([^"]*)"`, "u").exec(
           html,
@@ -3278,9 +3302,9 @@ export const czUsAdapter = defineSourceAdapter({
       if (!results.ok) {
         return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
-      const total = /z celkem (?<n>\d+)/u.exec(await results.text())?.groups?.[
-        "n"
-      ];
+      const total = /z celkem (?<n>\d+)/u.exec(
+        await readNalusResponseText(results, "source total results"),
+      )?.groups?.["n"];
       return total === undefined
         ? sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD)
         : sourceTotalRead(Number.parseInt(total, 10));

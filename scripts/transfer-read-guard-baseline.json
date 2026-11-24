@@ -120,22 +120,8 @@
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
-    "function": "module/fetchFormex",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
     "function": "module/fetchNotice",
     "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
-    "function": "module/fetchNotice",
-    "kind": "total-timeout-body",
     "count": 1,
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
@@ -148,13 +134,6 @@
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
-    "function": "module/getTotalCount",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
     "function": "module/queryDecisions",
     "kind": "numeric-timeout",
     "count": 1,
@@ -162,22 +141,8 @@
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
-    "function": "module/queryDecisions",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
     "function": "module/readDocumentResponse",
     "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
-    "function": "module/readDocumentResponse",
-    "kind": "total-timeout-body",
     "count": 1,
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
