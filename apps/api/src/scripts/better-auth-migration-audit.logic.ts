@@ -281,6 +281,92 @@ export const AUTH_TABLE_AUDIT_POLICY = {
     preservedColumns: columnNames(authSchema.session),
     tableName: getTableName(authSchema.session),
   },
+  scimConnectionBinding: {
+    foreignKeys: [],
+    preservedColumns: columnNames(authSchema.scimConnectionBinding),
+    tableName: getTableName(authSchema.scimConnectionBinding),
+  },
+  scimGroup: {
+    foreignKeys: [],
+    preservedColumns: columnNames(authSchema.scimGroup),
+    tableName: getTableName(authSchema.scimGroup),
+  },
+  scimGroupMember: {
+    foreignKeys: [
+      {
+        column: "group_id",
+        referencedColumn: "id",
+        referencedModel: "scimGroup",
+      },
+      {
+        column: "scim_user_id",
+        referencedColumn: "id",
+        referencedModel: "scimUser",
+      },
+    ],
+    preservedColumns: columnNames(authSchema.scimGroupMember),
+    tableName: getTableName(authSchema.scimGroupMember),
+  },
+  scimIdentityTombstone: {
+    foreignKeys: [
+      { column: "user_id", referencedColumn: "id", referencedModel: "user" },
+    ],
+    preservedColumns: columnNames(authSchema.scimIdentityTombstone),
+    tableName: getTableName(authSchema.scimIdentityTombstone),
+  },
+  scimManagedConnection: {
+    foreignKeys: [],
+    preservedColumns: columnNames(authSchema.scimManagedConnection),
+    tableName: getTableName(authSchema.scimManagedConnection),
+  },
+  scimManagedConnectionEvent: {
+    foreignKeys: [
+      {
+        column: "connection_record_id",
+        referencedColumn: "id",
+        referencedModel: "scimManagedConnection",
+      },
+    ],
+    preservedColumns: columnNames(authSchema.scimManagedConnectionEvent),
+    tableName: getTableName(authSchema.scimManagedConnectionEvent),
+  },
+  scimManagedCredential: {
+    foreignKeys: [
+      {
+        column: "connection_record_id",
+        referencedColumn: "id",
+        referencedModel: "scimManagedConnection",
+      },
+    ],
+    preservedColumns: columnNames(authSchema.scimManagedCredential),
+    tableName: getTableName(authSchema.scimManagedCredential),
+  },
+  scimProjectionGrant: {
+    foreignKeys: [
+      {
+        column: "scim_user_id",
+        referencedColumn: "id",
+        referencedModel: "scimUser",
+      },
+      { column: "user_id", referencedColumn: "id", referencedModel: "user" },
+    ],
+    preservedColumns: columnNames(authSchema.scimProjectionGrant),
+    tableName: getTableName(authSchema.scimProjectionGrant),
+  },
+  scimSubject: {
+    foreignKeys: [
+      { column: "user_id", referencedColumn: "id", referencedModel: "user" },
+    ],
+    preservedColumns: columnNames(authSchema.scimSubject),
+    tableName: getTableName(authSchema.scimSubject),
+  },
+  scimUser: {
+    foreignKeys: [
+      { column: "user_id", referencedColumn: "id", referencedModel: "user" },
+    ],
+    preservedColumns: columnNames(authSchema.scimUser),
+    tableName: getTableName(authSchema.scimUser),
+  },
   ssoProvider: {
     foreignKeys: [
       {
@@ -335,6 +421,16 @@ const AUTH_BASELINE_DISPOSITION = {
   oauthResource: "introduced",
   organization: "preserve",
   session: "preserve",
+  scimConnectionBinding: "introduced",
+  scimGroup: "introduced",
+  scimGroupMember: "introduced",
+  scimIdentityTombstone: "introduced",
+  scimManagedConnection: "introduced",
+  scimManagedConnectionEvent: "introduced",
+  scimManagedCredential: "introduced",
+  scimProjectionGrant: "introduced",
+  scimSubject: "introduced",
+  scimUser: "introduced",
   ssoProvider: "introduced",
   twoFactor: "preserve",
   user: "preserve",
@@ -512,6 +608,116 @@ const AUTH_ACCESS_POLICY = {
       },
     ],
     tableName: AUTH_TABLE_AUDIT_POLICY.session.tableName,
+  },
+  scimConnectionBinding: {
+    access: "denied",
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
+    tableName: AUTH_TABLE_AUDIT_POLICY.scimConnectionBinding.tableName,
+  },
+  scimGroup: {
+    access: "denied",
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
+    tableName: AUTH_TABLE_AUDIT_POLICY.scimGroup.tableName,
+  },
+  scimGroupMember: {
+    access: "denied",
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
+    tableName: AUTH_TABLE_AUDIT_POLICY.scimGroupMember.tableName,
+  },
+  scimIdentityTombstone: {
+    access: "denied",
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
+    tableName: AUTH_TABLE_AUDIT_POLICY.scimIdentityTombstone.tableName,
+  },
+  scimManagedConnection: {
+    access: "denied",
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
+    tableName: AUTH_TABLE_AUDIT_POLICY.scimManagedConnection.tableName,
+  },
+  scimManagedConnectionEvent: {
+    access: "denied",
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
+    tableName: AUTH_TABLE_AUDIT_POLICY.scimManagedConnectionEvent.tableName,
+  },
+  scimManagedCredential: {
+    access: "denied",
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
+    tableName: AUTH_TABLE_AUDIT_POLICY.scimManagedCredential.tableName,
+  },
+  scimProjectionGrant: {
+    access: "denied",
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
+    tableName: AUTH_TABLE_AUDIT_POLICY.scimProjectionGrant.tableName,
+  },
+  scimSubject: {
+    access: "denied",
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
+    tableName: AUTH_TABLE_AUDIT_POLICY.scimSubject.tableName,
+  },
+  scimUser: {
+    access: "denied",
+    policies: [
+      {
+        command: "ALL",
+        name: "auth_no_stella_access",
+        predicate: "deny",
+      },
+    ],
+    tableName: AUTH_TABLE_AUDIT_POLICY.scimUser.tableName,
   },
   ssoProvider: {
     access: "denied",

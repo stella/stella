@@ -1,4 +1,3 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import type {
@@ -192,17 +191,9 @@ export const createScimProvisioningPlugin = ({
     },
   });
 
-  return {
-    ...plugin,
-    hooks: {
-      before: [
-        {
-          matcher: (ctx) => ctx.path?.startsWith(SCIM_ENDPOINT_PREFIX) ?? false,
-          handler: scimDeploymentGate,
-        },
-        ...plugin.hooks.before,
-      ],
-      after: plugin.hooks.after,
-    },
-  } satisfies BetterAuthPlugin;
+  plugin.hooks.before.unshift({
+    matcher: (ctx) => ctx.path?.startsWith(SCIM_ENDPOINT_PREFIX) ?? false,
+    handler: scimDeploymentGate,
+  });
+  return plugin;
 };
