@@ -430,7 +430,7 @@
     "registryPreviewResult": "Przykładowy układ · to nie jest wynik z rejestru",
     "registryRetry": "Spróbuj ponownie",
     "registrySearch": "Szukaj w rejestrze handlowym",
-    "registrySearchHint": "Zacznij pisać, aby przeszukać ten rejestr.",
+    "registrySearchHint": "Zacznij pisać, aby przeszukać rejestr {registry}.",
     "registrySearchPlaceholder": "Nazwa firmy lub numer rejestracyjny",
     "registrySearching": "Wyszukiwanie…",
     "registrySelect": "Wybierz rejestr",

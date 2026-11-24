@@ -430,7 +430,7 @@
     "registryPreviewResult": "Ukážkové rozloženie · nejde o výsledok z registra",
     "registryRetry": "Skúsiť znova",
     "registrySearch": "Hľadať v obchodnom registri",
-    "registrySearchHint": "Začnite písať a prehľadajte tento register.",
+    "registrySearchHint": "Začnite písať a prehľadajte register {registry}.",
     "registrySearchPlaceholder": "Názov spoločnosti alebo registračné číslo",
     "registrySearching": "Vyhľadáva sa…",
     "registrySelect": "Vybrať register",

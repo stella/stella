@@ -430,7 +430,7 @@
     "registryPreviewResult": "Parauga izkārtojums · nav reģistra rezultāts",
     "registryRetry": "Mēģināt vēlreiz",
     "registrySearch": "Meklēt komercreģistrā",
-    "registrySearchHint": "Rakstiet, lai meklētu šajā reģistrā.",
+    "registrySearchHint": "Rakstiet, lai meklētu reģistrā {registry}.",
     "registrySearchPlaceholder": "Uzņēmuma nosaukums vai reģistrācijas numurs",
     "registrySearching": "Meklē…",
     "registrySelect": "Atlasīt reģistru",

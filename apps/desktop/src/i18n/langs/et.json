@@ -430,7 +430,7 @@
     "registryPreviewResult": "Näidispaigutus · ei ole registri tulemus",
     "registryRetry": "Proovige uuesti",
     "registrySearch": "Otsi äriregistrist",
-    "registrySearchHint": "Selle registri otsimiseks sisestage tekst.",
+    "registrySearchHint": "Registrist {registry} otsimiseks sisestage tekst.",
     "registrySearchPlaceholder": "Ettevõtte nimi või registrikood",
     "registrySearching": "Otsimine…",
     "registrySelect": "Vali register",

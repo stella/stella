@@ -430,7 +430,7 @@
     "registryPreviewResult": "Példaelrendezés · nem cégjegyzékbeli találat",
     "registryRetry": "Újra",
     "registrySearch": "Keresés a cégjegyzékben",
-    "registrySearchHint": "Gépeljen a kereséshez ebben a nyilvántartásban.",
+    "registrySearchHint": "Gépeljen a(z) {registry} nyilvántartásban való kereséshez.",
     "registrySearchPlaceholder": "Cégnév vagy cégjegyzékszám",
     "registrySearching": "Keresés…",
     "registrySelect": "Nyilvántartás kiválasztása",

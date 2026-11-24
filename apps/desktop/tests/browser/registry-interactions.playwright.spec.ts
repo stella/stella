@@ -830,6 +830,24 @@ test("waits for composition to end before sending edited registry queries", asyn
     });
 });
 
+test("the empty registry search names the selected registry", async ({
+  page,
+}) => {
+  await openClipboard(page);
+  await activateRegistry(page, "");
+  const hint = (registry: string) =>
+    enMessages.clipboard.registrySearchHint.replace(
+      "{registry}",
+      () => `⁨${registry}⁩`,
+    );
+  await expect(page.getByText(hint("Czech commercial registry"))).toBeVisible();
+  await page
+    .getByRole("button", { name: enMessages.clipboard.registrySelect })
+    .click();
+  await page.getByRole("menuitemradio", { name: "Companies House" }).click();
+  await expect(page.getByText(hint("Companies House"))).toBeVisible();
+});
+
 test("repeats the current query for a deliberately selected registry", async ({
   page,
 }) => {

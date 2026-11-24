@@ -430,7 +430,7 @@
     "registryPreviewResult": "Example layout · not a registry result",
     "registryRetry": "Try again",
     "registrySearch": "Search commercial registry",
-    "registrySearchHint": "Type to search this registry.",
+    "registrySearchHint": "Type to search the {registry} registry.",
     "registrySearchPlaceholder": "Company name or registration number",
     "registrySearching": "Searching…",
     "registrySelect": "Select registry",

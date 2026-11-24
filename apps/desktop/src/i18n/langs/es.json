@@ -430,7 +430,7 @@
     "registryPreviewResult": "Diseño de ejemplo · no es un resultado del registro",
     "registryRetry": "Intentar de nuevo",
     "registrySearch": "Buscar en el registro mercantil",
-    "registrySearchHint": "Escribe para buscar en este registro.",
+    "registrySearchHint": "Escribe para buscar en el registro {registry}.",
     "registrySearchPlaceholder": "Nombre de la empresa o número de registro",
     "registrySearching": "Buscando…",
     "registrySelect": "Seleccionar registro",
