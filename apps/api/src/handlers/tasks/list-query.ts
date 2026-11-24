@@ -16,7 +16,7 @@ import type { SQL } from "drizzle-orm";
 
 import { TASK_CLOSED_STATUSES } from "@stll/api-contract/entity-options";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { entities, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";

@@ -1,7 +1,7 @@
 import { STARTER_SKILLS } from "@stll/skills/starter-skills";
 
-import type { Transaction } from "@/api/db/root";
 import { agentSkills } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { hashSkillContent } from "@/api/lib/agent-skills/content-hash";
 import {
   AUDIT_ACTION,

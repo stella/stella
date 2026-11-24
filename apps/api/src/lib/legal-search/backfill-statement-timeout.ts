@@ -1,6 +1,6 @@
 import type { SQL } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { createIngestionDb, markRlsDatabase } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";

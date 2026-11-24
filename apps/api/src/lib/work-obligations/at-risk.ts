@@ -4,7 +4,7 @@ import type { SQL } from "drizzle-orm";
 
 import { Temporal, todayFor } from "@stll/time";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { WORK_OBLIGATION_STATUS, workObligations } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { entityQueryScopeCondition } from "@/api/lib/entities/query-scope";

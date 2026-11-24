@@ -6,6 +6,7 @@ import {
   BYOK_DEFAULT_MODELS,
   DECISION_MODEL_CATALOG,
   DECISION_MODEL_PROVIDERS,
+  MODEL_OVERRIDE_GROUPS,
 } from "@stll/ai-catalog";
 import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
 import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
@@ -15,6 +16,9 @@ import { aiAvailableResponse } from "@/__fixtures__/ai-availability";
 import { getModelOptionsForRole } from "@/components/ai-config-role-models.logic";
 import messages from "@/i18n/langs/en.json";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
+
+// One row per model role, plus the decision row.
+const MODE_ROW_COUNT = MODEL_OVERRIDE_GROUPS.length + 1;
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/admin",
@@ -56,28 +60,32 @@ let organizationSettings = {
 };
 const GOOGLE_KEY = `AIza${"a".repeat(31)}1234`;
 const GOOGLE_DEFAULTS = {
-  chat: { provider: "google", modelId: "gemini-3.8-flash" },
-  fast: { provider: "google", modelId: "gemini-3.8-flash" },
-  reasoning: { provider: "google", modelId: "gemini-3.8-flash" },
-  pdf: { provider: "google", modelId: "gemini-3.8-flash" },
+  chat: { provider: "google", modelId: "gemini-4-hydrogen" },
+  fast: { provider: "google", modelId: "gemini-4-hydrogen" },
+  reasoning: { provider: "google", modelId: "gemini-4-neon" },
+  pdf: { provider: "google", modelId: "gemini-4-hydrogen" },
+  browse: { provider: "google", modelId: "gemini-4-hydrogen" },
 } satisfies OrganizationAIConfig["defaultModels"];
 const ANTHROPIC_DEFAULTS = {
   chat: { provider: "anthropic", modelId: "claude-opus-5-5" },
   fast: { provider: "anthropic", modelId: "claude-haiku-5-5" },
   reasoning: { provider: "anthropic", modelId: "claude-opus-5-5" },
   pdf: { provider: "anthropic", modelId: "claude-opus-5-5" },
+  browse: { provider: "anthropic", modelId: "claude-haiku-5-5" },
 } satisfies OrganizationAIConfig["defaultModels"];
 const OPENROUTER_DEFAULTS = {
-  chat: { provider: "openrouter", modelId: "openai/gpt-6-sol" },
+  chat: { provider: "openrouter", modelId: "openai/gpt-6.2-sol" },
   fast: { provider: "openrouter", modelId: "anthropic/claude-haiku-5.5" },
-  reasoning: { provider: "openrouter", modelId: "openai/gpt-6-sol" },
+  reasoning: { provider: "openrouter", modelId: "openai/gpt-6.2-sol" },
   pdf: { provider: "openrouter", modelId: "google/gemini-3.8-flash" },
+  browse: { provider: "openrouter", modelId: "anthropic/claude-haiku-5.5" },
 } satisfies OrganizationAIConfig["defaultModels"];
 const EMPTY_DEFAULTS = {
   chat: null,
   fast: null,
   reasoning: null,
   pdf: null,
+  browse: null,
 } satisfies OrganizationAIConfig["defaultModels"];
 const previewDefaultsFixture = (fixtureKey: string) => {
   switch (fixtureKey) {
@@ -138,6 +146,10 @@ const savedConfig = {
     pdf: {
       provider: "google",
       modelId: BYOK_DEFAULT_MODELS.google.pdf.modelId,
+    },
+    browse: {
+      provider: "google",
+      modelId: BYOK_DEFAULT_MODELS.google.browse.modelId,
     },
   },
   decision: null,
@@ -434,7 +446,7 @@ const mount = async (
   });
   await deeplQueries().findByLabelText(messages.translate.settings.apiKeyLabel);
   await screen.findByRole("checkbox", {
-    name: messages.settings.organization.promptCaching.toggleLabel,
+    name: messages.settings.organization.promptCaching.title,
   });
   await waitFor(() => {
     expect(document.querySelector("#web-search-key-search") === null).toBe(
@@ -467,12 +479,19 @@ const unreadableRecoveryQueries = () => {
   return within(recovery);
 };
 const settingsSectionQueries = (title: string) => {
-  const heading = screen.getByRole("heading", { name: title });
+  // An on/off setting is a row named by its title, not a heading.
+  const heading =
+    screen.queryByRole("heading", { name: title }) ??
+    screen.getByRole("checkbox", { name: title });
+  // A settings section's heading sits in its header, above the surface its
+  // controls are on, so the section is the group around both.
   const section =
     heading.tagName === "H3"
       ? heading.parentElement?.parentElement
-      : heading.parentElement;
-  if (!section) {
+      : (heading.closest('[data-slot="settings-row"]') ??
+        heading.closest('[data-slot="list-group"]') ??
+        heading.parentElement);
+  if (!(section instanceof HTMLElement)) {
     panic("Settings section must contain its heading");
   }
   return within(section);
@@ -632,10 +651,10 @@ test("instruction refetches preserve drafts and compare edits with the latest sa
   expect(context.text).toBe(draft);
   replace(original);
   await waitFor(() => expect(hasUnsavedWork()).toBe(true));
-  expect(save).toHaveProperty("disabled", false);
+  expect(save.getAttribute("aria-disabled")).toBeNull();
   replace(updated);
   expect(hasUnsavedWork()).toBe(false);
-  expect(save).toHaveProperty("disabled", true);
+  expect(save.getAttribute("aria-disabled")).toBe("true");
   expect(writes()).toEqual([]);
 });
 
@@ -774,7 +793,7 @@ test("Advanced shows catalog defaults, saves only explicit overrides and resets 
       .filter((row) =>
         row.textContent.includes(messages.organization.aiConfig.usingDefaults),
       ),
-  ).toHaveLength(5);
+  ).toHaveLength(MODE_ROW_COUNT);
   expect(
     screen.getByText(messages.organization.aiConfig.defaultRationale.chat),
   ).toBeDefined();
@@ -1014,7 +1033,10 @@ test.each([false, true])(
         chat: { provider: "mistral", modelId: "mistral-medium-latest" },
         fast: { provider: "mistral", modelId: "mistral-small-latest" },
         reasoning: { provider: "mistral", modelId: "mistral-medium-latest" },
-        pdf: withFallback ? { provider: "openai", modelId: "gpt-6-sol" } : null,
+        pdf: withFallback
+          ? { provider: "openai", modelId: "gpt-6.2-sol" }
+          : null,
+        browse: { provider: "mistral", modelId: "mistral-small-latest" },
       },
       providerDefaultModels: [
         {
@@ -1027,6 +1049,7 @@ test.each([false, true])(
               modelId: "mistral-medium-latest",
             },
             pdf: null,
+            browse: { provider: "mistral", modelId: "mistral-small-latest" },
           },
         },
         ...(withFallback
@@ -1034,13 +1057,14 @@ test.each([false, true])(
               {
                 provider: openai.provider,
                 defaultModels: {
-                  chat: { provider: openai.provider, modelId: "gpt-6-sol" },
+                  chat: { provider: openai.provider, modelId: "gpt-6.2-sol" },
                   fast: { provider: openai.provider, modelId: "gpt-6-luna" },
                   reasoning: {
                     provider: openai.provider,
-                    modelId: "gpt-6-sol",
+                    modelId: "gpt-6.2-sol",
                   },
-                  pdf: { provider: openai.provider, modelId: "gpt-6-sol" },
+                  pdf: { provider: openai.provider, modelId: "gpt-6.2-sol" },
+                  browse: { provider: openai.provider, modelId: "gpt-6-luna" },
                 },
               },
             ]
@@ -1237,7 +1261,7 @@ const selectDecisionProvider = async (): Promise<"typesafe"> => {
   return provider;
 };
 
-test("Advanced has five mode rows with the default decision in the same table", async () => {
+test("Advanced has a row per model role and the default decision in the same table", async () => {
   await mount({ ...savedConfig, overrideModels: null });
   fireEvent.click(
     screen.getByRole("button", { name: messages.common.advanced }),
@@ -1251,7 +1275,7 @@ test("Advanced has five mode rows with the default decision in the same table", 
   const modeRows = within(table)
     .getAllByRole("group")
     .filter((group) => group.parentElement === table);
-  expect(modeRows).toHaveLength(5);
+  expect(modeRows).toHaveLength(MODE_ROW_COUNT);
   for (const label of Object.values(messages.organization.aiConfig.roles)) {
     expect(within(table).getByRole("group", { name: label })).toBeDefined();
   }
@@ -1430,7 +1454,7 @@ test("one page header save writes credential, model and decision changes togethe
     overrideModels: { chat: { provider: "google", modelId } },
     decision: { provider, modelId: decisionModelId, apiKeyMasked: "****key" },
   };
-  expect(save).toHaveProperty("disabled", false);
+  expect(save.getAttribute("aria-disabled")).toBeNull();
   fireEvent.click(save);
   await waitFor(() => expect(hasUnsavedWork()).toBe(false));
   const postWrites = requests.filter(({ method }) => method === "POST");
@@ -1606,24 +1630,26 @@ test("one page Save commits both provider drafts and all auxiliary sections", as
   fireEvent.change(fetch, { target: { value: "fixture-reader-key" } });
   fireEvent.click(
     screen.getByRole("checkbox", {
-      name: messages.settings.organization.promptCaching.toggleLabel,
+      name: messages.settings.organization.promptCaching.title,
     }),
   );
   fireEvent.click(
     screen.getByRole("checkbox", {
-      name: messages.settings.organization.documentProcessing.toggleLabel,
+      name: messages.settings.organization.documentProcessing.title,
     }),
   );
   const memory = screen.queryByRole("checkbox", {
-    name: messages.settings.organization.memoryExtraction.toggleLabel,
+    name: messages.settings.organization.memoryExtraction.title,
   });
   if (memory !== null) {
     fireEvent.click(memory);
   }
   expect(writes()).toEqual([]);
   expect(
-    screen.getByRole("button", { name: messages.common.save }),
-  ).toHaveProperty("disabled", true);
+    screen
+      .getByRole("button", { name: messages.common.save })
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
   expect(
     screen.getAllByRole("button", { name: messages.common.saveChanges }),
   ).toHaveLength(1);
@@ -1711,7 +1737,7 @@ test("a failed auxiliary section retains its draft while successful sections cle
   fireEvent.change(search, { target: { value: "fixture-search-key" } });
   fireEvent.click(
     screen.getByRole("checkbox", {
-      name: messages.settings.organization.promptCaching.toggleLabel,
+      name: messages.settings.organization.promptCaching.title,
     }),
   );
   auxiliaryFailure = {
@@ -1728,9 +1754,7 @@ test("a failed auxiliary section retains its draft while successful sections cle
     const save = screen.getByRole("button", {
       name: messages.common.saveChanges,
     });
-    expect(save instanceof HTMLButtonElement ? save.disabled : null).toBe(
-      false,
-    );
+    expect(save.getAttribute("aria-disabled")).toBeNull();
   });
   expect(deepl).toHaveProperty("value", "fixture-deepl-key");
   const failedSection = settingsSectionQueries(
@@ -1795,7 +1819,7 @@ test.each(Object.values(DIRTY_ONLY_SECTIONS))(
     } else {
       fireEvent.click(
         screen.getByRole("checkbox", {
-          name: messages.settings.organization.promptCaching.toggleLabel,
+          name: messages.settings.organization.promptCaching.title,
         }),
       );
     }
@@ -1905,9 +1929,7 @@ test("page Save refuses writes after the session organization changes and retain
     const save = screen.getByRole("button", {
       name: messages.common.saveChanges,
     });
-    expect(save instanceof HTMLButtonElement ? save.disabled : null).toBe(
-      false,
-    );
+    expect(save.getAttribute("aria-disabled")).toBeNull();
   });
   expect(writes()).toEqual([]);
   expect(deepl).toHaveProperty("value", "fixture-deepl-key");
@@ -1949,8 +1971,8 @@ test.each([false, true])(
       const save = screen.getByRole("button", {
         name: messages.common.saveChanges,
       });
-      expect(save instanceof HTMLButtonElement ? save.disabled : null).toBe(
-        !deleteFails,
+      expect(save.getAttribute("aria-disabled")).toBe(
+        deleteFails ? null : "true",
       );
     });
     expect(writes()).toHaveLength(2);

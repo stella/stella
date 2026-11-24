@@ -44,7 +44,7 @@ pre-commit:
       # --ignore-unknown, files in a language it does not format.
       run: bun fmt --staged --ignore-unknown {files}
     i18n:
-      glob: "apps/web/src/i18n/langs/*.{json,ts}"
+      glob: "apps/web/src/i18n/{namespaces/**/*.json,namespaces.json}"
       files: bun scripts/precommit-paths.ts
       # The sync runs packages/scripts tools and an apps/web script. The
       # script stages exactly the files the sync changed and refuses before
@@ -54,6 +54,10 @@ pre-commit:
       glob: "{.agents/skills,.ai/local-skills,.ai/shared/skills,.claude/skills}/**"
       files: bun scripts/precommit-paths.ts
       run: bash scripts/check-ai-skill-sources.sh
+    workflows:
+      glob: "{.github/workflows/*.{yml,yaml},.github/actions/**/*.{yml,yaml}}"
+      files: bun scripts/precommit-paths.ts
+      run: bun scripts/check-workflow-yaml.ts && bun scripts/check-workflow-shells.ts
     tracked-symlinks:
       # Match the archive's staged tree, never ignored or unstaged targets.
       run: bun scripts/check-tracked-symlinks.ts
@@ -62,7 +66,8 @@ pre-commit:
       run: bun run check:standalone-lockfiles && bun scripts/check-patched-dependencies.ts
 
 # Pre-push keeps only focused checks whose failure would cost a full CI round
-# trip. Lint, format, i18n, and the
+# trip. Lint, format, i18n, cli-contract (which derives both revisions'
+# capability catalogs without CI's cache), and the
 # query-cache type check run in CI only (pre-commit already formats staged
 # files and syncs i18n); run `bun run verify` locally when you want them
 # earlier. Typecheck runs only for touched TypeScript packages, sequentially;
@@ -75,8 +80,6 @@ pre-push:
     # diffs. Skips silently on a branch that touches no released package.
     changeset:
       run: bun scripts/changeset-guard.ts --base origin/main
-    cli-contract:
-      run: bun scripts/check-cli-contract-changeset.ts --base origin/main
     # Checks each touched TypeScript package once, sequentially.
     typecheck:
       run: bun scripts/pre-push-typecheck.ts --base origin/main

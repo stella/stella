@@ -2,8 +2,7 @@ import { panic, Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   softLawDocumentLocators,
   softLawDocuments,
@@ -11,6 +10,7 @@ import {
   softLawIngestionAttempts,
   softLawSources,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {

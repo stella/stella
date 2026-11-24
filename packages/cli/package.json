@@ -1,6 +1,6 @@
 {
   "name": "@stll/cli",
-  "version": "7.2.0",
+  "version": "8.2.2",
   "description": "Stella command-line client",
   "keywords": [
     "cli",

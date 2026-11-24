@@ -572,10 +572,6 @@
     "reason": "pending gate classification"
   },
   {
-    "key": "unclassified-route:GET /v1/files/:workspaceId/email-attachment/:fieldId/:attachmentId",
-    "reason": "pending gate classification"
-  },
-  {
     "key": "unclassified-route:GET /v1/files/:workspaceId/email-html/:fieldId",
     "reason": "pending gate classification"
   },
@@ -1589,10 +1585,6 @@
   },
   {
     "key": "unclassified-route:POST /v1/fields/:workspaceId",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/files/:workspaceId/email-attachment/:fieldId/:attachmentId/save",
     "reason": "pending gate classification"
   },
   {

@@ -26,6 +26,7 @@ import {
   type ComposerModelsMenuProps,
 } from "@/components/chat/chat-model-options-menu";
 import { ChatComposerChips } from "@/components/chat/chat-model-selector";
+import type { ChatThreadRef } from "@/features/chat/chat-thread-ref-types";
 import { ChatAnonymizedToggle } from "@/features/chat/components/chat-anonymized-toggle";
 import { ChatWebSearchToggle } from "@/features/chat/components/chat-web-search-toggle";
 import { guideAnchor } from "@/features/guides/guide-anchor";
@@ -34,7 +35,6 @@ import {
   useChatAnonymized,
   useSetChatAnonymized,
 } from "@/lib/chat-anonymized-store";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
 /**
@@ -196,6 +196,7 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
                     <Button
                       aria-label={t("chat.newChat")}
                       disabled={onNewThread === null}
+                      disabledReason={t("chat.alreadyInNewChat")}
                       onClick={onNewThread ?? undefined}
                       size="icon-xs"
                       tooltip={t("chat.newChat")}

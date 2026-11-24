@@ -125,6 +125,7 @@ const SellerProfilesCardBody = ({
         <Button
           onClick={() => open({ type: "create" })}
           disabled={mutation.isPending}
+          disabledReason={t("common.saving")}
         >
           {t("billing.sellerProfiles.add")}
         </Button>
@@ -181,6 +182,7 @@ const SellerProfilesCardBody = ({
                               variant="outline"
                               size="sm"
                               disabled={mutation.isPending}
+                              disabledReason={t("common.saving")}
                               onClick={() => open({ type: "edit", profile })}
                             >
                               {t("common.edit")}
@@ -190,6 +192,7 @@ const SellerProfilesCardBody = ({
                                 variant="outline"
                                 size="sm"
                                 disabled={mutation.isPending}
+                                disabledReason={t("common.saving")}
                                 onClick={() =>
                                   detached(
                                     run({ type: "default", id: profile.id }),
@@ -204,6 +207,7 @@ const SellerProfilesCardBody = ({
                               variant="ghost"
                               size="sm"
                               disabled={mutation.isPending}
+                              disabledReason={t("common.archiving")}
                               onClick={() => open({ type: "archive", profile })}
                             >
                               {t("common.archive")}
@@ -221,6 +225,7 @@ const SellerProfilesCardBody = ({
         <Button
           variant="outline"
           disabled={query.isFetchingNextPage}
+          disabledReason={t("common.loading")}
           onClick={() =>
             detached(query.fetchNextPage(), "seller-profiles.load-more")
           }
@@ -262,6 +267,7 @@ const SellerProfilesCardBody = ({
                   <Button
                     variant="outline"
                     disabled={mutation.isPending}
+                    disabledReason={t("common.archiving")}
                     onClick={close}
                   >
                     {t("common.cancel")}
@@ -269,6 +275,7 @@ const SellerProfilesCardBody = ({
                   <Button
                     variant="destructive"
                     disabled={mutation.isPending}
+                    disabledReason={t("common.saving")}
                     onClick={() =>
                       detached(
                         run({ type: "archive", id: dialog.profile.id }),

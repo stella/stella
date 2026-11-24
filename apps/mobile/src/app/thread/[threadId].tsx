@@ -21,14 +21,17 @@ const ThreadScreen = () => {
   const t = useTranslations("chat");
   const headerHeight = useHeaderHeight();
   const { state } = useSession();
-  const { fresh, matterId, shareId, threadId, title } = useLocalSearchParams<{
-    fresh?: string;
-    matterId?: string;
-    /** A share from another app the new conversation starts with. */
-    shareId?: string;
-    threadId: string;
-    title?: string;
-  }>();
+  const { dictated, fresh, matterId, shareId, threadId, title } =
+    useLocalSearchParams<{
+      /** Dictated text the new conversation's message starts with. */
+      dictated?: string;
+      fresh?: string;
+      matterId?: string;
+      /** A share from another app the new conversation starts with. */
+      shareId?: string;
+      threadId: string;
+      title?: string;
+    }>();
 
   return (
     <SafeAreaView
@@ -52,6 +55,7 @@ const ThreadScreen = () => {
       >
         {state.status === "signed-in" ? (
           <ChatThreadView
+            dictated={dictated}
             fresh={fresh === "1"}
             matterId={matterId}
             shareId={shareId}

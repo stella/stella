@@ -2,7 +2,7 @@ import { AskUserCard } from "@/components/chat/ask-user-card";
 import type {
   AskUserInput,
   RegisteredChatUIToolCallPart,
-} from "@/components/chat/chat-ui-tools";
+} from "@/components/chat/chat-ui-tools-types";
 
 /** The ask-user card with multiple-choice questions: chips, a checkbox list
  *  for long options, and an answered card listing the ticked options. */

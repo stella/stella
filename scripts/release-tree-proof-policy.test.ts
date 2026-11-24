@@ -66,7 +66,7 @@ test("PR-head proof validates the complete release delta from its merge-base wit
   const branch = source.slice(source.indexOf("  release_version=$(git show"));
   expect(branch).toContain('main=$(git merge-base "$sha" origin/main)');
   expect(branch).toContain(
-    'node "$candidate_tree_verifier" "$main" "$proof" "$repo"',
+    'bun --no-env-file --config=/dev/null "$candidate_tree_verifier" "$main" "$proof" "$repo"',
   );
   expect(branch).not.toContain('git merge-base --is-ancestor "$main" "$proof"');
   expect(branch).not.toContain("RELEASE_TREE_PROOF_STALE");

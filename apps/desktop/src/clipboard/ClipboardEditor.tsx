@@ -60,7 +60,7 @@ import {
   CLIPBOARD_HISTORY_CHANGED_EVENT,
   isClipboardEditorContext,
   isClipboardEditorSession,
-  isClipboardSnapshot,
+  isClipboardSettingsSnapshot,
 } from "./clipboard-types";
 import type {
   ClipboardEditorContext,
@@ -834,9 +834,9 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
       name: groupName,
     })
       .then((value) => {
-        // The command answers with the snapshot the timeline renders; the one
-        // group the editor has not seen before is the one just created.
-        const groups = isClipboardSnapshot(value) ? value.groups : null;
+        // The command answers with the clipboard settings; the one group the
+        // editor has not seen before is the one just created.
+        const groups = isClipboardSettingsSnapshot(value) ? value.groups : null;
         const created = groups?.find((group) => !knownGroupIds.has(group.id));
         if (!groups || !created) {
           reportDesktopError({
@@ -1191,6 +1191,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
           </div>
           <Button
             disabled={groupCreationPending}
+            disabledReason={t("creatingGroup")}
             onClick={requestClose}
             type="button"
             variant="ghost"
@@ -1199,6 +1200,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
           </Button>
           <Button
             disabled={state.save.type === "saving"}
+            disabledReason={t("savingChanges")}
             onClick={save}
             type="button"
           >
@@ -1222,6 +1224,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
             <div className="mt-4 flex items-center justify-end gap-3">
               <Button
                 disabled={groupCreationPending}
+                disabledReason={t("creatingGroup")}
                 onClick={() => setGroupDraft({ type: "closed" })}
                 type="button"
                 variant="ghost"
@@ -1230,6 +1233,11 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
               </Button>
               <Button
                 disabled={!state.groupDraft.name.trim() || groupCreationPending}
+                disabledReason={
+                  groupCreationPending
+                    ? t("creatingGroup")
+                    : t("enterGroupName")
+                }
                 onClick={createGroup}
                 type="button"
               >

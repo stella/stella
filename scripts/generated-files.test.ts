@@ -1108,15 +1108,21 @@ test("route tree has one derived owner and a cache producer for every consumer",
 test("web messages have one derived owner and are generated wherever the route tree is", () => {
   const owner = generator("i18n-messages-web");
   expect(owner.outputKind).toBe("derived");
-  const output = "apps/web/src/i18n/langs/messages.gen.ts";
-  expect(owner.outputs).toEqual([output]);
-  expect(
-    GENERATORS.filter(({ outputs }) =>
-      outputs.some((file) => file === output),
-    ).map(({ id }) => id),
-  ).toEqual([owner.id]);
-  const ignored = Bun.spawnSync(["git", "check-ignore", "--no-index", output]);
-  expect(ignored.exitCode).toBe(0);
+  expect(owner.outputs).toEqual([...CI_GENERATED_OUTPUTS.webMessages]);
+  for (const output of owner.outputs) {
+    expect(
+      GENERATORS.filter(({ outputs }) =>
+        outputs.some((file) => file === output),
+      ).map(({ id }) => id),
+    ).toEqual([owner.id]);
+    const ignored = Bun.spawnSync([
+      "git",
+      "check-ignore",
+      "--no-index",
+      output,
+    ]);
+    expect(ignored.exitCode, output).toBe(0);
+  }
   const config = v.parse(
     v.object({
       tasks: v.record(
@@ -1131,9 +1137,9 @@ test("web messages have one derived owner and are generated wherever the route t
       readFileSync(new URL("../turbo.json", import.meta.url), "utf-8"),
     ),
   );
-  expect(config.tasks["@stll/web#generate:messages"]?.outputs).toEqual([
-    "src/i18n/langs/messages.gen.ts",
-  ]);
+  expect(config.tasks["@stll/web#generate:messages"]?.outputs).toEqual(
+    owner.outputs.map((file) => file.replace(/^apps\/web\//u, "")),
+  );
   expect(
     generationInputs("generate:messages")
       .map((input) =>
@@ -1217,6 +1223,7 @@ test("web catalog checks pass without the derived message declarations", async (
       "apps/web/public/prepaint-init.js",
       "apps/api/src/lib/case-law/withdrawn-decision-labels.gen.json",
       "packages/ai-catalog/src",
+      "packages/workspace-ui/src",
     ],
     { cwd: repo, stdout: "pipe", stderr: "pipe" },
   );

@@ -15,7 +15,6 @@ import { DayCalendar } from "@stll/ui/day-calendar";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
-  EyeOffIcon,
   LockKeyholeIcon,
   PauseIcon,
   PlayIcon,
@@ -57,6 +56,11 @@ import {
   TitlesAccessStrip,
 } from "./ActivityCaptureDetails";
 import type { CaptureDetailsCommand } from "./ActivityCaptureDetails";
+import {
+  ActivityDisclosure,
+  ActivitySentFacts,
+  useStoredFact,
+} from "./ActivityDisclosure";
 import "./activity-calendar.css";
 import { ActivityDayCalendar } from "./ActivityDayCalendar";
 import type {
@@ -279,31 +283,32 @@ const ActivityWelcome = ({
   snapshot,
 }: ActivityWelcomeProps) => {
   const t = useTranslations("activity");
+  const stored = useStoredFact();
   return (
     <section className="flex flex-col gap-4 rounded-2xl border p-6">
       <h2 className="text-base font-semibold">{t("welcomeTitle")}</h2>
       <ActivityWelcomePreview snapshot={snapshot} />
 
       <ul className="text-muted-foreground flex flex-col gap-2 text-sm">
-        <li className="flex items-center gap-2">
-          <LockKeyholeIcon aria-hidden="true" className="size-4 shrink-0" />
-          {t("welcomeLocalFact")}
+        <li className="flex items-start gap-2">
+          <LockKeyholeIcon
+            aria-hidden="true"
+            className="mt-0.5 size-4 shrink-0"
+          />
+          {stored}
         </li>
-        <li className="flex items-center gap-2">
-          <EyeOffIcon aria-hidden="true" className="size-4 shrink-0" />
-          {t("welcomePrivacyFact")}
-        </li>
-        <li className="flex items-center gap-2">
-          <PauseIcon aria-hidden="true" className="size-4 shrink-0" />
-          {t("welcomeControlFact")}
+        <li className="flex items-start gap-2">
+          <PauseIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+          {t("disclosure.control")}
         </li>
       </ul>
-      <Collapsible className="text-muted-foreground text-xs">
+      {/* The same facts, in the same words, as setup's Activity step. */}
+      <Collapsible>
         <CollapsibleTrigger render={<Button size="touch" variant="muted" />}>
           {t("welcomeLearnMore")}
         </CollapsibleTrigger>
         <CollapsiblePanel>
-          <p className="leading-relaxed text-pretty">{t("welcomeDetails")}</p>
+          <ActivityDisclosure />
         </CollapsiblePanel>
       </Collapsible>
       <CaptureDetailsControl
@@ -379,6 +384,9 @@ const DayHeader = ({
           disabled={
             navigationDisabled || snapshot.date <= snapshot.earliestDate
           }
+          disabledReason={
+            navigationDisabled ? t("creatingDrafts") : t("earliestDayReached")
+          }
           onClick={() => onNavigate(shiftDate(snapshot.date, -1))}
           size="icon"
           variant="ghost"
@@ -395,6 +403,9 @@ const DayHeader = ({
         <Button
           aria-label={t("nextDay")}
           disabled={navigationDisabled || snapshot.date >= snapshot.latestDate}
+          disabledReason={
+            navigationDisabled ? t("creatingDrafts") : t("latestDayReached")
+          }
           onClick={() => onNavigate(shiftDate(snapshot.date, 1))}
           size="icon"
           variant="ghost"
@@ -404,6 +415,7 @@ const DayHeader = ({
         {snapshot.date === snapshot.today ? null : (
           <Button
             disabled={navigationDisabled}
+            disabledReason={t("creatingDrafts")}
             onClick={() => onNavigate(snapshot.today)}
             variant="ghost"
           >
@@ -428,6 +440,7 @@ const DayHeader = ({
 
 const PersistenceBadge = ({ snapshot }: { snapshot: ActivityDaySnapshot }) => {
   const t = useTranslations("activity");
+  const stored = useStoredFact();
   const status =
     snapshot.recordingStatus === "recording" ? t("recording") : t("paused");
   if (snapshot.persistence === "memoryOnly") {
@@ -459,8 +472,11 @@ const PersistenceBadge = ({ snapshot }: { snapshot: ActivityDaySnapshot }) => {
           <LockKeyholeIcon aria-hidden="true" />
         </PopoverTrigger>
         <PopoverPopup className="w-72" side="bottom" align="start">
-          <PopoverTitle>{t("encrypted")}</PopoverTitle>
-          <PopoverDescription>{t("batchPrivacy")}</PopoverDescription>
+          <PopoverTitle>{stored}</PopoverTitle>
+          <PopoverDescription>{t("disclosure.sentTitle")}</PopoverDescription>
+          <ul className="mt-2 flex flex-col gap-1.5 text-xs">
+            <ActivitySentFacts />
+          </ul>
         </PopoverPopup>
       </Popover>
     </span>
@@ -506,15 +522,8 @@ const DayContent = ({
       </>
     );
   }
-  if (snapshot.segments.length === 0 && !reviewVisible) {
-    return (
-      <>
-        {header}
-        {notice}
-        <p className="text-muted-foreground text-sm">{t("empty")}</p>
-      </>
-    );
-  }
+  // A day with nothing recorded still shows its grid: an entry can be drawn
+  // on it, and today's fills in as work is recorded.
   return (
     <ActivityDayCalendar
       key={snapshot.date}

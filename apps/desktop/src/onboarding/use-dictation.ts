@@ -122,7 +122,7 @@ const isDictationSnapshot = (value: unknown): value is DictationSnapshot =>
   typeof value["textBeforeCursorAvailable"] === "boolean";
 
 /** A model that is neither on disk nor on its way. */
-export const needsDownload = (model: DictationModel) =>
+const needsDownload = (model: DictationModel) =>
   model.status === "missing" || model.status === "failed";
 
 export type DictationControls = {

@@ -6,15 +6,16 @@ import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-
 import {
   CASE_LAW_DECISIONS_SLUG_UIDX,
   CASE_LAW_DECISIONS_SOURCE_DOCUMENT_IDX,
+  FALLBACK_DECISION_UNIQUE_INDEXES,
   onlineUniqueIndexTarget,
 } from "@/api/db/online-unique-indexes";
-import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   caseLawDecisionFallbackIdentities,
   caseLawDecisionIdentifiers,
   caseLawDecisions,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { settleReopenedCitations } from "@/api/handlers/case-law/citation-resolution";
@@ -584,19 +585,15 @@ export const writeDecisionRowWithSlug = async (
 };
 
 /**
- * Whether a row write lost a race to insert the same publisher identity.
- * The fallback identity indexes this release builds online join the list
- * once a later release can rely on them; until then the source lease keeps
- * one writer per source.
+ * Whether a row write lost a race to insert the same publisher identity,
+ * fallback identity or fallback content. The contract release relies on the
+ * fallback unique indexes the expansion validated online.
  */
 export const isConcurrentIdentityInsert = (error: unknown): boolean =>
-  isPgConstraintError(
-    error,
-    PG_ERROR.UNIQUE_VIOLATION,
+  [
     CASE_LAW_DECISIONS_SOURCE_DOCUMENT_IDX,
-  ) ||
-  isPgConstraintError(
-    error,
-    PG_ERROR.UNIQUE_VIOLATION,
     "case_law_decisions_pkey",
+    ...FALLBACK_DECISION_UNIQUE_INDEXES.map(({ name }) => name),
+  ].some((constraint) =>
+    isPgConstraintError(error, PG_ERROR.UNIQUE_VIOLATION, constraint),
   );

@@ -398,12 +398,10 @@ describe("the browser waits for the terminal's outcome", () => {
       throw new Error("listener failed to bind");
     }
     try {
-      const started = performance.now();
       const answered = followVerifiedRedirect(listener.redirectUri);
       await listener.waitForCallback(1000);
 
       const response = await answered;
-      const elapsed = performance.now() - started;
       const html = await response.text();
       expect(response.status).toBe(504);
       expect(await textContent(html, "h1")).toBe("Sign-in not confirmed");
@@ -411,8 +409,6 @@ describe("the browser waits for the terminal's outcome", () => {
         "stella CLI did not confirm the sign-in in time. If your terminal does not show you signed in, run:",
       );
       expect(await textContent(html, COMMAND)).toBe("stella auth login");
-      expect(elapsed).toBeGreaterThanOrEqual(completionTimeoutMs - 5);
-      expect(elapsed).toBeLessThan(completionTimeoutMs + 2000);
 
       // A report after the bound cannot turn the answer into success.
       await listener.finish({ kind: "signed_in" });

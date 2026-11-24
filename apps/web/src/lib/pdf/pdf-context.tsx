@@ -34,6 +34,7 @@ import {
   SCROLL_AREA_VIEWPORT_SELECTOR,
 } from "@/lib/pdf/consts";
 import type { PDFViewerError } from "@/lib/pdf/pdf-errors";
+import { fittedPageWidth } from "@/lib/pdf/pdf-fit-width.logic";
 import type { PDFDocument } from "@/lib/pdf/pdf-loader";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 import { renderPage } from "@/lib/pdf/pdf-renderer";
@@ -364,7 +365,7 @@ const createPDFStore = ({
         fitToWidth > 0 &&
         origPageWidth !== null &&
         origPageWidth > 0
-          ? fitToWidth / origPageWidth
+          ? fittedPageWidth(fitToWidth) / origPageWidth
           : document.baseScale;
 
       const effectiveScale = baseDocumentScale + get().scaleOffset;
@@ -521,7 +522,8 @@ const createPDFStore = ({
       }
 
       const { scale: currentBaseScale, pages: currentPages } = get();
-      const fitToWidthScale = containerWidth / originalPageWidth;
+      const fitToWidthScale =
+        fittedPageWidth(containerWidth) / originalPageWidth;
 
       if (currentBaseScale === fitToWidthScale) {
         return;
@@ -632,7 +634,14 @@ type PDFProviderProps = PropsWithChildren<{
   /** Names the viewer in telemetry; see {@link RecoverableViewerBoundary}. */
   surface: ViewerSurface;
   initialScaleOffset?: number | undefined;
-  fitToWidth?: number | undefined;
+  /**
+   * The width the pages first fit, measured from the viewer's box; the
+   * pages then follow that box as it resizes. Only a viewer that sets its own
+   * scale passes `null` (the full-screen page). Required so that no preview
+   * draws its pages at the document's own size by leaving it out: preview
+   * surfaces mount `MeasuredPdfProvider`, which measures it.
+   */
+  fitToWidth: number | null;
   /** `error` replaces the generic failed state for a final failure only. */
   fallback?: PDFPageFallback | undefined;
   onDownload?: (() => void) | undefined;
@@ -643,7 +652,7 @@ type PDFStoreProviderProps = PropsWithChildren<{
   fieldId: string;
   startPage: number;
   initialScaleOffset?: number | undefined;
-  fitToWidth?: number | undefined;
+  fitToWidth: number | null;
   suspense: ReactNode;
 }>;
 
@@ -660,7 +669,7 @@ const PDFStoreProvider = ({
       fieldId,
       startPage,
       scaleOffset: initialScaleOffset,
-      fitToWidth,
+      fitToWidth: fitToWidth ?? undefined,
     }),
   );
 

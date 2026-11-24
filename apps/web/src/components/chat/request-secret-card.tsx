@@ -20,7 +20,7 @@ import type {
   RequestSecretDecision,
   SecretTargetResolution,
 } from "@/components/chat/chat-approval-context";
-import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools";
+import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools-types";
 import { SecretInput } from "@/components/secret-input";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
@@ -75,6 +75,7 @@ const RequestSecretCredentialFields = ({
         <SecretInput
           autoComplete="off"
           disabled={disabled}
+          disabledReason={t("common.sending")}
           onChange={(event) => onValueChange(event.currentTarget.value)}
           value={value}
         />
@@ -238,7 +239,12 @@ const RequestSecretContinuationRetry = ({
         {t("chat.requestSecret.continuationError")}
       </p>
       <div className="flex flex-wrap justify-end gap-2">
-        <Button disabled={isRetrying} onClick={onRetry} type="button">
+        <Button
+          disabled={isRetrying}
+          disabledReason={t("common.retrying")}
+          onClick={onRetry}
+          type="button"
+        >
           {isRetrying ? (
             <Loader className="size-4" variant="decorative" />
           ) : null}
@@ -247,6 +253,31 @@ const RequestSecretContinuationRetry = ({
       </div>
     </div>
   );
+};
+
+type SecretSubmitDisabledReasonOptions = {
+  isSubmitting: boolean;
+  value: string;
+  t: (
+    key:
+      | "common.sending"
+      | "chat.requestSecret.enterValue"
+      | "chat.requestSecret.confirmReceiptOnly",
+  ) => string;
+};
+
+const secretSubmitDisabledReason = ({
+  isSubmitting,
+  value,
+  t,
+}: SecretSubmitDisabledReasonOptions) => {
+  if (isSubmitting) {
+    return t("common.sending");
+  }
+  if (value.length === 0) {
+    return t("chat.requestSecret.enterValue");
+  }
+  return t("chat.requestSecret.confirmReceiptOnly");
 };
 
 export const RequestSecretCard = ({
@@ -455,6 +486,7 @@ export const RequestSecretCard = ({
           <div className="flex flex-wrap justify-end gap-2">
             <Button
               disabled={isSubmitting}
+              disabledReason={t("common.sending")}
               onClick={() =>
                 detached(submit("decline"), "request-secret-card.decline")
               }
@@ -466,6 +498,7 @@ export const RequestSecretCard = ({
             {secretTarget?.available === true ? (
               <Button
                 disabled={isSubmitting}
+                disabledReason={t("common.sending")}
                 onClick={() =>
                   detached(submit("use-saved"), "request-secret-card.use-saved")
                 }
@@ -484,6 +517,11 @@ export const RequestSecretCard = ({
                     secretTarget.connector.responseDisposition === "normal" &&
                     normalConnectionAction !== "replace-with-receipt-only")
                 }
+                disabledReason={secretSubmitDisabledReason({
+                  isSubmitting,
+                  value,
+                  t,
+                })}
                 onClick={() =>
                   detached(submit("provide"), "request-secret-card.provide")
                 }

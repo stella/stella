@@ -52,7 +52,7 @@ import {
   chatRunTargetSchema,
 } from "@stll/api-contract/chat-run-target";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import type { StoredFileRef } from "@/api/handlers/chat/attachment-validation";
 import {
   validateChatFileParts,
@@ -63,6 +63,8 @@ import {
   type TurnBrowserExtension,
 } from "@/api/handlers/chat/browser-extension-capability";
 import {
+  answerableToolCalls,
+  type AwaitingUserInteraction,
   chatMessageFromPersisted,
   continueStoredChatPart,
   getResumedUserInteraction,
@@ -73,6 +75,7 @@ import {
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import { validatePrivateReceipts } from "@/api/handlers/chat/chat-secret-validation";
+import { subagentChildTool } from "@/api/handlers/chat/tools/browse-web-agent-tools";
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { resolveRegistryToolInputRefs } from "@/api/handlers/chat/tools/registry-adapter/input-ref-hydration";
 import { CHAT_TOOL_SCOPE } from "@/api/handlers/chat/tools/tool-scope";
@@ -981,6 +984,12 @@ const applyValidatedContinuationTransitions = ({
 }): ChatPart[] => {
   const transitionedCallIds = new Set<string>();
   const mergedParts = persistedParts.map((part) => {
+    if (part.type === "subagent") {
+      return continueStoredChatPart(
+        part,
+        withNestedTransitions(part, validatedCallsById),
+      );
+    }
     if (part.type !== "tool-call") {
       return part;
     }
@@ -1029,6 +1038,38 @@ const applyValidatedContinuationTransitions = ({
   }
 
   return mergedParts;
+};
+
+type ChatSubagentPart = Extract<ChatPart, { type: "subagent" }>;
+
+/**
+ * A stored sub-agent part with each of its child's calls an answer moved
+ * (`validateNestedContinuationCalls`) in its answered state, at every depth.
+ * Returns `part` itself when no call inside it moved.
+ */
+const withNestedTransitions = (
+  part: ChatSubagentPart,
+  validatedCallsById: ReadonlyMap<string, ValidatedContinuationToolCall>,
+): ChatSubagentPart => {
+  const messages = part.subagent.messages.map((message) => ({
+    ...message,
+    parts: message.parts.map((child) => {
+      if (child.type === "subagent") {
+        return withNestedTransitions(child, validatedCallsById);
+      }
+      if (child.type !== "tool-call") {
+        return child;
+      }
+      const validated = validatedCallsById.get(child.id);
+      return validated?.type === "transitioned" ? validated.call : child;
+    }),
+  }));
+  const moved = messages.some((message, index) =>
+    message.parts.some(
+      (child, at) => child !== part.subagent.messages.at(index)?.parts.at(at),
+    ),
+  );
+  return moved ? { ...part, subagent: { ...part.subagent, messages } } : part;
 };
 
 /**
@@ -1107,33 +1148,49 @@ const validateContinuationToolCallIntegrity = ({
   const awaitedCallIds = new Set(
     awaitedInteractions.map(({ toolCallId }) => toolCallId),
   );
+  // A suspended sub-agent's calls, which the stored message holds inside its
+  // `subagent` part. The client never authors that part (it is server-owned),
+  // so such a call is answered only through its interrupt.
+  const answerableCallsById = new Map(
+    answerableToolCalls(persistedMessage.parts).map(
+      (call) => [call.id, call] as const,
+    ),
+  );
+  const nestedAwaited = awaitedInteractions.filter(
+    ({ toolCallId }) => !canonicalCallsById.has(toolCallId),
+  );
   if (
+    answerableCallsById.size !==
+      answerableToolCalls(persistedMessage.parts).length ||
     [...validatedCallsById.values()].some(
       (call) =>
         call.type === "transitioned" && !awaitedCallIds.has(call.call.id),
     ) ||
-    awaitedInteractions.some(
-      ({ toolCallId }) => !incomingCallsById.has(toolCallId),
-    )
-  ) {
-    return invalidContinuationToolCall();
-  }
-  if (
-    awaitedInteractions.some(({ toolCallId }) => {
-      const call = canonicalCallsById.get(toolCallId);
-      return (
-        call === undefined ||
-        (isHarnessChatToolCall(call) ? "harness" : "cloud") !==
-          toolCallOwnership
-      );
-    }) ||
-    // A harness question is answered only through its interrupt.
-    (resume === undefined &&
-      awaitedInteractions.some(({ type }) => type === "harness-question"))
+    !awaitedCallsReachable({
+      answerableCallsById,
+      awaitedInteractions,
+      canonicalCallsById,
+      incomingCallsById,
+      nestedAwaited,
+      resume,
+      toolCallOwnership,
+    })
   ) {
     return invalidContinuationToolCall();
   }
   if (resume !== undefined) {
+    const nestedResult = validateNestedContinuationCalls({
+      nestedAwaited,
+      answerableCallsById,
+      refRegistry,
+      resume,
+    });
+    if (Result.isError(nestedResult)) {
+      return Result.err(nestedResult.error);
+    }
+    for (const [callId, validatedCall] of nestedResult.value) {
+      validatedCallsById.set(callId, validatedCall);
+    }
     const pendingInterrupts =
       persistedMessage.metadata?.resumeSnapshot?.pendingInterrupts;
     const awaitedInterrupts: {
@@ -1145,9 +1202,7 @@ const validateContinuationToolCallIntegrity = ({
       Parameters<typeof questionReplyOf>[1]
     >();
     for (const awaited of awaitedInteractions) {
-      const call = canonicalCalls.find(
-        (candidate) => candidate.id === awaited.toolCallId,
-      );
+      const call = answerableCallsById.get(awaited.toolCallId);
       if (call === undefined) {
         continue;
       }
@@ -1253,6 +1308,167 @@ const invalidContinuationToolCall = (): Result<never, HandlerError<400>> =>
       message: "Chat continuation does not match its awaited interaction",
     }),
   );
+
+/**
+ * Whether each awaited call can be answered by this continuation: a call of
+ * the message itself through the client's copy of it, a call inside a
+ * sub-agent run and a harness question only through their interrupt, and
+ * every call only by a turn of its own executor.
+ */
+const awaitedCallsReachable = ({
+  answerableCallsById,
+  awaitedInteractions,
+  canonicalCallsById,
+  incomingCallsById,
+  nestedAwaited,
+  resume,
+  toolCallOwnership,
+}: {
+  answerableCallsById: ReadonlyMap<string, ChatToolCallPart>;
+  awaitedInteractions: readonly AwaitingUserInteraction[];
+  canonicalCallsById: ReadonlyMap<string, ChatToolCallPart>;
+  incomingCallsById: ReadonlyMap<string, ChatToolCallPart>;
+  nestedAwaited: readonly AwaitingUserInteraction[];
+  resume: AgUiResume | undefined;
+  toolCallOwnership: ChatToolCallOwnership;
+}): boolean =>
+  awaitedInteractions.every(({ toolCallId }) => {
+    const call = answerableCallsById.get(toolCallId);
+    return (
+      call !== undefined &&
+      (!canonicalCallsById.has(toolCallId) ||
+        incomingCallsById.has(toolCallId)) &&
+      (isHarnessChatToolCall(call) ? "harness" : "cloud") === toolCallOwnership
+    );
+  }) &&
+  (resume !== undefined ||
+    (nestedAwaited.length === 0 &&
+      awaitedInteractions.every(({ type }) => type !== "harness-question")));
+
+const approvalResumePayloadSchema = v.strictObject({ approved: v.boolean() });
+const clientToolErrorPayloadSchema = v.strictObject({
+  error: v.pipe(v.string(), v.minLength(1)),
+});
+
+/**
+ * The calls a suspended sub-agent awaits, each moved by its answer. The page
+ * cannot author a sub-agent part (it is server-owned), so the answer is read
+ * from the call's interrupt alone and applied to the stored call here,
+ * through the same transition a top-level answer takes: an approval moves
+ * only its decision, a client call only its output, which must be a valid
+ * output of the child's tool. A call the resume cancels stays as awaited.
+ */
+const validateNestedContinuationCalls = ({
+  answerableCallsById,
+  nestedAwaited,
+  refRegistry,
+  resume,
+}: {
+  answerableCallsById: ReadonlyMap<string, ChatToolCallPart>;
+  nestedAwaited: readonly AwaitingUserInteraction[];
+  refRegistry: ChatRefRegistry;
+  resume: AgUiResume;
+}): Result<
+  ReadonlyMap<string, ValidatedContinuationToolCall>,
+  HandlerError<400>
+> => {
+  const validated = new Map<string, ValidatedContinuationToolCall>();
+  for (const awaited of nestedAwaited) {
+    const call = answerableCallsById.get(awaited.toolCallId);
+    if (call === undefined) {
+      return invalidContinuationToolCall();
+    }
+    const incoming = nestedAnsweredCall({ awaited, call, resume });
+    if (Result.isError(incoming)) {
+      return Result.err(incoming.error);
+    }
+    if (incoming.value === null) {
+      continue;
+    }
+    const transition = validateContinuationToolCallTransition({
+      canonicalCall: call,
+      incomingCall: incoming.value,
+      refRegistry,
+      tool: subagentChildTool(call.name),
+    });
+    if (Result.isError(transition)) {
+      return Result.err(transition.error);
+    }
+    validated.set(call.id, transition.value);
+  }
+  return Result.ok(validated);
+};
+
+/** The call as its resumed interrupt answers it, or `null` when the resume
+ *  leaves it awaited (cancelled, or not answered: the caller refuses that). */
+const nestedAnsweredCall = ({
+  awaited,
+  call,
+  resume,
+}: {
+  awaited: AwaitingUserInteraction;
+  call: ChatToolCallPart;
+  resume: AgUiResume;
+}): Result<ChatToolCallPart | null, HandlerError<400>> => {
+  const kind = awaited.type;
+  const interruptId = (() => {
+    switch (kind) {
+      case "approval":
+        return "approval" in call ? call.approval.id : null;
+      case "ask-user":
+      case "client-tool":
+        return `client_tool_${call.id}`;
+      // A harness question never sits inside a sub-agent run.
+      case "harness-question":
+        return null;
+      default:
+        kind satisfies never;
+        return panic(`Unhandled interaction: ${String(kind)}`);
+    }
+  })();
+  if (interruptId === null) {
+    return invalidContinuationToolCall();
+  }
+  const item = resume.find((entry) => entry.interruptId === interruptId);
+  if (item === undefined || item.status === "cancelled") {
+    return Result.ok(null);
+  }
+  const candidate = ((): unknown => {
+    if (awaited.type === "approval") {
+      const payload = v.safeParse(approvalResumePayloadSchema, item.payload);
+      return payload.success && "approval" in call
+        ? {
+            ...call,
+            approval: { ...call.approval, approved: payload.output.approved },
+            state: "approval-responded",
+          }
+        : null;
+    }
+    const tool = subagentChildTool(call.name);
+    if (tool === undefined) {
+      return null;
+    }
+    // A client call that failed answers with its error, as the page's
+    // interrupt sends it; any other answer is the tool's output.
+    if (v.is(clientToolErrorPayloadSchema, item.payload)) {
+      return { ...call, output: item.payload, state: "error" };
+    }
+    const output = validateToolPayload({
+      payload: item.payload,
+      payloadName: "output",
+      schema: tool.outputSchema,
+      toolName: call.name,
+    });
+    // Stored as the interrupt carried it, which the resume check compares.
+    return Result.isOk(output)
+      ? { ...call, output: item.payload, state: "complete" }
+      : null;
+  })();
+  if (!isChatPart(candidate) || candidate.type !== "tool-call") {
+    return invalidContinuationToolCall();
+  }
+  return Result.ok(candidate);
+};
 
 /**
  * The persisted call is the base of every continuation. This is intentionally

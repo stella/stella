@@ -15,6 +15,7 @@ import { ChatAttachmentChip } from "@/components/chat-attachment-chip";
 import { DictateButton } from "@/components/dictate-button";
 import { ThreadMatter } from "@/components/thread-matter";
 import type { useChatTurn } from "@/components/use-chat-turn";
+import { useDictationField } from "@/components/use-dictation-field";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
@@ -43,7 +44,6 @@ import {
 } from "@/state/chat-edit";
 import type { ChatEntry } from "@/state/chat-messages";
 import type { LocalRunTarget } from "@/state/chat-pending-input";
-import { appendDictation } from "@/state/dictation";
 
 /** How the thread answered an edit the form sent. */
 export type EditOutcome =
@@ -84,6 +84,7 @@ const ChatMessageEdit = ({
   const { end } = useSession();
   const [opened] = useState(() => editDraftOf(entry.parts ?? []));
   const [text, setText] = useState(opened.text);
+  const field = useDictationField(text, setText);
   const matterId = use(ThreadMatter);
   const [kept, setKept] = useState(opened.kept);
   const [read, setRead] = useState<ChatLocalFilesUndoRead>();
@@ -181,6 +182,7 @@ const ChatMessageEdit = ({
       return;
     }
     const undoFirst = editUndoesFilesFirst(choice);
+    const learned = field.learnOnceSent(draft.text);
     setSending(true);
     setNotice(undefined);
     setProblem(null);
@@ -215,7 +217,9 @@ const ChatMessageEdit = ({
         }
       }
       const outcome = await onSend(draft);
-      if (outcome.type === "refused" && open.current) {
+      if (outcome.type === "accepted") {
+        learned();
+      } else if (open.current) {
         setSending(false);
         setNotice(outcome.notice);
       }
@@ -234,6 +238,7 @@ const ChatMessageEdit = ({
               key={attachment.key}
               mimeType={attachment.mimeType}
               name={attachment.name}
+              unscannedContent={attachment.unscannedContent}
               onRemove={
                 sending
                   ? undefined
@@ -251,16 +256,15 @@ const ChatMessageEdit = ({
         accessibilityLabel={t("edit.input")}
         autoFocus
         editable={!sending}
-        onChangeText={setText}
+        {...field.inputProps}
         value={text}
       />
       <DictateButton
         disabled={sending}
+        field="message"
         matterId={matterId}
         onBusyChange={setDictating}
-        onText={(dictated) => {
-          setText((typed) => appendDictation(typed, dictated));
-        }}
+        onText={field.insert}
       />
       <Text variant="caption">{t("edit.notice")}</Text>
       {editRestartsConversation(read) ? (

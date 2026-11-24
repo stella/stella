@@ -2,17 +2,13 @@ import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import * as v from "valibot";
 
 import { getTranslator } from "@/i18n/i18n-store";
-import { getAnalytics } from "@/lib/analytics/provider";
 import { publicToolsCataloguePath } from "@/lib/knowledge/public-tools-path";
 import { pageTitle } from "@/lib/page-title";
 import { createPublicToolsHead } from "@/lib/public-tools-seo";
-import {
-  TOOLS_KIND_FILTERS,
-  type ToolsKindFilter,
-} from "@/lib/tools-catalogue";
+import { TOOLS_KIND_FILTERS } from "@/lib/tools-catalogue";
 import { routeSearchSchema } from "@/route-search-params";
-import { PublicToolsIndex } from "@/routes/tools/-components/public-tools-index";
-import { PublicToolsIndexPending } from "@/routes/tools/-components/public-tools-index-pending";
+import { PublicToolsIndexRoute } from "@/routes/tools/-index.page";
+import { PublicToolsIndexPending } from "@/routes/tools/-index.pending";
 
 // Public SEO page: a bad `?kind=` value (e.g. `?kind=skills`) must degrade
 // to the default "all" filter, not throw into the router's default error
@@ -40,22 +36,3 @@ export const Route = createFileRoute("/tools/")({
   component: PublicToolsIndexRoute,
   pendingComponent: PublicToolsIndexPending,
 });
-
-function PublicToolsIndexRoute() {
-  const kind = Route.useSearch({ select: (search) => search.kind });
-  const navigate = Route.useNavigate();
-
-  const onKindChange = (nextKind: ToolsKindFilter) => {
-    navigate({ search: { kind: nextKind } }).catch((error: unknown) => {
-      getAnalytics().captureError(error, {
-        fingerprintKey: "PublicToolsIndexRoute.onKindChange:failure",
-        scope: {
-          type: "handler",
-          handlerId: "PublicToolsIndexRoute.onKindChange:failure",
-        },
-      });
-    });
-  };
-
-  return <PublicToolsIndex kind={kind} onKindChange={onKindChange} />;
-}

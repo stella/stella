@@ -9,9 +9,9 @@
 
 import { and, eq, isNull } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { pdfSigningSessions } from "@/api/db/schema";
 import type { PdfSigningKeyType } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";

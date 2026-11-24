@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { reconcileCaseLawCorpusUploadIntents } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 

@@ -191,7 +191,14 @@ jobs:
         working-directory: apps/mobile
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: bunx expo prebuild --platform ios --clean
+        run: bunx --bun expo prebuild --platform ios --clean --no-install
+
+      # CocoaPods runs outside Bun: the Podfile's autolinking and the
+      # `.xcode.env.local` it writes call `node`, which `bunx --bun` would
+      # point at Bun.
+      - name: Install CocoaPods dependencies
+        working-directory: apps/mobile/ios
+        run: pod install || pod install --repo-update
 
       - name: Import the distribution certificate
         env:

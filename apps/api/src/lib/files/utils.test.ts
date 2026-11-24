@@ -2,12 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 
-import {
-  createFileKey,
-  createUserFileKey,
-  getFileExtension,
-  resolveUploadMime,
-} from "./utils";
+import { resolveUploadMime } from "./upload-mime";
+import { createFileKey, createUserFileKey, getFileExtension } from "./utils";
 
 describe("resolveUploadMime", () => {
   test("recovers .msg reported as octet-stream", () => {
@@ -79,6 +75,37 @@ describe("resolveUploadMime", () => {
     ).toBe(
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     );
+  });
+
+  test("recovers converted document formats, extensions no type table lists included", () => {
+    for (const [fileName, mimeType] of [
+      ["smlouva.wpd", "application/vnd.wordperfect"],
+      ["SMLOUVA.WP5", "application/vnd.wordperfect"],
+      ["dopis.wps", "application/vnd.ms-works"],
+      ["nabidka.pages", "application/vnd.apple.pages"],
+      ["rozpocet.numbers", "application/vnd.apple.numbers"],
+      ["vestnik.mht", "multipart/related"],
+      ["vestnik.MHTML", "multipart/related"],
+    ] as const) {
+      expect(resolveUploadMime({ declaredMime: "", fileName })).toBe(mimeType);
+    }
+  });
+
+  test("recovers Pages and Numbers declared as plain ZIP archives, and only those", () => {
+    for (const [declaredMime, fileName, mimeType] of [
+      ["application/zip", "nabidka.pages", "application/vnd.apple.pages"],
+      [
+        "application/x-zip-compressed",
+        "rozpocet.numbers",
+        "application/vnd.apple.numbers",
+      ],
+      ["application/zip", "kniha.epub", "application/epub+zip"],
+      ["application/zip", "smlouva.wpd", "application/zip"],
+      ["application/zip", "archiv.zip", "application/zip"],
+      ["application/pdf", "nabidka.pages", "application/pdf"],
+    ] as const) {
+      expect(resolveUploadMime({ declaredMime, fileName })).toBe(mimeType);
+    }
   });
 
   test("recovers previewable images without a mirrored extension map", () => {

@@ -99,6 +99,7 @@ describe("sourcemapProcessCommand", () => {
       cmd: [
         "bun",
         "x",
+        "--bun",
         "@posthog/cli@0.18.0",
         "sourcemap",
         "process",

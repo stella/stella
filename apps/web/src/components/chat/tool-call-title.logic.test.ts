@@ -1,14 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
 import { summarizeCodeToolSource } from "@stll/api-contract/chat-code-step";
+import { CHAT_LOCAL_RUN_TOOL_NAMES } from "@stll/api-contract/chat-local-run-tool";
+import { CHAT_LOCAL_RUN_STEER_TOOL } from "@stll/api-contract/chat-run-target";
 import {
   CHAT_STEP_LEDGER_KEY,
   type ChatStepLedger,
 } from "@stll/api-contract/chat-step-ledger";
+import { STELLA_MCP_TOOL_NAMES } from "@stll/api-contract/mcp-tool-names";
 
 import { getChatToolTitleKey } from "@/components/chat/chat-ui-tools";
 
-import { getToolCallTitleKey } from "./tool-call-title.logic";
+import { getToolCallTitle, getToolCallTitleKey } from "./tool-call-title.logic";
 
 const codeCall = (typescriptCode: string, ledger?: ChatStepLedger) => ({
   input: { typescriptCode },
@@ -150,5 +153,59 @@ describe("a code-mode step names what it looked up", () => {
         'await external_read_case_law_decision({decision_ids:["f46d5994"]});',
       ).topic,
     ).toBeUndefined();
+  });
+});
+
+/** A call the way a coding agent on the member's computer reports it. */
+const directCall = (name: string) => ({ input: {}, name, output: undefined });
+
+const UNKNOWN_TITLE = { type: "key", key: "chat.tool.unknown" } as const;
+
+describe("a coding agent's direct calls say what they did", () => {
+  test("no stella registry tool reads as the generic title", () => {
+    const generic = STELLA_MCP_TOOL_NAMES.filter(
+      (name) =>
+        JSON.stringify(getToolCallTitle(directCall(name))) ===
+        JSON.stringify(UNKNOWN_TITLE),
+    );
+    expect(generic).toEqual([]);
+  });
+
+  test("statute and case-law reads take the research titles a code step takes", () => {
+    expect(getToolCallTitle(directCall("read_statute_provisions"))).toEqual({
+      type: "key",
+      key: "chat.toolCall.readingLegislation",
+    });
+    expect(getToolCallTitle(directCall("search_case_law"))).toEqual({
+      type: "key",
+      key: "chat.toolCall.searchingCaseLaw",
+    });
+  });
+
+  test("a tool stella keeps no title for is named by its own name", () => {
+    expect(getToolCallTitle(directCall("read_guidance"))).toEqual({
+      type: "name",
+      name: "Read guidance",
+    });
+    expect(
+      getToolCallTitle(directCall("mcp__docs-server__search_docs")),
+    ).toEqual({ type: "name", name: "Search docs" });
+  });
+
+  test("a registered tool and a harness step keep their catalogue titles", () => {
+    expect(getToolCallTitle(directCall("web_search"))).toEqual({
+      type: "key",
+      key: getChatToolTitleKey("web_search"),
+    });
+    expect(
+      getToolCallTitle(directCall(CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool)),
+    ).toEqual(UNKNOWN_TITLE);
+  });
+
+  test("a steered message keeps its own title", () => {
+    expect(getToolCallTitle(directCall(CHAT_LOCAL_RUN_STEER_TOOL))).toEqual({
+      type: "key",
+      key: getChatToolTitleKey(CHAT_LOCAL_RUN_STEER_TOOL),
+    });
   });
 });

@@ -1,0 +1,21 @@
+{
+  "docxCitationCheck": {
+    "action": "Hivatkozás ellenőrzése",
+    "alternatives": "{count, plural, one {Erre a jelzetre még # határozat felel} other {Erre a jelzetre még # határozat felel}}",
+    "checking": "{citation} ellenőrzése …",
+    "contradicts": "Ellentmond",
+    "doesNotAddress": "Nem foglalkozik vele",
+    "earlier": "Korábbi ellenőrzések",
+    "failed": "A hivatkozás ellenőrzése nem fejeződött be. Próbálja újra.",
+    "goToParagraph": "Ugrás a bekezdésre",
+    "noPassage": "A határozat egyetlen szövegrésze sem hordozza ezt a megállapítást.",
+    "notFound": "Nincs {citation} jelzetű határozat az ítélkezési adatbázisban",
+    "probability": "{probability, number, percent} valószínűség",
+    "showPassage": "Szövegrész megjelenítése",
+    "supports": "Alátámasztja",
+    "title": "Hivatkozás ellenőrzése",
+    "unavailableDerivedAi": "A határozat kiadója nem engedélyezi a szöveg mesterséges intelligenciával végzett elemzését.",
+    "unavailableNoText": "A határozat megvan, de a szövege nem érhető el az ellenőrzéshez.",
+    "uncertain": "Bizonytalan"
+  }
+}

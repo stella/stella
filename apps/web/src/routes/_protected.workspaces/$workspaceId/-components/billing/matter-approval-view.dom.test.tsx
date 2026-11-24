@@ -595,9 +595,9 @@ describe("returning approved time to its timekeeper", () => {
       name: messages.billing.revertToDraft,
     });
     // A blank comment cannot be sent: the API requires a reason.
-    expect(revert).toHaveProperty("disabled", true);
+    expect(revert.getAttribute("aria-disabled")).toBe("true");
     await typeReturnComment(row, "   ");
-    expect(revert).toHaveProperty("disabled", true);
+    expect(revert.getAttribute("aria-disabled")).toBe("true");
 
     const comment = "Add the client meeting to the narrative";
     await typeReturnComment(row, `  ${comment}\n`);
@@ -715,7 +715,7 @@ describe("returning checked time together", () => {
     const returnSelected = testing.screen.getByRole("button", {
       name: "Return 2 selected entries",
     });
-    expect(returnSelected).toHaveProperty("disabled", true);
+    expect(returnSelected.getAttribute("aria-disabled")).toBe("true");
     const bulkReason = testing.screen
       .getAllByRole("textbox", {
         name: messages.billing.approval.returnComment,

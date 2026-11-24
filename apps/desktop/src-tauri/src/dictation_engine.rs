@@ -28,15 +28,19 @@ use crate::{
   dictation_audio::to_mono,
   dictation_cleanup,
   dictation_cloud::{self, CloudSession, Destination},
-  dictation_context::{self, CleanupContext},
+  dictation_context::{self, CleanupContext, Sharing},
   dictation_focus::{self, FocusTarget, Insertion},
   dictation_format::{AppClass, Segment},
-  dictation_hold_key::HoldChoice,
+  dictation_hold_key::{HoldChoice, MINIMUM_HOLD},
   dictation_input,
   dictation_live::{Ended, Live, Transcribe, Transcription},
+  dictation_media::{self, MediaGuard},
   dictation_microphone::{self, Choice, InputDevice},
   dictation_pauses::Segmenter,
   dictation_preview,
+  dictation_retype::LastDictation,
+  dictation_sounds::{self, Cue},
+  dictation_spelling,
   dictation_trace::{self, Cleanup, GlobeKey, Line, Outcome, Trace},
   dictation_worker::{self, Response},
 };
@@ -79,6 +83,27 @@ struct Active {
   trace: Trace,
   /// How often the panel checks for a password field between results.
   password_watch: dictation_preview::PasswordWatch,
+}
+
+impl Active {
+  /// Once the hold is long enough to be a dictation, not a tap: the start
+  /// sound when the speaker wants sounds, then whatever the speaker chose
+  /// for other sound, after the start sound so it is heard in full.
+  fn reach_hold(&mut self, app: &AppHandle) {
+    if self.capture.held || self.trace.since_press() < MINIMUM_HOLD {
+      return;
+    }
+    self.capture.held = true;
+    let delay = if dictation::sounds_enabled(app) {
+      self.capture.sounded = true;
+      dictation_sounds::play(Cue::Start);
+      dictation_sounds::CUE_LENGTH
+    } else {
+      Duration::ZERO
+    };
+    let (choice, speakers_only) = dictation::while_dictating(app);
+    self.capture.media = dictation_media::begin(choice, speakers_only, delay);
+  }
 }
 
 /// What a dictation that did not fail came to.
@@ -125,10 +150,7 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
             Ok(capture) => {
               // Read once recording runs, so it never delays capture; the
               // context is where the speaker pressed the shortcut.
-              let context = dictation_context::read(
-                focus.as_ref(),
-                dictation::context_sharing(app),
-              );
+              let context = dictation_context::read(focus.as_ref(), capture.sharing);
               active = Some(Active {
                 capture,
                 focus,
@@ -151,6 +173,13 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
       Ok(Command::Press) => {
         if let Some(active) = active.as_mut() {
           active.capture.listen();
+          active.reach_hold(app);
+        }
+      }
+      Ok(Command::Retype(focus)) => {
+        // A dictation recording now has the keyboard to itself.
+        if active.is_none() {
+          retype(app, focus.as_ref());
         }
       }
       Ok(Command::Cancel) => {
@@ -202,6 +231,7 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
       Err(RecvTimeoutError::Timeout) => match active.as_mut() {
         Some(active) => {
           active.capture.listen();
+          active.reach_hold(app);
           // Between transcription results too: a password field that takes
           // focus while the panel shows hides it at once.
           if active.password_watch.due(dictation_preview::showing(app))
@@ -283,8 +313,18 @@ struct Capture {
   segmenter: Segmenter,
   live: Live<Engines>,
   language: SpeakerLanguage,
+  /// Whether the text goes through AI cleanup, and what cleanup may read
+  /// besides the kind of app.
+  cleanup: bool,
+  sharing: Sharing,
   /// Mono samples taken so far, for the local log.
   recorded: usize,
+  /// Whether the hold became a dictation, and whether the start sound
+  /// played then, so the stop sound plays too.
+  held: bool,
+  sounded: bool,
+  /// What was done to other sound; dropping it puts that back.
+  media: Option<MediaGuard>,
 }
 
 impl Capture {
@@ -323,7 +363,12 @@ fn begin(
   if let Some(chosen) = &recorder.missing {
     dictation::report_missing_microphone(app, chosen, recorder.device.clone());
   }
-  let language = dictation::language(app);
+  // The app in front at the press decides cleanup and the language.
+  let dictation::ForApp {
+    cleanup,
+    language,
+    sharing,
+  } = dictation::for_app(app, focus);
   let local_installed = model.is_some();
   let mut cloud = CloudSession::new(
     app.clone(),
@@ -357,7 +402,12 @@ fn begin(
     recorder,
     live,
     language,
+    cleanup,
+    sharing,
     recorded: 0,
+    held: false,
+    sounded: false,
+    media: None,
   })
 }
 
@@ -385,7 +435,11 @@ fn finish(
     mut segmenter,
     mut live,
     language,
+    cleanup: cleanup_enabled,
     recorded,
+    sounded,
+    media,
+    ..
   } = capture;
   let channels = recorder.channels;
   let rate = recorder.rate;
@@ -394,6 +448,8 @@ fn finish(
   // A microphone that stopped midway leaves what it already delivered: the
   // stretches sent while the key was down still count.
   let Finished { last, lost } = recorder.finish();
+  // Recording stopped: other sound comes back, before the stop sound.
+  drop(media);
   // Counted once the stream stopped, so the last frames it delivered count.
   log_hold(
     app,
@@ -402,6 +458,10 @@ fn finish(
     rate,
     stretches,
   );
+  // Only once the microphone is closed, so the transcript cannot hear it.
+  if sounded {
+    dictation_sounds::play(Cue::Stop);
+  }
   for stretch in segmenter.push(&to_mono(&last, channels)) {
     live.send(stretch);
   }
@@ -413,6 +473,9 @@ fn finish(
   }
   live.send(rest.samples);
   let (ended, engines, tally) = live.finish_tallied().ok_or(Failure::Transcription)?;
+  // Some stretches went to the speech model on this computer, which takes
+  // no custom words.
+  let transcribed_here = engines.destination == Destination::Local || tally.fell_back;
   Line::Transcribe {
     duration: trace.since_release(),
     destination: engines.destination,
@@ -439,10 +502,31 @@ fn finish(
     // A hold that heard nothing is told unless it was a tap.
     return heard_nothing(held).map(|()| Delivered::Empty);
   }
+  // The speaker's learned fixes go first, whether cleanup is on or off, so
+  // cleanup and the custom words see the words as the speaker writes them.
+  let learned = crate::dictation_learned::apply(app, text);
+  let text = learned.as_str();
+  // Cleanup spells the custom words itself; without it, the words the speech
+  // model here missed are spelled on this computer.
+  let respelled;
+  let text = if transcribed_here && !cleanup_enabled {
+    respelled = dictation_spelling::respell(text, &crate::dictation_words::words(app));
+    respelled.as_str()
+  } else {
+    text
+  };
   let ((cleaned, cleanup), cleanup_took) = dictation_trace::timed(|| {
-    if dictation::cleanup_enabled(app) {
+    if cleanup_enabled {
       let words = crate::dictation_words::words(app);
-      dictation_cleanup::clean_up(app, text, &language.speaker, &words, context)
+      dictation_cleanup::clean_up(
+        app,
+        text,
+        &language.speaker,
+        &words,
+        context,
+        dictation::cleanup_form(app),
+        &dictation::cleanup_preferences(app),
+      )
     } else {
       (None, Cleanup::Off)
     }
@@ -492,11 +576,22 @@ fn deliver(
   }
   let identifier = focus.and_then(|target| target.identifier.as_deref());
   // Kept before typing, so a dictation that cannot be typed is not lost.
-  let kept_in_history = clipboard::keep_dictation(
+  let kept = clipboard::keep_dictation(
     app,
     &dictation_cleanup::typed_text(text, cleaned),
     identifier,
   );
+  let kept_in_history = kept.is_some();
+  if let Some(history_id) = kept {
+    dictation::remember_last(
+      app,
+      LastDictation {
+        history_id,
+        transcript: text.to_string(),
+        cleaned: cleaned.map(<[Segment]>::to_vec),
+      },
+    );
+  }
   let mut focus_read = None;
   let typed = type_into_focus(app, text, cleaned, focus, &mut focus_read, moved);
   let result = typed.map_err(|failure| Failed {
@@ -504,6 +599,35 @@ fn deliver(
     kept_in_history,
   });
   (result, focus_read, kept_in_history)
+}
+
+/// Types the last dictation again into `asked_in`, the app focused when it
+/// was asked for, through the same guards as a dictation's typing. A
+/// refusal is only logged: nothing new was kept, and the field shows that
+/// nothing was typed.
+fn retype(app: &AppHandle, asked_in: Option<&FocusTarget>) {
+  let Some(last) = dictation::last_dictation(app) else {
+    tracing::info!("dictation retype: no last dictation in clipboard history");
+    return;
+  };
+  if !dictation_input::request_access() {
+    tracing::info!("dictation retype: no Accessibility access");
+    return;
+  }
+  // The app focused when it was asked for is the only one typed into.
+  let mut focus_read = None;
+  let mut moved = None;
+  match type_into_focus(
+    app,
+    &last.transcript,
+    last.cleaned.as_deref(),
+    asked_in,
+    &mut focus_read,
+    &mut moved,
+  ) {
+    Ok(()) => tracing::info!("dictation retype: typed"),
+    Err(failure) => tracing::info!(?failure, "dictation retype: nothing typed"),
+  }
 }
 
 /// A dictation that recorded sound and produced no words: a failure the

@@ -2,7 +2,7 @@ import { Result } from "better-result";
 
 import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
 
-import type { SafeDbError } from "@/api/db/safe-db";
+import type { SafeDbError } from "@/api/db/safe-db-types";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 

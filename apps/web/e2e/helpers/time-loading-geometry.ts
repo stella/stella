@@ -1,11 +1,12 @@
 import { expect } from "@playwright/test";
-import type { Browser, Page } from "@playwright/test";
+import type { Browser } from "@playwright/test";
 import * as v from "valibot";
 
 import cs from "../../src/i18n/langs/cs.json" with { type: "json" };
 import en from "../../src/i18n/langs/en.json" with { type: "json" };
-import { apiDelete, apiPut, E2E_API_ORIGIN } from "./api";
+import { apiDelete, apiPost, apiPut, E2E_API_ORIGIN } from "./api";
 import { setPresentationPrefs } from "./presentation-prefs";
+import { captureLandmarks } from "./stable-geometry";
 import { createBrowserErrorCollector } from "./test";
 
 const VIEWPORT = { width: 1440, height: 900 };
@@ -83,7 +84,7 @@ const SURFACES = [
       messages.settings.organization.auditLogsResourceTypePlaceholder,
     landmarks: {
       heading: "h1",
-      filters: "[data-slot=frame-panel] .grid.items-end",
+      filters: "[data-slot=settings-panel] .grid.items-end",
       table: "table",
       firstRow: "tbody tr",
     },
@@ -127,37 +128,72 @@ const contactSurfaces = (contactId: string): readonly LoadingSurface[] => [
   },
 ];
 
-const captureLandmarks = async (
-  page: Page,
-  landmarks: Readonly<Record<string, string>>,
-) =>
-  await page.evaluate(
-    (selectors) =>
-      Object.fromEntries(
-        Object.entries(selectors).map(([name, selector]) => {
-          const box = document.querySelector(selector)?.getBoundingClientRect();
-          return [
-            name,
-            box === undefined
-              ? null
-              : {
-                  top: box.top,
-                  left: box.left,
-                  width: box.width,
-                  height: box.height,
-                },
-          ];
-        }),
-      ),
-    landmarks,
-  );
+/**
+ * An organization skill's page, recorded as evidence beside the others: the
+ * editor's identity block, how the skill runs and its files, on a skill the
+ * measurement creates.
+ */
+const skillSurfaces = (skillId: string): readonly LoadingSurface[] => [
+  {
+    type: "steady",
+    path: `/knowledge/tools/skills/${skillId}`,
+    busy: "[data-slot=file-tree-row-pending]",
+    landmarks: {
+      heading: "[data-slot=skill-editor-identity]",
+      runs: "[data-slot=skill-editor-identity] .grid",
+      files: "[data-slot=skill-editor-files]",
+    },
+  },
+];
+
+/**
+ * The Knowledge sections, recorded as evidence beside the others: the
+ * landing, whose cold paint leaves its cards to the sections this browser
+ * last saw, the clause library and the house styles.
+ */
+const KNOWLEDGE_SURFACES = [
+  {
+    type: "steady",
+    path: "/knowledge",
+    busy: "[data-slot=knowledge-section-card-pending]",
+    landmarks: {
+      heading: "[data-slot=knowledge-landing]",
+      firstCard: "[data-slot=knowledge-landing] > div > *",
+    },
+  },
+  {
+    type: "steady",
+    path: "/knowledge/clauses",
+    busy: "[data-slot=knowledge-rows-pending]",
+    landmarks: {
+      heading: "[data-slot=clause-list-toolbar]",
+      sidebar: "[data-slot=category-sidebar]",
+      body: "[data-slot=clause-list-body]",
+    },
+  },
+  {
+    type: "steady",
+    path: "/knowledge/styles",
+    busy: "[data-slot=style-set-list] > li[aria-hidden=true]",
+    landmarks: {
+      heading: "h1",
+      header: "div:has(> div > h1)",
+      firstRow: "[data-slot=style-set-list] > li",
+    },
+  },
+] as const satisfies readonly LoadingSurface[];
+
+/** The fixed surfaces a set measures (the contacts set builds its own). */
+const surfaceSet = (set: "time-admin" | "knowledge") =>
+  set === "knowledge" ? KNOWLEDGE_SURFACES : SURFACES;
 
 type MeasureLoadingGeometryOptions = {
   browser: Browser;
   baseURL: string;
   storageState: string;
-  /** Which surfaces to measure: time and admin, or inbox and contacts. */
-  set?: "time-admin" | "contacts" | undefined;
+  /** Which surfaces to measure: time and admin, inbox and contacts, the
+   *  Knowledge sections, or a Knowledge skill's page. */
+  set?: "time-admin" | "contacts" | "knowledge" | "knowledge-skill" | undefined;
 };
 
 export const measureLoadingGeometry = async ({
@@ -198,7 +234,31 @@ export const measureLoadingGeometry = async ({
             }),
           )
         : null;
-    const surfaces = contact === null ? SURFACES : contactSurfaces(contact.id);
+    const skill =
+      set === "knowledge-skill"
+        ? v.parse(
+            v.object({ id: v.string() }),
+            await apiPost(account.request, "/skills", {
+              scope: "private",
+              name: "Geometry fixture skill",
+              description: "Geometry fixture",
+              body: "Fixture instructions.",
+            }),
+          )
+        : null;
+    // The fixture's own surfaces, where the set made one.
+    const fixtureSurfaces = (): readonly LoadingSurface[] | null => {
+      if (contact !== null) {
+        return contactSurfaces(contact.id);
+      }
+      if (skill !== null) {
+        return skillSurfaces(skill.id);
+      }
+      return null;
+    };
+    const surfaces =
+      fixtureSurfaces() ??
+      surfaceSet(set === "knowledge" ? "knowledge" : "time-admin");
     const evidence = [];
     try {
       for (const { locale, browserLocale, messages } of LANGUAGES) {
@@ -232,10 +292,13 @@ export const measureLoadingGeometry = async ({
           try {
             for (const surface of surfaces) {
               await serverPage.goto(surface.path);
-              // Protected routes render a shared cold shell before locale hydration.
+              // The server paints every page in the presentation the cookie
+              // names, a member page's cold shell (whose root does not load
+              // there) included, so hydration never flips its language.
               const serverDocumentLanguage = await serverPage
                 .locator("html")
                 .getAttribute("lang");
+              expect(serverDocumentLanguage).toBe(locale);
               await expect(
                 serverPage.locator(surface.landmarks.heading),
               ).toBeVisible();
@@ -324,6 +387,9 @@ export const measureLoadingGeometry = async ({
       await setLocale(original.user.locale);
       if (contact !== null) {
         await apiDelete(account.request, `/contacts/${contact.id}`);
+      }
+      if (skill !== null) {
+        await apiDelete(account.request, `/skills/${skill.id}`);
       }
     }
   } finally {

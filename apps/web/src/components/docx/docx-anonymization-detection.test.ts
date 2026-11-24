@@ -2,7 +2,7 @@ import { Schema } from "@tiptap/pm/model";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { beforeEach, expect, jest, test } from "bun:test";
 
-import type { AnonymizationTerm } from "@stll/folio-react";
+import type { FolioAnonymizationTerm } from "@stll/folio-react";
 
 import { useInspectorAnonymizationStore } from "@/components/inspector/inspector-anonymization-store";
 
@@ -95,7 +95,7 @@ const createHarness = ({
   const fieldId = `field-${paragraphCount}`;
   const requestTexts: string[] = [];
   const pending: PendingDetection[] = [];
-  let delivered: AnonymizationTerm[] = [];
+  let delivered: FolioAnonymizationTerm[] = [];
   const detection = startAnonymizationDetection({
     // oxlint-disable-next-line typescript/promise-function-async -- the fake returns the pending promise directly
     detect: ({ text }) => {

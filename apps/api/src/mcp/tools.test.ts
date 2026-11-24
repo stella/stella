@@ -19,6 +19,10 @@ import {
   COUNTRY_INPUT_MAX_CHARS,
 } from "@stll/agent-input";
 import { CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT } from "@stll/api-contract";
+import {
+  DECISION_BODY_TEXT_SOURCE,
+  type DecisionBodySource,
+} from "@stll/api-contract/case-law-body-source";
 import type { CaseLawCourtYear } from "@stll/api-contract/case-law-court-year";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
@@ -763,6 +767,7 @@ const createReadDecisionResult = () => ({
   },
   sourceUrl: "https://example.test/decision",
   sourceAttributionUrl: "https://example.test/decision",
+  bodySource: { textSource: DECISION_BODY_TEXT_SOURCE.HOST },
 });
 
 /**
@@ -10056,6 +10061,51 @@ describe("OpenAI-compatible MCP tools", () => {
     const entry = await readOne({});
     expect(entry.status).toBe("found");
     expect(entry.decision).not.toHaveProperty("citations");
+  });
+
+  test("collection-backed passages preserve the text format and carry publication provenance", async () => {
+    const base = createReadDecisionResult();
+    const publication = {
+      extent: "unclassified",
+      contribution: "body",
+      sourceDocumentId: "123",
+      sourceUrl: "https://sbirka.nsoud.cz/sbirka/123/",
+      retrievedAt: "2026-10-09T12:00:00.000Z",
+      source: {
+        id: "01900000-0000-7000-8000-000000000001",
+        name: "Official collection",
+        adapterKey: "cz-ns-sbirka",
+        allowsDerivedAi: true,
+      },
+    } as const;
+    const bodySource = {
+      textSource: "collection",
+      source: publication.source,
+      sourceUrl: publication.sourceUrl,
+      retrievedAt: publication.retrievedAt,
+      extent: publication.extent,
+      provenance: {
+        coverage: "all",
+        totalCount: 1,
+        omittedCount: 0,
+        records: [publication],
+      },
+    } satisfies DecisionBodySource;
+    readDecisionHandlerMock.mockResolvedValue({ ...base, bodySource });
+    const entry = await readOne({ max_chars: 64 });
+    expect(entry.decision).toMatchObject({ textSource: "ast", bodySource });
+    expect(entry.decision?.text?.length).toBeGreaterThan(0);
+    readDecisionHandlerMock.mockResolvedValue({
+      ...base,
+      bodySource: {
+        ...bodySource,
+        source: { ...bodySource.source, allowsDerivedAi: false },
+      },
+    });
+    const denied = await readOne({});
+    expect(denied.decision).toHaveProperty("textWithheldReason");
+    expect(denied.decision).not.toHaveProperty("text");
+    expect(denied.decision).not.toHaveProperty("textSource");
   });
 
   test("read_case_law_decision withholds text when the source bars AI use", async () => {

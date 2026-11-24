@@ -8,8 +8,8 @@ import { numberFromString } from "@stll/api-contract/http-input";
 import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 import { parsePlainDate } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import { BILLING_STATUS, timeEntries, workspaces } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { timeEntryPageMoneyResponse } from "@/api/lib/billing/response-schemas";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";

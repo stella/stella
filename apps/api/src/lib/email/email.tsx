@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import type { FeedbackReportInput } from "@stll/api-contract/feedback";
@@ -17,8 +17,8 @@ import * as ReportExportStatus from "@stll/transactional/emails/report-export-st
 import type { ReportExportEmailStatus } from "@stll/transactional/emails/report-export-status";
 import { subject as reportExportStatusSubject } from "@stll/transactional/emails/report-export-status-subject";
 import {
-  type GeoPoint,
   LOCATION_MAP_CONTENT_TYPE,
+  type MapPlace,
   renderLocationMap,
 } from "@stll/transactional/map/location-map";
 import { renderEmail } from "@stll/transactional/render";
@@ -137,8 +137,8 @@ const isRefusedRecipient = async (to: string): Promise<boolean> => {
     "user.id": refusal.value.userId,
     "delivery.refusal_reason": refusal.value.reason,
   });
-  // A dropped send fails like a provider suppression-list bounce, so the
-  // sign-in screen explains it the same way, account or not.
+  // A dropped send is recorded like a provider suppression-list bounce,
+  // account or not.
   const recorded = await Result.tryPromise(
     async () =>
       await recordRecipientFailures(
@@ -159,13 +159,13 @@ const getTransport = (): EmailTransport => {
   cachedTransport ??= {
     send: async (message) => {
       if (isSyntheticPrincipal({ email: message.to })) {
-        return;
+        return { type: "skipped" };
       }
       if (await isRefusedRecipient(message.to)) {
-        return;
+        return { type: "skipped" };
       }
       deliveryTransport ??= resolveTransport();
-      await deliveryTransport.send(message);
+      return await deliveryTransport.send(message);
     },
   };
   return cachedTransport;
@@ -199,7 +199,7 @@ export const sendOTPEmail = async ({
   const node = <BetterAuthOTP.Email lang={lang} otp={otp} type={type} />;
   const { html, text } = renderEmail(node);
 
-  await getTransport().send({
+  return await getTransport().send({
     from: getTransactionalEmailFrom(),
     to: email,
     subject: betterAuthOTPSubject(lang),
@@ -210,8 +210,8 @@ export const sendOTPEmail = async ({
 
 type SendNewDeviceLoginEmailProps = {
   email: string;
-  device: string;
-  ipAddress: string;
+  device: NewDeviceLogin.SignInDevice;
+  ipAddress: NewDeviceLogin.SignInAddress;
   location: ViewerLocation;
   time: string;
   sessionsUrl: string;
@@ -229,7 +229,10 @@ export const sendNewDeviceLoginEmail = async ({
 }: SendNewDeviceLoginEmailProps) => {
   const map =
     location.type === "known" && location.coordinates !== null
-      ? await renderSignInLocationMap(location.coordinates)
+      ? await renderSignInLocationMap({
+          point: location.coordinates,
+          countryCode: location.countryCode,
+        })
       : null;
   const node = (
     <NewDeviceLogin.Email
@@ -272,21 +275,42 @@ const locationMapUnrendered = failureSink({
   expected: [],
 });
 
+// A country code the map cannot find is a defect in its country table; the
+// map is still sent, with no country shaded.
+const locationMapCountryUnresolved = failureSink({
+  event: "email.new_device_login.location_map_country_unresolved",
+  expected: [],
+});
+
+class LocationMapCountryUnresolvedError extends TaggedError(
+  "LocationMapCountryUnresolvedError",
+)<{ message: string; countryCode: string }> {}
+
 const renderSignInLocationMap = async (
-  coordinates: GeoPoint,
+  place: MapPlace,
 ): Promise<InlineImage | null> => {
   const rendered = await Result.tryPromise(
-    async () => await renderLocationMap(coordinates),
+    async () => await renderLocationMap(place),
   );
   if (rendered.isErr()) {
     observeFailure(rendered.error, { sink: locationMapUnrendered });
     return null;
   }
+  const { png, highlight } = rendered.value;
+  if (highlight.type === "unresolved") {
+    observeFailure(
+      new LocationMapCountryUnresolvedError({
+        message: "The location map has no feature for the reported country",
+        countryCode: highlight.countryCode,
+      }),
+      { sink: locationMapCountryUnresolved },
+    );
+  }
   return {
     contentId: SIGN_IN_LOCATION_MAP_CONTENT_ID,
     filename: "sign-in-location.png",
     contentType: LOCATION_MAP_CONTENT_TYPE,
-    content: rendered.value,
+    content: png,
   };
 };
 

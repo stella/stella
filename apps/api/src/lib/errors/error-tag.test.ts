@@ -1,7 +1,9 @@
 import { Panic, panic, TaggedError, UnhandledException } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { DrizzleQueryError } from "drizzle-orm";
 
 import { errorClassName, errorTag } from "@/api/lib/errors/error-tag";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
 
 class ExampleTaggedError extends TaggedError("ExampleTaggedError")<{
   message: string;
@@ -39,6 +41,21 @@ describe("errorClassName", () => {
     expect(
       errorClassName(new UnhandledException({ cause: new Error("boom") })),
     ).toBe("UnhandledException");
+  });
+
+  test("names a Drizzle query error whose constructor was renamed", () => {
+    const error = new DrizzleQueryError("select 1", undefined, new Error("x"));
+    // The minified bundle binds the class to a single letter.
+    const renamed = Object.defineProperty(() => undefined, "name", {
+      value: "e",
+    });
+    Object.defineProperty(error, "constructor", { value: renamed });
+
+    // Guard the fixture: the identifier no longer proves the declared name.
+    expect(error.constructor.name).toBe("e");
+    expect(errorClassName(error)).toBe("DrizzleQueryError");
+    expect(errorTag(error)).toBe("DrizzleQueryError");
+    expect(readEvidence(error).nodes[0]?.className).toBe("DrizzleQueryError");
   });
 
   test("names a bundler-suffixed class by its declared name", () => {

@@ -5,9 +5,6 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { Step, Steps } from "@stll/ui/steps";
-import { TruncatedText } from "@stll/ui/truncated-text";
-import { cn } from "@stll/ui/utils";
 
 import type { Permission } from "../shared/permissions";
 import { DESKTOP_PLATFORM } from "../shared/use-clipboard-shortcut";
@@ -15,11 +12,11 @@ import {
   DICTATION_SETUP_SCREENS,
   dictationSetupScreens,
   microphoneScreenPermissions,
-  moveFrom,
-  shownScreen,
 } from "./dictation-setup-steps";
 import type { DictationSetupScreen } from "./dictation-setup-steps";
 import { DictationSetupScreenBody } from "./DictationSetupScreens";
+import { moveFrom, shownScreen } from "./setup-screens";
+import { SetupStepper, Unread } from "./SetupScreenParts";
 import type { DictationControls } from "./use-dictation";
 
 /** The step's own actions, for the footer the step draws them in. */
@@ -45,13 +42,6 @@ type DictationSetupFlowProps = {
   renderFooter: (actions: DictationSetupActions) => ReactNode;
   /** What leaving without dictation is called: Skip, or Later. */
   skipLabel: string;
-};
-
-/** Grid columns for each number of screens, written out for Tailwind. */
-const COLUMNS: Record<number, string> = {
-  3: "grid-cols-3",
-  4: "grid-cols-4",
-  5: "grid-cols-5",
 };
 
 /**
@@ -103,12 +93,21 @@ export const DictationSetupFlow = ({
   }
 
   const screens = dictationSetupScreens(snapshot);
-  const screen = shownScreen(screens, requested);
+  const screen = shownScreen({
+    order: DICTATION_SETUP_SCREENS,
+    screen: requested,
+    screens,
+  });
   const position = screens.indexOf(screen);
   const last = position === screens.length - 1;
 
   const go = (direction: "back" | "continue") => {
-    const move = moveFrom(screens, screen, direction);
+    const move = moveFrom({
+      direction,
+      order: DICTATION_SETUP_SCREENS,
+      screen,
+      screens,
+    });
     switch (move.type) {
       case "screen":
         setRequested(move.screen);
@@ -149,17 +148,19 @@ export const DictationSetupFlow = ({
     }
     return last ? null : (
       <Button onClick={onLeaveForward} variant="ghost">
-        {t("dictationSetup.skipRest")}
+        {t("skipRest")}
       </Button>
     );
   })();
 
   return (
     <>
-      <DictationSetupStepper
+      <SetupStepper
         label={label}
+        names={screens.map((candidate) =>
+          t(`dictationSetup.screens.${candidate}`),
+        )}
         position={position}
-        screens={screens}
       />
       <div
         className="motion-safe:animate-swap-in flex min-h-0 flex-1 flex-col"
@@ -196,6 +197,7 @@ export const DictationSetupFlow = ({
         primary: (
           <Button
             disabled={busy}
+            disabledReason={t("enablingDictation")}
             onClick={() => {
               void onContinue();
             }}
@@ -206,68 +208,5 @@ export const DictationSetupFlow = ({
         secondary,
       })}
     </>
-  );
-};
-
-/** Where the step is among its screens: a short bar per screen with its
- *  name, the current one in full ink. */
-const DictationSetupStepper = ({
-  label,
-  position,
-  screens,
-}: {
-  label: string;
-  position: number;
-  screens: readonly DictationSetupScreen[];
-}) => {
-  const t = useTranslations("onboarding.dictationSetup");
-  return (
-    <nav aria-label={label} className="mb-4">
-      <p className="text-muted-foreground mb-1.5 text-xs font-medium">
-        {label}
-        <span className="sr-only">
-          {" "}
-          {t("progress", { current: position + 1, total: screens.length })}
-        </span>
-      </p>
-      <Steps
-        className={cn("list-none ps-0", COLUMNS[screens.length])}
-        markerStyle="none"
-        variant="progress"
-      >
-        {screens.map((candidate, index) => (
-          <Step
-            aria-current={index === position ? "step" : undefined}
-            className="min-w-0 ps-0 text-xs"
-            key={candidate}
-            status={stepStatus(index, position)}
-          >
-            <TruncatedText>{t(`screens.${candidate}`)}</TruncatedText>
-          </Step>
-        ))}
-      </Steps>
-    </nav>
-  );
-};
-
-const stepStatus = (index: number, position: number) => {
-  if (index < position) {
-    return "completed";
-  }
-  return index === position ? "current" : "upcoming";
-};
-
-/** The dictation state could not be read: says so and offers to read again. */
-const Unread = ({ onReload }: { onReload: () => void }) => {
-  const t = useTranslations("onboarding");
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <p className="text-destructive-foreground min-w-0 text-sm" role="alert">
-        {t("errorLoad")}
-      </p>
-      <Button className="shrink-0" onClick={onReload} variant="outline">
-        {t("tryAgain")}
-      </Button>
-    </div>
   );
 };

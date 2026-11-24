@@ -5,7 +5,11 @@ import fc from "fast-check";
 import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { BROWSER_CONTROL_TOOL_NAME } from "@stll/api-contract/browser-control";
+import {
+  BROWSER_CONTROL_CONTENT_TRUST,
+  BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_CONTROL_TOOL_NAME,
+} from "@stll/api-contract/browser-control";
 import { assertProperty, propertySeed } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -2539,5 +2543,99 @@ describe("anonymization output that lost its field structure", () => {
     expect(Result.isOk(prepared) ? prepared.value : prepared.error).toBe(
       "Bob briefed [PERSON_1].",
     );
+  });
+});
+
+describe("a suspended browsing run's child", () => {
+  test("crosses the anonymized boundary like the thread it sits in", async () => {
+    const { prepareSuspendedBrowseRuns } =
+      await import("@/api/handlers/chat/browse-web-agent");
+    const childCall: ChatPart = {
+      arguments: JSON.stringify({ action: "snapshot" }),
+      id: "child-call",
+      input: { action: "snapshot" },
+      name: BROWSER_CONTROL_TOOL_NAME,
+      output: {
+        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+        snapshot: {
+          contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
+          elements: [],
+          elementsLeftOut: false,
+          facts: { meta: [] },
+          revision: "rev-profile",
+          tabId: 7,
+          tabs: [{ active: true, tabId: 7, url: "https://example.cz/profile" }],
+          text: `Profile of ${STORED_PART_VALUE}.`,
+          title: `${STORED_PART_VALUE} profile`,
+          url: "https://example.cz/profile",
+          window: {
+            cursor: "r1.window-profile",
+            fromPercent: 0,
+            toPercent: 100,
+          },
+        },
+        status: "success",
+      },
+      state: "complete",
+      type: "tool-call",
+    };
+    const messages: ChatMessage[] = [
+      {
+        id: "assistant-1",
+        parts: [
+          {
+            subagent: {
+              id: "browse-run",
+              interruptIds: ["approval-1"],
+              messages: [
+                {
+                  id: "child-1",
+                  parts: [
+                    { content: `Reading ${STORED_PART_VALUE}.`, type: "text" },
+                    childCall,
+                  ],
+                  role: "assistant",
+                },
+              ],
+              name: "browse_web",
+              parentToolCallId: "call-browse",
+              status: "suspended",
+            },
+            type: "subagent",
+          },
+        ],
+        role: "assistant",
+      },
+    ];
+
+    const prepared = await prepareSuspendedBrowseRuns({
+      boundary: createBoundary(),
+      messages,
+      workspaceIds: [],
+    });
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+    // The planted value reaches the boundary's input ...
+    expect(JSON.stringify(messages)).toContain(STORED_PART_VALUE);
+    // ... and leaves only as its placeholder, in the child's history and in
+    // the part the SDK resumes from.
+    const sent = JSON.stringify([
+      [...prepared.value.runs.values()],
+      prepared.value.parts,
+    ]);
+    expect(sent).not.toContain(STORED_PART_VALUE);
+    expect(sent).toContain("[PERSON_1]");
+    expect(prepared.value.messageId).toBe("assistant-1");
+
+    // A raw boundary sends it unchanged.
+    const raw = await prepareSuspendedBrowseRuns({
+      boundary: createRawBoundary(),
+      messages,
+      workspaceIds: [],
+    });
+    expect(
+      JSON.stringify(Result.isOk(raw) ? [...raw.value.runs.values()] : null),
+    ).toContain(STORED_PART_VALUE);
   });
 });

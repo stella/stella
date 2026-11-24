@@ -20,7 +20,7 @@ import {
 } from "@stll/ui/select";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools-types";
 import { prepareCreateDocumentDraft } from "@/components/chat/create-document-draft-runtime";
 import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
 import { hasMessageExportCitations } from "@/components/chat/message-export-menu.logic";
@@ -278,6 +278,11 @@ export const MessageExportMenu = ({
             disabled={
               isExportPending ||
               (!includeMessage && (artifact === undefined || !includeArtifact))
+            }
+            disabledReason={
+              isExportPending
+                ? t("inspector.review.export.exporting")
+                : t("chat.selectExportContent")
             }
             onClick={() => {
               detached(handleExport(), "message-export-menu.export");

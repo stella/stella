@@ -3,7 +3,7 @@ import { panic, Result } from "better-result";
 import type {
   ChatAnonRestoration,
   PersistedChatMessage,
-} from "@/components/chat/chat-ui-tools";
+} from "@/components/chat/chat-ui-tools-types";
 import { ClientOperationError } from "@/lib/errors/client";
 
 /** Every SDK role chooses its visible message body explicitly. */

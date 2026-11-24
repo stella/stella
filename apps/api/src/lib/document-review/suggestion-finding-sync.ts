@@ -14,9 +14,9 @@
 import { panic } from "better-result";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { documentReviewFindings } from "@/api/db/schema";
 import type { DocxSuggestionStatus } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";

@@ -63,6 +63,7 @@ export type PageOrganizerCropProps = {
   onApply: (crops: ReadonlyMap<string, NormalizedCrop | null>) => void;
   onReset: () => void;
   disabled: boolean;
+  disabledReason?: string | undefined;
 };
 
 const geometryFor = ({ page, pageInfo }: CropPanelPage): CropPageGeometry => {
@@ -104,6 +105,7 @@ export const PageOrganizerCrop = ({
   onApply,
   onReset,
   disabled,
+  disabledReason,
 }: PageOrganizerCropProps) => {
   const t = useTranslations("workspaces.pdf.pageEditor");
   const tCommon = useTranslations("common");
@@ -169,6 +171,7 @@ export const PageOrganizerCrop = ({
             data-crop-action="previous"
             aria-label={t("cropPreviousPage")}
             disabled={activeIndex === 0}
+            disabledReason={t("cropFirstSelectedPage")}
             onClick={() => setActiveIndex(activeIndex - 1)}
             size="sm"
             variant="outline"
@@ -185,6 +188,7 @@ export const PageOrganizerCrop = ({
             data-crop-action="next"
             aria-label={t("cropNextPage")}
             disabled={activeIndex === pages.length - 1}
+            disabledReason={t("cropLastSelectedPage")}
             onClick={() => setActiveIndex(activeIndex + 1)}
             size="sm"
             variant="outline"
@@ -265,6 +269,7 @@ export const PageOrganizerCrop = ({
         <Button
           data-crop-action="reset"
           disabled={disabled}
+          disabledReason={disabledReason}
           onClick={onReset}
           variant="ghost"
         >
@@ -276,6 +281,7 @@ export const PageOrganizerCrop = ({
         <Button
           data-crop-action="apply"
           disabled={disabled || !canCrop}
+          disabledReason={disabledReason ?? t("cropTooSmall")}
           onClick={() =>
             onApply(
               new Map(

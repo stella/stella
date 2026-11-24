@@ -6548,6 +6548,7 @@ describe("chat message hydration", () => {
       safeDb,
       sendMode: CHAT_SEND_MODE.anonymized,
       userId,
+      zipNameCodePage: "ibm437",
     });
 
     expect(Result.isError(result)).toBe(true);
@@ -6606,6 +6607,7 @@ describe("chat message hydration", () => {
       safeDb,
       sendMode: CHAT_SEND_MODE.rawOverride,
       userId,
+      zipNameCodePage: "ibm437",
     });
 
     const parts = result.unwrap().flatMap((message) => message.parts);
@@ -7836,4 +7838,93 @@ test("an event type outside the engine's types reaches the client between answer
   expect(collectText(visible)).toBe("The answer continues.");
   expect(visible.map(({ type }): string => type)).toContain("FUTURE_EVENT");
   expect(visible.at(-1)?.type).toBe(EventType.RUN_FINISHED);
+});
+
+describe("a child run's content through the outgoing streams", () => {
+  test("keeps its subagentRunId on every released delta, held tails included", async () => {
+    const child = { subagentRunId: "child-run" };
+    // Each text ends inside a `#stella-` href, so its tail is held: the
+    // answer's until its END, the reasoning's until the stream ends.
+    const source = streamChunks(
+      asTestRaw<StreamChunk[]>([
+        {
+          ...child,
+          messageId: "child-answer",
+          role: "assistant",
+          type: EventType.TEXT_MESSAGE_START,
+        },
+        {
+          ...child,
+          delta: "See [NDA](#stella-entity-ref",
+          messageId: "child-answer",
+          type: EventType.TEXT_MESSAGE_CONTENT,
+        },
+        {
+          ...child,
+          delta: "=ent_1).",
+          messageId: "child-answer",
+          type: EventType.TEXT_MESSAGE_CONTENT,
+        },
+        {
+          ...child,
+          messageId: "child-answer",
+          type: EventType.TEXT_MESSAGE_END,
+        },
+        {
+          ...child,
+          parentMessageId: "child-answer",
+          toolCallId: "child-call",
+          toolCallName: "use-browser",
+          type: EventType.TOOL_CALL_START,
+        },
+        {
+          ...child,
+          delta: '{"action":"open"}',
+          toolCallId: "child-call",
+          type: EventType.TOOL_CALL_ARGS,
+        },
+        {
+          ...child,
+          delta: "Checking [it](#stella-entity-ref",
+          messageId: "child-thought",
+          type: EventType.REASONING_MESSAGE_CONTENT,
+        },
+      ]),
+    );
+    const persistenceVisible = transformPersistenceVisibleStream({
+      boundary: { type: "raw" },
+      initialRestorationPlaceholders: new Set(),
+      restorationPairs: [],
+      source,
+    });
+    const clientChunks = await collectChunks(
+      transformClientVisibleStream({
+        source: persistenceVisible,
+        storedHistory: NOTHING_REWRITTEN,
+      }),
+    );
+
+    const content = clientChunks.filter(
+      (chunk) =>
+        chunk.type === EventType.TEXT_MESSAGE_CONTENT ||
+        chunk.type === EventType.REASONING_MESSAGE_CONTENT ||
+        chunk.type === EventType.TOOL_CALL_ARGS,
+    );
+    const deltas = (type: EventType) =>
+      content
+        .flatMap((chunk) =>
+          chunk.type === type && "delta" in chunk ? [chunk.delta] : [],
+        )
+        .join("");
+    expect(deltas(EventType.TEXT_MESSAGE_CONTENT)).toBe(
+      "See [NDA](#stella-entity-ref=ent_1).",
+    );
+    expect(deltas(EventType.REASONING_MESSAGE_CONTENT)).toBe(
+      "Checking [it](#stella-entity-ref",
+    );
+    expect(deltas(EventType.TOOL_CALL_ARGS)).toBe('{"action":"open"}');
+    for (const chunk of content) {
+      expect(chunk).toMatchObject(child);
+    }
+  });
 });

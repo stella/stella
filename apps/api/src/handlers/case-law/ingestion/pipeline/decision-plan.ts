@@ -8,7 +8,7 @@ import { replacedBlockAnchorsOf } from "@stll/legal-ast/anchor-redirects";
 import { isDocumentAstInAnyBlockOrder } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
@@ -135,6 +135,7 @@ const storedScopeState = async ({
   const row = await storedScopeRow(decisionId, scopedDb);
   const ast = row?.astS3Key
     ? await readCorpusAst(row.astS3Key, {
+        report: { documentId: decisionId },
         ...corpus.readBytes,
         ...(signal === undefined ? {} : { signal }),
         ...(s3Policy === undefined ? {} : { s3Policy }),

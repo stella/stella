@@ -4,18 +4,19 @@ import type { OnlineConstraintValidation } from "./online-ddl";
 import type { OnlineRepair } from "./online-migration-connection";
 
 /**
- * The failure-kind check migration
- * 20261119180000_corpus_projection_document_language_failure replaces NOT
- * VALID: the table grows with the corpus, and a validating scan does not fit
- * the migration's statement budget. The replacement admits every kind the
- * check it replaces admitted, so every row satisfies it already and there is
- * no data work, only the validation.
+ * The failure-kind check, which migration
+ * 20261119180000_corpus_projection_document_language_failure first replaced
+ * NOT VALID and 20261124100000_corpus_projection_canonical_mismatch_failure
+ * replaced again: the table grows with the corpus, and a validating scan does
+ * not fit a migration's statement budget. Each replacement admits every kind
+ * the check it replaces admitted, so every row satisfies it already and there
+ * is no data work, only the validation. The newest replacement introduces it.
  */
 export const CORPUS_PROJECTION_DOCUMENT_LANGUAGE_CONSTRAINTS = [
   {
     tableName: "corpus_index_projection_states",
     constraintName: "corpus_index_projection_states_failure_kind_values",
-    introducedBy: "20261119180000_corpus_projection_document_language_failure",
+    introducedBy: "20261124100000_corpus_projection_canonical_mismatch_failure",
   },
 ] as const satisfies readonly (OnlineConstraintValidation & {
   introducedBy: string;

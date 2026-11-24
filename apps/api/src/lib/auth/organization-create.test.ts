@@ -4,10 +4,10 @@ import { describe, expect, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
-import type { Transaction } from "@/api/db/root";
 import { createOrganizationForAccount } from "@/api/db/root";
 import type { accountAuditLogs } from "@/api/db/schema";
 import { organizationCreationRequests } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

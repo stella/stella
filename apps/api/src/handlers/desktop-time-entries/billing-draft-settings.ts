@@ -10,8 +10,8 @@ import {
   desktopBillingDraftWithdrawalSchema,
 } from "@stll/api-contract/desktop-billing-drafts";
 
-import type { Transaction } from "@/api/db/root";
 import { billingDraftUserSettings } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,

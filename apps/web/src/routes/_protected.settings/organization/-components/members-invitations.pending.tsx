@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { Frame } from "@stll/ui/frame";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 import {
   Table,
   TableBody,
@@ -66,6 +66,9 @@ export const InvitationsTableRow = ({
   </TableRow>
 );
 
+/** Spanned by the row that replaces invitations when none match. */
+export const INVITATION_COLUMN_COUNT = INVITATION_COLUMNS.length;
+
 export const InvitationsTableFrame = ({
   label,
   children,
@@ -75,24 +78,28 @@ export const InvitationsTableFrame = ({
   children: ReactNode;
   dialog?: ReactNode;
 }) => (
-  <Frame>
-    <Table>
-      <TableHeader>
-        <TableRow>
-          {INVITATION_COLUMNS.map((column) => (
-            <TableHead
-              className={cn("className" in column && column.className)}
-              key={column.id}
-            >
-              {"label" in column ? label(column.label) : null}
-            </TableHead>
-          ))}
-        </TableRow>
-      </TableHeader>
-      <TableBody>{children}</TableBody>
-    </Table>
+  <>
+    <SettingsSection>
+      <SettingsPanel inset="flush">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              {INVITATION_COLUMNS.map((column) => (
+                <TableHead
+                  className={cn("className" in column && column.className)}
+                  key={column.id}
+                >
+                  {"label" in column ? label(column.label) : null}
+                </TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>{children}</TableBody>
+        </Table>
+      </SettingsPanel>
+    </SettingsSection>
     {dialog}
-  </Frame>
+  </>
 );
 
 export const PendingInvitationsSection = ({

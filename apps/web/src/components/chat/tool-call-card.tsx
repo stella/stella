@@ -58,7 +58,10 @@ import {
   advanceToolCallTiming,
   createToolCallTiming,
 } from "@/components/chat/tool-call-timing.logic";
-import { getToolCallTitleKey } from "@/components/chat/tool-call-title.logic";
+import {
+  getToolCallTitle,
+  toolCallTitleText,
+} from "@/components/chat/tool-call-title.logic";
 import { UnrestoredFieldsNotice } from "@/components/chat/unrestored-fields-notice";
 import {
   BUILT_IN_SKILL_ORIGIN,
@@ -538,12 +541,13 @@ const ToolCallCardComponent = ({
   const label =
     catalogEntry?.brand ??
     (localRunTitleKind === null
-      ? t(
-          getToolCallTitleKey({
+      ? toolCallTitleText(
+          getToolCallTitle({
             input: getToolInput(part),
             name,
             output: part.output,
           }),
+          (key) => t(key),
         )
       : t(LOCAL_RUN_TITLE_KEYS[localRunTitleKind]));
   const subtitle =

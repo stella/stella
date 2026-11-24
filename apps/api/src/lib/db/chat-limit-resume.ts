@@ -2,8 +2,8 @@ import { and, eq } from "drizzle-orm";
 
 import { CHAT_LIMIT_RESET_ACTION } from "@stll/api-contract/chat-limit-reminder";
 
-import type { Transaction } from "@/api/db/root";
 import { chatLimitReminders, chatTurns } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { NEWEST_CHAT_TURN_FIRST } from "@/api/lib/chat/turn-order";
 import { releaseChatQueueOnTx } from "@/api/lib/db/chat-queue-gate";

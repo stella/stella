@@ -37,12 +37,12 @@
 import { panic, Result } from "better-result";
 import { desc, eq } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerationFlips,
   corpusIndexGenerations,
 } from "@/api/db/schema";
 import { setSharedLockTimeout } from "@/api/db/shared-pool-timeouts";
+import type { Transaction } from "@/api/db/types";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import {
   CORPUS_INDEX_ACTIVE_GENERATION_STATUSES,

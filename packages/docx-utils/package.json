@@ -1,6 +1,6 @@
 {
   "name": "@stll/docx-utils",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Low-level OOXML helpers: relationship and content-type management, attached-template handling, office format metadata, and namespace constants.",
   "keywords": [
     "docx",
@@ -37,7 +37,7 @@
   },
   "scripts": {
     "clean": "git clean -xdf dist .cache .turbo node_modules",
-    "build": "tsdown",
+    "build": "bun --bun tsdown",
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
     "check:office-fixture-metadata": "bun scripts/check-office-fixture-metadata.ts",

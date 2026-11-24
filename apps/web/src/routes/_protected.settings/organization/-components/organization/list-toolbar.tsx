@@ -85,7 +85,7 @@ export const OrganizationListToolbar = () => {
 
   return (
     <MembersToolbarFace
-      invite={<InviteMemberDialog />}
+      invite={<InviteMemberDialog suggestedEmail={localQuery} />}
       search={
         <InputGroup>
           <InputGroupInput

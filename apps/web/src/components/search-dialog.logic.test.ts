@@ -711,6 +711,9 @@ test.each([
   ["text/csv", "CSV"],
   ["application/x-7z-compressed", "7Z-COMPRESSED"],
   ["application/vnd.apple.pages+zip", "APPLE.PAGES"],
+  ["application/x-iwork-pages-sffpages", "PAGES"],
+  ["application/vnd.wordperfect", "WPD"],
+  ["multipart/related", "MHT"],
 ])("names %s as %s", (mimeType, label) => {
   expect(formatMimeTypeLabel(mimeType)).toBe(label);
 });

@@ -108,7 +108,12 @@ if (!databaseUrl || !enabled) {
         }
 
         const authorization = await resolveMemberAuthorization(
-          { organizationId, userId, workspaceId: undefined },
+          {
+            authentication: { kind: "browser_session", sessionId },
+            organizationId,
+            userId,
+            workspaceId: undefined,
+          },
           db,
         );
         if (authorization === null || !isMemberRole(authorization.role)) {
@@ -130,6 +135,7 @@ if (!databaseUrl || !enabled) {
               userDeleted: authorization.userDeleted,
               enrolledFeatureIds: authorization.enrolledFeatureIds,
               professionalUse: authorization.professionalUse,
+              ssoAccess: authorization.ssoAccess,
             },
           },
           initialWorkspaceId: null,

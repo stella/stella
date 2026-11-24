@@ -1,6 +1,6 @@
 import { useTranslations } from "use-intl";
 
-import type { ChatMessageMetadata } from "@/components/chat/chat-ui-tools";
+import type { ChatMessageMetadata } from "@/components/chat/chat-ui-tools-types";
 import type { TranslationKey } from "@/i18n/types";
 
 type AnswerContextNotice = NonNullable<ChatMessageMetadata["contextNotice"]>;

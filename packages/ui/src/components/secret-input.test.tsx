@@ -24,6 +24,7 @@ describe("SecretInput", () => {
     const markup = renderToStaticMarkup(
       <SecretInput
         disabled
+        disabledReason="Saving…"
         hideValueLabel="Hide secret value"
         showValueLabel="Show secret value"
       />,

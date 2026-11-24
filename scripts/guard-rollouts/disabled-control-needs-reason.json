@@ -1,0 +1,14 @@
+{
+  "id": "disabled-control-needs-reason",
+  "rules": ["disabled-control-needs-reason/disabled-control-needs-reason"],
+  "type": "full",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "apps",
+    "packages"
+  ]
+}

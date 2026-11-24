@@ -2,14 +2,14 @@ import { panic, Result } from "better-result";
 import { and, desc, eq, isNull, lte } from "drizzle-orm";
 import * as v from "valibot";
 
-import type { Transaction } from "@/api/db/root";
-import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db-types";
 import {
   entities,
   entityVersions,
   fields,
   officeFileEvidence,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { envBase } from "@/api/env-base";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";

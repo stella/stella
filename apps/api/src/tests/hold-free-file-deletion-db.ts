@@ -1,4 +1,4 @@
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import type { OrganizationFileDeletionDb } from "@/api/lib/files/organization-file-deletion-db";
 
 import { asTestRaw } from "./helpers/test-tool-set";

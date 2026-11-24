@@ -130,6 +130,13 @@ test("state-column ownership covers every scoped runtime transition", () => {
       },
       ...Object.values(READER_ANSWER_TRANSITION_IDENTITIES),
       ...Object.values(FOLIO_COLLAB_TRANSITION_IDENTITIES),
+      // A sign-in moves through its review once per session.
+      {
+        tableName: "sessionSignIns",
+        key: "sessionId",
+        scope: [],
+        stateColumn: "review",
+      },
     ].toSorted(order),
   );
 });

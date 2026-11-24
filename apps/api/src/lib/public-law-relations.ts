@@ -15,6 +15,7 @@ import { REVIEW_COLUMN_GRANTS_BY_RELATION } from "./case-law/review-column-grant
 export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawCitationDoctrineReviews: "case_law_citation_doctrine_reviews",
   caseLawCitations: "case_law_citations",
+  caseLawCollectionBodies: "case_law_collection_bodies",
   caseLawCompletenessCensus: "case_law_completeness_census",
   caseLawWithdrawalStatus: "case_law_withdrawal_status",
   caseLawCorpusTombstones: "case_law_corpus_tombstones",
@@ -174,21 +175,6 @@ export const CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION = {
     polarity_classifier_version: "permitted",
     polarity_evidence_windows: "permitted",
     cited_part: "permitted",
-  },
-} as const satisfies PublicLawColumnGrantsByRelation;
-
-/**
- * Expansion release: tolerate the sitemap shard range grants before the
- * follow-up migration adds the range columns, grants them and its readers
- * require them. Deploy this declaration first.
- */
-export const CASE_LAW_SITEMAP_RANGE_COLUMN_GRANTS_BY_RELATION = {
-  case_law_sitemap_shards: {
-    total: "permitted",
-    range_start_date: "permitted",
-    range_start_id: "permitted",
-    range_end_date: "permitted",
-    range_end_id: "permitted",
   },
 } as const satisfies PublicLawColumnGrantsByRelation;
 
@@ -474,14 +460,27 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   },
   [CASE_LAW_DECISION_VIEWS[0]]: {
     ...CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
-    ...COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION.case_law_published_decisions,
-    ...COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION.case_law_published_decisions,
+    normalized_s3_key: "required",
+    source_observed_at: "required",
   },
   [CASE_LAW_DECISION_VIEWS[1]]: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
   case_law_collection_bodies: {
-    ...COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies,
-    ...COLLECTION_PART_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies,
-  },
+    host_decision_id: "required",
+    collection_source_id: "required",
+    collection_document_id: "required",
+    source_url: "required",
+    retrieved_at: "required",
+    detail_raw_s3_key: "required",
+    detail_raw_content_type: "required",
+    document_part: "required",
+    document_body_s3_key: "required",
+    document_body_sha256: "required",
+    origin: "required",
+  } satisfies Record<
+    | keyof typeof COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies
+    | keyof typeof COLLECTION_PART_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies,
+    "required"
+  >,
   case_law_decision_citation_stats: {
     decision_id: "required",
     direction: "required",
@@ -565,15 +564,19 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     tsv: "required",
     searchable_text: "required",
   },
-  // The shards the public sitemap index lists. The count is how the refresh
-  // splits a month, not what the index states.
+  // The shards the public sitemap index lists. A file's read looks up its
+  // range and refuses one whose count outgrew what a read may serve.
   case_law_sitemap_shards: {
-    ...CASE_LAW_SITEMAP_RANGE_COLUMN_GRANTS_BY_RELATION.case_law_sitemap_shards,
     country: "required",
     year: "required",
     month: "required",
     bucket: "required",
     last_modified_at: "required",
+    total: "required",
+    range_start_date: "required",
+    range_start_id: "required",
+    range_end_date: "required",
+    range_end_id: "required",
   },
   case_law_source_arrivals: {
     source_id: "required",

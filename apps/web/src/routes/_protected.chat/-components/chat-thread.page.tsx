@@ -957,6 +957,10 @@ export const ChatThreadPage = ({
               // height, so transcript clearance and the scroll button's
               // offset track the change automatically.
               composerBlockRef={observeComposerBlock}
+              fileDrop={{
+                onDragOver: controller.handleDragOver,
+                onDrop: controller.handleDrop,
+              }}
               aboveComposer={
                 <>
                   {env.VITE_FEATURE_USAGE && <UsageFallbackNotice />}
@@ -1136,7 +1140,12 @@ const NewChatButton = ({
   // /chat/new (or workspace-scoped) redirect helper.
   if (!hasMessages) {
     return (
-      <Button disabled size="sm" tooltip={t("chat.newChat")} variant="ghost">
+      <Button
+        disabled
+        disabledReason={t("chat.newChatRequiresMessage")}
+        size="sm"
+        variant="ghost"
+      >
         <NewChatIcon />
         <span className={CHAT_THREAD_NEW_CHAT_LABEL_CLASS}>
           {t("chat.newChat")}

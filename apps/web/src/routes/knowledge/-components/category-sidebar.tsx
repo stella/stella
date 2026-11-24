@@ -43,6 +43,13 @@ import {
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
+import {
+  CategoryMobileFilterBarFrame,
+  CategorySidebarDivider,
+  CategorySidebarFooter,
+  CategorySidebarFrame,
+  CategorySidebarNav,
+} from "@/features/knowledge/views/category-sidebar.pending";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import type { ToAPIErrorProps } from "@/lib/errors/api";
@@ -219,9 +226,9 @@ export const CategorySidebar = ({
     : [];
 
   return (
-    <div className="flex w-48 shrink-0 flex-col overflow-y-auto">
+    <CategorySidebarFrame className="overflow-y-auto">
       <ContextMenu actions={createCategoryActions}>
-        <nav className="flex-1 p-2">
+        <CategorySidebarNav>
           <CategoryNavButton
             dragAndDrop={dragAndDrop}
             isSelected={selectedId === null}
@@ -237,7 +244,7 @@ export const CategorySidebar = ({
             targetCategoryId={null}
           />
 
-          {categories.length > 0 && <div className="my-1 border-t" />}
+          {categories.length > 0 && <CategorySidebarDivider />}
 
           {categories.map((cat) => (
             <CategoryRow
@@ -254,11 +261,11 @@ export const CategorySidebar = ({
           ))}
 
           {children}
-        </nav>
+        </CategorySidebarNav>
       </ContextMenu>
 
       {permissions.canCreate && (
-        <div className="border-t p-2">
+        <CategorySidebarFooter>
           <Button
             className="w-full justify-start"
             onClick={() => setCreateOpen(true)}
@@ -268,7 +275,7 @@ export const CategorySidebar = ({
             <PlusIcon />
             {labels.createCategory}
           </Button>
-        </div>
+        </CategorySidebarFooter>
       )}
 
       <CategoryFormDialog
@@ -279,7 +286,7 @@ export const CategorySidebar = ({
         open={createOpen}
         ops={ops}
       />
-    </div>
+    </CategorySidebarFrame>
   );
 };
 
@@ -315,56 +322,54 @@ export const CategoryMobileFilterBar = ({
   );
 
   return (
-    <div className="border-b px-3 py-2 md:hidden">
-      <div className="flex gap-1 overflow-x-auto pb-0.5">
+    <CategoryMobileFilterBarFrame rowClassName="overflow-x-auto">
+      <CategoryMobileFilterButton
+        active={selectedId === null && !hasActiveExtraFilter}
+        label={labels.all}
+        onSelect={() => {
+          if (onSelectAll) {
+            onSelectAll();
+            return;
+          }
+          onSelect(null);
+        }}
+      />
+      <CategoryMobileFilterButton
+        active={selectedId === "uncategorized"}
+        label={t("common.uncategorized")}
+        onSelect={() => onSelect("uncategorized")}
+      />
+      {categories.map((category) => (
         <CategoryMobileFilterButton
-          active={selectedId === null && !hasActiveExtraFilter}
-          label={labels.all}
-          onSelect={() => {
-            if (onSelectAll) {
-              onSelectAll();
-              return;
-            }
-            onSelect(null);
-          }}
+          active={selectedId === category.id}
+          key={`category:${category.id}`}
+          label={category.name}
+          onSelect={() => onSelect(category.id)}
         />
+      ))}
+      {resolvedExtraFilters.map((filter) => (
         <CategoryMobileFilterButton
-          active={selectedId === "uncategorized"}
-          label={t("common.uncategorized")}
-          onSelect={() => onSelect("uncategorized")}
+          active={filter.active}
+          icon={filter.icon}
+          key={`extra:${filter.id}`}
+          label={filter.label}
+          onSelect={filter.onSelect}
+          variant="extra"
         />
-        {categories.map((category) => (
-          <CategoryMobileFilterButton
-            active={selectedId === category.id}
-            key={`category:${category.id}`}
-            label={category.name}
-            onSelect={() => onSelect(category.id)}
-          />
-        ))}
-        {resolvedExtraFilters.map((filter) => (
-          <CategoryMobileFilterButton
-            active={filter.active}
-            icon={filter.icon}
-            key={`extra:${filter.id}`}
-            label={filter.label}
-            onSelect={filter.onSelect}
-            variant="extra"
-          />
-        ))}
-        {canCreate && (
-          <Button
-            className="h-8 shrink-0"
-            onClick={onCreateCategory}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            <PlusIcon />
-            {labels.createCategory}
-          </Button>
-        )}
-      </div>
-    </div>
+      ))}
+      {canCreate && (
+        <Button
+          className="h-8 shrink-0"
+          onClick={onCreateCategory}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          <PlusIcon />
+          {labels.createCategory}
+        </Button>
+      )}
+    </CategoryMobileFilterBarFrame>
   );
 };
 
@@ -639,6 +644,7 @@ const CategoryRow = ({
             </AlertDialogClose>
             <Button
               disabled={deleting}
+              disabledReason={t("common.deleting")}
               onClick={() => {
                 detached(handleDelete(), "category-sidebar.delete");
               }}
@@ -784,6 +790,7 @@ const CategoryFormDialogBody = ({
         </DialogClose>
         <Button
           disabled={saving || !name.trim()}
+          disabledReason={saving ? t("common.saving") : t("common.enterName")}
           onClick={() => {
             detached(handleSave(), "category-sidebar.save");
           }}

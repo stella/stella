@@ -24,6 +24,7 @@ import {
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
 import { reportUnhandledAuthClientError } from "@/lib/account/auth-code-report";
 import { notifyStepUp } from "@/lib/account/mcp-step-up";
+import { sessionSignInsClient } from "@/lib/account/session-sign-ins-client";
 import { ssrApiHeaders } from "@/lib/account/ssr-api-headers";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { externalApiOrigin } from "@/lib/api-origins";
@@ -143,6 +144,7 @@ const authClientPlugins = [
   // The email-OTP sign-in step (otp-panel.tsx) reads `twoFactorRedirect` off
   // its own response instead and navigates to `/auth/two-factor` explicitly.
   twoFactorClient(),
+  sessionSignInsClient(),
 ];
 
 const customFetchImpl = async (
@@ -306,12 +308,6 @@ export const listAuthSessions = async () => {
     error: null,
   };
 };
-
-export const revokeAuthSession = async ({ sessionId }: { sessionId: string }) =>
-  await authClient.$fetch("/revoke-session-by-id", {
-    method: "POST",
-    body: { sessionId },
-  });
 
 // The two-factor server plugin rewrites a sign-in endpoint's response body to
 // `{ twoFactorRedirect: true, twoFactorMethods }` when the signed-in user has

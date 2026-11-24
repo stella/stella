@@ -2,8 +2,13 @@ import { Result } from "better-result";
 import { and, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import {
+  type UnscannedContentReason,
+  unscannedContentReasons,
+} from "@stll/api-contract/file-scan-warnings";
+
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { desktopEditSessions, entityVersions, fields } from "@/api/db/schema";
 import {
   decodeVersionCursor,
@@ -59,6 +64,7 @@ export const readVersionFileMetadata = (
       fileName: sql<string>`${fields.content}->>'fileName'`,
       mimeType: sql<string>`${fields.content}->>'mimeType'`,
       sizeBytes: sql<number>`(${fields.content}->>'sizeBytes')::double precision`,
+      scanWarnings: sql<string[] | null>`${fields.content}->'scanWarnings'`,
     })
     .from(fields)
     .innerJoin(entityVersions, eq(entityVersions.id, fields.entityVersionId))
@@ -298,6 +304,8 @@ export const readVersionsHandler = async function* ({
       fileName: string;
       mimeType: string;
       sizeBytes: number;
+      /** Why some of the file's content was not scanned; empty when all was. */
+      unscannedContent: UnscannedContentReason[];
     }
   >();
 
@@ -308,6 +316,7 @@ export const readVersionsHandler = async function* ({
       fileName: f.fileName,
       mimeType: f.mimeType,
       sizeBytes: f.sizeBytes,
+      unscannedContent: unscannedContentReasons(f.scanWarnings),
     });
   }
 

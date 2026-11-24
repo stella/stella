@@ -84,24 +84,23 @@ export const buildSearchPreviewPassages = (
   }
 };
 
-export const buildSearchPreviewPassageValueRows = ({
+export const buildSearchPreviewPassageSelect = ({
   generation,
   leadingValues,
   passages,
   regconfig,
   useUnaccent,
 }: PreviewPassageValueRowsOptions): SQL => {
-  const values = passages.map(({ content, ordinal }) => {
-    const normalized = useUnaccent
-      ? sql`unaccent(arabic_normalize(${content}))`
-      : sql`arabic_normalize(${content})`;
-    return sql`(
-      ${sql.join(leadingValues, sql`, `)},
-      ${generation}::uuid,
-      ${ordinal},
-      ${content},
-      to_tsvector(${regconfig}::regconfig, ${normalized})
-    )`;
-  });
-  return sql.join(values, sql`, `);
+  const normalized = useUnaccent
+    ? sql`unaccent(arabic_normalize(p.content))`
+    : sql`arabic_normalize(p.content)`;
+  return sql`SELECT
+    ${sql.join(leadingValues, sql`, `)},
+    ${generation}::uuid,
+    p.ordinal,
+    p.content,
+    to_tsvector(${regconfig}::regconfig, ${normalized})
+  FROM jsonb_to_recordset(${JSON.stringify(
+    passages.map(({ content, ordinal }) => ({ ordinal, content })),
+  )}::text::jsonb) AS p(ordinal integer, content text)`;
 };

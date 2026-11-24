@@ -8,6 +8,7 @@ import type {
   chatMessages,
   chatQueuedMessages,
   chatThreads,
+  dictationLearnedFixes,
   legalReaderAnnotations,
   legalReaderAnswerMessages,
   legalReaderAnswers,
@@ -78,6 +79,10 @@ type AccountExportProjectionSignatures = {
   billing_draft_user_settings: (
     row: typeof billingDraftUserSettings.$inferSelect,
   ) => unknown;
+  dictation_learned_fixes: (
+    organizationId: SafeId<"organization">,
+    row: typeof dictationLearnedFixes.$inferSelect,
+  ) => Promise<unknown>;
   template_lookup_format_user_defaults: (
     row: typeof templateLookupFormatUserDefaults.$inferSelect,
   ) => unknown;

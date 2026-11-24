@@ -3,7 +3,6 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,
@@ -13,6 +12,7 @@ import {
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
@@ -54,7 +54,7 @@ export type CorpusProjectionMaterial =
 
 type CorpusProjectionMaterialRejection = {
   lease: CorpusProjectionIntentLease;
-  status: "lease_lost" | "stale" | "unreadable";
+  status: "lease_lost" | "stale" | "canonical_input_mismatch" | "unreadable";
   reason: string;
 };
 
@@ -167,10 +167,14 @@ type ProjectedMaterialRow = {
 };
 
 // Every family sorts its leases the same way: a lease whose reservation moved
-// is lost, one whose generation's desired state or derived descriptor moved
-// is stale, and one without a text pointer is unreadable. `project` derives a
-// row's descriptor and material, and runs only for a lease whose reservation
-// and canonical state are still there.
+// is lost, and one whose desired state moved or disappeared is stale, since
+// that newer desired state already queues its own work. A lease whose desired
+// state still names it while its canonical row is gone or derives other
+// content (another upsert, or none) is a canonical mismatch: nothing else
+// moves that state, so settlement re-derives it
+// (`settleRejectedCorpusProjectionMaterials`). One without a text pointer is
+// unreadable. `project` derives a row's descriptor and material, and runs
+// only for a lease whose reservation and desired state are still current.
 //
 // Currency is the generation's own: its desired state still names the
 // lease's epoch, fingerprint and index, and the canonical row still derives
@@ -193,37 +197,56 @@ const sortLeasesByReadiness = <Row extends MaterialRow>(
   const byEntityId = new Map<string, Row>(
     rows.map((row) => [row.documentId, row]),
   );
-  const ready: CorpusProjectionMaterial[] = [];
-  const rejected: CorpusProjectionMaterialRejection[] = [];
-  for (const lease of leases) {
+  // Every lease gets exactly one typed outcome: its material, or the
+  // rejection that says why not.
+  const judge = (
+    lease: CorpusProjectionIntentLease,
+  ):
+    | { type: "ready"; material: CorpusProjectionMaterial }
+    | { type: "rejected"; rejection: CorpusProjectionMaterialRejection } => {
+    const rejected = (
+      status: CorpusProjectionMaterialRejection["status"],
+      reason: string,
+    ) => ({
+      type: "rejected" as const,
+      rejection: rejection(lease, status, reason),
+    });
     const intent = intents.get(lease.intentId);
     if (intent === undefined || !intentMatchesLease(intent, lease)) {
-      rejected.push(rejection(lease, "lease_lost", "reservation changed"));
-      continue;
+      return rejected("lease_lost", "reservation changed");
     }
     const state = states.get(lease.entityId);
+    if (state === undefined || !stateMatchesLease(state, lease)) {
+      return rejected("stale", "desired state moved past the reservation");
+    }
     const row = byEntityId.get(lease.entityId);
-    if (state === undefined || row === undefined) {
-      rejected.push(rejection(lease, "stale", "canonical state disappeared"));
-      continue;
+    if (row === undefined) {
+      return rejected(
+        "canonical_input_mismatch",
+        "projection reservation rejected: its canonical row disappeared",
+      );
     }
     const { descriptor, material } = project(row);
-    const stale =
-      !stateMatchesLease(state, lease) ||
-      !descriptorMatchesLease(descriptor, lease);
-    if (stale) {
-      rejected.push(rejection(lease, "stale", "canonical input changed"));
-      continue;
+    if (!descriptorMatchesLease(descriptor, lease)) {
+      return rejected(
+        "canonical_input_mismatch",
+        "projection reservation rejected: its canonical input differs",
+      );
     }
     if (row.textS3Key === null) {
-      rejected.push(
-        rejection(lease, "unreadable", "canonical text pointer is absent"),
-      );
-      continue;
+      return rejected("unreadable", "canonical text pointer is absent");
     }
-    ready.push(material(lease, row.textS3Key));
-  }
-  return { ready, rejected };
+    return { type: "ready", material: material(lease, row.textS3Key) };
+  };
+  const judged = leases.map(judge);
+  return {
+    ready: judged.flatMap((outcome) =>
+      outcome.type === "ready" ? [outcome.material] : [],
+    ),
+    rejected: judged.flatMap((outcome) =>
+      outcome.type === "rejected" ? [outcome.rejection] : [],
+    ),
+  };
 };
 
 type ReadCaseLawMaterialsOptions = {
@@ -321,7 +344,7 @@ const readCaseLawMaterials = async ({
     rows.map(({ documentId }) => documentId),
   );
   // The rows were read without a lock, so one can disappear between the two
-  // statements; its lease is then stale, like any other vanished row.
+  // statements; its lease is then judged like any other vanished row.
   const signalled = rows.flatMap((row) => {
     const rankingSignals = rankingSignalsByDecision.get(row.documentId);
     return rankingSignals === undefined ? [] : [{ ...row, rankingSignals }];
@@ -437,52 +460,85 @@ export const readReservedCorpusProjectionMaterialsTx = async (
     .from(corpusIndexProjectionIntents)
     .where(inArray(corpusIndexProjectionIntents.id, intentIds))
     .limit(intentIds.length);
-  const stateRows = await tx
-    .select({
-      entityId: corpusIndexProjectionStates.entityId,
-      desiredAction: corpusIndexProjectionStates.desiredAction,
-      desiredEpoch: corpusIndexProjectionStates.desiredEpoch,
-      desiredFingerprint: corpusIndexProjectionStates.desiredFingerprint,
-      desiredIndexId: corpusIndexProjectionStates.desiredIndexId,
-    })
-    .from(corpusIndexProjectionStates)
-    .where(
-      and(
-        eq(corpusIndexProjectionStates.family, family),
-        eq(corpusIndexProjectionStates.generation, generation),
-        inArray(corpusIndexProjectionStates.entityId, entityIds),
-      ),
-    )
-    .limit(entityIds.length);
+  const readStates = async (ids: readonly string[]) =>
+    await tx
+      .select({
+        entityId: corpusIndexProjectionStates.entityId,
+        desiredAction: corpusIndexProjectionStates.desiredAction,
+        desiredEpoch: corpusIndexProjectionStates.desiredEpoch,
+        desiredFingerprint: corpusIndexProjectionStates.desiredFingerprint,
+        desiredIndexId: corpusIndexProjectionStates.desiredIndexId,
+      })
+      .from(corpusIndexProjectionStates)
+      .where(
+        and(
+          eq(corpusIndexProjectionStates.family, family),
+          eq(corpusIndexProjectionStates.generation, generation),
+          inArray(corpusIndexProjectionStates.entityId, [...ids]),
+        ),
+      )
+      .limit(ids.length);
+  const stateRows = await readStates(entityIds);
   const intents = new Map(intentRows.map((row) => [row.id, row]));
   const states = new Map(stateRows.map((row) => [row.entityId, row]));
-  switch (family) {
-    case "case_law": {
-      if (manifest.family !== "case_law") {
-        return panic("Case-law material manifest has another family");
+  const materials = await (async () => {
+    switch (family) {
+      case "case_law": {
+        if (manifest.family !== "case_law") {
+          return panic("Case-law material manifest has another family");
+        }
+        return await readCaseLawMaterials({
+          tx,
+          leases,
+          manifest,
+          intents,
+          states,
+        });
       }
-      return await readCaseLawMaterials({
-        tx,
-        leases,
-        manifest,
-        intents,
-        states,
-      });
-    }
-    case "legislation": {
-      if (manifest.family !== "legislation") {
-        return panic("Legislation material manifest has another family");
+      case "legislation": {
+        if (manifest.family !== "legislation") {
+          return panic("Legislation material manifest has another family");
+        }
+        return await readLegislationMaterials({
+          tx,
+          leases,
+          manifest,
+          intents,
+          states,
+        });
       }
-      return await readLegislationMaterials({
-        tx,
-        leases,
-        manifest,
-        intents,
-        states,
-      });
+      default:
+        family satisfies never;
+        return panic(`Unhandled family: ${String(family)}`);
     }
-    default:
-      family satisfies never;
-      return panic(`Unhandled family: ${String(family)}`);
+  })();
+  const mismatches = materials.rejected.filter(
+    ({ status }) => status === "canonical_input_mismatch",
+  );
+  if (mismatches.length === 0) {
+    return materials;
   }
+  // A canonical writer can commit between the first state read and the
+  // canonical reads. Its newer desired state makes this normal supersession.
+  const latestStates = new Map(
+    (await readStates(mismatches.map(({ lease }) => lease.entityId))).map(
+      (state) => [state.entityId, state],
+    ),
+  );
+  return {
+    ready: materials.ready,
+    rejected: materials.rejected.map((entry) => {
+      if (entry.status !== "canonical_input_mismatch") {
+        return entry;
+      }
+      const latest = latestStates.get(entry.lease.entityId);
+      return latest === undefined || !stateMatchesLease(latest, entry.lease)
+        ? rejection(
+            entry.lease,
+            "stale",
+            "desired state changed during canonical read",
+          )
+        : entry;
+    }),
+  };
 };

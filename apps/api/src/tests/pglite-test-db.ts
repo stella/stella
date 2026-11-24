@@ -22,12 +22,8 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import * as schema from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
 import {
-  CASE_LAW_SITEMAP_RANGE_COLUMN_GRANTS_BY_RELATION,
   caseLawDecisionViewGrantStatement,
   CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
-  COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
-  COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION,
-  COLLECTION_PART_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   type PublicLawColumnGrant,
   publicLawColumnPairs,
@@ -69,6 +65,7 @@ import {
   installPgliteDecisionDocketFilingYear,
   installPgliteDesktopPresenceRls,
   installPgliteEntityFeatureGateMaintenance,
+  installPgliteFileObjectReconciliationFill,
   installPgliteFindingDecisionHistory,
   installPgliteFlowTransitions,
   installPgliteInvoiceLinks,
@@ -91,6 +88,7 @@ import {
   installPgliteSearchHistoryClearFence,
   installPgliteServiceClientCredentialCascade,
   installPgliteSharepointPolicyFence,
+  installPgliteSsoProviderIdentityGuard,
   installPgliteStatuteCitationCounts,
   installPgliteSyntheticMembershipTrigger,
   installPgliteTimeEntryTimerSignals,
@@ -368,13 +366,7 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
  */
 const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
   new Set(
-    [
-      CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
-      CASE_LAW_SITEMAP_RANGE_COLUMN_GRANTS_BY_RELATION,
-      COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
-      COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION,
-      COLLECTION_PART_COLUMN_GRANTS_BY_RELATION,
-    ]
+    [CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION]
       .flatMap(publicLawColumnPairs)
       .map(({ relation, column }) => `${relation}.${column}`),
   );
@@ -890,7 +882,14 @@ const installTestPublicLawViews = async (
     if (query === undefined) {
       panic(`Public-law view ${config.name} has no query`);
     }
-    if (config.with !== undefined) {
+    if (
+      config.with !== undefined &&
+      !(
+        config.name === "case_law_collection_bodies" &&
+        config.with.securityBarrier === true &&
+        Object.keys(config.with).length === 1
+      )
+    ) {
       panic(
         `Public-law fixture view ${config.name} must use plain view semantics`,
       );
@@ -901,6 +900,7 @@ const installTestPublicLawViews = async (
     }
     await db.execute(sql`
       CREATE VIEW ${sql.identifier(config.schema ?? "public")}.${sql.identifier(config.name)}
+      ${config.with?.securityBarrier === true ? sql`WITH (security_barrier = true)` : sql``}
       AS (${sql.raw(rendered.sql)})
     `);
   }
@@ -1022,6 +1022,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteSchedulerJobPauseLog(db);
   await installPgliteTreeParentGuards(db);
   await installPgliteOrganizationDeleteOwnerGuard(db);
+  await installPgliteSsoProviderIdentityGuard(db);
 
   await applyStellaTablePrivileges(client);
   for (const statement of ROLE_GRANT_STATEMENTS) {
@@ -1029,6 +1030,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   }
   await installPgliteTimeEntryTimerSignals(db);
   await installPgliteChatStoredContentEgress(db);
+  await installPgliteFileObjectReconciliationFill(db);
   await installPgliteSanctionsMonitoringTriggers(db);
   await installPgliteSearchHistoryClearFence(db);
   await installPgliteChatTurnOrdinal(db);

@@ -205,7 +205,8 @@ type LoadCurrentExtractedContentsOptions = {
 
 type RlsCurrentContentDb = Pick<Transaction, "query" | "rollback">;
 
-export type SystemSweep = "search-indexing" | "deadline-scout";
+export type SystemSweep =
+  "search-indexing" | "deadline-scout" | "document-naming";
 
 const resolveCurrentExtractedRowsFromDatabase = async (
   database: Pick<typeof rootDb, "query">,
@@ -554,12 +555,12 @@ const currentSourceWhere = (run: DeadlineSourceRun) =>
     eq(workspaces.status, WORKSPACE_STATUS.active),
   );
 
-export const loadCurrentDeadlineSource = async (
+export const loadCurrentDeadlineSourceReader = async (
   db: SystemExtractionReadDb,
-  sweep: Extract<SystemSweep, "deadline-scout">,
+  sweep: Extract<SystemSweep, "deadline-scout" | "document-naming">,
   run: DeadlineSourceRun,
 ) => {
-  sweep satisfies "deadline-scout";
+  sweep satisfies "deadline-scout" | "document-naming";
   const rows = await db
     .select({
       ciphertext: extractedContent.ciphertext,
@@ -584,15 +585,27 @@ export const loadCurrentDeadlineSource = async (
     .where(currentSourceWhere(run))
     .limit(1);
   const source = rows.at(0);
+  if (!source) {
+    return null;
+  }
+  const { ciphertext, iv, ...metadata } = source;
+  return {
+    ...metadata,
+    // Decryption may reach an external key provider. Callers that hold a
+    // database transaction can close it before performing that I/O.
+    readText: async () =>
+      await decryptContent(run.organizationId, ciphertext, iv),
+  };
+};
+
+export const loadCurrentDeadlineSource = async (
+  db: SystemExtractionReadDb,
+  sweep: Extract<SystemSweep, "deadline-scout">,
+  run: DeadlineSourceRun,
+) => {
+  const source = await loadCurrentDeadlineSourceReader(db, sweep, run);
   return source
-    ? {
-        entityName: source.entityName,
-        text: await decryptContent(
-          run.organizationId,
-          source.ciphertext,
-          source.iv,
-        ),
-      }
+    ? { entityName: source.entityName, text: await source.readText() }
     : null;
 };
 

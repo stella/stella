@@ -2,10 +2,10 @@ import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 import type { PgInsertValue } from "drizzle-orm/pg-core";
 
-import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawCitations, caseLawPolarityRules } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import type { ProceduralKeys } from "@/api/handlers/case-law/citation-kind";
@@ -236,10 +236,9 @@ const settleRuleVerdicts = async (
     UPDATE ${caseLawPolarityRules} AS r
        SET match_count = r.match_count + m.matches,
            updated_at = GREATEST(r.updated_at, ${observedAt})
-      FROM (VALUES ${sql.join(
-        tally.map(([ruleId, count]) => sql`(${ruleId}::uuid, ${count}::int)`),
-        sql.raw(","),
-      )}) AS m(id, matches)
+      FROM jsonb_to_recordset(${JSON.stringify(
+        tally.map(([ruleId, count]) => ({ id: ruleId, matches: count })),
+      )}::text::jsonb) AS m(id uuid, matches int)
      WHERE r.id = m.id
        AND r.source IN (${sql.join(
          ACTIVE_RULE_SOURCES.map((source) => sql`${source}`),

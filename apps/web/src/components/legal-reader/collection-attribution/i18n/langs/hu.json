@@ -1,0 +1,9 @@
+{
+  "readerCollection": {
+    "partialText": "A közzétett részek láthatók; a teljesség nem igazolt.",
+    "provenanceOmitted": "Kihagyott közzétételi rekordok: {omittedCount, number} / {totalCount, number}.",
+    "sourceAttribution": "Gyűjteménybeli közlés: <link>{source}</link>. Lekérve: {date}.",
+    "sourceAttributionUnknownDate": "Gyűjteménybeli közlés: <link>{source}</link>. A lekérés dátuma ismeretlen.",
+    "unclassifiedText": "E gyűjteménybeli szöveg terjedelme ismeretlen."
+  }
+}

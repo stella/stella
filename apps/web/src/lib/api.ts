@@ -26,7 +26,7 @@ import {
 import { REPLAY_CAPABLE_ROUTES } from "@/lib/idempotency/replay-routes.gen";
 import type { SafeId } from "@/lib/safe-id";
 
-export type WebApiRoutes = WebRoutes["v1"];
+export type { WebApiRoutes } from "@/lib/api-contract";
 
 const WEB_API_REQUEST_TIMEOUT_MS = 30_000;
 
@@ -48,30 +48,23 @@ export const createWebApiFetcher =
       },
     });
 
-// Types the API owns and the browser reads by name, re-exported through the
-// generated API types.
+// Types the API owns and the browser reads by name, re-exported from the
+// lightweight type contract module.
 export type {
   AskManual,
-  CapabilityId,
   DeterministicCheck,
   FallbackEntry,
-  GlobalSearchHit,
   GradedPosition,
   IdealLanguage,
-  LegalListSourceLocator,
   Negotiation,
   PlaybookScope,
   PlaybookTrigger,
   Position,
-  PositionDecisionSummary,
   PositionSeverity,
   PositionStandard,
   ReferencePassage,
   TierRule,
-  ViewLayout,
-  ViewSort,
-  ViewTemplateProperty,
-} from "@/generated/api-routes.gen";
+} from "@/lib/api-contract";
 
 export const webApiClientOptions = {
   requestReplayRoutes: REPLAY_CAPABLE_ROUTES,

@@ -2,9 +2,9 @@ import { Result, TaggedError } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { stellaPublicSanctionsReader } from "@/api/db/rls";
-import type { Transaction } from "@/api/db/root";
 import type { RlsDatabase } from "@/api/db/scoped";
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
+import type { Transaction } from "@/api/db/types";
 
 export type SanctionsReadTransaction = Pick<Transaction, "select" | "execute">;
 

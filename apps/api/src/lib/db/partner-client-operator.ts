@@ -2,7 +2,7 @@ import { TaggedError } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { oauthClient, oauthClientResource } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { OPEN_REGISTRATION_SCOPES } from "@/api/lib/db/oauth-scope-policy";
 import { PARTNER_CLIENT_TYPE } from "@/api/lib/db/partner-client-contract";

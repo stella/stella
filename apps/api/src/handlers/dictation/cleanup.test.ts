@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { afterAll, beforeEach, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import {
@@ -8,31 +8,30 @@ import {
 } from "@stll/api-contract/desktop-dictation-cleanup";
 import { createTestState } from "@stll/test-state";
 
-import { safeDbFromScoped } from "@/api/db/safe-db";
 import { env } from "@/api/env";
-import { createHttpApp } from "@/api/http/app";
-import { routes } from "@/api/http/route";
 import { HttpStatusResponse } from "@/api/http/status";
-import type { loadOrgAISettings } from "@/api/lib/ai-config-loader";
-import { toSafeId } from "@/api/lib/branded-types";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
-import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
-import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
-import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { getConfiguredChatModelOptions } from "@/api/lib/chat-model-selection";
 import {
-  claimFixtureDeviceProof,
-  createDesktopDeviceSigner,
-} from "@/api/tests/helpers/desktop-device-proof";
-import { runDispatchCheck } from "@/api/tests/helpers/dispatch-check";
+  CLEANUP_ORGANIZATION_TERMS,
+  mergeDictationTerms,
+} from "@/api/lib/dictation/organization-vocabulary";
+import type { readCleanupVocabulary } from "@/api/lib/dictation/organization-vocabulary";
 import {
-  createTestHandlerContext,
-  NO_AUDIT,
-} from "@/api/tests/helpers/handler-context";
-import { serveForTest, type TestServer } from "@/api/tests/helpers/test-server";
+  buildVocabularyIndex,
+  selectVocabulary,
+} from "@/api/lib/dictation/vocabulary-index";
+import {
+  DICTATING_ORGANIZATION_ID as ORGANIZATION_ID,
+  DICTATING_USER_ID as USER_ID,
+  exerciseDesktopDictationEndpoint,
+  exerciseMemberDictationEndpoint,
+  grantDesktopDictation,
+  testDesktopDictationGate,
+  testMemberDictationGate,
+} from "@/api/tests/helpers/desktop-dictation-endpoint";
+import type { TestServer } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createDictationCleanupEndpoint } from "./cleanup";
 import {
@@ -40,7 +39,7 @@ import {
   type DictationCleanupModelOutput,
   dictationCleanupModelOutputSchema,
 } from "./cleanup-model";
-import type { consumeDictationLimit } from "./limits";
+import { listDictationCleanupModels } from "./cleanup-models";
 import { createMemberDictationCleanupEndpoint } from "./member-cleanup";
 
 const testState = createTestState({ file: import.meta.path, config: env });
@@ -50,17 +49,10 @@ afterAll(async () => {
   await Promise.all(servers.map(async (server) => await server.stop()));
 });
 
-const USER_ID = toSafeId<"user">("dictating-member");
-const ORGANIZATION_ID = toSafeId<"organization">("dictating-firm");
-const EMAIL = "dictation@example.test";
 const TRANSCRIPT = "a tedy nový řádek se rozhodl odejít za tučně 24 dní";
 
 beforeEach(() => {
-  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
-    "desktop-dictation": [
-      { type: "member", organizationId: ORGANIZATION_ID, email: EMAIL },
-    ],
-  });
+  grantDesktopDictation(testState);
 });
 
 const CLEANED: DictationCleanupModelOutput = {
@@ -73,115 +65,55 @@ const CLEANED: DictationCleanupModelOutput = {
   ],
 };
 
+/** The organization's words as the real selection picks them, without a
+ *  database. */
+const organizationWords =
+  (newestFirst: readonly string[]): typeof readCleanupVocabulary =>
+  async ({ transcript, personal = [] }) =>
+    await Promise.resolve(
+      Result.ok(
+        mergeDictationTerms(
+          [
+            personal,
+            selectVocabulary(
+              buildVocabularyIndex(newestFirst),
+              transcript,
+              CLEANUP_ORGANIZATION_TERMS,
+            ),
+          ],
+          personal.length + CLEANUP_ORGANIZATION_TERMS,
+        ),
+      ),
+    );
+
 type ExerciseOptions = {
   input?: unknown;
+  organization?: readonly string[];
   granted?: boolean;
   role?: "member" | "external";
   limited?: boolean;
   answer?: () => DictationCleanupModelOutput;
+  orgAIConfig?: OrgAIConfig | null;
 };
 
 const exercise = async ({
   input = { transcript: TRANSCRIPT, locale: "cs", languages: ["cs", "en"] },
-  granted = true,
-  role = "member",
-  limited = false,
   answer = () => CLEANED,
-}: ExerciseOptions = {}) => {
-  if (!granted) {
-    testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
-  }
-  const calls: { system: string; prompt: string; schema: unknown }[] = [];
-  const { scopedDb } = createScopedDbMock({});
-  const generate = mock(
-    async (options: Parameters<typeof generateTanStackObjectForTask>[0]) => {
-      await runDispatchCheck(options.beforeEachDispatch);
-      calls.push({
-        system: options.system ?? "",
-        prompt: options.prompt ?? "",
-        schema: options.outputSchema,
-      });
-      return await Promise.resolve(answer());
-    },
-  );
-  const limit = mock(
-    async (_options: Parameters<typeof consumeDictationLimit>[0]) =>
-      await Promise.resolve(
-        limited
-          ? Result.err(
-              new HandlerError({
-                status: 429,
-                code: "rate_limited",
-                message: "Too many dictation cleanup requests",
-              }),
-            )
-          : Result.ok(undefined),
-      ),
-  );
-  const endpoint = createDictationCleanupEndpoint({
-    authorizeAccount: async (request) => {
-      const device = await createDesktopDeviceSigner();
-      return Result.ok({
-        featureAccessSnapshot: buildFeatureAccessSnapshot({
-          organizationId: ORGANIZATION_ID,
-          userId: USER_ID,
-          identity: { email: EMAIL, emailVerified: true },
-          enrolments: [],
-        }),
-        consumedProof: await claimFixtureDeviceProof({
-          request: await device.signRequest({
-            request,
-            credential: "dictation-cleanup-fixture",
-          }),
-          deviceJkt: device.deviceJkt,
-          keyId: "linked-desktop",
-          credential: "dictation-cleanup-fixture",
-        }),
-        organizationId: ORGANIZATION_ID,
-        userId: USER_ID,
-        keyId: "linked-desktop",
-        memberRole: sessionMemberRole(role),
-        scopedDb,
-      });
-    },
-    loadAISettings: asTestRaw<typeof loadOrgAISettings>(
-      async () =>
-        await Promise.resolve(
-          Result.ok({
-            orgAIConfig: null,
-            promptCachingEnabled: false,
-            managedAIResidency: "eu",
-          }),
-        ),
-    ),
-    limit: asTestRaw<typeof consumeDictationLimit>(limit),
-    generateObjectForTask:
-      asTestRaw<typeof generateTanStackObjectForTask>(generate),
-    admit: asTestRaw<typeof withActionAdmission>(
-      async ({ run }: Parameters<typeof withActionAdmission>[0]) =>
-        Result.ok(
-          await run(new AbortController().signal, {
-            reservePeriod: async () => Result.ok(undefined),
-          }),
-        ),
-    ),
+  organization = [],
+  ...options
+}: ExerciseOptions = {}) =>
+  await exerciseDesktopDictationEndpoint({
+    createEndpoint: (endpointOptions) =>
+      createDictationCleanupEndpoint({
+        ...endpointOptions,
+        readVocabulary: organizationWords(organization),
+      }),
+    testState,
+    servers,
+    input,
+    answer,
+    ...options,
   });
-  const server = serveForTest(
-    createHttpApp({
-      middleware: [errorBoundary],
-      routes: routes({ "/cleanup": { POST: endpoint } }),
-    }),
-  );
-  servers.push(server);
-  const response = await server.fetch(
-    new Request("http://localhost/cleanup", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(input),
-    }),
-  );
-  return { response, calls, generate, limit };
-};
 
 test("a granted desktop gets the model's segments for its transcript text", async () => {
   const { response, calls, limit } = await exercise();
@@ -208,77 +140,64 @@ test("a granted desktop gets the model's segments for its transcript text", asyn
   expect(limit.mock.calls.at(0)?.[0]).toMatchObject({ operation: "cleanup" });
 });
 
-test("an account without the dictation decision is refused before any model call", async () => {
-  const { response, generate, limit } = await exercise({ granted: false });
-  expect(response.status).toBe(403);
-  expect(generate).not.toHaveBeenCalled();
-  expect(limit).not.toHaveBeenCalled();
-});
-
-test("a role that may not use AI is refused before any model call", async () => {
-  const { response, generate } = await exercise({ role: "external" });
-  expect(response.status).toBe(403);
-  expect(generate).not.toHaveBeenCalled();
-});
-
-test("an exhausted cleanup budget refuses before any model call", async () => {
-  const { response, generate } = await exercise({ limited: true });
-  expect(response.status).toBe(429);
-  expect(generate).not.toHaveBeenCalled();
-});
-
-test.each([
-  [
-    "a transcript over the limit",
-    {
-      transcript: "x".repeat(
-        DESKTOP_DICTATION_CLEANUP_LIMITS.transcriptLength + 1,
-      ),
+test("the organization's words the transcript mentions follow the speaker's own", async () => {
+  const { response, calls } = await exercise({
+    input: {
+      transcript: "pošli to do Majkrosoftu a Novakovi",
+      vocabulary: ["Novák"],
     },
-  ],
-  ["an empty transcript", { transcript: "" }],
-  ["audio instead of text", { transcript: "ok", audio: "UklGRg==" }],
-  ["a locale that is not a language tag", { transcript: "ok", locale: "a b" }],
-  [
-    "a window title over the limit",
-    {
-      transcript: "ok",
-      context: {
-        appKind: "document",
-        windowTitle: "x".repeat(
-          DESKTOP_DICTATION_CLEANUP_LIMITS.windowTitleLength + 1,
-        ),
-      },
-    },
-  ],
-  [
-    "text before the cursor over the limit",
-    {
-      transcript: "ok",
-      context: {
-        appKind: "document",
-        textBeforeCursor: "x".repeat(
-          DESKTOP_DICTATION_CLEANUP_LIMITS.textBeforeCursorLength + 1,
-        ),
-      },
-    },
-  ],
-  ["an unknown app kind", { transcript: "ok", context: { appKind: "word" } }],
-])("%s is refused before any model call", async (_case, input) => {
-  const { response, generate } = await exercise({ input });
-  expect(response.status).toBeGreaterThanOrEqual(400);
-  expect(response.status).toBeLessThan(500);
-  expect(generate).not.toHaveBeenCalled();
-});
-
-test("a failed model call answers a bounded error without the transcript", async () => {
-  const { response } = await exercise({
-    answer: () => {
-      throw new TypeError(`provider echoed ${TRANSCRIPT}`);
-    },
+    organization: ["Deloitte", "Microsoft", "novák"],
   });
-  expect(response.status).toBeGreaterThanOrEqual(500);
-  expect(await response.text()).not.toContain("rozhodl");
+  expect(response.status).toBe(200);
+  expect(JSON.parse(calls.at(0)?.prompt ?? "null")).toMatchObject({
+    vocabulary: ["Novák", "Microsoft"],
+  });
+});
+
+testDesktopDictationGate({
+  exercise,
+  transcript: TRANSCRIPT,
+  invalidInputs: [
+    [
+      "a transcript over the limit",
+      {
+        transcript: "x".repeat(
+          DESKTOP_DICTATION_CLEANUP_LIMITS.transcriptLength + 1,
+        ),
+      },
+    ],
+    ["an empty transcript", { transcript: "" }],
+    ["audio instead of text", { transcript: "ok", audio: "UklGRg==" }],
+    [
+      "a locale that is not a language tag",
+      { transcript: "ok", locale: "a b" },
+    ],
+    [
+      "a window title over the limit",
+      {
+        transcript: "ok",
+        context: {
+          appKind: "document",
+          windowTitle: "x".repeat(
+            DESKTOP_DICTATION_CLEANUP_LIMITS.windowTitleLength + 1,
+          ),
+        },
+      },
+    ],
+    [
+      "text before the cursor over the limit",
+      {
+        transcript: "ok",
+        context: {
+          appKind: "document",
+          textBeforeCursor: "x".repeat(
+            DESKTOP_DICTATION_CLEANUP_LIMITS.textBeforeCursorLength + 1,
+          ),
+        },
+      },
+    ],
+    ["an unknown app kind", { transcript: "ok", context: { appKind: "word" } }],
+  ],
 });
 
 test("an answer that adds content is refused rather than typed", async () => {
@@ -358,75 +277,160 @@ test("where the text goes reaches the model as its own field, and the answer is 
   expect(await echoed.response.text()).not.toContain("Kupní cena");
 });
 
-const admitInline = asTestRaw<typeof withActionAdmission>(
-  async ({ run }: Parameters<typeof withActionAdmission>[0]) =>
-    Result.ok(
-      await run(new AbortController().signal, {
-        reservePeriod: async () => Result.ok(undefined),
-      }),
-    ),
-);
+const INSTRUCTIONS =
+  "Use British spelling.\nNever use emoji.\nAlways end with my signature: Regards, Jana Dvořáková.";
+
+test("the speaker's instructions reach the model as their own field, ranked below the system rules", async () => {
+  const { response, calls } = await exercise({
+    input: {
+      transcript: TRANSCRIPT,
+      locale: "cs",
+      customInstructions: INSTRUCTIONS,
+    },
+  });
+  expect(response.status).toBe(200);
+  const call = calls.at(0);
+  // Never part of the system prompt, which stays the same for everyone.
+  expect(call?.system).toBe(DICTATION_CLEANUP_SYSTEM_PROMPT);
+  expect(call?.system).not.toContain("British");
+  expect(call?.system).toContain("customInstructions");
+  expect(call?.system).toContain("ranks below every rule above");
+  expect(JSON.parse(call?.prompt ?? "null")).toEqual({
+    languages: [],
+    locale: "cs",
+    customInstructions: INSTRUCTIONS,
+    transcript: TRANSCRIPT,
+  });
+});
+
+test("whatever the instructions ask, the answer must pass the same plausibility checks", async () => {
+  const transcript = "please send the draft to the client today";
+  const signed: DictationCleanupModelOutput = {
+    segments: [
+      {
+        type: "text",
+        text: "Please send the draft to the client today.",
+        bold: false,
+      },
+      { type: "paragraphBreak", text: "", bold: false },
+      {
+        type: "text",
+        text: "Regards, Jana Dvořáková. I will also attach the signed engagement letter and the invoice for October.",
+        bold: false,
+      },
+    ],
+  };
+  const shortened: DictationCleanupModelOutput = {
+    segments: [{ type: "text", text: "Send it.", bold: false }],
+  };
+  for (const answer of [signed, shortened]) {
+    const withInstructions = await exercise({
+      input: { transcript, customInstructions: INSTRUCTIONS },
+      answer: () => structuredClone(answer),
+    });
+    const without = await exercise({
+      input: { transcript },
+      answer: () => structuredClone(answer),
+    });
+    // The instructions change nothing about what is accepted.
+    expect(without.response.status).toBe(502);
+    expect(withInstructions.response.status).toBe(502);
+    expect(await withInstructions.response.text()).not.toContain("Regards");
+  }
+  // A plain cleanup in the form the instructions ask for passes.
+  const honoured = await exercise({
+    input: { transcript, customInstructions: INSTRUCTIONS },
+    answer: () => ({
+      segments: [
+        {
+          type: "text",
+          text: "Please send the draft to the client today.",
+          bold: false,
+        },
+      ],
+    }),
+  });
+  expect(honoured.response.status).toBe(200);
+});
+
+test("instructions over the bound are refused before any model call", async () => {
+  const { response, calls } = await exercise({
+    input: {
+      transcript: TRANSCRIPT,
+      customInstructions: "x".repeat(
+        DESKTOP_DICTATION_CLEANUP_LIMITS.customInstructionsLength + 1,
+      ),
+    },
+  });
+  expect(response.status).toBe(422);
+  expect(calls).toHaveLength(0);
+});
+
+const OWN_ANTHROPIC = asTestRaw<OrgAIConfig>({
+  providers: [{ provider: "anthropic", apiKey: "own-key" }],
+});
+
+test("a model the organization offers runs the cleanup, and the choice never reaches the prompt", async () => {
+  const chosen = listDictationCleanupModels(OWN_ANTHROPIC).models.at(-1);
+  if (chosen === undefined) {
+    throw new TypeError("Expected an offered model");
+  }
+  // The same model the chat model picker offers this organization.
+  expect(
+    getConfiguredChatModelOptions(OWN_ANTHROPIC).map(({ value }) => value),
+  ).toContain(chosen.value);
+  const { response, calls } = await exercise({
+    input: { transcript: TRANSCRIPT, model: chosen.value },
+    orgAIConfig: OWN_ANTHROPIC,
+  });
+  expect(response.status).toBe(200);
+  expect(calls.at(0)?.task).toBe("short-text");
+  expect(calls.at(0)?.modelId).toBe(chosen.value);
+  expect(JSON.parse(calls.at(0)?.prompt ?? "null")).not.toHaveProperty("model");
+});
+
+test("a model the organization no longer offers falls back to automatic and still cleans up", async () => {
+  for (const model of [
+    "openai::gpt-5",
+    "anthropic::claude-retired-model",
+    "not a model",
+  ]) {
+    const { response, calls } = await exercise({
+      input: { transcript: TRANSCRIPT, model },
+      orgAIConfig: OWN_ANTHROPIC,
+    });
+    expect(response.status).toBe(200);
+    expect(calls).toHaveLength(1);
+    expect(calls.at(0)?.modelId).toBeUndefined();
+    expect(calls.at(0)?.task).toBe("short-text");
+  }
+  const automatic = await exercise({ orgAIConfig: OWN_ANTHROPIC });
+  expect(automatic.calls.at(0)?.modelId).toBeUndefined();
+});
 
 /** The member route: a signed-in member's session, no desktop decision. */
-const exerciseMember = async ({
-  role = "member",
-  limited = false,
-}: { role?: "member" | "external"; limited?: boolean } = {}) => {
-  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
-  const calls: { system: string; prompt: string }[] = [];
-  const { scopedDb } = createScopedDbMock({});
-  const generate = mock(
-    async (options: Parameters<typeof generateTanStackObjectForTask>[0]) => {
-      await runDispatchCheck(options.beforeEachDispatch);
-      calls.push({
-        system: options.system ?? "",
-        prompt: options.prompt ?? "",
-      });
-      return await Promise.resolve(CLEANED);
-    },
-  );
-  const limit = mock(
-    async (_options: Parameters<typeof consumeDictationLimit>[0]) =>
-      await Promise.resolve(
-        limited
-          ? Result.err(
-              new HandlerError({
-                status: 429,
-                code: "rate_limited",
-                message: "Too many dictation cleanup requests",
-              }),
-            )
-          : Result.ok(undefined),
-      ),
-  );
-  const endpoint = createMemberDictationCleanupEndpoint({
-    admit: admitInline,
-    limit: asTestRaw<typeof consumeDictationLimit>(limit),
-    generateObjectForTask:
-      asTestRaw<typeof generateTanStackObjectForTask>(generate),
-  });
-  const result = await endpoint.handler(
-    createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
-      audit: NO_AUDIT,
-      scopedDb,
-      safeDb: safeDbFromScoped(scopedDb),
-      memberRole: sessionMemberRole(role),
-      session: { activeOrganizationId: ORGANIZATION_ID },
-      user: { id: USER_ID, email: EMAIL },
-      body: { transcript: TRANSCRIPT, locale: "cs", languages: ["cs", "en"] },
-      request: new Request("https://stella.test/v1/dictation/cleanup", {
-        method: "POST",
+const exerciseMember = async (
+  options: { role?: "member" | "external"; limited?: boolean } = {},
+) =>
+  await exerciseMemberDictationEndpoint({
+    createEndpoint: (endpointOptions) =>
+      createMemberDictationCleanupEndpoint({
+        ...endpointOptions,
+        readVocabulary: organizationWords([]),
       }),
-      route: "/v1/dictation/cleanup",
-    }),
-  );
-  return { result, calls, generate, limit };
-};
+    testState,
+    route: "/v1/dictation/cleanup",
+    body: { transcript: TRANSCRIPT, locale: "cs", languages: ["cs", "en"] },
+    answer: () => CLEANED,
+    ...options,
+  });
 
 test("a signed-in member gets the same cleanup as a desktop, without any desktop decision", async () => {
   const { result, calls, limit } = await exerciseMember();
   if (result instanceof HttpStatusResponse) {
-    throw new TypeError(`Expected the cleaned segments, got ${result.code}`);
+    throw new TypeError(
+      `Expected the cleaned segments, got ${String(result.code)}`,
+    );
   }
   expect(v.parse(desktopDictationCleanupResponseSchema, result)).toEqual({
     segments: [
@@ -451,17 +455,4 @@ test("a signed-in member gets the same cleanup as a desktop, without any desktop
   });
 });
 
-test("a member whose role may not use AI is refused before the limit or any model call", async () => {
-  const { result, generate, limit } = await exerciseMember({
-    role: "external",
-  });
-  expect(result instanceof HttpStatusResponse && result.code).toBe(403);
-  expect(limit).not.toHaveBeenCalled();
-  expect(generate).not.toHaveBeenCalled();
-});
-
-test("a member over the cleanup budget is refused before any model call", async () => {
-  const { result, generate } = await exerciseMember({ limited: true });
-  expect(result instanceof HttpStatusResponse && result.code).toBe(429);
-  expect(generate).not.toHaveBeenCalled();
-});
+testMemberDictationGate(exerciseMember);

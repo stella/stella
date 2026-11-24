@@ -19,8 +19,8 @@ import { alias } from "drizzle-orm/pg-core";
 
 import type { DocumentReferenceMatch } from "@stll/api-contract";
 
-import type { Transaction } from "@/api/db/root";
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 
 type LookupOptions = {

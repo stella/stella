@@ -1,51 +1,43 @@
 import type { ReactNode } from "react";
 
-import {
-  List,
-  ListGroup,
-  ListGroupDescription,
-  ListGroupHeader,
-  ListGroupHeading,
-  ListGroupTitle,
-  ListItemSkeleton,
-} from "@stll/ui/list-shell";
+import { ListItemSkeleton } from "@stll/ui/list-shell";
+import { SettingsSection } from "@stll/ui/settings";
 
 import { PendingText } from "@/components/pending-text";
 
-/** The sign-in methods' group: its heading over the methods (`SignInMethods`). */
+/** The sign-in methods section's anchor; the summary and next steps link it. */
+export const SIGN_IN_METHODS_SECTION_ID = "sign-in-methods";
+
+/** The sign-in methods' section: its heading over one row per method. */
 export const SignInMethodsGroup = ({ children }: { children: ReactNode }) => (
-  <ListGroup>
-    <ListGroupHeader>
-      <ListGroupHeading>
-        <ListGroupTitle>
-          <PendingText
-            barClassName="w-28"
-            id="settings.account.signInMethods.title"
-          />
-        </ListGroupTitle>
-        <ListGroupDescription>
-          <PendingText
-            barClassName="w-72 max-w-full"
-            id="settings.account.signInMethods.description"
-          />
-        </ListGroupDescription>
-      </ListGroupHeading>
-    </ListGroupHeader>
+  <SettingsSection
+    className="scroll-mt-6"
+    description={
+      <PendingText
+        barClassName="w-72 max-w-full"
+        id="settings.account.signInMethods.description"
+      />
+    }
+    id={SIGN_IN_METHODS_SECTION_ID}
+    title={
+      <PendingText
+        barClassName="w-28"
+        id="settings.account.signInMethods.title"
+      />
+    }
+  >
     {children}
-  </ListGroup>
+  </SettingsSection>
 );
 
 /** Placeholder rows while the methods load: the email code and one account. */
 const SIGN_IN_METHOD_ROWS_PENDING = [{ key: "a" }, { key: "b" }] as const;
 
 /** The methods while they load, at the rows' geometry. */
-export const SignInMethodsRowsPending = () => (
-  <List aria-hidden="true">
-    {SIGN_IN_METHOD_ROWS_PENDING.map((row, index) => (
-      <ListItemSkeleton index={index} key={row.key} />
-    ))}
-  </List>
-);
+export const SignInMethodsRowsPending = () =>
+  SIGN_IN_METHOD_ROWS_PENDING.map((row, index) => (
+    <ListItemSkeleton index={index} key={row.key} media />
+  ));
 
 /** The sign-in methods in their pending phase. */
 export const SignInMethodsPending = () => (

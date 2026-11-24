@@ -150,15 +150,18 @@ test.each(
     );
     expect(hrefs(view)).toEqual([
       "/settings/account/profile",
+      "/settings/account/security",
       "/settings/account/desktop",
       "/settings/account/connections",
       "/settings/account/beta",
       "/settings/organization/general",
       "/settings/organization/members",
+      "/settings/organization/sso",
       "/settings/organization/usage",
       "/settings/organization/audit-logs",
       "/settings/organization/ai",
       "/settings/organization/anonymization",
+      "/settings/organization/dictation",
       "/settings/organization/tools",
       "/settings/organization/matter-numbering",
       "/settings/organization/document-types",

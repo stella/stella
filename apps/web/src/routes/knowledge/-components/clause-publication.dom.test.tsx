@@ -416,10 +416,10 @@ describe("clause detail with the real editor", () => {
       await save.settle(0, B);
       expect(save.head().body).toEqual(B);
       if (!laterEdit) {
-        expect(save.saveButton().hasAttribute("disabled")).toBe(true);
+        expect(save.saveButton().getAttribute("aria-disabled")).toBe("true");
         return;
       }
-      expect(save.saveButton().hasAttribute("disabled")).toBe(false);
+      expect(save.saveButton().getAttribute("aria-disabled")).toBeNull();
       await save.tick();
       expect(await save.started(1)).toMatchObject({
         type: "save",
@@ -494,7 +494,7 @@ describe("clause detail with the real editor", () => {
       expect(save.view.queryByRole("alertdialog")).toBeNull();
       expect(save.editor()).toBe(originalEditor);
       expect(save.editor().getText()).toBe("Historical clause");
-      expect(save.saveButton().hasAttribute("disabled")).toBe(true);
+      expect(save.saveButton().getAttribute("aria-disabled")).toBe("true");
       await save.tick();
       expect(save.requests).toHaveLength(1);
     },
@@ -505,7 +505,7 @@ describe("clause detail with the real editor", () => {
     async (retry) => {
       const save = mountDetail();
       await save.rewrite(0, R1);
-      expect(save.saveButton().hasAttribute("disabled")).toBe(true);
+      expect(save.saveButton().getAttribute("aria-disabled")).toBe("true");
       await save.click(
         save.view.getByRole("button", {
           name: englishMessages.docxReview.acceptAll,
@@ -515,9 +515,9 @@ describe("clause detail with the real editor", () => {
         type: "save",
         write: { body: R1, expectedBody: A },
       });
-      expect(save.saveButton().hasAttribute("disabled")).toBe(true);
+      expect(save.saveButton().getAttribute("aria-disabled")).toBe("true");
       await save.settle(0, R1, new Error("review persist refused"));
-      expect(save.saveButton().hasAttribute("disabled")).toBe(true);
+      expect(save.saveButton().getAttribute("aria-disabled")).toBe("true");
       if (retry === "typing") {
         await save.edit(C);
         await save.tick();
@@ -531,9 +531,9 @@ describe("clause detail with the real editor", () => {
         );
       }
       await save.started(1);
-      expect(save.saveButton().hasAttribute("disabled")).toBe(true);
+      expect(save.saveButton().getAttribute("aria-disabled")).toBe("true");
       await save.settle(1, retry === "typing" ? C : R1);
-      expect(save.saveButton().hasAttribute("disabled")).toBe(false);
+      expect(save.saveButton().getAttribute("aria-disabled")).toBeNull();
       await save.click(save.saveButton());
       expect(await save.started(2)).toMatchObject({
         type: "save",
@@ -554,7 +554,7 @@ describe("clause detail with the real editor", () => {
     await save.started(0);
     await save.rewrite(1, R2);
     await save.settle(0, R1);
-    expect(save.saveButton().hasAttribute("disabled")).toBe(true);
+    expect(save.saveButton().getAttribute("aria-disabled")).toBe("true");
     expect(
       save.view.getByRole("button", {
         name: englishMessages.docxReview.acceptAll,
@@ -566,9 +566,9 @@ describe("clause detail with the real editor", () => {
       }),
     );
     await save.started(1);
-    expect(save.saveButton().hasAttribute("disabled")).toBe(true);
+    expect(save.saveButton().getAttribute("aria-disabled")).toBe("true");
     await save.settle(1, R2);
-    expect(save.saveButton().hasAttribute("disabled")).toBe(false);
+    expect(save.saveButton().getAttribute("aria-disabled")).toBeNull();
   });
 
   test("fully rejecting another rewrite cannot open publication while an earlier acceptance remains unpersisted", async () => {
@@ -586,7 +586,7 @@ describe("clause detail with the real editor", () => {
         name: englishMessages.docxReview.rejectAll,
       }),
     );
-    expect(save.saveButton().hasAttribute("disabled")).toBe(true);
+    expect(save.saveButton().getAttribute("aria-disabled")).toBe("true");
     await act(() =>
       save.editor().emit("blur", {
         editor: save.editor(),
@@ -595,7 +595,7 @@ describe("clause detail with the real editor", () => {
       }),
     );
     await save.settle(1, R1);
-    expect(save.saveButton().hasAttribute("disabled")).toBe(false);
+    expect(save.saveButton().getAttribute("aria-disabled")).toBeNull();
   });
 
   test("a clean external head delivery reseeds the real editor without a write", async () => {
@@ -604,7 +604,7 @@ describe("clause detail with the real editor", () => {
     expect(save.editor().getText()).toBe("Another writer");
     await save.tick();
     expect(save.requests).toHaveLength(0);
-    expect(save.saveButton().hasAttribute("disabled")).toBe(true);
+    expect(save.saveButton().getAttribute("aria-disabled")).toBe("true");
   });
 
   test.each([false, true])(
@@ -727,7 +727,7 @@ describe("clause detail with the real editor", () => {
       );
       if (choice === "takeTheirText") {
         expect(save.editor().getText()).toBe("Another writer");
-        expect(save.saveButton().hasAttribute("disabled")).toBe(true);
+        expect(save.saveButton().getAttribute("aria-disabled")).toBe("true");
         await save.tick();
         expect(save.requests).toHaveLength(0);
         return;

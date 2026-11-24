@@ -5,15 +5,21 @@ import type { DataBoxDeliveryEvent } from "@stll/api-contract/data-box";
 import { Button } from "@stll/ui/button";
 import { DownloadIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { cn } from "@stll/ui/utils";
 
 import { DOCKED_COMPOSER_CLEARANCE } from "@/components/ai-suggestions/composer-geometry";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
+import {
+  FilePartList,
+  FilePartViewer,
+  useOpenFilePart,
+} from "@/components/file-parts/file-parts";
+import { useFilePartActions } from "@/components/file-parts/use-file-part-actions";
 import type { FileTab } from "@/components/inspector/file-tab";
 import { useFormatter } from "@/i18n/formatting-context";
 import { dataBoxPreviewOptions } from "@/lib/files/queries";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 
-import { CorrespondenceAttachments } from "./correspondence-attachments";
 import { DataBoxEnvelope } from "./data-box-envelope";
 
 /** Receipt events can repeat; the nth event with the same statement keeps its key. */
@@ -41,9 +47,10 @@ export const DataBoxFileViewer = ({
   );
   const t = useTranslations();
   const format = useFormatter();
-  const hasUnlinkedFiles =
-    data.kind === "message" &&
-    data.files.some((file) => file.entityId === null);
+  const source = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  const actions = useFilePartActions(source);
+  const files = data.kind === "message" ? data.files : [];
+  const { open, openPart, close } = useOpenFilePart(files);
 
   return (
     <FileViewerWithAI
@@ -55,7 +62,19 @@ export const DataBoxFileViewer = ({
       className="flex h-full min-h-0 flex-col"
       workspaceId={tab.workspaceId}
     >
-      <ScrollArea axis="vertical" className="min-h-0 flex-1">
+      {open === null ? null : (
+        <FilePartViewer
+          actions={actions}
+          key={open.part}
+          onBack={close}
+          row={open}
+          source={source}
+        />
+      )}
+      <ScrollArea
+        axis="vertical"
+        className={cn("min-h-0 flex-1", open !== null && "hidden")}
+      >
         <article
           {...DOCKED_COMPOSER_CLEARANCE}
           className="space-y-4 p-4"
@@ -75,12 +94,12 @@ export const DataBoxFileViewer = ({
                 : "correspondence.dataBox.statedInFile"
             }
           />
-          {data.kind === "message" && (
-            <CorrespondenceAttachments
-              files={data.files}
-              workspaceId={tab.workspaceId}
-            />
-          )}
+          <FilePartList
+            actions={actions}
+            onOpen={openPart}
+            parts={files}
+            title={t("emailViewer.attachments")}
+          />
           {data.kind === "receipt" && data.events.length > 0 && (
             <section className="rounded-lg border p-4">
               <h2 className="mb-3 text-sm font-medium">
@@ -108,11 +127,6 @@ export const DataBoxFileViewer = ({
               </ol>
             </section>
           )}
-          {hasUnlinkedFiles && (
-            <p className="text-sm print:hidden">
-              {t("correspondence.dataBox.unlinkedFiles")}
-            </p>
-          )}
           <div className="space-y-2">
             <Button
               className="print:hidden"
@@ -130,6 +144,7 @@ export const DataBoxFileViewer = ({
           </div>
         </article>
       </ScrollArea>
+      {actions.dialog}
     </FileViewerWithAI>
   );
 };

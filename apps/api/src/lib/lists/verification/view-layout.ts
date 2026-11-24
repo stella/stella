@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { legalLists } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ViewLayout } from "@/api/lib/views-schema";
 

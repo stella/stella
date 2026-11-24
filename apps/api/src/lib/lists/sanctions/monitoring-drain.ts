@@ -1,7 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { contacts, sanctionsContactMarks } from "@/api/db/schema";
 import {
   AUDIT_ACTION,

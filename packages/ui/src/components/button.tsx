@@ -5,6 +5,8 @@ import {
   Fragment,
   isValidElement,
   type ReactNode,
+  useCallback,
+  useId,
 } from "react";
 
 import { mergeProps } from "@base-ui/react/merge-props";
@@ -18,14 +20,14 @@ import {
   BUTTON_DISPOSITION,
   resolveButtonDisposition,
 } from "../lib/button-disposition";
-import { MENU_ROW_CLASS_NAME } from "../lib/menu-row";
 import { rendersNothing } from "../lib/renders-nothing";
+import { hasTooltipContent } from "../lib/tooltip-content";
 import { cn } from "../lib/utils";
 import {
   BUTTON_BASE_CLASS,
   BUTTON_DEFAULT_SIZE,
-  BUTTON_FACE_SIZE_CLASS_NAMES,
   BUTTON_LAYOUT_CLASS_NAMES,
+  BUTTON_SIZE_CLASS_NAMES,
   BUTTON_VARIANT_CLASS_NAMES,
 } from "./button-classes";
 import {
@@ -60,14 +62,6 @@ const buttonAccessibleDisabledClass = "cursor-not-allowed opacity-64";
  */
 const buttonPressClass =
   "motion-safe:transition-transform motion-safe:duration-150 ease-out motion-safe:active:scale-[0.98]";
-
-const BUTTON_SIZE_CLASS_NAMES = {
-  ...BUTTON_FACE_SIZE_CLASS_NAMES,
-  // One row of a menu list. The metric is shared with `CommandItem`; the
-  // rest undoes the base button's centred content and its icon inset, so
-  // a button row and a command row read as the same box.
-  row: `${MENU_ROW_CLASS_NAME} [&_svg]:mx-0`,
-} as const satisfies Record<ButtonSize, string>;
 
 const buttonVariants = cva(BUTTON_BASE_CLASS, {
   // An inline button is a word in a sentence: a hover fill behind it would
@@ -283,29 +277,95 @@ const implicitTooltip = (
 type ButtonProps = Omit<ButtonContract, "children" | "disabled"> & {
   layout?: keyof typeof BUTTON_LAYOUT_CLASS_NAMES;
   tooltip?: ReactNode;
+  /**
+   * Why the button cannot act right now, in the reader's terms ("Type a
+   * message to send it."). While `disabled`, it is the button's tooltip, in
+   * place of `tooltip`, and the button stays hoverable and focusable
+   * (`aria-disabled`) with activation blocked, so whoever reaches for it
+   * learns what to do. The `disabled-control-needs-reason` rule asks for it
+   * on every disabled Button.
+   */
+  disabledReason?: ReactNode;
   focusRing?: ButtonFocusRing | undefined;
   /** `variant="plain"` only: the outline its focus ring follows. */
   shape?: ButtonPlainShape | undefined;
   "data-accessible-disabled"?: "";
 } & useRender.ComponentProps<"button">;
 
-function Button({
-  className,
-  variant: variantProp,
-  size,
-  render,
-  layout,
-  loading,
-  icon,
-  children,
+type ButtonDescriptionOptions = {
+  disabled: ButtonProps["disabled"];
+  disabledReason: ButtonProps["disabledReason"];
+  describedBy: ButtonProps["aria-describedby"];
+  render: ButtonProps["render"];
+};
+
+const useButtonDescription = ({
   disabled,
-  tooltip,
-  selected,
-  focusRing = "outside",
-  shape = "box",
-  "data-accessible-disabled": accessibleDisabled,
-  ...props
-}: ButtonProps) {
+  disabledReason,
+  describedBy,
+  render,
+}: ButtonDescriptionOptions) => {
+  const id = useId();
+  const hasReason = disabled === true && hasTooltipContent(disabledReason);
+  const plainReason =
+    typeof disabledReason === "string" || typeof disabledReason === "number";
+  // Base UI merges an explicit render element's attributes last. Read the
+  // final DOM attribute so both descriptions survive that merge.
+  const ref = useCallback(
+    (button: HTMLElement | null) => {
+      if (!button || !hasReason || render === undefined) {
+        return undefined;
+      }
+      const previous = button.getAttribute("aria-describedby");
+      const merged = [
+        ...new Set(
+          `${describedBy ?? ""} ${previous ?? ""} ${id}`.trim().split(/\s+/u),
+        ),
+      ].join(" ");
+      button.setAttribute("aria-describedby", merged);
+      return () => {
+        if (button.getAttribute("aria-describedby") !== merged) {
+          return;
+        }
+        if (previous === null) {
+          button.removeAttribute("aria-describedby");
+        } else {
+          button.setAttribute("aria-describedby", previous);
+        }
+      };
+    },
+    [describedBy, hasReason, id, render],
+  );
+  return {
+    ref: hasReason && render !== undefined ? ref : null,
+    describedBy:
+      hasReason && render === undefined
+        ? [describedBy, id].filter(Boolean).join(" ")
+        : describedBy,
+    popupId: hasReason && !plainReason ? id : undefined,
+    text: hasReason && plainReason ? { id, value: disabledReason } : undefined,
+  };
+};
+
+const Button = (buttonProps: ButtonProps) => {
+  const {
+    className,
+    variant: variantProp,
+    size,
+    render,
+    layout,
+    loading,
+    icon,
+    children,
+    disabled,
+    disabledReason,
+    tooltip,
+    selected,
+    focusRing = "outside",
+    shape = "box",
+    "data-accessible-disabled": accessibleDisabled,
+    ...props
+  } = buttonProps;
   // An inline action with no variant reads as a link in its sentence; the
   // filled default would paint a box the line does not have.
   const variant = variantProp ?? (size === "inline" ? "link" : undefined);
@@ -315,7 +375,15 @@ function Button({
   // Same value `renderTooltipTrigger` mounts below, so the disposition and the
   // popup cannot disagree about whether this button has a tooltip.
   const tooltipContent =
-    tooltip ?? implicitTooltip(size, props["aria-label"] ?? props.title);
+    disabled === true && disabledReason !== undefined
+      ? disabledReason
+      : (tooltip ?? implicitTooltip(size, props["aria-label"] ?? props.title));
+  const description = useButtonDescription({
+    disabled,
+    disabledReason,
+    describedBy: props["aria-describedby"],
+    render,
+  });
   const disposition = resolveButtonDisposition({
     disabled,
     loading,
@@ -325,6 +393,10 @@ function Button({
     disposition === BUTTON_DISPOSITION.accessibleDisabled;
   const isActivationPreservingDisabled = accessibleDisabled !== undefined;
 
+  const buttonPropsWithDescription = {
+    ...props,
+    "aria-describedby": description.describedBy,
+  };
   const defaultProps = {
     children: buttonContent({
       icon,
@@ -364,23 +436,36 @@ function Button({
   // button would still click, still submit its form, and still fire onKeyDown.
   const button = useRender({
     defaultTagName: "button",
+    ref: description.ref,
     props: isAccessibleDisabled
-      ? mergeProps<"button">(defaultProps, props, {
+      ? mergeProps<"button">(defaultProps, buttonPropsWithDescription, {
           onClick: blockDisabledActivation,
           onKeyDown: blockDisabledKeyActivation,
           onKeyUp: blockDisabledKeyActivation,
           onMouseDown: blockDisabledActivation,
           onPointerDown: blockDisabledActivation,
         })
-      : mergeProps<"button">(defaultProps, props),
+      : mergeProps<"button">(defaultProps, buttonPropsWithDescription),
     render,
   });
 
-  return renderTooltipTrigger({
+  const trigger = renderTooltipTrigger({
     tooltip: tooltipContent,
     trigger: button,
+    keepTriggerMounted: Object.hasOwn(buttonProps, "disabledReason"),
+    popupDescriptionId: description.popupId,
   });
-}
+  return (
+    <>
+      {trigger}
+      {description.text && (
+        <span hidden id={description.text.id}>
+          {description.text.value}
+        </span>
+      )}
+    </>
+  );
+};
 
 /**
  * What the button shows. Loading never changes its width: with an `icon`,
@@ -485,7 +570,10 @@ type ButtonTextRunProps = Omit<
   className?: string | undefined;
   /** `link` unless the run holds a text mark that draws its own line. */
   variant?: ButtonTextRunVariant | undefined;
-};
+} & (
+    | { disabled?: false | undefined }
+    | { disabledReason: NonNullable<ReactNode> }
+  );
 
 /**
  * A long run of prose that acts as one button: a citation or a
@@ -499,7 +587,6 @@ type ButtonTextRunProps = Omit<
 const ButtonTextRun = ({
   children,
   className,
-  disabled,
   variant = "link",
   ...props
 }: ButtonTextRunProps) => (
@@ -516,7 +603,6 @@ const ButtonTextRun = ({
     <Button
       {...props}
       className={BUTTON_TEXT_RUN_TARGET_CLASS}
-      disabled={disabled}
       focusRing="outside"
       icon={undefined}
       loading={false}

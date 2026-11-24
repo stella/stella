@@ -1,4 +1,4 @@
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools-types";
 import { decisionReferenceHref } from "@/components/references/reference.logic";
 
 // One finished turn that uses every block an answer is built from: a title the

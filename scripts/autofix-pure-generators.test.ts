@@ -144,6 +144,10 @@ const EXCLUDED_AUTOFIX = {
     "Cargo test requires native platform dependencies and toolchain state",
   "scan-engine-wasm":
     "Requires canonical Linux Rust host and external WASM toolchain",
+  "heic-decoder-wasm":
+    "Requires canonical Linux Rust host and external WASM toolchain",
+  "pst-reader-wasm":
+    "Requires canonical Linux Rust host and external WASM toolchain",
   "chat-transcripts": "Runs service-backed chat recording suites",
   "case-law-publication-migration":
     "Migration SQL requires review rather than automatic rewriting",
@@ -276,8 +280,8 @@ test("translation content never becomes an autofix output", () => {
   // `i18n:sync` copies English into other locales; that is translation
   // content, so no generator may write a locale catalogue.
   const catalogues = [
-    "apps/web/src/i18n/langs/cs.json",
-    "apps/web/src/i18n/langs/en.json",
+    "apps/web/src/i18n/namespaces/cs/core.json",
+    "apps/web/src/i18n/namespaces/en/core.json",
     "apps/landing/src/i18n/messages/de.json",
     "packages/transactional/i18n/langs/sk.json",
   ];

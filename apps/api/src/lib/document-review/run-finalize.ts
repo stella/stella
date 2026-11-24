@@ -29,8 +29,8 @@
 import { panic } from "better-result";
 import { and, count, eq, inArray, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { holdLiveSourceWorkspaces } from "@/api/lib/db/aggregate-lock";
 import type { ReviewWithheldSource } from "@/api/lib/document-review/contract";
@@ -317,6 +317,8 @@ export const recordRunWithheldSources = async (
 
 type FinalizeWorkerRunArgs = {
   actor: RootRunActor<"documentReviewRun">;
+  /** Re-checks the requester's authority inside the completing transaction. */
+  authorize?: ((tx: Transaction) => Promise<void>) | undefined;
   basis: DocumentReviewRunBasis;
   entityId: SafeId<"entity">;
   fileFieldId: SafeId<"field">;
@@ -334,6 +336,7 @@ type FinalizeWorkerRunArgs = {
  */
 export const finalizeWorkerRun = async ({
   actor,
+  authorize,
   basis,
   entityId,
   fileFieldId,
@@ -347,6 +350,7 @@ export const finalizeWorkerRun = async ({
   );
   const writeDb = sourcesDb ?? actor.writeDb;
   return await writeDb(async (tx) => {
+    await authorize?.(tx);
     const sourcesStand =
       sourcesDb !== null &&
       (await holdLiveSourceWorkspaces({

@@ -1,9 +1,9 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { canEditActiveSkill } from "@/api/lib/agent-skills/access";
 import {
   NO_SKILL_BINDING_SCOPE,

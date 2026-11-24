@@ -30,6 +30,7 @@ import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { mergeManifestWithDiscovery } from "@/api/lib/docx/template-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
+import { readZipNameCodePage } from "@/api/lib/files/organization-zip-name-code-page";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { parsePickedEntityIdsJson } from "@/api/lib/safe-id-boundaries";
@@ -288,12 +289,17 @@ const prefillTemplate = createSafeRootHandler(config, async function* (ctx) {
         fileName: sanitizeFilename(file.name),
       }),
     );
+    const zipNameCodePage = yield* Result.await(
+      safeDb(async (tx) => await readZipNameCodePage(tx, organizationId)),
+    );
     const text = yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await extractFileText(scanned, {
-            source: "template-prefill",
-          }),
+          await extractFileText(
+            scanned,
+            { source: "template-prefill" },
+            { zipNameCodePage },
+          ),
         catch: (cause) =>
           new HandlerError({
             status: 500,

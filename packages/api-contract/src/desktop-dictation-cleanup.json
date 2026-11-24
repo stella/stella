@@ -6,6 +6,11 @@
   "maxSegments": 2000,
   "maxWindowTitleLength": 200,
   "maxTextBeforeCursorLength": 1000,
+  "maxCustomInstructionsLength": 1000,
+  "maxModelLength": 200,
+  "modelsPath": "/v1/desktop/dictation/cleanup-models",
+  "maxModels": 500,
+  "maxModelDisplayNameLength": 120,
   "appKinds": [
     "email",
     "chat",
@@ -15,7 +20,24 @@
     "terminal",
     "other"
   ],
+  "styles": ["polished", "casual", "notes", "verbatim"],
+  "translationLanguages": [
+    "ar",
+    "cs",
+    "de",
+    "en",
+    "es",
+    "et",
+    "fr",
+    "hu",
+    "lt",
+    "lv",
+    "pl",
+    "pt-BR",
+    "sk"
+  ],
   "minAnswerTextPercent": 50,
+  "condensedMinAnswerTextPercent": 25,
   "minBreakAllowance": 4,
   "transcriptCharactersPerBreak": 20,
   "sentenceEndMarks": ".!?;…؟",
@@ -89,5 +111,13 @@
     "teda",
     "oprava",
     "nie"
-  ]
+  ],
+  "recordingCleanup": {
+    "path": "/v1/desktop/dictation/recording-cleanup",
+    "maxTranscriptLength": 12000,
+    "maxPreviousTextLength": 1000,
+    "maxInstructions": 20,
+    "maxInstructionLength": 2000,
+    "maxMarkdownLength": 24000
+  }
 }

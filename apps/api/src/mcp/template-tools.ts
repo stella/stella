@@ -5,12 +5,12 @@ import * as v from "valibot";
 import { isActionAdmissionCode } from "@stll/api-contract/action-admission";
 import { displayNameSchema } from "@stll/api-contract/display-name";
 
-import type { Transaction } from "@/api/db/root";
 import { entities, templates } from "@/api/db/schema";
 import type {
   TemplatePersistenceDiagnostics,
   TemplatePersistenceResult,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
 import {
   decodeTemplateListCursor,
@@ -47,6 +47,7 @@ import { extractTextForPreview } from "@/api/lib/docx/extract-text";
 import { inlineBytesIgnoredWarning } from "@/api/lib/docx/template-warnings";
 import type { TemplateWarning } from "@/api/lib/docx/template-warnings";
 import { CLAUSE_RESOLUTIONS, type FieldMeta } from "@/api/lib/docx/types";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import type { DocxValidationFailure } from "@/api/lib/entity-versions/validate-docx-buffer";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -2088,6 +2089,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
           context.testDependencies?.persistFilledTemplateDocument ??
           persistFilledTemplateDocument
         )({
+          authority: CALLER_AUTHORIZED,
           scopedDb: context.scopedDb,
           organizationId: context.organizationId,
           workspaceId,
@@ -2129,6 +2131,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
         context.testDependencies?.persistFilledTemplateVersion ??
         persistFilledTemplateVersion
       )({
+        authority: CALLER_AUTHORIZED,
         safeDb: context.safeDb,
         organizationId: context.organizationId,
         workspaceId,

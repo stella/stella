@@ -8,7 +8,7 @@ import {
 } from "@stll/api-contract/desktop-billing-drafts";
 import { Temporal } from "@stll/time";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { contacts } from "@/api/db/schema";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import {
@@ -29,6 +29,7 @@ export const BILLING_DRAFT_CONTEXT_LIMITS = {
   candidateMatters: 20,
   promptCharacters: 100_000,
   timeoutMs: 60_000,
+  codeNames: DESKTOP_BILLING_DRAFT_LIMITS.codeNames,
 } as const;
 
 type LoadBillingDraftContextOptions = {
@@ -73,6 +74,7 @@ const loadBillingDraftMatters = async ({
       return Result.err(
         new HandlerError({
           status: 403,
+          code: DESKTOP_BILLING_DRAFT_REFUSAL_CODE.matterUnavailable,
           message: "Selected matter is unavailable",
         }),
       );
@@ -293,10 +295,43 @@ export const loadBillingDraftContext = async ({
         }),
       );
     }
+    // The names the selected LEDES matters' own code lists give their
+    // codes, so a review shows what a drafted code means.
+    const ledesMatterIds = matters.flatMap(({ matterId, ledesEnabled }) =>
+      ledesEnabled && validatedMatterIds.includes(matterId) ? [matterId] : [],
+    );
+    const codeNames =
+      ledesMatterIds.length === 0
+        ? []
+        : yield* Result.await(
+            safeDb((tx) =>
+              tx.query.billingCodes.findMany({
+                where: {
+                  organizationId: { eq: organizationId },
+                  workspaceId: { in: ledesMatterIds },
+                  active: { eq: true },
+                },
+                columns: {
+                  workspaceId: true,
+                  type: true,
+                  code: true,
+                  label: true,
+                },
+                orderBy: { sortOrder: "asc", id: "asc" },
+                limit: BILLING_DRAFT_CONTEXT_LIMITS.codeNames,
+              }),
+            ),
+          );
     return Result.ok({
       mode: "guided" as const,
       matters,
       guidelines,
+      codeNames: codeNames.map((row) => ({
+        matterId: row.workspaceId,
+        type: row.type,
+        code: row.code,
+        name: row.label,
+      })),
       ...shared,
     });
   });

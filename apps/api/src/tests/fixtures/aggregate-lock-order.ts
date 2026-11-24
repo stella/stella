@@ -230,6 +230,11 @@ export const aggregateFences = () => {
       id: { id: createSafeId<"aiMemory">(), organizationId },
       mode: "update",
     },
+    contact: {
+      aggregate: "contact",
+      id: { id: createSafeId<"contact">(), organizationId },
+      mode: "key share",
+    },
     searchProjectionRepair: {
       aggregate: "searchProjectionRepair",
       id: {
@@ -258,6 +263,10 @@ export const aggregateFences = () => {
       id: { organizationId },
     },
     contactCapacity: { aggregate: "contactCapacity", id: { organizationId } },
+    dictationVocabularyCapacity: {
+      aggregate: "dictationVocabularyCapacity",
+      id: { organizationId },
+    },
     billingDraftSettings: {
       aggregate: "billingDraftSettings",
       id: { organizationId },

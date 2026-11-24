@@ -8,9 +8,11 @@ import {
   HeaderSearchProvider,
   useHeaderSearch,
 } from "@/components/header-search";
+import { KeptDictationsProvider } from "@/components/kept-dictations";
 import { MattersViewProvider, useMattersView } from "@/components/matters-view";
 import { useNewChat } from "@/components/new-chat";
 import { PushRegistration } from "@/components/push-registration";
+import { QuickDictationSync } from "@/components/quick-dictation-sync";
 import { RoleProvider, useCan } from "@/components/role";
 import { RunBanners } from "@/components/run-banner";
 import { SelectionProvider, useSelection } from "@/components/selection";
@@ -42,10 +44,13 @@ export const ProtectedScreens = () => {
               <RoleProvider>
                 <SelectionProvider>
                   <ActiveChatRunsProvider>
-                    <TimerActivitySync />
-                    <PushRegistration />
-                    <Screens />
-                    <RunBanners />
+                    <KeptDictationsProvider>
+                      <TimerActivitySync />
+                      <QuickDictationSync />
+                      <PushRegistration />
+                      <Screens />
+                      <RunBanners />
+                    </KeptDictationsProvider>
                   </ActiveChatRunsProvider>
                 </SelectionProvider>
               </RoleProvider>
@@ -259,7 +264,20 @@ const Screens = () => {
               }}
             />
             <Stack.Screen
+              name="part/save"
+              options={{
+                ...pushedScreen,
+                presentation: "formSheet",
+                sheetAllowedDetents: [0.75, 1],
+                sheetGrabberVisible: true,
+              }}
+            />
+            <Stack.Screen
               name="share/[shareId]"
+              options={{ ...pushedScreen, presentation: "modal" }}
+            />
+            <Stack.Screen
+              name="dictation"
               options={{ ...pushedScreen, presentation: "modal" }}
             />
             <Stack.Screen name="timers/index" options={pushedScreen} />

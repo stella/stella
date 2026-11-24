@@ -21,10 +21,10 @@ import type {
   RefObject,
 } from "react";
 
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { CHAT_MEMBER_SEND_ACTION } from "@stll/api-contract/chat-send-intent";
-import { resolveChatComposerAction } from "@stll/chat/composer";
 import type {
   AISuggestion,
   AISuggestionPreset,
@@ -50,7 +50,6 @@ import {
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
@@ -569,7 +568,6 @@ export const PromptBar = (props: PromptBarProps) => {
 
   const {
     busy,
-    composerActionMode,
     composerSubmitDisabled,
     inputDisabled,
     isGenerating,
@@ -580,10 +578,16 @@ export const PromptBar = (props: PromptBarProps) => {
     isEmpty,
     onRetry,
     sendDisabled,
-    onStop,
     queueWhileGenerating,
     sendDisabledReason,
     status,
+  });
+  const sendDisabledText = resolveSendDisabledText({
+    canSubmit,
+    composerSubmitDisabled,
+    sendDisabledReason,
+    status,
+    t,
   });
   // With queuing enabled the composer keeps accepting input while a
   // response streams: `useChatSession` holds submitted drafts until the
@@ -653,13 +657,17 @@ export const PromptBar = (props: PromptBarProps) => {
    * chooser instead of the chips; Escape or losing chip visibility
    * cancels back to the chips.
    */
+  const [prevPresetChipsVisible, setPrevPresetChipsVisible] =
+    useState(presetChipsVisible);
   const [scopePromptPreset, setScopePromptPreset] =
     useState<AISuggestionPreset | null>(null);
-  // Cancel the scope chooser during render (adjust-state-during-render) rather
-  // than in an effect when the preset chips lose visibility; guarded on
-  // scopePromptPreset !== null so it converges in one pass.
-  if (!presetChipsVisible && scopePromptPreset !== null) {
-    setScopePromptPreset(null);
+  // Cancel the scope chooser during render when the preset chips lose
+  // visibility, rather than in an effect.
+  if (prevPresetChipsVisible !== presetChipsVisible) {
+    setPrevPresetChipsVisible(presetChipsVisible);
+    if (!presetChipsVisible) {
+      setScopePromptPreset(null);
+    }
   }
   const submitPreset = (preset: AISuggestionPreset) => {
     if (canSubmitNow !== undefined && !canSubmitNow()) {
@@ -812,7 +820,7 @@ export const PromptBar = (props: PromptBarProps) => {
             <div
               className={cn(
                 DOC_FLOAT_SURFACE_CLASS,
-                "border-foreground/15 shadow-floating absolute inset-x-1 bottom-full mb-2 overflow-hidden rounded-xl border",
+                "border-foreground/15 shadow-floating absolute inset-x-1 bottom-full mb-2 overflow-hidden rounded-xl border pb-2",
               )}
             >
               <ChatDraftAttachmentChips
@@ -955,47 +963,26 @@ export const PromptBar = (props: PromptBarProps) => {
         />
       </div>
 
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            // The control slot mirrors the (+) menu's seating: the shell
-            // is items-end, so the slot rides the bottom text line as the
-            // editor grows.
-            <ComposerControlSlot>
-              <ChatComposerActionButton
-                canSend={!composerSubmitDisabled && canSubmit}
-                isGenerating={isGenerating}
-                onRetry={retryOffer}
-                onSend={() => {
-                  detached(
-                    submitDraft(CHAT_MEMBER_SEND_ACTION.send),
-                    "ai-suggestions-host.submit-draft",
-                  );
-                }}
-                onStop={onStop}
-                stopping={stopping}
-              />
-            </ComposerControlSlot>
-          }
+      {/* The control slot mirrors the (+) menu's seating: the shell is
+          items-end, so the slot rides the bottom text line as the editor
+          grows. The button owns its tooltip: its action when it can act,
+          and why not when it cannot. */}
+      <ComposerControlSlot>
+        <ChatComposerActionButton
+          canSend={!composerSubmitDisabled && canSubmit}
+          disabledReason={sendDisabledText}
+          isGenerating={isGenerating}
+          onRetry={retryOffer}
+          onSend={() => {
+            detached(
+              submitDraft(CHAT_MEMBER_SEND_ACTION.send),
+              "ai-suggestions-host.submit-draft",
+            );
+          }}
+          onStop={onStop}
+          stopping={stopping}
         />
-        <TooltipPopup side="top">
-          {/* Labels the same state the button resolves internally —
-              `composerActionMode` comes from the button module's own
-              resolver, so the tooltip cannot drift from the morph. */}
-          {(() => {
-            if (composerActionMode === "stop") {
-              return t("chat.stopResponse");
-            }
-            if (composerActionMode === "retry") {
-              return t("common.retry");
-            }
-            if (canSubmit) {
-              return t("chat.sendPrompt");
-            }
-            return t("chat.askAnything");
-          })()}
-        </TooltipPopup>
-      </Tooltip>
+      </ComposerControlSlot>
     </PromptBarShell>
   );
 
@@ -1010,10 +997,52 @@ export const PromptBar = (props: PromptBarProps) => {
   );
 };
 
+/**
+ * What the send button says while it cannot act: the editor or a save holding
+ * it reads as that, and an empty draft says what to do. `t` is typed to the
+ * keys it reads, so the full message tree is not re-instantiated here.
+ */
+const resolveSendDisabledText = ({
+  canSubmit,
+  composerSubmitDisabled,
+  sendDisabledReason,
+  status,
+  t,
+}: {
+  canSubmit: boolean;
+  composerSubmitDisabled: boolean;
+  status: PromptBarProps["status"];
+  sendDisabledReason: PromptBarProps["sendDisabledReason"];
+  t: (
+    key:
+      | "chat.editorLoading"
+      | "chat.sendPromptEmpty"
+      | "chat.composer.waitForChat"
+      | "folio.savingDocument",
+  ) => string;
+}): string | undefined => {
+  switch (sendDisabledReason) {
+    case "editor-loading":
+      return t("chat.editorLoading");
+    case "draft-saving":
+      return t("folio.savingDocument");
+    case undefined:
+      if (status === "applying") {
+        return t("folio.savingDocument");
+      }
+      if (composerSubmitDisabled) {
+        return t("chat.composer.waitForChat");
+      }
+      return canSubmit ? undefined : t("chat.sendPromptEmpty");
+    default:
+      sendDisabledReason satisfies never;
+      return panic(`Unhandled send block: ${String(sendDisabledReason)}`);
+  }
+};
+
 const getPromptBarAvailability = ({
   isEmpty,
   onRetry,
-  onStop,
   queueWhileGenerating,
   sendDisabledReason,
   sendDisabled = false,
@@ -1021,7 +1050,6 @@ const getPromptBarAvailability = ({
 }: {
   isEmpty: boolean;
   onRetry: PromptBarProps["onRetry"];
-  onStop: PromptBarProps["onStop"];
   queueWhileGenerating: boolean;
   sendDisabledReason: PromptBarProps["sendDisabledReason"];
   sendDisabled: PromptBarProps["sendDisabled"];
@@ -1035,11 +1063,6 @@ const getPromptBarAvailability = ({
     onRetry !== undefined && isEmpty && !submitDisabled ? onRetry : undefined;
   return {
     busy,
-    composerActionMode: resolveChatComposerAction({
-      isGenerating,
-      onStop,
-      onRetry: retryOffer,
-    }),
     composerSubmitDisabled: queueWhileGenerating
       ? status === "applying" || isSendBlocked || sendDisabled
       : submitDisabled,
@@ -1200,6 +1223,7 @@ export const SuggestionCard = (props: SuggestionCardProps) => {
             className="rounded-md"
             onClick={() => onAccept(suggestion.id)}
             disabled={suggestion.status === "stale"}
+            disabledReason={t("docxReview.suggestionOutOfDate")}
           >
             <CheckIcon aria-hidden="true" />
             {t("common.accept")}

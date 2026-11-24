@@ -264,6 +264,14 @@ const createApiBudgets = (
         return getConfiguration().RATE_LIMIT_API_TRANSLATE_DURATION_MS;
       },
     },
+    citationCheck: {
+      get max() {
+        return getConfiguration().RATE_LIMIT_API_CITATION_CHECK_MAX;
+      },
+      get duration() {
+        return getConfiguration().RATE_LIMIT_API_CITATION_CHECK_DURATION_MS;
+      },
+    },
     invoiceLink: {
       get max() {
         return getConfiguration().RATE_LIMIT_API_INVOICE_LINK_MAX;

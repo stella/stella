@@ -1,9 +1,9 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { agentSkills } from "@/api/db/schema";
 import type { AgentSkillOrigin, AgentSkillScope } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SkillBinding } from "@/api/lib/agent-skills/binding";
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import type { SafeId } from "@/api/lib/branded-types";

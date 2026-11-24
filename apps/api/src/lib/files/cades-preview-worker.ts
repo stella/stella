@@ -4,7 +4,11 @@ import { detectEmbeddedPayload } from "@/api/lib/files/embedded-payload-format";
 import { parseP7m } from "@/api/lib/files/p7m";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 
-const derivePayloadName = (outerName: string, extension: string | null) => {
+/** The signed document's name: the envelope's, without `.p7m`. */
+export const derivePayloadName = (
+  outerName: string,
+  extension: string | null,
+) => {
   const stem = outerName.replace(/(?:\.p7m)+$/iu, "").trim() || "attachment";
   const name =
     extension && !stem.toLowerCase().endsWith(`.${extension}`)
@@ -31,6 +35,8 @@ export const scanCadesPayload = async (
     ownership: "transfer",
     declaredMimeType: mimeType,
     fileName,
+    // This worker runs outside the API's work pools, under its spawn timeout.
+    admission: "subprocess",
   });
   if (scanned.isErr()) {
     return Result.err(scanned.error);

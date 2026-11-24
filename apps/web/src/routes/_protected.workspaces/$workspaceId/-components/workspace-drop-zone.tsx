@@ -9,7 +9,7 @@ import { SettledQueryViewFeedback } from "@/components/query-view-feedback";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
-import type { CreateFileEntitiesInput } from "@/lib/workspaces/mutations/use-create-file-entities";
+import type { CreateFileEntitiesInput } from "@/lib/workspaces/mutations/create-file-entities-input.logic";
 import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { selectAvailableWorkspaceViews } from "@/lib/workspaces/queries/views.logic";

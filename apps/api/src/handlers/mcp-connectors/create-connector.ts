@@ -4,7 +4,7 @@ import * as v from "valibot";
 
 import { slugify } from "@stll/text-normalize";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { mcpConnectors } from "@/api/db/schema";
 import type { McpConnectorAuthType } from "@/api/db/schema";
 import {
@@ -171,7 +171,7 @@ export const createMcpConnectorHandler = ({
       }
       const displayName =
         input.displayName?.trim() || new URL(normalizedUrl).hostname;
-      const [slug, iconUrl] = await Promise.all([
+      const [slug, iconDiscovery] = await Promise.all([
         nextSlug({
           base: connectorSlug(displayName),
           organizationId: session.activeOrganizationId,
@@ -179,6 +179,8 @@ export const createMcpConnectorHandler = ({
         }),
         discoverIconUrl(normalizedUrl, permit),
       ]);
+      const iconUrl =
+        iconDiscovery.status === "discovered" ? iconDiscovery.url : null;
 
       const inserted = yield* Result.await(
         safeDb(async (tx) => {

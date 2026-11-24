@@ -22,9 +22,10 @@ import {
   withoutAuthorizationSubplans,
 } from "@/api/tests/query-plans/plan-walker";
 
-import { analyzePlan } from "./plan-analyzer";
+import { analyzePlan, scaledTimeViolations } from "./plan-analyzer";
 import type { QueryPerfProfileId, QueryPerfTenantProfileId } from "./profiles";
 import { withQueryPerfRollback } from "./rollback";
+import { median } from "./sampling";
 import type { seedQueryPerf } from "./seed";
 import {
   applyPlannerSettings,
@@ -67,28 +68,6 @@ export const sumMetrics = (
     executionTimeMs += measured.executionTimeMs;
   }
   return { sharedBlocks, executionTimeMs };
-};
-
-export const median = (values: readonly number[]) => {
-  if (
-    values.length === 0 ||
-    values.some((value) => !Number.isFinite(value) || value < 0)
-  ) {
-    return panic("Query perf median requires nonnegative finite samples");
-  }
-  const sorted = values.toSorted((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  const upper = sorted.at(middle);
-  if (upper === undefined) {
-    return panic("Query perf median missing sample");
-  }
-  if (sorted.length % 2 !== 0) {
-    return upper;
-  }
-  const lower = sorted.at(middle - 1);
-  return lower === undefined
-    ? panic("Query perf median missing sample")
-    : (lower + upper) / 2;
 };
 
 export const metricsFromPlan = (
@@ -336,9 +315,20 @@ export const summarize = (
       ),
     },
     plan: lastPlan,
-    planViolations: plans.flatMap((document) =>
-      analyzePlan({ document, owner, ownerDeadlineMs, statement, profileId }),
-    ),
+    planViolations: [
+      ...plans.flatMap((document) =>
+        analyzePlan({ document, owner, ownerDeadlineMs, statement, profileId }),
+      ),
+      // The warmup plan shapes the findings above, but its cold timing is not a sample.
+      ...scaledTimeViolations({
+        document: lastPlan,
+        executionTimesMs: samples.map(({ executionTimeMs }) => executionTimeMs),
+        owner,
+        ownerDeadlineMs,
+        statement,
+        profileId,
+      }),
+    ],
     samples,
   };
 };

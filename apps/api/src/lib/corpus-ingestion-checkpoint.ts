@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   caseLawSources,
   legislationSources,

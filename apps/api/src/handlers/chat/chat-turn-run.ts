@@ -12,7 +12,7 @@ import {
 } from "@stll/api-contract/chat-run-target";
 import { TimeoutError } from "@stll/concurrency/with-timeout";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { reportDeliveryFailuresByKind } from "@/api/handlers/chat/chat-delivery-failure";
 import {
   persistFailedChatTurn,

@@ -12,11 +12,6 @@ seed; `dirty.yjs` appends an unpublished amendment. The old package
 materialized both snapshots against the source and extracted the expected
 saved and amended text before these bytes were committed.
 
-`migratable.yjs` was generated from the unmodified `base.docx` using the same
-conversion and metadata writer. It has no ambiguous numbering and migrates
-without reseeding; it verifies that saved cuts hash the persisted input bytes
-rather than a normalized update.
-
 To reproduce, first create `base.docx` with the old package:
 
 ```ts

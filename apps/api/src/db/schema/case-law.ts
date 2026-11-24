@@ -112,6 +112,7 @@ import { INGESTION_FAILURE_IDENTITY_KINDS } from "@/api/lib/case-law/ingestion-f
 import { CASE_LAW_PROVISION_SEARCH_INDEX } from "@/api/lib/case-law/provision-search-index";
 import {
   publishedCaseLawDecisionFor,
+  publishedCaseLawDecisionSqlFor,
   unredactedCaseLawDecisionFor,
 } from "@/api/lib/case-law/published-decisions-sql";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
@@ -131,6 +132,7 @@ import {
 } from "@/api/lib/decision-date-bounds-sql";
 import { liveCaseLawLegacyReferenceSql } from "@/api/lib/legal-search/case-law-legacy-reference-sql";
 import type { CollectionDocumentPart } from "@/api/lib/legal-search/collection-document-part";
+import type { CollectionDocumentPartRead } from "@/api/lib/legal-search/collection-document-part-read";
 import { PACK_MEMBER_KINDS } from "@/api/lib/legal-search/corpus-pack";
 import { DECISION_SUPPLEMENT_KINDS } from "@/api/lib/legal-search/decision-supplement-kind";
 import {
@@ -1108,7 +1110,7 @@ export const caseLawDecisions = p.pgTable(
     ),
     p.check(
       "case_law_decisions_redacted_payload_erased",
-      sql`${t.redactedAt} IS NULL OR (${t.fulltext} IS NULL AND ${t.sections} IS NULL AND ${t.documentAst} IS NULL AND ${t.contentHash} IS NULL)`,
+      sql`${t.redactedAt} IS NULL OR (${t.fulltext} IS NULL AND ${t.sections} IS NULL AND ${t.documentAst} IS NULL AND ${t.contentHash} IS NULL AND ${t.sourceRaw} IS NULL)`,
     ),
     // The bounds `canonicalDecisionDate` enforces on the write path,
     // enforced at the table as well; both derive from `DECISION_DATE_BOUNDS`,
@@ -1137,16 +1139,12 @@ export const caseLawDecisions = p.pgTable(
       }),
     ),
     // Publisher ids identify documents; fallback keys include court and decision
-    // evidence. The obsolete docket-only index is removed by the contract migration.
+    // evidence; weak cohort members are distinguished by published content.
     p
       .uniqueIndex("case_law_decisions_source_document_idx")
       .on(t.sourceId, t.sourceDocumentId)
       .where(isNotNull(t.sourceDocumentId)),
     ...fallbackDecisionIdentityIndexes(t),
-    p
-      .uniqueIndex("case_law_decisions_source_case_lang_null_idx")
-      .on(t.sourceId, t.caseNumber, t.language)
-      .where(isNull(t.sourceDocumentId)),
     p
       .uniqueIndex("case_law_decisions_slug_uidx")
       .on(t.slug)
@@ -2094,6 +2092,93 @@ export const caseLawHeldDecisionAttachments = p.pgTable(
     ...caseLawIngestionOnlyPolicies(),
   ],
 );
+
+/** Only exact, live official collection attachments admitted by a visible host. */
+export const caseLawCollectionBodies = p
+  .pgView("case_law_collection_bodies", {
+    hostDecisionId: safeUuid<"caseLawDecision">("host_decision_id").notNull(),
+    collectionSourceId: safeUuid<"caseLawSource">(
+      "collection_source_id",
+    ).notNull(),
+    collectionDocumentId: p
+      .varchar("collection_document_id", { length: 256 })
+      .notNull(),
+    sourceUrl: p.varchar("source_url", { length: 2048 }),
+    retrievedAt: timestamptz("retrieved_at").notNull(),
+    detailRawS3Key: p.varchar("detail_raw_s3_key", { length: 512 }),
+    detailRawContentType: p.varchar("detail_raw_content_type", { length: 128 }),
+    documentPart: jsonb("document_part").$type<CollectionDocumentPartRead>(),
+    documentBodyS3Key: p.varchar("document_body_s3_key", { length: 512 }),
+    documentBodySha256: p.varchar("document_body_sha256", { length: 64 }),
+    origin: p
+      .varchar("origin", { enum: ["canonical-own-row", "attachment"] })
+      .notNull(),
+  })
+  .with({ securityBarrier: true }).as(sql`
+  SELECT host.id AS host_decision_id,
+    attachment.source_id AS collection_source_id,
+    attachment.source_document_id AS collection_document_id,
+    attachment.source_url,
+    attachment.observed_at AS retrieved_at,
+    CASE WHEN attachment.source_raw_s3_key ~ (
+      '^case-law/raw/[0-9a-f-]{36}/documents/' || attachment.host_decision_id::text || '/payloads/[0-9a-f]{64}$'
+    ) THEN attachment.source_raw_s3_key END AS detail_raw_s3_key,
+    attachment.source_raw_content_type AS detail_raw_content_type,
+    attachment.document_part - 'legalSentence' AS document_part,
+    CASE WHEN attachment.document_body_s3_key ~ (
+      '^case-law/raw/[0-9a-f-]{36}/documents/' || attachment.host_decision_id::text || '/payloads/[0-9a-f]{64}$'
+    ) AND right(attachment.document_body_s3_key, 64) = attachment.document_body_sha256
+      AND attachment.match_evidence->>'status' = 'matched'
+      THEN attachment.document_body_s3_key END AS document_body_s3_key,
+    attachment.document_body_sha256,
+    CASE WHEN attachment.source_id = host.source_id
+      AND attachment.source_document_id = host.source_document_id
+      THEN 'canonical-own-row' ELSE 'attachment' END::varchar AS origin
+  FROM case_law_held_decision_attachments AS attachment
+  JOIN case_law_decisions AS host
+    ON host.id = attachment.host_decision_id
+  JOIN case_law_sources AS host_source ON host_source.id = host.source_id
+  JOIN case_law_sources AS collection_source ON collection_source.id = attachment.source_id
+  WHERE attachment.host_withdrawn_at IS NULL
+    AND ${sql.raw(publishedCaseLawDecisionSqlFor("host"))}
+    AND ((collection_source.adapter_key = 'cz-ns-sbirka'
+        AND (attachment.match_evidence IS NULL OR attachment.match_evidence->>'status' = 'matched'))
+      OR (attachment.document_part IS NOT NULL AND attachment.match_evidence->>'status' = 'matched'))
+    AND ${redistributableCaseLawSourceFor(sql`host_source.descriptor`)}
+    AND ${redistributableCaseLawSourceFor(sql`collection_source.descriptor`)}
+  UNION ALL
+  SELECT host.id AS host_decision_id,
+    attachment.source_id AS collection_source_id,
+    attachment.source_document_id AS collection_document_id,
+    attachment.source_url,
+    attachment.observed_at AS retrieved_at,
+    CASE WHEN attachment.source_raw_s3_key ~ (
+      '^case-law/raw/[0-9a-f-]{36}/documents/' || attachment.host_decision_id::text || '/payloads/[0-9a-f]{64}$'
+    ) THEN attachment.source_raw_s3_key END AS detail_raw_s3_key,
+    attachment.source_raw_content_type AS detail_raw_content_type,
+    attachment.document_part - 'legalSentence' AS document_part,
+    CASE WHEN attachment.document_body_s3_key ~ (
+      '^case-law/raw/[0-9a-f-]{36}/documents/' || attachment.host_decision_id::text || '/payloads/[0-9a-f]{64}$'
+    ) AND right(attachment.document_body_s3_key, 64) = attachment.document_body_sha256
+      AND attachment.match_evidence->>'status' = 'matched'
+      THEN attachment.document_body_s3_key END AS document_body_s3_key,
+    attachment.document_body_sha256,
+    'attachment'::varchar AS origin
+  FROM case_law_held_decision_attachments AS attachment
+  JOIN case_law_decision_aliases AS alias
+    ON alias.retired_decision_id = attachment.host_decision_id
+  JOIN case_law_decisions AS host
+    ON host.id = alias.canonical_decision_id
+  JOIN case_law_sources AS host_source ON host_source.id = host.source_id
+  JOIN case_law_sources AS collection_source ON collection_source.id = attachment.source_id
+  WHERE attachment.host_withdrawn_at IS NULL
+    AND ${sql.raw(publishedCaseLawDecisionSqlFor("host"))}
+    AND ((collection_source.adapter_key = 'cz-ns-sbirka'
+        AND (attachment.match_evidence IS NULL OR attachment.match_evidence->>'status' = 'matched'))
+      OR (attachment.document_part IS NOT NULL AND attachment.match_evidence->>'status' = 'matched'))
+    AND ${redistributableCaseLawSourceFor(sql`host_source.descriptor`)}
+    AND ${redistributableCaseLawSourceFor(sql`collection_source.descriptor`)}
+`);
 
 /**
  * Exact corpus-object keys reserved before an external PUT. This deliberately
@@ -3379,7 +3464,9 @@ export const caseLawStatuteCitationCountState = p.pgTable(
  * whole by a background refresh, so a public read lists the shards without
  * counting the corpus. `year`/`month` are the shard's path segments
  * (`undated`/`00` for decisions without a date) and `bucket` is `all` for an
- * unsplit month or the two-digit bucket of a split one.
+ * unsplit month or the four-digit position of one range of a split one. A
+ * range is one contiguous key range of the decisions' date index, so serving
+ * it reads its own decisions and nothing else of the month.
  *
  * Row security is forced (migration `20260927230000_case_law_sitemap_shards`)
  * so the owner-run refresh needs a policy; table privileges decide access.
@@ -3421,9 +3508,19 @@ export const caseLawSitemapShards = p.pgTable(
     country: p.varchar({ length: 3 }).notNull(),
     year: p.varchar({ length: 7 }).notNull(),
     month: p.varchar({ length: 2 }).notNull(),
-    bucket: p.varchar({ length: 3 }).notNull(),
+    bucket: p.varchar({ length: 4 }).notNull(),
     total: p.integer().notNull(),
     lastModifiedAt: timestamptz("last_modified_at").notNull(),
+    /**
+     * Where a split month's range starts, inclusive, on the key of
+     * `case_law_decisions_country_date_published_idx` (the decision date,
+     * `-infinity` when undated, then the id); null from the month's start.
+     */
+    rangeStartDate: p.date("range_start_date"),
+    rangeStartId: p.uuid("range_start_id"),
+    /** Where the range ends, exclusive, on the same key; null to the month's end. */
+    rangeEndDate: p.date("range_end_date"),
+    rangeEndId: p.uuid("range_end_id"),
   },
   (t) => [
     p.primaryKey({

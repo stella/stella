@@ -54,6 +54,9 @@ export const ProfessionalUsePage = () => {
       signOut={
         <Button
           disabled={accept.isPending || signOut.isPending}
+          disabledReason={
+            accept.isPending ? t("common.accepting") : t("common.signingOut")
+          }
           loading={signOut.isPending}
           onClick={() => signOut.mutate()}
           variant="ghost"
@@ -64,6 +67,9 @@ export const ProfessionalUsePage = () => {
       accept={
         <Button
           disabled={accept.isPending || signOut.isPending}
+          disabledReason={
+            accept.isPending ? t("common.accepting") : t("common.signingOut")
+          }
           loading={accept.isPending}
           onClick={() => accept.mutate()}
         >

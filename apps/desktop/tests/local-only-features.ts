@@ -40,6 +40,31 @@ export const LOCAL_ONLY_FEATURES = [
     windows: ["clipboard", "clipboard-editor"],
   },
   {
+    // Clipboard settings, also offered in the Settings window: capture,
+    // retention, screen recordings, excluded applications and groups. None
+    // of these commands returns a clip.
+    callerType: "ClipboardSettingsCaller",
+    commandOwners: [
+      { module: "src/clipboard_settings.rs", prefixes: ["clipboard_"] },
+    ],
+    id: "clipboard_settings",
+    telemetry: "fixedCodes",
+    nativeModules: [],
+    windowModules: {
+      "src-tauri/capabilities/clipboard.json": [
+        "src/clipboard/clipboard-settings.ts",
+        "src/clipboard/ClipboardGroupDialog.tsx",
+      ],
+      "src-tauri/capabilities/default.json": [
+        "src/mainview/ClipboardSettings.tsx",
+        "src/clipboard/clipboard-settings.ts",
+        "src/clipboard/ClipboardGroupDialog.tsx",
+        "src/clipboard/ClipboardGroupFields.tsx",
+      ],
+    },
+    windows: ["clipboard", "clipboard-editor", "main"],
+  },
+  {
     callerType: "ActivityCaller",
     commandOwners: [
       { module: "src/activity_commands.rs", prefixes: ["activity_"] },
@@ -81,11 +106,6 @@ export const LOCAL_ONLY_FEATURES = [
     callerType: "ActivitySettingsCaller",
     commandOwners: [
       { module: "src/activity_settings.rs", prefixes: ["activity_"] },
-      // Consent to stella AI drafts, which the user withdraws in Settings.
-      {
-        module: "src/billing_draft_settings.rs",
-        prefixes: ["billing_draft_"],
-      },
     ],
     id: "activity_settings",
     telemetry: "fixedCodes",
@@ -98,6 +118,29 @@ export const LOCAL_ONLY_FEATURES = [
       ],
     },
     windows: ["activity", "main"],
+  },
+  {
+    // What setup also offers: starting to record, details, calls and
+    // consent to stella AI drafts. None deletes history or returns a day.
+    callerType: "ActivitySetupCaller",
+    commandOwners: [
+      { module: "src/activity_setup.rs", prefixes: ["activity_"] },
+      // Consent to stella AI drafts, which the user withdraws in Settings.
+      {
+        module: "src/billing_draft_settings.rs",
+        prefixes: ["billing_draft_"],
+      },
+    ],
+    id: "activity_setup",
+    telemetry: "fixedCodes",
+    nativeModules: [],
+    windowModules: {
+      "src-tauri/capabilities/onboarding.json": [
+        "src/onboarding/use-activity-setup.ts",
+        "src/activity/billing-draft-settings.ts",
+      ],
+    },
+    windows: ["activity", "main", "onboarding"],
   },
 ] as const;
 

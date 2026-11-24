@@ -5,11 +5,11 @@ import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, fields, pendingUploads, workspaces } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   captureError,
   createErrorCapture,
@@ -39,6 +39,8 @@ import {
   documentWriteRefusal,
   DocumentWriteRefusedError,
 } from "@/api/lib/entities/authorize-document-write";
+import { authorizeBufferWrite } from "@/api/lib/entities/buffer-write-authority";
+import type { BufferWriteAuthority } from "@/api/lib/entities/buffer-write-authority";
 import {
   insertNamedEntity,
   resolveSiblingNameForInsert,
@@ -97,13 +99,17 @@ type CreateEntityFromBufferInput = {
   scanWarnings?: string[] | undefined;
   provenance?:
     | {
-        type: "email_attachment";
-        attachmentId: string;
+        /** A part of another stored file, such as an email's attachment. */
+        type: "file_part";
+        /** The part's address, such as `attachment:0`. */
+        part: string;
         sourceEntityId: SafeId<"entity">;
         sourceFieldId: SafeId<"field">;
         sourceWorkspaceId: SafeId<"workspace">;
       }
     | undefined;
+  /** Required: a delayed member action rechecks its authority before any lock. */
+  authority: BufferWriteAuthority;
   /** Provenance of the first version's bytes; recorded on the audit event too. */
   source?: DocumentSource | undefined;
   afterCreate?:
@@ -187,6 +193,7 @@ export const createEntityFromBuffer = async ({
   parentId,
   scanWarnings,
   provenance,
+  authority,
   source,
   afterCreate,
   dependencies = defaultCreateEntityFromBufferDependencies,
@@ -287,7 +294,9 @@ export const createEntityFromBuffer = async ({
   let writeState: "confirmed" | "uncertain" = "uncertain";
 
   try {
-    const cleanupObject = async (): Promise<boolean> => {
+    const cleanupObject = async (): Promise<
+      { status: "deleted" } | { status: "failed" }
+    > => {
       const cleanup = Result.flatten(
         await Result.tryPromise({
           try: async () =>
@@ -310,16 +319,16 @@ export const createEntityFromBuffer = async ({
             objectKey: s3Key,
           }),
         );
-        return false;
+        return { status: "failed" };
       }
-      return true;
+      return { status: "deleted" };
     };
 
     const settleUncertainWrite = async () => {
       // A transport failure is ambiguous: S3 may publish after this immediate
       // delete completes. Keep the intent recoverable so later sweeps remove
       // any late publication; the heartbeat stops in finally below.
-      const cleanupSucceeded = await cleanupObject();
+      const cleanupSucceeded = (await cleanupObject()).status === "deleted";
       if (publication.type === "service") {
         const settled = await settleObjectCleanupIntentsAfterWriter({
           safeDb,
@@ -389,6 +398,10 @@ export const createEntityFromBuffer = async ({
     const transactionState = { durableReferencePrepared: false };
     try {
       await scopedDb(async (tx) => {
+        // Delayed actors must lock their current authority before the
+        // workspace cap/lifecycle row. This preserves the canonical member →
+        // assignment → workspace lock order used by role and access changes.
+        await authorizeBufferWrite(authority, tx);
         // See `lockWorkspacesForEntityCap` for the canonical lock
         // order every entity-creating path follows (issue #1139).
         const workspaceStatus = await lockWorkspaceForEntityCreate(
@@ -583,7 +596,7 @@ export const createEntityFromBuffer = async ({
       });
     } catch (error) {
       if (!transactionState.durableReferencePrepared) {
-        const cleanupSucceeded = await cleanupObject();
+        const cleanupSucceeded = (await cleanupObject()).status === "deleted";
         if (publication.type === "service") {
           const settled = await settleObjectCleanupIntentsAfterWriter({
             safeDb,

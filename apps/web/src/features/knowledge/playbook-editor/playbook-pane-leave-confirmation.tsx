@@ -56,6 +56,7 @@ export const PlaybookPaneLeaveConfirmation = () => {
           </AlertDialogClose>
           <Button
             disabled={saving}
+            disabledReason={t("common.saving")}
             onClick={() =>
               detached(
                 confirmPlaybookPaneLeave(),

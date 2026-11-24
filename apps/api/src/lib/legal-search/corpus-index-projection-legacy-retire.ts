@@ -3,22 +3,21 @@ import { type SQL, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisions,
-  caseLawIndexJobs,
   corpusIndexProjectionStates,
   legislationDocuments,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { lockCorpusProjectionStatesByEntity } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
   type DesiredStateKey,
   lockRegisteredCorpusProjectionManifestForMutation,
-  retireServedCopiesTx,
-  SERVED_COPY_RETIREMENT_REASONS,
+  retireLegacyErasedServedCopiesTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { corpusProjectionErasureIsRecorded } from "@/api/lib/legal-search/corpus-index-projection-erasure-evidence";
 import { corpusIndexProjectionNamedCopyTrailsTwoChanges } from "@/api/lib/legal-search/corpus-index-projection-sql";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -148,45 +147,27 @@ const requireDecision = (value: string): LegacyRetireDecision =>
 
 /**
  * Recorded evidence that an erasure was written for the state's entity after
- * its named copy was reserved and before the cutover: a succeeded `withdraw`
- * row of the case-law index-job trail, the one durable per-decision record of
- * an erasure (`recordCorpusWithdrawalAuditEvent`, written in the same
- * transaction as the canonical change and its desired erasure).
+ * its named copy was reserved and before the cutover
+ * (`corpusProjectionErasureIsRecorded`).
  *
- * The window is `[named.created_at, cutover)`, on the row's `created_at`,
- * which is its transaction's start and so no later than the erasure it
- * records:
- * - From the copy's reservation: a copy is applied only while the desired
- *   state still equals it, so an erasure written before the reservation was
- *   undone before the copy's content was chosen, and the copy holds content
- *   desired after it. A withdrawal whose transaction began before the
- *   reservation and wrote its erasure after the apply falls outside the
- *   window and leaves the copy served, the safe direction.
+ * - From the copy's reservation, as the owner states.
  * - Up to the cutover: a withdrawal whose transaction began at or after it is
  *   this release's write, and the undo that follows it is this release's
  *   write too, which retires the copy itself (`readUndoneErasuresTx`).
  *
- * Legislation has no production writer of withdrawals, so this is never true
- * for legislation and the pass never retires a legislation copy.
+ * Legislation has no such record, so the pass never retires a legislation
+ * copy.
  */
 const erasureRecordedInWindow = (
   family: CorpusFamily,
   cutoverAt: Temporal.Instant,
-): SQL => {
-  const states = corpusIndexProjectionStates;
-  const evidence = {
-    case_law: sql`EXISTS (
-      SELECT 1 FROM ${caseLawIndexJobs}
-      WHERE ${caseLawIndexJobs.decisionId} = ${states.entityId}
-        AND ${caseLawIndexJobs.operation} = 'withdraw'
-        AND ${caseLawIndexJobs.status} = 'succeeded'
-        AND ${caseLawIndexJobs.createdAt} >= named.created_at
-        AND ${caseLawIndexJobs.createdAt} < ${cutoverAt.toString()}::timestamptz
-    )`,
-    legislation: sql`false`,
-  } satisfies Record<CorpusFamily, SQL>;
-  return evidence[family];
-};
+): SQL =>
+  corpusProjectionErasureIsRecorded({
+    family,
+    entityId: corpusIndexProjectionStates.entityId,
+    reservedAt: sql`named.created_at`,
+    before: sql`${cutoverAt.toString()}::timestamptz`,
+  });
 
 /** The canonical epoch the state guard compares each state with. */
 const canonicalProjectionEpoch = (family: CorpusFamily) => {
@@ -408,11 +389,7 @@ export const retireLegacyUnprovenServedCopiesTx = async (
       ({ entityId, outcome }) =>
         outcome === "retired" ? [{ family, generation, entityId }] : [],
     );
-    await retireServedCopiesTx(
-      tx,
-      retired,
-      SERVED_COPY_RETIREMENT_REASONS.legacyUnproven,
-    );
+    await retireLegacyErasedServedCopiesTx(tx, retired);
   }
   return Result.ok({
     scanned: page.length,

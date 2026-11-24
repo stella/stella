@@ -6,7 +6,6 @@ import * as v from "valibot";
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 import { numberFromString } from "@stll/api-contract/http-input";
 
-import type { Transaction } from "@/api/db/root";
 import {
   entities,
   fields,
@@ -15,6 +14,7 @@ import {
   legalListItems,
   legalListItemSources,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { projectListFactDetails } from "@/api/lib/auth/feature-access/list-eligibility";

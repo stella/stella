@@ -208,6 +208,7 @@ export const ProvisionHistory = ({
         <Button
           className="self-start"
           disabled={isFetchingNextPage}
+          disabledReason={t("common.loading")}
           onClick={() => {
             detached(fetchNextPage(), "statutes.provision-history-page");
           }}

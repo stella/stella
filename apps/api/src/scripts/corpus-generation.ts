@@ -76,8 +76,8 @@ import {
   createDatabaseLoadVerdictReader,
   createScriptBackfillRuntime,
 } from "@/api/db/backfill-runtime";
-import type { Transaction } from "@/api/db/root";
 import { corpusIndexGenerations } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { loadGateHealthConfig } from "@/api/env-online-index";
 import { createSafeId } from "@/api/lib/branded-types";
 import {

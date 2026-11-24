@@ -1,4 +1,8 @@
-import type { DesktopDictationCleanupContext } from "@stll/api-contract/desktop-dictation-cleanup";
+import type {
+  DesktopDictationCleanupContext,
+  DesktopDictationCleanupStyle,
+  DesktopDictationTranslationLanguage,
+} from "@stll/api-contract/desktop-dictation-cleanup";
 
 type DictationCleanupCase = {
   id: string;
@@ -7,6 +11,8 @@ type DictationCleanupCase = {
   expected: string;
   /** Where the text goes, as the desktop sends it. */
   context?: DesktopDictationCleanupContext;
+  style?: DesktopDictationCleanupStyle;
+  translateTo?: DesktopDictationTranslationLanguage;
 };
 
 /**
@@ -94,5 +100,51 @@ export const dictationCleanupCases: readonly DictationCleanupCase[] = [
       windowTitle: "Kupní smlouva – návrh.docx",
       textBeforeCursor: "Článek 3\nKupní cena\n",
     },
+  },
+  // Counted points become numbered lines; the counting words are dropped.
+  {
+    id: "cs-spoken-list",
+    locale: "cs",
+    transcript:
+      "na zítra dvojtečka za prvé zavolat klientovi za druhé poslat návrh smlouvy za třetí objednat soud",
+    expected:
+      "Na zítra:\n1. Zavolat klientovi\n2. Poslat návrh smlouvy\n3. Objednat soud",
+  },
+  {
+    id: "en-spoken-list",
+    locale: "en",
+    transcript:
+      "the tenant must first pay the deposit second sign the handover report",
+    expected:
+      "The tenant must:\n1. Pay the deposit\n2. Sign the handover report",
+    context: { appKind: "email" },
+  },
+  {
+    id: "en-counting-word-in-a-sentence",
+    locale: "en",
+    transcript: "the first hearing is on monday period",
+    expected: "The first hearing is on Monday.",
+  },
+  {
+    id: "en-notes",
+    locale: "en",
+    transcript:
+      "so um I think we should call the client on monday and then send the draft by friday",
+    expected: "- Call the client on Monday\n- Send the draft by Friday",
+    style: "notes",
+  },
+  {
+    id: "cs-verbatim",
+    locale: "cs",
+    transcript: "no takže ehm pošlu to zítra ne pozítří tečka",
+    expected: "No, takže ehm pošlu to zítra, ne, pozítří.",
+    style: "verbatim",
+  },
+  {
+    id: "cs-translate-to-en",
+    locale: "cs",
+    transcript: "lhůta pro odvolání je patnáct dní tečka",
+    expected: "The time limit for an appeal is fifteen days.",
+    translateTo: "en",
   },
 ];

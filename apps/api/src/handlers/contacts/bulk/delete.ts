@@ -4,8 +4,8 @@ import * as v from "valibot";
 
 import { CONTACT_BULK_DELETE_LIMIT, RESOURCE_TYPE } from "@stll/api-contract";
 
-import type { Transaction } from "@/api/db/root";
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
 import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";

@@ -1,4 +1,4 @@
-import type { ReactNode, Ref } from "react";
+import type { DragEvent, ReactNode, Ref } from "react";
 
 import { ButtonFace } from "@stll/ui/control-face";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -53,6 +53,17 @@ type ChatThreadShellProps = {
   aboveComposer?: ReactNode;
   /** The composer and its status row. */
   composer: ReactNode;
+  /**
+   * The composer's file drop, widened to the whole pane: a file let go over
+   * the transcript attaches like one let go over the composer, instead of
+   * missing the composer's small box and falling through to the browser.
+   */
+  fileDrop?:
+    | {
+        onDragOver: (event: DragEvent) => void;
+        onDrop: (event: DragEvent) => void;
+      }
+    | undefined;
 };
 
 /**
@@ -67,6 +78,7 @@ export const ChatThreadShell = ({
   banner,
   composer,
   composerBlockRef,
+  fileDrop,
   headerActions,
   overlays,
   transcript,
@@ -87,6 +99,19 @@ export const ChatThreadShell = ({
     <div
       className="group/chat-scroll-surface relative flex min-h-0 flex-1 flex-col [--chat-bottom-fade-h:12rem]"
       data-composer-host=""
+      onDragOver={fileDrop?.onDragOver}
+      onDrop={
+        fileDrop === undefined
+          ? undefined
+          : (event) => {
+              // The composer box takes its own drops and cancels them; the
+              // event still bubbles here and must not attach twice.
+              if (event.defaultPrevented) {
+                return;
+              }
+              fileDrop.onDrop(event);
+            }
+      }
     >
       {transcript}
       {overlays}

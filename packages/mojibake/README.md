@@ -13,7 +13,11 @@ against CLDR exemplar characters.
   `repairMisdecoding` undoes a reported pair.
 - `declared-charset`: `decodeDeclared(bytes, { contentType })` reads bytes as
   their byte-order mark, HTTP charset or in-document declaration says, where
-  `Response.text()` always assumes UTF-8.
+  `Response.text()` always assumes UTF-8. Bytes that declare nothing are read
+  by `undeclared-charset`: as UTF-8 when they are valid UTF-8, else as the
+  windows-1250, windows-1252 or ISO-8859-2 reading whose words one language's
+  CLDR exemplar letters explain best. Every reading of a user's file as text
+  goes through `decodeDeclared`.
 - `charsets`: exact encoders and fatal decoders, derived from the platform's
   WHATWG decoders.
 - `exemplars.generated.ts`: CLDR main, auxiliary and punctuation exemplars per

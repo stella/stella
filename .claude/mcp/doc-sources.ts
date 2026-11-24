@@ -209,6 +209,7 @@ export const DOC_SOURCES = {
       "@better-auth/core",
       "@better-auth/oauth-provider",
       "@better-auth/cimd",
+      "@better-auth/sso",
     ],
     url: "https://better-auth.com/llms.txt",
   },
@@ -737,6 +738,14 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     explanation:
       "https://raw.githubusercontent.com/commenthol/date-holidays/master/llms.txt and https://commenthol.github.io/date-holidays/llms.txt return 404. Use the official API documentation in https://github.com/commenthol/date-holidays#api directly.",
     expiresAt: "2026-12-04T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
+  {
+    checkedAt: "2026-11-22T00:00:00.000Z",
+    dependency: "utif2",
+    explanation:
+      "https://raw.githubusercontent.com/photopea/UTIF.js/HEAD/llms.txt and https://raw.githubusercontent.com/photopea/UTIF.js/master/llms.txt return 404. Use the README and UTIF.d.ts in https://github.com/photopea/UTIF.js directly.",
+    expiresAt: "2026-12-22T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   ...["@dnd-kit/core", "@dnd-kit/sortable"].map(

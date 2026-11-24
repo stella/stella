@@ -12,13 +12,13 @@ import {
   SETTING_WORKSPACE_IDS,
   WORKSPACE_ACCESS_MODE,
 } from "@/api/db/rls";
-import type { Transaction } from "@/api/db/root";
 import {
   correspondenceAllowedSenderMatters,
   correspondenceAllowedSenders,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { activeAuthorizedWorkspaceQuery } from "@/api/lib/workspaces/authorized-workspace-ids";

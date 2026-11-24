@@ -79,6 +79,32 @@ export const OrganizationDangerZone = ({
     auditArchive?.status === "ready" &&
     auditArchive.coversCurrentTrail &&
     auditArchive.downloaded;
+  const resolveAuditArchiveDisabledReason = () => {
+    if (auditExportView.type === "pending") {
+      return t("common.loading");
+    }
+    if (
+      auditExportView.type === "error" ||
+      (auditExportView.type === "items" &&
+        auditExportView.refetchError !== undefined)
+    ) {
+      return t("common.loadFailed");
+    }
+    if (
+      auditArchive?.status === "requested" ||
+      auditArchive?.status === "processing"
+    ) {
+      return t("admin.auditArchiveWorking");
+    }
+    if (auditArchive?.status === "ready") {
+      return t(
+        auditArchive.coversCurrentTrail
+          ? "admin.auditArchiveDownloadFirst"
+          : "admin.auditArchiveOutdated",
+      );
+    }
+    return t("admin.deleteRefusedAuditArchive");
+  };
   const requestAuditArchive = useMutation({
     onMutate: async () => {
       await queryClient.cancelQueries({
@@ -166,6 +192,10 @@ export const OrganizationDangerZone = ({
     const result = await mutation.mutateAsync("delete");
     return result === "refused" ? "keep-open" : undefined;
   };
+  const organizationMutationReason =
+    mutation.variables === "leave"
+      ? t("admin.leavingOrganization")
+      : t("common.deleting");
   const refusalCode = outcome.status === "refused" ? outcome.code : undefined;
   const refusalMessage = (() => {
     if (refusalCode === undefined) {
@@ -187,6 +217,16 @@ export const OrganizationDangerZone = ({
     }
   })();
 
+  const resolveOrganizationDeletionDisabledReason = () => {
+    if (mutation.isPending) {
+      return organizationMutationReason;
+    }
+    if (outcome.status === "completed") {
+      return t("admin.organizationChangeCompleted");
+    }
+    return resolveAuditArchiveDisabledReason();
+  };
+
   return (
     <>
       <OrganizationDangerZoneSection>
@@ -194,6 +234,11 @@ export const OrganizationDangerZone = ({
           action={
             <Button
               disabled={mutation.isPending || outcome.status === "completed"}
+              disabledReason={
+                mutation.isPending
+                  ? organizationMutationReason
+                  : t("admin.organizationChangeCompleted")
+              }
               loading={mutation.isPending && mutation.variables === "leave"}
               onClick={() => mutation.mutate("leave")}
               variant="outline"
@@ -225,6 +270,7 @@ export const OrganizationDangerZone = ({
                   outcome.status === "completed" ||
                   !auditArchiveCurrent
                 }
+                disabledReason={resolveOrganizationDeletionDisabledReason()}
                 onClick={() => setDeleteOpen(true)}
                 variant="destructive"
               >

@@ -1,7 +1,7 @@
 {
   "invitation": {
     "accept": "Přijmout pozvánku",
-    "body": "Byli jste pozváni do organizace {organizationName} uživatelem {invitedByUsername}. Klikněte níže pro přijetí.",
+    "body": "{invitedByUsername} vás zve do organizace {organizationName}. Pozvánku přijmete kliknutím níže.",
     "expires": "Platnost pozvánky vyprší za 48 hodin.",
     "heading": "Pozvánka do organizace",
     "ignore": "Pokud jste tuto pozvánku nečekali, tento e-mail můžete ignorovat.",
@@ -21,37 +21,43 @@
     "subject": "{documentType, select, credit_note {Dobropis} advance {Zálohová faktura} other {Faktura}} {invoiceNumber} od {firmName}"
   },
   "newDeviceLogin": {
-    "action": "Zkontrolovat relace",
-    "body": "K vašemu účtu se někdo přihlásil z nového zařízení nebo místa.",
+    "action": "Zkontrolovat přihlášená zařízení",
+    "actionNote": "Tlačítko otevře Nastavení › Zabezpečení přímo u tohoto přihlášení.",
+    "body": "K vašemu účtu se právě někdo přihlásil z nového zařízení nebo místa.",
     "device": "Zařízení",
-    "heading": "Zjištěno nové přihlášení",
-    "ignore": "Pokud jste to byli vy, není potřeba nic dělat. Pokud tuto aktivitu nepoznáváte, zkontrolujte své aktivní relace a odvolejte ty, které nepoznáváte.",
+    "deviceName": {
+      "browserOnOs": "{browser} v systému {os}",
+      "unknown": "Neznámé zařízení"
+    },
+    "heading": "Nové přihlášení k vašemu účtu",
+    "ignore": "Pokud jste to byli vy, není potřeba nic dělat. Pokud tuto aktivitu nepoznáváte, zkontrolujte své aktivní relace a ukončete ty, které nepoznáváte.",
     "ipAddress": "IP adresa",
-    "location": "Přibližné místo",
-    "locationNote": "Místo je odhadnuté podle IP adresy a nemusí být přesné.",
+    "ipAddressUnknown": "Neznámá",
+    "location": "Poloha",
     "mapAlt": "Mapa s přibližným místem přihlášení: {location}",
-    "mapCredit": "Mapové podklady: Natural Earth",
     "place": {
       "cityCountry": "{city}, {country}",
       "cityRegionCountry": "{city}, {region}, {country}",
       "regionCountry": "{region}, {country}"
     },
+    "placeApproximate": "{place} (přibližně)",
     "preview": "Nové přihlášení z {device}",
+    "previewUnknownDevice": "Nové přihlášení z neznámého zařízení",
     "subject": "Nové přihlášení k vašemu účtu stella",
     "time": "Čas"
   },
   "otp": {
-    "changeEmail": "Použijte tento kód pro ověření vaší nové e-mailové adresy.",
-    "deleteAccount": "Použijte tento kód k ověření smazání vašeho účtu.",
-    "emailVerification": "Použijte tento kód pro ověření vaší e-mailové adresy.",
+    "changeEmail": "Tímto kódem ověříte svou novou e-mailovou adresu.",
+    "deleteAccount": "Tímto kódem potvrdíte smazání svého účtu.",
+    "emailVerification": "Tímto kódem ověříte svou e-mailovou adresu.",
     "expires": "Platnost kódu vyprší za 5 minut.",
-    "forgetPassword": "Použijte tento kód pro obnovení hesla.",
+    "forgetPassword": "Tímto kódem si obnovíte heslo.",
     "heading": "Váš jednorázový kód stella",
     "ignore": "Pokud jste o tento kód nežádali, tento e-mail můžete ignorovat.",
     "preview": "Použijte tento kód k ověření vaší identity",
-    "signIn": "Použijte tento kód pro přihlášení ke svému účtu stella.",
+    "signIn": "Tímto kódem se přihlásíte ke svému účtu stella.",
     "subject": "Váš ověřovací kód stella",
-    "twoFactorManage": "Použijte tento kód k potvrzení změn nastavení dvoufaktorového ověření."
+    "twoFactorManage": "Tímto kódem potvrdíte změny nastavení dvoufaktorového ověření."
   },
   "pushAlert": {
     "announcement": "Vaše organizace zveřejnila oznámení",
@@ -63,12 +69,12 @@
     "taskAssigned": "Byl vám přidělen úkol"
   },
   "reportExportStatus": {
-    "action": "Otevřít stella",
-    "completedBody": "Export vašeho reportu je připraven. Otevřete stella a zobrazte nebo stáhněte jej.",
+    "action": "Otevřít aplikaci stella",
+    "completedBody": "Export vašeho reportu je připravený. Otevřete aplikaci stella, kde si ho můžete zobrazit nebo stáhnout.",
     "completedHeading": "Export reportu je připraven",
     "completedPreview": "Export vašeho reportu je připraven",
     "completedSubject": "Export vašeho reportu je připraven",
-    "failedBody": "Export vašeho reportu se nepodařilo dokončit. Otevřete stella a zkuste to znovu.",
+    "failedBody": "Export vašeho reportu se nepodařilo dokončit. Otevřete aplikaci stella a zkuste to znovu.",
     "failedHeading": "Export reportu se nezdařil",
     "failedPreview": "Export vašeho reportu se nepodařilo dokončit",
     "failedSubject": "Export vašeho reportu se nepodařilo dokončit",

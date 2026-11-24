@@ -94,11 +94,25 @@ const visualLoaders = {
       return { default: UploadRejectionsPlayground };
     },
   },
+  "document-naming": {
+    load: async () => {
+      const { DocumentNamingPlayground } =
+        await import("./-components/document-naming-playground");
+      return { default: DocumentNamingPlayground };
+    },
+  },
   "page-crop": {
     load: async () => {
       const { PageCropPlayground } =
         await import("./-components/page-crop-playground");
       return { default: PageCropPlayground };
+    },
+  },
+  "pdf-fit-width": {
+    load: async () => {
+      const { PdfFitWidthPlayground } =
+        await import("./-components/pdf-fit-width-playground");
+      return { default: PdfFitWidthPlayground };
     },
   },
   "chat-long-paste": {
@@ -113,6 +127,13 @@ const visualLoaders = {
       const { ButtonLabelPlayground } =
         await import("./-components/button-label-playground");
       return { default: ButtonLabelPlayground };
+    },
+  },
+  "sortable-head": {
+    load: async () => {
+      const { SortableHeadPlayground } =
+        await import("./-components/sortable-head-playground");
+      return { default: SortableHeadPlayground };
     },
   },
   "menu-commits": {
@@ -262,13 +283,6 @@ const visualLoaders = {
       return { default: AnswerEditPlayground };
     },
   },
-  autocomplete: {
-    load: async () => {
-      const { AutocompletePlayground } =
-        await import("./-components/autocomplete-playground");
-      return { default: AutocompletePlayground };
-    },
-  },
   ui: {
     load: async () => {
       const { UiPlayground } = await import("./-components/ui-playground");
@@ -287,6 +301,13 @@ const visualLoaders = {
       const { InspectorPanePlayground } =
         await import("./-components/inspector-pane-playground");
       return { default: InspectorPanePlayground };
+    },
+  },
+  "inspector-phone-header": {
+    load: async () => {
+      const { InspectorPhoneHeaderPlayground } =
+        await import("./-components/inspector-phone-header-playground");
+      return { default: InspectorPhoneHeaderPlayground };
     },
   },
   "playbook-editor": {

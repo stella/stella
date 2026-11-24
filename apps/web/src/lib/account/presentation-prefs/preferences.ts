@@ -85,6 +85,11 @@ export const corePresentationPrefsSchema = v.strictObject({
   // An opened chat step shows what it looked up and found; its code and raw
   // result are for people who build with stella, so only they turn them on.
   chatTechnicalDetails: v.fallback(v.boolean(), false),
+  // The last time billing answer this browser saw, for the app frame's first
+  // paint, which the server draws before the session is read: it shapes only
+  // that paint's navigation (the Timesheets entry); route admission and every
+  // request still answer to the server.
+  timeBillingHint: v.fallback(v.boolean(), false),
 });
 
 export const DECISION_LAYOUT_COOKIE = "stella-decision-layouts";

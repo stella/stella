@@ -6,7 +6,7 @@ import { apiDateSchema } from "@stll/api-contract/api-date";
 import type { Temporal } from "@stll/time";
 
 import { timeEntryStatusSchema } from "@/api/db/billing-validators";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { timeEntries } from "@/api/db/schema";
 import {
   selectTimekeeperNames,

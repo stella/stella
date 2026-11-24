@@ -18,7 +18,7 @@ import { Result } from "better-result";
 
 import { SKILL_REF_HREF_PREFIX } from "@stll/api-contract";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
 import { offerSkillsToModel } from "@/api/lib/agent-skills/invocation";
 import { filterSkillsWithAvailableTools } from "@/api/lib/agent-skills/required-tools";

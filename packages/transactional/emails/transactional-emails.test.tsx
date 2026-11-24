@@ -121,8 +121,8 @@ describe("link/CTA emails carry the correct href", () => {
     const sessionsUrl = "https://app.stella.test/account/sessions";
     const html = renderHtml(
       <NewDeviceLogin.Email
-        device="Chrome on macOS"
-        ipAddress="203.0.113.42"
+        device={{ type: "browserOnOs", browser: "Chrome", os: "macOS" }}
+        ipAddress={{ type: "known", address: "203.0.113.42" }}
         lang="en"
         location={{ type: "unknown" }}
         sessionsUrl={sessionsUrl}
@@ -173,15 +173,16 @@ describe("every supported locale renders without missing-interpolation errors", 
 
       const deviceHtml = renderHtml(
         <NewDeviceLogin.Email
-          device="Chrome on macOS"
-          ipAddress="203.0.113.42"
+          device={{ type: "browserOnOs", browser: "Chrome", os: "macOS" }}
+          ipAddress={{ type: "known", address: "203.0.113.42" }}
           lang={lang}
           location={PRAGUE_WITH_MAP}
           sessionsUrl="https://app.stella.test/account/sessions"
           time="Mar 6, 2026, 2:30 PM UTC"
         />,
       );
-      expect(deviceHtml).toContain("Chrome on macOS");
+      expect(deviceHtml).toContain("Chrome");
+      expect(deviceHtml).toContain("macOS");
 
       // The subject helpers hit a second, separately-namespaced key path.
       expect(otpSubject(lang).length).toBeGreaterThan(0);
@@ -193,6 +194,44 @@ describe("every supported locale renders without missing-interpolation errors", 
       expectNoIntlErrors();
     }
   });
+
+  const DEVICES: readonly {
+    device: NewDeviceLogin.SignInDevice;
+    names: readonly string[];
+  }[] = [
+    {
+      device: { type: "browserOnOs", browser: "Chrome", os: "macOS" },
+      names: ["Chrome", "macOS"],
+    },
+    { device: { type: "browser", browser: "Chrome" }, names: ["Chrome"] },
+    { device: { type: "os", os: "macOS" }, names: ["macOS"] },
+    { device: { type: "unknown" }, names: [] },
+  ];
+
+  test.each(LOCALES.filter((lang) => lang !== "en"))(
+    "%s words the device and a missing address in its own language",
+    (lang) => {
+      for (const { device, names } of DEVICES) {
+        const { text } = renderEmail(
+          <NewDeviceLogin.Email
+            device={device}
+            ipAddress={{ type: "unknown" }}
+            lang={lang}
+            location={{ type: "unknown" }}
+            sessionsUrl="https://app.stella.test/account/sessions"
+            time="Mar 6, 2026, 2:30 PM UTC"
+          />,
+        );
+        // Browser and OS names are proper nouns and print as parsed; the
+        // words around them are the locale's.
+        for (const name of names) {
+          expect(text).toContain(name);
+        }
+        expect(text).not.toMatch(/\bUnknown\b|\bon macOS\b/u);
+      }
+      expectNoIntlErrors();
+    },
+  );
 
   test("Arabic renders right-to-left and Latin locales left-to-right", () => {
     const arabic = renderHtml(
@@ -226,8 +265,8 @@ describe("user-supplied strings are HTML-escaped in the rendered output", () => 
   test("new-device-login escapes the device string", () => {
     const html = renderHtml(
       <NewDeviceLogin.Email
-        device={INJECTION}
-        ipAddress="203.0.113.42"
+        device={{ type: "browserOnOs", browser: INJECTION, os: INJECTION }}
+        ipAddress={{ type: "known", address: "203.0.113.42" }}
         lang="en"
         location={{
           type: "known",
@@ -274,8 +313,8 @@ describe("new-device-login location", () => {
   ) =>
     renderEmail(
       <NewDeviceLogin.Email
-        device="Firefox on Linux"
-        ipAddress="198.51.100.7"
+        device={{ type: "browserOnOs", browser: "Firefox", os: "Linux" }}
+        ipAddress={{ type: "known", address: "198.51.100.7" }}
         lang={lang}
         location={location}
         sessionsUrl="https://app.stella.test/account/sessions"
@@ -295,27 +334,25 @@ describe("new-device-login location", () => {
       'alt="Map showing the approximate sign-in location: Prague, Hlavni mesto Praha, Czechia"',
     );
     expect(text).toMatchInlineSnapshot(`
-      "NEW SIGN-IN DETECTED
+      "NEW SIGN-IN TO YOUR ACCOUNT
 
-      Your account was signed in to from a new device or location.
+      Someone just signed in to your account from a new device or location.
 
       Device: Firefox on Linux
 
-      IP address: 198.51.100.7
+      Location: Prague, Hlavni mesto Praha, Czechia (approximate)
 
-      Approximate location: Prague, Hlavni mesto Praha, Czechia
+      IP address: 198.51.100.7
 
       Time: Mar 6, 2026, 2:30 PM UTC
 
-      The location is estimated from the IP address and may be inaccurate.
+      If this was you, you don't need to do anything. If you don't recognize this sign-in, sign this device out.
 
-      Map data: Natural Earth
+      Review signed-in devices https://app.stella.test/account/sessions
 
-      Review sessions https://app.stella.test/account/sessions
+      The button opens Settings › Security at this sign-in.
 
       ----------------------------------------
-
-      If this was you, no action is needed. If you don't recognize this activity, review your active sessions and revoke any you don't recognize.
 
       stella | open source legal workspace"
     `);
@@ -327,23 +364,19 @@ describe("new-device-login location", () => {
 
     expect(imageSources(html)).toEqual([ICON_URL]);
     expect(text).toContain(
-      "Approximate location: Prague, Hlavni mesto Praha, Czechia",
+      "Location: Prague, Hlavni mesto Praha, Czechia (approximate)",
     );
-    expect(text).toContain(
-      "The location is estimated from the IP address and may be inaccurate.",
-    );
-    expect(text).not.toContain("Natural Earth");
     expectNoIntlErrors();
   });
 
-  test("an unknown location leaves location, map and caveat out", () => {
+  test("an unknown location leaves location and map out", () => {
     const { html, text } = renderNotice({ type: "unknown" });
 
     expect(imageSources(html)).toEqual([ICON_URL]);
     expect(text).toMatchInlineSnapshot(`
-      "NEW SIGN-IN DETECTED
+      "NEW SIGN-IN TO YOUR ACCOUNT
 
-      Your account was signed in to from a new device or location.
+      Someone just signed in to your account from a new device or location.
 
       Device: Firefox on Linux
 
@@ -351,11 +384,13 @@ describe("new-device-login location", () => {
 
       Time: Mar 6, 2026, 2:30 PM UTC
 
-      Review sessions https://app.stella.test/account/sessions
+      If this was you, you don't need to do anything. If you don't recognize this sign-in, sign this device out.
+
+      Review signed-in devices https://app.stella.test/account/sessions
+
+      The button opens Settings › Security at this sign-in.
 
       ----------------------------------------
-
-      If this was you, no action is needed. If you don't recognize this activity, review your active sessions and revoke any you don't recognize.
 
       stella | open source legal workspace"
     `);
@@ -371,7 +406,7 @@ describe("new-device-login location", () => {
       map: null,
     });
 
-    expect(text).toContain("Approximate location: Vienna, Austria");
+    expect(text).toContain("Location: Vienna, Austria (approximate)");
   });
 
   test("a location with only a country names the country", () => {
@@ -383,7 +418,7 @@ describe("new-device-login location", () => {
       map: null,
     });
 
-    expect(text).toContain("Approximate location: Portugal");
+    expect(text).toContain("Location: Portugal (approximate)");
   });
 
   test("Arabic names the country in Arabic and separates with the Arabic comma", () => {

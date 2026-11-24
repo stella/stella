@@ -32,6 +32,7 @@ import {
   pendingDeletionTasksOptions,
   sessionsOptions,
 } from "@/lib/account/queries";
+import { sessionSignInsOptions } from "@/lib/account/session-sign-ins";
 import { professionalUseOptions } from "@/lib/auth-queries";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { inboxCountOptions } from "@/lib/inbox/queries";
@@ -191,6 +192,8 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     keys: () => [accountDataExportLatestOptions(USER).queryKey],
   },
   "account-exports/status/get.ts": { kind: "no-web-caller", calls: [] },
+  // The phone and the desktop sync learned dictation fixes; the web does not dictate.
+  "dictation/learned-fixes/list.ts": { kind: "no-web-caller", calls: [] },
   "organizations/audit-export/get.ts": {
     kind: "keyed",
     calls: ['api.organizations["audit-export"].get'],
@@ -1019,6 +1022,12 @@ const AUTH_CLIENT_READS: Record<string, PerUserRead> = {
       "routes/auth/-components/dev-quick-start-button.tsx",
     ],
     keys: () => [organizationListOptions(USER).queryKey],
+  },
+  "authClient.sessionSignIns.list": {
+    kind: "keyed",
+    calls: ["authClient.sessionSignIns.list"],
+    files: ["lib/account/session-sign-ins.ts"],
+    keys: () => [sessionSignInsOptions(USER).queryKey],
   },
 };
 

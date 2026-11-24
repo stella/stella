@@ -17,7 +17,6 @@ import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import {
   entities,
   entityVersions,
@@ -25,6 +24,7 @@ import {
   legalListGenerationRuns,
   legalListGenerationSources,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";

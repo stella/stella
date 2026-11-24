@@ -24,6 +24,7 @@ import {
 } from "@/api/lib/api-handlers";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import { createAuditRecorder } from "@/api/lib/audit-log";
+import { desktopVerifiedAccount } from "@/api/lib/business-registries/desktop/account-image";
 import {
   authorizeDesktopAccount,
   authorizeDesktopRegistry,
@@ -60,7 +61,10 @@ export const desktopRequestAuthorization = {
 type RegistryReply =
   | (DesktopRegistryConfig & {
       account: LinkedAccountSnapshot;
+      /** The member's picture for the desktop to show, or null. */
+      accountImage: string | null;
       identity: DesktopAccountIdentity;
+      organizationName: string;
     })
   | DesktopRegistrySearchResponse
   | { text: string; rendered: string }
@@ -103,15 +107,19 @@ export const createDesktopRegistryRequestEndpoint = (
           return Result.ok({ revoked: true });
         }
         case "config": {
-          const account = yield* Result.await(
+          const linked = yield* Result.await(
             Result.tryPromise({
               try: async () =>
-                await context.scopedDb((tx) =>
-                  tx.query.user.findFirst({
+                await context.scopedDb(async (tx) => ({
+                  account: await tx.query.user.findFirst({
                     where: { id: { eq: context.userId } },
-                    columns: { email: true, name: true },
+                    columns: { email: true, image: true, name: true },
                   }),
-                ),
+                  organization: await tx.query.organization.findFirst({
+                    where: { id: { eq: context.organizationId } },
+                    columns: { name: true },
+                  }),
+                })),
               catch: (cause) =>
                 new HandlerError({
                   status: 503,
@@ -121,7 +129,8 @@ export const createDesktopRegistryRequestEndpoint = (
                 }),
             }),
           );
-          if (!account) {
+          const { account, organization } = linked;
+          if (!account || !organization) {
             return Result.err(
               new HandlerError({
                 status: 401,
@@ -138,10 +147,12 @@ export const createDesktopRegistryRequestEndpoint = (
               userId: context.userId,
               organizationId: context.organizationId,
             },
-            account: {
-              ...account,
-              verifiedAt: Temporal.Now.instant().toString(),
-            },
+            ...desktopVerifiedAccount(
+              account,
+              Temporal.Now.instant().toString(),
+            ),
+            // The desktop seeds the member's dictation words with it.
+            organizationName: organization.name,
           });
         }
         case "search":

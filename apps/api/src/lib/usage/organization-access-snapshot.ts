@@ -1,13 +1,13 @@
 import { panic } from "better-result";
 import { eq, getColumns } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   organizationAccessStates,
   organizationConfiguredAccess,
   usageEntitlements,
   usagePolicies,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {

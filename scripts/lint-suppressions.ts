@@ -21,7 +21,8 @@
 
 import { panic } from "better-result";
 
-import { type Node, parseSource } from "../packages/scripts/src/syntax-tree";
+import type { Node } from "../packages/scripts/src/syntax-tree";
+import { parseSyntax } from "./parse-memo.ts";
 
 // --- Tracked rules ----------------------------------------------------------
 
@@ -304,7 +305,8 @@ export type LintDirective = {
   readonly rules: readonly string[];
 };
 
-const parseFile = (content: string, file: string) => parseSource(file, content);
+const parseFile = (content: string, file: string) =>
+  parseSyntax({ fileName: file, text: content });
 
 // The rules a directive names, or `[]` for a bare directive. The rule list
 // ends at the `--` reason trailer or the block-comment close, whichever comes

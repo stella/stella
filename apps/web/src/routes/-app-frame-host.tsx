@@ -6,6 +6,7 @@ import { useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
 
 import { ProtectedPendingInspectorScopeContext } from "@/components/inspector/protected-pending-inspector-scope";
+import { useLeafRouteInspectorEntry } from "@/components/inspector/route-inspector-entry";
 import { StellaWordmark } from "@/components/stella-wordmark";
 import { mountBrowserExtensionBridge } from "@/features/chat/browser-control/browser-extension-bridge";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
@@ -111,6 +112,7 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
     select: (state) => matchedAppFrameScope(state.matches),
   });
   const leafPendingView = useLeafPendingView();
+  const inspectorOnEntry = useLeafRouteInspectorEntry();
   const redirectScope = useLeafRedirectFrameScope();
   const routeUser = useRouterState({
     select: (state) => routeUserOf(state.matches),
@@ -157,11 +159,18 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
           organizationId: memberUser.activeOrganizationId,
         },
   );
+  const initialVisitor = publicKnowledge ? visitor : null;
+  const [prevInitialVisitor, setPrevInitialVisitor] = useState<string | null>(
+    null,
+  );
   const [shownVisitor, setShownVisitor] = useState<string | null>(null);
   const resetting = visitorChanged({ publicKnowledge, shownVisitor, visitor });
   // The first visitor the frame is shown to is recorded as it renders.
-  if (publicKnowledge && shownVisitor === null && visitor !== null) {
-    setShownVisitor(visitor);
+  if (prevInitialVisitor !== initialVisitor) {
+    setPrevInitialVisitor(initialVisitor);
+    if (shownVisitor === null && initialVisitor !== null) {
+      setShownVisitor(initialVisitor);
+    }
   }
   useLayoutEffect(() => {
     if (!publicKnowledge || visitor === null) {
@@ -183,7 +192,12 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
   }, [queryClient, publicKnowledge, visitor]);
 
   // Until the frame mounts, the skeleton already has the page's shape.
-  const pending = <ProtectedPendingSkeleton body={leafPendingView} />;
+  const pending = (
+    <ProtectedPendingSkeleton
+      body={leafPendingView}
+      inspectorOnEntry={inspectorOnEntry}
+    />
+  );
 
   if (resetting) {
     return pending;

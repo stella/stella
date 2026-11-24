@@ -10,8 +10,9 @@ defaults:
 # stand-ins for Codex and Claude Code. Not part of ci-result. Pull requests run
 # it when they change what the suite exercises: the agent engine, the desktop
 # runner and its sidecar host, the local run contract, the API's and the chat's
-# local run code, the stand-in's scripts or the suite itself. This list is the
-# one place that names that surface.
+# local run code, the composer's send controls the suite drives, the
+# stand-in's scripts or the suite itself. This list is the one place that
+# names that surface.
 on:
   pull_request:
     paths:
@@ -41,6 +42,9 @@ on:
       - apps/api/src/lib/desktop-runner/**
       - apps/web/src/components/chat/chat-run-target-menu*
       - apps/web/src/components/chat/chat-model-selector.tsx
+      - apps/web/src/components/chat-input-surface.tsx
+      - apps/web/src/components/chat/chat-composer-action-button.tsx
+      - apps/web/src/components/chat/chat-prompt-improve-button.tsx
       - apps/web/src/components/chat/chat-local-run-*
       - apps/web/src/components/chat/local-run-*
       - apps/web/src/components/chat/local-files-undo*
@@ -85,11 +89,20 @@ jobs:
         with:
           persist-credentials: false
 
+      # The Acquire timeouts end an attempt whose connection goes silent; the
+      # per-attempt deadline ends one that stalls while the connection stays
+      # open, so retry.sh can start a fresh attempt. A slow but healthy mirror
+      # install takes up to about 310 s, so the install deadline stays well
+      # above it. The step deadline covers every attempt and pause retry.sh
+      # makes for both calls.
       - name: Install desktop build libraries
-        timeout-minutes: 5
+        timeout-minutes: 29
         run: |
-          bash scripts/retry.sh sudo apt-get update -qq
-          bash scripts/retry.sh sudo apt-get install -y -qq --no-install-recommends \
+          apt_options=(-o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=3)
+          bash scripts/retry.sh sudo timeout --kill-after=10s 90s \
+            apt-get "${apt_options[@]}" update -qq
+          bash scripts/retry.sh sudo timeout --kill-after=10s 420s \
+            apt-get "${apt_options[@]}" install -y -qq --no-install-recommends \
             libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
             librsvg2-dev libxdo-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
 
@@ -218,7 +231,7 @@ jobs:
       - name: Login to GitHub Container Registry for browser images
         if: github.event.pull_request.head.repo.fork != true && github.token != ''
         continue-on-error: true
-        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        uses: ./.github/actions/docker-login
         with:
           registry: ghcr.io
           username: ${{ github.actor }}

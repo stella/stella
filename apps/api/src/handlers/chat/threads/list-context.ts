@@ -9,7 +9,7 @@ import {
 import type { EntityKind } from "@stll/api-contract";
 import { USER_FILE_URL_PREFIX } from "@stll/api-contract/user-file-url";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
 

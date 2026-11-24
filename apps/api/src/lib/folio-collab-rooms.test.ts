@@ -5,7 +5,6 @@ import type { PgTable, SelectedFields } from "drizzle-orm/pg-core";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { Doc, encodeStateAsUpdate, XmlElement, XmlText } from "yjs";
 
-import { FOLIO_YJS_ATTR_SCHEMA_VERSION } from "@stll/folio-core/server";
 import { sha256Hex } from "@stll/sha256/node";
 import { createTestClock } from "@stll/test-kit";
 import { createTestState } from "@stll/test-state";
@@ -17,6 +16,7 @@ import { envBase } from "@/api/env-base";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/file-key";
+import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -166,10 +166,14 @@ const scopedTransaction: QueryApi = {
   },
   execute: async (query) => {
     const { sql } = new PgDialect().sqlToQuery(query);
+    // Owner-registered advisory locks report the physical key they took.
+    if (sql.includes("AS key1")) {
+      return aggregateExecutionRows(query);
+    }
     if (sql.includes("pg_advisory_xact_lock")) {
       return [{}];
     }
-    if (/FOR (?:NO KEY )?UPDATE/u.test(sql)) {
+    if (/FOR (?:NO KEY UPDATE|UPDATE|SHARE)/u.test(sql)) {
       return [{ id: workspaceId, organizationId }];
     }
     const rows = resolveQueuedRows(scopedRows.shift());
@@ -190,7 +194,8 @@ const createScopedDbTestDouble =
     if (scopedFailure !== null && scopedCalls > scopedFailureAfterCalls) {
       throw new Error(scopedFailure.message, { cause: scopedFailure });
     }
-    return await callback(scopedTransaction);
+    // Each scoped call is its own transaction, with its own lock history.
+    return await callback({ ...scopedTransaction });
   };
 // Object storage is the real `lib/s3`, pointed at an in-process store: the
 // keys, content types and deletes below are the ones the module actually put
@@ -256,9 +261,7 @@ const snapshotKey = (fileId: string) =>
 
 const currentFolioSnapshot = () => {
   const doc = new Doc();
-  doc
-    .getMap("folio:document-metadata")
-    .set("attrSchemaVersion", FOLIO_YJS_ATTR_SCHEMA_VERSION);
+  doc.getText("body").insert(0, "saved room");
   const update = encodeStateAsUpdate(doc);
   doc.destroy();
   return update;
@@ -462,19 +465,12 @@ describe("folio collaboration room snapshot generation", () => {
     ]);
   });
 
-  test("returns the hash of persisted bytes before snapshot normalization", async () => {
+  test("returns the persisted bytes and their hash", async () => {
     const authorized = await authorize(validRow());
     if (authorized.status !== "authorized") {
       throw new Error("Expected an authorized snapshot target");
     }
-    const snapshot = new Uint8Array(
-      await Bun.file(
-        new URL(
-          "files/fixtures/folio-core-0.58.5/migratable.yjs",
-          import.meta.url,
-        ),
-      ).arrayBuffer(),
-    );
+    const snapshot = currentFolioSnapshot();
     scopedRows = [
       [
         {
@@ -493,14 +489,10 @@ describe("folio collaboration room snapshot generation", () => {
     );
     const loaded = (await loadFolioCollabSnapshot(authorized.value)).unwrap();
     expect(loaded?.rawSnapshotSha256Hex).toBe(sha256Hex(snapshot));
-    expect(loaded?.snapshot.loadOutcome).toBe("loaded");
-    const normalized = loaded?.snapshot.snapshotBase64;
-    if (normalized === null || normalized === undefined) {
-      throw new Error("Expected normalized persisted snapshot bytes");
-    }
-    expect(sha256Hex(Buffer.from(normalized, "base64"))).not.toBe(
-      sha256Hex(snapshot),
-    );
+    expect(loaded?.snapshot).toMatchObject({
+      loadOutcome: "loaded",
+      snapshotBase64: Buffer.from(snapshot).toBase64(),
+    });
   });
 
   test.each(["loaded", "rematerialize-from-docx", "conflict"] as const)(

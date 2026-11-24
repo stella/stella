@@ -26,6 +26,8 @@ const boundaryLeaves = new Set([
   "lib/deployment-feature-route.ts",
   "lib/api-handlers.ts",
   "lib/errors/tagged-errors.ts",
+  // Per-process work admission counts scan slots and memory; it reads no data.
+  "lib/load/work-admission.ts",
 ]);
 
 const allowedModules = new Set([
@@ -84,6 +86,9 @@ const allowedExternal = new Set([
   "@litko/yara-x",
   "@stll/agent-input",
   "@stll/api-contract",
+  // The warning text the scan records for content it could not read, and the
+  // pure reading of it back; no storage or data access.
+  "@stll/api-contract/file-scan-warnings",
   "@stll/collation",
   "@stll/docx-core/zip",
   "@stll/docx-utils",

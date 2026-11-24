@@ -13,8 +13,8 @@ import {
   readerPdfPageAnchorId,
 } from "@stll/api-contract/legal-reader-annotations";
 
-import type { Transaction } from "@/api/db/root";
 import { legalListClaims } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ClaimAnchor } from "@/api/lib/lists/verification/contract";
 

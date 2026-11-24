@@ -1,8 +1,9 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { panic } from "better-result";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { caseLawDecisions, legislationDocuments } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import {
@@ -11,7 +12,9 @@ import {
 } from "@/api/lib/db/timestamp-cas";
 import {
   type ActiveCorpusProjectionSourceLock,
+  CASE_LAW_PROJECTION_REPAIR_BATCH_SIZE,
   lockActiveCorpusProjectionSourceByIdTx,
+  synchronizeLockedCaseLawProjectionBatchTx,
   synchronizeLockedCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 
@@ -191,26 +194,63 @@ const lockCaseLawSourcesInOrderTx = async (
   return await lockCaseLawSourcesInOrderTx(tx, sourceIds, offset + 1, next);
 };
 
+type CaseLawProjectionBatch = {
+  sourceId: SafeId<"caseLawSource">;
+  decisionIds: SafeId<"caseLawDecision">[];
+};
+
+/** One set-based reconciliation per source batch, in source order. */
+const synchronizeCaseLawBatchesTx = async (
+  tx: Transaction,
+  lock: ActiveCorpusProjectionSourceLock,
+  batches: readonly CaseLawProjectionBatch[],
+  offset = 0,
+): Promise<void> => {
+  const batch = batches.at(offset);
+  if (batch === undefined) {
+    return;
+  }
+  await synchronizeLockedCaseLawProjectionBatchTx(tx, { lock, ...batch });
+  await synchronizeCaseLawBatchesTx(tx, lock, batches, offset + 1);
+};
+
 /**
  * Project decisions whose projectability or projected hash the caller wrote
  * in this transaction, under the lock `lockCaseLawProjectabilitySourcesTx`
- * took before the rows. Bounded by the caller's page.
+ * took before the rows. Set-based per source batch, so a page costs a fixed
+ * number of statements per batch rather than several per decision.
  */
 export const projectCaseLawDecisionsTx = async (
   tx: Transaction,
   lock: ActiveCorpusProjectionSourceLock,
   ids: readonly SafeId<"caseLawDecision">[],
-  offset = 0,
 ): Promise<void> => {
-  const id = ids.at(offset);
-  if (id === undefined) {
+  const requested = new Set(ids);
+  if (requested.size === 0) {
     return;
   }
-  await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
-    lock,
-    subject: { family: "case_law", entityId: id },
-  });
-  await projectCaseLawDecisionsTx(tx, lock, ids, offset + 1);
+  const rows = await tx
+    .select({ id: caseLawDecisions.id, sourceId: caseLawDecisions.sourceId })
+    .from(caseLawDecisions)
+    .where(inArray(caseLawDecisions.id, [...requested]))
+    .orderBy(asc(caseLawDecisions.sourceId), asc(caseLawDecisions.id))
+    .limit(requested.size);
+  if (rows.length !== requested.size) {
+    panic("Projected case-law decision disappeared");
+  }
+  const batches: CaseLawProjectionBatch[] = [];
+  for (const { id, sourceId } of rows) {
+    const batch = batches.at(-1);
+    if (
+      batch?.sourceId === sourceId &&
+      batch.decisionIds.length < CASE_LAW_PROJECTION_REPAIR_BATCH_SIZE
+    ) {
+      batch.decisionIds.push(id);
+    } else {
+      batches.push({ sourceId, decisionIds: [id] });
+    }
+  }
+  await synchronizeCaseLawBatchesTx(tx, lock, batches);
 };
 
 /** What a corpus write stored for a row: its object keys and content hash. */

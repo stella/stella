@@ -13,6 +13,7 @@ import type { Identity as ChatStoredContentEgressIdentity } from "./chatStoredCo
 import type { Identity as ChatThreadIdentity } from "./chatThread";
 import type { Identity as ChatToolGrantsIdentity } from "./chatToolGrants";
 import type { Identity as ChatTurnIdentity } from "./chatTurn";
+import type { Identity as ContactIdentity } from "./contact";
 import type { Identity as ContactCapacityIdentity } from "./contactCapacity";
 import type { Identity as CorpusProjectionOfflineRequestIdentity } from "./corpusProjectionOfflineRequest";
 import type { Identity as CorrespondenceIdentity } from "./correspondence";
@@ -23,6 +24,7 @@ import type { Identity as DesktopBatchIdentity } from "./desktopBatch";
 import type { Identity as DesktopCredentialIdentity } from "./desktopCredential";
 import type { Identity as DesktopMembershipIdentity } from "./desktopMembership";
 import type { Identity as DesktopRunnerCapacityIdentity } from "./desktopRunnerCapacity";
+import type { Identity as DictationVocabularyCapacityIdentity } from "./dictationVocabularyCapacity";
 import type { Identity as EntityIdentity } from "./entity";
 import type { Identity as EntityVersionIdentity } from "./entityVersion";
 import type { Identity as ExpenseCapacityIdentity } from "./expenseCapacity";
@@ -77,6 +79,7 @@ export type AggregateIdentities = {
   "chatThread": ChatThreadIdentity;
   "chatToolGrants": ChatToolGrantsIdentity;
   "chatTurn": ChatTurnIdentity;
+  "contact": ContactIdentity;
   "contactCapacity": ContactCapacityIdentity;
   "corpusProjectionOfflineRequest": CorpusProjectionOfflineRequestIdentity;
   "correspondence": CorrespondenceIdentity;
@@ -87,6 +90,7 @@ export type AggregateIdentities = {
   "desktopCredential": DesktopCredentialIdentity;
   "desktopMembership": DesktopMembershipIdentity;
   "desktopRunnerCapacity": DesktopRunnerCapacityIdentity;
+  "dictationVocabularyCapacity": DictationVocabularyCapacityIdentity;
   "entity": EntityIdentity;
   "entityVersion": EntityVersionIdentity;
   "expenseCapacity": ExpenseCapacityIdentity;

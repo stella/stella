@@ -1,4 +1,4 @@
-import type { AnonymizationTerm } from "@stll/folio-react";
+import type { FolioAnonymizationTerm } from "@stll/folio-react";
 
 import { detached } from "@/lib/detached";
 
@@ -206,8 +206,8 @@ type DetectionPair = {
  */
 export const dedupeDetectedAnonymizationTerms = (
   pairs: readonly DetectionPair[],
-): AnonymizationTerm[] => {
-  const byCanonical = new Map<string, AnonymizationTerm>();
+): FolioAnonymizationTerm[] => {
+  const byCanonical = new Map<string, FolioAnonymizationTerm>();
   for (const pair of pairs) {
     const key = `${pair.label} ${pair.original.toLowerCase()}`;
     if (!byCanonical.has(key)) {
@@ -241,8 +241,8 @@ export const buildExcludedCanonicalsSet = (
 
 type MergeAnonymizationTermsOptions = {
   isAnonymizationActive: boolean;
-  workspaceTerms: readonly AnonymizationTerm[];
-  detectedTerms: readonly AnonymizationTerm[];
+  workspaceTerms: readonly FolioAnonymizationTerm[];
+  detectedTerms: readonly FolioAnonymizationTerm[];
   excludedCanonicals: ReadonlySet<string>;
 };
 
@@ -260,7 +260,7 @@ export const mergeAnonymizationTerms = ({
   workspaceTerms,
   detectedTerms,
   excludedCanonicals,
-}: MergeAnonymizationTermsOptions): AnonymizationTerm[] => {
+}: MergeAnonymizationTermsOptions): FolioAnonymizationTerm[] => {
   if (!isAnonymizationActive) {
     return [];
   }

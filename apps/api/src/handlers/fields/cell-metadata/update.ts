@@ -6,7 +6,6 @@ import { REVIEW_FLAGS, REVIEW_FLAGS_MAX_ITEMS } from "@stll/api-contract";
 import type { ReviewFlag } from "@stll/api-contract";
 import { CELL_OVERRIDE_ABSENT_CODE } from "@stll/api-contract/property-policy";
 
-import type { Transaction } from "@/api/db/root";
 import { cellMetadata, entities, properties } from "@/api/db/schema";
 import { cellOverrideReasonSchema } from "@/api/db/schema-validators";
 import type {
@@ -14,6 +13,7 @@ import type {
   CellOverride,
   EntityKind,
 } from "@/api/db/schema-validators";
+import type { Transaction } from "@/api/db/types";
 import { fieldRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";

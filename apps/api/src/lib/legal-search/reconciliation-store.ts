@@ -17,8 +17,7 @@ import { and, count, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { DAY_IN_MS } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   caseLawReconciliationItems,
   caseLawSources,
@@ -26,6 +25,7 @@ import {
   RECONCILIATION_MAX_REVIVALS,
 } from "@/api/db/schema";
 import type { ReconciliationItemStatus } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";

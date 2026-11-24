@@ -19,7 +19,7 @@ import { CI_GENERATION_COMMANDS } from "./generated-files";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
-const run = (command: readonly string[]) => {
+const runSync = (command: readonly string[]) => {
   const result = Bun.spawnSync([...command], {
     cwd: root,
     stdout: "inherit",
@@ -30,17 +30,54 @@ const run = (command: readonly string[]) => {
   }
 };
 
-const generate = () => {
+const runAsync = async (command: readonly string[]): Promise<number> => {
+  const proc = Bun.spawn([...command], {
+    cwd: root,
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  return await proc.exited;
+};
+
+const isParallelCompilerStage = (command: readonly string[]): boolean =>
+  command.includes("generate:api-types") ||
+  command.includes("generate:typecheck-declarations");
+
+const generate = async () => {
+  const parallelStages: (readonly string[])[] = [];
   for (const command of CI_GENERATION_COMMANDS) {
-    run(command);
+    if (isParallelCompilerStage(command)) {
+      parallelStages.push(command);
+    } else {
+      runSync(command);
+    }
+  }
+  if (parallelStages.length <= 1) {
+    for (const command of parallelStages) {
+      runSync(command);
+    }
+    return;
+  }
+  const codes = await Promise.all(
+    parallelStages.map(async (command) => await runAsync(command)),
+  );
+  const failed = codes.find((code) => code !== 0);
+  if (failed !== undefined) {
+    process.exit(failed);
   }
 };
 
 // Only the producer fills generated directories: a consumer restores them, and
 // a local `prepare` leaves them to the checks that need them.
-const generateDirectories = () => {
+const generateDirectories = async () => {
+  const running: Promise<number>[] = [];
   for (const { command } of CI_GENERATED_DIRECTORIES) {
-    run(command);
+    running.push(runAsync(command));
+  }
+  const codes = await Promise.all(running);
+  const failed = codes.find((code) => code !== 0);
+  if (failed !== undefined) {
+    process.exit(failed);
   }
 };
 
@@ -53,8 +90,7 @@ if (mode === "produce") {
     process.argv.at(3) ?? panic("Expected generated artifact directory");
   const started = performance.now();
   const identity = generatedInputIdentity(root);
-  generate();
-  generateDirectories();
+  await Promise.all([generate(), generateDirectories()]);
   requireUnchangedGeneratedInputs(root, identity);
   const files = Object.fromEntries(
     [...ciGeneratedFiles(root), ...generatedDirectoryFiles(root)].map(
@@ -88,7 +124,7 @@ if (mode === "produce") {
   );
 } else if (mode === "prepare") {
   if (!hasPreparedGeneratedSources(root)) {
-    generate();
+    await generate();
   }
 } else {
   panic("Usage: ci-generated-sources.ts produce|restore <directory> | prepare");

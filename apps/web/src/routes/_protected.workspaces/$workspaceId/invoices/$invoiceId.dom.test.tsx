@@ -175,6 +175,7 @@ const mountInvoice = async (
       },
       documentProcessingMode: "off",
       matterNumberPattern: "{year}/{number}",
+      documentNamePattern: null,
       matterNumberPadding: 3,
       matterNumberingEnabled: false,
       practiceJurisdictions: [],

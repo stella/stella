@@ -143,13 +143,14 @@ export const BrowserQuestion = ({
             {t.rich("browserQuestionTitle", { bdi, browser: browser.name })}
           </h2>
           <p className="text-muted-foreground text-xs text-pretty">
-            {t("browserQuestionDescription")}
+            {t("browserQuestionDescription")} {t("browserPrivacyNote")}
           </p>
         </div>
         <Button
           aria-label={t("browserQuestionLater")}
           className="-me-2 -mt-1"
           disabled={pending}
+          disabledReason={t("savingCapturePreference")}
           onClick={() => state.dismiss(browser)}
           size="icon-sm"
           tooltip={t("browserQuestionLater")}
@@ -161,6 +162,7 @@ export const BrowserQuestion = ({
       <div className="flex flex-wrap gap-2 ps-7">
         <Button
           disabled={pending}
+          disabledReason={t("savingCapturePreference")}
           onClick={() => answer("titles")}
           size="sm"
           variant="outline"
@@ -169,6 +171,7 @@ export const BrowserQuestion = ({
         </Button>
         <Button
           disabled={pending}
+          disabledReason={t("savingCapturePreference")}
           onClick={() => answer("appOnly")}
           size="sm"
           variant="outline"

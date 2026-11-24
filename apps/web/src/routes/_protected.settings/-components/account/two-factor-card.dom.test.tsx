@@ -88,6 +88,7 @@ const mount = (emailAvailable: boolean) => {
     reviewPasswordSignIn: false,
     bootstrap: false,
     social: { google: false, microsoft: false, apple: false },
+    enterpriseSso: false,
     transactionalEmail: emailAvailable,
   });
   render(

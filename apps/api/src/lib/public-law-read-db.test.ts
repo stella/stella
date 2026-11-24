@@ -38,7 +38,7 @@ describe("external public-law database boundary", () => {
     expect(future.length).toBeGreaterThan(0);
     for (const pair of future) {
       expect(pair.grant).toBe("permitted");
-      expect(allowed).toContainEqual(pair);
+      expect(allowed).toContainEqual({ ...pair, grant: "required" });
     }
     expect(
       PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies,
@@ -56,14 +56,14 @@ describe("external public-law database boundary", () => {
     expect(future.length).toBeGreaterThan(0);
     for (const pair of future) {
       expect(pair.grant).toBe("permitted");
-      expect(allowed).toContainEqual(pair);
+      expect(allowed).toContainEqual({ ...pair, grant: "required" });
     }
     expect(
       PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.case_law_unredacted_decisions,
     ).not.toHaveProperty("source_observed_at");
   });
 
-  test("tolerates future collection-body grants without requiring or widening attachment access", () => {
+  test("requires the narrow collection-body grants without widening attachment access", () => {
     const future = publicLawColumnPairs(
       COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
     );
@@ -71,7 +71,7 @@ describe("external public-law database boundary", () => {
     expect(future.length).toBeGreaterThan(0);
     for (const pair of future) {
       expect(pair.grant).toBe("permitted");
-      expect(allowed).toContainEqual(pair);
+      expect(allowed).toContainEqual({ ...pair, grant: "required" });
     }
     expect(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).not.toHaveProperty(
       "case_law_held_decision_attachments",

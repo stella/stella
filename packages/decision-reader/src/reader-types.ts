@@ -1,3 +1,4 @@
+import type { DecisionBodySource } from "@stll/api-contract/case-law-body-source";
 import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
 import type { CaseLawDecisionLanguageAlternate } from "@stll/api-contract/case-law-decision-route";
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
@@ -30,6 +31,8 @@ export type ReaderDecision = {
   }[];
   language: string;
   sourceAttributionUrl: string | null;
+  /** Older API tasks and cached host responses omit provenance during rollout. */
+  bodySource?: DecisionBodySource;
   textFields: ReadDecisionTextFields;
 };
 

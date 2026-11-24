@@ -98,6 +98,7 @@ const decision = {
   judges: [],
   language: "cs",
   sourceAttributionUrl: "https://court.example/decision",
+  bodySource: { textSource: "host" },
   textFields: {
     abstract: absent,
     headnote: absent,
@@ -870,7 +871,7 @@ for (const response of ["error", "null", "empty"] as const) {
         toggle.click();
       });
       expect(requests).toHaveLength(1);
-      expect(toggle.disabled).toBe(true);
+      expect(toggle.getAttribute("aria-disabled")).toBe("true");
       expect(toggle.getAttribute("aria-expanded")).toBe("false");
       expect(container.textContent).toContain("Cited wording.");
       await act(async () => {
@@ -889,7 +890,7 @@ for (const response of ["error", "null", "empty"] as const) {
             response satisfies never;
         }
       });
-      expect(toggle.disabled).toBe(false);
+      expect(toggle.hasAttribute("aria-disabled")).toBe(false);
       expect(toggle.textContent).toBe("Show full provision");
       expect(toggle.getAttribute("aria-expanded")).toBe("false");
       expect(
@@ -905,13 +906,13 @@ for (const response of ["error", "null", "empty"] as const) {
         ),
       ).toBeNull();
       expect(container.textContent).toContain("Cited wording.");
-      expect(toggle.disabled).toBe(false);
+      expect(toggle.hasAttribute("aria-disabled")).toBe(false);
       expect(requests).toHaveLength(1);
       await act(async () => {
         toggle.click();
       });
       expect(requests).toHaveLength(2);
-      expect(toggle.disabled).toBe(true);
+      expect(toggle.getAttribute("aria-disabled")).toBe("true");
       await act(async () => {
         const retry = requests.at(1) ?? panic("Missing retry read");
         retry.resolve({
@@ -926,7 +927,7 @@ for (const response of ["error", "null", "empty"] as const) {
           ],
         });
       });
-      expect(toggle.disabled).toBe(false);
+      expect(toggle.hasAttribute("aria-disabled")).toBe(false);
       expect(toggle.textContent).toBe("Show cited part only");
       expect(toggle.getAttribute("aria-expanded")).toBe("true");
       expect(container.textContent).toContain("Rest of provision.");
@@ -1184,4 +1185,130 @@ test("a margin card's ranges are the cited words of its paragraph", () => {
     ["p-9", [["provision-90", "§ 90"]]],
     ["p-9", [["provision-91", "§ 91"]]],
   ]);
+});
+
+test("collection body attribution names its publisher and retrieval date outside quoted text", () => {
+  const publication = {
+    extent: "unclassified",
+    contribution: "body",
+    sourceDocumentId: "123",
+    sourceUrl: "https://sbirka.nsoud.cz/sbirka/123/",
+    retrievedAt: "2026-10-09T12:00:00.000Z",
+    source: {
+      id: "01900000-0000-7000-8000-000000000001",
+      name: "Official collection",
+      adapterKey: "cz-ns-sbirka",
+      allowsDerivedAi: true,
+    },
+  } as const;
+  const collected = {
+    ...decision,
+    bodySource: {
+      textSource: "collection",
+      source: publication.source,
+      sourceUrl: publication.sourceUrl,
+      retrievedAt: publication.retrievedAt,
+      extent: publication.extent,
+      provenance: {
+        coverage: "all",
+        totalCount: 1,
+        omittedCount: 0,
+        records: [publication],
+      },
+    },
+  } satisfies ReaderDecision;
+  const placements = prepareDecisionTextPlacements({
+    adapters: fakeReaderAdapters,
+    blocks: ast.blocks,
+    annotationAnchors: [],
+    statuteCitationAnchors: [],
+    unresolvedCitationAnchors: [],
+    citationAnchors: [],
+    provisionAnchors: [],
+  });
+  const markup = renderReaderFixture(
+    <DecisionText
+      decision={collected}
+      decisionId={collected.id}
+      isHydrated
+      placements={placements}
+    />,
+  );
+  const footer = markup.slice(markup.indexOf("<footer"));
+  expect(footer).toContain('href="https://sbirka.nsoud.cz/sbirka/123/"');
+  expect(footer).toContain("Retrieved");
+  expect(footer).toContain("2026");
+  expect(footer).not.toContain("court.example");
+  expect(footer).toContain('data-reader-chrome=""');
+  expect(footer).not.toContain("data-anchor");
+});
+
+test("collection attribution preserves every projected post, partial extent and unknown retrieval dates", () => {
+  const source = {
+    id: "01900000-0000-7000-8000-000000000001",
+    name: "Official collection",
+    adapterKey: "cz-ns-sbirka",
+    allowsDerivedAi: true,
+  };
+  const collected = {
+    ...decision,
+    bodySource: {
+      textSource: "collection",
+      source,
+      sourceUrl: "https://example.test/collection/first",
+      retrievedAt: null,
+      extent: "section",
+      provenance: {
+        coverage: "truncated",
+        totalCount: 3,
+        omittedCount: 1,
+        records: [
+          {
+            extent: "section",
+            sectionNumber: 1,
+            collectionLabel: "Printed label",
+            contribution: "body",
+            source,
+            sourceDocumentId: "first",
+            sourceUrl: "https://example.test/collection/first",
+            retrievedAt: null,
+          },
+          {
+            extent: "section",
+            sectionNumber: 2,
+            collectionLabel: "Printed label",
+            contribution: "body",
+            source,
+            sourceDocumentId: "second",
+            sourceUrl: "https://example.test/collection/second",
+            retrievedAt: "2026-10-09T12:00:00.000Z",
+          },
+        ],
+      },
+    },
+  } satisfies ReaderDecision;
+  const placements = prepareDecisionTextPlacements({
+    adapters: fakeReaderAdapters,
+    blocks: ast.blocks,
+    annotationAnchors: [],
+    statuteCitationAnchors: [],
+    unresolvedCitationAnchors: [],
+    citationAnchors: [],
+    provisionAnchors: [],
+  });
+  const markup = renderReaderFixture(
+    <DecisionText
+      decision={collected}
+      decisionId={collected.id}
+      isHydrated
+      placements={placements}
+    />,
+  );
+  const footer = markup.slice(markup.indexOf("<footer"));
+  expect(footer).toContain('href="https://example.test/collection/first"');
+  expect(footer).toContain('href="https://example.test/collection/second"');
+  expect(footer).toContain("completeness is not established");
+  expect(footer).toContain("Retrieval date unknown");
+  expect(footer).toContain("Omitted publication records: 1 of 3");
+  expect(footer).not.toContain("data-anchor");
 });

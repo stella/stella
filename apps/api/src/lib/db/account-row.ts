@@ -4,7 +4,7 @@ import * as v from "valibot";
 
 import { account, member, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";

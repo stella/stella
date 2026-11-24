@@ -9,7 +9,7 @@ import type { ChatInputDraft } from "@/components/chat-editor-provider";
 import type {
   ChatAttachmentPart,
   ChatPart,
-} from "@/components/chat/chat-ui-tools";
+} from "@/components/chat/chat-ui-tools-types";
 import {
   chatDraftHasModelContent,
   type EmptyChatMessageError,

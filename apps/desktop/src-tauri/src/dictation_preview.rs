@@ -282,20 +282,25 @@ fn window(app: &AppHandle) -> Option<tauri::WebviewWindow> {
   if let Some(window) = app.get_webview_window(PREVIEW_WINDOW_LABEL) {
     return Some(window);
   }
-  let built = crate::app_window::builder(app, PREVIEW_WINDOW_LABEL, "index.html")
-    .title("stella desktop")
-    .inner_size(WIDTH, HEIGHT)
-    .resizable(false)
-    .decorations(false)
-    .transparent(true)
-    .shadow(false)
-    .always_on_top(true)
-    .visible_on_all_workspaces(true)
-    .focused(false)
-    .focusable(false)
-    .skip_taskbar(true)
-    .visible(false)
-    .build();
+  let built = crate::app_window::builder(
+    app,
+    PREVIEW_WINDOW_LABEL,
+    "index.html",
+    crate::app_window::WindowKind::Panel,
+  )
+  .title("stella desktop")
+  .inner_size(WIDTH, HEIGHT)
+  .resizable(false)
+  .decorations(false)
+  .transparent(true)
+  .shadow(false)
+  .always_on_top(true)
+  .visible_on_all_workspaces(true)
+  .focused(false)
+  .focusable(false)
+  .skip_taskbar(true)
+  .visible(false)
+  .build();
   match built {
     Ok(window) => Some(window),
     Err(error) => {

@@ -733,12 +733,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/business-registries/default-formats"],
   },
   {
-    path: "apps/web/src/routes/dev/-components/autocomplete-playground.tsx",
-    class: "operator-configured-infrastructure",
-    reason: "Exercises autocomplete streaming through the configured API.",
-    transports: ["module:@stll/fetch"],
-  },
-  {
     path: "apps/web/src/components/docx/use-edit-session.ts",
     class: "operator-configured-infrastructure",
     reason: "Downloads edit-session documents from API-issued storage URLs.",
@@ -885,12 +879,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
-    path: "apps/web/src/lib/files/queries.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Reads and saves email attachments through the configured API.",
-    transports: ["module:@stll/fetch"],
-  },
-  {
     path: "apps/web/src/lib/files/storage-fetch.ts",
     class: "operator-configured-infrastructure",
     reason:
@@ -1024,6 +1012,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "operator-configured-infrastructure",
     reason:
       "Forwards a local harness's MCP requests only to the run's MCP URL on the configured stella API origin, without following redirects.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "packages/agent-engine/src/sidecar/mcp-stdio-bridge.ts",
+    class: "package-owned-client",
+    reason:
+      "Relays a stdio-only harness's MCP messages to stella's local MCP proxy; it refuses any URL that is not loopback HTTP and does not follow redirects.",
     transports: ["global:fetch"],
   },
   {
@@ -1208,6 +1203,15 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
   {
     path: "apps/api/src/handlers/ai-config/validate-provider.ts",
     reason: "Issues request authority for provider credential validation.",
+  },
+  {
+    path: "apps/api/src/handlers/organization-settings/sso/create-provider.ts",
+    reason:
+      "Issues request authority for OIDC discovery metadata validation before persisting a provider.",
+  },
+  {
+    path: "apps/api/src/handlers/organization-settings/sso/test-provider.ts",
+    reason: "Issues request authority for OIDC discovery metadata validation.",
   },
   {
     path: "apps/api/src/handlers/case-law/public-routes.ts",

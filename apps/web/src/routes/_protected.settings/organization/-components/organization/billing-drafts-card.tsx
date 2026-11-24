@@ -5,23 +5,25 @@ import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { MarkdownHybridEditor } from "@stll/markdown-editor";
+import type { MarkdownHybridEditorHandle } from "@stll/markdown-editor";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Field, FieldLabel } from "@stll/ui/field";
-import { Frame, FramePanel } from "@stll/ui/frame";
 import { List, ListItem, ListItemContent, ListItemTitle } from "@stll/ui/list";
 import { ListItemSkeleton } from "@stll/ui/list-shell";
 import { SearchField } from "@stll/ui/search-field";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 
 import { ContactPicker } from "@/components/contact-picker";
-import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-hybrid-editor";
-import { MarkdownHybridEditor } from "@/components/markdown/markdown-hybrid-editor";
+import { isSafeMarkdownPreviewImageSrc } from "@/components/markdown-preview.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
@@ -170,11 +172,11 @@ export const BillingDraftsCard = () => {
   });
   if (config.isError) {
     return (
-      <Frame>
-        <FramePanel>
+      <SettingsSection>
+        <SettingsPanel>
           <QueryViewFeedback view={queryView(config)} />
-        </FramePanel>
-      </Frame>
+        </SettingsPanel>
+      </SettingsSection>
     );
   }
   if (!config.data) {
@@ -281,6 +283,7 @@ export const BillingDraftsCard = () => {
             <Button
               variant="ghost"
               disabled={save.isPending}
+              disabledReason={t("common.saving")}
               onClick={() => {
                 setEditing(file);
                 setContent(undefined);
@@ -303,10 +306,13 @@ export const BillingDraftsCard = () => {
             key={`${editing.id}:${editorRevision}`}
             markdown={content ?? editor.data.content}
             onMarkdownChange={setContent}
-            imagePolicy="data-only"
+            allowsImageSource={isSafeMarkdownPreviewImageSrc}
+            label={t("markdownEditor.rawLabel")}
+            onOpenLink={openIsolatedWindow}
           />
           <Button
             disabled={save.isPending}
+            disabledReason={t("common.saving")}
             onClick={() => {
               if (!editorHandle.current) {
                 panic("Knowledge editor save requires a mounted editor");

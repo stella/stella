@@ -74,7 +74,13 @@ test("an organization without keys starts with no provider rows", () => {
   expect(
     deriveInitialAIConfig({
       configured: false,
-      defaultModels: { chat: null, fast: null, reasoning: null, pdf: null },
+      defaultModels: {
+        chat: null,
+        fast: null,
+        reasoning: null,
+        pdf: null,
+        browse: null,
+      },
       providerDefaultModels: [],
       instanceProvisioned: true,
       decisionInstanceProvisioned: false,
@@ -128,6 +134,7 @@ test("a provider serves the modes whose model it supplies, in mode order", () =>
     fast: { provider: "google", modelId: "g" },
     reasoning: { provider: "anthropic", modelId: "a" },
     pdf: null,
+    browse: null,
   } as const;
   expect(providerModes(selections, "anthropic")).toEqual(["chat", "reasoning"]);
   expect(providerModes(selections, "google")).toEqual(["fast"]);

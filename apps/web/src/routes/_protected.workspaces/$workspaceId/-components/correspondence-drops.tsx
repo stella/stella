@@ -131,6 +131,7 @@ const CorrespondenceDropsTable = ({ workspaceId }: { workspaceId: string }) => {
         <Button
           className="min-h-11"
           disabled={isFetching}
+          disabledReason={t("common.loading")}
           onClick={() => detached(refetch(), "correspondence.refresh-drops")}
           size="sm"
           variant="ghost"
@@ -200,6 +201,7 @@ const CorrespondenceDropsTable = ({ workspaceId }: { workspaceId: string }) => {
           size="sm"
           className="min-h-11"
           disabled={isFetching}
+          disabledReason={t("common.loading")}
           onClick={() =>
             detached(fetchNextPage(), "correspondence.fetch-next-drops")
           }

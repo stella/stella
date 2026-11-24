@@ -20,6 +20,7 @@
     "folio.findReplace.noResults",
     "folio.hideDetails",
     "folio.historyGroup",
+    "folio.savingDocument",
     "folio.showDetails",
     "folio.somethingWentWrong",
     "folio.undo",
@@ -50,11 +51,10 @@
     "workspaces.views.filter"
   ],
   "duplicateValues": [
-    "account.sessions.activeNow",
-    "account.sessions.currentSession",
     "agentClaim.error",
     "appearance.calendar",
     "auth.continueWithEmail",
+    "auth.signIn",
     "avt.claimTypes.opinion.label",
     "avt.mode.review",
     "avt.review.status.reviewed",
@@ -67,6 +67,7 @@
     "billing.invoices.dueDate",
     "billing.invoices.statuses.draft",
     "billing.invoices.statuses.paid",
+    "billing.loading",
     "billing.statuses.approved",
     "billing.statuses.draft",
     "billing.stopTimer",
@@ -87,6 +88,7 @@
     "chat.contextMeter.tools",
     "chat.createDocument.continue",
     "chat.createDocument.created",
+    "chat.editorLoading",
     "chat.landing.skills",
     "chat.modelSelector.autoLabel",
     "chat.modelSelector.effortValues.none",
@@ -101,6 +103,8 @@
     "chat.toolCall.field",
     "clauses.body",
     "clauses.deleteClause",
+    "clauses.searchClauses",
+    "clauses.searchPlaceholder",
     "clauses.titleLabel",
     "clauses.versionRestored",
     "consent.error",
@@ -114,7 +118,6 @@
     "docxReview.reject",
     "errors.failedToDeleteTemplate",
     "errors.failedToSaveTemplate",
-    "fileDetail.current",
     "fileDetail.label",
     "fileDetail.redlinePreview",
     "fileDetail.versionHistory",
@@ -135,9 +138,9 @@
     "folio.comments.unknownAuthor",
     "folio.comments.visibility",
     "folio.deleted",
+    "folio.loadingEditor",
     "folio.markupView.original",
     "guides.status.skipped",
-    "inbox.evidence.current",
     "inbox.view.new",
     "inspector.anonymization.deleteAction",
     "inspector.anonymization.labelPickerAriaLabel",
@@ -160,6 +163,7 @@
     "knowledge.playbooks.addRule",
     "knowledge.playbooks.approval.statusApproved",
     "knowledge.playbooks.approval.statusDraft",
+    "knowledge.playbooks.clausePlaceholder",
     "knowledge.playbooks.contentType.int",
     "knowledge.playbooks.contentType.text",
     "knowledge.playbooks.extractionAuto",
@@ -204,8 +208,10 @@
     "search.updatedWithin",
     "search.updatedWithinOptions.month",
     "search.updatedWithinOptions.week",
+    "settings.account.security.reviewPlace",
     "settings.account.title",
     "settings.account.twoFactor.enabledStatus",
+    "settings.connections.cliLoginLabel",
     "settings.organization.anonymization.deleteAction",
     "settings.organization.anonymization.labelPickerAriaLabel",
     "settings.organization.anonymization.labelPickerEmpty",
@@ -248,6 +254,7 @@
     "translate.settings.apiKeyLabel",
     "translate.settings.tierFree",
     "workspaces.deleteWorkspace",
+    "workspaces.files.pdfSigning.stampLocation",
     "workspaces.filters.date.last30d",
     "workspaces.filters.date.last7d",
     "workspaces.filters.from",
@@ -262,6 +269,7 @@
     "workspaces.overview.activity.actorActions.updated",
     "workspaces.overview.activity.fields.name",
     "workspaces.overview.activity.fields.property",
+    "workspaces.overview.activity.loading",
     "workspaces.parties.partyRoles.expert_witness",
     "workspaces.parties.partyRoles.other",
     "workspaces.parties.personalLabel",
@@ -462,9 +470,6 @@
     ],
     "common.role": [
       "cs"
-    ],
-    "common.sessions": [
-      "fr"
     ],
     "common.source": [
       "fr"
@@ -784,6 +789,20 @@
     "settings.account.desktop": [
       "de"
     ],
+    "settings.account.security.desktopApp": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "settings.organization.auditResourceKinds.playbook": [
       "cs",
       "es",
@@ -1000,9 +1019,6 @@
       "de"
     ],
     "workspaces.views.calendar.addDates": [
-      "fr"
-    ],
-    "workspaces.views.calendar.additionalDates": [
       "fr"
     ],
     "workspaces.views.reportExport.formatLabel": [

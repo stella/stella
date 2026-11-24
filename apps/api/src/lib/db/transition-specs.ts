@@ -28,6 +28,7 @@ import {
   timeEntries,
   workObligations,
 } from "@/api/db/schema";
+import { SESSION_SIGN_IN_REVIEW_TRANSITIONS } from "@/api/lib/auth/session-sign-in-review-transitions";
 import { DATA_EXPORT_TRANSITIONS } from "@/api/lib/db/data-export-transition-spec";
 import {
   FLOW_RUN_STEP_TRANSITIONS_V1,
@@ -65,6 +66,7 @@ import {
   MATCH_REVIEW_TRANSITIONS,
   SCREENING_COVERAGE_TRANSITIONS,
 } from "@/api/lib/lists/sanctions/monitoring-transition-specs";
+import { DOCUMENT_NAMING_TRANSITIONS } from "@/api/lib/uploads/document-naming/transitions";
 
 const SHAREPOINT_CONNECTION_TRANSITIONS = defineTransitions(
   sharepointConnections,
@@ -530,6 +532,7 @@ export const TRANSITIONS = {
   desktopRunnerFolderRestores: DESKTOP_RUNNER_FOLDER_RESTORE_TRANSITIONS,
   desktopRunnerRuns: DESKTOP_RUNNER_RUN_TRANSITIONS,
   desktopTimeEntryBatches: DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE,
+  documentNamingRuns: DOCUMENT_NAMING_TRANSITIONS,
   documentProcessingRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
   documentReviewFindings: { unmanaged: UNMANAGED_REASONS.userDecision },
   documentReviewRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
@@ -592,6 +595,7 @@ export const TRANSITIONS = {
   sanctionsEditions: { unmanaged: UNMANAGED_REASONS.corpusEdition },
   schedulerJobRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
   scoutRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
+  sessionSignIns: SESSION_SIGN_IN_REVIEW_TRANSITIONS,
   sharepointConnections: SHAREPOINT_CONNECTION_TRANSITIONS,
   sharepointOAuthState: { unmanaged: UNMANAGED_REASONS.antiForgery },
   signals: { unmanaged: UNMANAGED_REASONS.userWorkflow },

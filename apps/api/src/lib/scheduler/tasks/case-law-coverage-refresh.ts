@@ -10,8 +10,8 @@ import {
   createScriptBackfillRuntime,
 } from "@/api/db/backfill-runtime";
 import { CorpusSchemaLaneUnavailableError } from "@/api/db/corpus-schema-lane";
-import type { Transaction } from "@/api/db/root";
 import { caseLawCoverageSummaries } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { loadGateHealthConfig } from "@/api/env-online-index";
 import type { SafeId } from "@/api/lib/branded-types";
 import { CASE_LAW_COVERAGE_CURRENT_WITHIN_MS } from "@/api/lib/case-law/coverage-freshness";

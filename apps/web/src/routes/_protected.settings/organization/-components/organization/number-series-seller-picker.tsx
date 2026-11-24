@@ -119,6 +119,7 @@ export const NumberSeriesSellerPicker = ({
             variant="outline"
             size="sm"
             disabled={disabled || selected.isFetching}
+            disabledReason={disabled ? t("common.saving") : t("common.loading")}
             onClick={() =>
               detached(selected.refetch(), "number-series.seller-retry")
             }
@@ -135,6 +136,7 @@ export const NumberSeriesSellerPicker = ({
           <Button
             type="button"
             disabled={disabled || query.isFetching}
+            disabledReason={disabled ? t("common.saving") : t("common.loading")}
             variant="outline"
             size="sm"
             onClick={() =>
@@ -151,6 +153,7 @@ export const NumberSeriesSellerPicker = ({
           variant="outline"
           size="sm"
           disabled={disabled || query.isFetchingNextPage}
+          disabledReason={disabled ? t("common.saving") : t("common.loading")}
           onClick={() =>
             detached(query.fetchNextPage(), "number-series.sellers-more")
           }

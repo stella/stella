@@ -1,5 +1,5 @@
 //! Consent to AI drafts and the remembered drafting instruction, read and
-//! changed from the activity window or Settings. Nothing here reaches
+//! changed from the activity window, Settings or setup. Nothing here reaches
 //! recorded activity.
 use tauri::State;
 
@@ -7,7 +7,7 @@ use crate::{
   account::AccountState,
   billing_draft_submit,
   feature_gate::FeatureGates,
-  local_window::ActivitySettingsCaller,
+  local_window::ActivitySetupCaller,
   time_entry_commands::{linked_account, require_account},
   types::DesktopAccountIdentity,
 };
@@ -45,7 +45,7 @@ fn require_settings_scope(
 
 #[tauri::command]
 pub async fn billing_draft_get_settings(
-  caller: ActivitySettingsCaller,
+  caller: ActivitySetupCaller,
   gates: State<'_, FeatureGates>,
   accounts: State<'_, AccountState>,
 ) -> Result<serde_json::Value, String> {
@@ -61,7 +61,7 @@ pub async fn billing_draft_get_settings(
 /// user can always take consent back.
 #[tauri::command]
 pub async fn billing_draft_withdraw_consent(
-  caller: ActivitySettingsCaller,
+  caller: ActivitySetupCaller,
   gates: State<'_, FeatureGates>,
   accounts: State<'_, AccountState>,
   scope_key: String,
@@ -77,7 +77,7 @@ pub async fn billing_draft_withdraw_consent(
 
 #[tauri::command]
 pub async fn billing_draft_grant_consent(
-  caller: ActivitySettingsCaller,
+  caller: ActivitySetupCaller,
   gates: State<'_, FeatureGates>,
   accounts: State<'_, AccountState>,
   scope_key: String,
@@ -96,7 +96,7 @@ pub async fn billing_draft_grant_consent(
 /// The instruction future drafts follow, or `None` to forget it.
 #[tauri::command]
 pub async fn billing_draft_set_preference(
-  caller: ActivitySettingsCaller,
+  caller: ActivitySetupCaller,
   gates: State<'_, FeatureGates>,
   accounts: State<'_, AccountState>,
   scope_key: String,

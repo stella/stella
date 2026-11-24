@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
-import { CheckboxFace, LabelFace } from "@stll/ui/control-face";
-import { Frame, FramePanel } from "@stll/ui/frame";
+import { CheckboxFace } from "@stll/ui/control-face";
+import { SettingsRow, SettingsSection } from "@stll/ui/settings";
 
 import { PendingText } from "@/components/pending-text";
 import type { PendingTextKey } from "@/components/pending-text";
@@ -11,39 +11,13 @@ import { SettingsPagePending } from "@/routes/_protected.settings/-components/se
 
 /*
  * The beta page's one layout, drawn by both phases: the heading, then one
- * panel per preview with its name, its line and its switch. The page fills
- * each panel's control with a live checkbox; the pending phase, and the
+ * row per preview with its name, its line and its checkbox. The page fills
+ * each row's control with a live checkbox; the pending phase, and the
  * self-serve previews while their enrolment loads, with the checkbox's face.
  */
 
 /** The previews the page lists, in order. */
 export type BetaFeature = "workflows" | "timeBilling" | "localAgents" | "inbox";
-
-type BetaFeaturePanelProps = {
-  title: PendingTextKey;
-  description: PendingTextKey;
-  /** The checkbox and its caption. */
-  children: ReactNode;
-};
-
-/** One preview's panel: its name, its line, then its checkbox. */
-export const BetaFeaturePanel = ({
-  children,
-  description,
-  title,
-}: BetaFeaturePanelProps) => (
-  <FramePanel>
-    <div className="flex flex-col gap-3 p-1">
-      <h2 className="text-sm font-medium">
-        <PendingText barClassName="w-28" id={title} />
-      </h2>
-      <p className="text-muted-foreground text-xs">
-        <PendingText barClassName="w-72 max-w-full" id={description} />
-      </p>
-      {children}
-    </div>
-  </FramePanel>
-);
 
 /** The previews in order, by name and line; the toggles are the page's. */
 export const BETA_FEATURES = {
@@ -68,24 +42,60 @@ export const BETA_FEATURES = {
   { title: PendingTextKey; description: PendingTextKey }
 >;
 
-/** A preview's panel with its checkbox's face (the choice waits on data). */
-const BetaFeaturePanelPending = ({ feature }: { feature: BetaFeature }) => (
-  <BetaFeaturePanel {...BETA_FEATURES[feature]}>
-    {/* The live `Field` row: `flex-col` turned into this row. */}
-    <div className="flex flex-row items-center gap-2">
-      <CheckboxFace />
-      <LabelFace>
-        <PendingText barClassName="w-28" id={BETA_FEATURES[feature].title} />
-      </LabelFace>
-    </div>
-  </BetaFeaturePanel>
+/** The id a preview's row names its title and line by (`settingsRowIds`). */
+export const betaFeatureRowId = (feature: BetaFeature) =>
+  `beta-feature-${feature}`;
+
+type BetaFeatureRowProps = {
+  feature: BetaFeature;
+  /** The preview's name and line: translated on the page, through
+   *  `PendingText` in the pending phase. */
+  title: ReactNode;
+  description: ReactNode;
+  /** The checkbox, or its face. */
+  children: ReactNode;
+};
+
+/** One preview's row: its name and its line, then its checkbox. */
+export const BetaFeatureRow = ({
+  children,
+  description,
+  feature,
+  title,
+}: BetaFeatureRowProps) => (
+  <SettingsRow
+    description={description}
+    id={betaFeatureRowId(feature)}
+    interaction="label"
+    title={title}
+  >
+    {children}
+  </SettingsRow>
+);
+
+/** A preview's row with its checkbox's face (the choice waits on data). */
+const BetaFeatureRowPending = ({ feature }: { feature: BetaFeature }) => (
+  <BetaFeatureRow
+    description={
+      <PendingText
+        barClassName="w-72 max-w-full"
+        id={BETA_FEATURES[feature].description}
+      />
+    }
+    feature={feature}
+    title={
+      <PendingText barClassName="w-28" id={BETA_FEATURES[feature].title} />
+    }
+  >
+    <CheckboxFace />
+  </BetaFeatureRow>
 );
 
 /** The self-serve previews while their enrolment loads. */
 export const SelfServeFeaturePanelsPending = () => (
   <>
-    <BetaFeaturePanelPending feature="timeBilling" />
-    <BetaFeaturePanelPending feature="localAgents" />
+    <BetaFeatureRowPending feature="timeBilling" />
+    <BetaFeatureRowPending feature="localAgents" />
   </>
 );
 
@@ -108,20 +118,20 @@ export const BetaPageShell = ({
       description="settings.account.betaDescription"
       title="settings.account.beta"
     />
-    <Frame>
+    <SettingsSection>
       {workflows}
       {selfServe}
       {inbox}
-    </Frame>
+    </SettingsSection>
   </>
 );
 
 const BetaPendingView = () => (
   <SettingsPagePending area="account">
     <BetaPageShell
-      inbox={<BetaFeaturePanelPending feature="inbox" />}
+      inbox={<BetaFeatureRowPending feature="inbox" />}
       selfServe={<SelfServeFeaturePanelsPending />}
-      workflows={<BetaFeaturePanelPending feature="workflows" />}
+      workflows={<BetaFeatureRowPending feature="workflows" />}
     />
   </SettingsPagePending>
 );

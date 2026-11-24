@@ -17,8 +17,7 @@ import {
 import type { ChatTurnTiming } from "@stll/api-contract/chat";
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   CHAT_RUN_REFERENCE_STATE_MAX_BYTES,
   chatMessages,
@@ -28,6 +27,7 @@ import {
   chatThreads,
   chatTurns,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionReferencesIn } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";

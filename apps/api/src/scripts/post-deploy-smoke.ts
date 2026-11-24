@@ -51,6 +51,19 @@ import {
   streamFramesOf,
 } from "@/api/scripts/post-deploy-smoke-chat";
 
+const cancelBodyQuietly = async (
+  body: ReadableStream<Uint8Array> | null | undefined,
+): Promise<void> => {
+  if (!body) {
+    return;
+  }
+  try {
+    await body.cancel();
+  } catch {
+    // Stream already closed or aborted.
+  }
+};
+
 const SMOKE_SESSION_TIMEOUT_MS = 15_000;
 const READ_CHECK_TIMEOUT_MS = 15_000;
 const CHAT_SEND_TIMEOUT_MS = 60_000;
@@ -387,8 +400,20 @@ const readHealth = async (baseUrl: string): Promise<EvaluatedCheck> => {
     headers: EDGE_HEADERS,
     timeoutMs: READ_CHECK_TIMEOUT_MS,
   });
+  let body: unknown = null;
+  if (response.ok) {
+    try {
+      body = await response.json();
+    } catch (error) {
+      return {
+        name: "GET /health",
+        ok: false,
+        detail: `status ${response.status} with non-JSON body: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  }
   return evaluateHealthRevision({
-    body: response.ok ? await response.json().catch(() => null) : null,
+    body,
     expectedCommit: process.env["EXPECTED_COMMIT"],
     status: response.status,
   });
@@ -496,7 +521,13 @@ export const readStreamPrefix = async (
       }
     }
   } finally {
-    await reader.cancel().catch(() => undefined);
+    try {
+      await reader.cancel();
+    } catch {
+      // Stream already closed or aborted.
+    } finally {
+      reader.releaseLock();
+    }
     reader.releaseLock();
   }
   return buffered;
@@ -535,7 +566,7 @@ const sendChat = async (
     response.headers.get("content-type"),
   );
   if (!streamTypeCheck.ok) {
-    await response.body?.cancel().catch(() => undefined);
+    await cancelBodyQuietly(response.body);
     return [httpCheck, streamTypeCheck];
   }
 

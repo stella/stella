@@ -27,7 +27,10 @@ import {
 import { RouteProviderScopeBoundary } from "@/components/route-provider-scope/route-provider-scope";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { ClientDocumentPresentationBoot } from "@/i18n/client-document-presentation-boot";
-import { loadDocumentPresentation } from "@/i18n/document-presentation";
+import {
+  documentPresentationSnapshot,
+  loadDocumentPresentation,
+} from "@/i18n/document-presentation";
 import {
   getLangDir,
   RenderedI18nStoreProvider,
@@ -65,6 +68,7 @@ import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { requireProfessionalUseForSignedInRoute } from "@/routes/-auth-context";
 import { createRootHead } from "@/routes/-root-head";
 import { RootPendingComponent } from "@/routes/-root-pending";
+import { StrayFileDropGuard } from "@/routes/-stray-file-drop-guard";
 import "@/styles/app.css";
 import "@/styles/print.css";
 
@@ -220,8 +224,14 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   const prefs = Route.useRouteContext({
     select: (context) => context.presentationPrefs,
   });
-  const interfaceLocale = useI18nStore((s) => s.loadedLang);
+  const loadedLang = useI18nStore((s) => s.loadedLang);
   const hasLoadedOnce = useI18nStore((s) => s.hasLoadedOnce);
+  // A member page's root does not load on the server, so no locale is
+  // rendered there; its document takes the presentation's locale, the one
+  // the browser restores before it hydrates.
+  const interfaceLocale = hasLoadedOnce
+    ? loadedLang
+    : documentPresentationSnapshot(prefs).locale;
   const documentLanguage = useRouterState({
     select: (state) => pageDocumentLanguage(state.matches),
   });
@@ -281,6 +291,7 @@ function RootApp() {
         <AppFrameHost>
           <Outlet />
         </AppFrameHost>
+        <StrayFileDropGuard />
         {DevRoot ? (
           <ClientOnly>
             <Suspense fallback={null}>

@@ -1,5 +1,11 @@
 # @stll/anonymize-chat
 
+## 0.3.1
+
+### Patch Changes
+
+- [#9269](https://github.com/stella/stella/pull/9269) [`8c07fd2`](https://github.com/stella/stella/commit/8c07fd2a8dd29cde31821d6883e8dc14ead514c8) Thanks [@dependabot](https://github.com/apps/dependabot)! - Run on version 4.0.0 of `@stll/anonymize-wasm`.
+
 ## 0.3.0
 
 ### Minor Changes

@@ -4,12 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { MarkdownHybridEditorHandle } from "@stll/markdown-editor";
 import { stellaToast } from "@stll/ui/toast";
 
 import { getMarkdownDraftSyncDecision } from "@/components/inspector/file-tab-panel.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
-import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-hybrid-editor";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { MARKDOWN_MIME } from "@/lib/consts";
@@ -19,26 +19,6 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { filesKeys, textFileOptions } from "@/lib/files/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
-
-type MarkdownSyncInput = {
-  fieldId: string;
-  isDirty: boolean;
-  isMarkdownDisplay: boolean;
-  serverText: string | undefined;
-};
-
-const shouldSyncMarkdownDraft = ({
-  lastSyncInput,
-  syncInput,
-}: {
-  lastSyncInput: MarkdownSyncInput | null;
-  syncInput: MarkdownSyncInput;
-}) =>
-  lastSyncInput === null ||
-  lastSyncInput.fieldId !== syncInput.fieldId ||
-  lastSyncInput.isDirty !== syncInput.isDirty ||
-  lastSyncInput.isMarkdownDisplay !== syncInput.isMarkdownDisplay ||
-  lastSyncInput.serverText !== syncInput.serverText;
 
 type UseMarkdownFileDraftOptions = {
   filePropertyId: string | undefined;
@@ -70,9 +50,7 @@ export const useMarkdownFileDraft = ({
   );
   const text = textQuery.data?.text ?? "";
   const isDirty = draft !== text;
-  const [lastSyncInput, setLastSyncInput] = useState<MarkdownSyncInput | null>(
-    null,
-  );
+  const [prevSyncKey, setPrevSyncKey] = useState<string | null>(null);
   const saveMutation = useMutation({
     mutationFn: async ({
       entityId,
@@ -131,20 +109,19 @@ export const useMarkdownFileDraft = ({
   });
   const { isPending: isSaving, mutate: saveDraft } = saveMutation;
 
-  const syncInput = {
-    fieldId: tab.id,
-    isDirty,
-    isMarkdownDisplay,
-    serverText: textQuery.data?.text,
-  } satisfies MarkdownSyncInput;
-  if (shouldSyncMarkdownDraft({ lastSyncInput, syncInput })) {
-    setLastSyncInput(syncInput);
+  const serverText = textQuery.data?.text;
+  const syncKey = `${tab.id}\0${isDirty ? "1" : "0"}\0${isMarkdownDisplay ? "1" : "0"}\0${serverText === undefined ? "u" : `s:${serverText}`}`;
+  if (prevSyncKey !== syncKey) {
+    setPrevSyncKey(syncKey);
     if (!isMarkdownDisplay) {
       setDraftSourceFieldId(null);
     } else {
       const decision = getMarkdownDraftSyncDecision({
-        ...syncInput,
+        fieldId: tab.id,
+        isDirty,
+        isMarkdownDisplay,
         lastSyncedFieldId: draftSourceFieldId,
+        serverText,
       });
       if (decision.type === "sync") {
         setDraftSourceFieldId(decision.fieldId);

@@ -1281,13 +1281,26 @@ export const chatThreadTitleOptions = ({
   persistedThread,
   needed = true,
 }: ChatThreadTitleOptionsArgs) =>
-  queryOptions({
-    enabled: needed && persistedThread?.threadExists === true,
-    staleTime: STALE_TIME.FIVETEEN.MINUTES,
-    gcTime: STALE_TIME.FIVETEEN.MINUTES,
-    queryKey: chatKeys.threadTitle(activeOrganizationId, key),
-    queryFn: async () => await fetchChatThreadTitle(key),
-  });
+  resourceQueryOptions(
+    queryOptions({
+      enabled: needed && persistedThread?.threadExists === true,
+      staleTime: STALE_TIME.FIVETEEN.MINUTES,
+      gcTime: STALE_TIME.FIVETEEN.MINUTES,
+      queryKey: chatKeys.threadTitle(activeOrganizationId, key),
+      queryFn: async () => await fetchChatThreadTitle(key),
+    }),
+    // The thread's title, in the matter it belongs to or in the
+    // organization for a thread outside any matter.
+    key.workspaceId === undefined
+      ? {
+          resources: [RESOURCE_TYPE.CHAT_THREAD],
+          scope: { type: "organization", organizationId: activeOrganizationId },
+        }
+      : {
+          resources: [RESOURCE_TYPE.CHAT_THREAD],
+          scope: { type: "workspace", workspaceId: key.workspaceId },
+        },
+  );
 
 // Match every cached `chatKeys.groupedThreads` entry, whatever org, user,
 // search term and matter filter it carries: the invalidator cannot reconstruct

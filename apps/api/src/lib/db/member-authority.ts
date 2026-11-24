@@ -1,12 +1,12 @@
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import type { PermissionInput } from "@stll/permissions";
 
 import { member } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockMemberAccessRow } from "@/api/lib/db/aggregate-lock";
@@ -112,6 +112,29 @@ export const hasCurrentActiveWorkspaceMemberPermission = async ({
     isMemberRole(authority.role) &&
     hasCurrentMemberPermission(authority.role, permissions)
   );
+};
+
+class CurrentWorkspaceMemberPermissionError extends TaggedError(
+  "CurrentWorkspaceMemberPermissionError",
+)<{ message: string }> {}
+
+export const requireCurrentActiveWorkspaceMemberPermission = async (
+  options: CurrentWorkspaceMemberPermissionOptions,
+): Promise<void> => {
+  const authorization = (await hasCurrentActiveWorkspaceMemberPermission(
+    options,
+  ))
+    ? Result.ok(undefined)
+    : Result.err(
+        new CurrentWorkspaceMemberPermissionError({
+          message:
+            "The queued action requester is no longer authorized in this matter",
+        }),
+      );
+  if (authorization.isOk()) {
+    return;
+  }
+  abortTransaction(authorization.error);
 };
 
 type CurrentOrganizationMemberPermissionOptions = {

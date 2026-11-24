@@ -93,7 +93,7 @@ describe("suggestTemplateFieldsOrEmpty", () => {
       },
     });
 
-    expect(suggestions).toEqual([]);
+    expect(suggestions).toEqual({ status: "failed" });
     // One standard $ai_generation failure record plus one internal failed
     // event; the point pinned here is that the failure was captured rather
     // than thrown.

@@ -4,9 +4,9 @@ import { and, eq } from "drizzle-orm";
 import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import type { PermissionInput } from "@stll/permissions";
 
-import type { Transaction } from "@/api/db/root";
 import { AI_MEMORY_SCOPE_FREE_KINDS, aiMemories } from "@/api/db/schema";
 import type { AiMemoryKind, AiMemoryScope } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";

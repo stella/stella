@@ -12,7 +12,8 @@ import {
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { aiAvailableResponse } from "@/__fixtures__/ai-availability";
-import type { WebApiRoutes } from "@/lib/api";
+import { isDisabledControl } from "@/__fixtures__/disabled-control";
+import type { WebApiRoutes } from "@/lib/api-contract";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 // Match Vite's worker asset import without replacing the page or its runtime.
@@ -599,9 +600,7 @@ test("a new chat runs on the member's computer when they choose it, and its firs
   const send = await ui.findByRole("button", {
     name: messages.chat.sendPrompt,
   });
-  await testing.waitFor(() =>
-    expect(send.hasAttribute("disabled")).toBe(false),
-  );
+  await testing.waitFor(() => expect(isDisabledControl(send)).toBe(false));
   await testing.act(async () => {
     testing.fireEvent.click(send);
   });
@@ -635,9 +634,7 @@ const sendFirstTurn = async (
   const send = await ui.findByRole("button", {
     name: messages.chat.sendPrompt,
   });
-  await testing.waitFor(() =>
-    expect(send.hasAttribute("disabled")).toBe(false),
-  );
+  await testing.waitFor(() => expect(isDisabledControl(send)).toBe(false));
   await testing.act(async () => {
     testing.fireEvent.click(send);
   });
@@ -767,9 +764,7 @@ test("a new chat left on stella cloud sends its first turn without a computer", 
   const send = await ui.findByRole("button", {
     name: messages.chat.sendPrompt,
   });
-  await testing.waitFor(() =>
-    expect(send.hasAttribute("disabled")).toBe(false),
-  );
+  await testing.waitFor(() => expect(isDisabledControl(send)).toBe(false));
   await testing.act(async () => {
     testing.fireEvent.click(send);
   });

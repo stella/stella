@@ -4,8 +4,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { declareFingerprintFields } from "@stll/errors";
 import type { Fetcher, FetchWithTimeoutInit } from "@stll/fetch";
 
-import type { Transaction } from "@/api/db/root";
 import type { AnyDrizzle } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import { detached } from "@/api/lib/analytics/capture";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { failureSink } from "@/api/lib/observability/failure";

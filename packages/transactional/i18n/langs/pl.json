@@ -21,22 +21,28 @@
     "subject": "{documentType, select, credit_note {Faktura korygująca} advance {Faktura zaliczkowa} other {Faktura}} {invoiceNumber} od {firmName}"
   },
   "newDeviceLogin": {
-    "action": "Sprawdź sesje",
-    "body": "Na Twoje konto zalogowano się z nowego urządzenia lub lokalizacji.",
+    "action": "Sprawdź zalogowane urządzenia",
+    "actionNote": "Przycisk otwiera Ustawienia › Bezpieczeństwo przy tym logowaniu.",
+    "body": "Na Twoje konto właśnie zalogowano się z nowego urządzenia lub nowej lokalizacji.",
     "device": "Urządzenie",
-    "heading": "Wykryto nowe logowanie",
-    "ignore": "Jeśli to byłeś Ty, nie musisz nic robić. Jeśli nie rozpoznajesz tej aktywności, sprawdź swoje aktywne sesje i unieważnij te, których nie rozpoznajesz.",
+    "deviceName": {
+      "browserOnOs": "{browser} w systemie {os}",
+      "unknown": "Nieznane urządzenie"
+    },
+    "heading": "Nowe logowanie na Twoje konto",
+    "ignore": "Jeśli to Ty, nie musisz nic robić. Jeśli nie rozpoznajesz tego logowania, wyloguj to urządzenie.",
     "ipAddress": "Adres IP",
-    "location": "Przybliżona lokalizacja",
-    "locationNote": "Lokalizacja jest szacowana na podstawie adresu IP i może być niedokładna.",
+    "ipAddressUnknown": "Nieznany",
+    "location": "Lokalizacja",
     "mapAlt": "Mapa z przybliżoną lokalizacją logowania: {location}",
-    "mapCredit": "Dane mapy: Natural Earth",
     "place": {
       "cityCountry": "{city}, {country}",
       "cityRegionCountry": "{city}, {region}, {country}",
       "regionCountry": "{region}, {country}"
     },
+    "placeApproximate": "{place} (w przybliżeniu)",
     "preview": "Nowe logowanie z {device}",
+    "previewUnknownDevice": "Nowe logowanie z nieznanego urządzenia",
     "subject": "Nowe logowanie na Twoje konto stella",
     "time": "Czas"
   },

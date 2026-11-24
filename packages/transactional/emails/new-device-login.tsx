@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { CountryCode } from "@stll/country-codes";
 
 import { Body } from "../components/body";
@@ -33,9 +35,23 @@ export type SignInLocation =
       map: { contentId: string } | null;
     };
 
+/**
+ * The signing-in device as its user agent names it. Browser and OS names are
+ * proper nouns and print as parsed; the email words the rest in its language.
+ */
+export type SignInDevice =
+  | { type: "browserOnOs"; browser: string; os: string }
+  | { type: "browser"; browser: string }
+  | { type: "os"; os: string }
+  | { type: "unknown" };
+
+/** The address the sign-in came from; `unknown` when the runtime gave none. */
+export type SignInAddress =
+  { type: "known"; address: string } | { type: "unknown" };
+
 type Props = {
-  device: string;
-  ipAddress: string;
+  device: SignInDevice;
+  ipAddress: SignInAddress;
   location: SignInLocation;
   time: string;
   sessionsUrl: string;
@@ -52,11 +68,16 @@ export const Email = ({
 }: Props) => {
   const t = getTranslator(lang);
   const place = location.type === "known" ? placeName(location, lang) : null;
+  const deviceName = describeDevice(device, lang);
 
   return (
     <Html lang={lang} dir={getEmailDirection(lang)}>
       <Head />
-      <Preview>{t("newDeviceLogin.preview", { device })}</Preview>
+      <Preview>
+        {device.type === "unknown"
+          ? t("newDeviceLogin.previewUnknownDevice")
+          : t("newDeviceLogin.preview", { device: deviceName })}
+      </Preview>
       <Body style={sharedStyles.body}>
         <Container style={sharedStyles.container}>
           <Wordmark />
@@ -65,31 +86,38 @@ export const Email = ({
           </Heading>
           <Text style={sharedStyles.text}>{t("newDeviceLogin.body")}</Text>
           <Section style={styles.detailsSection}>
+            {location.type === "known" ? (
+              <LocationMap lang={lang} location={location} />
+            ) : null}
             <Text style={styles.detailRow}>
-              <strong>{t("newDeviceLogin.device")}:</strong> {device}
-            </Text>
-            <Text style={styles.detailRow}>
-              <strong>{t("newDeviceLogin.ipAddress")}:</strong> {ipAddress}
+              <strong>{t("newDeviceLogin.device")}:</strong> {deviceName}
             </Text>
             {place === null ? null : (
               <Text style={styles.detailRow}>
-                <strong>{t("newDeviceLogin.location")}:</strong> {place}
+                <strong>{t("newDeviceLogin.location")}:</strong>{" "}
+                {t("newDeviceLogin.placeApproximate", { place })}
               </Text>
             )}
+            <Text style={styles.detailRow}>
+              <strong>{t("newDeviceLogin.ipAddress")}:</strong>{" "}
+              {ipAddress.type === "known"
+                ? ipAddress.address
+                : t("newDeviceLogin.ipAddressUnknown")}
+            </Text>
             <Text style={styles.detailRow}>
               <strong>{t("newDeviceLogin.time")}:</strong> {time}
             </Text>
           </Section>
-          {location.type === "known" ? (
-            <LocationNotes lang={lang} location={location} />
-          ) : null}
+          <Text style={sharedStyles.text}>{t("newDeviceLogin.ignore")}</Text>
           <Section style={styles.buttonSection}>
             <Button href={sessionsUrl} style={styles.button}>
               {t("newDeviceLogin.action")}
             </Button>
           </Section>
+          <Text style={styles.actionNote}>
+            {t("newDeviceLogin.actionNote")}
+          </Text>
           <Hr style={sharedStyles.hr} />
-          <Text style={sharedStyles.footer}>{t("newDeviceLogin.ignore")}</Text>
           <Text style={sharedStyles.brandFooter}>{BRAND_FOOTER_TEXT}</Text>
         </Container>
       </Body>
@@ -99,30 +127,45 @@ export const Email = ({
 
 type KnownLocation = Extract<SignInLocation, { type: "known" }>;
 
-type LocationNotesProps = { location: KnownLocation; lang: SupportedLang };
+type LocationMapProps = { location: KnownLocation; lang: SupportedLang };
 
-/** The map, when there is one, and what the location rests on. */
-const LocationNotes = ({ location, lang }: LocationNotesProps) => {
+/**
+ * The map, when there is one, heading the sign-in details. The base map is
+ * public domain and needs no credit line.
+ */
+const LocationMap = ({ location, lang }: LocationMapProps) => {
   const t = getTranslator(lang);
-  return (
-    <>
-      {location.map === null ? null : (
-        <Img
-          alt={t("newDeviceLogin.mapAlt", {
-            location: placeName(location, lang),
-          })}
-          height={String(LOCATION_MAP_DISPLAY_SIZE.height)}
-          src={`cid:${location.map.contentId}`}
-          style={styles.map}
-          width={String(LOCATION_MAP_DISPLAY_SIZE.width)}
-        />
-      )}
-      <Text style={styles.caption}>{t("newDeviceLogin.locationNote")}</Text>
-      {location.map === null ? null : (
-        <Text style={styles.caption}>{t("newDeviceLogin.mapCredit")}</Text>
-      )}
-    </>
+  return location.map === null ? null : (
+    <Img
+      alt={t("newDeviceLogin.mapAlt", {
+        location: placeName(location, lang),
+      })}
+      height={String(LOCATION_MAP_DISPLAY_SIZE.height)}
+      src={`cid:${location.map.contentId}`}
+      style={styles.map}
+      width={String(LOCATION_MAP_DISPLAY_SIZE.width)}
+    />
   );
+};
+
+const describeDevice = (device: SignInDevice, lang: SupportedLang): string => {
+  const t = getTranslator(lang);
+  switch (device.type) {
+    case "browserOnOs":
+      return t("newDeviceLogin.deviceName.browserOnOs", {
+        browser: device.browser,
+        os: device.os,
+      });
+    case "browser":
+      return device.browser;
+    case "os":
+      return device.os;
+    case "unknown":
+      return t("newDeviceLogin.deviceName.unknown");
+    default:
+      device satisfies never;
+      return panic("Unknown sign-in device kind");
+  }
 };
 
 /**
@@ -173,18 +216,18 @@ const styles = {
     lineHeight: "22px",
   },
   map: {
-    margin: "0 0 8px",
+    margin: "0 0 12px",
     width: "100%",
     maxWidth: `${LOCATION_MAP_DISPLAY_SIZE.width}px`,
     height: "auto",
     borderRadius: "10px",
     border: `1px solid ${brand.border}`,
   },
-  caption: {
-    margin: "0 0 4px",
+  actionNote: {
+    margin: "-8px 0 24px",
     color: brand.textMuted,
-    fontSize: "12px",
-    lineHeight: "18px",
+    fontSize: "13px",
+    lineHeight: "20px",
   },
   buttonSection: {
     margin: "24px 0",

@@ -21,6 +21,8 @@ import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { parsePgTimestampCursorValue } from "@/api/lib/db-pagination";
 import type { ParsedPgTimestampCursor } from "@/api/lib/db-pagination";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 /** Rows read per page. */
@@ -43,9 +45,82 @@ const RECONCILE_SCAN_CONCURRENCY = 10;
  */
 const RECONCILE_MAX_PAGES = 20;
 
+type ReconcileRowOutcome = "handed-off" | "skipped" | "failed";
+
 export type ReconcileScanResult = {
   handedOff: number;
   scanned: number;
+};
+
+export const MEMBER_RUN_AUTHORITY_REVOKED = "authority_revoked" as const;
+
+const MEMBER_RUN_EXECUTION_FAILED_SINK = failureSink({
+  event: "member_run.execution_failed",
+  expected: [],
+});
+
+type MemberRunActor = {
+  runId: string;
+  workspaceId: SafeId<"workspace">;
+};
+
+type ProcessClaimedMemberRunOptions<
+  Actor extends MemberRunActor,
+  ClaimedRun extends object,
+  ErrorCode extends string,
+> = {
+  actor: Actor;
+  claim: (
+    actor: Actor,
+  ) => Promise<ClaimedRun | typeof MEMBER_RUN_AUTHORITY_REVOKED | null>;
+  execute: (claimed: ClaimedRun) => Promise<ErrorCode | null>;
+  internalErrorCode: ErrorCode;
+  setFailed: (actor: Actor, errorCode: ErrorCode) => Promise<void>;
+};
+
+/**
+ * Close a claimed member run on revoked authority, an execution failure, or a
+ * domain failure code. Claim errors still escape to the queue's own failed
+ * handler; only errors after a successful claim belong to the run lifecycle.
+ */
+export const processClaimedMemberRun = async <
+  Actor extends MemberRunActor,
+  ClaimedRun extends object,
+  ErrorCode extends string,
+>({
+  actor,
+  claim,
+  execute,
+  internalErrorCode,
+  setFailed,
+}: ProcessClaimedMemberRunOptions<
+  Actor,
+  ClaimedRun,
+  ErrorCode
+>): Promise<void> => {
+  const claimed = await claim(actor);
+  if (claimed === MEMBER_RUN_AUTHORITY_REVOKED) {
+    await setFailed(actor, internalErrorCode);
+    return;
+  }
+  if (claimed === null) {
+    return;
+  }
+  const outcome = await Result.tryPromise({
+    try: async () => await execute(claimed),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(outcome)) {
+    observeFailure(outcome.error, {
+      sink: MEMBER_RUN_EXECUTION_FAILED_SINK,
+      ctx: { runId: actor.runId, workspaceId: actor.workspaceId },
+    });
+    await setFailed(actor, internalErrorCode);
+    return;
+  }
+  if (outcome.value !== null) {
+    await setFailed(actor, outcome.value);
+  }
 };
 
 /**
@@ -73,7 +148,7 @@ type ScanPendingRowsOptions<Row> = {
    * on — an unusable actor, a queue lookup that failed — advances the cursor
    * instead of pinning the sweep to the page it sits on.
    */
-  handle: (row: Row) => Promise<boolean>;
+  handle: (row: Row) => Promise<boolean | ReconcileRowOutcome>;
   /** Reads the next page after `cursor`, ordered by the same key. */
   readPage: (cursor: Row | null) => Promise<readonly Row[]>;
 };
@@ -108,9 +183,9 @@ export const scanPendingRows = async <Row>({
       }
       next += 1;
       reserved += 1;
-      const didHandOff = await handle(row);
+      const outcome = await handle(row);
       scanned += 1;
-      if (didHandOff) {
+      if (outcome === true || outcome === "handed-off") {
         handedOff += 1;
       } else {
         reserved -= 1;
@@ -198,14 +273,14 @@ export const reconcileQueuedRuns = async <Row extends QueuedRunRow, DataType>({
 >): Promise<ReconcileQueuedRunsResult> => {
   let unattributed = 0;
 
-  const handle = async (run: Row): Promise<boolean> => {
+  const handle = async (run: Row): Promise<ReconcileRowOutcome> => {
     const admitted = admit === undefined ? true : await admit(run);
     if (run.requestedBy === null) {
       unattributed += 1;
-      return false;
+      return "skipped";
     }
     if (!admitted) {
-      return false;
+      return "skipped";
     }
     const { data, name, opts } = runJob({
       organizationId: run.organizationId,
@@ -223,9 +298,11 @@ export const reconcileQueuedRuns = async <Row extends QueuedRunRow, DataType>({
         outcome.error,
         handlerErrorContext("lib.handle.outcome_error", { runId: run.id }),
       );
-      return false;
+      return "failed";
     }
-    return outcome.value === QUEUE_REQUEUE_OUTCOME.REQUEUED;
+    return outcome.value === QUEUE_REQUEUE_OUTCOME.REQUEUED
+      ? "handed-off"
+      : "skipped";
   };
 
   const scan = await scanPendingRows({ handle, readPage });

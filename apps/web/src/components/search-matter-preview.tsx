@@ -51,6 +51,7 @@ export const SearchMatterPreview = ({
           variant="outline"
           size="sm"
           disabled={isFetching}
+          disabledReason={t("common.loading")}
           onClick={() => {
             detached(refetch(), "search-matter-preview.refetch");
           }}
@@ -147,6 +148,7 @@ const MatterPreviewActivity = ({ workspaceId }: { workspaceId: string }) => {
           size="sm"
           variant="outline"
           disabled={isFetching}
+          disabledReason={t("common.loading")}
           onClick={() => {
             detached(refetch(), "search-matter-preview.activity-retry");
           }}

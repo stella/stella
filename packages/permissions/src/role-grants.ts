@@ -65,6 +65,10 @@ export const statements = {
   // trace of their own reading that nobody else sees, not work they leave in
   // the organization.
   searchHistory: ["read", "create", "delete"],
+  // The spelling fixes dictation learned from how a member corrects it,
+  // private to them. Held by every role, like search history: it is the
+  // member's own way of writing, not work they leave in the organization.
+  dictationLearnedFix: ["read", "update", "delete"],
   // The member's own link between their account and an outside system: an
   // MCP server they connect, a SharePoint sign-in, an agent client bound to
   // them, a desktop registry key. What the organization permits to be linked
@@ -122,6 +126,7 @@ const externalStellaGrants = {
   legalReaderAnnotation: [],
   savedSearch: [],
   searchHistory: ["read", "create", "delete"],
+  dictationLearnedFix: ["read", "update", "delete"],
   integration: [],
   conflictCheck: [],
 } satisfies StellaPermissionMap;
@@ -174,6 +179,7 @@ const memberStellaGrants = {
   legalReaderAnnotation: ["create", "update", "delete"],
   savedSearch: ["create", "update", "delete"],
   searchHistory: ["read", "create", "delete"],
+  dictationLearnedFix: ["read", "update", "delete"],
   integration: ["create", "update", "delete"],
   conflictCheck: ["run"],
 } satisfies StellaPermissionMap;

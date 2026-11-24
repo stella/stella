@@ -1,4 +1,4 @@
-import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
+import type { ChatUIMessage } from "@/components/chat/chat-ui-tools-types";
 import { SourceChips } from "@/features/chat/source-chips";
 
 import { AnswerRevisionHistory } from "./answer-revision-history";

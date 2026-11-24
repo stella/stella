@@ -10,7 +10,8 @@ import {
   aiAvailableResponse,
   aiUnavailableResponse,
 } from "@/__fixtures__/ai-availability";
-import type { WebApiRoutes } from "@/lib/api";
+import { isDisabledControl } from "@/__fixtures__/disabled-control";
+import type { WebApiRoutes } from "@/lib/api-contract";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 // Match Vite's worker asset import without replacing the page or its runtime.
@@ -244,7 +245,9 @@ const serveSavedBuilder = ({
         ];
         return new Response(
           events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(""),
-          { headers: { "Content-Type": "text/event-stream" } },
+          {
+            headers: { "Content-Type": "text/event-stream" },
+          },
         );
       }
       if (
@@ -408,9 +411,9 @@ const openThreadPage = async (client: InstanceType<typeof QueryClient>) => {
 const send = async (ui: ReturnType<typeof testing.render>, count: number) => {
   await testing.waitFor(() =>
     expect(
-      ui
-        .getByRole("button", { name: messages.chat.sendPrompt })
-        .hasAttribute("disabled"),
+      isDisabledControl(
+        ui.getByRole("button", { name: messages.chat.sendPrompt }),
+      ),
     ).toBe(false),
   );
   await testing.act(async () => {
@@ -503,7 +506,7 @@ test("unavailable AI blocks sending and preserves the draft until availability r
   expect(textbox.textContent).toBe(prompt);
 
   const sendButton = ui.getByRole("button", { name: messages.chat.sendPrompt });
-  expect(sendButton.hasAttribute("disabled")).toBe(true);
+  expect(sendButton.getAttribute("aria-disabled")).toBe("true");
   expect(textbox.getAttribute("contenteditable")).toBe("true");
   await testing.act(async () => {
     testing.fireEvent.click(sendButton);

@@ -4,7 +4,7 @@ import { and, eq, lte } from "drizzle-orm";
 import { createSha256 } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import {
   TEMPLATE_PERSISTENCE_REQUEST_STATUS,
   templatePersistenceRequests,

@@ -10,7 +10,7 @@ import { CompaniesHouseAuthError } from "@stll/business-registries/companies-hou
 import { DenueAuthError } from "@stll/business-registries/denue";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import type { SafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";

@@ -516,8 +516,8 @@ test("section removals and field edits keep sibling metadata out of requests", a
     expect(
       view
         .getByRole("button", { name: messages.common.delete })
-        .hasAttribute("disabled"),
-    ).toBe(false),
+        .getAttribute("aria-disabled"),
+    ).toBeNull(),
   );
 
   const fieldValue = view.getByRole("textbox", {
@@ -538,7 +538,7 @@ test("section removals and field edits keep sibling metadata out of requests", a
     name: messages.contacts.customFields.removeField,
   });
   await testing.waitFor(() =>
-    expect(removeButton.hasAttribute("disabled")).toBe(false),
+    expect(removeButton.getAttribute("aria-disabled")).toBeNull(),
   );
   testing.fireEvent.click(removeButton);
   const removal = await nextPost(2);

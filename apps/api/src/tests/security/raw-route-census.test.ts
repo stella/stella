@@ -169,6 +169,22 @@ const RAW_ROUTES: ReadonlyMap<ApiRouteKey, RawRouteReview> = new Map([
     },
   ],
   [
+    "GET /v1/auth/sso/organization-providers",
+    {
+      access: RAW_ROUTE_ACCESS.sandbox,
+      reason:
+        "Lists SSO providers for an organization the signed-in user belongs to without enforcing the organization SSO gate, so members can complete SSO re-authentication in place.",
+    },
+  ],
+  [
+    "POST /v1/auth/sso/discover",
+    {
+      access: RAW_ROUTE_ACCESS.sessionless,
+      reason:
+        "Public sign-in discovery for DNS-verified organization email domains and explicit provider IDs.",
+    },
+  ],
+  [
     "GET /v1/desktop-edit-sessions/:sessionId/events",
     {
       access: RAW_ROUTE_ACCESS.sessionless,

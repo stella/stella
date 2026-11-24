@@ -495,6 +495,20 @@ const CENSUS: readonly CensusEntry[] = [
     why: "Records the fetch request inside the read's own READ_BUDGET_MS wait, which the read stops at; the recording finishes for the next reader.",
   },
   {
+    site: "apps/api/src/handlers/case-law/decisions/collection-body.ts#requestBoundedTimeoutMs(COLLECTION_READ_TIMEOUT_MS)",
+    path: "request",
+    tools: [
+      "fetch",
+      "read_case_law_decision",
+      "read_case_law_decision_blocks",
+      "open_case_law_decision",
+    ],
+    http: ["browse"],
+    bound: "request",
+    onExpiry: "degrades",
+    why: "Reads retained collection snapshots within the request's remaining budget; past it the decision answers without the collection body, marked unavailable.",
+  },
+  {
     site: "apps/api/src/handlers/case-law/decisions/dev-reparse.ts#FETCH_TIMEOUT_MS",
     path: "off-request",
     why: "A local-development route, not mounted in deployments.",

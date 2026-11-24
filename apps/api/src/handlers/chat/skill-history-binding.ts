@@ -1,6 +1,6 @@
 import { panic, type Result } from "better-result";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
 import {
   skillBindingAllows,

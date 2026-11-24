@@ -1,4 +1,0 @@
-{
-  "kind": "support",
-  "qualifier": "Runs API code-quality checks required by the merge verdict."
-}

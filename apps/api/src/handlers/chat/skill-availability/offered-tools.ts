@@ -15,7 +15,7 @@ import {
   workspaceIsVisible,
 } from "@stll/api-contract/workspace-status";
 
-import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db-types";
 import { browserExtensionPolicy } from "@/api/handlers/chat/browser-extension-capability";
 import { resolveBrowserExtensionCapability } from "@/api/handlers/chat/chat-schema";
 import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";

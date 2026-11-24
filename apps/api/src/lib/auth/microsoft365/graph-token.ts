@@ -5,7 +5,7 @@ import type { Microsoft365Capability } from "@stll/api-contract/microsoft365";
 import { SHAREPOINT_REFUSAL_CODE } from "@stll/api-contract/sharepoint";
 import { Temporal } from "@stll/time";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { sharepointConnections } from "@/api/db/schema";
 import type { SharepointConnectionStatus } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";

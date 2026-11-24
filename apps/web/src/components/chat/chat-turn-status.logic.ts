@@ -8,7 +8,8 @@ import {
 } from "@stll/api-contract/chat-tool-activity";
 import { getChatTurnDurationMs } from "@stll/api-contract/chat-turn-duration";
 
-import type { ChatPart } from "@/components/chat/chat-ui-tools";
+import { withSubagentRunParts } from "@/components/chat/chat-subagent-parts.logic";
+import type { ChatPart } from "@/components/chat/chat-ui-tools-types";
 
 export type TurnActivePhase =
   | { type: "thinking" }
@@ -101,14 +102,27 @@ export const turnPhaseForTool = (
   }
 };
 
-/** Latest active work wins; completed research hands off to source analysis. */
+/** Latest active work wins; completed research hands off to source analysis.
+ *  A sub-agent run's calls are the turn's work too: its approval request or
+ *  question waits on the user exactly as a top-level one does. */
 export const turnPhaseFromParts = (
   parts: readonly ChatPart[],
-  toolLabel: (part: Extract<ChatPart, { type: "tool-call" }>) => string,
+  toolLabel: (call: {
+    input: unknown;
+    name: string;
+    output: unknown;
+  }) => string,
 ): TurnActivePhase => {
-  for (const part of parts.toReversed()) {
+  for (const part of withSubagentRunParts(parts).toReversed()) {
     if (part.type === "tool-call") {
-      const phase = turnPhaseForTool(part.state, toolLabel(part));
+      const phase = turnPhaseForTool(
+        part.state,
+        toolLabel({
+          input: "input" in part ? part.input : undefined,
+          name: part.name,
+          output: part.output,
+        }),
+      );
       if (phase !== null) {
         if (
           isUserInputChatToolName(part.name) &&

@@ -13,53 +13,55 @@ import entry11 from "./chatStoredContentEgress";
 import entry12 from "./chatThread";
 import entry13 from "./chatToolGrants";
 import entry14 from "./chatTurn";
-import entry15 from "./contactCapacity";
-import entry16 from "./corpusProjectionOfflineRequest";
-import entry17 from "./correspondence";
-import entry18 from "./currentStep";
-import entry19 from "./definition";
-import entry20 from "./definitionCap";
-import entry21 from "./desktopBatch";
-import entry22 from "./desktopCredential";
-import entry23 from "./desktopMembership";
-import entry24 from "./desktopRunnerCapacity";
-import entry25 from "./entity";
-import entry26 from "./entityVersion";
-import entry27 from "./expenseCapacity";
-import entry28 from "./field";
-import entry29 from "./fileComparisonCapacity";
-import entry30 from "./folioCollabRoom";
-import entry31 from "./invoiceSendCapacity";
-import entry32 from "./legislationAmendmentWork";
-import entry33 from "./mcpOAuthState";
-import entry34 from "./memberCleanup";
-import entry35 from "./memory";
-import entry36 from "./obligation";
-import entry37 from "./orgFeatureAdmission";
-import entry38 from "./organization";
-import entry39 from "./organizationDataBoxes";
-import entry40 from "./organizationObjectIntent";
-import entry41 from "./organizationSettings";
-import entry42 from "./outboundAction";
-import entry43 from "./personalCatalog";
-import entry44 from "./processingClaim";
-import entry45 from "./professionalUseAcceptance";
-import entry46 from "./rateTableWorkspace";
-import entry47 from "./readerAnnotation";
-import entry48 from "./readerAnswer";
-import entry49 from "./readerAnswerMessage";
-import entry50 from "./requestReceipt";
-import entry51 from "./run";
-import entry52 from "./sampleCase";
-import entry53 from "./savedSearch";
-import entry54 from "./schedulerClaim";
-import entry55 from "./scoutCensus";
-import entry56 from "./searchHistory";
-import entry57 from "./searchProjectionRepair";
-import entry58 from "./sharepointConnection";
-import entry59 from "./signal";
-import entry60 from "./signingSession";
-import entry61 from "./workspace";
+import entry15 from "./contact";
+import entry16 from "./contactCapacity";
+import entry17 from "./corpusProjectionOfflineRequest";
+import entry18 from "./correspondence";
+import entry19 from "./currentStep";
+import entry20 from "./definition";
+import entry21 from "./definitionCap";
+import entry22 from "./desktopBatch";
+import entry23 from "./desktopCredential";
+import entry24 from "./desktopMembership";
+import entry25 from "./desktopRunnerCapacity";
+import entry26 from "./dictationVocabularyCapacity";
+import entry27 from "./entity";
+import entry28 from "./entityVersion";
+import entry29 from "./expenseCapacity";
+import entry30 from "./field";
+import entry31 from "./fileComparisonCapacity";
+import entry32 from "./folioCollabRoom";
+import entry33 from "./invoiceSendCapacity";
+import entry34 from "./legislationAmendmentWork";
+import entry35 from "./mcpOAuthState";
+import entry36 from "./memberCleanup";
+import entry37 from "./memory";
+import entry38 from "./obligation";
+import entry39 from "./orgFeatureAdmission";
+import entry40 from "./organization";
+import entry41 from "./organizationDataBoxes";
+import entry42 from "./organizationObjectIntent";
+import entry43 from "./organizationSettings";
+import entry44 from "./outboundAction";
+import entry45 from "./personalCatalog";
+import entry46 from "./processingClaim";
+import entry47 from "./professionalUseAcceptance";
+import entry48 from "./rateTableWorkspace";
+import entry49 from "./readerAnnotation";
+import entry50 from "./readerAnswer";
+import entry51 from "./readerAnswerMessage";
+import entry52 from "./requestReceipt";
+import entry53 from "./run";
+import entry54 from "./sampleCase";
+import entry55 from "./savedSearch";
+import entry56 from "./schedulerClaim";
+import entry57 from "./scoutCensus";
+import entry58 from "./searchHistory";
+import entry59 from "./searchProjectionRepair";
+import entry60 from "./sharepointConnection";
+import entry61 from "./signal";
+import entry62 from "./signingSession";
+import entry63 from "./workspace";
 
 export default {
   "account": entry0,
@@ -77,51 +79,53 @@ export default {
   "chatThread": entry12,
   "chatToolGrants": entry13,
   "chatTurn": entry14,
-  "contactCapacity": entry15,
-  "corpusProjectionOfflineRequest": entry16,
-  "correspondence": entry17,
-  "currentStep": entry18,
-  "definition": entry19,
-  "definitionCap": entry20,
-  "desktopBatch": entry21,
-  "desktopCredential": entry22,
-  "desktopMembership": entry23,
-  "desktopRunnerCapacity": entry24,
-  "entity": entry25,
-  "entityVersion": entry26,
-  "expenseCapacity": entry27,
-  "field": entry28,
-  "fileComparisonCapacity": entry29,
-  "folioCollabRoom": entry30,
-  "invoiceSendCapacity": entry31,
-  "legislationAmendmentWork": entry32,
-  "mcpOAuthState": entry33,
-  "memberCleanup": entry34,
-  "memory": entry35,
-  "obligation": entry36,
-  "orgFeatureAdmission": entry37,
-  "organization": entry38,
-  "organizationDataBoxes": entry39,
-  "organizationObjectIntent": entry40,
-  "organizationSettings": entry41,
-  "outboundAction": entry42,
-  "personalCatalog": entry43,
-  "processingClaim": entry44,
-  "professionalUseAcceptance": entry45,
-  "rateTableWorkspace": entry46,
-  "readerAnnotation": entry47,
-  "readerAnswer": entry48,
-  "readerAnswerMessage": entry49,
-  "requestReceipt": entry50,
-  "run": entry51,
-  "sampleCase": entry52,
-  "savedSearch": entry53,
-  "schedulerClaim": entry54,
-  "scoutCensus": entry55,
-  "searchHistory": entry56,
-  "searchProjectionRepair": entry57,
-  "sharepointConnection": entry58,
-  "signal": entry59,
-  "signingSession": entry60,
-  "workspace": entry61,
+  "contact": entry15,
+  "contactCapacity": entry16,
+  "corpusProjectionOfflineRequest": entry17,
+  "correspondence": entry18,
+  "currentStep": entry19,
+  "definition": entry20,
+  "definitionCap": entry21,
+  "desktopBatch": entry22,
+  "desktopCredential": entry23,
+  "desktopMembership": entry24,
+  "desktopRunnerCapacity": entry25,
+  "dictationVocabularyCapacity": entry26,
+  "entity": entry27,
+  "entityVersion": entry28,
+  "expenseCapacity": entry29,
+  "field": entry30,
+  "fileComparisonCapacity": entry31,
+  "folioCollabRoom": entry32,
+  "invoiceSendCapacity": entry33,
+  "legislationAmendmentWork": entry34,
+  "mcpOAuthState": entry35,
+  "memberCleanup": entry36,
+  "memory": entry37,
+  "obligation": entry38,
+  "orgFeatureAdmission": entry39,
+  "organization": entry40,
+  "organizationDataBoxes": entry41,
+  "organizationObjectIntent": entry42,
+  "organizationSettings": entry43,
+  "outboundAction": entry44,
+  "personalCatalog": entry45,
+  "processingClaim": entry46,
+  "professionalUseAcceptance": entry47,
+  "rateTableWorkspace": entry48,
+  "readerAnnotation": entry49,
+  "readerAnswer": entry50,
+  "readerAnswerMessage": entry51,
+  "requestReceipt": entry52,
+  "run": entry53,
+  "sampleCase": entry54,
+  "savedSearch": entry55,
+  "schedulerClaim": entry56,
+  "scoutCensus": entry57,
+  "searchHistory": entry58,
+  "searchProjectionRepair": entry59,
+  "sharepointConnection": entry60,
+  "signal": entry61,
+  "signingSession": entry62,
+  "workspace": entry63,
 } as const;

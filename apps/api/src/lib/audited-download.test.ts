@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";

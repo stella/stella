@@ -81,6 +81,10 @@ describe("deliverability transitions", () => {
           recipients: [member],
         },
         failures: [{ email: member, reason: failureReason }],
+        bouncedMessage: {
+          type: "message",
+          providerMessageId: "provider-message",
+        },
         at: new Date(timestamp),
       });
     },
@@ -98,6 +102,10 @@ describe("deliverability transitions", () => {
       expect(transition.isOk() && transition.value).toEqual({
         refusal: { type: "none" },
         failures: [{ email: normalizeEmail("member@example.test"), reason }],
+        bouncedMessage: {
+          type: "message",
+          providerMessageId: "provider-message",
+        },
         at: new Date(timestamp),
       });
     },
@@ -113,6 +121,10 @@ describe("deliverability transitions", () => {
           reason: "tls_required",
         },
       ],
+      bouncedMessage: {
+        type: "message",
+        providerMessageId: STARTTLS_REFUSAL_BOUNCE.mail.messageId,
+      },
       at: new Date(STARTTLS_REFUSAL_BOUNCE.bounce.timestamp),
     });
   });
@@ -126,6 +138,7 @@ describe("deliverability transitions", () => {
       expect(transition.isOk() && transition.value).toMatchObject({
         refusal: { type: "refused", reason },
         failures: [],
+        bouncedMessage: { type: "none" },
       });
     }
   });
@@ -237,6 +250,7 @@ describe("deliverability event drain", () => {
     const queue = createFakeSqsQueue();
     const marked: [NormalizedEmail, AccountEmailUndeliverableReason][] = [];
     const failed: [NormalizedEmail, EmailDeliveryFailureReason][] = [];
+    const reported: [string, EmailDeliveryFailureReason][] = [];
     let failWrites = 1;
     const drain = async () =>
       await drainDeliverabilityEvents({
@@ -277,6 +291,9 @@ describe("deliverability event drain", () => {
             ),
           );
           return failures.length;
+        },
+        reportBouncedMessage: async (providerMessageId, reason) => {
+          reported.push([providerMessageId, reason]);
         },
       });
 
@@ -330,6 +347,15 @@ describe("deliverability event drain", () => {
       [normalizeEmail("retry@example.test"), "other"],
       [normalizeEmail("retry@example.test"), "other"],
     ]);
+    // Each applied bounce names its message and first failure, so the
+    // sign-in attempt that sent it can learn why.
+    expect(reported).toEqual([
+      ["provider-message", "suppressed"],
+      ["provider-message", "other"],
+      ["provider-message", "mailbox_unavailable"],
+      ["provider-message", "other"],
+      ["provider-message", "other"],
+    ]);
 
     // Logs carry delivery ids and reasons, never an address.
     expect(JSON.stringify(records)).not.toContain("example.test");
@@ -357,6 +383,7 @@ describe("deliverability event drain", () => {
           return emails.length;
         },
         recordFailures: async (failures) => failures.length,
+        reportBouncedMessage: async () => undefined,
       });
     return { drain, marked, writes };
   };

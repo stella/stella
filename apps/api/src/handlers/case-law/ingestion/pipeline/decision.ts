@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   absorbComposedSupplementRows,
   SUPPLEMENT_ABSORB_FAILED,

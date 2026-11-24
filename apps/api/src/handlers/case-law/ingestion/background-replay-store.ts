@@ -24,7 +24,6 @@ import { DAY_IN_MS } from "@stll/time";
 
 import { decodeCheckpoint } from "@/api/db/backfill-runtime";
 import { CASE_LAW_REPLAY_PENDING_INDEX } from "@/api/db/case-law-parsed-input-state";
-import type { Transaction } from "@/api/db/root";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
@@ -41,6 +40,7 @@ import {
   setSharedLockTimeout,
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import {
@@ -2051,12 +2051,12 @@ export const buildReplayRetirementQuery = (tx: Transaction, limit: number) => {
     .select({ id: staleReceipts.id })
     .from(caseLawSources)
     .innerJoin(
-      sql`(VALUES ${sql.join(
-        Object.entries(PARSER_VERSIONS).map(
-          ([key, version]) => sql`(${key}::text, ${version}::int)`,
-        ),
-        sql`, `,
-      )}) AS current_parsers(adapter_key, parser_version)`,
+      sql`jsonb_to_recordset(${JSON.stringify(
+        Object.entries(PARSER_VERSIONS).map(([key, version]) => ({
+          adapter_key: key,
+          parser_version: version,
+        })),
+      )}::text::jsonb) AS current_parsers(adapter_key text, parser_version int)`,
       eq(caseLawSources.adapterKey, sql`current_parsers.adapter_key`),
     )
     .innerJoinLateral(staleReceipts, sql`true`)

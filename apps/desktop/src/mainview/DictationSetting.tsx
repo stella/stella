@@ -5,7 +5,15 @@ import type { InvokeArgs } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
 import { useLocale, useTranslations } from "use-intl";
 
-import { DESKTOP_DICTATION_CLEANUP_LIMITS } from "@stll/api-contract/desktop-dictation-cleanup";
+import {
+  DESKTOP_DICTATION_CLEANUP_LIMITS,
+  DESKTOP_DICTATION_CLEANUP_STYLES,
+  DESKTOP_DICTATION_TRANSLATION_LANGUAGES,
+} from "@stll/api-contract/desktop-dictation-cleanup";
+import type {
+  DesktopDictationCleanupStyle,
+  DesktopDictationTranslationLanguage,
+} from "@stll/api-contract/desktop-dictation-cleanup";
 import { displayLanguageName } from "@stll/locales";
 import { Button } from "@stll/ui/button";
 import {
@@ -24,34 +32,61 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import {
+  SettingsRow,
+  settingsRowIds,
+  SettingsSection,
+} from "@stll/ui/settings";
 import { Switch } from "@stll/ui/switch";
 import { Tooltip, TooltipFactTrigger, TooltipPopup } from "@stll/ui/tooltip";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { formatHoldKey, isHoldKey } from "../shared/hold-key";
 import type { HoldKey } from "../shared/hold-key";
-import type { ShortcutKeys } from "../shared/shortcut-keys";
+import { formatShortcut } from "../shared/shortcut-keys";
+import type { KeyboardLayout, ShortcutKeys } from "../shared/shortcut-keys";
 import {
   DESKTOP_PLATFORM,
   useKeyboardLayout,
 } from "../shared/use-clipboard-shortcut";
+import { DictationAppSettings } from "./DictationAppSettings";
+import type {
+  DictationAppSetting,
+  DictationRecentApp,
+} from "./DictationAppSettings";
+import {
+  DictationCleanupInstructionsRow,
+  DictationCleanupModelRow,
+} from "./DictationCleanupPreferences";
 import { DictationCustomWords } from "./DictationCustomWords";
 import { DictationDestination } from "./DictationDestination";
 import type { DictationDestinationValue } from "./DictationDestination";
 import { DictationInputFix } from "./DictationInputFix";
+import { DictationLearnedFixes } from "./DictationLearnedFixes";
 import { DictationMicrophoneRow } from "./DictationMicrophone";
-import {
-  SettingsGroup,
-  SettingsPageHeader,
-  SettingsRow,
-  settingsRowIds,
-} from "./settings-layout";
+import { DictationWhileDictatingRows } from "./DictationWhileDictating";
+import type { WhileDictating } from "./DictationWhileDictating";
+import { SettingsPageHeader } from "./settings-layout";
 
 type DictationModel =
   | { status: "missing" | "failed" | "ready" }
   | { received: number; status: "downloading"; total: number };
 
 const AUTOMATIC_LANGUAGE = "auto";
+/** The translate-to choice for the language the speaker dictates in. */
+const NO_TRANSLATION = "off";
+
+const isCleanupStyle = (
+  value: unknown,
+): value is DesktopDictationCleanupStyle =>
+  DESKTOP_DICTATION_CLEANUP_STYLES.some((style) => style === value);
+
+const isTranslationLanguage = (
+  value: unknown,
+): value is DesktopDictationTranslationLanguage =>
+  DESKTOP_DICTATION_TRANSLATION_LANGUAGES.some(
+    (language) => language === value,
+  );
 
 type DictationLanguage = {
   /** `auto` or one of `supported`. */
@@ -62,10 +97,22 @@ type DictationLanguage = {
 };
 
 export type DictationSnapshot = {
+  /** Cleanup and the language for one app or kind of app, over the
+   *  settings below. */
+  appSettings: DictationAppSetting[];
   available: boolean;
   /** Whether the transcribed text goes through stella to the organization's
    *  AI provider before it is typed. */
   cleanup: boolean;
+  /** How cleanup writes the text. */
+  cleanupStyle: DesktopDictationCleanupStyle;
+  /** The language cleanup writes the text in; null: the spoken one. */
+  translateTo: DesktopDictationTranslationLanguage | null;
+  /** What the speaker wrote for cleanup to follow; null: nothing. */
+  cleanupInstructions: string | null;
+  /** The model the speaker chose for cleanup, as the list names it; null:
+   *  automatic, the organization's fast model. */
+  cleanupModel: string | null;
   /** Whether the server enables transcription by stella AI; without it the
    *  choice of destination is not offered. */
   cloudAvailable: boolean;
@@ -84,6 +131,10 @@ export type DictationSnapshot = {
   language: DictationLanguage;
   /** Whether cleanup also gets the focused window's title. */
   shareWindowTitle: boolean;
+  /** Whether a short sound marks the start and the end of listening. */
+  sounds: boolean;
+  /** Whether other sound changes only while it plays through speakers. */
+  speakersOnly: boolean;
   /** Whether cleanup also gets the text before the cursor. */
   shareTextBeforeCursor: boolean;
   /** Whether this computer can read the text before the cursor; without it
@@ -103,6 +154,11 @@ export type DictationSnapshot = {
     | null;
   /** Whether the failed dictation's text is in clipboard history. */
   failureKeptInHistory: boolean;
+  /** Whether a shortcut opens the panel that fixes a dictation's words,
+   *  its keys, and whether another app holds them. */
+  fixKeys: ShortcutKeys;
+  fixShortcut: boolean;
+  fixShortcutTaken: boolean;
   /** The key dictation listens for, and what this computer offers. */
   holdKey: HoldKey;
   holdKeys: HoldKey[];
@@ -114,7 +170,19 @@ export type DictationSnapshot = {
   model: DictationModel;
   modelBytes: number;
   phase: "idle" | "recording" | "transcribing";
+  /** Apps dictated into since stella started, offered for their own
+   *  settings. */
+  recentApps: DictationRecentApp[];
+  /** Whether a shortcut types the last dictation again, its keys, and
+   *  whether another app holds them. */
+  retypeKeys: ShortcutKeys;
+  retypeShortcut: boolean;
+  retypeShortcutTaken: boolean;
   shortcutTaken: boolean;
+  /** What happens to other sound while recording, and what this computer
+   *  offers. */
+  whileDictating: WhileDictating;
+  whileDictatingOffered: WhileDictating[];
 };
 
 const BYTES_PER_MEGABYTE = 1_000_000;
@@ -127,11 +195,6 @@ const languageHasEffect = (snapshot: DictationSnapshot): boolean =>
   snapshot.cleanup ||
   snapshot.destination === "cloud" ||
   (snapshot.model.status === "ready" && snapshot.language.supported.length > 0);
-
-/** Custom words reach stella AI transcription and AI cleanup only; with
- *  neither they change nothing, so they are hidden. */
-const customWordsHaveEffect = (snapshot: DictationSnapshot): boolean =>
-  snapshot.cleanup || snapshot.destination === "cloud";
 
 /** Orders the snapshots the native side answers with. Each read or change
  *  takes a ticket as it starts; an answer is shown only when no answer to a
@@ -324,25 +387,8 @@ const DictationPage = ({
     return Result.isOk(result);
   };
 
-  const setHoldKey = async (holdKey: HoldKey) => {
-    await change("dictation_set_hold_key", { holdKey });
-  };
-
   const setEnabled = async (enabled: boolean) => {
     await change("dictation_set_enabled", { enabled });
-  };
-
-  const setCleanup = async (cleanup: boolean) => {
-    await change("dictation_set_cleanup", { enabled: cleanup });
-  };
-
-  const setShare = async (
-    command:
-      | "dictation_set_share_text_before_cursor"
-      | "dictation_set_share_window_title",
-    enabled: boolean,
-  ) => {
-    await change(command, { enabled });
   };
 
   const setLanguage = async (language: string) => {
@@ -360,6 +406,9 @@ const DictationPage = ({
   const setCustomWords = async (words: string[]) =>
     await change("dictation_set_custom_words", { words });
 
+  const setAppSettings = async (settings: DictationAppSetting[]) =>
+    await change("dictation_set_app_settings", { settings });
+
   const download = async () => {
     await change("dictation_download_model");
   };
@@ -368,8 +417,6 @@ const DictationPage = ({
     const removed = await change("dictation_remove_model");
     setRemoveFailed(!removed);
   };
-
-  const cleanupIds = settingsRowIds("dictation-cleanup");
 
   return (
     <div className="flex flex-col gap-6">
@@ -418,25 +465,20 @@ const DictationPage = ({
         // Keyed by the failure, so a new one reads its action afresh.
         <DictationInputFix key={snapshot.failure} />
       )}
+      <TranscribeRecordingGroup />
       {snapshot.enabled && (
         <>
-          <SettingsGroup title={t("groups.shortcut")}>
-            {snapshot.holdKeys.length > 1 && (
-              <DictationHoldKeyRow
-                holdKey={snapshot.holdKey}
-                holdKeys={snapshot.holdKeys}
-                label={holdKeyLabel}
-                onChange={(holdKey) => {
-                  void setHoldKey(holdKey);
-                }}
-              />
-            )}
-            <DictationMicrophoneRow
-              focused={focus === "microphone"}
-              onFocused={onFocusShown}
-            />
-          </SettingsGroup>
-          <SettingsGroup title={t("groups.transcription")}>
+          <DictationShortcutSection
+            change={(command, args) => {
+              void change(command, args);
+            }}
+            focus={focus}
+            holdKeyLabel={holdKeyLabel}
+            layout={layout}
+            onFocusShown={onFocusShown}
+            snapshot={snapshot}
+          />
+          <SettingsSection title={t("groups.transcription")}>
             {snapshot.cloudAvailable ? (
               <DictationDestination
                 cloudModel={snapshot.cloudModel}
@@ -470,67 +512,33 @@ const DictationPage = ({
                 }}
               />
             )}
-          </SettingsGroup>
-          <SettingsGroup title={t("groups.cleanup")}>
-            <SettingsRow
-              description={
-                snapshot.destination === "cloud"
-                  ? t("cleanup.descriptionCloud")
-                  : t("cleanup.description")
-              }
-              id="dictation-cleanup"
-              title={t("cleanup.title")}
-            >
-              <Switch
-                aria-describedby={cleanupIds.description}
-                aria-labelledby={cleanupIds.label}
-                checked={snapshot.cleanup}
-                onCheckedChange={(cleanup) => {
-                  void setCleanup(cleanup);
-                }}
-              />
-            </SettingsRow>
-            {/* What cleanup may also read; offered only while it runs. */}
-            <DictationSwitchRow
-              checked={snapshot.shareWindowTitle}
-              description={t("context.windowTitle.description")}
-              disabled={!snapshot.cleanup}
-              id="dictation-share-window-title"
-              onChange={(enabled) => {
-                void setShare("dictation_set_share_window_title", enabled);
-              }}
-              title={t("context.windowTitle.title")}
-            />
-            {snapshot.textBeforeCursorAvailable && (
-              <DictationSwitchRow
-                checked={snapshot.shareTextBeforeCursor}
-                description={t("context.textBeforeCursor.description", {
-                  limit:
-                    DESKTOP_DICTATION_CLEANUP_LIMITS.textBeforeCursorLength,
-                })}
-                disabled={!snapshot.cleanup}
-                id="dictation-share-text-before-cursor"
-                onChange={(enabled) => {
-                  void setShare(
-                    "dictation_set_share_text_before_cursor",
-                    enabled,
-                  );
-                }}
-                title={t("context.textBeforeCursor.title")}
-              />
-            )}
-          </SettingsGroup>
-          {customWordsHaveEffect(snapshot) && (
-            <DictationCustomWords
-              onChange={setCustomWords}
-              words={snapshot.customWords}
-            />
-          )}
+          </SettingsSection>
+          <DictationCleanupSection change={change} snapshot={snapshot} />
+          <DictationAppSettings
+            languages={snapshot.language.supported}
+            onChange={setAppSettings}
+            recentApps={snapshot.recentApps}
+            settings={snapshot.appSettings}
+          />
+          {/* stella AI and cleanup take the words; without either, the
+              text from the speech model here is spelled with them. */}
+          <DictationCustomWords
+            onChange={setCustomWords}
+            words={snapshot.customWords}
+          />
+          <DictationLearnedFixes
+            shortcut={formatShortcut({
+              keys: snapshot.fixKeys,
+              layout,
+              locale,
+              platform: DESKTOP_PLATFORM,
+            })}
+          />
           {/* With stella AI the model is not needed, but a downloaded one
               can still be removed. */}
           {(snapshot.destination === "local" ||
             snapshot.model.status === "ready") && (
-            <SettingsGroup title={t("groups.thisComputer")}>
+            <SettingsSection title={t("groups.thisComputer")}>
               <DictationModelRow
                 busy={snapshot.phase !== "idle"}
                 model={snapshot.model}
@@ -543,7 +551,7 @@ const DictationPage = ({
                 }}
                 removeFailed={removeFailed}
               />
-            </SettingsGroup>
+            </SettingsSection>
           )}
           {snapshot.keepsInHistory && (
             <p className="text-muted-foreground px-1 text-xs">
@@ -552,8 +560,87 @@ const DictationPage = ({
           )}
         </>
       )}
-      <TranscribeRecordingGroup />
     </div>
+  );
+};
+
+/** The key to hold, the microphone, the sounds and the shortcut that types
+ *  the last dictation again. */
+const DictationShortcutSection = ({
+  change,
+  focus,
+  holdKeyLabel,
+  layout,
+  onFocusShown,
+  snapshot,
+}: Pick<DictationFocus, "focus" | "onFocusShown"> & {
+  change: (command: string, args: InvokeArgs) => void;
+  holdKeyLabel: (holdKey: HoldKey) => string;
+  layout: KeyboardLayout | null;
+  snapshot: DictationSnapshot;
+}) => {
+  const t = useTranslations("dictation");
+  const locale = useLocale();
+  return (
+    <SettingsSection title={t("groups.shortcut")}>
+      {snapshot.holdKeys.length > 1 && (
+        <DictationHoldKeyRow
+          holdKey={snapshot.holdKey}
+          holdKeys={snapshot.holdKeys}
+          label={holdKeyLabel}
+          onChange={(holdKey) => {
+            change("dictation_set_hold_key", { holdKey });
+          }}
+        />
+      )}
+      <DictationMicrophoneRow
+        focused={focus === "microphone"}
+        onFocused={onFocusShown}
+      />
+      <DictationSoundsRow
+        checked={snapshot.sounds}
+        onChange={(sounds) => {
+          change("dictation_set_sounds", { enabled: sounds });
+        }}
+      />
+      <DictationWhileDictatingRows
+        choice={snapshot.whileDictating}
+        offered={snapshot.whileDictatingOffered}
+        onChoice={(choice) => {
+          change("dictation_set_while_dictating", { choice });
+        }}
+        onSpeakersOnly={(enabled) => {
+          change("dictation_set_speakers_only", { enabled });
+        }}
+        speakersOnly={snapshot.speakersOnly}
+      />
+      <DictationRetypeRow
+        checked={snapshot.retypeShortcut}
+        onChange={(enabled) => {
+          change("dictation_set_retype_shortcut", { enabled });
+        }}
+        shortcut={formatShortcut({
+          keys: snapshot.retypeKeys,
+          layout,
+          locale,
+          platform: DESKTOP_PLATFORM,
+        })}
+        taken={snapshot.retypeShortcutTaken}
+      />
+      <DictationFixRow
+        checked={snapshot.fixShortcut}
+        onChange={(enabled) => {
+          change("dictation_set_fix_shortcut", { enabled });
+        }}
+        shortcut={formatShortcut({
+          keys: snapshot.fixKeys,
+          layout,
+          locale,
+          platform: DESKTOP_PLATFORM,
+        })}
+        taken={snapshot.fixShortcutTaken}
+      />
+    </SettingsSection>
   );
 };
 
@@ -569,7 +656,7 @@ const TranscribeRecordingGroup = () => {
     setOpenFailed(Result.isError(result));
   };
   return (
-    <SettingsGroup>
+    <SettingsSection>
       <SettingsRow
         description={t("description")}
         id="dictation-transcribe-recording"
@@ -592,7 +679,7 @@ const TranscribeRecordingGroup = () => {
           {t("failed")}
         </li>
       ) : null}
-    </SettingsGroup>
+    </SettingsSection>
   );
 };
 
@@ -652,6 +739,319 @@ const DictationHoldKeyRow = ({
           {holdKeys.map((value) => (
             <SelectItem key={value} value={value}>
               {label(value)}
+            </SelectItem>
+          ))}
+        </SelectPopup>
+      </Select>
+    </SettingsRow>
+  );
+};
+
+/** Whether a short sound marks the start and the end of recording. */
+const DictationSoundsRow = ({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (enabled: boolean) => void;
+}) => {
+  const t = useTranslations("dictation.sounds");
+  const ids = settingsRowIds("dictation-sounds");
+  return (
+    <SettingsRow
+      description={t("description")}
+      id="dictation-sounds"
+      title={t("title")}
+    >
+      <Switch
+        aria-describedby={ids.description}
+        aria-labelledby={ids.label}
+        checked={checked}
+        onCheckedChange={onChange}
+      />
+    </SettingsRow>
+  );
+};
+
+/** The shortcut that types the last dictation again; the tray offers the
+ *  same whether or not it is on. */
+const DictationRetypeRow = ({
+  checked,
+  onChange,
+  shortcut,
+  taken,
+}: {
+  checked: boolean;
+  onChange: (enabled: boolean) => void;
+  shortcut: string;
+  taken: boolean;
+}) => {
+  const t = useTranslations("dictation.retype");
+  const ids = settingsRowIds("dictation-retype");
+  return (
+    <SettingsRow
+      description={
+        checked && taken
+          ? t("taken", { shortcut })
+          : t("description", { shortcut })
+      }
+      id="dictation-retype"
+      title={t("title")}
+    >
+      <Switch
+        aria-describedby={ids.description}
+        aria-labelledby={ids.label}
+        checked={checked}
+        onCheckedChange={onChange}
+      />
+    </SettingsRow>
+  );
+};
+
+/** The shortcut that opens the panel fixing a dictation's words; the tray
+ *  offers the same whether or not it is on. */
+const DictationFixRow = ({
+  checked,
+  onChange,
+  shortcut,
+  taken,
+}: {
+  checked: boolean;
+  onChange: (enabled: boolean) => void;
+  shortcut: string;
+  taken: boolean;
+}) => {
+  const t = useTranslations("dictation.fix");
+  const ids = settingsRowIds("dictation-fix");
+  return (
+    <SettingsRow
+      description={
+        checked && taken
+          ? t("taken", { shortcut })
+          : t("description", { shortcut })
+      }
+      id="dictation-fix"
+      title={t("title")}
+    >
+      <Switch
+        aria-describedby={ids.description}
+        aria-labelledby={ids.label}
+        checked={checked}
+        onCheckedChange={onChange}
+      />
+    </SettingsRow>
+  );
+};
+
+/** AI cleanup: the switch, how it writes, and what it may also read. */
+const DictationCleanupSection = ({
+  change,
+  snapshot,
+}: {
+  change: (command: string, args?: InvokeArgs) => Promise<boolean>;
+  snapshot: DictationSnapshot;
+}) => {
+  const t = useTranslations("dictation");
+  const cleanupIds = settingsRowIds("dictation-cleanup");
+
+  const setCleanup = async (cleanup: boolean) => {
+    await change("dictation_set_cleanup", { enabled: cleanup });
+  };
+
+  const setCleanupStyle = async (style: DesktopDictationCleanupStyle) => {
+    await change("dictation_set_cleanup_style", { style });
+  };
+
+  const setTranslateTo = async (
+    language: DesktopDictationTranslationLanguage | null,
+  ) => {
+    await change("dictation_set_translate_to", { language });
+  };
+
+  const setShare = async (
+    command:
+      | "dictation_set_share_text_before_cursor"
+      | "dictation_set_share_window_title",
+    enabled: boolean,
+  ) => {
+    await change(command, { enabled });
+  };
+
+  return (
+    <SettingsSection title={t("groups.cleanup")}>
+      <SettingsRow
+        description={
+          snapshot.destination === "cloud"
+            ? t("cleanup.descriptionCloud")
+            : t("cleanup.description")
+        }
+        id="dictation-cleanup"
+        title={t("cleanup.title")}
+      >
+        <Switch
+          aria-describedby={cleanupIds.description}
+          aria-labelledby={cleanupIds.label}
+          checked={snapshot.cleanup}
+          onCheckedChange={(cleanup) => {
+            void setCleanup(cleanup);
+          }}
+        />
+      </SettingsRow>
+      {/* How cleanup writes; offered only while it runs. */}
+      <DictationCleanupStyleRow
+        disabled={!snapshot.cleanup}
+        onChange={(style) => {
+          void setCleanupStyle(style);
+        }}
+        style={snapshot.cleanupStyle}
+      />
+      <DictationTranslateToRow
+        disabled={!snapshot.cleanup}
+        onChange={(language) => {
+          void setTranslateTo(language);
+        }}
+        translateTo={snapshot.translateTo}
+      />
+      {/* The speaker's own guidance and the model; offered only while
+          cleanup runs. */}
+      {snapshot.cleanup && (
+        <>
+          <DictationCleanupModelRow
+            cleanupModel={snapshot.cleanupModel}
+            onChange={async (model) =>
+              await change("dictation_set_cleanup_model", { model })
+            }
+          />
+          <DictationCleanupInstructionsRow
+            instructions={snapshot.cleanupInstructions}
+            onSave={async (instructions) =>
+              await change("dictation_set_cleanup_instructions", {
+                instructions,
+              })
+            }
+          />
+        </>
+      )}
+      {/* What cleanup may also read; offered only while it runs. */}
+      <DictationSwitchRow
+        checked={snapshot.shareWindowTitle}
+        description={t("context.windowTitle.description")}
+        disabled={!snapshot.cleanup}
+        id="dictation-share-window-title"
+        onChange={(enabled) => {
+          void setShare("dictation_set_share_window_title", enabled);
+        }}
+        title={t("context.windowTitle.title")}
+      />
+      {snapshot.textBeforeCursorAvailable && (
+        <DictationSwitchRow
+          checked={snapshot.shareTextBeforeCursor}
+          description={t("context.textBeforeCursor.description", {
+            limit: DESKTOP_DICTATION_CLEANUP_LIMITS.textBeforeCursorLength,
+          })}
+          disabled={!snapshot.cleanup}
+          id="dictation-share-text-before-cursor"
+          onChange={(enabled) => {
+            void setShare("dictation_set_share_text_before_cursor", enabled);
+          }}
+          title={t("context.textBeforeCursor.title")}
+        />
+      )}
+    </SettingsSection>
+  );
+};
+
+const DictationCleanupStyleRow = ({
+  disabled,
+  onChange,
+  style,
+}: {
+  disabled: boolean;
+  onChange: (style: DesktopDictationCleanupStyle) => void;
+  style: DesktopDictationCleanupStyle;
+}) => {
+  const t = useTranslations("dictation.cleanupStyle");
+  const ids = settingsRowIds("dictation-cleanup-style");
+  return (
+    <SettingsRow
+      depth="nested"
+      description={t(`${style}.description`)}
+      disabled={disabled}
+      id="dictation-cleanup-style"
+      title={t("title")}
+    >
+      <Select
+        disabled={disabled}
+        onValueChange={(value) => {
+          if (isCleanupStyle(value)) {
+            onChange(value);
+          }
+        }}
+        value={style}
+      >
+        <SelectTrigger
+          aria-describedby={ids.description}
+          aria-labelledby={ids.label}
+          className="w-44"
+        >
+          <SelectValue>
+            {(value: unknown) =>
+              isCleanupStyle(value) ? t(`${value}.title`) : null
+            }
+          </SelectValue>
+        </SelectTrigger>
+        <SelectPopup>
+          {DESKTOP_DICTATION_CLEANUP_STYLES.map((value) => (
+            <SelectItem key={value} value={value}>
+              {t(`${value}.title`)}
+            </SelectItem>
+          ))}
+        </SelectPopup>
+      </Select>
+    </SettingsRow>
+  );
+};
+
+const DictationTranslateToRow = ({
+  disabled,
+  onChange,
+  translateTo,
+}: {
+  disabled: boolean;
+  onChange: (language: DesktopDictationTranslationLanguage | null) => void;
+  translateTo: DesktopDictationTranslationLanguage | null;
+}) => {
+  const t = useTranslations("dictation.translateTo");
+  const ids = settingsRowIds("dictation-translate-to");
+  const label = (value: unknown) =>
+    isTranslationLanguage(value) ? displayLanguageName(value) : t("off");
+  return (
+    <SettingsRow
+      depth="nested"
+      description={t("description")}
+      disabled={disabled}
+      id="dictation-translate-to"
+      title={t("title")}
+    >
+      <Select
+        disabled={disabled}
+        onValueChange={(value) => {
+          onChange(isTranslationLanguage(value) ? value : null);
+        }}
+        value={translateTo ?? NO_TRANSLATION}
+      >
+        <SelectTrigger
+          aria-describedby={ids.description}
+          aria-labelledby={ids.label}
+          className="w-44"
+        >
+          <SelectValue>{label}</SelectValue>
+        </SelectTrigger>
+        <SelectPopup>
+          <SelectItem value={NO_TRANSLATION}>{t("off")}</SelectItem>
+          {DESKTOP_DICTATION_TRANSLATION_LANGUAGES.map((value) => (
+            <SelectItem key={value} value={value}>
+              {displayLanguageName(value)}
             </SelectItem>
           ))}
         </SelectPopup>
@@ -861,7 +1261,12 @@ const DictationModelAction = ({
   switch (model.status) {
     case "ready":
       return (
-        <Button disabled={busy} onClick={onRemove} variant="ghost">
+        <Button
+          disabled={busy}
+          disabledReason={t("dictationInProgress")}
+          onClick={onRemove}
+          variant="ghost"
+        >
           {t("removeModel")}
         </Button>
       );

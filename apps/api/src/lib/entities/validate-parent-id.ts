@@ -1,8 +1,8 @@
 import { and, eq } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { entities } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 
 type ValidateParentIdOptions = {

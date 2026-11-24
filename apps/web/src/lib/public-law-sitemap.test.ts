@@ -17,6 +17,7 @@ import type { DecisionWorkspaceProps } from "@/features/case-law/components/case
 import {
   isPublicLawPathIndexable,
   PUBLIC_CRAWL_ASSETS,
+  PUBLIC_CRAWL_RENDER_ASSETS,
   publicToolCrawlPaths,
 } from "@/public-crawl-policy";
 
@@ -41,8 +42,10 @@ const {
   SITEMAP_XML_RESPONSE_HEADERS,
 } = await import("@/lib/public-law-sitemap");
 const {
+  classifySitemapUpstreamFailure,
   createSitemapReadFailureResponse,
-  createSitemapUpstreamBusyError,
+  SitemapNotFoundError,
+  SitemapReadFailedError,
   SitemapUpstreamBusyError,
 } = await import("@/lib/public-sitemap");
 const { isPublicSsrPath } = await import("@/lib/public-ssr-paths");
@@ -150,6 +153,11 @@ const requestUrlForTest = (input: Request | URL | string): string => {
 
   return input.url;
 };
+
+const renderAssetAllowLines = PUBLIC_CRAWL_RENDER_ASSETS.flatMap(({ path }) => [
+  `Allow: ${path}/`,
+  `Allow: ${path}$`,
+]);
 
 describe("public law sitemap", () => {
   test.each(CASE_LAW_BROWSER_COUNTRIES)(
@@ -335,7 +343,7 @@ describe("public law sitemap", () => {
     ]);
   });
 
-  test("fetches bucketed sitemap decisions from stable shard paths", async () => {
+  test("fetches a split month's range from its stable shard path", async () => {
     const requestedUrls: string[] = [];
     const fetchImpl = async (input: Request | URL | string) => {
       requestedUrls.push(requestUrlForTest(input));
@@ -352,12 +360,12 @@ describe("public law sitemap", () => {
 
     await fetchPublicSitemapDecisions({
       fetchImpl,
-      shard: { bucket: "07", country: "cze", month: "05", year: "2026" },
+      shard: { bucket: "0007", country: "cze", month: "05", year: "2026" },
       signal: AbortSignal.timeout(1000),
     });
 
     expect(requestedUrls).toEqual([
-      "http://localhost:3001/v1/case/sitemap/decisions/shard?country=cze&year=2026&month=05&bucket=07",
+      "http://localhost:3001/v1/case/sitemap/decisions/shard?country=cze&year=2026&month=05&bucket=0007",
     ]);
   });
 
@@ -373,8 +381,9 @@ describe("public law sitemap", () => {
     ["-1", "60"],
     ["", "60"],
   ])("normalizes retry delay %s to decimal seconds", (header, expected) => {
-    const error = createSitemapUpstreamBusyError({
+    const error = classifySitemapUpstreamFailure({
       action: "readPublicSitemap",
+      addressesShard: true,
       response: new Response("busy", {
         status: 429,
         headers: { "Retry-After": header },
@@ -407,6 +416,72 @@ describe("public law sitemap", () => {
     },
   );
 
+  test.each([400, 404, 410, 422])(
+    "an upstream %d for a requested shard rejects as a missing sitemap",
+    async (status) => {
+      const fetchImpl = async () =>
+        Response.json(
+          { failure: { reason: "request_validation" } },
+          { status },
+        );
+
+      const error = await rejectionOf(
+        fetchPublicSitemapDecisions({
+          fetchImpl,
+          shard: { bucket: "00", country: "hun", month: "x", year: "undated" },
+        }),
+      );
+
+      expect(SitemapNotFoundError.is(error)).toBe(true);
+      expect(createSitemapReadFailureResponse(error).status).toBe(404);
+    },
+  );
+
+  test("a shard of an unpublished jurisdiction rejects as missing without a request", async () => {
+    let requested = false;
+    const fetchImpl = async () => {
+      requested = true;
+      return new Response();
+    };
+
+    const error = await rejectionOf(
+      fetchPublicSitemapDecisions({
+        fetchImpl,
+        shard: { bucket: "all", country: "xaa", month: "05", year: "2026" },
+      }),
+    );
+
+    expect(requested).toBe(false);
+    expect(SitemapNotFoundError.is(error)).toBe(true);
+  });
+
+  test.each([500, 502])(
+    "an upstream %d for a requested shard rejects as a read failure",
+    async (status) => {
+      const fetchImpl = async () => new Response("fault", { status });
+
+      const error = await rejectionOf(
+        fetchPublicSitemapDecisions({
+          fetchImpl,
+          shard: { bucket: "all", country: "cze", month: "05", year: "2026" },
+        }),
+      );
+
+      expect(SitemapReadFailedError.is(error)).toBe(true);
+      expect(SitemapReadFailedError.is(error) && error.upstreamStatus).toBe(
+        status,
+      );
+    },
+  );
+
+  test("an upstream 422 for the shard list is a read failure, not a missing sitemap", async () => {
+    const fetchImpl = async () => new Response("invalid", { status: 422 });
+
+    const error = await rejectionOf(fetchPublicSitemapShards({ fetchImpl }));
+
+    expect(SitemapReadFailedError.is(error)).toBe(true);
+  });
+
   test("fetches public sitemap shards from the public case-law API only", async () => {
     const requestedUrls: string[] = [];
     const fetchImpl = async (input: Request | URL | string) => {
@@ -423,7 +498,7 @@ describe("public law sitemap", () => {
               year: "2026",
             },
             {
-              bucket: "07",
+              bucket: "0007",
               country: "cze",
               lastmod: "2025-12-31",
               month: "04",
@@ -492,7 +567,7 @@ describe("public law sitemap", () => {
           year: "2026",
         },
         {
-          bucket: "07",
+          bucket: "0007",
           country: "cze",
           lastmod: "2025-12-31",
           month: "04",
@@ -515,7 +590,7 @@ describe("public law sitemap", () => {
       "<loc>http://localhost:3000/sitemaps/law-cases/cze/2026/05.xml</loc>",
     );
     expect(xml).toContain(
-      "<loc>http://localhost:3000/sitemaps/law-cases/cze/2026/04/07.xml</loc>",
+      "<loc>http://localhost:3000/sitemaps/law-cases/cze/2026/04/0007.xml</loc>",
     );
     expect(xml).toContain("<lastmod>2026-01-01</lastmod>");
     expect(xml).toMatch(
@@ -782,7 +857,7 @@ describe("public law sitemap", () => {
     expect(SITEMAP_XML_RESPONSE_HEADERS).toEqual({
       ...ssrCacheClassHeaders("public-anonymous"),
       "Cache-Control":
-        "public, max-age=3600, s-maxage=21600, stale-while-revalidate=86400",
+        "public, max-age=3600, s-maxage=21600, stale-while-revalidate=86400, stale-if-error=86400",
       "Content-Type": "application/xml; charset=utf-8",
     });
   });
@@ -870,6 +945,7 @@ describe("public law sitemap", () => {
       "Allow: /sitemaps/",
       "Allow: /sitemaps$",
       ...PUBLIC_CRAWL_ASSETS.map(({ path }) => `Allow: ${path}$`),
+      ...renderAssetAllowLines,
     ]);
     // A jurisdiction whose pages are not public stays behind Disallow: /.
     expect(allowLines.some((line) => line.startsWith("Allow: /law/svk"))).toBe(
@@ -895,9 +971,10 @@ describe("public law sitemap", () => {
       .split("\n")
       .filter((line) => line.startsWith("Allow:"));
 
-    expect(allowLines).toEqual(
-      publicToolCrawlPaths("/tools").map((path) => `Allow: ${path}$`),
-    );
+    expect(allowLines).toEqual([
+      ...publicToolCrawlPaths("/tools").map((path) => `Allow: ${path}$`),
+      ...renderAssetAllowLines,
+    ]);
     expect(robots).toContain("Disallow: /");
   });
 
@@ -916,7 +993,9 @@ describe("public law sitemap", () => {
       "Allow: /knowledge/templates/catalogue/",
       "Allow: /knowledge/templates/catalogue$",
       "Allow: /knowledge/playbooks/catalogue$",
+      ...renderAssetAllowLines,
     ]);
+    // With no public surface open, the render assets stay closed too.
     expect(allowLinesFor(false)).toEqual([]);
   });
 
@@ -1169,7 +1248,15 @@ describe("public law sitemap", () => {
       "documentPresentationSnapshot(readRequestPresentationPrefs())",
     );
     expect(source).not.toContain("useI18nStore.getState()");
-    expect(source).toContain("hydrate: restoreHydratedDocumentPresentation");
+    // The snapshot is restored, then handed to the matches the hydration
+    // builds, so a member page's root (not loaded on the server) hydrates
+    // with the presentation the server painted.
+    expect(source).toContain(
+      "await restoreHydratedDocumentPresentation(snapshot);",
+    );
+    expect(source).toContain(
+      "router.options.context.presentationPrefs = snapshot.prefs;",
+    );
     expect(source).not.toContain("localeUserId");
     expect(source).not.toContain("loadAuthContext");
     const root = await readSource("apps/web/src/routes/__root.tsx");

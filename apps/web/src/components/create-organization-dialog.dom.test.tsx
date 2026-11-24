@@ -16,7 +16,7 @@ import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
 import type { TranslationKey } from "@/i18n/types";
-import type { WebApiRoutes } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api-contract";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/settings" });
 Object.assign(globalThis, {
@@ -341,7 +341,9 @@ const renderCreationSurface = async ({
 const fillName = (messages: typeof en | typeof ar, name = "New firm") => {
   fireEvent.change(
     screen.getByRole("textbox", { name: messages.common.organizationName }),
-    { target: { value: name } },
+    {
+      target: { value: name },
+    },
   );
 };
 
@@ -445,7 +447,7 @@ test.each(
       fireEvent.submit(form);
     });
     await waitFor(() => expect(creationKeys).toHaveLength(1));
-    expect(submit.hasAttribute("disabled")).toBe(true);
+    expect(submit.getAttribute("aria-disabled")).toBe("true");
     response.resolve(createdResponse());
     const switchButton = await expectCreated(messages);
     expect(switchRequests()).toHaveLength(0);

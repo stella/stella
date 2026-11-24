@@ -5,7 +5,7 @@ import type { PublicCountrySurface } from "@stll/api-contract/public-country-cap
 import { mapWithConcurrency } from "@stll/concurrency";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { legislationDocuments } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -188,7 +188,8 @@ export const readVersionText = async ({
  */
 const versionAstCache = createCorpusAstCache({
   maxHeapBytes: LIMITS.legislationAstCacheMaxHeapBytes,
-  read: async (storedKey) => await readSizedCorpusAst(storedKey),
+  read: async (storedKey, _readTombstones, report) =>
+    await readSizedCorpusAst(storedKey, report === undefined ? {} : { report }),
 });
 
 export type ReadVersionAstOptions = {
@@ -231,7 +232,10 @@ const readVersionAstPayload = async ({
         documentId: row.id,
         key: source.key,
         step,
-        read: async () => await versionAstCache.read(source.key),
+        read: async () =>
+          await versionAstCache.read(source.key, undefined, {
+            documentId: row.id,
+          }),
         fallback: async () => parsePersistedCorpusAst(await readStoredAst()),
       });
     default: {

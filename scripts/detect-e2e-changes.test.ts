@@ -1467,7 +1467,7 @@ describe("detect-e2e-changes", () => {
     const command = isRecord(scripts) ? scripts["test:e2e"] : undefined;
     // Playwright fails when no test matches unless told otherwise.
     expect(command).toBe(
-      "playwright test --config e2e/playwright.config.ts --project landing",
+      "bun --bun playwright test --config e2e/playwright.config.ts --project landing",
     );
     const config = readFileSync(
       path.join(
@@ -1952,6 +1952,8 @@ describe("PR production E2E scope", () => {
     for (const file of [
       "apps/web/src/routes/index.tsx",
       "apps/web/src/components/breadcrumbs/chat-switcher.tsx",
+      "packages/ui/src/button.tsx",
+      "packages/locales/src/en.ts",
     ]) {
       expect(detects("pr-core", [file]), file).toBe("true");
     }
@@ -1962,7 +1964,9 @@ describe("PR production E2E scope", () => {
       "apps/api/src/handlers/tasks/get.ts",
       "apps/web/src/routes/index.test.tsx",
       "apps/web/src/i18n/TERMINOLOGY.md",
-      "packages/ui/src/button.tsx",
+      "packages/ui/src/button.test.tsx",
+      "packages/ui/README.md",
+      "packages/playwright-tools/src/index.ts",
       "README.md",
       "apps/web/e2e/new.spec.ts",
       "apps/web/e2e/collab/room.spec.ts",

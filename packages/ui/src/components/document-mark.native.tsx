@@ -20,6 +20,7 @@ import {
 } from "./document-mark.shared";
 
 export {
+  DOCUMENT_MARK_KINDS,
   isDocumentMarkKind,
   type DocumentMarkKind,
 } from "./document-mark.shared";

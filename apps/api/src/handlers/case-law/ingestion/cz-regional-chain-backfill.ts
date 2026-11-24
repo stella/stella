@@ -29,7 +29,7 @@ import { panic, Result } from "better-result";
 import type { UnhandledException } from "better-result";
 import { and, asc, eq, gt, isNotNull, sql } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { caseLawDecisions } from "@/api/db/schema";
 import {
   CZ_REGIONAL_AFFECTING_DOCS_METADATA_KEY,

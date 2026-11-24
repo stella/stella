@@ -44,6 +44,7 @@ const response = {
     {
       entryId: "entry_1",
       narrative: "Reviewed agreement",
+      narrativeLanguage: "en",
       classification: { type: "activity_group", activityGroup: "client" },
       flags: [
         {
@@ -69,6 +70,7 @@ const plainResponse = {
     {
       entryId: "entry_1",
       narrative: "Reviewed agreement",
+      narrativeLanguage: "en",
       matchedEarlierEntryIds: ["earlier-entry"],
     },
   ],
@@ -465,6 +467,7 @@ test("billing draft request and review dates are real calendar days in CE years"
     expect(
       v.safeParse(desktopBillingDraftReviewSchema, {
         result: response,
+        codeNames: [],
         earlierEntries: [
           {
             id: "earlier-entry",
@@ -601,7 +604,7 @@ test("the review returns the model result beside only the cited entry fields", (
     durationMinutes: 30,
     narrative: "Reviewed agreement",
   };
-  const review = { result: response, earlierEntries: [earlier] };
+  const review = { result: response, earlierEntries: [earlier], codeNames: [] };
   expect(v.parse(desktopBillingDraftReviewSchema, review)).toEqual(review);
   for (const extra of [
     { matterId: "00000000-0000-4000-8000-000000000001" },

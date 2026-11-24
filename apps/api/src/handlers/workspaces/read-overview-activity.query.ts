@@ -24,7 +24,7 @@ import type {
 } from "@stll/api-contract/matter-activity";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDbError } from "@/api/db/safe-db";
+import type { SafeDbError } from "@/api/db/safe-db-types";
 import {
   auditLogs,
   auditRelationshipChangeSql,

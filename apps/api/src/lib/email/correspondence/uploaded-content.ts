@@ -8,12 +8,12 @@ import {
 } from "@stll/api-contract/correspondence";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import type { Transaction } from "@/api/db/root";
 import {
   correspondence,
   correspondenceAttachments,
   correspondenceSources,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -28,6 +28,8 @@ import { sanitizeEmailBodyHtml } from "@/api/lib/files/email-to-html";
 // For email, the source is part of the key: a delivered message and an
 // uploaded file of the same message stay separate records. Each email file is
 // its own record, so deleting one copy never removes another file's record.
+// A certified email file is keyed the same way: a transport envelope and the
+// receipts about it are separate provider messages.
 const correspondenceDedupKey = (parsed: ParsedCorrespondence) => {
   if (parsed.channel === "data_box") {
     return hashSha256Hex(
@@ -114,6 +116,7 @@ export const prepareCorrespondenceContent = (parsed: ParsedCorrespondence) =>
     ...provenanceColumns(parsed),
     messageId: parsed.messageId,
     dataBox: parsed.dataBox,
+    certifiedEmail: parsed.certifiedEmail,
     contentHash: parsed.contentHash,
     dedupKey: correspondenceDedupKey(parsed),
     from: parsed.from,
@@ -409,6 +412,7 @@ export const persistCorrespondenceContent = async ({
           originalSignature: content.originalSignature,
           messageId: content.messageId,
           dataBox: content.dataBox,
+          certifiedEmail: content.certifiedEmail,
           contentHash: content.contentHash,
           dedupKey: content.dedupKey,
           from: content.from,

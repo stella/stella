@@ -1,44 +1,9 @@
 [advisories]
+unused-ignored-advisory = "deny"
 ignore = [
-  # Tauri 2.11 pulls urlpattern 0.3 through tauri-utils. These advisories track
-  # the unmaintained rust-unic crates under urlpattern; cargo-deny reports no
-  # safe upgrade in the current Tauri graph.
-  "RUSTSEC-2025-0075",
-  "RUSTSEC-2025-0080",
-  "RUSTSEC-2025-0081",
-  "RUSTSEC-2025-0098",
-  "RUSTSEC-2025-0100",
-  # Tauri/Wry currently pull the archived GTK3 Rust bindings on Linux. The
-  # advisory database reports no safe upgrade in this Tauri graph, so keep the
-  # known IDs explicit and let new GTK advisories fail the audit.
-  "RUSTSEC-2024-0411",
-  "RUSTSEC-2024-0412",
-  "RUSTSEC-2024-0413",
-  "RUSTSEC-2024-0414",
-  "RUSTSEC-2024-0415",
-  "RUSTSEC-2024-0416",
-  "RUSTSEC-2024-0417",
-  "RUSTSEC-2024-0418",
-  "RUSTSEC-2024-0419",
-  "RUSTSEC-2024-0420",
-  # Pulled through the same GTK3 macro stack; no safe upgrade is available in
-  # the current Tauri graph.
+  # Pulled through the GTK3 macro stack; no safe upgrade is available in the
+  # current Tauri graph.
   "RUSTSEC-2024-0370",
-  # Tauri and notify-rust currently pull quick-xml through plist,
-  # wayland-scanner, and tauri-winrt-notification. The affected owners are
-  # already at their latest published compatible versions in this graph, so
-  # Cargo cannot select the remediated quick-xml 0.41 line yet.
-  "RUSTSEC-2026-0194",
-  "RUSTSEC-2026-0195",
-  # zip 4 reaches the graph only through tauri-plugin-updater, whose 2.x and
-  # 3.0 pre-releases still require it; these advisories are fixed in zip 9,
-  # which the app's own dependency already uses. The updater verifies an
-  # update's signature against the configured public key before extracting
-  # it, and extracts zip archives only when installing on Windows.
-  # Review by 2026-11-16; remove once an updater release accepts zip >= 9.
-  "RUSTSEC-2026-0367",
-  "RUSTSEC-2026-0368",
-  "RUSTSEC-2026-0369",
   # chrono is marked unmaintained with no successor release. It reaches the
   # graph through tauri-utils (serde_with) as well as the app's own date
   # handling, so replacing the app's use alone would not remove it.

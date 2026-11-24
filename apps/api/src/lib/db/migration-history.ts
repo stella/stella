@@ -92,8 +92,21 @@ export const REWRITTEN_MIGRATION_HISTORIES: Readonly<
   Record<string, RewrittenMigrationHistory>
 > = rewrittenMigrationHistories;
 
+/**
+ * Rewritten-migration indexes a later contract release retired: their
+ * historical receipts stay valid, but nothing requires them any more.
+ */
+export const RETIRED_REWRITTEN_MIGRATION_INDEXES: ReadonlySet<string> = new Set(
+  [
+    // Replaced by the court-qualified fallback identity indexes.
+    "case_law_decisions_source_case_lang_null_idx",
+  ],
+);
+
 export const REWRITTEN_MIGRATION_INDEXES: readonly IntroducedMigrationIndex[] =
-  [...rewrittenMigrationIndexes];
+  rewrittenMigrationIndexes.filter(
+    ({ name }) => !RETIRED_REWRITTEN_MIGRATION_INDEXES.has(name),
+  );
 
 export type LocalMigration = { name: string; hash: string };
 export type AppliedMigration = { name: string | null; hash: string };

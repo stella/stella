@@ -397,6 +397,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("retention-source-independence.fixture.ts", [
     "retention-source-independence/retention-source-independence",
   ]),
+  fixtureRuleOverride("settings-layout-primitives.fixture.ts", [
+    "settings-layout-primitives/settings-layout-primitives",
+  ]),
   fixtureRuleOverride("retention-oracle-owner.fixture.ts", [
     "retention-oracle-owner/retention-oracle-owner",
   ]),
@@ -1460,7 +1463,6 @@ const bunNativeFiles = [
   "apps/api/src/lib/email/inbound/original-signature.test.ts",
   "apps/api/src/lib/email/inbound/upload.db.test.ts",
   "apps/api/src/lib/entities/window-cursor.ts",
-  "apps/api/src/lib/files/email-attachment-token.ts",
   "apps/api/src/lib/files/email-to-html.test.ts",
   "apps/api/src/lib/files/email-to-html.ts",
   "apps/api/src/lib/files/organization-file-usage-reconcile.ts",
@@ -2104,6 +2106,8 @@ const config = defineConfig({
     // wasm-bindgen glue is committed verbatim and checked by rebuilding it;
     // product-code rewrites would be replaced by the next generation.
     "packages/scan-engine/generated/scan_engine.js",
+    "packages/heic-decoder/generated/heic_decoder.js",
+    "packages/pst-reader/generated/pst_reader.js",
     // Snowball stemmers: generated output plus the upstream JS runtime,
     // transcribed verbatim. Product-code rules would rewrite the algorithm
     // (prefer-code-point changes UTF-16 semantics; no-bitwise has no
@@ -2132,6 +2136,7 @@ const config = defineConfig({
     // The package's plugins load through local re-exports; the modules say why.
     "./scripts/oxlint-presets/stella-lowercase-plugin.mjs",
     "./.oxlint-plugins/no-raw-cache-control.ts",
+    "./.oxlint-plugins/no-raw-cloudfront-viewer-header.ts",
     "./.oxlint-plugins/confine-sql-close.ts",
     "./.oxlint-plugins/confine-online-ddl.ts",
     "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
@@ -2202,6 +2207,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-test-support-import.ts",
     "./.oxlint-plugins/retention-source-independence.ts",
     "./.oxlint-plugins/retention-oracle-owner.ts",
+    "./.oxlint-plugins/settings-layout-primitives.ts",
     "./.oxlint-plugins/no-banned-glyph.ts",
     "./.oxlint-plugins/no-hand-built-document-run-queue.ts",
     "./.oxlint-plugins/no-hand-built-step-marker.ts",
@@ -2269,6 +2275,7 @@ const config = defineConfig({
     "./.oxlint-plugins/citation-evidence-text-fence.ts",
     "./.oxlint-plugins/no-source-raw-projection.ts",
     "./.oxlint-plugins/no-unguarded-case-law-replay-write.ts",
+    "./.oxlint-plugins/no-api-env-in-public-reader.ts",
     "./.oxlint-plugins/no-bare-case-law-source-ingestion-lease.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-literal-derived-attribute.ts",
@@ -2402,6 +2409,7 @@ const config = defineConfig({
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/semantic-controls.ts",
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
+    "./.oxlint-plugins/disabled-control-needs-reason.ts",
     "./.oxlint-plugins/no-button-whitespace-normal.ts",
     "./.oxlint-plugins/no-dialog-trigger-menu-item.ts",
     "./.oxlint-plugins/no-decorated-search-input.ts",
@@ -2508,7 +2516,8 @@ const config = defineConfig({
         "apps/landing/src/components/ProductPage.astro",
         "apps/landing/src/pages/security.astro",
         "apps/landing/src/pages/support.astro",
-        "apps/web/src/routes/tools/-components/public-tools-index.tsx",
+        "apps/web/src/routes/tools/-index.page.tsx",
+        "apps/web/src/routes/tools/-index.pending.tsx",
         ".oxlint-plugins/__fixtures__/narrative-prose-component.fixture.tsx",
       ],
       rules: {
@@ -2630,6 +2639,18 @@ const config = defineConfig({
       ],
       rules: { "no-test-support-import/no-test-support-import": "error" },
     },
+    // Settings and admin pages compose from @stll/ui/settings; see the rule's
+    // row in .oxlint-plugins/restricted-import.ts.
+    {
+      files: [
+        "apps/web/src/routes/_protected.settings/**/*.{ts,tsx}",
+        "apps/web/src/routes/_protected.admin/**/*.{ts,tsx}",
+      ],
+      excludeFiles: ["**/*.test.{ts,tsx}"],
+      rules: {
+        "settings-layout-primitives/settings-layout-primitives": "error",
+      },
+    },
     fixtureRuleOverride("require-static-timeout-label.fixture.ts", [
       "require-static-timeout-label/require-static-timeout-label",
     ]),
@@ -2724,7 +2745,7 @@ const config = defineConfig({
         "no-direct-status-set/no-direct-status-set": [
           "error",
           {
-            owner: STATUS_TRANSITION_OWNERSHIP.owner[0],
+            owners: STATUS_TRANSITION_OWNERSHIP.owner,
             columns: STATUS_TRANSITION_OWNERSHIP.enforcement.columns,
           },
         ],
@@ -2748,7 +2769,7 @@ const config = defineConfig({
         "no-direct-status-set/no-direct-status-set": [
           "error",
           {
-            owner: STATUS_TRANSITION_OWNERSHIP.owner[0],
+            owners: STATUS_TRANSITION_OWNERSHIP.owner,
             columns: STATUS_TRANSITION_OWNERSHIP.enforcement.columns,
           },
         ],
@@ -4425,6 +4446,29 @@ const config = defineConfig({
       },
     },
     {
+      // A disabled Button must say why it cannot act (`disabledReason`).
+      // Shared web Buttons show the reason on hover and focus.
+      files: [
+        "apps/*/src/**/*.tsx",
+        "packages/*/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/disabled-control-needs-reason.fixture.tsx",
+      ],
+      // Mirrors isExcludedSource for handwritten web TSX. Mobile and
+      // platform-native files can use Buttons without this prop.
+      excludeFiles: [
+        "apps/mobile/**",
+        "**/*.native.tsx",
+        "**/e2e/**",
+        "**/tests/**",
+        "**/__tests__/**",
+        "**/*.{gen,test,type-test,spec}.*",
+        "**/*.{gen,test,type-test,spec}.*/**",
+      ],
+      rules: {
+        "disabled-control-needs-reason/disabled-control-needs-reason": "error",
+      },
+    },
+    {
       // Button's size variants set fixed heights; wrapped labels can overflow
       // the row and overlap the next one. The wrap layout owns its height.
       files: [
@@ -5458,6 +5502,14 @@ const config = defineConfig({
     },
     {
       files: [
+        ".oxlint-plugins/__fixtures__/no-api-env-in-public-reader.fixture.ts",
+      ],
+      rules: {
+        "no-api-env-in-public-reader/no-api-env-in-public-reader": "error",
+      },
+    },
+    {
+      files: [
         ".oxlint-plugins/__fixtures__/no-direct-ingestion-checkpoint-write.fixture.ts",
       ],
       rules: {
@@ -6095,6 +6147,7 @@ const config = defineConfig({
               "apps/api/src/env-db-load-gate.ts",
               "apps/api/src/env-online-index.ts",
               "apps/api/src/env-db-timeouts.ts",
+              "apps/api/src/env-public-corpus.ts",
               "apps/api/src/env-replay.ts",
               "apps/api/src/env-eu-completion.ts",
               "apps/api/src/env-parsed-input-state-backfill.ts",
@@ -6127,6 +6180,10 @@ const config = defineConfig({
               // validates them on boot.
               "apps/api/src/lib/business-registries/dispatch.ts",
               "apps/api/src/lib/db/assert-migrations-applied.ts",
+              // The extraction worker's one input besides its arguments: the
+              // code page the API hands each run (its child env is PATH plus
+              // the variables `subprocess.ts` declares).
+              "apps/api/src/lib/files/zip-name-code-page.ts",
               "apps/api/src/lib/runtime-worker-path.ts",
               "apps/api/src/lib/s3.ts",
               "apps/api/src/lib/scheduler/runner.ts",
@@ -6408,6 +6465,15 @@ const config = defineConfig({
       rules: {
         "no-unguarded-case-law-replay-write/no-unguarded-case-law-replay-write":
           "error",
+      },
+    },
+    {
+      // The public case-law reader loads without tenant content settings:
+      // nothing its value imports reach may import the full API environment.
+      files: ["apps/api/src/**/*.ts", "packages/**/*.{ts,tsx}"],
+      excludeFiles: ["**/*.test.{ts,tsx}"],
+      rules: {
+        "no-api-env-in-public-reader/no-api-env-in-public-reader": "error",
       },
     },
     {
@@ -7157,6 +7223,25 @@ const config = defineConfig({
       ],
       rules: {
         "no-raw-cache-control/no-raw-cache-control": "error",
+      },
+    },
+    {
+      // CloudFront viewer headers are read only behind the origin proof, by
+      // the modules the rule names as owners.
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-raw-cloudfront-viewer-header.fixture.ts",
+      ],
+      excludeFiles: [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "apps/api/src/tests/**/*.ts",
+        "**/__tests__/**",
+      ],
+      rules: {
+        "no-raw-cloudfront-viewer-header/no-raw-cloudfront-viewer-header":
+          "error",
       },
     },
     {

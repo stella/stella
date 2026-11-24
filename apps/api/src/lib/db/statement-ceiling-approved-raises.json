@@ -1,1 +1,10 @@
-[]
+[
+  {
+    "kind": "scheduler",
+    "key": "reviewOrganization.reset",
+    "from": 962,
+    "to": 963,
+    "date": "2026-11-23",
+    "reason": "one sweep of the new dictation_learned_fixes table"
+  }
+]

@@ -245,6 +245,7 @@ export const NO_NATIVE_UI_REGISTRY = {
     "a clipped name that discloses its full text in a tooltip",
   ),
   "inline-drop-indicator": noNative("a drag-and-drop insertion marker"),
+  "inline-overflow": notComponent("the overflow policy of a single-line row"),
   "inline-rename": owned(
     "no-ad-hoc-inline-rename/no-ad-hoc-inline-rename",
     "hand-rolled rename inputs are reported there",
@@ -375,6 +376,9 @@ export const NO_NATIVE_UI_REGISTRY = {
     elements: ["hr"],
     roles: ["separator"],
   }),
+  settings: noNative(
+    "settings sections and rows; their grouped list has no native counterpart",
+  ),
   sheet: owned(
     nativeRuleId("dialog"),
     "a sheet is an edge-anchored dialog; native dialogs are the dialog rule's",
@@ -475,6 +479,7 @@ export const NO_NATIVE_UI_REGISTRY = {
   "typed-character": notComponent("keystroke classification"),
   "use-contained-handler": notComponent("a React hook"),
   "use-content-dir": notComponent("a React hook"),
+  "use-inline-overflow": notComponent("a React hook"),
   "use-latest": notComponent("a React hook"),
   "use-mobile": notComponent("a React hook"),
   "use-prefers-reduced-motion": notComponent("a React hook"),
@@ -727,6 +732,9 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
     "a phone picks from a list on its own screen or sheet, not a dropdown",
   ),
   separator: renderer("Separator from @stll/ui/separator", []),
+  settings: webOnly(
+    "the web and desktop settings pages; the app's settings are native screens",
+  ),
   sheet: renderer("Sheet from @stll/ui/sheet", ["Modal"]),
   sidebar: webOnly(
     "the web's navigation chrome; the app navigates with the platform's tab bar",

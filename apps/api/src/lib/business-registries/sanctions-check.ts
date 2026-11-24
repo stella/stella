@@ -3,7 +3,7 @@ import { panic, Result } from "better-result";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import type { CountryCode } from "@stll/country-codes";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DateOfBirth } from "@/api/lib/business-registries/date-of-birth";

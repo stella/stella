@@ -21,22 +21,28 @@
     "subject": "{documentType, select, credit_note {Kreeditarve} advance {Ettemaksuarve} other {Arve}} {invoiceNumber}, saatja {firmName}"
   },
   "newDeviceLogin": {
-    "action": "Vaata seansse",
-    "body": "Teie kontole logiti sisse uuest seadmest või asukohast.",
+    "action": "Vaata sisselogitud seadmeid",
+    "actionNote": "Nupp avab selle sisselogimise juures Seaded › Turvalisus.",
+    "body": "Teie kontole logiti just sisse uuest seadmest või uuest asukohast.",
     "device": "Seade",
-    "heading": "Tuvastati uus sisselogimine",
-    "ignore": "Kui see olite teie, ei ole vaja midagi teha. Kui te seda tegevust ei tunne ära, vaadake oma aktiivseid seansse ja tühistage need, mida te ei tunne ära.",
+    "deviceName": {
+      "browserOnOs": "{browser} operatsioonisüsteemis {os}",
+      "unknown": "Tundmatu seade"
+    },
+    "heading": "Uus sisselogimine teie kontole",
+    "ignore": "Kui see olite teie, ei pea te midagi tegema. Kui te seda sisselogimist ära ei tunne, logige see seade välja.",
     "ipAddress": "IP-aadress",
-    "location": "Ligikaudne asukoht",
-    "locationNote": "Asukoht on hinnatud IP-aadressi põhjal ega pruugi olla täpne.",
+    "ipAddressUnknown": "Teadmata",
+    "location": "Asukoht",
     "mapAlt": "Kaart sisselogimise ligikaudse asukohaga: {location}",
-    "mapCredit": "Kaardiandmed: Natural Earth",
     "place": {
       "cityCountry": "{city}, {country}",
       "cityRegionCountry": "{city}, {region}, {country}",
       "regionCountry": "{region}, {country}"
     },
+    "placeApproximate": "{place} (ligikaudu)",
     "preview": "Uus sisselogimine seadmest {device}",
+    "previewUnknownDevice": "Uus sisselogimine tundmatust seadmest",
     "subject": "Uus sisselogimine teie stella kontole",
     "time": "Aeg"
   },
@@ -58,7 +64,7 @@
     "flowRunAwaitingApproval": "Töövoog ootab teie kinnitust",
     "flowRunCompleted": "Töövoog on lõpetatud",
     "flowRunFailed": "Töövoog ebaõnnestus",
-    "localRunLimitReset": "Sinu arvutis töötav programmeerimisagent saab vestlust jätkata",
+    "localRunLimitReset": "Teie arvutis töötav programmeerimisagent saab vestlust jätkata",
     "mention": "Teid mainiti kommentaaris",
     "taskAssigned": "Teile määrati ülesanne"
   },

@@ -31,7 +31,11 @@ export const FILESYSTEM_VIEW_CLASS =
   "flex h-full flex-1 flex-col overflow-hidden p-2";
 export const FILESYSTEM_BREADCRUMB_ROW_CLASS = "mb-2 px-2";
 export const FILESYSTEM_SCROLL_CLASS = "mt-1 min-h-0 flex-1 overflow-auto";
-export const FILESYSTEM_CONTENT_CLASS = "w-max min-w-full";
+/**
+ * The tree's width: the view's, so the columns yield to it, and never less
+ * than the columns at their narrowest, past which it scrolls sideways.
+ */
+export const FILESYSTEM_CONTENT_CLASS = "w-full min-w-min";
 export const FILESYSTEM_COLUMN_HEADER_CLASS =
   "text-muted-foreground bg-background sticky top-0 z-10 grid w-full items-center gap-x-4 border-b px-2 pb-1 text-xs font-medium";
 /** One column's head inside the header row. */

@@ -68,6 +68,7 @@ const VERIFIED_CELL_FLAG = cellFlagDefinition(VERIFIED_FLAG_ID);
 // The 12px corner badges sit 2px from the cell edge and end 14px down: inside
 // the cell's 8px padding and the space above a value's first line (a `py-1`
 // control, or a shorter item centred on that line), so they never cover text.
+// Their backing is a plain tint to keep the badges in the cell's layer.
 const CELL_CORNER_CLASS = {
   start: "absolute start-0.5 top-0.5 z-20",
   end: "absolute end-0.5 top-0.5 z-20",
@@ -124,11 +125,14 @@ type CellMetadataFlagsProps = {
 };
 
 export const CellMetadataFlags = ({
-  workspaceId,
-  entityId,
-  propertyId,
   metadata,
-}: CellMetadataFlagsProps) => {
+  flags,
+  showActions,
+}: {
+  metadata: WorkspaceCellMetadata | undefined;
+  flags: ReturnType<typeof useCellMetadataFlags>;
+  showActions: boolean;
+}) => {
   const t = useTranslations();
   const getFlagLabel = useFlagLabel();
   const {
@@ -138,12 +142,7 @@ export const CellMetadataFlags = ({
     setLocked,
     tintFlag,
     toggleFlag,
-  } = useCellMetadataFlags({
-    entityId,
-    metadata,
-    propertyId,
-    workspaceId,
-  });
+  } = flags;
   const hasActiveFlag = activeFlags.length > 0;
   const verifiedProvenance = metadata?.flagProvenance?.[VERIFIED_FLAG_ID];
 
@@ -164,21 +163,19 @@ export const CellMetadataFlags = ({
           }}
         />
       )}
-      {isLocked ? (
+      {isLocked && (
         <CellLockBadge
           onUnlock={() => setLocked(false)}
           provenance={lockProvenance}
         />
-      ) : (
+      )}
+      {!isLocked && showActions && (
         <Tooltip
           content={t("workspaces.table.lock.lock")}
           render={
             <Button
               aria-label={t("workspaces.table.lock.lock")}
-              className={cn(
-                CELL_CORNER_CLASS.start,
-                "flex opacity-0 transition-opacity group-hover/cell-content:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100",
-              )}
+              className={cn(CELL_CORNER_CLASS.start, "flex")}
               data-row-expansion-ignore
               onClick={(event) => {
                 event.stopPropagation();
@@ -190,18 +187,19 @@ export const CellMetadataFlags = ({
             />
           }
         >
-          <span className="text-foreground-ghost bg-background/55 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px]">
+          <span className="text-foreground-ghost bg-background/85 flex size-3 items-center justify-center rounded-full">
             <LockOpenIcon className="size-2.5" strokeWidth={2.5} />
           </span>
         </Tooltip>
       )}
-      {hasActiveFlag ? (
+      {hasActiveFlag && (
         <CellCornerFlag
           flags={activeFlags}
           metadata={metadata}
           onDrop={toggleFlag}
         />
-      ) : (
+      )}
+      {!hasActiveFlag && showActions && (
         <Tooltip
           className="max-w-72 text-wrap"
           content={
@@ -213,10 +211,7 @@ export const CellMetadataFlags = ({
           render={
             <Button
               aria-label={getFlagLabel(VERIFIED_FLAG_ID)}
-              className={cn(
-                CELL_CORNER_CLASS.end,
-                "flex opacity-0 transition-opacity group-hover/cell-content:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100",
-              )}
+              className={cn(CELL_CORNER_CLASS.end, "flex")}
               onClick={(event) => {
                 event.stopPropagation();
                 toggleFlag(VERIFIED_FLAG_ID);
@@ -227,7 +222,7 @@ export const CellMetadataFlags = ({
             />
           }
         >
-          <span className="text-foreground-ghost bg-background/55 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px]">
+          <span className="text-foreground-ghost bg-background/85 flex size-3 items-center justify-center rounded-full">
             <CheckCircle2Icon className="size-2.5" strokeWidth={2.5} />
           </span>
         </Tooltip>
@@ -279,7 +274,7 @@ const CellCornerFlag = ({ flags, metadata, onDrop }: CellCornerFlagProps) => {
             }
           >
             <span
-              className="bg-background/55 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px]"
+              className="bg-background/85 flex size-3 items-center justify-center rounded-full"
               style={{ color: flag.color }}
             >
               <Icon className="size-2.5" strokeWidth={2.5} />
@@ -348,7 +343,7 @@ const CellLockBadge = ({ provenance, onUnlock }: CellLockBadgeProps) => {
           shape="round"
           variant="plain"
         >
-          <span className="text-foreground animate-in fade-in-0 zoom-in-75 bg-background/55 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px] duration-150 motion-reduce:animate-none">
+          <span className="text-foreground animate-in fade-in-0 zoom-in-75 bg-background/85 flex size-3 items-center justify-center rounded-full duration-150 motion-reduce:animate-none">
             <LockIcon className="size-2.5" strokeWidth={2.5} />
           </span>
         </Button>

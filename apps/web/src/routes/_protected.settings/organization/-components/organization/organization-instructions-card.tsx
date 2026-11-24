@@ -3,10 +3,11 @@ import { useId, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { MarkdownHybridEditor } from "@stll/markdown-editor";
+import type { MarkdownHybridEditorHandle } from "@stll/markdown-editor";
 import { Button } from "@stll/ui/button";
 
-import { MarkdownHybridEditor } from "@/components/markdown/markdown-hybrid-editor";
-import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-hybrid-editor";
+import { isSafeMarkdownPreviewImageSrc } from "@/components/markdown-preview.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
@@ -15,6 +16,7 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { queryView } from "@/lib/query-view.logic";
 import {
   organizationSettingsKeys,
@@ -113,6 +115,18 @@ const OrganizationInstructionsEditor = ({
     onError: () => setEditorRevision((revision) => revision + 1),
   });
 
+  const resolveInstructionsSaveDisabledReason = () => {
+    if (mutation.isPending) {
+      return t("common.saving");
+    }
+    if (tooLong) {
+      return t("organization.aiInstructions.tooLong", {
+        maxLength: format.number(settings.aiInstructionsMaxLength),
+      });
+    }
+    return t("common.noChangesToSave");
+  };
+
   return (
     <>
       <OrganizationInstructionsCardFrame
@@ -126,7 +140,9 @@ const OrganizationInstructionsEditor = ({
             key={editorRevision}
             ref={editor}
             markdown={draft}
-            imagePolicy="data-only"
+            allowsImageSource={isSafeMarkdownPreviewImageSrc}
+            label={t("markdownEditor.rawLabel")}
+            onOpenLink={openIsolatedWindow}
             onMarkdownChange={setDraft}
             changeEmission="immediate"
             readOnly={!canEdit || mutation.isPending}
@@ -147,6 +163,7 @@ const OrganizationInstructionsEditor = ({
               size="sm"
               loading={mutation.isPending}
               disabled={!dirty || tooLong || mutation.isPending}
+              disabledReason={resolveInstructionsSaveDisabledReason()}
               onClick={() => {
                 const next = editor.current?.captureForSave() ?? draft;
                 setDraft(next);
@@ -163,6 +180,11 @@ const OrganizationInstructionsEditor = ({
               size="sm"
               variant="ghost"
               disabled={draft.length === 0 || mutation.isPending}
+              disabledReason={
+                mutation.isPending
+                  ? t("common.saving")
+                  : t("common.noTextToRemove")
+              }
               onClick={() => {
                 editor.current?.resetMarkdown("");
                 setDraft("");

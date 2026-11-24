@@ -4,9 +4,9 @@ import { eq, sql } from "drizzle-orm";
 
 import type { WithTimeoutScheduler } from "@stll/concurrency/with-timeout";
 
-import type { Transaction } from "@/api/db/root";
 import { abortTransaction, type ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withTimeout } from "@/api/lib/with-timeout";
 

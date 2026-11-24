@@ -126,3 +126,74 @@ test("whitespace-only pasted text has a translated title", () => {
   );
   expect(view.getByText(en.chat.pastedText.title)).toBeDefined();
 });
+
+test("draft image attachments render a thumbnail preview and revoke their object URL on unmount", () => {
+  const originalCreateObjectURL = URL.createObjectURL;
+  const originalRevokeObjectURL = URL.revokeObjectURL;
+  const revoked: string[] = [];
+  const removed: string[] = [];
+
+  URL.createObjectURL = () => "blob:draft-image-preview";
+  URL.revokeObjectURL = (url: string) => {
+    revoked.push(url);
+  };
+
+  try {
+    const view = render(
+      <IntlProvider locale="en" messages={en}>
+        <TooltipProvider>
+          <ChatDraftAttachmentChips
+            files={[
+              {
+                type: "file",
+                id: "img-1",
+                filename: "CleanShot 2026-11-23.png",
+                mimeType: "image/png",
+                file: new File(["png"], "CleanShot 2026-11-23.png", {
+                  type: "image/png",
+                }),
+              },
+              {
+                type: "file",
+                id: "doc-1",
+                filename: "brief.pdf",
+                mimeType: "application/pdf",
+                file: new File(["pdf"], "brief.pdf", {
+                  type: "application/pdf",
+                }),
+              },
+            ]}
+            onExpand={() => undefined}
+            onRemove={(id) => {
+              removed.push(id);
+            }}
+          />
+        </TooltipProvider>
+      </IntlProvider>,
+    );
+
+    const previewImg = view.getByAltText("CleanShot 2026-11-23.png");
+    expect(previewImg.getAttribute("src")).toBe("blob:draft-image-preview");
+    expect(
+      view.container.querySelector("[data-draft-image-attachment]"),
+    ).not.toBeNull();
+    expect(view.getByText("brief.pdf")).toBeDefined();
+
+    const removeButtons = view.getAllByRole("button", {
+      name: en.common.remove,
+    });
+    expect(removeButtons).toHaveLength(2);
+    const imageRemove = removeButtons.at(0);
+    if (imageRemove === undefined) {
+      throw new Error("Expected remove button for draft image");
+    }
+    fireEvent.click(imageRemove);
+    expect(removed).toEqual(["img-1"]);
+
+    view.unmount();
+    expect(revoked).toEqual(["blob:draft-image-preview"]);
+  } finally {
+    URL.createObjectURL = originalCreateObjectURL;
+    URL.revokeObjectURL = originalRevokeObjectURL;
+  }
+});

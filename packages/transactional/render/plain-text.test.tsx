@@ -108,8 +108,8 @@ describe("plain text of the real templates", () => {
   test("bold labels stay inline with their values, one detail per paragraph", () => {
     const { text } = renderEmail(
       <NewDeviceLogin.Email
-        device="Chrome on macOS"
-        ipAddress="203.0.113.42"
+        device={{ type: "browserOnOs", browser: "Chrome", os: "macOS" }}
+        ipAddress={{ type: "known", address: "203.0.113.42" }}
         lang="en"
         location={{
           type: "known",
@@ -126,15 +126,17 @@ describe("plain text of the real templates", () => {
       [
         "Device: Chrome on macOS",
         "",
-        "IP address: 203.0.113.42",
+        "Location: Brno, South Moravian, Czechia (approximate)",
         "",
-        "Approximate location: Brno, South Moravian, Czechia",
+        "IP address: 203.0.113.42",
         "",
         "Time: Mar 6, 2026, 2:30 PM UTC",
         "",
-        "The location is estimated from the IP address and may be inaccurate.",
+        "If this was you, you don't need to do anything. If you don't recognize this sign-in, sign this device out.",
         "",
-        "Review sessions https://app.stella.test/account/sessions",
+        "Review signed-in devices https://app.stella.test/account/sessions",
+        "",
+        "The button opens Settings › Security at this sign-in.",
         "",
         DIVIDER,
       ].join("\n"),
@@ -210,8 +212,8 @@ describe("plain text of the real templates", () => {
         />,
         <NewDeviceLogin.Email
           key="device"
-          device="Chrome on macOS"
-          ipAddress="203.0.113.42"
+          device={{ type: "browserOnOs", browser: "Chrome", os: "macOS" }}
+          ipAddress={{ type: "known", address: "203.0.113.42" }}
           lang={lang}
           location={{
             type: "known",

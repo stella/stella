@@ -551,15 +551,17 @@ const compareDocumentDependencies = {
       testScannedFile({ bytes: new ArrayBuffer(1), mimeType: DOCX_MIME_TYPE }),
     ),
   readFileHandler: async () => ({
+    kind: "file" as const,
     fileId: compareTargetFileB,
     mimeType: DOCX_MIME_TYPE,
     originalMimeType: DOCX_MIME_TYPE,
     fileName: "comparison.docx",
     encrypted: false,
+    unscannedContent: [],
     presignedUrl: "https://files.example/comparison.docx",
     stampable: false,
   }),
-  resolveDocxEditAuthorName: async () => "Cross-tenant test user",
+  resolveDocxEditAuthorName: async () => Result.ok("Cross-tenant test user"),
   // The isolation cases all ask for a saved version; a temporary redline never
   // reaches another tenant because the object key leads with the organization.
   deliverTemporaryRedline: async () =>
@@ -1004,6 +1006,21 @@ const saveOrganizationBDraftSettings = async (
 
 const desktopCredentialIsolationCases = (): IsolationCase[] => [
   {
+    name: "desktop registry configuration organization name",
+    runAAgainstB: async ({ desktopA }) =>
+      await (
+        await desktopA(desktopRequest("/registry", { type: "config" }))
+      ).json(),
+    runBPositive: async ({ desktopB }) =>
+      await (
+        await desktopB(desktopRequest("/registry", { type: "config" }))
+      ).json(),
+    expectDenied: (result) =>
+      expect(result).toMatchObject({ organizationName: "Org A" }),
+    expectPositive: (result) =>
+      expect(result).toMatchObject({ organizationName: "Org B" }),
+  },
+  {
     name: "desktop registry saved format",
     runAAgainstB: async ({ desktopA }) =>
       await desktopA(
@@ -1200,11 +1217,13 @@ const desktopCredentialIsolationCases = (): IsolationCase[] => [
               {
                 entryId: "entry_1",
                 narrative: "Reviewed the agreement",
+                narrativeLanguage: "en",
                 matchedEarlierEntryIds: [],
               },
             ],
           },
           earlierEntries: [],
+          codeNames: [],
         },
       }),
   },
@@ -5053,6 +5072,7 @@ const desktopServer = (): TestServer => {
         ).entries.map(({ entryId }) => ({
           entryId,
           narrative: "Reviewed the agreement",
+          narrativeLanguage: "en",
           matchedEarlierEntryIds: [],
         })),
       }),

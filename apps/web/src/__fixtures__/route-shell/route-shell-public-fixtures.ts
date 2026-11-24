@@ -15,6 +15,10 @@ import type { Route as StatuteRoute } from "@/routes/law/$country/statutes/$slug
 
 export const publicRouteExceptions: Record<string, string> = {
   "/": "RootRedirect immediately navigates according to the audience; it has no stable leaf body. Destination routes are covered separately.",
+  "/law/cases/research/":
+    "Retired research link redirects to the case-law results, covered separately.",
+  "/law/cases/research/$tableId":
+    "Retired research table redirects to the case-law results, covered separately.",
   "/auth/handoff":
     "The handoff confirmation route requires root-loader state captured from an MCP handoff; its panel is covered separately.",
   "/sharepoint/oauth-callback":
@@ -91,6 +95,7 @@ const decision = {
     name: "Fixture source",
   },
   sourceAttributionUrl: null,
+  bodySource: { textSource: "host" },
   sourceLanguages: null,
   sourceUrl: null,
   textFields: {

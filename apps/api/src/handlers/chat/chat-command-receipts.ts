@@ -9,13 +9,13 @@ import {
   type ChatCommandType,
 } from "@stll/api-contract/chat-command";
 
-import type { Transaction } from "@/api/db/root";
 import {
   abortTransaction,
   type SafeDb,
   type SafeDbError,
 } from "@/api/db/safe-db";
 import { chatCommandReceipts } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { ResponseHeaders } from "@/api/http/context";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

@@ -64,12 +64,12 @@ import {
   type ImportExpression,
   isObjectLiteralProperty,
   type Node,
-  parseSource,
   type Program,
   type Statement,
   type TSImportType,
   walk,
 } from "../packages/scripts/src/syntax-tree";
+import { memoizeRecent, parseSyntax } from "./parse-memo.ts";
 
 // `apps/api/src/db/root.ts`, by alias or path. `./root` is how a sibling in
 // `apps/api/src/db/` names it; no other API module is called `root`.
@@ -520,11 +520,17 @@ type RootConnectionScan = {
   hits: RootConnectionShapeHit[];
   exemptOperations: RootOperationName[];
 };
+const mayReferenceRootModule = (content: string): boolean =>
+  content.includes("root") || content.includes("\\");
+
 const scanRootConnectionShapes = (
   content: string,
   file: string,
 ): RootConnectionScan => {
-  const source = parseSource(file, content);
+  if (!mayReferenceRootModule(content)) {
+    return { hits: [], exemptOperations: [] };
+  }
+  const source = parseSyntax({ fileName: file, text: content });
   const parents = new Map<Node, Node>();
   walk(source.program, (node, ancestors) => {
     const parent = ancestors.at(-1);
@@ -697,11 +703,25 @@ const importTypeHandles = (node: TSImportType, parents: ParentMap): number => {
   }
   return HANDLES_PER_MODULE;
 };
+const RECENT_ROOT_REFERENCES = memoizeRecent<RootConnectionReferences>(2);
+
 const countRootConnectionReferences = (
   content: string,
   file: string,
 ): RootConnectionReferences => {
-  const source = parseSource(file, content);
+  if (!mayReferenceRootModule(content)) {
+    return { value: 0, type: 0 };
+  }
+  return RECENT_ROOT_REFERENCES(`${file}\0${content}`, () =>
+    computeRootConnectionReferences(content, file),
+  );
+};
+
+const computeRootConnectionReferences = (
+  content: string,
+  file: string,
+): RootConnectionReferences => {
+  const source = parseSyntax({ fileName: file, text: content });
   const parents = new Map<Node, Node>();
   walk(source.program, (node, ancestors) => {
     const parent = ancestors.at(-1);
