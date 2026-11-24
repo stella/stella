@@ -3,7 +3,7 @@ import { panic, Result } from "better-result";
 
 import type { ModelTask } from "@stll/ai-catalog";
 import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
-import type { ChatLocalRunContext } from "@stll/api-contract/chat-run-target";
+import type { ChatHarnessContextUsage } from "@stll/api-contract/chat-run-target";
 import { classifyFailure, readFailureBrand } from "@stll/errors";
 
 import {
@@ -137,6 +137,8 @@ export const chatThreadNeedsCompaction = ({
   shouldCompactChatMessages(messages, triggerTokens);
 
 export type ThreadContextUsage = {
+  /** Stella's own estimate of the context its next cloud send carries. */
+  source: "estimate";
   estimatedTokens: number;
   triggerTokens: number;
   /** Prompt-cache-stable prefix (instructions + tool catalog). Equal to
@@ -153,13 +155,13 @@ export type ThreadContextUsage = {
     attachmentTokens: number;
     conversationTokens: number;
   };
-  /**
-   * For a thread whose turns run on the member's computer: how full the
-   * harness's context was after the latest answer, against its window, as
-   * the harness reported both. The composer shows it instead of the estimate.
-   */
-  reported?: ChatLocalRunContext;
 };
+
+/**
+ * What a thread's context meter shows: stella's estimate for a thread on its
+ * own models, the harness's report for one on the member's computer.
+ */
+export type ThreadContextMeter = ThreadContextUsage | ChatHarnessContextUsage;
 
 type ComputeThreadContextUsageOptions = {
   messages: readonly ChatMessage[];
@@ -224,6 +226,7 @@ export const computeThreadContextUsage = ({
   }
 
   return {
+    source: "estimate",
     estimatedTokens:
       promptTokens +
       toolTokens +

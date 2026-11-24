@@ -1239,6 +1239,7 @@ describe("thread context usage", () => {
     const usage = computeThreadContextUsage({ messages: [], summary: null });
 
     expect(usage).toEqual({
+      source: "estimate",
       estimatedTokens: 0,
       triggerTokens: DEFAULT_TRIGGER_TOKENS,
       cacheStableTokens: 0,

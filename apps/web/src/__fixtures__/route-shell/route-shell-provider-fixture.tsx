@@ -405,6 +405,7 @@ const installFixtureNetwork = () => {
             activeTurnSteering: "not_steerable",
             attachedFiles: { fileCount: 0, files: [] },
             context: {
+              source: "estimate",
               estimatedTokens: 0,
               triggerTokens: 0,
               cacheStableTokens: 0,

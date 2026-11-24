@@ -24,7 +24,10 @@ import {
   resolveChatScope,
 } from "@/api/handlers/chat/chat-scope";
 import { computeThreadContextUsage } from "@/api/handlers/chat/compaction";
-import type { ThreadContextUsage } from "@/api/handlers/chat/compaction";
+import type {
+  ThreadContextMeter,
+  ThreadContextUsage,
+} from "@/api/handlers/chat/compaction";
 import { loadWindowedThreadMessages } from "@/api/handlers/chat/history-window";
 import { loadChatMessagePage } from "@/api/handlers/chat/message-page";
 import { readLatestChatCompactionOnTx } from "@/api/handlers/chat/persistent-compaction";
@@ -45,8 +48,8 @@ import { THREAD_ARTEFACT_PROVENANCE_COLUMNS } from "@/api/lib/chat/artefact-prov
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import {
   chatRunTargetOf,
+  localRunContextUsage,
   localRunTargetField,
-  reportedLocalRunContext,
 } from "@/api/lib/chat/run-target";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
@@ -513,41 +516,42 @@ const getMessages = createSafeRootHandler(
       revisionNoteTokens,
     } = reads;
 
-    // Estimated for every thread, empty ones included: with no messages and no
-    // summary the estimate is just the cache-stable floor, so the meter is
-    // honest from the first render instead of reading 0% until the first send.
-    // Web research steers the core rules through the same two gates the send
-    // path applies (provider availability and the thread's opt-in), and (unlike
-    // template studio) the standalone read path never carries template-authoring
-    // tools. The trigger denominator resolves the same model the next send uses.
     const persistedMessages = windowedMessages.map((message) =>
       chatMessageFromPersisted(message),
     );
-    const estimate = buildNextSendContext({
-      revisionNoteTokens,
-      messages: persistedMessages.map(({ id, role, parts }) => ({
-        id,
-        role,
-        parts,
-      })),
-      summary: checkpoint
-        ? {
-            summarizedMessageCount: checkpoint.summarizedMessageCount,
-            summaryMarkdown: checkpoint.summaryMarkdown,
-          }
-        : null,
-      threadChatModel: thread.chatModel,
-      webResearch: webSearchAvailable && thread.webSearchEnabled,
-      modelTier,
-    });
-    // A thread whose turns run on the member's computer shows what its
-    // harness reported: the harness manages that context, not stella.
-    const reported = reportedLocalRunContext({
-      target: chatRunTargetOf(thread.chatLocalRunTarget),
-      messages: persistedMessages,
-    });
-    const context: ThreadContextUsage =
-      reported === undefined ? estimate : { ...estimate, reported };
+    // A thread whose turns run on the member's computer shows only what its
+    // harness reported: the harness builds and compacts that context, so
+    // stella's estimate of its own cloud send would measure something else.
+    // Every other thread is estimated, empty ones included: with no messages
+    // and no summary the estimate is just the cache-stable floor, so the
+    // meter is honest from the first render instead of reading 0% until the
+    // first send. Web research steers the core rules through the same two
+    // gates the send path applies (provider availability and the thread's
+    // opt-in), and (unlike template studio) the standalone read path never
+    // carries template-authoring tools. The trigger denominator resolves the
+    // same model the next send uses.
+    const context: ThreadContextMeter =
+      localRunContextUsage({
+        target: chatRunTargetOf(thread.chatLocalRunTarget),
+        messages: persistedMessages,
+      }) ??
+      buildNextSendContext({
+        revisionNoteTokens,
+        messages: persistedMessages.map(({ id, role, parts }) => ({
+          id,
+          role,
+          parts,
+        })),
+        summary: checkpoint
+          ? {
+              summarizedMessageCount: checkpoint.summarizedMessageCount,
+              summaryMarkdown: checkpoint.summaryMarkdown,
+            }
+          : null,
+        threadChatModel: thread.chatModel,
+        webResearch: webSearchAvailable && thread.webSearchEnabled,
+        modelTier,
+      });
 
     const activeTurnSteering = await readActiveTurnSteering({
       activeTurnId: page.activeTurnId,
