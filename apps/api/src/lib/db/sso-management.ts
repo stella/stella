@@ -419,28 +419,6 @@ export const createOrganizationSamlProvider = async (
     },
   });
 
-  const verifiedDomainRows = await db
-    .select({ domain: organizationSsoDomain.domain })
-    .from(organizationSsoDomain)
-    .where(
-      and(
-        eq(organizationSsoDomain.organizationId, params.organizationId),
-        isNotNull(organizationSsoDomain.verifiedAt),
-        inArray(organizationSsoDomain.domain, normalizedDomains),
-      ),
-    )
-    .limit(normalizedDomains.length);
-  const verifiedSet = new Set(verifiedDomainRows.map((row) => row.domain));
-  const unverified = normalizedDomains.filter((d) => !verifiedSet.has(d));
-  if (unverified.length > 0) {
-    return Result.err(
-      new SsoManagementError({
-        message: `Verify domain ownership via DNS TXT before binding SAML: ${unverified.join(", ")}`,
-        reason: "invalid_config",
-      }),
-    );
-  }
-
   const admitted = admitSsoSamlConfig(samlConfigJson);
   if (admitted.isErr()) {
     return Result.err(
@@ -451,32 +429,77 @@ export const createOrganizationSamlProvider = async (
     );
   }
 
-  // audit: skip - caller handler records organization settings audit event
-  const [inserted] = await db
-    .insert(ssoProvider)
-    .values({
-      id: Bun.randomUUIDv7(),
-      providerId,
-      displayName: params.displayName.trim(),
-      organizationId: params.organizationId,
-      issuer: normalizedIssuer,
-      domain: normalizedDomains.join(","),
-      oidcConfig: null,
-      samlConfig: admitted.value,
-      userId: params.userId,
-    })
-    .returning();
+  return await withAggregateTransaction(db, async (tx) => {
+    await withAggregateLock({
+      tx,
+      aggregate: "organization",
+      id: params.organizationId,
+      mode: "update",
+    });
 
-  if (inserted === undefined) {
-    return Result.err(
-      new SsoManagementError({
-        message: "Failed to persist SAML SSO provider",
-        reason: "invalid_config",
-      }),
-    );
-  }
+    const existingProviders = await tx
+      .select({ id: ssoProvider.id })
+      .from(ssoProvider)
+      .where(eq(ssoProvider.organizationId, params.organizationId))
+      .limit(MAX_SSO_PROVIDERS_PER_ORG);
+    if (existingProviders.length >= MAX_SSO_PROVIDERS_PER_ORG) {
+      return Result.err(
+        new SsoManagementError({
+          message: `An organization can configure at most ${MAX_SSO_PROVIDERS_PER_ORG} SSO providers`,
+          reason: "invalid_config",
+        }),
+      );
+    }
 
-  return Result.ok(toProviderSummary(inserted, params.urls));
+    const verifiedDomainRows = await tx
+      .select({ domain: organizationSsoDomain.domain })
+      .from(organizationSsoDomain)
+      .where(
+        and(
+          eq(organizationSsoDomain.organizationId, params.organizationId),
+          isNotNull(organizationSsoDomain.verifiedAt),
+          inArray(organizationSsoDomain.domain, normalizedDomains),
+        ),
+      )
+      .limit(normalizedDomains.length);
+    const verifiedSet = new Set(verifiedDomainRows.map((row) => row.domain));
+    const unverified = normalizedDomains.filter((d) => !verifiedSet.has(d));
+    if (unverified.length > 0) {
+      return Result.err(
+        new SsoManagementError({
+          message: `Verify domain ownership via DNS TXT before binding SAML: ${unverified.join(", ")}`,
+          reason: "invalid_config",
+        }),
+      );
+    }
+
+    // audit: skip - caller handler records organization settings audit event
+    const [inserted] = await tx
+      .insert(ssoProvider)
+      .values({
+        id: Bun.randomUUIDv7(),
+        providerId,
+        displayName: params.displayName.trim(),
+        organizationId: params.organizationId,
+        issuer: normalizedIssuer,
+        domain: normalizedDomains.join(","),
+        oidcConfig: null,
+        samlConfig: admitted.value,
+        userId: params.userId,
+      })
+      .returning();
+
+    if (inserted === undefined) {
+      return Result.err(
+        new SsoManagementError({
+          message: "Failed to persist SAML SSO provider",
+          reason: "invalid_config",
+        }),
+      );
+    }
+
+    return Result.ok(toProviderSummary(inserted, params.urls));
+  });
 };
 
 export const deleteOrganizationSsoProvider = async (
@@ -789,33 +812,41 @@ export const deleteOrganizationSsoDomain = async (
     organizationId: SafeId<"organization">;
     domainId: string;
   },
-): Promise<Result<{ id: string; domain: string }, SsoManagementError>> => {
-  // audit: skip - caller handler records organization settings audit event
-  const deleted = await db
-    .delete(organizationSsoDomain)
-    .where(
-      and(
-        eq(organizationSsoDomain.organizationId, params.organizationId),
-        eq(organizationSsoDomain.id, params.domainId),
-      ),
-    )
-    .returning({
-      id: organizationSsoDomain.id,
-      domain: organizationSsoDomain.domain,
+): Promise<Result<{ id: string; domain: string }, SsoManagementError>> =>
+  await withAggregateTransaction(db, async (tx) => {
+    await withAggregateLock({
+      tx,
+      aggregate: "organization",
+      id: params.organizationId,
+      mode: "update",
     });
 
-  const row = deleted.at(0);
-  if (row === undefined) {
-    return Result.err(
-      new SsoManagementError({
-        message: "Domain not found",
-        reason: "domain_not_found",
-      }),
-    );
-  }
+    // audit: skip - caller handler records organization settings audit event
+    const deleted = await tx
+      .delete(organizationSsoDomain)
+      .where(
+        and(
+          eq(organizationSsoDomain.organizationId, params.organizationId),
+          eq(organizationSsoDomain.id, params.domainId),
+        ),
+      )
+      .returning({
+        id: organizationSsoDomain.id,
+        domain: organizationSsoDomain.domain,
+      });
 
-  return Result.ok(row);
-};
+    const row = deleted.at(0);
+    if (row === undefined) {
+      return Result.err(
+        new SsoManagementError({
+          message: "Domain not found",
+          reason: "domain_not_found",
+        }),
+      );
+    }
+
+    return Result.ok(row);
+  });
 
 export const discoverVerifiedSsoProvidersByDomain = async (
   db: SsoManagementDb,

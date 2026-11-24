@@ -34,7 +34,7 @@ const urls = {
   callbackUrlFor: (providerId: string) =>
     `https://app.example.com/api/auth/sso/callback/${providerId}`,
   acsUrlFor: (providerId: string) =>
-    `https://app.example.com/api/auth/sso/saml2/callback/${providerId}`,
+    `https://app.example.com/api/auth/sso/saml2/sp/acs/${providerId}`,
   spMetadataUrlFor: (providerId: string) =>
     `https://app.example.com/api/auth/sso/saml2/sp/metadata?providerId=${providerId}`,
   launchUrlFor: (providerId: string) =>
@@ -371,7 +371,7 @@ describe("sso-management", () => {
       return;
     }
     expect(created.value.protocol).toBe("saml");
-    expect(created.value.acsUrl).toContain("/api/auth/sso/saml2/callback/");
+    expect(created.value.acsUrl).toContain("/api/auth/sso/saml2/sp/acs/");
     expect(created.value.spMetadataUrl).toContain(
       "/api/auth/sso/saml2/sp/metadata",
     );

@@ -280,7 +280,13 @@ const AddOidcProviderForm = ({
         </Field>
 
         <div className="flex justify-end gap-2">
-          <Button onClick={onCancel} type="button" variant="ghost">
+          <Button
+            disabled={createProviderMutation.isPending}
+            disabledReason={t("common.loading")}
+            onClick={onCancel}
+            type="button"
+            variant="ghost"
+          >
             {t("common.cancel")}
           </Button>
           <Button
@@ -405,7 +411,13 @@ const AddSamlProviderForm = ({
           />
         </Field>
         <div className="flex justify-end gap-2">
-          <Button onClick={onCancel} type="button" variant="ghost">
+          <Button
+            disabled={createProviderMutation.isPending}
+            disabledReason={t("common.loading")}
+            onClick={onCancel}
+            type="button"
+            variant="ghost"
+          >
             {t("common.cancel")}
           </Button>
           <Button
