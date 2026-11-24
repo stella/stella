@@ -919,3 +919,14 @@ export const provisionOrgSsoMemberByProviderRecord = async (params: {
   email: string;
   name?: string | null;
 }) => await provisionSsoMemberByProviderRecord(rootDb, params);
+
+export const readOrgSsoSeatLimit = async (
+  provisioningDomainId: string,
+): Promise<number | null> => {
+  const [policy] = await rootDb
+    .select({ seatLimit: organizationSsoPolicy.seatLimit })
+    .from(organizationSsoPolicy)
+    .where(eq(organizationSsoPolicy.organizationId, provisioningDomainId))
+    .limit(1);
+  return policy?.seatLimit ?? null;
+};

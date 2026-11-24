@@ -88,8 +88,11 @@ export const createOrganizationScimToken = async (
   await invokeAppOnlyWrite(
     "organization-settings.sso.scim-tokens.post",
     async () =>
-      unwrapApiResponse(
-        await api["organization-settings"].sso["scim-tokens"].post(body),
+      v.parse(
+        createOrganizationScimTokenResponseSchema,
+        unwrapApiResponse(
+          await api["organization-settings"].sso["scim-tokens"].post(body),
+        ),
       ),
   );
 
@@ -97,10 +100,13 @@ export const revokeOrganizationScimToken = async (tokenId: string) =>
   await invokeAppOnlyWrite(
     "organization-settings.sso.scim-tokens.delete",
     async () =>
-      unwrapApiResponse(
-        await api["organization-settings"].sso["scim-tokens"]({
-          tokenId,
-        }).delete(),
+      v.parse(
+        revokeOrganizationScimTokenResponseSchema,
+        unwrapApiResponse(
+          await api["organization-settings"].sso["scim-tokens"]({
+            tokenId,
+          }).delete(),
+        ),
       ),
   );
 

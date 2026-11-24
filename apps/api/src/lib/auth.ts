@@ -55,7 +55,6 @@ import { isUuid } from "@stll/uuid-codec";
 
 import {
   member,
-  organizationSsoPolicy,
   session as authSession,
   user as authUser,
 } from "@/api/db/auth-schema";
@@ -2809,16 +2808,7 @@ export const createAuth = (
       createSsoSignInPlugin(),
       createScimProvisioningPlugin({
         secret: env.BETTER_AUTH_SECRET,
-        readOrganizationSeatLimit: async (provisioningDomainId) => {
-          const [policy] = await rootDb
-            .select({ seatLimit: organizationSsoPolicy.seatLimit })
-            .from(organizationSsoPolicy)
-            .where(
-              eq(organizationSsoPolicy.organizationId, provisioningDomainId),
-            )
-            .limit(1);
-          return policy?.seatLimit ?? null;
-        },
+        readOrganizationSeatLimit: readOrgSsoSeatLimit,
       }),
       // Holds the organization endpoints to the same SSO decision.
       createSsoOrganizationGuardPlugin(),

@@ -22,7 +22,6 @@ CREATE UNIQUE INDEX "scim_managed_conn_connection_id_uidx" ON "scim_managed_conn
 CREATE INDEX "scim_managed_conn_domain_idx" ON "scim_managed_connection" ("provisioning_domain_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "scim_managed_conn_active_domain_uidx" ON "scim_managed_connection" ("provisioning_domain_id") WHERE ("status" = 'active');--> statement-breakpoint
 ALTER TABLE "scim_managed_connection" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "scim_managed_connection" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "scim_managed_connection_owner_access"
   ON "scim_managed_connection" FOR ALL TO public
   USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.scim_managed_connection'::regclass))
@@ -34,7 +33,7 @@ REVOKE ALL PRIVILEGES ON TABLE "scim_managed_connection" FROM stella;--> stateme
 
 CREATE TABLE "scim_managed_credential" (
   "id" text PRIMARY KEY NOT NULL,
-  "connection_record_id" text NOT NULL REFERENCES "scim_managed_connection"("id") ON DELETE CASCADE,
+  "connection_record_id" text NOT NULL CONSTRAINT "scim_managed_cred_conn_rec_fk" REFERENCES "scim_managed_connection"("id") ON DELETE CASCADE,
   "credential_id" text NOT NULL,
   "token_digest" text NOT NULL,
   "hash_version" text NOT NULL,
@@ -55,7 +54,6 @@ CREATE INDEX "scim_managed_cred_conn_rec_idx" ON "scim_managed_credential" ("con
 CREATE UNIQUE INDEX "scim_managed_cred_id_uidx" ON "scim_managed_credential" ("credential_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "scim_managed_cred_active_slot_uidx" ON "scim_managed_credential" ("active_slot_key");--> statement-breakpoint
 ALTER TABLE "scim_managed_credential" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "scim_managed_credential" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "scim_managed_credential_owner_access"
   ON "scim_managed_credential" FOR ALL TO public
   USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.scim_managed_credential'::regclass))
@@ -67,7 +65,7 @@ REVOKE ALL PRIVILEGES ON TABLE "scim_managed_credential" FROM stella;--> stateme
 
 CREATE TABLE "scim_managed_connection_event" (
   "id" text PRIMARY KEY NOT NULL,
-  "connection_record_id" text NOT NULL REFERENCES "scim_managed_connection"("id") ON DELETE CASCADE,
+  "connection_record_id" text NOT NULL CONSTRAINT "scim_managed_evt_conn_rec_fk" REFERENCES "scim_managed_connection"("id") ON DELETE CASCADE,
   "event_key" text NOT NULL,
   "sequence" integer NOT NULL,
   "type" text NOT NULL,
@@ -78,7 +76,6 @@ CREATE TABLE "scim_managed_connection_event" (
 CREATE INDEX "scim_managed_evt_conn_rec_idx" ON "scim_managed_connection_event" ("connection_record_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "scim_managed_evt_key_uidx" ON "scim_managed_connection_event" ("event_key");--> statement-breakpoint
 ALTER TABLE "scim_managed_connection_event" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "scim_managed_connection_event" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "scim_managed_connection_event_owner_access"
   ON "scim_managed_connection_event" FOR ALL TO public
   USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.scim_managed_connection_event'::regclass))
@@ -92,7 +89,7 @@ CREATE TABLE "scim_connection_binding" (
   "id" text PRIMARY KEY NOT NULL,
   "connection_id" text NOT NULL,
   "connection_key" text NOT NULL,
-  "provisioning_domain_id" text NOT NULL REFERENCES "organization"("id") ON DELETE CASCADE,
+  "provisioning_domain_id" text NOT NULL CONSTRAINT "scim_conn_binding_org_fk" REFERENCES "organization"("id") ON DELETE CASCADE,
   "created_at" timestamp with time zone NOT NULL,
   "decommissioned_at" timestamp with time zone,
   "decommission_status" text DEFAULT 'active' NOT NULL,
@@ -109,7 +106,6 @@ CREATE TABLE "scim_connection_binding" (
 CREATE INDEX "scim_conn_binding_conn_id_idx" ON "scim_connection_binding" ("connection_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "scim_conn_binding_conn_key_uidx" ON "scim_connection_binding" ("connection_key");--> statement-breakpoint
 ALTER TABLE "scim_connection_binding" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "scim_connection_binding" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "scim_connection_binding_owner_access"
   ON "scim_connection_binding" FOR ALL TO public
   USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.scim_connection_binding'::regclass))
@@ -122,7 +118,7 @@ REVOKE ALL PRIVILEGES ON TABLE "scim_connection_binding" FROM stella;--> stateme
 CREATE TABLE "scim_identity_tombstone" (
   "id" text PRIMARY KEY NOT NULL,
   "connection_id" text NOT NULL,
-  "provisioning_domain_id" text NOT NULL REFERENCES "organization"("id") ON DELETE CASCADE,
+  "provisioning_domain_id" text NOT NULL CONSTRAINT "scim_tombstone_org_fk" REFERENCES "organization"("id") ON DELETE CASCADE,
   "external_id" text NOT NULL,
   "external_id_key" text NOT NULL,
   "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
@@ -134,7 +130,6 @@ CREATE INDEX "scim_tombstone_domain_idx" ON "scim_identity_tombstone" ("provisio
 CREATE UNIQUE INDEX "scim_tombstone_ext_id_key_uidx" ON "scim_identity_tombstone" ("external_id_key");--> statement-breakpoint
 CREATE INDEX "scim_tombstone_user_id_idx" ON "scim_identity_tombstone" ("user_id");--> statement-breakpoint
 ALTER TABLE "scim_identity_tombstone" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "scim_identity_tombstone" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "scim_identity_tombstone_owner_access"
   ON "scim_identity_tombstone" FOR ALL TO public
   USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.scim_identity_tombstone'::regclass))
@@ -155,7 +150,6 @@ CREATE TABLE "scim_subject" (
 CREATE UNIQUE INDEX "scim_subject_user_id_uidx" ON "scim_subject" ("user_id");--> statement-breakpoint
 CREATE INDEX "scim_subject_profile_source_idx" ON "scim_subject" ("profile_source_id");--> statement-breakpoint
 ALTER TABLE "scim_subject" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "scim_subject" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "scim_subject_owner_access"
   ON "scim_subject" FOR ALL TO public
   USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.scim_subject'::regclass))
@@ -197,7 +191,6 @@ CREATE UNIQUE INDEX "scim_user_username_key_uidx" ON "scim_user" ("user_name_key
 CREATE UNIQUE INDEX "scim_user_ext_id_key_uidx" ON "scim_user" ("external_id_key");--> statement-breakpoint
 CREATE UNIQUE INDEX "scim_user_order_key_uidx" ON "scim_user" ("order_key");--> statement-breakpoint
 ALTER TABLE "scim_user" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "scim_user" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "scim_user_owner_access"
   ON "scim_user" FOR ALL TO public
   USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.scim_user'::regclass))
@@ -210,7 +203,7 @@ REVOKE ALL PRIVILEGES ON TABLE "scim_user" FROM stella;--> statement-breakpoint
 CREATE TABLE "scim_projection_grant" (
   "id" text PRIMARY KEY NOT NULL,
   "connection_id" text NOT NULL,
-  "provisioning_domain_id" text NOT NULL REFERENCES "organization"("id") ON DELETE CASCADE,
+  "provisioning_domain_id" text NOT NULL CONSTRAINT "scim_proj_grant_org_fk" REFERENCES "organization"("id") ON DELETE CASCADE,
   "scim_user_id" text NOT NULL REFERENCES "scim_user"("id") ON DELETE CASCADE,
   "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
   "source_kind" text NOT NULL,
@@ -227,7 +220,6 @@ CREATE INDEX "scim_proj_grant_scim_user_idx" ON "scim_projection_grant" ("scim_u
 CREATE INDEX "scim_proj_grant_user_id_idx" ON "scim_projection_grant" ("user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "scim_proj_grant_key_uidx" ON "scim_projection_grant" ("grant_key");--> statement-breakpoint
 ALTER TABLE "scim_projection_grant" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "scim_projection_grant" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "scim_projection_grant_owner_access"
   ON "scim_projection_grant" FOR ALL TO public
   USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.scim_projection_grant'::regclass))
@@ -256,7 +248,6 @@ CREATE UNIQUE INDEX "scim_group_display_name_key_uidx" ON "scim_group" ("display
 CREATE UNIQUE INDEX "scim_group_ext_id_key_uidx" ON "scim_group" ("external_id_key");--> statement-breakpoint
 CREATE UNIQUE INDEX "scim_group_order_key_uidx" ON "scim_group" ("order_key");--> statement-breakpoint
 ALTER TABLE "scim_group" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "scim_group" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "scim_group_owner_access"
   ON "scim_group" FOR ALL TO public
   USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.scim_group'::regclass))
@@ -279,7 +270,6 @@ CREATE INDEX "scim_group_member_group_id_idx" ON "scim_group_member" ("group_id"
 CREATE INDEX "scim_group_member_scim_user_idx" ON "scim_group_member" ("scim_user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "scim_group_member_key_uidx" ON "scim_group_member" ("membership_key");--> statement-breakpoint
 ALTER TABLE "scim_group_member" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "scim_group_member" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "scim_group_member_owner_access"
   ON "scim_group_member" FOR ALL TO public
   USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.scim_group_member'::regclass))

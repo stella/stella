@@ -1184,7 +1184,7 @@ const ScimProvisioningSection = ({
       onChanged();
     },
     onError: (err) => {
-      notifyUserError(err, t("settings.organization.sso.saveFailed"));
+      notifyUserError(err, t("errors.actionFailed"));
     },
   });
 
@@ -1204,7 +1204,7 @@ const ScimProvisioningSection = ({
       onChanged();
     },
     onError: (err) => {
-      notifyUserError(err, t("settings.organization.sso.saveFailed"));
+      notifyUserError(err, t("errors.actionFailed"));
     },
   });
 
@@ -1270,7 +1270,7 @@ const ScimProvisioningSection = ({
                     {token.id}
                   </code>
                   {token.status !== "active" && (
-                    <Badge variant="outline">
+                    <Badge>
                       {t("settings.organization.sso.scimStatusRevoked")}
                     </Badge>
                   )}

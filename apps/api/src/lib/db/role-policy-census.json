@@ -12351,16 +12351,6 @@
   },
   {
     "schema": "public",
-    "table": "scim_connection_binding",
-    "policy": "scim_connection_binding_owner_access",
-    "command": "ALL",
-    "roles": ["public"],
-    "permissive": "PERMISSIVE",
-    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('scim_connection_binding'::regclass)::oid)))",
-    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('scim_connection_binding'::regclass)::oid)))"
-  },
-  {
-    "schema": "public",
     "table": "scim_group",
     "policy": "auth_no_stella_access",
     "command": "ALL",
@@ -12368,16 +12358,6 @@
     "permissive": "PERMISSIVE",
     "using": "false",
     "withCheck": "false"
-  },
-  {
-    "schema": "public",
-    "table": "scim_group",
-    "policy": "scim_group_owner_access",
-    "command": "ALL",
-    "roles": ["public"],
-    "permissive": "PERMISSIVE",
-    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('scim_group'::regclass)::oid)))",
-    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('scim_group'::regclass)::oid)))"
   },
   {
     "schema": "public",
@@ -12391,16 +12371,6 @@
   },
   {
     "schema": "public",
-    "table": "scim_group_member",
-    "policy": "scim_group_member_owner_access",
-    "command": "ALL",
-    "roles": ["public"],
-    "permissive": "PERMISSIVE",
-    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('scim_group_member'::regclass)::oid)))",
-    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('scim_group_member'::regclass)::oid)))"
-  },
-  {
-    "schema": "public",
     "table": "scim_identity_tombstone",
     "policy": "auth_no_stella_access",
     "command": "ALL",
@@ -12408,16 +12378,6 @@
     "permissive": "PERMISSIVE",
     "using": "false",
     "withCheck": "false"
-  },
-  {
-    "schema": "public",
-    "table": "scim_identity_tombstone",
-    "policy": "scim_identity_tombstone_owner_access",
-    "command": "ALL",
-    "roles": ["public"],
-    "permissive": "PERMISSIVE",
-    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('scim_identity_tombstone'::regclass)::oid)))",
-    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('scim_identity_tombstone'::regclass)::oid)))"
   },
   {
     "schema": "public",
@@ -12431,16 +12391,6 @@
   },
   {
     "schema": "public",
-    "table": "scim_managed_connection",
-    "policy": "scim_managed_connection_owner_access",
-    "command": "ALL",
-    "roles": ["public"],
-    "permissive": "PERMISSIVE",
-    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('scim_managed_connection'::regclass)::oid)))",
-    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('scim_managed_connection'::regclass)::oid)))"
-  },
-  {
-    "schema": "public",
     "table": "scim_managed_connection_event",
     "policy": "auth_no_stella_access",
     "command": "ALL",
@@ -12448,16 +12398,6 @@
     "permissive": "PERMISSIVE",
     "using": "false",
     "withCheck": "false"
-  },
-  {
-    "schema": "public",
-    "table": "scim_managed_connection_event",
-    "policy": "scim_managed_connection_event_owner_access",
-    "command": "ALL",
-    "roles": ["public"],
-    "permissive": "PERMISSIVE",
-    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('scim_managed_connection_event'::regclass)::oid)))",
-    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('scim_managed_connection_event'::regclass)::oid)))"
   },
   {
     "schema": "public",
@@ -12471,16 +12411,6 @@
   },
   {
     "schema": "public",
-    "table": "scim_managed_credential",
-    "policy": "scim_managed_credential_owner_access",
-    "command": "ALL",
-    "roles": ["public"],
-    "permissive": "PERMISSIVE",
-    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('scim_managed_credential'::regclass)::oid)))",
-    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('scim_managed_credential'::regclass)::oid)))"
-  },
-  {
-    "schema": "public",
     "table": "scim_projection_grant",
     "policy": "auth_no_stella_access",
     "command": "ALL",
@@ -12488,16 +12418,6 @@
     "permissive": "PERMISSIVE",
     "using": "false",
     "withCheck": "false"
-  },
-  {
-    "schema": "public",
-    "table": "scim_projection_grant",
-    "policy": "scim_projection_grant_owner_access",
-    "command": "ALL",
-    "roles": ["public"],
-    "permissive": "PERMISSIVE",
-    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('scim_projection_grant'::regclass)::oid)))",
-    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('scim_projection_grant'::regclass)::oid)))"
   },
   {
     "schema": "public",
@@ -12511,16 +12431,6 @@
   },
   {
     "schema": "public",
-    "table": "scim_subject",
-    "policy": "scim_subject_owner_access",
-    "command": "ALL",
-    "roles": ["public"],
-    "permissive": "PERMISSIVE",
-    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('scim_subject'::regclass)::oid)))",
-    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('scim_subject'::regclass)::oid)))"
-  },
-  {
-    "schema": "public",
     "table": "scim_user",
     "policy": "auth_no_stella_access",
     "command": "ALL",
@@ -12528,16 +12438,6 @@
     "permissive": "PERMISSIVE",
     "using": "false",
     "withCheck": "false"
-  },
-  {
-    "schema": "public",
-    "table": "scim_user",
-    "policy": "scim_user_owner_access",
-    "command": "ALL",
-    "roles": ["public"],
-    "permissive": "PERMISSIVE",
-    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('scim_user'::regclass)::oid)))",
-    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('scim_user'::regclass)::oid)))"
   },
   {
     "schema": "public",
