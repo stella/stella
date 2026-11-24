@@ -10,7 +10,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisions,
   caseLawSources,
@@ -18,6 +17,7 @@ import {
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { CorpusIndexFlipEngine } from "@/api/lib/legal-search/corpus-index-generation-flip";
 import { registeredCorpusIndexGroups } from "@/api/lib/legal-search/corpus-index-group-contract";

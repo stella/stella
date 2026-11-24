@@ -8,8 +8,8 @@ import {
   MAX_DICTATION_TERMS_PER_REQUEST,
 } from "@stll/api-contract/dictation-vocabulary";
 
-import type { Transaction } from "@/api/db/root";
 import { dictationVocabularyTerms } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { uniqueItems } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";

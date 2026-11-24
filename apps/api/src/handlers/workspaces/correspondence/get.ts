@@ -8,7 +8,6 @@ import {
 } from "@stll/api-contract/correspondence";
 import type { DataBoxEnvelope } from "@stll/api-contract/data-box";
 
-import type { Transaction } from "@/api/db/root";
 import {
   contacts,
   correspondence,
@@ -16,6 +15,7 @@ import {
   correspondenceAttachments,
   correspondenceFilers,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";

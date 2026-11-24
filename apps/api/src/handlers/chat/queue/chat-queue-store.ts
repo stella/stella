@@ -8,12 +8,12 @@ import {
   type ChatQueueHoldReason,
 } from "@stll/api-contract/chat-queue";
 
-import type { Transaction } from "@/api/db/root";
 import {
   chatQueuedMessages,
   chatQueueHolds,
   chatThreads,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   getChatAttachmentUrl,
   isChatAttachmentPart,

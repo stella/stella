@@ -1,9 +1,9 @@
 import { panic } from "better-result";
 import { inArray } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { auditLogs, workspaces } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import listMySuggestionRange from "@/api/handlers/time-entries/me/suggestions/list";
 import { HttpStatusResponse } from "@/api/http/status";
 import {

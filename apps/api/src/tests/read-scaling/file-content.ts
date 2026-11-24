@@ -2,7 +2,6 @@ import { panic } from "better-result";
 import { eq, inArray, sql } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import {
   entities,
   entityVersions,
@@ -13,6 +12,7 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import type { RlsDatabase } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import { env } from "@/api/env";
 import { readFileContentEndpoint } from "@/api/handlers/files/read-content";
 import type { createReadFileContentEndpoint } from "@/api/handlers/files/read-content";

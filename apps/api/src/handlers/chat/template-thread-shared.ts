@@ -5,12 +5,12 @@
  * "new chat" repoints it at a freshly created thread.
  */
 
-import type { Transaction } from "@/api/db/root";
 import {
   CHAT_THREAD_TITLE_MAX_LENGTH,
   chatThreads,
   templateChatThreads,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";

@@ -16,7 +16,7 @@ import { runScriptWithErrorOutput } from "@stll/errors/script-error";
  *   bun run src/scripts/link-republished-decisions.ts --reverse --limit 5000
  */
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   enterCaseLawMaintenanceLane,

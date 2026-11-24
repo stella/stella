@@ -2,12 +2,12 @@
 
 import { and, eq, inArray } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   ACTIVE_DATA_EXPORT_PREDICATE,
   ACTIVE_DATA_EXPORT_STATUSES,
   organizationDataExports,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { DataExportVersionScope } from "@/api/handlers/data-exports/manifest-schema";
 import { dataExportSummaryColumns } from "@/api/handlers/data-exports/summary";
 import type { AuditRecorder } from "@/api/lib/audit-log";
