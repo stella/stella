@@ -219,6 +219,7 @@
       "name": "Chrome'i plugin",
       "reload": "Laadi kaart uuesti",
       "reloadDescription": "Plugin uuenes pärast selle kaardi avamist.",
+      "siteAccessDescription": "Klõpsake Chrome’i tööriistaribal stella ikoonil ja lubage juurdepääs veebisaitidele.",
       "statusNotInstalled": "Installimata",
       "statusReload": "Vajab laadimist",
       "statusUpdating": "Uuendamine",

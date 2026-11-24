@@ -219,6 +219,7 @@
       "name": "إضافة Chrome",
       "reload": "إعادة تحميل التبويب",
       "reloadDescription": "تم تحديث الإضافة بعد فتح هذا التبويب.",
+      "siteAccessDescription": "انقر على أيقونة stella في شريط أدوات Chrome واسمح بالوصول إلى المواقع.",
       "statusNotInstalled": "غير مثبّت",
       "statusReload": "يلزم إعادة التحميل",
       "statusUpdating": "جارٍ التحديث",

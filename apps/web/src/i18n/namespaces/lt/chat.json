@@ -219,6 +219,7 @@
       "name": "„Chrome“ papildinys",
       "reload": "Įkelti kortelę iš naujo",
       "reloadDescription": "Papildinys atnaujintas po to, kai atidarėte šią kortelę.",
+      "siteAccessDescription": "Spustelėkite „stella“ piktogramą „Chrome“ įrankių juostoje ir leiskite prieigą prie svetainių.",
       "statusNotInstalled": "Neįdiegta",
       "statusReload": "Reikia įkelti",
       "statusUpdating": "Atnaujinama",

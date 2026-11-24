@@ -219,6 +219,7 @@
       "name": "Plugin pro Chrome",
       "reload": "Znovu načíst kartu",
       "reloadDescription": "Plugin se aktualizoval po otevření této karty.",
+      "siteAccessDescription": "Klikněte na ikonu stella na liště Chromu a povolte přístup k webům.",
       "statusNotInstalled": "Nenainstalováno",
       "statusReload": "Nutné načtení",
       "statusUpdating": "Aktualizace",

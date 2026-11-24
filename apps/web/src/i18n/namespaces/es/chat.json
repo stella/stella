@@ -219,6 +219,7 @@
       "name": "Plugin de Chrome",
       "reload": "Recargar pestaña",
       "reloadDescription": "El plugin se actualizó después de abrir esta pestaña.",
+      "siteAccessDescription": "Haz clic en el icono de stella en la barra de Chrome y permite el acceso a sitios web.",
       "statusNotInstalled": "No instalado",
       "statusReload": "Requiere recarga",
       "statusUpdating": "Actualizando",

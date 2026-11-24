@@ -219,6 +219,7 @@
       "name": "Plugin Chrome",
       "reload": "Recharger l'onglet",
       "reloadDescription": "Le plugin a été mis à jour après l'ouverture de cet onglet.",
+      "siteAccessDescription": "Cliquez sur l’icône stella dans la barre d’outils de Chrome et autorisez l’accès aux sites web.",
       "statusNotInstalled": "Non installé",
       "statusReload": "Rechargement requis",
       "statusUpdating": "Mise à jour",

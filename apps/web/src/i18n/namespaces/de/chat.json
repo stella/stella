@@ -219,6 +219,7 @@
       "name": "Chrome-Plugin",
       "reload": "Tab neu laden",
       "reloadDescription": "Das Plugin wurde aktualisiert, nachdem dieser Tab geöffnet wurde.",
+      "siteAccessDescription": "Klicken Sie auf das stella-Symbol in der Chrome-Symbolleiste und erlauben Sie den Websitezugriff.",
       "statusNotInstalled": "Nicht installiert",
       "statusReload": "Neu laden nötig",
       "statusUpdating": "Aktualisierung",

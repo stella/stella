@@ -219,6 +219,7 @@
       "name": "Chrome spraudnis",
       "reload": "Pārlādēt cilni",
       "reloadDescription": "Spraudnis tika atjaunināts pēc šīs cilnes atvēršanas.",
+      "siteAccessDescription": "Noklikšķiniet uz stella ikonas Chrome rīkjoslā un atļaujiet piekļuvi vietnēm.",
       "statusNotInstalled": "Nav instalēts",
       "statusReload": "Nepieciešama pārlāde",
       "statusUpdating": "Atjaunina",

@@ -58,6 +58,12 @@ const copyFor = (status: VisibleStatus) => {
         description: "chat.browserExtension.installDescription",
       } as const;
     case BROWSER_EXTENSION_STATUS.needsSiteAccess:
+      return {
+        label: "chat.browserExtension.connect",
+        preview: "chat.browserExtensionPreview.notConnected",
+        status: "common.notConnected",
+        description: "chat.browserExtension.siteAccessDescription",
+      } as const;
     case BROWSER_EXTENSION_STATUS.notPaired:
       return {
         label: "chat.browserExtension.connect",

@@ -219,6 +219,7 @@
       "name": "Chrome plugin",
       "reload": "Reload this tab",
       "reloadDescription": "The plugin was updated after this tab opened.",
+      "siteAccessDescription": "Click the stella icon in Chrome’s toolbar and allow website access.",
       "statusNotInstalled": "Not installed",
       "statusReload": "Reload needed",
       "statusUpdating": "Updating",

@@ -1490,6 +1490,7 @@
   "chat.browserExtension.name": "Chrome plugin",
   "chat.browserExtension.reload": "Reload this tab",
   "chat.browserExtension.reloadDescription": "The plugin was updated after this tab opened.",
+  "chat.browserExtension.siteAccessDescription": "Click the stella icon in Chrome’s toolbar and allow website access.",
   "chat.browserExtension.statusNotInstalled": "Not installed",
   "chat.browserExtension.statusReload": "Reload needed",
   "chat.browserExtension.statusUpdating": "Updating",

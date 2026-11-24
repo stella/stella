@@ -215,7 +215,9 @@ for (const status of Object.values(BROWSER_EXTENSION_STATUS)) {
         );
         expect(
           await screen.findByText(
-            messages.chat.browserExtension.connectDescription,
+            status === BROWSER_EXTENSION_STATUS.needsSiteAccess
+              ? messages.chat.browserExtension.siteAccessDescription
+              : messages.chat.browserExtension.connectDescription,
           ),
         ).toBeTruthy();
         expect(screen.queryByRole("link")).toBeNull();

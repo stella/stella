@@ -219,6 +219,7 @@
       "name": "Plugin do Chrome",
       "reload": "Recarregar aba",
       "reloadDescription": "O plugin foi atualizado depois que esta aba foi aberta.",
+      "siteAccessDescription": "Clique no ícone da stella na barra de ferramentas do Chrome e permita o acesso a sites.",
       "statusNotInstalled": "Não instalado",
       "statusReload": "Recarregar aba",
       "statusUpdating": "Atualizando",

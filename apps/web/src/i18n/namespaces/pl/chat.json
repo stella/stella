@@ -219,6 +219,7 @@
       "name": "Wtyczka Chrome",
       "reload": "Odśwież kartę",
       "reloadDescription": "Wtyczka została zaktualizowana po otwarciu tej karty.",
+      "siteAccessDescription": "Kliknij ikonę stella na pasku narzędzi Chrome i zezwól na dostęp do witryn.",
       "statusNotInstalled": "Nie zainstalowano",
       "statusReload": "Wymagane odświeżenie",
       "statusUpdating": "Aktualizacja",

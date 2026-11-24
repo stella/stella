@@ -219,6 +219,7 @@
       "name": "Chrome bővítmény",
       "reload": "Lap újratöltése",
       "reloadDescription": "A bővítmény a lap megnyitása után frissült.",
+      "siteAccessDescription": "Kattintson a stella ikonra a Chrome eszköztárán, és engedélyezze a webhelyhozzáférést.",
       "statusNotInstalled": "Nincs telepítve",
       "statusReload": "Újratöltés szükséges",
       "statusUpdating": "Frissítés",

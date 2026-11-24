@@ -219,6 +219,7 @@
       "name": "Plugin pre Chrome",
       "reload": "Znovu načítať kartu",
       "reloadDescription": "Plugin sa aktualizoval po otvorení tejto karty.",
+      "siteAccessDescription": "Kliknite na ikonu stella na paneli Chromu a povoľte prístup k webom.",
       "statusNotInstalled": "Nenainštalované",
       "statusReload": "Potrebné načítanie",
       "statusUpdating": "Aktualizuje sa",
