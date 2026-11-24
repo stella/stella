@@ -20,6 +20,7 @@ import {
   DEFAULT_PRESETS,
 } from "@stll/ui/color-picker";
 import { FaceLabelPending } from "@stll/ui/control-face";
+import { EntityActions } from "@stll/ui/entity-actions";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
   EllipsisVerticalIcon,
@@ -32,16 +33,9 @@ import {
   Trash2Icon,
 } from "@stll/ui/icons";
 import { KanbanColumnHeader } from "@stll/ui/kanban";
-import {
-  Menu,
-  MenuAnchor,
-  MenuItem,
-  MenuPopup,
-  MenuTrigger,
-} from "@stll/ui/menu";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Popover, PopoverPopup } from "@stll/ui/popover";
 import { TruncatedText } from "@stll/ui/truncated-text";
-import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 import type {
   CalculationProperty,
@@ -162,28 +156,6 @@ export const KanbanColumn = ({
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(title);
 
-  // Context menu state
-  const [ctxOpen, setCtxOpen] = useState(false);
-  const [ctxOpener, setCtxOpener] = useState<HTMLElement | null>(null);
-  const [ctxAnchor, setCtxAnchor] = useState<{
-    getBoundingClientRect: () => DOMRect;
-  } | null>(null);
-
-  const handleContextMenu = (e: React.MouseEvent) => {
-    if (!onCreate) {
-      return;
-    }
-    e.preventDefault();
-    setCtxOpener(
-      e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
-    );
-    const x = e.clientX;
-    const y = e.clientY;
-    setCtxAnchor({
-      getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
-    });
-    setCtxOpen(true);
-  };
   const cardVirtualizer = useVirtualizer({
     count: entities.length,
     estimateSize: () => KANBAN_CARD_ESTIMATE_PX,
@@ -382,10 +354,20 @@ export const KanbanColumn = ({
           />
         }
       />
-      <div
-        className={KANBAN_COLUMN_BODY_CLASS}
-        onContextMenu={containedEventHandler(handleContextMenu)}
-        ref={scrollRef}
+      <EntityActions
+        actions={
+          onCreate
+            ? [
+                {
+                  label: t("tasks.newTask"),
+                  icon: <SquareCheckIcon />,
+                  onClick: () => onCreate("task"),
+                },
+              ]
+            : []
+        }
+        label={t("tasks.newTask")}
+        render={<div className={KANBAN_COLUMN_BODY_CLASS} ref={scrollRef} />}
       >
         {isFileDragOver && (
           <div className="border-primary/40 bg-primary/5 text-muted-foreground mb-2 flex items-center gap-2 rounded-lg border border-dashed p-3 text-xs">
@@ -432,29 +414,7 @@ export const KanbanColumn = ({
             ref={loadMoreSentinelRef}
           />
         </div>
-      </div>
-      {onCreate && (
-        <Menu
-          onOpenChange={(o) => {
-            setCtxOpen(o);
-            if (!o) {
-              setCtxAnchor(null);
-            }
-          }}
-          open={ctxOpen}
-        >
-          <MenuAnchor />
-          <MenuPopup
-            anchor={ctxAnchor ?? undefined}
-            finalFocus={() => ctxOpener}
-          >
-            <MenuItem onClick={() => onCreate("task")}>
-              <SquareCheckIcon />
-              {t("tasks.newTask")}
-            </MenuItem>
-          </MenuPopup>
-        </Menu>
-      )}
+      </EntityActions>
       {taskOnly && onCreate ? (
         <div className="border-t p-2">
           <Button

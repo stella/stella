@@ -7,7 +7,7 @@ import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
-import { ContextMenuActionItems } from "@stll/ui/context-menu";
+import { EntityActions } from "@stll/ui/entity-actions";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
   CalendarClockIcon,
@@ -18,7 +18,6 @@ import {
   UploadIcon,
   WorkflowIcon,
 } from "@stll/ui/icons";
-import { Menu, MenuAnchor, MenuItem, MenuPopup } from "@stll/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { UNKNOWN_AUTHOR_LABEL } from "@stll/ui/review-author-avatar";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -28,7 +27,6 @@ import {
   TooltipTrigger,
 } from "@stll/ui/tooltip";
 import { TruncatedText } from "@stll/ui/truncated-text";
-import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
 import { EmptyScreen } from "@/components/empty-screen";
@@ -89,23 +87,6 @@ const OVERVIEW_PANEL_CLASS = "bg-background overflow-hidden rounded-lg border";
 const TEAM_HEATMAP_GRID_CLASS =
   "grid grid-cols-[minmax(3.5rem,1fr)_repeat(7,1.375rem)] items-center gap-x-1 px-3 sm:grid-cols-[minmax(8rem,1fr)_repeat(7,1.75rem)_2.5rem] sm:gap-x-2 sm:px-4";
 
-type UpcomingTaskContext = {
-  entityId: string;
-  name: string;
-  status: string | null;
-};
-
-type VirtualAnchor = {
-  getBoundingClientRect: () => DOMRect;
-};
-
-type UpcomingMenuState = {
-  open: boolean;
-  anchor: VirtualAnchor | null;
-  opener: HTMLElement | null;
-  task: UpcomingTaskContext | null;
-};
-
 // ── Helpers ───────────────────────────────────────────────
 
 const getLocaleDayLabel = (dayIndex: number, firstWeekday: number) => {
@@ -160,12 +141,6 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const { data } = useSuspenseQuery(
     overviewOptions({ workspaceId, organizationId: user.activeOrganizationId }),
   );
-  const [upcomingMenu, setUpcomingMenu] = useState<UpcomingMenuState>({
-    open: false,
-    anchor: null,
-    opener: null,
-    task: null,
-  });
   const [, handleCreateFileEntities] = useCreateFileEntities(workspaceId);
   const openUploadPicker = () =>
     openFilePicker({
@@ -207,24 +182,6 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
   const taskStatusAction = useTaskStatusAction(workspaceId);
 
-  const handleTaskContextMenu =
-    (task: UpcomingTaskContext) => (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setUpcomingMenu({
-        open: true,
-        anchor: {
-          getBoundingClientRect: () => new DOMRect(e.clientX, e.clientY, 0, 0),
-        },
-        opener: e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
-        task,
-      });
-    };
-
-  const menuTaskStatus = upcomingMenu.task?.status ?? null;
-  const currentMenuTaskStatus = isTaskStatus(menuTaskStatus)
-    ? menuTaskStatus
-    : "open";
   const recentEntities = data.recentEntities.filter((e) => e.kind !== "folder");
   const hasActivity = recentEntities.length > 0;
 
@@ -457,22 +414,19 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       {/* Two-column layout: tasks + team */}
       <div className="grid min-w-0 grid-cols-1 gap-6 @3xl:grid-cols-2">
         {/* Upcoming tasks */}
-        <section
-          className="flex min-w-0 flex-col"
-          onContextMenu={containedEventHandler((e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setUpcomingMenu({
-              open: true,
-              anchor: {
-                getBoundingClientRect: () =>
-                  new DOMRect(e.clientX, e.clientY, 0, 0),
+        <EntityActions
+          actions={[
+            {
+              label: t("tasks.newTask"),
+              icon: <EntityKindIcon kind="task" />,
+              disabled: createTaskOnce.pending,
+              onClick: () => {
+                detached(handleCreateTask(), "overview-view.create-task");
               },
-              opener:
-                e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
-              task: null,
-            });
-          })}
+            },
+          ]}
+          label={t("tasks.newTask")}
+          render={<section className="flex min-w-0 flex-col" />}
         >
           <OverviewSectionHeader
             actionDisabledReason={
@@ -491,22 +445,38 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                 <ScrollArea className="min-h-0 flex-1 rounded-lg border">
                   <div className="divide-y">
                     {tasks.map((task) => (
-                      <Button
-                        className="block w-full min-w-0"
-                        key={task.entityId}
-                        onClick={() =>
-                          useInspectorTabsStore.getState().openTask({
-                            taskId: task.entityId,
-                            workspaceId,
+                      <EntityActions
+                        actions={[
+                          {
                             label: task.name,
-                          })
+                            icon: <SquareCheckIcon />,
+                            onClick: () =>
+                              useInspectorTabsStore.getState().openTask({
+                                taskId: task.entityId,
+                                workspaceId,
+                                label: task.name,
+                              }),
+                          },
+                          taskStatusAction(
+                            task.entityId,
+                            isTaskStatus(task.status) ? task.status : "open",
+                          ),
+                        ]}
+                        key={task.entityId}
+                        label={task.name}
+                        render={
+                          <Button
+                            className="block w-full min-w-0"
+                            onClick={() =>
+                              useInspectorTabsStore.getState().openTask({
+                                taskId: task.entityId,
+                                workspaceId,
+                                label: task.name,
+                              })
+                            }
+                            variant="plain"
+                          />
                         }
-                        onContextMenu={handleTaskContextMenu({
-                          entityId: task.entityId,
-                          name: task.name,
-                          status: task.status,
-                        })}
-                        variant="plain"
                       >
                         <span className="hover:bg-accent/50 flex w-full min-w-0 items-center gap-3 px-3 py-2.5">
                           <EntityKindIcon
@@ -547,7 +517,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                             </span>
                           </div>
                         </span>
-                      </Button>
+                      </EntityActions>
                     ))}
                   </div>
                 </ScrollArea>
@@ -570,62 +540,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               </Button>
             );
           })()}
-          <Menu
-            onOpenChange={(open) => {
-              setUpcomingMenu((previous) =>
-                open
-                  ? { ...previous, open }
-                  : { ...previous, open: false, anchor: null },
-              );
-            }}
-            open={upcomingMenu.open}
-          >
-            <MenuAnchor />
-            <MenuPopup
-              anchor={upcomingMenu.anchor ?? undefined}
-              finalFocus={() => upcomingMenu.opener}
-            >
-              {upcomingMenu.task === null ? (
-                <MenuItem
-                  disabled={createTaskOnce.pending}
-                  onClick={() => {
-                    detached(handleCreateTask(), "overview-view.create-task");
-                  }}
-                >
-                  <EntityKindIcon kind="task" />
-                  {t("tasks.newTask")}
-                </MenuItem>
-              ) : (
-                <>
-                  <MenuItem
-                    onClick={() => {
-                      const task = upcomingMenu.task;
-                      if (task === null) {
-                        return;
-                      }
-                      useInspectorTabsStore.getState().openTask({
-                        taskId: task.entityId,
-                        workspaceId,
-                        label: task.name,
-                      });
-                    }}
-                  >
-                    <SquareCheckIcon />
-                    {upcomingMenu.task.name}
-                  </MenuItem>
-                  <ContextMenuActionItems
-                    actions={[
-                      taskStatusAction(
-                        upcomingMenu.task.entityId,
-                        currentMenuTaskStatus,
-                      ),
-                    ]}
-                  />
-                </>
-              )}
-            </MenuPopup>
-          </Menu>
-        </section>
+        </EntityActions>
 
         {timeBillingEnabled && canReviewTimeEntries ? (
           <section className="flex min-w-0 flex-col">

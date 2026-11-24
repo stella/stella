@@ -6,7 +6,8 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { PanelRightIcon } from "@stll/ui/icons";
+import { EntityActions } from "@stll/ui/entity-actions";
+import { NewChatIcon, PanelRightIcon } from "@stll/ui/icons";
 import {
   entityTabGlyph,
   InspectorEntityTab,
@@ -47,7 +48,6 @@ import type {
   InspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
 import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
-import { useRailContextMenu } from "@/components/inspector/use-rail-context-menu";
 import { useRouteWorkspaceId } from "@/components/inspector/use-route-workspace-id";
 import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
 import { getInspectorView } from "@/components/inspector/view-registry";
@@ -102,10 +102,6 @@ export const InspectorRail = ({
   // A new chat is about the matter in the URL, not the matter this rail
   // displays (the active tab's, which the user may have left).
   const routeWorkspaceId = useRouteWorkspaceId();
-  const railContextMenu = useRailContextMenu({
-    activeSkill,
-    workspaceId: routeWorkspaceId,
-  });
   // The rail stands beside the main view, so a chat started here is about
   // whatever that view is showing.
   const legalDocument = useMainLegalDocument();
@@ -165,12 +161,7 @@ export const InspectorRail = ({
       }}
       className="h-full bg-(--matter-sidebar-tint)"
       label={t("inspector.title")}
-      overlay={
-        <>
-          {railContextMenu.element}
-          {transfer.dialog}
-        </>
-      }
+      overlay={transfer.dialog}
       topAction={
         <Tooltip
           content={toggleLabel}
@@ -192,12 +183,16 @@ export const InspectorRail = ({
         </Tooltip>
       }
     >
-      <div
-        className="flex min-h-full flex-col"
-        onContextMenu={(event) => {
-          event.preventDefault();
-          railContextMenu.openAt(event);
-        }}
+      <EntityActions
+        actions={[
+          {
+            label: t("chat.newChat"),
+            icon: <NewChatIcon />,
+            onClick: openContextChat,
+          },
+        ]}
+        label={t("chat.newChat")}
+        render={<div className="flex min-h-full flex-col" />}
       >
         {visibleGroups.map(({ group, tabs: groupTabs }) => (
           <InspectorRailGroup
@@ -234,7 +229,7 @@ export const InspectorRail = ({
           />
         ))}
         <SuggestedReviveTab />
-      </div>
+      </EntityActions>
     </WorkspaceEndRail>
   );
 };

@@ -26,6 +26,7 @@ import {
   BreadcrumbSeparator,
 } from "@stll/ui/breadcrumb";
 import { Button } from "@stll/ui/button";
+import { EntityActions } from "@stll/ui/entity-actions";
 import { getFileSizeDisplay } from "@stll/ui/file-size";
 import {
   ArrowDownIcon,
@@ -33,7 +34,6 @@ import {
   EyeOffIcon,
   FileIcon,
 } from "@stll/ui/icons";
-import { Menu, MenuAnchor, MenuItem, MenuPopup } from "@stll/ui/menu";
 import { MiddleTruncate } from "@stll/ui/middle-truncate";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
@@ -1025,10 +1025,7 @@ const ColumnHeaderCell = ({
 }: ColumnHeaderCellProps) => {
   const t = useTranslations();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [contextAnchor, setContextAnchor] = useState<{
-    getBoundingClientRect: () => DOMRect;
-  } | null>(null);
-  const isContextOpen = contextAnchor !== null;
+
   const isActive = activeSort?.propertyId === propertyId;
   const SortIcon = activeSort?.desc ? ArrowDownIcon : ArrowUpIcon;
 
@@ -1055,26 +1052,29 @@ const ColumnHeaderCell = ({
     window.addEventListener("pointerup", handleUp);
   };
 
-  const handleContextMenu = (event: React.MouseEvent) => {
-    if (!onHide) {
-      return;
-    }
-    event.preventDefault();
-    const x = event.clientX;
-    const y = event.clientY;
-    setContextAnchor({
-      getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
-    });
-  };
-
   return (
-    <div
-      className={cn(
-        FILESYSTEM_COLUMN_HEAD_CLASS,
-        align === "end" ? "justify-end" : "justify-start",
-      )}
-      onContextMenu={containedEventHandler(handleContextMenu)}
-      ref={containerRef}
+    <EntityActions
+      actions={
+        onHide
+          ? [
+              {
+                label: t("workspaces.views.hideColumn"),
+                icon: <EyeOffIcon className="size-4" />,
+                onClick: onHide,
+              },
+            ]
+          : []
+      }
+      label={t("workspaces.views.hideColumn")}
+      render={
+        <div
+          className={cn(
+            FILESYSTEM_COLUMN_HEAD_CLASS,
+            align === "end" ? "justify-end" : "justify-start",
+          )}
+          ref={containerRef}
+        />
+      }
     >
       <Button
         className={cn(
@@ -1104,30 +1104,7 @@ const ColumnHeaderCell = ({
       >
         <div className="bg-border/0 group-hover/column:bg-border/60 hover:bg-primary/60 mx-auto h-full w-px" />
       </div>
-      {onHide && (
-        <Menu
-          onOpenChange={(open) => {
-            if (!open) {
-              setContextAnchor(null);
-            }
-          }}
-          open={isContextOpen}
-        >
-          <MenuAnchor />
-          <MenuPopup anchor={contextAnchor ?? undefined}>
-            <MenuItem
-              onClick={() => {
-                onHide();
-                setContextAnchor(null);
-              }}
-            >
-              <EyeOffIcon className="size-4" />
-              {t("workspaces.views.hideColumn")}
-            </MenuItem>
-          </MenuPopup>
-        </Menu>
-      )}
-    </div>
+    </EntityActions>
   );
 };
 
