@@ -517,7 +517,8 @@ impl ParkedSlot {
 
   #[cfg(test)]
   fn take_at(&self, now: Duration) -> Resumable {
-    match self.lock().take() {
+    let parked = self.lock().take();
+    match parked {
       None => Resumable::Nothing,
       Some(parked) if now >= parked.expires => Resumable::Expired,
       Some(parked) => Resumable::Ready(parked),
