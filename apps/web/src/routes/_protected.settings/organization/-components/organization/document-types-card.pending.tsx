@@ -26,12 +26,14 @@ export function DocumentTypeRows({ children }: { children: ReactNode }) {
 
 export function DocumentTypeRowFace({
   className,
+  dropTarget = false,
   ...props
-}: ComponentProps<"li">) {
+}: ComponentProps<"li"> & { dropTarget?: boolean }) {
   return (
     <li
       className={cn(
         "bg-card flex items-center gap-2 rounded-lg border px-2 py-1.5",
+        dropTarget && "ring-primary ring-2",
         className,
       )}
       {...props}

@@ -37,7 +37,6 @@ import {
   Trash2Icon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
-import { cn } from "@stll/ui/utils";
 
 import {
   withDragAnnouncementData,
@@ -455,12 +454,7 @@ const DocumentTypeRow = ({
     <EntityActions
       actions={rowActions}
       label={t("common.actions")}
-      render={
-        <DocumentTypeRowFace
-          className={cn(isDropTarget && "ring-primary ring-2")}
-          ref={setRowRef}
-        />
-      }
+      render={<DocumentTypeRowFace dropTarget={isDropTarget} ref={setRowRef} />}
     >
       <Button
         aria-label={t("settings.organization.documentTypes.reorder")}
