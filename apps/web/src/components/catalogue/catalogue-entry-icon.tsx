@@ -72,14 +72,12 @@ export const CatalogueEntryIcon = ({
 
   if (slug && isSlugLucideOverrideKey(slug)) {
     const Icon = SLUG_LUCIDE_OVERRIDES[slug];
-    if (Icon) {
-      return (
-        <Icon
-          className={cn(TONE_CLASS[tone ?? "foreground"], className)}
-          style={{ width: size, height: size }}
-        />
-      );
-    }
+    return (
+      <Icon
+        className={cn(TONE_CLASS[tone ?? "foreground"], className)}
+        style={{ width: size, height: size }}
+      />
+    );
   }
 
   const bundledIconSrc = getCatalogueIconImageSrc(icon);
