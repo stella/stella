@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.89.1
+
+### Patch Changes
+
+- [#9417](https://github.com/stella/stella/pull/9417) [`fa3daba`](https://github.com/stella/stella/commit/fa3daba452c3192e68d62bd997cfe4145fa2ca6d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `ClaudeLogoIcon`, `GeminiLogoIcon` and `AntigravityLogoIcon` draw the official marks in their brand colours.
+
 ## 0.89.0
 
 ### Minor Changes
