@@ -82,7 +82,6 @@ const renderTurn = async ({
                     activitySession={{
                       reportedUnknownActivityTypes: new Set<string>(),
                     }}
-                    approvalPendingMessageId={null}
                     isGenerating={isGenerating}
                     messages={turnMessages}
                     onAskUserSubmit={() => {}}

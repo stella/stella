@@ -274,7 +274,6 @@ export function ChatStatusPlayground() {
   const thread = (key: string, shown: Frame, showToolCalls: boolean) => (
     <ChatThreadMessages
       activitySession={activitySession}
-      approvalPendingMessageId={null}
       isGenerating={shown.isGenerating}
       key={key}
       messages={toMessages(shown)}

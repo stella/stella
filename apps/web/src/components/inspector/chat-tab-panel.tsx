@@ -826,7 +826,6 @@ export const ChatTabPanel = ({
                   answerRewriteAvailability={
                     data.usedAnonymization ? "anonymized" : "available"
                   }
-                  approvalPendingMessageId={approvalPendingMessageId}
                   branchSource={{
                     contextMatterIds: tab.contextMatterIds,
                     threadRef,

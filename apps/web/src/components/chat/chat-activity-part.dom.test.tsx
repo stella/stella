@@ -74,7 +74,6 @@ const activityView = ({
                 <ChatEditorProvider>
                   <ChatThreadMessages
                     activitySession={activitySession}
-                    approvalPendingMessageId={null}
                     messages={[message]}
                     onAskUserSubmit={() => {}}
                     onCreateDocumentResolve={() => {}}
