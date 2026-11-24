@@ -491,15 +491,20 @@ type TransitionDecision<TTable extends StatusTable> =
 
 /** Existing domain owners remain explicit until their writers migrate. */
 
-const SCIM_CONNECTION_BINDING_TRANSITIONS = defineTransitions(
-  scimConnectionBinding,
-  {
-    active: ["reconciling", "complete"],
-    reconciling: ["complete"],
-    complete: [],
+const SCIM_CONNECTION_BINDING_TRANSITIONS = defineLifecycle({
+  table: scimConnectionBinding,
+  key: "id",
+  graphs: {
+    decommissionStatus: {
+      edges: {
+        active: ["reconciling", "complete"],
+        reconciling: ["complete"],
+        complete: [],
+      },
+      terminal: ["complete"],
+    },
   },
-  { stateColumn: "decommissionStatus", terminal: ["complete"] },
-);
+});
 
 const SCIM_MANAGED_CONNECTION_TRANSITIONS = defineTransitions(
   scimManagedConnection,

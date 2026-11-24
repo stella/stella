@@ -1065,7 +1065,9 @@ export const scimManagedConnection = pgTable(
     creationRequestId: text("creation_request_id").notNull(),
     connectionId: text("connection_id").notNull(),
     provisioningDomainId: text("provisioning_domain_id").notNull(),
-    status: text("status").notNull(),
+    status: text("status", {
+      enum: ["active", "decommissioning", "decommissioned"],
+    }).notNull(),
     revision: integer("revision").notNull(),
     createdAt: timestamptz("created_at").notNull(),
     createdBy: text("created_by").notNull(),
@@ -1100,7 +1102,9 @@ export const scimManagedCredential = pgTable(
     tokenDigest: text("token_digest").notNull(),
     hashVersion: text("hash_version").notNull(),
     activeSlotKey: text("active_slot_key").notNull(),
-    status: text("status").notNull(),
+    status: text("status", {
+      enum: ["active", "expired", "revoked", "decommissioned"],
+    }).notNull(),
     serializedScopes: text("serialized_scopes").notNull(),
     expiresAt: timestamptz("expires_at").notNull(),
     createdAt: timestamptz("created_at").notNull(),
@@ -1154,7 +1158,11 @@ export const scimConnectionBinding = pgTable(
     provisioningDomainId: text("provisioning_domain_id").notNull(),
     createdAt: timestamptz("created_at").notNull(),
     decommissionedAt: timestamptz("decommissioned_at"),
-    decommissionStatus: text("decommission_status").default("active").notNull(),
+    decommissionStatus: text("decommission_status", {
+      enum: ["active", "reconciling", "complete"],
+    })
+      .default("active")
+      .notNull(),
     decommissionCursorUserId: text("decommission_cursor_user_id"),
     decommissionReconciledUserCount: integer(
       "decommission_reconciled_user_count",
