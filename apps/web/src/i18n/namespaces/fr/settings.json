@@ -257,6 +257,8 @@
     },
     "members": {
       "billingAccess": "Accès aux données de facturation",
+      "billingAccessDescription": "Permet de consulter les taux, montants et factures des dossiers auxquels ce membre a accès. Les propriétaires et administrateurs ont toujours cet accès.",
+      "billingAccessIncludedInRole": "Inclus dans le rôle",
       "changeRole": "Modifier le rôle",
       "confirmRoleChangeDescription": "Le rôle de {email} passera {oldRole, select, owner {de propriétaire} admin {d'administrateur} member {de membre} intern {de stagiaire} external {de collaborateur externe} other {}} {newRole, select, owner {à propriétaire} admin {à administrateur} member {à membre} intern {à stagiaire} external {à collaborateur externe} other {}}.",
       "confirmRoleChangeTitle": "Changer le rôle",

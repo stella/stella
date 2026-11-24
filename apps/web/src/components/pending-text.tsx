@@ -387,6 +387,7 @@ type PendingTextMessageKey =
   | "organization.matterNumber.pattern"
   | "organization.matterNumber.showInTitle"
   | "organization.matterNumber.showInTitleDescription"
+  | "organization.members.billingAccess"
   | "organization.members.joined"
   | "organization.roles.member"
   | "publicTools.addSkill"

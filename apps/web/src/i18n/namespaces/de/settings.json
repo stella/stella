@@ -257,6 +257,8 @@
     },
     "members": {
       "billingAccess": "Zugriff auf Abrechnungsdaten",
+      "billingAccessDescription": "Ermöglicht die Ansicht von Sätzen, Beträgen und Rechnungen in Akten, auf die dieses Mitglied Zugriff hat. Eigentümer und Administratoren haben diesen Zugriff immer.",
+      "billingAccessIncludedInRole": "In Rolle enthalten",
       "changeRole": "Rolle ändern",
       "confirmRoleChangeDescription": "Die Rolle von {email} wird {oldRole, select, owner {von Eigentümer} admin {von Administrator} member {von Mitglied} intern {von Praktikant} external {von externem Mitarbeiter} other {}} {newRole, select, owner {auf Eigentümer} admin {auf Administrator} member {auf Mitglied} intern {auf Praktikant} external {auf externen Mitarbeiter} other {}} geändert.",
       "confirmRoleChangeTitle": "Rolle ändern",

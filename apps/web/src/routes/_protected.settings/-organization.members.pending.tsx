@@ -28,13 +28,24 @@ import { PendingInvitations } from "@/routes/_protected.settings/organization/-c
 export type SortKey = "name" | "role" | "joined";
 export type Sort = { key: SortKey; dir: "asc" | "desc" };
 
+type MemberColumnLabel =
+  | "common.user"
+  | "common.role"
+  | "organization.members.billingAccess"
+  | "organization.members.joined";
+
 type MemberColumn = {
   id: string;
   className?: string;
 } & (
   | {
       sortKey: SortKey;
-      label: "common.user" | "common.role" | "organization.members.joined";
+      label: MemberColumnLabel;
+      labelWidth: string;
+    }
+  | {
+      sortKey?: undefined;
+      label: MemberColumnLabel;
       labelWidth: string;
     }
   | { sortKey?: undefined; label?: undefined; labelWidth?: undefined }
@@ -43,7 +54,12 @@ type MemberColumn = {
 const MEMBER_COLUMNS = [
   { id: "user", sortKey: "name", label: "common.user", labelWidth: "w-10" },
   { id: "role", sortKey: "role", label: "common.role", labelWidth: "w-10" },
-  { id: "billing" },
+  {
+    id: "billing",
+    label: "organization.members.billingAccess",
+    labelWidth: "w-24",
+    className: "hidden sm:table-cell",
+  },
   {
     id: "joined",
     sortKey: "joined",
@@ -51,29 +67,31 @@ const MEMBER_COLUMNS = [
     labelWidth: "w-14",
     className: "hidden sm:table-cell",
   },
-  { id: "actions" },
+  { id: "actions", className: "w-12" },
 ] as const satisfies readonly MemberColumn[];
 
 type MemberColumnId = (typeof MEMBER_COLUMNS)[number]["id"];
 
 export const INITIAL_MEMBERS_SORT: Sort = { key: "name", dir: "asc" };
 
-export const MembersTableRow = ({
+export const MemberRowCells = ({
   cells,
 }: {
   cells: Record<MemberColumnId, ReactNode>;
 }) => (
-  <TableRow className="group">
+  <>
     {MEMBER_COLUMNS.map((column) => (
       <TableCellFace
         align={column.id === "actions" ? "end" : undefined}
         className={cn("className" in column && column.className)}
         key={column.id}
+        numeric={column.id === "joined"}
+        tone={column.id === "joined" ? "muted" : undefined}
       >
         {cells[column.id]}
       </TableCellFace>
     ))}
-  </TableRow>
+  </>
 );
 
 /** Spanned by the row that replaces members when none match. */
@@ -86,8 +104,10 @@ type MembersSortFaceOptions = {
 };
 
 const MembersTableHeader = ({
+  billingHeaderHelp,
   renderSortableHead,
 }: {
+  billingHeaderHelp?: ReactNode;
   renderSortableHead?:
     ((options: MembersSortFaceOptions) => ReactElement) | undefined;
 }) => (
@@ -95,11 +115,23 @@ const MembersTableHeader = ({
     <TableRow>
       {MEMBER_COLUMNS.map((column) => {
         const className = cn("className" in column && column.className);
-        if (!("sortKey" in column)) {
+        if (!("label" in column)) {
           return <TableHead className={className} key={column.id} />;
         }
-        const { id, sortKey, label, labelWidth } = column;
-        const text = <PendingText id={label} barClassName={labelWidth} />;
+        const text = (
+          <PendingText id={column.label} barClassName={column.labelWidth} />
+        );
+        if (!("sortKey" in column)) {
+          return (
+            <TableHead className={className} key={column.id}>
+              <span className="inline-flex items-center gap-1">
+                {text}
+                {billingHeaderHelp}
+              </span>
+            </TableHead>
+          );
+        }
+        const { id, sortKey } = column;
         return renderSortableHead === undefined ? (
           <SortableHeadFace
             className={className}
@@ -128,7 +160,7 @@ export const MembersToolbarFace = ({
   search: ReactNode;
   invite: ReactNode;
 }) => (
-  <div className="border-border/60 flex items-center gap-2 border-b px-2 py-2">
+  <div className="border-border/60 flex items-center justify-between gap-3 border-b px-3 py-2.5">
     <div className="flex max-w-sm min-w-0 flex-1">{search}</div>
     {invite}
   </div>
@@ -136,12 +168,14 @@ export const MembersToolbarFace = ({
 
 /** The active members table and invitations share this frame in either phase. */
 export const MembersShell = ({
+  billingHeaderHelp,
   busy,
   toolbar,
   renderSortableHead,
   children,
   invitations,
 }: {
+  billingHeaderHelp?: ReactNode;
   busy?: boolean;
   toolbar: ReactNode;
   renderSortableHead?:
@@ -170,7 +204,10 @@ export const MembersShell = ({
         <SettingsPanel inset="flush">
           {toolbar}
           <Table aria-busy={renderSortableHead === undefined || undefined}>
-            <MembersTableHeader renderSortableHead={renderSortableHead} />
+            <MembersTableHeader
+              billingHeaderHelp={billingHeaderHelp}
+              renderSortableHead={renderSortableHead}
+            />
             <TableBody aria-busy={busy}>{children}</TableBody>
           </Table>
         </SettingsPanel>
@@ -194,8 +231,8 @@ const MEMBER_PLACEHOLDERS = {
       </div>
     </div>
   ),
-  role: <Skeleton className="h-8 w-32" />,
-  billing: <Skeleton className="size-4.5 rounded-sm sm:size-4" />,
+  role: <Skeleton className="h-8 w-36" />,
+  billing: <Skeleton className="h-4.5 w-7.5 rounded-full" />,
   joined: <Skeleton className="h-4 w-24" />,
   actions: null,
 } satisfies Record<MemberColumnId, ReactNode>;

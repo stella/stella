@@ -257,6 +257,8 @@
     },
     "members": {
       "billingAccess": "Billing visibility",
+      "billingAccessDescription": "Allows viewing rates, amounts, and invoices on matters this member can access. Owners and admins always have this access.",
+      "billingAccessIncludedInRole": "Included in role",
       "changeRole": "Change role",
       "confirmRoleChangeDescription": "{email}'s role will change from {oldRole, select, owner {owner} admin {admin} member {member} intern {intern} external {external collaborator} other {}} to {newRole, select, owner {owner} admin {admin} member {member} intern {intern} external {external collaborator} other {}}.",
       "confirmRoleChangeTitle": "Change role",

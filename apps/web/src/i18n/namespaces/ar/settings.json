@@ -257,6 +257,8 @@
     },
     "members": {
       "billingAccess": "الاطلاع على بيانات الفوترة",
+      "billingAccessDescription": "يتيح عرض الأسعار والمبالغ والفواتير في الملفات التي يمكن لهذا العضو الوصول إليها. يمتلك المالكون والمسؤولون هذا الوصول دائمًا.",
+      "billingAccessIncludedInRole": "مشمول في الدور",
       "changeRole": "تغيير الدور",
       "confirmRoleChangeDescription": "سيتغير دور {email} من {oldRole, select, owner {مالك} admin {مسؤول} member {عضو} intern {متدرب} external {متعاون خارجي} other {}} إلى {newRole, select, owner {مالك} admin {مسؤول} member {عضو} intern {متدرب} external {متعاون خارجي} other {}}.",
       "confirmRoleChangeTitle": "تغيير الدور",
