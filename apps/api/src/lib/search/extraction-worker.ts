@@ -234,12 +234,17 @@ const isOcrRequiredError = (error: unknown): boolean =>
 
 const extractPdfMarkdown = async (
   pdfBytes: Uint8Array,
-): Promise<string | null> => {
+): Promise<{ status: "ok"; text: string } | { status: "ocr-required" }> => {
   try {
-    return normalizeExtractedText(await toMarkdownBytes(Buffer.from(pdfBytes)));
+    return {
+      status: "ok",
+      text: normalizeExtractedText(
+        await toMarkdownBytes(Buffer.from(pdfBytes)),
+      ),
+    };
   } catch (error) {
     if (isOcrRequiredError(error)) {
-      return null;
+      return { status: "ocr-required" };
     }
     throw error;
   }
@@ -348,20 +353,20 @@ const extractEmailPlaintext = async ({
       continue;
     }
 
-    const text = await extractAttachmentPlaintext({
+    const extracted = await extractAttachmentPlaintext({
       bytes: attachment.bytes,
       maxChars,
       mimeType: attachmentMimeType,
       nestingDepth: nestingDepth + 1,
     });
-    if (!text) {
+    if (extracted.status !== "ok" || !extracted.text) {
       continue;
     }
 
     parts.push(
       [
         `Attachment: ${attachment.fileName ?? "unnamed"} (${attachmentMimeType})`,
-        text,
+        extracted.text,
       ].join("\n"),
     );
   }
@@ -379,7 +384,7 @@ const extractAttachmentPlaintext = async ({
   maxChars: number;
   mimeType: string;
   nestingDepth: number;
-}): Promise<string | null> => {
+}): Promise<{ status: "ok"; text: string } | { status: "failed" }> => {
   const result = (
     await Result.tryPromise({
       try: async () =>
@@ -395,9 +400,9 @@ const extractAttachmentPlaintext = async ({
         formatAttachmentIssue(classifyAttachmentError(result.error, mimeType)),
       ),
     );
-    return null;
+    return { status: "failed" };
   }
-  return result.value;
+  return { status: "ok", text: result.value };
 };
 
 type LegalTextReadOptions = {
@@ -455,7 +460,7 @@ Attachment: ${file.fileName}
       if (remainingChars <= 0) {
         continue;
       }
-      const content = canExtractMimeType(mimeType)
+      const extracted = canExtractMimeType(mimeType)
         ? await extractAttachmentPlaintext({
             bytes: new Uint8Array(scanned.value.bytes),
             maxChars: remainingChars,
@@ -463,6 +468,7 @@ Attachment: ${file.fileName}
             nestingDepth: nestingDepth + 1,
           })
         : null;
+      const content = extracted?.status === "ok" ? extracted.text : null;
       text += heading + (content ?? "Attachment text unavailable.");
     }
   }
@@ -672,7 +678,8 @@ const extract = async ({
   let text: string | null = null;
 
   if (normalizedMimeType === PDF_MIME_TYPE) {
-    text = await extractPdfMarkdown(fileBytes);
+    const pdf = await extractPdfMarkdown(fileBytes);
+    text = pdf.status === "ok" ? pdf.text : null;
   } else if (normalizedMimeType === DOCX_MIME_TYPE) {
     const [documentText, reviewer] = await Promise.all([
       extractDocxText(fileBytes),
@@ -791,7 +798,11 @@ const readEmbeddedPayload = async (
   mimeType: string,
 ): Promise<{ text: string | null; format: PreviewTextFormat } | null> => {
   if (mimeType === PDF_MIME_TYPE) {
-    return { text: await extractPdfMarkdown(bytes), format: "markdown" };
+    const pdf = await extractPdfMarkdown(bytes);
+    return {
+      text: pdf.status === "ok" ? pdf.text : null,
+      format: "markdown",
+    };
   }
   if (mimeType === DOCX_MIME_TYPE || isOfficeDocumentMimeType(mimeType)) {
     return {
