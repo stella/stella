@@ -1,11 +1,11 @@
-export type ChangelogMarkdownBlock =
+type ChangelogMarkdownBlock =
   | { level: 1 | 2 | 3; text: string; type: "heading" }
   | { alt: string; src: string; type: "image" }
   | { items: string[]; type: "list" }
   | { text: string; type: "paragraph" }
   | { src: string; type: "video" };
 
-export type ChangelogInlineSegment =
+type ChangelogInlineSegment =
   | { text: string; type: "bold" }
   | { text: string; type: "code" }
   | { href: string; text: string; type: "link" }
@@ -14,8 +14,6 @@ export type ChangelogInlineSegment =
 const HTML_VIDEO_PATTERN =
   /^<video\b[^>]*\bsrc=["']([^"']+)["'][^>]*><\/video>$/iu;
 const MARKDOWN_IMAGE_PATTERN = /^!\[([^\]]*)\]\((https:\/\/[^)\s]+)\)$/u;
-const INLINE_MARKDOWN_PATTERN =
-  /(\*\*([^*]+)\*\*)|(`([^`]+)`)|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/gu;
 
 export const safeHttpsUrl = (value: string): string | null => {
   try {
@@ -41,41 +39,77 @@ export const removeFirstMarkdownHeading = (body: string): string => {
     .trim();
 };
 
+const pushText = (segments: ChangelogInlineSegment[], text: string) => {
+  if (!text) {
+    return;
+  }
+  const previous = segments.at(-1);
+  if (previous?.type === "text") {
+    previous.text += text;
+    return;
+  }
+  segments.push({ text, type: "text" });
+};
+
 export const parseChangelogInline = (
   text: string,
 ): ChangelogInlineSegment[] => {
   const segments: ChangelogInlineSegment[] = [];
   let cursor = 0;
 
-  for (const match of text.matchAll(INLINE_MARKDOWN_PATTERN)) {
-    const { index } = match;
-    if (index > cursor) {
-      segments.push({ text: text.slice(cursor, index), type: "text" });
-    }
-
-    const boldText = match[2];
-    const codeText = match[4];
-    const linkText = match[5];
-    const linkUrl = match[6];
-
-    if (boldText) {
-      segments.push({ text: boldText, type: "bold" });
-    } else if (codeText) {
-      segments.push({ text: codeText, type: "code" });
-    } else if (linkText && linkUrl) {
-      const safeHref = safeHttpsUrl(linkUrl);
-      if (safeHref) {
-        segments.push({ href: safeHref, text: linkText, type: "link" });
-      } else {
-        segments.push({ text: linkText, type: "text" });
+  while (cursor < text.length) {
+    if (text.startsWith("**", cursor)) {
+      const close = text.indexOf("**", cursor + 2);
+      if (close > cursor + 2) {
+        segments.push({ text: text.slice(cursor + 2, close), type: "bold" });
+        cursor = close + 2;
+        continue;
       }
     }
 
-    cursor = index + match[0].length;
-  }
+    if (text[cursor] === "`") {
+      const close = text.indexOf("`", cursor + 1);
+      if (close > cursor + 1) {
+        segments.push({ text: text.slice(cursor + 1, close), type: "code" });
+        cursor = close + 1;
+        continue;
+      }
+    }
 
-  if (cursor < text.length) {
-    segments.push({ text: text.slice(cursor), type: "text" });
+    if (text[cursor] === "[") {
+      const closeLabel = text.indexOf("](", cursor + 1);
+      if (closeLabel > cursor + 1) {
+        const closeUrl = text.indexOf(")", closeLabel + 2);
+        const urlStart = closeLabel + 2;
+        const rawUrl =
+          closeUrl > urlStart ? text.slice(urlStart, closeUrl) : "";
+        if (
+          rawUrl &&
+          (rawUrl.startsWith("https://") || rawUrl.startsWith("http://")) &&
+          !/\s/u.test(rawUrl)
+        ) {
+          const label = text.slice(cursor + 1, closeLabel);
+          const safeHref = safeHttpsUrl(rawUrl);
+          if (safeHref) {
+            segments.push({ href: safeHref, text: label, type: "link" });
+          } else {
+            pushText(segments, label);
+          }
+          cursor = closeUrl + 1;
+          continue;
+        }
+      }
+    }
+
+    let next = text.length;
+    for (const marker of ["**", "`", "["]) {
+      const pos = text.indexOf(marker, cursor + 1);
+      if (pos !== -1 && pos < next) {
+        next = pos;
+      }
+    }
+    pushText(segments, text.slice(cursor, next));
+    cursor = next;
   }
 
   return segments;
