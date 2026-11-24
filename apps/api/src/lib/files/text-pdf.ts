@@ -65,28 +65,30 @@ const WIN_ANSI: Record<number, number> = {
 };
 
 // Fallback ASCII for chars not in WinAnsi
-const FALLBACK: Record<string, string> = {
-  Č: "C",
-  č: "c",
-  Ď: "D",
-  ď: "d",
-  Ě: "E",
-  ě: "e",
-  Ĺ: "L",
-  ĺ: "l",
-  Ľ: "L",
-  ľ: "l",
-  Ň: "N",
-  ň: "n",
-  Ř: "R",
-  ř: "r",
-  Ť: "T",
-  ť: "t",
-  Ů: "U",
-  ů: "u",
-  Ŕ: "R",
-  ŕ: "r",
-};
+const FALLBACK = new Map<string, string>(
+  Object.entries({
+    Č: "C",
+    č: "c",
+    Ď: "D",
+    ď: "d",
+    Ě: "E",
+    ě: "e",
+    Ĺ: "L",
+    ĺ: "l",
+    Ľ: "L",
+    ľ: "l",
+    Ň: "N",
+    ň: "n",
+    Ř: "R",
+    ř: "r",
+    Ť: "T",
+    ť: "t",
+    Ů: "U",
+    ů: "u",
+    Ŕ: "R",
+    ŕ: "r",
+  }),
+);
 
 /** Encode a string for PDF text operators using
  *  WinAnsiEncoding. Non-encodable chars get an ASCII
@@ -113,7 +115,7 @@ const pdfEscape = (s: string): string => {
         out += `\\${winAnsi.toString(8).padStart(3, "0")}`;
       } else {
         // Not in WinAnsi — ASCII fallback
-        out += FALLBACK[ch] ?? "?";
+        out += FALLBACK.get(ch) ?? "?";
       }
     }
   }

@@ -1005,14 +1005,16 @@ type StyleRegistry = {
   numericCellXfs: string[];
 };
 
-const CURRENCY_FORMAT_LABELS: Record<string, string> = {
-  CHF: "CHF",
-  CZK: "K\u010d",
-  EUR: "\u20ac",
-  GBP: "\u00a3",
-  PLN: "z\u0142",
-  USD: "$",
-};
+const CURRENCY_FORMAT_LABELS = new Map<string, string>(
+  Object.entries({
+    CHF: "CHF",
+    CZK: "K\u010d",
+    EUR: "\u20ac",
+    GBP: "\u00a3",
+    PLN: "z\u0142",
+    USD: "$",
+  }),
+);
 
 const excelNumberFormatLiteral = (value: string): string =>
   value.replaceAll('"', '""');
@@ -1020,7 +1022,7 @@ const excelNumberFormatLiteral = (value: string): string =>
 const currencyFormatCode = (currency: string): string => {
   const normalizedCurrency = currency.toUpperCase();
   const label =
-    CURRENCY_FORMAT_LABELS[normalizedCurrency] ?? normalizedCurrency;
+    CURRENCY_FORMAT_LABELS.get(normalizedCurrency) ?? normalizedCurrency;
 
   return `"${excelNumberFormatLiteral(label)}"#,##0`;
 };

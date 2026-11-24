@@ -436,12 +436,14 @@ const SANDBOX_LOG_ENTRY_TRUNCATION_SUFFIX = "… [truncated]";
  * ("ERROR: ", "WARN: ", "INFO: ") when emitting `code_mode:console` events;
  * plain `log` lines stay unprefixed.
  */
-const SANDBOX_LOG_LEVEL_PREFIXES: Readonly<Record<string, string>> = {
-  warn: "WARN: ",
-  error: "ERROR: ",
-  info: "INFO: ",
-  debug: "DEBUG: ",
-};
+const SANDBOX_LOG_LEVEL_PREFIXES = new Map<string, string>(
+  Object.entries({
+    warn: "WARN: ",
+    error: "ERROR: ",
+    info: "INFO: ",
+    debug: "DEBUG: ",
+  }),
+);
 
 type SandboxLogCapture = {
   entries: string[];
@@ -473,7 +475,7 @@ const appendSandboxLog = ({
     return;
   }
 
-  const entry = `${SANDBOX_LOG_LEVEL_PREFIXES[method] ?? ""}${text}`;
+  const entry = `${SANDBOX_LOG_LEVEL_PREFIXES.get(method) ?? ""}${text}`;
   capture.entries.push(
     entry.length > MAX_SANDBOX_LOG_ENTRY_LENGTH
       ? `${entry.slice(0, MAX_SANDBOX_LOG_ENTRY_LENGTH)}${SANDBOX_LOG_ENTRY_TRUNCATION_SUFFIX}`

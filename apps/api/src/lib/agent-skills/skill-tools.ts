@@ -748,15 +748,17 @@ const formatCurrentSkillFileOutput = ({
   target,
 });
 
-const SKILL_RESOURCE_MIME_BY_EXT: Record<string, string> = {
-  md: "text/markdown",
-  markdown: "text/markdown",
-  txt: "text/plain",
-  json: "application/json",
-  yaml: "application/yaml",
-  yml: "application/yaml",
-  pdf: "application/pdf",
-};
+const SKILL_RESOURCE_MIME_BY_EXT = new Map<string, string>(
+  Object.entries({
+    md: "text/markdown",
+    markdown: "text/markdown",
+    txt: "text/plain",
+    json: "application/json",
+    yaml: "application/yaml",
+    yml: "application/yaml",
+    pdf: "application/pdf",
+  }),
+);
 
 const inferSkillResourceMimeType = (path: string): string => {
   const filename = path.split("/").pop() ?? "";
@@ -765,7 +767,7 @@ const inferSkillResourceMimeType = (path: string): string => {
     return "text/plain";
   }
   const ext = filename.slice(lastDot + 1).toLowerCase();
-  return SKILL_RESOURCE_MIME_BY_EXT[ext] ?? "text/plain";
+  return SKILL_RESOURCE_MIME_BY_EXT.get(ext) ?? "text/plain";
 };
 
 /** A skill read that failed in the database is a server defect for the tool. */

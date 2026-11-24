@@ -105,14 +105,19 @@ const SOFT_HYPHEN_END = /\p{L}-$/u;
  */
 const RESUMES_A_BROKEN_WORD = /^\p{Ll}/u;
 
-const HTML_ESCAPES: Readonly<Record<string, string>> = {
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-};
+const HTML_ESCAPES = new Map<string, string>(
+  Object.entries({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+  }),
+);
 
 const escapeHtml = (text: string): string =>
-  text.replace(/[&<>]/gu, (character) => HTML_ESCAPES[character] ?? character);
+  text.replace(
+    /[&<>]/gu,
+    (character) => HTML_ESCAPES.get(character) ?? character,
+  );
 
 /**
  * The x every body line of a page starts at: the most common one.

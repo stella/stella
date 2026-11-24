@@ -187,13 +187,15 @@ const collector = () => {
 
 // ── XML reading ─────────────────────────────────────────
 
-const XML_ENTITIES: Record<string, string> = {
-  amp: "&",
-  apos: "'",
-  gt: ">",
-  lt: "<",
-  quot: '"',
-};
+const XML_ENTITIES = new Map<string, string>(
+  Object.entries({
+    amp: "&",
+    apos: "'",
+    gt: ">",
+    lt: "<",
+    quot: '"',
+  }),
+);
 
 // Capture groups, in order: a named entity, a decimal reference, a hex one.
 const XML_ENTITY_RE = /&(?:([a-z]+)|#(\d+)|#x([\da-f]+));/giu;
@@ -210,7 +212,7 @@ const decodeXmlText = (value: string): string =>
     XML_ENTITY_RE,
     (match: string, named?: string, dec?: string, hex?: string) => {
       if (named !== undefined) {
-        return XML_ENTITIES[named.toLowerCase()] ?? match;
+        return XML_ENTITIES.get(named.toLowerCase()) ?? match;
       }
       if (dec !== undefined) {
         return codePointToText(dec, 10, match);

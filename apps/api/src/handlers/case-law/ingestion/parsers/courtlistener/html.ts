@@ -166,26 +166,29 @@ const PARAGRAPHS: Readonly<Record<string, DraftRole>> = {
  * opinion's author line. Only divisions carry these: the generic column
  * reuses words like `parties` and `docket` on paragraphs of body text.
  */
-const DIVISION_ROLES: Readonly<Record<string, DraftRole | "heading">> = {
-  casename: "parties",
-  caseopinionby: "heading",
-  citations: "front-matter",
-  counsel: "counsel",
-  courtinfo: "front-matter",
-  courtsummary: "summary",
-  docketnumber: "front-matter",
-  judges: "panel",
-  panel: "panel",
-  summaries: "apparatus",
-};
+const DIVISION_ROLES = new Map<string, DraftRole | "heading">(
+  Object.entries({
+    casename: "parties",
+    caseopinionby: "heading",
+    citations: "front-matter",
+    counsel: "counsel",
+    courtinfo: "front-matter",
+    courtsummary: "summary",
+    docketnumber: "front-matter",
+    judges: "panel",
+    panel: "panel",
+    summaries: "apparatus",
+  }),
+);
 
 const divisionRole = (element: Element): DraftRole | "heading" | undefined => {
   if (nameOf(element) !== "div") {
     return undefined;
   }
   for (const name of classesOf(element)) {
-    if (Object.hasOwn(DIVISION_ROLES, name)) {
-      return DIVISION_ROLES[name];
+    const role = DIVISION_ROLES.get(name);
+    if (role !== undefined) {
+      return role;
     }
   }
   return undefined;

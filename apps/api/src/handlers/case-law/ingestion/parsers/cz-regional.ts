@@ -142,16 +142,18 @@ export const parseRegionalDecision = (
   // Keyed on the local-language type the adapter maps the publisher's enum
   // to, never on the enum: `ORDER_T` is the publisher's criminal order and
   // reaches here as "trestní příkaz".
-  const titleMap: Record<string, string> = {
-    rozsudek: "ROZSUDEK",
-    usnesení: "USNESENÍ",
-    "trestní příkaz": "TRESTNÍ PŘÍKAZ",
-  };
+  const titleMap = new Map<string, string>(
+    Object.entries({
+      rozsudek: "ROZSUDEK",
+      usnesení: "USNESENÍ",
+      "trestní příkaz": "TRESTNÍ PŘÍKAZ",
+    }),
+  );
   // The court's own title line, where the header prints one, is the title;
   // a synthesized one beside it would print the title twice.
   const title = header.some(({ plainText }) => isDecisionTypeTitle(plainText))
     ? undefined
-    : titleMap[input.decisionType ?? ""];
+    : titleMap.get(input.decisionType ?? "");
   if (title) {
     blockIndex += 1;
     blocks.push({

@@ -55,21 +55,23 @@ const chain = (stages: readonly Middleware[], last: Next): Next => {
   return next;
 };
 
-const METHOD_BY_NAME: Readonly<Partial<Record<string, HttpMethod>>> = {
-  GET: "GET",
-  HEAD: "GET",
-  POST: "POST",
-  PUT: "PUT",
-  PATCH: "PATCH",
-  DELETE: "DELETE",
-  OPTIONS: "OPTIONS",
-};
+const METHOD_BY_NAME = new Map<string, HttpMethod>(
+  Object.entries({
+    GET: "GET",
+    HEAD: "GET",
+    POST: "POST",
+    PUT: "PUT",
+    PATCH: "PATCH",
+    DELETE: "DELETE",
+    OPTIONS: "OPTIONS",
+  }),
+);
 
 const entryFor = (
   routes: PathRoutes | undefined,
   method: string,
 ): RouteEntry | undefined => {
-  const lookup = METHOD_BY_NAME[method];
+  const lookup = METHOD_BY_NAME.get(method);
   return routes === undefined || lookup === undefined
     ? undefined
     : routes.byMethod.get(lookup);

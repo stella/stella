@@ -45,14 +45,16 @@ const PARAGRAPH_ELEMENTS = new Set([
  * spells a tab stop, a line break, a protected dash and the two angle
  * brackets as elements of their own, so `B<gdash/>VG` reads as "B-VG".
  */
-const PRINTED_AS: Readonly<Record<string, string>> = {
-  tab: " ",
-  br: " ",
-  gdash: "-",
-  gt: ">",
-  lt: "<",
-  amp: "&",
-};
+const PRINTED_AS = new Map<string, string>(
+  Object.entries({
+    tab: " ",
+    br: " ",
+    gdash: "-",
+    gt: ">",
+    lt: "<",
+    amp: "&",
+  }),
+);
 
 /** Run-level markup that sits inside a paragraph's line of text. */
 const INLINE_ELEMENTS = new Set([
@@ -82,7 +84,7 @@ const printedText = (node: AnyNode): string => {
   if (!isTag(node)) {
     return "";
   }
-  const printed = PRINTED_AS[node.name];
+  const printed = PRINTED_AS.get(node.name);
   if (printed !== undefined) {
     return printed;
   }
@@ -131,10 +133,7 @@ const collectParagraphs = (node: AnyNode, paragraphs: string[]): void => {
       collectParagraphs(child, paragraphs);
       continue;
     }
-    if (
-      INLINE_ELEMENTS.has(child.name) ||
-      PRINTED_AS[child.name] !== undefined
-    ) {
+    if (INLINE_ELEMENTS.has(child.name) || PRINTED_AS.has(child.name)) {
       run += printedText(child);
       continue;
     }

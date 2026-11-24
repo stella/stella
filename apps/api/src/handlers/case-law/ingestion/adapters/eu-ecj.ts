@@ -346,15 +346,17 @@ const isSparqlResponse = (value: unknown): value is SparqlResponse =>
  */
 export const SPARQL_LIMIT = 10_000;
 
-const CDM_TYPE_MAP: Record<string, string> = {
-  "http://publications.europa.eu/ontology/cdm#judgement": "judgment",
-  "http://publications.europa.eu/ontology/cdm#order": "order",
-  "http://publications.europa.eu/ontology/cdm#order_cjeu": "order",
-  "http://publications.europa.eu/ontology/cdm#opinion_advocate_general":
-    "opinion",
-  "http://publications.europa.eu/ontology/cdm#opinion_advocate-general":
-    "opinion",
-};
+const CDM_TYPE_MAP = new Map<string, string>(
+  Object.entries({
+    "http://publications.europa.eu/ontology/cdm#judgement": "judgment",
+    "http://publications.europa.eu/ontology/cdm#order": "order",
+    "http://publications.europa.eu/ontology/cdm#order_cjeu": "order",
+    "http://publications.europa.eu/ontology/cdm#opinion_advocate_general":
+      "opinion",
+    "http://publications.europa.eu/ontology/cdm#opinion_advocate-general":
+      "opinion",
+  }),
+);
 
 /**
  * Query the Cellar SPARQL endpoint for CJEU decisions
@@ -1445,9 +1447,7 @@ const UNKNOWN_DECISION_TYPE = "unknown";
  */
 const ecjDecisionType = (binding: SparqlResult): string => {
   const type = binding.type.value;
-  return Object.hasOwn(CDM_TYPE_MAP, type)
-    ? (CDM_TYPE_MAP[type] ?? UNKNOWN_DECISION_TYPE)
-    : UNKNOWN_DECISION_TYPE;
+  return CDM_TYPE_MAP.get(type) ?? UNKNOWN_DECISION_TYPE;
 };
 
 /**
@@ -1490,22 +1490,26 @@ const FORMEX_ARCHIVE_MAX_ENTRIES = 4096;
  * answers 24 notices and each renders the label in its negotiated language,
  * so a row built from the label would file one judgment under 24 courts.
  */
-const COURT_BY_CORPORATE_BODY: Readonly<Record<string, string>> = {
-  CJ: "Court of Justice",
-  GCEU: "General Court",
-  CST: "Civil Service Tribunal",
-};
+const COURT_BY_CORPORATE_BODY = new Map<string, string>(
+  Object.entries({
+    CJ: "Court of Justice",
+    GCEU: "General Court",
+    CST: "Civil Service Tribunal",
+  }),
+);
 
 /**
  * The same courts by the court code of their ECLI (`ECLI:EU:F:2006:112`),
  * which every row carries and which is the record's own statement of the
  * deciding court. The Civil Service Tribunal (2005–2016) is `F`.
  */
-const COURT_BY_ECLI_CODE: Readonly<Record<string, string>> = {
-  C: "Court of Justice",
-  T: "General Court",
-  F: "Civil Service Tribunal",
-};
+const COURT_BY_ECLI_CODE = new Map<string, string>(
+  Object.entries({
+    C: "Court of Justice",
+    T: "General Court",
+    F: "Civil Service Tribunal",
+  }),
+);
 
 /**
  * Not anchored: whether the value is a well-formed ECLI is the item
@@ -1519,7 +1523,7 @@ const courtFromEcli = (ecli: string): string | undefined => {
   if (code === undefined) {
     return undefined;
   }
-  const court = COURT_BY_ECLI_CODE[code];
+  const court = COURT_BY_ECLI_CODE.get(code);
   if (court === undefined) {
     logger.warn("case_law.ingestion.unmapped_cjeu_ecli_court", {
       adapterKey: ADAPTER_KEYS.EU_ECJ,
@@ -1608,7 +1612,7 @@ const courtFromNotice = (code: string | undefined): string | undefined => {
   if (code === undefined) {
     return undefined;
   }
-  const court = COURT_BY_CORPORATE_BODY[code];
+  const court = COURT_BY_CORPORATE_BODY.get(code);
   if (court === undefined) {
     logger.warn("case_law.ingestion.unmapped_cjeu_corporate_body", {
       adapterKey: ADAPTER_KEYS.EU_ECJ,
@@ -3404,7 +3408,7 @@ const ecjListedCourt = (binding: SparqlResult): string | undefined => {
     return fromEcli;
   }
   const code = CELEX_COURT_CODE.exec(binding.celex.value)?.groups?.["code"];
-  return code === undefined ? undefined : COURT_BY_ECLI_CODE[code];
+  return code === undefined ? undefined : COURT_BY_ECLI_CODE.get(code);
 };
 
 /**

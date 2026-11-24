@@ -391,12 +391,14 @@ const SLICE_SORTING_DIRECTION = "ASC";
  * a fifth value its schema declares and no record carries, so naming a court
  * for it would be this file inventing one.
  */
-const COURT_TYPE_MAP: Record<string, string> = {
-  COMMON: "Sąd powszechny",
-  SUPREME: "Sąd Najwyższy",
-  CONSTITUTIONAL_TRIBUNAL: "Trybunał Konstytucyjny",
-  NATIONAL_APPEAL_CHAMBER: "Krajowa Izba Odwoławcza",
-};
+const COURT_TYPE_MAP = new Map<string, string>(
+  Object.entries({
+    COMMON: "Sąd powszechny",
+    SUPREME: "Sąd Najwyższy",
+    CONSTITUTIONAL_TRIBUNAL: "Trybunał Konstytucyjny",
+    NATIONAL_APPEAL_CHAMBER: "Krajowa Izba Odwoławcza",
+  }),
+);
 
 /** SAOS's `judgmentType` enum, and the local term each is stored under. */
 export const SAOS_JUDGMENT_TYPE = {
@@ -1222,7 +1224,7 @@ const courtNameForItem = (item: SaosItem): string | undefined =>
   toOptionalValue(
     item.division?.court?.name ??
       (item.courtType
-        ? (COURT_TYPE_MAP[item.courtType] ?? item.courtType)
+        ? (COURT_TYPE_MAP.get(item.courtType) ?? item.courtType)
         : undefined),
   );
 

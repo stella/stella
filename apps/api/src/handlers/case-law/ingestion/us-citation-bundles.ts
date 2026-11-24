@@ -41,12 +41,14 @@ export type EntityTarget =
   | { status: "identified"; bases: readonly [ReporterBase, ...ReporterBase[]] }
   | { status: "conflicting" };
 
-const EDITION_RANK: Readonly<Record<string, number>> = {
-  "U.S.": 0,
-  "S. Ct.": 1,
-  "L. Ed.": 2,
-  "L. Ed. 2d": 2,
-};
+const EDITION_RANK = new Map<string, number>(
+  Object.entries({
+    "U.S.": 0,
+    "S. Ct.": 1,
+    "L. Ed.": 2,
+    "L. Ed. 2d": 2,
+  }),
+);
 const OTHER_EDITION_RANK = 3;
 
 const compareCodeUnits = (left: string, right: string): number => {
@@ -58,8 +60,8 @@ const compareCodeUnits = (left: string, right: string): number => {
 
 /** Storage order: U.S., then S. Ct., then L. Ed., then the rest by spelling. */
 const compareBases = (left: ReporterBase, right: ReporterBase): number =>
-  (EDITION_RANK[left.edition] ?? OTHER_EDITION_RANK) -
-    (EDITION_RANK[right.edition] ?? OTHER_EDITION_RANK) ||
+  (EDITION_RANK.get(left.edition) ?? OTHER_EDITION_RANK) -
+    (EDITION_RANK.get(right.edition) ?? OTHER_EDITION_RANK) ||
   compareCodeUnits(left.identifier.value, right.identifier.value);
 
 const overflow = (): UsCitationBundleOverflowError =>

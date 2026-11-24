@@ -158,9 +158,11 @@ const isEmptyValue = (value: unknown): boolean =>
  * presiding judge who is also the rapporteur), so only a declared pair is
  * ever collapsed.
  */
-const NATIVE_METADATA_ALIASES: Readonly<Record<string, string>> = {
-  kategorieRozhodnuti: "category",
-};
+const NATIVE_METADATA_ALIASES = new Map<string, string>(
+  Object.entries({
+    kategorieRozhodnuti: "category",
+  }),
+);
 
 /** Text, a list or a record, compared as stored; null for anything else. */
 const duplicateKeyOf = (value: unknown): string | null => {
@@ -205,9 +207,7 @@ export const compactDecisionMetadata = ({
   });
   return Object.fromEntries(
     kept.filter(([key, value]) => {
-      const canonical = Object.hasOwn(NATIVE_METADATA_ALIASES, key)
-        ? NATIVE_METADATA_ALIASES[key]
-        : undefined;
+      const canonical = NATIVE_METADATA_ALIASES.get(key);
       if (canonical === undefined || !Object.hasOwn(metadata, canonical)) {
         return true;
       }
