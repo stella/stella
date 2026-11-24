@@ -1020,7 +1020,7 @@ export const loadFolioCollabSnapshot = async (
 };
 
 /** The DOCX a room's generation was seeded from, or why there is none. */
-export type FolioCollabSeedDocxRead =
+type FolioCollabSeedDocxRead =
   | { status: "read"; docx: Uint8Array }
   /** The room moved to another generation, or is gone. */
   | { status: "generationChanged" }

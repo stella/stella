@@ -89,9 +89,7 @@ type RoomAuthorityCoordination =
 type RedisCoordination = Extract<RoomAuthorityCoordination, { type: "redis" }>;
 
 /** The room's authority cannot run: its peers' edits would never land. */
-export class RoomAuthorityStartError extends TaggedError(
-  "RoomAuthorityStartError",
-)<{
+class RoomAuthorityStartError extends TaggedError("RoomAuthorityStartError")<{
   message: string;
   reason: string;
 }> {}
@@ -104,7 +102,7 @@ type RoomAuthorityState =
   | { type: "stopped" };
 
 /** What this instance does for a room once its authority started. */
-export type RoomAuthorityRole = "relaying" | "serving" | "stopped";
+type RoomAuthorityRole = "relaying" | "serving" | "stopped";
 
 type RunningRoom = {
   roomId: string;
