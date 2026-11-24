@@ -491,39 +491,36 @@ type TransitionDecision<TTable extends StatusTable> =
 
 /** Existing domain owners remain explicit until their writers migrate. */
 
-const SCIM_CONNECTION_BINDING_TRANSITIONS = defineTransitions({
-  table: scimConnectionBinding,
-  stateColumn: "decommissionStatus",
-  states: ["active", "reconciling", "complete"] as const,
-  transitions: {
+const SCIM_CONNECTION_BINDING_TRANSITIONS = defineTransitions(
+  scimConnectionBinding,
+  {
     active: ["reconciling", "complete"],
     reconciling: ["complete"],
     complete: [],
   },
-});
+  { stateColumn: "decommissionStatus", terminal: ["complete"] },
+);
 
-const SCIM_MANAGED_CONNECTION_TRANSITIONS = defineTransitions({
-  table: scimManagedConnection,
-  stateColumn: "status",
-  states: ["active", "decommissioning", "decommissioned"] as const,
-  transitions: {
+const SCIM_MANAGED_CONNECTION_TRANSITIONS = defineTransitions(
+  scimManagedConnection,
+  {
     active: ["decommissioning", "decommissioned"],
     decommissioning: ["decommissioned"],
     decommissioned: [],
   },
-});
+  { terminal: ["decommissioned"] },
+);
 
-const SCIM_MANAGED_CREDENTIAL_TRANSITIONS = defineTransitions({
-  table: scimManagedCredential,
-  stateColumn: "status",
-  states: ["active", "expired", "revoked", "decommissioned"] as const,
-  transitions: {
+const SCIM_MANAGED_CREDENTIAL_TRANSITIONS = defineTransitions(
+  scimManagedCredential,
+  {
     active: ["expired", "revoked", "decommissioned"],
     expired: ["revoked", "decommissioned"],
     revoked: ["decommissioned"],
     decommissioned: [],
   },
-});
+  { terminal: ["decommissioned"] },
+);
 
 export const TRANSITIONS = {
   outboundActions: OUTBOUND_ACTION_TRANSITIONS,
