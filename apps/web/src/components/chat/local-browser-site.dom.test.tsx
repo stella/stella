@@ -14,6 +14,7 @@ const { QueryClient, QueryClientProvider } =
 const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { ChatApprovalContext } = await import("./chat-approval-context");
+const { isApprovalPart } = await import("./chat-ui-tools");
 const { ToolApprovalCard } = await import("./tool-approval-card");
 const { localBrowserApprovalSite } = await import("./local-browser-site");
 const { browserSiteGrantsOptions } =
@@ -60,6 +61,10 @@ const renderLocalCard = (
   input: unknown,
   { allowed = [] }: { allowed?: readonly string[] } = {},
 ) => {
+  const part = localBrowserPart(input);
+  if (!isApprovalPart(part)) {
+    throw new Error("Expected a local browser approval part");
+  }
   const approvedOnce: string[] = [];
   const approvedForRun: string[] = [];
   const queryClient = new QueryClient();
@@ -92,11 +97,7 @@ const renderLocalCard = (
               },
             }}
           >
-            <ToolApprovalCard
-              isAwaitingUser
-              isTurnActive={false}
-              part={localBrowserPart(input)}
-            />
+            <ToolApprovalCard isAwaitingUser isTurnActive={false} part={part} />
           </ChatApprovalContext>
         </IntlProvider>
       </AuthenticatedUserProvider>
