@@ -483,7 +483,7 @@ pub(crate) struct ParkedHandoff {
   pub target: Target,
   pub api_base_url: String,
   pub token: zeroize::Zeroizing<String>,
-  pub expires: std::time::Instant,
+  pub expires: Duration,
   recovery: AccountRecovery,
 }
 
@@ -493,7 +493,40 @@ enum AccountRecovery {
   AwaitingAccount,
 }
 
-static PARKED: std::sync::Mutex<Option<ParkedHandoff>> = std::sync::Mutex::new(None);
+const MONOTONIC_ORIGIN: Duration = Duration::from_secs(86_400);
+
+pub(crate) fn monotonic_now() -> Duration {
+  static HANDOFF_EPOCH: std::sync::OnceLock<std::time::Instant> =
+    std::sync::OnceLock::new();
+  MONOTONIC_ORIGIN + HANDOFF_EPOCH.get_or_init(std::time::Instant::now).elapsed()
+}
+
+struct ParkedSlot(std::sync::Mutex<Option<ParkedHandoff>>);
+
+impl ParkedSlot {
+  const fn new() -> Self {
+    Self(std::sync::Mutex::new(None))
+  }
+
+  fn lock(&self) -> std::sync::MutexGuard<'_, Option<ParkedHandoff>> {
+    self
+      .0
+      .lock()
+      .unwrap_or_else(std::sync::PoisonError::into_inner)
+  }
+
+  #[cfg(test)]
+  fn take_at(&self, now: Duration) -> Resumable {
+    let parked = self.lock().take();
+    match parked {
+      None => Resumable::Nothing,
+      Some(parked) if now >= parked.expires => Resumable::Expired,
+      Some(parked) => Resumable::Ready(parked),
+    }
+  }
+}
+
+static PARKED: ParkedSlot = ParkedSlot::new();
 static ACCOUNT_OFFER: Mutex<()> = Mutex::const_new(());
 static CONNECTION_START: Mutex<()> = Mutex::const_new(());
 
@@ -544,7 +577,16 @@ impl AccountOffer {
     host: &impl ConnectionHost,
     state: &crate::account::AccountState,
   ) -> Result<OfferConnection, Failure> {
-    let original = match self.pending() {
+    self.connect_with_clock(host, state, monotonic_now).await
+  }
+
+  async fn connect_with_clock(
+    &self,
+    host: &impl ConnectionHost,
+    state: &crate::account::AccountState,
+    clock: impl Fn() -> Duration,
+  ) -> Result<OfferConnection, Failure> {
+    let original = match self.pending_at(clock()) {
       Resumable::Nothing => return Ok(OfferConnection::NotCurrent),
       Resumable::Expired => return Ok(OfferConnection::Expired),
       Resumable::Ready(parked) => parked,
@@ -564,9 +606,7 @@ impl AccountOffer {
     let mismatch = account_mismatch(state, &original.api_base_url)
       .await
       .map_err(Failure::Terminal)?;
-    let mut parked = PARKED
-      .lock()
-      .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut parked = PARKED.lock();
     let Some(current) = parked.as_mut() else {
       return Ok(OfferConnection::NotCurrent);
     };
@@ -576,7 +616,7 @@ impl AccountOffer {
     {
       return Ok(OfferConnection::NotCurrent);
     }
-    if std::time::Instant::now() >= current.expires {
+    if clock() >= current.expires {
       parked.take();
       return Ok(OfferConnection::Expired);
     }
@@ -590,13 +630,11 @@ impl AccountOffer {
   }
 
   pub(crate) fn pending(&self) -> Resumable {
-    self.pending_at(std::time::Instant::now())
+    self.pending_at(monotonic_now())
   }
 
-  fn pending_at(&self, now: std::time::Instant) -> Resumable {
-    let mut parked = PARKED
-      .lock()
-      .unwrap_or_else(std::sync::PoisonError::into_inner);
+  fn pending_at(&self, now: Duration) -> Resumable {
+    let mut parked = PARKED.lock();
     let resumable = match parked.as_ref() {
       Some(current)
         if current.token.as_str() == self.token.as_str()
@@ -624,7 +662,6 @@ impl AccountOffer {
 pub(crate) async fn expire_parked(token: &str, api_base_url: &str) -> Resumable {
   let expires = PARKED
     .lock()
-    .unwrap_or_else(std::sync::PoisonError::into_inner)
     .as_ref()
     .filter(|current| {
       current.token.as_str() == token && current.api_base_url == api_base_url
@@ -633,7 +670,10 @@ pub(crate) async fn expire_parked(token: &str, api_base_url: &str) -> Resumable 
   let Some(expires) = expires else {
     return Resumable::Nothing;
   };
-  tokio::time::sleep_until(tokio::time::Instant::from_std(expires)).await;
+  let remaining = expires.saturating_sub(monotonic_now());
+  if !remaining.is_zero() {
+    tokio::time::sleep(remaining).await;
+  }
   account_offer(token, api_base_url).await.pending()
 }
 
@@ -649,9 +689,28 @@ pub(crate) async fn park_if_unlinked(
   target: Target,
   api_base_url: &str,
   token: &str,
-  expires: std::time::Instant,
+  expires: Duration,
 ) -> Result<AccountWait, String> {
-  if std::time::Instant::now() >= expires {
+  park_if_unlinked_with_clock(
+    state,
+    target,
+    api_base_url,
+    token,
+    monotonic_now,
+    expires,
+  )
+  .await
+}
+
+async fn park_if_unlinked_with_clock(
+  state: &crate::account::AccountState,
+  target: Target,
+  api_base_url: &str,
+  token: &str,
+  clock: impl Fn() -> Duration,
+  expires: Duration,
+) -> Result<AccountWait, String> {
+  if clock() >= expires {
     return Ok(AccountWait::Expired);
   }
   // Linking shares this lease: it either publishes before this check, or
@@ -659,7 +718,7 @@ pub(crate) async fn park_if_unlinked(
   let _start = CONNECTION_START.lock().await;
   let _lease = crate::account::lock_requests().await;
   let account = crate::account::current(state).await?;
-  if std::time::Instant::now() >= expires {
+  if clock() >= expires {
     return Ok(AccountWait::Expired);
   }
   if account.is_some_and(|account| account.api_base_url == api_base_url) {
@@ -669,15 +728,8 @@ pub(crate) async fn park_if_unlinked(
   Ok(AccountWait::Parked)
 }
 
-fn park_until(
-  target: Target,
-  api_base_url: &str,
-  token: &str,
-  expires: std::time::Instant,
-) {
-  *PARKED
-    .lock()
-    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(ParkedHandoff {
+fn park_until(target: Target, api_base_url: &str, token: &str, expires: Duration) {
+  *PARKED.lock() = Some(ParkedHandoff {
     target,
     api_base_url: api_base_url.into(),
     token: zeroize::Zeroizing::new(token.into()),
@@ -690,7 +742,6 @@ fn park_until(
 pub(crate) fn unpark(token: &str, api_base_url: &str) -> bool {
   PARKED
     .lock()
-    .unwrap_or_else(std::sync::PoisonError::into_inner)
     .take_if(|parked| {
       parked.token.as_str() == token && parked.api_base_url == api_base_url
     })
@@ -731,32 +782,24 @@ impl PartialEq for ParkedHandoff {
 impl Eq for ParkedHandoff {}
 
 #[cfg(test)]
-fn take_parked() -> Resumable {
-  take_parked_at(std::time::Instant::now())
-}
-
-#[cfg(test)]
-fn take_parked_at(now: std::time::Instant) -> Resumable {
-  let parked = PARKED
-    .lock()
-    .unwrap_or_else(std::sync::PoisonError::into_inner)
-    .take();
-  match parked {
-    None => Resumable::Nothing,
-    Some(parked) if now >= parked.expires => Resumable::Expired,
-    Some(parked) => Resumable::Ready(parked),
-  }
+fn take_parked_at(now: Duration) -> Resumable {
+  PARKED.take_at(now)
 }
 
 pub(crate) async fn take_parked_for_account(api_base_url: &str) -> ResumeAfterLink {
+  take_parked_for_account_at(api_base_url, monotonic_now()).await
+}
+
+async fn take_parked_for_account_at(
+  api_base_url: &str,
+  now: Duration,
+) -> ResumeAfterLink {
   let _start = CONNECTION_START.lock().await;
-  let mut parked = PARKED
-    .lock()
-    .unwrap_or_else(std::sync::PoisonError::into_inner);
+  let mut parked = PARKED.lock();
   let Some(current) = parked.as_mut() else {
     return ResumeAfterLink::Nothing;
   };
-  if std::time::Instant::now() >= current.expires {
+  if now >= current.expires {
     parked.take();
     return ResumeAfterLink::Expired;
   }
@@ -779,6 +822,8 @@ pub(crate) async fn take_parked_for_account(api_base_url: &str) -> ResumeAfterLi
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  const TEST_NOW: Duration = Duration::from_secs(1_000);
   use std::future::Future;
   #[test]
   fn both_redeems_send_protocol_bearer_and_token_in_body() {
@@ -1435,12 +1480,13 @@ mod tests {
       assert!(matches!(arrived, Err(Stop::AccountRequired)));
       assert_eq!(redeems.load(std::sync::atomic::Ordering::SeqCst), 0);
       assert_eq!(
-        park_if_unlinked(
+        park_if_unlinked_with_clock(
           &state,
           target,
           &origin,
           &token,
-          std::time::Instant::now() + HANDOFF_LIFETIME
+          || TEST_NOW,
+          TEST_NOW + HANDOFF_LIFETIME
         )
         .await
         .unwrap(),
@@ -1452,7 +1498,8 @@ mod tests {
         &origin,
         "stella_dr_live",
       ));
-      let ResumeAfterLink::Ready(parked) = take_parked_for_account(&origin).await
+      let ResumeAfterLink::Ready(parked) =
+        take_parked_for_account_at(&origin, TEST_NOW).await
       else {
         panic!("the parked handoff must resume after linking");
       };
@@ -1472,7 +1519,7 @@ mod tests {
       assert_eq!(redeemed, serde_json::json!({"id":"redeemed"}));
       assert_eq!(account.credential.key, "stella_dr_live");
       assert_eq!(redeems.swap(0, std::sync::atomic::Ordering::SeqCst), 1);
-      assert_eq!(take_parked(), Resumable::Nothing);
+      assert_eq!(take_parked_at(TEST_NOW), Resumable::Nothing);
       *state.lock().await = crate::account::AccountStore::Memory(None);
     }
 
@@ -1490,14 +1537,15 @@ mod tests {
           "stella_dr_live",
         ));
       }
-      assert_eq!(take_parked(), Resumable::Nothing);
+      assert_eq!(take_parked_at(TEST_NOW), Resumable::Nothing);
       assert_eq!(
-        park_if_unlinked(
+        park_if_unlinked_with_clock(
           &state,
           target,
           &origin,
           &token,
-          std::time::Instant::now() + HANDOFF_LIFETIME
+          || TEST_NOW,
+          TEST_NOW + HANDOFF_LIFETIME
         )
         .await
         .unwrap(),
@@ -1519,13 +1567,13 @@ mod tests {
       assert_eq!(redeemed, serde_json::json!({"id":"redeemed"}));
       assert_eq!(account.credential.key, "stella_dr_live");
       assert_eq!(redeems.swap(0, std::sync::atomic::Ordering::SeqCst), 1);
-      assert_eq!(take_parked(), Resumable::Nothing);
+      assert_eq!(take_parked_at(TEST_NOW), Resumable::Nothing);
       *state.lock().await = crate::account::AccountStore::Memory(None);
     }
 
     // A replacement owns the next offer; cancelling the old dialog cannot
     // strand it. Poll the queued lease once to deterministically hold the dialog.
-    let now = std::time::Instant::now();
+    let now = TEST_NOW;
     park_until(
       Target::DesktopEdit,
       &origin,
@@ -1533,7 +1581,10 @@ mod tests {
       now + HANDOFF_LIFETIME,
     );
     let first_offer = account_offer("first", &origin).await;
-    assert!(matches!(first_offer.pending(), Resumable::Ready(_)));
+    assert!(matches!(
+      first_offer.pending_at(TEST_NOW),
+      Resumable::Ready(_)
+    ));
     park_until(
       Target::PdfSigning,
       &origin,
@@ -1548,17 +1599,17 @@ mod tests {
       .await,
       "a replacement must queue behind the active offer"
     );
-    assert_eq!(first_offer.pending(), Resumable::Nothing);
+    assert_eq!(first_offer.pending_at(TEST_NOW), Resumable::Nothing);
     assert!(!unpark("first", &origin));
     drop(first_offer);
     let second_offer = second_offer.await;
-    let Resumable::Ready(offered) = second_offer.pending() else {
+    let Resumable::Ready(offered) = second_offer.pending_at(TEST_NOW) else {
       panic!("cancelling a superseded offer must offer the current token");
     };
     assert_eq!(offered.token.as_str(), "second");
     assert_eq!(offered.target, Target::PdfSigning);
     assert!(unpark("second", &origin));
-    assert_eq!(second_offer.pending(), Resumable::Nothing);
+    assert_eq!(second_offer.pending_at(TEST_NOW), Resumable::Nothing);
     drop(second_offer);
 
     // Completion during the old dialog resumes the replacement exactly once;
@@ -1586,7 +1637,9 @@ mod tests {
         "stella_dr_live",
       ));
     }
-    let ResumeAfterLink::Ready(resumed) = take_parked_for_account(&origin).await else {
+    let ResumeAfterLink::Ready(resumed) =
+      take_parked_for_account_at(&origin, TEST_NOW).await
+    else {
       panic!("a link completed during the old offer must resume the replacement");
     };
     assert_eq!(resumed.token.as_str(), token);
@@ -1605,12 +1658,12 @@ mod tests {
     .unwrap();
     assert_eq!(account.credential.key, "stella_dr_live");
     assert_eq!(redeems.swap(0, std::sync::atomic::Ordering::SeqCst), 1);
-    assert_eq!(first_offer.pending(), Resumable::Nothing);
+    assert_eq!(first_offer.pending_at(TEST_NOW), Resumable::Nothing);
     drop(first_offer);
     let second_offer = second_offer.await;
-    assert_eq!(second_offer.pending(), Resumable::Nothing);
+    assert_eq!(second_offer.pending_at(TEST_NOW), Resumable::Nothing);
     drop(second_offer);
-    assert_eq!(take_parked(), Resumable::Nothing);
+    assert_eq!(take_parked_at(TEST_NOW), Resumable::Nothing);
     *state.lock().await = crate::account::AccountStore::Memory(None);
 
     // A queued replacement that has expired gets one notice instead of an offer.
@@ -1650,11 +1703,18 @@ mod tests {
         ("https://other.example.test", "second"),
         ("https://other.example.test", "first"),
       ] {
-        let expires = std::time::Instant::now() + HANDOFF_LIFETIME;
+        let expires = TEST_NOW + HANDOFF_LIFETIME;
         assert_eq!(
-          park_if_unlinked(&state, Target::DesktopEdit, &origin, "first", expires)
-            .await
-            .unwrap(),
+          park_if_unlinked_with_clock(
+            &state,
+            Target::DesktopEdit,
+            &origin,
+            "first",
+            || TEST_NOW,
+            expires
+          )
+          .await
+          .unwrap(),
           AccountWait::Parked
         );
         let first_offer = account_offer("first", &origin).await;
@@ -1666,7 +1726,8 @@ mod tests {
           outcome: crate::account::ConnectionStart::Started,
         };
         {
-          let mut connection = std::pin::pin!(first_offer.connect(&host, &state));
+          let mut connection =
+            std::pin::pin!(first_offer.connect_with_clock(&host, &state, || TEST_NOW));
           assert!(
             std::future::poll_fn(|cx| std::task::Poll::Ready(
               connection.as_mut().poll(cx).is_pending()
@@ -1675,11 +1736,12 @@ mod tests {
             "the regression must reach the selected await"
           );
           assert_eq!(
-            park_if_unlinked(
+            park_if_unlinked_with_clock(
               &state,
               Target::PdfSigning,
               replacement_api,
               replacement_token,
+              || TEST_NOW,
               expires
             )
             .await
@@ -1697,38 +1759,44 @@ mod tests {
         drop(first_offer);
 
         let second_offer = account_offer(replacement_token, replacement_api).await;
-        let Resumable::Ready(current) = second_offer.pending() else {
+        let Resumable::Ready(current) = second_offer.pending_at(TEST_NOW) else {
           panic!("the replacement must get its own offer");
         };
         assert_eq!(current.api_base_url, replacement_api);
         let second_host =
           immediate_connection(crate::account::ConnectionStart::Started);
         assert_eq!(
-          second_offer.connect(&second_host, &state).await.unwrap(),
+          second_offer
+            .connect_with_clock(&second_host, &state, || TEST_NOW)
+            .await
+            .unwrap(),
           OfferConnection::Started(crate::account::ConnectionStart::Started)
         );
         assert_eq!(*second_host.opened.lock().unwrap(), [replacement_api]);
         drop(second_offer);
         if replacement_api != origin {
           let ResumeAfterLink::NeedsOffer(reoffered) =
-            take_parked_for_account(&origin).await
+            take_parked_for_account_at(&origin, TEST_NOW).await
           else {
             panic!("a different-server completion must re-offer instead of resuming");
           };
           assert_eq!(reoffered.api_base_url, replacement_api);
           let second_offer = account_offer(replacement_token, replacement_api).await;
-          assert!(matches!(second_offer.pending(), Resumable::Ready(_)));
+          assert!(matches!(
+            second_offer.pending_at(TEST_NOW),
+            Resumable::Ready(_)
+          ));
           drop(second_offer);
         }
         let ResumeAfterLink::Ready(resumed) =
-          take_parked_for_account(replacement_api).await
+          take_parked_for_account_at(replacement_api, TEST_NOW).await
         else {
           panic!("only a matching-server completion may resume the replacement");
         };
         assert_eq!(resumed.token.as_str(), replacement_token);
         assert_eq!(resumed.api_base_url, replacement_api);
         assert_eq!(
-          take_parked_for_account(replacement_api).await,
+          take_parked_for_account_at(replacement_api, TEST_NOW).await,
           ResumeAfterLink::Nothing
         );
       }
@@ -1776,21 +1844,31 @@ mod tests {
       assert!(notice.contains(&server_a));
       assert!(notice.contains(&origin));
       let before = redeems.load(std::sync::atomic::Ordering::SeqCst);
-      let expires = std::time::Instant::now() + HANDOFF_LIFETIME;
+      let expires = TEST_NOW + HANDOFF_LIFETIME;
       assert_eq!(
-        park_if_unlinked(&state, target, &origin, "mismatch", expires)
-          .await
-          .unwrap(),
+        park_if_unlinked_with_clock(
+          &state,
+          target,
+          &origin,
+          "mismatch",
+          || TEST_NOW,
+          expires
+        )
+        .await
+        .unwrap(),
         AccountWait::Parked
       );
       let offer = account_offer("mismatch", &origin).await;
       let host = immediate_connection(crate::account::ConnectionStart::Started);
       assert!(matches!(
-        offer.connect(&host, &state).await.unwrap(),
+        offer
+          .connect_with_clock(&host, &state, || TEST_NOW)
+          .await
+          .unwrap(),
         OfferConnection::AccountMismatch(_)
       ));
       assert!(host.opened.lock().unwrap().is_empty());
-      assert!(matches!(offer.pending(), Resumable::Ready(_)));
+      assert!(matches!(offer.pending_at(TEST_NOW), Resumable::Ready(_)));
       assert_eq!(
         crate::account::current(&state)
           .await
@@ -1809,7 +1887,7 @@ mod tests {
         );
         drop(store);
       }
-      let resumed = match take_parked_for_account(&origin).await {
+      let resumed = match take_parked_for_account_at(&origin, TEST_NOW).await {
         ResumeAfterLink::Ready(parked) => parked,
         outcome => {
           panic!("explicit disconnect and connection must resume: {outcome:?}")
@@ -1818,7 +1896,7 @@ mod tests {
       assert_eq!(resumed.target, target);
       assert_eq!(resumed.token.as_str(), "mismatch");
       assert_eq!(
-        take_parked_for_account(&origin).await,
+        take_parked_for_account_at(&origin, TEST_NOW).await,
         ResumeAfterLink::Nothing
       );
       let (redeemed, account) = redeem_with::<serde_json::Value>(
@@ -1848,7 +1926,7 @@ mod tests {
     // A different-origin pending connection has its own state and re-offer,
     // rather than pretending the replacement can use the pending account.
     let other_api = "https://other.example.test";
-    let expires = std::time::Instant::now() + HANDOFF_LIFETIME;
+    let expires = TEST_NOW + HANDOFF_LIFETIME;
     *state.lock().await =
       crate::account::AccountStore::fixture(linked_fixture(&origin, "stella_dr_live"));
     assert!(matches!(
@@ -1856,9 +1934,16 @@ mod tests {
       Err(Stop::AccountMismatch(_))
     ));
     assert_eq!(
-      park_if_unlinked(&state, Target::PdfSigning, other_api, "other", expires)
-        .await
-        .unwrap(),
+      park_if_unlinked_with_clock(
+        &state,
+        Target::PdfSigning,
+        other_api,
+        "other",
+        || TEST_NOW,
+        expires
+      )
+      .await
+      .unwrap(),
       AccountWait::Parked
     );
     *state.lock().await = crate::account::AccountStore::Memory(None);
@@ -1866,16 +1951,22 @@ mod tests {
     let other_host =
       immediate_connection(crate::account::ConnectionStart::DifferentOriginPending);
     assert_eq!(
-      other_offer.connect(&other_host, &state).await.unwrap(),
+      other_offer
+        .connect_with_clock(&other_host, &state, || TEST_NOW)
+        .await
+        .unwrap(),
       OfferConnection::Started(crate::account::ConnectionStart::DifferentOriginPending)
     );
     drop(other_offer);
     assert!(matches!(
-      take_parked_for_account(&origin).await,
+      take_parked_for_account_at(&origin, TEST_NOW).await,
       ResumeAfterLink::NeedsOffer(_)
     ));
     let other_offer = account_offer("other", other_api).await;
-    assert!(matches!(other_offer.pending(), Resumable::Ready(_)));
+    assert!(matches!(
+      other_offer.pending_at(TEST_NOW),
+      Resumable::Ready(_)
+    ));
     assert!(unpark("other", other_api));
     drop(other_offer);
     *state.lock().await = crate::account::AccountStore::Memory(None);
@@ -1883,12 +1974,19 @@ mod tests {
     // Parking an aged link preserves its arrival deadline, including across
     // a resumed handoff; no new account offer may renew the server token.
     for target in [Target::DesktopEdit, Target::PdfSigning] {
-      let arrived = std::time::Instant::now() - Duration::from_secs(115);
+      let arrived = TEST_NOW - Duration::from_secs(115);
       let original_expiry = arrived + HANDOFF_LIFETIME;
       assert_eq!(
-        park_if_unlinked(&state, target, &origin, &token, original_expiry)
-          .await
-          .unwrap(),
+        park_if_unlinked_with_clock(
+          &state,
+          target,
+          &origin,
+          &token,
+          || TEST_NOW,
+          original_expiry
+        )
+        .await
+        .unwrap(),
         AccountWait::Parked
       );
       let offer = account_offer(&token, &origin).await;
@@ -1903,21 +2001,22 @@ mod tests {
       );
       assert_eq!(offer.pending_at(original_expiry), Resumable::Expired);
       drop(offer);
-      assert_eq!(take_parked(), Resumable::Nothing);
+      assert_eq!(take_parked_at(TEST_NOW), Resumable::Nothing);
       assert_eq!(
-        park_if_unlinked(
+        park_if_unlinked_with_clock(
           &state,
           target,
           &origin,
           &token,
-          std::time::Instant::now() - Duration::from_nanos(1)
+          || TEST_NOW,
+          TEST_NOW - Duration::from_nanos(1)
         )
         .await
         .unwrap(),
         AccountWait::Expired,
         "an already-expired handoff must go to its notice without an account offer"
       );
-      assert_eq!(take_parked(), Resumable::Nothing);
+      assert_eq!(take_parked_at(TEST_NOW), Resumable::Nothing);
     }
 
     // A saved credential the API rejects is dropped before any redeem.
@@ -1941,7 +2040,7 @@ mod tests {
     assert!(crate::account::current(&state).await.unwrap().is_none());
 
     // One slot, newest wins, and it lapses with the handoff's lifetime.
-    let now = std::time::Instant::now();
+    let now = TEST_NOW;
     park_until(
       Target::DesktopEdit,
       &origin,

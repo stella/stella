@@ -19,6 +19,7 @@ const BIND_RETRY_MAX_BACKOFF: Duration = Duration::from_secs(30);
 #[derive(Clone)]
 pub struct BridgeState {
   pub account: crate::account::AccountState,
+  pub(crate) browser_connection: crate::account::BrowserConnectionSlot,
   pub manager: Arc<Mutex<SessionManager>>,
   pub static_allowed_origins: HashSet<String>,
   pub bridge_port: u16,
@@ -128,7 +129,8 @@ async fn connection_status(
 ) -> impl IntoResponse {
   let origin = get_origin(&headers);
   let allowed = is_allowed_origin(&state, origin.as_deref()).await;
-  let Ok(status) = crate::account::signed_browser_connection_status(
+  let Ok(status) = crate::account::signed_browser_connection_status_in(
+    &state.browser_connection,
     &state.account,
     &query.correlation_id,
   )
@@ -187,7 +189,8 @@ pub(crate) fn build_router(state: BridgeState) -> Router {
           );
         }
         let origin = get_origin(req.headers());
-        if !crate::account::authorize_bridge_request(
+        if !crate::account::authorize_bridge_request_in(
+          &state.browser_connection,
           origin.as_deref(),
           req
             .headers()
@@ -225,6 +228,7 @@ pub async fn start_bridge(
 ) {
   let state = BridgeState {
     account,
+    browser_connection: crate::account::shared_browser_connection(),
     manager,
     static_allowed_origins,
     bridge_port,
@@ -266,6 +270,7 @@ mod tests {
   fn test_state() -> BridgeState {
     BridgeState {
       account: Arc::new(Mutex::new(crate::account::AccountStore::Memory(None))),
+      browser_connection: crate::account::BrowserConnectionSlot::empty(),
       manager: Arc::new(Mutex::new(
         SessionManager::new().expect("test data directory"),
       )),
@@ -311,7 +316,9 @@ mod tests {
       ("http://localhost:3000", StatusCode::OK),
       ("https://other.example", StatusCode::UNAUTHORIZED),
     ] {
-      let response = build_router(test_state())
+      let mut state = test_state();
+      state.browser_connection = fixture.slot.clone();
+      let response = build_router(state)
         .oneshot(
           Request::builder()
             .method("GET")

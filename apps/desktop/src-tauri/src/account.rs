@@ -1197,7 +1197,7 @@ pub async fn account_disconnect(
   crate::dictation_learned::erase_all();
   // The picture leaves with the account, before any window reads again.
   crate::account_avatar::clear();
-  *BROWSER_CONNECTION
+  *shared_browser_connection()
     .lock()
     .map_err(with_cause_logged("Desktop connection is unavailable"))? = None;
   notify(&app);
@@ -1288,7 +1288,7 @@ struct BrowserConnection {
   verifier_hash: String,
   device_jkt: String,
   key: ChallengeKey,
-  expires_at: std::time::Instant,
+  expires_at: std::time::Duration,
   redemption: LinkRedemption,
   // The approval page URL, kept so a repeated request can show the same
   // challenge again instead of minting a competing one.
@@ -1341,8 +1341,36 @@ impl ChallengeKey {
   }
 }
 
-static BROWSER_CONNECTION: std::sync::Mutex<Option<BrowserConnection>> =
-  std::sync::Mutex::new(None);
+#[derive(Clone)]
+pub(crate) struct BrowserConnectionSlot(
+  Arc<std::sync::Mutex<Option<BrowserConnection>>>,
+);
+
+impl BrowserConnectionSlot {
+  pub(crate) fn empty() -> Self {
+    Self(Arc::new(std::sync::Mutex::new(None)))
+  }
+
+  fn lock(
+    &self,
+  ) -> std::sync::LockResult<std::sync::MutexGuard<'_, Option<BrowserConnection>>> {
+    self.0.lock()
+  }
+}
+
+pub(crate) fn shared_browser_connection() -> BrowserConnectionSlot {
+  static BROWSER_CONNECTION: OnceLock<BrowserConnectionSlot> = OnceLock::new();
+  BROWSER_CONNECTION
+    .get_or_init(BrowserConnectionSlot::empty)
+    .clone()
+}
+
+fn monotonic_now() -> std::time::Duration {
+  static MONOTONIC_EPOCH: OnceLock<std::time::Instant> = OnceLock::new();
+  MONOTONIC_EPOCH
+    .get_or_init(std::time::Instant::now)
+    .elapsed()
+}
 
 fn random_secret() -> Result<String, String> {
   use ring::rand::SecureRandom;
@@ -1357,6 +1385,7 @@ fn new_browser_connection_with_key(
   api_base_url: &str,
   web_origin: &str,
   key: ChallengeKey,
+  now: std::time::Duration,
 ) -> Result<(BrowserConnection, String), String> {
   use sha2::{Digest, Sha256};
   let api_base_url = crate::config::normalize_self_host_api_base_url(api_base_url)?;
@@ -1393,7 +1422,7 @@ fn new_browser_connection_with_key(
       verifier_hash,
       device_jkt,
       key,
-      expires_at: std::time::Instant::now() + LINK_APPROVAL_TIMEOUT,
+      expires_at: now + LINK_APPROVAL_TIMEOUT,
       redemption: LinkRedemption::Waiting { verifier },
       browser_url: url.to_string(),
     },
@@ -1436,14 +1465,14 @@ pub(crate) async fn prepare_browser_connection(
     }
   };
   let (connection, url) =
-    new_browser_connection_with_key(&api_base_url, &web_origin, key)?;
+    new_browser_connection_with_key(&api_base_url, &web_origin, key, monotonic_now())?;
   Ok(PreparedBrowserConnection { connection, url })
 }
 
 fn reserve_browser_connection(
   pending: &mut Option<BrowserConnection>,
   connection: BrowserConnection,
-  now: std::time::Instant,
+  now: std::time::Duration,
 ) -> ConnectionStart {
   if let Some(current) = pending.as_ref()
     && now < current.expires_at
@@ -1470,14 +1499,11 @@ fn reserve_browser_connection(
 impl PreparedBrowserConnection {
   pub(crate) fn open(self, app: &tauri::AppHandle) -> Result<ConnectionStart, String> {
     use tauri_plugin_opener::OpenerExt;
-    let mut pending = BROWSER_CONNECTION
+    let slot = shared_browser_connection();
+    let mut pending = slot
       .lock()
       .map_err(with_cause_logged("Desktop connection is unavailable"))?;
-    match reserve_browser_connection(
-      &mut pending,
-      self.connection,
-      std::time::Instant::now(),
-    ) {
+    match reserve_browser_connection(&mut pending, self.connection, monotonic_now()) {
       ConnectionStart::Started => {}
       ConnectionStart::Resumed => {
         let url = pending
@@ -1555,7 +1581,8 @@ fn valid_bridge_proof(
   .is_ok()
 }
 
-pub fn authorize_bridge_request(
+pub(crate) fn authorize_bridge_request_in(
+  slot: &BrowserConnectionSlot,
   origin: Option<&str>,
   timestamp: Option<&str>,
   proof: Option<&str>,
@@ -1565,14 +1592,14 @@ pub fn authorize_bridge_request(
   let (Some(origin), Some(timestamp), Some(proof)) = (origin, timestamp, proof) else {
     return false;
   };
-  let Ok(pending) = BROWSER_CONNECTION.lock() else {
+  let Ok(pending) = slot.lock() else {
     return false;
   };
   let Some(connection) = pending.as_ref() else {
     return false;
   };
   connection.web_origin == origin
-    && std::time::Instant::now() < connection.expires_at
+    && monotonic_now() < connection.expires_at
     && method == "GET"
     && valid_bridge_proof(
       connection,
@@ -1665,19 +1692,20 @@ impl ConnectionStatus {
   }
 }
 
-pub async fn browser_connection_status(
+async fn browser_connection_status_in(
+  slot: &BrowserConnectionSlot,
   state: &AccountState,
   correlation_id: &str,
 ) -> ConnectionStatus {
   let expected = {
-    let Ok(pending) = BROWSER_CONNECTION.lock() else {
+    let Ok(pending) = slot.lock() else {
       return ConnectionStatus::UNAVAILABLE;
     };
     let Some(connection) = pending.as_ref() else {
       return ConnectionStatus::UNAVAILABLE;
     };
     if connection.correlation_id != correlation_id
-      || std::time::Instant::now() >= connection.expires_at
+      || monotonic_now() >= connection.expires_at
     {
       return ConnectionStatus::UNAVAILABLE;
     }
@@ -1734,14 +1762,15 @@ fn connection_status_proof(
   hex::encode(ring::hmac::sign(&key, message.as_bytes()).as_ref())
 }
 
-pub async fn signed_browser_connection_status(
+pub(crate) async fn signed_browser_connection_status_in(
+  slot: &BrowserConnectionSlot,
   state: &AccountState,
   correlation_id: &str,
 ) -> Result<SignedConnectionStatus, String> {
-  let status = browser_connection_status(state, correlation_id).await;
-  let now = std::time::Instant::now();
+  let status = browser_connection_status_in(slot, state, correlation_id).await;
+  let now = monotonic_now();
   let timestamp = chrono::Utc::now().timestamp().to_string();
-  let proof = BROWSER_CONNECTION
+  let proof = slot
     .lock()
     .map_err(with_cause_logged("Desktop connection is unavailable"))?
     .as_ref()
@@ -1764,31 +1793,28 @@ pub(crate) struct BridgeProofFixture {
   pub port_secret: String,
   pub verifier_hash: String,
   pub device_jkt: String,
-  previous: Option<BrowserConnection>,
+  pub slot: BrowserConnectionSlot,
 }
 
 #[cfg(test)]
 pub(crate) fn bridge_proof_fixture() -> BridgeProofFixture {
-  let (connection, _) =
-    new_browser_connection("https://api.stll.app", "http://localhost:3000").unwrap();
+  let (connection, _) = new_browser_connection_with_key(
+    "https://api.stll.app",
+    "http://localhost:3000",
+    ChallengeKey::Stored(crate::device_proof::DeviceKey::fixture()),
+    monotonic_now(),
+  )
+  .unwrap();
   let correlation_id = connection.correlation_id.clone();
   let port_secret = connection.port_secret.clone();
   let verifier_hash = connection.verifier_hash.clone();
   let device_jkt = connection.device_jkt.clone();
-  let previous = BROWSER_CONNECTION.lock().unwrap().replace(connection);
   BridgeProofFixture {
     correlation_id,
     port_secret,
     verifier_hash,
     device_jkt,
-    previous,
-  }
-}
-
-#[cfg(test)]
-impl Drop for BridgeProofFixture {
-  fn drop(&mut self) {
-    *BROWSER_CONNECTION.lock().unwrap() = self.previous.take();
+    slot: BrowserConnectionSlot(Arc::new(std::sync::Mutex::new(Some(connection)))),
   }
 }
 
@@ -1804,7 +1830,7 @@ impl BrowserConnection {
   fn claim(
     &mut self,
     correlation_id: &str,
-    now: std::time::Instant,
+    now: std::time::Duration,
   ) -> Result<PendingRedemption, String> {
     if self.correlation_id != correlation_id
       || now >= self.expires_at
@@ -1832,17 +1858,18 @@ pub async fn complete_browser_connection(
   correlation_id: &str,
   expected_identity: DesktopAccountIdentity,
 ) -> Result<(), LinkError> {
+  let slot = shared_browser_connection();
   let pending = {
-    let mut connection = BROWSER_CONNECTION
+    let mut connection = slot
       .lock()
       .map_err(with_cause_logged("Desktop connection is unavailable"))?;
     connection
       .as_mut()
       .ok_or("Desktop connection is unavailable")?
-      .claim(correlation_id, std::time::Instant::now())?
+      .claim(correlation_id, monotonic_now())?
   };
   let result = redeem_browser_connection(app, pending, expected_identity.clone()).await;
-  if let Ok(mut pending) = BROWSER_CONNECTION.lock()
+  if let Ok(mut pending) = slot.lock()
     && let Some(connection) = pending.as_mut()
     && connection.correlation_id == correlation_id
   {
@@ -2202,6 +2229,7 @@ fn new_browser_connection(
     api_base_url,
     web_origin,
     ChallengeKey::Stored(crate::device_proof::DeviceKey::fixture()),
+    std::time::Duration::ZERO,
   )
 }
 
@@ -2326,7 +2354,7 @@ mod tests {
         reserve_browser_connection(
           &mut pending,
           replacement,
-          std::time::Instant::now()
+          std::time::Duration::ZERO
         ),
         ConnectionStart::Started
       );
@@ -2383,7 +2411,7 @@ mod tests {
     let (mut connection, _) =
       new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
     let correlation_id = connection.correlation_id.clone();
-    let now = std::time::Instant::now();
+    let now = std::time::Duration::ZERO;
     assert!(connection.claim("another", now).is_err());
     assert!(
       connection
