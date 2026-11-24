@@ -492,7 +492,7 @@ describe("website approvals", () => {
               observedPage,
             });
             if (proven !== null) {
-              expect(proven).toBe(shown);
+              expect(shown).toBe(proven);
             }
           }
         },
