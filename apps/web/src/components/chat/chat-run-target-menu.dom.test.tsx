@@ -325,10 +325,23 @@ test("a harness that runs in one mode offers no choice and says how it behaves",
   ]);
 });
 
-test("a cloud turn has no permission choice", async () => {
-  const { view } = renderMenu({ kind: "cloud", approvals: "ask" });
-  await waitFor(() => view.getByText(messages.chat.runOn.yourComputer));
-  expect(view.queryByText("Permissions")).toBeNull();
+test("a cloud turn offers every level, saying what each does in the browser", async () => {
+  const { view, chosen } = renderMenu({ kind: "cloud", approvals: "ask" });
+  await waitFor(() => view.getByText(messages.chat.runOn.cloudPermissionsHint));
+  expect(view.queryByText(messages.chat.localRun.permissions)).not.toBeNull();
+  const { runOn } = messages.chat;
+  for (const description of [
+    runOn.cloudPermissionPlanDescription,
+    runOn.cloudPermissionAskDescription,
+    runOn.cloudPermissionAutoDescription,
+    runOn.cloudPermissionFullAutoDescription,
+  ]) {
+    expect(view.queryByText(description)).not.toBeNull();
+  }
+  fireEvent.click(
+    await radioItem(view, messages.chat.localRun.permissionFullAuto),
+  );
+  expect(chosen).toEqual([{ kind: "cloud", approvals: "full_auto" }]);
 });
 
 test("the places open with the cloud, the member's computer and its ready agents", async () => {
