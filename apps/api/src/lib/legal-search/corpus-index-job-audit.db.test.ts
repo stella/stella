@@ -122,6 +122,37 @@ test("a withdrawal files its reason as detail, not as a failure", async () => {
   });
 });
 
+test("a withdrawal is stamped when it is written, not when its transaction began", async () => {
+  // A copy reserved while the withdrawing transaction was still running is
+  // reserved before the withdrawal reaches its state; the trail row must not
+  // claim an instant before that reservation.
+  const stamped = await db.transaction(async (tx) => {
+    const began = await tx.execute<{ at: string }>(
+      sql`SELECT transaction_timestamp()::text AS at`,
+    );
+    await tx.execute(sql`SELECT pg_sleep(0.02)`);
+    const written = await tx.execute<{ at: string }>(
+      sql`SELECT clock_timestamp()::text AS at`,
+    );
+    await recordCorpusWithdrawalAuditEvent(asTestRaw<Transaction>(tx), {
+      decisionId: DECISION_ID,
+      reason: "the stored payload re-parses to no document",
+    });
+    const recorded = await tx.execute<{
+      notBeforeWrite: boolean;
+      afterBegin: boolean;
+    }>(sql`
+      SELECT
+        created_at >= ${written.rows[0]?.at}::timestamptz AS "notBeforeWrite",
+        created_at > ${began.rows[0]?.at}::timestamptz AS "afterBegin"
+      FROM case_law_index_jobs
+      WHERE decision_id = ${DECISION_ID}
+    `);
+    return recorded.rows;
+  });
+  expect(stamped).toEqual([{ notBeforeWrite: true, afterBegin: true }]);
+});
+
 test("the database refuses a succeeded row that carries a failure", async () => {
   expect(
     await rejectionMessage(

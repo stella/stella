@@ -633,6 +633,7 @@ export const corpusProjectionLegacyFixture = (
   return {
     family,
     generation,
+    indexId: INDEX_ID,
     subjectOf,
     recordWithdrawal,
     uuid,

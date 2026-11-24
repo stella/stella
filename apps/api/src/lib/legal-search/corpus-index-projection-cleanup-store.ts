@@ -52,6 +52,7 @@ import {
   CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
   countCorpusProjectionRevisions,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import { corpusProjectionErasureIsExcluded } from "@/api/lib/legal-search/corpus-index-projection-erasure-evidence";
 import { CORPUS_INDEX_PROJECTION_INTENT_LIFECYCLE } from "@/api/lib/legal-search/corpus-index-projection-intent-transition-spec";
 import { corpusProjectionAppendPublishBarrier } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import {
@@ -73,6 +74,7 @@ import {
   corpusIndexProjectionCleanupIsDue,
   corpusIndexProjectionIntentIsOutstanding,
   corpusIndexProjectionRevisionIsRestorable,
+  corpusIndexProjectionRevisionKeepsServing,
   corpusIndexProjectionStateServesRevision,
 } from "@/api/lib/legal-search/corpus-index-projection-sql";
 import {
@@ -168,27 +170,23 @@ type ClaimCorpusProjectionCleanupOptions<Family extends CorpusFamily> =
 /**
  * Why the claim took a revision. Only `unserved` is the ordinary case: no
  * upsert state names the revision, so deleting it hides nothing. The other two
- * delete a copy an upsert state still names, and exist only for rows an
- * earlier release left behind (it queued served revisions for cleanup); no
- * writer in this release creates one, so both only shrink. The desired-state
- * writer keeps that true: a retirement it makes un-names the copy in the same
- * statement group, and a repair that would cost a queued, still restorable
- * copy its proof restores that copy first or is held
- * (`writeRepairedCorpusProjectionDesiredStatesTx`):
+ * delete a copy an upsert state still names. No writer of this release queues
+ * such a copy: a retirement un-names the copy in the same statement group, and
+ * a repair that would cost a queued, still restorable copy its proof restores
+ * that copy first or is held (`writeRepairedCorpusProjectionDesiredStatesTx`).
+ * Both exist for copies queued while they were served. The desired epoch of
+ * such a copy's state moves with each canonical change while it waits.
  *
  * - `served_after_delete`: a delete may already have been issued, so the copy
  *   may already be gone and holding the cleanup back would only keep the
  *   entity hidden. It settles and the entity is appended again.
- * - `served_unproven`: never claimed, but more than one desired change
- *   separates it from the desired state and its content differs from what
- *   the state desires, so an erasure undone in between cannot be ruled out
- *   and the copy may be the pre-erasure one. Deleting it is the safe
- *   direction; the entity is appended anew. It also takes a never-claimed
- *   copy whose cleanup an earlier release's erasure or drift repair queued
- *   (`last_error` set), even when an undo brought the desired content back
- *   to exactly the copy's: `last_error` is what singles out preparation for
- *   the restore, so that small class is deleted on purpose rather than
- *   restored (see `corpusIndexProjectionRevisionIsRestorable`).
+ * - `served_unproven`: never claimed, not restorable, and an erasure is
+ *   recorded since the copy was reserved (`corpusProjectionErasureIsExcluded`).
+ *   Only a recorded erasure counts: any other change of the decision leaves the
+ *   copy serving until it is appended anew. It also takes a copy that records
+ *   why it was queued (`last_error`: an erasure, an undone erasure or drift
+ *   repair), a copy in another index than the desired one, and a legislation
+ *   copy the projection rows do not prove. The entity is appended anew.
  */
 const CORPUS_PROJECTION_CLEANUP_CLAIM_KINDS = [
   "unserved",
@@ -198,13 +196,33 @@ const CORPUS_PROJECTION_CLEANUP_CLAIM_KINDS = [
 type CorpusProjectionCleanupClaimKind =
   (typeof CORPUS_PROJECTION_CLEANUP_CLAIM_KINDS)[number];
 
-const CLEANUP_CANDIDATE_RESTORE = "restore";
-const CORPUS_PROJECTION_CLEANUP_DISPOSITIONS = [
-  CLEANUP_CANDIDATE_RESTORE,
-  ...CORPUS_PROJECTION_CLEANUP_CLAIM_KINDS,
+/**
+ * Why the claim returned a served revision to `applied` instead.
+ *
+ * - `restorable`: the projection rows alone prove the copy
+ *   (`corpusIndexProjectionRevisionIsRestorable`).
+ * - `kept_superseded`: they no longer do, and no erasure is recorded since the
+ *   copy was reserved, so it keeps serving like every other superseded copy
+ *   (`corpusIndexProjectionRevisionKeepsServing`).
+ */
+const CORPUS_PROJECTION_CLEANUP_RESTORE_KINDS = [
+  "restorable",
+  "kept_superseded",
 ] as const;
+type CorpusProjectionCleanupRestoreKind =
+  (typeof CORPUS_PROJECTION_CLEANUP_RESTORE_KINDS)[number];
+
 type CorpusProjectionCleanupDisposition =
-  (typeof CORPUS_PROJECTION_CLEANUP_DISPOSITIONS)[number];
+  CorpusProjectionCleanupRestoreKind | CorpusProjectionCleanupClaimKind;
+const CORPUS_PROJECTION_CLEANUP_DISPOSITIONS = [
+  ...CORPUS_PROJECTION_CLEANUP_RESTORE_KINDS,
+  ...CORPUS_PROJECTION_CLEANUP_CLAIM_KINDS,
+] as const satisfies readonly CorpusProjectionCleanupDisposition[];
+
+const isCleanupRestoreKind = (
+  disposition: CorpusProjectionCleanupDisposition,
+): disposition is CorpusProjectionCleanupRestoreKind =>
+  CORPUS_PROJECTION_CLEANUP_RESTORE_KINDS.some((kind) => kind === disposition);
 
 const requireCleanupDisposition = (
   value: unknown,
@@ -300,6 +318,12 @@ const noCleanupClaims = () =>
     served_after_delete: 0,
     served_unproven: 0,
   }) satisfies Record<CorpusProjectionCleanupClaimKind, number>;
+
+const noCleanupRestores = () =>
+  ({
+    restorable: 0,
+    kept_superseded: 0,
+  }) satisfies Record<CorpusProjectionCleanupRestoreKind, number>;
 
 type CleanupPageRow = Awaited<
   ReturnType<typeof corpusProjectionCleanupClaimPage>
@@ -399,21 +423,41 @@ const lockCleanupCandidatesTx = async (
   return { decidable, skippedLocked };
 };
 
-/** Each locked candidate's disposition, read under the locks just taken. */
-const decideCleanupCandidatesTx = async (
+type CleanupDecisionOptions = {
+  family: CorpusFamily;
+  intentIds: readonly ProjectionIntentId[];
+};
+
+/**
+ * Each locked candidate with its disposition. The erasure records are read
+ * last in the `CASE`, so only a served, never claimed, not restorable copy
+ * costs their index probes. Exported so the plan guard explains the exact
+ * statement the claim issues.
+ */
+export const corpusProjectionCleanupDecisionQuery = (
   tx: Transaction,
-  intentIds: readonly ProjectionIntentId[],
+  { family, intentIds }: CleanupDecisionOptions,
 ) => {
-  if (intentIds.length === 0) {
-    return [];
-  }
   const served = {
     revisionId: corpusIndexProjectionIntents.id,
     appliedRevision: corpusIndexProjectionStates.appliedRevision,
     desiredAction: corpusIndexProjectionStates.desiredAction,
     appliedAction: corpusIndexProjectionStates.appliedAction,
   };
-  const rows = await tx
+  const untouched = {
+    ...served,
+    revisionEpoch: corpusIndexProjectionIntents.epoch,
+    cleanupAttempts: corpusIndexProjectionIntents.cleanupAttempts,
+    revisionAppliedAt: corpusIndexProjectionIntents.appliedAt,
+    lastError: corpusIndexProjectionIntents.lastError,
+    appliedEpoch: corpusIndexProjectionStates.appliedEpoch,
+    desiredEpoch: corpusIndexProjectionStates.desiredEpoch,
+  };
+  const route = {
+    revisionIndexId: corpusIndexProjectionIntents.indexId,
+    desiredIndexId: corpusIndexProjectionStates.desiredIndexId,
+  };
+  return tx
     .select({
       id: corpusIndexProjectionIntents.id,
       entityId: corpusIndexProjectionIntents.entityId,
@@ -421,21 +465,24 @@ const decideCleanupCandidatesTx = async (
         WHEN ${corpusIndexProjectionStateServesRevision(served)} IS NOT TRUE
           THEN ${"unserved" satisfies CorpusProjectionCleanupDisposition}
         WHEN ${corpusIndexProjectionRevisionIsRestorable({
-          ...served,
-          revisionEpoch: corpusIndexProjectionIntents.epoch,
+          ...untouched,
+          ...route,
           revisionFingerprint: corpusIndexProjectionIntents.fingerprint,
-          revisionIndexId: corpusIndexProjectionIntents.indexId,
-          cleanupAttempts: corpusIndexProjectionIntents.cleanupAttempts,
-          revisionAppliedAt: corpusIndexProjectionIntents.appliedAt,
-          lastError: corpusIndexProjectionIntents.lastError,
-          appliedEpoch: corpusIndexProjectionStates.appliedEpoch,
-          desiredEpoch: corpusIndexProjectionStates.desiredEpoch,
           desiredFingerprint: corpusIndexProjectionStates.desiredFingerprint,
-          desiredIndexId: corpusIndexProjectionStates.desiredIndexId,
         })}
-          THEN ${CLEANUP_CANDIDATE_RESTORE satisfies CorpusProjectionCleanupDisposition}
+          THEN ${"restorable" satisfies CorpusProjectionCleanupDisposition}
         WHEN ${corpusIndexProjectionIntents.cleanupAttempts} > 0
           THEN ${"served_after_delete" satisfies CorpusProjectionCleanupDisposition}
+        WHEN ${corpusIndexProjectionRevisionKeepsServing({
+          ...untouched,
+          ...route,
+          erasureExcluded: corpusProjectionErasureIsExcluded({
+            family,
+            entityId: corpusIndexProjectionIntents.entityId,
+            reservedAt: corpusIndexProjectionIntents.createdAt,
+          }),
+        })}
+          THEN ${"kept_superseded" satisfies CorpusProjectionCleanupDisposition}
         ELSE ${"served_unproven" satisfies CorpusProjectionCleanupDisposition}
       END`,
     })
@@ -450,6 +497,17 @@ const decideCleanupCandidatesTx = async (
     .where(inArray(corpusIndexProjectionIntents.id, [...intentIds]))
     .orderBy(asc(corpusIndexProjectionIntents.id))
     .limit(intentIds.length);
+};
+
+/** Each locked candidate's disposition, read under the locks just taken. */
+const decideCleanupCandidatesTx = async (
+  tx: Transaction,
+  options: CleanupDecisionOptions,
+) => {
+  if (options.intentIds.length === 0) {
+    return [];
+  }
+  const rows = await corpusProjectionCleanupDecisionQuery(tx, options);
   return rows.map((row) => ({
     id: row.id,
     entityId: row.entityId,
@@ -459,8 +517,10 @@ const decideCleanupCandidatesTx = async (
 
 /**
  * Claim the next cleanup batch of one index. Cleanup never deletes the copy an
- * upsert state serves, except the two kinds `CORPUS_PROJECTION_CLEANUP_CLAIM_KINDS`
- * names; a served revision no delete reached is restored instead.
+ * upsert state serves, except the two kinds
+ * `CORPUS_PROJECTION_CLEANUP_CLAIM_KINDS` names; a served revision no delete
+ * reached is restored instead (`CORPUS_PROJECTION_CLEANUP_RESTORE_KINDS`), so
+ * every row a turn decides leaves the queue and none of them heads it again.
  *
  * Lock order is the projection order: mutation fence, manifest, then the
  * serving states by entity, then the revisions by id. Both row locks skip
@@ -501,24 +561,32 @@ export const claimCorpusProjectionCleanupTx = async <
     limit,
     scopedEntityIds,
   });
-  const decided = await decideCleanupCandidatesTx(tx, decidable);
+  const decided = await decideCleanupCandidatesTx(tx, {
+    family,
+    intentIds: decidable,
+  });
   const claimAt = testNow ?? sql<Date>`clock_timestamp()`;
-  const restoredIntentIds = decided
-    .filter(({ disposition }) => disposition === CLEANUP_CANDIDATE_RESTORE)
-    .map(({ id }) => id);
+  const restoredIntentIds: ProjectionIntentId[] = [];
+  const restored = noCleanupRestores();
+  const toClaim: {
+    id: ProjectionIntentId;
+    entityId: string;
+    kind: CorpusProjectionCleanupClaimKind;
+  }[] = [];
+  const claimed = noCleanupClaims();
+  for (const { id, entityId, disposition } of decided) {
+    if (isCleanupRestoreKind(disposition)) {
+      restoredIntentIds.push(id);
+      restored[disposition] += 1;
+    } else {
+      toClaim.push({ id, entityId, kind: disposition });
+      claimed[disposition] += 1;
+    }
+  }
   await restoreServedCorpusProjectionRevisionsTx(tx, {
     intentIds: restoredIntentIds,
     transitionAt: claimAt,
   });
-  const toClaim = decided.flatMap(({ id, entityId, disposition }) =>
-    disposition === CLEANUP_CANDIDATE_RESTORE
-      ? []
-      : [{ id, entityId, kind: disposition }],
-  );
-  const claimed = noCleanupClaims();
-  for (const { kind } of toClaim) {
-    claimed[kind] += 1;
-  }
   const leaseToken = newLeaseToken();
   if (toClaim.length > 0) {
     const leaseExpiresAt =
@@ -561,6 +629,7 @@ export const claimCorpusProjectionCleanupTx = async <
       generation,
       index: indexId,
       restored: restoredIntentIds.length,
+      restored_superseded: restored.kept_superseded,
       claimed_after_delete: claimed.served_after_delete,
       claimed_unproven: claimed.served_unproven,
     });

@@ -52,6 +52,8 @@
     "function:public.clear_search_preview_generation():EXECUTE:GRANTOR:census_admin:GRANTABLE:false",
     "function:public.corpus_index_projection_intent_transition_allowed(from_status text, to_status text):EXECUTE:EFFECTIVE",
     "function:public.corpus_index_projection_intent_transition_allowed(from_status text, to_status text):EXECUTE:GRANTOR:census_admin:GRANTABLE:false",
+    "function:public.corpus_index_projection_queued_copy_is_kept(revision corpus_index_projection_intents):EXECUTE:EFFECTIVE",
+    "function:public.corpus_index_projection_queued_copy_is_kept(revision corpus_index_projection_intents):EXECUTE:GRANTOR:census_admin:GRANTABLE:false",
     "function:public.decision_docket_filing_year(case_number text, jurisdiction text):EXECUTE:EFFECTIVE",
     "function:public.decision_docket_filing_year(case_number text, jurisdiction text):EXECUTE:GRANTOR:census_admin:GRANTABLE:false",
     "function:public.decrement_case_law_statute_citation_count():EXECUTE:EFFECTIVE",

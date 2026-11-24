@@ -3,14 +3,23 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { type SQL, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+
 import type { Transaction } from "@/api/db/root";
-import { corpusIndexGenerations } from "@/api/db/schema";
+import {
+  caseLawDecisions,
+  caseLawSources,
+  corpusIndexGenerations,
+} from "@/api/db/schema";
+import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   corpusProjectionCleanupClaimPage,
+  corpusProjectionCleanupDecisionQuery,
   corpusProjectionSettlementTaskWalk,
 } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
 import { legacyServedCopyRetirePageQuery } from "@/api/lib/legal-search/corpus-index-projection-legacy-retire";
@@ -224,6 +233,139 @@ test("the cleanup claim reads one page of its queue, however many served revisio
   expect(large.rows).toBe(LIMIT);
   expect(large.buffers).toBeLessThanOrEqual(Math.round(small.buffers * 1.25));
   expect(large.buffers / large.rows).toBeLessThanOrEqual(25);
+}, 600_000);
+
+const SOURCE_ID = toSafeId<"caseLawSource">(
+  "00000000-0000-4000-a000-000000000001",
+);
+
+/** Canonical decisions for the served entities, each with a trail of its own. */
+const seedDecisions = async (
+  first: number,
+  count: number,
+  trailRows: number,
+) => {
+  const numbers = Array.from({ length: count }, (_, index) => first + index);
+  await db.insert(caseLawDecisions).values(
+    numbers.map((number) => ({
+      id: toSafeId<"caseLawDecision">(
+        `00000000-0000-4000-8000-${number.toString(16).padStart(12, "0")}`,
+      ),
+      sourceId: SOURCE_ID,
+      ...decisionDocketColumns({
+        caseNumber: `${number} As 1/2020`,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        country: "CZE",
+      }),
+      court: "Nejvyšší správní soud",
+      country: "CZE",
+      language: "cs",
+      contentHash: "f".repeat(64),
+      projectionEpoch: 3n,
+    })),
+  );
+  // Indexing rows, and one withdrawal recorded before the copy was reserved.
+  await db.execute(
+    sql.raw(`
+      INSERT INTO case_law_index_jobs (id, decision_id, operation, status, created_at)
+      SELECT gen_random_uuid(), ${entity("i")},
+        CASE WHEN j = 1 THEN 'withdraw' ELSE 'index' END, 'succeeded',
+        '2026-05-01'::timestamptz + (j || ' minutes')::interval
+      FROM generate_series(${first}, ${first + count - 1}) AS i,
+        generate_series(1, ${trailRows}) AS j
+    `),
+  );
+};
+
+// timeout: seeds and vacuums thousands of rows in PGlite, with no signal to await.
+test("the claim's decision probes the erasure records of its page alone, however long the trail", async () => {
+  await db.insert(caseLawSources).values({
+    id: SOURCE_ID,
+    adapterKey: "cleanup-claim-plan-test",
+    name: "Cleanup claim plan test",
+  });
+  await seedServed({
+    first: 1,
+    count: LIMIT,
+    waiting: true,
+    queuedAt: "2026-07-10",
+  });
+  // Two desired changes behind, so every row reaches the records.
+  await db.execute(
+    sql.raw("UPDATE corpus_index_projection_states SET desired_epoch = 3"),
+  );
+  await seedServed({
+    first: LIMIT + 1,
+    count: CONVERGED,
+    waiting: false,
+    queuedAt: null,
+  });
+  const TRAIL = 12;
+  const OTHERS = 200;
+  await seedDecisions(1, LIMIT + OTHERS, TRAIL);
+  const analyzeRecords = async () => {
+    await analyze();
+    await db.execute(sql.raw("VACUUM ANALYZE case_law_decisions"));
+    await db.execute(sql.raw("VACUUM ANALYZE case_law_index_jobs"));
+  };
+  await analyzeRecords();
+  const queued = await db.execute<{ id: string }>(
+    sql.raw(`
+      SELECT id::text AS id FROM corpus_index_projection_intents
+      WHERE status = 'cleanup_pending'
+    `),
+  );
+  const intentIds = queued.rows.map(({ id }) =>
+    toSafeId<"corpusIndexProjectionIntent">(id),
+  );
+  const decide = (tx: Transaction) =>
+    corpusProjectionCleanupDecisionQuery(tx, {
+      family: "case_law",
+      intentIds,
+    });
+  // The fixture reaches the records: without them no row would be kept.
+  const decided = await db.transaction(
+    async (tx) => await decide(asTestRaw<Transaction>(tx)),
+  );
+  expect(decided.map(({ disposition }) => disposition)).toEqual(
+    Array.from({ length: LIMIT }, () => "kept_superseded"),
+  );
+
+  const decision = (tx: Transaction) => decide(tx).getSQL();
+  const small = await explain(decision);
+  const text = small.lines.join("\n");
+  expect(small.rows).toBe(LIMIT);
+  expect(text).not.toContain("Seq Scan");
+  expect(text).not.toContain("hashed SubPlan");
+  expect(text).toContain("case_law_index_jobs_decision_idx");
+  expect(text).toContain("case_law_decisions_pkey");
+
+  // Five times the corpus and its trail costs the same page nothing.
+  await seedDecisions(LIMIT + OTHERS + 1, 4 * OTHERS, TRAIL);
+  await analyzeRecords();
+  const large = await explain(decision);
+  expect(large.rows).toBe(LIMIT);
+  expect(large.lines.join("\n")).not.toContain("Seq Scan");
+  expect(large.buffers).toBeLessThanOrEqual(Math.round(small.buffers * 1.5));
+  expect(large.buffers / large.rows).toBeLessThanOrEqual(40);
+
+  // The page's own decisions gain ten times their trail in rows the records
+  // do not match (indexing runs since the reservation), measured on its own.
+  await db.execute(
+    sql.raw(`
+      INSERT INTO case_law_index_jobs (id, decision_id, operation, status, created_at)
+      SELECT gen_random_uuid(), ${entity("i")}, 'index', 'succeeded',
+        '2026-07-02'::timestamptz + (j || ' minutes')::interval
+      FROM generate_series(1, ${LIMIT}) AS i,
+        generate_series(1, ${10 * TRAIL}) AS j
+    `),
+  );
+  await analyzeRecords();
+  const own = await explain(decision);
+  expect(own.rows).toBe(LIMIT);
+  expect(own.lines.join("\n")).not.toContain("Seq Scan");
+  expect(own.buffers).toBeLessThanOrEqual(Math.round(small.buffers * 1.5));
+  expect(own.buffers / own.rows).toBeLessThanOrEqual(40);
 }, 600_000);
 
 /**

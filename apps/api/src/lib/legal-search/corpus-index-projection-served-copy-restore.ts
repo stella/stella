@@ -33,7 +33,7 @@ type RestoreServedRevisionsOptions = {
  * each one under its state's and its own row lock. The columns are the ones
  * the revision held while applied: preparation only queued it, and the
  * publish barrier and every append instant are immutable. The database guard
- * on `cleanup_pending -> applied` repeats the restore predicate.
+ * on `cleanup_pending -> applied` repeats the predicates they decide by.
  */
 export const restoreServedCorpusProjectionRevisionsTx = async (
   tx: Transaction,
