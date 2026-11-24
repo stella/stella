@@ -20,6 +20,7 @@ import {
   type LegislationExpressionClassification,
 } from "@/api/lib/legal-search/legislation-expression-classification";
 import type {
+  LegislationAmendmentSnapshot,
   LegislationDocumentInput,
   LegislationSourceAdapter,
   LegislationSyncPage,
@@ -362,34 +363,33 @@ test("an untyped version hashes to the bytes it had before classifications", () 
 test("an amendment snapshot without a named channel hashes to the bytes it had before channels", () => {
   const { window, expressionKind } = UNTYPED_HASHES[0];
   const classification = { ...EFFECTIVE_CONSOLIDATION, expressionKind };
-  const amendments = {
-    observedAt: "2026-10-20T10:00:00Z",
-    relations: [],
-    coverage: { type: "complete" },
-  } as const;
-  const preChannelHash =
-    "0244f3672faa2c2775e08fa8ffd086d22d8f5bf71616db1d3300f9991ec87d84";
-  for (const channel of [undefined, "legacy"]) {
-    expect(
-      legislationSourceHash(
-        {
-          ...HASH_INPUT,
-          amendments: {
-            ...amendments,
-            ...(channel === undefined ? {} : { channel }),
-          },
-        },
-        window,
-        classification,
-      ),
-    ).toBe(preChannelHash);
-  }
-  expect(
+  const hash = (amendments: LegislationAmendmentSnapshot) =>
     legislationSourceHash(
-      { ...HASH_INPUT, amendments: { ...amendments, channel: "bulk" } },
+      { ...HASH_INPUT, amendments },
       window,
       classification,
-    ),
+    );
+  const observedAt = "2026-10-20T10:00:00Z";
+  const preChannelHash =
+    "0244f3672faa2c2775e08fa8ffd086d22d8f5bf71616db1d3300f9991ec87d84";
+  expect(
+    hash({ observedAt, relations: [], coverage: { type: "complete" } }),
+  ).toBe(preChannelHash);
+  expect(
+    hash({
+      channel: "legacy",
+      observedAt,
+      relations: [],
+      coverage: { type: "complete" },
+    }),
+  ).toBe(preChannelHash);
+  expect(
+    hash({
+      channel: "bulk",
+      observedAt,
+      relations: [],
+      coverage: { type: "complete" },
+    }),
   ).not.toBe(preChannelHash);
 });
 
