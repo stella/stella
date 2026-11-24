@@ -13,9 +13,9 @@ import type { Route as CourtBrowseRoute } from "@/routes/law/$country/courts/$";
 import type { Route as JurisdictionHubRoute } from "@/routes/law/$country/index";
 import type { Route as StatuteRoute } from "@/routes/law/$country/statutes/$slug/index";
 
-const defineRouteExceptions = <const T extends Record<string, string>>(
-  entries: T,
-): Readonly<T> => entries;
+const defineRouteExceptions = (
+  entries: Readonly<Record<string, string>>,
+): Readonly<Record<string, string>> => entries;
 
 export const publicRouteExceptions = defineRouteExceptions({
   "/": "RootRedirect immediately navigates according to the audience; it has no stable leaf body. Destination routes are covered separately.",
