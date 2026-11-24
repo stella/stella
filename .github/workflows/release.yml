@@ -1398,6 +1398,23 @@ jobs:
           done
           if ! bash "$GH_RETRY_SCRIPT" release view "$RELEASE_REF" >/dev/null; then
             bash "$GH_RETRY_SCRIPT" release view "$RC_REF" --json body --jq .body > NOTES.md
+            manual_notes="docs/changelog/${RELEASE_REF}.md"
+            if [[ -L "$manual_notes" ]]; then
+              echo "Manual release description must be a regular file: ${manual_notes}" >&2
+              exit 1
+            fi
+            if [[ -e "$manual_notes" ]]; then
+              if [[ ! -f "$manual_notes" ]]; then
+                echo "Manual release description must be a regular file: ${manual_notes}" >&2
+                exit 1
+              fi
+              {
+                cat "$manual_notes"
+                printf '\n\n## Changes\n\n'
+                cat NOTES.md
+              } > NOTES.with-manual.md
+              mv NOTES.with-manual.md NOTES.md
+            fi
             bash "$GH_RETRY_SCRIPT" release create "$RELEASE_REF" --draft --verify-tag --title "$RELEASE_REF" --notes-file NOTES.md
           fi
           bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" release-manifest.json --clobber

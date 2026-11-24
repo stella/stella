@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseChangelogMarkdown } from "./changelog-markdown";
+import {
+  parseChangelogInline,
+  parseChangelogMarkdown,
+  removeFirstMarkdownHeading,
+} from "./changelog-markdown";
 
 describe("changelog Markdown paragraphs", () => {
   test("treats consecutive source lines as one prose paragraph", () => {
@@ -62,5 +66,31 @@ describe("changelog Markdown paragraphs", () => {
         type: "image",
       },
     ]);
+  });
+});
+
+describe("changelog inline Markdown", () => {
+  test("parses bold, inline code, and https links while downgrading unsafe links", () => {
+    expect(
+      parseChangelogInline(
+        "Use **stella** with `@stll/ui` from [docs](https://stll.app) or [bad](http://example.com).",
+      ),
+    ).toEqual([
+      { text: "Use ", type: "text" },
+      { text: "stella", type: "bold" },
+      { text: " with ", type: "text" },
+      { text: "@stll/ui", type: "code" },
+      { text: " from ", type: "text" },
+      { href: "https://stll.app/", text: "docs", type: "link" },
+      { text: " or bad.", type: "text" },
+    ]);
+  });
+
+  test("strips only the first level-1 heading", () => {
+    expect(
+      removeFirstMarkdownHeading(
+        "# Maintenance release\n\nSummary.\n\n## Packages\n",
+      ),
+    ).toBe("Summary.\n\n## Packages");
   });
 });

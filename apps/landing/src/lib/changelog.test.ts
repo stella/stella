@@ -46,3 +46,25 @@ describe("changelog release dates", () => {
     );
   });
 });
+
+describe("changelog descriptions and bodies", () => {
+  test("never uses a Packages section heading as a release description", () => {
+    const broken = getChangelogReleases()
+      .filter((release) => release.description === "Packages")
+      .map((release) => release.tagName);
+    expect(broken).toEqual([]);
+  });
+
+  test("uses the opening prose paragraph when a release has no subtitle heading", () => {
+    const releases = new Map(
+      getChangelogReleases().map((release) => [release.tagName, release]),
+    );
+    expect(releases.get("v0.9.89")?.description).toBe(
+      "stella includes reliability and maintenance improvements.",
+    );
+    expect(releases.get("v0.9.24")?.description).toBe(
+      "Case law and statutes open in the legal database.",
+    );
+    expect(releases.get("v0.9.88")?.body).toContain("legal-file-formats.mp4");
+  });
+});

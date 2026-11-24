@@ -1,33 +1,36 @@
 ---
 import Base from "../layouts/Base.astro";
+import ChangelogMarkdown from "../components/ChangelogMarkdown.astro";
+import LandingFooter from "../components/LandingFooter.astro";
 import {
   getChangelogReleaseEntries,
-  getChangelogReleases,
-  getUnpromotedReleaseTags,
   type ChangelogRelease,
 } from "../lib/changelog";
+import { removeFirstMarkdownHeading } from "../lib/changelog-markdown";
 import {
   CHANGELOG_ENTRIES_PER_PAGE,
   formatMaintenanceReleaseRange,
   getMaintenanceReleaseTitle,
   isFeatureRelease,
 } from "../lib/changelog-release";
-import LandingFooter from "../components/LandingFooter.astro";
 
 const githubUrl = "https://github.com/stella/stella";
 const releasesUrl = `${githubUrl}/releases`;
-const releases = getChangelogReleases();
 const releaseEntries = getChangelogReleaseEntries();
-const previewReleaseSlugs = releases.map((release) => release.slug);
-const unpromotedReleaseTags = getUnpromotedReleaseTags();
 
-// Server-rendered first page of the changelog: real content for crawlers and
-// the no-JS/pre-JS state. The client script below replaces it with the live
-// GitHub feed once fresh data arrives (same page size as the live feed).
 const staticReleaseEntries = releaseEntries.slice(
   0,
   CHANGELOG_ENTRIES_PER_PAGE,
 );
+const totalPages = Math.max(
+  1,
+  Math.ceil(releaseEntries.length / CHANGELOG_ENTRIES_PER_PAGE),
+);
+const serializedEntries = JSON.stringify(releaseEntries).replace(
+  /</gu,
+  "\u003c",
+);
+
 const releaseUrl = (release: ChangelogRelease) =>
   `${releasesUrl}/tag/${release.tagName}`;
 const formatReleaseDate = (publishedAt: string) =>
@@ -84,10 +87,7 @@ const formatReleaseDate = (publishedAt: string) =>
                 if (entry.type === "maintenance") {
                   const newestRelease = entry.releases[0];
                   return (
-                    <details
-                      class="changelog-entry changelog-patch-release rounded-lg"
-                      data-static-release
-                    >
+                    <details class="changelog-entry changelog-patch-release rounded-lg">
                       <summary class="changelog-patch-summary flex min-h-14 cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 sm:flex-nowrap sm:px-6">
                         <span
                           class="shrink-0 tabular-nums text-sm font-medium"
@@ -125,39 +125,48 @@ const formatReleaseDate = (publishedAt: string) =>
                         class="changelog-maintenance-list px-5 pb-2 sm:px-6"
                         style="border-top: 1px solid var(--border)"
                       >
-                        {entry.releases.map((release) => (
-                          <details
-                            id={release.slug}
-                            class="changelog-maintenance-item py-3"
-                          >
-                            <summary class="flex cursor-pointer items-center justify-between gap-4 text-sm font-medium">
-                              <span class="tabular-nums">{release.tagName}</span>
-                              {release.publishedAt && (
-                                <time
-                                  datetime={release.publishedAt}
-                                  class="shrink-0 tabular-nums"
-                                  style="color: var(--muted-foreground)"
-                                >
-                                  {formatReleaseDate(release.publishedAt)}
-                                </time>
-                              )}
-                            </summary>
-                            <div class="changelog-body pb-2 pt-3">
-                              <p>{release.description}</p>
-                              <div class="mt-4 flex flex-wrap items-center gap-3">
-                                <a
-                                  href={releaseUrl(release)}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  class="inline-flex h-9 shrink-0 items-center justify-center rounded-[0.625rem] px-3 text-sm font-medium transition-opacity hover:opacity-80 whitespace-nowrap"
-                                  style="background: var(--background); border: 1px solid var(--border); color: var(--foreground)"
-                                >
-                                  View release on GitHub
-                                </a>
+                        {entry.releases.map((release) => {
+                          const notesBody = removeFirstMarkdownHeading(
+                            release.body,
+                          );
+                          return (
+                            <details
+                              id={release.slug}
+                              class="changelog-maintenance-item py-3"
+                            >
+                              <summary class="flex cursor-pointer items-center justify-between gap-4 text-sm font-medium">
+                                <span class="tabular-nums">
+                                  {release.tagName}
+                                </span>
+                                {release.publishedAt && (
+                                  <time
+                                    datetime={release.publishedAt}
+                                    class="shrink-0 tabular-nums"
+                                    style="color: var(--muted-foreground)"
+                                  >
+                                    {formatReleaseDate(release.publishedAt)}
+                                  </time>
+                                )}
+                              </summary>
+                              <div class="changelog-body pb-2 pt-3">
+                                <ChangelogMarkdown
+                                  body={notesBody || release.description}
+                                />
+                                <div class="mt-4 flex flex-wrap items-center gap-3">
+                                  <a
+                                    href={releaseUrl(release)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="inline-flex h-9 shrink-0 items-center justify-center rounded-[0.625rem] px-3 text-sm font-medium transition-opacity hover:opacity-80 whitespace-nowrap"
+                                    style="background: var(--background); border: 1px solid var(--border); color: var(--foreground)"
+                                  >
+                                    View release on GitHub
+                                  </a>
+                                </div>
                               </div>
-                            </div>
-                          </details>
-                        ))}
+                            </details>
+                          );
+                        })}
                       </div>
                     </details>
                   );
@@ -165,11 +174,11 @@ const formatReleaseDate = (publishedAt: string) =>
 
                 const { release } = entry;
                 if (!isFeatureRelease(release.heading)) {
+                  const notesBody = removeFirstMarkdownHeading(release.body);
                   return (
                     <details
                       id={release.slug}
                       class="changelog-entry changelog-patch-release rounded-lg"
-                      data-static-release
                       open
                     >
                       <summary class="changelog-patch-summary flex min-h-14 cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 sm:flex-nowrap sm:px-6">
@@ -203,10 +212,12 @@ const formatReleaseDate = (publishedAt: string) =>
                         </span>
                       </summary>
                       <div
-                        class="changelog-body px-5 pb-5 pt-1 sm:px-6"
+                        class="changelog-body px-5 pb-5 pt-3 sm:px-6"
                         style="border-top: 1px solid var(--border)"
                       >
-                        <p>{release.description}</p>
+                        <ChangelogMarkdown
+                          body={notesBody || release.description}
+                        />
                         <div class="mt-5 flex flex-wrap items-center gap-3">
                           <a
                             href={releaseUrl(release)}
@@ -227,7 +238,6 @@ const formatReleaseDate = (publishedAt: string) =>
                   <article
                     id={release.slug}
                     class="changelog-entry changelog-feature-release rounded-lg p-6 sm:p-8"
-                    data-static-release
                   >
                     <div
                       class="flex flex-wrap items-center gap-3 text-sm font-medium"
@@ -235,13 +245,12 @@ const formatReleaseDate = (publishedAt: string) =>
                     >
                       <h2>
                         <a
-                          href={releaseUrl(release)}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                          href={`/changelog/${release.slug}/`}
+                          data-release-anchor={release.slug}
                           class="font-display text-3xl font-medium transition-opacity hover:opacity-70 sm:text-4xl"
                           style="color: var(--foreground)"
                         >
-                          {release.heading ?? release.displayName}
+                          {release.tagName}
                         </a>
                       </h2>
                       {release.publishedAt && (
@@ -249,21 +258,18 @@ const formatReleaseDate = (publishedAt: string) =>
                           {formatReleaseDate(release.publishedAt)}
                         </time>
                       )}
+                      <a
+                        href={releaseUrl(release)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="inline-flex h-9 shrink-0 items-center justify-center rounded-[0.625rem] px-3 text-sm font-medium transition-opacity hover:opacity-80 whitespace-nowrap"
+                        style="background: var(--background); border: 1px solid var(--border); color: var(--foreground)"
+                      >
+                        View release on GitHub
+                      </a>
                     </div>
                     <div class="changelog-body mt-7 space-y-3">
-                      <h3>{release.displayName}</h3>
-                      <p>{release.description}</p>
-                      <div class="mt-5 flex flex-wrap items-center gap-3">
-                        <a
-                          href={releaseUrl(release)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          class="inline-flex h-9 shrink-0 items-center justify-center rounded-[0.625rem] px-3 text-sm font-medium transition-opacity hover:opacity-80 whitespace-nowrap"
-                          style="background: var(--background); border: 1px solid var(--border); color: var(--foreground)"
-                        >
-                          View release on GitHub
-                        </a>
-                      </div>
+                      <ChangelogMarkdown body={release.body} />
                     </div>
                   </article>
                 );
@@ -272,7 +278,10 @@ const formatReleaseDate = (publishedAt: string) =>
           </div>
           <nav
             id="changelog-pagination"
-            class="mt-6 hidden items-center justify-between gap-3"
+            class:list={[
+              "mt-6 items-center justify-between gap-3",
+              totalPages > 1 ? "flex" : "hidden",
+            ]}
             aria-label="Changelog pagination"
           >
           </nav>
@@ -282,7 +291,10 @@ const formatReleaseDate = (publishedAt: string) =>
               class="mt-6 rounded-lg p-6"
               style="background: var(--card); border: 1px solid var(--border)"
             >
-              <p class="text-sm leading-[1.8]" style="color: var(--muted-foreground)">
+              <p
+                class="text-sm leading-[1.8]"
+                style="color: var(--muted-foreground)"
+              >
                 Showing the latest releases. The full history and complete
                 release notes are on
                 <a
@@ -303,15 +315,9 @@ const formatReleaseDate = (publishedAt: string) =>
 
   <script
     is:inline
-    id="changelog-preview-release-slugs"
+    id="changelog-entries"
     type="application/json"
-    set:html={JSON.stringify(previewReleaseSlugs)}
-  />
-  <script
-    is:inline
-    id="changelog-unpromoted-release-tags"
-    type="application/json"
-    set:html={JSON.stringify(unpromotedReleaseTags)}
+    set:html={serializedEntries}
   />
 
   <style>
@@ -435,6 +441,14 @@ const formatReleaseDate = (publishedAt: string) =>
       line-height: 1.8;
     }
 
+    :global(.changelog-body code) {
+      background: var(--muted);
+      border-radius: 0.25rem;
+      color: var(--foreground);
+      font-size: 0.85em;
+      padding: 0.125rem 0.35rem;
+    }
+
     :global(.changelog-body ul) {
       list-style: disc;
       margin-top: 0.75rem;
@@ -491,193 +505,108 @@ const formatReleaseDate = (publishedAt: string) =>
   </style>
 
   <script>
+    import { panic } from "better-result";
+    import type { ChangelogRelease } from "../lib/changelog";
+    import {
+      parseChangelogInline,
+      parseChangelogMarkdown,
+      removeFirstMarkdownHeading,
+      safeHttpsUrl,
+    } from "../lib/changelog-markdown";
     import {
       CHANGELOG_ENTRIES_PER_PAGE,
       type ChangelogReleaseEntry,
       formatMaintenanceReleaseRange,
       getMaintenanceReleaseTitle,
-      groupMaintenanceReleases,
       isFeatureRelease,
-      isStellaReleaseTag,
     } from "../lib/changelog-release";
-    import { parseChangelogMarkdown } from "../lib/changelog-markdown";
-    import { panic } from "better-result";
-    import { slugify } from "@stll/text-normalize";
 
-    type GitHubRelease = {
-      body: string | null;
-      draft: boolean;
-      html_url: string;
-      name: string | null;
-      prerelease: boolean;
-      published_at: string | null;
-      tag_name: string;
-    };
+    const GITHUB_RELEASES_URL = "https://github.com/stella/stella/releases";
 
-    const isGitHubRelease = (value: unknown): value is GitHubRelease => {
+    const isChangelogRelease = (value: unknown): value is ChangelogRelease => {
       if (typeof value !== "object" || value === null || Array.isArray(value)) {
         return false;
       }
       const body = Reflect.get(value, "body");
-      const draft = Reflect.get(value, "draft");
-      const htmlUrl = Reflect.get(value, "html_url");
-      const name = Reflect.get(value, "name");
-      const prerelease = Reflect.get(value, "prerelease");
-      const publishedAt = Reflect.get(value, "published_at");
-      const tagName = Reflect.get(value, "tag_name");
+      const description = Reflect.get(value, "description");
+      const displayName = Reflect.get(value, "displayName");
+      const heading = Reflect.get(value, "heading");
+      const publishedAt = Reflect.get(value, "publishedAt");
+      const slug = Reflect.get(value, "slug");
+      const tagName = Reflect.get(value, "tagName");
       return (
-        (typeof body === "string" || body === null) &&
-        typeof draft === "boolean" &&
-        typeof htmlUrl === "string" &&
-        (typeof name === "string" || name === null) &&
-        typeof prerelease === "boolean" &&
+        typeof body === "string" &&
+        typeof description === "string" &&
+        typeof displayName === "string" &&
+        (typeof heading === "string" || heading === null) &&
         (typeof publishedAt === "string" || publishedAt === null) &&
+        typeof slug === "string" &&
         typeof tagName === "string"
       );
     };
 
-    const parseGitHubReleases = (value: unknown): GitHubRelease[] =>
-      Array.isArray(value) ? value.filter(isGitHubRelease) : [];
+    const isChangelogEntry = (
+      value: unknown,
+    ): value is ChangelogReleaseEntry<ChangelogRelease> => {
+      if (typeof value !== "object" || value === null || Array.isArray(value)) {
+        return false;
+      }
+      const type = Reflect.get(value, "type");
+      if (type === "release") {
+        return isChangelogRelease(Reflect.get(value, "release"));
+      }
+      if (type === "maintenance") {
+        const releases = Reflect.get(value, "releases");
+        return (
+          Array.isArray(releases) &&
+          releases.length > 0 &&
+          releases.every(isChangelogRelease)
+        );
+      }
+      return false;
+    };
 
-    const GITHUB_RELEASES_PER_PAGE = 100;
-    const releasesApiBase = "https://api.github.com/repos/stella/stella/releases";
-    const releasesEndpoint =
-      `${releasesApiBase}?per_page=${GITHUB_RELEASES_PER_PAGE}`;
-    let releasesContainer: HTMLElement | null = null;
-    let paginationContainer: HTMLElement | null = null;
-    let previewReleaseSlugsElement: HTMLElement | null = null;
-    let unpromotedReleaseTagsElement: HTMLElement | null = null;
-    const readStringList = (element: HTMLElement | null) => {
+    const readEntries = (
+      element: HTMLElement | null,
+    ): ChangelogReleaseEntry<ChangelogRelease>[] => {
       if (!element?.textContent) {
         return [];
       }
-
-      const parsed = JSON.parse(element.textContent);
-      if (!Array.isArray(parsed)) {
-        return [];
-      }
-
-      return parsed.filter((value): value is string => typeof value === "string");
-    };
-    let previewReleaseSlugs = new Set<string>();
-    // Stable tags built but never promoted; their release objects predate the
-    // draft-until-promoted publication and are still published on GitHub.
-    let unpromotedReleaseTags = new Set<string>();
-    const isListedStellaRelease = (release: GitHubRelease) =>
-      !release.draft &&
-      !release.prerelease &&
-      isStellaReleaseTag(release.tag_name) &&
-      !unpromotedReleaseTags.has(release.tag_name);
-    const readCurrentPage = () => {
-      const page = Number(new URLSearchParams(window.location.search).get("page"));
-      if (!Number.isInteger(page) || page < 1) {
-        return 1;
-      }
-      return page;
-    };
-    let currentPage = 1;
-    let hasNextPage = false;
-    let activeReleaseLoad: AbortController | null = null;
-
-    const safeHttpsUrl = (value: string) => {
-      try {
-        const url = new URL(value);
-        if (url.protocol !== "https:") {
-          return null;
-        }
-        return url.href;
-      } catch {
-        return null;
-      }
+      const parsed: unknown = JSON.parse(element.textContent);
+      return Array.isArray(parsed) ? parsed.filter(isChangelogEntry) : [];
     };
 
-    const releaseAnchorId = (tagName: string) =>
-      slugify(tagName, {
-    charset: "ascii",
-    fallback: "",
-    maxLength: Number.MAX_SAFE_INTEGER,
-    separator: "-",
-  });
+    const formatDate = (publishedAt: string | null) =>
+      publishedAt
+        ? new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(
+            new Date(publishedAt),
+          )
+        : null;
 
-    const normalizeMarkdownText = (text: string) =>
-      text
-        .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/gu, "$1")
-        .replace(/[*_`]/gu, "")
-        .replace(/\s+/gu, " ")
-        .trim();
-
-    const findMarkdownHeading = (body: string, level: 1 | 2) => {
-      const marker = "#".repeat(level);
-      const heading = body
-        .split("\n")
-        .map((line) => line.trim())
-        .find((line) => line.startsWith(`${marker} `));
-
-      if (!heading) {
-        return null;
-      }
-
-      return normalizeMarkdownText(heading.slice(marker.length + 1));
-    };
-
-    const getReleaseSummaryTitle = (release: GitHubRelease) => {
-      const body = release.body ?? "";
-      return findMarkdownHeading(body, 1) ?? release.name ?? release.tag_name;
-    };
-
-    const removeFirstMarkdownTitle = (body: string) => {
-      const lines = body.split("\n");
-      const titleIndex = lines.findIndex((line) => line.trim().startsWith("# "));
-      if (titleIndex === -1) {
-        return body;
-      }
-
-      return [
-        ...lines.slice(0, titleIndex),
-        ...lines.slice(titleIndex + 1),
-      ].join("\n").trim();
-    };
-
-    const appendTextWithInlineMarkdown = (target: HTMLElement, text: string) => {
-      const inlinePattern =
-        /(\*\*([^*]+)\*\*)|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/gu;
-      let cursor = 0;
-
-      for (const match of text.matchAll(inlinePattern)) {
-        const index = match.index ?? 0;
-        if (index > cursor) {
-          target.append(document.createTextNode(text.slice(cursor, index)));
-        }
-
-        const boldText = match[2];
-        const linkText = match[3];
-        const linkUrl = match[4];
-
-        if (boldText) {
+    const appendInlineMarkdown = (target: HTMLElement, text: string) => {
+      for (const segment of parseChangelogInline(text)) {
+        if (segment.type === "bold") {
           const strong = document.createElement("strong");
-          strong.textContent = boldText;
+          strong.textContent = segment.text;
           target.append(strong);
-        } else if (linkText && linkUrl) {
+          continue;
+        }
+        if (segment.type === "code") {
+          const code = document.createElement("code");
+          code.textContent = segment.text;
+          target.append(code);
+          continue;
+        }
+        if (segment.type === "link") {
           const link = document.createElement("a");
-          link.textContent = linkText;
+          link.textContent = segment.text;
+          link.href = segment.href;
           link.target = "_blank";
           link.rel = "noopener noreferrer";
-          try {
-            const url = new URL(linkUrl);
-            if (url.protocol === "https:") {
-              link.href = url.href;
-            }
-          } catch {
-            link.removeAttribute("href");
-          }
           target.append(link);
+          continue;
         }
-
-        cursor = index + match[0].length;
-      }
-
-      if (cursor < text.length) {
-        target.append(document.createTextNode(text.slice(cursor)));
+        target.append(document.createTextNode(segment.text));
       }
     };
 
@@ -690,7 +619,6 @@ const formatReleaseDate = (publishedAt: string) =>
           if (!safeSrc) {
             continue;
           }
-
           const image = document.createElement("img");
           image.alt = block.alt;
           image.decoding = "async";
@@ -705,7 +633,6 @@ const formatReleaseDate = (publishedAt: string) =>
           if (!safeSrc) {
             continue;
           }
-
           const video = document.createElement("video");
           video.controls = true;
           video.preload = "metadata";
@@ -715,7 +642,9 @@ const formatReleaseDate = (publishedAt: string) =>
         }
 
         if (block.type === "heading") {
-          const heading = document.createElement(block.level === 1 ? "h2" : "h3");
+          const heading = document.createElement(
+            block.level === 1 ? "h2" : "h3",
+          );
           heading.textContent = block.text;
           fragment.append(heading);
           continue;
@@ -725,7 +654,7 @@ const formatReleaseDate = (publishedAt: string) =>
           const list = document.createElement("ul");
           for (const text of block.items) {
             const item = document.createElement("li");
-            appendTextWithInlineMarkdown(item, text);
+            appendInlineMarkdown(item, text);
             list.append(item);
           }
           fragment.append(list);
@@ -733,78 +662,18 @@ const formatReleaseDate = (publishedAt: string) =>
         }
 
         const paragraph = document.createElement("p");
-        appendTextWithInlineMarkdown(paragraph, block.text);
+        appendInlineMarkdown(paragraph, block.text);
         fragment.append(paragraph);
       }
 
       return fragment;
     };
 
-    const splitReleaseBody = (body: string) => {
-      const lines = body.split("\n");
-      const changesIndex = lines.findIndex(
-        (line) => line.trim() === "## Changes",
-      );
-
-      if (changesIndex === -1) {
-        return { manualNotes: "", fullNotes: body.trim() };
-      }
-
-      return {
-        manualNotes: lines.slice(0, changesIndex).join("\n").trim(),
-        fullNotes: lines.slice(changesIndex + 1).join("\n").trim(),
-      };
-    };
-
-    const renderReleaseBody = (body: string) => {
-      const fragment = document.createDocumentFragment();
-      const { manualNotes, fullNotes } = splitReleaseBody(body);
-
-      if (manualNotes) {
-        fragment.append(renderMarkdownFragment(manualNotes));
-      }
-
-      if (!fullNotes) {
-        return fragment;
-      }
-
-      const details = document.createElement("details");
-      details.className = manualNotes ? "mt-6" : "";
-
-      const summary = document.createElement("summary");
-      summary.className =
-        "cursor-pointer text-sm font-medium transition-opacity hover:opacity-70";
-      summary.style.color = "var(--foreground)";
-      summary.textContent = "Full release notes";
-
-      const content = document.createElement("div");
-      content.className = "mt-4 space-y-3";
-      content.append(renderMarkdownFragment(fullNotes));
-
-      details.append(summary, content);
-      fragment.append(details);
-      return fragment;
-    };
-
-    const formatDate = (publishedAt: string | null) => {
-      if (!publishedAt) {
-        return "Unpublished";
-      }
-      return new Intl.DateTimeFormat("en", {
-        dateStyle: "medium",
-      }).format(new Date(publishedAt));
-    };
-
-    const createReleaseLink = (release: GitHubRelease) => {
-      const safeUrl = safeHttpsUrl(release.html_url);
-      if (!safeUrl) {
-        return null;
-      }
-
+    const createReleaseLink = (release: ChangelogRelease) => {
       const releaseLink = document.createElement("a");
       releaseLink.className =
         "inline-flex h-9 shrink-0 items-center justify-center rounded-[0.625rem] px-3 text-sm font-medium transition-opacity hover:opacity-80 whitespace-nowrap";
-      releaseLink.href = safeUrl;
+      releaseLink.href = `${GITHUB_RELEASES_URL}/tag/${release.tagName}`;
       releaseLink.target = "_blank";
       releaseLink.rel = "noopener noreferrer";
       releaseLink.style.background = "var(--background)";
@@ -814,9 +683,24 @@ const formatReleaseDate = (publishedAt: string) =>
       return releaseLink;
     };
 
-    const renderFeatureRelease = (release: GitHubRelease) => {
+    const bindAnchorClick = (link: HTMLAnchorElement, slug: string) => {
+      link.addEventListener("click", (event) => {
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+          return;
+        }
+        const target = document.querySelector(`#${CSS.escape(slug)}`);
+        if (!target) {
+          return;
+        }
+        event.preventDefault();
+        window.history.pushState(null, "", `#${slug}`);
+        target.scrollIntoView({ block: "start", behavior: "smooth" });
+      });
+    };
+
+    const renderFeatureRelease = (release: ChangelogRelease) => {
       const article = document.createElement("article");
-      article.id = releaseAnchorId(release.tag_name);
+      article.id = release.slug;
       article.className =
         "changelog-entry changelog-feature-release rounded-lg p-6 sm:p-8";
 
@@ -826,49 +710,38 @@ const formatReleaseDate = (publishedAt: string) =>
 
       const title = document.createElement("h2");
       const titleLink = document.createElement("a");
-      const hasPreviewPage = previewReleaseSlugs.has(article.id);
-      titleLink.href = hasPreviewPage ? `/changelog/${article.id}/` : `#${article.id}`;
+      titleLink.href = `/changelog/${release.slug}/`;
+      titleLink.dataset["releaseAnchor"] = release.slug;
       titleLink.className =
         "font-display text-3xl font-medium transition-opacity hover:opacity-70 sm:text-4xl";
       titleLink.style.color = "var(--foreground)";
-      titleLink.textContent = release.name || release.tag_name;
-      if (hasPreviewPage) {
-        titleLink.addEventListener("click", (event) => {
-          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-            return;
-          }
-
-          event.preventDefault();
-          window.history.pushState(null, "", `#${article.id}`);
-          article.scrollIntoView({ block: "start", behavior: "smooth" });
-        });
-      }
+      titleLink.textContent = release.tagName;
+      bindAnchorClick(titleLink, release.slug);
       title.append(titleLink);
       meta.append(title);
 
-      const date = document.createElement("span");
-      date.textContent = formatDate(release.published_at);
-      meta.append(date);
-
-      const releaseLink = createReleaseLink(release);
-      if (releaseLink) {
-        meta.append(releaseLink);
+      const formattedDate = formatDate(release.publishedAt);
+      if (formattedDate && release.publishedAt) {
+        const time = document.createElement("time");
+        time.dateTime = release.publishedAt;
+        time.textContent = formattedDate;
+        meta.append(time);
       }
+
+      meta.append(createReleaseLink(release));
 
       const body = document.createElement("div");
       body.className = "changelog-body mt-7 space-y-3";
-      body.append(renderReleaseBody(release.body || "No release notes published."));
+      body.append(renderMarkdownFragment(release.body));
 
       article.append(meta, body);
       return article;
     };
 
-    const renderCompactRelease = (release: GitHubRelease) => {
+    const renderCompactRelease = (release: ChangelogRelease) => {
       const details = document.createElement("details");
-      details.id = releaseAnchorId(release.tag_name);
+      details.id = release.slug;
       details.className = "changelog-entry changelog-patch-release rounded-lg";
-      // A release without a headline still shows its notes; only maintenance
-      // groups start collapsed.
       details.open = true;
 
       const summary = document.createElement("summary");
@@ -878,18 +751,25 @@ const formatReleaseDate = (publishedAt: string) =>
       const version = document.createElement("span");
       version.className = "shrink-0 tabular-nums text-sm font-medium";
       version.style.color = "var(--muted-foreground)";
-      version.textContent = release.name ?? release.tag_name;
+      version.textContent = release.tagName;
 
       const title = document.createElement("h2");
       title.className =
         "min-w-0 flex-1 truncate font-display text-base font-medium sm:text-lg";
       title.style.color = "var(--foreground)";
-      title.textContent = getReleaseSummaryTitle(release);
+      title.textContent = release.heading ?? release.displayName;
 
-      const date = document.createElement("span");
-      date.className = "shrink-0 text-sm tabular-nums";
-      date.style.color = "var(--muted-foreground)";
-      date.textContent = formatDate(release.published_at);
+      summary.append(version, title);
+
+      const formattedDate = formatDate(release.publishedAt);
+      if (formattedDate && release.publishedAt) {
+        const time = document.createElement("time");
+        time.dateTime = release.publishedAt;
+        time.className = "shrink-0 text-sm tabular-nums";
+        time.style.color = "var(--muted-foreground)";
+        time.textContent = formattedDate;
+        summary.append(time);
+      }
 
       const marker = document.createElement("span");
       marker.className =
@@ -898,37 +778,27 @@ const formatReleaseDate = (publishedAt: string) =>
       marker.style.background = "var(--muted)";
       marker.style.color = "var(--foreground)";
       marker.textContent = "+";
-
-      summary.append(version, title, date, marker);
+      summary.append(marker);
 
       const body = document.createElement("div");
-      body.className = "changelog-body px-5 pb-5 pt-1 sm:px-6";
+      body.className = "changelog-body px-5 pb-5 pt-3 sm:px-6";
       body.style.borderTop = "1px solid var(--border)";
-      body.append(
-        renderReleaseBody(
-          release.body
-            ? removeFirstMarkdownTitle(release.body)
-            : "No release notes published.",
-        ),
-      );
+      const notesBody = removeFirstMarkdownHeading(release.body);
+      body.append(renderMarkdownFragment(notesBody || release.description));
 
-      const releaseLink = createReleaseLink(release);
-      if (releaseLink) {
-        const footer = document.createElement("div");
-        footer.className = "mt-5 flex flex-wrap items-center gap-3";
-        footer.append(releaseLink);
-        body.append(footer);
-      }
+      const footer = document.createElement("div");
+      footer.className = "mt-5 flex flex-wrap items-center gap-3";
+      footer.append(createReleaseLink(release));
+      body.append(footer);
 
       details.append(summary, body);
       return details;
     };
 
-    const renderMaintenanceItem = (release: GitHubRelease) => {
+    const renderMaintenanceItem = (release: ChangelogRelease) => {
       const details = document.createElement("details");
-      details.id = releaseAnchorId(release.tag_name);
+      details.id = release.slug;
       details.className = "changelog-maintenance-item py-3";
-      details.open = decodeURIComponent(window.location.hash.slice(1)) === details.id;
 
       const summary = document.createElement("summary");
       summary.className =
@@ -936,45 +806,38 @@ const formatReleaseDate = (publishedAt: string) =>
 
       const version = document.createElement("span");
       version.className = "tabular-nums";
-      version.textContent = release.tag_name;
+      version.textContent = release.tagName;
+      summary.append(version);
 
-      const date = document.createElement("span");
-      date.className = "shrink-0 tabular-nums";
-      date.style.color = "var(--muted-foreground)";
-      date.textContent = formatDate(release.published_at);
-      summary.append(version, date);
+      const formattedDate = formatDate(release.publishedAt);
+      if (formattedDate && release.publishedAt) {
+        const time = document.createElement("time");
+        time.dateTime = release.publishedAt;
+        time.className = "shrink-0 tabular-nums";
+        time.style.color = "var(--muted-foreground)";
+        time.textContent = formattedDate;
+        summary.append(time);
+      }
 
       const body = document.createElement("div");
       body.className = "changelog-body pb-2 pt-3";
-      body.append(
-        renderReleaseBody(
-          release.body
-            ? removeFirstMarkdownTitle(release.body)
-            : "No release notes published.",
-        ),
-      );
+      const notesBody = removeFirstMarkdownHeading(release.body);
+      body.append(renderMarkdownFragment(notesBody || release.description));
 
-      const releaseLink = createReleaseLink(release);
-      if (releaseLink) {
-        const footer = document.createElement("div");
-        footer.className = "mt-4 flex flex-wrap items-center gap-3";
-        footer.append(releaseLink);
-        body.append(footer);
-      }
+      const footer = document.createElement("div");
+      footer.className = "mt-4 flex flex-wrap items-center gap-3";
+      footer.append(createReleaseLink(release));
+      body.append(footer);
 
       details.append(summary, body);
       return details;
     };
 
     const renderMaintenanceReleases = (
-      releases: [GitHubRelease, ...GitHubRelease[]],
+      releases: [ChangelogRelease, ...ChangelogRelease[]],
     ) => {
       const details = document.createElement("details");
       details.className = "changelog-entry changelog-patch-release rounded-lg";
-      const currentHash = decodeURIComponent(window.location.hash.slice(1));
-      details.open = releases.some(
-        (release) => releaseAnchorId(release.tag_name) === currentHash,
-      );
 
       const summary = document.createElement("summary");
       summary.className =
@@ -985,7 +848,7 @@ const formatReleaseDate = (publishedAt: string) =>
       version.style.color = "var(--muted-foreground)";
       version.textContent = formatMaintenanceReleaseRange(
         releases,
-        (release) => release.tag_name,
+        (release) => release.tagName,
       );
 
       const title = document.createElement("h2");
@@ -993,12 +856,18 @@ const formatReleaseDate = (publishedAt: string) =>
         "min-w-0 flex-1 truncate font-display text-base font-medium sm:text-lg";
       title.style.color = "var(--foreground)";
       title.textContent = getMaintenanceReleaseTitle(releases.length);
+      summary.append(version, title);
 
       const newestRelease = releases[0];
-      const date = document.createElement("span");
-      date.className = "shrink-0 text-sm tabular-nums";
-      date.style.color = "var(--muted-foreground)";
-      date.textContent = formatDate(newestRelease.published_at);
+      const formattedDate = formatDate(newestRelease.publishedAt);
+      if (formattedDate && newestRelease.publishedAt) {
+        const time = document.createElement("time");
+        time.dateTime = newestRelease.publishedAt;
+        time.className = "shrink-0 text-sm tabular-nums";
+        time.style.color = "var(--muted-foreground)";
+        time.textContent = formattedDate;
+        summary.append(time);
+      }
 
       const marker = document.createElement("span");
       marker.className =
@@ -1007,7 +876,7 @@ const formatReleaseDate = (publishedAt: string) =>
       marker.style.background = "var(--muted)";
       marker.style.color = "var(--foreground)";
       marker.textContent = "+";
-      summary.append(version, title, date, marker);
+      summary.append(marker);
 
       const body = document.createElement("div");
       body.className = "changelog-maintenance-list px-5 pb-2 sm:px-6";
@@ -1019,15 +888,13 @@ const formatReleaseDate = (publishedAt: string) =>
     };
 
     const renderReleaseEntry = (
-      entry: ChangelogReleaseEntry<GitHubRelease>,
+      entry: ChangelogReleaseEntry<ChangelogRelease>,
     ) => {
       switch (entry.type) {
         case "maintenance":
           return renderMaintenanceReleases(entry.releases);
         case "release":
-          return isFeatureRelease(
-            findMarkdownHeading(entry.release.body ?? "", 1),
-          )
+          return isFeatureRelease(entry.release.heading)
             ? renderFeatureRelease(entry.release)
             : renderCompactRelease(entry.release);
         default: {
@@ -1037,272 +904,19 @@ const formatReleaseDate = (publishedAt: string) =>
       }
     };
 
-    const renderMessage = (text: string) => {
-      const message = document.createElement("article");
-      message.className = "rounded-lg p-6";
-      message.style.background = "var(--card)";
-      message.style.border = "1px solid var(--border)";
-
-      const paragraph = document.createElement("p");
-      paragraph.className = "text-sm leading-[1.8]";
-      paragraph.style.color = "var(--muted-foreground)";
-      paragraph.append(document.createTextNode(`${text} `));
-
-      const link = document.createElement("a");
-      link.href = "https://github.com/stella/stella/releases";
-      link.className = "font-medium transition-opacity hover:opacity-70";
-      link.style.color = "var(--foreground)";
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      link.textContent = "GitHub releases";
-      paragraph.append(link, document.createTextNode("."));
-
-      message.append(paragraph);
-      return message;
-    };
-
-    const renderLoading = () => {
-      const article = document.createElement("article");
-      article.className = "rounded-lg p-6";
-      article.style.background = "var(--card)";
-      article.style.border = "1px solid var(--border)";
-
-      const tag = document.createElement("div");
-      tag.className = "h-3 w-28 rounded-full";
-      tag.style.background = "var(--muted)";
-
-      const title = document.createElement("div");
-      title.className = "mt-5 h-7 w-48 rounded-full";
-      title.style.background = "var(--muted)";
-
-      const lines = document.createElement("div");
-      lines.className = "mt-6 space-y-3";
-
-      for (const className of [
-        "h-3 w-full rounded-full",
-        "h-3 w-5/6 rounded-full",
-        "h-3 w-2/3 rounded-full",
-      ]) {
-        const line = document.createElement("div");
-        line.className = className;
-        line.style.background = "var(--muted)";
-        lines.append(line);
+    const findEntryPageForSlug = (
+      entries: readonly ChangelogReleaseEntry<ChangelogRelease>[],
+      slug: string,
+    ): number | null => {
+      const index = entries.findIndex((entry) =>
+        entry.type === "maintenance"
+          ? entry.releases.some((release) => release.slug === slug)
+          : entry.release.slug === slug,
+      );
+      if (index === -1) {
+        return null;
       }
-
-      article.append(tag, title, lines);
-      return article;
-    };
-
-    const updatePageUrl = () => {
-      const isChangelogRoute = /^\/changelog\/?$/u.test(window.location.pathname);
-      if (!releasesContainer?.isConnected || !isChangelogRoute) {
-        return;
-      }
-      const url = new URL(window.location.href);
-      url.pathname = "/changelog/";
-      if (currentPage === 1) {
-        url.searchParams.delete("page");
-      } else {
-        url.searchParams.set("page", String(currentPage));
-      }
-      window.history.replaceState(null, "", url);
-    };
-
-    const responseHasNextPage = (response: Response) =>
-      response.headers.get("link")?.includes('rel="next"') ?? false;
-
-    const buildReleasesUrl = (githubPage: number) =>
-      `${releasesEndpoint}&page=${githubPage}`;
-
-    const fetchStellaReleasePage = async (
-      page: number,
-      signal: AbortSignal,
-    ) => {
-      const releaseEntryOffset = (page - 1) * CHANGELOG_ENTRIES_PER_PAGE;
-      // The extra entry is never rendered. It proves that the page's trailing
-      // maintenance group is complete and supplies an accurate next-page flag.
-      const releaseEntryLimit =
-        releaseEntryOffset + CHANGELOG_ENTRIES_PER_PAGE + 1;
-      const stellaReleases: GitHubRelease[] = [];
-      let releaseEntries: ChangelogReleaseEntry<GitHubRelease>[] = [];
-      let githubPage = 1;
-      let hasMoreGithubPages = true;
-
-      while (hasMoreGithubPages && releaseEntries.length < releaseEntryLimit) {
-        const response = await fetch(buildReleasesUrl(githubPage), {
-          headers: { Accept: "application/vnd.github+json" },
-          signal,
-        });
-        if (!response.ok) {
-          return null;
-        }
-
-        const releases = parseGitHubReleases(await response.json());
-        stellaReleases.push(...releases.filter(isListedStellaRelease));
-        releaseEntries = groupMaintenanceReleases(
-          stellaReleases,
-          getReleaseSummaryTitle,
-        );
-        hasMoreGithubPages = responseHasNextPage(response);
-        githubPage += 1;
-      }
-
-      return {
-        entries: releaseEntries.slice(
-          releaseEntryOffset,
-          releaseEntryOffset + CHANGELOG_ENTRIES_PER_PAGE,
-        ),
-        hasNextPage:
-          releaseEntries.length >
-          releaseEntryOffset + CHANGELOG_ENTRIES_PER_PAGE,
-      };
-    };
-
-    const renderPagination = () => {
-      if (!paginationContainer) {
-        return;
-      }
-      paginationContainer.replaceChildren();
-
-      if (currentPage === 1 && !hasNextPage) {
-        paginationContainer.classList.add("hidden");
-        paginationContainer.classList.remove("flex");
-        return;
-      }
-
-      const previousButton = document.createElement("button");
-      previousButton.type = "button";
-      previousButton.className =
-        "inline-flex h-10 items-center justify-center rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40";
-      previousButton.style.background = "var(--card)";
-      previousButton.style.border = "1px solid var(--border)";
-      previousButton.style.color = "var(--foreground)";
-      previousButton.disabled = currentPage === 1;
-      previousButton.textContent = "Previous";
-      previousButton.addEventListener("click", () => {
-        if (currentPage === 1) {
-          return;
-        }
-        currentPage -= 1;
-        loadReleases();
-      });
-
-      const pageIndicator = document.createElement("span");
-      pageIndicator.className = "text-sm tabular-nums";
-      pageIndicator.style.color = "var(--muted-foreground)";
-      pageIndicator.textContent = `Page ${currentPage}`;
-
-      const nextButton = document.createElement("button");
-      nextButton.type = "button";
-      nextButton.className =
-        "inline-flex h-10 items-center justify-center rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40";
-      nextButton.style.background = "var(--card)";
-      nextButton.style.border = "1px solid var(--border)";
-      nextButton.style.color = "var(--foreground)";
-      nextButton.disabled = !hasNextPage;
-      nextButton.textContent = "Next";
-      nextButton.addEventListener("click", () => {
-        if (!hasNextPage) {
-          return;
-        }
-        currentPage += 1;
-        loadReleases();
-      });
-
-      paginationContainer.append(previousButton, pageIndicator, nextButton);
-      paginationContainer.classList.remove("hidden");
-      paginationContainer.classList.add("flex");
-    };
-
-    const loadReleases = async () => {
-      const loadContainer = releasesContainer;
-      if (!loadContainer?.isConnected) {
-        return;
-      }
-
-      activeReleaseLoad?.abort();
-      const controller = new AbortController();
-      activeReleaseLoad = controller;
-      const loadPage = currentPage;
-
-      // The server-rendered list is the pre-JS content for page 1: keep it
-      // visible while the live feed loads and only swap once data arrives.
-      // Paginating (or landing on ?page=N) replaces it with the skeleton.
-      const hasStaticList = (container: HTMLElement) =>
-        container.querySelector("[data-static-release]") !== null;
-
-      try {
-        if (loadPage !== 1 || !hasStaticList(loadContainer)) {
-          loadContainer.replaceChildren(renderLoading());
-        }
-
-        const releasePage = await fetchStellaReleasePage(
-          loadPage,
-          controller.signal,
-        );
-        if (
-          controller !== activeReleaseLoad ||
-          controller.signal.aborted ||
-          !loadContainer.isConnected ||
-          releasesContainer !== loadContainer ||
-          currentPage !== loadPage
-        ) {
-          return;
-        }
-
-        if (!releasePage) {
-          hasNextPage = false;
-          renderPagination();
-          // With the server-rendered list still up, keep it over an error card.
-          if (!hasStaticList(loadContainer)) {
-            loadContainer.replaceChildren(
-              renderMessage(
-                "Release notes could not be loaded right now. Read them directly on",
-              ),
-            );
-          }
-          return;
-        }
-
-        hasNextPage = releasePage.hasNextPage;
-        if (releasePage.entries.length === 0) {
-          renderPagination();
-          loadContainer.replaceChildren(
-            renderMessage("No public releases are published yet. Check"),
-          );
-          return;
-        }
-
-        updatePageUrl();
-        renderPagination();
-        loadContainer.replaceChildren(
-          ...releasePage.entries.map(renderReleaseEntry),
-        );
-        scrollToCurrentHash();
-      } catch {
-        if (
-          controller !== activeReleaseLoad ||
-          controller.signal.aborted ||
-          !loadContainer.isConnected ||
-          releasesContainer !== loadContainer
-        ) {
-          return;
-        }
-
-        hasNextPage = false;
-        renderPagination();
-        if (!hasStaticList(loadContainer)) {
-          loadContainer.replaceChildren(
-            renderMessage(
-              "Release notes could not be loaded right now. Read them directly on",
-            ),
-          );
-        }
-      } finally {
-        if (activeReleaseLoad === controller) {
-          activeReleaseLoad = null;
-        }
-      }
+      return Math.floor(index / CHANGELOG_ENTRIES_PER_PAGE) + 1;
     };
 
     const scrollToCurrentHash = () => {
@@ -1328,37 +942,142 @@ const formatReleaseDate = (publishedAt: string) =>
     };
 
     const initializeChangelog = () => {
-      activeReleaseLoad?.abort();
-      activeReleaseLoad = null;
-      releasesContainer = document.querySelector("#changelog-releases");
-      paginationContainer = document.querySelector("#changelog-pagination");
-      previewReleaseSlugsElement = document.querySelector(
-        "#changelog-preview-release-slugs",
+      const releasesContainer =
+        document.querySelector<HTMLElement>("#changelog-releases");
+      const paginationContainer = document.querySelector<HTMLElement>(
+        "#changelog-pagination",
       );
-      unpromotedReleaseTagsElement = document.querySelector(
-        "#changelog-unpromoted-release-tags",
-      );
+      const entriesElement =
+        document.querySelector<HTMLElement>("#changelog-entries");
       if (!releasesContainer) {
         return;
       }
 
-      previewReleaseSlugs = new Set(readStringList(previewReleaseSlugsElement));
-      unpromotedReleaseTags = new Set(
-        readStringList(unpromotedReleaseTagsElement),
+      const allEntries = readEntries(entriesElement);
+      const totalPages = Math.max(
+        1,
+        Math.ceil(allEntries.length / CHANGELOG_ENTRIES_PER_PAGE),
       );
-      currentPage = readCurrentPage();
-      hasNextPage = false;
-      // Expand a nested anchor in the server-rendered list immediately; the
-      // live GitHub feed may take a network round trip before replacing it.
-      scrollToCurrentHash();
-      void loadReleases();
+
+      for (const anchor of releasesContainer.querySelectorAll<HTMLAnchorElement>(
+        "a[data-release-anchor]",
+      )) {
+        const slug = anchor.dataset["releaseAnchor"];
+        if (slug) {
+          bindAnchorClick(anchor, slug);
+        }
+      }
+
+      const readRequestedPage = () => {
+        const raw = Number(
+          new URLSearchParams(window.location.search).get("page"),
+        );
+        if (Number.isInteger(raw) && raw >= 1 && raw <= totalPages) {
+          return raw;
+        }
+        const hashSlug = decodeURIComponent(window.location.hash.slice(1));
+        if (hashSlug) {
+          return findEntryPageForSlug(allEntries, hashSlug) ?? 1;
+        }
+        return 1;
+      };
+
+      let currentPage = readRequestedPage();
+
+      const updatePageUrl = (page: number) => {
+        const url = new URL(window.location.href);
+        if (page === 1) {
+          url.searchParams.delete("page");
+        } else {
+          url.searchParams.set("page", String(page));
+        }
+        window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+      };
+
+      const renderPagination = () => {
+        if (!paginationContainer) {
+          return;
+        }
+        paginationContainer.replaceChildren();
+
+        if (totalPages <= 1) {
+          paginationContainer.classList.add("hidden");
+          paginationContainer.classList.remove("flex");
+          return;
+        }
+
+        const previousButton = document.createElement("button");
+        previousButton.type = "button";
+        previousButton.className =
+          "inline-flex h-10 items-center justify-center rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40";
+        previousButton.style.background = "var(--card)";
+        previousButton.style.border = "1px solid var(--border)";
+        previousButton.style.color = "var(--foreground)";
+        previousButton.disabled = currentPage === 1;
+        previousButton.textContent = "Previous";
+        previousButton.addEventListener("click", () => {
+          if (currentPage > 1) {
+            goToPage(currentPage - 1, true);
+          }
+        });
+
+        const pageIndicator = document.createElement("span");
+        pageIndicator.className = "text-sm tabular-nums";
+        pageIndicator.style.color = "var(--muted-foreground)";
+        pageIndicator.textContent = `Page ${currentPage} of ${totalPages}`;
+
+        const nextButton = document.createElement("button");
+        nextButton.type = "button";
+        nextButton.className =
+          "inline-flex h-10 items-center justify-center rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40";
+        nextButton.style.background = "var(--card)";
+        nextButton.style.border = "1px solid var(--border)";
+        nextButton.style.color = "var(--foreground)";
+        nextButton.disabled = currentPage >= totalPages;
+        nextButton.textContent = "Next";
+        nextButton.addEventListener("click", () => {
+          if (currentPage < totalPages) {
+            goToPage(currentPage + 1, true);
+          }
+        });
+
+        paginationContainer.append(previousButton, pageIndicator, nextButton);
+        paginationContainer.classList.remove("hidden");
+        paginationContainer.classList.add("flex");
+      };
+
+      const goToPage = (page: number, scrollTop: boolean) => {
+        currentPage = page;
+        const start = (page - 1) * CHANGELOG_ENTRIES_PER_PAGE;
+        const pageEntries = allEntries.slice(
+          start,
+          start + CHANGELOG_ENTRIES_PER_PAGE,
+        );
+        releasesContainer.replaceChildren(
+          ...pageEntries.map(renderReleaseEntry),
+        );
+        updatePageUrl(page);
+        renderPagination();
+        if (scrollTop) {
+          releasesContainer.scrollIntoView({
+            block: "start",
+            behavior: "smooth",
+          });
+        } else {
+          scrollToCurrentHash();
+        }
+      };
+
+      // Page 1 is already server-rendered with identical markup; only replace
+      // the DOM when navigating to another page.
+      if (currentPage !== 1) {
+        goToPage(currentPage, false);
+      } else {
+        renderPagination();
+        scrollToCurrentHash();
+      }
     };
 
     document.addEventListener("astro:page-load", initializeChangelog);
-    document.addEventListener("astro:before-swap", () => {
-      activeReleaseLoad?.abort();
-      activeReleaseLoad = null;
-    });
-
   </script>
 </Base>

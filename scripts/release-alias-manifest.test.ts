@@ -103,6 +103,10 @@ test("final release declares no build, smoke, or web-image work", () => {
     `web="$(jq -r '.webImage.digest' release-manifest.json)"`,
   );
   expect(alias).not.toContain(".productionWebImage.digest");
+  // Stable releases created by aliasing an RC must still prepend the
+  // curated release notes from docs/changelog/<tag>.md before the RC commit log.
+  expect(alias).toContain(`manual_notes="docs/changelog/\${RELEASE_REF}.md"`);
+  expect(alias).toContain("## Changes");
 });
 
 test("the final release attests the aliased web image under its own ref", () => {
