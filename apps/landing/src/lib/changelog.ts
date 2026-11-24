@@ -4,9 +4,11 @@ import path from "node:path";
 import { slugify } from "@stll/text-normalize";
 
 import releaseDates from "../data/changelog-release-dates.json";
+import { parseChangelogMarkdown } from "./changelog-markdown";
 import { groupMaintenanceReleases } from "./changelog-release";
 
 export type ChangelogRelease = {
+  body: string;
   description: string;
   displayName: string;
   heading: string | null;
@@ -31,6 +33,7 @@ const CHANGELOG_DIR = resolveRepoPath(
   path.dirname(CI_MARKDOWN_READER_INPUTS_CHANGELOG[0]),
 );
 const STABLE_CHANGELOG_FILE_PATTERN = /^v\d+\.\d+\.\d+\.md$/u;
+const SECTION_HEADINGS = new Set(["Changes", "Packages"]);
 
 const releaseAnchorId = (tagName: string) =>
   slugify(tagName, {
@@ -61,17 +64,39 @@ const listReleaseTags = (): string[] => {
   );
 };
 
+const extractDescription = (markdown: string): string | null => {
+  for (const block of parseChangelogMarkdown(markdown)) {
+    if (block.type === "heading" && block.level === 2) {
+      const normalized = normalizeMarkdownText(block.text);
+      if (normalized && !SECTION_HEADINGS.has(normalized)) {
+        return normalized;
+      }
+      continue;
+    }
+
+    if (block.type === "paragraph") {
+      const normalized = normalizeMarkdownText(block.text);
+      if (normalized) {
+        return normalized;
+      }
+    }
+  }
+
+  return null;
+};
+
 const readRelease = (tagName: string): ChangelogRelease => {
   const markdown = readFileSync(
     path.join(CHANGELOG_DIR, `${tagName}.md`),
     "utf-8",
-  );
+  ).trim();
   const heading = findHeading(markdown, 1);
   const description =
-    findHeading(markdown, 2) ??
+    extractDescription(markdown) ??
     `Release notes for ${formatReleaseName(tagName)}.`;
 
   return {
+    body: markdown,
     description,
     displayName: formatReleaseName(tagName),
     heading,
@@ -85,9 +110,7 @@ export const getChangelogReleases = (): ChangelogRelease[] =>
   listReleaseTags().map(readRelease);
 
 /**
- * Stable tags recorded as never promoted. The live GitHub feed on the
- * changelog page drops these too: their release objects may still be
- * published, since the draft-until-promoted publication came later.
+ * Stable tags recorded as never promoted.
  */
 export const getUnpromotedReleaseTags = (): string[] =>
   Object.entries(RELEASE_DATES)

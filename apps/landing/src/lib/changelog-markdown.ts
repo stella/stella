@@ -1,13 +1,85 @@
-type ChangelogMarkdownBlock =
+export type ChangelogMarkdownBlock =
   | { level: 1 | 2 | 3; text: string; type: "heading" }
   | { alt: string; src: string; type: "image" }
   | { items: string[]; type: "list" }
   | { text: string; type: "paragraph" }
   | { src: string; type: "video" };
 
+export type ChangelogInlineSegment =
+  | { text: string; type: "bold" }
+  | { text: string; type: "code" }
+  | { href: string; text: string; type: "link" }
+  | { text: string; type: "text" };
+
 const HTML_VIDEO_PATTERN =
   /^<video\b[^>]*\bsrc=["']([^"']+)["'][^>]*><\/video>$/iu;
 const MARKDOWN_IMAGE_PATTERN = /^!\[([^\]]*)\]\((https:\/\/[^)\s]+)\)$/u;
+const INLINE_MARKDOWN_PATTERN =
+  /(\*\*([^*]+)\*\*)|(`([^`]+)`)|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/gu;
+
+export const safeHttpsUrl = (value: string): string | null => {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:") {
+      return null;
+    }
+    return url.href;
+  } catch {
+    return null;
+  }
+};
+
+export const removeFirstMarkdownHeading = (body: string): string => {
+  const lines = body.split("\n");
+  const titleIndex = lines.findIndex((line) => line.trim().startsWith("# "));
+  if (titleIndex === -1) {
+    return body.trim();
+  }
+
+  return [...lines.slice(0, titleIndex), ...lines.slice(titleIndex + 1)]
+    .join("\n")
+    .trim();
+};
+
+export const parseChangelogInline = (
+  text: string,
+): ChangelogInlineSegment[] => {
+  const segments: ChangelogInlineSegment[] = [];
+  let cursor = 0;
+
+  for (const match of text.matchAll(INLINE_MARKDOWN_PATTERN)) {
+    const index = match.index ?? 0;
+    if (index > cursor) {
+      segments.push({ text: text.slice(cursor, index), type: "text" });
+    }
+
+    const boldText = match[2];
+    const codeText = match[4];
+    const linkText = match[5];
+    const linkUrl = match[6];
+
+    if (boldText) {
+      segments.push({ text: boldText, type: "bold" });
+    } else if (codeText) {
+      segments.push({ text: codeText, type: "code" });
+    } else if (linkText && linkUrl) {
+      const safeHref = safeHttpsUrl(linkUrl);
+      if (safeHref) {
+        segments.push({ href: safeHref, text: linkText, type: "link" });
+      } else {
+        segments.push({ text: linkText, type: "text" });
+      }
+    }
+
+    cursor = index + match[0].length;
+  }
+
+  if (cursor < text.length) {
+    segments.push({ text: text.slice(cursor), type: "text" });
+  }
+
+  return segments;
+};
 
 const parseHeading = (line: string) => {
   if (line.startsWith("### ")) {

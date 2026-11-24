@@ -1,0 +1,88 @@
+---
+import {
+  parseChangelogInline,
+  parseChangelogMarkdown,
+  safeHttpsUrl,
+} from "../lib/changelog-markdown";
+
+type Props = {
+  body: string;
+};
+
+const { body } = Astro.props;
+const blocks = parseChangelogMarkdown(body);
+---
+
+{
+  blocks.map((block) => {
+    if (block.type === "image") {
+      const safeSrc = safeHttpsUrl(block.src);
+      return safeSrc ? (
+        <img alt={block.alt} decoding="async" loading="lazy" src={safeSrc} />
+      ) : null;
+    }
+
+    if (block.type === "video") {
+      const safeSrc = safeHttpsUrl(block.src);
+      return safeSrc ? (
+        <video controls preload="metadata" src={safeSrc}></video>
+      ) : null;
+    }
+
+    if (block.type === "heading") {
+      return block.level === 1 ? <h2>{block.text}</h2> : <h3>{block.text}</h3>;
+    }
+
+    if (block.type === "list") {
+      return (
+        <ul>
+          {block.items.map((item) => (
+            <li>
+              {parseChangelogInline(item).map((segment) => {
+                if (segment.type === "bold") {
+                  return <strong>{segment.text}</strong>;
+                }
+                if (segment.type === "code") {
+                  return <code>{segment.text}</code>;
+                }
+                if (segment.type === "link") {
+                  return (
+                    <a
+                      href={segment.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {segment.text}
+                    </a>
+                  );
+                }
+                return segment.text;
+              })}
+            </li>
+          ))}
+        </ul>
+      );
+    }
+
+    return (
+      <p>
+        {parseChangelogInline(block.text).map((segment) => {
+          if (segment.type === "bold") {
+            return <strong>{segment.text}</strong>;
+          }
+          if (segment.type === "code") {
+            return <code>{segment.text}</code>;
+          }
+          if (segment.type === "link") {
+            return (
+              <a href={segment.href} target="_blank" rel="noopener noreferrer">
+                {segment.text}
+              </a>
+            );
+          }
+          return segment.text;
+        })}
+      </p>
+    );
+  })
+}
