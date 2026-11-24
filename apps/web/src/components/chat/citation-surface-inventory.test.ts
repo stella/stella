@@ -28,52 +28,74 @@ const trayBypasses = (failures: readonly string[]) =>
       failure.includes("features/chat/source-chips.tsx:"),
   );
 
+const AST_SCAN_TIMEOUT_MS = 15_000;
+
 describe("chat citation surface ownership", () => {
-  test("all discovered markdown overrides and source sinks use the shared legal resolver", () => {
-    const result = CITATION_INVENTORY.inspect();
-    expect(result.hostCount).toBeGreaterThan(0);
-    expect(result.anchorCount).toBeGreaterThan(0);
-    expect(result.sinkCount).toBeGreaterThan(0);
-    expect(result.failures).toEqual([]);
-  });
-  test("a plain anchor override cannot silently bypass citation navigation", () => {
-    const anchor = CITATION_INVENTORY.inspect().sharedAnchorOverrides.at(0);
-    expect(anchor).toBeDefined();
-    if (anchor === undefined) {
-      return;
-    }
-    const mutated = `${anchor.sourceText.slice(0, anchor.start)}(props) => <a {...props} />${anchor.sourceText.slice(anchor.end)}`;
-    const result = CITATION_INVENTORY.inspect(
-      new Map([[anchor.filePath, mutated]]),
-    );
-    expect(
-      result.failures.some((failure) =>
-        failure.startsWith("Bypassing markdown anchor"),
-      ),
-    ).toBe(true);
-  });
-  test("a function-declared tray component cannot hide a plain source anchor", () => {
-    const result = CITATION_INVENTORY.inspect(
-      trayWith("<PlainSourceAnchor />", [
-        'function PlainSourceAnchor() { return <a href="https://example.test">source</a>; }',
-      ]),
-    );
-    expect(trayBypasses(result.failures)).toHaveLength(1);
-  });
-  test("a function-declared tray component is checked through the props its caller passes", () => {
-    const component =
-      "function SourceAnchor({ href }: { href: string }) { return <a href={href}>source</a>; }";
-    const resolved = CITATION_INVENTORY.inspect(
-      trayWith("<SourceAnchor href={resolveLegalCitationLinks({}).href} />", [
-        'import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";',
-        component,
-      ]),
-    );
-    const plain = CITATION_INVENTORY.inspect(
-      trayWith('<SourceAnchor href={"https://example.test"} />', [component]),
-    );
-    expect(resolved.sinkCount).toBe(plain.sinkCount);
-    expect(resolved.failures).toEqual([]);
-    expect(trayBypasses(plain.failures)).toHaveLength(1);
-  });
+  // timeout: full apps/web/src TypeScript AST scan runs 2-4s single-lane and needs headroom under 2-lane CI concurrency
+  test(
+    "all discovered markdown overrides and source sinks use the shared legal resolver",
+    () => {
+      const result = CITATION_INVENTORY.inspect();
+      expect(result.hostCount).toBeGreaterThan(0);
+      expect(result.anchorCount).toBeGreaterThan(0);
+      expect(result.sinkCount).toBeGreaterThan(0);
+      expect(result.failures).toEqual([]);
+    },
+    AST_SCAN_TIMEOUT_MS,
+  );
+  // timeout: full apps/web/src TypeScript AST scan runs 2-4s single-lane and needs headroom under 2-lane CI concurrency
+  test(
+    "a plain anchor override cannot silently bypass citation navigation",
+    () => {
+      const anchor = CITATION_INVENTORY.inspect().sharedAnchorOverrides.at(0);
+      expect(anchor).toBeDefined();
+      if (anchor === undefined) {
+        return;
+      }
+      const mutated = `${anchor.sourceText.slice(0, anchor.start)}(props) => <a {...props} />${anchor.sourceText.slice(anchor.end)}`;
+      const result = CITATION_INVENTORY.inspect(
+        new Map([[anchor.filePath, mutated]]),
+      );
+      expect(
+        result.failures.some((failure) =>
+          failure.startsWith("Bypassing markdown anchor"),
+        ),
+      ).toBe(true);
+    },
+    AST_SCAN_TIMEOUT_MS,
+  );
+  // timeout: full apps/web/src TypeScript AST scan runs 2-4s single-lane and needs headroom under 2-lane CI concurrency
+  test(
+    "a function-declared tray component cannot hide a plain source anchor",
+    () => {
+      const result = CITATION_INVENTORY.inspect(
+        trayWith("<PlainSourceAnchor />", [
+          'function PlainSourceAnchor() { return <a href="https://example.test">source</a>; }',
+        ]),
+      );
+      expect(trayBypasses(result.failures)).toHaveLength(1);
+    },
+    AST_SCAN_TIMEOUT_MS,
+  );
+  // timeout: full apps/web/src TypeScript AST scan runs 2-4s single-lane and needs headroom under 2-lane CI concurrency
+  test(
+    "a function-declared tray component is checked through the props its caller passes",
+    () => {
+      const component =
+        "function SourceAnchor({ href }: { href: string }) { return <a href={href}>source</a>; }";
+      const resolved = CITATION_INVENTORY.inspect(
+        trayWith("<SourceAnchor href={resolveLegalCitationLinks({}).href} />", [
+          'import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";',
+          component,
+        ]),
+      );
+      const plain = CITATION_INVENTORY.inspect(
+        trayWith('<SourceAnchor href={"https://example.test"} />', [component]),
+      );
+      expect(resolved.sinkCount).toBe(plain.sinkCount);
+      expect(resolved.failures).toEqual([]);
+      expect(trayBypasses(plain.failures)).toHaveLength(1);
+    },
+    AST_SCAN_TIMEOUT_MS,
+  );
 });
