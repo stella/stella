@@ -523,7 +523,7 @@ export const isDisplayableAPIError = (error: APIError): boolean =>
   isAuthRefusal(error) ||
   (error.status === 402 &&
     typeof error.details?.["reason"] === "string" &&
-    isUsageRejectionReason(error.details["reason"]));
+    USAGE_REJECTION_REASON_KEYS.has(error.details["reason"]));
 
 export const internalToolErrorMessage = (error: APIError): string => {
   if (

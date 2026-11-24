@@ -110,7 +110,7 @@ export const defineFeedbackRoutes = <
   entries: T,
 ): T => entries;
 
-const ROUTE_AREA_PATTERNS = defineFeedbackRoutes({
+export const ROUTE_AREA_PATTERNS = defineFeedbackRoutes({
   "/admin": "web_app",
   "/settings/organization": "web_app",
   "/chat": "chat",

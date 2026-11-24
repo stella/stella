@@ -150,6 +150,10 @@ const LABEL_TRANSLATION_KEYS = new Map<string, TranslationKey>([
   ["date of birth", "common.anonymizationLabels.dateOfBirth"],
   ["bank account number", "common.anonymizationLabels.bankAccountNumber"],
   ["iban", "common.anonymizationLabels.iban"],
+  [
+    "tax identification number",
+    "common.anonymizationLabels.taxIdentificationNumber",
+  ],
   ["identity card number", "common.anonymizationLabels.identityCardNumber"],
   ["registration number", "common.anonymizationLabels.registrationNumber"],
   ["case number", "caseLaw.columns.caseNumber"],
