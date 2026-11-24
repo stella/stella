@@ -324,7 +324,7 @@ const BrowserExtensionPanel = () => {
         target="_blank"
       >
         <ExternalLinkIcon />
-        {t("settings.connections.browserExtensionInstall")}
+        {t("common.addToChrome")}
       </a>
       <p className="text-muted-foreground text-xs">
         {t("settings.connections.browserExtensionConnectHint")}
