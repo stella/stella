@@ -13,7 +13,7 @@ import { isRecord } from "@/api/lib/type-guards";
  * account policy before the endpoint takes effect. Email codes are named by
  * the request's email and checked with the other body-email endpoints.
  */
-export type TokenSubject = {
+type TokenSubject = {
   email: string;
   operation: ReviewAccountOperation;
 };
