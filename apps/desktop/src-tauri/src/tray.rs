@@ -40,7 +40,38 @@ const RESUME_ACTIVITY_ACTION: &str = "activity-resume";
 const ACTIVITY_STATUS_ITEM: &str = "activity-status";
 const ACTIVITY_NOW_ITEM: &str = "activity-now";
 const MILLIS_PER_TENTH_HOUR: u64 = 360_000;
-const TRAY_ICON_BYTES: &[u8] = include_bytes!("../icons/tray-icon-32-template.png");
+
+/// One tray image and the recording badge drawn over it.
+struct TrayArt {
+  png: &'static [u8],
+  recording_dot: image::Rgba<u8>,
+  /// Separates the dot from the art underneath.
+  recording_ring: image::Rgba<u8>,
+}
+
+/// macOS tints a template image to match the menu bar, so the art and its
+/// badge stay monochrome and the ring is a transparent cut-out.
+const TEMPLATE_TRAY_ART: TrayArt = TrayArt {
+  png: include_bytes!("../icons/tray-icon-32-template.png"),
+  recording_dot: image::Rgba([0, 0, 0, 255]),
+  recording_ring: image::Rgba([0, 0, 0, 0]),
+};
+
+/// Windows and Linux draw the image as given, so they show the app icon tile
+/// (`assets/render-tray-tile.sh`) and a red dot ringed in white.
+const TILE_TRAY_ART: TrayArt = TrayArt {
+  png: include_bytes!("../icons/tray-icon-32-tile.png"),
+  recording_dot: image::Rgba([229, 72, 77, 255]),
+  recording_ring: image::Rgba([255, 255, 255, 255]),
+};
+
+/// The platform-merged `app.trayIcon.iconPath` names the same file, so the
+/// tray Tauri builds at startup already shows this art.
+const TRAY_ART: &TrayArt = if cfg!(target_os = "macos") {
+  &TEMPLATE_TRAY_ART
+} else {
+  &TILE_TRAY_ART
+};
 
 fn format_activity_hours(total_ms: u64, locale: &str) -> String {
   let tenths =
@@ -196,9 +227,15 @@ fn dictation_menu(
 }
 
 fn recording_icon(recording: bool) -> image::ImageResult<tauri::image::Image<'static>> {
-  let mut image = image::load_from_memory(TRAY_ICON_BYTES)?.to_rgba8();
+  recording_icon_for(TRAY_ART, recording)
+}
+
+fn recording_icon_for(
+  art: &TrayArt,
+  recording: bool,
+) -> image::ImageResult<tauri::image::Image<'static>> {
+  let mut image = image::load_from_memory(art.png)?.to_rgba8();
   if recording {
-    // A monochrome dot remains visible when macOS tints the template icon.
     let radius = image.width().min(image.height()) / 10;
     let center_x = image.width().saturating_sub(radius + 2);
     let center_y = image.height().saturating_sub(radius + 2);
@@ -206,9 +243,9 @@ fn recording_icon(recording: bool) -> image::ImageResult<tauri::image::Image<'st
       let distance =
         u64::from(x.abs_diff(center_x)).pow(2) + u64::from(y.abs_diff(center_y)).pow(2);
       if distance <= u64::from(radius).pow(2) {
-        *pixel = image::Rgba([0, 0, 0, 255]);
+        *pixel = art.recording_dot;
       } else if distance <= u64::from(radius + 1).pow(2) {
-        *pixel = image::Rgba([0, 0, 0, 0]);
+        *pixel = art.recording_ring;
       }
     }
   }
@@ -229,9 +266,11 @@ fn set_tray_icon(
   tray: &tauri::tray::TrayIcon,
   icon: tauri::image::Image<'_>,
 ) -> tauri::Result<()> {
-  // Replacing the image clears macOS template tinting.
   tray.set_icon(Some(icon))?;
-  tray.set_icon_as_template(true)
+  // Replacing the image clears macOS template tinting.
+  #[cfg(target_os = "macos")]
+  tray.set_icon_as_template(true)?;
+  Ok(())
 }
 
 const OPEN_ABOUT_ACTION: &str = "open-about";
@@ -976,20 +1015,102 @@ mod tests {
 
   #[test]
   fn recording_icon_adds_a_dot_without_changing_dimensions_and_restores_the_base() {
-    let base = recording_icon(false).unwrap();
-    let recording = recording_icon(true).unwrap();
-    assert_eq!(
-      (recording.width(), recording.height()),
-      (base.width(), base.height())
-    );
-    assert_ne!(recording.rgba(), base.rgba());
-    assert_eq!(recording_icon(false).unwrap().rgba(), base.rgba());
+    for art in [&TEMPLATE_TRAY_ART, &TILE_TRAY_ART] {
+      let base = recording_icon_for(art, false).unwrap();
+      let recording = recording_icon_for(art, true).unwrap();
+      assert_eq!(
+        (recording.width(), recording.height()),
+        (base.width(), base.height())
+      );
+      assert_ne!(recording.rgba(), base.rgba());
+      assert_eq!(recording_icon_for(art, false).unwrap().rgba(), base.rgba());
+    }
   }
 
   #[test]
-  fn recording_icons_are_monochrome_with_alpha() {
+  fn tile_recording_icon_keeps_the_tile_and_rings_the_dot() {
+    let base = recording_icon_for(&TILE_TRAY_ART, false).unwrap();
+    let recording = recording_icon_for(&TILE_TRAY_ART, true).unwrap();
+    let width = base.width();
+    let pixel = |icon: &tauri::image::Image<'_>, x: u32, y: u32| {
+      icon.rgba().as_chunks::<4>().0[usize::try_from(y * width + x).unwrap()]
+    };
+    // The tile ground of stella-app-icon.svg (#59a1d4).
+    assert_eq!(pixel(&base, 16, 1), [0x59, 0xa1, 0xd4, 255]);
+    // A 32 px icon puts the dot (radius 3) at (27, 27) with a 1 px ring.
+    assert_eq!(pixel(&recording, 27, 27), TILE_TRAY_ART.recording_dot.0);
+    assert_eq!(pixel(&recording, 27, 23), TILE_TRAY_ART.recording_ring.0);
+    for y in 0..base.height() {
+      for x in 0..width {
+        if x.abs_diff(27).pow(2) + y.abs_diff(27).pow(2) > 16 {
+          assert_eq!(pixel(&recording, x, y), pixel(&base, x, y), "({x}, {y})");
+        }
+      }
+    }
+  }
+
+  /// Tauri merges `tauri.<platform>.conf.json` over `tauri.conf.json` as a JSON
+  /// merge patch (RFC 7396) when it builds the startup tray.
+  fn merge_patch(target: &mut serde_json::Value, patch: serde_json::Value) {
+    match (target, patch) {
+      (serde_json::Value::Object(target), serde_json::Value::Object(patch)) => {
+        for (key, value) in patch {
+          if value.is_null() {
+            target.remove(&key);
+          } else {
+            merge_patch(target.entry(key).or_insert(serde_json::Value::Null), value);
+          }
+        }
+      }
+      (target, patch) => *target = patch,
+    }
+  }
+
+  fn read_config(name: &str) -> Option<serde_json::Value> {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(name);
+    match std::fs::read_to_string(&path) {
+      Ok(text) => Some(serde_json::from_str(&text).unwrap()),
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+      Err(error) => panic!("{}: {error}", path.display()),
+    }
+  }
+
+  #[test]
+  fn startup_tray_config_names_the_art_each_platform_draws() {
+    for (platform, art, template) in [
+      ("macos", &TEMPLATE_TRAY_ART, true),
+      ("windows", &TILE_TRAY_ART, false),
+      ("linux", &TILE_TRAY_ART, false),
+    ] {
+      let mut config = read_config("tauri.conf.json").unwrap();
+      if let Some(patch) = read_config(&format!("tauri.{platform}.conf.json")) {
+        merge_patch(&mut config, patch);
+      }
+      let tray = &config["app"]["trayIcon"];
+      let path = tray["iconPath"].as_str().unwrap();
+      let png =
+        std::fs::read(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(path))
+          .unwrap();
+      assert_eq!(png, art.png, "{platform} startup tray icon");
+      // Tauri defaults `iconAsTemplate` to false.
+      assert_eq!(
+        tray["iconAsTemplate"].as_bool().unwrap_or(false),
+        template,
+        "{platform} template flag"
+      );
+    }
+    let expected = if cfg!(target_os = "macos") {
+      TEMPLATE_TRAY_ART.png
+    } else {
+      TILE_TRAY_ART.png
+    };
+    assert_eq!(TRAY_ART.png, expected);
+  }
+
+  #[test]
+  fn template_recording_icons_are_monochrome_with_alpha() {
     for recording in [false, true] {
-      let icon = recording_icon(recording).unwrap();
+      let icon = recording_icon_for(&TEMPLATE_TRAY_ART, recording).unwrap();
       let (pixels, _) = icon.rgba().as_chunks::<4>();
       assert!(pixels.iter().any(|pixel| pixel[3] == 0));
       assert!(pixels.iter().any(|pixel| pixel[3] == 255));
