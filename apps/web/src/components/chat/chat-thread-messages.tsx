@@ -964,6 +964,8 @@ const StickyUserTurn = ({
       sentinel.getBoundingClientRect().top -
       container.getBoundingClientRect().top;
   };
+  // Pinned past its stick point, unless its editor is open.
+  const pinned = isStuck && !messageEdit.editing;
 
   return (
     <section
@@ -988,15 +990,18 @@ const StickyUserTurn = ({
           // it (z-auto). The page-level stacking order (see chat-thread-page)
           // keeps the floating composer above the whole transcript, so this
           // must NOT climb high enough to overlay it. `z-10` is the ceiling.
-          "group/sticky sticky z-10",
+          "group/sticky z-10",
           // Scrolls in flow until only the shelf's slice is left in view.
-          "top-[calc(var(--sticky-user-header-stick-at,0px)*-1)]",
+          // An open editor never pins: its form (notices, Cancel and Send)
+          // is taller than the shelf, so it scrolls with the page instead.
+          !messageEdit.editing &&
+            "sticky top-[calc(var(--sticky-user-header-stick-at,0px)*-1)]",
           // Preserve the natural in-flow height while pinned. The compact
           // chrome below owns its own paint, so the transparent remainder
           // neither hides nor intercepts the answer scrolling underneath.
           "data-[stuck=true]:pointer-events-none data-[stuck=true]:h-(--sticky-user-header-natural-height)",
         )}
-        data-stuck={isStuck ? "true" : "false"}
+        data-stuck={pinned ? "true" : "false"}
         ref={stickyHeaderRef}
       >
         <div
@@ -1018,7 +1023,7 @@ const StickyUserTurn = ({
           {/* Behind the bubble: while stuck the bubble goes
               pointer-events-none so plain text falls through to this jump
               target, and only its interactive children re-enable clicks. */}
-          {isStuck && (
+          {pinned && (
             // An invisible hit area: a plain button paints nothing, so no
             // fill shows over the pinned header.
             <Button
