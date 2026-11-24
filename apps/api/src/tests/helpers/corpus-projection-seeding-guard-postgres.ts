@@ -1,7 +1,7 @@
 import { beforeAll } from "bun:test";
 
-import type { Transaction } from "@/api/db/root";
 import { caseLawDecisions, corpusIndexGenerations } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   CORPUS_INDEX_MANIFESTS,

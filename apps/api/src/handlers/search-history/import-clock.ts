@@ -6,7 +6,7 @@ import * as v from "valibot";
 import { API_STORABLE_INSTANT_CHECK } from "@stll/api-contract/api-date";
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";

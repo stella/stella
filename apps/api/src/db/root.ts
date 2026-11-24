@@ -247,7 +247,7 @@ export const bindOwnerSyntheticSessionAuthorizer =
   async (current: Parameters<typeof authorizeSyntheticSession>[1]) =>
     await authorize(rootDb, current);
 
-export type RootDatabase = typeof rootDb;
+type RootDatabase = typeof rootDb;
 export type Transaction = TransactionOf<RootDatabase>;
 
 /** The deployment operator receives only audited activity aggregates. */

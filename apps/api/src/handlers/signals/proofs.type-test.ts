@@ -2,7 +2,7 @@ import { name } from "@gdp-ts/core";
 import type { Named } from "@gdp-ts/core";
 import { Result } from "better-result";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import { emitSignalRequest } from "@/api/handlers/signals/requests/write";
 import { transitionSignal } from "@/api/handlers/signals/transition";
 import type { SignalTransitionArgs } from "@/api/handlers/signals/transition";

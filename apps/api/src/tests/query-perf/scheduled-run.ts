@@ -10,10 +10,10 @@ import type { Verdict } from "@stll/db-load-gate/health";
 
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import { databaseRelations } from "@/api/db/database-relations";
-import type { Transaction } from "@/api/db/root";
 import type { TransactionOf } from "@/api/db/scoped";
 import { setSharedQueryTimeouts } from "@/api/db/shared-pool-timeouts";
 import { createDatabase } from "@/api/db/sql-client";
+import type { Transaction } from "@/api/db/types";
 import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
 import { createSafeId } from "@/api/lib/branded-types";
 import { resetLocalCaseLawConfigForTesting } from "@/api/lib/case-law/local-case-law-config";

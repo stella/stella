@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import type { RootDatabase } from "@/api/db/root";
+import type { RootDatabase } from "@/api/db/types";
 import { admitOAuthCredential } from "@/api/lib/auth/oauth-grant-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 

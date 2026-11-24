@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import { billCreatedDraft } from "@/api/lib/billing/invoice-create-operation";
 import { resolveInvoicePrefill } from "@/api/lib/billing/invoice-prefill";
