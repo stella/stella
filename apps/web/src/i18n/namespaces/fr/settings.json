@@ -529,6 +529,7 @@
       "anonymization": {
         "addPlaceholder": "Terme à toujours masquer (ex. nom de l’équipe)",
         "deleteAction": "Supprimer le terme",
+        "deleteConfirm": "Retirer « {value} » de la liste de blocage de l’équipe ? L’anonymisation ne le masquera plus systématiquement.",
         "description": "Gérez la liste de blocage de l’équipe : les termes que le pipeline d’anonymisation masque toujours. Importez une liste de départ depuis un fichier CSV, TXT ou JSON.",
         "emptyState": "Aucun terme pour l’équipe. Ajoutez-en un ci-dessus ou importez une liste.",
         "entriesHeading": "Termes de l’équipe ({count})",
@@ -717,6 +718,7 @@
         "importHint": "Collez un mot par ligne, ou choisissez un fichier .txt avec un mot par ligne ou un fichier .csv dont la première colonne contient les mots.",
         "importedToast": "{count, plural, =0 {# mots ajoutés.} one {# mot ajouté.} many {# mots ajoutés.} other {# mots ajoutés.}}",
         "invalid": "Un mot ne peut contenir ni saut de ligne ni caractère de contrôle.",
+        "matchingCount": "{count, plural, =0 {# mots correspondants} one {# mot correspondant} many {# mots correspondants} other {# mots correspondants}}",
         "noMatch": "Aucun mot ne correspond à « {search} ».",
         "pasteLabel": "Mots à ajouter",
         "pastePlaceholder": "Un mot par ligne",

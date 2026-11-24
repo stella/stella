@@ -320,6 +320,8 @@
       "disableDescription": "Se eliminará la conexión de Microsoft de todos los miembros y se borrará su inicio de sesión almacenado. Los documentos ya importados permanecen en sus asuntos. Los miembros tendrán que volver a conectarse si vuelves a activar la función.",
       "disableInputLabel": "Escribe {confirmation} para desactivarlo",
       "disableTitle": "¿Desactivar SharePoint y OneDrive?",
+      "disabledToast": "SharePoint y OneDrive se desactivaron para tu organización.",
+      "enabledToast": "SharePoint y OneDrive se activaron para tu organización.",
       "toggleLabel": "Permitir SharePoint y OneDrive"
     },
     "askAdmin": "Desactivada para tu organización. Pide a un administrador que la active.",

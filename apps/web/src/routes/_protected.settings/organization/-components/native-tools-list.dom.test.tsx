@@ -176,9 +176,15 @@ test("native tool inventory filters locally without case or accents and clears s
   fireEvent.change(search, { target: { value: "unmatched" } });
   expect(screen.queryByRole("switch")).toBeNull();
   expect(screen.getByText(messages.common.noResults)).toBeDefined();
-  fireEvent.click(
-    screen.getByRole("button", { name: messages.common.clearSearch }),
-  );
+  const clearButtons = screen.getAllByRole("button", {
+    name: messages.common.clearSearch,
+  });
+  expect(clearButtons.length).toBe(2);
+  const emptyClear = clearButtons.at(-1);
+  expect(emptyClear).toBeDefined();
+  if (emptyClear) {
+    fireEvent.click(emptyClear);
+  }
   expect(screen.getByRole("switch", { name: "Český registr" })).toBeDefined();
   expect(server.reads()).toBe(1);
 });

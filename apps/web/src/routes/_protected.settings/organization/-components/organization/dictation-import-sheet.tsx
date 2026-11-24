@@ -129,14 +129,18 @@ const DictationImportSheetBody = ({
   };
   // A CSV shows only its first cells, so what is edited is what is added.
   const readFile = async (file: File) => {
-    if (checking) {
+    if (checking || add.isPending) {
       return;
     }
-    const content = await file.text();
+    const content = await Result.tryPromise(async () => await file.text());
+    if (content.isErr()) {
+      notifyUserError(content.error, t("errors.actionFailed"));
+      return;
+    }
     edit(
       file.name.toLowerCase().endsWith(".csv")
-        ? dictationImportLines(content, "csv").join("\n")
-        : content,
+        ? dictationImportLines(content.value, "csv").join("\n")
+        : content.value,
     );
   };
 
@@ -152,7 +156,7 @@ const DictationImportSheetBody = ({
           </p>
           <Textarea
             aria-label={t("settings.organization.dictation.pasteLabel")}
-            disabled={checking}
+            disabled={checking || add.isPending}
             maxRows={16}
             onChange={(event) => {
               edit(event.target.value);
@@ -163,6 +167,10 @@ const DictationImportSheetBody = ({
           />
           <div>
             <Button
+              disabled={checking || add.isPending}
+              disabledReason={
+                add.isPending ? t("common.saving") : t("common.loading")
+              }
               onClick={() => {
                 openFilePicker({
                   accept: ".txt,.csv,text/plain,text/csv",
@@ -202,6 +210,8 @@ const DictationImportSheetBody = ({
         </Button>
         {review === null ? (
           <Button
+            disabled={text.trim().length === 0}
+            disabledReason={t("common.enterTerm")}
             loading={checking}
             onClick={() => {
               detached(check(), "dictation-import-sheet.review");

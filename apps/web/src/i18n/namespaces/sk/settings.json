@@ -529,6 +529,7 @@
       "anonymization": {
         "addPlaceholder": "Pojem, ktorý sa má vždy maskovať (napr. názov tímu)",
         "deleteAction": "Zmazať pojem",
+        "deleteConfirm": "Odobrať pojem „{value}“ z tímového zoznamu? Anonymizácia ho už nebude vždy skrývať.",
         "description": "Spravujte tímový zoznam pojmov, ktoré anonymizačný kanál vždy zamaskuje, a importujte úvodný zoznam z CSV, TXT alebo JSON",
         "emptyState": "Žiadne tímové pojmy. Pridajte ich vyššie alebo importujte zoznam.",
         "entriesHeading": "Tímové pojmy ({count})",
@@ -717,6 +718,7 @@
         "importHint": "Vložte jedno slovo na riadok alebo vyberte súbor .txt s jedným slovom na riadok či súbor .csv so slovami v prvom stĺpci.",
         "importedToast": "{count, plural, one {Pridané # slovo.} few {Pridané # slová.} many {Pridaných # slova.} other {Pridaných # slov.}}",
         "invalid": "Slovo nesmie obsahovať zalomenie riadka ani riadiace znaky.",
+        "matchingCount": "{count, plural, one {# zodpovedajúce slovo} few {# zodpovedajúce slová} many {# zodpovedajúceho slova} other {# zodpovedajúcich slov}}",
         "noMatch": "Hľadaniu „{search}“ nezodpovedá žiadne slovo.",
         "pasteLabel": "Slová na pridanie",
         "pastePlaceholder": "Jedno slovo na riadok",

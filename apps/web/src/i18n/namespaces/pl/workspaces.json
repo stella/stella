@@ -320,6 +320,8 @@
       "disableDescription": "Połączenia wszystkich członków z Microsoft zostaną usunięte, a zapisane logowania skasowane. Zaimportowane już dokumenty pozostaną w swoich sprawach. Jeśli ponownie włączysz tę funkcję, członkowie będą musieli połączyć się ponownie.",
       "disableInputLabel": "Wpisz {confirmation}, aby wyłączyć",
       "disableTitle": "Wyłączyć SharePoint i OneDrive?",
+      "disabledToast": "Wyłączono SharePoint i OneDrive dla Twojej organizacji.",
+      "enabledToast": "Włączono SharePoint i OneDrive dla Twojej organizacji.",
       "toggleLabel": "Zezwalaj na SharePoint i OneDrive"
     },
     "askAdmin": "Wyłączone dla Twojej organizacji. Poproś administratora o włączenie.",

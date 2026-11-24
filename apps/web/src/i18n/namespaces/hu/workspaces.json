@@ -320,6 +320,8 @@
       "disableDescription": "Minden tag Microsoft-kapcsolata megszűnik, és a tárolt bejelentkezésük törlődik. A már importált dokumentumok az ügyeikben maradnak. A tagoknak újra csatlakozniuk kell, ha visszakapcsolja a funkciót.",
       "disableInputLabel": "A kikapcsoláshoz írja be: {confirmation}",
       "disableTitle": "Kikapcsolja a SharePointot és a OneDrive-ot?",
+      "disabledToast": "A SharePoint és a OneDrive kikapcsolva a szervezet számára.",
+      "enabledToast": "A SharePoint és a OneDrive bekapcsolva a szervezet számára.",
       "toggleLabel": "A SharePoint és a OneDrive engedélyezése"
     },
     "askAdmin": "A szervezete számára kikapcsolva. Kérje meg egy adminisztrátort, hogy kapcsolja be.",

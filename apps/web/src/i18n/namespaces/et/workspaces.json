@@ -320,6 +320,8 @@
       "disableDescription": "Kõigi liikmete Microsofti ühendus eemaldatakse ja nende salvestatud sisselogimine kustutatakse. Juba imporditud dokumendid jäävad oma toimikutesse. Kui lülitate funktsiooni uuesti sisse, peavad liikmed uuesti ühenduma.",
       "disableInputLabel": "Väljalülitamiseks sisestage {confirmation}",
       "disableTitle": "Lülitada SharePoint ja OneDrive välja?",
+      "disabledToast": "SharePoint ja OneDrive lülitati teie organisatsiooni jaoks välja.",
+      "enabledToast": "SharePoint ja OneDrive lülitati teie organisatsiooni jaoks sisse.",
       "toggleLabel": "Luba SharePoint ja OneDrive"
     },
     "askAdmin": "Teie organisatsioonile välja lülitatud. Paluge administraatoril see sisse lülitada.",

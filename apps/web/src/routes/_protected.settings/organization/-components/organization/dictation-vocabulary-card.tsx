@@ -35,6 +35,7 @@ import { SearchField } from "@stll/ui/search-field";
 import { stellaToast } from "@stll/ui/toast";
 
 import { SettledQueryViewFeedback } from "@/components/query-view-feedback";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -62,6 +63,7 @@ export const DictationVocabularyCard = () => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const { activeOrganizationId } = useAuthenticatedUser();
+  const canEdit = usePermissions({ organizationSettings: ["update"] });
   const [search, setSearch] = useState("");
   const [serverSearch] = useDebounce(search.trim(), SEARCH_DEBOUNCE_MS);
   const [selected, setSelected] = useState<
@@ -160,6 +162,8 @@ export const DictationVocabularyCard = () => {
         </ListGroupHeading>
         <ListGroupAction>
           <Button
+            disabled={!canEdit}
+            disabledReason={t("errors.api.forbidden")}
             onClick={() => {
               setImporting(true);
             }}
@@ -184,7 +188,7 @@ export const DictationVocabularyCard = () => {
           )}
         </ListGroupAction>
       </ListGroupHeader>
-      <AddWordForm full={max !== undefined && total >= max} />
+      <AddWordForm canEdit={canEdit} full={max !== undefined && total >= max} />
       <div className="flex flex-wrap items-center gap-2">
         <SearchField
           aria-label={t("settings.organization.dictation.searchPlaceholder")}
@@ -196,6 +200,8 @@ export const DictationVocabularyCard = () => {
         />
         {selected.size > 0 && (
           <Button
+            disabled={!canEdit}
+            disabledReason={t("errors.api.forbidden")}
             onClick={() => {
               setConfirmingDelete(true);
             }}
@@ -209,6 +215,16 @@ export const DictationVocabularyCard = () => {
           </Button>
         )}
       </div>
+      {serverSearch.length > 0 && firstPage !== undefined && (
+        <p
+          aria-live="polite"
+          className="text-muted-foreground text-xs tabular-nums"
+        >
+          {t("settings.organization.dictation.matchingCount", {
+            count: firstPage.matching,
+          })}
+        </p>
+      )}
       <List aria-busy={list.isFetching}>
         {words.map((word) => (
           <ListItem key={word.id}>
@@ -217,6 +233,7 @@ export const DictationVocabularyCard = () => {
                 word: word.term,
               })}
               checked={selected.has(word.id)}
+              disabled={!canEdit}
               onCheckedChange={(checked) => {
                 toggle(word.id, checked);
               }}
@@ -231,11 +248,16 @@ export const DictationVocabularyCard = () => {
                 aria-label={t("settings.organization.dictation.deleteWord", {
                   word: word.term,
                 })}
+                disabled={!canEdit}
+                disabledReason={t("errors.api.forbidden")}
                 loading={remove.isPending && remove.variables.includes(word.id)}
                 onClick={() => {
                   remove.mutate([word.id]);
                 }}
                 size="icon-sm"
+                tooltip={t("settings.organization.dictation.deleteWord", {
+                  word: word.term,
+                })}
                 variant="ghost"
               >
                 <Trash2Icon />
@@ -297,7 +319,13 @@ export const DictationVocabularyCard = () => {
 };
 
 /** One word typed in, checked against the same rules the list keeps. */
-const AddWordForm = ({ full }: { full: boolean }) => {
+const AddWordForm = ({
+  canEdit,
+  full,
+}: {
+  canEdit: boolean;
+  full: boolean;
+}) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState("");
@@ -330,12 +358,26 @@ const AddWordForm = ({ full }: { full: boolean }) => {
     },
   });
   const problem = wordProblem(reading.type);
+  const addDisabled =
+    !canEdit || draft.trim().length === 0 || problem !== null || full;
+  const resolveAddDisabledReason = () => {
+    if (!canEdit) {
+      return t("errors.api.forbidden");
+    }
+    if (full) {
+      return t("settings.organization.dictation.full");
+    }
+    if (problem !== null) {
+      return t(problem);
+    }
+    return t("common.enterTerm");
+  };
 
   return (
     <Form
       action={() => {
         // A blank, refused or over-limit word says why next to the field.
-        if (reading.type === "term" && !full) {
+        if (canEdit && reading.type === "term" && !full) {
           add.mutate(reading.term);
         }
       }}
@@ -350,7 +392,7 @@ const AddWordForm = ({ full }: { full: boolean }) => {
             aria-invalid={problem !== null}
             aria-label={t("settings.organization.dictation.addLabel")}
             autoComplete="off"
-            disabled={add.isPending || full}
+            disabled={!canEdit || add.isPending || full}
             onChange={(event) => {
               setDraft(event.target.value);
             }}
@@ -368,7 +410,13 @@ const AddWordForm = ({ full }: { full: boolean }) => {
             </p>
           )}
         </div>
-        <Button loading={add.isPending} size="sm" type="submit">
+        <Button
+          disabled={addDisabled}
+          disabledReason={resolveAddDisabledReason()}
+          loading={add.isPending}
+          size="sm"
+          type="submit"
+        >
           {t("common.add")}
         </Button>
       </div>

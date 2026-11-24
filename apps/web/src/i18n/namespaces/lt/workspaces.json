@@ -320,6 +320,8 @@
       "disableDescription": "Visų narių Microsoft ryšys bus pašalintas, o jų išsaugotas prisijungimas ištrintas. Jau importuoti dokumentai liks savo bylose. Jei vėl įjungsite šią funkciją, nariams reikės prisijungti iš naujo.",
       "disableInputLabel": "Įveskite {confirmation}, kad išjungtumėte",
       "disableTitle": "Išjungti SharePoint ir OneDrive?",
+      "disabledToast": "SharePoint ir OneDrive išjungti jūsų organizacijai.",
+      "enabledToast": "SharePoint ir OneDrive įjungti jūsų organizacijai.",
       "toggleLabel": "Leisti SharePoint ir OneDrive"
     },
     "askAdmin": "Jūsų organizacijai išjungta. Paprašykite administratoriaus ją įjungti.",

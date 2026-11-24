@@ -529,6 +529,7 @@
       "anonymization": {
         "addPlaceholder": "Termo a ser sempre mascarado (ex.: nome da equipe)",
         "deleteAction": "Excluir termo",
+        "deleteConfirm": "Remover “{value}” da lista da equipe? A anonimização deixará de ocultá-lo automaticamente.",
         "description": "Gerencie a lista global da equipe com os termos que o pipeline de anonimização sempre mascara e importe uma lista inicial em CSV, TXT ou JSON.",
         "emptyState": "Ainda não há termos da equipe. Adicione um acima ou importe uma lista.",
         "entriesHeading": "Termos da equipe ({count})",
@@ -717,6 +718,7 @@
         "importHint": "Cole uma palavra por linha, ou escolha um arquivo .txt com uma palavra por linha ou um arquivo .csv com as palavras na primeira coluna.",
         "importedToast": "{count, plural, =0 {# palavras adicionadas.} one {# palavra adicionada.} many {# palavras adicionadas.} other {# palavras adicionadas.}}",
         "invalid": "Uma palavra não pode conter quebras de linha nem caracteres de controle.",
+        "matchingCount": "{count, plural, =0 {# palavras correspondentes} one {# palavra correspondente} many {# palavras correspondentes} other {# palavras correspondentes}}",
         "noMatch": "Nenhuma palavra corresponde a “{search}”.",
         "pasteLabel": "Palavras a adicionar",
         "pastePlaceholder": "Uma palavra por linha",

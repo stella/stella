@@ -6,6 +6,7 @@ import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import { Label } from "@stll/ui/label";
 import { SettingsPanel, SettingsRow, SettingsSection } from "@stll/ui/settings";
 import { Switch } from "@stll/ui/switch";
+import { stellaToast } from "@stll/ui/toast";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { SHAREPOINT_ACCESS } from "@/features/sharepoint/sharepoint-access.logic";
@@ -81,6 +82,16 @@ const SharepointEnablement = ({
       ),
     invalidate: sharepointKeys.root(),
     errorToast: { title: t("errors.actionFailed") },
+    onSuccess: (_data, next) => {
+      stellaToast.add({
+        title: t(
+          next
+            ? "sharepoint.admin.enabledToast"
+            : "sharepoint.admin.disabledToast",
+        ),
+        type: "success",
+      });
+    },
   });
   // The dialog awaits this and stays open when the write fails.
   const confirmDisable = async () => await mutation.mutateAsync(false);

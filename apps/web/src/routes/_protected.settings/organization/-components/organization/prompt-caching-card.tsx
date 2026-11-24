@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { Checkbox } from "@stll/ui/checkbox";
 import { SettingsPanel, settingsRowIds } from "@stll/ui/settings";
+import { Switch } from "@stll/ui/switch";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -59,7 +59,7 @@ export const PromptCachingCard = ({
       }
       title={PROMPT_CACHING_CARD.title}
       toggle={
-        <Checkbox
+        <Switch
           aria-describedby={ids.description}
           aria-labelledby={ids.label}
           id={ids.control}

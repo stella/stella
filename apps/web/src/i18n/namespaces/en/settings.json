@@ -529,6 +529,7 @@
       "anonymization": {
         "addPlaceholder": "Term to always mask (e.g. team name)",
         "deleteAction": "Delete term",
+        "deleteConfirm": "Remove \"{value}\" from the team-wide deny list? The anonymization pipeline will no longer always mask it.",
         "description": "Curate the team-wide deny list of terms the anonymization pipeline always masks, and import a starter list from CSV, TXT, or JSON",
         "emptyState": "No team-wide terms yet. Add one above or import a list.",
         "entriesHeading": "Team-wide terms ({count})",
@@ -717,6 +718,7 @@
         "importHint": "Paste one word per line, or choose a .txt file with one word per line or a .csv file with the words in its first column.",
         "importedToast": "{count, plural, one {Added # word.} other {Added # words.}}",
         "invalid": "A word can't contain line breaks or control characters.",
+        "matchingCount": "{count, plural, one {# matching word} other {# matching words}}",
         "noMatch": "No words match “{search}”.",
         "pasteLabel": "Words to add",
         "pastePlaceholder": "One word per line",

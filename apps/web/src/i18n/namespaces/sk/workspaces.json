@@ -320,6 +320,8 @@
       "disableDescription": "Pripojenie všetkých členov k Microsoftu sa odstráni a ich uložené prihlásenia sa vymažú. Už importované dokumenty zostanú vo svojich spisoch. Ak funkciu znova zapnete, členovia sa budú musieť pripojiť znova.",
       "disableInputLabel": "Na vypnutie napíšte {confirmation}",
       "disableTitle": "Vypnúť SharePoint a OneDrive?",
+      "disabledToast": "SharePoint a OneDrive boli pre vašu organizáciu vypnuté.",
+      "enabledToast": "SharePoint a OneDrive boli pre vašu organizáciu zapnuté.",
       "toggleLabel": "Povoliť SharePoint a OneDrive"
     },
     "askAdmin": "Pre vašu organizáciu vypnuté. Požiadajte správcu, aby funkciu zapol.",
