@@ -377,6 +377,7 @@
       "displayNameRequired": "Įveskite rodomą vardą.",
       "displayNameSaved": "Rodomas vardas atnaujintas",
       "enterOtp": "Patvirtinimo kodas",
+      "localePreferences": "Kalba ir regionas",
       "otpSentSuccess": "Patvirtinimo kodas išsiųstas į jūsų el. paštą.",
       "personalDataExportDescription": "Jūsų paskyros asmens duomenys viename faile. Paruošimas trunka kelias minutes, nuoroda galioja valandą.",
       "personalDataExportExpired": "Nuoroda nebegalioja.",
@@ -476,6 +477,8 @@
         "setupTitle": "Nustatyti dviejų veiksnių autentifikavimą",
         "title": "Dviejų veiksnių autentifikavimas"
       },
+      "wordEditIdentity": "„Word“ redagavimo tapatybė",
+      "wordEditIdentityDescription": "Vardas ir inicialai, naudojami peržiūrint ar sekant pakeitimus „Word“ dokumentuose.",
       "wordEditIdentitySaved": "Word redagavimo tapatybė atnaujinta",
       "wordEditShortcut": "Inicialai Word pakeitimams",
       "wordEditShortcutDescription": "Trumpa jūsų inicialų žyma Word pakeitimuose.",

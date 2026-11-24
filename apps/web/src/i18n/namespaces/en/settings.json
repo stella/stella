@@ -377,6 +377,7 @@
       "displayNameRequired": "Enter a display name.",
       "displayNameSaved": "Display name updated",
       "enterOtp": "Verification code",
+      "localePreferences": "Language and region",
       "otpSentSuccess": "Verification code sent to your email.",
       "personalDataExportDescription": "The personal data from your account in one file. Preparing it takes a few minutes; the link works for an hour.",
       "personalDataExportExpired": "The link has expired.",
@@ -476,6 +477,8 @@
         "setupTitle": "Set up two-factor authentication",
         "title": "Two-factor authentication"
       },
+      "wordEditIdentity": "Word edit identity",
+      "wordEditIdentityDescription": "Name and initials used when you review or track changes in Word documents.",
       "wordEditIdentitySaved": "Word edit identity updated",
       "wordEditShortcut": "Initials for Word edits",
       "wordEditShortcutDescription": "Short tag for your initials on Word edits.",

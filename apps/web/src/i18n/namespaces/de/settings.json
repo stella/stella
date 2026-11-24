@@ -377,6 +377,7 @@
       "displayNameRequired": "Geben Sie einen Anzeigenamen ein.",
       "displayNameSaved": "Anzeigename aktualisiert",
       "enterOtp": "Bestätigungscode",
+      "localePreferences": "Sprache und Region",
       "otpSentSuccess": "Bestätigungscode an Ihre E-Mail-Adresse gesendet.",
       "personalDataExportDescription": "Die personenbezogenen Daten Ihres Kontos in einer Datei. Die Vorbereitung dauert ein paar Minuten; der Link gilt eine Stunde.",
       "personalDataExportExpired": "Der Link ist abgelaufen.",
@@ -476,6 +477,8 @@
         "setupTitle": "Zwei-Faktor-Authentifizierung einrichten",
         "title": "Zwei-Faktor-Authentifizierung"
       },
+      "wordEditIdentity": "Identität für Word-Bearbeitungen",
+      "wordEditIdentityDescription": "Name und Initialen für Überarbeitungen und nachverfolgte Änderungen in Word-Dokumenten.",
       "wordEditIdentitySaved": "Word-Bearbeitungsidentität aktualisiert",
       "wordEditShortcut": "Initialen für Word-Änderungen",
       "wordEditShortcutDescription": "Kurzes Kürzel für Ihre Initialen bei Word-Bearbeitungen.",

@@ -377,6 +377,7 @@
       "displayNameRequired": "Sisestage kuvatav nimi.",
       "displayNameSaved": "Kuvatav nimi uuendatud",
       "enterOtp": "Kinnituskood",
+      "localePreferences": "Keel ja piirkond",
       "otpSentSuccess": "Kinnituskood on saadetud teie e-postile.",
       "personalDataExportDescription": "Teie konto isikuandmed ühes failis. Ettevalmistus võtab paar minutit, link kehtib tund aega.",
       "personalDataExportExpired": "Link on aegunud.",
@@ -476,6 +477,8 @@
         "setupTitle": "Seadista kahefaktoriline autentimine",
         "title": "Kahefaktoriline autentimine"
       },
+      "wordEditIdentity": "Wordi muudatuste identiteet",
+      "wordEditIdentityDescription": "Nimi ja initsiaalid, mida kasutatakse Wordi dokumentide läbivaatamisel ja muudatuste jälitamisel.",
       "wordEditIdentitySaved": "Wordi muudatuste isik uuendatud",
       "wordEditShortcut": "Wordi muudatuste initsiaalid",
       "wordEditShortcutDescription": "Lühike silt teie initsiaalide jaoks Wordi muudatustes.",

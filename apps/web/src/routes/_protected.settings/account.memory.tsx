@@ -31,7 +31,13 @@ export const Route = createFileRoute("/_protected/settings/account/memory")({
 
     return { activeOrganizationId: context.user.activeOrganizationId };
   },
-  staticData: { presentation: routePresentation({ type: "inherit" }) },
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "memory.pageTitle",
+      to: "/settings/account/memory",
+    }),
+  },
   loader: async ({ context }) => {
     const admission = await loadCallerFeature({
       queryClient: context.queryClient,

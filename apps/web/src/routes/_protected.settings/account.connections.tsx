@@ -7,7 +7,9 @@ import {
   mcpConnectorsOptions,
 } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
+import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import { routePresentation } from "@/routes/-route-presentation";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 
 import { ConnectionsPage } from "./-account.connections.page";
@@ -16,7 +18,13 @@ import { ConnectionsPending } from "./-account.connections.pending";
 export const Route = createFileRoute(
   "/_protected/settings/account/connections",
 )({
-  component: ConnectionsPage,
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "settings.connections.title",
+      to: "/settings/account/connections",
+    }),
+  },
   loader: async ({ context }) => {
     // Prime every query the page suspends on so the fetches run in parallel
     // during navigation instead of one after another on mount.
@@ -52,5 +60,7 @@ export const Route = createFileRoute(
       ),
     ]);
   },
+  component: ConnectionsPage,
+  head: () => ({ meta: [{ title: pageTitle("settings.connections.title") }] }),
   pendingComponent: ConnectionsPending,
 });

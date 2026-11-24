@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { CheckboxFace } from "@stll/ui/control-face";
+import { SwitchFace } from "@stll/ui/control-face";
 import { SettingsRow, SettingsSection } from "@stll/ui/settings";
 
 import { PendingText } from "@/components/pending-text";
@@ -87,7 +87,7 @@ const BetaFeatureRowPending = ({ feature }: { feature: BetaFeature }) => (
       <PendingText barClassName="w-28" id={BETA_FEATURES[feature].title} />
     }
   >
-    <CheckboxFace />
+    <SwitchFace />
   </BetaFeatureRow>
 );
 

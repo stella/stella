@@ -892,6 +892,7 @@ const ProfileSubmitButton = ({ label }: { label: string }) => {
       className="w-fit"
       disabled={pending}
       disabledReason={t("common.saving")}
+      loading={pending}
       type="submit"
     >
       {label}

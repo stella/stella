@@ -1,8 +1,8 @@
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { Checkbox } from "@stll/ui/checkbox";
 import { SettingsPanel, settingsRowIds } from "@stll/ui/settings";
+import { Switch } from "@stll/ui/switch";
 
 import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
 import { detached } from "@/lib/detached";
@@ -40,7 +40,7 @@ const BetaFeatureToggle = ({
       feature={feature}
       title={t(title)}
     >
-      <Checkbox
+      <Switch
         aria-describedby={ids.description}
         aria-labelledby={ids.label}
         id={ids.control}

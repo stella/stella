@@ -377,6 +377,7 @@
       "displayNameRequired": "Podaj nazwę wyświetlaną.",
       "displayNameSaved": "Zaktualizowano nazwę wyświetlaną",
       "enterOtp": "Kod weryfikacyjny",
+      "localePreferences": "Język i region",
       "otpSentSuccess": "Kod weryfikacyjny został wysłany na Twój adres e-mail.",
       "personalDataExportDescription": "Dane osobowe z Twojego konta w jednym pliku. Przygotowanie trwa kilka minut, a link działa przez godzinę.",
       "personalDataExportExpired": "Link wygasł.",
@@ -476,6 +477,8 @@
         "setupTitle": "Skonfiguruj uwierzytelnianie dwuskładnikowe",
         "title": "Uwierzytelnianie dwuskładnikowe"
       },
+      "wordEditIdentity": "Tożsamość edycji w Wordzie",
+      "wordEditIdentityDescription": "Imię, nazwisko i inicjały używane przy recenzowaniu i śledzeniu zmian w dokumentach Word.",
       "wordEditIdentitySaved": "Zaktualizowano tożsamość do edycji w programie Word",
       "wordEditShortcut": "Inicjały do zmian w Wordzie",
       "wordEditShortcutDescription": "Krótki znacznik z Twoimi inicjałami przy edycji w programie Word.",

@@ -377,6 +377,7 @@
       "displayNameRequired": "Ievadiet attēlojamo vārdu.",
       "displayNameSaved": "Attēlojamais vārds atjaunināts",
       "enterOtp": "Apstiprinājuma kods",
+      "localePreferences": "Valoda un reģions",
       "otpSentSuccess": "Apstiprinājuma kods ir nosūtīts uz jūsu e-pastu.",
       "personalDataExportDescription": "Jūsu konta personas dati vienā failā. Sagatavošana aizņem dažas minūtes, saite derīga stundu.",
       "personalDataExportExpired": "Saites derīgums ir beidzies.",
@@ -476,6 +477,8 @@
         "setupTitle": "Iestatīt divfaktoru autentifikāciju",
         "title": "Divfaktoru autentifikācija"
       },
+      "wordEditIdentity": "Word rediģēšanas identitāte",
+      "wordEditIdentityDescription": "Vārds un iniciāļi, ko izmanto, pārskatot vai izsekojot izmaiņas Word dokumentos.",
       "wordEditIdentitySaved": "Word rediģēšanas identitāte atjaunināta",
       "wordEditShortcut": "Iniciāļi Word labojumiem",
       "wordEditShortcutDescription": "Īss apzīmējums jūsu iniciāļiem Word rediģējumos.",
