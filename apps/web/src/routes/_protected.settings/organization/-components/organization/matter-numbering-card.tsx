@@ -183,6 +183,7 @@ const MatterNumberingCardBody = ({
           checked={settings.matterNumberingEnabled}
           description={t("organization.matterNumber.showInTitleDescription")}
           disabled={numberingToggle.isPending}
+          disabledReason={t("common.saving")}
           label={t("organization.matterNumber.showInTitle")}
           onCheckedChange={(checked) => {
             numberingToggle.mutate(checked);

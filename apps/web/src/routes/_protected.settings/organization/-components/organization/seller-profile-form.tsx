@@ -132,6 +132,7 @@ export const SellerProfileForm = ({
                 checked={field.state.value}
                 description={t("billing.sellerProfiles.vatPayerHelp")}
                 disabled={disabled}
+                disabledReason={t("common.saving")}
                 id={`${id}-vatPayer`}
                 label={t("common.vatPayer")}
                 onCheckedChange={(checked) => field.handleChange(checked)}

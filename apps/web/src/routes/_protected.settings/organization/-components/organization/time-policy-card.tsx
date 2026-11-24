@@ -318,6 +318,11 @@ export const TimePolicyForm = ({ settings, canEdit }: TimePolicyFormProps) => {
             <SwitchField
               checked={field.state.value}
               disabled={disabled}
+              disabledReason={
+                mutation.isPending
+                  ? t("common.saving")
+                  : t("errors.api.forbidden")
+              }
               id={`${id}-narrative`}
               label={t("settings.organization.timePolicy.narrativeRequired")}
               onCheckedChange={field.handleChange}
