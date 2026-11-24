@@ -18,7 +18,7 @@ import {
 import {
   beginBrowserCommand,
   BROWSER_APPROVAL_MODE,
-  browserCommandSite,
+  browserCommandSites,
   type BrowserObservedPage,
   createBrowserApprovalStore,
   decideBrowserAutoApproval,
@@ -474,19 +474,80 @@ describe("website approvals", () => {
     ).toEqual({ type: "ask" });
   });
 
-  test("the site a card names is the one its approval would cover", () => {
+  test("a site the extension proves is always the one the card names", () => {
+    assertProperty(
+      "a site the extension proves is always the one the card names",
+      fc.property(
+        fc.constantFrom(...SITE_URLS),
+        fc.constantFrom(...SITE_URLS),
+        fc.constantFrom("revision-0", "revision-1"),
+        fc.boolean(),
+        (pageUrl, commandUrl, revision, reported) => {
+          const observedPage = reported
+            ? { ...observed(pageUrl), revision }
+            : null;
+          for (const command of commandsAt(commandUrl, FIELD)) {
+            const { proven, shown } = browserCommandSites({
+              command,
+              observedPage,
+            });
+            if (proven !== null) {
+              expect(shown).toBe(proven);
+            }
+          }
+        },
+      ),
+    );
     expect(
-      browserCommandSite({
+      browserCommandSites({
         command: { action: "snapshot" },
         observedPage: observed("https://Example.com/a?b=c"),
       }),
-    ).toBe(GRANTED);
+    ).toEqual({ shown: GRANTED, proven: GRANTED });
     expect(
-      browserCommandSite({
+      browserCommandSites({
         command: { action: "open", url: "http://example.com/" },
         observedPage: null,
       }),
-    ).toBeNull();
+    ).toEqual({ shown: null, proven: null });
+  });
+
+  test("a key press on a page not reported, or reported since, offers its site but runs only once reported", () => {
+    const pressEnter = {
+      action: "press-key",
+      key: "Enter",
+      page: { revision: "revision-1", url: "https://example.com/search" },
+      target: target(FIELD),
+    } satisfies BrowserControlCommand;
+    const unproven: (BrowserObservedPage | null)[] = [
+      null,
+      { ...observed("https://example.com/search"), revision: "revision-2" },
+      observed("https://example.com/other"),
+    ];
+    for (const observedPage of unproven) {
+      expect(
+        browserCommandSites({ command: pressEnter, observedPage }),
+      ).toEqual({ shown: GRANTED, proven: null });
+      // Allowing the offered site does not answer this card on its own.
+      expect(
+        decideBrowserAutoApproval({
+          command: pressEnter,
+          grantedOrigins: granted,
+          lastCommandSucceeded: true,
+          mode: BROWSER_APPROVAL_MODE.askEveryTime,
+          observedPage,
+        }),
+      ).toEqual({ type: "ask" });
+    }
+    expect(
+      decideBrowserAutoApproval({
+        command: pressEnter,
+        grantedOrigins: granted,
+        lastCommandSucceeded: true,
+        mode: BROWSER_APPROVAL_MODE.askEveryTime,
+        observedPage: observed("https://example.com/search"),
+      }),
+    ).toEqual({ type: "site-grant", origin: GRANTED });
   });
 
   test("a website approval is kept for its result check, also across a reload", () => {

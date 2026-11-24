@@ -559,7 +559,7 @@
     },
     "create": {
       "matterName": "Lietas nosaukums",
-      "personalDescription": "Personīgās lietas ir privātas un nav nepieciešams klients. Vēlāk tās var paaugstināt, lai dalītos ar komandu."
+      "personalDescription": "Klients nav obligāts. To var pievienot vēlāk; tas nemaina, kas redz lietu."
     },
     "createNewWorkspace": "Izveidot jaunu lietu",
     "defaultName": "Bez nosaukuma",
@@ -1051,11 +1051,10 @@
         "third_party": "Trešā puse",
         "witness": "Liecinieks"
       },
-      "personalDescription": "Personīgās lietas ir tikai jums. Paaugstiniet klientam, lai dalītos ar komandu.",
+      "personalDescription": "Šai lietai nav klienta. Klienta pievienošana nemaina, kas to redz.",
       "personalLabel": "Personīga",
       "promoteCta": "Paaugstināt klientam",
-      "promoteDescription": "Pievienojiet klientu, lai dalītos ar šo lietu komandai. Tas ir neatgriezeniski: paaugstinātās lietas nevar atgriezties personīgās.",
-      "promoteToClientConfirm": "Lieta <bdi>{matterName}</bdi> tiks piesaistīta klientam <bdi>{clientName}</bdi> un kopīgota ar komandu. To vairs nevarēs atgriezt personīgajās.",
+      "promoteDescription": "Piesaistiet šai lietai klientu. Tas, kas to redz, nemainās. Klientu vēlāk varat mainīt, bet ne noņemt.",
       "promotedSuccess": "Lieta paaugstināta",
       "recentClients": "Nesenie klienti",
       "removeClient": "Noņemt klientu",
@@ -1426,6 +1425,19 @@
       },
       "useTemplate": "Lietot iepriekšiestatījumu…",
       "viewSettings": "Skata iestatījumi"
+    },
+    "visibility": {
+      "adminsAndAssigned": "Administratori un piešķirtie",
+      "adminsAndAssignedDescription": "Īpašnieki, administratori un lietai piešķirtie cilvēki",
+      "allMembers": "Visa komanda",
+      "allMembersDescription": "Visi komandas dalībnieki, izņemot ārējos lietotājus",
+      "assignedOnly": "Tikai piešķirtie",
+      "assignedOnlyDescription": "Tikai lietai piešķirtie cilvēki",
+      "label": "Kas redz",
+      "widenConfirm": "Mainīt redzamību",
+      "widenTitle": "Vai rādīt šo lietu vairāk cilvēkiem?",
+      "widenToAdminsAndAssigned": "Īpašnieki un administratori varēs atvērt šo lietu un tās dokumentus, arī ja nav tai piešķirti.",
+      "widenToAllMembers": "Visi komandas dalībnieki, izņemot ārējos lietotājus, varēs atvērt šo lietu un tās dokumentus, arī ja nav tai piešķirti."
     },
     "workflow": {
       "largeRunPrompt": {

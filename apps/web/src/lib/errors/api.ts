@@ -37,6 +37,10 @@ import { CORRESPONDENCE_SOURCE_CHANGED_CODE } from "@stll/api-contract/correspon
 import { ORGANIZATION_DATA_BOX_REFUSAL_CODE } from "@stll/api-contract/data-box";
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
 import { LEGAL_HOLD_ACTIVE } from "@stll/api-contract/legal-holds";
+import {
+  MATTER_STEWARD_HANDOVER_REQUIRED_CODE,
+  MATTER_VISIBILITY_WIDENING_UNCONFIRMED_CODE,
+} from "@stll/api-contract/matter-visibility";
 import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
 import type { ModelRunCapCode } from "@stll/api-contract/model-run-caps";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
@@ -333,6 +337,10 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.matterContactCapacityReached",
   [MATTER_CONTACT_CAPACITY_CODE.exceeded]:
     "errors.apiCodes.matterContactCapacityExceeded",
+  [MATTER_VISIBILITY_WIDENING_UNCONFIRMED_CODE]:
+    "errors.apiCodes.matterVisibilityWideningUnconfirmed",
+  [MATTER_STEWARD_HANDOVER_REQUIRED_CODE]:
+    "errors.apiCodes.matterStewardHandoverRequired",
   [CORRESPONDENCE_SOURCE_CHANGED_CODE]:
     "errors.apiCodes.correspondenceSourceChanged",
   [ORGANIZATION_DATA_BOX_REFUSAL_CODE.limitReached]:
@@ -403,11 +411,14 @@ const CODE_ERROR_KEYS = {
   [SAVED_SEARCH_NOT_FOUND_ERROR_CODE]: STATUS_ERROR_KEYS.notFound,
 } as const satisfies Record<string, TranslationKey>;
 
+type UsageRejectionReason =
+  "entitlement_inactive" | "no_entitlement" | "usage_limit_exceeded";
+
 const USAGE_REJECTION_REASON_KEYS = {
   entitlement_inactive: CODE_ERROR_KEYS.usage_limit_exceeded,
   no_entitlement: CODE_ERROR_KEYS.usage_limit_exceeded,
   usage_limit_exceeded: CODE_ERROR_KEYS.usage_limit_exceeded,
-} as const satisfies Record<string, TranslationKey>;
+} as const satisfies Record<UsageRejectionReason, TranslationKey>;
 
 const isKnownErrorCode = (code: string): code is keyof typeof CODE_ERROR_KEYS =>
   Object.hasOwn(CODE_ERROR_KEYS, code);

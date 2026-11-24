@@ -1,5 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
@@ -19,7 +19,10 @@ const { setTranslator } = await import("@/i18n/translator");
 const { ChatApprovalContext } = await import("./chat-approval-context");
 const { ToolApprovalCard } = await import("./tool-approval-card");
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  mock.restore();
+});
 afterAll(async () => {
   await unregisterDomEnvironment();
 });
@@ -131,6 +134,56 @@ test("a card already waiting when the thread opened waits for the user, whatever
   await waitFor(() => {
     expect(approved).toEqual(["pending-approval"]);
   });
+  queryClient.clear();
+});
+
+const spyOnReveals = () => {
+  const revealed: { element: Element; options: unknown }[] = [];
+  spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (
+    this: Element,
+    options?: boolean | ScrollIntoViewOptions,
+  ) {
+    revealed.push({ element: this, options });
+  });
+  return revealed;
+};
+
+test("a card that waits on the member comes fully into view above the composer", async () => {
+  const revealed = spyOnReveals();
+  const { queryClient, view } = renderPendingCard(
+    async () => await Promise.resolve(true),
+    { approvalIdsAwaitedAtOpen: new Set(["pending-approval"]) },
+  );
+  await act(async () => {
+    await Promise.resolve();
+  });
+
+  const allow = view.getByRole("button", {
+    name: messages.chat.approval.allowOnce,
+  });
+  expect(revealed).toHaveLength(1);
+  const [reveal] = revealed;
+  expect(reveal?.element.contains(allow)).toBe(true);
+  expect(reveal?.options).toEqual({ behavior: "smooth", block: "nearest" });
+  // The reveal stops short of the floating composer's measured height.
+  expect(reveal?.element.className).toContain(
+    "scroll-mb-[calc(var(--composer-block-h,0px)+1.5rem)]",
+  );
+  queryClient.clear();
+});
+
+test("a card answered on its own never pulls the view to it", async () => {
+  const revealed = spyOnReveals();
+  const { approved, queryClient } = renderPendingCard(
+    async () => await Promise.resolve(true),
+  );
+
+  await act(async () => {
+    await waitFor(() => {
+      expect(approved).toEqual(["pending-approval"]);
+    });
+  });
+  expect(revealed).toEqual([]);
   queryClient.clear();
 });
 

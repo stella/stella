@@ -666,6 +666,7 @@ const CONTRACT_CORPUS = {
           billingNarrativeLanguage: null,
           color: null,
           documentNamingEnabled: false,
+          visibility: "admins_and_assigned",
           status: "active",
           lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
           createdAt: new Date("2026-01-01T00:00:00.000Z"),

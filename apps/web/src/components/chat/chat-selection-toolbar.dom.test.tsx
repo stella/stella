@@ -20,6 +20,7 @@ const { default: messages } = await import("@/i18n/langs/en.json");
 const { ChatEditorProvider } =
   await import("@/components/chat-editor-provider");
 const { ChatSelectionToolbar } = await import("./chat-selection-toolbar");
+const { ChatProse } = await import("./chat-prose");
 const { ActionCapabilitiesProvider } =
   await import("@/lib/organization/feature-access/capability-actions");
 const { resolveActionCapabilities } =
@@ -28,6 +29,8 @@ const { createAppQueryClient } = await import("@/lib/react-query");
 const { toChatThreadId } = await import("@/lib/chat-thread-ref");
 
 const SELECTED_TEXT = "old text";
+/** Chrome a message carries beside its prose, such as a tool card's title. */
+const CHROME_TEXT = "Using your browser";
 
 const originalRects = Object.getOwnPropertyDescriptor(
   Range.prototype,
@@ -63,7 +66,9 @@ const mountSelection = async ({
   isGenerating = false,
   awaitingUser = false,
   answerRewriteAvailability = "available",
+  selectedText = SELECTED_TEXT,
 }: {
+  selectedText?: typeof SELECTED_TEXT | typeof CHROME_TEXT;
   ai?: boolean;
   isGenerating?: boolean;
   awaitingUser?: boolean;
@@ -88,14 +93,19 @@ const mountSelection = async ({
             <ChatEditorProvider>
               <div ref={rootRef} style={{ overflow: "visible" }}>
                 <div data-chat-message-id="message-1">
-                  <div data-text-part-index="0">
-                    <span
-                      data-src-start="0"
-                      data-src-end="8"
-                      data-src-offsets="0,1,2,3,4,5,6,7,8"
-                    >
-                      {SELECTED_TEXT}
-                    </span>
+                  <ChatProse>
+                    <div data-text-part-index="0">
+                      <span
+                        data-src-start="0"
+                        data-src-end="8"
+                        data-src-offsets="0,1,2,3,4,5,6,7,8"
+                      >
+                        {SELECTED_TEXT}
+                      </span>
+                    </div>
+                  </ChatProse>
+                  <div>
+                    <span>{CHROME_TEXT}</span>
                   </div>
                 </div>
               </div>
@@ -143,7 +153,7 @@ const mountSelection = async ({
   );
   view.container.style.overflow = "visible";
   const root = rootRef.current;
-  const leaf = view.getByText("old text");
+  const leaf = view.getByText(selectedText);
   const text = leaf.firstChild;
   if (root === null || text === null) {
     throw new TypeError("Selection fixture is missing");
@@ -159,7 +169,7 @@ const mountSelection = async ({
   root.getBoundingClientRect = () => new DOMRect(0, 0, 800, 600);
   const range = document.createRange();
   range.setStart(text, 0);
-  range.setEnd(text, 8);
+  range.setEnd(text, selectedText.length);
   document.getSelection()?.addRange(range);
   await act(async () =>
     fireEvent.pointerUp(leaf, { clientX: 60, clientY: 50 }),
@@ -173,6 +183,19 @@ test("a mapped answer selection opens anchored instructions and Escape closes th
   expect(view.getByRole("textbox").getAttribute("aria-invalid")).toBe("false");
   fireEvent.keyDown(view.getByRole("textbox"), { key: "Escape" });
   expect(view.queryByRole("textbox")).toBeNull();
+});
+
+test("words selected in a message's chrome offer no selection actions", async () => {
+  const view = await mountSelection({ selectedText: CHROME_TEXT });
+  expect(
+    view.queryByRole("toolbar", { name: messages.chat.selection.toolbarLabel }),
+  ).toBeNull();
+  expect(view.queryByRole("button", { name: "Copy" })).toBeNull();
+});
+
+test("words selected in a message's prose offer the selection actions", async () => {
+  const view = await mountSelection();
+  expect(view.getByRole("button", { name: "Copy" })).toBeTruthy();
 });
 
 test("a member without AI receives no AI selection actions", async () => {

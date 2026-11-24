@@ -56,7 +56,7 @@ const TRIGGERS_NOT_INSTALLED_IN_TESTS = [
 const NAME = String.raw`"?(\w+)"?`;
 const TABLE = String.raw`(?:"?public"?\.)?"?(\w+)"?`;
 const CREATE_TRIGGER = new RegExp(
-  String.raw`^CREATE\s+(?:OR\s+REPLACE\s+)?TRIGGER\s+${NAME}[\s\S]*?\bON\s+${TABLE}`,
+  String.raw`^CREATE\s+(?:OR\s+REPLACE\s+)?(?:CONSTRAINT\s+)?TRIGGER\s+${NAME}[\s\S]*?\bON\s+${TABLE}`,
   "iu",
 );
 const DROP_TRIGGER = new RegExp(

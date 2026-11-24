@@ -1060,6 +1060,11 @@ const SEEDS = {
     "workspaces_external_ref_check",
     `INSERT INTO workspaces (id, organization_id, name, reference, ${EXTERNAL_REF_COLUMNS}) VALUES ('${WORKSPACE_ID}', 'org', 'Matter', 'M-1', ${EXTERNAL_REF_VALUES})`,
   ),
+  workspaces_visibility_check: noRowSeed(
+    "workspaces",
+    "workspaces_visibility_check",
+    `INSERT INTO workspaces (id, organization_id, name, reference, visibility) VALUES ('${WORKSPACE_ID}', 'org', 'Matter', 'M-1', 'all_members')`,
+  ),
   time_entries_external_ref_check: noRowSeed(
     "time_entries",
     "time_entries_external_ref_check",

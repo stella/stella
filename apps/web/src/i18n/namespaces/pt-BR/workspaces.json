@@ -559,7 +559,7 @@
     },
     "create": {
       "matterName": "Nome do caso",
-      "personalDescription": "Casos pessoais são privados para você e não precisam de cliente. Você pode promovê-los depois para compartilhar com a equipe."
+      "personalDescription": "O cliente é opcional. Você pode adicioná-lo depois; isso não muda quem vê o caso."
     },
     "createNewWorkspace": "Criar novo caso",
     "defaultName": "Sem título",
@@ -1051,11 +1051,10 @@
         "third_party": "Terceiro",
         "witness": "Testemunha"
       },
-      "personalDescription": "Casos pessoais são privados para você. Promova para um cliente para compartilhar com a equipe.",
+      "personalDescription": "Este caso não tem cliente. Adicionar um não muda quem o vê.",
       "personalLabel": "Pessoal",
       "promoteCta": "Promover para cliente",
-      "promoteDescription": "Associe um cliente para compartilhar este caso com a equipe. Esta ação é unidirecional; casos promovidos não podem voltar a ser pessoais.",
-      "promoteToClientConfirm": "O caso <bdi>{matterName}</bdi> será associado a <bdi>{clientName}</bdi> e compartilhado com a equipe. Ele não poderá voltar a ser pessoal.",
+      "promoteDescription": "Associe um cliente a este caso. Quem o vê continua o mesmo. Você pode trocar o cliente depois, mas não removê-lo.",
       "promotedSuccess": "Caso promovido",
       "recentClients": "Clientes recentes",
       "removeClient": "Remover cliente",
@@ -1426,6 +1425,19 @@
       },
       "useTemplate": "Usar predefinição…",
       "viewSettings": "Configurações da visualização"
+    },
+    "visibility": {
+      "adminsAndAssigned": "Administradores e atribuídos",
+      "adminsAndAssignedDescription": "Proprietários, administradores e pessoas atribuídas ao caso",
+      "allMembers": "Toda a equipe",
+      "allMembersDescription": "Todos os membros da equipe, exceto usuários externos",
+      "assignedOnly": "Somente atribuídos",
+      "assignedOnlyDescription": "Somente pessoas atribuídas ao caso",
+      "label": "Quem pode ver",
+      "widenConfirm": "Alterar visibilidade",
+      "widenTitle": "Mostrar este caso para mais pessoas?",
+      "widenToAdminsAndAssigned": "Proprietários e administradores poderão abrir este caso e seus documentos sem estar atribuídos a ele.",
+      "widenToAllMembers": "Todos os membros da equipe, exceto usuários externos, poderão abrir este caso e seus documentos sem estar atribuídos a ele."
     },
     "workflow": {
       "largeRunPrompt": {

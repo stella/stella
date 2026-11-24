@@ -18,6 +18,7 @@ export default {
       // Kept equal to MEMBER_RUN_QUEUES by scripts/ownership.test.ts.
       ...[
         "apps/api/src/lib/document-review/run-queue.ts",
+        "apps/api/src/lib/flows/flow-run-worker.ts",
         "apps/api/src/lib/document-translation/run-queue.ts",
         "apps/api/src/lib/bilingual/run-queue.ts",
         "apps/api/src/handlers/reports/report-export-queue.ts",

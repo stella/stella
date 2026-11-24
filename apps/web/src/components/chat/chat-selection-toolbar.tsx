@@ -8,6 +8,7 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { AiActionIcon, ChevronLeftIcon, TextIcon } from "@stll/ui/icons";
 
 import { useChatEditorManager } from "@/components/chat-editor-provider";
+import { chatProseElementOf } from "@/components/chat/chat-prose";
 import {
   chatQuoteChip,
   chatSelectionActions,
@@ -54,15 +55,18 @@ type Selected = {
   edit: ReturnType<typeof mapAnswerSelection> | { status: "unavailable" };
 } & SelectionToolbarAnchor;
 
+/** The message whose prose `node` sits in. Words in a message's chrome (a
+ *  tool or approval card, a step row, a footer) are not the message's own,
+ *  so they belong to no message here. */
 const messageElementOf = (node: Node | null, root: HTMLElement) => {
-  const element =
-    node instanceof Element ? node : (node?.parentElement ?? null);
-  const message = element?.closest(`[${CHAT_MESSAGE_ATTRIBUTE}]`) ?? null;
+  const message =
+    chatProseElementOf(node)?.closest(`[${CHAT_MESSAGE_ATTRIBUTE}]`) ?? null;
   return message !== null && root.contains(message) ? message : null;
 };
 
-/** The selection's range when both of its ends sit in messages of this
- *  transcript; anything else (the composer, another pane) is not ours. */
+/** The selection's range when both of its ends sit in the prose of messages
+ *  of this transcript; anything else (the composer, another pane, a card's
+ *  chrome) is not ours. */
 const selectedMessageRange = (
   selection: Selection,
   root: HTMLElement,

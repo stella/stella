@@ -58,6 +58,7 @@ describe("workspace update cache invalidation", () => {
       },
       name: { type: "name", value: "Renamed matter" },
       reference: { type: "reference", value: "REF-42" },
+      visibility: { type: "visibility", value: "assigned_only" },
     } as const satisfies {
       [Type in WorkspaceUpdate["type"]]: Extract<
         WorkspaceUpdate,
@@ -78,6 +79,7 @@ describe("workspace update cache invalidation", () => {
       leadUserId: "query-cache",
       name: "route-metadata",
       reference: "query-cache",
+      visibility: "query-cache",
     });
   });
 
@@ -104,6 +106,12 @@ describe("workspace update cache invalidation", () => {
       workspaceUpdateBody({ type: "leadUserId", value: null }),
       workspaceUpdateBody({ type: "name", value: "Renamed matter" }),
       workspaceUpdateBody({ type: "reference", value: "REF-42" }),
+      workspaceUpdateBody({ type: "visibility", value: "assigned_only" }),
+      workspaceUpdateBody({
+        type: "visibility",
+        value: "all_members",
+        confirmWidening: true,
+      }),
     ];
 
     expect(bodies).toEqual([
@@ -119,6 +127,8 @@ describe("workspace update cache invalidation", () => {
       { leadUserId: null },
       { name: "Renamed matter" },
       { reference: "REF-42" },
+      { visibility: "assigned_only" },
+      { visibility: "all_members", confirmWidening: true },
     ]);
   });
 });

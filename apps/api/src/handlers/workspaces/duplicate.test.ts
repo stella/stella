@@ -453,7 +453,7 @@ describe("duplicateWorkspace", () => {
 
       expect(result).toEqual({ workspaceId: expect.any(String) });
       // The database creates the matter: id, client, name, reference,
-      // billing reference, color and lead.
+      // billing reference, color, lead and the original's visibility.
       expect(createdWorkspaces).toEqual([
         [
           expect.any(String),
@@ -463,6 +463,7 @@ describe("duplicateWorkspace", () => {
           "BILL-123",
           "blue",
           "user_lead123",
+          "admins_and_assigned",
         ],
       ]);
       expect(insertedWorkspaceMembers).toEqual([

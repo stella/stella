@@ -498,6 +498,8 @@
       "localRunAnonymizedRefusal": "Der Coding-Agent auf Ihrem Computer liest Ihre Dokumente so, wie sie sind, daher kann eine Nachricht an ihn nicht anonymisiert werden. Senden Sie sie ohne Anonymisierung.",
       "matterContactCapacityExceeded": "Diese Akte enthält mehr Kontakte, als angezeigt werden können. Entfernen Sie sichtbare Kontaktverknüpfungen, um die übrigen Kontakte anzuzeigen.",
       "matterContactCapacityReached": "Diese Akte hat die Höchstzahl an Kontakten erreicht. Entfernen Sie eine Kontaktverknüpfung, bevor Sie einen weiteren Kontakt hinzufügen.",
+      "matterStewardHandoverRequired": "Wenn nur zugewiesene Personen eine Akte sehen, muss ihr mindestens ein Teammitglied zugewiesen bleiben. Weisen Sie zuerst jemanden zu.",
+      "matterVisibilityWideningUnconfirmed": "Diese Änderung macht die Akte für mehr Personen sichtbar. Bestätigen Sie sie und versuchen Sie es erneut.",
       "mcpAuthorizationApprovalRequired": "Ein Administrator muss diesen Connector genehmigen, bevor Sie eine Verbindung herstellen können.",
       "notOrganizationMember": "Sie sind kein Mitglied dieser Organisation.",
       "organizationDataBoxLimitReached": "Diese Organisation hat die Höchstzahl an Databoxen erreicht. Entfernen Sie eine Databox, bevor Sie eine weitere hinzufügen.",

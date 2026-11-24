@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import type { Job } from "bullmq";
 import { and, asc, gt, inArray, lt, sql } from "drizzle-orm";
 
@@ -24,7 +25,7 @@ import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { BACKGROUND_ACTION_KIND } from "@/api/lib/rate-limit/action-kinds";
 import { runBackgroundJob } from "@/api/lib/rate-limit/queued-action-admission";
 import { createBullMqConnection } from "@/api/lib/redis-client";
-import { createRootMembershipScopedDb } from "@/api/lib/root-scoped-db";
+import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import { brandPersistedFlowRunId } from "@/api/lib/safe-id-boundaries";
 
 // The BullMQ worker side of the flow-run engine. It lives in its own module so
@@ -77,23 +78,37 @@ const executeAdmittedFlowStep = async ({
   const actor = await resolveActorUserId(row, database);
   if (!workspace || !actor) {
     // The executor refuses a run without tenant or actor before any step.
-    await executeFlowStep(job.data, signal, { admission: null, database });
+    await executeFlowStep(job.data, signal, {
+      admission: null,
+      database,
+      makeScopedDb: () =>
+        panic("flow step without tenant or actor cannot open a scoped handle"),
+    });
     return;
   }
+  const runActor = createRootRunActor(
+    {
+      organizationId: workspace.organizationId,
+      workspaceId: row.workspaceId,
+      userId: actor,
+      runId: row.id,
+    },
+    brandPersistedFlowRunId,
+  );
   await runBackgroundJob({
     actionKind: BACKGROUND_ACTION_KIND.flow,
     organizationId: workspace.organizationId,
     userId: actor,
-    organizationStateDb: createRootMembershipScopedDb({
-      organizationId: workspace.organizationId,
-      userId: actor,
-    }),
+    organizationStateDb: runActor.inputDb,
     job,
     signal,
     run: async (executionSignal, admission) =>
       await executeFlowStep(job.data, executionSignal, {
         admission,
         database,
+        makeScopedDb: () => runActor.writeDb,
+        makeSafeDb: () => runActor.writeSafeDb,
+        inputDb: runActor.inputDb,
       }),
   });
 };
@@ -189,7 +204,19 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
     const finalize = prepareFlowStepFailure({
       job,
       error,
-      dependencies: { database: db },
+      dependencies: {
+        database: db,
+        makeScopedDb: (scope) =>
+          createRootRunActor(
+            {
+              organizationId: scope.organizationId,
+              workspaceId: scope.workspaceIds.at(0) ?? null,
+              userId: scope.userId,
+              runId: job?.data.runId ?? panic("failed flow step missing job"),
+            },
+            brandPersistedFlowRunId,
+          ).writeDb,
+      },
     });
     if (finalize !== undefined) {
       detached(finalize, "flow-run-worker.fail-flow-run-from-worker");

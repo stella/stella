@@ -253,6 +253,9 @@ pub struct DictationSnapshot {
   /// not available, whatever the stored preference says.
   destination: Destination,
   cloud_model: Option<String>,
+  /// A model was stored but cannot be read: the window shows none chosen,
+  /// so the speaker picks one, never the region's default as if chosen.
+  cloud_model_unreadable: bool,
   model: ModelState,
   model_bytes: u64,
   phase: Phase,
@@ -316,6 +319,9 @@ struct Inner {
   language: Choice,
   destination: Destination,
   cloud_model: Option<String>,
+  /// A model was stored but could not be read: nothing goes to stella AI
+  /// until the speaker picks one, never the region's default in its place.
+  cloud_model_unreadable: bool,
   cloud_model_class: Option<StoredClass>,
   model: ModelState,
   phase: Phase,
@@ -404,9 +410,9 @@ impl DictationState {
         .read()
         .as_deref(),
     );
-    let cloud_model = DevicePreference::in_app_data(CLOUD_MODEL_PREFERENCE_FILE_NAME)
-      .read()
-      .filter(|model_id| valid_model_id(model_id));
+    let (cloud_model, cloud_model_unreadable) = stored_cloud_model(
+      &DevicePreference::in_app_data(CLOUD_MODEL_PREFERENCE_FILE_NAME),
+    );
     let cloud_model_class =
       DevicePreference::in_app_data(CLOUD_MODEL_CLASS_PREFERENCE_FILE_NAME)
         .read()
@@ -432,6 +438,7 @@ impl DictationState {
       language,
       destination,
       cloud_model,
+      cloud_model_unreadable,
       cloud_model_class,
       model: if installed_model().is_some() {
         ModelState::Ready
@@ -487,6 +494,7 @@ impl DictationState {
       cloud_available,
       destination: inner.destination.effective(cloud_available),
       cloud_model: inner.cloud_model.clone(),
+      cloud_model_unreadable: inner.cloud_model_unreadable,
       model: inner.model,
       model_bytes: MODEL_BYTES,
       phase: inner.phase,
@@ -702,6 +710,26 @@ fn speaker_language(app: &AppHandle, choice: Choice) -> SpeakerLanguage {
   }
 }
 
+/// The stored stella AI model, and whether one was stored but cannot be
+/// read: a file that fails to read or holds no valid model id. Nothing
+/// stored is no model and readable: the region's default is then the
+/// speaker's choice.
+fn stored_cloud_model(preference: &DevicePreference) -> (Option<String>, bool) {
+  match preference.read_stored() {
+    Ok(None) => (None, false),
+    Ok(Some(model_id)) if valid_model_id(&model_id) => (Some(model_id), false),
+    Ok(Some(_)) | Err(_) => (None, true),
+  }
+}
+
+/// Whether a stored model could not be read; until the speaker picks one,
+/// no dictation goes to stella AI.
+pub fn cloud_model_unreadable(app: &AppHandle) -> bool {
+  app
+    .state::<DictationState>()
+    .update(|inner| inner.cloud_model_unreadable)
+}
+
 fn valid_model_id(model_id: &str) -> bool {
   !model_id.is_empty()
     && model_id.len() <= MAX_MODEL_ID_BYTES
@@ -782,6 +810,7 @@ pub fn adopt_cloud_model(
   )?;
   change_preference(app, CLOUD_MODEL_PREFERENCE_FILE_NAME, model_id, |inner| {
     inner.cloud_model = Some(model_id.to_string());
+    inner.cloud_model_unreadable = false;
   })
 }
 
@@ -1818,6 +1847,11 @@ pub async fn dictation_get_cloud_models(app: AppHandle) -> Result<CloudModels, S
     return Err("stella AI transcription is not available".to_string());
   }
   let offered = dictation_cloud::models(&app).await?;
+  // An unreadable stored model is never replaced by the default here: the
+  // speaker picks one.
+  if cloud_model_unreadable(&app) {
+    return Ok(offered);
+  }
   let stored = app
     .state::<DictationState>()
     .update(|inner| inner.cloud_model.clone());
@@ -2064,6 +2098,7 @@ mod tests {
       language: Choice::Automatic,
       destination: Destination::parse(None),
       cloud_model: None,
+      cloud_model_unreadable: false,
       cloud_model_class: None,
       model: ModelState::Missing,
       phase: Phase::Idle,
@@ -2237,6 +2272,50 @@ mod tests {
     let dir =
       std::env::temp_dir().join(format!("stella-dictation-{}", uuid::Uuid::new_v4()));
     (DevicePreference::at(dir.join("dictation-cleanup")), dir)
+  }
+
+  #[test]
+  fn nothing_stored_is_no_model_and_readable() {
+    let (_, dir) = temp_preference();
+    let preference = DevicePreference::at(dir.join(CLOUD_MODEL_PREFERENCE_FILE_NAME));
+    assert_eq!(stored_cloud_model(&preference), (None, false));
+  }
+
+  #[test]
+  fn a_stored_model_reads_back() {
+    let (_, dir) = temp_preference();
+    crate::local_store::create_private_dir(&dir).unwrap();
+    let path = dir.join(CLOUD_MODEL_PREFERENCE_FILE_NAME);
+    DevicePreference::at(path.clone())
+      .write("elevenlabs/scribe-v3")
+      .unwrap();
+    assert_eq!(
+      stored_cloud_model(&DevicePreference::at(path)),
+      (Some("elevenlabs/scribe-v3".to_string()), false)
+    );
+    std::fs::remove_dir_all(dir).unwrap();
+  }
+
+  #[test]
+  fn a_stored_model_that_cannot_be_read_is_unreadable_never_the_default() {
+    let (_, dir) = temp_preference();
+    // A directory where the file belongs cannot be read as a model.
+    let blocked = dir.join(CLOUD_MODEL_PREFERENCE_FILE_NAME);
+    crate::local_store::create_private_dir(&blocked).unwrap();
+    assert_eq!(
+      stored_cloud_model(&DevicePreference::at(blocked)),
+      (None, true)
+    );
+    // A stored value that is no model id is unreadable too.
+    let invalid = dir.join("invalid-model");
+    DevicePreference::at(invalid.clone())
+      .write("bad\u{7}model")
+      .unwrap();
+    assert_eq!(
+      stored_cloud_model(&DevicePreference::at(invalid)),
+      (None, true)
+    );
+    std::fs::remove_dir_all(dir).unwrap();
   }
 
   #[test]

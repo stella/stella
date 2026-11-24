@@ -498,6 +498,8 @@
       "localRunAnonymizedRefusal": "Agent programistyczny na Twoim komputerze odczytuje Twoje dokumenty w oryginalnej postaci, więc wiadomości do niego nie można zanonimizować. Wyślij ją bez anonimizacji.",
       "matterContactCapacityExceeded": "Ta sprawa zawiera więcej kontaktów, niż można wyświetlić. Usuń widoczne powiązania z kontaktami, aby wyświetlić pozostałe kontakty.",
       "matterContactCapacityReached": "Ta sprawa osiągnęła limit kontaktów. Usuń jedno powiązanie z kontaktem przed dodaniem kolejnego.",
+      "matterStewardHandoverRequired": "Gdy sprawę widzą tylko osoby przypisane, musi pozostać do niej przypisany co najmniej jeden członek zespołu. Najpierw przypisz kogoś.",
+      "matterVisibilityWideningUnconfirmed": "Ta zmiana udostępnia sprawę większej liczbie osób. Potwierdź ją i spróbuj ponownie.",
       "mcpAuthorizationApprovalRequired": "Administrator musi zatwierdzić ten konektor, zanim będzie można się połączyć.",
       "notOrganizationMember": "Nie jesteś członkiem tej organizacji.",
       "organizationDataBoxLimitReached": "Ta organizacja osiągnęła limit skrzynek danych. Usuń jedną, zanim dodasz kolejną.",

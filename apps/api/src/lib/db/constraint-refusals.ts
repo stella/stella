@@ -1,8 +1,15 @@
 import { SKILL_PACKAGE_REFUSAL_CODE } from "@stll/api-contract";
+import { MATTER_STEWARD_HANDOVER_REQUIRED_CODE } from "@stll/api-contract/matter-visibility";
 import { SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
+
+/**
+ * Constraint the stewardship triggers refuse a change under: it would leave
+ * an assigned-only matter without an assigned internal member.
+ */
+export const MATTER_STEWARD_CONSTRAINT = "workspaces_assigned_only_steward";
 
 /** Constraint the skill package size trigger refuses a write under. */
 export const SKILL_PACKAGE_SIZE_CONSTRAINT =
@@ -17,6 +24,19 @@ const MIB = 1024 * 1024;
  * to remember to translate it.
  */
 const DATABASE_CONSTRAINT_REFUSALS = [
+  {
+    constraint: MATTER_STEWARD_CONSTRAINT,
+    sqlState: PG_ERROR.CHECK_VIOLATION,
+    refusal: (cause: unknown) =>
+      new HandlerError({
+        cause,
+        status: 409,
+        code: MATTER_STEWARD_HANDOVER_REQUIRED_CODE,
+        message:
+          "A matter visible to assigned members only must keep at least one assigned internal member.",
+        hint: "Assign another internal member to the matter, or widen its visibility, then try again.",
+      }),
+  },
   {
     constraint: SKILL_PACKAGE_SIZE_CONSTRAINT,
     sqlState: PG_ERROR.CHECK_VIOLATION,

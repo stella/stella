@@ -498,6 +498,8 @@
       "localRunAnonymizedRefusal": "O agente de programação do seu computador lê seus documentos como estão, então uma mensagem para ele não pode ser anonimizada. Envie-a sem anonimização.",
       "matterContactCapacityExceeded": "Este caso tem mais contatos do que é possível exibir. Remova vínculos visíveis com contatos para exibir os contatos restantes.",
       "matterContactCapacityReached": "Este caso atingiu o limite de contatos. Remova um vínculo com um contato antes de adicionar outro.",
+      "matterStewardHandoverRequired": "Quando só as pessoas atribuídas veem um caso, pelo menos um membro da equipe precisa continuar atribuído a ele. Atribua alguém primeiro.",
+      "matterVisibilityWideningUnconfirmed": "Esta alteração mostra o caso para mais pessoas. Confirme-a e tente novamente.",
       "mcpAuthorizationApprovalRequired": "Um administrador precisa aprovar este conector antes que você possa se conectar.",
       "notOrganizationMember": "Você não é membro desta organização.",
       "organizationDataBoxLimitReached": "Esta organização atingiu o limite de caixas de dados. Remova uma antes de adicionar outra.",

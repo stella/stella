@@ -305,7 +305,9 @@ const getMcpToolInfo = (toolName: string): McpToolInfo | null => {
   return { connectorSlug: connector };
 };
 
-const NATIVE_TOOL_BRANDS: Record<string, string> = {
+type NativeToolBrandKey = "ares_lookup_company" | "ares_search_companies";
+
+const NATIVE_TOOL_BRANDS: Record<NativeToolBrandKey, string> = {
   // Historical aliases for chat history that predates the unified
   // `business_registry_lookup` tool. New turns route through the
   // unified tool; the per-jurisdiction brand is resolved at render
@@ -313,6 +315,9 @@ const NATIVE_TOOL_BRANDS: Record<string, string> = {
   ares_lookup_company: "ARES",
   ares_search_companies: "ARES",
 };
+
+const isNativeToolBrandKey = (key: string): key is NativeToolBrandKey =>
+  Object.hasOwn(NATIVE_TOOL_BRANDS, key);
 
 type CatalogEntry = {
   brand: string;
@@ -345,7 +350,9 @@ const findCatalogEntry = ({
     };
   }
 
-  const nativeBrand = NATIVE_TOOL_BRANDS[toolName];
+  const nativeBrand = isNativeToolBrandKey(toolName)
+    ? NATIVE_TOOL_BRANDS[toolName]
+    : undefined;
   if (nativeBrand === undefined) {
     return null;
   }
