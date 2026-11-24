@@ -3197,6 +3197,13 @@
     "title": "skills.list"
   },
   {
+    "access": "read",
+    "command": ["capability", "skills", "monitor-get"],
+    "description": "Read usage monitoring metrics for one agent skill over a 7, 30, or 90 day window: runs, unique users, average DAU, Chat vs. MCP reads, daily trend, and per-file context reads. Restricted to skill managers (private skill owner, or org admins/owners for team skills).",
+    "name": "capability:skills.monitor.get",
+    "title": "skills.monitor.get"
+  },
+  {
     "access": "write",
     "command": ["capability", "skills", "proposals-create"],
     "description": "Open a draft change proposal against an agent skill, branched from its newest revision. Omit body to start from that revision's text. The skill itself is untouched until someone with edit rights accepts the proposal; bundled skills are refused.",
@@ -3237,6 +3244,17 @@
     "description": "Accept or reject a change proposal for an agent skill that its author has submitted for review (status proposed); a draft is a 409. Accepting writes the proposed body to the skill and records the revision it produced; rejecting leaves the skill untouched. Either way the decision is final. Requires the rights to edit the skill itself.",
     "name": "capability:skills.proposals.review",
     "title": "skills.proposals.review"
+  },
+  {
+    "access": "write",
+    "command": [
+      "capability",
+      "skills",
+      "proposals-suggest-improvements-create"
+    ],
+    "description": "Review an agent skill's instructions and context file structure, then create a draft change proposal with concrete improvements to SKILL.md. The live skill is untouched until a manager accepts the proposal. Bundled skills are refused. Consumes AI usage.",
+    "name": "capability:skills.proposals.suggest-improvements.create",
+    "title": "skills.proposals.suggest-improvements.create"
   },
   {
     "access": "write",
