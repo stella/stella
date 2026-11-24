@@ -329,10 +329,9 @@ pub fn handle_url(
           return;
         }
 
-        let active_edit_sessions = {
-          let mgr = manager.lock().await;
-          mgr.has_active_edit_sessions()
-        };
+        let sessions = &*manager;
+        let active_edit_sessions =
+          move || async move { sessions.lock().await.has_active_edit_sessions() };
 
         match updater::run_check(&app_handle, active_edit_sessions).await {
           updater::CheckOutcome::Deferred { version } => {
@@ -895,6 +894,7 @@ pub(crate) async fn show_connection_confirmation(
     app_handle,
     "selfhost-connect-dialog",
     format!("selfhost-connect-dialog.html#{hash}"),
+    crate::app_window::WindowKind::App,
   )
   .title(crate::i18n::t(title_key))
   .inner_size(420.0, 320.0)

@@ -32,6 +32,8 @@ export const Route = createFileRoute(
 )({
   staticData: {
     presentation: routePresentation({ type: "entity", entity: "pdf" }),
+    // The page opens the file's tab in the inspector when it mounts.
+    inspector: "opens-page-tab",
   },
   component: DocumentPage,
   // v.object: validateSearch receives the full URL search params

@@ -1,11 +1,11 @@
 import { and, eq, gt, inArray, lte, or, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   FILE_USAGE_RECONCILIATION_STATE,
   fileComparisonUploads,
   organizationFileObjects,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { TransitionTransaction } from "@/api/lib/db/transitions";

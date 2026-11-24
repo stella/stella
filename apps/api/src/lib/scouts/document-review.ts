@@ -6,12 +6,12 @@ import {
   SUGGESTION_KIND,
 } from "@stll/api-contract/signals";
 
-import type { Transaction } from "@/api/db/root";
 import {
   documentReviewFindings,
   documentReviewRuns,
   entities,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { basisReferenceWorkspaceIds } from "@/api/lib/document-review/reference-passages";

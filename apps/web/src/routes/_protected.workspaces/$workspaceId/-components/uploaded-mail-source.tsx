@@ -20,6 +20,11 @@ const SOURCE_LABEL_KEYS = {
     title: "correspondence.dataBox.uploaded",
     open: "correspondence.dataBox.openFile",
   },
+  // A certified email is an .eml file; its envelope states what it is.
+  pec: {
+    title: "correspondence.uploadedFile",
+    open: "correspondence.openSourceFile",
+  },
 } as const satisfies Record<
   CorrespondenceChannel,
   Record<"title" | "open", TranslationKey>

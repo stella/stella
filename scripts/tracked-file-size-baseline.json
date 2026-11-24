@@ -10,9 +10,14 @@
     "reason": "CJK font subset embedded in signature stamps at runtime; produced by apps/api/src/scripts/subset-stamp-fonts.ts."
   },
   {
+    "path": "apps/landing/public/media/changelog/legal-file-formats.mp4",
+    "maxBytes": 3285374,
+    "reason": "Changelog demo video for the v0.9.88 file formats note (refreshed recording with mailbox exports), served by the landing site."
+  },
+  {
     "path": "packages/recording-wasm/generated/recording_bg.wasm",
     "maxBytes": 2097152,
-    "reason": "The desktop's recording reader (Symphonia decoders, Opus, resampler) built for the API; committed because its canonical build needs the pinned x86_64 Linux toolchain, and recording-wasm-drift proves it matches its source."
+    "reason": "The desktop's recording reader (Symphonia decoders, Opus, resampler) built for the API; committed because its canonical build needs the pinned x86_64 Linux toolchain, and scan-engine-wasm-drift proves it matches its source."
   },
   {
     "path": "provenance/projects/root/sbom.cdx.json",

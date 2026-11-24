@@ -3,7 +3,7 @@ import * as v from "valibot";
 
 import { CHAT_QUEUE_ERROR_CODE } from "@stll/api-contract/chat-queue";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import {
   isChatPart,
   toPersistableChatMessage,

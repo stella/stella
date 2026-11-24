@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { entities } from "@/api/db/schema";
 import { readOverviewAgenda } from "@/api/handlers/workspaces/read-overview-agenda.query";
 import type { SafeId } from "@/api/lib/branded-types";

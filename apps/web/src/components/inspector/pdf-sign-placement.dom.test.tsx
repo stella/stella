@@ -133,9 +133,9 @@ test("entering placement offers the page and waits for a stamp before signing wi
   mount();
 
   expect(screen.getByText(strings.placementModeHint)).toBeDefined();
-  expect(button(strings.placementSignVisible).hasAttribute("disabled")).toBe(
-    true,
-  );
+  expect(
+    button(strings.placementSignVisible).getAttribute("aria-disabled"),
+  ).toBe("true");
   expect(button(strings.placementSignInvisible).hasAttribute("disabled")).toBe(
     false,
   );
@@ -203,9 +203,9 @@ test("a cancelled pointer leaves no stamp behind", () => {
 
   expect(preview()).toBeNull();
   expect(queryButton(strings.placementBox)).toBeNull();
-  expect(button(strings.placementSignVisible).hasAttribute("disabled")).toBe(
-    true,
-  );
+  expect(
+    button(strings.placementSignVisible).getAttribute("aria-disabled"),
+  ).toBe("true");
 });
 
 test("Escape cancels placement without signing", () => {

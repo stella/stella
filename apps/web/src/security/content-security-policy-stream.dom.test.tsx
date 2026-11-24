@@ -20,7 +20,13 @@ import { plugin } from "bun";
 import { expect, mock, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+import { sha256Base64 } from "@stll/sha256/bun";
 
+import {
+  ANONYMOUS_DOCUMENT_CACHE_CONTROL,
+  responseCachePolicy,
+  SSR_CACHE_CLASS_HEADER,
+} from "../route-response-policy";
 import { renderSsrResponse } from "../ssr-renderer";
 import { withContentSecurityPolicy } from "./content-security-policy.server";
 
@@ -66,6 +72,9 @@ Object.assign(import.meta.env, {
   VITE_DOCUMENTS_BUCKET: "documents",
   VITE_DOCUMENTS_ENDPOINT: "https://objects.stella.test",
   VITE_PUBLIC_TOOLS_ENABLED: "true",
+  // An indexable deployment, so the tools catalogue is a shareable document.
+  VITE_PUBLIC_TOOLS_INDEXING_ENABLED: "true",
+  VITE_SEO_INDEXABLE: "true",
   VITE_PUBLIC_KNOWLEDGE_ENABLED: "false",
 });
 // Unsplit client-only leaf modules read browser globals during import.
@@ -122,8 +131,91 @@ const assertInlineScriptNonces = async (response: Response, html: string) => {
   return inlineNonces;
 };
 
-for (const pathname of ["/public", "/authenticated"]) {
-  test(`${pathname}: every inline script in the SSR stream carries the response nonce`, async () => {
+const EXECUTABLE_SCRIPT_TYPES = new Set([
+  "",
+  "module",
+  "text/javascript",
+  "application/javascript",
+]);
+
+/**
+ * A document a shared cache may store names no nonce anywhere: its policy
+ * admits each inline script by its SHA-256, and the markup carries no nonce
+ * value to reuse.
+ */
+const assertInlineScriptHashes = async (response: Response, html: string) => {
+  const policy = response.headers.get("Content-Security-Policy") ?? "";
+  const scriptDirective =
+    policy
+      .split("; ")
+      .find((directive) => directive.startsWith("script-src ")) ?? "";
+  expect(policy).not.toContain("'nonce-");
+  expect(scriptDirective).not.toContain("'strict-dynamic'");
+  expect(scriptDirective.startsWith("script-src 'self' ")).toBe(true);
+  const listed = new Set(
+    [...scriptDirective.matchAll(/'sha256-([^']+)'/gu)].map(
+      (match) => match[1],
+    ),
+  );
+  const scripts: string[] = [];
+  let current: string[] | null = null;
+  let nonceAttributes = 0;
+  await new HTMLRewriter()
+    .on("[nonce]", {
+      element: () => {
+        nonceAttributes += 1;
+      },
+    })
+    .on("script", {
+      element: (element) => {
+        const type = element.getAttribute("type")?.trim().toLowerCase() ?? "";
+        if (element.hasAttribute("src") || !EXECUTABLE_SCRIPT_TYPES.has(type)) {
+          current = null;
+          return;
+        }
+        const text: string[] = [];
+        current = text;
+        element.onEndTag(() => {
+          scripts.push(text.join(""));
+        });
+      },
+      text: (chunk) => {
+        current?.push(chunk.text);
+      },
+    })
+    .transform(new Response(html))
+    .text();
+  expect(nonceAttributes).toBe(0);
+  expect(html).not.toContain("csp-nonce");
+  expect(scripts.length).toBeGreaterThan(0);
+  for (const script of scripts) {
+    const hash = sha256Base64(script);
+    expect(listed.has(hash), `inline script is admitted: ${script}`).toBe(true);
+  }
+  return scripts;
+};
+
+/** Passes the body through and calls `onText` once `text` has streamed. */
+const onceStreamed = (text: string, onText: () => void) => {
+  const decoder = new TextDecoder();
+  let streamed = "";
+  return new TransformStream<Uint8Array, Uint8Array>({
+    transform: (chunk, controller) => {
+      controller.enqueue(chunk);
+      streamed += decoder.decode(chunk, { stream: true });
+      if (streamed.includes(text)) {
+        onText();
+      }
+    },
+  });
+};
+
+for (const [pathname, shared] of [
+  ["/public", false],
+  ["/authenticated", false],
+  ["/public", true],
+] as const) {
+  test(`${pathname}${shared ? " (shared cache)" : ""}: every inline script in the SSR stream is admitted by the response policy`, async () => {
     const pending = Promise.withResolvers<string>();
     const errors: unknown[] = [];
     const request = new Request(`https://stella.test${pathname}`, {
@@ -173,43 +265,58 @@ for (const pathname of ["/public", "/authenticated"]) {
       loader: () => ({ streamed: pending.promise }),
       component: Page,
     });
-    const response = await serveDocument(
-      request,
-      async () =>
-        await createRequestHandler({
-          request,
-          createRouter: () =>
-            createRouter({
-              routeTree: root.addChildren([publicRoute, authenticatedRoute]),
-              // Only the session boundary is a fixture; Router owns loading,
-              // dehydration, script generation and stream transformation.
-              context: {
-                session: request.headers
-                  .get("cookie")
-                  ?.includes("session=fixture")
-                  ? "fixture"
-                  : null,
-              },
-              isServer: true,
-              ssr: getRequestSsrOptions(),
-            }),
-        })(async ({ router, responseHeaders }) => {
-          const rendered = await renderSsrResponse({
-            request,
-            rendererSignal: request.signal,
-            router,
-            responseHeaders,
-            children: <RouterServer router={router} />,
-            reportError: (error) => {
-              errors.push(error);
+    const renderDocument = async () =>
+      await createRequestHandler({
+        request,
+        createRouter: () =>
+          createRouter({
+            routeTree: root.addChildren([publicRoute, authenticatedRoute]),
+            // Only the session boundary is a fixture; Router owns loading,
+            // dehydration, script generation and stream transformation.
+            context: {
+              session: request.headers
+                .get("cookie")
+                ?.includes("session=fixture")
+                ? "fixture"
+                : null,
             },
-          });
-          if (rendered.isErr()) {
-            throw rendered.error;
-          }
-          return rendered.value;
-        }),
-    );
+            isServer: true,
+            ssr: getRequestSsrOptions(),
+          }),
+      })(async ({ router, responseHeaders }) => {
+        const rendered = await renderSsrResponse({
+          request,
+          rendererSignal: request.signal,
+          router,
+          responseHeaders,
+          children: <RouterServer router={router} />,
+          reportError: (error) => {
+            errors.push(error);
+          },
+        });
+        if (rendered.isErr()) {
+          throw rendered.error;
+        }
+        return rendered.value;
+      });
+    const response = await serveDocument(request, async () => {
+      const rendered = await renderDocument();
+      if (!shared) {
+        return rendered;
+      }
+      // A shared document is read whole before it is sent, so the deferred
+      // content is released once its fallback has streamed.
+      const headers = new Headers(rendered.headers);
+      headers.set("Cache-Control", ANONYMOUS_DOCUMENT_CACHE_CONTROL);
+      return new Response(
+        rendered.body?.pipeThrough(
+          onceStreamed(`<p>${PENDING_TEXT}</p>`, () => {
+            pending.resolve("Stream completed");
+          }),
+        ),
+        { headers, status: rendered.status },
+      );
+    });
     expect(response.status).toBe(200);
     const body = response.body;
     if (body === null) {
@@ -239,47 +346,70 @@ for (const pathname of ["/public", "/authenticated"]) {
     expect(html).toContain("$RC(");
     expect(html).toContain("$_TSR.router=");
     expect(errors).toEqual([]);
-    expect(await assertInlineScriptNonces(response, html)).toHaveLength(7);
+    expect(
+      await (shared
+        ? assertInlineScriptHashes(response, html)
+        : assertInlineScriptNonces(response, html)),
+    ).toHaveLength(7);
   });
 }
 
-for (const pathname of ["/tools", "/chat/new"]) {
-  test(`production ${pathname}: every inline SSR script carries the response nonce`, async () => {
+// The anonymous catalogue is a document a shared cache may store; a member's
+// page is private and keeps the per-response nonce.
+for (const [pathname, shared] of [
+  ["/tools", true],
+  ["/chat/new", false],
+] as const) {
+  test(`production ${pathname}: every inline SSR script is admitted by the response policy`, async () => {
     const request = new Request(`https://stella.test${pathname}`, {
       headers: {
         accept: "text/html",
-        cookie: pathname === "/chat/new" ? "session=fixture" : "",
+        ...(shared ? {} : { cookie: "session=fixture" }),
       },
     });
     const errors: unknown[] = [];
-    const response = await serveDocument(
-      request,
-      async () =>
-        await createRequestHandler({ request, createRouter: getRouter })(
-          async ({ router, responseHeaders }) => {
-            expect(router.state.location.pathname).toBe(pathname);
-            const rendered = await renderSsrResponse({
-              request,
-              rendererSignal: request.signal,
-              router,
-              responseHeaders,
-              children: <RouterServer router={router} />,
-              reportError: (error) => {
-                errors.push(error);
-              },
-            });
-            if (rendered.isErr()) {
-              throw rendered.error;
-            }
-            return rendered.value;
+    const response = await serveDocument(request, async () => {
+      const rendered = await createRequestHandler({
+        request,
+        createRouter: getRouter,
+      })(async ({ router, responseHeaders }) => {
+        expect(router.state.location.pathname).toBe(pathname);
+        const result = await renderSsrResponse({
+          request,
+          rendererSignal: request.signal,
+          router,
+          responseHeaders,
+          children: <RouterServer router={router} />,
+          reportError: (error) => {
+            errors.push(error);
           },
-        ),
-    );
+        });
+        if (result.isErr()) {
+          throw result.error;
+        }
+        return result.value;
+      });
+      // The server applies the route's cache class the same way.
+      const policy = responseCachePolicy({
+        cacheClass: rendered.headers.get(SSR_CACHE_CLASS_HEADER),
+        status: rendered.status,
+        isHtml: true,
+        isAnonymous: shared,
+        setsCookie: rendered.headers.has("Set-Cookie"),
+        routeCacheControl: rendered.headers.get("Cache-Control"),
+      });
+      expect(policy.shared).toBe(shared);
+      const headers = new Headers(rendered.headers);
+      headers.set("Cache-Control", policy.cacheControl);
+      return new Response(rendered.body, { headers, status: rendered.status });
+    });
     expect(response.status).toBe(200);
     const html = await response.text();
     expect(errors).toEqual([]);
     expect(html).toContain("/prepaint-init.js");
     expect(html).toContain("$_TSR.router=");
-    await assertInlineScriptNonces(response, html);
+    await (shared
+      ? assertInlineScriptHashes(response, html)
+      : assertInlineScriptNonces(response, html));
   });
 }

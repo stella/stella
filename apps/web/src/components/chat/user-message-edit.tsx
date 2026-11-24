@@ -14,6 +14,7 @@ import {
   createChatPastedTextPart,
   isChatPastedTextPart,
 } from "@stll/api-contract/chat";
+import { knownUnscannedContentReasons } from "@stll/api-contract/file-scan-warnings";
 import { sleep } from "@stll/concurrency/sleep";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -33,7 +34,8 @@ import {
 import { useChatEditorManager } from "@/components/chat-editor-provider";
 import { containsCredentialCandidate } from "@/components/chat-secret-candidate.logic";
 import { AttachmentChip } from "@/components/chat/attachment-chip";
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import { ChatImageThumbnailCard } from "@/components/chat/chat-image-attachment";
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools-types";
 import {
   createUserMessageEditDraft,
   createUserMessageEditSessions,
@@ -51,6 +53,7 @@ import type {
   UserMessageEditSession,
 } from "@/components/chat/user-message-edit.logic";
 import { DocumentIcon } from "@/components/document-icon";
+import { UnscannedContentMark } from "@/components/inspector/unscanned-content-notice";
 import {
   type LocalFilesUndoMessage,
   localFilesUndoOptions,
@@ -76,6 +79,10 @@ import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
+import {
+  getUserFileContentUrl,
+  getUserFileThumbnailUrl,
+} from "@/lib/user-files";
 import { createUuid } from "@/lib/uuid";
 
 /** What a transcript does when the user edits one of their sent messages. */
@@ -349,6 +356,18 @@ const LocalFilesUndoPending = () => {
   );
 };
 
+/** A kept file's chip says what was not scanned of it, as in the thread. */
+const AttachmentUnscannedContent = ({
+  part,
+}: {
+  part: UserMessageEditAttachment["part"];
+}) =>
+  isChatPastedTextPart(part) ? null : (
+    <UnscannedContentMark
+      reasons={knownUnscannedContentReasons(part.metadata?.unscannedContent)}
+    />
+  );
+
 type UserMessageEditFormProps = {
   draft: UserMessageEditDraft;
   /** The edited message and its thread: an edit from it may first undo the
@@ -371,6 +390,106 @@ type UserMessageEditFormProps = {
  * paragraphs, line breaks, bold text and chips load as the composer holds
  * them, and sending writes the markup a new message would carry.
  */
+const sendDisabledKey = ({
+  sending,
+  isGenerating,
+}: {
+  sending: boolean;
+  isGenerating: boolean;
+}) => {
+  if (sending) {
+    return "common.sending";
+  }
+  return isGenerating
+    ? "chat.answerEdit.waitForAnswer"
+    : "chat.sendPromptEmpty";
+};
+
+type UserMessageEditAttachmentsProps = {
+  attachments: readonly UserMessageEditAttachment[];
+  onRemove: (id: string) => void;
+  sending: boolean;
+};
+
+const UserMessageEditAttachments = ({
+  attachments,
+  onRemove,
+  sending,
+}: UserMessageEditAttachmentsProps) => {
+  const t = useTranslations();
+  if (attachments.length === 0) {
+    return null;
+  }
+  return (
+    <div className="flex flex-wrap items-start gap-2">
+      {attachments.map((attachment) => {
+        const title = attachmentTitle(attachment, t("chat.attachment"));
+        const pasted = isChatPastedTextPart(attachment.part);
+        const mimeType = attachmentMimeType(attachment);
+        const removeLabel = t("chat.editMessageRemoveAttachment", {
+          name: title,
+        });
+        const removeAttachment = () => onRemove(attachment.id);
+        if (
+          !isChatPastedTextPart(attachment.part) &&
+          mimeType.startsWith("image/")
+        ) {
+          const url = attachment.part.source.value;
+          const contentUrl = getUserFileContentUrl(url) ?? undefined;
+          const thumbnailUrl =
+            (attachment.part.metadata?.placeholder !== undefined
+              ? getUserFileThumbnailUrl(url)
+              : null) ?? contentUrl;
+          return (
+            <ChatImageThumbnailCard
+              filename={title}
+              fullSrc={contentUrl}
+              key={attachment.id}
+              mimeType={mimeType}
+              remove={
+                sending
+                  ? undefined
+                  : { label: removeLabel, onRemove: removeAttachment }
+              }
+              thumbnailSrc={thumbnailUrl}
+            />
+          );
+        }
+        return (
+          <AttachmentChip
+            // A sent draft is read-only until the server answers.
+            actions={
+              sending
+                ? []
+                : [
+                    {
+                      type: "remove",
+                      label: removeLabel,
+                      icon: ({ className }) => (
+                        <XIcon aria-hidden="true" className={className} />
+                      ),
+                      onClick: removeAttachment,
+                    },
+                  ]
+            }
+            icon={({ className }) =>
+              pasted ? (
+                <TextIcon aria-hidden="true" className={className} />
+              ) : (
+                <DocumentIcon className={className} mimeType={mimeType} />
+              )
+            }
+            key={attachment.id}
+            kind={pasted ? "pasted_text" : "file"}
+            notice={<AttachmentUnscannedContent part={attachment.part} />}
+            title={title}
+          />
+        );
+      })}
+    </div>
+  );
+};
+
 const UserMessageEditForm = ({
   draft,
   isGenerating,
@@ -612,54 +731,15 @@ const UserMessageEditForm = ({
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-2" data-chat-message-edit>
-      {attachments.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {attachments.map((attachment) => {
-            const title = attachmentTitle(attachment, t("chat.attachment"));
-            const pasted = isChatPastedTextPart(attachment.part);
-            return (
-              <AttachmentChip
-                // A sent draft is read-only until the server answers.
-                actions={
-                  sending
-                    ? []
-                    : [
-                        {
-                          type: "remove",
-                          label: t("chat.editMessageRemoveAttachment", {
-                            name: title,
-                          }),
-                          icon: ({ className }) => (
-                            <XIcon aria-hidden="true" className={className} />
-                          ),
-                          onClick: () => {
-                            setAttachments(
-                              attachments.filter(
-                                (candidate) => candidate.id !== attachment.id,
-                              ),
-                            );
-                          },
-                        },
-                      ]
-                }
-                icon={({ className }) =>
-                  pasted ? (
-                    <TextIcon aria-hidden="true" className={className} />
-                  ) : (
-                    <DocumentIcon
-                      className={className}
-                      mimeType={attachmentMimeType(attachment)}
-                    />
-                  )
-                }
-                key={attachment.id}
-                kind={pasted ? "pasted_text" : "file"}
-                title={title}
-              />
-            );
-          })}
-        </div>
-      )}
+      <UserMessageEditAttachments
+        attachments={attachments}
+        onRemove={(id) => {
+          setAttachments(
+            attachments.filter((candidate) => candidate.id !== id),
+          );
+        }}
+        sending={sending}
+      />
       <div className="border-input bg-background focus-within:border-ring focus-within:ring-ring/24 rounded-lg border px-2.5 py-2 focus-within:ring-3">
         <EditorContent editor={editor} />
       </div>
@@ -692,6 +772,7 @@ const UserMessageEditForm = ({
         </Button>
         <Button
           disabled={!canSend}
+          disabledReason={t(sendDisabledKey({ sending, isGenerating }))}
           onClick={() => {
             submitFrom(editor);
           }}

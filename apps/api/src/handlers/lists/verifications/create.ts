@@ -12,7 +12,7 @@ import { decisionParagraphRangeSchema } from "@stll/api-contract/decision-paragr
 import { VERIFICATION_SCOPE_REFUSALS } from "@stll/api-contract/verification-scope";
 import type { ParagraphRange } from "@stll/legal-ast/paragraph-range";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { legalListVerificationRuns } from "@/api/db/schema";
 import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
 import {

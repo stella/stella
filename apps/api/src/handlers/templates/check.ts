@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db-types";
 import { buildTemplateCheckFindings } from "@/api/handlers/templates/check-template";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";

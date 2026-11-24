@@ -1,6 +1,6 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import baselineCounts from "./no-render-phase-update-baseline.json" with { type: "json" };
+import rawBaselineCounts from "./no-render-phase-update-baseline.json" with { type: "json" };
 import {
   getPropertyName,
   isIdentifier,
@@ -10,6 +10,8 @@ import {
   resolveVariable,
   stableInitializer,
 } from "./utils.ts";
+
+const baselineCounts: Readonly<Record<string, number>> = rawBaselineCounts;
 
 const FUNCTIONS = new Set([
   "ArrowFunctionExpression",

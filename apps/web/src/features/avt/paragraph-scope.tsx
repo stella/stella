@@ -54,6 +54,7 @@ type ScopeErrorKey =
 
 type ParagraphRangeStartProps = {
   disabled: boolean;
+  disabledReason: string;
   starting: boolean;
   /** Owned by the row, which shows a refusal beside it while closed. */
   open: boolean;
@@ -68,6 +69,7 @@ type ParagraphRangeStartProps = {
 /** Verify only some paragraphs: opened beside the document's Verify. */
 export const ParagraphRangeStart = ({
   disabled,
+  disabledReason,
   starting,
   open,
   onOpenChange,
@@ -98,6 +100,7 @@ export const ParagraphRangeStart = ({
           <Button
             aria-label={t("avt.scope.verifyParagraphs")}
             disabled={disabled}
+            disabledReason={disabledReason}
             size="icon-sm"
             tooltip={t("avt.scope.verifyParagraphs")}
             variant="outline"
@@ -143,6 +146,7 @@ export const ParagraphRangeStart = ({
           )}
           <Button
             disabled={disabled}
+            disabledReason={disabledReason}
             loading={starting}
             size="sm"
             type="submit"

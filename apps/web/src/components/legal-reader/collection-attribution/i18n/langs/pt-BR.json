@@ -1,0 +1,9 @@
+{
+  "readerCollection": {
+    "partialText": "As seções publicadas são exibidas; a integridade do texto não foi estabelecida.",
+    "provenanceOmitted": "Registros de publicação omitidos: {omittedCount, number} de {totalCount, number}.",
+    "sourceAttribution": "Publicação da coletânea: <link>{source}</link>. Consultada em {date}.",
+    "sourceAttributionUnknownDate": "Publicação da coletânea: <link>{source}</link>. Data de consulta desconhecida.",
+    "unclassifiedText": "A extensão deste texto da coletânea é desconhecida."
+  }
+}

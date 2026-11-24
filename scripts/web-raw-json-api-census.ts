@@ -26,8 +26,6 @@ const RAW_JSON_STREAM_ALLOWLIST = {
   'components/autocomplete/use-autocomplete-stream.ts#"/ai-autocomplete/stream"':
     "Consumes incremental autocomplete output.",
   [READER_ANSWER_STREAM_CALL]: "Consumes the streamed reader-answer response.",
-  'routes/dev/-components/autocomplete-playground.tsx#"/ai-autocomplete/stream"':
-    "Exercises the same incremental autocomplete stream in development.",
 } as const satisfies Record<string, string>;
 
 const SOURCE_EXTENSION = /\.[cm]?[jt]sx?$/u;

@@ -19,7 +19,16 @@ export const DESKTOP_DICTATION_CLEANUP_LIMITS = {
   segments: contract.maxSegments,
   windowTitleLength: contract.maxWindowTitleLength,
   textBeforeCursorLength: contract.maxTextBeforeCursorLength,
+  customInstructionsLength: contract.maxCustomInstructionsLength,
+  modelLength: contract.maxModelLength,
+  models: contract.maxModels,
+  modelDisplayNameLength: contract.maxModelDisplayNameLength,
 } as const;
+
+/** The models a linked desktop may choose for cleanup besides automatic:
+ *  the ones the organization's chat model picker offers. */
+export const DESKTOP_DICTATION_CLEANUP_MODELS_PATH =
+  `${STELLA_API_VERSION_PREFIX}/desktop/dictation/cleanup-models` as const;
 
 /** The kind of app a dictation goes to, which sets the register cleanup
  *  writes in. Webmail and online documents cannot be told apart from other
@@ -37,6 +46,43 @@ export const DESKTOP_DICTATION_APP_KINDS = [
 export type DesktopDictationAppKind =
   (typeof DESKTOP_DICTATION_APP_KINDS)[number];
 
+/** How cleanup writes a dictation: `polished` fixes recognition mistakes
+ *  and keeps the wording (the form when a request names none), `casual`
+ *  keeps a relaxed tone, `notes` writes terse points, and `verbatim`
+ *  changes no word, only casing, punctuation and spoken commands. `styles`
+ *  in the JSON file lists the same values. */
+export const DESKTOP_DICTATION_CLEANUP_STYLES = [
+  "polished",
+  "casual",
+  "notes",
+  "verbatim",
+] as const;
+export type DesktopDictationCleanupStyle =
+  (typeof DESKTOP_DICTATION_CLEANUP_STYLES)[number];
+export const DESKTOP_DICTATION_DEFAULT_CLEANUP_STYLE =
+  "polished" satisfies DesktopDictationCleanupStyle;
+
+/** The languages cleanup can write a dictation in when asked to translate
+ *  it: the languages the apps come in. `translationLanguages` in the JSON
+ *  file lists the same values. */
+export const DESKTOP_DICTATION_TRANSLATION_LANGUAGES = [
+  "ar",
+  "cs",
+  "de",
+  "en",
+  "es",
+  "et",
+  "fr",
+  "hu",
+  "lt",
+  "lv",
+  "pl",
+  "pt-BR",
+  "sk",
+] as const;
+export type DesktopDictationTranslationLanguage =
+  (typeof DESKTOP_DICTATION_TRANSLATION_LANGUAGES)[number];
+
 /** Code points, the way the desktop counts them (Rust `chars().count()`),
  *  so both sides hold a text to the same bound. */
 export const countDictationCodePoints = (text: string): number => {
@@ -53,6 +99,31 @@ const maxCodePoints = (limit: number) =>
     `Text is longer than ${limit} characters`,
   );
 
+/** A code-point bound, with the UTF-16 bound it implies (two units per code
+ *  point at most) stated too, so the published schema carries a length. */
+const boundedText = (limit: number) =>
+  v.pipe(v.string(), v.maxLength(limit * 2), maxCodePoints(limit));
+
+/** What the speaker wrote for cleanup to follow, such as "use British
+ *  spelling, never use emoji": style guidance below the system rules, which
+ *  never replaces them or the answer's shape. Several lines may come;
+ *  no other control character. Neither logged nor stored. */
+const customInstructionsSchema = v.optional(
+  v.pipe(
+    boundedText(DESKTOP_DICTATION_CLEANUP_LIMITS.customInstructionsLength),
+    v.minLength(1),
+    v.regex(/^[\P{Cc}\n\t]*$/u),
+  ),
+);
+
+/** A model as the chat model picker names it (`provider::modelId`). */
+const cleanupModelSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(DESKTOP_DICTATION_CLEANUP_LIMITS.modelLength),
+  v.regex(/^\P{Cc}+$/u),
+);
+
 /** How far a cleaned answer may shrink from what was dictated. Cleanup
  *  replaces spoken `formattingCommands` by marks, breaks or bold, so the
  *  transcript is measured by its letters and digits outside complete
@@ -61,17 +132,30 @@ const maxCodePoints = (limit: number) =>
  *  character or a command), a marker with dictated words on both sides may
  *  drop itself and as much of the words before it as the correction after
  *  it holds. An answer that keeps less than `minAnswerTextPercent` of the
- *  rest, or breaks a line far more often than the dictation could have asked
- *  for, lost content and is replaced by the raw transcript. Only a dictation
- *  of formatting commands alone may be answered by breaks alone. */
+ *  rest (`condensedMinAnswerTextPercent` for notes or a translation, which
+ *  word the dictation anew), or breaks a line far more often than the
+ *  dictation could have asked for, lost content and is replaced by the raw
+ *  transcript. Only a dictation of formatting commands alone may be answered
+ *  by breaks alone. */
 export const DESKTOP_DICTATION_CLEANUP_PLAUSIBILITY = {
   minAnswerTextPercent: contract.minAnswerTextPercent,
+  condensedMinAnswerTextPercent: contract.condensedMinAnswerTextPercent,
   minBreakAllowance: contract.minBreakAllowance,
   transcriptCharactersPerBreak: contract.transcriptCharactersPerBreak,
   sentenceEndMarks: contract.sentenceEndMarks,
   formattingCommands: contract.formattingCommands,
   correctionMarkers: contract.correctionMarkers,
 } as const;
+
+/** The share of the dictated letters and digits a cleaned answer must
+ *  keep, by how it was asked to write them. */
+export const dictationCleanupMinAnswerTextPercent = ({
+  style,
+  translateTo,
+}: Pick<DesktopDictationCleanupRequest, "style" | "translateTo">): number =>
+  style === "notes" || translateTo !== undefined
+    ? DESKTOP_DICTATION_CLEANUP_PLAUSIBILITY.condensedMinAnswerTextPercent
+    : DESKTOP_DICTATION_CLEANUP_PLAUSIBILITY.minAnswerTextPercent;
 
 /** Characters the desktop never types: controls, the Unicode line and
  *  paragraph separators, and the bidirectional embedding, override and
@@ -158,6 +242,16 @@ export const desktopDictationCleanupRequestSchema = v.strictObject({
    *  neither logged nor stored. */
   context: v.optional(desktopDictationCleanupContextSchema),
   vocabulary: vocabularySchema,
+  /** How to write the text; `polished` when absent. */
+  style: v.optional(v.picklist(DESKTOP_DICTATION_CLEANUP_STYLES)),
+  /** The language to write the cleaned text in, whatever language it was
+   *  dictated in. Absent, every word stays in its spoken language. */
+  translateTo: v.optional(v.picklist(DESKTOP_DICTATION_TRANSLATION_LANGUAGES)),
+  customInstructions: customInstructionsSchema,
+  /** The model the speaker chose from `DESKTOP_DICTATION_CLEANUP_MODELS_PATH`;
+   *  absent: automatic, the organization's fast model. One the organization
+   *  no longer offers is cleaned up automatically, never refused. */
+  model: v.optional(cleanupModelSchema),
 });
 export type DesktopDictationCleanupRequest = v.InferOutput<
   typeof desktopDictationCleanupRequestSchema
@@ -199,6 +293,33 @@ export type DesktopDictationCleanupResponse = v.InferOutput<
   typeof desktopDictationCleanupResponseSchema
 >;
 
+/** One model cleanup may run on: its picker value, its name and the
+ *  provider that runs it. */
+export const desktopDictationCleanupModelSchema = v.strictObject({
+  value: cleanupModelSchema,
+  displayName: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(DESKTOP_DICTATION_CLEANUP_LIMITS.modelDisplayNameLength),
+  ),
+  provider: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(DESKTOP_DICTATION_CLEANUP_LIMITS.modelDisplayNameLength),
+  ),
+});
+
+/** The models besides automatic, in the chat model picker's order. */
+export const desktopDictationCleanupModelsSchema = v.strictObject({
+  models: v.pipe(
+    v.array(desktopDictationCleanupModelSchema),
+    v.maxLength(DESKTOP_DICTATION_CLEANUP_LIMITS.models),
+  ),
+});
+export type DesktopDictationCleanupModels = v.InferOutput<
+  typeof desktopDictationCleanupModelsSchema
+>;
+
 // --- Recording cleanup ------------------------------------------------------
 
 const recordingContract = contract.recordingCleanup;
@@ -207,6 +328,11 @@ const recordingContract = contract.recordingCleanup;
  *  desktop's "Transcribe a recording" window. */
 export const DESKTOP_DICTATION_RECORDING_CLEANUP_PATH =
   `${STELLA_API_VERSION_PREFIX}/desktop/dictation/recording-cleanup` as const;
+
+/** The same cleanup for a signed-in member's session (web and phone apps),
+ *  with the same request and answer. */
+export const DICTATION_RECORDING_CLEANUP_PATH =
+  `${STELLA_API_VERSION_PREFIX}/dictation/recording-cleanup` as const;
 
 /** Lengths in code points, the way the desktop counts them. A recording is
  *  cleaned part by part: the desktop splits the transcript into parts of at
@@ -245,6 +371,7 @@ export const desktopDictationRecordingCleanupRequestSchema = v.strictObject({
   locale: localeSchema,
   languages: languagesSchema,
   vocabulary: vocabularySchema,
+  customInstructions: customInstructionsSchema,
 });
 export type DesktopDictationRecordingCleanupRequest = v.InferOutput<
   typeof desktopDictationRecordingCleanupRequestSchema
@@ -278,11 +405,6 @@ const writtenText = (allowLineFeed: boolean) =>
  * images, HTML, code, tables, block quotes or rules; the server removes
  * them. Lines end in `\n` only.
  */
-/** A code-point bound, with the UTF-16 bound it implies (two units per code
- *  point at most) stated too, so the published schema carries a length. */
-const boundedText = (limit: number) =>
-  v.pipe(v.string(), v.maxLength(limit * 2), maxCodePoints(limit));
-
 export const desktopDictationRecordingCleanupResponseSchema = v.strictObject({
   instructions: v.pipe(
     v.array(

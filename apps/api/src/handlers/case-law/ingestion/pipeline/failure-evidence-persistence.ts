@@ -7,7 +7,6 @@ import {
   CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX,
   onlineUniqueIndexTarget,
 } from "@/api/db/online-unique-indexes";
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisions,
   caseLawDecisionSourceIdentities,
@@ -15,6 +14,7 @@ import {
   caseLawIngestionFailureEvidence,
   caseLawIngestionFailures,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   captureFailureEvidence,
   encodeIngestionFailureEvidence,

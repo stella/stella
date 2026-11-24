@@ -35,6 +35,7 @@ import {
 import type { ProcessSummaryPiece } from "@stll/api-contract/chat-tool-activity";
 import { chatElapsedReading } from "@stll/api-contract/chat-turn-duration";
 import { desktopAgentSettingsUrl } from "@stll/api-contract/desktop-account-link";
+import { knownUnscannedContentReasons } from "@stll/api-contract/file-scan-warnings";
 import { Temporal } from "@stll/time";
 import {
   AlertDialog,
@@ -201,6 +202,7 @@ import type { UserMessageEditActions } from "@/components/chat/user-message-edit
 import { WebSearchSources } from "@/components/chat/web-search-sources";
 import { CopyControl } from "@/components/copy-control";
 import { DocumentIcon } from "@/components/document-icon";
+import { UnscannedContentMark } from "@/components/inspector/unscanned-content-notice";
 import { ProviderSetupGuidanceNotice } from "@/components/provider-diagnostic-content";
 import { ReferenceRenderScope } from "@/components/references/reference-chip";
 import {
@@ -216,6 +218,7 @@ import {
 } from "@/features/chat/chat-queue.logic";
 import { chatErrorTranslationKey } from "@/features/chat/chat-request-error";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
+import type { ChatThreadRef } from "@/features/chat/chat-thread-ref-types";
 import { SuggestedFollowups } from "@/features/chat/components/suggested-followups";
 import type { SuggestedFollowupsProps } from "@/features/chat/components/suggested-followups";
 import type { ChatComputerWait } from "@/features/chat/desktop-launch.logic";
@@ -227,7 +230,6 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { openDesktopUrl } from "@/lib/desktop-bridge";
 import { detached } from "@/lib/detached";
@@ -1199,6 +1201,9 @@ const getAttachmentPlaceholder = (
   part: ChatAttachmentPart,
 ): string | undefined => part.metadata?.placeholder;
 
+const getAttachmentUnscannedContent = (part: ChatAttachmentPart) =>
+  knownUnscannedContentReasons(part.metadata?.unscannedContent);
+
 type DownloadDataAttachmentOptions = {
   errorTitle: string;
   fileName: string;
@@ -1311,6 +1316,11 @@ const MessageAttachments = ({
             )}
             key={key}
             kind="file"
+            notice={
+              <UnscannedContentMark
+                reasons={getAttachmentUnscannedContent(part)}
+              />
+            }
             open={open}
             title={title}
           />
@@ -1453,6 +1463,11 @@ const OpenDesktopAndResendButton = ({
     <>
       <Button
         disabled={disabled || opening}
+        disabledReason={
+          opening
+            ? t("settings.account.desktopCardOpeningTitle")
+            : t("chat.answerEdit.waitForAnswer")
+        }
         onClick={() => {
           const superseded = holdResend();
           detached(
@@ -1585,6 +1600,7 @@ export const ChatErrorMessage = ({
           {canSendWithoutAnonymization && (
             <Button
               disabled={isGenerating}
+              disabledReason={t("chat.answerEdit.waitForAnswer")}
               onClick={() => {
                 detached(
                   onSendWithoutAnonymization(),
@@ -1624,6 +1640,7 @@ export const ChatErrorMessage = ({
           {onResend && canRetryChatRequest(error) && (
             <Button
               disabled={isGenerating}
+              disabledReason={t("chat.answerEdit.waitForAnswer")}
               onClick={() => {
                 desktopResend.current?.abort();
                 detached(onResend(), "chat-thread-messages.resend");

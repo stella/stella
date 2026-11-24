@@ -25,7 +25,7 @@ import type {
 } from "@stll/legal-ast/analysis";
 import { analysisHeadingInputSchema } from "@stll/legal-ast/analysis";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   type OrgAIConfig,
   resolveCaching,

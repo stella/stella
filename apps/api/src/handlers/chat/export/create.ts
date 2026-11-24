@@ -19,6 +19,8 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { markdownToStellaDocument } from "@stll/docx-authoring/markdown";
+
 import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
 import {
   assertChatThreadScopeMatches,
@@ -48,7 +50,6 @@ import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import { formatCourtParagraphMark } from "@/api/lib/case-law/court-paragraph-mark";
 import { readChatExportSource } from "@/api/lib/chat/export-source";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { markdownToStellaDocument } from "@/api/lib/docx-authoring/from-markdown";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";

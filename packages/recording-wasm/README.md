@@ -21,4 +21,4 @@ const opened = openRecording({ size, chunks, extension: "m4a" });
 
 ## Building
 
-`generated/` holds the committed bindings. They are built on x86_64 Linux with the Rust version in `rust-toolchain.toml` and wasm-bindgen 0.2.130 (`bun run build:wasm`); elsewhere use `bun run build:wasm:container` (Docker) or the `recording-wasm` artifact the `recording-wasm-drift` CI job uploads when the committed bindings are out of date.
+`generated/` holds the committed bindings. They are built on x86_64 Linux with the Rust version in `rust-toolchain.toml` and wasm-bindgen 0.2.130 (`bun run build:wasm`); elsewhere use `bun run build:wasm:container` (Docker) or the `recording-wasm` directory of the `scan-engine-wasm` artifact the `scan-engine-wasm-drift` CI job uploads when the committed bindings are out of date.

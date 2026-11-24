@@ -24,6 +24,7 @@ type ReasonFieldProps = {
   /** Names the action, as its confirm button. */
   submitLabel: string;
   disabled: boolean;
+  disabledReason?: string | undefined;
   onSubmit: (reason: string) => void;
   onCancel: () => void;
 };
@@ -32,6 +33,7 @@ export const ReasonField = ({
   label,
   submitLabel,
   disabled,
+  disabledReason,
   onSubmit,
   onCancel,
 }: ReasonFieldProps) => {
@@ -44,6 +46,9 @@ export const ReasonField = ({
       <Form
         onSubmit={(event) => {
           event.preventDefault();
+          if (disabled) {
+            return;
+          }
           const trimmed = reason.trim();
           if (trimmed === "") {
             setMissing(true);
@@ -87,7 +92,14 @@ export const ReasonField = ({
           />
           {missing && <FieldError match>{t("avt.reason.required")}</FieldError>}
           <div className="flex items-center gap-1.5">
-            <Button disabled={disabled} size="sm" type="submit">
+            <Button
+              disabled={disabled}
+              disabledReason={
+                disabledReason ?? t("avt.review.permissionRequired")
+              }
+              size="sm"
+              type="submit"
+            >
               {submitLabel}
             </Button>
             <Button onClick={onCancel} size="sm" type="button" variant="ghost">

@@ -2,8 +2,8 @@ import { and, asc, eq, inArray, lt } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import { aiMemories } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,

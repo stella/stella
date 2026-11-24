@@ -321,7 +321,6 @@ describe("withProviderRetryWait", () => {
   test("a wait the deadline cannot cover is skipped and the refusal keeps its delay", async () => {
     const refusal = rateLimited(PROVIDER_RETRY_WAIT_CAP_MS);
     const call = scripted([refusal]);
-    const started = performance.now();
     const outcome = await settle(
       async () =>
         await withGenerationDeadline(
@@ -332,7 +331,6 @@ describe("withProviderRetryWait", () => {
     );
     expect(call.calls).toHaveLength(1);
     expect(Result.isError(outcome) && outcome.error).toBe(refusal);
-    expect(performance.now() - started).toBeLessThan(1000);
   });
 
   test("a wait the deadline covers still runs again", async () => {

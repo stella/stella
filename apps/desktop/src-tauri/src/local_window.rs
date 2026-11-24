@@ -101,6 +101,22 @@ impl LocalWindowFeature for ClipboardWindows {
 
 pub type ClipboardCaller = LocalCaller<ClipboardWindows>;
 
+/// Clipboard settings: the Clips windows and the Settings window. These
+/// commands change how history is kept and how its groups are named and
+/// ordered; the one read returns those settings, never a clip.
+pub struct ClipboardSettingsWindows;
+
+impl LocalWindowFeature for ClipboardSettingsWindows {
+  const WINDOW_LABELS: &'static [&'static str] = &[
+    crate::clipboard_window::CLIPBOARD_WINDOW_LABEL,
+    crate::clipboard_window::CLIPBOARD_EDITOR_WINDOW_LABEL,
+    crate::SETTINGS_WINDOW_LABEL,
+  ];
+  const REFUSAL: &'static str = "clipboard settings are not available here";
+}
+
+pub type ClipboardSettingsCaller = LocalCaller<ClipboardSettingsWindows>;
+
 /// The activity window: the only reader of the day timeline.
 pub struct ActivityWindows;
 
@@ -144,6 +160,31 @@ impl LocalWindowFeature for ActivitySettingsWindows {
 
 impl ActivityAccountFeature for ActivitySettingsWindows {}
 
+/// Activity setup: the activity window, Settings and the setup window. These
+/// commands read and change what setup offers (starting to record, details,
+/// calls, consent to AI drafts); none deletes history or returns the
+/// timeline or a day's apps.
+pub struct ActivitySetupWindows;
+
+impl LocalWindowFeature for ActivitySetupWindows {
+  const WINDOW_LABELS: &'static [&'static str] = &[
+    crate::activity_window::ACTIVITY_WINDOW_LABEL,
+    crate::SETTINGS_WINDOW_LABEL,
+    crate::onboarding::ONBOARDING_WINDOW_LABEL,
+  ];
+  const REFUSAL: &'static str = "activity setup is not available here";
+
+  fn is_available<R: Runtime>(app: &AppHandle<R>) -> bool {
+    ActivityWindows::is_available(app)
+  }
+
+  fn account_binding<R: Runtime>(app: &AppHandle<R>) -> Option<(u64, String)> {
+    ActivityWindows::account_binding(app)
+  }
+}
+
+impl ActivityAccountFeature for ActivitySetupWindows {}
+
 /// A feature whose callers act on the linked account's activity store.
 pub trait ActivityAccountFeature: LocalWindowFeature {}
 
@@ -165,6 +206,8 @@ impl<F: ActivityAccountFeature> LocalCaller<F> {
 pub type ActivityCaller = LocalCaller<ActivityWindows>;
 
 pub type ActivitySettingsCaller = LocalCaller<ActivitySettingsWindows>;
+
+pub type ActivitySetupCaller = LocalCaller<ActivitySetupWindows>;
 
 #[cfg(test)]
 mod tests {
@@ -210,6 +253,37 @@ mod tests {
   #[test]
   fn clipboard_callers_are_clipboard_windows_on_the_app_origin() {
     assert_only_feature_windows_on_the_app_origin::<ClipboardWindows>();
+  }
+
+  #[test]
+  fn clipboard_settings_callers_add_only_the_settings_window() {
+    assert_only_feature_windows_on_the_app_origin::<ClipboardSettingsWindows>();
+    assert_eq!(
+      ClipboardSettingsWindows::WINDOW_LABELS,
+      [
+        crate::clipboard_window::CLIPBOARD_WINDOW_LABEL,
+        crate::clipboard_window::CLIPBOARD_EDITOR_WINDOW_LABEL,
+        crate::SETTINGS_WINDOW_LABEL,
+      ]
+    );
+    let page = tauri::Url::parse("tauri://localhost/index.html").unwrap();
+    // The Settings window reaches clipboard settings, never the history.
+    assert!(
+      LocalCaller::<ClipboardSettingsWindows>::verify(
+        crate::SETTINGS_WINDOW_LABEL,
+        Some(&page),
+        None
+      )
+      .is_some()
+    );
+    assert!(
+      LocalCaller::<ClipboardWindows>::verify(
+        crate::SETTINGS_WINDOW_LABEL,
+        Some(&page),
+        None
+      )
+      .is_none()
+    );
   }
 
   #[test]
@@ -261,5 +335,29 @@ mod tests {
           .is_none()
       );
     }
+  }
+
+  #[test]
+  fn activity_setup_callers_add_only_the_setup_window() {
+    assert_only_feature_windows_on_the_app_origin::<ActivitySetupWindows>();
+    assert_eq!(
+      ActivitySetupWindows::WINDOW_LABELS,
+      [
+        crate::activity_window::ACTIVITY_WINDOW_LABEL,
+        crate::SETTINGS_WINDOW_LABEL,
+        crate::onboarding::ONBOARDING_WINDOW_LABEL,
+      ]
+    );
+    let page = tauri::Url::parse("tauri://localhost/index.html").unwrap();
+    // Setup reaches its own choices, never activity settings or the timeline.
+    let setup = crate::onboarding::ONBOARDING_WINDOW_LABEL;
+    assert!(
+      LocalCaller::<ActivitySetupWindows>::verify(setup, Some(&page), None).is_some()
+    );
+    assert!(
+      LocalCaller::<ActivitySettingsWindows>::verify(setup, Some(&page), None)
+        .is_none()
+    );
+    assert!(LocalCaller::<ActivityWindows>::verify(setup, Some(&page), None).is_none());
   }
 }

@@ -6,8 +6,8 @@ import {
   type WorkspaceStatus,
 } from "@stll/api-contract/workspace-status";
 
-import type { Transaction } from "@/api/db/root";
 import { invoiceLines, timeEntries, workspaces } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { timeEntryIsRunning } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

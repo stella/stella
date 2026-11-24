@@ -8,7 +8,6 @@ import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { member, organization } from "@/api/db/auth-schema";
 import { entityFeatureGateMetadata } from "@/api/db/entity-feature-gate-metadata";
 import { SETTING_ORGANIZATION_DELETION_IDS } from "@/api/db/rls";
-import type { Transaction } from "@/api/db/root";
 import {
   aiMemories,
   chatThreadCompactions,
@@ -35,6 +34,7 @@ import {
   userFiles,
   workspaces,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { requireOrganizationAuditExport } from "@/api/lib/account-export/organization-audit-gate";
 import type { OrganizationAuditExportRefusalCode } from "@/api/lib/account-export/organization-audit-gate";
 import { createSafeId } from "@/api/lib/branded-types";

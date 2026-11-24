@@ -1,9 +1,9 @@
 import { panic } from "better-result";
 import { and, eq, isNotNull } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { organizationSettings } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   ACTION_SERVICE_CREDENTIALS,
@@ -133,6 +133,7 @@ export const FREE_WITHOUT_OWN_KEY = {
   "case-law.research-answers": "counts",
   "documents.bounding-boxes": "counts",
   "documents.scan-deadlines": "counts",
+  "documents.suggest-name": "counts",
   "document-reviews.parties": "counts",
   "document-reviews.propose-positions": "counts",
   "document-reviews.start": "counts",

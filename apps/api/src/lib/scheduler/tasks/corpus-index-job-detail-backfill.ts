@@ -16,13 +16,13 @@ import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
 import { withLongRunningConnection } from "@/api/db/long-running-connection";
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawIndexJobs,
   CORPUS_INDEX_JOB_SUCCEEDED_CHECKS,
   legislationIndexJobs,
   schedulerJobs,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { CorpusIndexProjectionSubject } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";

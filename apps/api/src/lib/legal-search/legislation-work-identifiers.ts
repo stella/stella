@@ -3,11 +3,11 @@ import { and, eq, inArray, ne, sql } from "drizzle-orm";
 
 import { compareCodeUnit } from "@stll/collation";
 
-import type { Transaction } from "@/api/db/root";
 import {
   legislationDocuments,
   legislationWorkIdentifiers,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { LegislationDocumentInput } from "@/api/lib/legal-search/legislation-ingestion-types";
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
 

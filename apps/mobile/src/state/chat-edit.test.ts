@@ -144,13 +144,20 @@ describe("the edit's draft", () => {
     ]);
     expect(draft.text).toBe("Check the lease\n\nand the annex");
     expect(draft.kept).toEqual([
-      { key: "1", name: "Lease.pdf", mimeType: "application/pdf", part: LEASE },
+      {
+        key: "1",
+        name: "Lease.pdf",
+        mimeType: "application/pdf",
+        part: LEASE,
+        unscannedContent: [],
+      },
       // A paste reads as its first line with words, as its chip on the web.
       {
         key: "2",
         name: "  Clause 4: rent",
         mimeType: "text/plain",
         part: PASTED,
+        unscannedContent: [],
       },
     ]);
   });
@@ -172,10 +179,15 @@ describe("the edit's draft", () => {
   });
 
   test("shows the edited message with its files' names while its answer runs", () => {
+    // A kept file part of which was not scanned keeps saying so.
+    const locked = {
+      ...LEASE,
+      metadata: { filename: "Lease.pdf", unscannedContent: ["encrypted"] },
+    };
     expect(
       editedEntry({
         createdAt: CREATED_AT,
-        draft: { ...editDraftOf([LEASE]), text: "New words " },
+        draft: { ...editDraftOf([locked]), text: "New words " },
         messageId: MESSAGE_ID,
       }),
     ).toEqual({
@@ -184,7 +196,13 @@ describe("the edit's draft", () => {
       createdAt: CREATED_AT,
       text: "New words",
       blocks: [],
-      files: [{ name: "Lease.pdf", mimeType: "application/pdf" }],
+      files: [
+        {
+          name: "Lease.pdf",
+          mimeType: "application/pdf",
+          unscannedContent: ["encrypted"],
+        },
+      ],
       drafts: [],
       contextNotice: null,
     });
@@ -310,7 +328,9 @@ describe("the choice to undo the file changes", () => {
     ).toEqual({ type: "hidden" });
     expect(
       editFilesChoice({ read: undefined, checked: true, problem: null }),
-    ).toEqual({ type: "hidden" });
+    ).toEqual({
+      type: "hidden",
+    });
   });
 
   test("offers the switch off, with the problem the last undo ran into", () => {

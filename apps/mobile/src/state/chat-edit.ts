@@ -24,7 +24,8 @@ import { requestApi } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
 import { sendRefusal } from "@/state/chat-attachments";
 import type { SendRefusal } from "@/state/chat-attachments";
-import type { ChatEntry } from "@/state/chat-messages";
+import { shownFileOf } from "@/state/chat-messages";
+import type { ChatEntry, ShownFile } from "@/state/chat-messages";
 
 /**
  * Editing one of the person's sent messages ("Edit from here"), as the web
@@ -50,10 +51,8 @@ export const messageActions = (entry: ChatEntry): readonly MessageAction[] =>
  * A file or pasted text the edited message carries on as it was stored:
  * its part, and the name and type its chip shows.
  */
-type KeptAttachment = {
+type KeptAttachment = ShownFile & {
   readonly key: string;
-  readonly name: string;
-  readonly mimeType: string;
   readonly part: unknown;
 };
 
@@ -66,12 +65,6 @@ export type EditDraft = {
 const textPartSchema = v.object({
   type: v.literal("text"),
   content: v.string(),
-});
-
-const filePartSchema = v.object({
-  type: v.picklist(["image", "document"]),
-  source: v.looseObject({ mimeType: v.optional(v.string()) }),
-  metadata: v.optional(v.looseObject({ filename: v.optional(v.string()) })),
 });
 
 /** A pasted text's chip reads as its first line with words, as on the web. */
@@ -94,17 +87,13 @@ export const editDraftOf = (parts: readonly unknown[]): EditDraft => {
         name: pastedTitle(part.content),
         mimeType: "text/plain",
         part,
+        unscannedContent: [],
       });
       continue;
     }
-    const file = v.safeParse(filePartSchema, part);
-    if (file.success) {
-      kept.push({
-        key,
-        name: file.output.metadata?.filename ?? "",
-        mimeType: file.output.source.mimeType ?? "",
-        part,
-      });
+    const file = shownFileOf(part);
+    if (file !== null) {
+      kept.push({ ...file, key, part });
       continue;
     }
     const text = v.safeParse(textPartSchema, part);
@@ -144,7 +133,11 @@ export const editedEntry = ({
   createdAt,
   text: draft.text.trim(),
   blocks: [],
-  files: draft.kept.map(({ mimeType, name }) => ({ mimeType, name })),
+  files: draft.kept.map(({ mimeType, name, unscannedContent }) => ({
+    mimeType,
+    name,
+    unscannedContent,
+  })),
   drafts: [],
   contextNotice: null,
 });

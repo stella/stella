@@ -1,7 +1,7 @@
 import { and, eq, inArray, notExists, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { fields, properties } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 
 type MarkPropertiesFreshParams = {

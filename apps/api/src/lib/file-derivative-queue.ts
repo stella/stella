@@ -8,14 +8,14 @@ import type { ConversionRefusal } from "@stll/api-contract/conversion-refusal";
 import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { fields, workspaces } from "@/api/db/schema";
 import { DERIVATIVE_FAILURE_REASON } from "@/api/db/schema-validators";
 import type {
   DerivativeFailureReason,
   FieldContent,
 } from "@/api/db/schema-validators";
+import type { Transaction } from "@/api/db/types";
 import { envBase } from "@/api/env-base";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -56,6 +56,7 @@ import {
   ConversionInputError,
   type ConversionInputErrorReason,
   convertToPdf,
+  PdfRenderError,
   shouldGeneratePdfDerivative,
 } from "@/api/lib/files/gotenberg";
 import {
@@ -725,6 +726,9 @@ export const displayableConversionRefusal = (
     case "legacy_format": {
       return reason;
     }
+    case "no_preview": {
+      return { ...reason, format: reason.format.slice(0, 32) };
+    }
     case "external_reference":
     case "inspection_failed": {
       return undefined;
@@ -751,6 +755,23 @@ const readSourceWithinBudget = async <T>(
     label: "file-derivative-source-read",
     timeoutMs: OBJECT_READ_TIMEOUT_MS,
   });
+
+/**
+ * What a render refusal records, or `null` to retry. A file the renderer
+ * refuses, renders too large or renders past the worker's memory ceiling
+ * gets the same answer on every attempt, so its preview is unavailable at
+ * once; a busy render slot or a worker that did not finish is retried.
+ */
+const FAILURE_REASON_FOR_RENDER = {
+  unreadable: DERIVATIVE_FAILURE_REASON.PROCESSING,
+  "too-large": DERIVATIVE_FAILURE_REASON.TOO_LARGE,
+  memory: DERIVATIVE_FAILURE_REASON.TOO_LARGE,
+  busy: null,
+  failed: null,
+} as const satisfies Record<
+  PdfRenderError["reason"],
+  DerivativeFailureReason | null
+>;
 
 /**
  * Read an admitted source once and convert it to PDF. The converter makes a
@@ -796,6 +817,13 @@ const buildPdfDerivative = async (
         type: "refused",
         reason: FAILURE_REASON_FOR_REFUSAL[conversion.error.refusal],
       };
+    }
+    const renderRefusal =
+      conversion.error instanceof PdfRenderError
+        ? FAILURE_REASON_FOR_RENDER[conversion.error.reason]
+        : null;
+    if (renderRefusal !== null) {
+      return { type: "refused", reason: renderRefusal };
     }
     throw conversion.error;
   }

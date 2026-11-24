@@ -5,8 +5,8 @@ import type { SQL, SQLWrapper } from "drizzle-orm";
 import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
 import { stellaAuthorizedWorkspaces } from "@/api/db/rls";
-import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import { visibleWorkspaceSql } from "@/api/lib/workspaces/visible-workspace-sql";

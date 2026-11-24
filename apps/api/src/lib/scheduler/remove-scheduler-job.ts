@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { schedulerJobs } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 
 /** Remove scheduler bookkeeping on the transaction that owns its lifecycle fence. */
 export const removeSchedulerJob = async (

@@ -5,6 +5,10 @@ import { assertProperty } from "@stll/property-testing";
 
 import type { HeaderReadableImageMimeType } from "@/api/lib/files/image-header";
 import { readImageHeader } from "@/api/lib/files/image-header";
+import {
+  heicFixture,
+  withHeifRotation,
+} from "@/api/tests/helpers/image-fixtures";
 
 const bytesOf = (
   size: number,
@@ -142,11 +146,151 @@ const CASES = [
     expected: [1234, 5678, 1],
   },
   { mimeType: "image/tiff", bytes: tiff(), expected: [3000, 4000, 1] },
+  {
+    mimeType: "image/heic",
+    bytes: heicFixture("grid.heic"),
+    expected: [1100, 700, 1],
+  },
+  // irot turns anticlockwise: a quarter turn shows as EXIF 8, three as 6.
+  {
+    mimeType: "image/heic",
+    bytes: withHeifRotation(heicFixture("single.heic"), 1),
+    expected: [96, 64, 8],
+  },
+  {
+    mimeType: "image/heif",
+    bytes: withHeifRotation(heicFixture("single.heic"), 2),
+    expected: [96, 64, 3],
+  },
+  {
+    mimeType: "image/heic-sequence",
+    bytes: withHeifRotation(heicFixture("alpha.heic"), 3),
+    expected: [300, 200, 6],
+  },
 ] as const satisfies readonly {
   mimeType: HeaderReadableImageMimeType;
   bytes: Uint8Array;
   expected: readonly [number, number, number];
 }[];
+
+/** An ISO base media box: size, type, then `body`. */
+const box = (type: string, ...body: Uint8Array[]): Uint8Array => {
+  const size = 8 + body.reduce((sum, part) => sum + part.length, 0);
+  const out = new Uint8Array(size);
+  new DataView(out.buffer).setUint32(0, size);
+  ascii(out, 4, type);
+  let offset = 8;
+  for (const part of body) {
+    out.set(part, offset);
+    offset += part.length;
+  }
+  return out;
+};
+
+const u8 = (...values: number[]) => Uint8Array.from(values);
+const u32 = (...values: number[]) =>
+  bytesOf(values.length * 4, (view) => {
+    for (const [index, value] of values.entries()) {
+      view.setUint32(index * 4, value);
+    }
+  });
+
+/**
+ * The `ftyp` and `meta` boxes of a HEIF file whose primary item 1 has the
+ * given properties, associated in order; no image data follows.
+ */
+const heifHeader = (properties: readonly Uint8Array[], colour?: Uint8Array) => {
+  const all = colour === undefined ? properties : [...properties, colour];
+  return Uint8Array.from([
+    ...box("ftyp", new TextEncoder().encode("heic\0\0\0\0mif1heic")),
+    ...box(
+      "meta",
+      u32(0),
+      box(
+        "hdlr",
+        u32(0, 0),
+        new TextEncoder().encode("pict"),
+        u32(0, 0, 0),
+        u8(0),
+      ),
+      box("pitm", u32(0), u8(0, 1)),
+      box(
+        "iprp",
+        box("ipco", ...all),
+        // version 0, flags 0: one entry, item 1, one-byte indexes from 1.
+        box(
+          "ipma",
+          u32(0, 1),
+          u8(0, 1, all.length, ...all.map((_, index) => index + 1)),
+        ),
+      ),
+    ),
+  ]);
+};
+
+const ispe = (width: number, height: number) =>
+  box("ispe", u32(0, width, height));
+const irot = (quarterTurns: number) => box("irot", u8(quarterTurns));
+const imir = (axis: number) => box("imir", u8(axis));
+
+describe("HEIF headers", () => {
+  test("reads the primary image's size and its transforms in order", () => {
+    const read = (...properties: Uint8Array[]) =>
+      readImageHeader(
+        heifHeader([ispe(4032, 3024), ...properties]),
+        "image/heic",
+      );
+    expect(read()).toMatchObject({ width: 4032, height: 3024, orientation: 1 });
+    // imir axis 1 mirrors left to right (EXIF 2), axis 0 top to bottom (4).
+    expect(read(imir(1))?.orientation).toBe(2);
+    expect(read(imir(0))?.orientation).toBe(4);
+    // Mirrored then turned a quarter anticlockwise: transposed (EXIF 5);
+    // turned then mirrored: the other diagonal (EXIF 7).
+    expect(read(imir(1), irot(1))?.orientation).toBe(5);
+    expect(read(irot(1), imir(1))?.orientation).toBe(7);
+    expect(read(irot(3), irot(3))?.orientation).toBe(3);
+  });
+
+  test("says whether the colour is an ICC profile", () => {
+    expect(readImageHeader(heicFixture("p3.heic"), "image/heic")).toMatchObject(
+      {
+        encoding: { format: "heif", iccProfile: true, tiled: false },
+      },
+    );
+    expect(
+      readImageHeader(heicFixture("grid.heic"), "image/heic"),
+    ).toMatchObject({
+      encoding: { format: "heif", iccProfile: false, tiled: true },
+    });
+  });
+
+  test("a primary item without a size is unreadable", () => {
+    expect(readImageHeader(heifHeader([irot(1)]), "image/heic")).toBeNull();
+  });
+
+  test("an image sequence without a still image reads its track's size", () => {
+    const tkhd = bytesOf(84, (view) => {
+      // version 0: width and height in 16.16 fixed point after the matrix.
+      view.setUint32(76, 1920 * 0x1_00_00);
+      view.setUint32(80, 1080 * 0x1_00_00);
+    });
+    const sequence = Uint8Array.from([
+      ...box("ftyp", new TextEncoder().encode("msf1\0\0\0\0msf1hevc")),
+      ...box("moov", box("trak", box("tkhd", tkhd))),
+    ]);
+    expect(readImageHeader(sequence, "image/heic-sequence")).toMatchObject({
+      width: 1920,
+      height: 1080,
+      orientation: 1,
+    });
+  });
+
+  test("a box larger than its file is unreadable", () => {
+    const header = heifHeader([ispe(10, 10)]);
+    new DataView(header.buffer).setUint32(24, 0x7f_ff_ff_ff);
+    expect(readImageHeader(header, "image/heic")).toBeNull();
+  });
+});
 
 describe("image header dimensions", () => {
   test.each(CASES)(
@@ -286,6 +430,7 @@ describe("malformed image headers", () => {
   const MIME_TYPES = [
     "image/bmp",
     "image/gif",
+    "image/heic",
     "image/jpeg",
     "image/png",
     "image/tiff",

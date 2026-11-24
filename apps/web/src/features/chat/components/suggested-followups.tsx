@@ -7,10 +7,10 @@ import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { FollowUpIcon } from "@stll/ui/icons";
 
+import type { ChatThreadId } from "@/features/chat/chat-thread-ref-types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { FollowupSurface } from "@/lib/analytics/types";
-import type { ChatThreadId } from "@/lib/chat-thread-ref";
 
 /** More than three reads as a menu to scan, not a next step to take. */
 const MAX_FOLLOWUPS = 3;

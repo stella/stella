@@ -9,7 +9,7 @@ import type {
 } from "@stll/api-contract/document-ocr-availability";
 import { classifyFailure } from "@stll/errors";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type {

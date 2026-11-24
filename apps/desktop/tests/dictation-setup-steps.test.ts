@@ -4,11 +4,13 @@ import {
   DICTATION_SETUP_SCREENS,
   dictationSetupScreens,
   microphoneScreenPermissions,
-  moveFrom,
-  shownScreen,
   transcriptionChoices,
 } from "../src/onboarding/dictation-setup-steps";
-import type { DictationSetupState } from "../src/onboarding/dictation-setup-steps";
+import type {
+  DictationSetupScreen,
+  DictationSetupState,
+} from "../src/onboarding/dictation-setup-steps";
+import { moveFrom, shownScreen } from "../src/onboarding/setup-screens";
 
 const DEFAULTS = {
   cleanup: true,
@@ -105,6 +107,17 @@ describe("the microphone screen's permissions", () => {
   });
 });
 
+const move = (
+  screens: readonly DictationSetupScreen[],
+  screen: DictationSetupScreen,
+  direction: "back" | "continue",
+) => moveFrom({ direction, order: DICTATION_SETUP_SCREENS, screen, screens });
+
+const shown = (
+  screens: readonly DictationSetupScreen[],
+  screen: DictationSetupScreen,
+) => shownScreen({ order: DICTATION_SETUP_SCREENS, screen, screens });
+
 describe("moving between the screens", () => {
   const all = dictationSetupScreens(DEFAULTS);
 
@@ -116,19 +129,19 @@ describe("moving between the screens", () => {
         break;
       }
       visited.push(screen);
-      const move = moveFrom(all, screen, "continue");
-      if (move.type !== "screen") {
-        expect(move.type).toBe("leaveForward");
+      const next = move(all, screen, "continue");
+      if (next.type !== "screen") {
+        expect(next.type).toBe("leaveForward");
         break;
       }
-      screen = move.screen;
+      screen = next.screen;
     }
     expect(visited).toEqual(all);
   });
 
   test("Back from the first screen leaves for the step before", () => {
-    expect(moveFrom(all, "microphone", "back")).toEqual({ type: "leaveBack" });
-    expect(moveFrom(all, "transcription", "back")).toEqual({
+    expect(move(all, "microphone", "back")).toEqual({ type: "leaveBack" });
+    expect(move(all, "transcription", "back")).toEqual({
       screen: "microphone",
       type: "screen",
     });
@@ -140,11 +153,11 @@ describe("moving between the screens", () => {
       cloudAvailable: true,
       destination: "cloud",
     });
-    expect(moveFrom(withoutCleanup, "app", "continue")).toEqual({
+    expect(move(withoutCleanup, "app", "continue")).toEqual({
       screen: "words",
       type: "screen",
     });
-    expect(moveFrom(withoutCleanup, "words", "back")).toEqual({
+    expect(move(withoutCleanup, "words", "back")).toEqual({
       screen: "app",
       type: "screen",
     });
@@ -156,23 +169,23 @@ describe("moving between the screens", () => {
       cleanup: false,
       destination: "cloud",
     });
-    expect(shownScreen(withoutContext, "context")).toBe("words");
-    expect(moveFrom(withoutContext, "context", "continue")).toEqual({
+    expect(shown(withoutContext, "context")).toBe("words");
+    expect(move(withoutContext, "context", "continue")).toEqual({
       screen: "words",
       type: "screen",
     });
-    expect(moveFrom(withoutContext, "context", "back")).toEqual({
+    expect(move(withoutContext, "context", "back")).toEqual({
       screen: "app",
       type: "screen",
     });
     // With nothing after it, the last screen that still applies is shown,
     // and Continue leaves the step.
     const fewest = dictationSetupScreens({ ...DEFAULTS, cleanup: false });
-    expect(shownScreen(fewest, "words")).toBe("app");
-    expect(moveFrom(fewest, "words", "continue")).toEqual({
+    expect(shown(fewest, "words")).toBe("app");
+    expect(move(fewest, "words", "continue")).toEqual({
       type: "leaveForward",
     });
-    expect(moveFrom(fewest, "words", "back")).toEqual({
+    expect(move(fewest, "words", "back")).toEqual({
       screen: "app",
       type: "screen",
     });

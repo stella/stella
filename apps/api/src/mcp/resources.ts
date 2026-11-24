@@ -26,8 +26,9 @@ import {
   readSkillResource,
 } from "@stll/skills";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { envBase } from "@/api/env-base";
+import type { McpToolName } from "@/api/http/handler-config-types";
 import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
 import { offerSkillsToModel } from "@/api/lib/agent-skills/invocation";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
@@ -35,7 +36,6 @@ import {
   CHAT_SKILL_SOURCE,
   listAvailableChatSkillMetadata,
 } from "@/api/lib/agent-skills/skills";
-import type { McpToolName } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import type { FeatureId } from "@/api/lib/feature-access/registry";

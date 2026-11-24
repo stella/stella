@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { useTranslations } from "use-intl";
+
 import { Button } from "@stll/ui/button";
 import {
   COMPOSER_BOX_CLASS,
@@ -50,6 +52,7 @@ export const LawEntryBox = ({
   searchLabel,
   status,
 }: LawEntryBoxProps) => {
+  const t = useTranslations();
   const trimmed = query.trim();
 
   return (
@@ -101,6 +104,7 @@ export const LawEntryBox = ({
                 aria-label={searchLabel}
                 className={cn(trimmed.length === 0 && "opacity-50")}
                 disabled={trimmed.length === 0}
+                disabledReason={t("common.enterSearchQuery")}
                 size="icon-round"
                 tooltip={searchLabel}
                 type="submit"

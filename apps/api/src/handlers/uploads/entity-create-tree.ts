@@ -4,12 +4,12 @@ import * as v from "valibot";
 
 import { sha256HexToBase64 } from "@stll/sha256";
 
-import type { Transaction } from "@/api/db/root";
 import {
   type PendingUploadPurposeData,
   pendingUploads,
   workspaces,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { entityUploadRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -29,7 +29,7 @@ import {
   insertEntityBatch,
 } from "@/api/lib/entity-versions/insert-entity-batch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { resolveUploadMime } from "@/api/lib/files/utils";
+import { resolveUploadMime } from "@/api/lib/files/upload-mime";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { presignUploadUrl } from "@/api/lib/s3-presign";

@@ -3,8 +3,8 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { renderMatterReference } from "@stll/api-contract";
 
-import type { Transaction } from "@/api/db/root";
 import { documentReferenceCounters, matterCounters } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   toNumberPatternScopeKey,
   validateNumberPattern,

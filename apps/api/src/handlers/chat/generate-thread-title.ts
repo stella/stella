@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db-types";
 import { CHAT_TITLE_SOURCE } from "@/api/db/schema";
 import { readThreadTitleInput } from "@/api/handlers/chat/thread-title-input";
 import {

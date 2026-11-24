@@ -20,23 +20,37 @@ export type WorkspaceViewStripProps = {
   /** The strip's reading direction; the document's when left out. */
   direction?: InlineDirection | undefined;
   addControl?: ReactNode;
+  /**
+   * Drawn right after the tabs, in the room they share: the menu that holds
+   * the views the strip has no room for, and the copy it measures them by.
+   */
+  overflowControl?: ReactNode;
   onViewChange?: (viewId: string) => void;
-  /** The element that holds the tabs, for a drop target around them. */
+  /**
+   * The row the tabs and the overflow control share: its width is the room
+   * the switcher fits tabs into, and it is the drop target around them.
+   */
   stripRef?: Ref<HTMLDivElement>;
   children: ReactNode;
 };
 
 /**
- * The saved-view strip without behaviour: one toolbar row of underline tabs
- * and, after them, the add control. `WorkspaceViewSwitcher` renders its tabs
+ * The saved-view strip without behaviour: one toolbar row of underline tabs,
+ * the overflow menu right after them when some views have no room, and the
+ * add control at the row's end. `WorkspaceViewSwitcher` renders its tabs
  * inside it; a loading view renders `WorkspaceViewSwitcherFace` in the same
  * strip, so the row does not move when the switcher takes over.
+ *
+ * The tabs never scroll: the switcher moves the views that do not fit into
+ * the overflow menu, so no divider is needed to set the add control apart
+ * from a scrolling strip.
  */
 export const WorkspaceViewStrip = ({
   activeViewId,
   ariaLabel,
   direction,
   addControl,
+  overflowControl,
   onViewChange,
   stripRef,
   children,
@@ -51,9 +65,12 @@ export const WorkspaceViewStrip = ({
     data-slot="workspace-view-switcher"
     dir={direction}
   >
-    <div className="h-full min-w-0 flex-1" ref={stripRef}>
+    <div
+      className="relative flex h-full min-w-0 flex-1 items-center gap-0.5"
+      ref={stripRef}
+    >
       <Tabs
-        className="h-full gap-0"
+        className="h-full min-w-0 gap-0"
         onValueChange={(value) => {
           if (typeof value === "string") {
             onViewChange?.(value);
@@ -69,9 +86,10 @@ export const WorkspaceViewStrip = ({
           {children}
         </TabsList>
       </Tabs>
+      {overflowControl}
     </div>
     {addControl === null || addControl === undefined ? null : (
-      <div className="border-border flex shrink-0 translate-y-1 items-center border-s ps-1">
+      <div className="flex shrink-0 translate-y-1 items-center">
         {addControl}
       </div>
     )}

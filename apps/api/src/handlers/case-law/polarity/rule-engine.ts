@@ -13,7 +13,7 @@
 import { and, eq, inArray, lte, sql } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { caseLawPolarityRules } from "@/api/db/schema";
 import { aggregateMentionPolarities } from "@/api/handlers/case-law/polarity/aggregate";
 import {

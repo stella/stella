@@ -2,7 +2,7 @@ import { defineProof, name } from "@gdp-ts/core";
 import type { Named, Proof, Prover } from "@gdp-ts/core";
 import { panic, Result } from "better-result";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 

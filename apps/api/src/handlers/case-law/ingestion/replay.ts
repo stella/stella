@@ -18,8 +18,7 @@ import { unionAll } from "drizzle-orm/pg-core";
 
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 
-import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
@@ -27,6 +26,7 @@ import {
   caseLawReplayBlocked,
   PARSED_INPUT_STATE,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import { processStoredDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";

@@ -71,6 +71,9 @@ pub enum NoticeKind {
   NothingHeard,
   /// The chosen microphone was not connected; the system default records.
   MicrophoneMissing,
+  /// The chosen stella AI model is no longer offered and none of its
+  /// provider, region and retention is: this computer transcribed instead.
+  ModelWithdrawn,
 }
 
 impl NoticeKind {
@@ -95,6 +98,7 @@ impl NoticeKind {
       Self::Microphone => 0,
       Self::NothingHeard => 1,
       Self::MicrophoneMissing => 2,
+      Self::ModelWithdrawn => 3,
     }
   }
 }
@@ -103,7 +107,7 @@ impl NoticeKind {
 /// handed in by the caller, so the rule is tested without a clock.
 #[derive(Debug, Default)]
 pub struct NoticeGate {
-  last_shown: [Option<Duration>; 3],
+  last_shown: [Option<Duration>; 4],
 }
 
 impl NoticeGate {
@@ -187,6 +191,8 @@ pub enum NoticeFix {
   OpenSound,
   /// Open Settings → Dictation on its microphone choice.
   ChooseMicrophone,
+  /// Open Settings → Dictation, where the stella AI model is chosen.
+  ChooseModel,
 }
 
 /// What the panel offers: `None` where this OS has nowhere to send the user.
@@ -202,6 +208,7 @@ pub const fn fix_for(
     (NoticeKind::Microphone, _) if has_settings_page => Some(NoticeFix::OpenSettings),
     (NoticeKind::NothingHeard, _) if has_settings_page => Some(NoticeFix::OpenSound),
     (NoticeKind::MicrophoneMissing, _) => Some(NoticeFix::ChooseMicrophone),
+    (NoticeKind::ModelWithdrawn, _) => Some(NoticeFix::ChooseModel),
     _ => None,
   }
 }
@@ -241,6 +248,9 @@ pub const fn notice_text(
       "dictation.notice.missingTitle",
       "dictation.notice.missingBody",
     ),
+    (NoticeKind::ModelWithdrawn, _) => {
+      ("dictation.notice.modelTitle", "dictation.notice.modelBody")
+    }
     (NoticeKind::Microphone, PermissionStatus::NotDetermined) => {
       ("dictation.notice.title", "dictation.notice.allowBody")
     }
@@ -258,15 +268,32 @@ fn choose_microphone(app: &AppHandle) {
   crate::show_settings(app, crate::SettingsView::Microphone);
 }
 
-/// Opens Settings → Dictation on the microphone choice when this notice's
-/// notification is clicked.
+/// Settings → Dictation, where the stella AI model is chosen.
+fn choose_model(app: &AppHandle) {
+  crate::show_settings(
+    app,
+    crate::SettingsView::Tab(crate::PreferencesTab::Dictation),
+  );
+}
+
+/// Opens Settings → Dictation when this notice's notification is clicked:
+/// on the model choice for a withdrawn model, else on the microphone.
 pub fn listen_for_clicks(app: &AppHandle) {
   use tauri_plugin_notification::NotificationExt;
 
   let handle = app.clone();
   crate::logging::best_effort(
     app.notification().on_action(move |performed| {
-      if performed.notification().map(|shown| shown.id()) == Some(NOTIFICATION_ID) {
+      if performed.notification().map(|shown| shown.id()) != Some(NOTIFICATION_ID) {
+        return;
+      }
+      let kind = handle
+        .state::<DictationNotice>()
+        .shown()
+        .map(|shown| shown.kind);
+      if kind == Some(NoticeKind::ModelWithdrawn) {
+        choose_model(&handle);
+      } else {
         choose_microphone(&handle);
       }
     }),
@@ -329,6 +356,19 @@ pub fn on_failure(app: &AppHandle, failure: Failure, input_device: Option<String
   }
 }
 
+/// Called when a dictation found its chosen stella AI model withdrawn with
+/// none of its class offered; this computer transcribes it instead.
+pub fn on_model_withdrawn(app: &AppHandle) {
+  tell(
+    app,
+    Shown {
+      kind: NoticeKind::ModelWithdrawn,
+      input_device: None,
+      missing: None,
+    },
+  );
+}
+
 /// Called when the chosen microphone was not connected at the press and
 /// `using`, the system default, records instead.
 pub fn on_missing_microphone(app: &AppHandle, missing: &str, using: Option<String>) {
@@ -364,16 +404,21 @@ fn tell(app: &AppHandle, shown: Shown) {
 
 fn show(app: &AppHandle) {
   let size = LogicalSize::new(WIDTH, HEIGHT);
-  let mut builder = crate::app_window::builder(app, NOTICE_WINDOW_LABEL, "index.html")
-    .title("stella desktop")
-    .inner_size(size.width, size.height)
-    .resizable(false)
-    .decorations(false)
-    .transparent(true)
-    .shadow(true)
-    .always_on_top(true)
-    .focused(false)
-    .skip_taskbar(true);
+  let mut builder = crate::app_window::builder(
+    app,
+    NOTICE_WINDOW_LABEL,
+    "index.html",
+    crate::app_window::WindowKind::Panel,
+  )
+  .title("stella desktop")
+  .inner_size(size.width, size.height)
+  .resizable(false)
+  .decorations(false)
+  .transparent(true)
+  .shadow(true)
+  .always_on_top(true)
+  .focused(false)
+  .skip_taskbar(true);
   if let Some(area) = crate::window_placement::target_work_area(app) {
     let origin = crate::window_placement::centered_origin(area, size);
     let y = (area.y + area.height - HEIGHT - BOTTOM_GAP).max(area.y);
@@ -447,6 +492,10 @@ pub async fn dictation_notice_respond(
     NoticeKind::NothingHeard => open_sound_input_settings(),
     NoticeKind::MicrophoneMissing => {
       choose_microphone(&fix_app);
+      Ok(())
+    }
+    NoticeKind::ModelWithdrawn => {
+      choose_model(&fix_app);
       Ok(())
     }
   })

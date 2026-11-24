@@ -13,6 +13,7 @@ import { ZipArchive } from "@stll/docx-core/zip";
 
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { yaraRuleNames } from "@/api/lib/file-scan/yara";
+import { eicarTestFile } from "@/api/tests/fixtures/eicar";
 
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -97,6 +98,11 @@ const POSITIVE_FIXTURES: Record<string, () => Promise<Fixture> | Fixture> = {
   embedded_elf: () => embedded([0x7f, 0x45, 0x4c, 0x46]),
   embedded_macho_64: () => embedded([0xcf, 0xfa, 0xed, 0xfe]),
   embedded_macho_32: () => embedded([0xce, 0xfa, 0xed, 0xfe]),
+  eicar_test_file: () => ({
+    buffer: encoder.encode(eicarTestFile()),
+    declaredMimeType: "application/octet-stream",
+    fileName: "eicar.com",
+  }),
 
   ole2_container: () => ({
     buffer: new Uint8Array([

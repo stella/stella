@@ -1,5 +1,5 @@
-import type { RootDatabase, Transaction } from "@/api/db/root";
 import { contacts } from "@/api/db/schema";
+import type { RootDatabase, Transaction } from "@/api/db/types";
 import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 

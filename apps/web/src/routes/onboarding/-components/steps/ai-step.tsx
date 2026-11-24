@@ -256,7 +256,11 @@ export const AIStep = ({
           <Button onClick={onSkip} type="button" variant="ghost">
             {t("onboarding.skipStep")}
           </Button>
-          <Button disabled={!canContinue} type="submit">
+          <Button
+            disabled={!canContinue}
+            disabledReason={t("organization.aiConfig.selectModelForEachRole")}
+            type="submit"
+          >
             {t("common.next")}
           </Button>
         </div>

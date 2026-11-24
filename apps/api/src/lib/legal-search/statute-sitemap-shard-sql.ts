@@ -1,12 +1,12 @@
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   legislationDocuments,
   legislationSources,
   statuteSitemapBucket,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { groupableSql } from "@/api/lib/groupable-sql";
 import { publishedLegislationDocumentFor } from "@/api/lib/legal-search/legislation-redistribution";
 import {

@@ -1,14 +1,18 @@
 use crate::logging::best_effort;
 use tauri::{
   AppHandle, Manager, Wry,
-  menu::{Menu, MenuBuilder, MenuItemBuilder, Submenu, SubmenuBuilder},
+  menu::{
+    CheckMenuItemBuilder, Menu, MenuBuilder, MenuItemBuilder, Submenu, SubmenuBuilder,
+  },
 };
 
 use crate::PreferencesTab;
 use crate::activity::{ActivityRecordingStatus, TrayActivitySnapshot};
 use crate::dictation::TrayDictation;
 use crate::dictation_hold_key::KeyNames;
+use crate::dictation_language::{self, Choice};
 use crate::i18n::{active_locale, t, t_fmt, t_plural};
+use crate::transcribe_recording::{MS_PER_MINUTE, TrayTranscription};
 use crate::types::{AppSnapshot, SessionSnapshot};
 
 #[cfg(target_os = "macos")]
@@ -23,8 +27,14 @@ const RECONNECT_ACCOUNT_ACTION: &str = "reconnect-account";
 const OPEN_CLIPBOARD_ACTION: &str = "open-clipboard";
 const OPEN_ACTIVITY_ACTION: &str = "open-activity";
 const OPEN_TRANSCRIBE_ACTION: &str = "open-transcribe";
+/// The top-level item that brings an open Transcribe window back.
+const SHOW_TRANSCRIPTION_ACTION: &str = "show-transcription";
 const OPEN_DICTATION_SETTINGS_ACTION: &str = "open-dictation-settings";
 const DICTATION_HINT_ITEM: &str = "dictation-hint";
+/// Followed by the stored language choice (`auto` or a language code).
+const DICTATION_LANGUAGE_PREFIX: &str = "dictation-language:";
+const RETYPE_DICTATION_ACTION: &str = "dictation-retype";
+const FIX_DICTATION_ACTION: &str = "dictation-fix";
 const PAUSE_ACTIVITY_ACTION: &str = "activity-pause";
 const RESUME_ACTIVITY_ACTION: &str = "activity-resume";
 const ACTIVITY_STATUS_ITEM: &str = "activity-status";
@@ -43,9 +53,16 @@ fn format_activity_hours(total_ms: u64, locale: &str) -> String {
     }
     _ => panic!("activity tray requires a shipped locale"),
   };
-  let number = format!("{}{separator}{}", tenths / 10, tenths % 10);
+  locale_digits(
+    &format!("{}{separator}{}", tenths / 10, tenths % 10),
+    locale,
+  )
+}
+
+/// A number written in the locale's digits.
+fn locale_digits(number: &str, locale: &str) -> String {
   if locale != "ar" {
-    return number;
+    return number.to_string();
   }
   number
     .chars()
@@ -63,6 +80,38 @@ fn format_activity_hours(total_ms: u64, locale: &str) -> String {
       other => other,
     })
     .collect()
+}
+
+/// The item that brings the Transcribe window back, named by what it shows:
+/// whole minutes transcribed while it runs, ready once the whole recording
+/// is done.
+fn transcription_label(transcription: TrayTranscription, locale: &str) -> String {
+  match transcription {
+    TrayTranscription::Working {
+      transcribed_ms,
+      duration_ms,
+    } => {
+      let done = transcribed_ms / MS_PER_MINUTE;
+      match duration_ms {
+        Some(duration_ms) => {
+          let total = duration_ms.div_ceil(MS_PER_MINUTE).max(1);
+          t_fmt(
+            "tray.transcriptionProgress",
+            &[
+              ("done", &locale_digits(&done.min(total).to_string(), locale)),
+              ("total", &locale_digits(&total.to_string(), locale)),
+            ],
+          )
+        }
+        None => t_fmt(
+          "tray.transcriptionProgressSoFar",
+          &[("done", &locale_digits(&done.to_string(), locale))],
+        ),
+      }
+    }
+    TrayTranscription::Ready => t("tray.transcriptionReady").to_string(),
+    TrayTranscription::Open => t("tray.showTranscription").to_string(),
+  }
 }
 
 fn activity_status_label(snapshot: &TrayActivitySnapshot) -> String {
@@ -94,8 +143,22 @@ fn activity_action(
 enum DictationMenu {
   /// Switched off: one item, opening the page where it is turned on.
   Off,
-  /// On: a line naming the key to hold, then its settings.
-  On { hint: String },
+  /// On: a line naming the key to hold, typing the last dictation again
+  /// (enabled while there is one), fixing a dictation's words, a quick
+  /// language switch, then its settings.
+  On {
+    hint: String,
+    can_retype: bool,
+    languages: Vec<TrayLanguage>,
+  },
+}
+
+/// One choice in the quick language switch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TrayLanguage {
+  stored: &'static str,
+  label: String,
+  checked: bool,
 }
 
 /// `None` wherever the Settings window shows no Dictation page.
@@ -112,8 +175,23 @@ fn dictation_menu(
   let key = state.hold_key.label(names, language, |key| {
     t_fmt("dictation.holdKey.right", &[("key", key)])
   });
+  let languages = dictation_language::quick_choices(&state.language, &state.inferred)
+    .into_iter()
+    .map(|choice| TrayLanguage {
+      stored: choice.stored(),
+      label: match choice {
+        Choice::Automatic => t("dictation.language.automatic").to_string(),
+        Choice::Language(code) => dictation_language::autonym(code)
+          .unwrap_or(code)
+          .to_string(),
+      },
+      checked: choice == state.language,
+    })
+    .collect();
   Some(DictationMenu::On {
     hint: t_fmt("tray.dictationHint", &[("key", &key)]),
+    can_retype: state.can_retype,
+    languages,
   })
 }
 
@@ -202,10 +280,6 @@ fn can_retry_session(session: &SessionSnapshot) -> bool {
 }
 
 fn get_tray_status_label(snapshot: &AppSnapshot) -> String {
-  if snapshot.update.update_ready {
-    return t("tray.updateReady").to_string();
-  }
-
   let needs_attention = snapshot
     .sessions
     .iter()
@@ -407,6 +481,17 @@ fn build_tray_menu_with_activity(
       .enabled(false)
       .build(app)?,
   );
+  // An open Transcribe window is easy to lose behind other apps; it comes
+  // back from right under the status line.
+  if let Some(transcription) = crate::transcribe_recording::tray_state(app) {
+    builder = builder.item(
+      &MenuItemBuilder::with_id(
+        SHOW_TRANSCRIPTION_ACTION,
+        transcription_label(transcription, active_locale()),
+      )
+      .build(app)?,
+    );
+  }
   builder = builder.separator();
 
   if crate::account::reconnect_needed() {
@@ -450,7 +535,8 @@ fn build_tray_menu_with_activity(
       .build(app)?,
   );
 
-  // Check for updates, unless the organization deploys them itself
+  // Check for updates, unless the organization deploys them itself. It opens
+  // About, which shows a check or install already under way.
   if crate::managed_policy::current().updates_disabled {
     builder = builder.item(
       &MenuItemBuilder::with_id(UPDATES_MANAGED_ITEM, t("tray.updatesManaged"))
@@ -460,12 +546,6 @@ fn build_tray_menu_with_activity(
   } else {
     builder = builder.item(
       &MenuItemBuilder::with_id(CHECK_FOR_UPDATES_ACTION, t("tray.checkForUpdates"))
-        .enabled(!matches!(
-          snapshot.update.status,
-          crate::types::DesktopUpdateStatus::Checking
-            | crate::types::DesktopUpdateStatus::Downloading
-            | crate::types::DesktopUpdateStatus::Applying
-        ))
         .build(app)?,
     );
   }
@@ -584,12 +664,26 @@ fn build_dictation_menu(
       )
       .separator()
       .item(&transcribe),
-    DictationMenu::On { hint } => menu
+    DictationMenu::On {
+      hint,
+      can_retype,
+      languages,
+    } => menu
       .item(
         &MenuItemBuilder::with_id(DICTATION_HINT_ITEM, hint)
           .enabled(false)
           .build(app)?,
       )
+      .item(
+        &MenuItemBuilder::with_id(RETYPE_DICTATION_ACTION, t("tray.dictationRetype"))
+          .enabled(*can_retype)
+          .build(app)?,
+      )
+      .item(
+        &MenuItemBuilder::with_id(FIX_DICTATION_ACTION, t("tray.dictationFix"))
+          .build(app)?,
+      )
+      .item(&build_dictation_language_menu(app, languages)?)
       .separator()
       .item(&transcribe)
       .item(
@@ -601,6 +695,24 @@ fn build_dictation_menu(
       ),
   }
   .build()
+}
+
+fn build_dictation_language_menu(
+  app: &AppHandle,
+  languages: &[TrayLanguage],
+) -> tauri::Result<Submenu<Wry>> {
+  let mut menu = SubmenuBuilder::new(app, t("settings.language"));
+  for language in languages {
+    menu = menu.item(
+      &CheckMenuItemBuilder::with_id(
+        format!("{DICTATION_LANGUAGE_PREFIX}{}", language.stored),
+        &language.label,
+      )
+      .checked(language.checked)
+      .build(app)?,
+    );
+  }
+  menu.build()
 }
 
 fn build_activity_menu(
@@ -659,11 +771,17 @@ pub fn handle_menu_action(action: &str) -> MenuAction {
   if action == OPEN_ACTIVITY_ACTION {
     return MenuAction::OpenActivity;
   }
-  if action == OPEN_TRANSCRIBE_ACTION {
+  if action == OPEN_TRANSCRIBE_ACTION || action == SHOW_TRANSCRIPTION_ACTION {
     return MenuAction::OpenTranscribe;
   }
   if action == OPEN_DICTATION_SETTINGS_ACTION {
     return MenuAction::OpenPreferences(PreferencesTab::Dictation);
+  }
+  if action == RETYPE_DICTATION_ACTION {
+    return MenuAction::RetypeDictation;
+  }
+  if action == FIX_DICTATION_ACTION {
+    return MenuAction::FixDictation;
   }
   if action == PAUSE_ACTIVITY_ACTION {
     return MenuAction::SetActivityRecording(ActivityRecordingStatus::Paused);
@@ -690,6 +808,10 @@ pub fn handle_menu_action(action: &str) -> MenuAction {
     return MenuAction::RevealSupportRoot;
   }
 
+  if let Some(language) = get_session_id_from_action(action, DICTATION_LANGUAGE_PREFIX)
+  {
+    return MenuAction::SetDictationLanguage(language.to_string());
+  }
   if let Some(id) = get_session_id_from_action(action, SESSION_OPEN_PREFIX) {
     return MenuAction::OpenSessionFile(id.to_string());
   }
@@ -712,7 +834,11 @@ pub enum MenuAction {
   OpenClipboard,
   OpenActivity,
   OpenTranscribe,
+  RetypeDictation,
+  FixDictation,
   SetActivityRecording(ActivityRecordingStatus),
+  /// The stored dictation language choice the quick switch picked.
+  SetDictationLanguage(String),
   CheckForUpdates,
   OpenEditRoot,
   CopyDiagnostics,
@@ -751,6 +877,71 @@ mod tests {
     assert_eq!(format_activity_hours(18_720_000, "ar"), "٥٫٢");
     for locale in crate::i18n::shipped_locales() {
       assert!(!format_activity_hours(18_720_000, locale).is_empty());
+    }
+  }
+
+  #[test]
+  fn the_transcription_item_names_what_the_window_shows() {
+    init_i18n();
+    let working = |transcribed_ms, duration_ms| TrayTranscription::Working {
+      transcribed_ms,
+      duration_ms,
+    };
+    assert_eq!(
+      transcription_label(
+        working(12 * 60_000 + 59_000, Some(39 * 60_000 + 30_000)),
+        "en"
+      ),
+      "Transcription in progress: 12 of 40 min"
+    );
+    assert_eq!(
+      transcription_label(working(0, Some(20_000)), "en"),
+      "Transcription in progress: 0 of 1 min",
+      "a recording under a minute is one minute long"
+    );
+    assert_eq!(
+      transcription_label(working(5 * 60_000, Some(4 * 60_000)), "en"),
+      "Transcription in progress: 4 of 4 min",
+      "never more done than the recording is long"
+    );
+    assert_eq!(
+      transcription_label(working(3 * 60_000, None), "en"),
+      "Transcription in progress: 3 min so far"
+    );
+    assert_eq!(
+      transcription_label(TrayTranscription::Ready, "en"),
+      "Transcription ready"
+    );
+    assert_eq!(
+      transcription_label(TrayTranscription::Open, "en"),
+      "Show transcription"
+    );
+    assert!(
+      transcription_label(working(12 * 60_000, Some(40 * 60_000)), "ar").contains("١٢"),
+      "minutes follow the locale's digits"
+    );
+  }
+
+  #[test]
+  fn the_transcription_item_brings_the_transcribe_window_back() {
+    assert!(matches!(
+      handle_menu_action(SHOW_TRANSCRIPTION_ACTION),
+      MenuAction::OpenTranscribe
+    ));
+  }
+
+  #[test]
+  fn transcription_items_have_translations_in_every_locale() {
+    for key in [
+      "tray.transcriptionProgress",
+      "tray.transcriptionProgressSoFar",
+      "tray.transcriptionReady",
+      "tray.showTranscription",
+    ] {
+      assert!(
+        crate::i18n::locales_missing(key).is_empty(),
+        "missing {key}"
+      );
     }
   }
 
@@ -823,6 +1014,9 @@ mod tests {
     let off = TrayDictation {
       enabled: false,
       hold_key: HoldChoice::Fn,
+      language: Choice::Automatic,
+      inferred: vec!["cs", "en"],
+      can_retype: true,
     };
     assert_eq!(
       dictation_menu(Some(off), KeyNames::Mac, "en"),
@@ -836,9 +1030,12 @@ mod tests {
     let on = |hold_key| TrayDictation {
       enabled: true,
       hold_key,
+      language: Choice::Automatic,
+      inferred: Vec::new(),
+      can_retype: false,
     };
     let hint = |state, names| match dictation_menu(Some(state), names, "en") {
-      Some(DictationMenu::On { hint }) => hint,
+      Some(DictationMenu::On { hint, .. }) => hint,
       other => panic!("expected the on menu, got {other:?}"),
     };
     assert_eq!(
@@ -853,6 +1050,80 @@ mod tests {
       hint(on(HoldChoice::Combination), KeyNames::Windows),
       "Hold Ctrl+Alt+Space to dictate"
     );
+  }
+
+  #[test]
+  fn the_quick_language_switch_checks_the_choice_and_names_languages_their_own_way() {
+    init_i18n();
+    let state = TrayDictation {
+      enabled: true,
+      hold_key: HoldChoice::Fn,
+      language: Choice::Language("de"),
+      inferred: vec!["cs", "en"],
+      can_retype: false,
+    };
+    let Some(DictationMenu::On { languages, .. }) =
+      dictation_menu(Some(state), KeyNames::Mac, "en")
+    else {
+      panic!("expected the on menu");
+    };
+    let shown: Vec<(&str, &str, bool)> = languages
+      .iter()
+      .map(|language| (language.stored, language.label.as_str(), language.checked))
+      .collect();
+    assert_eq!(
+      shown,
+      vec![
+        ("auto", "Automatic", false),
+        ("cs", "Čeština", false),
+        ("en", "English", false),
+        ("de", "Deutsch", true),
+      ]
+    );
+  }
+
+  #[test]
+  fn a_quick_language_switch_item_sets_the_dictation_language() {
+    assert!(matches!(
+      handle_menu_action(&format!("{DICTATION_LANGUAGE_PREFIX}cs")),
+      MenuAction::SetDictationLanguage(language) if language == "cs"
+    ));
+    assert!(matches!(
+      handle_menu_action(DICTATION_LANGUAGE_PREFIX),
+      MenuAction::OpenPreferences(PreferencesTab::General)
+    ));
+  }
+
+  #[test]
+  fn typing_the_last_dictation_again_is_offered_once_there_is_one() {
+    init_i18n();
+    let can_retype = |can_retype| {
+      let state = TrayDictation {
+        enabled: true,
+        hold_key: HoldChoice::Fn,
+        language: Choice::Automatic,
+        inferred: Vec::new(),
+        can_retype,
+      };
+      match dictation_menu(Some(state), KeyNames::Mac, "en") {
+        Some(DictationMenu::On { can_retype, .. }) => can_retype,
+        other => panic!("expected the on menu, got {other:?}"),
+      }
+    };
+    assert!(!can_retype(false));
+    assert!(can_retype(true));
+    assert!(matches!(
+      handle_menu_action(RETYPE_DICTATION_ACTION),
+      MenuAction::RetypeDictation
+    ));
+  }
+
+  #[test]
+  fn the_dictation_submenu_fixes_a_dictation() {
+    assert!(matches!(
+      handle_menu_action(FIX_DICTATION_ACTION),
+      MenuAction::FixDictation
+    ));
   }
 
   #[test]
@@ -876,6 +1147,8 @@ mod tests {
     for key in [
       "tray.dictation",
       "tray.dictationHint",
+      "tray.dictationRetype",
+      "tray.dictationFix",
       "tray.dictationSettings",
       "tray.dictationTurnOn",
     ] {
@@ -1055,14 +1328,6 @@ mod tests {
     init_i18n();
     let snap = make_snapshot(vec![make_session(SessionStatus::Syncing)]);
     assert_eq!(get_tray_status_label(&snap), "1 document syncing");
-  }
-
-  #[test]
-  fn test_status_label_update_ready() {
-    init_i18n();
-    let mut snap = make_snapshot(vec![make_session(SessionStatus::Ready)]);
-    snap.update.update_ready = true;
-    assert_eq!(get_tray_status_label(&snap), "Update ready");
   }
 
   // -- get_session_id_from_action --

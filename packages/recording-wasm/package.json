@@ -11,7 +11,7 @@
   },
   "scripts": {
     "clean": "git clean -xdf target .cache .turbo node_modules",
-    "test": "bun run test:bun && cargo test",
+    "test": "bun run test:bun && bash ../../scripts/cargo-test.sh",
     "test:bun": "bun test src",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun scripts/lint.ts packages/recording-wasm",

@@ -31,7 +31,7 @@ const CopyButton = lazy(async () => ({
 export const InstallButtonPlaceholder = () => {
   const t = useTranslations();
   return (
-    <Button disabled type="button">
+    <Button disabled disabledReason={t("common.loading")} type="button">
       {t("publicTools.addToStella")}
     </Button>
   );

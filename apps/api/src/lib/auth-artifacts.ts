@@ -13,7 +13,6 @@ import {
   session as sessionTable,
   verification,
 } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import {
   desktopEditHandoffs,
   desktopEditSessions,
@@ -26,6 +25,7 @@ import {
   sharepointOAuthState,
   workspaces,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { ApiKeyConfigId } from "@/api/lib/api-key-plugin-configs";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/lib/business-registries/desktop/config";

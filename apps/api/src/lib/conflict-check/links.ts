@@ -9,7 +9,7 @@ import {
 } from "@stll/api-contract/conflict-checks";
 import type { ConflictPartyRole } from "@stll/api-contract/conflict-checks";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { StoredConflictLink } from "@/api/lib/conflict-check/stored-results";
 import { resourceIdSchema } from "@/api/lib/custom-schema";

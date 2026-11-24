@@ -24,9 +24,8 @@ import {
 import { MarkdownView } from "@/components/markdown-view";
 import { ThreadMatter } from "@/components/thread-matter";
 import { APP_VARIANT } from "@/env";
-import type { SentFile } from "@/state/chat-attachments";
 import { CHAT_FAILURE_KEYS, chatFailureStepsKey } from "@/state/chat-failure";
-import type { ChatEntry } from "@/state/chat-messages";
+import type { ChatEntry, ShownFile } from "@/state/chat-messages";
 import { plainText } from "@/state/markdown";
 
 /**
@@ -62,6 +61,7 @@ export const ChatMessage = ({
             key={key}
             mimeType={file.mimeType}
             name={file.name}
+            unscannedContent={file.unscannedContent}
           />
         ))}
         {entry.text === "" ? null : (
@@ -256,7 +256,7 @@ const ShareAnswer = ({ text }: { text: string }) => {
 };
 
 /** Each file with a key that tells apart two files of the same name. */
-function keyedFiles(files: readonly SentFile[]) {
+function keyedFiles(files: readonly ShownFile[]) {
   const seen = new Map<string, number>();
   return files.map((file) => {
     const earlier = seen.get(file.name) ?? 0;

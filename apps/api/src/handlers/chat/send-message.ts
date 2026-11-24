@@ -30,7 +30,7 @@ import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
 
-import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db-types";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { env } from "@/api/env";
 import {
@@ -352,6 +352,10 @@ import { FileScanRejectedError } from "@/api/lib/file-scan/scan-upload";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { lockLiveVersionField } from "@/api/lib/files/live-version-field";
 import { createFileKey } from "@/api/lib/files/utils";
+import {
+  type ZipNameCodePage,
+  zipNameCodePageFor,
+} from "@/api/lib/files/zip-name-code-page";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { getDisabledNativeToolSlugs } from "@/api/lib/mcp-connectors/catalog-metadata";
@@ -4128,6 +4132,10 @@ const prepareChatContext = async ({
     const practiceJurisdictions = normalizeOptionalArray(
       orgSettingsRow?.practiceJurisdictions,
     );
+    // Read from the row above: an archive among the files costs no read.
+    const zipNameCodePage = zipNameCodePageFor(
+      practiceJurisdictions.map((jurisdiction) => jurisdiction.countryCode),
+    );
 
     const promptAndMessagesResult = await Result.allAsync([
       buildChatSystemPromptParts({
@@ -4166,6 +4174,7 @@ const prepareChatContext = async ({
         safeDb,
         sendMode,
         userId,
+        zipNameCodePage,
       }),
     ]);
     const [systemPrompt, hydratedMessages] =
@@ -4199,6 +4208,7 @@ const prepareChatContext = async ({
         safeDb,
         sendMode,
         workspaceId,
+        zipNameCodePage,
       }),
     );
     const messagesWithHydratedRefs = hydrateAssistantMessageRefs({
@@ -4237,6 +4247,7 @@ type AttachActiveFileFallbackWhenExtractionIsEmptyProps = {
   safeDb: SafeDb;
   sendMode: ChatSendMode;
   workspaceId: SafeId<"workspace"> | null;
+  zipNameCodePage: ZipNameCodePage;
 };
 
 const attachActiveFileFallbackWhenExtractionIsEmpty = async ({
@@ -4247,6 +4258,7 @@ const attachActiveFileFallbackWhenExtractionIsEmpty = async ({
   safeDb,
   sendMode,
   workspaceId,
+  zipNameCodePage,
 }: AttachActiveFileFallbackWhenExtractionIsEmptyProps): Promise<
   Result<ChatMessage[], HandlerError<404 | 422 | 500> | SafeDbError>
 > =>
@@ -4292,6 +4304,7 @@ const attachActiveFileFallbackWhenExtractionIsEmpty = async ({
         source: activeFileBinding.source,
         sourceVersion: activeFileBinding.version,
         workspaceId,
+        zipNameCodePage,
       }),
     );
     // A withdrawal during storage access or parsing must fence the model delivery too.
@@ -4460,6 +4473,7 @@ type ReadActiveFileFallbackForModelProps = {
   source: ActiveFileSourceForModel;
   sourceVersion: "current" | "historical";
   workspaceId: SafeId<"workspace">;
+  zipNameCodePage: ZipNameCodePage;
 };
 
 type ActiveFileFallbackForModel =
@@ -4489,6 +4503,7 @@ const readActiveFileFallbackForModel = async ({
   source,
   sourceVersion,
   workspaceId,
+  zipNameCodePage,
 }: ReadActiveFileFallbackForModelProps): Promise<
   Result<ActiveFileFallbackForModel, HandlerError<422 | 500>>
 > =>
@@ -4529,6 +4544,7 @@ const readActiveFileFallbackForModel = async ({
         storedSource.withMimeType(mimeType),
         {
           includeContainerAttachments: true,
+          zipNameCodePage,
         },
       );
       if (Result.isError(extracted)) {

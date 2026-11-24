@@ -7,7 +7,7 @@ import {
   BackfillHeldError,
   createScriptBackfillRuntime,
 } from "@/api/db/backfill-runtime";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { schedulerJobs } from "@/api/db/schema";
 import { reconcilePublisherRemovals } from "@/api/handlers/case-law/ingestion/removal-reconciliation";
 import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";

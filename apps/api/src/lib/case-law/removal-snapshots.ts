@@ -1,4 +1,4 @@
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import { invalidateSourceStoredTotalTx } from "@/api/handlers/case-law/ingestion/source-totals";
 import type { SafeId } from "@/api/lib/branded-types";
 import { invalidateCaseLawSitemapShardsTx } from "@/api/lib/case-law/sitemap-shard-refresh";

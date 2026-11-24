@@ -11,7 +11,7 @@ import {
   LIST_CONNECTABLE_CONNECTORS_TOOL_NAME,
 } from "@stll/api-contract/chat-connector";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { loadConnectableMcpConnectorsForUser } from "@/api/lib/mcp-upstream/connections";

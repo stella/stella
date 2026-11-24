@@ -430,14 +430,15 @@ test("malformed and GraphQL error dequeue results fail closed", () => {
 });
 
 test("the contributor-signature parser is generated from the shared owner", () => {
-  execFileSync("node", ["scripts/sync-merge-group-parser.mjs", "--check"], {
-    cwd: new URL("..", import.meta.url),
-    maxBuffer: 1024 * 1024,
-  });
+  execFileSync(
+    process.execPath,
+    ["scripts/sync-merge-group-parser.mjs", "--check"],
+    { cwd: new URL("..", import.meta.url), maxBuffer: 1024 * 1024 },
+  );
 });
 
-test("the required job runs on PRs and merge groups using only trusted base scripts", () => {
-  const workflow = v.parse(
+const readHoldWorkflow = () =>
+  v.parse(
     v.object({
       on: v.object({
         pull_request: v.object({ types: v.array(v.string()) }),
@@ -469,6 +470,9 @@ test("the required job runs on PRs and merge groups using only trusted base scri
       ),
     ),
   );
+
+test("the required job runs on PRs and merge groups using only trusted base scripts", () => {
+  const workflow = readHoldWorkflow();
   expect(workflow.on.pull_request.types).toEqual([
     "opened",
     "synchronize",
@@ -495,16 +499,26 @@ test("the required job runs on PRs and merge groups using only trusted base scri
   expect(job?.steps.at(2)?.run).toBe(
     'bash "$GITHUB_WORKSPACE/.workflow-tooling/scripts/merge-target-base.sh"',
   );
-  expect(job?.steps.at(4)?.env?.["MERGE_GROUP_BASE_SHA"]).toBe(
+  expect(job?.steps.at(4)?.with?.["bun-version-file"]).toBe(
+    ".hold-tooling/package.json",
+  );
+  expect(job?.steps.at(5)?.env?.["MERGE_GROUP_BASE_SHA"]).toBe(
     `\${{ steps.target-base.outputs.base_sha }}`,
   );
-  expect(job?.steps.at(4)?.env?.["HOLD_VARS"]).toBe(`\${{ toJSON(vars) }}`);
+  expect(job?.steps.at(5)?.env?.["HOLD_VARS"]).toBe(`\${{ toJSON(vars) }}`);
+  expect(job?.steps.at(5)?.run).toBe("bun scripts/check-merge-group-hold.mjs");
   expect(job?.steps.at(3)?.with?.["ref"]).toBe(
     `\${{ steps.target-base.outputs.base_sha }}`,
   );
   expect(job?.steps.at(3)?.with?.["persist-credentials"]).toBe(false);
-  expect(job?.steps.at(4)?.["timeout-minutes"]).toBeGreaterThan(0);
-  expect(job?.steps.at(4)?.if).toBe("github.event_name == 'merge_group'");
+  for (const step of [job?.steps.at(4), job?.steps.at(5)]) {
+    expect(step?.["timeout-minutes"]).toBeGreaterThan(0);
+    expect(step?.if).toBe("github.event_name == 'merge_group'");
+  }
+});
+
+test("the dequeue job runs the default branch's scripts on Bun", () => {
+  const workflow = readHoldWorkflow();
   const dequeue = workflow.jobs["dequeue-held-pull-request"];
   expect(dequeue?.if).toBe(
     `github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && contains(fromJSON('["labeled", "unlabeled", "reopened"]'), github.event.action) && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.ref == github.event.repository.default_branch`,
@@ -518,7 +532,12 @@ test("the required job runs on PRs and merge groups using only trusted base scri
   );
   expect(dequeue?.steps.at(0)?.with?.["persist-credentials"]).toBe(false);
   expect(dequeue?.steps.at(0)?.["timeout-minutes"]).toBeGreaterThan(0);
+  expect(dequeue?.steps.at(1)?.with?.["bun-version-file"]).toBe("package.json");
   expect(dequeue?.steps.at(1)?.["timeout-minutes"]).toBeGreaterThan(0);
+  expect(dequeue?.steps.at(2)?.["timeout-minutes"]).toBeGreaterThan(0);
+  expect(dequeue?.steps.at(2)?.run).toBe(
+    "bun scripts/check-merge-group-hold.mjs",
+  );
 });
 
 test("removing hold while a variable holds this head restores the label and dequeues", () => {

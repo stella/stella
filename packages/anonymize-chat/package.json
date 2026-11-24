@@ -1,6 +1,6 @@
 {
   "name": "@stll/anonymize-chat",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Placeholder-safe, reversible anonymization contracts for provider-bound text.",
   "keywords": [
     "anonymization",
@@ -34,7 +34,7 @@
   },
   "scripts": {
     "clean": "git clean -xdf dist .cache .turbo node_modules",
-    "build": "tsdown",
+    "build": "bun --bun tsdown",
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",

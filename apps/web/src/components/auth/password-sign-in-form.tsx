@@ -227,6 +227,11 @@ export const PasswordSignInForm = ({
               email.trim().length === 0 ||
               password.trim().length === 0
             }
+            disabledReason={
+              isSubmitting
+                ? t("auth.confirmingHandoff")
+                : t("auth.enterEmailAndPassword")
+            }
             loading={isSubmitting}
             type="submit"
             variant={signInMethodVariant({

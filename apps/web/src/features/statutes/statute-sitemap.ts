@@ -1,20 +1,22 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { SITEMAP_FILE_FETCH_TIMEOUT_MS } from "@stll/api-contract/public-sitemap-budget";
 import {
   createStatutePath,
   normalizeStatuteStoredSlug,
 } from "@stll/api-contract/statute-route";
 
 import { apiUrl } from "@/lib/api-url";
-import { ClientOperationError } from "@/lib/errors/client";
 import { createPublicLawCanonicalUrl } from "@/lib/public-law-seo";
 import {
   assertSitemapXmlWithinProtocolLimits,
-  createSitemapUpstreamBusyError,
+  classifySitemapUpstreamFailure,
   escapeSitemapXml,
   SITEMAP_XML_RESPONSE_HEADERS,
-  type SitemapUpstreamBusyError,
+  SitemapNotFoundError,
+  SitemapReadFailedError,
+  type SitemapReadFailure,
 } from "@/lib/public-sitemap";
 import { isPublicStatutePageCountry } from "@/lib/statutes/statute-route";
 
@@ -74,6 +76,7 @@ type FetchStatuteSitemapWorksOptions = {
 
 type ReadSitemapPageOptions<TSchema extends v.GenericSchema> = {
   action: string;
+  addressesShard: boolean;
   fetchImpl: FetchLike;
   schema: TSchema;
   signal: AbortSignal;
@@ -81,9 +84,7 @@ type ReadSitemapPageOptions<TSchema extends v.GenericSchema> = {
   url: URL | string;
 };
 
-type SitemapReadError = ClientOperationError | SitemapUpstreamBusyError;
-
-type SitemapPageResult<TItem> = Promise<Result<TItem[], SitemapReadError>>;
+type SitemapPageResult<TItem> = Promise<Result<TItem[], SitemapReadFailure>>;
 
 export { SITEMAP_XML_RESPONSE_HEADERS };
 
@@ -97,38 +98,36 @@ export const createStatuteSitemapShardPath = ({
 
 const readSitemapPage = async <TSchema extends v.GenericSchema>({
   action,
+  addressesShard,
   fetchImpl,
   schema,
   signal,
   subject,
   url,
 }: ReadSitemapPageOptions<TSchema>): Promise<
-  Result<v.InferOutput<TSchema>, SitemapReadError>
+  Result<v.InferOutput<TSchema>, SitemapReadFailure>
 > => {
   const response = await Result.tryPromise(
     async () => await fetchImpl(url, { signal }),
   );
   if (response.isErr()) {
     return Result.err(
-      new ClientOperationError({
+      new SitemapReadFailedError({
         action,
         cause: response.error,
         message: `Failed to reach the public ${subject} endpoint.`,
+        reason: "upstream_unreachable",
+        upstreamStatus: null,
       }),
-    );
-  }
-
-  if (response.value.status === 429 || response.value.status === 503) {
-    return Result.err(
-      createSitemapUpstreamBusyError({ action, response: response.value }),
     );
   }
 
   if (!response.value.ok) {
     return Result.err(
-      new ClientOperationError({
+      classifySitemapUpstreamFailure({
         action,
-        message: `Failed to fetch public ${subject}: ${response.value.status}`,
+        addressesShard,
+        response: response.value,
       }),
     );
   }
@@ -140,10 +139,12 @@ const readSitemapPage = async <TSchema extends v.GenericSchema>({
   );
   if (body.isErr()) {
     return Result.err(
-      new ClientOperationError({
+      new SitemapReadFailedError({
         action,
         cause: body.error,
         message: `Public ${subject} was not JSON.`,
+        reason: "unexpected_payload",
+        upstreamStatus: response.value.status,
       }),
     );
   }
@@ -151,10 +152,12 @@ const readSitemapPage = async <TSchema extends v.GenericSchema>({
   const parseResult = v.safeParse(schema, body.value);
   if (!parseResult.success) {
     return Result.err(
-      new ClientOperationError({
+      new SitemapReadFailedError({
         action,
         cause: parseResult.issues,
         message: `Public ${subject} had an unexpected shape.`,
+        reason: "unexpected_payload",
+        upstreamStatus: response.value.status,
       }),
     );
   }
@@ -164,10 +167,11 @@ const readSitemapPage = async <TSchema extends v.GenericSchema>({
 
 export const fetchPublicStatuteSitemapShards = async ({
   fetchImpl = fetch,
-  signal = AbortSignal.timeout(10_000),
+  signal = AbortSignal.timeout(SITEMAP_FILE_FETCH_TIMEOUT_MS),
 }: FetchStatuteSitemapShardsOptions = {}): SitemapPageResult<StatuteSitemapShard> => {
   const page = await readSitemapPage({
     action: "fetchPublicStatuteSitemapShards",
+    addressesShard: false,
     fetchImpl,
     schema: statuteSitemapShardPageSchema,
     signal,
@@ -185,11 +189,11 @@ export const fetchPublicStatuteSitemapShards = async ({
 export const fetchPublicStatuteSitemapWorks = async ({
   fetchImpl = fetch,
   shard,
-  signal = AbortSignal.timeout(10_000),
+  signal = AbortSignal.timeout(SITEMAP_FILE_FETCH_TIMEOUT_MS),
 }: FetchStatuteSitemapWorksOptions): SitemapPageResult<StatuteSitemapWork> => {
   if (!isPublicStatutePageCountry(shard.country)) {
     return Result.err(
-      new ClientOperationError({
+      new SitemapNotFoundError({
         action: "fetchPublicStatuteSitemap",
         message: "The statute sitemap shard is not published.",
       }),
@@ -202,6 +206,7 @@ export const fetchPublicStatuteSitemapWorks = async ({
 
   const page = await readSitemapPage({
     action: "fetchPublicStatuteSitemap",
+    addressesShard: true,
     fetchImpl,
     schema: statuteSitemapWorkPageSchema,
     signal,

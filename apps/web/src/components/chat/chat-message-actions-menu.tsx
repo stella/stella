@@ -20,7 +20,7 @@ import {
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools-types";
 import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
 import { MessageExportMenu } from "@/components/chat/message-export-menu";
 import {

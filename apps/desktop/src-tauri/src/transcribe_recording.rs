@@ -7,9 +7,13 @@
 //! before it are done. Stopping cancels what is still outstanding and keeps
 //! the text so far.
 //!
-//! The file is only read, never copied, and no audio or text is written to
-//! disk here: the text exists in the window until the user copies it, saves
-//! it as a file or saves it to a matter. A file is only ever chosen through
+//! The file is only read, never copied, and no audio is ever written to
+//! disk. The text is written nowhere here either: the window keeps each
+//! finished or stopped transcript in the account's encrypted history on
+//! this computer (`transcribe_history`, 30 days unless the user chose
+//! otherwise, or nothing at all), and the user may copy it, save it as a
+//! file or save it to a matter. The history holds the recording's name,
+//! format and length, never its audio. A file is only ever chosen through
 //! the native picker or dropped on the window, so the webview never names a
 //! path this code reads.
 
@@ -170,7 +174,7 @@ struct PieceText {
   text: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Failure {
   /// The speech model is not on this computer.
@@ -235,9 +239,68 @@ struct Inner {
   /// The job the window shows, with the dictation account it started for:
   /// its text is cleaned up only for that account.
   result_account: Option<(u64, String)>,
+  /// The window exists.
+  window_open: bool,
+  /// How far into the recording the running job has transcribed.
+  transcribed_ms: u64,
+  /// The job the window shows transcribed the whole recording.
+  finished: bool,
+}
+
+/// The Transcribe window as the tray shows it, while the window exists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TrayTranscription {
+  /// A recording is being transcribed; its length, when the file says it.
+  Working {
+    transcribed_ms: u64,
+    duration_ms: Option<u64>,
+  },
+  /// The whole recording is transcribed.
+  Ready,
+  /// Anything else: a file to choose, a transcript stopped or failed.
+  Open,
+}
+
+pub(crate) const MS_PER_MINUTE: u64 = 60_000;
+
+/// Whether the transcribed part reached another whole minute: the tray
+/// counts in minutes, so it is rebuilt at most once per minute of audio.
+fn whole_minute_passed(before_ms: u64, after_ms: u64) -> bool {
+  after_ms / MS_PER_MINUTE > before_ms / MS_PER_MINUTE
 }
 
 impl Inner {
+  fn tray(&self) -> Option<TrayTranscription> {
+    if !self.window_open {
+      return None;
+    }
+    if self.job.is_some() {
+      let duration_ms = match self.file.as_ref().map(|chosen| &chosen.choice) {
+        Some(FileChoice::Ready { duration_ms, .. }) => *duration_ms,
+        _ => None,
+      };
+      return Some(TrayTranscription::Working {
+        transcribed_ms: self.transcribed_ms,
+        duration_ms,
+      });
+    }
+    if self.finished && self.holds_result {
+      return Some(TrayTranscription::Ready);
+    }
+    Some(TrayTranscription::Open)
+  }
+
+  /// A piece of `job` ending at `end_ms` was delivered; whether the tray's
+  /// minutes moved.
+  fn progressed(&mut self, job: u64, end_ms: u64) -> bool {
+    if !self.job.as_ref().is_some_and(|running| running.id == job) {
+      return false;
+    }
+    let before = self.transcribed_ms;
+    self.transcribed_ms = before.max(end_ms);
+    whole_minute_passed(before, self.transcribed_ms)
+  }
+
   /// A cloud start goes only to the model, and for the account, the window
   /// was last shown under `ticket`; anything else is shown again first.
   fn acknowledged(
@@ -294,6 +357,8 @@ impl Inner {
     self.file = None;
     self.holds_result = false;
     self.result_account = None;
+    self.transcribed_ms = 0;
+    self.finished = false;
   }
 
   /// The file a start names, if it is still the chosen one.
@@ -325,12 +390,23 @@ impl TranscribeState {
   }
 }
 
+/// The recording the window holds, while no transcription of it runs: the
+/// file the user chose, never a path the webview names.
+pub(crate) fn chosen_recording(app: &AppHandle) -> Option<PathBuf> {
+  app.state::<TranscribeState>().update(|inner| {
+    if inner.job.is_some() {
+      return None;
+    }
+    inner.file.as_ref().map(|chosen| chosen.path.clone())
+  })
+}
+
 /// Whether this computer offers the window: dictation is on its way here.
 pub(crate) fn available(app: &AppHandle) -> bool {
   dictation::available(app)
 }
 
-fn require_window(window: &Window) -> Result<(), String> {
+pub(crate) fn require_window(window: &Window) -> Result<(), String> {
   if window.label() == TRANSCRIBE_WINDOW_LABEL {
     Ok(())
   } else {
@@ -338,7 +414,7 @@ fn require_window(window: &Window) -> Result<(), String> {
   }
 }
 
-fn require_available(app: &AppHandle) -> Result<(), String> {
+pub(crate) fn require_available(app: &AppHandle) -> Result<(), String> {
   if available(app) {
     Ok(())
   } else {
@@ -346,7 +422,7 @@ fn require_available(app: &AppHandle) -> Result<(), String> {
   }
 }
 
-fn file_name(path: &Path) -> String {
+pub(crate) fn file_name(path: &Path) -> String {
   path
     .file_name()
     .map(|name| {
@@ -359,7 +435,7 @@ fn file_name(path: &Path) -> String {
     .unwrap_or_default()
 }
 
-fn extension(path: &Path) -> Option<String> {
+pub(crate) fn extension(path: &Path) -> Option<String> {
   path
     .extension()
     .and_then(|extension| extension.to_str())
@@ -506,16 +582,33 @@ pub(crate) fn dropped(app: &AppHandle, paths: &[PathBuf]) {
   });
 }
 
+/// The window was built; the tray offers to bring it back.
+pub(crate) fn window_opened(app: &AppHandle) {
+  app
+    .state::<TranscribeState>()
+    .update(|inner| inner.window_open = true);
+  crate::activity::refresh_tray(app);
+}
+
 /// Ends any transcription when the window closes, and forgets the file.
 pub(crate) fn window_closed(app: &AppHandle) {
   let job = app.state::<TranscribeState>().update(|inner| {
     inner.clear();
     inner.shown_model = None;
+    inner.window_open = false;
     inner.job.take()
   });
   if let Some(job) = job {
     job.end_now();
   }
+  crate::activity::refresh_tray(app);
+}
+
+/// The Transcribe window for the tray; `None` while it is closed.
+pub(crate) fn tray_state(app: &AppHandle) -> Option<TrayTranscription> {
+  app
+    .try_state::<TranscribeState>()?
+    .update(|inner| inner.tray())
 }
 
 #[tauri::command]
@@ -609,6 +702,7 @@ pub fn transcribe_clear_file(
       inner.clear();
     }
   });
+  crate::activity::refresh_tray(window.app_handle());
   Ok(())
 }
 
@@ -652,6 +746,7 @@ pub async fn transcribe_start(
     job,
     destination: request.destination,
     model: model.clone(),
+    account: account.clone(),
     matter_id,
     language: dictation::language(&app).hint,
     workers: Arc::clone(&workers),
@@ -673,8 +768,11 @@ pub async fn transcribe_start(
     });
     inner.holds_result = true;
     inner.result_account = Some((job, account));
+    inner.transcribed_ms = 0;
+    inner.finished = false;
     Ok::<(), String>(())
   })?;
+  crate::activity::refresh_tray(&app);
   Ok(Started {
     job,
     model,
@@ -701,11 +799,12 @@ pub fn transcribe_stop(
   if let Some(running) = running {
     running.end_now();
     announce(&app, &Finished::Stopped { job });
+    crate::activity::refresh_tray(&app);
   }
   Ok(())
 }
 
-fn valid_id(id: &str) -> Result<(), String> {
+pub(crate) fn valid_id(id: &str) -> Result<(), String> {
   if id.len() <= 200
     && id.chars().all(|character| {
       character.is_ascii_alphanumeric() || character == '-' || character == '_'
@@ -722,6 +821,9 @@ struct Plan {
   destination: Destination,
   /// The stella AI model, and the account the recording started for.
   model: Option<RecordingModel>,
+  /// The dictation account the recording started for: its learned fixes
+  /// spell every piece, even if another account is linked meanwhile.
+  account: String,
   matter_id: Option<String>,
   language: Option<&'static str>,
   workers: Arc<LocalWorkers>,
@@ -746,16 +848,21 @@ async fn run(
     Ok(duration_ms) => Finished::Done { job, duration_ms },
     Err(failure) => Finished::Failed { job, failure },
   };
+  let done = matches!(finished, Finished::Done { .. });
   let current = app.state::<TranscribeState>().update(|inner| {
     let current = inner.job.as_ref().is_some_and(|running| running.id == job);
     if current {
       inner.job = None;
+      inner.finished = done;
     }
     current
   });
   // A stopped job was announced by the stop itself.
   if current && !stop.load(Ordering::SeqCst) {
     announce(&app, &finished);
+  }
+  if current {
+    crate::activity::refresh_tray(&app);
   }
 }
 
@@ -806,7 +913,7 @@ async fn transcribe(
           }
         })
         .buffered(CLOUD_PIECES_AT_ONCE);
-      deliver(app, plan.job, texts).await
+      deliver(app, plan.job, &plan.account, texts).await
     }
     Destination::Local => {
       let model = dictation::installed_model().ok_or(Failure::ModelMissing)?;
@@ -842,7 +949,7 @@ async fn transcribe(
           }
         })
         .buffered(1);
-      deliver(app, plan.job, texts).await
+      deliver(app, plan.job, &plan.account, texts).await
     }
   }
 }
@@ -875,6 +982,7 @@ impl Decoded {
 async fn deliver(
   app: &AppHandle,
   job: u64,
+  account: &str,
   steps: impl futures_util::Stream<Item = Step>,
 ) -> Result<u64, Failure> {
   futures_util::pin_mut!(steps);
@@ -882,10 +990,19 @@ async fn deliver(
     match step {
       Step::Text(mut text) => {
         text.job = job;
+        // The speaker's learned fixes, as dictation applies them, so a
+        // recording spells their words the way they write them.
+        text.text = crate::dictation_learned::apply_for(account, &text.text);
         crate::logging::best_effort(
           app.emit_to(TRANSCRIBE_WINDOW_LABEL, PIECE_EVENT, &text),
           "transcribed piece was not delivered",
         );
+        if app
+          .state::<TranscribeState>()
+          .update(|inner| inner.progressed(job, text.end_ms))
+        {
+          crate::activity::refresh_tray(app);
+        }
       }
       Step::Failed(failure) | Step::Other(Decoded::Failed(failure)) => {
         return Err(failure);
@@ -1344,58 +1461,6 @@ pub async fn transcribe_search_matters(
   matters
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TranscriptParagraph {
-  start_ms: u64,
-  text: String,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SaveToMatterRequest {
-  matter_id: String,
-  title: String,
-  paragraphs: Vec<TranscriptParagraph>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SavedTranscript {
-  file_name: String,
-}
-
-const SAVE_FAILURE: &str = "the transcript could not be saved to the matter";
-
-/// Files the transcript in the matter as a Word document, through the
-/// linked account.
-#[tauri::command]
-pub async fn transcribe_save_to_matter(
-  app: AppHandle,
-  window: Window,
-  request: SaveToMatterRequest,
-) -> Result<SavedTranscript, String> {
-  require_window(&window)?;
-  require_available(&app)?;
-  valid_id(&request.matter_id)?;
-  let text_bytes = request
-    .paragraphs
-    .iter()
-    .map(|paragraph| paragraph.text.len())
-    .sum::<usize>();
-  if request.paragraphs.is_empty() || text_bytes > MAX_SAVED_TEXT_BYTES {
-    return Err("the transcript is empty or too large to save".to_string());
-  }
-  let title = request
-    .title
-    .chars()
-    .take(MAX_TITLE_CHARS)
-    .collect::<String>();
-  let body = SaveToMatterRequest { title, ..request };
-  let bytes = dictation_cloud::save_transcript(&app, &body, SAVE_FAILURE).await?;
-  serde_json::from_slice(&bytes).map_err(|_error| SAVE_FAILURE.to_string())
-}
-
 /// Opens the window, from the tray or the Settings window.
 #[tauri::command]
 pub fn transcribe_open(app: AppHandle) -> Result<(), String> {
@@ -1532,6 +1597,81 @@ mod tests {
     assert!(inner.startable(selection).is_err());
     inner.clear();
     assert!(inner.begin_choice().is_ok());
+  }
+
+  fn running(id: u64) -> Job {
+    Job {
+      id,
+      stop: Arc::new(AtomicBool::new(false)),
+      workers: Arc::new(LocalWorkers::default()),
+      task: tauri::async_runtime::spawn(async {}),
+    }
+  }
+
+  #[test]
+  fn the_tray_follows_the_window_from_choice_to_finished_transcript() {
+    let mut inner = Inner::default();
+    assert_eq!(inner.tray(), None, "no window, no tray item");
+
+    inner.window_open = true;
+    assert_eq!(inner.tray(), Some(TrayTranscription::Open));
+
+    let selection = inner.begin_choice().unwrap();
+    let forty_minutes = Chosen {
+      choice: FileChoice::Ready {
+        selection,
+        name: "Hearing.m4a".to_string(),
+        format: "M4A",
+        duration_ms: Some(40 * MS_PER_MINUTE),
+      },
+      ..chosen(selection)
+    };
+    assert!(inner.commit_choice(selection, Some(forty_minutes)));
+    assert_eq!(inner.tray(), Some(TrayTranscription::Open));
+
+    inner.job = Some(running(7));
+    inner.holds_result = true;
+    assert!(inner.progressed(7, 12 * MS_PER_MINUTE + 5_000));
+    assert_eq!(
+      inner.tray(),
+      Some(TrayTranscription::Working {
+        transcribed_ms: 12 * MS_PER_MINUTE + 5_000,
+        duration_ms: Some(40 * MS_PER_MINUTE),
+      })
+    );
+
+    inner.job = None;
+    inner.finished = true;
+    assert_eq!(inner.tray(), Some(TrayTranscription::Ready));
+    inner.clear();
+    assert_eq!(inner.tray(), Some(TrayTranscription::Open));
+
+    inner.window_open = false;
+    inner.job = Some(running(8));
+    assert_eq!(inner.tray(), None, "a closed window has no tray item");
+  }
+
+  #[test]
+  fn the_tray_is_rebuilt_once_per_minute_transcribed_never_per_piece() {
+    let mut inner = Inner {
+      job: Some(running(3)),
+      ..Inner::default()
+    };
+    let rebuilds = (1..=200_u64)
+      .filter(|piece| inner.progressed(3, piece * 20_000))
+      .count();
+    // 200 pieces of 20 s are 66 whole minutes and a bit.
+    assert_eq!(rebuilds, 66);
+    assert!(
+      !inner.progressed(4, 90 * MS_PER_MINUTE),
+      "an older job's piece moves nothing"
+    );
+    assert!(
+      !inner.progressed(3, MS_PER_MINUTE),
+      "progress never goes back"
+    );
+    assert!(!whole_minute_passed(59_999, 60_000 - 1));
+    assert!(whole_minute_passed(59_999, 60_000));
   }
 
   /// A real child process that stays busy until it is killed.

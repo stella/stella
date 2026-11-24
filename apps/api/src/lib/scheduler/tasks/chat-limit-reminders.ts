@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 import { inArray } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { chatLimitReminders } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { notifyChatLimitResetOnTx } from "@/api/lib/chat/limit-reset-notification";
 import { withSkipLockedBatch } from "@/api/lib/db/aggregate-lock";
 import {

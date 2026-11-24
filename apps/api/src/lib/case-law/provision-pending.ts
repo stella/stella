@@ -44,7 +44,7 @@ export const readProvisionPendingCounts = async (
     const language =
       capability.languages.at(0) ??
       panic("Supported capability has no language");
-    return [sql`(${country}::text, ${language}::text)`];
+    return [{ country, language }];
   });
   const result =
     supportedScopes.length === 0
@@ -60,7 +60,7 @@ export const readProvisionPendingCounts = async (
           revision: sql<number | null>`pending.revision`,
           scope_generation: sql<string | null>`pending.scope_generation::text`,
         })
-          .from(sql`(VALUES ${sql.join(supportedScopes, sql`, `)}) AS scope(country, language)
+          .from(sql`jsonb_to_recordset(${JSON.stringify(supportedScopes)}::text::jsonb) AS scope(country text, language text)
         CROSS JOIN LATERAL read_case_law_provision_pending(
           scope.country, scope.language, ARRAY[${sql.join(
             EMPTY_CORPUS_CONTENT_HASHES.map((hash) => sql`${hash}`),

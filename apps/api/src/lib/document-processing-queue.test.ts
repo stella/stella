@@ -325,6 +325,35 @@ describe("OCR derivative durability", () => {
   });
 });
 
+describe("OCR near-duplicate signature", () => {
+  // A scanned PDF has no native text, so the OCR text is the only text a
+  // signature can come from.
+  test("records the signature from OCR text once it becomes the projection", () => {
+    const processStart = queueSource.indexOf(
+      "export const processDocumentProcessingRun",
+    );
+    const processEnd = queueSource.indexOf("\nconst errorCode", processStart);
+    const processSource = queueSource.slice(processStart, processEnd);
+    const persistence = processSource.indexOf(
+      "const persistenceOutcome = await persistOcrProjection",
+    );
+    const signature = processSource.indexOf(
+      "await recordNearDuplicateSignature(database",
+    );
+    const guard = processSource.lastIndexOf(
+      'if (persistenceOutcome === "persisted")',
+      signature,
+    );
+
+    expect(persistence).toBeGreaterThan(-1);
+    expect(guard).toBeGreaterThan(persistence);
+    expect(signature).toBeGreaterThan(guard);
+    expect(processSource.slice(signature, signature + 400)).toContain(
+      "text: result.value.text",
+    );
+  });
+});
+
 describe("lease heartbeat", () => {
   test("aborts the attempt when a renewal no longer owns the run", () => {
     const heartbeatStart = queueSource.indexOf(
@@ -509,6 +538,7 @@ describe("reconciliation fault isolation", () => {
     expect(results).toEqual({
       "deadline-scout": { count: 0, hasMore: false },
       delivery: { count: 5, hasMore: false },
+      "document-naming": { count: 0, hasMore: false },
       reindex: { count: 2, hasMore: false },
       repair: { count: 0, hasMore: true },
       retry: { count: 3, hasMore: true },
@@ -942,7 +972,7 @@ describe("bounded search-index replay", () => {
           name: "reindex",
           run: async () => ({
             count: Number(
-              await runSearchIndexReplayAttempt({
+              (await runSearchIndexReplayAttempt({
                 indexEntity: async () => await new Promise<void>(() => {}),
                 onFailure: async (error) => {
                   replayError = error;
@@ -953,7 +983,7 @@ describe("bounded search-index replay", () => {
                   return true;
                 },
                 timeoutMs: 5, // timeout under test
-              }),
+              })) === "replayed",
             ),
             hasMore: false,
           }),
@@ -1371,6 +1401,7 @@ describe("reconciliationLeftWorkBehind", () => {
     expect(declared).toEqual([
       "deadline-scout",
       "delivery",
+      "document-naming",
       "reindex",
       "repair",
       "retry",

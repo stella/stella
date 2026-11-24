@@ -160,7 +160,7 @@ test.describe("lockless DOCX collaboration", () => {
       );
       await firstParagraph.click();
       await collaboratorParagraph.click();
-      await expect(page.locator(".ProseMirror-yjs-cursor")).toHaveCount(1);
+      await expect(page.locator("[data-peer]")).toHaveCount(1);
 
       const firstToken = ` FIRST${String(Date.now())}`;
       await page.keyboard.type(firstToken);

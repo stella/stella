@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterAll, beforeEach, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -7,29 +8,30 @@ import {
 } from "@stll/api-contract/desktop-dictation-cleanup";
 import { createTestState } from "@stll/test-state";
 
-import { safeDbFromScoped } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import { HttpStatusResponse } from "@/api/http/status";
-import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { getConfiguredChatModelOptions } from "@/api/lib/chat-model-selection";
 import {
-  admitInline,
-  DICTATING_EMAIL as EMAIL,
+  CLEANUP_ORGANIZATION_TERMS,
+  mergeDictationTerms,
+} from "@/api/lib/dictation/organization-vocabulary";
+import type { readCleanupVocabulary } from "@/api/lib/dictation/organization-vocabulary";
+import {
+  buildVocabularyIndex,
+  selectVocabulary,
+} from "@/api/lib/dictation/vocabulary-index";
+import {
   DICTATING_ORGANIZATION_ID as ORGANIZATION_ID,
   DICTATING_USER_ID as USER_ID,
-  dictationLimit,
   exerciseDesktopDictationEndpoint,
+  exerciseMemberDictationEndpoint,
   grantDesktopDictation,
-  recordingModel,
   testDesktopDictationGate,
+  testMemberDictationGate,
 } from "@/api/tests/helpers/desktop-dictation-endpoint";
-import {
-  createTestHandlerContext,
-  NO_AUDIT,
-} from "@/api/tests/helpers/handler-context";
 import type { TestServer } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createDictationCleanupEndpoint } from "./cleanup";
 import {
@@ -37,7 +39,7 @@ import {
   type DictationCleanupModelOutput,
   dictationCleanupModelOutputSchema,
 } from "./cleanup-model";
-import type { consumeDictationLimit } from "./limits";
+import { listDictationCleanupModels } from "./cleanup-models";
 import { createMemberDictationCleanupEndpoint } from "./member-cleanup";
 
 const testState = createTestState({ file: import.meta.path, config: env });
@@ -63,21 +65,49 @@ const CLEANED: DictationCleanupModelOutput = {
   ],
 };
 
+/** The organization's words as the real selection picks them, without a
+ *  database. */
+const organizationWords =
+  (newestFirst: readonly string[]): typeof readCleanupVocabulary =>
+  async ({ transcript, personal = [] }) =>
+    await Promise.resolve(
+      Result.ok(
+        mergeDictationTerms(
+          [
+            personal,
+            selectVocabulary(
+              buildVocabularyIndex(newestFirst),
+              transcript,
+              CLEANUP_ORGANIZATION_TERMS,
+            ),
+          ],
+          personal.length + CLEANUP_ORGANIZATION_TERMS,
+        ),
+      ),
+    );
+
 type ExerciseOptions = {
   input?: unknown;
+  organization?: readonly string[];
   granted?: boolean;
   role?: "member" | "external";
   limited?: boolean;
   answer?: () => DictationCleanupModelOutput;
+  orgAIConfig?: OrgAIConfig | null;
 };
 
 const exercise = async ({
   input = { transcript: TRANSCRIPT, locale: "cs", languages: ["cs", "en"] },
   answer = () => CLEANED,
+  organization = [],
   ...options
 }: ExerciseOptions = {}) =>
   await exerciseDesktopDictationEndpoint({
-    createEndpoint: createDictationCleanupEndpoint,
+    createEndpoint: (endpointOptions) =>
+      createDictationCleanupEndpoint({
+        ...endpointOptions,
+        readVocabulary: organizationWords(organization),
+      }),
     testState,
     servers,
     input,
@@ -108,6 +138,20 @@ test("a granted desktop gets the model's segments for its transcript text", asyn
     transcript: TRANSCRIPT,
   });
   expect(limit.mock.calls.at(0)?.[0]).toMatchObject({ operation: "cleanup" });
+});
+
+test("the organization's words the transcript mentions follow the speaker's own", async () => {
+  const { response, calls } = await exercise({
+    input: {
+      transcript: "pošli to do Majkrosoftu a Novakovi",
+      vocabulary: ["Novák"],
+    },
+    organization: ["Deloitte", "Microsoft", "novák"],
+  });
+  expect(response.status).toBe(200);
+  expect(JSON.parse(calls.at(0)?.prompt ?? "null")).toMatchObject({
+    vocabulary: ["Novák", "Microsoft"],
+  });
 });
 
 testDesktopDictationGate({
@@ -233,43 +277,160 @@ test("where the text goes reaches the model as its own field, and the answer is 
   expect(await echoed.response.text()).not.toContain("Kupní cena");
 });
 
-/** The member route: a signed-in member's session, no desktop decision. */
-const exerciseMember = async ({
-  role = "member",
-  limited = false,
-}: { role?: "member" | "external"; limited?: boolean } = {}) => {
-  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
-  const { calls, generate } = recordingModel(() => CLEANED);
-  const { scopedDb } = createScopedDbMock({});
-  const limit = dictationLimit(limited);
-  const endpoint = createMemberDictationCleanupEndpoint({
-    admit: admitInline,
-    limit: asTestRaw<typeof consumeDictationLimit>(limit),
-    generateObjectForTask:
-      asTestRaw<typeof generateTanStackObjectForTask>(generate),
+const INSTRUCTIONS =
+  "Use British spelling.\nNever use emoji.\nAlways end with my signature: Regards, Jana Dvořáková.";
+
+test("the speaker's instructions reach the model as their own field, ranked below the system rules", async () => {
+  const { response, calls } = await exercise({
+    input: {
+      transcript: TRANSCRIPT,
+      locale: "cs",
+      customInstructions: INSTRUCTIONS,
+    },
   });
-  const result = await endpoint.handler(
-    createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
-      audit: NO_AUDIT,
-      scopedDb,
-      safeDb: safeDbFromScoped(scopedDb),
-      memberRole: sessionMemberRole(role),
-      session: { activeOrganizationId: ORGANIZATION_ID },
-      user: { id: USER_ID, email: EMAIL },
-      body: { transcript: TRANSCRIPT, locale: "cs", languages: ["cs", "en"] },
-      request: new Request("https://stella.test/v1/dictation/cleanup", {
-        method: "POST",
-      }),
-      route: "/v1/dictation/cleanup",
+  expect(response.status).toBe(200);
+  const call = calls.at(0);
+  // Never part of the system prompt, which stays the same for everyone.
+  expect(call?.system).toBe(DICTATION_CLEANUP_SYSTEM_PROMPT);
+  expect(call?.system).not.toContain("British");
+  expect(call?.system).toContain("customInstructions");
+  expect(call?.system).toContain("ranks below every rule above");
+  expect(JSON.parse(call?.prompt ?? "null")).toEqual({
+    languages: [],
+    locale: "cs",
+    customInstructions: INSTRUCTIONS,
+    transcript: TRANSCRIPT,
+  });
+});
+
+test("whatever the instructions ask, the answer must pass the same plausibility checks", async () => {
+  const transcript = "please send the draft to the client today";
+  const signed: DictationCleanupModelOutput = {
+    segments: [
+      {
+        type: "text",
+        text: "Please send the draft to the client today.",
+        bold: false,
+      },
+      { type: "paragraphBreak", text: "", bold: false },
+      {
+        type: "text",
+        text: "Regards, Jana Dvořáková. I will also attach the signed engagement letter and the invoice for October.",
+        bold: false,
+      },
+    ],
+  };
+  const shortened: DictationCleanupModelOutput = {
+    segments: [{ type: "text", text: "Send it.", bold: false }],
+  };
+  for (const answer of [signed, shortened]) {
+    const withInstructions = await exercise({
+      input: { transcript, customInstructions: INSTRUCTIONS },
+      answer: () => structuredClone(answer),
+    });
+    const without = await exercise({
+      input: { transcript },
+      answer: () => structuredClone(answer),
+    });
+    // The instructions change nothing about what is accepted.
+    expect(without.response.status).toBe(502);
+    expect(withInstructions.response.status).toBe(502);
+    expect(await withInstructions.response.text()).not.toContain("Regards");
+  }
+  // A plain cleanup in the form the instructions ask for passes.
+  const honoured = await exercise({
+    input: { transcript, customInstructions: INSTRUCTIONS },
+    answer: () => ({
+      segments: [
+        {
+          type: "text",
+          text: "Please send the draft to the client today.",
+          bold: false,
+        },
+      ],
     }),
-  );
-  return { result, calls, generate, limit };
-};
+  });
+  expect(honoured.response.status).toBe(200);
+});
+
+test("instructions over the bound are refused before any model call", async () => {
+  const { response, calls } = await exercise({
+    input: {
+      transcript: TRANSCRIPT,
+      customInstructions: "x".repeat(
+        DESKTOP_DICTATION_CLEANUP_LIMITS.customInstructionsLength + 1,
+      ),
+    },
+  });
+  expect(response.status).toBe(422);
+  expect(calls).toHaveLength(0);
+});
+
+const OWN_ANTHROPIC = asTestRaw<OrgAIConfig>({
+  providers: [{ provider: "anthropic", apiKey: "own-key" }],
+});
+
+test("a model the organization offers runs the cleanup, and the choice never reaches the prompt", async () => {
+  const chosen = listDictationCleanupModels(OWN_ANTHROPIC).models.at(-1);
+  if (chosen === undefined) {
+    throw new TypeError("Expected an offered model");
+  }
+  // The same model the chat model picker offers this organization.
+  expect(
+    getConfiguredChatModelOptions(OWN_ANTHROPIC).map(({ value }) => value),
+  ).toContain(chosen.value);
+  const { response, calls } = await exercise({
+    input: { transcript: TRANSCRIPT, model: chosen.value },
+    orgAIConfig: OWN_ANTHROPIC,
+  });
+  expect(response.status).toBe(200);
+  expect(calls.at(0)?.task).toBe("short-text");
+  expect(calls.at(0)?.modelId).toBe(chosen.value);
+  expect(JSON.parse(calls.at(0)?.prompt ?? "null")).not.toHaveProperty("model");
+});
+
+test("a model the organization no longer offers falls back to automatic and still cleans up", async () => {
+  for (const model of [
+    "openai::gpt-5",
+    "anthropic::claude-retired-model",
+    "not a model",
+  ]) {
+    const { response, calls } = await exercise({
+      input: { transcript: TRANSCRIPT, model },
+      orgAIConfig: OWN_ANTHROPIC,
+    });
+    expect(response.status).toBe(200);
+    expect(calls).toHaveLength(1);
+    expect(calls.at(0)?.modelId).toBeUndefined();
+    expect(calls.at(0)?.task).toBe("short-text");
+  }
+  const automatic = await exercise({ orgAIConfig: OWN_ANTHROPIC });
+  expect(automatic.calls.at(0)?.modelId).toBeUndefined();
+});
+
+/** The member route: a signed-in member's session, no desktop decision. */
+const exerciseMember = async (
+  options: { role?: "member" | "external"; limited?: boolean } = {},
+) =>
+  await exerciseMemberDictationEndpoint({
+    createEndpoint: (endpointOptions) =>
+      createMemberDictationCleanupEndpoint({
+        ...endpointOptions,
+        readVocabulary: organizationWords([]),
+      }),
+    testState,
+    route: "/v1/dictation/cleanup",
+    body: { transcript: TRANSCRIPT, locale: "cs", languages: ["cs", "en"] },
+    answer: () => CLEANED,
+    ...options,
+  });
 
 test("a signed-in member gets the same cleanup as a desktop, without any desktop decision", async () => {
   const { result, calls, limit } = await exerciseMember();
   if (result instanceof HttpStatusResponse) {
-    throw new TypeError(`Expected the cleaned segments, got ${result.code}`);
+    throw new TypeError(
+      `Expected the cleaned segments, got ${String(result.code)}`,
+    );
   }
   expect(v.parse(desktopDictationCleanupResponseSchema, result)).toEqual({
     segments: [
@@ -294,17 +455,4 @@ test("a signed-in member gets the same cleanup as a desktop, without any desktop
   });
 });
 
-test("a member whose role may not use AI is refused before the limit or any model call", async () => {
-  const { result, generate, limit } = await exerciseMember({
-    role: "external",
-  });
-  expect(result instanceof HttpStatusResponse && result.code).toBe(403);
-  expect(limit).not.toHaveBeenCalled();
-  expect(generate).not.toHaveBeenCalled();
-});
-
-test("a member over the cleanup budget is refused before any model call", async () => {
-  const { result, generate } = await exerciseMember({ limited: true });
-  expect(result instanceof HttpStatusResponse && result.code).toBe(429);
-  expect(generate).not.toHaveBeenCalled();
-});
+testMemberDictationGate(exerciseMember);

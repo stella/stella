@@ -1,11 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
 import { Button } from "../components/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../components/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/tooltip";
+import {
+  INLINE_OVERFLOW_ITEM_ATTRIBUTE,
+  INLINE_OVERFLOW_TRIGGER_ATTRIBUTE,
+  useInlineOverflow,
+} from "../hooks/use-inline-overflow";
 import { ChevronDownIcon } from "../icons";
+import { splitInlineOverflow } from "../lib/inline-overflow";
 import { cn } from "../lib/utils";
-import { resolveFacetOverflow } from "./facet-bar.logic";
 import { TOOLBAR_ROW_HEIGHT } from "./layout-tokens";
 
 export type InspectorFacetBarProps<F extends string> = {
@@ -49,7 +54,7 @@ export type InspectorFacetBarProps<F extends string> = {
  * (`˅`) dropdown. The active facet is pinned visible ahead of the rest
  * so the current tab stays readable rather than hiding inside the menu
  * — except at the narrowest widths, where not even the active chip fits
- * beside the trigger; see `resolveFacetOverflow`'s narrow-width floor.
+ * beside the trigger; see `resolveInlineOverflow`'s narrow-width floor.
  */
 export const InspectorFacetBar = <F extends string>({
   facet,
@@ -62,9 +67,19 @@ export const InspectorFacetBar = <F extends string>({
   onChange,
 }: InspectorFacetBarProps<F>) => {
   const lastPulseSeq = useRef<number | undefined>(pulseSeq);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const measureRef = useRef<HTMLDivElement>(null);
-  const [visibleCount, setVisibleCount] = useState(facets.length);
+
+  // Measure the full-width chips off-screen and recompute how many fit
+  // (reserving room for the overflow trigger) whenever the row resizes
+  // or the labels change.
+  const activeIndex = facets.indexOf(facet);
+  const { container, containerRef, measureRef, visibleCount } =
+    useInlineOverflow({
+      activeIndex,
+      itemKeys: facets,
+    });
+  const { visible: visibleFacets, overflow: overflowFacets } =
+    splitInlineOverflow(facets, visibleCount, activeIndex);
+  const overflowing = overflowFacets.length > 0;
 
   // Bumping `pulseSeq` flashes the active chip once — a background action
   // (e.g. a version landing) changed which facet is active, and the flash
@@ -76,163 +91,101 @@ export const InspectorFacetBar = <F extends string>({
       return;
     }
     lastPulseSeq.current = pulseSeq;
-    const activeChip = containerRef.current?.querySelector(
-      "[data-facet-chip-active]",
-    );
+    const activeChip = container?.querySelector("[data-facet-chip-active]");
     if (activeChip instanceof HTMLElement) {
       flashFacetChip(activeChip);
     }
-  }, [pulseSeq]);
-
-  // Measure the full-width chips off-screen and recompute how many fit
-  // (reserving room for the overflow trigger) whenever the row resizes
-  // or the labels change. Off-screen measurement keeps the widths stable
-  // regardless of how many chips the visible row is currently showing,
-  // so there's no measure/collapse feedback loop.
-  useEffect(() => {
-    const container = containerRef.current;
-    const measure = measureRef.current;
-    if (!container || !measure) {
-      return undefined;
-    }
-
-    const recompute = () => {
-      const style = getComputedStyle(container);
-      // `|| 0`: computed padding can be "" on a detached node and columnGap is
-      // "normal" when no gap is set — both make parseFloat return NaN.
-      const padX =
-        (Number.parseFloat(style.paddingInlineStart) || 0) +
-        (Number.parseFloat(style.paddingInlineEnd) || 0);
-      const gap = Number.parseFloat(style.columnGap) || 0;
-      const availableWidth = container.clientWidth - padX;
-
-      const cells = [...measure.children];
-      const triggerWidth = cells.at(-1)?.getBoundingClientRect().width ?? 0;
-      const chipWidths = cells
-        .slice(0, facets.length)
-        .map((cell) => cell.getBoundingClientRect().width);
-
-      const policy = resolveFacetOverflow({
-        activeIndex: facets.indexOf(facet),
-        availableWidth,
-        chipWidths,
-        gap,
-        triggerWidth,
-      });
-      setVisibleCount(policy.visibleCount);
-    };
-
-    const observer = new ResizeObserver(recompute);
-    observer.observe(container);
-    observer.observe(measure);
-    recompute();
-    return () => observer.disconnect();
-  }, [facets, facet]);
-
-  const overflowing = visibleCount < facets.length;
-  const activeIndex = facets.indexOf(facet);
-
-  let visibleFacets: F[];
-  let overflowFacets: F[];
-  if (!overflowing) {
-    visibleFacets = [...facets];
-    overflowFacets = [];
-  } else if (visibleCount === 0) {
-    // `resolveFacetOverflow`'s narrow-width floor: not even the active
-    // chip fits beside the trigger. Show nothing but the trigger — every
-    // facet, including the active one, still reaches through its menu.
-    visibleFacets = [];
-    overflowFacets = [...facets];
-  } else if (activeIndex < visibleCount) {
-    visibleFacets = facets.slice(0, visibleCount);
-    overflowFacets = facets.slice(visibleCount);
-  } else {
-    // The active facet would overflow: pin it into the last visible slot
-    // so the current tab is always readable, and overflow the rest in
-    // their original order.
-    const head = facets.slice(0, visibleCount - 1);
-    visibleFacets = [...head, facet];
-    overflowFacets = facets.filter((value) => !visibleFacets.includes(value));
-  }
+  }, [container, pulseSeq]);
 
   return (
     <div
       className={cn(
-        "bg-background/85 supports-[backdrop-filter]:bg-background/65 sticky top-0 z-10 flex shrink-0 items-center gap-0.5 overflow-hidden border-b px-1.5 backdrop-blur",
+        "bg-background/85 supports-[backdrop-filter]:bg-background/65 sticky top-0 z-10 flex shrink-0 items-center overflow-hidden border-b px-1.5 backdrop-blur",
         TOOLBAR_ROW_HEIGHT,
       )}
       data-active-facet={facet}
       data-slot="inspector-facet-bar"
-      ref={containerRef}
     >
-      {/* `contents` keeps the chips in the bar's flex row, and the overflow
-          trigger outside the list: a tablist owns only tabs. */}
-      <div className="contents" role="tablist">
-        {visibleFacets.map((value) => (
-          <FacetChip
-            activeBadge={activeBadge}
-            disabled={disabledFacets?.has(value) ?? false}
-            isActive={value === facet}
-            key={value}
-            label={labels[value]}
-            onSelect={() => onChange(value)}
-            value={value}
-          />
-        ))}
-      </div>
-
-      {overflowing && (
-        <Menu>
-          <MenuTrigger
-            aria-label={overflowMenuLabel}
-            // Pinned to the inline-end (far right in LTR, far left in RTL)
-            // via `ms-auto`, set apart from the last chip rather than
-            // crammed beside it. The outline variant reads as a real
-            // button, not a bare chevron.
-            className="ms-auto"
-            data-slot="inspector-facet-overflow-trigger"
-            render={<Button size="icon-sm" type="button" variant="outline" />}
-          >
-            <ChevronDownIcon />
-          </MenuTrigger>
-          <MenuPopup align="end" side="bottom">
-            {overflowFacets.map((value) => (
-              <MenuItem
-                data-facet-overflow-value={value}
-                disabled={disabledFacets?.has(value) ?? false}
-                key={value}
-                onClick={() => onChange(value)}
-              >
-                {labels[value]}
-              </MenuItem>
-            ))}
-          </MenuPopup>
-        </Menu>
-      )}
-
-      {/* Off-screen full-width copy of every chip (plus the trigger) used
-          only to measure natural widths; never visible or interactive. */}
+      {/* The measured row sits inside the bar's padding, so its own box is
+          the room the chips and the overflow trigger share. */}
       <div
-        aria-hidden="true"
-        className="pointer-events-none invisible absolute flex w-max items-center gap-0.5"
-        ref={measureRef}
+        className="relative flex h-full min-w-0 flex-1 items-center gap-0.5"
+        data-slot="inspector-facet-row"
+        ref={containerRef}
       >
-        {facets.map((value) => (
-          <span
-            className={cn(CHIP_CLASS, INACTIVE_CHIP_CLASS)}
-            data-facet-option={value}
-            data-facet-option-disabled={
-              disabledFacets?.has(value) ? "" : undefined
-            }
-            key={value}
-          >
-            {labels[value]}
-          </span>
-        ))}
-        {/* Mirrors the overflow trigger's square footprint (Button
+        {/* `contents` keeps the chips in the row's flex line, and the overflow
+          trigger outside the list: a tablist owns only tabs. */}
+        <div className="contents" role="tablist">
+          {visibleFacets.map((value) => (
+            <FacetChip
+              activeBadge={activeBadge}
+              disabled={disabledFacets?.has(value) ?? false}
+              isActive={value === facet}
+              key={value}
+              label={labels[value]}
+              onSelect={() => onChange(value)}
+              value={value}
+            />
+          ))}
+        </div>
+
+        {overflowing && (
+          <Menu>
+            <MenuTrigger
+              aria-label={overflowMenuLabel}
+              // Pinned to the inline-end (far right in LTR, far left in RTL)
+              // via `ms-auto`, set apart from the last chip rather than
+              // crammed beside it. The outline variant reads as a real
+              // button, not a bare chevron.
+              className="ms-auto"
+              data-slot="inspector-facet-overflow-trigger"
+              render={<Button size="icon-sm" type="button" variant="outline" />}
+            >
+              <ChevronDownIcon />
+            </MenuTrigger>
+            <MenuPopup align="end" side="bottom">
+              {overflowFacets.map((value) => (
+                <MenuItem
+                  data-facet-overflow-value={value}
+                  disabled={disabledFacets?.has(value) ?? false}
+                  key={value}
+                  onClick={() => onChange(value)}
+                >
+                  {labels[value]}
+                </MenuItem>
+              ))}
+            </MenuPopup>
+          </Menu>
+        )}
+
+        {/* Off-screen full-width copy of every chip (plus the trigger) used
+          only to measure natural widths; never visible or interactive. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none invisible absolute flex w-max items-center gap-0.5"
+          ref={measureRef}
+        >
+          {facets.map((value) => (
+            <span
+              className={cn(CHIP_CLASS, INACTIVE_CHIP_CLASS)}
+              data-facet-option={value}
+              data-facet-option-disabled={
+                disabledFacets?.has(value) ? "" : undefined
+              }
+              key={value}
+              {...{ [INLINE_OVERFLOW_ITEM_ATTRIBUTE]: value }}
+            >
+              {labels[value]}
+            </span>
+          ))}
+          {/* Mirrors the overflow trigger's square footprint (Button
             `size="icon-sm"`) so the fit calculation reserves the right
             amount of room for it. */}
-        <span className="size-8 shrink-0 rounded-lg border sm:size-7" />
+          <span
+            className="size-8 shrink-0 rounded-lg border sm:size-7"
+            {...{ [INLINE_OVERFLOW_TRIGGER_ATTRIBUTE]: "" }}
+          />
+        </div>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import type {
   AuditAction,
   AuditRecorder,

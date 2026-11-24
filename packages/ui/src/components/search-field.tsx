@@ -15,6 +15,7 @@ type SearchFieldProps = Omit<
   onValueChange: (value: string) => void;
   /** Accessible name of the clear button; the package ships no copy. */
   clearLabel: string;
+  disabledReason?: string | undefined;
   /** Class for the outer group (width, margins). */
   groupClassName?: string;
 };
@@ -29,6 +30,7 @@ const SearchField = ({
   value,
   onValueChange,
   clearLabel,
+  disabledReason,
   groupClassName,
   className,
   onKeyDown,
@@ -60,6 +62,7 @@ const SearchField = ({
           aria-label={clearLabel}
           // A disabled field cannot be edited, so it cannot be cleared either.
           disabled={props.disabled}
+          disabledReason={disabledReason}
           onClick={() => {
             onValueChange("");
           }}

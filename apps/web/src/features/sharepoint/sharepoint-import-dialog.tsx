@@ -586,6 +586,7 @@ const SharepointBrowser = ({
         </DialogClose>
         <Button
           disabled={selection.length === 0}
+          disabledReason={t("common.selectAtLeastOneFile")}
           loading={importFiles.isPending}
           onClick={() => importFiles.mutate(selection)}
         >

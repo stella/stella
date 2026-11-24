@@ -9,13 +9,13 @@ import { and, eq, inArray, ne } from "drizzle-orm";
 
 import { LIST_SOURCE_KINDS } from "@stll/api-contract/list-source-kinds";
 
-import type { Transaction } from "@/api/db/root";
 import {
   entities,
   legalListItemSources,
   legalLists,
   legalListSourceDocuments,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { factTier, sourceKindOrDefault } from "@/api/lib/lists/source-kind";
 import type { FactTier, SourceKind } from "@/api/lib/lists/source-kind";

@@ -4,7 +4,7 @@ import * as v from "valibot";
 import { parsePlainDate, Temporal, todayFor } from "@stll/time";
 
 import type { TranslationKey } from "@/i18n/types";
-import type { WebApiRoutes } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api-contract";
 import { APIError } from "@/lib/errors/api";
 
 const TIME_POLICY_FIELDS = [

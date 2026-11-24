@@ -21,6 +21,11 @@ export default {
           "Bounded favicon cache and miss admission; outages return no icon without an origin lease.",
       },
       {
+        path: "apps/api/src/lib/auth/sign-in-code-delivery-store.ts",
+        reason:
+          "Which sign-in attempt sent a code mail and whether it bounced, kept for the code's lifetime; an outage answers every follow-up with no report and the sign-in proceeds.",
+      },
+      {
         path: "apps/api/src/lib/legal-search/public-read-continuation-store.ts",
         reason:
           "Continuation leases and stored answers of public-law reads, all reproducible from the request; an outage trips a breaker and each read answers on its own task.",
@@ -47,6 +52,11 @@ export default {
       },
       {
         path: "apps/api/src/lib/document-deadline-scout-worker.ts",
+        reason:
+          "Queue transport: worker owns its dedicated blocking connection.",
+      },
+      {
+        path: "apps/api/src/lib/uploads/document-naming/worker.ts",
         reason:
           "Queue transport: worker owns its dedicated blocking connection.",
       },

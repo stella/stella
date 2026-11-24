@@ -9,6 +9,7 @@
  */
 
 import { isTaggedError, Result } from "better-result";
+import { DrizzleError, DrizzleQueryError } from "drizzle-orm";
 
 const GENERIC_ERROR_NAME = "Error";
 
@@ -44,6 +45,24 @@ const constructorNameOf = (error: Error): unknown => {
     ? safeReflectGet(constructorValue, "name")
     : undefined;
 };
+
+/**
+ * Dependency error classes named by their prototype. Their published builds
+ * declare the class beside a computed static member, and the bundle's
+ * minifier renames such a class despite keeping names, so the constructor
+ * identifier cannot vouch for the declared name. The prototype is fixed by
+ * the import and cannot be written by a caller.
+ */
+const PROTOTYPE_NAMED_ERROR_CLASSES: ReadonlyMap<unknown, string> = new Map<
+  unknown,
+  string
+>([
+  [DrizzleError.prototype, "DrizzleError"],
+  [DrizzleQueryError.prototype, "DrizzleQueryError"],
+]);
+
+const ownPrototypeOf = (error: Error): unknown =>
+  Result.try((): unknown => Object.getPrototypeOf(error)).unwrapOr(undefined);
 
 const hasNumericSuffix = (value: string, prefix: string): boolean => {
   if (!value.startsWith(prefix)) {
@@ -83,10 +102,13 @@ export const errorClassName = (error: Error): string =>
     taggedName: taggedErrorName(error),
     name: safeReflectGet(error, "name"),
     constructorName: constructorNameOf(error),
+    prototype: ownPrototypeOf(error),
   });
 
 type ErrorClassNameParts = {
   taggedName: string | undefined;
+  /** The error's own prototype, when the reader has it. */
+  prototype?: unknown;
   name: unknown;
   constructorName: unknown;
 };
@@ -99,9 +121,14 @@ export const errorClassNameFrom = ({
   taggedName,
   name,
   constructorName,
+  prototype,
 }: ErrorClassNameParts): string => {
   if (taggedName !== undefined) {
     return taggedName;
+  }
+  const prototypeName = PROTOTYPE_NAMED_ERROR_CLASSES.get(prototype);
+  if (prototypeName !== undefined) {
+    return prototypeName;
   }
 
   const declaredName = declaredErrorName(name);

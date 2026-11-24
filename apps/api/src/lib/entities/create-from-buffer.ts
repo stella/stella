@@ -5,11 +5,11 @@ import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, fields, pendingUploads, workspaces } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   captureError,
   createErrorCapture,
@@ -99,8 +99,10 @@ type CreateEntityFromBufferInput = {
   scanWarnings?: string[] | undefined;
   provenance?:
     | {
-        type: "email_attachment";
-        attachmentId: string;
+        /** A part of another stored file, such as an email's attachment. */
+        type: "file_part";
+        /** The part's address, such as `attachment:0`. */
+        part: string;
         sourceEntityId: SafeId<"entity">;
         sourceFieldId: SafeId<"field">;
         sourceWorkspaceId: SafeId<"workspace">;
@@ -292,7 +294,9 @@ export const createEntityFromBuffer = async ({
   let writeState: "confirmed" | "uncertain" = "uncertain";
 
   try {
-    const cleanupObject = async (): Promise<boolean> => {
+    const cleanupObject = async (): Promise<
+      { status: "deleted" } | { status: "failed" }
+    > => {
       const cleanup = Result.flatten(
         await Result.tryPromise({
           try: async () =>
@@ -315,16 +319,16 @@ export const createEntityFromBuffer = async ({
             objectKey: s3Key,
           }),
         );
-        return false;
+        return { status: "failed" };
       }
-      return true;
+      return { status: "deleted" };
     };
 
     const settleUncertainWrite = async () => {
       // A transport failure is ambiguous: S3 may publish after this immediate
       // delete completes. Keep the intent recoverable so later sweeps remove
       // any late publication; the heartbeat stops in finally below.
-      const cleanupSucceeded = await cleanupObject();
+      const cleanupSucceeded = (await cleanupObject()).status === "deleted";
       if (publication.type === "service") {
         const settled = await settleObjectCleanupIntentsAfterWriter({
           safeDb,
@@ -592,7 +596,7 @@ export const createEntityFromBuffer = async ({
       });
     } catch (error) {
       if (!transactionState.durableReferencePrepared) {
-        const cleanupSucceeded = await cleanupObject();
+        const cleanupSucceeded = (await cleanupObject()).status === "deleted";
         if (publication.type === "service") {
           const settled = await settleObjectCleanupIntentsAfterWriter({
             safeDb,

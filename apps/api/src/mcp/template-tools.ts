@@ -5,12 +5,12 @@ import * as v from "valibot";
 import { isActionAdmissionCode } from "@stll/api-contract/action-admission";
 import { displayNameSchema } from "@stll/api-contract/display-name";
 
-import type { Transaction } from "@/api/db/root";
 import { entities, templates } from "@/api/db/schema";
 import type {
   TemplatePersistenceDiagnostics,
   TemplatePersistenceResult,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
 import {
   decodeTemplateListCursor,

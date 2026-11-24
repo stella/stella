@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { lazy, Suspense } from "react";
 
 import { useQuery, useSuspenseInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -11,9 +11,9 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { CopyControl } from "@/components/copy-control";
+import { DATA_BOX_DIRECTION_LABEL_KEYS } from "@/features/correspondence/data-box-direction";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
-import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 import {
   CORRESPONDENCE_PAGE_SIZE,
@@ -34,16 +34,16 @@ import {
   useRotateCorrespondenceAddress,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/correspondence";
 
-// An incoming message is the default and needs no label.
-const DIRECTION_LABEL_KEYS = {
-  organization_sender: "correspondence.dataBox.sent",
-  organization_recipient: null,
-  unknown: "correspondence.dataBox.directionUnknown",
-} as const satisfies Record<DataBoxDirectionBasis, TranslationKey | null>;
+// Only a certified email record needs its chip; its strings load with it.
+const CertifiedEmailKindChip = lazy(async () => {
+  const m =
+    await import("@/features/correspondence/certified-email/certified-email-envelope");
+  return { default: m.CertifiedEmailKindChip };
+});
 
 const DataBoxDirectionLabel = ({ basis }: { basis: DataBoxDirectionBasis }) => {
   const t = useTranslations();
-  const label = DIRECTION_LABEL_KEYS[basis];
+  const label = DATA_BOX_DIRECTION_LABEL_KEYS[basis];
   return label === null ? null : (
     <span className="text-muted-foreground text-xs">{t(label)}</span>
   );
@@ -118,6 +118,19 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
     );
   }
 
+  const resolveAddressChangeDisabledReason = () => {
+    if (rotate.isPending || revoke.isPending) {
+      return t("common.saving");
+    }
+    if (isPending) {
+      return t("common.loading");
+    }
+    if (isError) {
+      return t("common.loadFailed");
+    }
+    return t("correspondence.addressNotConfigured");
+  };
+
   return (
     <section className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
       <div className="min-w-0">
@@ -146,6 +159,7 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
               isError ||
               data.status === "unconfigured"
             }
+            disabledReason={resolveAddressChangeDisabledReason()}
             onClick={() => rotate.mutate({ workspaceId })}
             size="sm"
             variant="outline"
@@ -160,6 +174,7 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
           <Button
             className="min-h-11"
             disabled={revoke.isPending || rotate.isPending}
+            disabledReason={t("common.saving")}
             onClick={() => revoke.mutate({ workspaceId })}
             size="sm"
             variant="ghost"
@@ -225,6 +240,11 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
                       basis={item.dataBox.directionBasis}
                     />
                   )}
+                  {item.channel === "pec" && (
+                    <Suspense fallback={null}>
+                      <CertifiedEmailKindChip kind={item.certifiedEmail.kind} />
+                    </Suspense>
+                  )}
                 </span>
                 {item.channel === "data_box" ? (
                   <TruncatedText className="text-muted-foreground mt-1 text-xs">
@@ -274,6 +294,7 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
           <Button
             className="min-h-11"
             disabled={isFetchingNextPage}
+            disabledReason={t("common.loading")}
             onClick={() =>
               detached(fetchNextPage(), "correspondence.fetch-next-page")
             }

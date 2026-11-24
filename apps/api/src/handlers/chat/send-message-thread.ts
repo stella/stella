@@ -9,7 +9,7 @@ import {
   type ChatRunTarget,
 } from "@stll/api-contract/chat-run-target";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import {
   EMPTY_CHAT_HISTORY_SNAPSHOT,

@@ -16,7 +16,7 @@ import { REVIEW_FLAG } from "@stll/api-contract";
 import type { ConditionNode } from "@stll/conditions";
 import { Temporal } from "@stll/time";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { cellMetadata, entities, properties } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
 import { fieldRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";

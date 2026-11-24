@@ -375,6 +375,19 @@ const FlowEditorForm = (props: FlowEditorFormProps) => {
     addStep,
     handleSave,
   } = useFlowEditorDraft(props);
+  const resolveWorkflowSaveDisabledReason = () => {
+    if (saving) {
+      return t("common.saving");
+    }
+    if (reloadState === "loading") {
+      return t("common.loading");
+    }
+    if (!canSave) {
+      return t("errors.api.forbidden");
+    }
+    return t("flows.reloadToSave");
+  };
+
   return (
     <fieldset
       disabled={saving}
@@ -419,6 +432,7 @@ const FlowEditorForm = (props: FlowEditorFormProps) => {
                     </AlertDialogClose>
                     <Button
                       disabled={saving}
+                      disabledReason={t("common.saving")}
                       onClick={() => {
                         detached(handleDelete(), "flow-editor.delete");
                       }}
@@ -437,6 +451,7 @@ const FlowEditorForm = (props: FlowEditorFormProps) => {
                 reloadState === "loading" ||
                 conflict === "version"
               }
+              disabledReason={resolveWorkflowSaveDisabledReason()}
               loading={saving}
               onClick={() => {
                 detached(handleSave(), "flow-editor.save");
@@ -453,6 +468,7 @@ const FlowEditorForm = (props: FlowEditorFormProps) => {
             <p>{t("errors.apiCodes.versionConflict")}</p>
             <Button
               disabled={reloadState === "loading"}
+              disabledReason={t("common.loading")}
               loading={reloadState === "loading"}
               variant="outline"
               onClick={() => {
@@ -1390,6 +1406,7 @@ const StepsSection = ({
   onAdd: (kind: FlowStepKind) => void;
 }) => {
   const t = useTranslations();
+  const format = useFormatter();
   const atLimit = steps.length >= MAX_FLOW_STEPS;
 
   return (
@@ -1431,6 +1448,9 @@ const StepsSection = ({
           return (
             <Button
               disabled={atLimit}
+              disabledReason={t("flows.validation.tooManySteps", {
+                max: format.number(MAX_FLOW_STEPS),
+              })}
               key={kind}
               onClick={() => onAdd(kind)}
               size="sm"
@@ -1489,6 +1509,7 @@ const FlowStepEditor = ({
           <Button
             aria-label={t("common.moveUp")}
             disabled={index === 0}
+            disabledReason={t("common.alreadyFirst")}
             onClick={onMoveUp}
             size="icon-sm"
             type="button"
@@ -1499,6 +1520,7 @@ const FlowStepEditor = ({
           <Button
             aria-label={t("common.moveDown")}
             disabled={index === total - 1}
+            disabledReason={t("common.alreadyLast")}
             onClick={onMoveDown}
             size="icon-sm"
             type="button"

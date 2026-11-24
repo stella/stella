@@ -380,6 +380,7 @@ const sanitizeBodyHtml = (
     body: { type: "html", html },
     inlineImages: [],
     attachments: [],
+    certified: null,
   } satisfies ParsedEmail;
   // A MIME part's closing line break is transport framing, not content; the
   // text body is trimmed the same way, so both formats hash alike.
@@ -912,6 +913,7 @@ export const parseEmailFile = async ({
 type CorrespondenceContent = CorrespondenceMessageContent & {
   channel: "email";
   dataBox: null;
+  certifiedEmail: null;
 };
 
 type CorrespondenceFromMessageOptions<
@@ -937,6 +939,7 @@ export const correspondenceFromMessage = <
   const content: CorrespondenceContent = {
     channel: "email",
     dataBox: null,
+    certifiedEmail: null,
     direction: message.from === sender ? "out" : "in",
     from: { address: message.from, name: null },
     to: message.to.map((address) => ({ address, name: null })),

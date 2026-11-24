@@ -25,6 +25,7 @@ import {
 } from "@/api/lib/db/account-profile-projection";
 import { projectFeedbackReportForAccountExport } from "@/api/lib/db/feedback-report-projection";
 import { projectProfessionalUseAcceptanceForAccountExport } from "@/api/lib/db/professional-use-projection";
+import { toLearnedFixesAccountExport } from "@/api/lib/dictation/learned-fixes";
 
 /**
  * Binds each exported table to the projection its owning domain already
@@ -40,6 +41,7 @@ export const ACCOUNT_EXPORT_PROJECTIONS = {
   legal_reader_answers: projectPrivateReaderAnswerForAccountExport,
   saved_time_narratives: toSavedTimeNarrativeItem,
   billing_draft_user_settings: toBillingDraftSettingsAccountExport,
+  dictation_learned_fixes: toLearnedFixesAccountExport,
   template_lookup_format_user_defaults: toUserDefaultAccountExport,
   chat_threads: toPersonalChatThreadResponse,
   chat_messages: toPersonalChatMessageResponse,

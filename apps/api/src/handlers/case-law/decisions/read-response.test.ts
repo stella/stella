@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
+import { DECISION_BODY_TEXT_SOURCE } from "@stll/api-contract/case-law-body-source";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import type { ExtractionWarnings } from "@stll/api-contract/case-law-extraction-warnings";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
@@ -107,6 +108,7 @@ const decisionWithText = (text: string) => {
     projectionDigest: text,
     documentAstSource: "row",
     sections: [{ index: 0, type: "header", title: text, blockIndices: [0] }],
+    bodySource: { textSource: DECISION_BODY_TEXT_SOURCE.HOST },
     sourceUrl: text,
     sourceAttributionUrl: text,
     sourceLanguages: Array.from({ length: 256 }, () => text),

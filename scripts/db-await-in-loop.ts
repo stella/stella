@@ -117,6 +117,7 @@ const API_PROJECTS = [
 // whether or not its type still mentions Drizzle.
 const API_HANDLE_DECLARATION_FILES = [
   "apps/api/src/db/root.ts",
+  "apps/api/src/db/types.ts",
   "apps/api/src/db/safe-db.ts",
   "apps/api/src/db/scoped.ts",
   "apps/api/src/lib/case-law-ingestion-db.ts",

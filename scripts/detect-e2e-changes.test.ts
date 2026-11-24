@@ -1467,7 +1467,7 @@ describe("detect-e2e-changes", () => {
     const command = isRecord(scripts) ? scripts["test:e2e"] : undefined;
     // Playwright fails when no test matches unless told otherwise.
     expect(command).toBe(
-      "playwright test --config e2e/playwright.config.ts --project landing",
+      "bun --bun playwright test --config e2e/playwright.config.ts --project landing",
     );
     const config = readFileSync(
       path.join(

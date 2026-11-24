@@ -170,7 +170,9 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_AGENT_ID_JAG",
   "FEATURE_AI_MEMORY",
   "FEATURE_CHAT_TURN_HANDOVER",
+  "FEATURE_CITATION_CHECK",
   "FEATURE_CONFLICT_CHECK",
+  "FEATURE_ENTERPRISE_SSO",
   "FEATURE_FILE_USAGE_LIMITS",
   "FEATURE_FREE_TIER",
   "FEATURE_GOVERNED_WORKFLOW",
@@ -193,6 +195,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FRONTEND_URL",
   "GOOGLE_AUTH_CLIENT_ID",
   "GOTENBERG_URL",
+  "HEIC_PREVIEW_DECODING_ENABLED",
   "HOSTED_USAGE_PROVIDER_BASE_URL",
   "HUGGINGFACE_BASE_URL",
   "INBOUND_MAIL_BUCKET",
@@ -607,6 +610,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "HTTPS, a loopback sidecar, or a private deployment network.",
   GOTENBERG_USERNAME:
     "Username for the Gotenberg sidecar's HTTP basic authentication.",
+  HEIC_PREVIEW_DECODING_ENABLED:
+    "Make previews of HEIC/HEIF photos by decoding them on this server, in " +
+    "the sandboxed PDF worker. Off, such a photo shows that it has no " +
+    "preview and still downloads as uploaded.",
   INGESTION_USER_AGENT:
     "User-Agent sent to court publishers. Defaults to a stella product " +
     "identifier with the build version and a contact URL; set it so a fork " +
@@ -735,6 +742,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Show governed work-obligation fields on a task (owner, acknowledgement, hard deadline).",
   VITE_FEATURE_INBOX:
     "Show the Inbox and the notification bell for everyone, without the per-browser beta toggle.",
+  VITE_FEATURE_PDF_AREA_REDACTION:
+    "Let readers mark areas of a PDF page that the anonymized PDF download blacks out.",
   VITE_POSTHOG_KEY:
     'Public PostHog project key. The placeholder "phc_" disables local capture.',
   VITE_POSTHOG_LOCAL_DEBUG:
@@ -925,8 +934,10 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   FEATURE_ACTION_COST_RECORDS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_AGENT_ID_JAG: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_AI_MEMORY: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_CITATION_CHECK: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_CONFIGURED_ACCESS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_CONFLICT_CHECK: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_ENTERPRISE_SSO: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_FILE_USAGE_LIMITS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_FREE_TIER: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
@@ -964,6 +975,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   GOTENBERG_PASSWORD: ENV_CREDENTIAL_KIND.credential,
   GOTENBERG_URL: ENV_CREDENTIAL_KIND.notCredential,
   GOTENBERG_USERNAME: ENV_CREDENTIAL_KIND.notCredential,
+  HEIC_PREVIEW_DECODING_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   HOSTED_USAGE_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
   HOSTED_USAGE_PROVIDER_API_KEY: ENV_CREDENTIAL_KIND.credential,
   HOSTED_USAGE_PROVIDER_API_VERSION: ENV_CREDENTIAL_KIND.notCredential,
@@ -1130,6 +1142,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   VITE_FEATURE_FOLIO_COLLAB: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_INBOX: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_FEATURE_PDF_AREA_REDACTION: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_USAGE: ENV_CREDENTIAL_KIND.notCredential,
   VITE_POSTHOG_HOST: ENV_CREDENTIAL_KIND.notCredential,
   VITE_POSTHOG_KEY: ENV_CREDENTIAL_KIND.notCredential,
@@ -1466,6 +1479,16 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "STELLA_SIDECAR_VERSION",
   "STELLA_TIMING",
   "STELLA_WEB_PORT",
+  // Web runtime only, read once at start: how many requests the server
+  // renderer handles at once before it answers 503 with Retry-After (a whole
+  // number from 2 to 1024; unset uses the default sized for a 512 MB-1 GB
+  // task). apps/web/src/ssr-admission.ts parses it.
+  "STELLA_WEB_SSR_MAX_IN_FLIGHT",
+  // Set by the API for each extraction worker run, never deployed: the code
+  // page a tie between readings of a ZIP archive's undeclared file names
+  // goes to (`ibm437` or `ibm852`). apps/api/src/lib/files/zip-name-code-page.ts
+  // reads it in the worker.
+  "STELLA_ZIP_NAME_CODE_PAGE",
   "XDG_CACHE_HOME",
   "XDG_CONFIG_HOME",
   "XDG_STATE_HOME",
@@ -1564,6 +1587,9 @@ export const TOOLING_ENV_KEYS = new Set([
   // file their tests name; the fake Codex app server also logs its CODEX_HOME.
   "FAKE_HARNESS_LOG",
   "CODEX_HOME",
+  "GEMINI_HOME",
+  "STELLA_MCP_URL",
+  "STELLA_MCP_TOKEN",
   // The skill folder the fake harness CLIs' `reads_skill` scenario touches.
   "FAKE_SKILL_PATH",
   // The pause between a paced fake Codex scenario's outputs.
@@ -1649,9 +1675,10 @@ export const TOOLING_ENV_KEYS = new Set([
   // catalogs.
   "CLI_CONTRACT_BASE_CATALOG",
   "CLI_CONTRACT_HEAD_CATALOG",
-  // The scan engine drift check builds into a scratch directory and compares it.
+  // The WebAssembly drift checks build into a scratch directory and compare it.
   "SCAN_ENGINE_WASM_OUT_DIR",
-  // The recording reader drift check does the same.
+  "HEIC_DECODER_WASM_OUT_DIR",
+  "PST_READER_WASM_OUT_DIR",
   "RECORDING_WASM_OUT_DIR",
   // The manual checks workflow passes its inputs and result files to its scripts.
   "CHECK_CHECK",
@@ -1751,6 +1778,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "API_TEST_ARTIFACT_DIR",
   "API_TEST_CHILD_TIMEOUT_MS",
   // Resolved weight identity changes the Turbo test cache key.
+  // Selects a single API lint shard (`lib`, `handlers`, or `rest`) for parallel CI runs.
+  "API_LINT_SHARD",
   "API_TEST_DURATIONS_HASH",
   // Optional main-measured weights path; content identity is keyed separately.
   "API_TEST_DURATIONS_FILE",
@@ -1801,6 +1830,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "EXPECTED_COMMIT",
   // Flake trial ownership and isolated subprocess fixture handoffs.
   "FLAKE_CHILD_RECORD",
+  // The test job's clock (epoch ms); the repeats end inside the job's timeout.
+  "CI_T0",
   "FLAKE_GATE_FIXTURE_PRELOADED",
   "FLAKE_GATE_TRIAL",
   // Quarantine preload: report directory for its JSON lines; registry path override for fixture trees.
@@ -1998,14 +2029,19 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_DEV_INSTANCE",
   "STELLA_DOCKER_KEEPER_LABEL",
   "STELLA_INFRA_OFFSET",
+  // The image a Postgres suite's own throwaway cluster runs: CI's service image.
+  "STELLA_ISOLATED_POSTGRES_IMAGE",
   // Prevents recursive spawning of native file-mode test subprocesses.
   "STELLA_LOCAL_FILE_CHILD",
   "STELLA_PORT_OFFSET",
   "STELLA_QUERY_PLAN_SCALE_PROFILE",
   // Development render census: verify React Refresh with isolated temporary modules.
   "STELLA_RENDER_CENSUS_HMR",
+  // Opt-in conversion tests against a running document converter.
+  "STELLA_RUN_CONVERTER_TESTS",
   "STELLA_RUN_CORPUS_ENGINE_TESTS",
   "STELLA_RUN_POSTGRES_TESTS",
+  "QUERY_PERF_SHARD",
   "STELLA_RUN_QUERY_PERF_TESTS",
   "STELLA_RUN_VALKEY_TESTS",
   "STELLA_SEED_ID_NAMESPACE",

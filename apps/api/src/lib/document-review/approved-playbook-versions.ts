@@ -10,8 +10,8 @@
 
 import { and, desc, eq, inArray } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { playbookDefinitionVersions } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { PlaybookVersionForPin } from "@/api/lib/document-review/resolve-playbook-pin";
 import { PLAYBOOK_VERSION_SOURCE } from "@/api/lib/workflow/playbook-positions";

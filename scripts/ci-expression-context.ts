@@ -155,7 +155,6 @@ const DEFAULT_CHANGED_FILE_OUTPUTS = {
   route_smoke_required: "false",
   route_tree_required: "false",
   scan_engine_wasm_required: "false",
-  recording_wasm_required: "false",
   service_suites_pr_required: "false",
   stack_redaction_browsers_required: "false",
   valkey_suites_required: "false",

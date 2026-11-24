@@ -19,6 +19,11 @@ type PublicCorpusAdmissionOptions = {
   totalCapacity: number;
   /** Waiters beyond this are refused at once, so a burst cannot pile up. */
   maxWaiters: number;
+  /**
+   * Waiters of one class beyond this are refused at once, so a class whose
+   * requests wait long cannot fill the queue the other classes wait in.
+   */
+  classMaxWaitersOf: (routeClass: AdmissionClass) => number;
 };
 
 type Waiter = {
@@ -39,6 +44,7 @@ export const createPublicCorpusAdmission = ({
   capacityOf,
   totalCapacity,
   maxWaiters,
+  classMaxWaitersOf,
 }: PublicCorpusAdmissionOptions) => {
   const classActive = new Map<AdmissionClass, number>();
   const clientActive = new Map<string, number>();
@@ -105,7 +111,12 @@ export const createPublicCorpusAdmission = ({
     if (hasRoom(routeClass, client)) {
       return grant(routeClass, client);
     }
-    if (waitMs <= 0 || waiters.length >= maxWaiters) {
+    if (
+      waitMs <= 0 ||
+      waiters.length >= maxWaiters ||
+      waiters.filter((waiter) => waiter.routeClass === routeClass).length >=
+        classMaxWaitersOf(routeClass)
+    ) {
       return null;
     }
     const { promise, resolve } = Promise.withResolvers<AdmissionLease | null>();

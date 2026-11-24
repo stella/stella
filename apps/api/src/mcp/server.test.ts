@@ -857,6 +857,7 @@ describe("handleMcpHttpRequest", () => {
               userDeleted: false,
               enrolledFeatureIds: [],
               professionalUse: { status: "required" },
+              ssoAccess: { status: "not_evaluated" },
             }) satisfies NonNullable<
               Awaited<ReturnType<ResolveCredentialMemberAuthorization>>
             >,
@@ -912,6 +913,7 @@ describe("handleMcpHttpRequest", () => {
               userDeleted: false,
               enrolledFeatureIds: [],
               professionalUse: { status: "required" },
+              ssoAccess: { status: "not_evaluated" },
             }) satisfies NonNullable<
               Awaited<ReturnType<ResolveCredentialMemberAuthorization>>
             >,
@@ -990,6 +992,7 @@ describe("handleMcpHttpRequest", () => {
               userDeleted: false,
               enrolledFeatureIds: [],
               professionalUse: { status: "required" },
+              ssoAccess: { status: "not_evaluated" },
             }) satisfies NonNullable<
               Awaited<ReturnType<ResolveCredentialMemberAuthorization>>
             >,

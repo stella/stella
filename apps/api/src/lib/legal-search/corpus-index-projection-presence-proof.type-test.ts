@@ -1,4 +1,4 @@
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import { CorpusProjectionPresenceProof } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { proveAcceptedCorpusProjectionAppendsTx } from "@/api/lib/legal-search/corpus-index-projection-store";
 

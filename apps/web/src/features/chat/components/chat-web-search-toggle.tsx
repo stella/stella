@@ -6,12 +6,12 @@ import { Button } from "@stll/ui/button";
 import { GlobeIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
+import type { ChatThreadRef } from "@/features/chat/chat-thread-ref-types";
 import {
   invalidateChatThread,
   matchesChatThread,
 } from "@/features/chat/queries";
 import { api } from "@/lib/api";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
@@ -131,6 +131,7 @@ export const ChatWebSearchToggle = ({
       className="text-muted-foreground hover:text-foreground"
       data-pressed={enabled ? "" : undefined}
       disabled={disabled}
+      disabledReason={t("common.loading")}
       onClick={() => {
         setWebSearch(!enabled);
       }}

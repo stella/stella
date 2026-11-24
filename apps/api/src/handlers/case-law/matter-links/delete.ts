@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { caseLawMatterLinks } from "@/api/db/schema";
 import { status } from "@/api/http/status";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";

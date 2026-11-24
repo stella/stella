@@ -210,6 +210,33 @@ const mirrorAvailable = async (reference: string) => {
   return available;
 };
 
+/**
+ * Dockerfile stages a trusted build takes from a private registry copy instead
+ * of building them. Forks and builds outside CI build the stage as written.
+ * The OCR models stage downloads the same files that
+ * .github/workflows/publish-ocr-models.yml packed into this image.
+ */
+const TRUSTED_STAGE_IMAGES: Record<string, Record<string, string>> = {
+  "apps/api/Dockerfile": {
+    "ocr-models":
+      "ghcr.io/stella/ocr-models@sha256:d4f3491cd4afd36b13d8a768964075971ce991667a5fb0f0de219495bef255ce",
+  },
+};
+
+const stageImageAvailable = async (stage: string, reference: string) => {
+  const child = Bun.spawn(
+    ["docker", "buildx", "imagetools", "inspect", reference],
+    { stdout: "ignore", stderr: "ignore" },
+  );
+  const available = (await child.exited) === 0;
+  if (!available) {
+    process.stderr.write(
+      `Stage image unavailable: ${reference}; building the ${stage} stage\n`,
+    );
+  }
+  return available;
+};
+
 export const dockerfileImages = (text: string) => [
   ...new Set(
     text.split("\n").flatMap((line) => {
@@ -389,9 +416,12 @@ if (import.meta.main) {
       `${JSON.stringify(await composeImageOverrides(await Bun.file(file).text(), resolve, path.dirname(path.resolve(file))))}\n`,
     );
   } else if (mode === "--resolve") {
-    for (const { source, name } of mirrorImages) {
-      process.stdout.write(`${name}=${await resolve(source)}\n`);
-    }
+    const lines = await Promise.all(
+      mirrorImages.map(
+        async ({ source, name }) => `${name}=${await resolve(source)}\n`,
+      ),
+    );
+    process.stdout.write(lines.join(""));
   } else if (
     mode === "--build-contexts" ||
     mode === "--build" ||
@@ -423,6 +453,14 @@ if (import.meta.main) {
         }
       } else if (resolved !== image) {
         contexts.push(`${image}=docker-image://${resolved}`);
+      }
+    }
+    if (enabled && mode !== "--pull") {
+      const stages = TRUSTED_STAGE_IMAGES[path.normalize(file)] ?? {};
+      for (const [stage, reference] of Object.entries(stages)) {
+        if (await stageImageAvailable(stage, reference)) {
+          contexts.push(`${stage}=docker-image://${reference}`);
+        }
       }
     }
     if (mode === "--build-contexts") {

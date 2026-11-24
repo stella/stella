@@ -23,17 +23,22 @@ import {
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
 import { envBase } from "@/api/env-base";
+import { decisionDateSortKeySql } from "@/api/lib/case-law/decision-date-order";
 import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
-  decisionBucketSqlFor,
+  SITEMAP_RANGE_ROWS,
+  SITEMAP_RANGE_ROWS_CEILING,
+} from "@/api/lib/case-law/sitemap-shard-budget";
+import {
   SITEMAP_ALL_BUCKET,
-  SITEMAP_MULTILINGUAL_URL_WEIGHT,
+  SITEMAP_RANGES_PER_MONTH_MAX,
   SITEMAP_UNDATED_MONTH,
   SITEMAP_UNDATED_YEAR,
   sitemapDocumentRepresentativeFor,
-  sitemapHasLanguageAlternatesFor,
   sitemapLastModifiedSqlFor,
+  sitemapRangeBucket,
+  sitemapRangeKeySql,
 } from "@/api/lib/case-law/sitemap-shard-sql";
 import {
   lockCaseLawSitemapRefreshCursor,
@@ -47,15 +52,6 @@ import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionScopedBatch } from "@/api/lib/db/transitions";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
-
-/** Growth between refreshes must not consume the protocol ceiling. */
-export const SITEMAP_SHARD_URL_HEADROOM = 1000;
-/** Language alternates reserve extra URL weight within the protocol ceiling. */
-export const SITEMAP_SHARD_SPLIT_THRESHOLD =
-  LIMITS.caseLawSitemapShardUrlLimit - SITEMAP_SHARD_URL_HEADROOM;
-
-export const shouldSplitSitemapMonth = (weightedUrlCount: number): boolean =>
-  weightedUrlCount > SITEMAP_SHARD_SPLIT_THRESHOLD;
 
 /**
  * A change-log row whose year and month are this asks for a whole country,
@@ -198,25 +194,49 @@ const monthRangeSql = ({ year, month }: SitemapMonth): SQL => {
 };
 
 /**
- * One month's published decisions among the redistributable sources, counted
- * per bucket with their newest `updated_at`. Retirement uses the durable
- * transaction boundary captured before this count; later commits stay queued.
- * An empty month answers one row with no bucket.
+ * One month cut into ranges, with each range's listed decisions counted and
+ * their newest `updated_at`. Retirement uses the durable transaction boundary
+ * captured before this count; later commits stay queued. An empty month
+ * answers one row with no range.
  *
- * The country and the month's date range are the leading keys of
- * `case_law_decisions_sitemap_month_published_idx` and the publication gate is
- * its partial predicate, so the count reads that month's index range and
- * nothing else. The language group probes read
+ * A range starts at every `SITEMAP_RANGE_ROWS`th published decision of the
+ * month in the order of `case_law_decisions_country_date_published_idx`
+ * (date, then id), so the read serving it scans at most that many decisions
+ * of every source, listed or not, whatever the month's size. A month with
+ * fewer has one range, `all`. Range 0 starts at the month's start and the last
+ * ends at its end.
+ *
+ * Both passes read `case_law_decisions_sitemap_month_published_idx`, whose
+ * leading keys are the country and the date range and whose partial predicate
+ * is the publication gate: the cut sorts each day's ids as the index hands
+ * the days over, and the count reads the language group's probes off
  * `case_law_decisions_language_group_published_idx`, so neither touches the
  * heap of an all-visible page. Exported for the plan contract.
  */
-export const sitemapMonthCountSql = (target: SitemapMonth): SQL => sql`
-  WITH counts AS (
+export const sitemapMonthCountSql = (target: SitemapMonth): SQL =>
+  // sql-perf-allow: index case_law_decisions_sitemap_month_published_idx, bounded by one country-month range of it in both passes
+  sql`
+  WITH positioned AS (
     SELECT
-      ${decisionBucketSqlFor(caseLawDecisions)} AS bucket,
+      ${decisionDateSortKeySql(caseLawDecisions.decisionDate)} AS start_date,
+      ${caseLawDecisions.id} AS start_id,
+      row_number() OVER (
+        ORDER BY ${caseLawDecisions.decisionDate}, ${caseLawDecisions.id}
+      ) AS position
+    FROM ${caseLawDecisions}
+    WHERE ${publishedCaseLawDecisionFor(caseLawDecisions)}
+      AND ${caseLawDecisions.country} = ${target.country}
+      AND ${monthRangeSql(target)}
+  ), cuts AS MATERIALIZED (
+    SELECT ((position - 1) / ${SITEMAP_RANGE_ROWS}::int)::int AS range, start_date, start_id
+    FROM positioned
+    WHERE position > 1 AND (position - 1) % ${SITEMAP_RANGE_ROWS}::int = 0
+  ), starts AS MATERIALIZED (
+    SELECT array_agg(ROW(start_date, start_id) ORDER BY range) AS keys FROM cuts
+  ), counts AS (
+    SELECT
+      coalesce(width_bucket(${sitemapRangeKeySql(caseLawDecisions)}, (SELECT keys FROM starts)), 0) AS range,
       count(*)::int AS total,
-      sum(CASE WHEN ${sitemapHasLanguageAlternatesFor(caseLawDecisions)}
-        THEN ${SITEMAP_MULTILINGUAL_URL_WEIGHT} ELSE 1 END)::int AS weighted_total,
       (extract(epoch FROM ${sitemapLastModifiedSqlFor(caseLawDecisions)}) * 1000)::float8 AS last_modified_ms
     FROM ${caseLawDecisions}
     INNER JOIN ${caseLawSources} ON ${caseLawSources.id} = ${caseLawDecisions.sourceId}
@@ -227,9 +247,14 @@ export const sitemapMonthCountSql = (target: SitemapMonth): SQL => sql`
       AND ${sitemapDocumentRepresentativeFor(caseLawDecisions)}
     GROUP BY 1
   )
-  SELECT counts.bucket, counts.total, counts.weighted_total, counts.last_modified_ms
+  SELECT counts.range, counts.total, counts.last_modified_ms,
+    (SELECT count(*)::int FROM cuts) AS cuts,
+    range_start.start_date::text AS start_date, range_start.start_id::text AS start_id,
+    range_end.start_date::text AS end_date, range_end.start_id::text AS end_id
   FROM (VALUES (1)) AS empty_month(value)
   LEFT JOIN counts ON true
+  LEFT JOIN cuts AS range_start ON range_start.range = counts.range
+  LEFT JOIN cuts AS range_end ON range_end.range = counts.range + 1
 `;
 
 /**
@@ -306,54 +331,65 @@ const sitemapCountriesSql = (): SQL => sql`
   WHERE countries.country IS NOT NULL
 `;
 
+const rangeKeyText = v.nullable(v.string());
 const monthCountRowSchema = v.union([
   v.object({
-    bucket: v.string(),
+    range: v.pipe(v.number(), v.safeInteger(), v.minValue(0)),
     total: v.pipe(v.number(), v.safeInteger(), v.minValue(1)),
-    weighted_total: v.pipe(v.number(), v.safeInteger(), v.minValue(1)),
     last_modified_ms: v.number(),
+    cuts: v.pipe(v.number(), v.safeInteger(), v.minValue(0)),
+    start_date: rangeKeyText,
+    start_id: rangeKeyText,
+    end_date: rangeKeyText,
+    end_id: rangeKeyText,
   }),
   v.object({
-    bucket: v.null(),
+    range: v.null(),
     total: v.null(),
-    weighted_total: v.null(),
     last_modified_ms: v.null(),
+    // Every decision the cut counted can belong to a source the sitemap
+    // does not list.
+    cuts: v.pipe(v.number(), v.safeInteger(), v.minValue(0)),
+    start_date: v.null(),
+    start_id: v.null(),
+    end_date: v.null(),
+    end_id: v.null(),
   }),
 ]);
-type BucketCount = {
-  bucket: string;
-  total: number;
-  weighted_total: number;
-  last_modified_ms: number;
-};
+type MonthCountRow = v.InferOutput<typeof monthCountRowSchema>;
+type RangeCount = Extract<MonthCountRow, { range: number }>;
 
 const monthRowSchema = v.object({ year: v.string(), month: v.string() });
 
 type ShardRow = typeof caseLawSitemapShards.$inferInsert;
 
+/** Both halves of a range bound, or neither. */
+const rangeBound = (
+  date: string | null,
+  id: string | null,
+): { date: string; id: string } | null => {
+  if (date === null && id === null) {
+    return null;
+  }
+  if (date === null || id === null) {
+    return panic("A sitemap range bound must name both its date and its id");
+  }
+  return { date, id };
+};
+
 /**
- * A month becomes one `all` row, or one row per bucket once it passes the
- * split threshold; an empty month becomes no rows.
+ * A month becomes one `all` row when it was not cut, or one row per range
+ * that lists a decision; an empty month becomes no rows.
  */
 const shardRows = (
   target: SitemapMonth,
-  buckets: readonly BucketCount[],
+  ranges: readonly RangeCount[],
 ): ShardRow[] => {
-  let monthTotal = 0;
-  let monthWeightedTotal = 0;
-  let monthLastModifiedMs = 0;
-  for (const { total, weighted_total, last_modified_ms } of buckets) {
-    monthTotal += total;
-    monthWeightedTotal += weighted_total;
-    monthLastModifiedMs = Math.max(monthLastModifiedMs, last_modified_ms);
-  }
-  if (monthTotal === 0) {
-    return [];
-  }
   const { country, year, month } = target;
-  if (shouldSplitSitemapMonth(monthWeightedTotal)) {
-    return buckets.map(({ bucket, total, last_modified_ms }) => ({
-      bucket,
+  const cuts = ranges.at(0)?.cuts ?? 0;
+  if (cuts === 0) {
+    return ranges.map(({ total, last_modified_ms }) => ({
+      bucket: SITEMAP_ALL_BUCKET,
       country,
       lastModifiedAt: new Date(last_modified_ms),
       month,
@@ -361,16 +397,27 @@ const shardRows = (
       year,
     }));
   }
-  return [
-    {
-      bucket: SITEMAP_ALL_BUCKET,
+  if (cuts >= SITEMAP_RANGES_PER_MONTH_MAX) {
+    return panic(
+      `Sitemap month ${country} ${year}/${month} needs more ranges than its names hold`,
+    );
+  }
+  return ranges.map((range) => {
+    const start = rangeBound(range.start_date, range.start_id);
+    const end = rangeBound(range.end_date, range.end_id);
+    return {
+      bucket: sitemapRangeBucket(range.range),
       country,
-      lastModifiedAt: new Date(monthLastModifiedMs),
+      lastModifiedAt: new Date(range.last_modified_ms),
       month,
-      total: monthTotal,
+      rangeEndDate: end?.date ?? null,
+      rangeEndId: end?.id ?? null,
+      rangeStartDate: start?.date ?? null,
+      rangeStartId: start?.id ?? null,
+      total: range.total,
       year,
-    },
-  ];
+    };
+  });
 };
 
 const targetConditions = (target: SitemapMonth) =>
@@ -398,8 +445,8 @@ const recountMonth = async (
   const counted = executedRows(
     await tx.execute(sitemapMonthCountSql(target)),
   ).map((row) => v.parse(monthCountRowSchema, row));
-  const buckets = counted.flatMap((row) => (row.bucket === null ? [] : [row]));
-  const rows = shardRows(target, buckets);
+  const ranges = counted.flatMap((row) => (row.range === null ? [] : [row]));
+  const rows = shardRows(target, ranges);
   await tx
     .delete(caseLawSitemapShards)
     .where(
@@ -983,7 +1030,7 @@ export const refreshCaseLawSitemapShards = async (
 
   const extent = await readPublicShardExtent(laneDb, budget);
   if (
-    extent.largestShard > LIMITS.caseLawSitemapShardUrlLimit ||
+    extent.largestShard > SITEMAP_RANGE_ROWS_CEILING ||
     extent.shards > LIMITS.caseLawSitemapIndexEntryLimit - 1
   ) {
     logger.error("case_law.sitemap.shard_refresh_over_capacity", extent);

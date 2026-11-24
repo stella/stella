@@ -328,6 +328,9 @@ export const ENUM_COLUMN_ROLES = {
   desktop_runners: {
     connection: ATTRIBUTE,
   },
+  document_naming_runs: {
+    entity_feature_gate: ATTRIBUTE,
+  },
   document_processing_runs: {
     entity_feature_gate: ATTRIBUTE,
     kind: ATTRIBUTE,
@@ -376,6 +379,12 @@ export const ENUM_COLUMN_ROLES = {
     entity_feature_gate: ATTRIBUTE,
   },
   entity_version_ai_summaries: {
+    entity_feature_gate: ATTRIBUTE,
+  },
+  entity_version_minhash_bands: {
+    entity_feature_gate: ATTRIBUTE,
+  },
+  entity_version_minhash_signatures: {
     entity_feature_gate: ATTRIBUTE,
   },
   entity_versions: {
@@ -599,6 +608,10 @@ export const ENUM_COLUMN_ROLES = {
   organization_data_exports: {
     version_scope: ATTRIBUTE,
   },
+  // Either requirement may follow the other at any time.
+  organization_sso_policy: {
+    requirement: ATTRIBUTE,
+  },
   organization_settings: {
     ai_billing_drafts_mode: ATTRIBUTE,
     document_processing_mode: ATTRIBUTE,
@@ -662,6 +675,10 @@ export const ENUM_COLUMN_ROLES = {
   },
   session: {
     refresh_mode: ATTRIBUTE,
+  },
+  session_sign_ins: {
+    location_kind: ATTRIBUTE,
+    review: LIFECYCLE,
   },
   signal_events: {
     type: ATTRIBUTE,

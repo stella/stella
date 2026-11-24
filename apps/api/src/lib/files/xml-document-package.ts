@@ -12,7 +12,10 @@ export type DocumentXmlNode = {
   namespaceURI: string;
   attributes: ReadonlyMap<string, string>;
   children: DocumentXmlNode[];
+  /** The element's own text, its runs joined, without its children's. */
   text: string;
+  /** Text runs and child elements in document order, for mixed content. */
+  content: (string | DocumentXmlNode)[];
 };
 
 export type DocumentXmlReader = (
@@ -37,7 +40,16 @@ const MAX_XML_DEPTH = 96;
 // Feed the parser in slices so a failure recorded by a callback stops the read
 // within one slice instead of after the whole part.
 const XML_WRITE_CHUNK_CHARS = 64 * 1024;
-const LEGACY_XML_ENCODINGS = ["gb18030", "windows-1254"] as const;
+// Single-byte Central European encodings appear in signed filings from
+// Czech, Slovak and Polish authorities.
+const LEGACY_XML_ENCODINGS = [
+  "gb18030",
+  "windows-1254",
+  "windows-1250",
+  "windows-1252",
+  "iso-8859-1",
+  "iso-8859-2",
+] as const;
 const DECLARED_ENCODING = /\bencoding\s*=\s*["']([\w.:-]{1,40})["']/u;
 
 const unreadableXml = () =>
@@ -45,7 +57,7 @@ const unreadableXml = () =>
 
 // The declaration is ASCII-compatible for both legacy encodings. Honor only
 // explicit declarations; malformed UTF-8 must never silently change alphabets.
-const xmlEncoding = (bytes: Uint8Array) => {
+export const xmlEncoding = (bytes: Uint8Array) => {
   if (bytes[0] === 0xff && bytes[1] === 0xfe) {
     return "utf-16le";
   }
@@ -130,10 +142,12 @@ const parseXmlPart = (
       ),
       children: [],
       text: "",
+      content: [],
     };
     const parent = stack.at(-1);
     if (parent) {
       parent.children.push(node);
+      parent.content.push(node);
     } else {
       read.root = node;
     }
@@ -143,6 +157,13 @@ const parseXmlPart = (
     const node = stack.at(-1);
     if (node && !read.failure) {
       node.text += value;
+      const last = node.content.length - 1;
+      const previous = node.content[last];
+      if (typeof previous === "string") {
+        node.content[last] = previous + value;
+      } else {
+        node.content.push(value);
+      }
     }
   };
   parser.on("text", append);
@@ -206,6 +227,19 @@ export const openXmlDocumentPackage = async (
   };
   return Result.ok(readXml);
 };
+
+/**
+ * Parses one XML document that is not inside a ZIP package, such as an XML
+ * dossier with embedded documents. The same node and depth budgets apply; the
+ * byte budget is the caller's, which has already bounded the file.
+ */
+export const parseStandaloneXml = (
+  bytes: Uint8Array,
+  maxBytes: number,
+): Result<DocumentXmlNode, DocumentPackageError> =>
+  bytes.byteLength > maxBytes
+    ? Result.err(limitError())
+    : parseXmlPart(bytes, { remaining: MAX_XML_NODES });
 
 export const createDocumentText = (maxChars: number) => {
   let text = "";

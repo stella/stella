@@ -168,6 +168,12 @@ const SHAPE_EXCLUSIONS: readonly ShapeExclusion[] = [
       "The narrative language only steers activity billing drafts and is set through the matter capability.",
   },
   {
+    capability: "matters.update",
+    field: "documentNamingEnabled",
+    reason:
+      "The automatic naming opt-in is a matter setting, set through the matter capability.",
+  },
+  {
     capability: "tasks.create",
     field: "parentId",
     reason: "Task hierarchy is managed separately.",

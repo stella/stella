@@ -12,7 +12,7 @@
 import { panic, Result } from "better-result";
 import type * as v from "valibot";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import type { ReferenceSource } from "@/api/handlers/document-reviews/reference-position-normalizer";
 import { resolveReviewSelection } from "@/api/handlers/document-reviews/review-selection";
 import type { proposeReviewPositionsBodySchema } from "@/api/handlers/document-reviews/schemas";

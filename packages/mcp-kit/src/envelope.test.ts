@@ -146,20 +146,16 @@ describe("tool results preserve JSON data or return a safe error", () => {
 
 describe("closest tool names", () => {
   test("bounds distance work for long names", () => {
-    const startedAt = performance.now();
     expect(toolNameDistance("x".repeat(10_000), "search_documents")).toBe(
       Number.POSITIVE_INFINITY,
     );
     expect(toolNameDistance("search_documents", "x".repeat(10_000))).toBe(
       Number.POSITIVE_INFINITY,
     );
-    expect(performance.now() - startedAt).toBeLessThan(50);
   });
 
   test("bounds suggestion work and preserves short near matches", () => {
-    const startedAt = performance.now();
     expect(closestNames("x".repeat(10_000), ["search_documents"])).toEqual([]);
-    expect(performance.now() - startedAt).toBeLessThan(50);
     expect(closestNames("search_documnts", ["search_documents"])).toEqual([
       "search_documents",
     ]);

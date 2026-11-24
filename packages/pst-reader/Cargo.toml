@@ -1,0 +1,56 @@
+[package]
+name = "stella-pst-reader"
+version = "0.0.1"
+edition = "2024"
+description = "Bounded Outlook PST/OST mailbox reader"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# The test-only PST assembler, also used by the fixture and measurement
+# examples. Never part of the WebAssembly build.
+assemble = []
+
+[[example]]
+name = "write-fixtures"
+path = "examples/write_fixtures.rs"
+required-features = ["assemble"]
+
+[[example]]
+name = "large-mailbox"
+path = "examples/large_mailbox.rs"
+required-features = ["assemble"]
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+cast_lossless = "warn"
+dbg_macro = "deny"
+implicit_clone = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
+uninlined_format_args = "warn"
+unwrap_used = "deny"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.rustdoc]
+bare_urls = "deny"
+broken_intra_doc_links = "deny"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+incremental = false
+
+[dependencies]
+outlook-pst = "=1.2.0"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "=0.2.130"

@@ -3,7 +3,7 @@ import * as v from "valibot";
 import { isEntityKind } from "@stll/api-contract";
 import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import type { DocumentProcessingStatus } from "@/api/db/schema";
 import { searchProvenanceAnswer } from "@/api/handlers/search/provenance-error";
 import { status } from "@/api/http/status";

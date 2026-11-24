@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { entityVersions, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";

@@ -17,7 +17,6 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { ShieldAlertIcon, Trash2Icon } from "@stll/ui/icons";
-import { Label } from "@stll/ui/label";
 import {
   List,
   ListGroup,
@@ -37,6 +36,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import {
+  SettingsRow,
+  settingsRowIds,
+  SettingsSection,
+} from "@stll/ui/settings";
 import { Skeleton } from "@stll/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@stll/ui/toggle-group";
 
@@ -62,9 +66,10 @@ import type {
   ActivityRetention,
   ActivitySettingsSnapshot,
 } from "./activity-types";
-import { CaptureDetailsControl } from "./ActivityCaptureDetails";
+import { TitlesAccessStrip } from "./ActivityCaptureDetails";
 import type { CaptureDetailsCommand } from "./ActivityCaptureDetails";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
+import { aiDraftsChoice } from "./billing-draft-logic";
 import { useBillingDraftSettings } from "./billing-draft-settings";
 import {
   CAPTURE_MODES,
@@ -74,6 +79,7 @@ import {
   isBrowserApp,
 } from "./capture-modes";
 import type { CaptureMode, CaptureModeCommand } from "./capture-modes";
+import { DraftConsent } from "./DraftConsent";
 
 type ActivitySettingsView =
   | { type: "loading" }
@@ -248,41 +254,95 @@ type SettingsSectionProps = {
   settings: ActivitySettingsSnapshot;
 };
 
+const CAPTURE_DETAILS_ROW_ID = "activity-capture-details";
+
+/** Why details are not recorded although the setting is on, under its row:
+ * the Activity window's own strip when Accessibility access is missing. */
+const DetailsAccessFooter = ({
+  access,
+  onCommand,
+}: {
+  access: ActivitySettingsSnapshot["detailsAccess"];
+  onCommand: RunCommand;
+}) => {
+  const t = useTranslations("activity");
+  switch (access) {
+    case "disabled":
+    case "ready":
+      return null;
+    case "accessibilityRequired":
+      return <TitlesAccessStrip onCommand={onCommand} />;
+    case "unavailable":
+      return (
+        <p className="text-muted-foreground text-xs">
+          {t("detailsUnavailable")}
+        </p>
+      );
+    default:
+      access satisfies never;
+      return panic("Unhandled activity details access");
+  }
+};
+
 const RecordingSettings = ({ onCommand, settings }: SettingsSectionProps) => {
   const t = useTranslations("activity");
+  const detectCallsIds = settingsRowIds("activity-detect-calls");
+  const retentionIds = settingsRowIds("activity-retention");
+  const captureDetailsIds = settingsRowIds(CAPTURE_DETAILS_ROW_ID);
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        <Label className="items-start gap-2" htmlFor="activity-detect-calls">
-          <Checkbox
-            checked={settings.detectCalls}
-            id="activity-detect-calls"
-            onCheckedChange={(enabled) =>
-              onCommand("activity_set_detect_calls", { enabled })
-            }
+    <SettingsSection>
+      <SettingsRow
+        description={t("detectCallsDescription")}
+        id="activity-detect-calls"
+        interaction="label"
+        title={t("detectCalls")}
+      >
+        <Checkbox
+          aria-describedby={detectCallsIds.description}
+          aria-labelledby={detectCallsIds.label}
+          id={detectCallsIds.control}
+          checked={settings.detectCalls}
+          onCheckedChange={(enabled) =>
+            onCommand("activity_set_detect_calls", { enabled })
+          }
+        />
+      </SettingsRow>
+      <SettingsRow
+        description={t(
+          settings.captureDetails
+            ? "captureDetailsDescription"
+            : "captureDetailsOffDescription",
+        )}
+        footer={
+          <DetailsAccessFooter
+            access={settings.detailsAccess}
+            onCommand={onCommand}
           />
-          <span>{t("detectCalls")}</span>
-        </Label>
-        <p className="text-muted-foreground text-xs">
-          {t("detectCallsDescription")}
-        </p>
-      </div>
+        }
+        id={CAPTURE_DETAILS_ROW_ID}
+        interaction="label"
+        title={t("captureDetails")}
+      >
+        <Checkbox
+          aria-describedby={captureDetailsIds.description}
+          aria-labelledby={captureDetailsIds.label}
+          id={captureDetailsIds.control}
+          checked={settings.captureDetails}
+          onCheckedChange={(enabled) =>
+            onCommand("activity_set_capture_details", { enabled })
+          }
+        />
+      </SettingsRow>
+      {/* stella AI drafts send the titles recorded above, so they follow. */}
       <BillingDraftConsentSettings />
-      <CaptureDetailsControl onCommand={onCommand} settings={settings} />
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-sm" id="activity-retention-label">
-          {t("retention")}
-        </span>
+      <SettingsRow id="activity-retention" title={t("retention")}>
         <Select
           onValueChange={(retention) => {
             onCommand("activity_set_retention", { retention });
           }}
           value={settings.retention}
         >
-          <SelectTrigger
-            aria-labelledby="activity-retention-label"
-            className="w-36"
-          >
+          <SelectTrigger aria-labelledby={retentionIds.label} className="w-36">
             <SelectValue />
           </SelectTrigger>
           <SelectPopup>
@@ -293,8 +353,8 @@ const RecordingSettings = ({ onCommand, settings }: SettingsSectionProps) => {
             ))}
           </SelectPopup>
         </Select>
-      </div>
-    </section>
+      </SettingsRow>
+    </SettingsSection>
   );
 };
 
@@ -443,6 +503,7 @@ const CaptureModeList = ({
       <div>
         <Button
           disabled={deletionDisabled}
+          disabledReason={t(BLOCKED_DELETION_NOTICE[settings.deletionStatus])}
           onClick={onDeleteDay}
           variant="outline"
         >
@@ -557,6 +618,7 @@ const HistoryDeletion = ({
           disabled={
             deletionDisabled && settings.deletionStatus !== "unreadable"
           }
+          disabledReason={t(BLOCKED_DELETION_NOTICE[settings.deletionStatus])}
           onClick={onDeleteAll}
           variant="destructive"
         >
@@ -574,13 +636,13 @@ const HistoryDeletion = ({
 type OtherAccountHistoryProps = {
   days: number;
   onDelete: () => void;
-  deletionDisabled: boolean;
+  disabledReason: string | undefined;
 };
 
 const OtherAccountHistory = ({
   days,
   onDelete,
-  deletionDisabled,
+  disabledReason,
 }: OtherAccountHistoryProps) => {
   const t = useTranslations("activity");
   if (days === 0) {
@@ -591,7 +653,12 @@ const OtherAccountHistory = ({
       <p className="text-muted-foreground text-xs">
         {t("otherAccountHistory", { days })}
       </p>
-      <Button disabled={deletionDisabled} onClick={onDelete} variant="outline">
+      <Button
+        disabled={disabledReason !== undefined}
+        disabledReason={disabledReason}
+        onClick={onDelete}
+        variant="outline"
+      >
         {t("deleteOtherAccountHistory")}
       </Button>
     </div>
@@ -951,10 +1018,12 @@ export const ActivitySettingsPane = () => {
   const otherAccountHistory = (
     <OtherAccountHistory
       days={settings.otherAccountHistoryDays}
-      deletionDisabled={
+      disabledReason={
         deletionDisabled &&
         settings.deletionStatus !== "keyMissing" &&
         settings.deletionStatus !== "unreadable"
+          ? t(BLOCKED_DELETION_NOTICE[settings.deletionStatus])
+          : undefined
       }
       onDelete={() =>
         setDialog({
@@ -1029,70 +1098,118 @@ export const ActivitySettingsPane = () => {
   );
 };
 
+/** Withdraw while consent is given; send the withdrawal again once the server
+ *  did not confirm it; nothing while it is on its way. */
+const WithdrawConsentButton = ({
+  consent,
+  onWithdraw,
+}: {
+  consent: "granted" | "pending-withdrawal" | "withdrawal-unconfirmed";
+  onWithdraw: () => void;
+}) => {
+  const t = useTranslations("activity");
+  switch (consent) {
+    case "granted":
+      return (
+        <Button onClick={onWithdraw} variant="outline">
+          {t("billingDraftsWithdraw")}
+        </Button>
+      );
+    case "withdrawal-unconfirmed":
+      return (
+        <Button onClick={onWithdraw} variant="outline">
+          {t("retry")}
+        </Button>
+      );
+    case "pending-withdrawal":
+      return null;
+    default:
+      consent satisfies never;
+      return panic("Unhandled stella AI draft withdrawal");
+  }
+};
+
 /**
  * Consent to stella AI drafts, kept on the server. Withdrawing stays possible
  * whenever consent exists, even where the firm has drafting off; it applies
  * in this window at once and is sent again until the server confirms it.
+ * Without consent, Settings asks as a time entry card does.
  */
 const BillingDraftConsentSettings = () => {
   const t = useTranslations("activity");
   const { settings, setConsent, setPreference } = useBillingDraftSettings(true);
-  if (settings.type === "loading" || settings.type === "unavailable") {
-    return null;
-  }
+  // A read that failed is said, not hidden as a choice that does not apply.
   if (settings.type === "failed") {
     return (
-      <p className="text-muted-foreground text-xs">
-        {t("billingDraftsUnavailable")}
-      </p>
+      <SettingsRow
+        description={t("billingDraftsUnavailable")}
+        title={t("billingDraftsTitle")}
+      />
     );
   }
-  const { consent } = settings;
-  const withdrawable =
-    consent === "granted" || consent === "pending-withdrawal";
-  if (!withdrawable && settings.mode === "off") {
+  if (settings.type !== "ready" || aiDraftsChoice(settings) === "notOffered") {
     return null;
   }
-  return (
-    <div className="flex flex-col gap-2">
-      <span className="text-sm">{t("billingDraftsTitle")}</span>
-      <p className="text-muted-foreground text-xs">
-        {withdrawable ? t("billingDraftsGranted") : t("billingDraftsRevoked")}
-      </p>
-      {consent === "pending-withdrawal" ? (
-        <p className="text-muted-foreground text-xs" role="status">
-          {t("billingDraftsWithdrawPending")}
-        </p>
-      ) : null}
-      {settings.preference === null ? null : (
-        <div className="flex flex-col gap-1">
-          <span className="text-muted-foreground text-xs">
-            {t("billingDraftsPreference")}
-          </span>
-          <bdi className="text-sm text-pretty">{settings.preference}</bdi>
-          <Button
-            className="self-start"
-            onClick={() => {
-              void setPreference(null);
-            }}
-            size="xs"
-            variant="ghost"
+  const { consent } = settings;
+  switch (consent) {
+    case "granted":
+    case "pending-withdrawal":
+    case "withdrawal-unconfirmed":
+      return (
+        <>
+          <SettingsRow
+            description={
+              consent === "granted"
+                ? t("billingDraftsGranted")
+                : t("billingDraftsWithdrawPending")
+            }
+            title={t("billingDraftsTitle")}
           >
-            {t("billingDraftsForgetPreference")}
-          </Button>
-        </div>
-      )}
-      {consent === "granted" ? (
-        <Button
-          className="self-start"
-          onClick={() => {
-            void setConsent("revoked");
-          }}
-          variant="outline"
-        >
-          {t("billingDraftsWithdraw")}
-        </Button>
-      ) : null}
-    </div>
-  );
+            <WithdrawConsentButton
+              consent={consent}
+              onWithdraw={() => {
+                void setConsent("revoked");
+              }}
+            />
+          </SettingsRow>
+          {settings.preference === null ? null : (
+            <SettingsRow
+              depth="nested"
+              description={<bdi>{settings.preference}</bdi>}
+              title={t("billingDraftsPreference")}
+            >
+              <Button
+                onClick={() => {
+                  void setPreference(null);
+                }}
+                variant="outline"
+              >
+                {t("billingDraftsForgetPreference")}
+              </Button>
+            </SettingsRow>
+          )}
+        </>
+      );
+    case "unavailable":
+    case "revoked":
+    case "pending-grant":
+    case "grant-refused":
+      return (
+        <SettingsRow
+          description={t("billingDraftsRevoked")}
+          footer={
+            <DraftConsent
+              onAllow={() => {
+                void setConsent("granted");
+              }}
+              status={consent}
+            />
+          }
+          title={t("billingDraftsTitle")}
+        />
+      );
+    default:
+      consent satisfies never;
+      return panic("Unhandled stella AI draft consent");
+  }
 };

@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 
 import { SHAREPOINT_REFUSAL_CODE } from "@stll/api-contract/sharepoint";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { sharepointConnections } from "@/api/db/schema";
 import { assertSharepointConnectionEnabled } from "@/api/handlers/sharepoint/enablement";
 import type { SharepointGraphError } from "@/api/handlers/sharepoint/graph-client";

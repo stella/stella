@@ -353,6 +353,7 @@ export const ReviewBar = ({
       <Button
         aria-label={t("common.previous")}
         disabled={activeIndex <= 0}
+        disabledReason={t("docxReview.firstChangeReached")}
         onClick={goPrev}
         size="icon-sm"
         tooltip={`${t("common.previous")} · ${formatHotkeyForPlatform(
@@ -366,6 +367,7 @@ export const ReviewBar = ({
       <Button
         aria-label={t("common.next")}
         disabled={activeIndex >= changes.length - 1}
+        disabledReason={t("docxReview.lastChangeReached")}
         onClick={goNext}
         size="icon-sm"
         tooltip={`${t("common.next")} · ${formatHotkeyForPlatform(
@@ -430,6 +432,7 @@ export const ReviewBar = ({
               hotkeyPlatform,
             )}`}
             size="xs"
+            applyingReason={t("docxReview.applyingReviewDecision")}
             state={activeAction === "busy" ? "applying" : "pending"}
           />
         )}

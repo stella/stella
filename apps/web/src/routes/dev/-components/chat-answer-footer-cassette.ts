@@ -1,4 +1,4 @@
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools-types";
 
 // A short finished turn whose footer holds everything a footer can: the turn's
 // duration, the actions, and a source the answer consulted without linking.

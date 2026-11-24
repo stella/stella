@@ -117,6 +117,7 @@ export const SuggestionsQueue = (props: SuggestionsQueueProps) => {
             <div className="flex shrink-0 gap-2">
               <Button
                 disabled={reviewSuggestion.isPending}
+                disabledReason={t("suggestions.reviewing")}
                 onClick={() =>
                   reviewSuggestion.mutate({
                     memoryId: suggestion.id,
@@ -130,6 +131,7 @@ export const SuggestionsQueue = (props: SuggestionsQueueProps) => {
               </Button>
               <Button
                 disabled={reviewSuggestion.isPending}
+                disabledReason={t("suggestions.reviewing")}
                 onClick={() =>
                   reviewSuggestion.mutate({
                     memoryId: suggestion.id,
@@ -147,6 +149,7 @@ export const SuggestionsQueue = (props: SuggestionsQueueProps) => {
       {hasNextPage ? (
         <Button
           disabled={isFetchingNextPage}
+          disabledReason={commonT("loading")}
           onClick={() => {
             detached(fetchNextPage(), "memory-suggestions.fetch-next-page");
           }}

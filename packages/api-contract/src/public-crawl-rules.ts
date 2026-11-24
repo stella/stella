@@ -3,14 +3,18 @@ export const PUBLIC_CRAWL_AGENT_CLASSIFICATIONS = {
     "GPTBot",
     "ClaudeBot",
     "CCBot",
-    "Google-Extended",
     "Applebot-Extended",
     "meta-externalagent",
     "Diffbot",
     "ImagesiftBot",
     "Amazonbot",
   ],
-  search: ["OAI-SearchBot", "Claude-SearchBot", "PerplexityBot"],
+  search: [
+    "OAI-SearchBot",
+    "Claude-SearchBot",
+    "PerplexityBot",
+    "Google-Extended",
+  ],
 } as const satisfies Record<"training" | "search", readonly string[]>;
 
 export const PUBLIC_ROBOTS_DENIED_USER_AGENTS =

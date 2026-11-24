@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import type { Result } from "better-result";
 
-import type { SafeDbError } from "@/api/db/safe-db";
+import type { SafeDbError } from "@/api/db/safe-db-types";
 import type { ExcludableChatToolName } from "@/api/handlers/chat/tools/excluded-chat-tools";
 import { toExcludedChatTools } from "@/api/handlers/chat/tools/excluded-chat-tools";
 import type { RejectedChatRead } from "@/api/handlers/chat/tools/execute/documented-chat-reads";

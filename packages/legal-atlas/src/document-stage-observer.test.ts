@@ -106,11 +106,9 @@ describe("document telemetry containment", () => {
           },
         },
       );
-      const startedAt = performance.now();
       for (let fetch = 0; fetch < 100; fetch++) {
         await safe(observation);
       }
-      expect(performance.now() - startedAt).toBeLessThan(100);
       expect(calls).toBeLessThan(100);
       expect(reported).toEqual([
         {

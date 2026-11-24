@@ -250,7 +250,6 @@ const DECLARED_NORMAL_PLAN_CHANGES = new Set([
   "e2e-production-shard",
   "web-build",
   "scan-engine-wasm-drift",
-  "recording-wasm-drift",
 ]);
 // Jobs that now also run at fast depth: on a pull request they run, and every
 // other event keeps the plan its former predicate had at full depth.
@@ -396,7 +395,6 @@ test("off and unset preserve today's job plan across every event and depth", asy
     "e2e-production-shard",
     "web-build",
     "scan-engine-wasm-drift",
-    "recording-wasm-drift",
   ]);
   expect([...DECLARED_EVERY_DEPTH_CHANGES]).toEqual([
     "e2e-landing",
@@ -738,25 +736,4 @@ test("scan engine builds offline on affected PRs in both coverage profiles", () 
     }
   }
   expect(fastJobs(workflow)).toContain("scan-engine-wasm-drift");
-});
-
-test("recording reader builds offline on affected PRs in both coverage profiles", () => {
-  const condition = workflow.jobs["recording-wasm-drift"]?.if;
-  if (!condition) {
-    throw new Error("Missing recording reader condition");
-  }
-  for (const profile of ["normal-v1", "pilot-fast-v1"]) {
-    for (const required of ["false", "true"]) {
-      for (const trusted of ["false", "true"]) {
-        const context = conditionContext(profile, "pull_request", "fast");
-        context.values["needs.ci-plan.outputs.recording_wasm_required"] =
-          required;
-        context.values["needs.ci-plan.outputs.trusted"] = trusted;
-        expect(evaluate(condition, context)).toBe(
-          required === "true" && trusted === "true",
-        );
-      }
-    }
-  }
-  expect(fastJobs(workflow)).toContain("recording-wasm-drift");
 });

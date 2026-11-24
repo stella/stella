@@ -13,8 +13,8 @@ import { sql } from "drizzle-orm";
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
 
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
-import type { Transaction } from "@/api/db/root";
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
+import type { Transaction } from "@/api/db/types";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { backfillEntrypoints } from "@/api/scripts/backfill-entrypoint";
 

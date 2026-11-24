@@ -4,12 +4,12 @@ import type { PgInsertValue } from "drizzle-orm/pg-core";
 import type { ReviewDecision } from "@stll/api-contract/review-decision";
 import { REVIEW_STATUS_DECISION } from "@stll/api-contract/review-decision";
 
-import type { Transaction } from "@/api/db/root";
 import {
   legalListItemSourceDecisions,
   legalListItemSources,
   type LegalListSourceVerificationStatus,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 
 type DecisionEvent = typeof legalListItemSourceDecisions.$inferInsert;

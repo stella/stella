@@ -2,13 +2,13 @@ import { panic } from "better-result";
 import { and, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisions,
   caseLawDecisionSourceIdentities,
   caseLawDecisionSupplements,
   caseLawHeldDecisionAttachments,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
 import {

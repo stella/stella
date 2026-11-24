@@ -9,7 +9,6 @@ import {
 } from "@stll/invoicing";
 import type { VatRatePeriod } from "@stll/invoicing";
 
-import type { Transaction } from "@/api/db/root";
 import {
   contacts,
   organizationSettings,
@@ -17,6 +16,7 @@ import {
   vatRates,
   workspaces,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readBounded } from "@/api/lib/db/read-bounded";
 

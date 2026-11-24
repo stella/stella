@@ -282,19 +282,24 @@ test("nested metadata fields stay out of the visual census and every loader modu
 test("selects loader, transitive, spec, and shared harness changes", () => {
   const inventory = readPlaygroundInventory(ROOT);
   const pageCrop = "apps/web/e2e/ui-playground/page-crop.geometry.spec.ts";
-  const registry = "apps/web/e2e/ui-playground/registry.geometry.spec.ts";
+  const registryShards = [
+    "apps/web/e2e/ui-playground/registry-part-1.geometry.spec.ts",
+    "apps/web/e2e/ui-playground/registry-part-2.geometry.spec.ts",
+    "apps/web/e2e/ui-playground/registry-part-3.geometry.spec.ts",
+    "apps/web/e2e/ui-playground/registry-part-4.geometry.spec.ts",
+  ];
   expect(
     selectGeometrySpecs(
       ["apps/web/src/routes/dev/-components/page-crop-playground.tsx"],
       ROOT,
     ),
-  ).toEqual([pageCrop, registry]);
+  ).toEqual([pageCrop, ...registryShards]);
   expect(
     selectGeometrySpecs(
       ["apps/web/src/components/pdf/page-organizer-crop.logic.ts"],
       ROOT,
     ),
-  ).toEqual([pageCrop, registry]);
+  ).toEqual([pageCrop, ...registryShards]);
   expect(selectGeometrySpecs(["apps/api/src/index.ts"], ROOT)).toEqual([]);
   expect(selectGeometrySpecs([pageCrop], ROOT)).toEqual([pageCrop]);
   expect(
@@ -1121,7 +1126,9 @@ test("a JSX transform warning keeps the closure exact", () => {
     );
     expect(
       staticImportClosure("apps/web/src/routes/dev/fixture.tsx", fixture.root),
-    ).toMatchObject({ complete: true });
+    ).toMatchObject({
+      complete: true,
+    });
     expect(
       selectGeometrySpecs(["apps/web/src/routes/dev/cell.tsx"], fixture.root),
     ).toEqual([fixture.spec]);

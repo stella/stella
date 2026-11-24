@@ -971,6 +971,19 @@ const CreateContactDialog = ({
     });
   };
 
+  const resolveExtractedContactImportDisabledReason = () => {
+    if (extraction.review.isImporting) {
+      return t("clauses.importing");
+    }
+    if (extraction.review.validation.status === "pending") {
+      return t("common.verifying");
+    }
+    if (extraction.review.validation.status === "failed") {
+      return extraction.review.validation.message;
+    }
+    return t("contacts.importStudio.noReadyContacts");
+  };
+
   return (
     <Dialog
       onOpenChange={(nextOpen) => {
@@ -1286,6 +1299,7 @@ const CreateContactDialog = ({
             {extraction.stage === "review" && (
               <Button
                 disabled={!extraction.canConfirm}
+                disabledReason={resolveExtractedContactImportDisabledReason()}
                 loading={extraction.isConfirming}
                 onClick={() =>
                   detached(

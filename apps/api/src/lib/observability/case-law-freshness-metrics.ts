@@ -1,12 +1,12 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawSources,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { readServedCorpusIndexGenerationsTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";

@@ -20,6 +20,7 @@ export const DESIGN_SYSTEM_CONSUMER_FILES = [
   "apps/playground/src/**/*.{ts,tsx}",
   "packages/chat/src/**/*.{ts,tsx}",
   "packages/decision-reader/src/**/*.{ts,tsx}",
+  "packages/markdown-editor/src/**/*.{ts,tsx}",
   "packages/workspace-ui/src/**/*.{ts,tsx}",
 ] as const;
 

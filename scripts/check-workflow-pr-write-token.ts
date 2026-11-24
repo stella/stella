@@ -224,12 +224,6 @@ export const WORKFLOW_PRIVILEGE_ALLOWLIST = {
     requires: CI_PLAN_TRUSTED,
     privileges: ACTIONS_WRITE,
   },
-  ".github/workflows/ci.yml:recording-wasm-drift": {
-    reason: CI_PLAN_REASON,
-    covers: PULL_REQUEST_DEPENDABOT,
-    requires: CI_PLAN_TRUSTED,
-    privileges: ACTIONS_WRITE,
-  },
   ".github/workflows/ci.yml:service-suites": {
     reason: CI_PLAN_REASON,
     covers: PULL_REQUEST_DEPENDABOT,

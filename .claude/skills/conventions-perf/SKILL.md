@@ -18,18 +18,18 @@ up as a reviewable diff in the PR. The guards include:
   per-route request manifest, waterfall depth, per-request repeat budget, and
   per-request DB query budget.
 - **Startup bundle gates** (`scripts/bundle-baseline.ts --check` over
-  `scripts/bundle-startup-gates.ts`, budget `initial` in
-  `scripts/bundle-baseline.json`, ledger `scripts/bundle-startup-ledger.json`):
+  `scripts/bundle-startup-gates.ts`, budgets `initial` and `pending` in
+  `scripts/bundle-baseline.json`):
   blocking in the web-build CI job, on the build's Start manifest and hidden
   sourcemaps. The initial graph is the manifest's `__root__` preloads, which
   carry the route tree and every route file. Four gates: its gzip may grow at
   most 8 KiB over the committed budget; `*.pending.tsx` views in it stay under
-  6 KiB minified each and 150 KiB together; it holds no page code (`*.page.tsx`
-  or route-local `-*-page.tsx` modules, `?tsr-shared=1` modules, or route-file
-  code only the route's `component` reaches); and every page a route loads
+  6 KiB minified each and within 1 KiB of the committed `pending` total
+  together; it holds no page code (`*.page.tsx` or route-local `-*-page.tsx`
+  modules, `?tsr-shared=1` modules, or route-file code only the route's
+  `component` reaches); and every page a route loads
   with `import()` is in that route's manifest preloads, so a cold load never
-  waits an extra hop. The ledger only shrinks: a new offender fails, and so
-  does a listed one that stopped offending. Per-group gzip sizes (entry,
+  waits an extra hop. No offender is exempt. Per-group gzip sizes (entry,
   `vendor-*`, routes) stay a report in the default mode.
 - **React Compiler bailout guard** (`scripts/rc-bailouts.ts` +
   `scripts/react-compiler-bailouts.json`): tracks every component the compiler
@@ -95,7 +95,10 @@ census. Do not infer API coverage from source regexes or MCP coverage from name
 prefixes. Every exemption carries a concrete reason in a shrink-only ledger;
 entries can be removed as coverage lands, never added to silence a new failure.
 `pendingWriteHarness` records the current mutating surfaces until their harness
-lands and obeys the same shrink-only rule.
+lands. Existing entries are shrink-only. A write route that the same change
+adds may enter with its reason (`withNewWriteRoutes` in
+`apps/api/src/tests/read-scaling/surface.ts`); its entry leaves once
+`writeScalingScenarios` measures it.
 
 Mutation-check each guard: introduce the excess work or remove a coverage case,
 confirm that the relevant assertion fails, then restore the implementation. Record
@@ -221,7 +224,9 @@ offender with its minified bytes.
   `lazyRouteComponent(() => import(...))` or `await import(...)`, which the
   manifest cannot preload. Import the page statically from the route file's
   `component` and let the router split it. [check: scripts/bundle-baseline.ts]
-- **Ledger line no longer offends.** Delete the line; the ledger only shrinks.
+- **Pending layer over budget.** The loading views grew past the committed
+  `pending` total. Trim them, or re-anchor with `--write-baseline` and state
+  in the pull request why every cold visit should pay for it.
   [check: scripts/bundle-baseline.ts]
 - **A dependency escaped its `manualChunks` bucket** and landed in the
   initial graph instead of a lazy route chunk. Dynamic-`import()` it, or fix

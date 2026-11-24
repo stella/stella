@@ -16,8 +16,8 @@
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "typegen": "bun ../scripts/src/i18n-typegen.ts i18n/langs",
     "i18n:accept": "bun ../scripts/src/i18n-check.ts i18n/langs --accept",
-    "i18n:brief": "bun ../scripts/src/i18n-brief.ts i18n/langs --glossary=../../apps/web/src/i18n/glossary.json --usage-in=emails",
-    "i18n:check": "bun ../scripts/src/i18n-typegen.ts i18n/langs --check && bun ../scripts/src/i18n-check.ts i18n/langs",
+    "i18n:brief": "bun ../scripts/src/i18n-brief.ts i18n/langs --glossary=../../apps/web/src/i18n/glossary.json --usage-in=emails --usage-in=push --memory=../../apps/web/src/i18n/langs",
+    "i18n:check": "bun ../scripts/src/i18n-typegen.ts i18n/langs --check && bun ../scripts/src/i18n-check.ts i18n/langs --unused-in=emails --unused-in=push && bun ../scripts/src/i18n-lint.ts i18n/langs --glossary=../../apps/web/src/i18n/glossary.json",
     "i18n:sync": "bun ../scripts/src/i18n-check.ts i18n/langs --sync && bun ../scripts/src/i18n-typegen.ts i18n/langs",
     "lint": "cd ../.. && bun scripts/lint.ts packages/transactional",
     "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/transactional"

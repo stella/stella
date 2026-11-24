@@ -203,7 +203,6 @@ const SCOPE_PLAN_FIXTURES = {
   package_checks_required: "packages/ui/src/index.ts",
   postgres_service_suites_required: "apps/api/src/db/schema.ts",
   query_perf_required: "apps/api/src/db/schema.ts",
-  recording_wasm_required: "packages/recording-wasm/src/lib.rs",
   release_typecheck_required: "VERSION",
   route_smoke_required: "apps/api/src/server.ts",
   run_required: ".github/workflows/ci.yml",

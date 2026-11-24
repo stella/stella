@@ -39,9 +39,9 @@
   },
   "scripts": {
     "clean": "git clean -xdf dist target .cache .turbo node_modules",
-    "build": "tsdown",
+    "build": "bun --bun tsdown",
     "pack:dry-run": "bun pm pack --dry-run",
-    "test": "bun run test:bun && cargo test",
+    "test": "bun run test:bun && bash ../../scripts/cargo-test.sh",
     "test:bun": "bun test src",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun scripts/lint.ts packages/scan-engine",

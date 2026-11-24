@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 import * as v from "valibot";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { clauses, clauseVersions } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";

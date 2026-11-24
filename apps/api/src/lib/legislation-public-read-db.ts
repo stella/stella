@@ -1,4 +1,4 @@
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import { publicLawReadDb } from "@/api/lib/public-law-read-db";
 
 const LEGISLATION_PUBLIC_READ_DB = Symbol("legislationPublicReadDb");

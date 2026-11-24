@@ -10,7 +10,6 @@ import { sql } from "drizzle-orm";
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import {
   entities,
   entityVersions,
@@ -21,6 +20,7 @@ import {
   legalListVerificationRuns,
   workspaces,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { writeGraphEdges } from "@/api/lib/lists/graph/edge-writer";

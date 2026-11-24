@@ -144,6 +144,8 @@ export const DIFF_SCOPED_STEPS = {
     operational(GENERATED_CONFLICTS),
   "network-baseline-record.yml:record#Seed write mode from the latest published recording":
     operational("Seeds the recorder from the last published recording."),
+  "route-scale-nightly.yml:measure#Prepare network comparison baseline":
+    fullTree(NETWORK_BUDGET),
   "journey-canary.yml:journeys#Check published versions": operational(
     "Compares the published versions with main before the journeys run.",
   ),
@@ -254,9 +256,6 @@ export const DIFF_SCOPED_STEPS = {
   "ci.yml:ci-checks-policy#SHA-256 migration ledger": fullTree(
     "Scans the whole ledger; the base only keeps it from growing.",
   ),
-  "ci.yml:ci-checks-policy#Startup bundle ledger": fullTree(
-    "Reads the whole ledger; the base only keeps it from gaining an exception.",
-  ),
   "ci.yml:ci-checks-policy#Workspace test gating ledger": fullTree(
     "Scans every workspace test file; the base only keeps the list from growing.",
   ),
@@ -357,9 +356,6 @@ export const DIFF_SCOPED_STEPS = {
     operational(
       "Selects the baseline file the full recall is measured against.",
     ),
-  "ci.yml:web-build#Startup gate base": operational(
-    "Selects the base's bundle baseline and pending-component exceptions the startup gates measure against.",
-  ),
   "ci.yml:database-migrations-check#Check migration coverage": expands(
     "A fast check of the schema entry files; the plan runs the migration jobs for every file the schema imports, and the schema parity step in database-migrations-apply-fresh compares the migrated database with the whole schema.",
   ),

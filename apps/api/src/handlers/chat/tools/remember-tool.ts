@@ -2,7 +2,7 @@ import { toolDefinition } from "@tanstack/ai";
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { AI_MEMORY_KINDS } from "@/api/db/schema";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";

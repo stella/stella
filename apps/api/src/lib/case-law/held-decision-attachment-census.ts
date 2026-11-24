@@ -4,13 +4,13 @@ import { alias } from "drizzle-orm/pg-core";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,
   caseLawHeldDecisionAttachments,
   caseLawSources,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { ecliKeysMatchSql } from "@/api/lib/case-law/case-number-match-key";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
 import { readCappedByGroup } from "@/api/lib/db/read-bounded";

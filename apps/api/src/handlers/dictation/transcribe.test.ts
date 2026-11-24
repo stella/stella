@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, UnhandledException } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
 import * as fc from "fast-check";
 import * as v from "valibot";
@@ -63,6 +63,7 @@ type DictationContext = Exclude<
 type Dependencies = Parameters<typeof executeDictation>[1];
 const TEXT = "K návrhu Žofie Černé a Ľubomíra Kováča.";
 const VOCABULARY = ["Žofia Černá", "Ľubomír Kováč"];
+const ORGANIZATION_WORDS = ["Hogan Lovells", "due diligence"];
 const MODEL = "mistralai/voxtral-mini-transcribe";
 
 const audioChunk = (durationMs = 1234) =>
@@ -147,6 +148,8 @@ const fixture = (
           });
         },
       }),
+    organizationVocabulary: async ({ first = [] }) =>
+      await Promise.resolve(Result.ok([...first, ...ORGANIZATION_WORDS])),
     credential: async () => {
       credentials++;
       return Result.ok({ type: "static" as const, apiKey: "managed-fixture" });
@@ -1122,5 +1125,67 @@ describe("a member's labels flag", () => {
       "pieceId",
       "vocabulary",
     ]);
+  });
+});
+
+describe("organization dictation words", () => {
+  const WHISPER = "openai/whisper-large-v3-turbo";
+
+  test("a model that applies vocabulary gets the speaker's words, then the organization's", async () => {
+    const f = fixture();
+    const result = await executeDictation(
+      {
+        ...f.context,
+        // Whisper on OpenRouter is served in the US region only.
+        managedAIResidency: "us",
+        body: { ...f.context.body, modelId: WHISPER },
+      },
+      f.dependencies,
+    );
+    expect(result.isOk()).toBe(true);
+    expect(f.requests.at(0)?.body).toMatchObject({
+      provider: {
+        options: {
+          groq: { prompt: [...VOCABULARY, ...ORGANIZATION_WORDS].join(", ") },
+        },
+      },
+    });
+  });
+
+  test("a model that ignores vocabulary is not sent the organization's words", async () => {
+    const f = fixture();
+    let reads = 0;
+    const result = await executeDictation(f.context, {
+      ...f.dependencies,
+      organizationVocabulary: async ({ first = [] }) => {
+        reads += 1;
+        return await Promise.resolve(Result.ok([...first]));
+      },
+    });
+    expect(result.isOk()).toBe(true);
+    expect(reads).toBe(0);
+  });
+
+  test("words that cannot be read leave the chunk with the speaker's own", async () => {
+    const f = fixture();
+    const result = await executeDictation(
+      {
+        ...f.context,
+        // Whisper on OpenRouter is served in the US region only.
+        managedAIResidency: "us",
+        body: { ...f.context.body, modelId: WHISPER },
+      },
+      {
+        ...f.dependencies,
+        organizationVocabulary: async () =>
+          await Promise.resolve(
+            Result.err(new UnhandledException({ cause: "unreadable" })),
+          ),
+      },
+    );
+    expect(result.isOk()).toBe(true);
+    expect(f.requests.at(0)?.body).toMatchObject({
+      provider: { options: { groq: { prompt: VOCABULARY.join(", ") } } },
+    });
   });
 });

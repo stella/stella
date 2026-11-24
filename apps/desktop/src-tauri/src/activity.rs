@@ -12,7 +12,8 @@
 //! whenever recording stops. Nothing here reaches the network: the timeline
 //! is read only by the activity window, through `ActivityCaller`; settings
 //! and the names of one day's apps also reach the Settings window, through
-//! `ActivitySettingsCaller`.
+//! `ActivitySettingsCaller`; setup reads only its own choices, through
+//! `ActivitySetupCaller`.
 
 use crate::logging::best_effort;
 use chrono::{DateTime, Days, FixedOffset, Local, NaiveDate, TimeZone, Utc};
@@ -35,7 +36,8 @@ use crate::{
   keychain::{self, LocalDataKey, LocalDataKeyLookup},
   local_store::{self, StoreKey},
   local_window::{
-    ActivityAccountFeature, ActivityCaller, ActivitySettingsCaller, LocalCaller,
+    ActivityAccountFeature, ActivityCaller, ActivitySettingsCaller,
+    ActivitySetupCaller, LocalCaller,
   },
   logging::with_cause_logged,
 };
@@ -477,6 +479,17 @@ impl ActivityDaySnapshot {
         .chain(PREVIEW_APPS.iter().map(|app| app.app_identifier.as_str())),
     );
   }
+}
+
+/// What setup reads: whether recording has started and the choices it
+/// offers. It carries no day, app, segment, window title or document.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivitySetupSnapshot {
+  recording_status: ActivityRecordingStatus,
+  capture_details: bool,
+  detect_calls: bool,
+  details_access: ActivityDetailsAccess,
 }
 
 /// What the activity settings show: their values, deletion state, and the
@@ -2329,6 +2342,19 @@ impl ActivityManager {
       browser_apps: self.browser_apps(&segments),
       apps: day_apps(&segments),
       source_app_visuals: Vec::new(),
+    }
+  }
+
+  pub fn setup_snapshot(
+    &self,
+    _caller: &ActivitySetupCaller,
+    details_access: ActivityDetailsAccess,
+  ) -> ActivitySetupSnapshot {
+    ActivitySetupSnapshot {
+      recording_status: self.settings.recording_status,
+      capture_details: self.settings.capture_details,
+      detect_calls: !self.settings.ignore_calls,
+      details_access,
     }
   }
 

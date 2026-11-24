@@ -1,4 +1,4 @@
-import type { WebApiRoutes } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api-contract";
 
 type ListRoutes = WebApiRoutes["lists"][":workspaceId"][":listId"];
 

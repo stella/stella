@@ -1372,13 +1372,6 @@
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
-    "file": "apps/api/src/lib/s3.ts",
-    "function": "module/readCorpusS3Range",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
     "file": "apps/api/src/lib/scheduler/tasks/case-law-redaction-tombstone-backfill.ts",
     "function": "module/backfillCaseLawRedactionTombstones",
     "kind": "constant-limit",
@@ -1857,20 +1850,6 @@
   {
     "file": "apps/web/src/lib/dev-otp.ts",
     "function": "module/fetchDevOtp",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/lib/files/queries.ts",
-    "function": "module/emailAttachmentPreviewOptions",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/lib/files/queries.ts",
-    "function": "module/emailAttachmentPreviewOptions",
     "kind": "total-timeout-body",
     "count": 1,
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."

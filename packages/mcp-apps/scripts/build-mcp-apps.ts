@@ -29,6 +29,10 @@ import {
 } from "./lib/mcp-reader-ui-guard";
 import { resolveMetafilePath } from "./lib/metafile-path";
 import { namespaceMembers } from "./lib/namespace-members";
+import {
+  READER_FONT_STYLESHEET,
+  SHARED_GENERATED_MODULE,
+} from "./lib/plugin-filters";
 import { precompiledMessagesPlugin } from "./lib/precompiled-messages";
 import { STYLE_SOURCES_COMMAND, unscannedStyleSources } from "./style-sources";
 
@@ -54,7 +58,7 @@ const generatedAssetPlugin = {
         return undefined;
       },
     );
-    builder.onLoad({ filter: /shared\/generated\//u }, ({ path: file }) => {
+    builder.onLoad({ filter: SHARED_GENERATED_MODULE }, ({ path: file }) => {
       const contents = generatedAssets.get(file);
       if (contents === undefined) {
         return undefined;
@@ -81,6 +85,8 @@ const webRoot = path.resolve(import.meta.dirname, "../../../apps/web");
 const repoRoot = path.resolve(import.meta.dirname, "../../..");
 const canonicalRepoRoot = realpathSync(repoRoot);
 const readerMessages = new Map<string, Map<string, string>>();
+const { buildCatalogs } = await import("../../scripts/src/i18n-namespaces");
+await buildCatalogs(path.join(webRoot, "src/i18n"));
 const localeRoot = path.join(webRoot, "src/i18n/langs");
 for (const file of [
   ...new Bun.Glob("*.json").scanSync({ cwd: localeRoot }),
@@ -132,7 +138,7 @@ const inlineReaderFonts = {
   name: "inline-reader-fonts",
   setup(builder: Bun.PluginBuilder) {
     builder.onLoad(
-      { filter: /source-serif-4\/.*\.css$/u },
+      { filter: READER_FONT_STYLESHEET },
       async ({ path: cssPath }) => {
         let contents = await Bun.file(cssPath).text();
         for (const match of [

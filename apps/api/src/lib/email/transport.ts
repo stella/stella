@@ -33,6 +33,16 @@ export type InlineImage = {
   content: Uint8Array;
 };
 
+/**
+ * What became of one message: the provider took it and named its message id
+ * (`accepted`, the id its delivery events carry), took it without an id its
+ * events would carry (`accepted_untracked`), or it was not sent (`skipped`).
+ */
+export type EmailSendOutcome =
+  | { type: "accepted"; providerMessageId: string }
+  | { type: "accepted_untracked" }
+  | { type: "skipped" };
+
 export type EmailTransport = {
-  send: (message: EmailMessage) => Promise<void>;
+  send: (message: EmailMessage) => Promise<EmailSendOutcome>;
 };

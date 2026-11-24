@@ -4,7 +4,7 @@ import {
   type ChatStepRef,
 } from "@stll/api-contract/chat-step-ledger";
 
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools-types";
 
 // The step ledger each code step carries, as the server records it from the
 // reads the script made (`chat-step-ledger.ts`): what each read was asked

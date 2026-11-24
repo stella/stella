@@ -520,6 +520,7 @@ const InlineTextEditor = ({
   property: WorkspaceProperty;
   stopPropagation: boolean;
 }) => {
+  const t = useTranslations();
   const [state, setState] = useState<
     | { status: "display" }
     | { status: "loading" }
@@ -532,6 +533,7 @@ const InlineTextEditor = ({
         className="block w-full min-w-0"
         data-open-expanded-cell
         disabled={state.status === "loading"}
+        disabledReason={t("common.loading")}
         onClick={(event) => {
           if (stopPropagation) {
             event.stopPropagation();

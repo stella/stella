@@ -1,6 +1,6 @@
 {
   "route": "/settings/organization/audit-logs",
-  "reason": "Organization admin renders inside the app frame, which loads its shared chat, notification, timer and organization-settings data. The sidebar's Time link reads the approval queue's bounded count of submitted time waiting for the signed-in person (one request, limit 1). The person filter lists the organization's members, read once from the full organization; the sidebar shows each matter's working and waiting chats, read once per page from one bounded list",
+  "reason": "Organization admin renders inside the app frame, which loads its shared chat, notification, timer and organization-settings data. The sidebar's Time link reads the approval queue's bounded count of submitted time waiting for the signed-in person (one request, limit 1). The person filter lists the organization's members, read once from the full organization; the sidebar shows each matter's working and waiting chats, read once per page from one bounded list The settings navigation's Security item shows how many sign-ins wait for review: one read of the account's own sign-ins, which the security page shares.",
   "budget": {
     "depth": 6,
     "requests": [
@@ -8,6 +8,7 @@
       "GET /api/auth/organization/get-active-member-role",
       "GET /api/auth/organization/get-full-organization",
       "GET /api/auth/organization/list",
+      "GET /api/auth/session-sign-ins",
       "GET /health",
       "GET /v1/audit-logs",
       "GET /v1/chat/runs/active",
@@ -28,6 +29,7 @@
       "GET /api/auth/organization/get-active-member-role": 1,
       "GET /api/auth/organization/get-full-organization": 1,
       "GET /api/auth/organization/list": 1,
+      "GET /api/auth/session-sign-ins": 1,
       "GET /health": 1,
       "GET /v1/audit-logs": 1,
       "GET /v1/chat/runs/active": 1,
@@ -48,6 +50,7 @@
       "GET /api/auth/organization/get-active-member-role": 4,
       "GET /api/auth/organization/get-full-organization": 7,
       "GET /api/auth/organization/list": 6,
+      "GET /api/auth/session-sign-ins": 4,
       "GET /health": 1,
       "GET /v1/audit-logs": 10,
       "GET /v1/chat/threads": 6,
@@ -67,6 +70,7 @@
       "GET /api/auth/organization/get-active-member-role": 1024,
       "GET /api/auth/organization/get-full-organization": 3072,
       "GET /api/auth/organization/list": 1024,
+      "GET /api/auth/session-sign-ins": 3072,
       "GET /health": 1024,
       "GET /v1/audit-logs": 11264,
       "GET /v1/chat/threads": 4096,

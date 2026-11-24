@@ -351,15 +351,28 @@ const desktopRustRequired = (files: readonly string[]) =>
     "packages/api-contract/src/chat-local-run-step-content.fixtures.json",
   ]);
 
+// Non-packaging desktop files (unit/e2e tests, locale JSONs, i18n baselines)
+// are validated by fast JS/i18n checks and do not need a 23-minute Windows
+// MSVC dry-run build.
+const isDesktopWindowsDryRunExcluded = (file: string): boolean =>
+  /\.mdx?$/u.test(file) ||
+  file.startsWith("apps/desktop/tests/") ||
+  file.startsWith("apps/desktop/e2e/") ||
+  file.startsWith("apps/desktop/src/i18n/langs/") ||
+  file === "apps/desktop/src/i18n/i18n-check-baseline.json" ||
+  file === "apps/desktop/src/i18n/i18n-lint-baseline.json" ||
+  file === "apps/desktop/src/i18n/i18n-source-lock.json";
+
+const matchesDesktopWindowsDryRunInput = (file: string): boolean =>
+  !isDesktopWindowsDryRunExcluded(file) &&
+  matches(file, DESKTOP_WINDOWS_DRY_RUN_INPUTS);
+
 const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
   const full = input.suiteDepth === "full";
   const desktopWindowsDryRun =
     input.eventName !== "merge_group" ||
     input.scopeUnknown ||
-    input.changedFiles.some(
-      (file) =>
-        !/\.mdx?$/u.test(file) && matches(file, DESKTOP_WINDOWS_DRY_RUN_INPUTS),
-    );
+    input.changedFiles.some(matchesDesktopWindowsDryRunInput);
   const releaseTypecheck =
     input.heavyOnly &&
     (PERIODIC_RELEASE_TYPECHECK_EVENTS.some(
@@ -417,7 +430,6 @@ const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
     release_typecheck_required: bool(releaseTypecheck),
     route_tree_required: TRUE,
     scan_engine_wasm_required: TRUE,
-    recording_wasm_required: TRUE,
     stack_redaction_browsers_required: TRUE,
     web_api_types_required: TRUE,
     web_build_required: TRUE,
@@ -504,7 +516,6 @@ const deriveScopeFacts = (
         route_smoke_required: FALSE,
         route_tree_required: FALSE,
         scan_engine_wasm_required: FALSE,
-        recording_wasm_required: FALSE,
         stack_redaction_browsers_required: FALSE,
         web_api_types_required: FALSE,
         web_build_required: FALSE,
@@ -776,7 +787,6 @@ export const OUTPUT_ORDER = [
   "route_smoke_required",
   "route_tree_required",
   "scan_engine_wasm_required",
-  "recording_wasm_required",
   "stack_redaction_browsers_required",
   "web_api_types_required",
   "web_build_required",
@@ -1089,23 +1099,16 @@ export const OUTPUT_RULES = {
     scopeRule(facts, "route_tree_required", ({ full, p }) =>
       bool(full || p(ROUTE_TREE_INPUTS)),
     ),
-  recording_wasm_required: (facts) =>
-    scopeRule(facts, "recording_wasm_required", ({ p }) =>
-      bool(
-        p([
-          "packages/recording-wasm/*",
-          "apps/desktop/src-tauri/crates/recording/*",
-          ".github/actions/cargo-deny/*",
-          "bun.lock",
-          ".github/workflows/ci.yml",
-        ]),
-      ),
-    ),
+  // Every Rust WebAssembly package shares the drift job.
   scan_engine_wasm_required: (facts) =>
     scopeRule(facts, "scan_engine_wasm_required", ({ p }) =>
       bool(
         p([
           "packages/scan-engine/*",
+          "packages/heic-decoder/*",
+          "packages/pst-reader/*",
+          "packages/recording-wasm/*",
+          "apps/desktop/src-tauri/crates/recording/*",
           ".github/actions/cargo-deny/*",
           "bun.lock",
           ".github/workflows/ci.yml",
@@ -1203,11 +1206,7 @@ export const OUTPUT_RULES = {
       ({ input, files, full }) =>
         bool(
           (full && input.eventName !== "merge_group") ||
-            files.some(
-              (file) =>
-                !/\.mdx?$/u.test(file) &&
-                matches(file, DESKTOP_WINDOWS_DRY_RUN_INPUTS),
-            ),
+            files.some(matchesDesktopWindowsDryRunInput),
         ),
     ),
 } as const satisfies Record<ScopeOutput, (facts: ScopeFacts) => string>;

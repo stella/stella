@@ -2,7 +2,7 @@ import { and, asc, eq, gt, ilike, inArray, or, sql } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import { user } from "@/api/db/auth-schema";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { auditLogs } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -53,6 +53,7 @@ export const readOverviewActivityActorRows = async ({
       .from(auditLogs)
       .where(and(...conditions))
       .as("historical_activity_actors");
+    // sql-perf-allow: bounded by distinct user actors of one workspace from audit_logs_org_workspace_user_actor_created_id_idx, joined by user primary key
     const identityCondition =
       search === ""
         ? sql`true`

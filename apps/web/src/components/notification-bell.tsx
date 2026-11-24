@@ -193,6 +193,7 @@ export const NotificationBell = () => {
               <Button
                 className="w-full"
                 disabled={isFetchingNextPage}
+                disabledReason={t("caseLaw.loadingMore")}
                 onClick={() => {
                   detached(fetchNextPage(), "notification-bell.next-page");
                 }}

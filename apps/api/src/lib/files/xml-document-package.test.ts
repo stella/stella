@@ -14,6 +14,8 @@ const xmlPart = async (part: Uint8Array | string) => {
 test.each([
   { encoding: "GB18030", bytes: [0xc4, 0xe3, 0xba, 0xc3], text: "你好" },
   { encoding: "windows-1254", bytes: [0xdd, 0xfd, 0xde], text: "İıŞ" },
+  { encoding: "windows-1250", bytes: [0x9e, 0xe8, 0xf8], text: "žčř" },
+  { encoding: "ISO-8859-2", bytes: [0xb1, 0xea, 0xbf], text: "ąęż" },
 ])(
   "decodes explicitly declared $encoding text in a document part",
   async ({ encoding, bytes, text }) => {

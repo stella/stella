@@ -3,7 +3,7 @@ import { create } from "zustand";
 import type { ResourceName } from "@stll/api-contract";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import type { CapabilityId } from "@/lib/api";
+import type { CapabilityId } from "@/lib/api-contract";
 
 /** A capability the current screen offers on one resource. */
 export type ScreenAction = {

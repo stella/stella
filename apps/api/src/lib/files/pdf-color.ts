@@ -21,6 +21,10 @@ export const PDF_NEUTRALS = {
   stampName: grey(0.1),
   /** The signature stamp's signing details. */
   stampDetail: [0.357, 0.373, 0.4],
+  /** The grid of a table preview. */
+  tableRule: grey(0.7),
+  /** The repeated header row of a table preview. */
+  tableHeaderFill: grey(0.93),
 } as const satisfies Record<string, SrgbColor>;
 
 // A channel as a content-stream number: rounded to three decimals and printed

@@ -4,7 +4,7 @@ import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
 import { renderChatMessagesForCompaction } from "@/api/handlers/chat/compaction";
 import { pastChatScopeSql } from "@/api/handlers/chat/tools/past-chat-tools";

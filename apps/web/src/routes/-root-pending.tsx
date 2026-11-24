@@ -2,6 +2,7 @@ import { useRouter, useRouterState } from "@tanstack/react-router";
 import type { RouteComponent } from "@tanstack/react-router";
 import { IntlProvider } from "use-intl";
 
+import { useLeafRouteInspectorEntry } from "@/components/inspector/route-inspector-entry";
 import { PendingTextIntlScope } from "@/components/pending-text";
 import {
   DefaultPendingComponent,
@@ -56,6 +57,7 @@ export function RootPendingComponent() {
       }),
   });
   const pagePending = useLeafPendingView();
+  const inspectorOnEntry = useLeafRouteInspectorEntry();
   const localizeStandalone = useRouterState({
     select: ({ matches }) =>
       matches.at(-1)?.staticData.pendingText === "request-locale",
@@ -93,7 +95,10 @@ export function RootPendingComponent() {
     // client hydrates this paint before it restores the account's locale, so
     // its labels are bars until the frame host's skeleton takes over.
     <div {...PENDING_STATUS_PROPS} className="flex h-dvh w-full flex-col">
-      <ProtectedPendingSkeleton body={pagePending} />
+      <ProtectedPendingSkeleton
+        body={pagePending}
+        inspectorOnEntry={inspectorOnEntry}
+      />
     </div>
   );
 }

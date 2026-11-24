@@ -55,12 +55,18 @@ const EMAIL_VALUES = `'${ID}', 'org', '${WORKSPACE_ID}', 'in', 'email', 'direct'
 const CORRESPONDENCE_EMAIL = `INSERT INTO correspondence (${EMAIL_COLUMNS}) VALUES (${EMAIL_VALUES})`;
 /** An uploaded data-box message; its source entity is the fixture entity. */
 const CORRESPONDENCE_DATA_BOX = `INSERT INTO correspondence (id, organization_id, workspace_id, channel, source, source_entity_id, message_id, original_signature, data_box_envelope, content_hash, dedup_key, sender, recipients_to, recipients_cc, subject, received_at, "references", body_text, entity_feature_gate) VALUES ('${ID}', 'org', '${WORKSPACE_ID}', 'data_box', 'upload', '${ENTITY_ID}', 'message', '{"status":"unverified"}', '{"messageId":"message"}', repeat('a', 64), repeat('b', 64), '{}', '[]', '[]', 'Subject', now(), '[]', 'Body', 'open')`;
+/** An uploaded certified email; its source entity is the fixture entity. */
+const CORRESPONDENCE_PEC = `INSERT INTO correspondence (id, organization_id, workspace_id, direction, channel, source, source_entity_id, original_signature, certified_email_envelope, content_hash, dedup_key, sender, recipients_to, recipients_cc, subject, received_at, "references", body_text, entity_feature_gate) VALUES ('${ID}', 'org', '${WORKSPACE_ID}', 'in', 'pec', 'upload', '${ENTITY_ID}', '{"status":"unverified"}', '{"system":"pec"}', repeat('a', 64), repeat('b', 64), '{}', '[]', '[]', 'Subject', now(), '[]', 'Body', 'open')`;
 /** A chat turn its owner handed over, waiting for another task to adopt it. */
 const HANDED_OVER_CHAT_TURN = `INSERT INTO chat_turns (id, organization_id, user_id, thread_id, user_message_id, status, assistant_message_id, lease_expires_at) VALUES ('${ID}', 'org', 'user', '${ID_2}', '${ID_3}', 'handed-over', '${ENTITY_ID}', now() + interval '90 seconds')`;
 const EXTERNAL_REF_COLUMNS =
   "external_source, external_id, external_change_key, imported_at";
 const EXTERNAL_REF_VALUES = "'fixture', 'external-1', 'change-1', now()";
 const SITEMAP_ENROLLMENT = "case-law-sitemap-packing-enrollment";
+const SITEMAP_RANGE_ENROLLMENT = "case-law-sitemap-range-enrollment";
+/** One listed whole month, as the refresh writes it. */
+const SITEMAP_SHARD_INSERT =
+  "INSERT INTO case_law_sitemap_shards (country, year, month, bucket, total, last_modified_at) VALUES ('CZE', '2026', '09', 'all', 1, now())";
 /** A Czech VAT number in the legacy tax_id column; synthetic. */
 const VAT_ID = "CZ12345678";
 /** An offline revision committed with the fault its record stores. */
@@ -827,6 +833,19 @@ const SEEDS = {
     `INSERT INTO account_audit_logs (id, user_id, event_type, resource_id, group_id) VALUES ('${ID}', 'user', 'organization.created', 'org', '${ID_2}')`,
     { scoped: true },
   ),
+  session_sign_ins_location_check: noRowSeed(
+    "session_sign_ins",
+    "session_sign_ins_location_check",
+    `INSERT INTO session_sign_ins (session_id, location_kind) VALUES ('session', 'unknown')`,
+    {
+      parents: async (client) => {
+        await exec(client, [
+          FIXTURE_USER,
+          `INSERT INTO "session" (id, token, user_id, expires_at, updated_at) VALUES ('session', 'session-token', 'user', now() + interval '1 day', now())`,
+        ]);
+      },
+    },
+  ),
   "client-invoice-tenant-key": {
     kind: "no-row-work",
     tables: ["invoices"],
@@ -1116,7 +1135,7 @@ const SEEDS = {
     ),
     seed: async (client) => {
       await exec(client, [
-        "INSERT INTO case_law_sitemap_shards (country, year, month, bucket, total, last_modified_at) VALUES ('CZE', '2026', '09', '000', 1, now())",
+        SITEMAP_SHARD_INSERT,
         `UPDATE database_backfill_states SET cursor = NULL WHERE name = '${SITEMAP_ENROLLMENT}'`,
       ]);
     },
@@ -1124,6 +1143,25 @@ const SEEDS = {
     writerLock: {
       column: "name",
       id: SITEMAP_ENROLLMENT,
+      table: "database_backfill_states",
+    },
+  },
+  "case-law-sitemap-range-enrollment": {
+    kind: "row-work",
+    ...repairedWhen(
+      SITEMAP_RANGE_ENROLLMENT,
+      "SELECT cursor IS NOT DISTINCT FROM 'complete' AND EXISTS (SELECT 1 FROM case_law_sitemap_changes WHERE country = 'CZE' AND year = '*' AND month = '*') AS repaired FROM database_backfill_states WHERE name = $1",
+    ),
+    seed: async (client) => {
+      await exec(client, [
+        SITEMAP_SHARD_INSERT,
+        `UPDATE database_backfill_states SET cursor = NULL WHERE name = '${SITEMAP_RANGE_ENROLLMENT}'`,
+      ]);
+    },
+    // The repair serializes its batches on this checkpoint.
+    writerLock: {
+      column: "name",
+      id: SITEMAP_RANGE_ENROLLMENT,
       table: "database_backfill_states",
     },
   },
@@ -1172,6 +1210,10 @@ const SEEDS = {
   correspondence_data_box_check: correspondenceSeed(
     "correspondence_data_box_check",
     CORRESPONDENCE_DATA_BOX,
+  ),
+  correspondence_certified_email_check: correspondenceSeed(
+    "correspondence_certified_email_check",
+    CORRESPONDENCE_PEC,
   ),
   organization_settings_data_box_ids_check: noRowSeed(
     "organization_settings",

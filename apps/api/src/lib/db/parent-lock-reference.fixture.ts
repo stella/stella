@@ -2,8 +2,8 @@ import { sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { organization } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {

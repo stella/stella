@@ -29,6 +29,7 @@ export const AnswerEditPanel = ({
   anchor,
   threadId,
   disabled,
+  disabledReason,
   onCancel,
   onAnswerEdited,
   request = requestAnswerEdit,
@@ -238,7 +239,14 @@ export const AnswerEditPanel = ({
                 </form.Field>
                 {state.error && <p role="alert">{state.error}</p>}
                 <div className="flex gap-2">
-                  <Button size="sm" type="submit" disabled={disabled}>
+                  <Button
+                    size="sm"
+                    type="submit"
+                    disabled={disabled}
+                    disabledReason={
+                      disabledReason ?? t("chat.answerEdit.waitForAnswer")
+                    }
+                  >
                     {t("chat.answerEdit.submit")}
                   </Button>
                   <Button
@@ -317,6 +325,7 @@ type AnswerEditPanelProps = {
   anchor: AnswerEditAnchor;
   threadId: string;
   disabled: boolean;
+  disabledReason?: string | undefined;
   onCancel: () => void;
   onAnswerEdited: () => Promise<void>;
   initialProposal?: AnswerEditProposal | undefined;
@@ -357,7 +366,10 @@ export const AnswerEditProposalReview = ({
       {error && <p role="alert">{error}</p>}
       <ReviewDecisionActions
         state={status === "accepting" ? "applying" : "pending"}
-        disabled={disabled}
+        disabledReason={
+          disabled ? t("chat.answerEdit.waitForAnswer") : undefined
+        }
+        applyingReason={t("common.applying")}
         acceptLabel={t("common.accept")}
         rejectLabel={t("common.undo")}
         onAccept={onAccept}

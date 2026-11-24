@@ -6,8 +6,11 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
+import messages from "@/i18n/langs/en.json";
+
 GlobalRegistrator.register({ url: "http://localhost/law" });
 const { cleanup, fireEvent, render } = await import("@testing-library/react");
+const { IntlProvider } = await import("use-intl");
 const { LawEntryBox } = await import("./law-entry-box");
 
 afterEach(cleanup);
@@ -24,17 +27,19 @@ const Entry = ({
 }) => {
   const [query, setQuery] = useState(initial);
   return (
-    <LawEntryBox
-      askScope={null}
-      maxLength={SEARCH_QUERY_MAX_LENGTH}
-      onQueryChange={setQuery}
-      onSubmit={onSubmit}
-      pickers={<span />}
-      placeholder="Search the law"
-      query={query}
-      searchLabel="Search"
-      status={<span />}
-    />
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <LawEntryBox
+        askScope={null}
+        maxLength={SEARCH_QUERY_MAX_LENGTH}
+        onQueryChange={setQuery}
+        onSubmit={onSubmit}
+        pickers={<span />}
+        placeholder="Search the law"
+        query={query}
+        searchLabel="Search"
+        status={<span />}
+      />
+    </IntlProvider>
   );
 };
 

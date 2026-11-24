@@ -5,7 +5,7 @@ import {
   type QueryClient,
   type QueryKey,
 } from "@tanstack/react-query";
-import type { updateUser } from "better-auth/api";
+import type { revokeOtherSessions, updateUser } from "better-auth/api";
 import type { OrganizationCreator } from "better-auth/plugins";
 import { panic, Result } from "better-result";
 
@@ -18,12 +18,17 @@ import {
   type ResourceType,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
+import type { SESSION_SIGN_IN_REVIEW_PATH } from "@stll/api-contract/session-sign-ins";
 
 import {
   captureSessionQueryOwner,
   hasCurrentAuthQueryOwner,
   isObservedSessionQueryOwner,
 } from "@/lib/account/auth-query-owner";
+import type {
+  REVOKE_SESSION_BY_ID_PATH,
+  SessionSignInsWriteRoute,
+} from "@/lib/account/session-sign-ins-client";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import {
@@ -115,6 +120,22 @@ type AuthPluginEndpointWrite<
   route: ReturnType<OrganizationCreator>["endpoints"][TEndpoint]["path"];
 };
 
+type AuthCoreRevokeOtherSessionsWrite = {
+  type: "auth-core-endpoint";
+  endpoint: "revokeOtherSessions";
+  method: (typeof revokeOtherSessions)["options"]["method"];
+  route: (typeof revokeOtherSessions)["path"];
+};
+
+/** A write to one of the API's own account session endpoints
+ *  (`sessionSignInsClient`). */
+type SessionSignInsWrite<TRoute extends SessionSignInsWriteRoute> = {
+  type: "auth-plugin-endpoint";
+  plugin: "session-sign-ins";
+  method: "POST";
+  route: TRoute;
+};
+
 type AuthCoreUserUpdateWrite = {
   type: "auth-core-endpoint";
   endpoint: "updateUser";
@@ -169,6 +190,16 @@ export const RESOURCE_MUTATION_CONTRACTS = {
         type: "handler-route",
         method: "DELETE",
         route: "/workspaces/:workspaceId/members/:userId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.WORKSPACE],
+  },
+  updateWorkspace: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/workspaces/:workspaceId",
       },
     ],
     resources: [RESOURCE_TYPE.WORKSPACE],
@@ -332,6 +363,76 @@ export const RESOURCE_MUTATION_CONTRACTS = {
   },
   // An administrator turns the decision model on or off for verification
   // verdicts; the organization's AI configuration read shows the switch.
+  saveOrganizationSsoPolicy: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PUT",
+        route: "/organization-settings/sso/policy",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  registerOidcSsoProvider: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/sso/providers",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  probeOidcSsoProvider: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/sso/providers/test",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  removeOrganizationSsoProvider: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/organization-settings/sso/providers/:providerId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  addOrganizationSsoDomain: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/sso/domains",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  verifyOrganizationSsoDomain: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/sso/domains/:domainId/verify",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  removeOrganizationSsoDomain: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/organization-settings/sso/domains/:domainId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
   updateVerificationDecisionModel: {
     writes: [
       {
@@ -394,6 +495,42 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.USER],
   },
+  // The account holder signs one of their devices out, signs out every
+  // device but this one, or answers whether a sign-in was theirs; the
+  // account's session and sign-in lists refresh.
+  revokeSession: {
+    writes: [
+      {
+        type: "auth-plugin-endpoint",
+        plugin: "session-sign-ins",
+        method: "POST",
+        route: "/revoke-session-by-id",
+      } satisfies SessionSignInsWrite<typeof REVOKE_SESSION_BY_ID_PATH>,
+    ],
+    resources: [RESOURCE_TYPE.USER],
+  },
+  revokeOtherSessions: {
+    writes: [
+      {
+        type: "auth-core-endpoint",
+        endpoint: "revokeOtherSessions",
+        method: "POST",
+        route: "/revoke-other-sessions",
+      } satisfies AuthCoreRevokeOtherSessionsWrite,
+    ],
+    resources: [RESOURCE_TYPE.USER],
+  },
+  reviewSessionSignIn: {
+    writes: [
+      {
+        type: "auth-plugin-endpoint",
+        plugin: "session-sign-ins",
+        method: "POST",
+        route: "/session-sign-ins/review",
+      } satisfies SessionSignInsWrite<typeof SESSION_SIGN_IN_REVIEW_PATH>,
+    ],
+    resources: [RESOURCE_TYPE.USER],
+  },
   deleteOrganization: {
     writes: [
       {
@@ -410,6 +547,27 @@ export const RESOURCE_MUTATION_CONTRACTS = {
         method: "POST",
         route: "/organization/leave",
       } satisfies AuthPluginEndpointWrite<"leaveOrganization">,
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  // The organization's dictation words: one list, read by its settings page.
+  addDictationVocabulary: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/dictation-vocabulary",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  deleteDictationVocabulary: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/organization-settings/dictation-vocabulary",
+      },
     ],
     resources: [RESOURCE_TYPE.ORGANIZATION],
   },

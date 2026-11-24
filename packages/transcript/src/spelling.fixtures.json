@@ -1,0 +1,260 @@
+[
+  {
+    "name": "missing diacritics and case are restored",
+    "text": "dopis pro pana novaka a dvoracka",
+    "words": ["Nováka", "Dvořáčka"],
+    "expected": "dopis pro pana Nováka a Dvořáčka"
+  },
+  {
+    "name": "a longer word may be a letter off",
+    "text": "smlouva s firmou Kubernetis",
+    "words": ["Kubernetes"],
+    "expected": "smlouva s firmou Kubernetes"
+  },
+  {
+    "name": "a longer word may be a letter off, with diacritics",
+    "text": "klient Hrdlicka",
+    "words": ["Hrdlička"],
+    "expected": "klient Hrdlička"
+  },
+  {
+    "name": "a word too far off stays",
+    "text": "Nováková přijde",
+    "words": ["Novák"],
+    "expected": "Nováková přijde"
+  },
+  {
+    "name": "another word too far off stays",
+    "text": "pan Novy",
+    "words": ["Novák"],
+    "expected": "pan Novy"
+  },
+  {
+    "name": "a short word changes in case",
+    "text": "firma stll",
+    "words": ["STLL"],
+    "expected": "firma STLL"
+  },
+  {
+    "name": "a short word a letter off stays",
+    "text": "firma stil",
+    "words": ["STLL"],
+    "expected": "firma stil"
+  },
+  {
+    "name": "very short custom words are left alone",
+    "text": "ano, to je ono",
+    "words": ["ANO"],
+    "expected": "ano, to je ono"
+  },
+  {
+    "name": "only whole words change",
+    "text": "dvorackova a dvoracek",
+    "words": ["Dvořák"],
+    "expected": "dvorackova a dvoracek"
+  },
+  {
+    "name": "phrases match word for word",
+    "text": "podle smlouvy s Baker Mckenzie včera",
+    "words": ["Baker McKenzie"],
+    "expected": "podle smlouvy s Baker McKenzie včera"
+  },
+  {
+    "name": "the whole phrase wins over one of its words",
+    "text": "baker mckenzie",
+    "words": ["Baker", "Baker McKenzie"],
+    "expected": "Baker McKenzie"
+  },
+  {
+    "name": "punctuation between the words is no phrase",
+    "text": "Baker. Mckenzie",
+    "words": ["Baker McKenzie"],
+    "expected": "Baker. Mckenzie"
+  },
+  {
+    "name": "a word close to two custom words stays",
+    "text": "pan Kovarik",
+    "words": ["Kovářík", "Kovarík"],
+    "expected": "pan Kovarik"
+  },
+  {
+    "name": "a capital at the start of a sentence stays",
+    "text": "Ebitda vzrostla.",
+    "words": ["EBITDA", "e-mailem"],
+    "expected": "EBITDA vzrostla."
+  },
+  {
+    "name": "a capital at the start of a sentence goes on a lower-case custom word",
+    "text": "Emailem posílám.",
+    "words": ["e-mailem"],
+    "expected": "E-mailem posílám."
+  },
+  {
+    "name": "punctuation and spacing are kept",
+    "text": "„novak“, (dvorak)!",
+    "words": ["Novák", "Dvořák"],
+    "expected": "„Novák“, (Dvořák)!"
+  },
+  {
+    "name": "the right spelling changes nothing",
+    "text": "pan Novák",
+    "words": ["Novák"],
+    "expected": "pan Novák"
+  },
+  {
+    "name": "no words change nothing",
+    "text": "pan novak",
+    "words": [],
+    "expected": "pan novak"
+  },
+  {
+    "name": "a number a digit off stays",
+    "text": "podle ISO 27002",
+    "words": ["ISO 27001"],
+    "expected": "podle ISO 27002"
+  },
+  {
+    "name": "a section number a digit off stays",
+    "text": "viz section 124",
+    "words": ["Section 123"],
+    "expected": "viz section 124"
+  },
+  {
+    "name": "a number written the same matches",
+    "text": "podle iso 27001",
+    "words": ["ISO 27001"],
+    "expected": "podle ISO 27001"
+  },
+  {
+    "name": "a number with a hyphen added stays",
+    "text": "podle iso 27-001",
+    "words": ["ISO 27001"],
+    "expected": "podle iso 27-001"
+  },
+  {
+    "name": "a decomposed accent stays with its word",
+    "text": "pan José",
+    "words": ["José"],
+    "expected": "pan José"
+  },
+  {
+    "name": "a decomposed accent in lower case",
+    "text": "pan josé",
+    "words": ["José"],
+    "expected": "pan José"
+  },
+  {
+    "name": "a fully decomposed name reads composed",
+    "text": "Dvořák",
+    "words": ["Dvořák"],
+    "expected": "Dvořák"
+  },
+  {
+    "name": "a swap of two letters is one edit",
+    "text": "firma Kubrenetes",
+    "words": ["Kubernetes"],
+    "expected": "firma Kubernetes"
+  },
+  {
+    "name": "the same name twice, composed and decomposed, is no tie",
+    "text": "pan dvorak",
+    "words": ["Dvořák", "Dvořák"],
+    "expected": "pan Dvořák"
+  },
+  {
+    "name": "a phrase spelled right keeps its words from other matches",
+    "text": "Baker McKenzie",
+    "words": ["Baker McKenzie", "McKénzie"],
+    "expected": "Baker McKenzie"
+  },
+  {
+    "name": "a company suffix matches as written",
+    "text": "smlouva s novak s.r.o.",
+    "words": ["Novák s.r.o."],
+    "expected": "smlouva s Novák s.r.o."
+  },
+  {
+    "name": "a company suffix keeps what follows its full stop",
+    "text": "novak s.r.o., ahoj",
+    "words": ["Novák s.r.o."],
+    "expected": "Novák s.r.o., ahoj"
+  },
+  {
+    "name": "other punctuation is no match",
+    "text": "novak s. r. o.",
+    "words": ["Novák s.r.o."],
+    "expected": "novak s. r. o."
+  },
+  {
+    "name": "a name keeps the ending it was spoken with",
+    "text": "dopis pro dvoraka",
+    "words": ["Dvořák"],
+    "expected": "dopis pro Dvořáka"
+  },
+  {
+    "name": "a dative ending",
+    "text": "zavolej novakovi",
+    "words": ["Novák"],
+    "expected": "zavolej Novákovi"
+  },
+  {
+    "name": "an ending already spelled right",
+    "text": "s panem Dvořákem",
+    "words": ["Dvořák"],
+    "expected": "s panem Dvořákem"
+  },
+  {
+    "name": "a final vowel gives way to the ending",
+    "text": "od pani hrdlicky",
+    "words": ["Hrdlička"],
+    "expected": "od pani Hrdličky"
+  },
+  {
+    "name": "a final vowel gives way to an accented ending",
+    "text": "s Hrdlickou",
+    "words": ["Hrdlička"],
+    "expected": "s Hrdličkou"
+  },
+  {
+    "name": "the e of -ek drops before an ending",
+    "text": "pro dvoracka",
+    "words": ["Dvořáček"],
+    "expected": "pro Dvořáčka"
+  },
+  {
+    "name": "an adjective takes its endings inside a phrase",
+    "text": "u Nejvyssiho soudu",
+    "words": ["Nejvyšší soud"],
+    "expected": "u Nejvyššího soudu"
+  },
+  {
+    "name": "an adjective takes its endings",
+    "text": "pana novotneho",
+    "words": ["Novotný"],
+    "expected": "pana Novotného"
+  },
+  {
+    "name": "an English possessive keeps its apostrophe",
+    "text": "Mckenzie's view",
+    "words": ["McKenzie"],
+    "expected": "McKenzie's view"
+  },
+  {
+    "name": "a word spelled as a custom word wins over an ending",
+    "text": "pro novaka",
+    "words": ["Novák", "Nováka"],
+    "expected": "pro Nováka"
+  },
+  {
+    "name": "a name written decomposed takes endings as a composed one",
+    "text": "pana novotneho",
+    "words": ["Novotný"],
+    "expected": "pana Novotného"
+  },
+  {
+    "name": "a short stem takes no ending",
+    "text": "velká misa",
+    "words": ["Mise"],
+    "expected": "velká misa"
+  }
+]

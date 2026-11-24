@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { sendNewDeviceNotice } from "@/api/lib/auth/new-device-notice";
-import { toSafeId } from "@/api/lib/branded-types";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 
 const newSession = {
   user: {
@@ -24,21 +24,43 @@ const previousSessions = [
   },
 ];
 
-const createDependencies = () => {
+type ReviewOutcome = "marked" | "failed";
+
+const createDependencies = (reviewOutcome: ReviewOutcome = "marked") => {
   const notices: unknown[] = [];
+  const reviews: string[] = [];
+  const errors: unknown[] = [];
   let lookupCount = 0;
   return {
     notices,
+    reviews,
+    errors,
     getLookupCount: () => lookupCount,
     dependencies: {
       findPreviousSessions: async () => {
         lookupCount += 1;
         return previousSessions;
       },
+      requestReview: async ({
+        userId,
+        sessionId,
+      }: {
+        userId: SafeId<"user">;
+        sessionId: string;
+      }) => {
+        if (reviewOutcome === "failed") {
+          throw new Error("review store unavailable");
+        }
+        reviews.push(`${userId}/${sessionId}`);
+      },
       sendNotice: (notice: unknown) => notices.push(notice),
       isTransactionalEmailConfigured: () => true,
       isLocalDev: () => false,
       onError: (error: unknown) => {
+        if (reviewOutcome === "failed") {
+          errors.push(error);
+          return;
+        }
         throw error;
       },
     },
@@ -129,5 +151,45 @@ describe("new-device notices", () => {
     expect(emailSignIn.notices).toHaveLength(1);
     expect(noSessionPath.getLookupCount()).toBe(0);
     expect(noSessionPath.notices).toHaveLength(0);
+  });
+
+  test("marks the reported sign-in for review, and only that one", async () => {
+    const reported = createDependencies();
+    await sendNewDeviceNotice({
+      path: "/two-factor/verify-totp",
+      newSession,
+      dependencies: reported.dependencies,
+    });
+
+    const known = createDependencies();
+    await sendNewDeviceNotice({
+      path: "/two-factor/verify-totp",
+      newSession: {
+        ...newSession,
+        session: { ...newSession.session, ipAddress: "203.0.113.1" },
+      },
+      dependencies: known.dependencies,
+    });
+
+    expect(reported.reviews).toEqual(["user-1/session-2"]);
+    // The email links to the review of exactly this session.
+    expect(reported.notices).toEqual([
+      expect.objectContaining({ sessionId: "session-2" }),
+    ]);
+    expect(known.reviews).toEqual([]);
+    expect(known.notices).toHaveLength(0);
+  });
+
+  test("still sends the notice when the review cannot be recorded", async () => {
+    const { dependencies, notices, errors } = createDependencies("failed");
+
+    await sendNewDeviceNotice({
+      path: "/two-factor/verify-totp",
+      newSession,
+      dependencies,
+    });
+
+    expect(notices).toHaveLength(1);
+    expect(errors).toHaveLength(1);
   });
 });

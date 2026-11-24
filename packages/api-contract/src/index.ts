@@ -1,4 +1,5 @@
 import { STELLA_API_VERSION_PREFIX } from "./api-version";
+import type { FilePartDescriptor } from "./file-parts";
 
 /** Version of the public REST request and response contract. */
 export const STELLA_REST_API_CONTRACT_VERSION = 4 as const;
@@ -634,7 +635,6 @@ export type {
 } from "./resource-link";
 
 export { STELLA_API_VERSION_PREFIX } from "./api-version";
-export const MAX_EMAIL_TEXT_ATTACHMENT_PREVIEW_BYTES = 1024 * 1024;
 export const EMAIL_TEXT_ATTACHMENT_CHARSET = {
   big5: "big5",
   eucJp: "euc-jp",
@@ -679,14 +679,12 @@ export const EMAIL_TEXT_ATTACHMENT_CHARSET = {
 export type EmailTextAttachmentCharset =
   (typeof EMAIL_TEXT_ATTACHMENT_CHARSET)[keyof typeof EMAIL_TEXT_ATTACHMENT_CHARSET];
 
-/** One attachment an email preview lists, without its bytes. */
-export type EmailAttachmentDescriptor = {
+/**
+ * One attachment an email preview lists, without its bytes: a part of the
+ * email file, and the charset its text declares.
+ */
+export type EmailAttachmentDescriptor = FilePartDescriptor & {
   charset: EmailTextAttachmentCharset | null;
-  id: string;
-  fileName: string | null;
-  mimeType: string | null;
-  sizeBytes: number;
-  previewable: boolean;
 };
 
 /**

@@ -2,7 +2,6 @@ import { panic } from "better-result";
 import { asc, sql } from "drizzle-orm";
 import type { Column } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   expenses,
   invoiceLines,
@@ -11,6 +10,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { InvoiceStatus } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   parseInvoiceLinkExpensesRow,
   parseInvoiceLinkInvoiceRow,

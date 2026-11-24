@@ -3,7 +3,7 @@ import type { InferOk } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { legislationDocuments } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readBounded } from "@/api/lib/db/read-bounded";

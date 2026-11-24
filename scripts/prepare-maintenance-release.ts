@@ -1782,18 +1782,39 @@ export const readLatestFinalVersion = (rootDir: string): string => {
   return latest.slice(1);
 };
 
+/**
+ * The cut needs HEAD on the fetched main's first-parent history: main's tip
+ * or an older main commit whose suites are already proven. Merges after it
+ * stay out of this release. A commit main reaches only through a merge's
+ * second parent, or one main lacks, never landed as a main commit.
+ */
+export const assertHeadOnMainHistory = (
+  rootDir: string,
+  mainRef = "origin/main",
+): void => {
+  const head = resolveHeadSha(rootDir);
+  const listed = Bun.spawnSync(
+    ["git", "rev-list", "--first-parent", mainRef, "--"],
+    { cwd: rootDir, stderr: "pipe", stdout: "pipe" },
+  );
+  if (!listed.success) {
+    throw new MaintenanceReleaseError(
+      `Could not read the first-parent history of ${mainRef}`,
+    );
+  }
+  if (!listed.stdout.toString().split("\n").includes(head)) {
+    throw new MaintenanceReleaseError(
+      `Cut releases from a commit on main: ${head} is not on the first-parent history of ${mainRef}`,
+    );
+  }
+};
+
 export const productionCutGateEffects = (rootDir: string) => ({
   rootDir,
   resolveHeadSha: () => resolveHeadSha(rootDir),
   latestFinalVersion: () => {
     run(["git", "fetch", "origin", "main", "--tags"]);
-    const head = resolveHeadSha(rootDir);
-    const main = spawnOutput(["git", "rev-parse", "origin/main"])?.trim();
-    if (head !== main) {
-      throw new MaintenanceReleaseError(
-        "Cut releases from the fetched main commit",
-      );
-    }
+    assertHeadOnMainHistory(rootDir);
     return readLatestFinalVersion(rootDir);
   },
   runGate: runCutGate,

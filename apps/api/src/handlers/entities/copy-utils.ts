@@ -4,7 +4,6 @@ import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
-import type { Transaction } from "@/api/db/root";
 import {
   cellMetadata,
   entities,
@@ -14,6 +13,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
+import type { Transaction } from "@/api/db/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";

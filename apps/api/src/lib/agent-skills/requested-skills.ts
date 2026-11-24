@@ -2,7 +2,7 @@ import { Result } from "better-result";
 
 import type { SkillMetadata } from "@stll/skills/frontmatter";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import {

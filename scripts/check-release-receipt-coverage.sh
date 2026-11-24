@@ -40,7 +40,7 @@ command -v bun >/dev/null 2>&1 \
   || not_covered "Bun is not available, so the release history cannot be checked."
 # Where the previous release last took main; release tags sit on release
 # branches main never contains, so the queue history script owns this rule.
-previous_release=$(bun "$queue_history" --previous-release --base "$sha" --repo-dir "$PWD") \
+previous_release=$(bun --no-env-file --config=/dev/null "$queue_history" --previous-release --base "$sha" --repo-dir "$PWD") \
   && [[ "$previous_release" =~ ^[0-9a-f]{40}$ ]] \
   || not_covered "no previous release is known for $sha in this checkout."
 # The newest earlier main commit whose main/heavy and main/pr-depth both passed
@@ -60,7 +60,7 @@ while read -r candidate; do
     break
   fi
 done < <(git rev-list --first-parent --max-count=50 "$previous_release..$sha^" 2>/dev/null)
-GH_RETRY_SCRIPT="$gh_retry_script" bun "$queue_history" --require \
+GH_RETRY_SCRIPT="$gh_retry_script" bun --no-env-file --config=/dev/null "$queue_history" --require \
   --from "$anchor" --base "$sha" --repo-dir "$PWD" >&2 \
   || not_covered "history since $anchor is not validated through the merge queue."
 echo "Merge-group receipt on $sha and validated queue history since $anchor stand in for main/heavy and main/pr-depth." >&2

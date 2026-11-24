@@ -438,12 +438,19 @@ export const TemplateStudioPage = ({
   } = useQuery(
     templateDocxBufferOptions(activeOrganizationId, templateId, presignedUrl),
   );
+  const nextLoadedBuffer = loadedBuffer ?? null;
+  const [prevLoadedBuffer, setPrevLoadedBuffer] = useState<ArrayBuffer | null>(
+    null,
+  );
   const [docBuffer, setDocBuffer] = useState<ArrayBuffer | null>(null);
   // Freeze the first buffer so a later query refetch cannot re-initialize the
   // editor mid-edit. Guarded render-time adjustment makes that async arrival a
   // single transition without an intermediate empty commit.
-  if (loadedBuffer && docBuffer === null) {
-    setDocBuffer(loadedBuffer);
+  if (prevLoadedBuffer !== nextLoadedBuffer) {
+    setPrevLoadedBuffer(nextLoadedBuffer);
+    if (nextLoadedBuffer !== null && docBuffer === null) {
+      setDocBuffer(nextLoadedBuffer);
+    }
   }
 
   // Seed the shared session from the manifest and open the Fields/Clauses/

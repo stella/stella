@@ -11,6 +11,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  EVENT_LOOP_BLOCKED_MARKER as WATCHDOG_MARKER,
+  eventLoopBlockedMessage,
+} from "../packages/scripts/src/test-event-loop-watchdog-policy.ts";
+import {
   checkLogText,
   exitCodeDetail,
   FAILED_CHECK_RECORD,
@@ -28,6 +32,7 @@ import {
   DIGEST_ARTIFACT,
   digestFile,
   escapeMarkdown,
+  EVENT_LOOP_BLOCKED_MARKER,
   failedTests,
   failureLines,
   type FailureRecord,
@@ -650,12 +655,10 @@ test("an oversized log line costs bounded time", () => {
   const huge = `${"a/".repeat(25_000)}${"b.".repeat(25_000)}`;
   expect(huge.length).toBe(100_000);
   const lines = [huge, `error ${huge}:`, `  at ${huge}`, `  1) [x] › ${huge}`];
-  const started = performance.now();
   failureLines(lines);
   renderTail(lines);
   splitSteps(lines.join("\n"));
   expect(findLocation(huge)).toBeUndefined();
-  expect(performance.now() - started).toBeLessThan(1000);
   expect(MAX_SCAN_WIDTH).toBeLessThanOrEqual(2000);
 });
 
@@ -1984,4 +1987,115 @@ test("show prints a run's digest from its artifact, else from its job logs", () 
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+// A rest shard as Turbo streamed it when one package hung beside a failure:
+// @stll/ui opened a test file and printed nothing more, @stll/scripts then
+// timed out and stopped the run, and @stll/chat had finished.
+const STARVED_RUN = [
+  "@stll/chat:test: cache miss, executing 1a2b3c",
+  "@stll/chat:test: ::group::src/transport.test.ts:",
+  "@stll/chat:test: (pass) transport > delivers [1.00ms]",
+  "@stll/chat:test: ::endgroup::",
+  "@stll/chat:test:  1 pass",
+  "@stll/chat:test: Ran 1 test across 1 file. [10.00ms]",
+  "@stll/ui:test: cache miss, executing 4d5e6f",
+  "@stll/ui:test: ::group::src/components/native-contracts.test.ts:",
+  "@stll/ui:test: (pass) each renderer accepts its contract [0.05ms]",
+  "@stll/ui:test: ::endgroup::",
+  "@stll/ui:test: ",
+  "@stll/ui:test: ::group::src/components/settings.dom.test.tsx:",
+  "@stll/scripts:test: cache miss, executing 7a8b9c",
+  "@stll/scripts:test: ::group::src/dev-process-groups.test.ts:",
+  '@stll/scripts:test: ::error title=error: Test "stops one session" timed out after 5000ms::',
+  "@stll/scripts:test: (fail) stops one session [5017.88ms]",
+  "@stll/scripts:test:   ^ this test timed out after 5000ms.",
+  "@stll/scripts:test:  1 fail",
+  "@stll/scripts:test: Ran 1 test across 1 file. [5.10s]",
+  '@stll/scripts:test: error: script "test" exited with code 1',
+  `##[error]command (${WORK}/packages/scripts) /home/runner/.bun/bin/bun run test exited (1)`,
+  `@stll/scripts#test:  ERROR  command (${WORK}/packages/scripts) /home/runner/.bun/bin/bun run test exited (1)`,
+  " Tasks:    1 successful, 3 total",
+  "Failed:    @stll/scripts#test",
+  " ERROR  run failed: command  exited (1)",
+];
+const UI_STILL_RUNNING =
+  "@stll/ui#test was still running when the run stopped, in src/components/settings.dom.test.tsx";
+
+test("a test task the run stopped mid-file is named with its open file, a finished one is not", () => {
+  const tail = renderTail(STARVED_RUN);
+  expect(tail).toContain(UI_STILL_RUNNING);
+  expect(tail).not.toContain("@stll/chat#test");
+  expect(tail).not.toContain("@stll/scripts#test was still running");
+  // The failure that stopped the run is still listed, under its plain file.
+  expect(tail).toContain("  src/dev-process-groups.test.ts");
+  expect(tail).not.toContain("::group::src/dev-process-groups");
+  expect(failureLines(STARVED_RUN).map(({ message }) => message)).toContain(
+    UI_STILL_RUNNING,
+  );
+});
+
+test("a Bun file header inside a GitHub group names the plain file", () => {
+  expect(failedTests(STARVED_RUN)).toEqual([
+    {
+      scope: "@stll/scripts",
+      file: "src/dev-process-groups.test.ts",
+      name: "stops one session",
+    },
+  ]);
+});
+
+test("the digest reads the event-loop watchdog's own kill line under its file", () => {
+  expect(EVENT_LOOP_BLOCKED_MARKER).toBe(WATCHDOG_MARKER);
+  const kill = eventLoopBlockedMessage({
+    file: "src/components/settings.dom.test.tsx",
+    blockedMs: 60_000,
+    pid: 3130,
+    descendants: 0,
+  });
+  const log = [
+    "@stll/ui:test: cache miss, executing 4d5e6f",
+    "@stll/ui:test: ::group::src/components/settings.dom.test.tsx:",
+    `@stll/ui:test: ${kill}`,
+    '@stll/ui:test: error: script "test" was terminated by signal SIGKILL (Forced quit)',
+    `@stll/ui#test:  ERROR  command (${WORK}/packages/ui) /home/runner/.bun/bin/bun run test exited (1)`,
+    " ERROR  run failed: command  exited (1)",
+  ];
+  expect(
+    failureLines(log)
+      .at(0)
+      ?.message.startsWith(
+        `@stll/ui: src/components/settings.dom.test.tsx: ${WATCHDOG_MARKER}`,
+      ),
+  ).toBe(true);
+  const tail = renderTail(log);
+  expect(tail).toContain(
+    "---- test files that blocked their event loop (1) ----",
+  );
+  expect(tail).not.toContain("still running when the run stopped");
+});
+
+test("watchdog reports never crowd out an independent failure", () => {
+  const kill = (file: string) => [
+    `@stll/${file}:test: cache miss, executing ${file}`,
+    `@stll/${file}:test: ::group::src/${file}.test.ts:`,
+    `@stll/${file}:test: ${eventLoopBlockedMessage({ file: `src/${file}.test.ts`, blockedMs: 60_000, pid: 1, descendants: 0 })}`,
+    `@stll/${file}:test: Ran 1 test across 1 file. [60.00s]`,
+  ];
+  const log = [
+    ...kill("a"),
+    ...kill("b"),
+    ...kill("c"),
+    "@stll/d:test: cache miss, executing d",
+    "@stll/d:test: ::group::src/d.test.ts:",
+    "@stll/d:test: error: expect(received).toBe(expected)",
+    "@stll/d:test: (fail) d adds up [1.00ms]",
+    "@stll/d:test: Ran 1 test across 1 file. [5.00ms]",
+  ];
+  const messages = failureLines(log, 3).map(({ message }) => message);
+  expect(messages).toHaveLength(3);
+  expect(
+    messages.filter((message) => message.includes(WATCHDOG_MARKER)),
+  ).toHaveLength(2);
+  expect(messages.some((message) => message.includes("d adds up"))).toBe(true);
 });

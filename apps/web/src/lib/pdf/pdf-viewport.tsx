@@ -25,6 +25,7 @@ import { usePDFFitToWidth } from "@/lib/pdf/hooks/use-pdf-fit-to-width";
 import { usePDFWheelZoom } from "@/lib/pdf/hooks/use-pdf-wheel-zoom";
 import { useTextSelection } from "@/lib/pdf/hooks/use-text-selection";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
+import { PDF_PAGE_INLINE_INSET_PX } from "@/lib/pdf/pdf-fit-width.logic";
 import type { PDFDocument } from "@/lib/pdf/pdf-loader";
 import type { PDFPageProps } from "@/lib/pdf/pdf-page";
 import type { PDFPageSource } from "@/lib/pdf/pdf-page-source";
@@ -200,6 +201,7 @@ const PDFViewerContent = ({
     "--scale-factor": effectiveScale,
     "--scale-round-x": `${roundY}px`,
     "--scale-round-y": `${roundY}px`,
+    paddingInline: PDF_PAGE_INLINE_INSET_PX,
   };
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -368,16 +370,30 @@ const PDFPasswordPrompt = ({
             </FieldError>
           )}
         </Field>
-        <PDFPasswordSubmitButton label={t("workspaces.pdf.unlock")} />
+        <PDFPasswordSubmitButton
+          label={t("workspaces.pdf.unlock")}
+          pendingLabel={t("common.loading")}
+        />
       </Form>
     </div>
   );
 };
 
-const PDFPasswordSubmitButton = ({ label }: { label: string }) => {
+const PDFPasswordSubmitButton = ({
+  label,
+  pendingLabel,
+}: {
+  label: string;
+  pendingLabel: string;
+}) => {
   const { pending } = useFormStatus();
   return (
-    <Button className="w-full" disabled={pending} type="submit">
+    <Button
+      className="w-full"
+      disabled={pending}
+      disabledReason={pendingLabel}
+      type="submit"
+    >
       {label}
     </Button>
   );

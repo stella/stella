@@ -45,7 +45,7 @@ use crate::{
   },
   keychain,
   local_store::StoreKey,
-  local_window::ClipboardCaller,
+  local_window::{ClipboardCaller, ClipboardSettingsCaller},
 };
 
 #[cfg(target_os = "windows")]
@@ -918,6 +918,22 @@ pub struct ClipboardSnapshot {
   pub welcome_status: ClipboardWelcomeStatus,
 }
 
+/// What the clipboard settings read returns: how history is kept and how its
+/// groups are named and ordered, never a clip. The Settings window renders it
+/// beside the Clips windows, which read the full [`ClipboardSnapshot`].
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClipboardSettingsSnapshot {
+  pub revision: u32,
+  pub capture_status: ClipboardCaptureStatus,
+  pub group_limit: usize,
+  pub groups: Vec<ClipboardGroup>,
+  pub retention: ClipboardRetention,
+  pub screen_capture: ClipboardScreenCapture,
+  pub source_app_exclusion_limit: usize,
+  pub source_app_exclusions: Vec<ClipboardSourceAppExclusion>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClipboardCaptureUpdate {
@@ -1550,6 +1566,22 @@ impl ClipboardManager {
       source_app_exclusions: self.source_app_exclusions.clone(),
       source_app_visuals,
       welcome_status: self.welcome.status(),
+    }
+  }
+
+  pub fn settings_snapshot(
+    &self,
+    _caller: &ClipboardSettingsCaller,
+  ) -> ClipboardSettingsSnapshot {
+    ClipboardSettingsSnapshot {
+      revision: self.revision,
+      capture_status: self.capture_status,
+      group_limit: MAX_GROUPS,
+      groups: self.groups.clone(),
+      retention: self.retention,
+      screen_capture: self.screen_capture.capture(),
+      source_app_exclusion_limit: MAX_CAPTURE_EXCLUSIONS,
+      source_app_exclusions: self.source_app_exclusions.clone(),
     }
   }
 
@@ -2345,6 +2377,22 @@ impl ClipboardManager {
     prune_items(&mut self.items, self.retention, at);
     self.persist_or_restore(checkpoint)?;
     Ok(true)
+  }
+
+  /// Whether history, still keeping dictations, holds the dictation kept as
+  /// `id`.
+  fn holds_dictation(&self, id: &str) -> bool {
+    self.capture_status == ClipboardCaptureStatus::Active
+      && self.items.iter().any(|item| {
+        matches!(
+          item,
+          ClipboardItem::Text {
+            id: item_id,
+            origin: ClipboardItemOrigin::Dictation,
+            ..
+          } if item_id == id
+        )
+      })
   }
 
   fn capture_image(
@@ -3995,9 +4043,9 @@ pub fn keeps_dictations(app: &AppHandle) -> bool {
 
 /// Keeps a finished dictation in stella's own clipboard history, labelled
 /// as a dictation and stored with the same local encryption as every clip.
-/// The system clipboard is never written. Returns whether the text is in
-/// history: never while the organization turned history off, the user
-/// paused it, or `app_identifier` is an app the user left out of it.
+/// The system clipboard is never written. Returns the history item the
+/// text is kept as: none while the organization turned history off, the
+/// user paused it, or `app_identifier` is an app the user left out of it.
 #[cfg_attr(
   not(dictation),
   allow(dead_code, reason = "only builds with the speech engine dictate")
@@ -4006,17 +4054,15 @@ pub fn keep_dictation(
   app: &AppHandle,
   text: &str,
   app_identifier: Option<&str>,
-) -> bool {
+) -> Option<String> {
   if crate::managed_policy::current().clipboard_disabled {
-    return false;
+    return None;
   }
-  let Some(state) = app.try_state::<ClipboardAppState>() else {
-    return false;
-  };
-  let revision = {
+  let state = app.try_state::<ClipboardAppState>()?;
+  let (id, revision) = {
     let Ok(mut manager) = state.lock() else {
       tracing::error!("clipboard manager lock is poisoned");
-      return false;
+      return None;
     };
     let previous_ids = manager
       .items
@@ -4024,11 +4070,15 @@ pub fn keep_dictation(
       .map(|item| item.id().to_string())
       .collect::<Vec<_>>();
     match manager.keep_dictation(text, app_identifier, Utc::now()) {
-      Ok(true) => manager.cache_capture_update(&previous_ids),
-      Ok(false) => return false,
+      // A kept dictation goes first.
+      Ok(true) => (
+        manager.items.first()?.id().to_string(),
+        manager.cache_capture_update(&previous_ids),
+      ),
+      Ok(false) => return None,
       Err(error) => {
         tracing::warn!(error = %error, "dictation was not kept in clipboard history");
-        return false;
+        return None;
       }
     }
   };
@@ -4038,7 +4088,23 @@ pub fn keep_dictation(
       "clipboard history change was not announced",
     );
   }
-  true
+  Some(id)
+}
+
+/// Whether clipboard history still holds the dictation kept as `id`: not
+/// once the speaker deleted it, cleared or paused history, or the
+/// organization turned history off.
+#[cfg_attr(
+  not(dictation),
+  allow(dead_code, reason = "only builds with the speech engine dictate")
+)]
+pub fn holds_dictation(app: &AppHandle, id: &str) -> bool {
+  !crate::managed_policy::current().clipboard_disabled
+    && app.try_state::<ClipboardAppState>().is_some_and(|state| {
+      state
+        .lock()
+        .is_ok_and(|manager| manager.holds_dictation(id))
+    })
 }
 
 pub fn initialize_and_watch(
@@ -7409,6 +7475,54 @@ mod tests {
   }
 
   #[test]
+  fn settings_snapshot_carries_settings_and_never_a_clip() {
+    let mut manager = ready_manager();
+    let clip_text = "Draft settlement figure for the client";
+    manager.items.push(text_item(Utc::now(), clip_text));
+    manager
+      .create_group("Prompts", ClipboardGroupColor::default(), None)
+      .unwrap();
+    manager.set_retention(ClipboardRetention::Week).unwrap();
+    manager
+      .set_capture_status(ClipboardCaptureStatus::Paused)
+      .unwrap();
+
+    let full =
+      serde_json::to_value(manager.snapshot(&ClipboardCaller::for_test())).unwrap();
+    assert!(full.to_string().contains(clip_text));
+
+    let settings = manager.settings_snapshot(&ClipboardSettingsCaller::for_test());
+    assert_eq!(settings.revision, manager.revision);
+    let json = serde_json::to_value(settings).unwrap();
+    let mut keys = json
+      .as_object()
+      .unwrap()
+      .keys()
+      .cloned()
+      .collect::<Vec<_>>();
+    keys.sort();
+    assert_eq!(
+      keys,
+      [
+        "captureStatus",
+        "groupLimit",
+        "groups",
+        "retention",
+        "revision",
+        "screenCapture",
+        "sourceAppExclusionLimit",
+        "sourceAppExclusions",
+      ]
+    );
+    assert!(!json.to_string().contains(clip_text));
+    assert_eq!(json["retention"], "week");
+    assert_eq!(json["captureStatus"], "paused");
+    assert_eq!(json["groupLimit"], MAX_GROUPS);
+    assert_eq!(json["groups"][0]["name"], "Prompts");
+    assert_eq!(json["sourceAppExclusionLimit"], MAX_CAPTURE_EXCLUSIONS);
+  }
+
+  #[test]
   fn group_count_and_names_are_bounded() {
     let mut manager = ready_manager();
     for index in 0..MAX_GROUPS {
@@ -7733,6 +7847,32 @@ mod tests {
     assert_eq!(manager.items.len(), 2);
     assert_eq!(manager.items[0].id(), id);
     assert_eq!(manager.items[0].origin(), ClipboardItemOrigin::Dictation);
+  }
+
+  #[test]
+  fn history_holds_a_kept_dictation_until_it_is_deleted_paused_or_copied_over() {
+    let mut manager = ready_manager();
+    assert!(manager.keep_dictation("Ano.", None, Utc::now()).unwrap());
+    let id = manager.items[0].id().to_string();
+    assert!(manager.holds_dictation(&id));
+    assert!(!manager.holds_dictation("another"));
+
+    manager
+      .set_capture_status(ClipboardCaptureStatus::Paused)
+      .unwrap();
+    assert!(!manager.holds_dictation(&id));
+    manager
+      .set_capture_status(ClipboardCaptureStatus::Active)
+      .unwrap();
+    assert!(manager.holds_dictation(&id));
+
+    assert!(manager.delete_item(&id).unwrap());
+    assert!(!manager.holds_dictation(&id));
+
+    // A copy of the same text is a clip, not the dictation.
+    assert!(capture(&mut manager, "Ano.", None, Utc::now()));
+    let copied = manager.items[0].id().to_string();
+    assert!(!manager.holds_dictation(&copied));
   }
 
   #[test]

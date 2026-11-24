@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 import { execFileSync } from "node:child_process";
 
 const MAX_CHANGED_DATA_BYTES = 2 * 1024 * 1024;

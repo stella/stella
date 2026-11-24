@@ -2,11 +2,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { Result } from "better-result";
-import { useTranslations } from "use-intl";
+import { panic, Result } from "better-result";
+import { useFormatter, useTranslations } from "use-intl";
 
 import type { DesktopMatter } from "@stll/api-contract/desktop-time-entries";
+import {
+  blocksToHtml,
+  blocksToText,
+  escapeHtmlText,
+  paragraphsToHtml,
+} from "@stll/transcript/cleanup";
 import { Button } from "@stll/ui/button";
+import { formatFileSize } from "@stll/ui/file-size";
 import { InfoIcon, TriangleAlertIcon, WavesIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@stll/ui/toggle-group";
@@ -22,12 +29,18 @@ import {
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import {
-  blocksToHtml,
-  blocksToText,
-  cleanedMarkdown,
-  escapeHtmlText,
-  paragraphsToHtml,
-} from "./cleaned-text";
+  folderShortfalls,
+  isSavedFolder,
+  isSaveProgress,
+  TRANSCRIBE_SAVE_PROGRESS_EVENT,
+  uploadedPercent,
+} from "./matter-folder-save";
+import type {
+  FolderShortfall,
+  MatterFolderRequest,
+  SavedFolder,
+  SaveProgress,
+} from "./matter-folder-save";
 import {
   afterRefusedStart,
   formatTimestamp,
@@ -61,10 +74,12 @@ import {
   CleanedText,
   CleanupOffer,
   PaneActions,
+  useCleanedEditing,
   useCopyFormat,
   useRecordingCleanup,
 } from "./TranscribeCleanup";
 import { TranscribeMatterPicker } from "./TranscribeMatterPicker";
+import { useTranscriptSaveOptions } from "./use-transcript-save-options";
 
 const MAC = detectDesktopPlatform(navigator.userAgent) === "mac";
 
@@ -81,8 +96,8 @@ type Session = {
 
 type Saving =
   | { status: "idle" }
-  | { status: "saving" }
-  | { status: "saved"; fileName: string }
+  | { status: "saving"; progress: SaveProgress | null }
+  | { status: "saved"; folder: SavedFolder }
   | { status: "failed" };
 
 /** The "Transcribe a recording" window: choose a file, then read its text
@@ -511,6 +526,22 @@ const ChooseScreen = ({
     };
   }, []);
   const usable = usableFor({ snapshot, destination, model });
+  const destinationDisabledReason = (() => {
+    if (usable) {
+      return undefined;
+    }
+    if (destination === "local") {
+      return snapshot.cloudAvailable
+        ? t("destination.localMissingCloud")
+        : t("destination.localMissing");
+    }
+    if (!snapshot.cloudAvailable) {
+      return t("destination.useLocal");
+    }
+    return model.status === "failed"
+      ? t("destination.modelFailed")
+      : t("destination.loadingModel");
+  })();
   const choose = async () => {
     setChoosing(true);
     setChooseFailed(false);
@@ -542,6 +573,11 @@ const ChooseScreen = ({
           </p>
           <Button
             disabled={!usable || choosing}
+            disabledReason={
+              choosing
+                ? t("waitingForFileSelection")
+                : destinationDisabledReason
+            }
             onClick={() => {
               void choose();
             }}
@@ -567,6 +603,7 @@ const ChooseScreen = ({
               </p>
               <Button
                 disabled={!usable}
+                disabledReason={destinationDisabledReason}
                 onClick={() => {
                   onStartKept(kept);
                 }}
@@ -626,10 +663,6 @@ const ChooseScreen = ({
             <TranscribeMatterPicker matter={matter} onChange={onMatterChange} />
           </div>
         </div>
-        <p className="text-muted-foreground flex gap-2 px-0.5 text-xs text-pretty">
-          <InfoIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-          <span>{t("note")}</span>
-        </p>
       </div>
     </Shell>
   );
@@ -712,6 +745,66 @@ const FAILURE_MESSAGES = {
   tooLong: "failure.tooLong",
 } as const satisfies Record<TranscribeFailure, string>;
 
+type TranscriptActionReasonOptions = {
+  hasText: boolean;
+  running: boolean;
+  saving: Saving;
+  cleanup: Pick<
+    ReturnType<typeof useRecordingCleanup>,
+    "busy" | "parts" | "running" | "started"
+  >;
+};
+
+const transcriptActionReasons = (
+  { hasText, running, saving, cleanup }: TranscriptActionReasonOptions,
+  t: (
+    key:
+      | "progress.transcribing"
+      | "result.noSpeech"
+      | "result.savingToMatter"
+      | "result.alreadySaved"
+      | "cleaned.running"
+      | "cleaned.offerTitle",
+  ) => string,
+) => {
+  const noTranscriptReason = t(
+    running ? "progress.transcribing" : "result.noSpeech",
+  );
+  const raw = hasText ? undefined : noTranscriptReason;
+  const save = (() => {
+    if (running) {
+      return t("progress.transcribing");
+    }
+    if (saving.status === "saving") {
+      return t("result.savingToMatter");
+    }
+    // The folder takes the cleaned-up text too, so a save waits for it.
+    if (cleanup.running) {
+      return t("cleaned.running");
+    }
+    if (saving.status === "saved") {
+      return t("result.alreadySaved");
+    }
+    return raw;
+  })();
+  const cleaned = (() => {
+    if (!cleanup.running && cleanup.parts.length > 0) {
+      return undefined;
+    }
+    if (cleanup.busy) {
+      return t("cleaned.running");
+    }
+    if (!hasText) {
+      return raw;
+    }
+    if (!cleanup.started) {
+      return t("cleaned.offerTitle");
+    }
+    return t(running ? "progress.transcribing" : "cleaned.running");
+  })();
+  return { raw, save, cleaned };
+};
+
 const ResultScreen = ({
   session,
   pieces,
@@ -752,24 +845,13 @@ const ResultScreen = ({
     finished: !running,
     autoStart: session.autoCleanup,
   });
+  const editing = useCleanedEditing(cleanup);
   const [copyFormat, setCopyFormat] = useCopyFormat();
-  const cleanedBlocks = cleanup.blocks;
-  const cleanedReady = !cleanup.running && cleanup.parts.length > 0;
-  const save = async (
-    text: string,
-    fileName: string,
-    format: "text" | "markdown",
-  ) => {
-    setActionFailed(false);
-    const result = await Result.tryPromise(async () =>
-      invoke<boolean>("transcribe_save_text", {
-        request: { text, fileName, format },
-      }),
-    );
-    if (Result.isError(result)) {
-      setActionFailed(true);
-    }
-  };
+  const cleanedBlocks = editing.blocks;
+  const reasons = transcriptActionReasons(
+    { hasText, running, saving, cleanup },
+    t,
+  );
   const copy = async (text: string, html: string | null) => {
     const result = await Result.tryPromise(async () =>
       html === null
@@ -782,7 +864,7 @@ const ResultScreen = ({
   let cleanedStatus = "";
   if (cleanup.running && hasText) {
     cleanedStatus = t("cleaned.running");
-  } else if (cleanup.failed > 0) {
+  } else if (cleanup.failed > 0 && !editing.edited) {
     cleanedStatus = t("cleaned.failedCount", { count: cleanup.failed });
   }
   const instructionsLabel = t("cleaned.instructionsLabel");
@@ -800,23 +882,61 @@ const ResultScreen = ({
       : []),
     blocksToHtml(cleanedBlocks),
   ].join("\n");
+  const saveOptions = useTranscriptSaveOptions({
+    title,
+    paragraphs,
+    cleaned: { instructions: cleanup.instructions, markdown: editing.markdown },
+    cleanedPlain,
+    onResult: setActionFailed,
+  });
   const saveToMatter = async () => {
     if (session.matter === null) {
       return;
     }
-    setSaving({ status: "saving" });
-    const result = await Result.tryPromise(async () =>
-      invoke<{ fileName: string }>("transcribe_save_to_matter", {
-        request: {
-          matterId: session.matter?.id,
-          title: t("result.documentTitle", { title }),
-          paragraphs,
+    const request: MatterFolderRequest = {
+      matterId: session.matter.id,
+      title,
+      paragraphs,
+      transcriptName: t("result.documentTitle", { title }),
+      cleanedName: t("matterFolder.cleanedTitle", { title }),
+      instructionsLabel: t("matterFolder.instructionsLabel"),
+      // The cleaned-up text as shown: the speaker's edits once there are any.
+      cleaned:
+        editing.editable && editing.markdown.trim() !== ""
+          ? { markdown: editing.markdown, instructions: cleanup.instructions }
+          : null,
+    };
+    setSaving({ status: "saving", progress: null });
+    // Progress belongs to this save only: heard from before the save starts,
+    // so no stage is missed, and dropped once it answers. Without it the row
+    // says Saving… until then.
+    const stopProgress = await new Promise<() => void>((resolve) => {
+      const stop = subscribeDesktopEvent<unknown>({
+        event: TRANSCRIBE_SAVE_PROGRESS_EVENT,
+        handler: ({ payload }) => {
+          if (isSaveProgress(payload)) {
+            setSaving((current) =>
+              current.status === "saving"
+                ? { status: "saving", progress: payload }
+                : current,
+            );
+          }
         },
-      }),
+        onError: () => {
+          resolve(stop);
+        },
+        onSubscribed: () => {
+          resolve(stop);
+        },
+      });
+    });
+    const result = await Result.tryPromise(async () =>
+      invoke<unknown>("transcribe_save_to_matter_folder", { request }),
     );
+    stopProgress();
     setSaving(
-      Result.isOk(result)
-        ? { status: "saved", fileName: result.value.fileName }
+      Result.isOk(result) && isSavedFolder(result.value)
+        ? { status: "saved", folder: result.value }
         : { status: "failed" },
     );
   };
@@ -837,12 +957,8 @@ const ResultScreen = ({
         </div>
         {session.matter === null ? null : (
           <Button
-            disabled={
-              !hasText ||
-              running ||
-              saving.status === "saving" ||
-              saving.status === "saved"
-            }
+            disabled={reasons.save !== undefined}
+            disabledReason={reasons.save}
             onClick={() => {
               void saveToMatter();
             }}
@@ -868,7 +984,7 @@ const ResultScreen = ({
             </h2>
             <PaneActions
               copyFormat={copyFormat}
-              disabled={!hasText}
+              disabledReason={reasons.raw}
               onCopy={async (format) =>
                 await copy(
                   transcriptText(paragraphs, { timestamps: true }),
@@ -878,30 +994,7 @@ const ResultScreen = ({
                 )
               }
               onCopyFormatChange={setCopyFormat}
-              saveOptions={[
-                {
-                  id: "timestamps",
-                  label: t("result.saveWithTimestamps"),
-                  onSave: () => {
-                    void save(
-                      transcriptText(paragraphs, { timestamps: true }),
-                      t("result.fileName", { title }),
-                      "text",
-                    );
-                  },
-                },
-                {
-                  id: "plain",
-                  label: t("result.saveWithoutTimestamps"),
-                  onSave: () => {
-                    void save(
-                      transcriptText(paragraphs, { timestamps: false }),
-                      t("result.fileName", { title }),
-                      "text",
-                    );
-                  },
-                },
-              ]}
+              saveOptions={saveOptions.transcript}
             />
           </div>
           <ScrollArea className="min-h-0 flex-1">
@@ -944,9 +1037,14 @@ const ResultScreen = ({
                 {cleanedStatus}
               </TruncatedText>
             </div>
+            {editing.edited ? (
+              <Button onClick={editing.discard} size="xs" variant="ghost">
+                {t("cleaned.discardEdits")}
+              </Button>
+            ) : null}
             <PaneActions
               copyFormat={copyFormat}
-              disabled={!cleanedReady}
+              disabledReason={reasons.cleaned}
               onCopy={async (format) =>
                 await copy(
                   cleanedPlain,
@@ -954,40 +1052,17 @@ const ResultScreen = ({
                 )
               }
               onCopyFormatChange={setCopyFormat}
-              saveOptions={[
-                {
-                  id: "markdown",
-                  label: t("cleaned.saveMarkdown"),
-                  onSave: () => {
-                    void save(
-                      cleanedMarkdown(
-                        cleanup.instructions,
-                        cleanup.markdown,
-                        instructionsLabel,
-                      ),
-                      t("cleaned.fileNameMarkdown", { title }),
-                      "markdown",
-                    );
-                  },
-                },
-                {
-                  id: "text",
-                  label: t("cleaned.saveText"),
-                  onSave: () => {
-                    void save(
-                      cleanedPlain,
-                      t("cleaned.fileNameText", { title }),
-                      "text",
-                    );
-                  },
-                },
-              ]}
+              saveOptions={saveOptions.cleaned}
             />
           </div>
           <ScrollArea className="min-h-0 flex-1">
             <div className="px-7 pt-5 pb-6">
               {hasText && cleanup.started ? (
-                <CleanedText cleanup={cleanup} transcribing={running} />
+                <CleanedText
+                  cleanup={cleanup}
+                  editing={editing}
+                  transcribing={running}
+                />
               ) : null}
               {hasText && !cleanup.started ? (
                 <CleanupOffer onStart={cleanup.start} />
@@ -1059,6 +1134,7 @@ const StatusRow = ({
         </div>
         <Button
           disabled={stopping}
+          disabledReason={t("progress.stopping")}
           onClick={() => {
             setStopping(true);
             void invoke("transcribe_stop", { job }).catch(() => {
@@ -1091,6 +1167,69 @@ const StatusRow = ({
   );
 };
 
+/** How a save to a matter is getting on, in the status row. */
+const saveProgressText = (
+  progress: SaveProgress | null,
+  t: (
+    key:
+      | "result.savingToMatter"
+      | "matterFolder.preparing"
+      | "matterFolder.documents"
+      | "matterFolder.uploading"
+      | "matterFolder.finishing",
+    values?: { percent: number },
+  ) => string,
+): string => {
+  if (progress === null) {
+    return t("result.savingToMatter");
+  }
+  switch (progress.stage) {
+    case "preparing":
+      return t("matterFolder.preparing");
+    case "documents":
+      return t("matterFolder.documents");
+    case "uploading":
+      return t("matterFolder.uploading", {
+        percent: uploadedPercent(progress),
+      });
+    case "finishing":
+      return t("matterFolder.finishing");
+    default:
+      progress satisfies never;
+      return panic("Unhandled save progress stage");
+  }
+};
+
+/** What a saved folder is missing, said plainly. */
+const shortfallText = (
+  shortfall: FolderShortfall,
+  t: (
+    key:
+      | "matterFolder.cleanedNotFiled"
+      | "matterFolder.audioTooLarge"
+      | "matterFolder.audioFailed"
+      | "matterFolder.audioMissing",
+    values?: { size: string },
+  ) => string,
+  fileSize: (bytes: number) => string,
+): string => {
+  switch (shortfall.kind) {
+    case "cleanedNotFiled":
+      return t("matterFolder.cleanedNotFiled");
+    case "audioTooLarge":
+      return t("matterFolder.audioTooLarge", {
+        size: fileSize(shortfall.maxBytes),
+      });
+    case "audioFailed":
+      return t("matterFolder.audioFailed");
+    case "audioMissing":
+      return t("matterFolder.audioMissing");
+    default:
+      shortfall satisfies never;
+      return panic("Unhandled matter folder shortfall");
+  }
+};
+
 const OutcomeLine = ({
   outcome,
   doneMs,
@@ -1105,14 +1244,36 @@ const OutcomeLine = ({
   actionFailed: boolean;
 }) => {
   const t = useTranslations("transcribe");
-  if (saving.status === "saved" && matterName !== null) {
+  const format = useFormatter();
+  if (saving.status === "saving") {
     return (
-      <p className="text-foreground-strong-muted text-pretty">
-        {t("result.savedToMatter", {
-          matter: matterName,
-          fileName: saving.fileName,
-        })}
+      <p className="text-foreground-strong-muted tabular-nums">
+        {saveProgressText(saving.progress, t)}
       </p>
+    );
+  }
+  if (saving.status === "saved" && matterName !== null) {
+    const shortfalls = folderShortfalls(saving.folder);
+    return (
+      <div className="flex flex-col gap-0.5">
+        <p className="text-foreground-strong-muted text-pretty">
+          {t("matterFolder.saved", {
+            matter: matterName,
+            folder: saving.folder.folderName,
+          })}
+        </p>
+        {shortfalls.map((shortfall) => (
+          <p
+            className="text-muted-foreground flex gap-1.5 text-pretty"
+            key={shortfall.kind}
+          >
+            <InfoIcon aria-hidden="true" className="mt-px size-3.5 shrink-0" />
+            {shortfallText(shortfall, t, (bytes) =>
+              formatFileSize(bytes, format),
+            )}
+          </p>
+        ))}
+      </div>
     );
   }
   if (saving.status === "failed" || actionFailed) {

@@ -163,6 +163,8 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   usageEvent: { type: "non_resource", reason: "event" },
   desktopEditHandoff: { type: "non_resource", reason: "workflow" },
   desktopEditSession: { type: "non_resource", reason: "session" },
+  // One word of the organization's dictation list, a setting.
+  dictationVocabularyTerm: { type: "non_resource", reason: "policy" },
   docxSuggestion: { type: "non_resource", reason: "subresource" },
   document: { type: "alias", resourceType: RESOURCE_TYPE.ENTITY },
   documentCounter: { type: "non_resource", reason: "projection" },

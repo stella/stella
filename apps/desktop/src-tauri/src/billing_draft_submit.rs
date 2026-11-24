@@ -96,25 +96,34 @@ pub enum DraftError {
   Off,
   /// The user has not consented, or withdrew consent, on the server.
   ConsentRequired,
-  /// Time entry creation or a selected matter is no longer available.
+  /// Time entry creation or a selected matter is no longer available, so
+  /// the entry cannot be created either.
   Refused,
   /// The firm's guideline files changed between drafting and refining.
   ModeChanged,
   /// The selected entries bring more context than one request may carry.
   TooLarge,
+  /// Any other refusal: the user's AI access (a seat, the firm's own key)
+  /// does not cover drafting. The entry itself can still be created.
+  AiUnavailable,
   Failed,
 }
 
 /// The server's refusal codes (`DESKTOP_BILLING_DRAFT_REFUSAL_CODE`).
 const CODE_OFF: &str = "billing_drafts_off";
 const CODE_CONSENT_REQUIRED: &str = "billing_draft_consent_required";
+const CODE_TIME_ENTRY_NOT_PERMITTED: &str = "billing_draft_time_entry_not_permitted";
+const CODE_MATTER_UNAVAILABLE: &str = "billing_draft_matter_unavailable";
 
 impl DraftError {
   fn from_status(status: u16, code: Option<&str>) -> Self {
     match (status, code) {
       (403, Some(CODE_OFF)) => Self::Off,
       (403, Some(CODE_CONSENT_REQUIRED)) => Self::ConsentRequired,
-      (403, _) => Self::Refused,
+      (403, Some(CODE_TIME_ENTRY_NOT_PERMITTED | CODE_MATTER_UNAVAILABLE)) => {
+        Self::Refused
+      }
+      (403, _) => Self::AiUnavailable,
       (409, _) => Self::ModeChanged,
       (413, _) => Self::TooLarge,
       _ => Self::Failed,
@@ -440,17 +449,40 @@ mod tests {
     let errors = [
       DraftError::from_status(403, Some(CODE_OFF)),
       DraftError::from_status(403, Some(CODE_CONSENT_REQUIRED)),
-      DraftError::from_status(403, None),
+      DraftError::from_status(403, Some(CODE_TIME_ENTRY_NOT_PERMITTED)),
       DraftError::from_status(409, None),
       DraftError::from_status(413, None),
+      DraftError::from_status(403, None),
       DraftError::from_status(500, Some(CODE_OFF)),
       DraftError::from(ResponseFailure::Failed),
     ];
     assert_eq!(
-      serde_json::to_value(&errors[..6]).unwrap(),
+      serde_json::to_value(&errors[..7]).unwrap(),
       fixture["failures"]
     );
-    assert_eq!(errors[6], DraftError::Failed);
+    assert_eq!(errors[7], DraftError::Failed);
+  }
+
+  /// Only a refusal of the entry itself stops the window creating it; a
+  /// refusal of AI access leaves the entry to be written by hand.
+  #[test]
+  fn only_entry_refusals_refuse_the_entry() {
+    for code in [CODE_TIME_ENTRY_NOT_PERMITTED, CODE_MATTER_UNAVAILABLE] {
+      assert_eq!(
+        DraftError::from_status(403, Some(code)),
+        DraftError::Refused
+      );
+    }
+    for code in [
+      None,
+      Some("own_key_required"),
+      Some("ai_member_assignment_required"),
+    ] {
+      assert_eq!(
+        DraftError::from_status(403, code),
+        DraftError::AiUnavailable
+      );
+    }
   }
 
   #[test]

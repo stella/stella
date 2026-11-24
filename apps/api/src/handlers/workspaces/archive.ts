@@ -4,7 +4,7 @@ import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
 import { member } from "@/api/db/auth-schema";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import {
   documentProcessingRuns,
   timeEntries,

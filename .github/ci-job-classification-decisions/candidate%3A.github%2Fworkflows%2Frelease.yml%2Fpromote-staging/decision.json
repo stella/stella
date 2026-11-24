@@ -1,4 +1,0 @@
-{
-  "kind": "priority",
-  "qualifier": "Deploys release-candidate tags to staging and publishes the GitHub prerelease."
-}

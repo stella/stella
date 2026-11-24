@@ -85,7 +85,7 @@ describe("FilingSection", () => {
     expect(html).not.toContain(SUGGESTED.name);
     expect(html).toContain("Finish saving");
     expect(html).toMatch(
-      /<button[^>]*disabled=""[^>]*>(?:<span[^>]*>)?Change</u,
+      /<button[^>]*aria-disabled="true"[^>]*>(?:<span[^>]*>)?Change</u,
     );
   });
 

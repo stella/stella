@@ -6,12 +6,12 @@ import * as v from "valibot";
 import { numberFromString } from "@stll/api-contract/http-input";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import {
   chatMessageRevisions,
   chatMessages,
   chatThreads,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { revisionText } from "@/api/handlers/chat/chat-revision-context";
 import { hasChatWorkspaceAccess } from "@/api/handlers/chat/chat-scope";
 import type { ChatWorkspaceAccess } from "@/api/handlers/chat/chat-scope";

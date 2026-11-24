@@ -4,7 +4,7 @@ import type { SQL } from "drizzle-orm";
 
 import { isNonNullObject } from "@stll/template-conditions/path";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { corpusStorageMode } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";

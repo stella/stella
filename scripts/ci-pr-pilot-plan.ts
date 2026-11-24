@@ -5,7 +5,6 @@ export const PILOT_FAST_ROOTS = [
   "generated-sources",
   "desktop-rust-lint",
   "scan-engine-wasm-drift",
-  "recording-wasm-drift",
   "ci-checks-generated",
   "ci-checks-policy",
   "ci-checks-rest",

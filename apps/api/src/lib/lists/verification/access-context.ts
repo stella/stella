@@ -6,8 +6,8 @@ import {
 } from "@stll/api-contract/workspace-status";
 
 import { member, user } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { readFeatureAccessGrants } from "@/api/env-feature-access";
 import { resolveFeatureAccess } from "@/api/lib/auth/feature-access/context";
 import type { SafeId } from "@/api/lib/branded-types";

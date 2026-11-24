@@ -286,6 +286,7 @@ export const TimeApprovalsPage = ({
         <div className="flex justify-center">
           <Button
             disabled={queue.isFetchingNextPage}
+            disabledReason={t("common.loading")}
             onClick={() =>
               detached(
                 (async () => {

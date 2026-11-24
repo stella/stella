@@ -1,3 +1,4 @@
+import { documentToDocx } from "@stll/docx-authoring/document";
 import {
   headingLevelOf,
   paragraphNumberingReference,
@@ -12,7 +13,6 @@ import {
 } from "@stll/folio-core/server";
 import type { DocumentPreset, DocumentStyleSet } from "@stll/folio-core/server";
 
-import { documentToDocx } from "@/api/lib/docx-authoring/document";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { openScannedDocxReviewer } from "@/api/lib/file-scan/document-parsers";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";

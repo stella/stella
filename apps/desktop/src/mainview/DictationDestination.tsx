@@ -13,9 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { SettingsRow, settingsRowIds } from "@stll/ui/settings";
 import { ToggleGroup, ToggleGroupItem } from "@stll/ui/toggle-group";
-
-import { SettingsRow, settingsRowIds } from "./settings-layout";
 
 export type DictationDestinationValue = "local" | "cloud";
 
@@ -127,20 +126,27 @@ export const unavailableMessage = (
   }
 };
 
-/** The model shown as chosen: the stored one, else the region's default,
- *  else the first on offer. A model whose provider keeps the audio is shown
- *  only once picked, never as the fallback for a missing or stale choice. */
+/** The model shown as chosen: the stored one; none while the stored one is
+ *  no longer offered, which stays the choice until another is picked; with
+ *  none stored, the region's default, else the first on offer. A model
+ *  whose provider keeps the audio is shown only once picked, never as the
+ *  fallback for a missing choice. */
 export const shownCloudModel = (
   offered: CloudModels,
   cloudModel: string | null,
-): CloudModel | null =>
-  offered.models.find(({ id }) => id === cloudModel) ??
-  offered.models.find(
-    ({ id, retainsData }) =>
-      id === offered.defaultModelId && retainsData !== true,
-  ) ??
-  offered.models.find(({ retainsData }) => retainsData !== true) ??
-  null;
+): CloudModel | null => {
+  if (cloudModel !== null) {
+    return offered.models.find(({ id }) => id === cloudModel) ?? null;
+  }
+  return (
+    offered.models.find(
+      ({ id, retainsData }) =>
+        id === offered.defaultModelId && retainsData !== true,
+    ) ??
+    offered.models.find(({ retainsData }) => retainsData !== true) ??
+    null
+  );
+};
 
 /** Where dictation is transcribed: this computer (the default) or stella AI,
  *  with a model the organization's region offers. stella AI is offered only
@@ -215,7 +221,7 @@ export const DictationDestination = ({
       {destination === "cloud" && offered !== null && (
         <SettingsRow
           description={
-            chosen === null ? null : <DictationModelTags model={chosen} />
+            <ChosenModelNote chosen={chosen} cloudModel={cloudModel} />
           }
           footer={
             chosen?.retainsData === true ? (
@@ -237,6 +243,26 @@ export const DictationDestination = ({
         </SettingsRow>
       )}
     </>
+  );
+};
+
+/** Beside the model choice: the chosen model's labels, or, while the
+ *  stored model is no longer offered, that another has to be picked. */
+export const ChosenModelNote = ({
+  chosen,
+  cloudModel,
+}: {
+  chosen: CloudModel | null;
+  cloudModel: string | null;
+}) => {
+  const t = useTranslations("dictation.destination");
+  if (chosen !== null) {
+    return <DictationModelTags model={chosen} />;
+  }
+  return cloudModel === null ? null : (
+    <span className="block" role="note">
+      {t("modelWithdrawn")}
+    </span>
   );
 };
 
@@ -302,7 +328,7 @@ export const CloudModelSelect = ({
 
 /** Who runs the chosen model, whether it leaves the region, and whether its
  *  provider keeps the audio. */
-export const DictationModelTags = ({ model }: { model: CloudModel }) => {
+const DictationModelTags = ({ model }: { model: CloudModel }) => {
   const t = useTranslations("dictation.destination");
   return (
     <span className="mt-1 flex flex-wrap gap-1.5">

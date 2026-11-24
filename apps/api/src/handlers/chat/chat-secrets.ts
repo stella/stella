@@ -3,7 +3,6 @@ import { and, eq, gt, sql } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import { abortTransaction, transactionAbortError } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -11,6 +10,7 @@ import {
   MCP_RESPONSE_DISPOSITION,
   mcpUserConnections,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import {
   AUDIT_ACTION,

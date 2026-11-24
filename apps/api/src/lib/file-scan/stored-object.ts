@@ -15,7 +15,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import type { SafeDbError } from "@/api/db/safe-db";
+import type { SafeDbError } from "@/api/db/safe-db-types";
 import type { StoredFileScanState } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { fileKeySchema } from "@/api/lib/file-key";

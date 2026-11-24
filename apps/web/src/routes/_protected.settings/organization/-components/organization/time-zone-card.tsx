@@ -5,8 +5,8 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { Frame, FramePanel } from "@stll/ui/frame";
 import { Label } from "@stll/ui/label";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
@@ -63,8 +63,8 @@ export const OrganizationTimeZoneCard = () => {
       return null;
     case "error":
       return (
-        <Frame>
-          <FramePanel>
+        <SettingsSection>
+          <SettingsPanel>
             <p className="text-muted-foreground text-sm">
               {t("errors.actionFailed")}
             </p>
@@ -77,8 +77,8 @@ export const OrganizationTimeZoneCard = () => {
             >
               {t("common.retry")}
             </Button>
-          </FramePanel>
-        </Frame>
+          </SettingsPanel>
+        </SettingsSection>
       );
     case "items":
       break;

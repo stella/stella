@@ -182,6 +182,7 @@ export const AIConfigDecisionModel = ({
             size="sm"
             variant="ghost"
             disabled={disabled}
+            disabledReason={common("saving")}
             onClick={() => onStateChange({ kind: "cleared" })}
           >
             {common("resetToDefault")}
@@ -195,6 +196,7 @@ export const AIConfigDecisionModel = ({
               aria-label={t("aiConfig.apiKey")}
               autoComplete="off"
               disabled={disabled}
+              disabledReason={common("saving")}
               onChange={(event) => editDecision({ apiKey: event.target.value })}
               placeholder={
                 draft.apiKeyMasked === undefined

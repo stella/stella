@@ -3,6 +3,8 @@
 import { expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
+import { sha256Base64 } from "@stll/sha256/node";
+
 type ContentSecurityPolicyViolation = {
   blockedURI: string;
   effectiveDirective: string;
@@ -24,16 +26,23 @@ declare global {
   }
 }
 
+type RenderedInlineScript = { nonce: string; text: string };
+
 type ContentSecurityPolicySnapshot = {
   violations: readonly ContentSecurityPolicyViolation[];
   policies: readonly (string | undefined)[];
-  scriptNonces: readonly string[];
+  scripts: readonly RenderedInlineScript[];
 };
 
+/**
+ * A private document admits its inline scripts by a per-response nonce. A
+ * document a shared cache may store names no nonce: it lists the SHA-256 of
+ * each inline script instead, and its markup carries no nonce.
+ */
 export const assertContentSecurityPolicySnapshot = ({
   violations,
   policies,
-  scriptNonces,
+  scripts,
 }: ContentSecurityPolicySnapshot) => {
   expect(violations, "content security policy violations").toEqual([]);
   expect(
@@ -42,18 +51,32 @@ export const assertContentSecurityPolicySnapshot = ({
   ).toBeGreaterThan(0);
   for (const policy of policies) {
     expect(policy, "document content-security-policy header").toBeTruthy();
-    expect(policy, "document policy nonce").toMatch(/'nonce-[^']+'/u);
+    expect(policy, "document policy script sources").toMatch(
+      /'(?:nonce|sha256)-[^']+'/u,
+    );
   }
-  const nonce = /'nonce-([^']+)'/u.exec(policies.at(-1) ?? "")?.[1];
+  expect(scripts.length, "rendered inline scripts captured").toBeGreaterThan(0);
+  const policy = policies.at(-1) ?? "";
+  const nonce = /'nonce-([^']+)'/u.exec(policy)?.[1];
+  if (nonce !== undefined) {
+    // Every inline script, not just one: a single unnonced script among
+    // nonced ones is still blocked by the policy.
+    expect(
+      scripts.filter((script) => script.nonce !== nonce),
+      "rendered scripts carry the document policy nonce",
+    ).toEqual([]);
+    return;
+  }
+  const hashes = new Set(
+    [...policy.matchAll(/'sha256-([^']+)'/gu)].map((match) => match[1]),
+  );
   expect(
-    scriptNonces.length,
-    "rendered inline scripts captured",
-  ).toBeGreaterThan(0);
-  // Every inline script, not just one: a single unnonced script among nonced
-  // ones is still blocked by the policy.
-  expect(
-    scriptNonces.filter((scriptNonce) => scriptNonce !== nonce),
-    "rendered scripts carry the document policy nonce",
+    scripts.filter(
+      (script) =>
+        script.nonce !== "" ||
+        !hashes.has(sha256Base64(script.text.replaceAll(/\r\n?/gu, "\n"))),
+    ),
+    "rendered scripts are admitted by a listed hash and carry no nonce",
   ).toEqual([]);
 };
 
@@ -65,7 +88,7 @@ const EXECUTABLE_SCRIPT_TYPES = new Set([
   "text/javascript",
   "application/javascript",
 ]);
-const SCRIPT_OPENING_TAG = /<script\b([^>]*)>/giu;
+const SCRIPT_ELEMENT = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/giu;
 const SRC_ATTRIBUTE = /(?:^|\s)src\s*=/iu;
 const TYPE_ATTRIBUTE = /(?:^|\s)type\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/iu;
 const NONCE_ATTRIBUTE =
@@ -75,16 +98,15 @@ const attributeValue = (match: RegExpExecArray | null) =>
   match === null ? null : (match[1] ?? match[2] ?? match[3] ?? "");
 
 /**
- * The nonces of the inline executable scripts a server-rendered document
- * contains. These are the parser-inserted scripts the nonce must admit; a
- * script a trusted script inserts later runs under `'strict-dynamic'` and is
- * not part of this set.
+ * The inline executable scripts a server-rendered document contains, with
+ * their nonce and text. These are the parser-inserted scripts the policy must
+ * admit; a script a trusted script inserts later is not part of this set.
  */
-export const renderedInlineScriptNonces = (html: string): string[] =>
-  [...html.matchAll(SCRIPT_OPENING_TAG)]
-    .map((match) => match[1] ?? "")
+export const renderedInlineScripts = (html: string): RenderedInlineScript[] =>
+  [...html.matchAll(SCRIPT_ELEMENT)]
+    .map((match) => ({ attributes: match[1] ?? "", text: match[2] ?? "" }))
     .filter(
-      (attributes) =>
+      ({ attributes }) =>
         !SRC_ATTRIBUTE.test(attributes) &&
         EXECUTABLE_SCRIPT_TYPES.has(
           (attributeValue(TYPE_ATTRIBUTE.exec(attributes)) ?? "")
@@ -92,9 +114,10 @@ export const renderedInlineScriptNonces = (html: string): string[] =>
             .toLowerCase(),
         ),
     )
-    .map(
-      (attributes) => attributeValue(NONCE_ATTRIBUTE.exec(attributes)) ?? "",
-    );
+    .map(({ attributes, text }) => ({
+      nonce: attributeValue(NONCE_ATTRIBUTE.exec(attributes)) ?? "",
+      text,
+    }));
 
 export const installContentSecurityPolicyCollector = async (page: Page) => {
   const violations: ContentSecurityPolicyViolation[] = [];
@@ -150,12 +173,12 @@ export const installContentSecurityPolicyCollector = async (page: Page) => {
       if (html === undefined) {
         throw new TypeError("No enforced document response was captured");
       }
-      const scriptNonces = renderedInlineScriptNonces(html);
+      const scripts = renderedInlineScripts(html);
       await flushViolations();
       assertContentSecurityPolicySnapshot({
         violations,
         policies,
-        scriptNonces,
+        scripts,
       });
     },
     // Call after navigation settles, so the document can acknowledge delivery.

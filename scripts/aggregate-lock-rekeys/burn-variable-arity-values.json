@@ -1,0 +1,8 @@
+[
+  {
+    "file": "apps/api/src/db/migration-runner.ts",
+    "from": "21acaeb917d61bb9faf3d85bcaed9099760b3ff6ed6a221f96c66ab1f07db5f5",
+    "to": "3a246ee5e2905dfb05ad059d85c62d13efcc33803c66f50861cb4af1f23331c8",
+    "reason": "The preflight adoption update reads its receipts through jsonb_to_recordset instead of a VALUES list; same transaction boundary, same ledger rows, no additional acquisition."
+  }
+]

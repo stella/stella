@@ -1140,7 +1140,12 @@ const NewChatButton = ({
   // /chat/new (or workspace-scoped) redirect helper.
   if (!hasMessages) {
     return (
-      <Button disabled size="sm" tooltip={t("chat.newChat")} variant="ghost">
+      <Button
+        disabled
+        disabledReason={t("chat.newChatRequiresMessage")}
+        size="sm"
+        variant="ghost"
+      >
         <NewChatIcon />
         <span className={CHAT_THREAD_NEW_CHAT_LABEL_CLASS}>
           {t("chat.newChat")}

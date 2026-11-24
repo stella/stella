@@ -28,8 +28,6 @@ type ChatPromptImproveButtonProps = {
   anonymized: boolean;
   controller: ChatEditorController;
   disabled: boolean;
-  /** Why the button is disabled, shown in place of its label (as the
-   *  anonymized case already does) so hovering it says what to do. */
   disabledReason?: string | undefined;
 };
 
@@ -67,6 +65,38 @@ type MissingPromptImprovementOption = Exclude<
 >;
 
 true satisfies MissingPromptImprovementOption extends never ? true : never;
+
+type PromptImprovementDisabledReasonOptions = {
+  anonymized: boolean;
+  isPending: boolean;
+  disabled: boolean;
+  disabledReason: string | undefined;
+  t: (
+    key:
+      | "chat.improvePromptUnavailableAnonymized"
+      | "chat.improvingPrompt"
+      | "chat.improvePromptEmpty",
+  ) => string;
+};
+
+const promptImprovementDisabledReason = ({
+  anonymized,
+  isPending,
+  disabled,
+  disabledReason,
+  t,
+}: PromptImprovementDisabledReasonOptions) => {
+  if (isPending) {
+    return t("chat.improvingPrompt");
+  }
+  if (anonymized) {
+    return t("chat.improvePromptUnavailableAnonymized");
+  }
+  if (disabled) {
+    return disabledReason ?? t("chat.improvePromptEmpty");
+  }
+  return undefined;
+};
 
 export const ChatPromptImproveButton = ({
   anonymized,
@@ -141,9 +171,6 @@ export const ChatPromptImproveButton = ({
   };
 
   let label = t("chat.improvePrompt");
-  if (disabled && disabledReason !== undefined) {
-    label = disabledReason;
-  }
   if (anonymized) {
     label = t("chat.improvePromptUnavailableAnonymized");
   }
@@ -158,7 +185,13 @@ export const ChatPromptImproveButton = ({
       primaryContent="icon"
       primaryLabel={label}
       menuLabel={t("chat.choosePromptImprovementStrategy")}
-      primaryDisabled={unavailable}
+      primaryDisabledReason={promptImprovementDisabledReason({
+        anonymized,
+        isPending,
+        disabled,
+        disabledReason,
+        t,
+      })}
       menuDisabled={unavailable}
       open={open}
       onOpenChange={setOpen}

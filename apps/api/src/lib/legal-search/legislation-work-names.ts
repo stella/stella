@@ -37,13 +37,13 @@ import {
 import { normalizeUnicode } from "@stll/text-normalize";
 import { todayFor } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import {
   LEGISLATION_WORK_NAME_KEY_MAX_CHARS,
   legislationDocuments,
   legislationWorkNames,
 } from "@/api/db/schema";
 import type { LegislationWorkNameDerivation } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { actNumberCondition } from "@/api/lib/legal-search/legislation-act-number";

@@ -14,7 +14,7 @@ import {
   sanitizeQueryErrorText,
 } from "@stll/errors";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import type {
   UsageActionType,
   UsageEventLane,
@@ -910,21 +910,26 @@ const createFamilyMember = (
           }),
         );
       } else {
-        const consumption = recordTanStackConsumption(
-          consumptionArgs.value,
-        ).catch((error: unknown) => {
-          // A rejected deferred settles inside the stream lifecycle;
-          // capture it here so it cannot surface as an unhandled
-          // rejection there.
-          captureTelemetryError(
-            error,
-            handlerErrorContext("analytics.consumption", {
-              organization_id: metering.organizationId,
-              source: "usage.tanstack_ai",
-              trace_id: config.traceId,
-            }),
-          );
-        });
+        const consumption = (async () => {
+          const recorded = await Result.tryPromise({
+            try: async () =>
+              await recordTanStackConsumption(consumptionArgs.value),
+            catch: (error) => error,
+          });
+          if (Result.isError(recorded)) {
+            // A rejected deferred settles inside the stream lifecycle;
+            // capture it here so it cannot surface as an unhandled
+            // rejection there.
+            captureTelemetryError(
+              recorded.error,
+              handlerErrorContext("analytics.consumption", {
+                organization_id: metering.organizationId,
+                source: "usage.tanstack_ai",
+                trace_id: config.traceId,
+              }),
+            );
+          }
+        })();
         ctx.defer(consumption);
       }
     }

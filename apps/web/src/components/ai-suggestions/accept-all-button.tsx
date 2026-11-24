@@ -116,6 +116,11 @@ export const AcceptAllButton = ({
         aria-label={t("docxReview.acceptAll")}
         className={className}
         disabled={pendingChanges.length === 0 || isAccepting}
+        disabledReason={
+          isAccepting
+            ? t("docxReview.acceptingChanges")
+            : t("docxReview.noChangesToAccept")
+        }
         onClick={handleClick}
         size={buttonSize}
         tooltip={t("docxReview.acceptAll")}
@@ -132,7 +137,7 @@ export const AcceptAllButton = ({
             </AlertDialogTitle>
             <AlertDialogDescription>
               {t("docxReview.acceptAllConfirmDescription", {
-                count: String(pendingChanges.length),
+                count: pendingChanges.length,
               })}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -155,6 +160,7 @@ export const AcceptAllButton = ({
             </Button>
             <Button
               disabled={isAccepting}
+              disabledReason={t("docxReview.acceptingChanges")}
               onClick={() => {
                 setConfirmOpen(false);
                 runAccept();

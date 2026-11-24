@@ -35,6 +35,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/playwright-tools/src/**/*.ts",
   "packages/render-probe/src/**/*.{ts,tsx}",
   "apps/web/src/features/law-search-history/**/*.ts",
+  "apps/web/src/features/sso/**/*.ts",
   "apps/desktop/src/activity/**/*.ts",
   "apps/desktop/src/activity/**/*.tsx",
   "apps/api/src/handlers/mobile-updates/**/*.ts",
@@ -52,6 +53,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/mobile/src/native/**/*.{ts,tsx}",
   "apps/mobile/src/widgets/**/*.{ts,tsx}",
   "apps/mobile/src/app/document/**/*.{ts,tsx}",
+  "apps/mobile/src/app/part/**/*.{ts,tsx}",
   "apps/mobile/src/components/document-viewer/**/*.{ts,tsx}",
   "apps/outlook/src/components/**/*.{ts,tsx}",
   "apps/outlook/src/i18n/**/*.{ts,tsx}",
@@ -189,11 +191,12 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/components/catalogue/**/*.{ts,tsx}",
   "apps/web/src/components/conditions/**/*.{ts,tsx}",
   "apps/web/src/components/entity-views/**/*.{ts,tsx}",
+  "apps/web/src/components/file-parts/**/*.{ts,tsx}",
   "apps/web/src/components/file-tree/**/*.{ts,tsx}",
   "apps/web/src/components/flows/**/*.{ts,tsx}",
   "apps/web/src/components/inbox/**/*.{ts,tsx}",
   "apps/web/src/components/legal-reader/**/*.{ts,tsx}",
-  "apps/web/src/components/markdown/**/*.{ts,tsx}",
+  "packages/markdown-editor/src/**/*.{ts,tsx}",
   "apps/web/src/components/oauth-consent/**/*.{ts,tsx}",
   "apps/web/src/components/organization/**/*.{ts,tsx}",
   "apps/web/src/components/billing/**/*.{ts,tsx}",
@@ -255,6 +258,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/country-codes/src/**/*.ts",
   "packages/db-load-gate/src/**/*.ts",
   "packages/decision-reader/src/**/*.{ts,tsx}",
+  "packages/docx-authoring/src/**/*.ts",
   "packages/docx-utils/src/**/*.ts",
   "packages/errors/src/**/*.ts",
   "packages/fetch/src/**/*.ts",
@@ -264,6 +268,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/parameter-store/src/**/*.ts",
   "packages/permissions/src/**/*.ts",
   "packages/portable-path/src/**/*.ts",
+  "packages/pst-reader/src/**/*.ts",
   "packages/recording-wasm/src/**/*.ts",
   "packages/redis-config/src/**/*.ts",
   "packages/runtime-mode/src/**/*.ts",
@@ -329,6 +334,13 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Better Auth maps a rejected code exchange to its callback error, so the
   // retry wrapper hands the provider's rejection back unchanged.
   "apps/api/src/lib/auth/social-token-exchange.ts",
+  // Better Auth consumes an SSO endpoint gate's and the session provenance
+  // hook's refusals as rejected APIError values.
+  "apps/api/src/lib/auth/sso-sign-in.ts",
+  // Better Auth consumes the organization endpoints' SSO refusal as a
+  // rejected APIError value.
+  "apps/api/src/lib/auth/sso-organization-guard.ts",
+  "apps/api/src/lib/auth/sso-organization-guard.ts",
 
   "apps/api/src/lib/api-handlers.ts",
   "apps/api/src/handlers/**/routes.ts",
@@ -340,6 +352,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/account-export/organization-audit-archive.ts",
   "apps/api/src/lib/account-export/queue.ts",
   "apps/api/src/lib/bilingual/run-queue.ts",
+  "apps/api/src/lib/uploads/document-naming/worker.ts",
   "apps/api/src/lib/document-processing-queue.ts",
   "apps/api/src/lib/document-review/run-queue.ts",
   "apps/api/src/lib/document-translation/run-queue.ts",
@@ -440,6 +453,11 @@ export const RESULT_BOUNDARY_GLOBS = [
   // this adapter converts that runtime contract to a typed Result.
   "packages/scan-engine/src/scan-engine.ts",
   "packages/scan-engine/src/scan-engine.worker.ts",
+  // A trap in the HEIC decoder's module surfaces as a thrown
+  // WebAssembly.RuntimeError; the adapter turns it into a typed outcome.
+  "packages/heic-decoder/src/heic-decoder.ts",
+  // So does a trap in the PST reader's module.
+  "packages/pst-reader/src/pst-reader.ts",
 ] as const;
 
 // Declaration files carry no runtime code. The lint ignores them outright, so

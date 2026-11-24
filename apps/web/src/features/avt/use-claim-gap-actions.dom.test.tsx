@@ -6,7 +6,7 @@ import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import type { WebApiRoutes } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api-contract";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { QueryClient, QueryClientProvider } =

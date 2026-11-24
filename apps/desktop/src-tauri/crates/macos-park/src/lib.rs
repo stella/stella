@@ -13,7 +13,8 @@ mod focused_window;
 #[cfg(target_os = "macos")]
 pub use focused_window::{
   FocusedWindowDetails, accessibility_trusted, focused_field_is_secure,
-  focused_window_details, request_accessibility_permission, text_before_cursor,
+  focused_window_details, request_accessibility_permission, selected_text,
+  text_before_cursor,
 };
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -62,6 +63,21 @@ mod microphone;
 #[cfg(target_os = "macos")]
 pub use microphone::{
   AudioTransport, audio_device_transport, microphone_input_bundle_ids,
+};
+
+#[cfg(target_os = "macos")]
+mod output_audio;
+#[cfg(target_os = "macos")]
+pub use output_audio::{
+  default_output_device_id, output_plays_on_headphones, output_volume,
+  set_output_volume,
+};
+
+#[cfg(target_os = "windows")]
+mod windows_output_audio;
+#[cfg(target_os = "windows")]
+pub use windows_output_audio::{
+  default_output_device_id, output_volume, set_output_volume,
 };
 
 #[cfg(target_os = "macos")]
@@ -128,6 +144,11 @@ pub use system_audio_windows::SystemAudioReader;
 mod windows_password_field;
 #[cfg(target_os = "windows")]
 pub use windows_password_field::focused_field_is_secure;
+
+#[cfg(target_os = "windows")]
+mod windows_selection;
+#[cfg(target_os = "windows")]
+pub use windows_selection::selected_text;
 
 #[cfg(target_os = "windows")]
 mod windows_window;

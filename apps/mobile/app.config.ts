@@ -14,9 +14,12 @@ import path from "node:path";
 // exactly the languages the app ships.
 import { UI_LOCALES } from "@stll/locales/languages";
 
+import { withQuickDictation } from "./modules/quick-dictation/plugin.ts";
+
 // Evaluated by Node through Expo's config loader, which cannot follow a
 // workspace package's extensionless TypeScript imports. So this file imports
-// npm packages and only workspace modules that import nothing (as
+// npm packages, the app's own plugins by their full file names (which import
+// npm packages only), and only workspace modules that import nothing (as
 // `@stll/locales/languages`), and `src/architecture.test.ts` pins every value
 // below to `@stll/api-contract/mobile-client`.
 
@@ -502,14 +505,16 @@ const appConfigBase = ({
       },
     ],
     // The composer's microphone dictates a message
-    // (src/components/use-dictation.ts); recording only while the app is open.
+    // (src/components/use-dictation.ts). A dictation the person started goes
+    // on while the screen is locked or another app is open, until they
+    // finish it or it reaches its limit (background audio mode).
     [
       "expo-audio",
       {
         microphonePermission:
           "stella records your voice while you dictate a message, to type it for you.",
         recordAudioAndroid: true,
-        enableBackgroundRecording: false,
+        enableBackgroundRecording: true,
       },
     ] satisfies [string, unknown],
     // Notifications from the server: mentions, approvals, finished exports
@@ -580,8 +585,13 @@ export const appConfigFor = ({
   );
   // The native module is autolinked even when the extension is omitted.
   const bundled = withWidgetsBundle(config);
+  // Dictation from outside the app records under a Live Activity, and its
+  // Control Center control lives in the same extension.
+  const dictation = storeCapabilities
+    ? withQuickDictation(bundled, { widgetsTarget: WIDGETS_TARGET })
+    : bundled;
   const signed =
-    signing === undefined ? bundled : withReleaseSigning(bundled, signing);
+    signing === undefined ? dictation : withReleaseSigning(dictation, signing);
   // Registered after the release signing, so its target exists by the time
   // the signing's mod runs.
   return shareExtension

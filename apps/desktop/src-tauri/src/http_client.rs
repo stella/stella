@@ -41,6 +41,17 @@ pub struct DesktopHttpClient(reqwest::Client);
 
 impl DesktopHttpClient {
   pub fn new(options: HttpClientOptions) -> reqwest::Result<Self> {
+    Self::build(options, true)
+  }
+
+  /// Like `new`, without the `Referer` reqwest sets on a redirect: for a
+  /// fetch whose URL may carry a signed query that a redirect target must not
+  /// be sent.
+  pub fn new_without_referer(options: HttpClientOptions) -> reqwest::Result<Self> {
+    Self::build(options, false)
+  }
+
+  fn build(options: HttpClientOptions, referer: bool) -> reqwest::Result<Self> {
     #[allow(
       clippy::disallowed_methods,
       reason = "construct the identified desktop client"
@@ -52,6 +63,7 @@ impl DesktopHttpClient {
         reqwest::header::HeaderValue::from_static(LOCAL_CLIENT_IDENTITY),
       )]))
       .redirect(options.redirect)
+      .referer(referer)
       // Application retry owners rebuild possession proofs for each attempt.
       .retry(reqwest::retry::never());
     if let Some(timeout) = options.timeout {
@@ -70,6 +82,10 @@ impl DesktopHttpClient {
 
   pub fn post(&self, url: impl reqwest::IntoUrl) -> reqwest::RequestBuilder {
     self.0.post(url)
+  }
+
+  pub fn delete(&self, url: impl reqwest::IntoUrl) -> reqwest::RequestBuilder {
+    self.0.delete(url)
   }
 
   #[cfg(test)]

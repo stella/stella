@@ -57,13 +57,14 @@ export type WorksAtDateResolution = {
   inconsistentKeys: Set<string>;
 };
 
-const valuesOf = (requests: readonly WorkAtDateRequest[]) =>
-  sql.join(
-    requests.map(
-      (request) =>
-        sql`(${request.key}, ${request.country}, ${request.eli}, ${request.asOf}::date)`,
-    ),
-    sql`, `,
+const workRequestPayload = (requests: readonly WorkAtDateRequest[]) =>
+  JSON.stringify(
+    requests.map((request) => ({
+      key: request.key,
+      country: request.country,
+      eli: request.eli,
+      as_of: request.asOf,
+    })),
   );
 
 /**
@@ -125,7 +126,7 @@ export const resolveWorksAtDate = async (
              w.key AS key,
              ${legislationDocuments.id} AS id,
              ${inForceAtRequest} AS in_force
-        FROM (VALUES ${valuesOf(requests)}) AS w(key, country, eli, as_of)
+        FROM jsonb_to_recordset(${workRequestPayload(requests)}::text::jsonb) AS w(key text, country text, eli text, as_of date)
         JOIN ${legislationDocuments}
           ON ${legislationDocuments.country} = w.country
          AND ${legislationDocuments.eli} = w.eli
@@ -166,7 +167,7 @@ export const resolveWorksAtDate = async (
     const inconsistent = executedRows(
       await tx.execute(sql`
         SELECT DISTINCT w.key AS key
-          FROM (VALUES ${valuesOf(unanswered)}) AS w(key, country, eli, as_of)
+          FROM jsonb_to_recordset(${workRequestPayload(unanswered)}::text::jsonb) AS w(key text, country text, eli text, as_of date)
           JOIN ${legislationDocuments}
             ON ${legislationDocuments.country} = w.country
            AND ${legislationDocuments.eli} = w.eli
