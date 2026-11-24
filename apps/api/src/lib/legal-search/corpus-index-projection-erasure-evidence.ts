@@ -37,7 +37,9 @@ type CorpusProjectionErasureWindow = CorpusProjectionErasureEvidenceColumns & {
 /**
  * Recorded evidence that an erasure was written for the entity since its copy
  * was reserved: a succeeded `withdraw` row in `[reservedAt, before)`, judged
- * on the row's `created_at`, which is its transaction's start.
+ * on the row's `created_at`. The writer stamps it after the withdrawal's
+ * desired-state write (`recordCorpusWithdrawalAuditEvent`), so it follows the
+ * reservation of every copy applied before the withdrawal reached the state.
  *
  * The window starts at the copy's reservation: a copy is applied only while
  * the desired state still equals it, so an erasure written before the

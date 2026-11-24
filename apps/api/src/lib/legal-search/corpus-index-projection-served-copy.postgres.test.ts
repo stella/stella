@@ -262,20 +262,28 @@ const holdOpen = <T>(
 
 /**
  * Run `body` while `held` keeps its transaction open, then release it and
- * wait for it to end whatever `body` does: the suite's cleanup deletes rows
- * the held transaction locks, so a failed assertion would otherwise hang the
- * test instead of reporting. Returns what the held transaction returned.
+ * wait for it, and for every `competing` transaction started against it, to
+ * end whatever `body` does: the suite's cleanup deletes rows these
+ * transactions lock, so a failed assertion would otherwise hang the test or
+ * tear its fixture down under a running writer instead of reporting. Returns
+ * what the held transaction returned; the caller still awaits each competing
+ * one for its own result.
  */
 const whileHeld = async <T>(
   held: Held<T>,
   body: () => Promise<void>,
+  competing: readonly Promise<unknown>[] = [],
 ): Promise<T> => {
+  for (const transaction of competing) {
+    // swallow-ok: marks the rejection handled until the caller awaits the same promise and asserts its outcome
+    void transaction.catch(() => undefined);
+  }
   try {
     await body();
   } finally {
     held.release();
     // When `body` failed, its error is the one to report.
-    await Promise.allSettled([held.done]);
+    await Promise.allSettled([held.done, ...competing]);
   }
   return await held.done;
 };
@@ -492,14 +500,15 @@ const advanceDecision = async (db: GatedTestDb, { entityId }: Fixture) =>
  * desired change behind: the earlier release queued it at the first change and
  * this release's desired writer made the second.
  */
-const seedDriftedDecision = async (db: GatedTestDb): Promise<Fixture> => {
-  const suffix = Bun.randomUUIDv7().replaceAll("-", "").slice(-12);
-  const fixture: Fixture = {
-    sourceId: Bun.randomUUIDv7(),
-    indexId: CASE_LAW.indexId,
-    entityId: Bun.randomUUIDv7(),
-    revision: Bun.randomUUIDv7(),
-  };
+/** The rows `seedDriftedDecision` created, so a failed setup removes only them. */
+type DriftedSeed = { generation: boolean; source: boolean; decision: boolean };
+
+const seedDriftedDecision = async (
+  db: GatedTestDb,
+  fixture: Fixture,
+  seeded: DriftedSeed,
+): Promise<void> => {
+  const suffix = fixture.sourceId.replaceAll("-", "").slice(-12);
   await db.execute(sql`
     INSERT INTO corpus_index_generations (
       family, generation, cluster, manifest_digest, status
@@ -509,6 +518,7 @@ const seedDriftedDecision = async (db: GatedTestDb): Promise<Fixture> => {
       'building'
     )
   `);
+  seeded.generation = true;
   await db.execute(sql`
     INSERT INTO case_law_sources (id, adapter_key, name, enabled)
     VALUES (
@@ -516,6 +526,7 @@ const seedDriftedDecision = async (db: GatedTestDb): Promise<Fixture> => {
       'Superseded copy fixture', false
     )
   `);
+  seeded.source = true;
   await db.insert(caseLawDecisions).values({
     id: toSafeId<"caseLawDecision">(fixture.entityId),
     sourceId: toSafeId<"caseLawSource">(fixture.sourceId),
@@ -530,6 +541,7 @@ const seedDriftedDecision = async (db: GatedTestDb): Promise<Fixture> => {
     contentHash: "f".repeat(64),
     projectionEpoch: 1n,
   });
+  seeded.decision = true;
   await seedServedCopy(db, {
     family: CASE_LAW.family,
     generation: CASE_LAW.generation,
@@ -540,22 +552,21 @@ const seedDriftedDecision = async (db: GatedTestDb): Promise<Fixture> => {
   await advanceDecision(db, fixture);
   await queueServedRevision(db, fixture);
   await advanceDecision(db, fixture);
-  return fixture;
 };
 
-/** A withdrawal as its writer issues it: trail, canonical row, erasure. */
+/** A withdrawal as its writer issues it: canonical row, erasure, trail. */
 const withdrawIn = async (tx: GatedTransaction, { entityId }: Fixture) => {
   const decisionId = toSafeId<"caseLawDecision">(entityId);
-  await recordCorpusWithdrawalAuditEvent(tx, {
-    decisionId,
-    reason: "Stored payload no longer parses as a document",
-  });
   await tx.execute(sql`
     UPDATE case_law_decisions SET content_hash = NULL WHERE id = ${entityId}
   `);
   await advanceCorpusProjectionDesiredStateTx(tx, {
     family: CASE_LAW.family,
     entityId: decisionId,
+  });
+  await recordCorpusWithdrawalAuditEvent(tx, {
+    decisionId,
+    reason: "Stored payload no longer parses as a document",
   });
 };
 
@@ -569,17 +580,14 @@ const restoreDocument = async (db: GatedTestDb, fixture: Fixture) => {
 };
 
 /**
- * A withdrawal and its undo as an earlier release left them: the trail row and
- * two desired changes in one transaction, the pointer kept.
+ * A withdrawal and its undo as an earlier release left them: two desired
+ * changes and the trail row in one transaction, the pointer kept. The trail
+ * row comes last, as this release's writers record it.
  */
 const previousWithdrawAndUndoIn = async (
   tx: GatedTransaction,
   { entityId }: Fixture,
 ) => {
-  await recordCorpusWithdrawalAuditEvent(tx, {
-    decisionId: toSafeId<"caseLawDecision">(entityId),
-    reason: "Stored payload no longer parses as a document",
-  });
   for (const desired of ["erase", "upsert"] as const) {
     // db-await-in-loop: the erasure, then its undo
     await tx.execute(sql`
@@ -596,6 +604,10 @@ const previousWithdrawAndUndoIn = async (
       WHERE entity_id = ${entityId}
     `);
   }
+  await recordCorpusWithdrawalAuditEvent(tx, {
+    decisionId: toSafeId<"caseLawDecision">(entityId),
+    reason: "Stored payload no longer parses as a document",
+  });
 };
 
 /** Every message of a failed statement, down its chain of causes. */
@@ -624,6 +636,18 @@ const withDriftedDecision = async (
     fixture: Fixture,
     observer: GatedTestDb,
   ) => Promise<void>,
+  {
+    beforeSeed,
+  }: {
+    /**
+     * Runs on the observer before anything is seeded, and returns what ends
+     * whatever it left open; that runs before the fixture is removed.
+     */
+    beforeSeed?: (
+      observer: GatedTestDb,
+      fixture: Fixture,
+    ) => Promise<() => Promise<void>>;
+  } = {},
 ) => {
   if (databaseUrl === undefined) {
     panic("DATABASE_URL is required");
@@ -632,17 +656,41 @@ const withDriftedDecision = async (
     const { db: first } = openClient();
     const { db: second } = openClient();
     const { db: observer } = openClient();
-    const fixture = await seedDriftedDecision(first);
+    const fixture: Fixture = {
+      sourceId: Bun.randomUUIDv7(),
+      indexId: CASE_LAW.indexId,
+      entityId: Bun.randomUUIDv7(),
+      revision: Bun.randomUUIDv7(),
+    };
+    const seeded: DriftedSeed = {
+      generation: false,
+      source: false,
+      decision: false,
+    };
+    let settleBeforeSeed = async () => undefined;
     try {
+      if (beforeSeed !== undefined) {
+        settleBeforeSeed = await beforeSeed(observer, fixture);
+      }
+      await seedDriftedDecision(first, fixture, seeded);
       await run(first, second, fixture, observer);
     } finally {
-      await removeGeneration(first, CASE_LAW.generation, CASE_LAW.family);
-      await first.execute(
-        sql`DELETE FROM case_law_decisions WHERE id = ${fixture.entityId}`,
-      );
-      await first.execute(
-        sql`DELETE FROM case_law_sources WHERE id = ${fixture.sourceId}`,
-      );
+      await settleBeforeSeed();
+      // Only what this setup created: a generation it found already there
+      // fails the insert above and is left alone.
+      if (seeded.generation) {
+        await removeGeneration(first, CASE_LAW.generation, CASE_LAW.family);
+      }
+      if (seeded.decision) {
+        await first.execute(
+          sql`DELETE FROM case_law_decisions WHERE id = ${fixture.entityId}`,
+        );
+      }
+      if (seeded.source) {
+        await first.execute(
+          sql`DELETE FROM case_law_sources WHERE id = ${fixture.sourceId}`,
+        );
+      }
     }
   });
 };
@@ -704,7 +752,7 @@ if (!databaseUrl || !runPostgresTests) {
         const erase = writeCanonical(writer, fixture, null);
         const restored = await whileHeld(restore, async () => {
           expect(await blockedBehind(observer, holder)).toBe(true);
-        });
+        }, [erase]);
         expect(restored.restoredIntentIds).toHaveLength(1);
         await erase;
         await writer.transaction(
@@ -747,7 +795,7 @@ if (!databaseUrl || !runPostgresTests) {
         })();
         await whileHeld(restore, async () => {
           expect(await blockedBehind(observer, holder)).toBe(true);
-        });
+        }, [eraseThenUndo]);
         await eraseThenUndo;
 
         expect(await stateOf(writer, fixture)).toEqual({
@@ -883,7 +931,7 @@ if (!databaseUrl || !runPostgresTests) {
         const repair = reconcile(writer, fixture);
         const claimed = await whileHeld(claiming, async () => {
           expect(await blockedBehind(observer, holder)).toBe(true);
-        });
+        }, [repair]);
         expect(claimed.claimed.served_unproven).toBe(1);
 
         const outcome = await repair;
@@ -927,7 +975,7 @@ if (!databaseUrl || !runPostgresTests) {
         await whileHeld(claiming, async () => {
           // The guard read the copy as restorable; its row lock waits.
           expect(await blockedBehind(observer, holder)).toBe(true);
-        });
+        }, [repair]);
 
         const outcome = await repair;
         if (outcome.isOk()) {
@@ -1036,7 +1084,7 @@ if (!databaseUrl || !runPostgresTests) {
                   last_error = NULL, updated_at = clock_timestamp()
               WHERE id = ${sibling.revision} AND status = 'applied'
             `);
-          });
+          }, [repair]);
 
           const outcome = await repair;
           if (outcome.isOk()) {
@@ -1118,7 +1166,7 @@ if (!databaseUrl || !runPostgresTests) {
         );
         const kept = await whileHeld(keeping, async () => {
           expect(await blockedBehind(observer, holder)).toBe(true);
-        });
+        }, [withdrawal]);
         expect(kept.restoredIntentIds).toHaveLength(1);
         await withdrawal;
         expect(await stateOf(observer, fixture)).toMatchObject({
@@ -1162,6 +1210,44 @@ if (!databaseUrl || !runPostgresTests) {
       });
     });
 
+    test("a withdrawal whose transaction began before the copy was reserved is recorded since the reservation", async () => {
+      const proceed = Promise.withResolvers<undefined>();
+      let withdrawal: Promise<void> | undefined;
+      await withDriftedDecision(
+        async (_writer, claimer, fixture) => {
+          proceed.resolve(undefined);
+          await (withdrawal ?? panic("The withdrawal did not begin"));
+          const after = await claimDecision(claimer);
+          expect(after.restoredIntentIds).toEqual([]);
+          expect(after.claimed.served_unproven).toBe(1);
+          expect(await statusOf(claimer, fixture)).toEqual({
+            status: "cleanup_started",
+            cleanupAttempts: 1,
+          });
+        },
+        {
+          // The withdrawal's transaction begins before the copy is reserved,
+          // applied and queued, and reaches the state only after.
+          beforeSeed: async (observer, fixture) => {
+            const began = Promise.withResolvers<undefined>();
+            const opened = observer.transaction(async (tx) => {
+              await tx.execute(sql`SELECT 1`);
+              began.resolve(undefined);
+              await proceed.promise;
+              await previousWithdrawAndUndoIn(tx, fixture);
+            });
+            withdrawal = opened;
+            void opened.catch(began.reject);
+            await began.promise;
+            return async () => {
+              proceed.resolve(undefined);
+              await Promise.allSettled([opened]);
+            };
+          },
+        },
+      );
+    });
+
     test("the guard reads the records after it holds the state: a restore that waited for a withdrawal is refused", async () => {
       await withDriftedDecision(async (writer, restorer, fixture, observer) => {
         const undone = holdOpen(
@@ -1181,7 +1267,7 @@ if (!databaseUrl || !runPostgresTests) {
         );
         await whileHeld(undone, async () => {
           expect(await blockedBehind(observer, holder)).toBe(true);
-        });
+        }, [restore]);
         const refused = await restore;
         expect(refused.isErr() ? messagesOf(refused.error) : "").toContain(
           "only a queued copy its upsert state keeps serving can be restored",

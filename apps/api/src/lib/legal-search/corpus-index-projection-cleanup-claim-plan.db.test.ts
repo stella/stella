@@ -348,6 +348,29 @@ test("the claim's decision probes the erasure records of its page alone, however
   expect(large.lines.join("\n")).not.toContain("Seq Scan");
   expect(large.buffers).toBeLessThanOrEqual(Math.round(small.buffers * 1.5));
   expect(large.buffers / large.rows).toBeLessThanOrEqual(40);
+
+  // The page's own decisions gain ten times their trail in rows the records
+  // do not match (indexing runs since the reservation), measured on its own.
+  await db.execute(
+    sql.raw(`
+      INSERT INTO case_law_index_jobs (id, decision_id, operation, status, created_at)
+      SELECT gen_random_uuid(), ${entity("i")}, 'index', 'succeeded',
+        '2026-07-02'::timestamptz + (j || ' minutes')::interval
+      FROM generate_series(1, ${LIMIT}) AS i,
+        generate_series(1, ${10 * TRAIL}) AS j
+    `),
+  );
+  await analyzeRecords();
+  const own = await explain(decision);
+  console.log("own-trail buffers", {
+    small: small.buffers,
+    large: large.buffers,
+    own: own.buffers,
+  });
+  expect(own.rows).toBe(LIMIT);
+  expect(own.lines.join("\n")).not.toContain("Seq Scan");
+  expect(own.buffers).toBeLessThanOrEqual(Math.round(small.buffers * 1.5));
+  expect(own.buffers / own.rows).toBeLessThanOrEqual(40);
 }, 600_000);
 
 /**

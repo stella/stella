@@ -234,10 +234,6 @@ const requeueEmptiedDocumentBatchTx = async (
       .update(caseLawDecisions)
       .set({ fulltext: null, documentFetchAttempts: 0 })
       .where(inArray(caseLawDecisions.id, ids));
-    await recordCorpusWithdrawalAuditEvent(tx, {
-      decisionId: ids,
-      reason: "Requeue settled empty documents for deferred PDF parsing",
-    });
     if (lock !== null) {
       await synchronizeLockedCaseLawProjectionBatchTx(tx, {
         lock,
@@ -245,6 +241,11 @@ const requeueEmptiedDocumentBatchTx = async (
         decisionIds: ids,
       });
     }
+    // After the desired-state write: see `recordCorpusWithdrawalAuditEvent`.
+    await recordCorpusWithdrawalAuditEvent(tx, {
+      decisionId: ids,
+      reason: "Requeue settled empty documents for deferred PDF parsing",
+    });
   }
   await extendRequeuedDecisions(tx, ids);
   const requeued = new Set(ids);

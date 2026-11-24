@@ -58,7 +58,7 @@ beforeEach(async () => {
   client = await createTestPglite();
   await optOutOfCorpusProjectionSeedingGuard(client, {
     reason:
-      "Exercises the projection store, executor and serving pipeline on canonical rows and desired states this suite stands up as fixtures; no desired writer runs here, and the writer suites keep the guard.",
+      "Stands canonical rows, desired states and an earlier release's queued copies up as direct fixture writes the seeding rule does not hold for (`changeDesired`, `previousPrepare`, the canonical updates). Several tests then move desired state through this release's writer (`advanceCorpusProjectionDesiredStateTx`, directly or through the fixture's `thisReleaseChanges`) on top of those fixtures, so the guard would judge the fixtures, not the writer; the writer suites keep the guard.",
   });
   db = drizzle({ client });
   await caseLaw.seedGeneration();
@@ -175,31 +175,45 @@ const replaceText = async (entityId: string) => {
   `);
 };
 
-/** The statement as any writer would issue it, rolled back when admitted. */
-const guardAdmits = async (
-  statement: ReturnType<typeof sql>,
-): Promise<boolean> => {
+const RESTORE_REFUSAL =
+  "only a queued copy its upsert state keeps serving can be restored";
+
+/** Every message of a failed statement, down its chain of causes. */
+const messagesOf = (error: unknown): string =>
+  error instanceof Error ? `${error.message}\n${messagesOf(error.cause)}` : "";
+
+/**
+ * The restore as any writer would issue it, rolled back when admitted: true
+ * when the guard admits it (the update returned the revision), false when the
+ * restore guard refuses it. Any other failure is rethrown, so a refusal is
+ * never a missing row or an unrelated error.
+ */
+const guardAdmitsRestore = async (revision: string): Promise<boolean> => {
   const attempted = await Result.tryPromise(
     async () =>
       await db.transaction(async (tx) => {
-        await tx.execute(statement);
+        const updated = await tx.execute<{ id: string }>(sql`
+          UPDATE corpus_index_projection_intents
+          SET status = 'applied', cleanup_not_before = NULL,
+              lease_token = NULL, lease_expires_at = NULL
+          WHERE id = ${revision}
+          RETURNING id::text AS id
+        `);
+        expect(updated.rows).toEqual([{ id: revision }]);
         tx.rollback();
       }),
   );
-  // A rollback after the update means the guard admitted it.
-  return (
-    attempted.isErr() &&
-    attempted.error.cause instanceof TransactionRollbackError
-  );
+  if (attempted.isOk()) {
+    return panic("An admitted restore must roll back");
+  }
+  if (attempted.error.cause instanceof TransactionRollbackError) {
+    return true;
+  }
+  if (messagesOf(attempted.error).includes(RESTORE_REFUSAL)) {
+    return false;
+  }
+  return panic("The restore failed for another reason", attempted.error);
 };
-
-const guardAdmitsRestore = async (revision: string) =>
-  await guardAdmits(sql`
-    UPDATE corpus_index_projection_intents
-    SET status = 'applied', cleanup_not_before = NULL,
-        lease_token = NULL, lease_expires_at = NULL
-    WHERE id = ${revision}
-  `);
 
 describe("the claim's decision about a drifted copy a state still names", () => {
   beforeEach(async () => {
@@ -209,6 +223,22 @@ describe("the claim's decision about a drifted copy a state still names", () => 
   test("keeps it serving when no erasure is recorded", async () => {
     const served = await servedEntity();
     await queueThenDrift(served);
+    await expectKept(served);
+  });
+
+  test("restores a copy one change behind whose desired index moved: it serves until the append to the new index applies", async () => {
+    const served = await servedEntity();
+    await changeDesired(served.entityId, 2, {
+      action: "upsert",
+      fingerprint: fingerprint(1),
+    });
+    await run(sql`
+      UPDATE corpus_index_projection_states
+      SET desired_index_id = 'case_law_v5_other'
+      WHERE entity_id = ${served.entityId}
+    `);
+    await previousPrepare(served.entityId, served.revision);
+    expect(await guardAdmitsRestore(served.revision)).toBe(true);
     await expectKept(served);
   });
 
