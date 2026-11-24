@@ -94,14 +94,15 @@ export const PUBLIC_CRAWL_ASSETS = [
     scope: "exact",
     permission: "law",
   },
-  // The built scripts and styles: a crawler renders the public pages with
-  // them, so a page it may index must not have its assets blocked.
-  {
-    path: "/assets",
-    scope: "subtree",
-    permission: "law",
-  },
 ] as const satisfies readonly Omit<PublicCrawlRoute, "route" | "format">[];
+
+/**
+ * The built scripts and styles every public page loads. A crawler renders a
+ * page with them, so they are open whenever any public surface is.
+ */
+export const PUBLIC_CRAWL_RENDER_ASSETS = [
+  { path: "/assets", scope: "subtree" },
+] as const satisfies readonly PublicCrawlRule[];
 
 export type PublicCrawlOptions = {
   publicKnowledgeCrawlAllowed: boolean;
@@ -172,6 +173,9 @@ export const createPublicCrawlRules = ({
       continue;
     }
     rules.push({ path: entry.path, scope: entry.scope });
+  }
+  if (rules.length > 0) {
+    rules.push(...PUBLIC_CRAWL_RENDER_ASSETS);
   }
   return rules;
 };

@@ -17,6 +17,7 @@ import type { DecisionWorkspaceProps } from "@/features/case-law/components/case
 import {
   isPublicLawPathIndexable,
   PUBLIC_CRAWL_ASSETS,
+  PUBLIC_CRAWL_RENDER_ASSETS,
   publicToolCrawlPaths,
 } from "@/public-crawl-policy";
 
@@ -150,6 +151,11 @@ const requestUrlForTest = (input: Request | URL | string): string => {
 
   return input.url;
 };
+
+const renderAssetAllowLines = PUBLIC_CRAWL_RENDER_ASSETS.flatMap(({ path }) => [
+  `Allow: ${path}/`,
+  `Allow: ${path}$`,
+]);
 
 describe("public law sitemap", () => {
   test.each(CASE_LAW_BROWSER_COUNTRIES)(
@@ -869,11 +875,8 @@ describe("public law sitemap", () => {
       "Allow: /sitemap.xml$",
       "Allow: /sitemaps/",
       "Allow: /sitemaps$",
-      ...PUBLIC_CRAWL_ASSETS.flatMap(({ path, scope }) =>
-        scope === "subtree"
-          ? [`Allow: ${path}/`, `Allow: ${path}$`]
-          : [`Allow: ${path}$`],
-      ),
+      ...PUBLIC_CRAWL_ASSETS.map(({ path }) => `Allow: ${path}$`),
+      ...renderAssetAllowLines,
     ]);
     // A jurisdiction whose pages are not public stays behind Disallow: /.
     expect(allowLines.some((line) => line.startsWith("Allow: /law/svk"))).toBe(
@@ -899,9 +902,10 @@ describe("public law sitemap", () => {
       .split("\n")
       .filter((line) => line.startsWith("Allow:"));
 
-    expect(allowLines).toEqual(
-      publicToolCrawlPaths("/tools").map((path) => `Allow: ${path}$`),
-    );
+    expect(allowLines).toEqual([
+      ...publicToolCrawlPaths("/tools").map((path) => `Allow: ${path}$`),
+      ...renderAssetAllowLines,
+    ]);
     expect(robots).toContain("Disallow: /");
   });
 
@@ -920,7 +924,9 @@ describe("public law sitemap", () => {
       "Allow: /knowledge/templates/catalogue/",
       "Allow: /knowledge/templates/catalogue$",
       "Allow: /knowledge/playbooks/catalogue$",
+      ...renderAssetAllowLines,
     ]);
+    // With no public surface open, the render assets stay closed too.
     expect(allowLinesFor(false)).toEqual([]);
   });
 
