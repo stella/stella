@@ -33,7 +33,9 @@ CREATE TABLE "organization_sso_pending_member" (
   CONSTRAINT "organization_sso_pending_member_reason_check"
     CHECK ("reason" IN ('admin_approval', 'seat_limit_reached')),
   CONSTRAINT "organization_sso_pending_member_status_check"
-    CHECK ("status" IN ('pending', 'approved', 'rejected'))
+    CHECK ("status" IN ('pending', 'approved', 'rejected')),
+  CONSTRAINT "org_sso_pending_member_review_state_check"
+    CHECK (("status" = 'pending' AND "reviewed_at" IS NULL AND "reviewed_by" IS NULL) OR ("status" IN ('approved', 'rejected') AND "reviewed_at" IS NOT NULL))
 );--> statement-breakpoint
 CREATE UNIQUE INDEX "organization_sso_pending_member_org_user_uidx"
   ON "organization_sso_pending_member" ("organization_id", "user_id");--> statement-breakpoint

@@ -662,6 +662,10 @@ export const organizationSsoPendingMember = pgTable(
       "organization_sso_pending_member_status_check",
       inArray(table.status, ORGANIZATION_SSO_PENDING_STATUSES),
     ),
+    check(
+      "org_sso_pending_member_review_state_check",
+      sql`(${table.status} = 'pending' AND ${table.reviewedAt} IS NULL AND ${table.reviewedBy} IS NULL) OR (${table.status} IN ('approved', 'rejected') AND ${table.reviewedAt} IS NOT NULL)`,
+    ),
     tableOwnerAccess("organization_sso_pending_member"),
     ...denyStellaAccessPolicies(),
   ],
