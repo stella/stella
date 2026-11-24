@@ -549,6 +549,7 @@ describe("policy coverage", () => {
     "sso_provider",
     "organization_sso_policy",
     "organization_sso_domain",
+    "organization_sso_pending_member",
     // Filed feedback reports: organization_id/user_id record who filed a
     // report for the maintainers' private view and are never a tenant scope.
     // The table has no read surface at all: RLS is enabled with no policy and
@@ -1667,6 +1668,7 @@ describe("policy coverage", () => {
       "oauth_refresh_token",
       "organization_sso_policy",
       "organization_sso_domain",
+      "organization_sso_pending_member",
       "session",
       "sso_provider",
       "two_factor",

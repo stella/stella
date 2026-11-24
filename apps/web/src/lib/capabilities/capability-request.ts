@@ -35,6 +35,8 @@ export type AppOnlyWriteId =
   | "organization-settings.sso.domains.delete"
   | "organization-settings.sso.domains.post"
   | "organization-settings.sso.domains.verify.post"
+  | "organization-settings.sso.pending-members.approve.post"
+  | "organization-settings.sso.pending-members.reject.post"
   | "organization-settings.sso.policy.put"
   | "organization-settings.sso.providers.delete"
   | "organization-settings.sso.providers.post"

@@ -330,6 +330,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "sso_provider",
   "organization_sso_policy",
   "organization_sso_domain",
+  "organization_sso_pending_member",
   // Machine API keys: credential digests plus the permission set each key
   // carries. A tenant-scoped connection must be able to neither read a digest
   // nor widen a key's permissions, so every access goes through better-auth on

@@ -5,6 +5,7 @@ import { rejectOrgSsoPendingMember } from "@/api/db/root";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 import { mapSsoProvisioningError } from "./sso-error-map";
 
@@ -50,5 +51,11 @@ const rejectOrganizationSsoPendingMemberHandler = createSafeRootHandler(
     return Result.ok({ rejected: true as const, id: rejected.value.id });
   },
 );
+
+declareAggregateMutation(rejectOrganizationSsoPendingMemberHandler, {
+  type: "independent",
+  reason:
+    "Single-row pending SSO member status transition scoped to active organization.",
+});
 
 export default rejectOrganizationSsoPendingMemberHandler;

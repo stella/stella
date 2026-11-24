@@ -1096,7 +1096,7 @@ const ProvisioningAndSeatsSection = ({
                   size="xs"
                   type="button"
                 >
-                  {t("settings.organization.sso.approveMember")}
+                  {t("common.approve")}
                 </Button>
                 <Button
                   disabled={

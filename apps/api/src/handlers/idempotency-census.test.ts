@@ -813,6 +813,14 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "POST /v1/organization-settings/sso/pending-members/:pendingId/approve": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/organization-settings/sso/pending-members/:pendingId/reject": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/organization-settings/sso/providers": {
     type: "non-replay",
     reason: "current-state",

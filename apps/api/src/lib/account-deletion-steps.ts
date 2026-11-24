@@ -30,6 +30,7 @@ import {
   oauthRefreshToken,
   organization,
   organizationSsoDomain,
+  organizationSsoPendingMember,
   session,
   ssoProvider,
   twoFactor,
@@ -261,6 +262,7 @@ const REVOKE_AUTH_CREDENTIALS_TABLES = [
   invitation,
   apikey,
   organizationSsoDomain,
+  organizationSsoPendingMember,
   ssoProvider,
 ] as const satisfies readonly PgTable[];
 
@@ -307,6 +309,16 @@ export const revokeAuthCredentialsAndInvitations = async ({
     .update(organizationSsoDomain)
     .set({ createdBy: null })
     .where(eq(organizationSsoDomain.createdBy, currentUserId));
+  // Remove pending SSO membership requests for the deleted user and clear reviewer attribution.
+  // audit: skip - verifyAndDeleteUser records the parent account-deletion request in this transaction.
+  await tx
+    .delete(organizationSsoPendingMember)
+    .where(eq(organizationSsoPendingMember.userId, currentUserId));
+  // audit: skip - verifyAndDeleteUser records the parent account-deletion request in this transaction.
+  await tx
+    .update(organizationSsoPendingMember)
+    .set({ reviewedBy: null })
+    .where(eq(organizationSsoPendingMember.reviewedBy, currentUserId));
 };
 
 const REVOKE_OAUTH_TOKENS_TABLES = [
