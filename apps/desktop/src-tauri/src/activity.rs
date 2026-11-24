@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use std::{
   collections::{BTreeMap, BTreeSet, btree_map::Entry},
   path::PathBuf,
-  sync::{Arc, Mutex},
+  sync::{Arc, Mutex, OnceLock},
   time::{Duration, Instant},
 };
 use tauri::{AppHandle, Emitter, Manager, Runtime};
@@ -554,11 +554,17 @@ fn details_enabled(settings: &ActivitySettings, app: DetailCaptureApp<'_>) -> bo
       || is_excluded(&settings.browser_title_apps, app.identifier))
 }
 
+static MONOTONIC_EPOCH: OnceLock<Instant> = OnceLock::new();
+
+fn monotonic_now() -> Duration {
+  MONOTONIC_EPOCH.get_or_init(Instant::now).elapsed()
+}
+
 struct ObservationCommit {
   generation: u64,
   enabled: bool,
   now: DateTime<Utc>,
-  monotonic: Instant,
+  monotonic: Duration,
   idle: Duration,
   observation: Observation,
   partition: DayPartition,
@@ -577,8 +583,8 @@ pub struct ActivityManager {
   manual_assignments: BTreeMap<NaiveDate, Vec<ActivityManualAssignment>>,
   pending_batches: BTreeMap<NaiveDate, ActivityPendingBatch>,
   cached_pending_dates: Result<BTreeSet<NaiveDate>, String>,
-  last_flush: Option<Instant>,
-  last_sample: Option<(DateTime<Utc>, Instant)>,
+  last_flush: Option<Duration>,
+  last_sample: Option<(DateTime<Utc>, Duration)>,
   wall_floor: Option<DateTime<Utc>>,
   observation_generation: u64,
   namespace: Option<String>,
@@ -1155,7 +1161,7 @@ impl ActivityManager {
   /// Production supplies both clocks and idle evidence; tests can inject them.
   #[cfg(test)]
   pub fn observe(&mut self, now: DateTime<Utc>, observation: Observation) -> bool {
-    let monotonic = self.last_sample.map_or_else(Instant::now, |(wall, clock)| {
+    let monotonic = self.last_sample.map_or(Duration::ZERO, |(wall, clock)| {
       clock + (now - wall).to_std().unwrap_or_default()
     });
     self.observe_at(
@@ -1187,14 +1193,14 @@ impl ActivityManager {
   fn observe_at(
     &mut self,
     now: DateTime<Utc>,
-    monotonic: Instant,
+    monotonic: Duration,
     idle: Duration,
     observation: Observation,
     partition: DayPartition,
   ) -> bool {
     let mut closed = false;
     if let Some((wall, previous)) = self.last_sample {
-      let elapsed = monotonic.saturating_duration_since(previous);
+      let elapsed = monotonic.saturating_sub(previous);
       let wall_elapsed = (now - wall).to_std();
       if elapsed > MAX_SAMPLE_GAP
         || wall_elapsed.is_err()
@@ -1479,7 +1485,7 @@ impl ActivityManager {
   /// file it is loaded from cannot already hold that segment.
   pub fn flush(&mut self, now: DateTime<Utc>) -> Result<(), String> {
     let _ = now;
-    self.last_flush = Some(Instant::now());
+    self.last_flush = Some(monotonic_now());
     let open_pieces = self.open_pieces();
     for (date, _) in &open_pieces {
       let _ = self.day_mut(*date);
@@ -1517,10 +1523,10 @@ impl ActivityManager {
     failure.map_or(Ok(()), Err)
   }
 
-  pub fn flush_due(&self, now: Instant) -> bool {
-    self.last_flush.is_none_or(|last_flush| {
-      now.saturating_duration_since(last_flush) >= FLUSH_INTERVAL
-    })
+  pub fn flush_due(&self, now: Duration) -> bool {
+    self
+      .last_flush
+      .is_none_or(|last_flush| now.saturating_sub(last_flush) >= FLUSH_INTERVAL)
   }
 
   /// Ends recording for now: closes the open segment and writes it.
@@ -2888,7 +2894,7 @@ fn sample(app: &AppHandle, state: &ActivityAppState, calls: &mut CallDetector) {
   // The foreground lookup hops to the main thread, so it runs without the
   // lock and commands never wait on it.
   let now = Utc::now();
-  let monotonic = Instant::now();
+  let monotonic = monotonic_now();
   let call = if settings.ignore_calls {
     calls.reset();
     None
@@ -5239,7 +5245,7 @@ mod tests {
             generation,
             enabled: sampler_enabled.load(Ordering::SeqCst),
             now: at(5),
-            monotonic: Instant::now(),
+            monotonic: Duration::ZERO,
             idle: Duration::ZERO,
             observation: active_details(if transition == "browser-titles-off" {
               "com.google.chrome"
@@ -5361,7 +5367,7 @@ mod tests {
       let store = ActivityStore::new([3; 32], root.clone());
       let mut manager = recording_manager();
       manager.persistence = ActivityPersistence::Encrypted(store.clone());
-      let clock = Instant::now();
+      let clock = Duration::ZERO;
       manager.observe_at(
         at(0),
         clock,
@@ -5404,7 +5410,7 @@ mod tests {
       let store = ActivityStore::new([3; 32], root.clone());
       let mut manager = recording_manager();
       manager.persistence = ActivityPersistence::Encrypted(store.clone());
-      let clock = Instant::now();
+      let clock = Duration::ZERO;
       for (second, idle) in [
         (0, 0),
         (5, 0),
@@ -5464,7 +5470,7 @@ mod tests {
   #[test]
   fn continuously_advancing_input_evidence_keeps_sustained_activity() {
     let mut manager = recording_manager();
-    let clock = Instant::now();
+    let clock = Duration::ZERO;
     for second in [0, 5, 10, 15] {
       let idle = if second == 0 {
         Duration::ZERO
@@ -5498,7 +5504,7 @@ mod tests {
     let store = ActivityStore::new([3; 32], root.clone());
     let mut manager = recording_manager();
     manager.persistence = ActivityPersistence::Encrypted(store.clone());
-    let clock = Instant::now();
+    let clock = Duration::ZERO;
     for (second, idle) in [(0, 0), (5, 0), (10, 5), (15, 1), (20, 0)] {
       let now = start + chrono::Duration::seconds(second);
       manager.observe_at(
@@ -5536,7 +5542,7 @@ mod tests {
   #[test]
   fn fractional_idle_at_the_initial_sample_keeps_advancing_input_activity() {
     let mut manager = recording_manager();
-    let clock = Instant::now();
+    let clock = Duration::ZERO;
     for second in [0, 5, 10] {
       manager.observe_at(
         at(second),
@@ -5623,7 +5629,7 @@ mod tests {
   fn clock_corrections_never_overlap_intervals_or_delay_monotonic_flush() {
     for correction in [-120, -10, 10, 120, 3600] {
       let mut manager = recording_manager();
-      let clock = Instant::now();
+      let clock = Duration::ZERO;
       for (tick, wall, app) in [
         (0, 0, "a"),
         (5, 5, "a"),
@@ -5828,7 +5834,7 @@ mod tests {
       settings.clone(),
       at(0),
     );
-    let clock = Instant::now();
+    let clock = Duration::ZERO;
     for second in [0, 5, 10, 15] {
       let now = start + chrono::Duration::seconds(second);
       first.observe_at(
@@ -5925,7 +5931,7 @@ mod tests {
     let utc = FixedOffset::east_opt(0).unwrap();
     let west = FixedOffset::west_opt(3600).unwrap();
     let start = Utc.with_ymd_and_hms(2026, 3, 10, 0, 30, 0).unwrap();
-    let clock = Instant::now();
+    let clock = Duration::ZERO;
     for second in [0, 5] {
       let now = start + chrono::Duration::seconds(second);
       manager.observe_at(

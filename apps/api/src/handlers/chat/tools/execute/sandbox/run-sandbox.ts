@@ -1190,70 +1190,76 @@ const runHostCall = ({
   parsedArgs,
 }: RunHostCallProps): Promise<void> => {
   const workPromise = (async () => {
-    const hostResult = await Result.tryPromise({
-      try: async () =>
-        await fn.execute({
-          input: parsedArgs,
-          signal: state.abortController.signal,
-        }),
-      catch: (cause) =>
-        createVmBridgeError("SandboxHostError", errorMessageFromUnknown(cause)),
+    const outcome = await Result.tryPromise({
+      try: async () => {
+        const hostResult = await Result.tryPromise({
+          try: async () =>
+            await fn.execute({
+              input: parsedArgs,
+              signal: state.abortController.signal,
+            }),
+          catch: (cause) =>
+            createVmBridgeError(
+              "SandboxHostError",
+              errorMessageFromUnknown(cause),
+            ),
+        });
+
+        if (Result.isError(hostResult)) {
+          settleDeferredWithBridgeError({
+            ctx,
+            deferred,
+            clock,
+            error: hostResult.error,
+            state,
+          });
+          return;
+        }
+
+        const serialised = serializeHostFunctionValue(hostResult.value);
+        if (Result.isError(serialised)) {
+          settleDeferredWithBridgeError({
+            ctx,
+            deferred,
+            clock,
+            error: createVmBridgeError(
+              "SandboxHostError",
+              serialised.error.message,
+            ),
+            state,
+          });
+          return;
+        }
+
+        if (shouldIgnoreHostCompletion({ ctx, clock, state })) {
+          return;
+        }
+
+        if (serialised.value === undefined) {
+          deferred.resolve(ctx.undefined);
+          return;
+        }
+
+        using result = ctx.newString(serialised.value);
+        deferred.resolve(result);
+      },
+      catch: (error: unknown) =>
+        createVmBridgeError("SandboxHostError", errorMessageFromUnknown(error)),
     });
 
-    if (Result.isError(hostResult)) {
+    if (Result.isError(outcome)) {
       settleDeferredWithBridgeError({
         ctx,
         deferred,
         clock,
-        error: hostResult.error,
+        error: outcome.error,
         state,
       });
-      return;
     }
-
-    const serialised = serializeHostFunctionValue(hostResult.value);
-    if (Result.isError(serialised)) {
-      settleDeferredWithBridgeError({
-        ctx,
-        deferred,
-        clock,
-        error: createVmBridgeError(
-          "SandboxHostError",
-          serialised.error.message,
-        ),
-        state,
-      });
-      return;
-    }
-
-    if (shouldIgnoreHostCompletion({ ctx, clock, state })) {
-      return;
-    }
-
-    if (serialised.value === undefined) {
-      deferred.resolve(ctx.undefined);
-      return;
-    }
-
-    using result = ctx.newString(serialised.value);
-    deferred.resolve(result);
-  })()
-    .catch((error: unknown) => {
-      settleDeferredWithBridgeError({
-        ctx,
-        deferred,
-        clock,
-        error: createVmBridgeError(
-          "SandboxHostError",
-          errorMessageFromUnknown(error),
-        ),
-        state,
-      });
-    })
-    .finally(() => {
-      state.pendingHostWork.delete(workPromise);
-      sandboxHostWorkInFlight.delete(workPromise);
-    });
+  })().finally(() => {
+    state.pendingHostWork.delete(workPromise);
+    sandboxHostWorkInFlight.delete(workPromise);
+  });
 
   sandboxHostWorkInFlight.add(workPromise);
   return workPromise;

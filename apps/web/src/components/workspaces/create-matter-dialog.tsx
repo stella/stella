@@ -53,7 +53,7 @@ export const SelectedClient = ({
   onClear,
   clearLabel,
 }: {
-  client: MatterDraftClient;
+  client: Pick<MatterDraftClient, "displayName" | "type">;
   onClear: () => void;
   clearLabel: string;
 }) => (

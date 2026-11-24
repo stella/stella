@@ -59,6 +59,7 @@ import type {
   RecoveryTarget,
 } from "../shared/rpc";
 import { DESKTOP_PLATFORM } from "../shared/use-clipboard-shortcut";
+import { useDictationAvailability } from "../shared/use-dictation-availability";
 import { WindowDragRegion } from "../shared/WindowDragRegion";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
@@ -73,7 +74,7 @@ import { AgentSubscriptionsSection } from "./AgentSubscriptionsSection";
 import type { AgentSettingsFocus } from "./AgentSubscriptionsSection";
 import { ClipboardSettingsSections } from "./ClipboardSettings";
 import { commandErrorMessage } from "./command-error";
-import { DictationSetting, useDictationAvailability } from "./DictationSetting";
+import { DictationSetting } from "./DictationSetting";
 import { KeepAwakeSection } from "./KeepAwakeSection";
 import { LocalLinkedFoldersSection } from "./LocalLinkedFoldersSection";
 import { LocalSkillFoldersSection } from "./LocalSkillFoldersSection";

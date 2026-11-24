@@ -257,6 +257,8 @@
     },
     "members": {
       "billingAccess": "Zugriff auf Abrechnungsdaten",
+      "billingAccessDescription": "Ermöglicht die Ansicht von Sätzen, Beträgen und Rechnungen in Akten, auf die dieses Mitglied Zugriff hat. Eigentümer und Administratoren haben diesen Zugriff immer.",
+      "billingAccessIncludedInRole": "In Rolle enthalten",
       "changeRole": "Rolle ändern",
       "confirmRoleChangeDescription": "Die Rolle von {email} wird {oldRole, select, owner {von Eigentümer} admin {von Administrator} member {von Mitglied} intern {von Praktikant} external {von externem Mitarbeiter} other {}} {newRole, select, owner {auf Eigentümer} admin {auf Administrator} member {auf Mitglied} intern {auf Praktikant} external {auf externen Mitarbeiter} other {}} geändert.",
       "confirmRoleChangeTitle": "Rolle ändern",
@@ -780,8 +782,10 @@
         "title": "Kurzname der Organisation"
       },
       "sso": {
+        "acsUrlLabel": "ACS-URL",
         "addDomain": "Domain hinzufügen",
         "addProvider": "OIDC-Anbieter hinzufügen",
+        "addSamlProvider": "SAML 2.0-Anbieter hinzufügen",
         "callbackUrlLabel": "Callback-URL",
         "clientIdLabel": "Client-ID",
         "clientSecretLabel": "Client-Secret",
@@ -809,6 +813,10 @@
         "providersTitle": "Identitätsanbieter",
         "requireSsoDescription": "Wenn aktiviert, müssen sich Mitglieder über einen Identitätsanbieter dieser Organisation anmelden, um auf Akten und Einstellungen zuzugreifen.",
         "requireSsoTitle": "SSO für diese Organisation erzwingen",
+        "samlCertLabel": "IdP X.509-Signaturzertifikat (PEM)",
+        "samlEntityIdLabel": "IdP-Aussteller-URI",
+        "samlEntryPointLabel": "IdP-SSO-URL (Einstiegspunkt)",
+        "spMetadataUrlLabel": "SP-Metadaten-URL",
         "testDiscovery": "Discovery testen",
         "title": "Single Sign-On (SSO)",
         "verifyDomain": "Jetzt prüfen"

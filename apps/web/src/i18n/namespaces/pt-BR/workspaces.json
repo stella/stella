@@ -854,6 +854,8 @@
       "instructionsEmpty": "Sem instruções personalizadas",
       "instructionsPlaceholder": "ex.: Use nomes de pastas em inglês, agrupe por contraparte, prefixe datas com o ano.",
       "instructionsTitle": "Instruções de IA",
+      "newClientHint": "Um novo contato é criado ao aplicar.",
+      "newMatterFromDocuments": "Novo caso a partir de documentos",
       "noChangesToApply": "Não há arquivos ou pastas para organizar.",
       "noFilesToOrganize": "Adicione arquivos para organizar.",
       "organized": "Arquivos organizados",

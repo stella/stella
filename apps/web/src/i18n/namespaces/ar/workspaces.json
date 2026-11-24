@@ -854,6 +854,8 @@
       "instructionsEmpty": "لا توجد تعليمات مخصصة",
       "instructionsPlaceholder": "مثل: استخدم أسماء مجلدات بالإنجليزية، وجمّع حسب الطرف المقابل، وضع السنة قبل التواريخ.",
       "instructionsTitle": "تعليمات الذكاء الاصطناعي",
+      "newClientHint": "سيتم إنشاء جهة اتصال جديدة عند التطبيق.",
+      "newMatterFromDocuments": "ملف قانوني جديد من المستندات",
       "noChangesToApply": "لا توجد ملفات أو مجلدات لتنظيمها.",
       "noFilesToOrganize": "أضف الملفات التي تريد تنظيمها.",
       "organized": "تم تنظيم الملفات",
