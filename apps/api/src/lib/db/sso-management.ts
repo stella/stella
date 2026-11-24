@@ -446,7 +446,7 @@ export const createOrganizationSamlProvider = async (
       MAX_SSO_PROVIDERS_PER_ORG,
     );
     if (
-      existingProviders.type === "truncated" ||
+      existingProviders.type === "overflow" ||
       existingProviders.rows.length >= MAX_SSO_PROVIDERS_PER_ORG
     ) {
       return Result.err(
