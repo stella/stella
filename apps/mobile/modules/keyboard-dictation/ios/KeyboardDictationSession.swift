@@ -457,10 +457,7 @@ final class KeyboardDictationSession {
   // MARK: - Audio
 
   private static func recordingAllowed() -> Bool {
-    if #available(iOS 17.0, *) {
-      return AVAudioApplication.shared.recordPermission == .granted
-    }
-    return AVAudioSession.sharedInstance().recordPermission == .granted
+    AVAudioApplication.shared.recordPermission == .granted
   }
 
   private func startEngine() throws {

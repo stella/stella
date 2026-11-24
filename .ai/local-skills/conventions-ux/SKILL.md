@@ -68,6 +68,11 @@ in doubt, simpler is better, or skip it.
 - `AiActionIcon` (the magic wand) is for AI actions: rewrite, refine,
   redraft, search query refinement, prompt editing, AI rename. Do not
   use generic sparkles for this function, and never for a skill. [review]
+- A third-party logo (Claude, OpenAI, Gemini, Antigravity, GitHub…) is
+  copied from the owner's asset or a licensed icon set (Simple Icons,
+  LobeHub, Octicons) in its own colours, never redrawn, simplified or
+  recoloured. It lives in `@stll/ui/brand-icons` with a comment naming
+  its source; with no official asset, show the name instead. [review]
 
 ## Review chrome
 

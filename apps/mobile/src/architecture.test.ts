@@ -28,6 +28,7 @@ import {
   BAR_GLYPHS_FOLDER,
   copyBarGlyphs,
   copyKeyboardExtension,
+  IOS_DEPLOYMENT_TARGET,
   KEYBOARD_BRIDGE,
   KEYBOARD_DICTATE_ROUTE,
   KEYBOARD_EXTENSION_FOLDER,
@@ -161,6 +162,48 @@ describe("the app's builds", () => {
       expect(declared).toEqual([...UI_LOCALES]);
     },
   );
+
+  test("every local iOS podspec matches the app's deployment target", () => {
+    const modulesRoot = path.join(SOURCE_ROOT, "..", "modules");
+    const podspecs = readdirSync(modulesRoot)
+      .toSorted()
+      .flatMap((moduleName) => {
+        const iosDir = path.join(modulesRoot, moduleName, "ios");
+        return existsSync(iosDir)
+          ? readdirSync(iosDir)
+              .filter((file) => file.endsWith(".podspec"))
+              .map((file) => path.join(iosDir, file))
+          : [];
+      });
+    expect(podspecs.length).toBeGreaterThan(0);
+    for (const podspec of podspecs) {
+      expect(readFileSync(podspec, "utf-8")).toContain(
+        `:ios => '${IOS_DEPLOYMENT_TARGET}'`,
+      );
+    }
+  });
+
+  test("every build sets the iOS deployment target in Podfile.properties.json", async () => {
+    for (const { config } of configs) {
+      const podfilePropertiesMod = config.mods?.ios?.podfileProperties;
+      expect(podfilePropertiesMod).toBeDefined();
+      const result = await podfilePropertiesMod?.({
+        ...config,
+        modRawConfig: config,
+        modRequest: {
+          introspect: false,
+          modName: "podfileProperties",
+          platform: "ios",
+          platformProjectRoot: "",
+          projectRoot: "",
+        },
+        modResults: {},
+      });
+      expect(result?.modResults["ios.deploymentTarget"]).toBe(
+        IOS_DEPLOYMENT_TARGET,
+      );
+    }
+  });
 
   test("a signed release leaves out the Live Activity extension it cannot sign yet", () => {
     const signed = appConfigFor({
@@ -740,6 +783,43 @@ describe("the app's transcriptions", () => {
     (name) => {
       expect(
         sendsDirectly(readFileSync(path.join(SOURCE_ROOT, name), "utf-8")),
+      ).toEqual([]);
+    },
+  );
+});
+
+describe("the app's dictation choices", () => {
+  /**
+   * The modules that may read the choices with the defaults in place of
+   * unreadable ones: where they are kept, and Settings, which only shows
+   * and changes them. A dictation reads `readDictationChoice`, which fails
+   * rather than guess, so an unreadable choice never sends a recording to
+   * the default model.
+   */
+  const SHOWERS = new Set([
+    path.join("state", "dictation-preferences.ts"),
+    path.join("components", "dictation-setting.tsx"),
+  ]);
+
+  const guesses = (source: string): string[] =>
+    source.match(
+      /\b(?:readDictationPreferences|DEFAULT_DICTATION_PREFERENCES)\b/gu,
+    ) ?? [];
+
+  test("finds the modules that may show the defaults, and the scan sees what it forbids elsewhere", () => {
+    for (const name of SHOWERS) {
+      expect(appModules).toContain(name);
+      expect(
+        guesses(readFileSync(path.join(SOURCE_ROOT, name), "utf-8")),
+      ).not.toEqual([]);
+    }
+  });
+
+  test.each(appModules.filter((name) => !SHOWERS.has(name)))(
+    "%s reads the choices only through readDictationChoice",
+    (name) => {
+      expect(
+        guesses(readFileSync(path.join(SOURCE_ROOT, name), "utf-8")),
       ).toEqual([]);
     },
   );

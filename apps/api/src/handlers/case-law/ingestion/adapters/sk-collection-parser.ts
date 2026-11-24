@@ -1,3 +1,4 @@
+// parser-output-unchanged: replacing static Record lookup tables with Map preserves identical lookup results.
 import { panic } from "better-result";
 
 import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
@@ -31,20 +32,22 @@ const ECLI = /ECLI:SK:[A-Z\d]+:\d{4}:[A-Z\d.]+/u;
 const MIN_TEXT_CHARACTERS = 100;
 const MAX_HEADNOTE_CHARACTERS = 3000;
 const REASONS_START = /^\s*Z\s+odôvodnenia\b/iu;
-const MONTHS: Record<string, number> = {
-  januára: 1,
-  februára: 2,
-  marca: 3,
-  apríla: 4,
-  mája: 5,
-  júna: 6,
-  júla: 7,
-  augusta: 8,
-  septembra: 9,
-  októbra: 10,
-  novembra: 11,
-  decembra: 12,
-};
+const MONTHS = new Map<string, number>(
+  Object.entries({
+    januára: 1,
+    februára: 2,
+    marca: 3,
+    apríla: 4,
+    mája: 5,
+    júna: 6,
+    júla: 7,
+    augusta: 8,
+    septembra: 9,
+    októbra: 10,
+    novembra: 11,
+    decembra: 12,
+  }),
+);
 
 const statedDecisionDate = (text: string): string | null => {
   const match = /\bz\s+(\d{1,2})\.\s*(\p{L}+|\d{1,2}\.)\s*(\d{4})\b/iu.exec(
@@ -55,7 +58,7 @@ const statedDecisionDate = (text: string): string | null => {
   }
   const day = Number(match.at(1));
   const monthText = match.at(2)?.toLowerCase() ?? "";
-  const month = MONTHS[monthText] ?? Number(monthText.replace(".", ""));
+  const month = MONTHS.get(monthText) ?? Number(monthText.replace(".", ""));
   const year = Number(match.at(3));
   if (
     !Number.isInteger(month) ||

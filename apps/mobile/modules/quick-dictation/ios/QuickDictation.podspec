@@ -5,7 +5,7 @@ Pod::Spec.new do |s|
   s.description    = 'Records a dictation in the background for an App Intent, cut at pauses, with a Live Activity to finish or cancel it, and hands the recording to the app to transcribe.'
   s.author         = ''
   s.homepage       = 'https://stll.app'
-  s.platforms      = { :ios => '16.4' }
+  s.platforms      = { :ios => '26.0' }
   s.source         = { git: '' }
   s.static_framework = true
 

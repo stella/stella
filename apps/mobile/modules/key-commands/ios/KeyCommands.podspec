@@ -5,7 +5,7 @@ Pod::Spec.new do |s|
   s.description    = 'A view around the app that answers hardware keyboard shortcuts.'
   s.author         = ''
   s.homepage       = 'https://stll.app'
-  s.platforms      = { :ios => '16.4' }
+  s.platforms      = { :ios => '26.0' }
   s.source         = { git: '' }
   s.static_framework = true
 

@@ -1,3 +1,4 @@
+// parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 import { panic, Result } from "better-result";
 /**
  * The CourtListener record contract: one cluster with every row of the pinned
@@ -396,14 +397,16 @@ const trustedPath = (issue: v.BaseIssue<unknown>) => {
   return { path: segments?.join(".") || "$", unexpected };
 };
 
-const ROW_TABLES: Readonly<Record<string, readonly string[]>> = {
-  cluster: CLUSTER_COLUMNS,
-  docket: DOCKET_COLUMNS,
-  court: COURT_COLUMNS,
-  opinions: OPINION_COLUMNS,
-  citations: CITATION_COLUMNS,
-  judgeRelations: PERSON_COLUMNS,
-};
+const ROW_TABLES = new Map<string, readonly string[]>(
+  Object.entries({
+    cluster: CLUSTER_COLUMNS,
+    docket: DOCKET_COLUMNS,
+    court: COURT_COLUMNS,
+    opinions: OPINION_COLUMNS,
+    citations: CITATION_COLUMNS,
+    judgeRelations: PERSON_COLUMNS,
+  }),
+);
 
 /**
  * Column drift is schema drift; any other shape failure is an invalid record,
@@ -436,7 +439,7 @@ const schemaDiagnostics = (
   for (const issue of drift) {
     const { path } = trustedPath(issue);
     const table = path.split(".").at(0);
-    const columns = table === undefined ? undefined : ROW_TABLES[table];
+    const columns = table === undefined ? undefined : ROW_TABLES.get(table);
     if (columns === undefined) {
       return panic(`No CourtListener row columns for ${path}`);
     }

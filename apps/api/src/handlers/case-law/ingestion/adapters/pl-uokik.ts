@@ -1,3 +1,4 @@
+// parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 // parser-output-unchanged: source-fields-pl: Additional publisher categories and inventory targets leave existing parsed decisions unchanged.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 import { panic, Result } from "better-result";
@@ -791,9 +792,11 @@ const listOf = (text: string | undefined): string[] =>
  * The register a page names in its title, and the authority whose decisions
  * that register publishes. A page naming another is not filed under a guess.
  */
-const AUTHORITY_OF_REGISTER: Readonly<Record<string, string>> = {
-  "Decyzje Prezesa UOKiK": "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
-};
+const AUTHORITY_OF_REGISTER = new Map<string, string>(
+  Object.entries({
+    "Decyzje Prezesa UOKiK": "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
+  }),
+);
 
 // ── Fetching a decision ──────────────────────────────────
 
@@ -1464,7 +1467,7 @@ export const assemblePlUokikDecision = async ({
     row.decisionDate;
   const register = detail?.title;
   const court =
-    register === undefined ? undefined : AUTHORITY_OF_REGISTER[register];
+    register === undefined ? undefined : AUTHORITY_OF_REGISTER.get(register);
   // A row stored without its page names no register; its status says why.
   if (detail !== undefined && court === undefined) {
     logger.warn("case_law.ingestion.court_not_stated", {

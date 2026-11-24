@@ -33,10 +33,12 @@ export const yaraRuleNames: readonly string[] = [
   ...ruleSource.matchAll(/^rule\s+(\w+)/gmu),
 ].flatMap((m) => (m[1] === undefined ? [] : [m[1]]));
 
-const YARA_SEVERITY_MAP: Record<string, Match["severity"]> = {
-  malicious: "critical",
-  suspicious: "suspicious",
-};
+const YARA_SEVERITY_MAP = new Map<string, Match["severity"]>(
+  Object.entries({
+    malicious: "critical",
+    suspicious: "suspicious",
+  }),
+);
 
 const toMatch = (m: RuleMatch): Match => {
   const { meta } = m;
@@ -46,7 +48,7 @@ const toMatch = (m: RuleMatch): Match => {
       : undefined;
 
   const severity =
-    (verdict ? YARA_SEVERITY_MAP[verdict] : undefined) ?? "suspicious";
+    (verdict ? YARA_SEVERITY_MAP.get(verdict) : undefined) ?? "suspicious";
   const match: Match = {
     rule: m.ruleIdentifier,
     severity,

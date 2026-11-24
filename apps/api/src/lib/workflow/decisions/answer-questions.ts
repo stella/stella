@@ -186,16 +186,18 @@ const NUMBER_PATTERN =
 /** A currency the number carries as an affix: an ISO code or a symbol beside it. */
 const CURRENCY_BEFORE = /(?:([A-Z]{3})|([€$£]|Kč|zł|Ft|kr|lei))\s*$/u;
 const CURRENCY_AFTER = /^\s*(?:([A-Z]{3})|([€$£]|Kč|zł|Ft|kr|lei))(?![\p{L}])/u;
-const CURRENCY_BY_SYMBOL: Record<string, string> = {
-  "€": "EUR",
-  $: "USD",
-  "£": "GBP",
-  Kč: "CZK",
-  zł: "PLN",
-  Ft: "HUF",
-  kr: "SEK",
-  lei: "RON",
-};
+const CURRENCY_BY_SYMBOL = new Map<string, string>(
+  Object.entries({
+    "€": "EUR",
+    $: "USD",
+    "£": "GBP",
+    Kč: "CZK",
+    zł: "PLN",
+    Ft: "HUF",
+    kr: "SEK",
+    lei: "RON",
+  }),
+);
 
 type CurrencyAffix = { code: string; verbatim: string };
 
@@ -216,7 +218,7 @@ const currencyBeside = (
   const [, code, symbol] = hit;
   const resolved =
     code ??
-    (symbol === undefined ? null : (CURRENCY_BY_SYMBOL[symbol] ?? null));
+    (symbol === undefined ? null : (CURRENCY_BY_SYMBOL.get(symbol) ?? null));
   if (resolved === null) {
     return null;
   }

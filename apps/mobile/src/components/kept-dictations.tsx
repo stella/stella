@@ -33,7 +33,7 @@ import {
   withTranscribed,
 } from "@/state/dictation-kept";
 import { readLearnedFixes } from "@/state/dictation-learned";
-import { readDictationPreferences } from "@/state/dictation-preferences";
+import { readDictationChoice } from "@/state/dictation-preferences";
 import type { DictationPreferences } from "@/state/dictation-preferences";
 import { createKeptDictations } from "@/state/kept-dictations";
 import type {
@@ -229,9 +229,10 @@ const modelFor = async (
   if (kept.state.refusedFor !== "model" || session === undefined) {
     return { modelId: kept.modelId, modelClass: kept.modelClass };
   }
-  const { modelId, modelClass } = await readDictationPreferences(
-    deviceAccountStore,
-    session,
-  ).catch(() => ({ modelId: kept.modelId, modelClass: kept.modelClass }));
+  // Choices the phone cannot read keep the dictation's own model, which the
+  // server refuses again: never the default in their place.
+  const { modelId, modelClass } = (
+    await readDictationChoice(deviceAccountStore, session)
+  ).unwrapOr({ modelId: kept.modelId, modelClass: kept.modelClass });
   return { modelId, modelClass };
 };

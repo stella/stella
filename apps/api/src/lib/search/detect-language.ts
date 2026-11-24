@@ -14,41 +14,43 @@
  * Only languages with a built-in PG stemmer are listed;
  * everything else falls back to "simple" (no stemming).
  */
-const REGCONFIG_MAP: Record<string, string> = {
-  ar: "arabic",
-  hy: "armenian",
-  eu: "basque",
-  ca: "catalan",
-  da: "danish",
-  nl: "dutch",
-  en: "english",
-  fi: "finnish",
-  fr: "french",
-  de: "german",
-  el: "greek",
-  hi: "hindi",
-  hu: "hungarian",
-  id: "indonesian",
-  ga: "irish",
-  it: "italian",
-  lt: "lithuanian",
-  ne: "nepali",
-  nb: "norwegian",
-  nn: "norwegian",
-  no: "norwegian",
-  pt: "portuguese",
-  ro: "romanian",
-  ru: "russian",
-  sr: "serbian",
-  es: "spanish",
-  sv: "swedish",
-  ta: "tamil",
-  tr: "turkish",
-  yi: "yiddish",
-};
+const REGCONFIG_MAP = new Map<string, string>(
+  Object.entries({
+    ar: "arabic",
+    hy: "armenian",
+    eu: "basque",
+    ca: "catalan",
+    da: "danish",
+    nl: "dutch",
+    en: "english",
+    fi: "finnish",
+    fr: "french",
+    de: "german",
+    el: "greek",
+    hi: "hindi",
+    hu: "hungarian",
+    id: "indonesian",
+    ga: "irish",
+    it: "italian",
+    lt: "lithuanian",
+    ne: "nepali",
+    nb: "norwegian",
+    nn: "norwegian",
+    no: "norwegian",
+    pt: "portuguese",
+    ro: "romanian",
+    ru: "russian",
+    sr: "serbian",
+    es: "spanish",
+    sv: "swedish",
+    ta: "tamil",
+    tr: "turkish",
+    yi: "yiddish",
+  }),
+);
 
 const FALLBACK_REGCONFIG = "simple";
 
 /** Map an ISO 639-1 code to a PostgreSQL regconfig name. */
 export const isoToRegconfig = (iso: string | null): string =>
-  (iso && REGCONFIG_MAP[iso]) || FALLBACK_REGCONFIG;
+  (iso && REGCONFIG_MAP.get(iso)) || FALLBACK_REGCONFIG;

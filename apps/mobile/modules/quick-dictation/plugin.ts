@@ -110,7 +110,7 @@ export const writeAppShortcutsStrings = ({
 
 /** How expo-widgets ends its generated widget bundle; the control joins it there. */
 export const WIDGET_BUNDLE_END = "    WidgetLiveActivity()\n";
-const WIDGET_BUNDLE_WITH_CONTROL = `${WIDGET_BUNDLE_END}    if #available(iOS 18.0, *) {\n      DictationControl()\n    }\n`;
+const WIDGET_BUNDLE_WITH_CONTROL = `${WIDGET_BUNDLE_END}    DictationControl()\n`;
 
 /**
  * Dictation from the Action Button, Siri, Shortcuts and Control Center

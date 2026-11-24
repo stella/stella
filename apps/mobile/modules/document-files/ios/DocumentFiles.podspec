@@ -5,7 +5,7 @@ Pod::Spec.new do |s|
   s.description    = 'Keeps an opened document in protected caches, hands its bytes to the viewer, and shows other files in Quick Look.'
   s.author         = ''
   s.homepage       = 'https://stll.app'
-  s.platforms      = { :ios => '16.4' }
+  s.platforms      = { :ios => '26.0' }
   s.source         = { git: '' }
   s.static_framework = true
 

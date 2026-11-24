@@ -5,7 +5,7 @@ Pod::Spec.new do |s|
   s.description    = 'Keeps the microphone open in the app for the stella keyboard, records what the keyboard asks for and hands the recordings to JavaScript.'
   s.author         = ''
   s.homepage       = 'https://stll.app'
-  s.platforms      = { :ios => '16.4' }
+  s.platforms      = { :ios => '26.0' }
   s.source         = { git: '' }
   s.static_framework = true
 

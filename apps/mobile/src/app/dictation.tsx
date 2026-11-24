@@ -35,8 +35,7 @@ import type { KeptRefusal } from "@/state/dictation-kept";
 import { readLearnedFixes } from "@/state/dictation-learned";
 import {
   chosenModelId,
-  DEFAULT_DICTATION_PREFERENCES,
-  readDictationPreferences,
+  readDictationChoice,
 } from "@/state/dictation-preferences";
 import { UPLOAD_ORIGIN } from "@/state/document-upload";
 import type { FinishedPiece, KeptDictations } from "@/state/kept-dictations";
@@ -397,17 +396,23 @@ const readDictation = async ({
       return { type: "none" };
     }
     const session = source.session();
-    // A choice the phone cannot read is no choice: the server's default;
-    // fixes it cannot read are not applied.
-    const [preferences, learned] =
-      session === undefined
-        ? [DEFAULT_DICTATION_PREFERENCES, []]
-        : await Promise.all([
-            readDictationPreferences(deviceAccountStore, session).catch(
-              () => DEFAULT_DICTATION_PREFERENCES,
-            ),
-            readLearnedFixes(deviceAccountStore, session).catch(() => []),
-          ]);
+    // Signed out, nothing is sent: the recording waits for a retry once
+    // signed in.
+    if (session === undefined) {
+      return { type: "failed", signedOut: true };
+    }
+    // Fixes the phone cannot read are not applied.
+    const [choice, learned] = await Promise.all([
+      readDictationChoice(deviceAccountStore, session),
+      readLearnedFixes(deviceAccountStore, session).catch(() => []),
+    ]);
+    // Choices the phone cannot read send nothing anywhere: the recording is
+    // deleted unheard and the dictation fails.
+    if (choice.isErr()) {
+      await discardQuickDictation();
+      return { type: "failed", signedOut: false };
+    }
+    const preferences = choice.value;
     const text = await transcribeQuickDictation({
       fetch,
       learned,

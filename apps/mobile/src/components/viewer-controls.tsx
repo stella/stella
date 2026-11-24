@@ -1,6 +1,6 @@
 import type { ComponentProps } from "react";
 
-import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
+import { GlassView } from "expo-glass-effect";
 import { Platform, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFormatter, useTranslations } from "use-intl";
@@ -42,7 +42,7 @@ const APPEARANCE_GLYPHS = {
  * The bar floating over a document: − and + walk the zoom steps, the level
  * between them goes back to the fit, and the last button cycles the pages'
  * appearance between the app's, light and dark. A Liquid Glass capsule on
- * iOS 26, a bordered one elsewhere.
+ * iOS, a bordered one elsewhere.
  */
 export const ViewerControls = ({
   appearance,
@@ -59,7 +59,7 @@ export const ViewerControls = ({
   const format = useFormatter();
   const colors = useAppColors();
   const insets = useSafeAreaInsets();
-  const glass = Platform.OS === "ios" && isLiquidGlassAvailable();
+  const glass = Platform.OS === "ios";
   const level =
     zoom === FIT_ZOOM ? t("fit") : format.number(zoom, { style: "percent" });
 
