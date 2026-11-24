@@ -265,18 +265,44 @@ test("the mounted chip changes from checking to install when the announcement de
   ).toBeTruthy();
 });
 
-test("the connected tooltip explains the separate website tab", async () => {
+test("the connected preview card and popover explain what the extension does and link to site settings", async () => {
   await states[BROWSER_EXTENSION_STATUS.connected]();
   showChip();
   const trigger = screen.getByRole("button", {
     name: messages.chat.browserExtension.connected,
   });
-  await act(async () => {
-    trigger.focus();
+  expect(
+    document.querySelector(
+      `[id="${trigger.getAttribute("aria-describedby") ?? ""}"]`,
+    )?.textContent,
+  ).toBe(messages.chat.browserExtensionPreview.connected);
+
+  fireEvent.click(trigger);
+  expect(
+    await screen.findByText(
+      messages.chat.browserExtension.connectedDescription,
+    ),
+  ).toBeTruthy();
+  expect(
+    screen.getByText(messages.chat.browserExtension.tipShareTab),
+  ).toBeTruthy();
+  const manageLink = screen.getByRole("link", {
+    name: messages.chat.browserExtension.manageSites,
+  });
+  expect(manageLink.getAttribute("href")).toBe("/settings/account/connections");
+});
+
+test("the not-installed preview card describes the extension before clicking", async () => {
+  await states[BROWSER_EXTENSION_STATUS.notInstalled]();
+  showChip();
+  const trigger = screen.getByRole("button", {
+    name: messages.chat.browserExtension.install,
   });
   expect(
-    await screen.findByText(messages.chat.browserExtension.description),
-  ).toBeTruthy();
+    document.querySelector(
+      `[id="${trigger.getAttribute("aria-describedby") ?? ""}"]`,
+    )?.textContent,
+  ).toBe(messages.chat.browserExtensionPreview.notInstalled);
 });
 
 for (const origin of PRODUCTION_STELLA_ORIGINS) {
