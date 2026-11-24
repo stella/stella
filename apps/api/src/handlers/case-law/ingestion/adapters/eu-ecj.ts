@@ -144,12 +144,14 @@ const readEcjResponseBytes = async (
   }
   const bytes = await readCappedBytes(response.body, PUBLISHER_BODY_MAX_BYTES);
   if (bytes === null) {
-    throw new AdapterFetchError({
-      message: `CJEU ${subject} body exceeded ${PUBLISHER_BODY_MAX_BYTES} bytes`,
-      adapterKey: ADAPTER_KEYS.EU_ECJ,
-      cursor: null,
-      httpStatus: response.status,
-    });
+    return await Promise.reject(
+      new AdapterFetchError({
+        message: `CJEU ${subject} body exceeded ${PUBLISHER_BODY_MAX_BYTES} bytes`,
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        cursor: null,
+        httpStatus: response.status,
+      }),
+    );
   }
   return bytes;
 };
@@ -158,7 +160,9 @@ const readEcjResponseText = async (
   response: Response,
   subject: string,
 ): Promise<string> =>
-  new TextDecoder().decode(await readEcjResponseBytes(response, subject));
+  new TextDecoder("utf-8", { fatal: true }).decode(
+    await readEcjResponseBytes(response, subject),
+  );
 
 const readEcjResponseJson = async (
   response: Response,

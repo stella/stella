@@ -1999,11 +1999,13 @@ const readNalusResponseText = async (
   }
   const bytes = await readCappedBytes(response.body, PUBLISHER_BODY_MAX_BYTES);
   if (bytes === null) {
-    throw new NalusResponseError({
-      message: `NALUS ${subject} body exceeded ${PUBLISHER_BODY_MAX_BYTES} bytes`,
-    });
+    return await Promise.reject(
+      new NalusResponseError({
+        message: `NALUS ${subject} body exceeded ${PUBLISHER_BODY_MAX_BYTES} bytes`,
+      }),
+    );
   }
-  return new TextDecoder().decode(bytes);
+  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
 };
 
 const fetchSearchPage = async ({
