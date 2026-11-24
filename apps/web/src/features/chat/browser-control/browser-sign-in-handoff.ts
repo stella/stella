@@ -34,7 +34,7 @@ export const browserCommandHost = (input: unknown): string | null => {
  * Pauses browser execution while a docked card above the composer lets the
  * member open the background sign-in tab and continue once signed in.
  */
-export const waitForBrowserSignIn = ({
+export const waitForBrowserSignIn = async ({
   host,
   signal,
 }: {
@@ -42,11 +42,11 @@ export const waitForBrowserSignIn = ({
   signal: AbortSignal;
 }): Promise<BrowserSignInDecision> => {
   if (signal.aborted) {
-    return Promise.resolve("cancel");
+    return "cancel";
   }
   // Supersede any stale prompt cleanly so only one sign-in card is shown.
   useBrowserSignInStore.getState().pending?.cancel();
-  return new Promise<BrowserSignInDecision>((resolve) => {
+  return await new Promise<BrowserSignInDecision>((resolve) => {
     let settled = false;
     const finish = (decision: BrowserSignInDecision): void => {
       if (settled) {
