@@ -15,7 +15,7 @@ import { BUSINESS_REGISTRY_FORMAT_CAPABILITIES } from "@stll/business-registries
 import { mapWithConcurrency } from "@stll/concurrency";
 import { classifyFailure } from "@stll/errors";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { templateLookupFormats } from "@/api/db/schema";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";

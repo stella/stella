@@ -23,11 +23,11 @@ import {
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import { LegalReaderControls } from "@/components/legal-reader/legal-reader-controls";
 import {
   LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
   LEGAL_READER_LAYOUT_CLASS_NAME,
-  LegalReaderControls,
-} from "@/components/legal-reader/legal-reader-controls";
+} from "@/components/legal-reader/legal-reader-controls.pending";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
@@ -40,7 +40,7 @@ import {
 import type { StatuteViewPayload } from "@/features/statutes/statute-inspector.logic";
 import {
   prepareStatuteReader,
-  statuteLandingAnchorId,
+  statuteLandingAnchorIds,
 } from "@/features/statutes/statute-reader-blocks";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
@@ -64,7 +64,7 @@ export const StatuteInspectorView = ({
 }: InspectorViewRenderProps<StatuteViewPayload>) => {
   const t = useTranslations();
   const { payload } = tab;
-  const textScale = useReaderTextScale("statute");
+  const textScale = useReaderTextScale();
   const {
     data: statute,
     isError,
@@ -101,12 +101,12 @@ export const StatuteInspectorView = ({
     blocks: ast === null ? [] : ast.blocks,
     statuteTitle: statute?.title ?? payload.statuteTitle,
   });
-  const landingAnchorId = statuteLandingAnchorId(
+  const landingAnchorIds = statuteLandingAnchorIds(
     {
       blocks: preparedReader.blocks,
       scheme: statuteAnchorSchemeFor(payload.country),
     },
-    payload.anchorId,
+    payload,
   );
   // The chat is bound to the consolidation the tab holds, which is the
   // document the full reader binds: a question asked here and one asked there
@@ -209,7 +209,7 @@ export const StatuteInspectorView = ({
               {statute !== undefined && (
                 <StatuteReaderBody
                   blocks={preparedReader.blocks}
-                  landingAnchorId={landingAnchorId}
+                  landingAnchorIds={landingAnchorIds}
                   masthead={preparedReader.masthead}
                   scrollContainerRef={contentRef}
                   statute={statute}

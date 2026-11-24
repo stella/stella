@@ -20,7 +20,7 @@ import { TaggedError } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import { organization } from "@/api/db/auth-schema";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   DATA_EXPORT_MAX_FAILURES,
   organizationDataExports,

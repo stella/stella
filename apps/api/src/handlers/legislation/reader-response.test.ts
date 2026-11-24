@@ -28,10 +28,13 @@ import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
 import { createSafeId } from "@/api/lib/branded-types";
 import { toRouteJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
+import { legislationAmendmentEffectSchema } from "@/api/lib/legal-search/legislation-amendment-effect";
+import type { LegislationAmendmentRelation } from "@/api/lib/legal-search/legislation-ingestion-types";
 import { effectOpensVersion } from "@/api/lib/legal-search/legislation-validity-window";
 import { LIMITS } from "@/api/lib/limits";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
+import { truncateTextBytes } from "@/api/lib/search/response-text-bounds";
 import { responseSchemaByteBound } from "@/api/tests/helpers/response-schema-byte-bound";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 
@@ -163,11 +166,14 @@ test("provision history pages keep each preview wording inside its byte budget",
         expressionKind: "consolidation",
         windowDisposition: "effective",
         windowDispositionBasis: null,
+        status: "found",
+        wordingChange: "changed",
         text,
       } as const;
       const count = LIMITS.legislationProvisionHistoryPageSizeMax;
       const item = projectProvisionHistoryItem({
         ...row,
+        governingText: [{ anchor: text, position: "closing", text }],
         country: "CZE",
         slug: "89-2012-sb",
         sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
@@ -287,11 +293,17 @@ test("reader plain text keeps literal markup and entities as text", () => {
           expressionKind: "consolidation",
           windowDisposition: "effective",
           windowDispositionBasis: null,
+          status: "found",
+          wordingChange: "unchanged",
           text,
-        }).text;
+          governingText: [],
+        });
+        if (history.status !== "found") {
+          throw new Error("Expected a found history item");
+        }
         for (const [projected, maxBytes] of [
           [preview, readerTextBytes.previewText],
-          [history, readerTextBytes.provisionText],
+          [history.text, readerTextBytes.provisionText],
         ] as const) {
           expect(text.startsWith(projected ?? "")).toBe(true);
           expect(Buffer.byteLength(projected ?? "")).toBeLessThanOrEqual(
@@ -406,6 +418,8 @@ test("amendment previews preserve same-day actors, staged starts, and source gap
     effectiveDate: "2027-01-01",
     effectiveText: null,
     publisherInstruction: null,
+    effectDetails: null,
+    observations: null,
   } as const;
   const page = {
     items: [
@@ -459,6 +473,187 @@ test("amendment previews preserve same-day actors, staged starts, and source gap
   expect(
     projectStatuteAmendments({ page, snapshot: widened })?.coverage,
   ).toEqual(snapshot.coverage);
+});
+
+test.each(["ř", "漢", "🧑"] as const)(
+  "a bounded conditional excerpt keeps nonblank %s evidence without changing the admitted text",
+  (glyph) => {
+    const sourceText = `${" ".repeat(8192 - glyph.length)}${glyph}`;
+    const effective = v.parse(legislationAmendmentEffectSchema, {
+      type: "conditional",
+      condition: { text: sourceText, label: null },
+      workingDate: "2999-01-01",
+      actualDate: null,
+    });
+    if (effective.type !== "conditional") {
+      throw new Error("Expected a conditional fixture");
+    }
+    expect(effective.condition.text).toBe(sourceText);
+    expect(Buffer.byteLength(sourceText)).toBeGreaterThan(8192);
+    expect(truncateTextBytes(sourceText, 8192).trim()).toBe("");
+    const relation = {
+      publisherId: "publisher:condition-1",
+      amendingEli: "https://example.test/acts/2026/101",
+      amendingTitle: null,
+      amendingAnchor: null,
+      affectedAnchor: "section-5",
+      changeKind: "changed",
+      effective,
+      publisherInstruction: null,
+    } satisfies LegislationAmendmentRelation;
+    const row = {
+      sourceId: createSafeId<"legislationSource">(),
+      targetEli: "https://example.test/acts/2020/10",
+      language: "en",
+      publisherId: relation.publisherId,
+      amendingEli: relation.amendingEli,
+      amendingTitle: relation.amendingTitle,
+      amendingAnchor: relation.amendingAnchor,
+      affectedAnchor: relation.affectedAnchor,
+      changeKind: relation.changeKind,
+      publisherInstruction: relation.publisherInstruction,
+      effectiveType: "not-stated",
+      effectiveDate: null,
+      effectiveText: sourceText,
+      effectDetails: effective,
+      observations: [
+        {
+          status: "present",
+          channel: "bulk",
+          observedAt: "2026-10-20T10:00:00Z",
+          relation,
+        },
+      ],
+    } satisfies Parameters<
+      typeof projectStatuteAmendments
+    >[0]["page"]["items"][number];
+    const projected = projectStatuteAmendments({
+      page: { items: [row], limit: 1, nextCursor: null },
+      snapshot: {
+        observedAt: new Date("2026-10-20T10:00:00Z"),
+        coverage: { type: "complete" },
+      },
+    });
+    expect(
+      v.is(
+        statuteReaderSuccessResponseSchema.entries.pendingChanges,
+        projected,
+      ),
+    ).toBe(true);
+    expect(projected?.items.at(0)?.effective).toMatchObject({
+      type: "conditional",
+      condition: { text: glyph },
+    });
+    expect(projected?.items.at(0)?.observations.at(0)).toMatchObject({
+      relation: {
+        effective: { type: "conditional", condition: { text: glyph } },
+      },
+    });
+    expect(effective.condition.text).toBe(sourceText);
+    expect(row.observations.at(0)?.relation.effective).toEqual(effective);
+    const ordinary = {
+      ...effective,
+      condition: { ...effective.condition, text: `  ${glyph}` },
+    };
+    const ordinaryRow = {
+      ...row,
+      effectiveText: ordinary.condition.text,
+      effectDetails: ordinary,
+      observations: [
+        {
+          status: "present",
+          channel: "bulk",
+          observedAt: "2026-10-20T10:00:00Z",
+          relation: { ...relation, effective: ordinary },
+        },
+      ],
+    } satisfies Parameters<
+      typeof projectStatuteAmendments
+    >[0]["page"]["items"][number];
+    const ordinaryPage = projectStatuteAmendments({
+      page: { items: [ordinaryRow], limit: 1, nextCursor: null },
+      snapshot: {
+        observedAt: new Date("2026-10-20T10:00:00Z"),
+        coverage: { type: "complete" },
+      },
+    });
+    expect(ordinaryPage?.items.at(0)?.effective).toMatchObject({
+      type: "conditional",
+      condition: { text: ordinary.condition.text },
+    });
+  },
+);
+
+test("an instruction the publisher restates under several links reads once and keeps every link", () => {
+  const sourceId = createSafeId<"legislationSource">();
+  // 408/2023 Sb. amends § 5 písm. e) of 435/2004 Sb. on 2024-01-01; the
+  // publisher's link dataset states it again under another link id.
+  const relation = {
+    sourceId,
+    targetEli: "https://www.e-sbirka.cz/eli/cz/sb/2004/435",
+    language: "cs",
+    publisherId: "cz-esbirka:link/981085",
+    amendingEli: "https://www.e-sbirka.cz/eli/cz/sb/2023/408",
+    amendingTitle: "408/2023 Sb.",
+    amendingAnchor: null,
+    affectedAnchor: "par_5-pism_e",
+    changeKind: "changed",
+    effectiveType: "date",
+    effectiveDate: "2024-01-01",
+    effectiveText: null,
+    publisherInstruction: "UPRAVUJE",
+    effectDetails: null,
+    observations: null,
+  } as const;
+  const page = {
+    items: [
+      relation,
+      { ...relation, publisherId: "cz-esbirka:link/1310442" },
+      {
+        ...relation,
+        publisherId: "cz-esbirka:link/981086",
+        changeKind: "inserted" as const,
+      },
+      {
+        ...relation,
+        publisherId: "cz-esbirka:link/981087",
+        affectedAnchor: "par_5-pism_f",
+      },
+    ],
+    limit: 500,
+    nextCursor: null,
+  };
+  const snapshot = {
+    observedAt: new Date("2026-11-18T06:00:00Z"),
+    coverage: { type: "complete" },
+  } as const;
+  const result = projectStatuteAmendments({ page, snapshot });
+  expect(
+    result?.items.map(
+      ({ publisherId, duplicatePublisherIds, affectedAnchor, changeKind }) => [
+        publisherId,
+        duplicatePublisherIds,
+        affectedAnchor,
+        changeKind,
+      ],
+    ),
+  ).toEqual([
+    [
+      "cz-esbirka:link/981085",
+      ["cz-esbirka:link/1310442"],
+      "par_5-pism_e",
+      "changed",
+    ],
+    ["cz-esbirka:link/981086", [], "par_5-pism_e", "inserted"],
+    ["cz-esbirka:link/981087", [], "par_5-pism_f", "changed"],
+  ]);
+  // Every stored link is still named.
+  expect(
+    result?.items.flatMap(({ publisherId, duplicatePublisherIds }) => [
+      publisherId,
+      ...duplicatePublisherIds,
+    ]),
+  ).toHaveLength(page.items.length);
 });
 
 test("effect dates label only eligible version openings across every expression state", () => {

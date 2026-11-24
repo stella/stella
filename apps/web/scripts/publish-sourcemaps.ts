@@ -98,6 +98,7 @@ export const sourcemapProcessCommand = (
   cmd: [
     "bun",
     "x",
+    "--bun",
     POSTHOG_CLI_PACKAGE,
     "sourcemap",
     "process",

@@ -1,15 +1,18 @@
 //! Hold-to-talk dictation into any app. Speech is transcribed on this
 //! computer: audio never leaves it and is never stored. The finished text is
 //! kept only in stella's own clipboard history on this computer, labelled as
-//! a dictation, while that history is on; the system clipboard is never
-//! written. With AI cleanup on (the default), the transcribed text, never the
-//! audio, goes through stella to the organization's AI provider before it is
-//! typed, with the kind of app it goes to and, when the user shares them, the
-//! window title and the text before the cursor; stella stores none of it.
+//! a dictation, while that history is on (and, while it holds the last one,
+//! in memory to type it again: `dictation_retype`); the system clipboard is
+//! never written. With AI cleanup on (the default), the transcribed text,
+//! never the audio, goes through stella to the organization's AI provider
+//! before it is typed, with the kind of app it goes to and, when the user
+//! shares them, the window title and the text before the cursor; stella
+//! stores none of it.
 //! Only when the user chooses stella AI for transcription does the audio
 //! leave this computer.
 //!
-//! This module owns the preferences, the speech model file and the shortcut.
+//! This module owns the preferences, the speech model file and the key it
+//! listens for (`dictation_hold_key` holds the rules for that key).
 //! `dictation_engine` owns capture, transcription and insertion on one thread;
 //! `dictation_live` transcribes each stretch of speech while the key is down.
 
@@ -23,9 +26,9 @@ use std::{
   sync::{Mutex, mpsc::Sender},
 };
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, EventId, Listener, Manager, State};
 use tauri_plugin_global_shortcut::{
   Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutEvent, ShortcutState,
 };
@@ -35,9 +38,19 @@ use crate::{
   clipboard_shortcut::ShortcutKeys,
   config::APP_DATA_DIR_NAME,
   device_preference::DevicePreference,
-  dictation_cloud::{self, CloudModels, Destination},
+  dictation_app_settings::{self, AppSetting, RecentApp},
+  dictation_cleanup::{
+    self, CleanupForm, CleanupModels, CleanupPreferences, CleanupStyle,
+  },
+  dictation_cloud::{self, CloudModels, Destination, ModelClass},
   dictation_context::{self, Sharing},
+  dictation_fix,
+  dictation_focus::{self, FocusTarget},
+  dictation_hold_key::{self, Action, Gesture, HoldChoice},
   dictation_language::{self, Choice, LanguageSnapshot},
+  dictation_media::{self, WhileDictating},
+  dictation_retype::{self, LastDictation, Request},
+  dictation_words,
   feature_gate::{DesktopFeature, FeatureGates},
   http_client::{DesktopHttpClient, HttpClientOptions},
 };
@@ -45,18 +58,55 @@ use crate::{
 const PREFERENCE_FILE_NAME: &str = "dictation-enabled";
 /// On unless the user turned it off.
 const CLEANUP_PREFERENCE_FILE_NAME: &str = "dictation-cleanup";
+/// The cleanup style; absent or unknown: polished.
+const CLEANUP_STYLE_PREFERENCE_FILE_NAME: &str = "dictation-cleanup-style";
+/// A language the cleanup contract lists to write the text in, or `off`
+/// (and absent): the spoken language.
+const TRANSLATE_TO_PREFERENCE_FILE_NAME: &str = "dictation-translate-to";
+/// What the speaker wrote for cleanup to follow; absent: nothing. Several
+/// lines may be stored.
+const CLEANUP_INSTRUCTIONS_PREFERENCE_FILE_NAME: &str =
+  "dictation-cleanup-instructions";
+/// The model the speaker chose for cleanup, as the chat model picker names
+/// it; absent: automatic.
+const CLEANUP_MODEL_PREFERENCE_FILE_NAME: &str = "dictation-cleanup-model";
 /// `auto` or a language code the speech model lists.
 const LANGUAGE_PREFERENCE_FILE_NAME: &str = "dictation-language";
 /// `local` (this computer, the default) or `cloud` (stella AI).
 const DESTINATION_PREFERENCE_FILE_NAME: &str = "dictation-destination";
 /// The stella AI transcription model the user picked; absent: the default.
+/// A recording transcribed with stella AI uses it too.
 const CLOUD_MODEL_PREFERENCE_FILE_NAME: &str = "dictation-cloud-model";
+/// Who runs the stored model, on which side of the region and whether its
+/// provider keeps the audio, as the list said when it was stored, with the
+/// id it was stored for; empty where the list named no provider.
+const CLOUD_MODEL_CLASS_PREFERENCE_FILE_NAME: &str = "dictation-cloud-model-class";
+
+/// A model's class as kept, with the model it belongs to: a class written
+/// beside an id that was not (a write cut short) belongs to no model.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StoredClass {
+  model_id: String,
+  class: ModelClass,
+}
 /// Off unless the user turned it on: cleanup also gets the window title.
 const SHARE_WINDOW_TITLE_PREFERENCE_FILE_NAME: &str = "dictation-share-window-title";
 /// Off unless the user turned it on: cleanup also gets the text before the
 /// cursor.
 const SHARE_TEXT_BEFORE_CURSOR_PREFERENCE_FILE_NAME: &str =
   "dictation-share-text-before-cursor";
+/// On unless the user turned it off: a short sound when dictation starts
+/// and stops listening.
+const SOUNDS_PREFERENCE_FILE_NAME: &str = "dictation-sounds";
+/// On unless the user turned it off: a shortcut types the last dictation
+/// again.
+const RETYPE_SHORTCUT_PREFERENCE_FILE_NAME: &str = "dictation-retype-shortcut";
+/// On unless the user turned it off: a shortcut opens the panel that fixes
+/// the words of a dictation.
+const FIX_SHORTCUT_PREFERENCE_FILE_NAME: &str = "dictation-fix-shortcut";
+/// The key dictation listens for; absent: this computer's default.
+const HOLD_KEY_PREFERENCE_FILE_NAME: &str = "dictation-hold-key";
 const MAX_MODEL_ID_BYTES: usize = 128;
 const ENABLED_VALUE: &str = "on";
 const DISABLED_VALUE: &str = "off";
@@ -72,17 +122,30 @@ const MODEL_URL: &str = "https://huggingface.co/handy-computer/parakeet-ultra-gg
 const MODEL_BYTES: u64 = 740_363_168;
 const MODEL_SHA256: &str =
   "007a59761e9258779f189df396b50d12b83bb5b79e66df4b955c230d2f2a0a59";
+/// The speech model's name in the local log: its file name without the
+/// extension.
+pub fn local_model_id() -> &'static str {
+  MODEL_FILE_NAME
+    .strip_suffix(".gguf")
+    .unwrap_or(MODEL_FILE_NAME)
+}
+
 /// Enough progress events to look alive, few enough to stay cheap.
 const PROGRESS_STEP_BYTES: u64 = MODEL_BYTES / 100;
 
-fn shortcut() -> Shortcut {
+pub(crate) fn shortcut() -> Shortcut {
   Shortcut::new(Some(Modifiers::CONTROL.union(Modifiers::ALT)), Code::Space)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
   Press,
   Release,
+  /// Stop recording and discard it: a tap or a shortcut on the hold key.
+  Cancel,
+  /// Type the last dictation again into the app focused when it was asked
+  /// for; ignored while one is recording.
+  Retype(Option<FocusTarget>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -119,6 +182,12 @@ pub enum Failure {
   /// stella AI could not transcribe, and this computer has no speech model to
   /// fall back to.
   CloudTranscription,
+  /// A password field had focus at the press or before typing: the
+  /// dictation was neither kept nor typed.
+  PasswordField,
+  /// The microphone delivered sound but no speech came of it: nothing
+  /// loud enough, or a model that heard no words.
+  NothingHeard,
 }
 
 /// A dictation that went wrong, and whether its text is in stella's
@@ -144,6 +213,21 @@ pub struct DictationSnapshot {
   available: bool,
   enabled: bool,
   cleanup: bool,
+  /// How cleanup writes the text.
+  cleanup_style: CleanupStyle,
+  /// The language cleanup writes the text in; `None` for the spoken one.
+  translate_to: Option<&'static str>,
+  /// What the speaker wrote for cleanup to follow; `None` for nothing.
+  cleanup_instructions: Option<String>,
+  /// The model the speaker chose for cleanup; `None` for automatic.
+  cleanup_model: Option<String>,
+  /// Whether a short sound marks the start and the end of listening.
+  sounds: bool,
+  /// What happens to other sound while recording, what this computer
+  /// offers, and whether only while it plays through speakers.
+  while_dictating: WhileDictating,
+  while_dictating_offered: &'static [WhileDictating],
+  speakers_only: bool,
   /// Whether cleanup also gets the focused window's title.
   share_window_title: bool,
   /// Whether cleanup also gets the text before the cursor.
@@ -155,6 +239,13 @@ pub struct DictationSnapshot {
   /// user paused it or the organization turned it off.
   keeps_in_history: bool,
   language: LanguageSnapshot,
+  /// The speaker's custom words, kept on this computer for the dictation
+  /// account.
+  custom_words: Vec<String>,
+  /// Settings for one app or kind of app over the global ones, and the
+  /// apps dictated into since stella started, offered for a new entry.
+  app_settings: Vec<AppSetting>,
+  recent_apps: Vec<RecentApp>,
   /// Whether the server enables stella AI transcription for this account;
   /// without it the window offers no choice of destination.
   cloud_available: bool,
@@ -168,22 +259,81 @@ pub struct DictationSnapshot {
   failure: Option<Failure>,
   /// Whether the failed dictation's text is in clipboard history.
   failure_kept_in_history: bool,
+  /// The combination of Control, Option (Alt) and Space, one of the choices.
   keys: ShortcutKeys,
   shortcut_taken: bool,
+  /// The key dictation listens for, and what this computer offers.
+  hold_key: HoldChoice,
+  hold_keys: &'static [HoldChoice],
+  /// The hold key cannot be heard yet: on a Mac, until stella has
+  /// Accessibility access.
+  hold_key_waiting: bool,
+  /// Whether a shortcut types the last dictation again, its keys, and
+  /// whether another app holds them.
+  retype_shortcut: bool,
+  retype_keys: ShortcutKeys,
+  retype_shortcut_taken: bool,
+  /// The same for the shortcut that fixes a dictation's words.
+  fix_shortcut: bool,
+  fix_keys: ShortcutKeys,
+  fix_shortcut_taken: bool,
+}
+
+/// Whether one of dictation's own shortcuts is registered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ShortcutListening {
+  None,
+  Registered,
+  /// The OS refused it: another app holds the combination.
+  Taken,
+}
+
+/// What listens for the key while dictation runs.
+enum Listening {
+  None,
+  Combination,
+  #[cfg(any(target_os = "macos", target_os = "windows"))]
+  Hold(
+    #[allow(dead_code, reason = "held only so that dropping it stops the listener")]
+    stella_desktop_macos::HoldKeyListener,
+  ),
 }
 
 struct Inner {
   enabled: bool,
   cleanup: bool,
+  cleanup_style: CleanupStyle,
+  translate_to: Option<&'static str>,
+  cleanup_preferences: CleanupPreferences,
+  app_settings: Vec<AppSetting>,
+  /// Only in memory.
+  recent_apps: Vec<RecentApp>,
+  sounds: bool,
+  while_dictating: WhileDictating,
+  speakers_only: bool,
   share_window_title: bool,
   share_text_before_cursor: bool,
   language: Choice,
   destination: Destination,
   cloud_model: Option<String>,
+  cloud_model_class: Option<StoredClass>,
   model: ModelState,
   phase: Phase,
   failure: Option<Failed>,
   shortcut_taken: bool,
+  hold_key: HoldChoice,
+  hold_key_waiting: bool,
+  listening: Listening,
+  retype_shortcut: bool,
+  retype_listening: ShortcutListening,
+  fix_shortcut: bool,
+  fix_listening: ShortcutListening,
+  /// Only in memory, and only while clipboard history holds it.
+  last: Option<LastDictation>,
+  /// Forgets the last dictation once clipboard history no longer holds it.
+  history_listener: Option<EventId>,
+  /// Counts listeners started, so a stopped one cannot report its state.
+  listener_generation: u64,
   commands: Option<Sender<Command>>,
 }
 
@@ -197,12 +347,53 @@ impl DictationState {
       .read()
       .as_deref()
       != Some(DISABLED_VALUE);
+    let cleanup_style = CleanupStyle::parse(
+      DevicePreference::in_app_data(CLEANUP_STYLE_PREFERENCE_FILE_NAME)
+        .read()
+        .as_deref(),
+    );
+    let translate_to = DevicePreference::in_app_data(TRANSLATE_TO_PREFERENCE_FILE_NAME)
+      .read()
+      .and_then(|stored| dictation_cleanup::translation_language(&stored));
+    let cleanup_preferences = stored_cleanup_preferences(
+      &DevicePreference::in_app_data(CLEANUP_INSTRUCTIONS_PREFERENCE_FILE_NAME),
+      &DevicePreference::in_app_data(CLEANUP_MODEL_PREFERENCE_FILE_NAME),
+    );
+    let sounds = DevicePreference::in_app_data(SOUNDS_PREFERENCE_FILE_NAME)
+      .read()
+      .as_deref()
+      != Some(DISABLED_VALUE);
+    let retype_shortcut =
+      DevicePreference::in_app_data(RETYPE_SHORTCUT_PREFERENCE_FILE_NAME)
+        .read()
+        .as_deref()
+        != Some(DISABLED_VALUE);
+    let while_dictating = WhileDictating::parse(
+      DevicePreference::in_app_data(dictation_media::PREFERENCE_FILE_NAME)
+        .read()
+        .as_deref(),
+    );
+    let speakers_only = DevicePreference::in_app_data(
+      dictation_media::SPEAKERS_ONLY_PREFERENCE_FILE_NAME,
+    )
+    .read()
+    .as_deref()
+      != Some(DISABLED_VALUE);
+    let fix_shortcut = DevicePreference::in_app_data(FIX_SHORTCUT_PREFERENCE_FILE_NAME)
+      .read()
+      .as_deref()
+      != Some(DISABLED_VALUE);
     let shared = |file_name: &str| {
       DevicePreference::in_app_data(file_name).read().as_deref() == Some(ENABLED_VALUE)
     };
     let share_window_title = shared(SHARE_WINDOW_TITLE_PREFERENCE_FILE_NAME);
     let share_text_before_cursor =
       shared(SHARE_TEXT_BEFORE_CURSOR_PREFERENCE_FILE_NAME);
+    let app_settings = dictation_app_settings::parse(
+      DevicePreference::in_app_data(dictation_app_settings::PREFERENCE_FILE_NAME)
+        .read()
+        .as_deref(),
+    );
     let language = Choice::parse(
       DevicePreference::in_app_data(LANGUAGE_PREFERENCE_FILE_NAME)
         .read()
@@ -216,14 +407,32 @@ impl DictationState {
     let cloud_model = DevicePreference::in_app_data(CLOUD_MODEL_PREFERENCE_FILE_NAME)
       .read()
       .filter(|model_id| valid_model_id(model_id));
+    let cloud_model_class =
+      DevicePreference::in_app_data(CLOUD_MODEL_CLASS_PREFERENCE_FILE_NAME)
+        .read()
+        .and_then(|stored| serde_json::from_str(&stored).ok());
+    let hold_key = HoldChoice::parse(
+      DevicePreference::in_app_data(HOLD_KEY_PREFERENCE_FILE_NAME)
+        .read()
+        .as_deref(),
+    );
     Self(Mutex::new(Inner {
       enabled,
       cleanup,
+      cleanup_style,
+      translate_to,
+      cleanup_preferences,
+      app_settings,
+      recent_apps: Vec::new(),
+      sounds,
+      while_dictating,
+      speakers_only,
       share_window_title,
       share_text_before_cursor,
       language,
       destination,
       cloud_model,
+      cloud_model_class,
       model: if installed_model().is_some() {
         ModelState::Ready
       } else {
@@ -232,6 +441,16 @@ impl DictationState {
       phase: Phase::Idle,
       failure: None,
       shortcut_taken: false,
+      hold_key,
+      hold_key_waiting: false,
+      listening: Listening::None,
+      retype_shortcut,
+      retype_listening: ShortcutListening::None,
+      fix_shortcut,
+      fix_listening: ShortcutListening::None,
+      last: None,
+      history_listener: None,
+      listener_generation: 0,
       commands: None,
     }))
   }
@@ -248,12 +467,23 @@ impl DictationState {
       available,
       enabled: inner.enabled,
       cleanup: inner.cleanup,
+      cleanup_style: inner.cleanup_style,
+      translate_to: inner.translate_to,
+      cleanup_instructions: inner.cleanup_preferences.custom_instructions.clone(),
+      cleanup_model: inner.cleanup_preferences.model.clone(),
+      sounds: inner.sounds,
+      while_dictating: inner.while_dictating,
+      while_dictating_offered: WhileDictating::OFFERED,
+      speakers_only: inner.speakers_only,
       share_window_title: inner.share_window_title,
       share_text_before_cursor: inner.share_text_before_cursor
         && dictation_context::TEXT_BEFORE_CURSOR_SUPPORTED,
       text_before_cursor_available: dictation_context::TEXT_BEFORE_CURSOR_SUPPORTED,
       keeps_in_history,
       language: LanguageSnapshot::new(&inner.language, inferred),
+      custom_words: Vec::new(),
+      app_settings: inner.app_settings.clone(),
+      recent_apps: inner.recent_apps.clone(),
       cloud_available,
       destination: inner.destination.effective(cloud_available),
       cloud_model: inner.cloud_model.clone(),
@@ -266,6 +496,15 @@ impl DictationState {
         .is_some_and(|failed| failed.kept_in_history),
       keys: ShortcutKeys::of(&shortcut()),
       shortcut_taken: inner.shortcut_taken,
+      hold_key: inner.hold_key,
+      hold_keys: HoldChoice::OFFERED,
+      hold_key_waiting: inner.hold_key_waiting,
+      retype_shortcut: inner.retype_shortcut,
+      retype_keys: ShortcutKeys::of(&dictation_retype::shortcut()),
+      retype_shortcut_taken: inner.retype_listening == ShortcutListening::Taken,
+      fix_shortcut: inner.fix_shortcut,
+      fix_keys: ShortcutKeys::of(&dictation_fix::shortcut()),
+      fix_shortcut_taken: inner.fix_listening == ShortcutListening::Taken,
     }
   }
 
@@ -289,7 +528,7 @@ impl DictationState {
   }
 }
 
-fn publish(app: &AppHandle) {
+pub(crate) fn publish(app: &AppHandle) {
   if let Err(error) = app.emit(CHANGED_EVENT, ()) {
     tracing::warn!(%error, "dictation change event failed");
   }
@@ -325,8 +564,95 @@ const fn stored_switch(enabled: bool) -> &'static str {
   }
 }
 
+/// The microphone the speaker chose; `None` for the system default.
+pub fn microphone_choice() -> Option<crate::dictation_microphone::Choice> {
+  crate::dictation_microphone::Choice::parse(
+    DevicePreference::in_app_data(crate::dictation_microphone::PREFERENCE_FILE_NAME)
+      .read()
+      .as_deref(),
+  )
+}
+
+/// The chosen microphone was not connected at the press; `using` records.
+pub fn report_missing_microphone(
+  app: &AppHandle,
+  missing: &str,
+  using: Option<String>,
+) {
+  tracing::info!(
+    "dictation chose the system default: the chosen microphone is not connected"
+  );
+  crate::dictation_notice::on_missing_microphone(app, missing, using);
+}
+
+#[tauri::command]
+pub async fn dictation_get_microphones(
+  app: AppHandle,
+) -> Result<crate::dictation_microphone::MicrophonesSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  tauri::async_runtime::spawn_blocking(crate::dictation_microphone::list)
+    .await
+    .map_err(crate::logging::with_cause_logged(
+      "microphones could not be listed",
+    ))
+}
+
+/// Records from `id` from the next press; `None` for the system default.
+#[tauri::command]
+pub async fn dictation_set_microphone(
+  app: AppHandle,
+  id: Option<String>,
+) -> Result<crate::dictation_microphone::MicrophonesSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  tauri::async_runtime::spawn_blocking(move || {
+    crate::dictation_microphone::choose(id.as_deref())
+  })
+  .await
+  .map_err(crate::logging::with_cause_logged(
+    "the microphone could not be chosen",
+  ))?
+}
+
+/// Whether a dictation is recording now: the microphone test waits.
+pub fn recording(app: &AppHandle) -> bool {
+  app
+    .state::<DictationState>()
+    .update(|inner| inner.phase == Phase::Recording)
+}
+
+/// What the tray offers for dictation: `None` wherever the Settings window
+/// shows no Dictation page.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TrayDictation {
+  pub enabled: bool,
+  pub hold_key: HoldChoice,
+  /// The dictation language choice and this computer's languages, for the
+  /// quick switch.
+  pub language: Choice,
+  pub inferred: Vec<&'static str>,
+  /// Whether there is a last dictation to type again.
+  pub can_retype: bool,
+}
+
+pub fn tray_state(app: &AppHandle) -> Option<TrayDictation> {
+  available(app).then(|| {
+    let inferred = dictation_language::inferred(app);
+    app.state::<DictationState>().update(|inner| TrayDictation {
+      enabled: inner.enabled,
+      hold_key: inner.hold_key,
+      language: inner.language.clone(),
+      inferred,
+      can_retype: inner.last.is_some(),
+    })
+  })
+}
+
 /// A build that can run the model, for an account the server enabled.
-fn available(app: &AppHandle) -> bool {
+pub(crate) fn available(app: &AppHandle) -> bool {
   SUPPORTED
     && app
       .state::<FeatureGates>()
@@ -362,6 +688,10 @@ pub fn language(app: &AppHandle) -> SpeakerLanguage {
   let choice = app
     .state::<DictationState>()
     .update(|inner| inner.language.clone());
+  speaker_language(app, choice)
+}
+
+fn speaker_language(app: &AppHandle, choice: Choice) -> SpeakerLanguage {
   let inferred = match choice {
     Choice::Automatic => dictation_language::inferred(app),
     Choice::Language(_) => Vec::new(),
@@ -379,7 +709,7 @@ fn valid_model_id(model_id: &str) -> bool {
 }
 
 /// Whether the server enables stella AI transcription alongside dictation.
-fn cloud_available(app: &AppHandle) -> bool {
+pub(crate) fn cloud_available(app: &AppHandle) -> bool {
   available(app) && dictation_cloud::enabled(app)
 }
 
@@ -395,6 +725,17 @@ pub fn destination(app: &AppHandle) -> (Destination, Option<String>) {
   })
 }
 
+/// The stored model's class, as the list gave it when the model was stored.
+pub fn cloud_model_class(app: &AppHandle) -> Option<ModelClass> {
+  app.state::<DictationState>().update(|inner| {
+    inner
+      .cloud_model_class
+      .clone()
+      .filter(|kept| inner.cloud_model.as_deref() == Some(kept.model_id.as_str()))
+      .map(|kept| kept.class)
+  })
+}
+
 /// Read before every chunk sent to stella AI: dictation is still on and
 /// still set to stella AI, and the server still enables both.
 pub fn cloud_chosen(app: &AppHandle) -> bool {
@@ -404,18 +745,41 @@ pub fn cloud_chosen(app: &AppHandle) -> bool {
   })
 }
 
-/// Replaces a stored model the region no longer offers, or none, with the
-/// one dictation now uses, so the window shows and keeps what is used.
-pub fn adopt_cloud_model(app: &AppHandle, model_id: &str) -> Result<(), String> {
+/// Stores the model dictation now uses with its class, so the window shows
+/// and keeps what is used and a withdrawn model can later give way only to
+/// one of its class; nothing is written when both are already stored.
+pub fn adopt_cloud_model(
+  app: &AppHandle,
+  model_id: &str,
+  class: Option<ModelClass>,
+) -> Result<(), String> {
   if !valid_model_id(model_id) {
     return Err("this transcription model is not offered".to_string());
   }
-  let stored = app
+  let stored_class = class.map(|class| StoredClass {
+    model_id: model_id.to_string(),
+    class,
+  });
+  let (stored, kept_class) = app
     .state::<DictationState>()
-    .update(|inner| inner.cloud_model.clone());
-  if stored.as_deref() == Some(model_id) {
+    .update(|inner| (inner.cloud_model.clone(), inner.cloud_model_class.clone()));
+  if stored.as_deref() == Some(model_id) && kept_class == stored_class {
     return Ok(());
   }
+  // The class names its model, so a write cut short between the two files
+  // never gives one model another's class.
+  let encoded = stored_class
+    .as_ref()
+    .and_then(|class| serde_json::to_string(class).ok())
+    .unwrap_or_default();
+  change_preference(
+    app,
+    CLOUD_MODEL_CLASS_PREFERENCE_FILE_NAME,
+    &encoded,
+    |inner| {
+      inner.cloud_model_class = stored_class;
+    },
+  )?;
   change_preference(app, CLOUD_MODEL_PREFERENCE_FILE_NAME, model_id, |inner| {
     inner.cloud_model = Some(model_id.to_string());
   })
@@ -426,9 +790,176 @@ pub fn apply_cloud_gate(app: &AppHandle) {
   change(app, |_inner| ());
 }
 
+/// The key dictation listens for.
+pub fn hold_key(app: &AppHandle) -> HoldChoice {
+  app.state::<DictationState>().update(|inner| inner.hold_key)
+}
+
+/// What a dictation into the app focused at the press runs with.
+pub struct ForApp {
+  pub cleanup: bool,
+  pub language: SpeakerLanguage,
+  /// What cleanup may read besides the kind of app: nothing without it.
+  pub sharing: Sharing,
+}
+
+/// The settings for the app focused at the press, over the global ones;
+/// the app joins the recent ones offered for an entry of its own.
+pub fn for_app(app: &AppHandle, focus: Option<&FocusTarget>) -> ForApp {
+  let identifier = focus.and_then(|target| target.identifier.as_deref());
+  let (applied, sharing, noted) = app.state::<DictationState>().update(|inner| {
+    let noted = identifier.zip(focus).is_some_and(|(identifier, target)| {
+      dictation_app_settings::note_recent(
+        &mut inner.recent_apps,
+        identifier,
+        &target.name,
+      )
+    });
+    let applied = dictation_app_settings::apply(
+      &inner.app_settings,
+      identifier,
+      inner.cleanup,
+      &inner.language,
+    );
+    let sharing = sharing_with(inner, applied.cleanup);
+    (applied, sharing, noted)
+  });
+  // Settings offers the app the moment it is dictated into.
+  if noted {
+    publish(app);
+  }
+  ForApp {
+    cleanup: applied.cleanup,
+    language: speaker_language(app, applied.language),
+    sharing,
+  }
+}
+
 /// Whether a finished dictation goes through AI cleanup before it is typed.
 pub fn cleanup_enabled(app: &AppHandle) -> bool {
   app.state::<DictationState>().update(|inner| inner.cleanup)
+}
+
+/// How cleanup is asked to write a dictation.
+pub fn cleanup_form(app: &AppHandle) -> CleanupForm {
+  app.state::<DictationState>().update(|inner| CleanupForm {
+    style: inner.cleanup_style,
+    translate_to: inner.translate_to,
+  })
+}
+
+/// What the speaker wrote for cleanup to follow and the model they chose.
+pub fn cleanup_preferences(app: &AppHandle) -> CleanupPreferences {
+  app
+    .state::<DictationState>()
+    .update(|inner| inner.cleanup_preferences.clone())
+}
+
+/// The stored instructions and model, each held to the contract again: a
+/// file edited by hand, or written under an older bound, reads as none.
+fn stored_cleanup_preferences(
+  instructions: &DevicePreference,
+  model: &DevicePreference,
+) -> CleanupPreferences {
+  CleanupPreferences {
+    custom_instructions: instructions.read().and_then(|stored| {
+      dictation_cleanup::custom_instructions(&stored)
+        .ok()
+        .flatten()
+    }),
+    model: model
+      .read()
+      .and_then(|stored| dictation_cleanup::cleanup_model(&stored).ok().flatten()),
+  }
+}
+
+/// Whether a short sound marks the start and the end of listening.
+pub fn sounds_enabled(app: &AppHandle) -> bool {
+  app.state::<DictationState>().update(|inner| inner.sounds)
+}
+
+/// Remembers a dictation clipboard history just kept, for typing it again;
+/// the tray offers that once there is one.
+pub fn remember_last(app: &AppHandle, last: LastDictation) {
+  let first = app
+    .state::<DictationState>()
+    .update(|inner| inner.last.replace(last).is_none());
+  if first {
+    crate::activity::refresh_tray(app);
+  }
+}
+
+/// The last dictation, while clipboard history still holds it; one it no
+/// longer holds is forgotten.
+pub fn last_dictation(app: &AppHandle) -> Option<LastDictation> {
+  let last = app
+    .state::<DictationState>()
+    .update(|inner| inner.last.clone())?;
+  if crate::clipboard::holds_dictation(app, &last.history_id) {
+    return Some(last);
+  }
+  forget_last(app);
+  None
+}
+
+/// Forgets the last dictation once clipboard history no longer holds it:
+/// deleted, history cleared or paused, or turned off. Checked off the thread
+/// that announced the change, which may still hold history's lock.
+fn forget_last_unless_held(app: &AppHandle) {
+  let Some(id) = app
+    .state::<DictationState>()
+    .update(|inner| inner.last.as_ref().map(|last| last.history_id.clone()))
+  else {
+    return;
+  };
+  let app = app.clone();
+  tauri::async_runtime::spawn_blocking(move || {
+    if !crate::clipboard::holds_dictation(&app, &id) {
+      forget_last(&app);
+    }
+  });
+}
+
+fn forget_last(app: &AppHandle) {
+  let forgot = app
+    .state::<DictationState>()
+    .update(|inner| inner.last.take().is_some());
+  if forgot {
+    crate::activity::refresh_tray(app);
+  }
+}
+
+/// The tray's "type the last dictation again".
+pub fn retype_from_tray(app: &AppHandle) {
+  request_retype(app, Request::Tray);
+}
+
+/// Reads the focus as the request arrives, off the thread that delivered
+/// it (the focus lookup waits for the main thread), and only then queues
+/// it: a request that waits behind a dictation types only into the app
+/// that was focused when it was made.
+fn request_retype(app: &AppHandle, request: Request) {
+  let app = app.clone();
+  let spawned = std::thread::Builder::new()
+    .name("dictation-retype".to_string())
+    .spawn(move || {
+      if request == Request::Tray {
+        std::thread::sleep(dictation_retype::TRAY_SETTLE);
+      }
+      let focus = dictation_focus::current(&app);
+      send_command(&app, Command::Retype(focus));
+    });
+  if let Err(error) = spawned {
+    tracing::warn!(%error, "dictation retype could not start");
+  }
+}
+
+/// What happens to other sound while recording, and whether only while it
+/// plays through speakers.
+pub fn while_dictating(app: &AppHandle) -> (WhileDictating, bool) {
+  app
+    .state::<DictationState>()
+    .update(|inner| (inner.while_dictating, inner.speakers_only))
 }
 
 /// Starts a dictation: marks it recording and reads the speech model under
@@ -454,18 +985,30 @@ pub fn set_phase(app: &AppHandle, phase: Phase) {
 
 /// What cleanup may read about where the text goes besides the kind of app:
 /// nothing while cleanup is off, otherwise what the speaker shares.
-pub fn context_sharing(app: &AppHandle) -> Sharing {
-  app.state::<DictationState>().update(|inner| Sharing {
-    window_title: inner.cleanup && inner.share_window_title,
-    text_before_cursor: inner.cleanup
+const fn sharing_with(inner: &Inner, cleanup: bool) -> Sharing {
+  Sharing {
+    window_title: cleanup && inner.share_window_title,
+    text_before_cursor: cleanup
       && inner.share_text_before_cursor
       && dictation_context::TEXT_BEFORE_CURSOR_SUPPORTED,
-  })
+  }
 }
 
+/// Records the failure for Settings → Dictation and, where the speaker would
+/// otherwise see nothing, tells them at once.
 pub fn report_failure(app: &AppHandle, failed: impl Into<Failed>) {
+  report_input_failure(app, failed, None);
+}
+
+/// `report_failure`, naming the input device the dictation listened to.
+pub fn report_input_failure(
+  app: &AppHandle,
+  failed: impl Into<Failed>,
+  input_device: Option<String>,
+) {
   let failed = failed.into();
   change(app, |inner| inner.failure = Some(failed));
+  crate::dictation_notice::on_failure(app, failed.failure, input_device);
 }
 
 pub fn clear_failure(app: &AppHandle) {
@@ -482,11 +1025,7 @@ fn show_phase_in_tray(app: &AppHandle, phase: Phase) {
   crate::tray::set_status_mark(app, mark);
 }
 
-fn on_shortcut(app: &AppHandle, _shortcut: &Shortcut, event: ShortcutEvent) {
-  let command = match event.state {
-    ShortcutState::Pressed => Command::Press,
-    ShortcutState::Released => Command::Release,
-  };
+fn send_command(app: &AppHandle, command: Command) {
   let sender = app
     .state::<DictationState>()
     .update(|inner| inner.commands.clone());
@@ -497,6 +1036,245 @@ fn on_shortcut(app: &AppHandle, _shortcut: &Shortcut, event: ShortcutEvent) {
   }
 }
 
+impl DictationState {
+  /// Sends `command` from the hold key listener started as `generation`,
+  /// under the lock `unlisten` advances the generation under: a stopped
+  /// listener's command is dropped, so it can never follow the `Cancel` that
+  /// replaced the listener. The channel is unbounded, so sending under the
+  /// lock never blocks.
+  fn send_from_listener(&self, generation: u64, command: Command) {
+    let delivered = self.update(|inner| {
+      if inner.listener_generation != generation {
+        return true;
+      }
+      inner
+        .commands
+        .as_ref()
+        .is_none_or(|sender| sender.send(command).is_ok())
+    });
+    if !delivered {
+      tracing::warn!("dictation engine stopped");
+    }
+  }
+}
+
+fn on_shortcut(app: &AppHandle, _shortcut: &Shortcut, event: ShortcutEvent) {
+  send_command(
+    app,
+    match event.state {
+      ShortcutState::Pressed => Command::Press,
+      ShortcutState::Released => Command::Release,
+    },
+  );
+}
+
+/// Starts listening for the chosen key. A listener that cannot start leaves
+/// the reason in the snapshot.
+fn listen(app: &AppHandle) {
+  let (choice, generation) = app.state::<DictationState>().update(|inner| {
+    inner.listener_generation += 1;
+    (inner.hold_key, inner.listener_generation)
+  });
+  let listening = match choice {
+    HoldChoice::Combination => {
+      match app.global_shortcut().on_shortcut(shortcut(), on_shortcut) {
+        Ok(()) => Listening::Combination,
+        Err(error) => {
+          tracing::warn!(%error, "dictation shortcut could not be registered");
+          change(app, |inner| inner.shortcut_taken = true);
+          Listening::None
+        }
+      }
+    }
+    _ => listen_for_hold_key(app, choice, generation),
+  };
+  change(app, |inner| inner.listening = listening);
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn listen_for_hold_key(
+  app: &AppHandle,
+  choice: HoldChoice,
+  generation: u64,
+) -> Listening {
+  use std::cell::Cell;
+
+  use stella_desktop_macos::{HoldEdge, HoldKey};
+
+  let key = match choice {
+    HoldChoice::Fn => HoldKey::Fn,
+    HoldChoice::RightOption => HoldKey::RightOption,
+    HoldChoice::RightCommand => HoldKey::RightCommand,
+    HoldChoice::RightControl => HoldKey::RightControl,
+    HoldChoice::ControlWindows | HoldChoice::Combination => HoldKey::ControlWindows,
+  };
+  let edges_app = app.clone();
+  let gesture = Cell::new(Gesture::default());
+  let started = std::time::Instant::now();
+  let on_edge = move |edge: HoldEdge| {
+    let input = match edge {
+      HoldEdge::Down { others_held } => dictation_hold_key::Input::Down { others_held },
+      HoldEdge::Up => dictation_hold_key::Input::Up,
+      HoldEdge::OtherKey => dictation_hold_key::Input::OtherKey,
+    };
+    let mut current = gesture.get();
+    let action = current.handle(input, started.elapsed());
+    gesture.set(current);
+    if let Some(action) = action {
+      edges_app.state::<DictationState>().send_from_listener(
+        generation,
+        match action {
+          Action::Start => Command::Press,
+          Action::Transcribe => Command::Release,
+          Action::Cancel => Command::Cancel,
+        },
+      );
+    }
+  };
+  let state_app = app.clone();
+  let on_listening = move |listening: bool| {
+    change(&state_app, |inner| {
+      if inner.listener_generation == generation {
+        inner.hold_key_waiting = !listening;
+      }
+    });
+  };
+  match stella_desktop_macos::listen_for_hold_key(key, on_edge, on_listening) {
+    Ok(listener) => Listening::Hold(listener),
+    Err(_unsupported) => {
+      tracing::warn!("dictation hold key could not be watched");
+      change(app, |inner| inner.hold_key_waiting = true);
+      Listening::None
+    }
+  }
+}
+
+/// No other platform offers a hold key.
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn listen_for_hold_key(
+  _app: &AppHandle,
+  _choice: HoldChoice,
+  _generation: u64,
+) -> Listening {
+  Listening::None
+}
+
+/// The tray's "fix last dictation".
+pub fn fix_from_tray(app: &AppHandle) {
+  dictation_fix::request(app, Request::Tray);
+}
+
+fn on_fix_shortcut(app: &AppHandle, _shortcut: &Shortcut, event: ShortcutEvent) {
+  if event.state == ShortcutState::Pressed {
+    dictation_fix::request(app, Request::Shortcut);
+  }
+}
+
+/// Registers the shortcut that fixes a dictation's words, while the speaker
+/// wants it.
+fn listen_for_fix(app: &AppHandle) {
+  if !app
+    .state::<DictationState>()
+    .update(|inner| inner.fix_shortcut)
+  {
+    return;
+  }
+  let listening = match app
+    .global_shortcut()
+    .on_shortcut(dictation_fix::shortcut(), on_fix_shortcut)
+  {
+    Ok(()) => ShortcutListening::Registered,
+    Err(error) => {
+      tracing::warn!(%error, "dictation fix shortcut could not be registered");
+      ShortcutListening::Taken
+    }
+  };
+  // The speaker may have turned the shortcut off while it was registered
+  // here: then nothing records it, and it is released at once.
+  let wanted = change(app, |inner| {
+    if inner.fix_shortcut {
+      inner.fix_listening = listening;
+    }
+    inner.fix_shortcut
+  });
+  if !wanted
+    && listening == ShortcutListening::Registered
+    && let Err(error) = app.global_shortcut().unregister(dictation_fix::shortcut())
+  {
+    tracing::warn!(%error, "dictation fix shortcut could not be released");
+  }
+}
+
+fn unlisten_fix(app: &AppHandle) {
+  let listening = change(app, |inner| {
+    std::mem::replace(&mut inner.fix_listening, ShortcutListening::None)
+  });
+  if listening == ShortcutListening::Registered
+    && let Err(error) = app.global_shortcut().unregister(dictation_fix::shortcut())
+  {
+    tracing::warn!(%error, "dictation fix shortcut could not be released");
+  }
+}
+
+fn on_retype_shortcut(app: &AppHandle, _shortcut: &Shortcut, event: ShortcutEvent) {
+  if event.state == ShortcutState::Pressed {
+    request_retype(app, Request::Shortcut);
+  }
+}
+
+/// Registers the shortcut that types the last dictation again, while the
+/// speaker wants it.
+fn listen_for_retype(app: &AppHandle) {
+  if !app
+    .state::<DictationState>()
+    .update(|inner| inner.retype_shortcut)
+  {
+    return;
+  }
+  let listening = match app
+    .global_shortcut()
+    .on_shortcut(dictation_retype::shortcut(), on_retype_shortcut)
+  {
+    Ok(()) => ShortcutListening::Registered,
+    Err(error) => {
+      tracing::warn!(%error, "dictation retype shortcut could not be registered");
+      ShortcutListening::Taken
+    }
+  };
+  change(app, |inner| inner.retype_listening = listening);
+}
+
+fn unlisten_retype(app: &AppHandle) {
+  let listening = change(app, |inner| {
+    std::mem::replace(&mut inner.retype_listening, ShortcutListening::None)
+  });
+  if listening == ShortcutListening::Registered
+    && let Err(error) = app
+      .global_shortcut()
+      .unregister(dictation_retype::shortcut())
+  {
+    tracing::warn!(%error, "dictation retype shortcut could not be released");
+  }
+}
+
+/// Stops listening; a recording in progress is left to its release or to
+/// the engine stopping.
+fn unlisten(app: &AppHandle) {
+  let listening = change(app, |inner| {
+    inner.listener_generation += 1;
+    inner.shortcut_taken = false;
+    inner.hold_key_waiting = false;
+    std::mem::replace(&mut inner.listening, Listening::None)
+  });
+  if matches!(listening, Listening::Combination)
+    && let Err(error) = app.global_shortcut().unregister(shortcut())
+  {
+    tracing::warn!(%error, "dictation shortcut could not be released");
+  }
+  // Dropping a hold key listener stops it.
+  drop(listening);
+}
+
 fn start(app: &AppHandle) {
   #[cfg(dictation)]
   {
@@ -504,26 +1282,33 @@ fn start(app: &AppHandle) {
     let sender = crate::dictation_engine::spawn(app.clone());
     change(app, |inner| inner.commands = sender);
   }
-  let taken = match app.global_shortcut().on_shortcut(shortcut(), on_shortcut) {
-    Ok(()) => false,
-    Err(error) => {
-      tracing::warn!(%error, "dictation shortcut could not be registered");
-      true
-    }
-  };
-  change(app, |inner| inner.shortcut_taken = taken);
+  listen(app);
+  listen_for_retype(app);
+  listen_for_fix(app);
+  // Learned fixes made on the speaker's other devices, and any made here
+  // while offline.
+  crate::dictation_learned::sync_soon(app);
+  let history_app = app.clone();
+  let history_listener = app.listen(crate::clipboard::HISTORY_EVENT, move |_event| {
+    forget_last_unless_held(&history_app);
+  });
+  change(app, |inner| inner.history_listener = Some(history_listener));
 }
 
 fn stop(app: &AppHandle) {
-  if let Err(error) = app.global_shortcut().unregister(shortcut()) {
-    tracing::warn!(%error, "dictation shortcut could not be released");
-  }
+  unlisten(app);
+  unlisten_retype(app);
+  unlisten_fix(app);
   // Dropping the sender ends the engine thread and with it the worker.
-  change(app, |inner| {
+  let history_listener = change(app, |inner| {
     inner.commands = None;
-    inner.shortcut_taken = false;
     inner.failure = None;
+    inner.last = None;
+    inner.history_listener.take()
   });
+  if let Some(history_listener) = history_listener {
+    app.unlisten(history_listener);
+  }
 }
 
 /// The server's decision, applied whenever it arrives or changes. Nothing
@@ -538,6 +1323,8 @@ pub fn apply_feature_gate(app: &AppHandle, enabled: bool) {
     stop(app);
   }
   change(app, |_inner| ());
+  // The tray's Dictation entry follows the same decision.
+  crate::activity::refresh_tray(app);
 }
 
 /// The snapshot a window reads, with the languages inferred right now.
@@ -548,12 +1335,16 @@ fn read_snapshot(app: &AppHandle, state: &DictationState) -> DictationSnapshot {
   } else {
     Vec::new()
   };
-  state.snapshot(
+  let mut snapshot = state.snapshot(
     available,
     cloud_available(app),
     inferred,
     crate::clipboard::keeps_dictations(app),
-  )
+  );
+  if available {
+    snapshot.custom_words = dictation_words::words(app);
+  }
+  snapshot
 }
 
 #[tauri::command]
@@ -589,6 +1380,7 @@ pub fn dictation_set_enabled(
     } else {
       stop(&app);
     }
+    crate::activity::refresh_tray(&app);
   }
   Ok(read_snapshot(&app, &state))
 }
@@ -607,6 +1399,234 @@ pub fn dictation_set_cleanup(
     CLEANUP_PREFERENCE_FILE_NAME,
     stored_switch(enabled),
     |inner| inner.cleanup = enabled,
+  )?;
+  Ok(read_snapshot(&app, &state))
+}
+
+/// How cleanup writes the text: one of the contract's styles.
+#[tauri::command]
+pub fn dictation_set_cleanup_style(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  style: String,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  let chosen = CleanupStyle::parse(Some(&style));
+  if chosen.stored() != style {
+    return Err("this cleanup style is not available".to_string());
+  }
+  change_preference(
+    &app,
+    CLEANUP_STYLE_PREFERENCE_FILE_NAME,
+    chosen.stored(),
+    |inner| inner.cleanup_style = chosen,
+  )?;
+  Ok(read_snapshot(&app, &state))
+}
+
+/// The language cleanup writes the text in, or `None` for the spoken one.
+#[tauri::command]
+pub fn dictation_set_translate_to(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  language: Option<String>,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  let translate_to = match language.as_deref() {
+    None => None,
+    Some(tag) => Some(
+      dictation_cleanup::translation_language(tag)
+        .ok_or_else(|| "cleanup cannot write in this language".to_string())?,
+    ),
+  };
+  change_preference(
+    &app,
+    TRANSLATE_TO_PREFERENCE_FILE_NAME,
+    translate_to.unwrap_or(DISABLED_VALUE),
+    |inner| inner.translate_to = translate_to,
+  )?;
+  Ok(read_snapshot(&app, &state))
+}
+
+/// What the speaker wants cleanup to follow, such as "use British
+/// spelling"; blank or `None` clears it. Refused whole beyond the contract's
+/// bound, never cut.
+#[tauri::command]
+pub fn dictation_set_cleanup_instructions(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  instructions: Option<String>,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  let stored =
+    dictation_cleanup::custom_instructions(instructions.as_deref().unwrap_or(""))
+      .map_err(str::to_string)?;
+  change_preference(
+    &app,
+    CLEANUP_INSTRUCTIONS_PREFERENCE_FILE_NAME,
+    stored.as_deref().unwrap_or(""),
+    |inner| {
+      inner
+        .cleanup_preferences
+        .custom_instructions
+        .clone_from(&stored)
+    },
+  )?;
+  Ok(read_snapshot(&app, &state))
+}
+
+/// The model cleanup runs on, as the list names it; `None` for automatic.
+/// The server checks it against the organization's models on every cleanup
+/// and runs automatically on one it no longer offers.
+#[tauri::command]
+pub fn dictation_set_cleanup_model(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  model: Option<String>,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  let stored = dictation_cleanup::cleanup_model(model.as_deref().unwrap_or(""))
+    .map_err(str::to_string)?;
+  change_preference(
+    &app,
+    CLEANUP_MODEL_PREFERENCE_FILE_NAME,
+    stored.as_deref().unwrap_or(""),
+    |inner| inner.cleanup_preferences.model.clone_from(&stored),
+  )?;
+  Ok(read_snapshot(&app, &state))
+}
+
+/// The models the dictation account's organization offers for cleanup
+/// besides automatic.
+#[tauri::command]
+pub async fn dictation_get_cleanup_models(
+  app: AppHandle,
+) -> Result<CleanupModels, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  dictation_cleanup::models(&app).await
+}
+
+/// Whether a short sound marks the start and the end of listening.
+#[tauri::command]
+pub fn dictation_set_sounds(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  enabled: bool,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  change_preference(
+    &app,
+    SOUNDS_PREFERENCE_FILE_NAME,
+    stored_switch(enabled),
+    |inner| inner.sounds = enabled,
+  )?;
+  Ok(read_snapshot(&app, &state))
+}
+
+/// Whether a shortcut opens the panel that fixes a dictation's words.
+/// Applies at once while dictation runs.
+#[tauri::command]
+pub fn dictation_set_fix_shortcut(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  enabled: bool,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  let changed = change_preference(
+    &app,
+    FIX_SHORTCUT_PREFERENCE_FILE_NAME,
+    stored_switch(enabled),
+    |inner| std::mem::replace(&mut inner.fix_shortcut, enabled) != enabled,
+  )?;
+  if changed && state.update(|inner| inner.commands.is_some()) {
+    if enabled {
+      listen_for_fix(&app);
+    } else {
+      unlisten_fix(&app);
+    }
+  }
+  Ok(read_snapshot(&app, &state))
+}
+
+/// Whether a shortcut types the last dictation again. Applies at once while
+/// dictation runs.
+#[tauri::command]
+pub fn dictation_set_retype_shortcut(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  enabled: bool,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  let changed = change_preference(
+    &app,
+    RETYPE_SHORTCUT_PREFERENCE_FILE_NAME,
+    stored_switch(enabled),
+    |inner| std::mem::replace(&mut inner.retype_shortcut, enabled) != enabled,
+  )?;
+  if changed && state.update(|inner| inner.commands.is_some()) {
+    if enabled {
+      listen_for_retype(&app);
+    } else {
+      unlisten_retype(&app);
+    }
+  }
+  Ok(read_snapshot(&app, &state))
+}
+
+/// What happens to other sound while recording, from the next one.
+#[tauri::command]
+pub fn dictation_set_while_dictating(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  choice: String,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  let parsed = WhileDictating::parse(Some(&choice));
+  if parsed.stored() != choice {
+    return Err("this is not offered on this computer".to_string());
+  }
+  change_preference(
+    &app,
+    dictation_media::PREFERENCE_FILE_NAME,
+    parsed.stored(),
+    |inner| inner.while_dictating = parsed,
+  )?;
+  Ok(read_snapshot(&app, &state))
+}
+
+/// Whether other sound is changed only while it plays through speakers.
+#[tauri::command]
+pub fn dictation_set_speakers_only(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  enabled: bool,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  change_preference(
+    &app,
+    dictation_media::SPEAKERS_ONLY_PREFERENCE_FILE_NAME,
+    stored_switch(enabled),
+    |inner| inner.speakers_only = enabled,
   )?;
   Ok(read_snapshot(&app, &state))
 }
@@ -661,19 +1681,72 @@ pub fn dictation_set_language(
   state: State<'_, DictationState>,
   language: String,
 ) -> Result<DictationSnapshot, String> {
+  store_language(&app, &language)?;
+  Ok(read_snapshot(&app, &state))
+}
+
+/// Stores the dictation language, `auto` or a model language, from Settings
+/// or the tray's quick switch, and redraws that switch, also when nothing
+/// was stored: a clicked item keeps its native check until the menu is
+/// rebuilt from the stored choice.
+pub fn store_language(app: &AppHandle, language: &str) -> Result<(), String> {
+  let stored = if available(app) {
+    let choice = Choice::parse(Some(language));
+    if choice.stored() == language {
+      change_preference(
+        app,
+        LANGUAGE_PREFERENCE_FILE_NAME,
+        choice.stored(),
+        |inner| inner.language = choice,
+      )
+    } else {
+      Err("this language is not available for dictation".to_string())
+    }
+  } else {
+    Err("dictation is not available on this computer".to_string())
+  };
+  crate::activity::refresh_tray(app);
+  stored
+}
+
+/// Settings for apps and kinds of app over the global ones, replacing the
+/// list stored before; refused whole when an entry could never apply.
+#[tauri::command]
+pub fn dictation_set_app_settings(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  settings: Vec<AppSetting>,
+) -> Result<DictationSnapshot, String> {
   if !available(&app) {
     return Err("dictation is not available on this computer".to_string());
   }
-  let choice = Choice::parse(Some(&language));
-  if choice.stored() != language {
-    return Err("this language is not available for dictation".to_string());
-  }
+  let settings = dictation_app_settings::validated(settings)?;
+  let stored = serde_json::to_string(&settings).map_err(
+    crate::logging::with_cause_logged("dictation app settings could not be stored"),
+  )?;
   change_preference(
     &app,
-    LANGUAGE_PREFERENCE_FILE_NAME,
-    choice.stored(),
-    |inner| inner.language = choice,
+    dictation_app_settings::PREFERENCE_FILE_NAME,
+    &stored,
+    |inner| inner.app_settings = settings,
   )?;
+  Ok(read_snapshot(&app, &state))
+}
+
+/// The speaker's custom words for the dictation account, replacing the
+/// list stored before; refused whole when a word or the list is beyond what
+/// stella AI accepts.
+#[tauri::command]
+pub fn dictation_set_custom_words(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  words: Vec<String>,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  dictation_words::store(&app, &words)?;
+  publish(&app);
   Ok(read_snapshot(&app, &state))
 }
 
@@ -703,6 +1776,42 @@ pub fn dictation_set_destination(
 /// The models stella AI offers this organization; the window picks from it.
 /// A stored model the region no longer offers is replaced by the one
 /// dictation would use, so the window shows what is used.
+/// The key dictation listens for, from what this computer offers. Applies
+/// from the next press.
+#[tauri::command]
+pub fn dictation_set_hold_key(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  hold_key: String,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  let Some(choice) = HoldChoice::offered(&hold_key) else {
+    return Err("this key is not offered for dictation".to_string());
+  };
+  if state.update(|inner| inner.hold_key) != choice {
+    change_preference(
+      &app,
+      HOLD_KEY_PREFERENCE_FILE_NAME,
+      choice.stored(),
+      |inner| {
+        inner.hold_key = choice;
+      },
+    )?;
+    if state.update(|inner| inner.commands.is_some()) {
+      unlisten(&app);
+      // The old key's release will never be heard: a recording it started
+      // is discarded.
+      send_command(&app, Command::Cancel);
+      listen(&app);
+    }
+    // The tray names the key to hold.
+    crate::activity::refresh_tray(&app);
+  }
+  Ok(read_snapshot(&app, &state))
+}
+
 #[tauri::command]
 pub async fn dictation_get_cloud_models(app: AppHandle) -> Result<CloudModels, String> {
   if !cloud_available(&app) {
@@ -712,10 +1821,15 @@ pub async fn dictation_get_cloud_models(app: AppHandle) -> Result<CloudModels, S
   let stored = app
     .state::<DictationState>()
     .update(|inner| inner.cloud_model.clone());
-  if let Some(choice) = dictation_cloud::choose_model(stored.as_deref(), &offered)
-    && choice.replaces_stored
+  let stored_class = cloud_model_class(&app);
+  // A withdrawn model with no same-class successor stays stored, and the
+  // window shows it as no longer offered until another is picked. A model
+  // still offered gets its class kept, as one stored before classes were.
+  if let Ok(choice) =
+    dictation_cloud::choose_model(stored.as_deref(), stored_class.as_ref(), &offered)
+    && (choice.replaces_stored || stored_class.is_none())
   {
-    adopt_cloud_model(&app, &choice.model_id)?;
+    adopt_cloud_model(&app, &choice.model_id, offered.class_of(&choice.model_id))?;
   }
   Ok(offered)
 }
@@ -729,12 +1843,11 @@ pub async fn dictation_set_cloud_model(
     return Err("stella AI transcription is not available".to_string());
   }
   // Only a model the organization is offered right now can be chosen.
-  if !valid_model_id(&model_id)
-    || !dictation_cloud::models(&app).await?.offers(&model_id)
-  {
+  let offered = dictation_cloud::models(&app).await?;
+  if !valid_model_id(&model_id) || !offered.offers(&model_id) {
     return Err("this transcription model is not offered".to_string());
   }
-  adopt_cloud_model(&app, &model_id)?;
+  adopt_cloud_model(&app, &model_id, offered.class_of(&model_id))?;
   let state = app.state::<DictationState>();
   Ok(read_snapshot(&app, &state))
 }
@@ -923,7 +2036,9 @@ mod tests {
       (Failure::FocusChanged, "focusChanged"),
       (Failure::FocusUnconfirmed, "focusUnconfirmed"),
       (Failure::ShortcutHeld, "shortcutHeld"),
+      (Failure::PasswordField, "passwordField"),
       (Failure::CloudTranscription, "cloudTranscription"),
+      (Failure::NothingHeard, "nothingHeard"),
     ] {
       assert_eq!(
         serde_json::to_value(failure).unwrap(),
@@ -936,17 +2051,186 @@ mod tests {
     DictationState(Mutex::new(Inner {
       enabled: true,
       cleanup,
+      cleanup_style: CleanupStyle::Polished,
+      translate_to: None,
+      cleanup_preferences: CleanupPreferences::default(),
+      app_settings: Vec::new(),
+      recent_apps: Vec::new(),
+      sounds: true,
+      while_dictating: WhileDictating::Nothing,
+      speakers_only: true,
       share_window_title: false,
       share_text_before_cursor: false,
       language: Choice::Automatic,
       destination: Destination::parse(None),
       cloud_model: None,
+      cloud_model_class: None,
       model: ModelState::Missing,
       phase: Phase::Idle,
       failure: None,
       shortcut_taken: false,
+      hold_key: HoldChoice::parse(None),
+      hold_key_waiting: false,
+      listening: Listening::None,
+      retype_shortcut: true,
+      retype_listening: ShortcutListening::None,
+      fix_shortcut: true,
+      fix_listening: ShortcutListening::None,
+      last: None,
+      history_listener: None,
+      listener_generation: 0,
       commands: None,
     }))
+  }
+
+  #[test]
+  fn the_retype_shortcut_is_on_and_names_its_keys() {
+    let state = state(true);
+    let snapshot =
+      serde_json::to_value(state.snapshot(true, false, Vec::new(), true)).unwrap();
+    assert_eq!(snapshot["retypeShortcut"], true);
+    assert_eq!(snapshot["retypeShortcutTaken"], false);
+    assert_eq!(
+      snapshot["retypeKeys"],
+      serde_json::to_value(ShortcutKeys::of(&dictation_retype::shortcut())).unwrap()
+    );
+    state.update(|inner| inner.retype_listening = ShortcutListening::Taken);
+    let taken =
+      serde_json::to_value(state.snapshot(true, false, Vec::new(), true)).unwrap();
+    assert_eq!(taken["retypeShortcutTaken"], true);
+  }
+
+  #[test]
+  fn the_fix_shortcut_is_on_and_names_its_keys() {
+    let state = state(true);
+    let snapshot =
+      serde_json::to_value(state.snapshot(true, false, Vec::new(), true)).unwrap();
+    assert_eq!(snapshot["fixShortcut"], true);
+    assert_eq!(snapshot["fixShortcutTaken"], false);
+    assert_eq!(
+      snapshot["fixKeys"],
+      serde_json::to_value(ShortcutKeys::of(&dictation_fix::shortcut())).unwrap()
+    );
+    state.update(|inner| inner.fix_listening = ShortcutListening::Taken);
+    let taken =
+      serde_json::to_value(state.snapshot(true, false, Vec::new(), true)).unwrap();
+    assert_eq!(taken["fixShortcutTaken"], true);
+  }
+
+  #[test]
+  fn the_snapshot_names_the_hold_key_and_what_is_offered() {
+    let snapshot =
+      serde_json::to_value(state(true).snapshot(true, false, Vec::new(), false))
+        .unwrap();
+
+    assert_eq!(
+      snapshot["holdKey"],
+      serde_json::json!(HoldChoice::OFFERED[0].stored())
+    );
+    assert_eq!(
+      snapshot["holdKeys"].as_array().map(Vec::len),
+      Some(HoldChoice::OFFERED.len())
+    );
+    assert_eq!(snapshot["holdKeyWaiting"], serde_json::json!(false));
+  }
+
+  #[test]
+  fn the_snapshot_names_the_cleanup_style_and_the_language_to_write_in() {
+    let state = state(true);
+    let polished =
+      serde_json::to_value(state.snapshot(true, false, Vec::new(), false)).unwrap();
+    assert_eq!(polished["cleanupStyle"], serde_json::json!("polished"));
+    assert_eq!(polished["translateTo"], serde_json::Value::Null);
+    state.update(|inner| {
+      inner.cleanup_style = CleanupStyle::Notes;
+      inner.translate_to = Some("en");
+    });
+    let notes =
+      serde_json::to_value(state.snapshot(true, false, Vec::new(), false)).unwrap();
+    assert_eq!(notes["cleanupStyle"], serde_json::json!("notes"));
+    assert_eq!(notes["translateTo"], serde_json::json!("en"));
+  }
+
+  #[test]
+  fn cleanup_instructions_and_model_are_stored_and_read_back_with_the_snapshot() {
+    let dir =
+      std::env::temp_dir().join(format!("stella-dictation-{}", uuid::Uuid::new_v4()));
+    let instructions =
+      DevicePreference::at(dir.join(CLEANUP_INSTRUCTIONS_PREFERENCE_FILE_NAME));
+    let model = DevicePreference::at(dir.join(CLEANUP_MODEL_PREFERENCE_FILE_NAME));
+    let state = state(true);
+    let unset =
+      serde_json::to_value(state.snapshot(true, false, Vec::new(), false)).unwrap();
+    assert_eq!(unset["cleanupInstructions"], serde_json::Value::Null);
+    assert_eq!(unset["cleanupModel"], serde_json::Value::Null);
+
+    let written = dictation_cleanup::custom_instructions(
+      "Use British spelling.\r\nNever use emoji.",
+    )
+    .unwrap();
+    state
+      .store(&instructions, written.as_deref().unwrap_or(""), |inner| {
+        inner.cleanup_preferences.custom_instructions = written.clone();
+      })
+      .unwrap();
+    let chosen =
+      dictation_cleanup::cleanup_model("anthropic::claude-sonnet-4-5").unwrap();
+    state
+      .store(&model, chosen.as_deref().unwrap_or(""), |inner| {
+        inner.cleanup_preferences.model = chosen.clone();
+      })
+      .unwrap();
+    let set =
+      serde_json::to_value(state.snapshot(true, false, Vec::new(), false)).unwrap();
+    assert_eq!(
+      set["cleanupInstructions"],
+      "Use British spelling.\nNever use emoji."
+    );
+    assert_eq!(set["cleanupModel"], "anthropic::claude-sonnet-4-5");
+    // What a restart reads is what was set.
+    assert_eq!(
+      stored_cleanup_preferences(&instructions, &model),
+      state.update(|inner| inner.cleanup_preferences.clone())
+    );
+
+    // Cleared, both files read as nothing: automatic, no instructions.
+    state
+      .store(&instructions, "", |inner| {
+        inner.cleanup_preferences.custom_instructions = None;
+      })
+      .unwrap();
+    state
+      .store(&model, "", |inner| inner.cleanup_preferences.model = None)
+      .unwrap();
+    assert_eq!(
+      stored_cleanup_preferences(&instructions, &model),
+      CleanupPreferences::default()
+    );
+
+    // A file beyond the contract's bound reads as none, never cut.
+    let too_long = "x".repeat(5000);
+    assert!(dictation_cleanup::custom_instructions(&too_long).is_err());
+    instructions.write(&too_long).unwrap();
+    assert_eq!(
+      stored_cleanup_preferences(&instructions, &model).custom_instructions,
+      None
+    );
+    std::fs::remove_dir_all(dir).unwrap();
+  }
+
+  #[test]
+  fn a_stopped_listener_sends_no_command() {
+    let state = state(true);
+    let (sender, receiver) = std::sync::mpsc::channel();
+    state.update(|inner| {
+      inner.commands = Some(sender);
+      inner.listener_generation = 2;
+    });
+
+    state.send_from_listener(1, Command::Press);
+    state.send_from_listener(2, Command::Release);
+
+    assert_eq!(receiver.try_iter().collect::<Vec<_>>(), [Command::Release]);
   }
 
   fn temp_preference() -> (DevicePreference, PathBuf) {
@@ -1018,6 +2302,9 @@ mod tests {
       serde_json::to_value(state.snapshot(true, false, Vec::new(), true)).unwrap();
     assert_eq!(snapshot["shareWindowTitle"], false);
     assert_eq!(snapshot["shareTextBeforeCursor"], false);
+    assert_eq!(snapshot["sounds"], true);
+    assert_eq!(snapshot["whileDictating"], "nothing");
+    assert_eq!(snapshot["speakersOnly"], true);
     assert_eq!(
       snapshot["textBeforeCursorAvailable"],
       dictation_context::TEXT_BEFORE_CURSOR_SUPPORTED

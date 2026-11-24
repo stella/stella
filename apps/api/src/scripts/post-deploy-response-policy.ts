@@ -55,15 +55,26 @@ const PLAYBOOK_STARTERS = "/playbook-starters";
 /** Knowledge pages a visitor may open when public Knowledge is enabled. */
 const KNOWLEDGE_PAGE_PATHS = [
   "/knowledge",
-  "/knowledge/templates",
   "/knowledge/templates/catalogue",
-  "/knowledge/playbooks",
-  "/knowledge/tools",
+  "/knowledge/playbooks/catalogue",
+  "/knowledge/tools/catalogue",
   "/knowledge/tools/contribute",
 ] as const;
 
-/** Knowledge pages that need an account. */
+/** Of those, the pages built with the shared public head. */
+const PUBLIC_HEAD_PAGE_PATHS: ReadonlySet<string> = new Set([
+  "/knowledge/templates/catalogue",
+  "/knowledge/playbooks/catalogue",
+  "/knowledge/tools/catalogue",
+  "/knowledge/tools/contribute",
+]);
+
+/** Knowledge pages that need an account: a visitor is turned away (to the
+ *  section's catalogue, or the landing). */
 const SIGNED_IN_PAGE_PATHS = [
+  "/knowledge/templates",
+  "/knowledge/playbooks",
+  "/knowledge/tools",
   "/knowledge/clauses",
   "/knowledge/styles",
 ] as const;
@@ -463,7 +474,7 @@ export const buildTargets = ({
   const pages: Target[] = KNOWLEDGE_PAGE_PATHS.map((path) => ({
     path,
     responseClass: RESPONSE_CLASS.page,
-    robots: enabled && path === "/knowledge/tools/contribute",
+    robots: enabled && PUBLIC_HEAD_PAGE_PATHS.has(path),
   }));
   if (toolEntry) {
     pages.push({
@@ -705,28 +716,38 @@ const discoverPublicIds = async (
 };
 
 /** The build commit an origin reports; null when it reports none. */
+type BuildCommitOutcome =
+  { status: "ok"; commit: string | null } | { status: "unreachable" };
+
 const readBuildCommit = async (
   config: Config,
   url: string,
-): Promise<string | null> => {
+): Promise<BuildCommitOutcome> => {
   try {
     const response = await deploymentFetch(url, {
       method: "GET",
       headers: { ...config.edgeHeaders, accept: "application/json" },
     });
-    return buildCommit(parseJson(await response.text()));
+    return {
+      status: "ok",
+      commit: buildCommit(parseJson(await response.text())),
+    };
   } catch {
     // Outages surface in the checks themselves.
-    return null;
+    return { status: "unreachable" };
   }
 };
 
 const main = async (): Promise<boolean> => {
   const config = readConfig();
-  const [apiCommit, webCommit] = await Promise.all([
+  const [apiCommitOutcome, webCommitOutcome] = await Promise.all([
     readBuildCommit(config, `${config.apiUrl}${API_BUILD_PATH}`),
     readBuildCommit(config, `${config.webUrl}${WEB_BUILD_PATH}`),
   ]);
+  const apiCommit =
+    apiCommitOutcome.status === "ok" ? apiCommitOutcome.commit : null;
+  const webCommit =
+    webCommitOutcome.status === "ok" ? webCommitOutcome.commit : null;
   const mismatch = buildCommitMismatch({ api: apiCommit, web: webCommit });
   if (mismatch !== null) {
     throw new ResponsePolicyError({ message: mismatch });

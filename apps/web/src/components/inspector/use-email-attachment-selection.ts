@@ -1,7 +1,7 @@
-import { useCallback, useMemo, useState } from "react";
+import { useState } from "react";
 
 import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
-import { getEmailAttachmentPreviewId } from "@/components/inspector/email-attachments-facet.logic";
+import { filePartViewId } from "@/components/file-parts/file-parts.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 
@@ -19,8 +19,8 @@ const getEmailAttachmentState = ({
   tab,
 }: GetEmailAttachmentStateOptions) => {
   const selectedEmailAttachmentPreviewId = selectedEmailAttachmentId
-    ? getEmailAttachmentPreviewId({
-        attachmentId: selectedEmailAttachmentId,
+    ? filePartViewId({
+        part: selectedEmailAttachmentId,
         fieldId: tab.id,
         workspaceId: tab.workspaceId,
       })
@@ -75,60 +75,38 @@ export const useEmailAttachmentSelection = ({
     emailPreviewOverlayActivation,
     emailSidepeekOverlayActivation,
     selectedEmailAttachmentPreviewId,
-  } = useMemo(
-    () =>
-      getEmailAttachmentState({
-        isActive,
-        scaleOffsets,
-        selectedEmailAttachmentId,
-        tab,
-      }),
-    [isActive, scaleOffsets, selectedEmailAttachmentId, tab],
-  );
-  const openEmailAttachment = useCallback(
-    (attachmentId: string | null) => {
-      setSelectedEmailAttachmentId(attachmentId);
-      setFileFacet(tab.id, "attachments");
-    },
-    [setFileFacet, tab.id],
-  );
-  const resetEmailAttachmentZoom = useCallback(() => {
+  } = getEmailAttachmentState({
+    isActive,
+    scaleOffsets,
+    selectedEmailAttachmentId,
+    tab,
+  });
+  const openEmailAttachment = (attachmentId: string | null) => {
+    setSelectedEmailAttachmentId(attachmentId);
+    setFileFacet(tab.id, "attachments");
+  };
+  const resetEmailAttachmentZoom = () => {
     if (selectedEmailAttachmentPreviewId) {
       handleResetZoom(selectedEmailAttachmentPreviewId);
     }
-  }, [handleResetZoom, selectedEmailAttachmentPreviewId]);
-  const zoomEmailAttachment = useCallback(
-    (direction: "in" | "out") => {
-      if (selectedEmailAttachmentPreviewId) {
-        handleZoom(selectedEmailAttachmentPreviewId, direction);
-      }
-    },
-    [handleZoom, selectedEmailAttachmentPreviewId],
-  );
+  };
+  const zoomEmailAttachment = (direction: "in" | "out") => {
+    if (selectedEmailAttachmentPreviewId) {
+      handleZoom(selectedEmailAttachmentPreviewId, direction);
+    }
+  };
 
-  return useMemo(
-    () => ({
-      emailAttachmentOverlayActivation,
-      emailAttachmentScaleOffset,
-      emailPreviewOverlayActivation,
-      emailSidepeekOverlayActivation,
-      openEmailAttachment,
-      resetEmailAttachmentZoom,
-      selectedEmailAttachmentId,
-      setSelectedEmailAttachmentId,
-      zoomEmailAttachment,
-    }),
-    [
-      emailAttachmentOverlayActivation,
-      emailAttachmentScaleOffset,
-      emailPreviewOverlayActivation,
-      emailSidepeekOverlayActivation,
-      openEmailAttachment,
-      resetEmailAttachmentZoom,
-      selectedEmailAttachmentId,
-      zoomEmailAttachment,
-    ],
-  );
+  return {
+    emailAttachmentOverlayActivation,
+    emailAttachmentScaleOffset,
+    emailPreviewOverlayActivation,
+    emailSidepeekOverlayActivation,
+    openEmailAttachment,
+    resetEmailAttachmentZoom,
+    selectedEmailAttachmentId,
+    setSelectedEmailAttachmentId,
+    zoomEmailAttachment,
+  };
 };
 
 export type EmailAttachmentSelection = ReturnType<

@@ -4,7 +4,7 @@ import type {
   KeyboardEvent,
   ReactNode,
 } from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useState } from "react";
 
 import { panic } from "better-result";
 import { defaultRehypePlugins, Streamdown } from "streamdown";
@@ -53,7 +53,7 @@ import type {
   AskUserOutput,
   ChatAnonRestoration,
   RegisteredChatUIToolCallPart,
-} from "@/components/chat/chat-ui-tools";
+} from "@/components/chat/chat-ui-tools-types";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { rehypeScopeAnswerIds } from "@/components/chat/rehype-scope-answer-ids";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
@@ -231,6 +231,7 @@ const AskUserOptions = ({
           </span>
           <Button
             disabled={draft.picked.length === options.length}
+            disabledReason={t("chat.askUser.allOptionsSelected")}
             onClick={() =>
               onChange((current) => pickAllAskUserOptions(question, current))
             }
@@ -241,6 +242,7 @@ const AskUserOptions = ({
           </Button>
           <Button
             disabled={draft.picked.length === 0}
+            disabledReason={t("chat.askUser.noOptionsSelected")}
             onClick={() => onChange((current) => ({ ...current, picked: [] }))}
             size="xs"
             variant="ghost"
@@ -354,27 +356,19 @@ export const AskUserCard = ({
   // caller doesn't pass any pairs.
   const pairs: readonly ChatAnonRestoration[] =
     restorationPairs ?? EMPTY_RESTORATION_PAIRS;
-  const analysisComponents = useMemo(
-    () => ({
-      a: createAnalysisAnchor(workspaceId),
-      img: messageComponents.img,
-      "stll-anon": renderAnalysisAnonymizedSpan,
-    }),
-    [workspaceId],
-  );
+  const analysisComponents = {
+    a: createAnalysisAnchor(workspaceId),
+    img: messageComponents.img,
+    "stll-anon": renderAnalysisAnonymizedSpan,
+  };
   // Stable rehype-plugins identity so Streamdown's internal memo
   // can short-circuit when nothing actually changed.
-  const analysisRehypePlugins = useMemo(
-    () => [
-      ...Object.values(defaultRehypePlugins),
-      rehypeScopeAnswerIds,
-      ...(pairs.length > 0
-        ? [[rehypeAnonSpans, pairs] satisfies Pluggable]
-        : []),
-      rehypeChatLinks,
-    ],
-    [pairs],
-  );
+  const analysisRehypePlugins = [
+    ...Object.values(defaultRehypePlugins),
+    rehypeScopeAnswerIds,
+    ...(pairs.length > 0 ? [[rehypeAnonSpans, pairs] satisfies Pluggable] : []),
+    rehypeChatLinks,
+  ];
   const answeredOutput = part.state === "complete" ? part.output : null;
   const isLoading =
     part.state === "awaiting-input" || part.state === "input-streaming";
@@ -387,16 +381,19 @@ export const AskUserCard = ({
   const [drafts, setDrafts] = useState<Record<number, AskUserDraft>>(() =>
     input ? initialAskUserDrafts(input.questions) : {},
   );
-  const [defaultsSeeded, setDefaultsSeeded] = useState(input !== null);
+  const hasInput = input !== null;
+  const [prevHasInput, setPrevHasInput] = useState(hasInput);
   // Seed defaults once the full input arrives (after streaming).
   // The useState initializer only runs on mount, when input may
   // still be null. `drafts` is user-mutated interactive state set in
   // several handlers, so this is a one-shot prop-arrival merge into
   // existing state, not plain derived state. Guarded render-time adjustment
   // applies the transition before children render and avoids an extra commit.
-  if (input !== null && !defaultsSeeded) {
-    setDefaultsSeeded(true);
-    setDrafts({ ...initialAskUserDrafts(input.questions), ...drafts });
+  if (prevHasInput !== hasInput) {
+    setPrevHasInput(hasInput);
+    if (input !== null) {
+      setDrafts({ ...initialAskUserDrafts(input.questions), ...drafts });
+    }
   }
 
   const [submitted, setSubmitted] = useState(false);
@@ -418,22 +415,20 @@ export const AskUserCard = ({
     return () => onEditingChange?.(part.id, false);
   }, [isEditing, onEditingChange, part.id]);
 
-  const updateDraft = useCallback(
-    (index: number, next: (draft: AskUserDraft) => AskUserDraft) =>
-      setDrafts((current) => ({
-        ...current,
-        [index]: next(askUserDraftOf(current, index)),
-      })),
-    [],
-  );
+  const updateDraft = (
+    index: number,
+    next: (draft: AskUserDraft) => AskUserDraft,
+  ) =>
+    setDrafts((current) => ({
+      ...current,
+      [index]: next(askUserDraftOf(current, index)),
+    }));
 
   const answers = input ? askUserAnswersOf(input.questions, drafts) : null;
-  const buildOutput = useCallback(
-    (): AskUserOutput | null => (answers === null ? null : { answers }),
-    [answers],
-  );
+  const buildOutput = (): AskUserOutput | null =>
+    answers === null ? null : { answers };
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = () => {
     if (!input || submitted) {
       return;
     }
@@ -443,9 +438,9 @@ export const AskUserCard = ({
     }
     setSubmitted(true);
     onSubmit(part.id, output);
-  }, [input, submitted, buildOutput, onSubmit, part.id]);
+  };
 
-  const handleStartEdit = useCallback(() => {
+  const handleStartEdit = () => {
     if (!input || !answeredOutput || !canRerun) {
       return;
     }
@@ -453,13 +448,13 @@ export const AskUserCard = ({
       askUserDraftsFromAnswers(input.questions, answeredOutput.answers),
     );
     setIsEditing(true);
-  }, [input, answeredOutput, canRerun]);
+  };
 
-  const handleCancelEdit = useCallback(() => {
+  const handleCancelEdit = () => {
     setIsEditing(false);
-  }, []);
+  };
 
-  const handleRerun = useCallback(() => {
+  const handleRerun = () => {
     if (!input || !onEditAndRerun) {
       return;
     }
@@ -469,22 +464,19 @@ export const AskUserCard = ({
     }
     setIsEditing(false);
     detached(onEditAndRerun(part.id, output), "ask-user-card.edit-and-rerun");
-  }, [input, onEditAndRerun, buildOutput, part.id]);
+  };
 
-  const handleFormSubmit = useCallback<
-    NonNullable<ComponentProps<"form">["onSubmit"]>
-  >(
-    (event) => {
-      event.preventDefault();
-      if (isEditing) {
-        handleRerun();
-        return;
-      }
+  const handleFormSubmit: NonNullable<ComponentProps<"form">["onSubmit"]> = (
+    event,
+  ) => {
+    event.preventDefault();
+    if (isEditing) {
+      handleRerun();
+      return;
+    }
 
-      handleSubmit();
-    },
-    [handleRerun, handleSubmit, isEditing],
-  );
+    handleSubmit();
+  };
 
   if (!input || isWithdrawn) {
     return (
@@ -628,7 +620,12 @@ export const AskUserCard = ({
                 </p>
               )}
               <div className="flex items-center gap-2">
-                <Button disabled={answers === null} size="xs" type="submit">
+                <Button
+                  disabled={answers === null}
+                  disabledReason={t("chat.askUser.answerRequired")}
+                  size="xs"
+                  type="submit"
+                >
                   {isEditing
                     ? t("chat.askUser.rerun")
                     : t("chat.askUser.submit")}

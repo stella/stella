@@ -46,7 +46,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -89,7 +89,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -120,7 +120,7 @@ jobs:
       - name: Login to GitHub Container Registry for browser images
         if: github.event.pull_request.head.repo.fork != true && github.token != ''
         continue-on-error: true
-        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        uses: ./.github/actions/docker-login
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -138,7 +138,7 @@ jobs:
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Record network baseline
-        timeout-minutes: 6
+        timeout-minutes: 8
         env:
           E2E_EXECUTION_PROFILE: network-baseline
           E2E_EXPECT_DEV_ROUTES: "false"

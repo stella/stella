@@ -1,5 +1,7 @@
 import type { PropsWithChildren, ReactNode } from "react";
 import {
+  lazy,
+  Suspense,
   useCallback,
   useOptimistic,
   useRef,
@@ -56,6 +58,13 @@ import {
   selectJustificationByFieldId,
   useWorkspaceStore,
 } from "@/lib/workspaces/store";
+
+// Off the startup path: the panel opens with every document, while the
+// section is a collapsed list most readers never expand.
+const SimilarDocumentsSection = lazy(async () => {
+  const m = await import("@/components/inspector/similar-documents-section");
+  return { default: m.SimilarDocumentsSection };
+});
 
 type AiFieldClickArgs = {
   fieldId: string;
@@ -222,6 +231,7 @@ const EntityMetadataContent = ({
       ) ?? null,
   );
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const refreshEntityFields = useCallback(async () => {
     await Promise.all([
       queryClient.invalidateQueries({
@@ -569,6 +579,13 @@ const EntityMetadataContent = ({
               fileFieldId={fileFieldId}
               workspaceId={workspaceId}
             />
+            <Suspense fallback={null}>
+              <SimilarDocumentsSection
+                entityId={entity.entityId}
+                heading={(title) => <SectionHeading>{title}</SectionHeading>}
+                workspaceId={workspaceId}
+              />
+            </Suspense>
           </>
         )}
 

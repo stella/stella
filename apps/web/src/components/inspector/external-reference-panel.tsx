@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -236,7 +236,7 @@ const ExternalPdfPreview = ({
         pageSource="portfolio"
         buffer={buffer}
         className="document-preview-surface h-full"
-        contentClassName="relative space-y-2 px-2 pt-2"
+        contentClassName="relative space-y-2 pt-2"
         fileId={fileId}
         renderPage={(props) => <PDFPage {...props} />}
       />
@@ -345,6 +345,7 @@ const GenericExternalReferencePanel = ({
     provider !== undefined ||
     connectorSlug !== undefined ||
     sourceToolName !== undefined;
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- inlining this conditional pushes the component past the complexity limit
   const activeExternal = useMemo(
     () =>
       canPreview
@@ -402,27 +403,24 @@ const GenericExternalReferencePanel = ({
           connectorSlug,
           connectors: availableConnectors,
         }));
-  const requestOpenExternal = useCallback(
-    (href: string) => {
-      setConfirmHref(href);
-    },
-    [setConfirmHref],
-  );
-  const requestSafeExternalOpen = useCallback(() => {
+  const requestOpenExternal = (href: string) => {
+    setConfirmHref(href);
+  };
+  const requestSafeExternalOpen = () => {
     if (safeHref === undefined) {
       return;
     }
 
     requestOpenExternal(safeHref);
-  }, [requestOpenExternal, safeHref]);
-  const openConfirmedExternal = useCallback(() => {
+  };
+  const openConfirmedExternal = () => {
     if (confirmHref === undefined) {
       return;
     }
 
     openIsolatedWindow(confirmHref);
     setConfirmHref(undefined);
-  }, [confirmHref, setConfirmHref]);
+  };
 
   const headerActions: HeaderAction[] = [];
   if (previewText) {

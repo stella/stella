@@ -221,6 +221,7 @@ export const SignalCard = ({
     <div className="flex flex-wrap items-center gap-1.5">
       {canResolve && taskSuggestion && (
         <ReviewDecisionActions
+          applyingReason={t("docxReview.applyingReviewDecision")}
           state={busy ? "applying" : "pending"}
           acceptLabel={t("common.accept")}
           rejectLabel={t("docxReview.reject")}
@@ -270,6 +271,7 @@ export const SignalCard = ({
                 <Button
                   aria-label={t("inbox.snooze")}
                   disabled={busy}
+                  disabledReason={t("docxReview.applyingReviewDecision")}
                   size="sm"
                   tooltip={t("inbox.snooze")}
                   variant="muted"
@@ -493,6 +495,7 @@ const SuggestionButton = ({
       return (
         <Button
           disabled={disabled}
+          disabledReason={t("docxReview.applyingReviewDecision")}
           onClick={() => {
             detached(onAccept(suggestion.kind), "inbox.accept");
           }}
@@ -515,6 +518,7 @@ const SuggestionButton = ({
       return (
         <Button
           disabled={disabled}
+          disabledReason={t("docxReview.applyingReviewDecision")}
           onClick={(event) => {
             openCreateMatter({
               opener: event.currentTarget,
@@ -538,6 +542,7 @@ const SuggestionButton = ({
           {(capabilityProps) => (
             <Button
               disabled={disabled}
+              disabledReason={t("docxReview.applyingReviewDecision")}
               onClick={() => {
                 onOpenChat(suggestion.prompt);
                 detached(onAccept(suggestion.kind), "inbox.accept");
@@ -581,7 +586,14 @@ const AssignMenu = ({
   return (
     <Menu>
       <MenuTrigger
-        render={<Button disabled={disabled} size="sm" variant="outline" />}
+        render={
+          <Button
+            disabled={disabled}
+            disabledReason={t("docxReview.applyingReviewDecision")}
+            size="sm"
+            variant="outline"
+          />
+        }
       >
         {label}
       </MenuTrigger>
@@ -621,6 +633,7 @@ const DismissPopover = ({ disabled, onDismiss }: DismissPopoverProps) => {
           <Button
             aria-label={t("common.dismiss")}
             disabled={disabled}
+            disabledReason={t("docxReview.applyingReviewDecision")}
             size="sm"
             tooltip={t("common.dismiss")}
             variant="muted"

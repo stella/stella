@@ -53,7 +53,10 @@ import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { createOpaqueToken } from "@/api/lib/entities/opaque-tokens";
-import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
+import {
+  lockDocxEditTarget,
+  readVersionDocxTarget,
+} from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
@@ -648,9 +651,19 @@ export const touchFolioCollabRoom = async (
   });
 };
 
+type LoadedFolioCollabSnapshot = Extract<
+  FolioCollabSnapshotLoadResponse,
+  { loadOutcome: typeof FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME.loaded }
+>;
+
+/** A room's stored state, before the service load adds the room's seed. */
+type FolioCollabStoredSnapshot =
+  | Exclude<FolioCollabSnapshotLoadResponse, LoadedFolioCollabSnapshot>
+  | Omit<LoadedFolioCollabSnapshot, "seedDocxBase64">;
+
 type FolioCollabSnapshotLoadResult = Result<
   {
-    snapshot: FolioCollabSnapshotLoadResponse;
+    snapshot: FolioCollabStoredSnapshot;
     rawSnapshotSha256Hex: string | null;
   } | null,
   HandlerError
@@ -1004,6 +1017,71 @@ export const loadFolioCollabSnapshot = async (
     }
   };
   return await loadCurrentSnapshot("initial");
+};
+
+/** The DOCX a room's generation was seeded from, or why there is none. */
+type FolioCollabSeedDocxRead =
+  | { status: "read"; docx: Uint8Array }
+  /** The room moved to another generation, or is gone. */
+  | { status: "generationChanged" }
+  /** The source version, or its file, is gone. */
+  | { status: "unavailable" };
+
+/**
+ * The DOCX a room was seeded from, which its authority reads revision 0
+ * from. Every generation of a room keeps its source version, and only a new
+ * generation changes it, so the seed is read only while the room still holds
+ * `generation`: a seed and a snapshot are then of the same generation.
+ */
+export const readFolioCollabSeedDocx = async (
+  value: FolioCollabSnapshotTarget,
+  generation: number,
+  readObject = readS3ObjectIfPresent,
+): Promise<FolioCollabSeedDocxRead> => {
+  const source = await value.scopedDb(async (tx) => {
+    const rooms = await tx
+      .select({
+        propertyId: folioCollabRooms.propertyId,
+        sourceVersionId: folioCollabRooms.sourceVersionId,
+      })
+      .from(folioCollabRooms)
+      .where(
+        and(
+          eq(folioCollabRooms.id, value.roomId),
+          eq(folioCollabRooms.workspaceId, value.workspaceId),
+          eq(folioCollabRooms.generation, generation),
+        ),
+      )
+      .limit(1);
+    const room = rooms.at(0);
+    if (!room) {
+      return { status: "generationChanged" } as const;
+    }
+    const file = await readVersionDocxTarget({
+      entityVersionId: room.sourceVersionId,
+      propertyId: room.propertyId,
+      tx,
+      workspaceId: value.workspaceId,
+    });
+    return file === null
+      ? ({ status: "unavailable" } as const)
+      : ({ status: "found", file } as const);
+  });
+  if (source.status !== "found") {
+    return source;
+  }
+  const buffer = await readObject(
+    createFileKey({
+      fileId: source.file.id,
+      mimeType: DOCX_MIME_TYPE,
+      organizationId: value.organizationId,
+      workspaceId: value.workspaceId,
+    }),
+    AbortSignal.timeout(10_000),
+  );
+  return buffer === null
+    ? { status: "unavailable" }
+    : { status: "read", docx: new Uint8Array(buffer) };
 };
 
 export type StoreFolioCollabSnapshotResult =

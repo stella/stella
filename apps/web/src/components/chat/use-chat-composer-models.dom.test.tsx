@@ -127,7 +127,7 @@ const storedReads = new Map<string, Promise<StoredChoice>>();
 /** The composer over a thread whose stored choice the query reads. */
 const renderComposer = (
   initial: Promise<StoredChoice> = Promise.resolve(AUTO_ON_STELLA),
-  { startsOnLastChoice = false }: { startsOnLastChoice?: boolean } = {},
+  { opensNewChats = false }: { opensNewChats?: boolean } = {},
 ) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
@@ -147,7 +147,7 @@ const renderComposer = (
         threadRef,
         stored: data,
         queryKey: stored.queryKey,
-        startsOnLastChoice,
+        opensNewChats,
       });
     },
     {
@@ -163,9 +163,53 @@ const renderComposer = (
   return Object.assign(view, { queryClient, queryKey: stored.queryKey });
 };
 
-/** A new chat's composer, on a surface that opens new chats. */
-const renderNewChat = () =>
-  renderComposer(Promise.resolve(NEW_CHAT), { startsOnLastChoice: true });
+/**
+ * A new chat's composer: one over a chat the server holds no row for, on
+ * whichever surface opened it (the new-chat page, a thread page at a fresh
+ * id, an inspector tab).
+ */
+const renderNewChat = () => renderComposer(Promise.resolve(NEW_CHAT));
+
+/** The member's one computer, connected, with Codex ready on `CODEX.model`. */
+const CODEX_READY: ChatLocalRunReadiness = {
+  status: "enabled",
+  runners: [
+    {
+      desktopId: "0192f3a0-6b1c-7d2e-8f30-000000000001",
+      connected: true,
+      lastSeenAt: "2026-11-12T10:00:00.000Z",
+      linkedFolders: [],
+      harnesses: [
+        {
+          id: "codex",
+          state: "ready",
+          version: "0.50.0",
+          capabilities: ["approvals"],
+          approvalModes: ["ask", "full_auto"],
+          models: [
+            {
+              id: CODEX.model,
+              label: "GPT-5 Codex",
+              isDefault: true,
+              reasoningEfforts: ["low", "high"],
+            },
+          ],
+        },
+      ],
+    },
+  ],
+  maxApprovals: "full_auto",
+};
+const codexReady = () => CODEX_READY;
+
+/** The same computer, not connected now: its last report still names Codex. */
+const codexOffline = (): ChatLocalRunReadiness => ({
+  ...CODEX_READY,
+  runners: CODEX_READY.runners.map((runner) => ({
+    ...runner,
+    connected: false,
+  })),
+});
 
 /** The composer once its stored choice is read. */
 const renderReadyComposer = async () => {
@@ -260,7 +304,7 @@ test("a menu opened while the computer is being written shows the computer", asy
 });
 
 test("a new chat starts on the member's last Run on choice, and a send carries it", async () => {
-  const server = serve();
+  const server = serve({ computers: codexReady });
   rememberRunTarget(ORGANIZATION_ID, CODEX);
   const { result } = renderNewChat();
   await waitFor(() => expect(result.current.models.state).toBe("ready"));
@@ -272,8 +316,34 @@ test("a new chat starts on the member's last Run on choice, and a send carries i
   expect(server.patches).toEqual([]);
 });
 
+test("before its first read, a new chat shows where it will start, and decides nothing on it", async () => {
+  const server = serve({ computers: codexReady });
+  rememberRunTarget(ORGANIZATION_ID, CODEX);
+  const read = Promise.withResolvers<StoredChoice>();
+  const { result } = renderComposer(read.promise, { opensNewChats: true });
+  // The row lays out for the computer (no web search switch) from the first
+  // render, while the menus stay pending: the chip says nothing yet.
+  expect(result.current.models.state).toBe("loading");
+  expect(result.current.runTarget).toEqual(CODEX);
+
+  read.resolve(NEW_CHAT);
+  await waitFor(() => expect(result.current.models.state).toBe("ready"));
+  expect(result.current.runTarget).toEqual(CODEX);
+  expect(server.patches).toEqual([]);
+});
+
+test("before its first read, a thread page shows no start of its own", () => {
+  serve();
+  rememberRunTarget(ORGANIZATION_ID, CODEX);
+  const { result } = renderComposer(
+    Promise.withResolvers<StoredChoice>().promise,
+  );
+  expect(result.current.models.state).toBe("loading");
+  expect(result.current.runTarget).toEqual({ kind: "cloud" });
+});
+
 test("a model picked on a new chat stores the remembered target with it, and the chat keeps it", async () => {
-  const server = serve();
+  const server = serve({ computers: codexReady });
   rememberRunTarget(ORGANIZATION_ID, CODEX);
   const { result } = renderNewChat();
   await waitFor(() => expect(result.current.models.state).toBe("ready"));
@@ -301,9 +371,7 @@ test("a model picked on a new chat stores the remembered target with it, and the
 test("a chat the server holds runs where it stored, whatever the member chose last", async () => {
   serve();
   rememberRunTarget(ORGANIZATION_ID, CODEX);
-  const { result } = renderComposer(Promise.resolve(AUTO_ON_STELLA), {
-    startsOnLastChoice: true,
-  });
+  const { result } = renderComposer(Promise.resolve(AUTO_ON_STELLA));
   await waitFor(() => expect(result.current.models.state).toBe("ready"));
 
   expect(result.current.runTarget).toEqual({ kind: "cloud" });
@@ -326,13 +394,18 @@ test("a Run on pick is remembered as the member's last choice", async () => {
   // Where it runs and on which model; the permission stays with the chat.
   expect(
     useChatRunOnPreferenceStore.getState().byOrganization[ORGANIZATION_ID],
-  ).toEqual({ kind: "local", harness: "codex", model: CODEX.model });
+  ).toEqual({
+    kind: "local",
+    harness: "codex",
+    model: CODEX.model,
+    reasoningEffort: null,
+  });
 });
 
 const FULL_AUTO: ChatLocalRunTarget = { ...CODEX, approvals: "full_auto" };
 
 test("a new chat starts on the remembered computer with Ask, never a permission granted before", async () => {
-  serve();
+  serve({ computers: codexReady });
   rememberRunTarget(ORGANIZATION_ID, FULL_AUTO);
   const { result } = renderNewChat();
   await waitFor(() => expect(result.current.models.state).toBe("ready"));
@@ -342,7 +415,7 @@ test("a new chat starts on the remembered computer with Ask, never a permission 
 });
 
 test("full auto picked in one chat does not reach the start of another", async () => {
-  const server = serve();
+  const server = serve({ computers: codexReady });
   const first = await renderReadyComposer();
   const runOn = first.result.current.models.runTarget;
   if (runOn.type !== "choice") {
@@ -361,7 +434,7 @@ test("full auto picked in one chat does not reach the start of another", async (
 });
 
 test("a new chat keeps its start when another write creates its row", async () => {
-  serve();
+  serve({ computers: codexReady });
   rememberRunTarget(ORGANIZATION_ID, CODEX);
   const { result, queryClient, queryKey } = renderNewChat();
   await waitFor(() => expect(result.current.models.state).toBe("ready"));
@@ -375,13 +448,100 @@ test("a new chat keeps its start when another write creates its row", async () =
   expect(result.current.getRunTarget()).toEqual(CODEX);
 });
 
-test("a thread page shows what its thread stores, whatever the member chose last", async () => {
+const CODEX_HIGH: ChatLocalRunTarget = { ...CODEX, reasoningEffort: "high" };
+
+test("a new chat starts on the remembered computer with the model and effort chosen last", async () => {
+  const server = serve({ computers: codexReady });
+  rememberRunTarget(ORGANIZATION_ID, CODEX_HIGH);
+  const { result } = renderNewChat();
+  // The chips wait for the computers, so they never show a place the chat
+  // may not start on.
+  expect(result.current.models.state).toBe("loading");
+  await waitFor(() => expect(result.current.models.state).toBe("ready"));
+
+  expect(result.current.runTarget).toEqual(CODEX_HIGH);
+  expect(result.current.getRunTarget()).toEqual(CODEX_HIGH);
+  const runOn = result.current.models.runTarget;
+  expect(runOn.type === "choice" && runOn.startedInCloud).toBeNull();
+  expect(server.patches).toEqual([]);
+});
+
+test("a new chat whose remembered computer is offline starts in the cloud and says why", async () => {
+  const server = serve({ computers: codexOffline });
+  rememberRunTarget(ORGANIZATION_ID, CODEX_HIGH);
+  const { result } = renderNewChat();
+  await waitFor(() => expect(result.current.models.state).toBe("ready"));
+
+  expect(result.current.runTarget).toEqual({ kind: "cloud" });
+  expect(result.current.getRunTarget()).toEqual({ kind: "cloud" });
+  const runOn = result.current.models.runTarget;
+  if (runOn.type !== "choice") {
+    throw new Error("The composer offers no Run on choice");
+  }
+  expect(runOn.startedInCloud).toEqual({
+    harness: "codex",
+    why: {
+      type: "unavailable",
+      state: {
+        type: "harness",
+        option: { harness: "codex", state: "offline" },
+      },
+    },
+  });
+  // The member's choice stays theirs: the next chat checks the computer again.
+  expect(
+    useChatRunOnPreferenceStore.getState().byOrganization[ORGANIZATION_ID],
+  ).toEqual({
+    kind: "local",
+    harness: "codex",
+    model: CODEX.model,
+    reasoningEffort: "high",
+  });
+  expect(server.patches).toEqual([]);
+});
+
+test("a new chat whose computers cannot be read starts in the cloud and says so", async () => {
   serve();
   rememberRunTarget(ORGANIZATION_ID, CODEX);
-  const { result } = renderComposer(Promise.resolve(NEW_CHAT));
+  const { result } = renderNewChat();
   await waitFor(() => expect(result.current.models.state).toBe("ready"));
 
   expect(result.current.getRunTarget()).toEqual({ kind: "cloud" });
+  const runOn = result.current.models.runTarget;
+  expect(runOn.type === "choice" && runOn.startedInCloud).toEqual({
+    harness: "codex",
+    why: { type: "check_failed" },
+  });
+});
+
+test("picking a place on a chat that started in the cloud drops the reason", async () => {
+  const server = serve({ computers: codexOffline });
+  rememberRunTarget(ORGANIZATION_ID, CODEX);
+  const { result } = renderNewChat();
+  await waitFor(() => expect(result.current.models.state).toBe("ready"));
+  const runOn = result.current.models.runTarget;
+  if (runOn.type !== "choice") {
+    throw new Error("The composer offers no Run on choice");
+  }
+
+  act(() => {
+    runOn.select({ kind: "cloud" });
+  });
+  await server.releaseNext();
+  (await result.current.awaitPendingSelection()).unwrap();
+
+  const picked = result.current.models.runTarget;
+  expect(picked.type === "choice" && picked.startedInCloud).toBeNull();
+});
+
+test("a new chat keeps the remembered computer when only its model is gone, which the model chip says", async () => {
+  serve({ computers: codexReady });
+  const gone: ChatLocalRunTarget = { ...CODEX, model: "gpt-4-codex" };
+  rememberRunTarget(ORGANIZATION_ID, gone);
+  const { result } = renderNewChat();
+  await waitFor(() => expect(result.current.models.state).toBe("ready"));
+
+  expect(result.current.getRunTarget()).toEqual(gone);
 });
 
 /**
@@ -409,29 +569,19 @@ const computerConnectingOnOpen = () => {
   return { open, computers: () => computer(opened) };
 };
 
-test("a new chat on the remembered computer opens nothing by itself; its send opens stella desktop once", async () => {
+test("a new chat whose remembered computer is not connected opens nothing, and its send runs in the cloud", async () => {
   const desktop = computerConnectingOnOpen();
   serve({ computers: desktop.computers });
   rememberRunTarget(ORGANIZATION_ID, CODEX);
-  const { result, queryClient } = renderNewChat();
+  const { result } = renderNewChat();
   await waitFor(() => expect(result.current.models.state).toBe("ready"));
-  // The composer read the computers for the remembered target: offline.
-  await waitFor(() =>
-    expect(
-      queryClient.getQueryData(localRunnersOptions(ORGANIZATION_ID).queryKey),
-    ).toBeDefined(),
-  );
-  expect(desktop.open).not.toHaveBeenCalled();
 
   act(() => {
     result.current.openDesktopForSend();
   });
-  const launching = getDesktopLaunch().pending();
 
-  expect(desktop.open).toHaveBeenCalledTimes(1);
-  expect(desktop.open).toHaveBeenCalledWith(DESKTOP_PING_URL);
-  expect(await launching?.outcome).toBe("connected");
-  expect(desktop.open).toHaveBeenCalledTimes(1);
+  expect(result.current.getRunTarget()).toEqual({ kind: "cloud" });
+  expect(desktop.open).not.toHaveBeenCalled();
 });
 
 test("a send on stella, or on a computer that is connected, opens nothing", async () => {

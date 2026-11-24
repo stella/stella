@@ -60,6 +60,7 @@ describe("projectOrganizationSettingsRow", () => {
         documentProcessingMode: "searchable-text",
         matterNumberPadding: 3,
         matterNumberPattern: "{SEQ}",
+        documentNamePattern: null,
         matterNumberingEnabled: false,
         practiceJurisdictions: [
           { countryCode: "CZ", isPrimary: true },
@@ -347,4 +348,14 @@ describe.serial("undeclared feature deployment discovery", () => {
       restoreRuntimeMode();
     }
   });
+});
+
+test("invoice link deployment discovery follows the configured flag", () => {
+  for (const enabled of [false, true]) {
+    testState.setConfig("FEATURE_INVOICE_LINKS", enabled);
+    expect(
+      projectOrganizationSettingsRow(null, emptySnapshot).deploymentFeatures
+        .invoiceLinks,
+    ).toBe(enabled);
+  }
 });

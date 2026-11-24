@@ -18,6 +18,10 @@
       "types": "./src/format.ts",
       "import": "./src/format.ts"
     },
+    "./package": {
+      "types": "./src/package.ts",
+      "import": "./src/package.ts"
+    },
     "./frontmatter": {
       "types": "./src/frontmatter.ts",
       "import": "./src/frontmatter.ts"
@@ -46,6 +50,7 @@
   "dependencies": {
     "@stll/portable-path": "workspace:*",
     "@stll/sha256": "workspace:*",
+    "@stll/text-normalize": "workspace:*",
     "better-result": "catalog:"
   },
   "devDependencies": {

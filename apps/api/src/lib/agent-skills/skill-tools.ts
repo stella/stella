@@ -5,7 +5,7 @@ import * as v from "valibot";
 
 import type { SkillMetadata } from "@stll/skills/frontmatter";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
 import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";

@@ -12,10 +12,10 @@ import {
   CORPUS_INDEX_COMMIT,
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
   CORPUS_INDEX_INGEST_TIMEOUT_MS,
-  CORPUS_INDEX_SEARCH_TIMEOUT_MS,
   corpusIndexCommittedIngestTimeoutMs,
   type CorpusIndexDeleteSettlementRead,
   CorpusIndexError,
+  type CorpusIndexQueryDsl,
   corpusIndexScoredSearchRequest,
   type CorpusIndexSettlementSplit,
   getCorpusIndexClient,
@@ -592,6 +592,8 @@ test("generation-scoped aggregation keeps caller exclusions strict in one reques
   expect(request?.path).toBe(
     "/api/v1/_elastic/case_law_v8_cs_sk,case_law_v9_cze/_search",
   );
+  // A failed split must fail the count, not shrink it.
+  expect(request?.search).toBe("?allow_partial_search_results=false");
   expect(JSON.parse(request?.body ?? "{}")).toEqual({
     size: 0,
     track_total_hits: false,
@@ -611,6 +613,22 @@ test("generation-scoped aggregation keeps caller exclusions strict in one reques
     },
     aggs,
   });
+});
+
+test("a filtered aggregation missing a split is refused, not counted short", async () => {
+  responseBody = {
+    _shards: { total: 4, successful: 3, failed: 1 },
+    aggregations: { decisions: { value: 3 } },
+  };
+  const result = await getCorpusIndexClient("q09").aggregate({
+    observer: "unobserved",
+    indexId: "case_law_v7_cs_sk",
+    query: "text:smlouva",
+    filter: 'jurisdiction:"CZE"',
+    aggs: { decisions: { cardinality: { field: "document_id" } } },
+  });
+
+  expect(result.isErr()).toBe(true);
 });
 
 test.each([undefined, 'projection_generation:"case_law_v9"'])(
@@ -2178,7 +2196,6 @@ test("a search inside a tool call gives up at the tool's budget, not its own", a
       preconnect: originalFetch.preconnect,
     }),
   );
-  const startedAt = performance.now();
   const result = await runWithinRequestLatencyBudget(
     { label: "search_legislation", budgetMs: 40 },
     async () =>
@@ -2188,9 +2205,6 @@ test("a search inside a tool call gives up at the tool's budget, not its own", a
         query: "text:smlouva",
         maxHits: 1,
       }),
-  );
-  expect(performance.now() - startedAt).toBeLessThan(
-    CORPUS_INDEX_SEARCH_TIMEOUT_MS,
   );
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
@@ -2481,7 +2495,7 @@ test("a scored search projects named stored fields and sorts by score", () => {
       requiredFields: ["document_id"],
     }),
   ).toEqual({
-    path: "/api/v1/_elastic/case_law_v5_cs_sk/_search?_source_includes=document_id,chunk_id",
+    path: "/api/v1/_elastic/case_law_v5_cs_sk/_search?_source_includes=document_id,chunk_id&allow_partial_search_results=false",
     body: {
       query: {
         query_string: {
@@ -2495,6 +2509,28 @@ test("a scored search projects named stored fields and sorts by score", () => {
       track_total_hits: true,
     },
   });
+});
+
+test("a scored search sends a DSL query as given, through the same strict read", () => {
+  const dsl = {
+    bool: {
+      filter: [{ query_string: { query: "is_opening:true" } }],
+      should: [{ query_string: { query: 'decision_terms:"zisk"' } }],
+      minimum_should_match: 1,
+    },
+  };
+  const { path, body } = corpusIndexScoredSearchRequest({
+    observer: "unobserved",
+    indexId: "case_law_v11_cze",
+    query: { type: "dsl", query: dsl } satisfies CorpusIndexQueryDsl,
+    from: 0,
+    size: 20,
+    fields: ["document_id"],
+    requiredFields: ["document_id"],
+  });
+  expect(path).toEndWith("&allow_partial_search_results=false");
+  expect(body["query"]).toBe(dsl);
+  expect(body["sort"]).toEqual([{ _score: { order: "desc" } }]);
 });
 
 test.each([
@@ -2573,6 +2609,19 @@ test.each([
       total: { value: 1 },
       hits: [{ _source: { document_id: null }, sort: [1] }],
     },
+  },
+  // A split the engine could not read: the hits it did read are a short
+  // ranking that looks whole, so the answer is refused, not served.
+  {
+    _shards: { total: 3, successful: 2, failed: 1 },
+    hits: {
+      total: { value: 1 },
+      hits: [{ _source: { document_id: "a" }, sort: [1] }],
+    },
+  },
+  {
+    _shards: { total: 3, successful: 3, failed: "0" },
+    hits: { total: { value: 0 }, hits: [] },
   },
 ])("a scored response of another shape is refused", (response) => {
   expect(

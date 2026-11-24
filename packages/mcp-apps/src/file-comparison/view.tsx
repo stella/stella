@@ -16,6 +16,13 @@ type FileComparisonProps = {
 const Content = ({ runtime }: FileComparisonProps) => {
   const snapshot = useSyncExternalStore(runtime.subscribe, runtime.getSnapshot);
   const t = useTranslations();
+  const activeUploadReason = snapshot.message || t("preparingUpload");
+  const comparisonDisabledReason = (() => {
+    if (snapshot.uploadPhase === "active") {
+      return activeUploadReason;
+    }
+    return t("chooseComparisonFiles");
+  })();
   return (
     <main
       aria-labelledby="title"
@@ -30,6 +37,7 @@ const Content = ({ runtime }: FileComparisonProps) => {
         <FileInput
           aria-labelledby="base-label"
           disabled={snapshot.uploadPhase === "active"}
+          disabledReason={activeUploadReason}
           file={snapshot.base}
           onFileChange={runtime.selectBase}
           chooseLabel={t("chooseFile")}
@@ -42,6 +50,7 @@ const Content = ({ runtime }: FileComparisonProps) => {
         <FileInput
           aria-labelledby="target-label"
           disabled={snapshot.uploadPhase === "active"}
+          disabledReason={activeUploadReason}
           file={snapshot.target}
           onFileChange={runtime.selectTarget}
           chooseLabel={t("chooseFile")}
@@ -57,6 +66,7 @@ const Content = ({ runtime }: FileComparisonProps) => {
           !snapshot.base ||
           !snapshot.target
         }
+        disabledReason={comparisonDisabledReason}
         onClick={() => {
           runtime.detached(runtime.upload(), "fileComparison.upload");
         }}

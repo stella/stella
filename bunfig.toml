@@ -23,7 +23,6 @@ minimumReleaseAgeExcludes = [
   # First-party @stll packages are on public npm (open source). They share a
   # release cadence and would otherwise be blocked on every publish cycle.
   # Permanent exclusions record their original introduction for auditability.
-  "cargo:ammonia", # quarantine-expires: 2026-11-18T05:25:55.933Z
   "@stll/oxlint-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/typescript-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/aho-corasick", # quarantine-excluded-since: 2026-10-17T16:30:00.000Z
@@ -84,6 +83,12 @@ minimumReleaseAgeExcludes = [
   "@stll/stdnum-win32-x64-msvc", # quarantine-excluded-since: 2026-07-26T19:50:26.000Z
   "@stll/text-search", # quarantine-excluded-since: 2026-10-14T16:29:50.763Z
   "@stll/text-search-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
+  # Taken early for the url 2.5.9 patch release in the desktop Cargo.lock;
+  # form_urlencoded 1.2.3 ships with it and is required by it.
+  "cargo:form_urlencoded", # quarantine-expires: 2026-11-25T23:02:49.484Z
+  "cargo:url", # quarantine-expires: 2026-11-25T23:03:07.148Z
+  # Taken early for the cookie 0.18.3 patch release in the desktop Cargo.lock.
+  "cargo:cookie", # quarantine-expires: 2026-11-28T07:45:48.068Z
 ]
 
 [fmt]

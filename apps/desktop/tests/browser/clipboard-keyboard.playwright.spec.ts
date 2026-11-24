@@ -1,16 +1,19 @@
 import { expect, test } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
-import { TauriEvent } from "@tauri-apps/api/event";
 
 import { DEFAULT_CLIPBOARD_GROUP_COLOR } from "../../src/clipboard/clipboard-style";
-import { isClipboardSnapshot } from "../../src/clipboard/clipboard-types";
+import {
+  CLIPBOARD_WINDOW_SESSION_EVENT,
+  isClipboardSnapshot,
+} from "../../src/clipboard/clipboard-types";
 import type {
   ClipboardCaptureUpdate,
+  ClipboardHideReason,
   ClipboardSnapshot,
 } from "../../src/clipboard/clipboard-types";
 import arMessages from "../../src/i18n/langs/ar.json" with { type: "json" };
 import enMessages from "../../src/i18n/langs/en.json" with { type: "json" };
-import { installTauriIpc, tauriInvocations } from "./tauri-ipc";
+import { emitTauriEvent, installTauriIpc, tauriInvocations } from "./tauri-ipc";
 
 const CLIPBOARD_ITEMS = Array.from({ length: 14 }, (_, index) => {
   const item = {
@@ -54,10 +57,13 @@ const SNAPSHOT = {
   welcomeStatus: "completed",
 } satisfies ClipboardSnapshot;
 
+type DictationOffer = "available" | "unavailable";
+
 type NativeBoundaryOptions = {
   language: "ar" | "en";
   groups?: ClipboardSnapshot["groups"];
   copyLifecycle?: "keepVisible" | "hideUntilReopened";
+  dictation?: DictationOffer;
 };
 
 const installNativeBoundary = async (
@@ -66,6 +72,7 @@ const installNativeBoundary = async (
     language,
     groups = SNAPSHOT.groups,
     copyLifecycle = "keepVisible",
+    dictation = "unavailable",
   }: NativeBoundaryOptions,
 ) => {
   expect(isClipboardSnapshot(SNAPSHOT)).toBe(true);
@@ -75,19 +82,29 @@ const installNativeBoundary = async (
     arg: {
       clipboardSnapshot: { ...SNAPSHOT, groups },
       nativeLanguage: language,
-      nativeBlurEvent: TauriEvent.WINDOW_BLUR,
       nativeCopyLifecycle: copyLifecycle,
+      nativeDictation: dictation,
+      windowSessionEvent: CLIPBOARD_WINDOW_SESSION_EVENT,
     },
     handlers: (
       {
         clipboardSnapshot,
         nativeLanguage,
-        nativeBlurEvent,
         nativeCopyLifecycle,
+        nativeDictation,
+        windowSessionEvent,
       },
-      { emit, invocations },
+      { emit },
     ) => {
       let session = 1;
+      let dictationOffer = nativeDictation;
+      Reflect.set(
+        window,
+        "__STELLA_TEST_SET_DICTATION__",
+        (next: DictationOffer) => {
+          dictationOffer = next;
+        },
+      );
       let latestCapture: ClipboardCaptureUpdate | null = null;
       Reflect.set(
         window,
@@ -122,28 +139,27 @@ const installNativeBoundary = async (
           return notifications;
         },
       );
+      // Native presentation announces each open and hide; the page still
+      // sees its own focus and blur around them, as in the real window.
+      const hideWindow = (reason: string) => {
+        document.documentElement.hidden = true;
+        emit(windowSessionEvent, { reason, type: "hidden" });
+        window.dispatchEvent(new FocusEvent("blur"));
+      };
       Reflect.set(window, "__STELLA_TEST_REOPEN_CLIPBOARD__", () => {
         if (!document.documentElement.hidden) {
           throw new TypeError("Clipboard must be hidden before a new session");
         }
         document.documentElement.hidden = false;
+        emit(windowSessionEvent, { type: "opened" });
         window.dispatchEvent(new FocusEvent("focus"));
         session += 1;
         return session;
       });
-      Reflect.set(window, "__STELLA_TEST_NATIVE_BLUR__", () => {
-        const subscription = invocations.findLast(
-          ({ args, command }) =>
-            command === "plugin:event|listen" &&
-            args["event"] === nativeBlurEvent,
-        );
-        emit(nativeBlurEvent, null);
-        return subscription?.args["target"];
-      });
+      Reflect.set(window, "__STELLA_TEST_NATIVE_HIDE__", hideWindow);
       const copy = () => {
         if (nativeCopyLifecycle === "hideUntilReopened") {
-          document.documentElement.hidden = true;
-          window.dispatchEvent(new FocusEvent("blur"));
+          hideWindow("requested");
         }
         return undefined;
       };
@@ -236,6 +252,9 @@ const installNativeBoundary = async (
           ...clipboardSnapshot,
           sourceAppExclusions: [],
         }),
+        dictation_get_snapshot: () => ({
+          available: dictationOffer === "available",
+        }),
         get_desktop_language: () => nativeLanguage,
         registry_get_state: () => ({ status: "disconnected" }),
         is_autostart_enabled: () => false,
@@ -321,6 +340,31 @@ const lastInvocationArgs = async (page: Page, command: string) =>
     (invocation) => invocation.command === command,
   )?.args ?? null;
 
+/** The native side hides the window. */
+const hideNatively = async (page: Page, reason: ClipboardHideReason) =>
+  await page.evaluate((hideReason) => {
+    const hide: ((nativeReason: string) => void) | undefined = Reflect.get(
+      window,
+      "__STELLA_TEST_NATIVE_HIDE__",
+    );
+    if (typeof hide !== "function") {
+      throw new TypeError("Native window hide boundary is not installed");
+    }
+    hide(hideReason);
+  }, reason);
+
+const reopenNatively = async (page: Page) =>
+  await page.evaluate(() => {
+    const reopen: (() => unknown) | undefined = Reflect.get(
+      window,
+      "__STELLA_TEST_REOPEN_CLIPBOARD__",
+    );
+    if (typeof reopen !== "function") {
+      throw new TypeError("Native reopen boundary missing");
+    }
+    return reopen();
+  });
+
 /**
  * Resolves once a tooltip popup is on screen, or once the open delay has
  * passed without one. Tooltips open on a timer, so a missing popup is only
@@ -382,6 +426,38 @@ test("captures use a caller-scoped delta and recover a burst revision gap", asyn
         ).length,
     )
     .toBe(snapshotsBeforeBurst + 1);
+});
+
+test("the transcribe button follows dictation availability and opens the Transcribe window", async ({
+  page,
+}) => {
+  await openClipboard(page, { language: "en" });
+  const transcribe = page
+    .locator(".clipboard-controls")
+    .getByRole("button", { name: enMessages.transcribe.title, exact: true });
+  await expect
+    .poll(async () => invocationCount(page, "dictation_get_snapshot"))
+    .toBe(1);
+  await expect(transcribe).toHaveCount(0);
+
+  await page.evaluate((next) => {
+    const setDictation: ((offer: typeof next) => void) | undefined =
+      Reflect.get(window, "__STELLA_TEST_SET_DICTATION__");
+    if (setDictation === undefined) {
+      throw new TypeError("Native dictation boundary is missing");
+    }
+    setDictation(next);
+  }, "available" satisfies DictationOffer);
+  await emitTauriEvent(page, "dictation-changed");
+  await expect(transcribe).toBeVisible();
+
+  await transcribe.click();
+  await expect
+    .poll(async () => invocationCount(page, "transcribe_open"))
+    .toBe(1);
+  await expect(
+    page.getByText(enMessages.clipboard.errorOpenTranscribeRecording),
+  ).toHaveCount(0);
 });
 
 const DIRECTIONS = [
@@ -573,8 +649,8 @@ for (const {
       expect(await invocationCount(page, "registry_search")).toBe(0);
     });
 
-    for (const dismissal of ["dom", "native"] as const) {
-      test(`prepares the first card before reopening after ${dismissal} dismissal`, async ({
+    for (const reason of ["requested", "deactivated"] as const) {
+      test(`prepares the first card before reopening after a ${reason} hide`, async ({
         page,
       }) => {
         await openClipboard(page, { language });
@@ -585,22 +661,17 @@ for (const {
           page.locator('[data-clipboard-id="clip-11"]'),
         ).toHaveAttribute("aria-current", "true");
 
-        const parked = await page.evaluate((source) => {
-          let eventTarget: unknown;
-          if (source === "native") {
-            const emit: (() => unknown) | undefined = Reflect.get(
-              window,
-              "__STELLA_TEST_NATIVE_BLUR__",
-            );
-            if (typeof emit !== "function") {
-              throw new TypeError(
-                "Native window blur boundary is not installed",
-              );
-            }
-            eventTarget = emit();
-          } else {
-            window.dispatchEvent(new FocusEvent("blur"));
+        const parked = await page.evaluate((hideReason) => {
+          const hide: ((reason: string) => void) | undefined = Reflect.get(
+            window,
+            "__STELLA_TEST_NATIVE_HIDE__",
+          );
+          if (typeof hide !== "function") {
+            throw new TypeError("Native window hide boundary is not installed");
           }
+          // Read in the same task: the frame must be ready before the
+          // parked panel can paint it.
+          hide(hideReason);
           const selected = document.querySelector<HTMLElement>(
             '[data-clipboard-id][aria-current="true"]',
           );
@@ -608,20 +679,10 @@ for (const {
           return {
             selectedId: selected?.dataset["clipboardId"],
             scrollLeft: rail?.scrollLeft,
-            eventTarget,
           };
-        }, dismissal);
-        expect(parked).toEqual({
-          selectedId: "clip-1",
-          scrollLeft: 0,
-          eventTarget:
-            dismissal === "native"
-              ? { kind: "Window", label: "clipboard" }
-              : undefined,
-        });
-        await page.evaluate(() =>
-          window.dispatchEvent(new FocusEvent("focus")),
-        );
+        }, reason);
+        expect(parked).toEqual({ selectedId: "clip-1", scrollLeft: 0 });
+        await reopenNatively(page);
         await expect(
           page.locator(
             '[data-clipboard-id="clip-1"] [data-clipboard-card-trigger]',
@@ -629,6 +690,39 @@ for (const {
         ).toBeFocused();
       });
     }
+
+    test("page focus and blur without a native hide keep the view and the selection", async ({
+      page,
+    }) => {
+      const cards = await openClipboard(page, { language });
+      for (let index = 0; index < 3; index += 1) {
+        await page.keyboard.press(nextCardKey);
+      }
+      await page.keyboard.press("Space");
+      await page.keyboard.press(nextCardKey);
+      await page.keyboard.press("Space");
+      // WebView2 fires these for focus moves between the host window and the
+      // webview, with no open or close in between.
+      await page.evaluate(() => {
+        for (let churn = 0; churn < 3; churn += 1) {
+          window.dispatchEvent(new FocusEvent("blur"));
+          window.dispatchEvent(new FocusEvent("focus"));
+        }
+      });
+      await expect(
+        page.locator('[data-clipboard-id="clip-5"]'),
+      ).toHaveAttribute("aria-current", "true");
+      await expect(cards.nth(3)).toHaveAttribute("aria-pressed", "true");
+      await expect(cards.nth(4)).toHaveAttribute("aria-pressed", "true");
+      expect(
+        await invocationCount(page, "clipboard_copy_dismissed_selection"),
+      ).toBe(0);
+      await page.keyboard.press("Enter");
+      expect(await lastInvocationArgs(page, "clipboard_copy_items")).toEqual({
+        format: "original",
+        ids: ["clip-4", "clip-5"],
+      });
+    });
 
     test("a vertical wheel advances the timeline toward its end", async ({
       page,
@@ -1977,12 +2071,110 @@ test("dismissing and reopening starts a new selection session without a copy", a
     }),
   ).toBe(2);
   await expect(page.locator("[data-selected]")).toHaveCount(0);
+  expect(
+    await invocationCount(page, "clipboard_copy_dismissed_selection"),
+  ).toBe(0);
   await cards.nth(3).click();
   expect(await lastInvocationArgs(page, "clipboard_copy_item")).toEqual({
     format: "original",
     id: "clip-4",
   });
   expect(await invocationCount(page, "clipboard_copy_items")).toBe(0);
+});
+
+test("an outside click copies the selection once, in selection order", async ({
+  page,
+}) => {
+  const cards = await openClipboard(page, { language: "en" });
+  await cards.nth(2).click({ modifiers: ["Meta"] });
+  await cards.first().click({ modifiers: ["Meta"] });
+  await hideNatively(page, "deactivated");
+  await expect
+    .poll(async () =>
+      (await tauriInvocations(page)).filter(
+        ({ command }) => command === "clipboard_copy_dismissed_selection",
+      ),
+    )
+    .toEqual([
+      {
+        command: "clipboard_copy_dismissed_selection",
+        args: { format: "original", ids: ["clip-3", "clip-1"] },
+      },
+    ]);
+  await expect(page.locator("[data-selected]")).toHaveCount(0);
+  expect(await invocationCount(page, "clipboard_copy_items")).toBe(0);
+  expect(await invocationCount(page, "clipboard_copy_item")).toBe(0);
+  await reopenNatively(page);
+  await hideNatively(page, "deactivated");
+  expect(
+    await invocationCount(page, "clipboard_copy_dismissed_selection"),
+  ).toBe(1);
+});
+
+test("an outside click without a selection copies nothing", async ({
+  page,
+}) => {
+  await openClipboard(page, { language: "en" });
+  await hideNatively(page, "deactivated");
+  await reopenNatively(page);
+  expect(
+    await invocationCount(page, "clipboard_copy_dismissed_selection"),
+  ).toBe(0);
+  expect(await invocationCount(page, "clipboard_copy_items")).toBe(0);
+  expect(await invocationCount(page, "clipboard_copy_item")).toBe(0);
+});
+
+test("Escape clears the selection without copying, then hides", async ({
+  page,
+}) => {
+  const cards = await openClipboard(page, { language: "en" });
+  await cards.nth(1).click({ modifiers: ["Meta"] });
+  await expect(page.locator("[data-selected]")).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("[data-selected]")).toHaveCount(0);
+  expect(await invocationCount(page, "clipboard_hide")).toBe(0);
+  await page.keyboard.press("Escape");
+  expect(await invocationCount(page, "clipboard_hide")).toBe(1);
+  await hideNatively(page, "deactivated");
+  expect(
+    await invocationCount(page, "clipboard_copy_dismissed_selection"),
+  ).toBe(0);
+  expect(await invocationCount(page, "clipboard_copy_items")).toBe(0);
+});
+
+test("the selection bar announces the count and copies the selection in order", async ({
+  page,
+}) => {
+  const cards = await openClipboard(page, { language: "en" });
+  const status = page.getByRole("status").filter({ hasText: "selected" });
+  await expect(page.locator("[data-clipboard-selection-bar]")).toHaveCount(0);
+  await cards.nth(2).click({ modifiers: ["Meta"] });
+  await expect(status).toHaveText("1 clip selected");
+  await cards.first().click({ modifiers: ["Meta"] });
+  await expect(status).toHaveText("2 clips selected");
+  const bar = page.getByRole("group", { name: "2 clips selected" });
+  await bar.getByRole("button", { name: "Copy", exact: true }).click();
+  expect(await lastInvocationArgs(page, "clipboard_copy_items")).toEqual({
+    format: "original",
+    ids: ["clip-3", "clip-1"],
+  });
+  await expect(page.locator("[data-clipboard-selection-bar]")).toHaveCount(0);
+});
+
+test("the selection bar's cancel works from the keyboard and returns focus to the rail", async ({
+  page,
+}) => {
+  const cards = await openClipboard(page, { language: "en" });
+  await page.keyboard.press("Space");
+  const cancel = page
+    .getByRole("group", { name: "1 clip selected" })
+    .getByRole("button", { name: "Cancel", exact: true });
+  await cancel.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("[data-selected]")).toHaveCount(0);
+  await expect(cards.first()).toBeFocused();
+  expect(await invocationCount(page, "clipboard_copy_items")).toBe(0);
+  expect(await invocationCount(page, "clipboard_copy_item")).toBe(0);
 });
 
 for (const language of ["en", "ar"] as const) {

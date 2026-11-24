@@ -1,6 +1,9 @@
 /** Maximum stored task or activity code length. */
 export const BILLING_CODE_MAX_LENGTH = 20;
 
+/** What a firm's billing code classifies: the task or the activity. */
+export const BILLING_CODE_TYPES = ["task", "activity"] as const;
+
 export const TIME_ENTRY_ACTIVITY_GROUPS = ["client", "internal"] as const;
 export type TimeEntryActivityGroup =
   (typeof TIME_ENTRY_ACTIVITY_GROUPS)[number];
@@ -55,6 +58,13 @@ export const EXPENSE_CATEGORIES = [
   "courier",
   "other",
 ] as const;
+
+/** What one emailed invoice send may carry. */
+export const INVOICE_SEND_LIMITS = {
+  minRecipients: 1,
+  maxRecipients: 10,
+  messageMaxChars: 1000,
+} as const;
 
 /** Languages in which Stella can render an invoice document. */
 export const INVOICE_LANGUAGES = [

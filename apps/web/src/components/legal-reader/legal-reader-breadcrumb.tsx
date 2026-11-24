@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { panic } from "better-result";
 
@@ -38,16 +38,12 @@ export const LegalReaderBreadcrumb = ({
   analysis,
   viewport,
 }: LegalReaderBreadcrumbProps) => {
-  const headings = useMemo(() => readerBreadcrumbPaths(blocks), [blocks]);
-  const contents = useMemo(
-    () =>
-      readerContents({
-        anchorOrder: blocks.map(({ anchorId }) => anchorId),
-        headings,
-        analysis,
-      }),
-    [blocks, headings, analysis],
-  );
+  const headings = readerBreadcrumbPaths(blocks);
+  const contents = readerContents({
+    anchorOrder: blocks.map(({ anchorId }) => anchorId),
+    headings,
+    analysis,
+  });
   const [position, setPosition] = useState<ReaderPosition | null>(null);
   useExternalSyncEffect(() => {
     if (content === null || viewport === null) {

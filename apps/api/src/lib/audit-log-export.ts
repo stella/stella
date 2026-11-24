@@ -1,8 +1,8 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { member, user } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import { auditLogs } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   auditReadChangesSql,
   projectAuditReadChanges,

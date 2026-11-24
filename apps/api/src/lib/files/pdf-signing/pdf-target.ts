@@ -10,9 +10,9 @@
 
 import { and, eq, isNull } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { entityVersions, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { EntityVersionFile } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";

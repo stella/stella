@@ -5,9 +5,9 @@ import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
 import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
-import type { Transaction } from "@/api/db/root";
 import { timeEntries, timeTimers, workspaces } from "@/api/db/schema";
 import { runScopedWorkInTransaction } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,

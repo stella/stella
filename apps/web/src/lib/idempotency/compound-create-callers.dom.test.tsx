@@ -97,10 +97,11 @@ const createClient = () => {
   const timeZone = parseTimeZoneId("UTC") ?? panic("Fixture UTC must exist");
   const settings = {
     declaredFeatureIds: [],
-    deploymentFeatures: { legalLists: true },
+    deploymentFeatures: { legalLists: true, invoiceLinks: true },
     capabilities: {},
     documentProcessingMode: "off",
     matterNumberPattern: "{year}/{number}",
+    documentNamePattern: null,
     matterNumberPadding: 3,
     matterNumberingEnabled: true,
     practiceJurisdictions: [],

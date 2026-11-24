@@ -11,6 +11,7 @@ import {
   apiUploadDocx,
 } from "../helpers/api";
 import { installContentSecurityPolicyCollector } from "../helpers/content-security-policy";
+import { openSavedView } from "../helpers/saved-views";
 import { expect, test } from "../helpers/test";
 import {
   PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
@@ -133,11 +134,9 @@ test.describe("DOCX upload + inspector", () => {
     // New matters land on their Overview view. Move through the visible Table
     // tab before opening the uploaded file so this remains a client-side user
     // transition instead of falling back to a direct document URL.
-    const tableTab = page.getByRole("tab", { exact: true, name: "Table" });
-    await expect(tableTab).toBeVisible({
+    await openSavedView(page, "Table", {
       timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
-    await tableTab.click();
 
     const fileButton = page.getByRole("button", {
       exact: true,

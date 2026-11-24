@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 
 import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { workspaces } from "@/api/db/schema";
 import { organizationWorkspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";

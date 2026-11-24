@@ -8,6 +8,7 @@ export const DESKTOP_TELEMETRY_WINDOWS = {
   takeoverDialog: "takeoverDialog",
   activity: "activity",
   onboarding: "onboarding",
+  transcribe: "transcribe",
 } as const;
 
 export const DESKTOP_TELEMETRY_OPERATIONS = {
@@ -464,7 +465,11 @@ export const desktopTelemetryWindowFromLabel = (
       return DESKTOP_TELEMETRY_WINDOWS.clipboard;
     case "clipboard-editor":
       return DESKTOP_TELEMETRY_WINDOWS.clipboardEditor;
+    // The dictation notice and fix panel belong to the Dictation settings.
+    case "dictation-notice":
+    case "dictation-fix":
     case "main":
+    case "dictation-preview":
       return DESKTOP_TELEMETRY_WINDOWS.main;
     case "selfhost-connect-dialog":
       return DESKTOP_TELEMETRY_WINDOWS.selfHostConnectDialog;
@@ -475,6 +480,8 @@ export const desktopTelemetryWindowFromLabel = (
     case "onboarding":
     case "accessibility-guide":
       return DESKTOP_TELEMETRY_WINDOWS.onboarding;
+    case "transcribe":
+      return DESKTOP_TELEMETRY_WINDOWS.transcribe;
     default:
       reportDesktopError({
         code: DESKTOP_TELEMETRY_ERROR_CODES.windowLabelMismatch,

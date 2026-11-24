@@ -36,12 +36,14 @@ export const TEST_SHARD_IDS = [
   "api-4",
   "api-5",
   "api-6",
+  "api-7",
+  "api-8",
   "rest",
   "web",
 ] as const;
 export type TestShardId = (typeof TEST_SHARD_IDS)[number];
 
-// Rest and web keep separate verdicts while sharing one runner.
+// Each shard runs on its own runner so rest, web, and api shards overlap.
 export const TEST_JOB_SHARDS = {
   "api-1": ["api-1"],
   "api-2": ["api-2"],
@@ -49,7 +51,10 @@ export const TEST_JOB_SHARDS = {
   "api-4": ["api-4"],
   "api-5": ["api-5"],
   "api-6": ["api-6"],
-  "rest-web": ["rest", "web"],
+  "api-7": ["api-7"],
+  "api-8": ["api-8"],
+  rest: ["rest"],
+  web: ["web"],
 } as const satisfies Record<string, readonly TestShardId[]>;
 
 /**
@@ -65,6 +70,8 @@ export const TEST_SHARD_PACKAGES = {
   "api-4": ["@stll/api"],
   "api-5": ["@stll/api"],
   "api-6": ["@stll/api"],
+  "api-7": ["@stll/api"],
+  "api-8": ["@stll/api"],
   rest: null,
   web: ["@stll/web"],
 } as const satisfies Record<TestShardId, readonly string[] | null>;

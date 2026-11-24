@@ -894,17 +894,24 @@ const HU_DECISION_TYPES = [
  * The decision's kind, from the title lines the document opens with.
  *
  * The publisher prints it in the accusative under the operative part
- * (`ítéletet`, `végzést`) and in the possessive in the title block
- * (`ítélete`), so the stem is what matches and the stored value is the
- * dictionary form.
+ * (`ítéletet`, `végzést`) and in the possessive in the title block, whose
+ * vowel follows the word's harmony: `ítélete`, `végzése`, but `határozata`
+ * (`A Kúria Önkormányzati Tanácsának határozata`) and `állásfoglalása`. So
+ * the stem is what matches and the stored value is the dictionary form.
  */
+const HU_POSSESSIVE_ENDINGS = ["e", "a"] as const;
+
 export const huDecisionTypeFrom = (
   lines: readonly string[],
 ): string | undefined => {
   for (const line of lines) {
     const key = headingKey(line);
     const matched = HU_DECISION_TYPES.find(
-      (type) => key === type || key.startsWith(`${type}e`),
+      (type) =>
+        key === type ||
+        HU_POSSESSIVE_ENDINGS.some((ending) =>
+          key.startsWith(`${type}${ending}`),
+        ),
     );
     if (matched !== undefined) {
       return matched;

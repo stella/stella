@@ -26,6 +26,7 @@ const {
   toRenderableMediaSource,
   withMcpAppFrameTitle,
 } = await import("@/components/chat/chat-rich-message-part");
+const { toSafeId } = await import("@/lib/safe-id");
 const { ChatRenderErrorBoundary } =
   await import("@/components/chat/chat-render-error-boundary");
 
@@ -169,12 +170,28 @@ describe("rich chat message parts", () => {
       toolName: "search_case_law",
     } as const satisfies RichChatPart;
     expect(normalizeUiResourcePart(app)).toBeNull();
-    for (const part of [
-      app,
-      { ...app, resource: { ...app.resource, text: "<script></script>" } },
-    ]) {
-      const rendered = renderMediaPart(part);
-      expect(rendered).toContain(messages.chat.richContentUnavailable);
+    const broken = {
+      ...app,
+      resource: { ...app.resource, text: "<script></script>" },
+    };
+    for (const [part, status] of [
+      [app, messages.chat.richContentLoading],
+      [broken, messages.chat.richContentUnavailable],
+    ] as const) {
+      const rendered = renderToStaticMarkup(
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <ChatRichMessagePart
+            part={part}
+            threadRef={{
+              scope: "global",
+              threadId: toSafeId<"chatThread">(
+                "019df73f-4d68-7002-956c-4e11ad647dab",
+              ),
+            }}
+          />
+        </IntlProvider>,
+      );
+      expect(rendered).toContain(status);
       expect(rendered).not.toContain("<iframe");
     }
   });

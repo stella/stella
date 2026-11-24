@@ -493,7 +493,7 @@ export const buildAiConditionDecider = ({
         observeFailure(skillToolsResult.error, {
           sink: SKILL_CATALOG_LOAD_SINK,
         });
-        return undefined;
+        return { decidedBy: "undecided", reason: "failed" };
       }
       const skills = skillToolsResult.value;
       const decided = await decide({
@@ -545,7 +545,7 @@ export const buildAiConditionDecider = ({
         : { decidedBy: "generative_model", value };
     } catch (error) {
       aiAnalytics?.captureError(error);
-      return undefined;
+      return { decidedBy: "undecided", reason: "failed" };
     }
   };
 };
@@ -673,7 +673,7 @@ export const buildAiOccurrenceAdapter = ({
         observeFailure(skillToolsResult.error, {
           sink: SKILL_CATALOG_LOAD_SINK,
         });
-        return undefined;
+        return { type: "failed" };
       }
       const skillTools = skillToolsResult.value;
       const { renderings } = await generateFieldObject({
@@ -697,15 +697,15 @@ export const buildAiOccurrenceAdapter = ({
         tenantWorkspaceIds,
       });
       if (renderings.length !== input.occurrences.length) {
-        return undefined;
+        return { type: "failed" };
       }
       const trimmed = renderings.map((rendering) => rendering.trim());
       return trimmed.some((rendering) => rendering.length === 0)
-        ? undefined
-        : trimmed;
+        ? { type: "failed" }
+        : { type: "adapted", renderings: trimmed };
     } catch (error) {
       aiAnalytics?.captureError(error);
-      return undefined;
+      return { type: "failed" };
     }
   };
 };

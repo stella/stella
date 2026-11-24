@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { pdfSigningSessions } from "@/api/db/schema";
 import type { PdfSigningSessionCloseReason } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";

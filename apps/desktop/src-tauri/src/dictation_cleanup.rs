@@ -3,10 +3,13 @@
 //! never the audio, and only while the server enables dictation for that same
 //! account. With it goes the kind of app the text is for and, when the
 //! speaker shares them, the window title and the text before the cursor
-//! (`dictation_context`), which set the register and are never typed. The answer is a list of typed segments; any failure, timeout, or
-//! malformed or implausible answer leaves the raw transcript, so cleanup never
-//! blocks or loses a dictation. Neither the transcript nor the answer is
-//! logged or stored.
+//! (`dictation_context`), which set the register and are never typed, and the
+//! speaker's custom words (`dictation_words`) as the spellings to use, and
+//! the style and language the speaker chose for the text (`CleanupForm`). The
+//! answer is a list of typed segments; any failure, timeout, or malformed or
+//! implausible answer leaves the raw transcript, so cleanup never blocks or
+//! loses a dictation. Neither the transcript, the custom words nor the answer
+//! is logged or stored.
 
 #![cfg_attr(
   not(dictation),
@@ -22,6 +25,7 @@ use crate::{
   account::{self, AccountRequest, AccountState},
   dictation_context::CleanupContext,
   dictation_format::{self, AppClass, Segment, Stroke},
+  dictation_trace::Cleanup,
   feature_gate::{DesktopFeature, FeatureGates},
   http_client::{DesktopHttpClient, HttpClientOptions},
   logging::request_cause_logged,
@@ -45,10 +49,23 @@ struct Contract {
   max_segments: usize,
   max_window_title_length: usize,
   max_text_before_cursor_length: usize,
+  /// In characters, as the API counts them.
+  max_custom_instructions_length: usize,
+  /// In UTF-16 code units, as the API counts them.
+  max_model_length: usize,
+  models_path: String,
+  max_models: usize,
+  max_model_display_name_length: usize,
   /// `dictation_context::AppKind` names the same kinds; a test binds them.
   #[cfg(test)]
   app_kinds: Vec<String>,
+  /// `CleanupStyle` names the same styles; a test binds them.
+  #[cfg(test)]
+  styles: Vec<String>,
+  translation_languages: Vec<String>,
   min_answer_text_percent: usize,
+  /// What notes and translations must keep, which word the dictation anew.
+  condensed_min_answer_text_percent: usize,
   min_break_allowance: usize,
   transcript_characters_per_break: usize,
   sentence_end_marks: String,
@@ -116,6 +133,208 @@ pub fn contract_app_kinds() -> &'static [String] {
   &contract().app_kinds
 }
 
+/// How cleanup writes the text; `polished` (the default) is cleanup as it
+/// was before styles, and a request leaves it out.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CleanupStyle {
+  #[default]
+  Polished,
+  Casual,
+  Notes,
+  Verbatim,
+}
+
+impl CleanupStyle {
+  pub const ALL: [Self; 4] =
+    [Self::Polished, Self::Casual, Self::Notes, Self::Verbatim];
+
+  pub const fn stored(self) -> &'static str {
+    match self {
+      Self::Polished => "polished",
+      Self::Casual => "casual",
+      Self::Notes => "notes",
+      Self::Verbatim => "verbatim",
+    }
+  }
+
+  /// The stored preference; anything unknown reads as polished.
+  pub fn parse(stored: Option<&str>) -> Self {
+    Self::ALL
+      .into_iter()
+      .find(|style| Some(style.stored()) == stored)
+      .unwrap_or_default()
+  }
+
+  fn is_polished(&self) -> bool {
+    *self == Self::Polished
+  }
+}
+
+/// A language the contract lets cleanup write the text in, as it lists it.
+pub fn translation_language(tag: &str) -> Option<&'static str> {
+  contract()
+    .translation_languages
+    .iter()
+    .map(String::as_str)
+    .find(|language| *language == tag)
+}
+
+/// How the speaker asked cleanup to write a dictation: its style, and the
+/// language to write it in when not the spoken one.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CleanupForm {
+  pub style: CleanupStyle,
+  pub translate_to: Option<&'static str>,
+}
+
+impl CleanupForm {
+  /// Notes and translations word the dictation anew, so they need to keep only
+  /// the contract's condensed share of it.
+  fn min_answer_text_percent(self) -> usize {
+    let contract = contract();
+    if self.style == CleanupStyle::Notes || self.translate_to.is_some() {
+      contract.condensed_min_answer_text_percent
+    } else {
+      contract.min_answer_text_percent
+    }
+  }
+}
+
+const INSTRUCTIONS_CONTROL: &str = "cleanup instructions cannot hold a control character other than a line break or a tab";
+const INSTRUCTIONS_TOO_LONG: &str =
+  "cleanup instructions are longer than stella AI accepts";
+const MODEL_INVALID: &str = "this cleanup model cannot be chosen";
+
+/// What the speaker set for cleanup beyond its form: their own instructions,
+/// style guidance the server ranks below its rules, and the model they chose
+/// (`None`: automatic, the organization's fast model). Like the transcript,
+/// neither is logged.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CleanupPreferences {
+  pub custom_instructions: Option<String>,
+  pub model: Option<String>,
+}
+
+/// Instructions as stored: line endings as `\n`, trimmed, none when blank.
+/// Text beyond the contract's bound or with a control character other than a
+/// line break or a tab is refused whole, so nothing the speaker typed is cut
+/// without a word. The error names the bound, never the text.
+pub fn custom_instructions(raw: &str) -> Result<Option<String>, &'static str> {
+  let text = raw.replace("\r\n", "\n").replace('\r', "\n");
+  let text = text.trim();
+  if text.is_empty() {
+    return Ok(None);
+  }
+  if text
+    .chars()
+    .any(|character| character.is_control() && character != '\n' && character != '\t')
+  {
+    return Err(INSTRUCTIONS_CONTROL);
+  }
+  if text.chars().count() > contract().max_custom_instructions_length {
+    return Err(INSTRUCTIONS_TOO_LONG);
+  }
+  Ok(Some(text.to_string()))
+}
+
+/// A chosen model as stored: a picker value within the contract's bound, or
+/// none for automatic. Whether the organization offers it is the server's
+/// call on every cleanup.
+pub fn cleanup_model(raw: &str) -> Result<Option<String>, &'static str> {
+  let value = raw.trim();
+  if value.is_empty() {
+    return Ok(None);
+  }
+  if value.chars().any(char::is_control)
+    || value.encode_utf16().count() > contract().max_model_length
+  {
+    return Err(MODEL_INVALID);
+  }
+  Ok(Some(value.to_string()))
+}
+
+/// One model cleanup may run on, as the API lists it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CleanupModel {
+  pub value: String,
+  pub display_name: String,
+  pub provider: String,
+}
+
+/// The models besides automatic, in the chat model picker's order.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CleanupModels {
+  pub models: Vec<CleanupModel>,
+}
+
+/// The list, held to the contract's bounds.
+pub fn parse_models(body: &[u8]) -> Result<CleanupModels, String> {
+  let listed = serde_json::from_slice::<CleanupModels>(body)
+    .map_err(|_error| INVALID.to_string())?;
+  let contract = contract();
+  let bounded = |text: &str, limit: usize| {
+    !text.is_empty()
+      && text.encode_utf16().count() <= limit
+      && !text.chars().any(char::is_control)
+  };
+  let valid = listed.models.len() <= contract.max_models
+    && listed.models.iter().all(|model| {
+      bounded(&model.value, contract.max_model_length)
+        && bounded(&model.display_name, contract.max_model_display_name_length)
+        && bounded(&model.provider, contract.max_model_display_name_length)
+    });
+  if valid {
+    Ok(listed)
+  } else {
+    Err(INVALID.to_string())
+  }
+}
+
+/// The dictation account's cleanup models, for the Settings window.
+pub async fn models(app: &AppHandle) -> Result<CleanupModels, String> {
+  let account = dictation_account(app).await?;
+  let response = crate::http_client::device_proof_request(
+    client()?.get(format!(
+      "{}{}",
+      account.api_base_url,
+      contract().models_path
+    )),
+    &account.device_key,
+    Some(&account.credential.key),
+    None,
+  )?
+  .send()
+  .await
+  .map_err(request_cause_logged(FAILURE));
+  drop(account);
+  let mut response = response?;
+  if !response.status().is_success() {
+    return Err(format!(
+      "dictation cleanup models were refused: {}",
+      response.status()
+    ));
+  }
+  let limit = contract().max_models
+    * (contract().max_model_length + 2 * contract().max_model_display_name_length)
+    * 6
+    + 64;
+  let mut body = Vec::new();
+  while let Some(chunk) = response
+    .chunk()
+    .await
+    .map_err(request_cause_logged(FAILURE))?
+  {
+    if body.len() + chunk.len() > limit {
+      return Err(INVALID.to_string());
+    }
+    body.extend_from_slice(&chunk);
+  }
+  parse_models(&body)
+}
+
 /// Every segment's text is at most a transcript long, and JSON spends at
 /// most six bytes on a character; the field names fit in the rest.
 fn max_response_bytes() -> usize {
@@ -134,6 +353,21 @@ struct CleanupRequest<'a> {
   /// Where the text goes: the kind of app, and the window title and the
   /// text before the cursor when the speaker shares them.
   context: &'a CleanupContext,
+  /// The speaker's custom words; absent when there are none, as an older
+  /// API expects.
+  #[serde(skip_serializing_if = "<[_]>::is_empty")]
+  vocabulary: &'a [String],
+  /// Absent when polished, as an older API expects.
+  #[serde(skip_serializing_if = "CleanupStyle::is_polished")]
+  style: CleanupStyle,
+  #[serde(rename = "translateTo", skip_serializing_if = "Option::is_none")]
+  translate_to: Option<&'a str>,
+  /// The speaker's own instructions; absent when there are none.
+  #[serde(rename = "customInstructions", skip_serializing_if = "Option::is_none")]
+  custom_instructions: Option<&'a str>,
+  /// The model the speaker chose; absent for automatic.
+  #[serde(skip_serializing_if = "Option::is_none")]
+  model: Option<&'a str>,
 }
 
 #[derive(Deserialize)]
@@ -328,7 +562,7 @@ fn dictated_content(transcript: &str) -> (usize, usize) {
 /// lines no more often than the dictation could have asked for. The server
 /// applies the same bounds; this side holds them too, so an answer that lost
 /// content is never typed.
-pub fn plausible(transcript: &str, segments: &[Segment]) -> bool {
+pub fn plausible(transcript: &str, segments: &[Segment], form: CleanupForm) -> bool {
   let contract = contract();
   let (dictated, discardable) = dictated_content(transcript);
   let mut kept = 0;
@@ -351,7 +585,7 @@ pub fn plausible(transcript: &str, segments: &[Segment]) -> bool {
   let has_text = texts > 0 || (dictated == 0 && breaks > 0);
   has_text
     && kept * 100
-      >= dictated.saturating_sub(discardable) * contract.min_answer_text_percent
+      >= dictated.saturating_sub(discardable) * form.min_answer_text_percent()
     && breaks <= allowed_breaks
 }
 
@@ -378,7 +612,7 @@ pub fn typed_text(transcript: &str, cleaned: Option<&[Segment]>) -> String {
 }
 
 /// A language tag the contract admits, or none.
-fn locale_hint(locale: &str) -> Option<&str> {
+pub(crate) fn locale_hint(locale: &str) -> Option<&str> {
   let mut parts = locale.split('-');
   let language = parts.next()?;
   let tagged = (2..=3).contains(&language.len())
@@ -407,31 +641,89 @@ fn client() -> Result<&'static DesktopHttpClient, String> {
   Ok(CLIENT.get_or_init(|| client))
 }
 
-async fn send(
+/// What cleanup asks for besides the transcript.
+#[derive(Clone, Copy)]
+struct Asked<'a> {
+  locale: Option<&'a str>,
+  languages: &'a [&'a str],
+  vocabulary: &'a [String],
+  context: &'a CleanupContext,
+  form: CleanupForm,
+  custom_instructions: Option<&'a str>,
+  model: Option<&'a str>,
+}
+
+async fn post(
   account: &AccountRequest,
   transcript: &str,
-  locale: Option<&str>,
-  languages: &[&str],
-  context: &CleanupContext,
-) -> Result<Vec<Segment>, String> {
-  let languages = &languages[..languages.len().min(contract().max_languages)];
-  let request = crate::http_client::device_proof_request(
+  asked: &Asked<'_>,
+) -> Result<reqwest::Response, String> {
+  let languages =
+    &asked.languages[..asked.languages.len().min(contract().max_languages)];
+  crate::http_client::device_proof_request(
     client()?
       .post(format!("{}{}", account.api_base_url, contract().path))
       .json(&CleanupRequest {
         transcript,
-        locale,
+        locale: asked.locale,
         languages,
-        context,
+        context: asked.context,
+        vocabulary: asked.vocabulary,
+        style: asked.form.style,
+        translate_to: asked.form.translate_to,
+        custom_instructions: asked.custom_instructions,
+        model: asked.model,
       }),
     &account.device_key,
     Some(&account.credential.key),
     None,
-  )?;
-  let mut response = request
-    .send()
-    .await
-    .map_err(request_cause_logged(FAILURE))?;
+  )?
+  .send()
+  .await
+  .map_err(request_cause_logged(FAILURE))
+}
+
+/// What to ask again after `status`: an API from before instructions and a
+/// chosen model refuses a request that carries either, one from before styles
+/// a request that names a style or a language to write in, and one from before
+/// custom words a request with them, so each is dropped in turn, the newest
+/// first; asked again without it, the API still cleans up. `None` once nothing
+/// is left to drop or the refusal was of another kind.
+fn fallback<'a>(status: reqwest::StatusCode, asked: &Asked<'a>) -> Option<Asked<'a>> {
+  if status != reqwest::StatusCode::UNPROCESSABLE_ENTITY {
+    return None;
+  }
+  if asked.custom_instructions.is_some() || asked.model.is_some() {
+    return Some(Asked {
+      custom_instructions: None,
+      model: None,
+      ..*asked
+    });
+  }
+  if asked.form != CleanupForm::default() {
+    return Some(Asked {
+      form: CleanupForm::default(),
+      ..*asked
+    });
+  }
+  (!asked.vocabulary.is_empty()).then_some(Asked {
+    vocabulary: &[],
+    ..*asked
+  })
+}
+
+/// The segments, with the form the API was asked for in the end.
+async fn send(
+  account: &AccountRequest,
+  transcript: &str,
+  asked: &Asked<'_>,
+) -> Result<(Vec<Segment>, CleanupForm), String> {
+  let mut asked = *asked;
+  let mut response = post(account, transcript, &asked).await?;
+  while let Some(next) = fallback(response.status(), &asked) {
+    asked = next;
+    response = post(account, transcript, &asked).await?;
+  }
   if !response.status().is_success() {
     return Err(format!(
       "dictation cleanup was refused: {}",
@@ -449,11 +741,32 @@ async fn send(
     }
     body.extend_from_slice(&chunk);
   }
-  parse_segments(&body)
+  parse_segments(&body).map(|segments| (segments, asked.form))
 }
 
 /// The linked account the server enabled dictation for, and no other: what
 /// dictation sends goes only there.
+/// Signs and sends a recording cleanup request for the account, which the
+/// caller holds until the answer is read, like every account request.
+pub(crate) async fn send_recording_cleanup(
+  account: &AccountRequest,
+  client: &DesktopHttpClient,
+  path: &str,
+  body: &impl Serialize,
+) -> Result<reqwest::Response, String> {
+  crate::http_client::device_proof_request(
+    client
+      .post(format!("{}{}", account.api_base_url, path))
+      .json(body),
+    &account.device_key,
+    Some(&account.credential.key),
+    None,
+  )?
+  .send()
+  .await
+  .map_err(request_cause_logged(FAILURE))
+}
+
 pub(crate) async fn dictation_account(
   app: &AppHandle,
 ) -> Result<AccountRequest, String> {
@@ -475,20 +788,29 @@ async fn request(
   app: &AppHandle,
   transcript: &str,
   languages: &[&str],
+  vocabulary: &[String],
   context: &CleanupContext,
+  form: CleanupForm,
+  preferences: &CleanupPreferences,
 ) -> Result<Vec<Segment>, String> {
   let account = dictation_account(app).await?;
   let segments = send(
     &account,
     transcript,
-    locale_hint(crate::i18n::active_locale()),
-    languages,
-    context,
+    &Asked {
+      locale: locale_hint(crate::i18n::active_locale()),
+      languages,
+      vocabulary,
+      context,
+      form,
+      custom_instructions: preferences.custom_instructions.as_deref(),
+      model: preferences.model.as_deref(),
+    },
   )
   .await;
   drop(account);
-  let segments = segments?;
-  if plausible(transcript, &segments) {
+  let (segments, form) = segments?;
+  if plausible(transcript, &segments, form) {
     Ok(segments)
   } else {
     Err(IMPLAUSIBLE.to_string())
@@ -511,25 +833,41 @@ pub(crate) fn bounded<T>(
 /// The cleaned segments, or `None` whenever the raw transcript should be
 /// typed instead. Blocks the dictation thread for at most [`TIMEOUT`]. The
 /// plausibility check measures the answer against the transcript alone, so
-/// nothing from `context` can be typed.
+/// nothing from `context` can be typed; `form` says how to write it.
+///
+/// Returns how it went, for the local log, with the segments.
 pub fn clean_up(
   app: &AppHandle,
   transcript: &str,
   languages: &[&str],
+  vocabulary: &[String],
   context: &CleanupContext,
-) -> Option<Vec<Segment>> {
+  form: CleanupForm,
+  preferences: &CleanupPreferences,
+) -> (Option<Vec<Segment>>, Cleanup) {
   if transcript.chars().count() > contract().max_transcript_length {
-    return None;
+    return (None, Cleanup::TooLong);
   }
-  match bounded(TIMEOUT, request(app, transcript, languages, context)) {
-    Some(Ok(segments)) => Some(segments),
+  match bounded(
+    TIMEOUT,
+    request(
+      app,
+      transcript,
+      languages,
+      vocabulary,
+      context,
+      form,
+      preferences,
+    ),
+  ) {
+    Some(Ok(segments)) => (Some(segments), Cleanup::Applied),
     Some(Err(error)) => {
       tracing::info!(%error, "dictation cleanup skipped; typing the transcript");
-      None
+      (None, Cleanup::Skipped)
     }
     None => {
       tracing::info!("dictation cleanup timed out; typing the transcript");
-      None
+      (None, Cleanup::TimedOut)
     }
   }
 }
@@ -597,9 +935,14 @@ mod tests {
     let transcript = "the parties agree to extend the deadline by two weeks";
     assert!(plausible(
       transcript,
-      &[plain("The parties agree to extend the deadline.")]
+      &[plain("The parties agree to extend the deadline.")],
+      CleanupForm::default()
     ));
-    assert!(!plausible(transcript, &[plain("The parties agree.")]));
+    assert!(!plausible(
+      transcript,
+      &[plain("The parties agree.")],
+      CleanupForm::default()
+    ));
   }
 
   #[test]
@@ -612,7 +955,8 @@ mod tests {
         plain("a tedy"),
         Segment::LineBreak,
         plain("se rozhodl odejít."),
-      ]
+      ],
+      CleanupForm::default()
     ));
     assert!(plausible(
       "tučně 42, ne, 24 dní tečka",
@@ -622,7 +966,8 @@ mod tests {
           bold: true,
         },
         plain(" dní."),
-      ]
+      ],
+      CleanupForm::default()
     ));
   }
 
@@ -636,6 +981,10 @@ mod tests {
     transcript: String,
     segments: Vec<WireSegment>,
     plausible: bool,
+    #[serde(default)]
+    style: CleanupStyle,
+    #[serde(default, rename = "translateTo")]
+    translate_to: Option<String>,
   }
 
   /// The server runs the same cases (cleanup-model.test.ts), so both sides
@@ -648,8 +997,14 @@ mod tests {
     for case in cases {
       let segments: Vec<Segment> =
         case.segments.into_iter().map(Segment::from).collect();
+      let form = CleanupForm {
+        style: case.style,
+        translate_to: case.translate_to.as_deref().map(|tag| {
+          translation_language(tag).expect("a case writes in a contract language")
+        }),
+      };
       assert_eq!(
-        plausible(&case.transcript, &segments),
+        plausible(&case.transcript, &segments, form),
         case.plausible,
         "{}",
         case.name
@@ -659,10 +1014,22 @@ mod tests {
 
   #[test]
   fn only_a_dictation_of_commands_may_become_breaks_alone() {
-    assert!(plausible("nový řádek", &[Segment::LineBreak]));
-    assert!(plausible("Nový odstavec.", &[Segment::ParagraphBreak]));
-    assert!(!plausible("nový řádek", &[]));
-    assert!(!plausible("smlouva nový řádek", &[Segment::LineBreak]));
+    assert!(plausible(
+      "nový řádek",
+      &[Segment::LineBreak],
+      CleanupForm::default()
+    ));
+    assert!(plausible(
+      "Nový odstavec.",
+      &[Segment::ParagraphBreak],
+      CleanupForm::default()
+    ));
+    assert!(!plausible("nový řádek", &[], CleanupForm::default()));
+    assert!(!plausible(
+      "smlouva nový řádek",
+      &[Segment::LineBreak],
+      CleanupForm::default()
+    ));
   }
 
   /// The transcript's words, with a line break before each of the first
@@ -686,12 +1053,16 @@ mod tests {
   fn an_answer_that_breaks_far_more_often_than_dictated_is_not_typed() {
     // Four breaks are always allowed; 27 characters allow no more.
     let short = "ano ne ano ne ano ne ano ne";
-    assert!(plausible(short, &broken(short, 4)));
-    assert!(!plausible(short, &broken(short, 5)));
+    assert!(plausible(short, &broken(short, 4), CleanupForm::default()));
+    assert!(!plausible(short, &broken(short, 5), CleanupForm::default()));
     // 240 characters allow one break per 20 of them.
     let long = "slovo ".repeat(40);
-    assert!(plausible(&long, &broken(&long, 12)));
-    assert!(!plausible(&long, &broken(&long, 13)));
+    assert!(plausible(&long, &broken(&long, 12), CleanupForm::default()));
+    assert!(!plausible(
+      &long,
+      &broken(&long, 13),
+      CleanupForm::default()
+    ));
   }
 
   #[test]
@@ -859,6 +1230,8 @@ mod tests {
                 "appKind": "document",
                 "windowTitle": "Kupní smlouva.docx",
               },
+              "customInstructions": "Use British spelling.\nNever use emoji.",
+              "model": "anthropic::claude-sonnet-4-5",
             });
           if signed && authorized && only_text {
             (StatusCode::OK, FIXTURE.to_string())
@@ -877,21 +1250,271 @@ mod tests {
       window_title: Some("Kupní smlouva.docx".to_string()),
       text_before_cursor: None,
     };
+    let asked = Asked {
+      locale: Some("cs"),
+      languages: &["cs", "en"],
+      vocabulary: &[],
+      context: &context,
+      form: CleanupForm::default(),
+      custom_instructions: Some("Use British spelling.\nNever use emoji."),
+      model: Some("anthropic::claude-sonnet-4-5"),
+    };
     let good = AccountRequest::fixture(linked(base.clone(), "stella_dr_good")).await;
     assert_eq!(
-      send(&good, "tučně 42", Some("cs"), &["cs", "en"], &context)
-        .await
-        .unwrap(),
-      parse_segments(FIXTURE.as_bytes()).unwrap()
+      send(&good, "tučně 42", &asked).await.unwrap(),
+      (
+        parse_segments(FIXTURE.as_bytes()).unwrap(),
+        CleanupForm::default()
+      )
     );
     drop(good);
     let bad = AccountRequest::fixture(linked(base, "stella_dr_bad")).await;
-    assert!(
-      send(&bad, "tučně 42", Some("cs"), &["cs", "en"], &context)
-        .await
-        .is_err()
-    );
+    assert!(send(&bad, "tučně 42", &asked).await.is_err());
     drop(bad);
     server.abort();
+  }
+
+  #[test]
+  fn custom_words_are_a_field_of_their_own_and_absent_when_there_are_none() {
+    let context = CleanupContext {
+      app_kind: crate::dictation_context::AppKind::Email,
+      window_title: None,
+      text_before_cursor: None,
+    };
+    let words = vec!["custom terms list".to_string()];
+    let body = |vocabulary: &[String]| {
+      serde_json::to_value(CleanupRequest {
+        transcript: "tam jsem list",
+        locale: None,
+        languages: &["cs", "en"],
+        context: &context,
+        vocabulary,
+        style: CleanupStyle::Polished,
+        translate_to: None,
+        custom_instructions: None,
+        model: None,
+      })
+      .unwrap()
+    };
+    assert_eq!(
+      body(&words)["vocabulary"],
+      serde_json::json!(["custom terms list"])
+    );
+    assert!(body(&[]).get("vocabulary").is_none());
+  }
+
+  #[test]
+  fn a_style_and_a_language_to_write_in_are_fields_absent_when_polished() {
+    let context = CleanupContext {
+      app_kind: crate::dictation_context::AppKind::Chat,
+      window_title: None,
+      text_before_cursor: None,
+    };
+    let body = |style, translate_to| {
+      serde_json::to_value(CleanupRequest {
+        transcript: "za prvé zavolat za druhé poslat",
+        locale: None,
+        languages: &["cs"],
+        context: &context,
+        vocabulary: &[],
+        style,
+        translate_to,
+        custom_instructions: None,
+        model: None,
+      })
+      .unwrap()
+    };
+    let polished = body(CleanupStyle::Polished, None);
+    assert!(polished.get("style").is_none());
+    assert!(polished.get("translateTo").is_none());
+    let notes = body(CleanupStyle::Notes, Some("en"));
+    assert_eq!(notes["style"], "notes");
+    assert_eq!(notes["translateTo"], "en");
+  }
+
+  #[test]
+  fn styles_and_translation_languages_are_the_contract_ones() {
+    let names: Vec<&str> = CleanupStyle::ALL
+      .iter()
+      .map(|style| style.stored())
+      .collect();
+    assert_eq!(names, contract().styles);
+    for style in CleanupStyle::ALL {
+      assert_eq!(
+        serde_json::to_value(style).unwrap(),
+        serde_json::json!(style.stored())
+      );
+      assert_eq!(CleanupStyle::parse(Some(style.stored())), style);
+    }
+    assert_eq!(CleanupStyle::parse(Some("formal")), CleanupStyle::Polished);
+    assert_eq!(CleanupStyle::parse(None), CleanupStyle::Polished);
+    assert_eq!(translation_language("en"), Some("en"));
+    assert_eq!(translation_language("pt-BR"), Some("pt-BR"));
+    assert_eq!(translation_language("off"), None);
+    assert_eq!(translation_language("EN"), None);
+  }
+
+  #[test]
+  fn notes_and_translations_keep_the_condensed_share() {
+    let transcript = "so um basically I think we should probably call the client on Monday and then you know send the draft by Friday";
+    let notes = [
+      plain("- Call client Monday"),
+      Segment::LineBreak,
+      plain("- Draft by Friday"),
+    ];
+    assert!(!plausible(transcript, &notes, CleanupForm::default()));
+    let noted = CleanupForm {
+      style: CleanupStyle::Notes,
+      translate_to: None,
+    };
+    assert!(plausible(transcript, &notes, noted));
+    assert!(!plausible(transcript, &[plain("- Call")], noted));
+    let translated = CleanupForm {
+      style: CleanupStyle::Polished,
+      translate_to: Some("cs"),
+    };
+    assert!(plausible(transcript, &notes, translated));
+  }
+
+  #[test]
+  fn a_refused_request_is_asked_again_without_the_newest_fields_first() {
+    let context = CleanupContext {
+      app_kind: crate::dictation_context::AppKind::Email,
+      window_title: None,
+      text_before_cursor: None,
+    };
+    let words = vec!["custom terms list".to_string()];
+    let invalid = reqwest::StatusCode::UNPROCESSABLE_ENTITY;
+    let asked = Asked {
+      locale: None,
+      languages: &["cs"],
+      vocabulary: &words,
+      context: &context,
+      form: CleanupForm {
+        style: CleanupStyle::Notes,
+        translate_to: Some("en"),
+      },
+      custom_instructions: Some("Keep my sentence fragments."),
+      model: Some("model-a"),
+    };
+    let without_preferences = fallback(invalid, &asked).unwrap();
+    assert_eq!(without_preferences.custom_instructions, None);
+    assert_eq!(without_preferences.model, None);
+    assert_eq!(without_preferences.form, asked.form);
+    assert_eq!(without_preferences.vocabulary, words.as_slice());
+    let without_form = fallback(invalid, &without_preferences).unwrap();
+    assert_eq!(without_form.form, CleanupForm::default());
+    assert_eq!(without_form.vocabulary, words.as_slice());
+    let without_words = fallback(invalid, &without_form).unwrap();
+    assert_eq!(without_words.form, CleanupForm::default());
+    assert!(without_words.vocabulary.is_empty());
+    assert!(fallback(invalid, &without_words).is_none());
+    for status in [
+      reqwest::StatusCode::OK,
+      reqwest::StatusCode::FORBIDDEN,
+      reqwest::StatusCode::TOO_MANY_REQUESTS,
+      reqwest::StatusCode::BAD_GATEWAY,
+    ] {
+      assert!(fallback(status, &asked).is_none(), "{status}");
+    }
+  }
+  #[test]
+  fn instructions_and_a_chosen_model_are_fields_absent_when_unset() {
+    let context = CleanupContext {
+      app_kind: crate::dictation_context::AppKind::Email,
+      window_title: None,
+      text_before_cursor: None,
+    };
+    let body = |custom_instructions, model| {
+      serde_json::to_value(CleanupRequest {
+        transcript: "send the draft",
+        locale: None,
+        languages: &[],
+        context: &context,
+        vocabulary: &[],
+        style: CleanupStyle::Polished,
+        translate_to: None,
+        custom_instructions,
+        model,
+      })
+      .unwrap()
+    };
+    let unset = body(None, None);
+    assert!(unset.get("customInstructions").is_none());
+    assert!(unset.get("model").is_none());
+    let set = body(
+      Some("Use British spelling."),
+      Some("openrouter::anthropic/claude-sonnet-4.5"),
+    );
+    assert_eq!(set["customInstructions"], "Use British spelling.");
+    assert_eq!(set["model"], "openrouter::anthropic/claude-sonnet-4.5");
+  }
+
+  #[test]
+  fn instructions_are_held_to_the_contract_bound_in_characters() {
+    let limit = contract().max_custom_instructions_length;
+    // The bound is the API's: code points, so an astral character counts
+    // once, as it does on the server.
+    let at_limit = "📝".repeat(limit);
+    assert_eq!(at_limit.chars().count(), limit);
+    assert!(at_limit.encode_utf16().count() > limit);
+    assert_eq!(custom_instructions(&at_limit), Ok(Some(at_limit.clone())));
+    assert_eq!(
+      custom_instructions(&format!("{at_limit}x")),
+      Err(INSTRUCTIONS_TOO_LONG)
+    );
+    assert_eq!(
+      custom_instructions(
+        "  Use British spelling.\r\nNever use emoji.\r\tKeep fragments. \n"
+      ),
+      Ok(Some(
+        "Use British spelling.\nNever use emoji.\n\tKeep fragments.".to_string()
+      ))
+    );
+    assert_eq!(custom_instructions(" \n\t "), Ok(None));
+    assert_eq!(
+      custom_instructions("press \u{1b}[A"),
+      Err(INSTRUCTIONS_CONTROL)
+    );
+  }
+
+  #[test]
+  fn a_chosen_model_is_held_to_the_contract_bound() {
+    let limit = contract().max_model_length;
+    let prefix = "openrouter::";
+    let at_limit = format!("{prefix}{}", "x".repeat(limit - prefix.len()));
+    assert_eq!(cleanup_model(&at_limit), Ok(Some(at_limit.clone())));
+    assert_eq!(cleanup_model(&format!("{at_limit}x")), Err(MODEL_INVALID));
+    assert_eq!(cleanup_model("  "), Ok(None));
+    assert_eq!(cleanup_model("openrouter::a\nb"), Err(MODEL_INVALID));
+  }
+
+  #[test]
+  fn the_models_list_is_held_to_the_contract() {
+    let model = r#"{"value":"anthropic::claude-sonnet-4-5","displayName":"Claude Sonnet 4.5","provider":"anthropic"}"#;
+    assert_eq!(
+      parse_models(format!(r#"{{"models":[{model}]}}"#).as_bytes()).unwrap(),
+      CleanupModels {
+        models: vec![CleanupModel {
+          value: "anthropic::claude-sonnet-4-5".to_string(),
+          display_name: "Claude Sonnet 4.5".to_string(),
+          provider: "anthropic".to_string(),
+        }],
+      }
+    );
+    let too_many = format!(
+      r#"{{"models":[{}]}}"#,
+      vec![model; contract().max_models + 1].join(",")
+    );
+    for body in [
+      "not json".to_string(),
+      "{}".to_string(),
+      r#"{"models":[{"value":"a::b","displayName":"B","provider":"a","apiKey":"k"}]}"#
+        .to_string(),
+      r#"{"models":[{"value":"","displayName":"B","provider":"a"}]}"#.to_string(),
+      too_many,
+    ] {
+      assert!(parse_models(body.as_bytes()).is_err(), "{body}");
+    }
   }
 }

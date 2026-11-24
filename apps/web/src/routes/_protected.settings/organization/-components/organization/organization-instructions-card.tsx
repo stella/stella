@@ -3,11 +3,11 @@ import { useId, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { MarkdownHybridEditor } from "@stll/markdown-editor";
+import type { MarkdownHybridEditorHandle } from "@stll/markdown-editor";
 import { Button } from "@stll/ui/button";
-import { Frame, FramePanel } from "@stll/ui/frame";
 
-import { MarkdownHybridEditor } from "@/components/markdown/markdown-hybrid-editor";
-import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-hybrid-editor";
+import { isSafeMarkdownPreviewImageSrc } from "@/components/markdown-preview.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
@@ -16,6 +16,7 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { queryView } from "@/lib/query-view.logic";
 import {
   organizationSettingsKeys,
@@ -25,6 +26,11 @@ import type { OrganizationSettings } from "@/queries/organization-settings";
 import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
 
 import { SettingsLeaveGuard } from "../settings-leave-guard";
+import {
+  ORGANIZATION_INSTRUCTIONS_ACTIONS_CLASS,
+  OrganizationInstructionsCardFrame,
+  OrganizationInstructionsCardPending,
+} from "./organization-instructions-card.pending";
 
 export const OrganizationInstructionsCard = () => {
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
@@ -36,6 +42,9 @@ export const OrganizationInstructionsCard = () => {
       }),
     ),
   );
+  if (view.type === "pending") {
+    return <OrganizationInstructionsCardPending />;
+  }
   if (view.type !== "items") {
     return <QueryViewFeedback view={view} />;
   }
@@ -106,81 +115,87 @@ const OrganizationInstructionsEditor = ({
     onError: () => setEditorRevision((revision) => revision + 1),
   });
 
+  const resolveInstructionsSaveDisabledReason = () => {
+    if (mutation.isPending) {
+      return t("common.saving");
+    }
+    if (tooLong) {
+      return t("organization.aiInstructions.tooLong", {
+        maxLength: format.number(settings.aiInstructionsMaxLength),
+      });
+    }
+    return t("common.noChangesToSave");
+  };
+
   return (
-    <Frame>
-      <FramePanel>
-        <div className="flex flex-col gap-3">
-          <h2 id={headingId} className="text-sm font-medium">
-            {t("organization.aiInstructions.title")}
-          </h2>
-          <p id={descriptionId} className="text-muted-foreground text-xs">
-            {t("organization.aiInstructions.description")}
-          </p>
-          <div
-            role="group"
-            aria-labelledby={headingId}
-            aria-describedby={descriptionId}
-            // The editor loads lazily into this box and fills it, so its
-            // arrival never changes the card's height.
-            className="flex min-h-40 flex-col rounded-md border"
-          >
-            <MarkdownHybridEditor
-              key={editorRevision}
-              ref={editor}
-              markdown={draft}
-              imagePolicy="data-only"
-              onMarkdownChange={setDraft}
-              changeEmission="immediate"
-              readOnly={!canEdit || mutation.isPending}
-            />
-          </div>
-          <p className="text-muted-foreground text-end text-xs tabular-nums">
-            {t("organization.aiInstructions.characterCount", {
-              count: format.number(characterCount),
+    <>
+      <OrganizationInstructionsCardFrame
+        lengthLine={t("organization.aiInstructions.characterCount", {
+          count: format.number(characterCount),
+          maxLength: format.number(settings.aiInstructionsMaxLength),
+        })}
+        descriptionId={descriptionId}
+        editor={
+          <MarkdownHybridEditor
+            key={editorRevision}
+            ref={editor}
+            markdown={draft}
+            allowsImageSource={isSafeMarkdownPreviewImageSrc}
+            label={t("markdownEditor.rawLabel")}
+            onOpenLink={openIsolatedWindow}
+            onMarkdownChange={setDraft}
+            changeEmission="immediate"
+            readOnly={!canEdit || mutation.isPending}
+          />
+        }
+        headingId={headingId}
+      >
+        {tooLong && (
+          <p role="alert" className="text-destructive text-xs">
+            {t("organization.aiInstructions.tooLong", {
               maxLength: format.number(settings.aiInstructionsMaxLength),
             })}
           </p>
-          {tooLong && (
-            <p role="alert" className="text-destructive text-xs">
-              {t("organization.aiInstructions.tooLong", {
-                maxLength: format.number(settings.aiInstructionsMaxLength),
-              })}
-            </p>
-          )}
-          {canEdit && (
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                loading={mutation.isPending}
-                disabled={!dirty || tooLong || mutation.isPending}
-                onClick={() => {
-                  const next = editor.current?.captureForSave() ?? draft;
-                  setDraft(next);
-                  if (next.length > settings.aiInstructionsMaxLength) {
-                    setEditorRevision((revision) => revision + 1);
-                    return;
-                  }
-                  mutation.mutate(next);
-                }}
-              >
-                {t("common.save")}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={draft.length === 0 || mutation.isPending}
-                onClick={() => {
-                  editor.current?.resetMarkdown("");
-                  setDraft("");
-                }}
-              >
-                {t("common.remove")}
-              </Button>
-            </div>
-          )}
-        </div>
-      </FramePanel>
+        )}
+        {canEdit && (
+          <div className={ORGANIZATION_INSTRUCTIONS_ACTIONS_CLASS}>
+            <Button
+              size="sm"
+              loading={mutation.isPending}
+              disabled={!dirty || tooLong || mutation.isPending}
+              disabledReason={resolveInstructionsSaveDisabledReason()}
+              onClick={() => {
+                const next = editor.current?.captureForSave() ?? draft;
+                setDraft(next);
+                if (next.length > settings.aiInstructionsMaxLength) {
+                  setEditorRevision((revision) => revision + 1);
+                  return;
+                }
+                mutation.mutate(next);
+              }}
+            >
+              {t("common.save")}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={draft.length === 0 || mutation.isPending}
+              disabledReason={
+                mutation.isPending
+                  ? t("common.saving")
+                  : t("common.noTextToRemove")
+              }
+              onClick={() => {
+                editor.current?.resetMarkdown("");
+                setDraft("");
+              }}
+            >
+              {t("common.remove")}
+            </Button>
+          </div>
+        )}
+      </OrganizationInstructionsCardFrame>
       <SettingsLeaveGuard blocker={blocker} />
-    </Frame>
+    </>
   );
 };

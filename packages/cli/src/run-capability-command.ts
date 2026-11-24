@@ -20,8 +20,9 @@ import type { CapabilityLeafSpec } from "./route-types.js";
 import {
   composeInputFromFlags,
   confirmDestructive,
+  loadValidatedInput,
   maybeConfirmAndRetry,
-  parseInputObject,
+  parsePayload,
   readOutputFormat,
   renderClientError,
   renderCommandResult,
@@ -33,6 +34,7 @@ import {
   writeInputSchema,
   writersFor,
 } from "./run-leaf-command.js";
+import { saveDownload } from "./save-download.js";
 import { timingEnd } from "./timing.js";
 import { commandUnavailableMessage } from "./unavailable-command.js";
 
@@ -117,16 +119,15 @@ export const runCapabilityCommand = async ({
   // (e.g. --workspace) advertised on the usage line therefore stays usable
   // alongside a body passed through --input, instead of forcing the caller to
   // hand-relocate it into `params.workspaceId` in the JSON.
-  const inputRaw = flags[RESERVED_FLAG_KEYS.input];
-  const inputBase =
-    typeof inputRaw === "string"
-      ? await parseInputObject({ inputRaw, writers })
-      : {};
-  if (inputBase === undefined) {
-    setExit(context, EXIT_CODES.validation);
+  const parsedInput = await loadValidatedInput({ context, flags, writers });
+  if (Result.isError(parsedInput)) {
     return;
   }
-  const built = await composeCapabilityFlags({ base: inputBase, flags, spec });
+  const built = await composeCapabilityFlags({
+    base: parsedInput.value,
+    flags,
+    spec,
+  });
   if (!built.ok) {
     writers.stderr(`${built.message}\n`);
     setExit(context, EXIT_CODES.validation);
@@ -289,4 +290,42 @@ export const runCapabilityCommand = async ({
   }
 
   renderCall(call.value);
+  await saveResultDownload({ context, flags, result: call.value, writers });
+};
+
+/**
+ * `--save <path>`: write the file the successful result's downloadUrl points
+ * to. The JSON answer is already printed; a failed save says why on stderr
+ * and sets its own exit code.
+ */
+const saveResultDownload = async ({
+  context,
+  flags,
+  result,
+  writers,
+}: {
+  context: Context;
+  flags: LeafFlags;
+  result: CallToolResult;
+  writers: ReturnType<typeof writersFor>;
+}): Promise<void> => {
+  const savePath = flags[RESERVED_FLAG_KEYS.save];
+  if (typeof savePath !== "string" || result.isError === true) {
+    return;
+  }
+  const saved = await saveDownload({
+    path: savePath,
+    payload: parsePayload(result),
+  });
+  if (Result.isError(saved)) {
+    writers.stderr(`${saved.error.message}\n`);
+    setExit(
+      context,
+      saved.error.kind === "usage"
+        ? EXIT_CODES.validation
+        : EXIT_CODES.unexpected,
+    );
+    return;
+  }
+  writers.stderr(`Saved ${String(saved.value)} bytes to ${savePath}\n`);
 };

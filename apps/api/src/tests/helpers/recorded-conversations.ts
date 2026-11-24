@@ -12,6 +12,7 @@ import {
 import path from "node:path";
 
 import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
+import { CHAT_STEP_LEDGER_KEY } from "@stll/api-contract/chat-step-ledger";
 import { CHAT_TURN_BUDGET } from "@stll/chat-limits";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -388,7 +389,10 @@ return { id: document.entityId, name: document.name };`;
   /** What the web app's Continue sends, in the recording's language. */
   const continueText = async (): Promise<string> => {
     const catalog: unknown = await import(
-      new URL("../../../../web/src/i18n/langs/en.json", import.meta.url).href
+      new URL(
+        "../../../../web/src/i18n/namespaces/en/chat.json",
+        import.meta.url,
+      ).href
     );
     return asTestRaw<{
       default: { chat: { turnPaused: { continue: string } } };
@@ -777,6 +781,14 @@ return { id: document.entityId, name: document.name };`;
         // names in each request is only visible to the server, so it is checked
         // here, on every scenario.
         harness.expectStableRefs(threadId);
+        // A code step's ledger is for the page; no model call is handed one,
+        // on its own turn or when a later turn replays it.
+        expect(
+          harness
+            .promptsOf(threadId)
+            .flat()
+            .filter((block) => block.includes(CHAT_STEP_LEDGER_KEY)),
+        ).toEqual([]);
       } catch (error) {
         failure = error;
       } finally {

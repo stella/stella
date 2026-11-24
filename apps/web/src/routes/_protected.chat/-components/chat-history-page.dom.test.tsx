@@ -5,7 +5,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
-import type { WebApiRoutes } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api-contract";
 import type { WorkspaceNavigationItem } from "@/lib/memory-api";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -34,7 +34,7 @@ const { noopAnalytics } = await import("@/lib/analytics/noop");
 const { workspacesNavigationOptions } =
   await import("@/lib/workspaces/queries");
 const { RenderLoopGuard } = await import("@/testing/render-loop-guard");
-const { ChatHistoryPage } = await import("./chat-history-page");
+const { ChatHistoryPage } = await import("./chat-history.page");
 
 type ChatHistorySearch = Parameters<typeof ChatHistoryPage>[0]["search"];
 type ThreadsPage = WebApiRoutes["chat"]["threads"]["get"]["response"][200];
@@ -473,7 +473,9 @@ describe("chat history page", () => {
     await testing.act(async () => {
       testing.fireEvent.change(
         ui.getByRole("searchbox", { name: messages.common.search }),
-        { target: { value: "lease" } },
+        {
+          target: { value: "lease" },
+        },
       );
     });
 
@@ -683,6 +685,60 @@ describe("chat history page", () => {
       ]),
     ).toEqual([[THIS_WEEK_IN_A.id, MATTER_A.id]]);
     expect(threadLink(ui, TODAY_GLOBAL.title)).toBeDefined();
+  });
+
+  test("a chat that drew on every matter says so once instead of naming them", async () => {
+    const asContext = (matter: typeof MATTER_A) => ({
+      color: matter.color,
+      id: matter.id,
+      name: matter.name,
+    });
+    const server = fullServer();
+    server.global = [
+      {
+        ...TODAY_GLOBAL,
+        context: {
+          fileCount: 0,
+          files: [],
+          matterCount: 2,
+          matters: [asContext(MATTER_A), asContext(MATTER_B)],
+        },
+      },
+    ];
+    server.workspaces = server.workspaces.map((group) =>
+      group.workspaceId === MATTER_A.id
+        ? {
+            ...group,
+            threads: [
+              {
+                ...THIS_WEEK_IN_A,
+                context: {
+                  fileCount: 0,
+                  files: [],
+                  matterCount: 1,
+                  matters: [asContext(MATTER_A)],
+                },
+              },
+            ],
+          }
+        : group,
+    );
+    serve(server);
+    const { ui } = await openHistory();
+
+    await testing.waitFor(() =>
+      expect(threadLink(ui, TODAY_GLOBAL.title).textContent).toContain(
+        messages.inspector.matterPicker.allMatters,
+      ),
+    );
+    const everyMatter = threadLink(ui, TODAY_GLOBAL.title).textContent;
+    expect(everyMatter).not.toContain(MATTER_A.name);
+    expect(everyMatter).not.toContain(MATTER_B.name);
+    // One matter of two is named, not summed up.
+    const oneMatter = threadLink(ui, THIS_WEEK_IN_A.title).textContent;
+    expect(oneMatter).toContain(MATTER_A.name);
+    expect(oneMatter).not.toContain(messages.inspector.matterPicker.allMatters);
+    expect(unexpected).toEqual([]);
   });
 
   test("pinned chats come first, under their own heading, and an unread one says so", async () => {

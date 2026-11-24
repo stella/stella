@@ -5,7 +5,7 @@ import {
   type QueryClient,
   type QueryKey,
 } from "@tanstack/react-query";
-import type { updateUser } from "better-auth/api";
+import type { revokeOtherSessions, updateUser } from "better-auth/api";
 import type { OrganizationCreator } from "better-auth/plugins";
 import { panic, Result } from "better-result";
 
@@ -18,12 +18,17 @@ import {
   type ResourceType,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
+import type { SESSION_SIGN_IN_REVIEW_PATH } from "@stll/api-contract/session-sign-ins";
 
 import {
   captureSessionQueryOwner,
   hasCurrentAuthQueryOwner,
   isObservedSessionQueryOwner,
 } from "@/lib/account/auth-query-owner";
+import type {
+  REVOKE_SESSION_BY_ID_PATH,
+  SessionSignInsWriteRoute,
+} from "@/lib/account/session-sign-ins-client";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import {
@@ -115,6 +120,22 @@ type AuthPluginEndpointWrite<
   route: ReturnType<OrganizationCreator>["endpoints"][TEndpoint]["path"];
 };
 
+type AuthCoreRevokeOtherSessionsWrite = {
+  type: "auth-core-endpoint";
+  endpoint: "revokeOtherSessions";
+  method: (typeof revokeOtherSessions)["options"]["method"];
+  route: (typeof revokeOtherSessions)["path"];
+};
+
+/** A write to one of the API's own account session endpoints
+ *  (`sessionSignInsClient`). */
+type SessionSignInsWrite<TRoute extends SessionSignInsWriteRoute> = {
+  type: "auth-plugin-endpoint";
+  plugin: "session-sign-ins";
+  method: "POST";
+  route: TRoute;
+};
+
 type AuthCoreUserUpdateWrite = {
   type: "auth-core-endpoint";
   endpoint: "updateUser";
@@ -173,6 +194,46 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.WORKSPACE],
   },
+  createWorkspace: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PUT",
+        route: "/workspaces",
+      },
+    ],
+    resources: [RESOURCE_TYPE.WORKSPACE],
+  },
+  deleteWorkspace: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/workspaces/:workspaceId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.WORKSPACE],
+  },
+  createContact: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PUT",
+        route: "/contacts",
+      },
+    ],
+    resources: [RESOURCE_TYPE.CONTACT],
+  },
+  updateWorkspace: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/workspaces/:workspaceId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.WORKSPACE],
+  },
   // The member's own reminder for when a chat's usage limit resets.
   changeChatLimitReminder: {
     writes: [
@@ -215,6 +276,28 @@ export const RESOURCE_MUTATION_CONTRACTS = {
         type: "handler-route",
         method: "POST",
         route: "/invoices/:workspaceId/:invoiceId/transition",
+      },
+    ],
+    resources: [RESOURCE_TYPE.INVOICE],
+  },
+  revokeInvoiceSend: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/invoices/:workspaceId/:invoiceId/sends/:sendId/revoke",
+      },
+    ],
+    resources: [RESOURCE_TYPE.INVOICE],
+  },
+  // A public invoice link's file: the server records the access and the
+  // first view on the invoice's send, which no member session caches.
+  openInvoiceLinkFile: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/public/invoice-links/download",
       },
     ],
     resources: [RESOURCE_TYPE.INVOICE],
@@ -310,6 +393,86 @@ export const RESOURCE_MUTATION_CONTRACTS = {
   },
   // An administrator turns the decision model on or off for verification
   // verdicts; the organization's AI configuration read shows the switch.
+  saveOrganizationSsoPolicy: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PUT",
+        route: "/organization-settings/sso/policy",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  registerOidcSsoProvider: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/sso/providers",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  registerSamlSsoProvider: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/sso/providers/saml",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  probeOidcSsoProvider: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/sso/providers/test",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  removeOrganizationSsoProvider: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/organization-settings/sso/providers/:providerId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  addOrganizationSsoDomain: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/sso/domains",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  verifyOrganizationSsoDomain: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/sso/domains/:domainId/verify",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  removeOrganizationSsoDomain: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/organization-settings/sso/domains/:domainId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
   updateVerificationDecisionModel: {
     writes: [
       {
@@ -372,6 +535,42 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.USER],
   },
+  // The account holder signs one of their devices out, signs out every
+  // device but this one, or answers whether a sign-in was theirs; the
+  // account's session and sign-in lists refresh.
+  revokeSession: {
+    writes: [
+      {
+        type: "auth-plugin-endpoint",
+        plugin: "session-sign-ins",
+        method: "POST",
+        route: "/revoke-session-by-id",
+      } satisfies SessionSignInsWrite<typeof REVOKE_SESSION_BY_ID_PATH>,
+    ],
+    resources: [RESOURCE_TYPE.USER],
+  },
+  revokeOtherSessions: {
+    writes: [
+      {
+        type: "auth-core-endpoint",
+        endpoint: "revokeOtherSessions",
+        method: "POST",
+        route: "/revoke-other-sessions",
+      } satisfies AuthCoreRevokeOtherSessionsWrite,
+    ],
+    resources: [RESOURCE_TYPE.USER],
+  },
+  reviewSessionSignIn: {
+    writes: [
+      {
+        type: "auth-plugin-endpoint",
+        plugin: "session-sign-ins",
+        method: "POST",
+        route: "/session-sign-ins/review",
+      } satisfies SessionSignInsWrite<typeof SESSION_SIGN_IN_REVIEW_PATH>,
+    ],
+    resources: [RESOURCE_TYPE.USER],
+  },
   deleteOrganization: {
     writes: [
       {
@@ -388,6 +587,27 @@ export const RESOURCE_MUTATION_CONTRACTS = {
         method: "POST",
         route: "/organization/leave",
       } satisfies AuthPluginEndpointWrite<"leaveOrganization">,
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  // The organization's dictation words: one list, read by its settings page.
+  addDictationVocabulary: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/dictation-vocabulary",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  deleteDictationVocabulary: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/organization-settings/dictation-vocabulary",
+      },
     ],
     resources: [RESOURCE_TYPE.ORGANIZATION],
   },
@@ -481,7 +701,25 @@ export const RESOURCE_MUTATION_CONTRACTS = {
 } as const;
 
 type ResourceMutationName = keyof typeof RESOURCE_MUTATION_CONTRACTS;
-type PrimaryResourceMutationName = Exclude<ResourceMutationName, "updateUser">;
+
+/**
+ * Writes a public page makes with a link token instead of a member session:
+ * every route they post to is a public one.
+ */
+type PublicTokenResourceMutationName = {
+  [
+    TMutation in ResourceMutationName
+  ]: (typeof RESOURCE_MUTATION_CONTRACTS)[TMutation]["writes"][number] extends {
+    route: `/public/${string}`;
+  }
+    ? TMutation
+    : never;
+}[ResourceMutationName];
+
+type PrimaryResourceMutationName = Exclude<
+  ResourceMutationName,
+  "updateUser" | PublicTokenResourceMutationName
+>;
 
 /**
  * The variable naming the one entity a contract changes, if it names one.
@@ -523,6 +761,8 @@ type OrganizationProjectionMutationScope = {
   organizationId: string | null;
   userId: string | null;
 };
+
+type PublicTokenMutationScope = { type: "public-token" };
 
 type ResourceMutationScope =
   | { type: "organization" }
@@ -628,14 +868,29 @@ export function resourceMutation<
   TData,
   // A write that takes no variables is invoked with none.
   TVariables = void,
+  TRest extends unknown[] = [],
 >(
-  options: ResourceMutationOptions<TMutation, TVariables, TData> & {
+  options: ResourceMutationOptions<TMutation, TVariables, TData, TRest> & {
     scope: { type: "organization" };
   },
-): (variables: TVariables) => Promise<TData>;
+): (variables: TVariables, ...rest: TRest) => Promise<TData>;
 export function resourceMutation<TData, TVariables>(
   options: ResourceMutationOptions<"updateUser", TVariables, TData> & {
     scope: OrganizationProjectionMutationScope;
+  },
+): (variables: TVariables) => Promise<TData>;
+/**
+ * A write a public page makes with a link token. No member session owns the
+ * page's cache, so nothing a session reads is invalidated; the page's own
+ * token read stays as it was, since reading it again is itself an access.
+ */
+export function resourceMutation<
+  TMutation extends PublicTokenResourceMutationName,
+  TVariables,
+  TData,
+>(
+  options: ResourceMutationOptions<TMutation, TVariables, TData> & {
+    scope: PublicTokenMutationScope;
   },
 ): (variables: TVariables) => Promise<TData>;
 export function resourceMutation<TVariables, TData, TRest extends unknown[]>({
@@ -647,9 +902,13 @@ export function resourceMutation<TVariables, TData, TRest extends unknown[]>({
   scope?:
     | { type: "workspace" }
     | { type: "organization" }
-    | OrganizationProjectionMutationScope;
+    | OrganizationProjectionMutationScope
+    | PublicTokenMutationScope;
 }): (variables: TVariables, ...rest: TRest) => Promise<TData> {
   return async (variables: TVariables, ...rest: TRest) => {
+    if (scope?.type === "public-token") {
+      return await mutationFn(variables, ...rest);
+    }
     const owner = captureSessionQueryOwner(queryClient);
     const data = await mutationFn(variables, ...rest);
     if (scope?.type === "organization-projection") {

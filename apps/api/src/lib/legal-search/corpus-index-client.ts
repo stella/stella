@@ -296,11 +296,24 @@ type CorpusIndexSearchResponse = {
  * it can do two things that one cannot: project each hit to named stored
  * fields, and report the BM25 score beside the hit.
  */
+/**
+ * A scored read's query as ES DSL rather than a query string: what a ranking
+ * needs when scope must filter without scoring (`filter`) and words must
+ * count toward `minimum_should_match` (`corpus-ranked-decision-query.ts`).
+ */
+export type CorpusIndexQueryDsl = {
+  type: "dsl";
+  query: Readonly<Record<string, unknown>>;
+};
+
 type CorpusIndexScoredSearchInput = {
   observer: RegistryRequestObservation;
   indexId: string;
-  /** Full corpus index query string, read exactly as `search` reads it. */
-  query: string;
+  /**
+   * Full corpus index query string, read exactly as `search` reads it, or a
+   * DSL query sent as given.
+   */
+  query: string | CorpusIndexQueryDsl;
   /** Rank of the first hit returned. */
   from: number;
   size: number;
@@ -329,6 +342,28 @@ export type CorpusIndexScoredSearchResponse = {
 };
 
 const STORED_FIELD_NAME = /^[A-Za-z_][A-Za-z0-9_.]*$/u;
+
+/**
+ * The ES-compatible endpoint answers HTTP 200 with the splits it could read
+ * when one fails (`allow_partial_search_results` defaults to true there,
+ * unlike the native endpoint's `allow_failed_splits`). A ranking or a count
+ * missing a split is a short answer that looks whole, so every ES read asks
+ * for failure instead, and every ES answer is checked for failed shards too.
+ */
+export const STRICT_ELASTIC_READ = "allow_partial_search_results=false";
+
+/**
+ * Whether an ES-compatible answer reports a shard (split) it could not read.
+ * A missing `_shards` is not proof of failure; a count above zero is.
+ */
+export const elasticAnswerHasFailedShards = (response: unknown): boolean => {
+  const shards = isRecord(response) ? response["_shards"] : undefined;
+  if (!isRecord(shards)) {
+    return false;
+  }
+  const failed = shards["failed"];
+  return typeof failed !== "number" || failed !== 0;
+};
 
 /**
  * The request a scored read sends.
@@ -364,9 +399,12 @@ export const corpusIndexScoredSearchRequest = ({
     }
   }
   return {
-    path: `/api/v1/_elastic/${indexId}/_search?_source_includes=${fields.join(",")}`,
+    path: `/api/v1/_elastic/${indexId}/_search?_source_includes=${fields.join(",")}&${STRICT_ELASTIC_READ}`,
     body: {
-      query: { query_string: { query, default_operator: "AND" } },
+      query:
+        typeof query === "string"
+          ? { query_string: { query, default_operator: "AND" } }
+          : query.query,
       from,
       size,
       sort: [{ _score: { order: "desc" } }],
@@ -390,6 +428,9 @@ export const parseCorpusIndexScoredSearchResponse = (
   response: unknown,
   requiredFields: readonly string[],
 ): CorpusIndexScoredSearchResponse | null => {
+  if (elasticAnswerHasFailedShards(response)) {
+    return null;
+  }
   const outer = isRecord(response) ? response["hits"] : undefined;
   if (!isRecord(outer)) {
     return null;
@@ -1031,12 +1072,19 @@ const sendBoundedRequest = async <T>(
 const requestJson = async (unbounded: CorpusIndexRequest): Promise<unknown> =>
   await sendRequest(unbounded, async (response, request) => {
     if (!response.ok) {
-      const body = await response.text().catch(() => "");
+      const bodyRead = await Result.tryPromise({
+        try: async () => await response.text(),
+        catch: (cause) => cause,
+      });
+      const detail = Result.isError(bodyRead)
+        ? `(error body unreadable: ${bodyRead.error instanceof Error ? bodyRead.error.message : String(bodyRead.error)})`
+        : `: ${bodyRead.value.slice(0, 500)}`;
       throw new CorpusIndexError({
-        message: `corpus index ${requestLabel(request)} -> ${response.status}: ${body.slice(0, 500)}`,
+        message: `corpus index ${requestLabel(request)} -> ${response.status}${Result.isError(bodyRead) ? ` ${detail}` : detail}`,
         status: response.status,
         rejection: rejectionForHttpStatus(response.status),
         reach: reachForHttpStatus(response.status),
+        ...(Result.isError(bodyRead) ? { cause: bodyRead.error } : {}),
       });
     }
     return await response.json().catch((error: unknown) => {
@@ -1953,7 +2001,7 @@ const buildClient = (
     const path =
       filter === undefined
         ? `/api/v1/${indexId}/search`
-        : `/api/v1/_elastic/${indexId}/_search`;
+        : `/api/v1/_elastic/${indexId}/_search?${STRICT_ELASTIC_READ}`;
     return await withSearchAdmission(
       searchAdmission,
       {
@@ -2012,7 +2060,11 @@ const buildClient = (
               timeoutMs: remainingAfterWait,
               signal,
             });
-            if (!isRecord(response) || !isRecord(response["aggregations"])) {
+            if (
+              !isRecord(response) ||
+              !isRecord(response["aggregations"]) ||
+              elasticAnswerHasFailedShards(response)
+            ) {
               throw new CorpusIndexError({
                 message:
                   "corpus index aggregation returned an invalid response",

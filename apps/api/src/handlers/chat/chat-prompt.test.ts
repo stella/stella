@@ -1015,7 +1015,7 @@ describe("chat prompt builders", () => {
       userContext: null,
     }).fullPrompt;
     const local = buildGlobalPromptParts({
-      promptTarget: { type: "local_run", webSearch: "unasked" },
+      promptTarget: { type: "local_run", webSearch: "unasked", skillTools: [] },
       toolAvailability: noWeb,
       userContext: null,
     }).fullPrompt;
@@ -1039,12 +1039,19 @@ describe("chat prompt builders", () => {
     // The rules every turn follows stay.
     expect(local).toContain("TRUTHFULNESS:");
     expect(local).toContain("DECISION CITATIONS:");
+    // Both write the one sentence the chat shows above the turn's steps,
+    // in the user's language, before the first tool call.
+    for (const prompt of [cloud, local]) {
+      expect(prompt).toContain(
+        "PLAN LINE: When you will use tools to answer, first write one short sentence in the user's language",
+      );
+    }
   });
 
   test("a turn on the member's computer is told how its web search runs at the permission level", () => {
     const promptFor = (webSearch: "unasked" | "asks" | "off") =>
       buildGlobalPromptParts({
-        promptTarget: { type: "local_run", webSearch },
+        promptTarget: { type: "local_run", webSearch, skillTools: [] },
         userContext: null,
       }).fullPrompt;
     const unasked = promptFor("unasked");
@@ -1069,7 +1076,11 @@ describe("chat prompt builders", () => {
   });
 
   test("the prompt text builders keep the turn's target, as their parts do", () => {
-    const localRun = { type: "local_run", webSearch: "asks" } as const;
+    const localRun = {
+      type: "local_run",
+      webSearch: "asks",
+      skillTools: [],
+    } as const;
     const refRegistry = createChatRefRegistry();
     const workspace = {
       entityCount: 1,

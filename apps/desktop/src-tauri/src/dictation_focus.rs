@@ -16,10 +16,11 @@
 use tauri::AppHandle;
 
 /// The focused app: identifier (bundle identifier on macOS, executable on
-/// Windows), process and window.
+/// Windows), display name, process and window.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FocusTarget {
   pub identifier: Option<String>,
+  pub name: String,
   process_id: i64,
   window: Option<isize>,
 }
@@ -42,6 +43,30 @@ pub enum Insertion {
   FocusUnconfirmed,
 }
 
+/// What differs between the focus at the press and the focus now, the
+/// broadest difference first, for the local log.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Moved {
+  /// Another app.
+  App,
+  /// The same app, another process of it.
+  Process,
+  /// The same process, another of its windows in front, or none.
+  Window,
+}
+
+pub fn moved(pressed: &FocusTarget, now: &FocusTarget) -> Option<Moved> {
+  if pressed.identifier != now.identifier {
+    Some(Moved::App)
+  } else if pressed.process_id != now.process_id {
+    Some(Moved::Process)
+  } else if pressed.window != now.window {
+    Some(Moved::Window)
+  } else {
+    None
+  }
+}
+
 /// Whether text may go to the app focused now. Without a target read at the
 /// press there is nothing to compare, and typing goes ahead as plain text
 /// (`dictation_format` gives an unread app no formatting keystrokes); once a
@@ -58,6 +83,30 @@ pub fn insertion(
   }
 }
 
+/// Whether keyboard focus in `target` is a password field: nothing is
+/// recorded for one or typed into one. False when it cannot be read; on
+/// Windows only classic edit controls say.
+pub fn in_password_field(target: Option<&FocusTarget>) -> bool {
+  let Some(target) = target else {
+    return false;
+  };
+  #[cfg(target_os = "macos")]
+  {
+    i32::try_from(target.process_id)
+      .is_ok_and(stella_desktop_macos::focused_field_is_secure)
+  }
+  #[cfg(target_os = "windows")]
+  {
+    u32::try_from(target.process_id)
+      .is_ok_and(stella_desktop_macos::focused_field_is_secure)
+  }
+  #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+  {
+    let _ = target;
+    false
+  }
+}
+
 #[cfg(target_os = "macos")]
 pub fn current(app: &AppHandle) -> Option<FocusTarget> {
   let foreground = crate::foreground_app::current(app)?;
@@ -67,6 +116,7 @@ pub fn current(app: &AppHandle) -> Option<FocusTarget> {
     .and_then(|number| isize::try_from(number).ok());
   Some(FocusTarget {
     identifier: foreground.identifier,
+    name: foreground.name,
     process_id: i64::from(foreground.process_id),
     window,
   })
@@ -86,6 +136,7 @@ pub fn current(app: &AppHandle) -> Option<FocusTarget> {
   }
   Some(FocusTarget {
     identifier: foreground.identifier,
+    name: foreground.name,
     process_id: i64::from(process_id),
     window: Some(window.ptr() as isize),
   })
@@ -103,6 +154,7 @@ mod tests {
   fn target(identifier: &str, process_id: i64, window: Option<isize>) -> FocusTarget {
     FocusTarget {
       identifier: Some(identifier.to_string()),
+      name: identifier.to_string(),
       process_id,
       window,
     }
@@ -131,6 +183,24 @@ mod tests {
         "{now:?}"
       );
     }
+  }
+
+  #[test]
+  fn the_log_names_the_broadest_difference_in_focus() {
+    let pressed = target("com.microsoft.word", 41, Some(7));
+    assert_eq!(moved(&pressed, &pressed.clone()), None);
+    assert_eq!(
+      moved(&pressed, &target("com.tinyspeck.slackmacgap", 52, Some(9))),
+      Some(Moved::App)
+    );
+    assert_eq!(
+      moved(&pressed, &target("com.microsoft.word", 42, Some(7))),
+      Some(Moved::Process)
+    );
+    assert_eq!(
+      moved(&pressed, &target("com.microsoft.word", 41, None)),
+      Some(Moved::Window)
+    );
   }
 
   #[test]

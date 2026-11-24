@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { sha256Hex } from "@stll/sha256/node";
 
@@ -31,7 +32,9 @@ test("quoted values preserve escaped delimiters and unmatched literal text", () 
 });
 
 test("unterminated escaped quote suffixes finish within a bounded subprocess", () => {
-  const source = new URL("failure-fingerprint.ts", import.meta.url).pathname;
+  const source = fileURLToPath(
+    new URL("failure-fingerprint.ts", import.meta.url),
+  );
   const result = Bun.spawnSync({
     cmd: [
       process.execPath,

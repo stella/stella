@@ -18,8 +18,8 @@ import {
 } from "@stll/legal-ast/anchor-redirects";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import type { Transaction } from "@/api/db/root";
 import { caseLawDecisionAnchorRedirects } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 

@@ -6,8 +6,12 @@ import { publicLawDatabaseRolePermissionsSql } from "@/api/lib/public-law-read-d
 import type { PublicLawDatabaseRolePermissions } from "@/api/lib/public-law-read-db";
 import {
   CENSUS_COLUMN_GRANTS_BY_RELATION,
+  COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
+  COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION,
+  COLLECTION_PART_COLUMN_GRANTS_BY_RELATION,
   LEGISLATION_WORK_IDENTIFIER_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+  type PublicLawColumnGrantsByRelation,
 } from "@/api/lib/public-law-relations";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
@@ -17,6 +21,15 @@ describe.skipIf(!enabled)("staged public-law grants (postgres)", () => {
   test.each(
     Object.entries({
       ...CENSUS_COLUMN_GRANTS_BY_RELATION,
+      ...COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
+      case_law_published_decisions: {
+        ...COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION.case_law_published_decisions,
+        ...COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION.case_law_published_decisions,
+      },
+      case_law_collection_bodies: {
+        ...COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies,
+        ...COLLECTION_PART_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies,
+      },
       ...LEGISLATION_WORK_IDENTIFIER_COLUMN_GRANTS_BY_RELATION,
     }),
   )(
@@ -56,12 +69,14 @@ describe.skipIf(!enabled)("staged public-law grants (postgres)", () => {
             await tx.execute(
               sql`GRANT SELECT (id) ON public.case_law_sources TO ${role}`,
             );
-            const permissions = async () => {
+            const permissions = async (
+              releaseGrants: PublicLawColumnGrantsByRelation = grants,
+            ) => {
               await tx.execute(sql`SET LOCAL ROLE ${role}`);
               const row =
                 (
                   await tx.execute<PublicLawDatabaseRolePermissions>(
-                    publicLawDatabaseRolePermissionsSql(grants),
+                    publicLawDatabaseRolePermissionsSql(releaseGrants),
                   )
                 ).at(0) ?? panic("Reader grant attestation returned no result");
               await tx.execute(sql`RESET ROLE`);
@@ -101,6 +116,28 @@ describe.skipIf(!enabled)("staged public-law grants (postgres)", () => {
               sql`GRANT SELECT (${columnList}) ON ${table} TO ${role}`,
             );
             expect(await permissions()).toMatchObject(accepted);
+            // The pre-expansion reader refuses the same new grants; only the
+            // deployed permitted inventory admits the feature migration.
+            expect(
+              await permissions({ case_law_sources: { id: "required" } }),
+            ).toMatchObject({ canReadOtherData: true });
+            const featureGrants = {
+              ...grants,
+              [relation]: Object.fromEntries(
+                columns.map((column) => [column, "required" as const]),
+              ),
+            };
+            expect(await permissions(featureGrants)).toMatchObject(accepted);
+            await tx.execute(
+              sql`REVOKE SELECT (${sql.identifier(firstColumn)}) ON ${table} FROM ${role}`,
+            );
+            expect(await permissions(featureGrants)).toMatchObject({
+              canReadPublicLaw: false,
+            });
+            expect(await permissions()).toMatchObject(accepted);
+            await tx.execute(
+              sql`GRANT SELECT (${sql.identifier(firstColumn)}) ON ${table} TO ${role}`,
+            );
 
             await tx.execute(
               sql`GRANT SELECT (private_fixture) ON ${table} TO ${role}`,

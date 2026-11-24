@@ -144,6 +144,8 @@ export const DIFF_SCOPED_STEPS = {
     operational(GENERATED_CONFLICTS),
   "network-baseline-record.yml:record#Seed write mode from the latest published recording":
     operational("Seeds the recorder from the last published recording."),
+  "route-scale-nightly.yml:measure#Prepare network comparison baseline":
+    fullTree(NETWORK_BUDGET),
   "journey-canary.yml:journeys#Check published versions": operational(
     "Compares the published versions with main before the journeys run.",
   ),
@@ -319,6 +321,9 @@ export const DIFF_SCOPED_STEPS = {
   ),
   "ci.yml:ci-checks-rest#Check migration identity against the base branch":
     diffComplete("Concerns the migrations the change adds or removes."),
+  "ci.yml:ci-checks-rest#Action commit pins": diffComplete(
+    "Concerns only action pins new against the base; an unchanged pin was verified when it was added.",
+  ),
   "ci.yml:ci-checks-rest#Bridge-version guard": expands(
     "Watches the bridge files and every crate module the bridge calls, read from bridge.rs.",
   ),

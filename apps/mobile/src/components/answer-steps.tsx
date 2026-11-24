@@ -1,11 +1,11 @@
 import { useState } from "react";
 
 import { panic } from "better-result";
-import { Pressable, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useTranslations } from "use-intl";
 
-import { PROCESS_SUMMARY_KINDS } from "@stll/api-contract/chat-tool-activity";
-import type { ProcessSummaryKind } from "@stll/api-contract/chat-tool-activity";
+import type { ProcessSummaryPhrase } from "@stll/api-contract/chat-tool-activity";
+import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
 
 import { keyedBy } from "@/components/keyed";
@@ -15,19 +15,29 @@ import { ChevronDownIcon, ChevronRightIcon } from "@/icons.gen";
 import type { AnswerBlock, AnswerStep } from "@/state/chat-answer";
 import { useAppColors } from "@/theme";
 
-/** The phrase each kind of work is counted in, as the web counts it. */
+/** Where each phrase of a run's summary is kept, as the web words it. */
 const SUMMARY_KEYS = {
-  research: "processSummary.sourcesChecked",
-  artifact: "processSummary.documentEdits",
-  mutation: "processSummary.changesSaved",
-  computation: "processSummary.analyses",
-} as const satisfies Record<ProcessSummaryKind, string>;
+  searchedLegislation: "processSummary.searchedLegislation",
+  searchedCaseLaw: "processSummary.searchedCaseLaw",
+  searchedLegislationAndCaseLaw: "processSummary.searchedLegislationAndCaseLaw",
+  readDocument: "processSummary.readDocument",
+  readDocuments: "processSummary.readDocuments",
+  searchedMatters: "processSummary.searchedMatters",
+  checkedRegisters: "processSummary.checkedRegisters",
+  searchedWeb: "processSummary.searchedWeb",
+  searchedChats: "processSummary.searchedChats",
+  sourcesChecked: "processSummary.sourcesChecked",
+  lookups: "lookupCount",
+  documentEdits: "processSummary.documentEdits",
+  changesSaved: "processSummary.changesSaved",
+  steps: "stepCount",
+} as const satisfies Record<ProcessSummaryPhrase, string>;
 
 /**
- * A run of the steps an answer took, as the web shows it: one line that
- * says what the run got done ("3 sources checked · 2 analyses"), or, while
- * the run is still going, the step it is on. Tapping it lists each step by
- * its title.
+ * A run of the steps an answer took, as the web shows it: one quiet line
+ * that says what the run got done ("Searched legislation and case law · 5
+ * lookups"), or, while the run is still going, the step it is on, with a
+ * trailing chevron. Tapping it lists each step by its title.
  */
 export const AnswerSteps = ({
   block,
@@ -42,37 +52,50 @@ export const AnswerSteps = ({
   const stepTitle = useStepTitle();
   const [open, setOpen] = useState(false);
   const current = block.steps.at(-1);
-  // Settled, the run says what it got done; a run of reasoning alone, or of
-  // steps that did not land, counts its steps instead.
-  const work =
-    PROCESS_SUMMARY_KINDS.flatMap((kind) => {
-      const count = block.work.get(kind) ?? 0;
-      return count > 0 ? [t(SUMMARY_KEYS[kind], { count })] : [];
-    }).join(" · ") || t("stepCount", { count: block.steps.length });
-  const summary = live && current !== undefined ? stepTitle(current) : work;
+  // Settled, the run says what it got done, in the shared summary's
+  // phrases (`summarizeProcessRun`).
+  const done = block.summary
+    .map(({ phrase, count }) => t(SUMMARY_KEYS[phrase], { count }))
+    .join(" · ");
+  const summary = live && current !== undefined ? stepTitle(current) : done;
   const Chevron = open ? ChevronDownIcon : ChevronRightIcon;
 
   return (
     <View style={styles.run}>
-      <Pressable
-        accessibilityRole="button"
+      <Button
         accessibilityState={{ expanded: open }}
+        className="max-w-full"
         hitSlop={6}
         onPress={() => {
           setOpen((shown) => !shown);
         }}
-        style={[
-          styles.summary,
-          { backgroundColor: colors.card, borderColor: colors.border },
-        ]}
+        variant="plain"
       >
-        <Chevron color={colors.muted} size={14} />
-        <Text numberOfLines={1} style={[styles.label, { color: colors.muted }]}>
-          {summary}
-        </Text>
-      </Pressable>
+        <View style={styles.summary}>
+          <Text
+            numberOfLines={1}
+            style={[styles.label, { color: colors.muted }]}
+          >
+            {summary}
+          </Text>
+          <Chevron color={colors.muted} size={14} />
+        </View>
+      </Button>
       {open ? <StepList steps={block.steps} /> : null}
     </View>
+  );
+};
+
+/**
+ * The plan the model wrote before its first step, as the web shows it:
+ * quiet prose above the steps, no box, at most three lines.
+ */
+export const AnswerIntent = ({ text }: { text: string }) => {
+  const colors = useAppColors();
+  return (
+    <Text numberOfLines={3} style={[styles.intent, { color: colors.muted }]}>
+      {text}
+    </Text>
   );
 };
 
@@ -150,17 +173,17 @@ export const AnswerSubagent = ({
   return (
     <View style={styles.run}>
       {opens ? (
-        <Pressable
-          accessibilityRole="button"
+        <Button
           accessibilityState={{ expanded: open }}
+          className="self-stretch"
           hitSlop={6}
           onPress={() => {
             setChosen(open ? "closed" : "open");
           }}
-          style={frame}
+          variant="plain"
         >
-          {header}
-        </Pressable>
+          <View style={frame}>{header}</View>
+        </Button>
       ) : (
         <View style={frame}>{header}</View>
       )}
@@ -187,7 +210,9 @@ const useStepTitle = () => {
       case "reasoning":
         return t("reasoning");
       case "tool":
-        return t(`tool.${step.label}`);
+        return step.research === undefined
+          ? t(`tool.${step.label}`)
+          : t(`toolResearch.${step.research}`);
       case "local":
         return step.titleKind === null
           ? t(`tool.${step.label}`)
@@ -260,18 +285,18 @@ const StepRow = ({ step, title }: { step: AnswerStep; title: string }) => {
       {contentCallId === null ? (
         label
       ) : (
-        <Pressable
-          accessibilityRole="button"
+        <Button
           accessibilityState={{ expanded: open }}
           hitSlop={6}
           onPress={() => {
             setOpen((shown) => !shown);
           }}
-          style={styles.opens}
+          size="inline"
+          variant="link"
         >
           {label}
           <Chevron color={colors.muted} size={14} />
-        </Pressable>
+        </Button>
       )}
       {detail === null || detail === "" ? null : (
         <Text selectable style={[styles.detail, { color: colors.muted }]}>
@@ -295,14 +320,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
+  intent: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
   run: {
     alignItems: "flex-start",
     gap: 6,
-  },
-  opens: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 4,
   },
   step: {
     gap: 2,
@@ -330,12 +354,9 @@ const styles = StyleSheet.create({
   },
   summary: {
     alignItems: "center",
-    borderRadius: 8,
-    borderWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
-    gap: 6,
+    gap: 4,
     maxWidth: "100%",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    minHeight: 32,
   },
 });

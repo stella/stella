@@ -5,7 +5,6 @@ import { eq, getColumns, sql } from "drizzle-orm";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { createTestState } from "@stll/test-state";
 
-import type { Transaction } from "@/api/db/root";
 import {
   auditLogs,
   featureEnrolments,
@@ -16,6 +15,7 @@ import {
   legalListVerificationRuns,
 } from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import { env } from "@/api/env";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";

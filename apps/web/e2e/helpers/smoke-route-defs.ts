@@ -86,6 +86,7 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     expectation: { kind: "settles" },
   }),
   staticRoute("/settings/organization/members"),
+  staticRoute("/settings/organization/sso"),
   staticRoute("/settings/organization/usage"),
   staticRoute("/admin", {
     expectation: {
@@ -104,6 +105,9 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
       kind: "redirectsTo",
       to: "/settings/organization/tools",
     },
+  }),
+  staticRoute("/admin/sso", {
+    expectation: { kind: "redirectsTo", to: "/settings/organization/sso" },
   }),
   staticRoute("/admin/ai", {
     expectation: { kind: "redirectsTo", to: "/settings/organization/ai" },
@@ -178,9 +182,9 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     path: (world) => `/workspaces/${world.workspace.id}/invoices`,
   },
   {
-    // Lists is shown only to callers with list access; the smoke caller has
-    // none, so the route answers the shared not-found page in place, the same
-    // as an unknown link. Granted rendering is covered by the route gate tests.
+    // The baseline caller has no list grant, so the route answers the shared
+    // not-found page in place, the same as an unknown link. Granted rendering is
+    // covered by the route gate tests.
     template: "/workspaces/$workspaceId/lists",
     path: (world) => `/workspaces/${world.workspace.id}/lists`,
     expectation: { kind: "rendersInPlace" },
@@ -252,8 +256,17 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   },
   staticRoute("/time/approvals"),
   staticRoute("/time/report"),
+  staticRoute("/settings/account/security"),
+  staticRoute("/settings/organization/dictation"),
+  staticRoute("/admin/dictation", {
+    expectation: {
+      kind: "redirectsTo",
+      to: "/settings/organization/dictation",
+    },
+  }),
 ];
 
+/** The validated scale fixture grants lists to both measured organizations. */
 // These routes need richer domain setup than cheap route smoke should own.
 // Keeping them explicit means a newly added authenticated route fails the
 // coverage assertion until it is either smoked or deliberately placed here.
@@ -262,6 +275,11 @@ export const INTENTIONALLY_NOT_SMOKED = new Set([
   "/knowledge/company-formats/$registry/$companyId",
   // A file download handler, not a page.
   "/knowledge/tools/$entry/download",
+  // Opens one of the organization's skills; agent-skills.spec.ts creates one
+  // and drives its editor there.
+  "/knowledge/tools/skills/$skillId",
+  // Requires a served regulator guidance document; the smoke world has none.
+  "/guidance/$guidanceId",
   "/workspaces/$workspaceId/invoices/$invoiceId",
   "/workspaces/$workspaceId/reports/$exportId",
 ]);

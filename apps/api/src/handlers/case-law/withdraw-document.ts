@@ -11,7 +11,7 @@ import { and, eq } from "drizzle-orm";
  * The two share the object-deletion step and nothing else.
  */
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
@@ -210,12 +210,6 @@ export const withdrawCaseLawDecisionDocument = async ({
       return { type: "missing" };
     }
 
-    // The audit row and the columns it describes are written together, so
-    // a withdrawal cannot land without a record of why.
-    await recordCorpusWithdrawalAuditEvent(tx, {
-      decisionId,
-      reason,
-    });
     const write = replayWrite(caseLawDecisions, {
       corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
       ...TRIMMED_CORPUS_PAYLOAD_COLUMNS,
@@ -240,6 +234,14 @@ export const withdrawCaseLawDecisionDocument = async ({
         subject: { family: "case_law", entityId: decisionId },
       });
     }
+    // The audit row and the columns it describes are written together, so
+    // a withdrawal cannot land without a record of why. It follows the
+    // desired-state write, so its instant follows every copy reserved before
+    // the withdrawal reached the state (`recordCorpusWithdrawalAuditEvent`).
+    await recordCorpusWithdrawalAuditEvent(tx, {
+      decisionId,
+      reason,
+    });
     await runDecisionWriteExtension(tx, decisionId);
     return { type: "written", cancelledIntents };
   });

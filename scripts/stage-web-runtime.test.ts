@@ -103,7 +103,10 @@ describe("external runtime workspace closure", () => {
   // to an empty set — must fail here, not in a production rollout.
   test("reaches folio-core's workspace-linked runtime dependencies", () => {
     expect(runtimeWorkspacePaths).toEqual(
-      expect.arrayContaining(["packages/template-conditions"]),
+      // folio-core 0.70 takes @stll/template-conditions from the registry
+      // (see stll-registry-resolutions.test.ts); that copy's
+      // @stll/conditions still links the workspace.
+      expect.arrayContaining(["packages/conditions"]),
     );
   });
 });

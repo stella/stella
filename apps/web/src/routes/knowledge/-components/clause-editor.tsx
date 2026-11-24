@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import Bold from "@tiptap/extension-bold";
 import Document from "@tiptap/extension-document";
@@ -591,37 +591,37 @@ export const ClauseEditor = ({
     editor.chain().focus().toggleHeading({ level }).run();
   };
 
-  const toggleBulletList = useCallback(() => {
+  const toggleBulletList = () => {
     if (!isUsableEditor(editor)) {
       return;
     }
 
     editor.chain().focus().toggleBulletList().run();
-  }, [editor]);
+  };
 
-  const toggleOrderedList = useCallback(() => {
+  const toggleOrderedList = () => {
     if (!isUsableEditor(editor)) {
       return;
     }
 
     editor.chain().focus().toggleOrderedList().run();
-  }, [editor]);
+  };
 
-  const undo = useCallback(() => {
+  const undo = () => {
     if (!isUsableEditor(editor)) {
       return;
     }
 
     editor.chain().focus().undo().run();
-  }, [editor]);
+  };
 
-  const redo = useCallback(() => {
+  const redo = () => {
     if (!isUsableEditor(editor)) {
       return;
     }
 
     editor.chain().focus().redo().run();
-  }, [editor]);
+  };
 
   const canUndo = editorReady && editor.can().undo();
   const canRedo = editorReady && editor.can().redo();
@@ -631,6 +631,11 @@ export const ClauseEditor = ({
   // TipTap's `editable: false` (which only blocks direct DOM interaction),
   // so the toolbar must disable them itself during review and generation.
   const editingLocked = reviewing || aiEdit.status === "generating";
+  const formattingDisabledReason = reviewing
+    ? t("common.finishReview")
+    : t("common.loading");
+  const historyDisabledReason =
+    editingLocked || !editorReady ? formattingDisabledReason : undefined;
 
   return (
     // Stop modifier key combos from propagating to global
@@ -650,6 +655,10 @@ export const ClauseEditor = ({
         <Button
           aria-label={t("folio.undo")}
           disabled={!canUndo || editingLocked}
+          disabledReason={
+            historyDisabledReason ??
+            t("legalReader.annotations.history.nothingToUndo")
+          }
           onClick={undo}
           size="icon-xs"
           title={t("folio.undo")}
@@ -661,6 +670,10 @@ export const ClauseEditor = ({
         <Button
           aria-label={t("folio.redo")}
           disabled={!canRedo || editingLocked}
+          disabledReason={
+            historyDisabledReason ??
+            t("legalReader.annotations.history.nothingToRedo")
+          }
           onClick={redo}
           size="icon-xs"
           title={t("folio.redo")}
@@ -674,6 +687,7 @@ export const ClauseEditor = ({
           aria-label={t("folio.bold")}
           className={cn(editorReady && editor.isActive("bold") && "bg-muted")}
           disabled={!editorReady || editingLocked}
+          disabledReason={formattingDisabledReason}
           onClick={toggleBold}
           size="icon-xs"
           type="button"
@@ -685,6 +699,7 @@ export const ClauseEditor = ({
           aria-label={t("folio.italic")}
           className={cn(editorReady && editor.isActive("italic") && "bg-muted")}
           disabled={!editorReady || editingLocked}
+          disabledReason={formattingDisabledReason}
           onClick={toggleItalic}
           size="icon-xs"
           type="button"
@@ -701,6 +716,7 @@ export const ClauseEditor = ({
               "bg-muted",
           )}
           disabled={!editorReady || editingLocked}
+          disabledReason={formattingDisabledReason}
           onClick={() => toggleHeading(1)}
           size="icon-xs"
           type="button"
@@ -716,6 +732,7 @@ export const ClauseEditor = ({
               "bg-muted",
           )}
           disabled={!editorReady || editingLocked}
+          disabledReason={formattingDisabledReason}
           onClick={() => toggleHeading(2)}
           size="icon-xs"
           type="button"
@@ -731,6 +748,7 @@ export const ClauseEditor = ({
               "bg-muted",
           )}
           disabled={!editorReady || editingLocked}
+          disabledReason={formattingDisabledReason}
           onClick={() => toggleHeading(3)}
           size="icon-xs"
           type="button"
@@ -745,6 +763,7 @@ export const ClauseEditor = ({
             editorReady && editor.isActive("bulletList") && "bg-muted",
           )}
           disabled={!editorReady || editingLocked}
+          disabledReason={formattingDisabledReason}
           onClick={toggleBulletList}
           size="icon-xs"
           type="button"
@@ -758,6 +777,7 @@ export const ClauseEditor = ({
             editorReady && editor.isActive("orderedList") && "bg-muted",
           )}
           disabled={!editorReady || editingLocked}
+          disabledReason={formattingDisabledReason}
           onClick={toggleOrderedList}
           size="icon-xs"
           type="button"
@@ -905,6 +925,9 @@ const AiEditBar = ({
         )}
         <Button
           disabled={generating || instruction.trim() === ""}
+          disabledReason={
+            generating ? t("common.loading") : t("common.enterInstruction")
+          }
           onClick={onSubmit}
           size="sm"
           type="button"

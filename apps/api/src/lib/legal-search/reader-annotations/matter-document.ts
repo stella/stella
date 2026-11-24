@@ -10,8 +10,8 @@ import { and, eq, isNull } from "drizzle-orm";
 
 import { MATTER_DOCUMENT_ANNOTATION_REFUSALS } from "@stll/api-contract/legal-reader-annotations";
 
-import type { Transaction } from "@/api/db/root";
 import { entityVersions, fields } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";

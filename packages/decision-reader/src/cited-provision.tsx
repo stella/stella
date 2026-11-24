@@ -572,6 +572,7 @@ export const CitedProvisionExpansion = ({
             <Button
               aria-expanded={displaysFullText}
               disabled={showsFull && outcome.type === "pending"}
+              disabledReason={messages["common.loading"]}
               onClick={(event) => {
                 event.stopPropagation();
                 onToggleFull(event);

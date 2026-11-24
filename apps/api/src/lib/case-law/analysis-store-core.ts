@@ -24,8 +24,8 @@ import type {
   DecisionAnalysis,
 } from "@stll/legal-ast/analysis";
 
-import type { Transaction } from "@/api/db/root";
 import { caseLawAnalysisFailures, caseLawDecisions } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { redactedProviderDiagnostic } from "@/api/lib/errors/redacted-provider-diagnostic";

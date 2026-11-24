@@ -13,9 +13,13 @@ import {
   TYPE,
 } from "@formatjs/icu-messageformat-parser";
 import { expect, test } from "bun:test";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createTranslator } from "use-intl/core";
 
 import { sourceFileIndex } from "@stll/scripts/src/source-file-index";
+
+import { featureCatalogRoots } from "../../scripts/i18n-feature-catalogs";
 
 type Catalog = Record<string, unknown>;
 type Message = { key: string; value: string };
@@ -467,7 +471,7 @@ const renderingErrors = (
 };
 
 const catalogFiles = sourceFileIndex(
-  new URL("langs", import.meta.url).pathname,
+  fileURLToPath(new URL("langs", import.meta.url)),
   {
     pattern: "*.json",
   },
@@ -479,6 +483,22 @@ const catalogs = new Map<string, Catalog>(
     JSON.parse(sourceText),
   ]),
 );
+
+// Feature catalogs are censused as part of the app's: each locale's file
+// adds its namespaces to that locale's catalog, as the provider merges them.
+const webRoot = fileURLToPath(new URL("../..", import.meta.url));
+for (const root of featureCatalogRoots(webRoot)) {
+  for (const { relativePath, sourceText } of sourceFileIndex(
+    path.join(webRoot, root),
+    { pattern: "*.json" },
+  )) {
+    const locale = relativePath.slice(0, -".json".length);
+    catalogs.set(locale, {
+      ...catalogs.get(locale),
+      ...JSON.parse(sourceText),
+    });
+  }
+}
 const englishMessages = new Map(
   flattenMessages(catalogs.get("en")).map(({ key, value }) => [key, value]),
 );

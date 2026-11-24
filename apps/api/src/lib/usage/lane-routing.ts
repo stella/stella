@@ -9,12 +9,12 @@
 
 import { and, eq } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   usageEntitlements,
   usagePolicies,
   usageSeatAssignments,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getLaneCounterMicroUnits } from "@/api/lib/usage/lane-budget";
 import { memberMayUseAI } from "@/api/lib/usage/member-capacity";

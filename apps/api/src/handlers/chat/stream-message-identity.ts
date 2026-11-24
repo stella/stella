@@ -18,7 +18,7 @@ import {
 } from "@stll/api-contract/chat";
 import { Temporal } from "@stll/time";
 
-import type { SafeDbError } from "@/api/db/safe-db";
+import type { SafeDbError } from "@/api/db/safe-db-types";
 import { toPersistableChatMessage } from "@/api/handlers/chat/chat-message-parts";
 import { COMPACTION_SUMMARY_MESSAGE_ID } from "@/api/handlers/chat/compaction";
 import type { ClientMessage } from "@/api/handlers/chat/message-page";

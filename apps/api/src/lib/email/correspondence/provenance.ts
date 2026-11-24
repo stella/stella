@@ -8,8 +8,8 @@ import type {
 
 import type { correspondence } from "@/api/db/schema";
 import {
-  deriveDataBoxDirectionBasis,
   DIRECTION_BY_BASIS,
+  withDataBoxDirection,
 } from "@/api/lib/email/correspondence/data-box/direction";
 
 type StoredCorrespondenceProvenance = Pick<
@@ -111,7 +111,7 @@ export const readCorrespondenceProvenance = (
 
 type StoredCorrespondenceChannel = Pick<
   typeof correspondence.$inferSelect,
-  "channel" | "dataBox" | "direction"
+  "channel" | "dataBox" | "certifiedEmail" | "direction"
 >;
 
 type CorrespondenceChannelProjection = CorrespondenceChannelContent & {
@@ -120,34 +120,37 @@ type CorrespondenceChannelProjection = CorrespondenceChannelContent & {
 
 /** Stored data-box envelopes contain only the file's assertions. */
 export const readCorrespondenceChannel = (
-  { channel, dataBox, direction }: StoredCorrespondenceChannel,
+  { channel, dataBox, certifiedEmail, direction }: StoredCorrespondenceChannel,
   organizationBoxIds: readonly string[],
 ): CorrespondenceChannelProjection => {
   switch (channel) {
     case "email":
-      if (dataBox !== null || direction === null) {
+      if (dataBox !== null || certifiedEmail !== null || direction === null) {
         return panic("Email correspondence has invalid channel metadata");
       }
-      return { channel, dataBox, direction };
+      return { channel, dataBox, certifiedEmail, direction };
     case "data_box": {
       if (
         dataBox === null ||
+        certifiedEmail !== null ||
         direction !== null ||
         "directionBasis" in dataBox
       ) {
         return panic("Data-box correspondence has invalid stored metadata");
       }
-      const directionBasis = deriveDataBoxDirectionBasis({
-        senderBoxId: dataBox.sender.boxId,
-        recipientBoxId: dataBox.recipient.boxId,
-        organizationBoxIds,
-      });
+      const envelope = withDataBoxDirection(dataBox, organizationBoxIds);
       return {
         channel,
-        dataBox: { ...dataBox, directionBasis },
-        direction: DIRECTION_BY_BASIS[directionBasis],
+        dataBox: envelope,
+        certifiedEmail,
+        direction: DIRECTION_BY_BASIS[envelope.directionBasis],
       };
     }
+    case "pec":
+      if (dataBox !== null || certifiedEmail === null || direction === null) {
+        return panic("Certified email correspondence has invalid metadata");
+      }
+      return { channel, dataBox, certifiedEmail, direction };
     default:
       channel satisfies never;
       return panic("Unhandled correspondence channel");

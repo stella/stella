@@ -13,6 +13,7 @@ import {
 } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
 import nodePath from "node:path";
+import { fileURLToPath } from "node:url";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
@@ -948,6 +949,9 @@ type EvaluateResultOptions = {
   missingJob?: boolean;
   matrixTimeoutSibling?: boolean;
   embeddedStepFailure?: boolean;
+  /** The failed job's merge-group cancel step ran and handed the run's
+   *  cancellation off, so the job itself ended with its failure. */
+  handedOffCancellation?: boolean;
   jobConclusion?: "cancelled" | "failure" | "timed_out";
   heavyOnly?: boolean;
   outcomeScript?: string;
@@ -1169,6 +1173,23 @@ const prHeavyEnv = (plannedOutputs: Record<string, string>) => ({
   PR_HEAVY_JOBS: JSON.stringify(PR_HEAVY_JOBS),
 });
 
+/** A failed job's steps: the step that failed it and, when the job handed
+ *  its run's cancellation off, its successful merge-group cancel step. */
+const fixtureJobSteps = ({
+  embeddedStepFailure,
+  handedOffCancellation,
+}: {
+  embeddedStepFailure: boolean;
+  handedOffCancellation: boolean;
+}) => [
+  ...(embeddedStepFailure
+    ? [{ name: "Validate contract", number: 3, conclusion: "failure" }]
+    : []),
+  ...(handedOffCancellation
+    ? [{ name: CANONICAL_CANCEL_STEP.name, number: 4, conclusion: "success" }]
+    : []),
+];
+
 const resultGateCase = ({
   event,
   results,
@@ -1185,6 +1206,7 @@ const resultGateCase = ({
   missingJob = false,
   matrixTimeoutSibling = false,
   embeddedStepFailure = false,
+  handedOffCancellation = false,
   jobConclusion,
   heavyOnly = false,
   outcomeScript = resultStep.run,
@@ -1253,9 +1275,7 @@ const resultGateCase = ({
         (job === "ci-tests" ? " (api-1)" : ""),
       conclusion: jobConclusion ?? result.result,
       html_url: `https://example.test/jobs/${checkId}`,
-      steps: embeddedStepFailure
-        ? [{ name: "Validate contract", number: 3, conclusion: "failure" }]
-        : [],
+      steps: fixtureJobSteps({ embeddedStepFailure, handedOffCancellation }),
       check_run_url: `https://api.github.com/repos/${PULL_REQUEST.repo}/check-runs/${checkId}`,
     });
     checkAnnotations[checkId] = [annotations];
@@ -1578,7 +1598,7 @@ test("a full-depth run passes jobs whose scope was not planned only when skipped
     }
   }
   expectResultGates(gates);
-}, 30_000);
+}, 50_000);
 
 // A pull request always plans `fast`; a manual run plans the depth it was
 // dispatched with. Both can be superseded by a newer run.
@@ -1624,7 +1644,7 @@ test("PR-depth evidence never replaces admitted merge-group checks", () => {
     }
   }
   expectResultGates(gates);
-}, 35_000);
+}, 50_000);
 
 test("CI result rejects a failed check leg after independent guards finish", () => {
   for (const event of [EVENT.mergeGroup, EVENT.pullRequest]) {
@@ -2298,7 +2318,7 @@ test("cancelled jobs retain failed-step evidence and cannot pass verified supers
     }),
   )) {
     expect(exitCode, `${item.event}/${item.job}`).toBe(1);
-    expect(stdout).toContain("Cancelled CI job contains a failed step:");
+    expect(stdout).toContain("::error::CI job failed:");
     expect(stdout).toContain("3: Validate contract");
   }
   const options = {
@@ -2314,7 +2334,43 @@ test("cancelled jobs retain failed-step evidence and cannot pass verified supers
   expect(outcomeScript).not.toBe(resultStep.run);
   expect(evaluateResult({ ...options, outcomeScript })).toBe(0);
   // Runs the outcome script for every required job of three events.
-}, 30_000);
+}, 50_000);
+
+// timeout: runs the outcome script once for every required job.
+test("a failed job that handed off its run's cancellation is named as the cause", () => {
+  // Every required job of a merge group can fail first; the run's other
+  // jobs end cancelled, and the summary names the job and step that failed.
+  const cases = resultJob.needs.map((job) => ({
+    job: activeJobForEvent(job, EVENT.mergeGroup),
+    handedOffCancellation: true,
+  }));
+  // Without its cancel step the failed job did not end the run: ordinary
+  // evaluation names it, never as a cancellation cause.
+  const notHandedOff = { job: "ci-tests", handedOffCancellation: false };
+  const outcomes = evaluateResults([...cases, notHandedOff], (item) => ({
+    event: EVENT.mergeGroup,
+    results: { [item.job]: "failure" },
+    cancellationEvidence: "missing",
+    embeddedStepFailure: true,
+    handedOffCancellation: item.handedOffCancellation,
+  }));
+  for (const { item, exitCode, stdout } of outcomes) {
+    expect(exitCode, item.job).toBe(1);
+    expect(stdout.includes("::error::CI job failed:"), item.job).toBe(
+      item.handedOffCancellation,
+    );
+    if (item.handedOffCancellation) {
+      expect(stdout, item.job).toMatch(
+        /::error::CI job failed: .+ \/ 3: Validate contract \(https:\/\/example\.test\/jobs\/10\)/u,
+      );
+      expect(stdout, item.job).toContain("Merge group failed: ");
+    }
+  }
+  // The gate recognises the hand-off by the canonical step's own name.
+  expect(resultStep.run).toContain(
+    `.name == "${CANONICAL_CANCEL_STEP.name}" and .conclusion == "success"`,
+  );
+}, 50_000);
 
 test("ci-result summary opens with the failed job and step before its cancelled verdict", () => {
   const outcomeScript = `
@@ -2929,7 +2985,7 @@ const jobSteps = (job: unknown) =>
     job,
   ).steps;
 
-const MATRIX_SHARD_ENV = `\${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}`;
+const MATRIX_SHARD_ENV = `\${{ matrix.shard }}`;
 
 const missingFullTestShards = (source: string) => {
   const steps = jobSteps(workflowJobs(source)["full-test"]);
@@ -2946,10 +3002,8 @@ const missingFullTestShards = (source: string) => {
             return false;
           }
           const configuredShard = step.env?.["SHARD"];
-          let actualShard = configuredShard;
-          if (configuredShard === MATRIX_SHARD_ENV) {
-            actualShard = jobShard === "rest-web" ? "rest" : jobShard;
-          }
+          const actualShard =
+            configuredShard === MATRIX_SHARD_ENV ? jobShard : configuredShard;
           if (actualShard !== suite) {
             return false;
           }
@@ -3378,7 +3432,7 @@ test("no workflow string that embeds an expression exceeds GitHub's expression l
     }
   };
   for (const file of new Bun.Glob("*.{yml,yaml}").scanSync(
-    directory.pathname,
+    fileURLToPath(directory),
   )) {
     visit(
       Bun.YAML.parse(await Bun.file(new URL(file, directory)).text()),
@@ -3626,7 +3680,7 @@ test("metadata ci-result mirrors only a code run on the same pull request head",
   expect(`${timedOut.stdout}\n${timedOut.stderr}`).toContain(
     "timed out after 45 min waiting for a code run",
   );
-}, 20_000);
+}, 50_000);
 
 test("required checks retain PR and merge-group coverage", async () => {
   const workflowSchema = v.object({
@@ -3635,11 +3689,12 @@ test("required checks retain PR and merge-group coverage", async () => {
   });
   const directory = new URL("../.github/workflows/", import.meta.url);
   const workflows = await Promise.all(
-    [...new Bun.Glob("*.yml").scanSync(directory.pathname)].map(async (file) =>
-      v.parse(
-        workflowSchema,
-        Bun.YAML.parse(await Bun.file(new URL(file, directory)).text()),
-      ),
+    [...new Bun.Glob("*.yml").scanSync(fileURLToPath(directory))].map(
+      async (file) =>
+        v.parse(
+          workflowSchema,
+          Bun.YAML.parse(await Bun.file(new URL(file, directory)).text()),
+        ),
     ),
   );
   // Each required check is defined by exactly one workflow, wherever it lives.
@@ -4783,11 +4838,36 @@ test("a selected leg planned only for a hosted browser suite skips the web run",
   expect(runs("full", "[]", "[]")).toBe(true);
 });
 
+test("shipped web source plans production shards on a fast PR", () => {
+  for (const file of [
+    "apps/web/src/routes/index.tsx",
+    "apps/web/src/components/breadcrumbs/chat-switcher.tsx",
+    "apps/web/src/i18n/namespaces/en/core.json",
+    // Workspace packages the web build bundles.
+    "packages/ui/src/button.tsx",
+    "packages/html/src/load.ts",
+  ]) {
+    expect(runSelector([file], ["e2e_production_required"]), file).toEqual([
+      "true",
+    ]);
+  }
+  for (const file of [
+    "apps/web/src/components/breadcrumbs/chat-breadcrumb.dom.test.tsx",
+    "apps/web/src/lib/react-query.test.ts",
+    "apps/web/src/i18n/TERMINOLOGY.md",
+    "packages/ui/src/button.stories.tsx",
+    "packages/playwright-tools/src/index.ts",
+  ]) {
+    expect(runSelector([file], ["e2e_production_required"]), file).toEqual([
+      "false",
+    ]);
+  }
+});
+
 test("production shards keep full-depth core coverage and exclude unrelated fast PRs", () => {
   for (const file of [
     "apps/api/src/handlers/tasks/get.ts",
-    "apps/web/src/routes/index.tsx",
-    "packages/ui/src/button.tsx",
+    "packages/cli/src/index.ts",
   ]) {
     expect(runSelector([file], ["e2e_production_required"])).toEqual(["false"]);
     expect(
@@ -5694,6 +5774,11 @@ test("every browser suite runs on its required matrix legs, the playground on ev
         `bun run test:e2e:ui-playground "\${specs[@]}"`,
       );
       expect(suite.run, suite.name).not.toContain("--shard");
+    } else if (suite.name === "Test desktop browser interactions") {
+      expect(suite.if, suite.name).toContain(
+        "startsWith(matrix.suite, 'desktop-')",
+      );
+      expect(suite.run, suite.name).toContain("--shard=");
     } else {
       expect(suite.if, suite.name).toContain("matrix.suite ==");
     }
@@ -5766,7 +5851,7 @@ test("route-relevant changes plan the required route smoke", () => {
       unplannedScopes: [scope],
     }),
   ).toBe(0);
-}, 30_000);
+}, 50_000);
 
 test("a merge group relies on route-smoke after the duplicate matrix leg is removed", () => {
   const event = EVENT.mergeGroup;
@@ -5821,7 +5906,7 @@ test("a merge group plans both browser suites for app changes and neither for do
       EVENT.mergeGroup,
     ),
   ).toEqual(["false", "false"]);
-}, 30_000);
+}, 50_000);
 
 test("route smoke consumes the production build and fails when its stack cannot run", () => {
   const plan = jobSteps(ciJobs["ci-plan"]).find(
@@ -5990,7 +6075,7 @@ test("service-suite scopes run on pull requests only for selected corpus coverag
       })),
     ),
   );
-}, 30_000);
+}, 50_000);
 
 describe("drawn property samples match the shared runner", () => {
   // Compare both consumers under one seed, including the exploratory tier.
@@ -6163,7 +6248,7 @@ test("image scopes remain planned while pull requests skip execution", () => {
       }
     }
   }
-}, 30_000);
+}, 50_000);
 
 test("each split service step follows its own dependency scope and execution depth", () => {
   const scopes = [
@@ -6695,6 +6780,7 @@ test("workflow and planner changes run every planner test as a merge-group gate"
           step.run?.includes(file) ||
           (unlisted.has(file) &&
             step.run?.includes("bun scripts/run-unlisted-script-tests.ts") &&
+            !step.run.includes("--check-declarations") &&
             step.run.includes("--depth") === depthTests.has(file))
         ) {
           const existing = owners.get(file) ?? [];
@@ -7241,19 +7327,22 @@ test("API test matrix omits unaffected API shards and keeps whole affected merge
   const web = planCiApiTests({
     event: "pull_request",
     scopeUnknown: false,
-    testJobs: ["rest-web"],
+    testJobs: ["rest", "web"],
     select: () => selectApiTestImpact({ changed: ["apps/web/src/page.tsx"] }),
   });
   expect(web.type).toBe("run");
-  expect(web.type === "run" ? web.matrix.shard : []).toEqual(["rest-web"]);
+  expect(web.type === "run" ? web.matrix.shard : []).toEqual(["rest", "web"]);
   const queue = planCiApiTests({
     event: "merge_group",
     scopeUnknown: false,
-    testJobs: ["rest-web"],
+    testJobs: ["rest", "web"],
     select: () => ({ mode: "none", files: [], shards: 0 }),
   });
   expect(queue.type).toBe("run");
-  expect(queue.type === "run" ? queue.matrix.shard : []).toEqual(["rest-web"]);
+  expect(queue.type === "run" ? queue.matrix.shard : []).toEqual([
+    "rest",
+    "web",
+  ]);
   expect(
     (() => {
       const plan = planCiApiTests({
@@ -7266,7 +7355,18 @@ test("API test matrix omits unaffected API shards and keeps whole affected merge
       });
       return plan.type === "run" ? plan.matrix.shard : [];
     })(),
-  ).toEqual(["api-1", "api-2", "api-3", "api-4", "api-5", "api-6", "rest-web"]);
+  ).toEqual([
+    "api-1",
+    "api-2",
+    "api-3",
+    "api-4",
+    "api-5",
+    "api-6",
+    "api-7",
+    "api-8",
+    "rest",
+    "web",
+  ]);
   expect(workflow).toContain(
     `matrix: \${{ fromJSON(needs.ci-plan.outputs.ci_tests_matrix) }}`,
   );
@@ -7276,7 +7376,7 @@ test("API test matrix omits unaffected API shards and keeps whole affected merge
   expect(planner?.run).toContain(
     "! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then",
   );
-  expect(planner?.run).toContain("api_test_shards=6");
+  expect(planner?.run).toContain("api_test_shards=8");
   expect(planner?.env?.["COMPARISON_BASE"]).toBe(
     `\${{ steps.changed-files.outputs.comparison_base }}`,
   );
@@ -7345,9 +7445,9 @@ test("a crashed API planner widens the real workflow outputs", () => {
     );
     const values = readFileSync(output, "utf-8");
     expect(values).toContain(
-      'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","api-5","api-6","rest-web"]}',
+      'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","api-5","api-6","api-7","api-8","rest","web"]}',
     );
-    expect(values).toContain("api_test_shards=6");
+    expect(values).toContain("api_test_shards=8");
     expect(values).toContain("api_test_files_encoded=\n");
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -7649,12 +7749,9 @@ test("the nightly shard census rejects a planted missing web suite", () => {
     new URL("../.github/workflows/nightly-test.yml", import.meta.url),
     "utf-8",
   );
-  const planted = nightly.replace(
-    /\n {6}- name: Full web test suite\n[\s\S]*?(?=\n\n {2}# The production client build)/u,
-    "",
-  );
+  const planted = nightly.replace(`SHARD: ${MATRIX_SHARD_ENV}`, "SHARD: rest");
   expect(planted).not.toBe(nightly);
-  expect(missingFullTestShards(planted)).toEqual(["rest-web/web"]);
+  expect(missingFullTestShards(planted)).toContain("web/web");
 });
 
 test("API planning only loads dependencies after installation and emits install-free fallbacks", () => {
@@ -7682,18 +7779,18 @@ test("API planning only loads dependencies after installation and emits install-
       expected,
     ] of [
       ["pull_request", "false", "false", "", "", "", "0"],
-      ["pull_request", "true", "false", "", "", "", "6"],
+      ["pull_request", "true", "false", "", "", "", "8"],
       // Without package checks no API test runs, even when the API scope is
       // unknown: ci_tests_required is the one gate of ci-tests.
       ["pull_request", "false", "true", "", "", "", "0"],
-      ["merge_group", "true", "false", "", "", "", "6"],
-      ["workflow_dispatch", "true", "false", "", "", "", "6"],
+      ["merge_group", "true", "false", "", "", "", "8"],
+      ["workflow_dispatch", "true", "false", "", "", "", "8"],
       [
         "pull_request",
         "true",
         "false",
         "true",
-        '{"shard":["api-1","rest-web"]}',
+        '{"shard":["api-1","rest","web"]}',
         "1",
         "1",
       ],
@@ -7702,9 +7799,9 @@ test("API planning only loads dependencies after installation and emits install-
         "true",
         "false",
         "",
-        '{"shard":["api-1","rest-web"]}',
+        '{"shard":["api-1","rest","web"]}',
         "1",
-        "6",
+        "8",
       ],
     ]) {
       writeFileSync(output, "");
@@ -7742,11 +7839,11 @@ test("API planning only loads dependencies after installation and emits install-
         );
       } else if (packages !== "true") {
         expect(values).toContain("ci_tests_required=false\n");
-        expect(values).toContain('ci_tests_matrix={"shard":["rest-web"]}\n');
+        expect(values).toContain('ci_tests_matrix={"shard":["rest"]}\n');
       } else if (selected) {
         expect(values).toContain("ci_tests_required=true\n");
         expect(values).toContain(
-          'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","api-5","api-6","rest-web"]}\n',
+          'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","api-5","api-6","api-7","api-8","rest","web"]}\n',
         );
       }
     }

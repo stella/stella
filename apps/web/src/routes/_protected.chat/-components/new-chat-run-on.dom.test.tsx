@@ -12,7 +12,8 @@ import {
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { aiAvailableResponse } from "@/__fixtures__/ai-availability";
-import type { WebApiRoutes } from "@/lib/api";
+import { isDisabledControl } from "@/__fixtures__/disabled-control";
+import type { WebApiRoutes } from "@/lib/api-contract";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 // Match Vite's worker asset import without replacing the page or its runtime.
@@ -55,9 +56,9 @@ const { workspacesNavigationOptions } =
 const { __resetChatRequestStateForTests } =
   await import("@/features/chat/chat-runtime-registry");
 const { Route: ChatIndexRoute } = await import("../index");
+const { Route: NewChatRoute } = await import("../../_protected.chat_.new");
+const { ChatThreadPage } = await import("./chat-thread.page");
 const desktopBridge = await import("@/lib/desktop-bridge");
-const { DESKTOP_PING_URL } =
-  await import("@/features/chat/desktop-launch.logic");
 
 const user = {
   activeOrganizationId: "00000000-0000-7000-8000-00000000ffff",
@@ -350,6 +351,35 @@ const serve = ({
       if (pathname.endsWith("/organization-settings/ai-availability")) {
         return Response.json(aiAvailableResponse());
       }
+      // The thread page's own reads: nothing granted, queued, suggested or
+      // running in the background, and no connectors.
+      if (pathname.endsWith("/chat/tool-grants")) {
+        return Response.json({ grants: [] });
+      }
+      if (/\/chat\/threads\/[^/]+\/queue$/u.test(pathname)) {
+        return Response.json({ hold: null, items: [] });
+      }
+      if (/\/chat\/threads\/[^/]+\/suggested-prompts$/u.test(pathname)) {
+        return Response.json({ prompts: [] });
+      }
+      if (/\/chat\/threads\/[^/]+\/background-tasks$/u.test(pathname)) {
+        return Response.json({ count: 0 });
+      }
+      if (/\/chat\/threads\/[^/]+\/read-state$/u.test(pathname)) {
+        return Response.json({ readState: "read" });
+      }
+      if (pathname.endsWith("/mcp/connections")) {
+        return Response.json({
+          connections: [],
+        } satisfies WebApiRoutes["mcp"]["connections"]["get"]["response"][200]);
+      }
+      if (pathname.endsWith("/mcp/connectors")) {
+        return Response.json({
+          canManageCustomConnectors: false,
+          connectors: [],
+          nativeTools: [],
+        } satisfies WebApiRoutes["mcp"]["connectors"]["get"]["response"][200]);
+      }
       if (pathname.startsWith("/api/auth/")) {
         return Response.json(null);
       }
@@ -451,6 +481,71 @@ const openNewChat = async (client: InstanceType<typeof QueryClient>) => {
   return { ui, appRouter };
 };
 
+/**
+ * `/chat/new`, which every New chat control on a thread opens (the header's,
+ * the composer's (+) menu, `/new`): it redirects to a fresh id that the
+ * thread page shows as a chat the server holds no row for.
+ */
+const openNewChatUrl = async (client: InstanceType<typeof QueryClient>) => {
+  const Redirect = NewChatRoute.options.component;
+  if (Redirect === undefined) {
+    throw new Error("The /chat/new route renders no component");
+  }
+  const root = router.createRootRoute({ component: router.Outlet });
+  const protectedRoute = router.createRoute({
+    getParentRoute: () => root,
+    id: "_protected",
+    beforeLoad: () => ({ user }),
+    component: router.Outlet,
+  });
+  const newChat = router.createRoute({
+    getParentRoute: () => protectedRoute,
+    path: "/chat/new",
+    component: Redirect,
+  });
+  const thread = router.createRoute({
+    getParentRoute: () => protectedRoute,
+    path: "/chat/$threadId",
+    component: () => {
+      const threadId = thread.useParams({
+        select: (params) => toChatThreadId(params.threadId),
+      });
+      return (
+        <ChatEditorProvider>
+          <ChatThreadPage threadRef={{ scope: "global", threadId }} />
+        </ChatEditorProvider>
+      );
+    },
+  });
+  const appRouter = router.createRouter({
+    routeTree: root.addChildren([
+      protectedRoute.addChildren([newChat, thread]),
+    ]),
+    history: router.createMemoryHistory({ initialEntries: ["/chat/new"] }),
+    isServer: false,
+  });
+  await appRouter.load();
+  const ui = testing.render(
+    <AnalyticsContext value={noopAnalytics}>
+      <QueryClientProvider client={client}>
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <FormattingProvider locale="en" timeZone="UTC">
+            <AuthenticatedUserProvider user={user}>
+              <AIAvailabilityProvider>
+                <router.RouterProvider router={appRouter} />
+              </AIAvailabilityProvider>
+            </AuthenticatedUserProvider>
+          </FormattingProvider>
+        </IntlProvider>
+      </QueryClientProvider>
+    </AnalyticsContext>,
+  );
+  await ui.findByRole("textbox");
+  expect(appRouter.state.location.pathname).toMatch(/^\/chat\/[^/]+$/u);
+  expect(appRouter.state.location.pathname).not.toBe("/chat/new");
+  return { ui, appRouter };
+};
+
 /** Write into the new chat's composer, whose thread id the page chose. */
 const typeDraft = (server: ReturnType<typeof serve>, text: string) => {
   const [threadId, ...others] = [...server.threadIds];
@@ -505,9 +600,7 @@ test("a new chat runs on the member's computer when they choose it, and its firs
   const send = await ui.findByRole("button", {
     name: messages.chat.sendPrompt,
   });
-  await testing.waitFor(() =>
-    expect(send.hasAttribute("disabled")).toBe(false),
-  );
+  await testing.waitFor(() => expect(isDisabledControl(send)).toBe(false));
   await testing.act(async () => {
     testing.fireEvent.click(send);
   });
@@ -523,22 +616,25 @@ test("a new chat runs on the member's computer when they choose it, and its firs
     useChatRunOnPreferenceStore.getState().byOrganization[
       user.activeOrganizationId
     ],
-  ).toEqual({ kind: "local", harness: "codex", model: CODEX.model });
+  ).toEqual({
+    kind: "local",
+    harness: "codex",
+    model: CODEX.model,
+    reasoningEffort: null,
+  });
   expect(server.unexpected).toEqual([]);
 });
 
 /** Type into the new chat and send; the request the page sent. */
 const sendFirstTurn = async (
   server: ReturnType<typeof serve>,
-  ui: Awaited<ReturnType<typeof openNewChat>>["ui"],
+  ui: ReturnType<typeof testing.render>,
 ) => {
   typeDraft(server, "Run the tests");
   const send = await ui.findByRole("button", {
     name: messages.chat.sendPrompt,
   });
-  await testing.waitFor(() =>
-    expect(send.hasAttribute("disabled")).toBe(false),
-  );
+  await testing.waitFor(() => expect(isDisabledControl(send)).toBe(false));
   await testing.act(async () => {
     testing.fireEvent.click(send);
   });
@@ -561,30 +657,100 @@ test("a new chat opens on the member's last Run on choice, and its first send go
   expect(server.unexpected).toEqual([]);
 });
 
-test("a new chat whose remembered computer is offline says so in the bar, opens stella desktop on the send, and does not move to stella cloud", async () => {
+/** The where chip of a new chat that started in the cloud instead of on Codex. */
+const startedInCloudLabel = (state: string) =>
+  `${CLOUD_LABEL}. ${messages.chat.runOn.startedInCloud
+    .replace("{harness}", () => "Codex")
+    .replace("{state}", () => state)}`;
+
+test("a new chat whose remembered computer is offline starts in the cloud and says why in the where chip", async () => {
   rememberRunTarget(user.activeOrganizationId, CODEX);
-  // Opening stella desktop is what connects the computer, as on a real
-  // machine.
-  let opened = false;
-  const open = spyOn(desktopBridge, "openDesktopUrl").mockImplementation(() => {
-    opened = true;
-  });
-  const server = serve({ readiness: () => (opened ? READINESS : OFFLINE) });
+  const open = spyOn(desktopBridge, "openDesktopUrl").mockImplementation(
+    () => undefined,
+  );
+  const server = serve({ readiness: OFFLINE });
   const client = createClient();
   const { ui } = await openNewChat(client);
 
-  const offline = `${CODEX_LABEL}. ${messages.chat.localRun.stateOffline}`;
-  expect(await ui.findByRole("button", { name: offline })).toBeTruthy();
-  expect(ui.queryByRole("button", { name: AUTO_LABEL })).toBeNull();
-  // The remembered choice is no gesture: nothing opened before the send.
-  expect(open).not.toHaveBeenCalled();
-  // The send opens stella desktop once and goes to the computer once it
-  // connects, never to stella's models in its place.
+  expect(
+    await ui.findByRole("button", {
+      name: startedInCloudLabel(messages.chat.localRun.stateOffline),
+    }),
+  ).toBeTruthy();
   expect(await sendFirstTurn(server, ui)).toMatchObject({
-    forwardedProps: { runTarget: CODEX },
+    forwardedProps: { runTarget: { kind: "cloud" } },
   });
-  expect(open).toHaveBeenCalledTimes(1);
-  expect(open).toHaveBeenCalledWith(DESKTOP_PING_URL);
+  // Nothing was opened for a computer the chat does not run on.
+  expect(open).not.toHaveBeenCalled();
+  expect(server.unexpected).toEqual([]);
+});
+
+const CODEX_HIGH: ChatLocalRunTarget = { ...CODEX, reasoningEffort: "high" };
+/** Codex ready on the computer, offering a high reasoning effort. */
+const READY_WITH_EFFORTS: ChatLocalRunReadiness = {
+  status: "enabled",
+  runners: [
+    {
+      desktopId: "0192f3a0-6b1c-7d2e-8f30-000000000001",
+      connected: true,
+      lastSeenAt: "2026-11-03T10:00:00.000Z",
+      linkedFolders: [],
+      harnesses: [
+        {
+          id: "codex",
+          state: "ready",
+          version: "0.50.0",
+          capabilities: ["approvals"],
+          approvalModes: ["ask"],
+          models: [
+            {
+              id: CODEX.model,
+              label: "GPT-5 Codex",
+              reasoningEfforts: ["low", "high"],
+            },
+          ],
+        },
+      ],
+    },
+  ],
+  maxApprovals: "full_auto",
+};
+
+// Guards the path every New chat control on a thread takes: `/chat/new`
+// lands on the thread page at a fresh id, which once ignored the member's
+// last choice and started every such chat in the cloud.
+test("New chat opened from a thread starts on the member's last Run on choice, model and effort included", async () => {
+  rememberRunTarget(user.activeOrganizationId, CODEX_HIGH);
+  const server = serve({ readiness: READY_WITH_EFFORTS });
+  const client = createClient();
+  const { ui } = await openNewChatUrl(client);
+
+  expect(await ui.findByRole("button", { name: CODEX_LABEL })).toBeTruthy();
+  expect(
+    await ui.findByRole("button", { name: "GPT-5 Codex | High" }),
+  ).toBeTruthy();
+  expect(await sendFirstTurn(server, ui)).toMatchObject({
+    forwardedProps: { runTarget: CODEX_HIGH },
+  });
+  expect(server.patches).toEqual([]);
+  expect(server.unexpected).toEqual([]);
+});
+
+test("New chat opened from a thread while the remembered computer is offline starts in the cloud and says why", async () => {
+  rememberRunTarget(user.activeOrganizationId, CODEX);
+  const server = serve({ readiness: OFFLINE });
+  const client = createClient();
+  const { ui } = await openNewChatUrl(client);
+
+  const label = startedInCloudLabel(messages.chat.localRun.stateOffline);
+  const chip = await ui.findByRole("button", { name: label });
+  // The where chip's menu says it too, first, for a member who opens it.
+  await testing.act(async () => {
+    testing.fireEvent.click(chip);
+  });
+  expect(
+    await ui.findByText(label.slice(`${CLOUD_LABEL}. `.length)),
+  ).toBeTruthy();
   expect(server.unexpected).toEqual([]);
 });
 
@@ -598,9 +764,7 @@ test("a new chat left on stella cloud sends its first turn without a computer", 
   const send = await ui.findByRole("button", {
     name: messages.chat.sendPrompt,
   });
-  await testing.waitFor(() =>
-    expect(send.hasAttribute("disabled")).toBe(false),
-  );
+  await testing.waitFor(() => expect(isDisabledControl(send)).toBe(false));
   await testing.act(async () => {
     testing.fireEvent.click(send);
   });

@@ -59,11 +59,20 @@ export const aggregateFences = () => {
       id: organizationId,
       mode: "update",
     },
+    sharepointConnection: {
+      aggregate: "sharepointConnection",
+      id: { id: createSafeId<"sharepointConnection">(), organizationId },
+      mode: "share",
+    },
     organizationDataBoxes: {
       aggregate: "organizationDataBoxes",
       id: { organizationId },
     },
-    organizationSettings: { aggregate: "organizationSettings", id: organizationId, mode: "update" },
+    organizationSettings: {
+      aggregate: "organizationSettings",
+      id: organizationId,
+      mode: "update",
+    },
     organizationObjectIntent: {
       aggregate: "organizationObjectIntent",
       id: organizationId,
@@ -221,6 +230,11 @@ export const aggregateFences = () => {
       id: { id: createSafeId<"aiMemory">(), organizationId },
       mode: "update",
     },
+    contact: {
+      aggregate: "contact",
+      id: { id: createSafeId<"contact">(), organizationId },
+      mode: "key share",
+    },
     searchProjectionRepair: {
       aggregate: "searchProjectionRepair",
       id: {
@@ -244,7 +258,15 @@ export const aggregateFences = () => {
       id: { id: createSafeId<"documentProcessingRun">(), workspaceId },
       mode: "update",
     },
+    invoiceSendCapacity: {
+      aggregate: "invoiceSendCapacity",
+      id: { organizationId },
+    },
     contactCapacity: { aggregate: "contactCapacity", id: { organizationId } },
+    dictationVocabularyCapacity: {
+      aggregate: "dictationVocabularyCapacity",
+      id: { organizationId },
+    },
     billingDraftSettings: {
       aggregate: "billingDraftSettings",
       id: { organizationId },
@@ -281,6 +303,11 @@ export const aggregateFences = () => {
     chatToolGrants: {
       aggregate: "chatToolGrants",
       id: { organizationId, userId },
+    },
+    outboundAction: {
+      aggregate: "outboundAction",
+      id: { id: createSafeId<"outboundAction">(), organizationId, userId },
+      mode: "update",
     },
     personalCatalog: {
       aggregate: "personalCatalog",
@@ -323,17 +350,17 @@ export const aggregateExecutionRows = (statement: SQL, found = true) => {
     return found ? [{ id: "locked" }] : [];
   }
   const first = query.params.at(0);
-  const contact = query.sql.includes("'contact_capacity'");
+  const namespace = /hashtext\('([^']+)'\)/u.exec(query.sql)?.at(1);
   let key1 = hashFixture(first);
-  if (contact) {
-    key1 = hashFixture("contact_capacity");
+  if (namespace !== undefined) {
+    key1 = hashFixture(namespace);
   } else if (typeof first === "number") {
     key1 = first;
   }
   return [
     {
       key1,
-      key2: hashFixture(query.params.at(contact ? 0 : 1)),
+      key2: hashFixture(query.params.at(namespace === undefined ? 1 : 0)),
       acquired: true,
     },
   ];

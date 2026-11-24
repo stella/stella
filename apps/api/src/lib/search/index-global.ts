@@ -19,7 +19,7 @@ import { Temporal } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
 import type {
   ContactAddress,
@@ -27,8 +27,13 @@ import type {
   ContactPhone,
 } from "@/api/db/schema-validators";
 import { arrayOrEmpty } from "@/api/lib/array";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ArtefactProvenanceDecodeError } from "@/api/lib/chat/artefact-provenance";
+import {
+  withAggregateLock,
+  withAggregateSavepoint,
+} from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -63,10 +68,9 @@ import type {
   GlobalSearchCursor,
   SearchRankingTier,
 } from "@/api/lib/search/pagination";
-import {
-  buildSearchPreviewPassages,
-  buildSearchPreviewPassageValueRows,
-} from "@/api/lib/search/preview-passages";
+import { buildSearchPreviewPassages } from "@/api/lib/search/preview-passages";
+import { lockCurrentSearchProjectionRepair } from "@/api/lib/search/projection-repair-fence";
+import type { SearchProjectionRepairFence } from "@/api/lib/search/projection-repair-fence";
 import {
   buildSearchCandidateTsQuery,
   buildSearchTsQuery,
@@ -1390,6 +1394,7 @@ const labelLikeFilter = (column: SQL, search: string): SQL => {
     return sql``;
   }
   const pattern = `%${escapeLike(trimmed)}%`;
+  // sql-perf-allow: bounded by one organization's accessible workspaces (search_documents_org_workspace_idx) and active facet filters
   return sql`AND ${column} ILIKE ${pattern}`;
 };
 
@@ -1581,6 +1586,45 @@ type SearchDocumentDatabase = Pick<
   "query" | "select" | "transaction"
 >;
 
+type SupplementalProjectionPublication =
+  | { type: "direct" }
+  | {
+      type: "repair";
+      fence: SearchProjectionRepairFence<"contact" | "workspace">;
+    };
+
+/**
+ * A contact edit locks the contact row before it re-marks the repair, so a
+ * repair publication takes the same order: contact first, then its fence.
+ * The projection insert's key check would otherwise wait on the contact while
+ * the fence blocks the edit.
+ */
+const lockContactRepair = async (
+  tx: Transaction,
+  fence: SearchProjectionRepairFence<"contact" | "workspace">,
+  projections: readonly {
+    contact: { id: SafeId<"contact">; organizationId: SafeId<"organization"> };
+  }[],
+): Promise<boolean> => {
+  const [projection, ...rest] = projections;
+  if (projection === undefined || rest.length > 0) {
+    return panic("A contact repair publishes exactly one contact");
+  }
+  const source = await withAggregateLock({
+    aggregate: "contact",
+    id: {
+      id: projection.contact.id,
+      organizationId: projection.contact.organizationId,
+    },
+    mode: "key share",
+    tx,
+  });
+  return (
+    source.status === "locked" &&
+    (await lockCurrentSearchProjectionRepair(tx, fence))
+  );
+};
+
 // Contact and matter projections are rebuilt in batches of at most
 // `REINDEX_BATCH_SIZE` sources. A batch is one read of the sources and their
 // relations, then one transaction: parent locks, the projection upsert,
@@ -1592,6 +1636,7 @@ type SearchDocumentDatabase = Pick<
 const writeContactProjections = async (
   contactIds: readonly SafeId<"contact">[],
   database: SearchDocumentDatabase,
+  publication: SupplementalProjectionPublication,
 ): Promise<void> => {
   if (contactIds.length === 0) {
     return;
@@ -1652,7 +1697,7 @@ const writeContactProjections = async (
   });
   const previewGeneration = Bun.randomUUIDv7();
 
-  await database.transaction(async (tx) => {
+  await withAggregateSavepoint(database, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: builtProjections.map(
         ({ contact }) => contact.organizationId,
@@ -1664,31 +1709,51 @@ const writeContactProjections = async (
     if (projections.length === 0) {
       return;
     }
+    if (
+      publication.type === "repair" &&
+      !(await lockContactRepair(tx, publication.fence, projections))
+    ) {
+      return;
+    }
     const ids = projections.map(({ contact }) => contact.id);
+    const contactPayload = projections.map(({ contact, searchableText }) => ({
+      contact_id: contact.id,
+      organization_id: contact.organizationId,
+      contact_type: contact.type,
+      title: contact.displayName,
+      searchable_text: searchableText,
+      updated_at:
+        contact.updatedAt instanceof Date
+          ? contact.updatedAt.toISOString()
+          : contact.updatedAt,
+    }));
     await tx.execute(sql`
       INSERT INTO contact_search_documents (
         contact_id, organization_id, contact_type,
         title, searchable_text, updated_at, tsv
-      ) VALUES ${sql.join(
-        projections.map(
-          ({ contact, searchableText }) => sql`(
-            ${contact.id},
-            ${contact.organizationId},
-            ${contact.type},
-            ${contact.displayName},
-            ${searchableText},
-            ${contact.updatedAt},
-            to_tsvector(
-              'simple',
-              unaccent(arabic_normalize(
-                coalesce(${contact.displayName}, '') || ' ' ||
-                coalesce(${searchableText}, '')
-              ))
-            )
-          )`,
-        ),
-        sql`, `,
-      )}
+      )
+      SELECT
+        v.contact_id,
+        v.organization_id,
+        v.contact_type,
+        v.title,
+        v.searchable_text,
+        v.updated_at,
+        to_tsvector(
+          'simple',
+          unaccent(arabic_normalize(
+            coalesce(v.title, '') || ' ' ||
+            coalesce(v.searchable_text, '')
+          ))
+        )
+      FROM jsonb_to_recordset(${JSON.stringify(contactPayload)}::text::jsonb) AS v(
+        contact_id uuid,
+        organization_id text,
+        contact_type text,
+        title text,
+        searchable_text text,
+        updated_at timestamptz
+      )
       ON CONFLICT (contact_id) DO UPDATE SET
         organization_id = EXCLUDED.organization_id,
         contact_type = EXCLUDED.contact_type,
@@ -1701,21 +1766,32 @@ const writeContactProjections = async (
       DELETE FROM contact_search_document_preview_passages
       WHERE contact_id = ANY(${typedPgArray(ids, "uuid")})
     `);
+    const contactPassagesPayload = projections.flatMap(
+      ({ contact, passages }) =>
+        passages.map(({ ordinal, content }) => ({
+          contact_id: contact.id,
+          organization_id: contact.organizationId,
+          ordinal,
+          content,
+        })),
+    );
     await tx.execute(sql`
       INSERT INTO contact_search_document_preview_passages (
         contact_id, organization_id, generation, ordinal, content, tsv
-      ) VALUES ${sql.join(
-        projections.map(({ contact, passages }) =>
-          buildSearchPreviewPassageValueRows({
-            generation: previewGeneration,
-            leadingValues: [sql`${contact.id}`, sql`${contact.organizationId}`],
-            passages,
-            regconfig: sql`'simple'`,
-            useUnaccent: true,
-          }),
-        ),
-        sql`, `,
-      )}
+      )
+      SELECT
+        p.contact_id,
+        p.organization_id,
+        ${previewGeneration}::uuid,
+        p.ordinal,
+        p.content,
+        to_tsvector('simple'::regconfig, unaccent(arabic_normalize(p.content)))
+      FROM jsonb_to_recordset(${JSON.stringify(contactPassagesPayload)}::text::jsonb) AS p(
+        contact_id uuid,
+        organization_id text,
+        ordinal integer,
+        content text
+      )
     `);
     await tx.execute(sql`
       UPDATE contact_search_documents
@@ -1728,6 +1804,7 @@ const writeContactProjections = async (
 const writeWorkspaceProjections = async (
   workspaceIds: readonly SafeId<"workspace">[],
   database: SearchDocumentDatabase,
+  publication: SupplementalProjectionPublication,
 ): Promise<void> => {
   if (workspaceIds.length === 0) {
     return;
@@ -1829,7 +1906,7 @@ const writeWorkspaceProjections = async (
   });
   const previewGeneration = Bun.randomUUIDv7();
 
-  await database.transaction(async (tx) => {
+  await withAggregateSavepoint(database, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: builtProjections.map(
         ({ workspace }) => workspace.organizationId,
@@ -1844,30 +1921,43 @@ const writeWorkspaceProjections = async (
     if (projections.length === 0) {
       return;
     }
+    if (
+      publication.type === "repair" &&
+      !(await lockCurrentSearchProjectionRepair(tx, publication.fence))
+    ) {
+      return;
+    }
     const ids = projections.map(({ workspace }) => workspace.id);
+    const workspacePayload = projections.map(
+      ({ workspace, searchableText, updatedAt }) => ({
+        workspace_id: workspace.id,
+        organization_id: workspace.organizationId,
+        title: workspace.name,
+        searchable_text: searchableText,
+        updated_at:
+          updatedAt instanceof Date ? updatedAt.toISOString() : updatedAt,
+      }),
+    );
     await tx.execute(sql`
       INSERT INTO workspace_search_documents (
         workspace_id, organization_id,
         title, searchable_text, updated_at, tsv
-      ) VALUES ${sql.join(
-        projections.map(
-          ({ workspace, searchableText, updatedAt }) => sql`(
-            ${workspace.id},
-            ${workspace.organizationId},
-            ${workspace.name},
-            ${searchableText},
-            ${updatedAt},
-            to_tsvector(
-              'simple',
-              unaccent(arabic_normalize(
-                coalesce(${workspace.name}, '') || ' ' ||
-                coalesce(${searchableText}, '')
-              ))
-            )
-          )`,
-        ),
-        sql`, `,
-      )}
+      )
+      SELECT
+        v.workspace_id,
+        v.organization_id,
+        v.title,
+        v.searchable_text,
+        v.updated_at,
+        to_tsvector(
+          'simple',
+          unaccent(arabic_normalize(
+            coalesce(v.title, '') || ' ' ||
+            coalesce(v.searchable_text, '')
+          ))
+        )
+      FROM jsonb_to_recordset(${JSON.stringify(workspacePayload)}::text::jsonb)
+        AS v(workspace_id uuid, organization_id text, title text, searchable_text text, updated_at timestamptz)
       ON CONFLICT (workspace_id) DO UPDATE SET
         organization_id = EXCLUDED.organization_id,
         title = EXCLUDED.title,
@@ -1879,24 +1969,23 @@ const writeWorkspaceProjections = async (
       DELETE FROM workspace_search_document_preview_passages
       WHERE workspace_id = ANY(${typedPgArray(ids, "uuid")})
     `);
+    const workspacePassagesPayload = projections.flatMap(
+      ({ workspace, passages }) =>
+        passages.map(({ ordinal, content }) => ({
+          workspace_id: workspace.id,
+          organization_id: workspace.organizationId,
+          ordinal,
+          content,
+        })),
+    );
     await tx.execute(sql`
       INSERT INTO workspace_search_document_preview_passages (
         workspace_id, organization_id, generation, ordinal, content, tsv
-      ) VALUES ${sql.join(
-        projections.map(({ workspace, passages }) =>
-          buildSearchPreviewPassageValueRows({
-            generation: previewGeneration,
-            leadingValues: [
-              sql`${workspace.id}`,
-              sql`${workspace.organizationId}`,
-            ],
-            passages,
-            regconfig: sql`'simple'`,
-            useUnaccent: true,
-          }),
-        ),
-        sql`, `,
-      )}
+      )
+      SELECT p.workspace_id, p.organization_id, ${previewGeneration}::uuid, p.ordinal, p.content,
+        to_tsvector('simple'::regconfig, unaccent(arabic_normalize(p.content)))
+      FROM jsonb_to_recordset(${JSON.stringify(workspacePassagesPayload)}::text::jsonb)
+        AS p(workspace_id uuid, organization_id text, ordinal integer, content text)
     `);
     await tx.execute(sql`
       UPDATE workspace_search_documents
@@ -1910,7 +1999,18 @@ export const upsertContactSearchDocument = async (
   contactId: SafeId<"contact">,
   database: SearchDocumentDatabase,
 ): Promise<void> => {
-  await writeContactProjections([contactId], database);
+  await writeContactProjections([contactId], database, { type: "direct" });
+};
+
+export const repairContactSearchDocument = async (
+  fence: SearchProjectionRepairFence<"contact">,
+  database: SearchDocumentDatabase,
+): Promise<void> => {
+  await writeContactProjections(
+    [toSafeId<"contact">(fence.sourceId)],
+    database,
+    { fence, type: "repair" },
+  );
 };
 
 export const upsertWorkspaceSearchDocuments = async (
@@ -1922,7 +2022,7 @@ export const upsertWorkspaceSearchDocuments = async (
   // deadlocking.
   const pending = [...new Set(workspaceIds)].toSorted(compareCodeUnit);
   for (const itemBatch of chunkItems(pending, REINDEX_BATCH_SIZE)) {
-    await writeWorkspaceProjections(itemBatch, database);
+    await writeWorkspaceProjections(itemBatch, database, { type: "direct" });
   }
 };
 
@@ -1930,7 +2030,18 @@ export const upsertWorkspaceSearchDocument = async (
   workspaceId: SafeId<"workspace">,
   database: SearchDocumentDatabase,
 ): Promise<void> => {
-  await writeWorkspaceProjections([workspaceId], database);
+  await writeWorkspaceProjections([workspaceId], database, { type: "direct" });
+};
+
+export const repairWorkspaceSearchDocument = async (
+  fence: SearchProjectionRepairFence<"workspace">,
+  database: SearchDocumentDatabase,
+): Promise<void> => {
+  await writeWorkspaceProjections(
+    [toSafeId<"workspace">(fence.sourceId)],
+    database,
+    { fence, type: "repair" },
+  );
 };
 
 type SearchActivityDatabase = {
@@ -2036,6 +2147,7 @@ const rebuildContactPage = async (
     await writeContactProjections(
       page.map(({ id }) => id),
       pageDatabase,
+      { type: "direct" },
     );
     return {
       last: page.at(-1)?.id ?? after,
@@ -2067,6 +2179,7 @@ const rebuildWorkspacePage = async (
     await writeWorkspaceProjections(
       page.map(({ id }) => id),
       pageDatabase,
+      { type: "direct" },
     );
     return {
       last: page.at(-1)?.id ?? after,

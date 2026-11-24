@@ -3,6 +3,8 @@ import { getSessionFromCtx } from "better-auth/api";
 import { panic } from "better-result";
 
 import { secondFactorProviderIdentifier } from "@/api/lib/auth-artifacts";
+import type { DatabaseHookContext } from "@/api/lib/auth/database-hook-context";
+import { ssoCallbackProviderId } from "@/api/lib/auth/sso-sign-in";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -51,6 +53,11 @@ export const signInAccountProvider = (
   const path = ctx?.path;
   if (path === "/sign-in/email") {
     return "credential";
+  }
+  // An SSO account is linked under its provider id, like a social one.
+  const ssoProviderId = ssoCallbackProviderId(ctx);
+  if (ssoProviderId !== undefined) {
+    return ssoProviderId;
   }
   if (path === undefined || !path.startsWith(SOCIAL_CALLBACK_PREFIX)) {
     return undefined;
@@ -119,9 +126,9 @@ export const recordSecondFactorRequirement = async (
  * Better Auth has consumed the challenge itself by then.
  */
 export const sessionLinkedAccountRequirement = async (
-  ctx: GenericEndpointContext | null,
+  ctx: DatabaseHookContext,
 ): Promise<LinkedAccountRequirement> => {
-  if (!ctx || !isSecondFactorCompletion(ctx)) {
+  if (ctx === null || ctx === undefined || !isSecondFactorCompletion(ctx)) {
     return firstFactorRequirement(ctx);
   }
   // Better Auth completes enrollment, not a pending sign-in, when the request

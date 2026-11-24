@@ -31,14 +31,13 @@ import { panic } from "better-result";
 import { and, eq, gt, lte, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import type { ModelTask } from "@stll/ai-catalog";
+import type { ModelOverrideGroup, ModelTask } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
 import {
   onlineUniqueIndexTarget,
   USAGE_EVENTS_ORG_IDEMPOTENCY_KEY_UIDX,
 } from "@/api/db/online-unique-indexes";
-import type { Transaction } from "@/api/db/root";
 import {
   USAGE_ENTITLEMENT_STATUSES,
   usageAllocations,
@@ -54,6 +53,7 @@ import type {
   UsageEventLane,
   UsageServiceTier,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { UsageLimitExceededError } from "@/api/lib/errors/tagged-errors";
@@ -341,7 +341,8 @@ type RecordUsageEventInput = {
   workspaceId: SafeId<"workspace"> | null;
   userId: string;
   actionType: UsageActionType;
-  modelTask: ModelTask | "decision" | "transcription";
+  /** The task, or the admin-chosen role (`browse`), the model ran for. */
+  modelTask: ModelTask | ModelOverrideGroup | "decision" | "transcription";
   unitsConsumed: number;
   serviceTier: UsageServiceTier;
   isByok: boolean;

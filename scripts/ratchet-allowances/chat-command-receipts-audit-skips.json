@@ -1,5 +1,0 @@
-{
-  "metric": "audit-skip-directives",
-  "delta": 2,
-  "reason": "A chat command receipt is a retry key: it records that a member's send or answer was accepted, in the transaction that stores and audits that send or answer, and holds no content. The sweep deletes receipts past their one-day retention under the aggregated scheduler audit."
-}

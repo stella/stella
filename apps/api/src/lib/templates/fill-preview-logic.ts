@@ -6,7 +6,7 @@ import type { Result as ResultType } from "better-result";
  */
 import { Result } from "better-result";
 
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db-types";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives";

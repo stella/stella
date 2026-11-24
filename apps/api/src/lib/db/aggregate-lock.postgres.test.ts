@@ -6,10 +6,10 @@ import type { SQL } from "drizzle-orm";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { organization } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import { withResultSavepoint } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -23,6 +23,7 @@ import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-del
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 
 import {
+  lockOrganizationObjectIntentFence,
   withAggregateLock,
   withAggregateRowQuery,
   withAggregateSavepoint,
@@ -196,9 +197,21 @@ const advisoryAcquisitions = () => {
         id: definitionId,
         tx,
       }),
+    invoiceSendCapacity: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "invoiceSendCapacity",
+        id: { organizationId },
+        tx,
+      }),
     contactCapacity: async (tx: AggregateAcquireTransaction) =>
       await withAggregateLock({
         aggregate: "contactCapacity",
+        id: { organizationId },
+        tx,
+      }),
+    dictationVocabularyCapacity: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "dictationVocabularyCapacity",
         id: { organizationId },
         tx,
       }),
@@ -850,6 +863,39 @@ if (!databaseUrl || !enabled) {
           ).toMatchObject({ message: "Aggregate lock rank inversion" });
           expect(statements.length).toBe(countBeforeInversion);
         });
+      });
+    });
+
+    test("the object-intent fence holds the registered and the previous build's lock after one statement", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const statements: string[] = [];
+        const { db } = openClient({
+          logger: {
+            logQuery: (query) => {
+              statements.push(query);
+            },
+          },
+        });
+        const organizationId = mintAuthProviderId<"organization">();
+        for (const mode of ["shared", "exclusive"] as const) {
+          await db.transaction(async (tx) => {
+            const before = statements.length;
+            await lockOrganizationObjectIntentFence(tx, organizationId, mode);
+            expect(statements.length - before).toBe(1);
+            const held = executedRows(
+              await tx.execute(
+                sql`SELECT objsubid, mode FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid() AND granted ORDER BY objsubid`,
+              ),
+            );
+            const lockMode = mode === "shared" ? "ShareLock" : "ExclusiveLock";
+            // objsubid 1: the previous build's one-key lock; 2: the
+            // registered two-key aggregate lock.
+            expect(held).toEqual([
+              { objsubid: 1, mode: lockMode },
+              { objsubid: 2, mode: lockMode },
+            ]);
+          });
+        }
       });
     });
 

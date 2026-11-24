@@ -192,16 +192,15 @@ const createKanbanSelection = (): KanbanSelection => {
  * the same board.
  */
 export const useKanbanSelectionOwner = (viewId: string): KanbanSelection => {
-  const [owned, setOwned] = useState(() => ({
-    viewId,
-    selection: createKanbanSelection(),
-  }));
-  if (owned.viewId !== viewId) {
-    const next = { viewId, selection: createKanbanSelection() };
-    setOwned(next);
-    return next.selection;
+  const [prevViewId, setPrevViewId] = useState(viewId);
+  const [selection, setSelection] = useState(createKanbanSelection);
+  if (prevViewId !== viewId) {
+    const next = createKanbanSelection();
+    setPrevViewId(viewId);
+    setSelection(next);
+    return next;
   }
-  return owned.selection;
+  return selection;
 };
 
 const noopUnsubscribe = (): void => undefined;

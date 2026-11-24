@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -146,6 +146,7 @@ export const OutdatedChanges = ({
         <Button
           aria-label={t("common.summarizeChanges")}
           disabled={summary.status === "loading"}
+          disabledReason={t("common.loading")}
           onClick={() => {
             detached(handleSummarize(), "template-clauses-tab.summarize");
           }}
@@ -191,7 +192,7 @@ export const UnlinkButton = ({
   const [unlinkOpen, setUnlinkOpen] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
 
-  const handleUnlink = useCallback(async () => {
+  const handleUnlink = async () => {
     setUnlinking(true);
 
     const response = await api
@@ -217,7 +218,7 @@ export const UnlinkButton = ({
     });
     setUnlinkOpen(false);
     onChanged();
-  }, [linkId, templateId, t, onChanged]);
+  };
 
   return (
     <AlertDialog onOpenChange={setUnlinkOpen} open={unlinkOpen}>
@@ -243,6 +244,7 @@ export const UnlinkButton = ({
           </AlertDialogClose>
           <Button
             disabled={unlinking}
+            disabledReason={t("common.removing")}
             onClick={() => {
               detached(handleUnlink(), "template-clauses-tab.unlink");
             }}

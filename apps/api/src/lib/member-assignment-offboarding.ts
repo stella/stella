@@ -16,7 +16,6 @@ import {
   session,
 } from "@/api/db/auth-schema";
 import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
-import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
@@ -32,6 +31,7 @@ import {
   desktopRunnerFolderRestores,
   desktopRunnerRuns,
   desktopRunners,
+  dictationLearnedFixes,
   entities,
   flowDefinitions,
   flowRuns,
@@ -40,6 +40,7 @@ import {
   mcpOAuthState,
   mcpUserConnections,
   mcpWebHandoff,
+  outboundActions,
   pdfSigningSessions,
   requestIdempotencyReceipts,
   searchHistoryCountryClears,
@@ -59,6 +60,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { runScopedWorkInTransaction } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import { ACTIVE_TASK_REASSIGNMENT_STATUSES } from "@/api/lib/account-deletion-reassignment";
 import {
   AUDIT_ACTION,
@@ -1614,6 +1616,79 @@ const clearMemberScopedData = async (options: ClearMemberScopedDataOptions) => {
   });
 };
 
+type ClearMemberConnectorAuthorizationOptions = Pick<
+  RemoveOrganizationMemberOptions,
+  "tx" | "organizationId" | "userId"
+> & { recordAuditEvent: AuditRecorder };
+
+const clearMemberConnectorAuthorization = async ({
+  tx,
+  organizationId,
+  userId,
+  recordAuditEvent,
+}: ClearMemberConnectorAuthorizationOptions) => {
+  await tx
+    .delete(mcpUserConnections)
+    .where(
+      and(
+        eq(mcpUserConnections.organizationId, organizationId),
+        eq(mcpUserConnections.userId, userId),
+      ),
+    );
+  await tx
+    .delete(sharepointConnections)
+    .where(
+      and(
+        eq(sharepointConnections.organizationId, organizationId),
+        eq(sharepointConnections.userId, userId),
+      ),
+    );
+  await tx
+    .delete(outboundActions)
+    .where(
+      and(
+        eq(outboundActions.organizationId, organizationId),
+        eq(outboundActions.userId, userId),
+        eq(outboundActions.status, "pending"),
+      ),
+    );
+  // The member's own chat settings: tool grants, limit reminders and browser
+  // site approvals.
+  for (const table of [
+    chatToolGrants,
+    chatLimitReminders,
+    chatBrowserSiteGrants,
+  ] as const) {
+    await tx
+      .delete(table)
+      .where(
+        and(eq(table.organizationId, organizationId), eq(table.userId, userId)),
+      );
+  }
+  await tx
+    .delete(mcpOAuthState)
+    .where(
+      and(
+        eq(mcpOAuthState.organizationId, organizationId),
+        eq(mcpOAuthState.userId, userId),
+      ),
+    );
+  await tx
+    .delete(sharepointOAuthState)
+    .where(
+      and(
+        eq(sharepointOAuthState.organizationId, organizationId),
+        eq(sharepointOAuthState.userId, userId),
+      ),
+    );
+  await recordAuditEvent(tx, {
+    action: AUDIT_ACTION.UPDATE,
+    resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+    resourceId: organizationId,
+    metadata: { change: "member-connector-authorization-cleared", userId },
+  });
+};
+
 type ValidateOrganizationReassignmentOptions = Pick<
   RemoveOrganizationMemberOptions,
   "tx" | "organizationId" | "userId"
@@ -1757,51 +1832,21 @@ export const removeOrganizationMemberInTransaction = async (
         eq(searchHistoryEntries.userId, userId),
       ),
     );
+  // The spellings dictation learned from the member; they can name clients.
   await tx
-    .delete(mcpUserConnections)
+    .delete(dictationLearnedFixes)
     .where(
       and(
-        eq(mcpUserConnections.organizationId, organizationId),
-        eq(mcpUserConnections.userId, userId),
+        eq(dictationLearnedFixes.organizationId, organizationId),
+        eq(dictationLearnedFixes.userId, userId),
       ),
     );
-  await tx
-    .delete(sharepointConnections)
-    .where(
-      and(
-        eq(sharepointConnections.organizationId, organizationId),
-        eq(sharepointConnections.userId, userId),
-      ),
-    );
-  // The member's own chat settings: tool grants, limit reminders and browser
-  // site approvals.
-  for (const table of [
-    chatToolGrants,
-    chatLimitReminders,
-    chatBrowserSiteGrants,
-  ] as const) {
-    await tx
-      .delete(table)
-      .where(
-        and(eq(table.organizationId, organizationId), eq(table.userId, userId)),
-      );
-  }
-  await tx
-    .delete(mcpOAuthState)
-    .where(
-      and(
-        eq(mcpOAuthState.organizationId, organizationId),
-        eq(mcpOAuthState.userId, userId),
-      ),
-    );
-  await tx
-    .delete(sharepointOAuthState)
-    .where(
-      and(
-        eq(sharepointOAuthState.organizationId, organizationId),
-        eq(sharepointOAuthState.userId, userId),
-      ),
-    );
+  await clearMemberConnectorAuthorization({
+    tx,
+    organizationId,
+    userId,
+    recordAuditEvent,
+  });
   await tx
     .delete(invitation)
     .where(
@@ -1854,9 +1899,14 @@ export type MemberCleanupDisposition =
 /**
  * Every column organization removal changes for the departing member, in this
  * module or in the credential revocation it runs in the same transaction. The
- * schema coverage guard derives its census from this list.
+ * schema coverage guard derives its census from this list. Annotated rather
+ * than `as const`: a literal tuple of every column type is a union the
+ * type-aware lint cannot represent (TS2590).
  */
-export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
+export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS: readonly (readonly [
+  PgColumn,
+  MemberCleanupDisposition,
+])[] = [
   [billingDraftUserSettings.userId, "cleared"],
   [requestIdempotencyReceipts.userId, "cleared"],
   [requestIdempotencyReceipts.responseBody, "cleared"],
@@ -1872,6 +1922,7 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [searchHistoryEntries.userId, "cleared"],
   [searchHistoryCountryClears.userId, "cleared"],
   [searchHistoryOwners.userId, "cleared"],
+  [dictationLearnedFixes.userId, "cleared"],
   [searchHistoryTombstones.userId, "cleared"],
   [workspaceMembers.userId, "cleared"],
   [taskAssignees.userId, "reassigned"],
@@ -1904,13 +1955,16 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [agentRegistration.boundUserId, "cleared"],
   [agentDelegation.userId, "cleared"],
   [folioCollabRoomTokens.userId, "cleared"],
-] as const satisfies readonly (readonly [PgColumn, MemberCleanupDisposition])[];
+];
 
 /**
  * Every column matter removal (`handlers/workspaces/members/remove.ts` with
  * `clearMemberAssignments`) changes for the departing member. The schema coverage guard derives from this list.
  */
-export const WORKSPACE_MEMBER_CLEANUP_COLUMNS = [
+export const WORKSPACE_MEMBER_CLEANUP_COLUMNS: readonly (readonly [
+  PgColumn,
+  MemberCleanupDisposition,
+])[] = [
   [workspaceMembers.userId, "cleared"],
   [taskAssignees.userId, "reassigned"],
   [workObligations.ownerUserId, "reassigned"],
@@ -1921,4 +1975,4 @@ export const WORKSPACE_MEMBER_CLEANUP_COLUMNS = [
   [desktopEditSessions.takeoverRequestedBy, "cleared"],
   [desktopEditHandoffs.createdBy, "cleared"],
   [pdfSigningSessions.createdBy, "cleared"],
-] as const satisfies readonly (readonly [PgColumn, MemberCleanupDisposition])[];
+];

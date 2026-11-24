@@ -241,7 +241,7 @@ describe("shared AI column controls", () => {
               <AiColumnRunButton
                 scope={scope}
                 reveal={AI_COLUMN_RUN_REVEAL.pinned}
-                disabled={false}
+                disabledReason={undefined}
                 onRun={() => undefined}
               />
             </IntlProvider>

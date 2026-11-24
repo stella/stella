@@ -4,10 +4,7 @@ import nodePath from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
 
-const caseLawRoot = nodePath.resolve(
-  new URL(".", import.meta.url).pathname,
-  "../..",
-);
+const caseLawRoot = nodePath.resolve(import.meta.dirname, "../..");
 
 /**
  * The trees a publisher request can leave from: the crawl, the backfills and
@@ -152,6 +149,7 @@ describe("every publisher request goes through the gate", () => {
       expect(await sourceOf(entry)).toMatch(
         /createPublisherSlot|reservePublisherSlot|reservePublisherGateSlot|createPublisherRequestSlot|createPublisherGateSlot/u,
       );
+      expect(await sourceOf(entry)).toContain("limitPublisherResponse");
     }
   });
 

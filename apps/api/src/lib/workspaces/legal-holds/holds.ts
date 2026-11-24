@@ -5,7 +5,6 @@ import type { SQL } from "drizzle-orm";
 import { LEGAL_HOLD_ACTIVE } from "@stll/api-contract/legal-holds";
 
 import { organization } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import {
   aiMemories,
   chatMessages,
@@ -24,6 +23,7 @@ import {
   workspaceContacts,
   workspaces,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   lockLegalHoldOrganizations,

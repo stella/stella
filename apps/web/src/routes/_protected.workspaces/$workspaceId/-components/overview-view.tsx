@@ -1,5 +1,5 @@
 import type * as React from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -36,7 +36,10 @@ import { isTerminalFlowRunStatus } from "@/components/flows/flow-meta";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { StatCard } from "@/components/overview-stat-card";
 import { PersonMentionLabel } from "@/components/person-mention-label";
-import { QueryViewFeedback } from "@/components/query-view-feedback";
+import {
+  QueryViewFeedback,
+  SettledQueryViewFeedback,
+} from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { getWeekStart, toISODate } from "@/components/workspaces/entity-utils";
@@ -69,6 +72,10 @@ import {
 } from "@/lib/workspaces/queries/time-entries";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { ActivityPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel";
+import {
+  OVERVIEW_STATS_GRID_CLASS,
+  OVERVIEW_VIEW_CLASS,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/overview-view.pending";
 
 import { resolveNextDeadline } from "./overview-next-deadline.logic";
 import type { NextDeadline } from "./overview-next-deadline.logic";
@@ -188,10 +195,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       ? flowRunsData.items.filter((run) => !isTerminalFlowRunStatus(run.status))
           .length
       : 0;
-  const findViewByType = useCallback(
-    (type: string) => views?.find((v) => v.layout.type === type),
-    [views],
-  );
+  const findViewByType = (type: string) =>
+    views?.find((v) => v.layout.type === type);
 
   const createTask = useCreateTask();
   const createTaskOnce = useSingleFlight();
@@ -202,7 +207,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
   const taskStatusAction = useTaskStatusAction(workspaceId);
 
-  const handleTaskContextMenu = useCallback(
+  const handleTaskContextMenu =
     (task: UpcomingTaskContext) => (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
@@ -214,18 +219,13 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         opener: e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
         task,
       });
-    },
-    [],
-  );
+    };
 
   const menuTaskStatus = upcomingMenu.task?.status ?? null;
   const currentMenuTaskStatus = isTaskStatus(menuTaskStatus)
     ? menuTaskStatus
     : "open";
-  const recentEntities = useMemo(
-    () => data.recentEntities.filter((e) => e.kind !== "folder"),
-    [data.recentEntities],
-  );
+  const recentEntities = data.recentEntities.filter((e) => e.kind !== "folder");
   const hasActivity = recentEntities.length > 0;
 
   // Re-compute the current date when the user returns to the
@@ -255,10 +255,12 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
   // Anchor the calculation to the tracked local date so visibility-driven day
   // rollover updates are explicit dependencies rather than cache invalidators.
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const weekStart = useMemo(
     () => getWeekStart(locale, Temporal.PlainDate.from(today)),
     [today, locale],
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const weekEnd = useMemo(() => weekStart.add({ days: 6 }), [weekStart]);
 
   const timeSummaryView = queryView(
@@ -290,10 +292,12 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   );
 
   // Previous week for trend comparison
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const prevWeekStart = useMemo(
     () => weekStart.subtract({ days: 7 }),
     [weekStart],
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const prevWeekEnd = useMemo(
     () => weekStart.subtract({ days: 1 }),
     [weekStart],
@@ -327,7 +331,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           : currentTimeView.items.totalMinutes) / 60
       : null;
 
-  const teamHeatmap = useMemo(() => {
+  const teamHeatmap = (() => {
     if (!teamTimeSummary) {
       return [];
     }
@@ -346,18 +350,18 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         daily,
       };
     });
-  }, [teamTimeSummary, firstWeekday]);
+  })();
 
   const totalTeamHoursThisWeek = (teamTimeSummary?.totalTeamMinutes ?? 0) / 60;
 
   return (
-    <div className="@container flex flex-1 flex-col gap-6 overflow-y-auto p-4 tabular-nums sm:p-6">
+    <div className={OVERVIEW_VIEW_CLASS}>
       <OverviewQueryFeedback
         flowRunsView={flowRunsDataView}
         viewsView={viewsView}
       />
       {/* Stats grid */}
-      <div className="grid gap-3 @sm:grid-cols-2 @3xl:grid-cols-4">
+      <div className={OVERVIEW_STATS_GRID_CLASS}>
         <StatCard
           icon={<FolderTreeIcon className="size-4" />}
           label="workspaces.overview.totalDocuments"
@@ -471,7 +475,9 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           })}
         >
           <OverviewSectionHeader
-            actionDisabled={createTaskOnce.pending}
+            actionDisabledReason={
+              createTaskOnce.pending ? t("common.creating") : undefined
+            }
             actionLabel={t("common.add")}
             icon={<SquareCheckIcon />}
             onAction={() => {
@@ -551,6 +557,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               <Button
                 className="flex flex-1"
                 disabled={createTaskOnce.pending}
+                disabledReason={t("common.creating")}
                 onClick={() => {
                   detached(handleCreateTask(), "overview-view.create-task");
                 }}
@@ -863,7 +870,9 @@ const OverviewQueryFeedback = ({
   viewsView,
 }: OverviewQueryFeedbackProps) => (
   <>
-    <QueryViewFeedback view={viewsView} />
+    {/* A read still on its way has nothing to say above the page: the
+        stat cards stand in for what it fills. */}
+    <SettledQueryViewFeedback view={viewsView} />
     {flowRunsView.type !== "pending" && (
       <QueryViewFeedback view={flowRunsView} />
     )}
@@ -874,7 +883,7 @@ type OverviewSectionHeaderProps = {
   icon: React.ReactNode;
   title: string;
   actionLabel: string;
-  actionDisabled?: boolean;
+  actionDisabledReason?: string | undefined;
   onAction: () => void;
 };
 
@@ -883,7 +892,7 @@ const OverviewSectionHeader = ({
   icon,
   title,
   actionLabel,
-  actionDisabled,
+  actionDisabledReason,
   onAction,
 }: OverviewSectionHeaderProps) => (
   <div className="mb-3 flex h-7 items-center justify-between gap-3">
@@ -893,7 +902,8 @@ const OverviewSectionHeader = ({
     </h2>
     <Button
       className="relative h-7 shrink-0 after:absolute after:-inset-2 md:after:hidden"
-      disabled={actionDisabled}
+      disabled={actionDisabledReason !== undefined}
+      disabledReason={actionDisabledReason}
       onClick={onAction}
       size="sm"
       variant="ghost"

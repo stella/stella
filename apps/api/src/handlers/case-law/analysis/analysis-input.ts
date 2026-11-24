@@ -12,7 +12,7 @@ import { Result, TaggedError } from "better-result";
  * they compare would not mean the same thing.
  */
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { envBase } from "@/api/env-base";
 import {
   devReparseEnabled,
@@ -108,7 +108,7 @@ export const resolveAnalysisInput = defineWindowedRead(
       // parse rather than the stored one, and the anchors must agree. Resolved
       // before the stored analysis is consulted, because whether that analysis
       // still applies is a property of this text.
-      const reparsed =
+      const reparsedOutcome =
         devReparseEnabled() && decision.source !== null
           ? await reparseForDev({
               adapterKey: decision.source.adapterKey,
@@ -121,10 +121,10 @@ export const resolveAnalysisInput = defineWindowedRead(
               id: decisionId,
               metadata: decision.metadata,
             })
-          : null;
+          : ({ status: "not-applicable" } as const);
       const versionState = { changed: false };
       const ast =
-        reparsed ??
+        (reparsedOutcome.status === "reparsed" ? reparsedOutcome.ast : null) ??
         (await readDecisionAnalysisAst(
           { ...decision, documentAst: null },
           readCorpusTombstones,

@@ -1,36 +1,21 @@
 import { Result } from "better-result";
+import type * as v from "valibot";
 
 import {
   desktopDictationCleanupRequestSchema,
   desktopDictationCleanupResponseSchema,
 } from "@stll/api-contract/desktop-dictation-cleanup";
-import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
-import { classifyFailure } from "@stll/errors";
 
-import { safeDbFromScoped } from "@/api/db/safe-db";
-import { consumeDictationLimit } from "@/api/handlers/dictation/limits";
-import { resolveCaching } from "@/api/lib/ai-config";
-import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
-import { aiHandlerError } from "@/api/lib/ai-error";
-import {
-  generateArtefact,
-  readUnsourcedArtefact,
-} from "@/api/lib/ai-generation/provenance";
-import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
-  admitFiniteAction,
-  authorizeHandlerUsage,
   createSafeBoundedPublicHandler,
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
-import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
-import { hasMemberPermission } from "@/api/lib/permission-authorization";
-import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
-import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { readCleanupVocabulary } from "@/api/lib/dictation/organization-vocabulary";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 
 import {
   acceptDictationCleanup,
@@ -38,21 +23,102 @@ import {
   DICTATION_CLEANUP_SYSTEM_PROMPT,
   dictationCleanupModelOutputSchema,
 } from "./cleanup-model";
+import { resolveDictationCleanupModel } from "./cleanup-models";
+import {
+  type DesktopDictationGate,
+  type DictationGeneration,
+  type DictationModelCaller,
+  generateDictationAnswer,
+  runDesktopDictationModelAction,
+} from "./model-endpoint";
 
-const GENERATOR = "apps/api/src/handlers/dictation/cleanup.ts";
-const REQUIRED_FEATURE_ID = "desktop-dictation" satisfies DesktopFeatureId;
 /** The desktop stops waiting after about five seconds and types the raw
  *  transcript; a generation that outlives it would only spend usage. */
 const CLEANUP_DEADLINE_MS = 5000;
 const CLEANUP_OUTPUT_TOKENS = 8000;
+const ORGANIZATION_VOCABULARY_READ_FAILED = failureSink({
+  event: "dictation.organization_vocabulary.read_failed",
+  expected: [],
+});
 
-type DictationCleanupEndpointOptions = {
-  authorizeAccount?: typeof authorizeDesktopAccount;
-  loadAISettings?: typeof loadOrgAISettings;
-  limit?: typeof consumeDictationLimit;
-  generateObjectForTask?: typeof generateTanStackObjectForTask;
-  admit?: typeof withActionAdmission;
+/** The model call and the organization's words a test puts in place. */
+export type DictationCleanupGeneration = DictationGeneration & {
+  readVocabulary?: typeof readCleanupVocabulary;
 };
+
+type DictationCleanupOptions = DictationCleanupGeneration & {
+  caller: DictationModelCaller;
+  body: v.InferOutput<typeof desktopDictationCleanupRequestSchema>;
+  /** The admission the caller's action admission granted this cleanup. */
+  modelAdmission: ModelDispatchAdmission;
+  actionSignal: AbortSignal;
+};
+
+/**
+ * The words the model is told to spell: the speaker's own, then the
+ * organization's words this transcript seems to mention. They only help,
+ * so when the organization's cannot be read the cleanup runs with the
+ * speaker's and the failure is reported.
+ */
+const cleanupVocabulary = async (
+  { safeDb, organizationId }: DictationModelCaller,
+  { transcript, vocabulary }: DictationCleanupOptions["body"],
+  readVocabulary: typeof readCleanupVocabulary,
+): Promise<string[] | undefined> => {
+  const words = await readVocabulary({
+    safeDb,
+    organizationId,
+    transcript,
+    personal: vocabulary,
+  });
+  if (words.isErr()) {
+    observeFailure(words.error, {
+      sink: ORGANIZATION_VOCABULARY_READ_FAILED,
+      ctx: { operation: "dictation.cleanup" },
+    });
+    return vocabulary;
+  }
+  return words.value;
+};
+
+/**
+ * One cleanup generation, whichever credential proved its caller: the
+ * transcript goes to the organization's fast model, or to the model the
+ * speaker chose while the organization still offers it, and its answer is
+ * accepted only when it is a plausible cleanup of that transcript, whatever
+ * the speaker's own instructions asked for. The
+ * caller has already authorized the member, the limit, usage and the action.
+ */
+export const cleanUpDictation = async ({
+  body,
+  readVocabulary = readCleanupVocabulary,
+  ...options
+}: DictationCleanupOptions) => {
+  const vocabulary = await cleanupVocabulary(
+    options.caller,
+    body,
+    readVocabulary,
+  );
+  const { model, ...asked } = body;
+  return await generateDictationAnswer({
+    ...options,
+    feature: "dictation.cleanup",
+    failureName: "Dictation cleanup",
+    task: "short-text",
+    modelId: resolveDictationCleanupModel(model, options.caller.orgAIConfig),
+    deadlineMs: CLEANUP_DEADLINE_MS,
+    outputTokenBudget: CLEANUP_OUTPUT_TOKENS,
+    system: DICTATION_CLEANUP_SYSTEM_PROMPT,
+    prompt: buildDictationCleanupPrompt(
+      vocabulary === undefined ? asked : { ...asked, vocabulary },
+    ),
+    outputSchema: dictationCleanupModelOutputSchema,
+    accept: (output) => acceptDictationCleanup(output, body),
+  });
+};
+
+type DictationCleanupEndpointOptions = DictationCleanupGeneration &
+  DesktopDictationGate;
 
 /**
  * Cleans up one desktop dictation: the text the computer transcribed, never
@@ -60,15 +126,15 @@ type DictationCleanupEndpointOptions = {
  * mistakes and turns spoken punctuation and formatting commands into typed
  * segments. The request may say where the text goes (the kind of app, and
  * when the speaker shares them the window title and the text before the
- * cursor), which only sets the register. Neither the transcript, its
- * context nor the answer is stored or logged.
+ * cursor), which only sets the register, and the speaker's own
+ * instructions, which only choose among forms the rules leave open. Neither
+ * the transcript, its context, the instructions nor the answer is stored or
+ * logged.
  */
 export const createDictationCleanupEndpoint = ({
-  authorizeAccount = authorizeDesktopAccount,
-  loadAISettings = loadOrgAISettings,
-  limit = consumeDictationLimit,
-  generateObjectForTask = generateTanStackObjectForTask,
-  admit,
+  generateObjectForTask,
+  readVocabulary,
+  ...gate
 }: DictationCleanupEndpointOptions = {}) =>
   declareAggregateMutation(
     createSafeBoundedPublicHandler(
@@ -83,166 +149,26 @@ export const createDictationCleanupEndpoint = ({
         ),
       },
       async function* (ctx) {
-        const { request, body } = ctx;
-        const account = yield* Result.await(authorizeAccount(request));
-        if (
-          !isFeatureEnabled(
-            account.featureAccessSnapshot,
-            REQUIRED_FEATURE_ID,
-            account,
-          )
-        ) {
-          return Result.err(
-            new HandlerError({
-              status: 403,
-              message: "Dictation is unavailable",
-            }),
-          );
-        }
-        if (!hasMemberPermission(account.memberRole, { chat: ["create"] })) {
-          return Result.err(
-            new HandlerError({
-              status: 403,
-              message: "AI use is not permitted",
-            }),
-          );
-        }
-        yield* Result.await(
-          limit({
-            organizationId: account.organizationId,
-            userId: account.userId,
-            operation: "cleanup",
-          }),
-        );
-        const safeDb = safeDbFromScoped(account.scopedDb);
-        const aiSettings = yield* Result.await(
-          safeDb(
-            async (tx) =>
-              await loadAISettings(tx, {
-                organizationId: account.organizationId,
-                userId: account.userId,
+        return yield* runDesktopDictationModelAction({
+          ctx,
+          modelTask: "short-text",
+          gate,
+          async *handler({ caller, actionSignal, modelAdmission }) {
+            const segments = yield* Result.await(
+              cleanUpDictation({
+                caller,
+                body: ctx.body,
+                modelAdmission,
+                actionSignal,
+                ...(generateObjectForTask === undefined
+                  ? {}
+                  : { generateObjectForTask }),
+                ...(readVocabulary === undefined ? {} : { readVocabulary }),
               }),
-          ),
-        );
-        const { orgAIConfig, managedAIResidency, promptCachingEnabled } =
-          yield* aiSettings;
-        const authorization = yield* Result.await(
-          authorizeHandlerUsage({
-            metering: { actionType: "chat", modelTask: "short-text" },
-            organizationId: account.organizationId,
-            userId: account.userId,
-            safeDb,
-            orgAIConfig,
-            workspaceId: null,
-          }),
-        );
-        return await authorization.execute(
-          async () =>
-            await Result.gen(async function* () {
-              return yield* admitFiniteAction({
-                actionKind: "dictation.cleanup",
-                ctx: {
-                  ...ctx,
-                  user: { id: account.userId },
-                  session: { activeOrganizationId: account.organizationId },
-                  scopedDb: account.scopedDb,
-                  actionSignal: request.signal,
-                },
-                ...(admit ? { admit } : {}),
-                async *handler({ actionSignal, modelAdmission }) {
-                  const analytics = createTanStackAIAnalyticsCallbacks({
-                    dataClass: "customer",
-                    feature: "dictation.cleanup",
-                    modelTask: "short-text",
-                    modelTier: modelAdmission.modelTier,
-                    orgAIConfig,
-                    properties: {},
-                    traceId: Bun.randomUUIDv7(),
-                    usageMetering: {
-                      actionType: "chat",
-                      organizationId: account.organizationId,
-                      userId: account.userId,
-                      safeDb,
-                      serviceTier: "standard",
-                      workspaceId: null,
-                    },
-                  });
-                  const generated = await Result.tryPromise({
-                    try: async () =>
-                      await generateArtefact({
-                        generator: GENERATOR,
-                        // The request carries the transcript itself; no
-                        // stored record or decision feeds the answer.
-                        sources: { decisionIds: [], inputs: [] },
-                        generate: async () =>
-                          await generateObjectForTask({
-                            dataClass: "customer",
-                            admission: modelAdmission,
-                            userId: account.userId,
-                            organizationId: account.organizationId,
-                            orgAIConfig,
-                            managedAIResidency,
-                            task: "short-text",
-                            serviceTier: "standard",
-                            analytics,
-                            caching: resolveCaching({
-                              promptCachingEnabled,
-                              task: "short-text",
-                              scopeKey: null,
-                            }),
-                            tenantWorkspaceIds: [],
-                            abortSignal: actionSignal,
-                            deadlineMs: CLEANUP_DEADLINE_MS,
-                            systemPromptOrigin: "server-built",
-                            system: DICTATION_CLEANUP_SYSTEM_PROMPT,
-                            prompt: buildDictationCleanupPrompt(body),
-                            outputSchema: dictationCleanupModelOutputSchema,
-                            outputTokenBudget: CLEANUP_OUTPUT_TOKENS,
-                          }),
-                      }),
-                    catch: (cause: unknown) => cause,
-                  });
-                  const output = yield* generated
-                    .andThen((artefact) => artefact.map(readUnsourcedArtefact))
-                    .mapError((cause) => {
-                      analytics.captureError(cause);
-                      return aiHandlerError(cause, {
-                        status: 502,
-                        message: "Dictation cleanup failed",
-                      });
-                    });
-                  const accepted = acceptDictationCleanup(
-                    output,
-                    body.transcript,
-                  );
-                  if (accepted.isErr()) {
-                    // The reason only, never the text that caused it.
-                    analytics.captureError(
-                      classifyFailure(
-                        new HandlerError({
-                          status: 502,
-                          code: "internal_error",
-                          message: `Dictation cleanup answer refused: ${accepted.error}`,
-                        }),
-                        "response_invalid",
-                      ),
-                    );
-                    return Result.err(
-                      classifyFailure(
-                        new HandlerError({
-                          status: 502,
-                          code: "internal_error",
-                          message: "Dictation cleanup failed validation",
-                        }),
-                        "response_invalid",
-                      ),
-                    );
-                  }
-                  return Result.ok(accepted.value);
-                },
-              });
-            }),
-        );
+            );
+            return Result.ok(segments);
+          },
+        });
       },
     ),
     {

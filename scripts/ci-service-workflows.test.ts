@@ -426,7 +426,9 @@ test("GHCR attestations run before the job logs out of GHCR", () => {
         const run = typeof step["run"] === "string" ? step["run"] : "";
         if (
           uses.startsWith("docker/login-action@") ||
-          uses.endsWith("/build-web-image")
+          uses.endsWith("/docker-login") ||
+          uses.endsWith("/build-web-image") ||
+          run.includes("scripts/docker-login-action.ts")
         ) {
           loggedIn = true;
         }
@@ -434,7 +436,8 @@ test("GHCR attestations run before the job logs out of GHCR", () => {
           loggedIn = false;
         }
         const attests =
-          uses.endsWith("/provenance") ||
+          (uses.endsWith("/provenance") &&
+            !record(step["with"] ?? {})["subject-path"]) ||
           (uses.startsWith("actions/attest@") &&
             record(step["with"] ?? {})["push-to-registry"] === true);
         if (attests && !loggedIn) {

@@ -11,13 +11,13 @@ import {
   CHAT_SEND_QUEUES_INSTEAD_CODE,
 } from "@stll/api-contract/chat-queue";
 
-import type { Transaction } from "@/api/db/root";
 import {
   type SafeDb,
   type SafeDbError,
   transactionAbortError,
 } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   type ChatCommand,
   chatCommandReceiptOutcomeOnTx,

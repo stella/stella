@@ -1,4 +1,5 @@
 import { STELLA_API_VERSION_PREFIX } from "./api-version";
+import type { FilePartDescriptor } from "./file-parts";
 
 /** Version of the public REST request and response contract. */
 export const STELLA_REST_API_CONTRACT_VERSION = 4 as const;
@@ -23,7 +24,11 @@ export {
   CHAT_SKILL_CONTEXT_NEED,
   CHAT_SKILL_DOCUMENT,
   SKILL_DRAFT_NAME_KINDS,
+  SKILL_EXPORT_TOO_LARGE_CODE,
   SKILL_FROM_CHAT_REFUSAL_CODE,
+  SKILL_PACKAGE_FILE_EXTENSIONS,
+  SKILL_PACKAGE_REFUSAL_CODE,
+  SKILL_PACKAGE_SKILL_NOT_FOUND_CODE,
   SKILL_REF_HREF_PREFIX,
   SKILL_RESOURCE_PATH_PATTERN,
   SKILL_RESOURCE_REFUSAL_CODE,
@@ -88,6 +93,7 @@ export {
   INVOICE_LINE_INPUT_LIMITS,
   INVOICE_LINE_QUANTITY_PATTERN,
   INVOICE_LINE_SOURCES,
+  INVOICE_SEND_LIMITS,
   INVOICE_PAYMENT_INPUT_LIMITS,
   INVOICE_PAYMENT_METHODS,
   INVOICE_STATUS,
@@ -629,7 +635,6 @@ export type {
 } from "./resource-link";
 
 export { STELLA_API_VERSION_PREFIX } from "./api-version";
-export const MAX_EMAIL_TEXT_ATTACHMENT_PREVIEW_BYTES = 1024 * 1024;
 export const EMAIL_TEXT_ATTACHMENT_CHARSET = {
   big5: "big5",
   eucJp: "euc-jp",
@@ -674,14 +679,12 @@ export const EMAIL_TEXT_ATTACHMENT_CHARSET = {
 export type EmailTextAttachmentCharset =
   (typeof EMAIL_TEXT_ATTACHMENT_CHARSET)[keyof typeof EMAIL_TEXT_ATTACHMENT_CHARSET];
 
-/** One attachment an email preview lists, without its bytes. */
-export type EmailAttachmentDescriptor = {
+/**
+ * One attachment an email preview lists, without its bytes: a part of the
+ * email file, and the charset its text declares.
+ */
+export type EmailAttachmentDescriptor = FilePartDescriptor & {
   charset: EmailTextAttachmentCharset | null;
-  id: string;
-  fileName: string | null;
-  mimeType: string | null;
-  sizeBytes: number;
-  previewable: boolean;
 };
 
 /**

@@ -2,14 +2,15 @@ import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   agentSkillProposals,
   agentSkillResources,
   agentSkills,
 } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
+import { createSkillPackageTools } from "@/api/handlers/chat/tools/skill-package-tools";
 import createSkill from "@/api/handlers/skills/create";
 import createSkillFromBlueprint from "@/api/handlers/skills/from-blueprint/create";
 import reviewSkillProposal from "@/api/handlers/skills/proposals/review";
@@ -202,6 +203,27 @@ const runSkillEditTool = async ({
   await tool.execute(input);
 };
 
+const savePackage = async (input: Record<string, unknown>) => {
+  const tools = createSkillPackageTools({
+    offer: { type: "every" },
+    memberRole: sessionMemberRole("member"),
+    organizationId: ids.orgA,
+    recordAuditEvent: async () => undefined,
+    safeDb: asTestRaw<SafeDb>(createSafeDb(testDb, [], ids.orgA, ids.userA1)),
+    scopedDb: asTestRaw<ScopedDb>(
+      createScopedDb(testDb, [], ids.orgA, ids.userA1),
+    ),
+    userId: ids.userA1,
+  });
+  const tool = asTestExecutable<Record<string, unknown>, { skillId?: unknown }>(
+    tools.save_skill_package,
+  );
+  const output = await tool?.execute?.(input);
+  return typeof output?.skillId === "string"
+    ? toSafeId<"agentSkill">(output.skillId)
+    : panic(`Expected a saved skill in ${JSON.stringify(output)}`);
+};
+
 // Every path that writes a skill's hashed content. Each case returns the skill
 // it wrote so the invariant can be checked against a fresh computation.
 const MUTATION_PATHS = {
@@ -381,6 +403,23 @@ const MUTATION_PATHS = {
       input: { path: "references/from-chat.md", content: "Created from chat." },
     });
     return skillId;
+  },
+  "chat save_skill_package create": async () =>
+    await savePackage({
+      skillMd: `---\nname: hashed-package-${Bun.randomUUIDv7()}\ndescription: Hashed.\n---\nBody.`,
+      resources: [{ path: "references/a.md", content: "A." }],
+    }),
+  "chat save_skill_package update": async () => {
+    const skillId = await seedSkillWithResource();
+    return await savePackage({
+      skillId,
+      skillMd:
+        "---\nname: hashed-update\ndescription: Updated.\n---\nNew body.",
+      resources: [
+        { path: "references/checklist.md", content: "Replaced." },
+        { path: "references/added.md", content: "Added." },
+      ],
+    });
   },
 } as const satisfies Record<string, () => Promise<SafeId<"agentSkill">>>;
 

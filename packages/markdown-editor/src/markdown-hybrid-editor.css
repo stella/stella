@@ -1,0 +1,155 @@
+/*
+ * Maps the editor's variable-driven `md-theme-vscode-default` theme onto the
+ * app's design tokens. The theme only references `--vscode-*` names, so
+ * supplying them on the editor root is the whole integration: light/dark and
+ * any future palette change flow through automatically.
+ */
+.md-editor.md-theme-stella {
+  --markdown-font-family: var(--font-sans);
+  --markdown-font-size: 0.875rem;
+  --vscode-editor-font-family:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
+
+  --vscode-editor-background: var(--background);
+  --vscode-editor-foreground: var(--foreground);
+  --vscode-editorCursor-foreground: var(--foreground);
+  --vscode-descriptionForeground: var(--muted-foreground);
+  --vscode-disabledForeground: var(--muted-foreground);
+  --vscode-errorForeground: var(--destructive);
+  --vscode-focusBorder: var(--ring);
+  --vscode-contrastBorder: transparent;
+
+  --vscode-textLink-foreground: var(--primary);
+  --vscode-textSeparator-foreground: var(--border);
+  --vscode-textBlockQuote-background: var(--muted);
+  --vscode-textBlockQuote-border: var(--border);
+  --vscode-textCodeBlock-background: var(--muted);
+  --vscode-textPreformat-background: var(--muted);
+  --vscode-textPreformat-foreground: var(--foreground);
+
+  --vscode-editorWidget-background: var(--popover);
+  --vscode-editorWidget-foreground: var(--popover-foreground);
+  --vscode-editorWidget-border: var(--border);
+  --vscode-widget-border: var(--border);
+  --vscode-widget-shadow: color-mix(
+    in srgb,
+    var(--color-black) 16%,
+    transparent
+  );
+
+  --vscode-input-background: var(--background);
+  --vscode-input-foreground: var(--foreground);
+  --vscode-input-border: var(--input);
+  --vscode-input-placeholderForeground: var(--muted-foreground);
+  --vscode-inputOption-activeBackground: var(--accent);
+  --vscode-inputOption-activeForeground: var(--accent-foreground);
+  --vscode-inputOption-hoverBackground: var(--accent);
+  --vscode-inputValidation-errorBorder: var(--destructive);
+
+  --vscode-button-background: var(--primary);
+  --vscode-button-foreground: var(--primary-foreground);
+  --vscode-button-border: transparent;
+  --vscode-button-secondaryBackground: var(--secondary);
+  --vscode-button-secondaryForeground: var(--secondary-foreground);
+  --vscode-button-secondaryHoverBackground: var(--accent);
+  --vscode-button-secondaryBorder: var(--border);
+
+  /* The search-hit mark of `@stll/ui/text-mark`: a warning wash, stronger
+     with a ring of the same hue on the current match. */
+  --vscode-editor-findMatchBackground: color-mix(
+    in oklab,
+    var(--warning) 45%,
+    transparent
+  );
+  --vscode-editor-findMatchBorder: var(--warning);
+  --vscode-editor-findMatchHighlightBackground: color-mix(
+    in oklab,
+    var(--warning) 30%,
+    transparent
+  );
+
+  min-height: 100%;
+  padding-block: 0.75rem;
+}
+
+.dark .md-editor.md-theme-stella {
+  --vscode-editor-findMatchBackground: color-mix(
+    in oklab,
+    var(--warning) 35%,
+    transparent
+  );
+  --vscode-editor-findMatchHighlightBackground: color-mix(
+    in oklab,
+    var(--warning) 20%,
+    transparent
+  );
+}
+
+/*
+ * Diff mode (a `baseline` is set). The engine marks the baseline's removed and
+ * changed blocks with classes and paints word-level rects into an overlay, but
+ * ships no styles for either, so without these rules a deletion reads as the
+ * old paragraph in plain text beside the new one. The look is the product's
+ * one track-changes language (`@stll/ui/review/review-diff-text`): deleted
+ * text dimmed and struck through with a faint destructive tint, inserted text
+ * a soft success wash with an inset ring.
+ */
+.md-editor.md-theme-stella {
+  --md-gutter-added: var(--success);
+  --md-gutter-modified: var(--primary);
+  --md-gutter-deleted: var(--destructive);
+}
+
+.md-theme-stella .md-diff-highlight-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.md-theme-stella .md-diff-ins-rect,
+.md-theme-stella .md-diff-del-rect {
+  position: absolute;
+  border-radius: 3px;
+}
+
+.md-theme-stella .md-diff-ins-rect {
+  background-color: color-mix(in oklch, var(--success) 14%, transparent);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklch, var(--success) 28%, transparent);
+}
+
+/* The rect is an overlay, not a wrapper, so the strike is drawn as a 1px rule
+   through the middle of each line fragment. */
+.md-theme-stella .md-diff-del-rect {
+  background:
+    linear-gradient(
+        color-mix(in oklch, var(--destructive) 55%, var(--muted-foreground)),
+        color-mix(in oklch, var(--destructive) 55%, var(--muted-foreground))
+      )
+      center / 100% 1px no-repeat,
+    color-mix(in oklch, var(--destructive) 10%, transparent);
+}
+
+/* Baseline text shown beside the document: a whole removed block, or the old
+   side of a changed block (its deleted words carry a del rect). */
+.md-theme-stella :is(.md-diff-removed, .md-diff-original) {
+  color: color-mix(in oklch, var(--destructive) 35%, var(--muted-foreground));
+}
+
+.md-theme-stella .md-diff-removed {
+  text-decoration-line: line-through;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(
+    in oklch,
+    var(--destructive) 30%,
+    var(--muted-foreground)
+  );
+}
+
+.md-theme-stella .md-diff-added {
+  border-radius: 4px;
+  background-color: color-mix(in oklch, var(--success) 10%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in oklch, var(--success) 10%, transparent);
+}

@@ -37,7 +37,6 @@ import {
   FetchBoundaryError,
 } from "@stll/errors";
 import { isConnectionFailure } from "@stll/fetch";
-import type { PersistedAstDegradation } from "@stll/legal-ast/document-ast";
 import {
   INGESTION_STOP_KIND,
   type IngestionStopKind,
@@ -368,6 +367,7 @@ export const UNPERSISTABLE_DECISION_FIELDS = {
   PRIMARY_REFERENCE_TYPE: "primary-reference-type",
   SUPPLEMENT: "supplement",
   FALLBACK_IDENTITY: "fallback-identity",
+  HELD_DECISION_ATTACHMENT: "held-decision-attachment",
 } as const;
 
 export type UnpersistableDecisionField =
@@ -423,19 +423,18 @@ export class CorpusMemberDigestMismatchError extends TaggedError(
 }> {}
 
 /**
- * A stored document AST carried vocabulary this reader does not declare
- * (a block role, a block kind, or an inline kind) or head matter after the
- * body. The read served the document with those degraded (see
- * `persistedAstDegradations` and `headMatterOrderDegradations` in
- * `@stll/legal-ast/document-ast`); this is telemetry only, so the row is
- * visible: either a writer newer than this reader, or a row written past
- * the ingestion boundary that needs repair.
+ * A stored document AST was served other than as written: degraded without
+ * loss (vocabulary this reader does not declare, repeated identities, head
+ * matter after the body; see `persistedAstDegradations`) or stored without
+ * structure. Telemetry only, so the row stays visible until a reparse
+ * repairs it; `reportStoredAstOutcome` in `stored-ast-outcome.ts` is its one
+ * reporter, and the record it writes carries the counts, never the content.
  */
 export class StoredAstDegradedError extends TaggedError(
   "StoredAstDegradedError",
 )<{
   message: string;
-  degradations: readonly PersistedAstDegradation[];
+  outcome: "degraded" | "structureless";
 }> {}
 
 export const STORED_CORPUS_VALIDATION_CODE = "stored_corpus_invalid";
@@ -761,6 +760,11 @@ export const SUBPROCESS_TERMINATION_REASON = {
   cancelled: "cancelled",
   crashed: "crashed",
   external: "external",
+  /**
+   * The parent killed the worker past its resident-memory ceiling, or when
+   * its memory could no longer be read, so the ceiling could not be held.
+   */
+  memory: "memory",
 } as const;
 
 export type SubprocessTerminationReason =
@@ -792,6 +796,7 @@ export const EXTRACTION_WORKER_ERROR_CODE = {
   cancelled: "worker_cancelled",
   crashed: "worker_crashed",
   external: "worker_externally_terminated",
+  memory: "worker_memory_exceeded",
   parser: "parser_failed",
   timeout: "worker_timeout",
 } as const;
@@ -805,6 +810,7 @@ const EXTRACTION_WORKER_TERMINATION_ERROR_CODE = {
   [SUBPROCESS_TERMINATION_REASON.crashed]: EXTRACTION_WORKER_ERROR_CODE.crashed,
   [SUBPROCESS_TERMINATION_REASON.external]:
     EXTRACTION_WORKER_ERROR_CODE.external,
+  [SUBPROCESS_TERMINATION_REASON.memory]: EXTRACTION_WORKER_ERROR_CODE.memory,
   [SUBPROCESS_TERMINATION_REASON.timeout]: EXTRACTION_WORKER_ERROR_CODE.timeout,
 } as const satisfies Record<
   SubprocessTerminationReason,

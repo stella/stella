@@ -151,7 +151,7 @@ test("a turn that failed with no computer connected offers Open stella desktop, 
   const opening = await view.findByRole("button", {
     name: messages.settings.account.desktopCardOpeningTitle,
   });
-  expect(opening).toHaveProperty("disabled", true);
+  expect(opening.getAttribute("aria-disabled")).toBe("true");
   expect(view.getByRole("status")).toBe(status);
   expect(status.textContent).toBe(
     messages.settings.account.desktopCardOpeningTitle,

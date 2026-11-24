@@ -1,5 +1,5 @@
 import { rlsDb } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { createIngestionDb } from "@/api/db/scoped";
 
 let ingestionDb: ScopedDb | undefined;

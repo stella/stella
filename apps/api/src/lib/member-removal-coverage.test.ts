@@ -6,6 +6,7 @@ import type { PgColumn } from "drizzle-orm/pg-core";
 import * as agentSchema from "@/api/db/agent-auth-schema";
 import * as authSchema from "@/api/db/auth-schema";
 import * as schema from "@/api/db/schema";
+import { RETAINED_USER_ATTRIBUTION_COLUMNS } from "@/api/tests/helpers/user-attribution-retention";
 
 import {
   ORGANIZATION_MEMBER_CLEANUP_COLUMNS,
@@ -81,6 +82,13 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "case_law_decisions.extraction_warnings",
   "case_law_decisions.analysis",
   "case_law_decisions.metadata",
+  // A publisher's typed metadata of a public decision and the identifiers it
+  // declares on it; no member ids.
+  "case_law_held_decision_attachments.declared_identifiers",
+  // Publisher sections and the public decision identifiers used to match them.
+  "case_law_held_decision_attachments.document_part",
+  "case_law_held_decision_attachments.match_evidence",
+  "case_law_held_decision_attachments.metadata",
   "case_law_judges.external_refs",
   // Corpus population buckets: kind/value pairs derived from public decisions.
   "case_law_population_projections.buckets",
@@ -119,6 +127,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "contacts.bank_accounts",
   "contacts.billing_address",
   "correspondence.data_box_envelope",
+  // A PEC provider's certification data: addresses as stated in the file.
+  "correspondence.certified_email_envelope",
   "correspondence.original_signature",
   "correspondence.sender",
   "correspondence.recipients_to",
@@ -195,6 +205,10 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "legislation_documents.document_ast",
   "legislation_documents.metadata",
   "legislation_amendment_snapshots.coverage",
+  // Global publisher effects, source evidence and channel clocks contain no member identifiers.
+  "legislation_amendment_snapshots.channel_snapshots",
+  "legislation_amendments.effect_details",
+  "legislation_amendments.observations",
   "legislation_sources.config",
   "legislation_sources.descriptor",
   "mcp_connector_authorization_reviews.observed_endpoint_origins",
@@ -260,12 +274,18 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
 
 /** Member references both removal paths keep, and why. */
 const RETAINED_MEMBER_COLUMNS = {
+  "outbound_actions.user_id":
+    "Pending actions are removed; claimed and terminal delivery history remains attributable, with current membership and thread access gating reads.",
   "oauth_grant_revocations.user_id":
     "A revocation only refuses tokens issued before it and is pruned after the access-token lifetime.",
   "desktop_time_entry_batches.user_id":
     "Terminal billing replay receipt; current membership gates access and the row cascades with account or organization deletion.",
   "account_audit_logs.user_id":
     "User-owned account audit history; matter and organization removal do not erase the user account or grant membership.",
+  "sso_provider.user_id":
+    "Who registered the organization's SSO provider; the provider belongs to the organization, the attribution grants no membership or authority, and account deletion clears it.",
+  "organization_sso_domain.created_by":
+    "Who added the organization's SSO domain verification record; the domain belongs to the organization, the attribution grants no membership or authority, and account deletion clears it.",
   "account_exports.attempt_object_keys":
     "Storage keys of the account's own archives, named by account id; reclamation and account deletion own them, not membership removal.",
   "account_exports.user_id":
@@ -282,16 +302,15 @@ const RETAINED_MEMBER_COLUMNS = {
     "Decision attribution on the firm's compliance record; it grants no membership or review authority.",
   "sanctions_screening_events.reviewer_id":
     "Screening decision history; attribution grants no membership or review authority.",
-  "audit_logs.user_id": "Audit performer history.",
   "feature_enrolments.user_id":
     "The person's own feature opt-in; access also requires current membership, and the row cascades with the user and organization.",
   "audit_logs.trigger_user_id": "Audit trigger history.",
   "audit_logs.approved_by_user_id": "Audit approval history.",
   "buffer_object_cleanup_intents.writer_user_id":
     "Storage erasure receipt; retained for cleanup.",
+  "invoice_sends.sent_by_user_id":
+    "Invoice delivery history; links remain valid after account deletion.",
   "time_entries.approved_by_user_id": "Billing approval history.",
-  "invoice_payments.recorded_by": "Billing payment attribution history.",
-  "invoice_payments.voided_by": "Billing payment reversal attribution history.",
   "time_entries.returned_by_user_id": "Billing return history.",
   "usage_allocations.seat_scope_user_id":
     "Accounting scope; active seat assignment is membership-bound.",
@@ -331,6 +350,8 @@ const RETAINED_MEMBER_COLUMNS = {
   "bilingual_translation_runs.requested_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "case_law_matter_links.linked_by":
+    "Retained attribution or request history; this column grants no matter membership.",
+  "dictation_vocabulary_terms.created_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "legislation_matter_links.linked_by":
     "Retained attribution or request history; this column grants no matter membership.",
@@ -608,6 +629,8 @@ const MATTER_REMOVAL_RETAINED_COLUMNS = {
     "Organization-scoped history ordering state outlives a matter removal.",
   "search_history_tombstones.user_id":
     "Organization-scoped deletion identities outlive a matter removal.",
+  "dictation_learned_fixes.user_id":
+    "The person's own organization-scoped dictation spellings; they stay an organization member.",
   "member.user_id": "Organization membership outlives a matter removal.",
   "contacts.originating_attorney_id":
     "Organization-level attorney; the person stays an organization member.",
@@ -765,7 +788,12 @@ const organizationPath: RemovalPath = {
   cleanup: new Set(
     ORGANIZATION_MEMBER_CLEANUP_COLUMNS.map(([column]) => columnKey(column)),
   ),
-  retained: new Map(Object.entries(RETAINED_MEMBER_COLUMNS)),
+  retained: new Map([
+    ...Object.entries(RETAINED_MEMBER_COLUMNS),
+    ...RETAINED_USER_ATTRIBUTION_COLUMNS.map(
+      ({ column, reason }) => [columnKey(column), reason] as const,
+    ),
+  ]),
 };
 const matterPath: RemovalPath = {
   name: "matter",
@@ -774,6 +802,9 @@ const matterPath: RemovalPath = {
   ),
   retained: new Map([
     ...Object.entries(RETAINED_MEMBER_COLUMNS),
+    ...RETAINED_USER_ATTRIBUTION_COLUMNS.map(
+      ({ column, reason }) => [columnKey(column), reason] as const,
+    ),
     ...Object.entries(MATTER_REMOVAL_RETAINED_COLUMNS),
   ]),
 };
@@ -868,6 +899,9 @@ describe("member removal schema coverage", () => {
             ...matterPath,
             retained: new Map([
               ...Object.entries(RETAINED_MEMBER_COLUMNS),
+              ...RETAINED_USER_ATTRIBUTION_COLUMNS.map(
+                ({ column, reason }) => [columnKey(column), reason] as const,
+              ),
               ...matterOnly,
             ]),
           },

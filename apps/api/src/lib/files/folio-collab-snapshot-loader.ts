@@ -1,13 +1,28 @@
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
+import * as Y from "yjs";
 
 import { FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME } from "@stll/api-contract/folio-collab";
-import type { FolioYjsSnapshotMigrationError } from "@stll/folio-core/server";
-import { migrateFolioYjsSnapshot } from "@stll/folio-core/server";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import type { FolioCollabSavedSnapshotCut } from "@/api/lib/folio-collab-room-contract";
 
 export { FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME } from "@stll/api-contract/folio-collab";
+
+/**
+ * Why a stored room state cannot be loaded. `invalid_update`: the bytes are
+ * not a Yjs update. `legacy_room`: the room edited a ProseMirror fragment, as
+ * rooms did before they carried a canonical journal; it reopens from DOCX.
+ */
+export class FolioRoomSnapshotError extends TaggedError(
+  "FolioRoomSnapshotError",
+)<{
+  code: "invalid_update" | "legacy_room";
+  message: string;
+  cause?: unknown;
+}> {}
+
+/** The shared type a room edited before it carried a canonical journal. */
+const LEGACY_ROOM_FRAGMENT = "prosemirror";
 
 type FolioSnapshotRecoveryStateOptions = {
   savedSnapshotCut: FolioCollabSavedSnapshotCut | null;
@@ -56,40 +71,62 @@ export const decideFolioSnapshotRecoveryState = ({
   return snapshotUpdatedAt.getTime() < baseline ? "saved" : "unsaved";
 };
 
+/** Whether `snapshotBytes` restore a room, and whether that room is legacy. */
+const readRoomSnapshot = (
+  snapshotBytes: Uint8Array,
+): Result<"canonical" | "legacy", FolioRoomSnapshotError> =>
+  Result.try({
+    try: () => {
+      const room = new Y.Doc();
+      try {
+        Y.applyUpdate(room, snapshotBytes);
+        return room.share.has(LEGACY_ROOM_FRAGMENT) ? "legacy" : "canonical";
+      } finally {
+        room.destroy();
+      }
+    },
+    catch: (cause) =>
+      new FolioRoomSnapshotError({
+        code: "invalid_update",
+        message: "The stored collaboration state is not a Yjs update.",
+        cause,
+      }),
+  });
+
 type SnapshotRecoveryResult =
   | { status: "reset"; generation: number; resetGeneration: number }
   | { status: "replaced" };
 
 type LoadPersistedFolioSnapshotOptions = {
-  onRefused: (
-    error: FolioYjsSnapshotMigrationError,
-  ) => Promise<SnapshotRecoveryResult>;
+  onRefused: (error: FolioRoomSnapshotError) => Promise<SnapshotRecoveryResult>;
   snapshotBytes: Uint8Array;
 };
 
 /**
- * The only boundary that opens persisted Folio Yjs state. Folio migrations
- * either return a safe update or explicitly require a DOCX-backed reseed;
- * callers never inspect, patch, or partially apply refused state.
+ * The only boundary that opens persisted Folio room state. A canonical room
+ * loads as stored; a legacy room requires a DOCX-backed reseed; callers never
+ * inspect, patch, or partially apply refused state.
  */
 export const loadPersistedFolioSnapshot = async ({
   onRefused,
   snapshotBytes,
 }: LoadPersistedFolioSnapshotOptions) =>
   Result.gen(async function* () {
-    const migrated = migrateFolioYjsSnapshot(snapshotBytes);
-    if (Result.isOk(migrated)) {
+    const kind = yield* readRoomSnapshot(snapshotBytes);
+    if (kind === "canonical") {
       return Result.ok({
         outcome: FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME.loaded,
-        snapshotBytes: migrated.value.update,
+        snapshotBytes,
       } as const);
     }
 
-    if (migrated.error.code !== "unsupported_version") {
-      return yield* Result.err(migrated.error);
-    }
-
-    const recovery = await onRefused(migrated.error);
+    const recovery = await onRefused(
+      new FolioRoomSnapshotError({
+        code: "legacy_room",
+        message:
+          "The stored collaboration state edits a ProseMirror fragment; the room reopens from its DOCX.",
+      }),
+    );
     switch (recovery.status) {
       case "reset":
         return Result.ok({

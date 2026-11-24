@@ -6,6 +6,7 @@ import {
 } from "@/components/public-law-search";
 import type { PublicLawAskScope } from "@/components/public-law-search";
 import { fromCaseLawCountryParam } from "@/features/case-law/case-law-jurisdiction";
+import { CASE_LAW_SEARCH_PLACEHOLDER } from "@/features/case-law/components/case-law-search.pending";
 import type { CaseLawRefine } from "@/features/case-law/use-case-law-refine";
 import { useFormatter } from "@/i18n/formatting-context";
 import { caseLawCountryName } from "@/lib/case-law-route";
@@ -43,8 +44,8 @@ export const CaseLawSearch = ({
   query,
   refine,
 }: CaseLawSearchProps) => {
-  const t = useTranslations();
   const askScope = useCaseLawAskScope(country);
+  const t = useTranslations();
 
   return (
     <PublicLawSearch
@@ -52,7 +53,7 @@ export const CaseLawSearch = ({
       maxLength={maxLength}
       onQueryChange={onQueryChange}
       onSubmit={onSubmit}
-      placeholder={t("caseLaw.searchPlaceholder")}
+      placeholder={t(CASE_LAW_SEARCH_PLACEHOLDER)}
       query={query}
       refine={{ isPending: refine.isPending, onRefine: refine.onRefine }}
       searchLabel={t("caseLaw.searchLabel")}

@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { corpusMemberLayout } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";

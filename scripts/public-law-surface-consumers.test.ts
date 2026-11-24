@@ -66,6 +66,14 @@ const CONSUMERS = {
     "pages",
   // The iOS app opens decisions as the web's decision pages do.
   "apps/mobile/src/state/case-law.ts": "pages",
+  // Jurisdiction and court hubs: crawlable pages that link into decisions.
+  "apps/api/src/handlers/case-law/decisions/browse-hubs.ts": "pages",
+  "apps/web/src/features/case-law/browse-hub-path.ts": "pages",
+  "apps/web/src/routes/law/$country/index.tsx": "pages",
+  // The jurisdiction hub's page links the statutes of a public jurisdiction.
+  "apps/web/src/routes/law/$country/-index.page.tsx": "pages",
+  "apps/web/src/routes/law/$country/courts/$.tsx": "pages",
+  "apps/landing/src/data/public-law-hubs.ts": "pages",
   // Sitemaps.
   "apps/api/src/handlers/case-law/decisions/sitemap.ts": "sitemap",
   "apps/api/src/handlers/legislation/sitemap.ts": "sitemap",
@@ -88,6 +96,8 @@ const CONSUMERS = {
   "apps/api/src/handlers/case-law/decisions/search.ts": "search",
   "apps/api/src/handlers/case-law/decisions/search-expand.ts": "search",
   "apps/api/src/handlers/case-law/decisions/search-refine.ts": "search",
+  // The editor's citation check resolves a reference like the search box.
+  "apps/api/src/handlers/case-law/citations/check.logic.ts": "search",
   "apps/api/src/handlers/case-law/decisions/latest.ts": "search",
   "apps/api/src/handlers/case-law/decisions/facets.ts": "search",
   "apps/api/src/handlers/case-law/decisions/status.ts": "search",
@@ -110,6 +120,7 @@ const CONSUMERS = {
   "apps/web/src/lib/case-law-route.ts": "search",
   "apps/web/src/components/legal-citation-search.ts": "search",
   "apps/web/src/routes/law/index.tsx": "search",
+  "apps/web/src/routes/law/-law-home/law-home.page.tsx": "search",
   "apps/web/src/routes/law/cases/index.tsx": "search",
   "apps/web/src/routes/law/$country/statutes/index.tsx": "search",
   "apps/web/src/routes/law/-law-home/jurisdictions.ts": "search",
@@ -117,6 +128,8 @@ const CONSUMERS = {
   "apps/web/src/features/chat/hooks/use-global-chat-mention-registration.ts":
     "search",
   // Tests and query-plan fixtures that mirror a surface's country filter.
+  "apps/web/src/__fixtures__/route-shell/route-shell-public-fixtures.ts":
+    "pages",
   "apps/api/src/tests/query-plans/old-sitemap-refresh-fixture.ts": "sitemap",
   "apps/api/src/tests/query-plans/registry.ts": "search",
   "apps/api/src/tests/security/public-law-search-census.ts": "search",

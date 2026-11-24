@@ -1,9 +1,10 @@
 import type { Result } from "better-result";
 
-import type { SafeDbError } from "@/api/db/safe-db";
+import type { SafeDbError } from "@/api/db/safe-db-types";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { chatPartText } from "@/api/handlers/chat/chat-message-parts";
 import { buildRequestedSkillsSection } from "@/api/handlers/chat/chat-prompt";
+import type { ChatPromptTarget } from "@/api/handlers/chat/chat-prompt";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { resolveRequestedSkills } from "@/api/lib/agent-skills/requested-skills";
 import type { ResolveRequestedSkillsOptions } from "@/api/lib/agent-skills/requested-skills";
@@ -15,6 +16,8 @@ type RequestedSkillsPromptOptions = Omit<
 > & {
   activeSkillContext: ActiveChatSkillContext | null;
   messages: readonly ChatMessage[];
+  /** Where the turn runs, which decides how the model reaches a skill's rest. */
+  promptTarget: ChatPromptTarget;
 };
 
 /**
@@ -25,6 +28,7 @@ type RequestedSkillsPromptOptions = Omit<
 export const loadRequestedSkillsPrompt = async ({
   activeSkillContext,
   messages,
+  promptTarget,
   ...options
 }: RequestedSkillsPromptOptions): Promise<Result<string, SafeDbError>> => {
   const requested = await resolveRequestedSkills({
@@ -32,7 +36,9 @@ export const loadRequestedSkillsPrompt = async ({
     activeSkillId: activeSkillContext?.id ?? undefined,
     messageText: latestUserMessageText(messages),
   });
-  return requested.map(buildRequestedSkillsSection);
+  return requested.map((skills) =>
+    buildRequestedSkillsSection(skills, promptTarget),
+  );
 };
 
 /**

@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { lazy, Suspense } from "react";
 
 import { useQuery, useSuspenseInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -11,9 +11,9 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { CopyControl } from "@/components/copy-control";
+import { DATA_BOX_DIRECTION_LABEL_KEYS } from "@/features/correspondence/data-box-direction";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
-import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 import {
   CORRESPONDENCE_PAGE_SIZE,
@@ -28,21 +28,22 @@ import {
   CorrespondenceProvenance,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance";
 import { correspondenceProvenancePresentation } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance.logic";
+import { CorrespondenceListSkeleton } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view.pending";
 import {
   useRevokeCorrespondenceAddress,
   useRotateCorrespondenceAddress,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/correspondence";
 
-// An incoming message is the default and needs no label.
-const DIRECTION_LABEL_KEYS = {
-  organization_sender: "correspondence.dataBox.sent",
-  organization_recipient: null,
-  unknown: "correspondence.dataBox.directionUnknown",
-} as const satisfies Record<DataBoxDirectionBasis, TranslationKey | null>;
+// Only a certified email record needs its chip; its strings load with it.
+const CertifiedEmailKindChip = lazy(async () => {
+  const m =
+    await import("@/features/correspondence/certified-email/certified-email-envelope");
+  return { default: m.CertifiedEmailKindChip };
+});
 
 const DataBoxDirectionLabel = ({ basis }: { basis: DataBoxDirectionBasis }) => {
   const t = useTranslations();
-  const label = DIRECTION_LABEL_KEYS[basis];
+  const label = DATA_BOX_DIRECTION_LABEL_KEYS[basis];
   return label === null ? null : (
     <span className="text-muted-foreground text-xs">{t(label)}</span>
   );
@@ -72,20 +73,6 @@ export const CorrespondenceView = ({
 };
 
 /** Route-pending body: the address card and the list rows, shimmering. */
-export const CorrespondenceViewSkeleton = () => (
-  <div className="space-y-5 p-4 sm:p-6">
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
-      <div className="space-y-2">
-        <Skeleton className="h-4 w-32" />
-        <Skeleton className="h-4 w-48" />
-      </div>
-      <Skeleton className="h-9 w-24 rounded-md" />
-    </div>
-    <Skeleton className="h-11 w-full rounded-md" />
-    <CorrespondenceListSkeleton />
-  </div>
-);
-
 const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
   const t = useTranslations();
   const canUpdate = usePermissions({ workspace: ["update"] });
@@ -131,6 +118,19 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
     );
   }
 
+  const resolveAddressChangeDisabledReason = () => {
+    if (rotate.isPending || revoke.isPending) {
+      return t("common.saving");
+    }
+    if (isPending) {
+      return t("common.loading");
+    }
+    if (isError) {
+      return t("common.loadFailed");
+    }
+    return t("correspondence.addressNotConfigured");
+  };
+
   return (
     <section className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
       <div className="min-w-0">
@@ -159,6 +159,7 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
               isError ||
               data.status === "unconfigured"
             }
+            disabledReason={resolveAddressChangeDisabledReason()}
             onClick={() => rotate.mutate({ workspaceId })}
             size="sm"
             variant="outline"
@@ -173,6 +174,7 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
           <Button
             className="min-h-11"
             disabled={revoke.isPending || rotate.isPending}
+            disabledReason={t("common.saving")}
             onClick={() => revoke.mutate({ workspaceId })}
             size="sm"
             variant="ghost"
@@ -238,6 +240,11 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
                       basis={item.dataBox.directionBasis}
                     />
                   )}
+                  {item.channel === "pec" && (
+                    <Suspense fallback={null}>
+                      <CertifiedEmailKindChip kind={item.certifiedEmail.kind} />
+                    </Suspense>
+                  )}
                 </span>
                 {item.channel === "data_box" ? (
                   <TruncatedText className="text-muted-foreground mt-1 text-xs">
@@ -287,6 +294,7 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
           <Button
             className="min-h-11"
             disabled={isFetchingNextPage}
+            disabledReason={t("common.loading")}
             onClick={() =>
               detached(fetchNextPage(), "correspondence.fetch-next-page")
             }
@@ -300,22 +308,3 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
     </div>
   );
 };
-
-const CORRESPONDENCE_SKELETON_ROW_KEYS = ["s1", "s2", "s3", "s4", "s5"];
-
-const CorrespondenceListSkeleton = () => (
-  <div className="space-y-2">
-    {CORRESPONDENCE_SKELETON_ROW_KEYS.map((rowKey) => (
-      <div
-        className="flex h-16 items-center gap-4 rounded-lg border px-4"
-        key={rowKey}
-      >
-        <div className="flex-1 space-y-2">
-          <Skeleton className="h-4 w-56" />
-          <Skeleton className="h-3 w-36" />
-        </div>
-        <Skeleton className="h-3 w-20" />
-      </div>
-    ))}
-  </div>
-);

@@ -18,8 +18,13 @@ export const editor = {
   evidence: [
     {
       type: "source",
-      path: "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx",
-      contains: ["DocxBrowserEditor", "app-docx-editor"],
+      path: "apps/web/src/routes/_protected.workspaces/$workspaceId/-$viewId.document.page.tsx",
+      contains: ["DocxBrowserEditor", "ReadOnlyDocxDocument"],
+    },
+    {
+      type: "source",
+      path: "apps/web/src/components/docx/read-only-docx-document.tsx",
+      contains: ["app-docx-editor", "readOnly"],
     },
     {
       type: "source",

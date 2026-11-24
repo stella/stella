@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { apiStatus, apiUploadDocx } from "../helpers/api";
+import { openSavedView } from "../helpers/saved-views";
 import { expect, test } from "../helpers/test";
 import {
   PLAYWRIGHT_EXPECT_TIMEOUT_1_SECOND_MS,
@@ -70,7 +71,7 @@ test.describe("filesystem rename", () => {
     await page.goto(`/workspaces/${testWorkspace.id}/${testWorkspace.viewId}`, {
       waitUntil: "domcontentloaded",
     });
-    await page.getByRole("tab", { exact: true, name: "Files" }).click();
+    await openSavedView(page, "Files");
 
     const originalName = page.getByTitle(`${LONG_BASE_NAME}.docx`, {
       exact: true,

@@ -11,14 +11,17 @@ import type {
 } from "@stll/legal-ast/decision-identifier";
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
 import {
   CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE,
   CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASES,
 } from "@/api/db/schema";
 import type { CaseLawDecisionIdentifierBackfillPhase } from "@/api/db/schema";
-import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
+import type { Transaction } from "@/api/db/types";
+import {
+  type CitationGraphTransaction,
+  runCitationGraphTransaction,
+} from "@/api/handlers/case-law/citation-graph-transaction";
 import {
   CITATION_RESOLUTION_STATUS,
   effectiveCitationIdentifierTypeSql,
@@ -26,13 +29,22 @@ import {
   settledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import {
+  activeAttachmentIdentifierClaimSql,
+  reconcileHostIdentifierClaimsTx,
+} from "@/api/handlers/case-law/decision-identifier-claims-persistence";
+import {
   decisionIdentifiersFromStoredMetadata,
   decisionIdentifierTypeOfCitation,
   normalizeDecisionIdentifierIn,
   normalizeDecisionIdentifierValue,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  caseNumberKeysMatchSql,
+  sameStoredCaseNumberKeySql,
+} from "@/api/lib/case-law/case-number-match-key";
 import { assertCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
+import { DECISION_IDENTIFIER_CLAIM } from "@/api/lib/case-law/decision-identifier-claims";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -271,7 +283,7 @@ const ensureCheckpoint = async (rootDb: CaseLawRootHandle): Promise<void> => {
 };
 
 type DecisionRow = {
-  id: string;
+  id: SafeId<"caseLawDecision">;
   caseNumber: string;
   country: string;
   caseNumberType: DecisionPrimaryReferenceType;
@@ -324,7 +336,7 @@ const readDecisionRows = (result: unknown): DecisionRow[] =>
     (typeof row["createdAt"] === "string" || row["createdAt"] instanceof Date)
       ? [
           {
-            id: row["id"],
+            id: brandPersistedCaseLawDecisionId(row["id"]),
             caseNumber: row["caseNumber"],
             country: row["country"],
             caseNumberType: primaryReferenceTypeFromStored(
@@ -506,7 +518,7 @@ const boundedCourtLabel = (court: string): string => {
 };
 
 const projectDecisionPage = async (
-  tx: Transaction,
+  tx: CitationGraphTransaction<Transaction>,
   checkpoint: RunningBackfillCheckpoint,
   { batchSize, now }: BackfillPageOptions,
 ): Promise<DecisionIdentifierBackfillPageProgress> => {
@@ -540,16 +552,32 @@ const projectDecisionPage = async (
     // prepared statement for the life of its connection, and a page's identifier
     // count varies, so VALUES would leave a large plan on the connection for each
     // count it ever saw. These statements keep one text whatever the page holds.
-    const expected = JSON.stringify(
-      projections.flatMap(({ country, decisionId, identifiers }) =>
+    const expectedRows = projections.flatMap(
+      ({ country, decisionId, identifiers }) =>
         identifiers.map((identifier) => ({
           decision_id: decisionId,
           type: identifier.type,
           value: identifier.value,
           normalized_value: normalizeDecisionIdentifierIn(country, identifier),
         })),
-      ),
     );
+    const expected = JSON.stringify(expectedRows);
+    await reconcileHostIdentifierClaimsTx(tx, {
+      decisionIds: projections.map(({ decisionId }) => decisionId),
+      identifiers: expectedRows.map(
+        ({ decision_id, normalized_value, type, value }) => ({
+          decisionId: decision_id,
+          normalizedValue: normalized_value,
+          type,
+          value,
+        }),
+      ),
+    });
+    const attachedClaim = activeAttachmentIdentifierClaimSql({
+      decisionId: sql`stored.decision_id`,
+      type: sql`stored.type`,
+      normalizedValue: sql`stored.normalized_value`,
+    });
     const page = JSON.stringify(
       projections.map(({ decisionId }) => ({ decision_id: decisionId })),
     );
@@ -567,20 +595,23 @@ const projectDecisionPage = async (
     deleted AS (
       DELETE FROM case_law_decision_identifiers stored USING page
       WHERE stored.decision_id = page.decision_id
-        -- A declared alias is not derived from the decision, so no
-        -- derivation removes it.
-        AND stored.declared_at IS NULL
+        AND cardinality(stored.independent_claims) = 0
+        AND NOT ${attachedClaim}
         AND NOT EXISTS (
           SELECT 1 FROM expected
           WHERE expected.decision_id = stored.decision_id
             AND expected.type = stored.type
-            AND expected.normalized_value = stored.normalized_value
+            AND ${sameStoredCaseNumberKeySql(
+              sql.raw("expected.normalized_value"),
+              sql.raw("stored.normalized_value"),
+            )}
         )
       RETURNING stored.decision_id, stored.type, stored.normalized_value
     ), inserted AS (
       INSERT INTO case_law_decision_identifiers (
-        decision_id, type, value, normalized_value
-      ) SELECT decision_id, type, value, normalized_value FROM expected
+        decision_id, type, value, normalized_value, independent_claims
+      ) SELECT decision_id, type, value, normalized_value,
+          ARRAY[${DECISION_IDENTIFIER_CLAIM.HOST}]::varchar[] FROM expected
       ON CONFLICT ON CONSTRAINT case_law_decision_identifiers_pk DO UPDATE
       SET value = EXCLUDED.value
       WHERE case_law_decision_identifiers.value IS DISTINCT FROM EXCLUDED.value
@@ -593,7 +624,8 @@ const projectDecisionPage = async (
       -- Who answers a citation changes only with an identity. A new spelling
       -- of a stored identity changes nobody's answer, and neither does
       -- recording the docket the decision already answers under through its
-      -- citation key. Reopening for those would discard links that still hold.
+      -- citation key, in either year form. Reopening for those would discard
+      -- links that still hold.
       SELECT moved.type, moved.normalized_value
       FROM (
         SELECT decision_id, type, normalized_value FROM deleted
@@ -603,7 +635,11 @@ const projectDecisionPage = async (
       JOIN case_law_decisions holder ON holder.id = moved.decision_id
       WHERE NOT (
         moved.type = ${DECISION_IDENTIFIER_TYPES.CASE_NUMBER}
-        AND holder.citation_key IS NOT DISTINCT FROM moved.normalized_value
+        AND holder.citation_key IS NOT NULL
+        AND ${caseNumberKeysMatchSql(
+          sql.raw("holder.citation_key"),
+          sql.raw("moved.normalized_value"),
+        )}
       )
     ), reopened AS (
       UPDATE case_law_citations citation
@@ -618,9 +654,12 @@ const projectDecisionPage = async (
           WHERE changed.type = ${effectiveCitationIdentifierTypeSql(
             sql.raw("citation.identifier_type"),
           )}
-            AND changed.normalized_value = ${effectiveCitationIdentifierValueSql(
-              sql.raw("citation.normalized_identifier_value"),
-              sql.raw("citation.citation_key"),
+            AND ${caseNumberKeysMatchSql(
+              sql.raw("changed.normalized_value"),
+              effectiveCitationIdentifierValueSql(
+                sql.raw("citation.normalized_identifier_value"),
+                sql.raw("citation.citation_key"),
+              ),
             )}
         )
       RETURNING citation.id
@@ -728,6 +767,12 @@ const projectCitationPage = async (
       return { id: row.id, type, normalized_value: checked.value };
     }),
   );
+  // The citation's own stored value against its projection: a rewrite of the
+  // row, which keeps its outcome only where the stored bytes stay.
+  const storedIdentityUnchanged = sameStoredCaseNumberKeySql(
+    sql.raw("citation.normalized_identifier_value"),
+    sql.raw("projected.normalized_value"),
+  );
   await tx.execute(sql`
     WITH projected AS (
       SELECT * FROM jsonb_to_recordset(${projected}::text::jsonb) AS row(
@@ -742,7 +787,7 @@ const projectCitationPage = async (
             AND projected.type = ${DECISION_IDENTIFIER_TYPES.CASE_NUMBER}
             THEN citation.resolution_status
           WHEN citation.identifier_type = projected.type
-            AND citation.normalized_identifier_value = projected.normalized_value
+            AND ${storedIdentityUnchanged}
             THEN citation.resolution_status
           ELSE ${CITATION_RESOLUTION_STATUS.PENDING} END,
         resolution_rule_id = CASE
@@ -750,7 +795,7 @@ const projectCitationPage = async (
             AND projected.type = ${DECISION_IDENTIFIER_TYPES.CASE_NUMBER}
             THEN citation.resolution_rule_id
           WHEN citation.identifier_type = projected.type
-            AND citation.normalized_identifier_value = projected.normalized_value
+            AND ${storedIdentityUnchanged}
             THEN citation.resolution_rule_id
           ELSE NULL END,
         resolution_attempted_at = CASE
@@ -758,7 +803,7 @@ const projectCitationPage = async (
             AND projected.type = ${DECISION_IDENTIFIER_TYPES.CASE_NUMBER}
             THEN citation.resolution_attempted_at
           WHEN citation.identifier_type = projected.type
-            AND citation.normalized_identifier_value = projected.normalized_value
+            AND ${storedIdentityUnchanged}
             THEN citation.resolution_attempted_at
           ELSE NULL END
     FROM projected
@@ -812,7 +857,8 @@ const decisionMismatchCount = async (
     await tx.execute(sql`
     SELECT decision_id::text AS "decisionId", type, value,
            normalized_value AS "normalizedValue",
-           declared_at IS NOT NULL AS "declared"
+           NOT (independent_claims @> ARRAY[${DECISION_IDENTIFIER_CLAIM.HOST}]::varchar[]
+             OR (declared_at IS NULL AND independent_claims @> ARRAY[${DECISION_IDENTIFIER_CLAIM.UNVERIFIED}]::varchar[])) AS "declared"
     FROM case_law_decision_identifiers
     WHERE decision_id = ANY (ARRAY[${ids}]::uuid[])
   `),

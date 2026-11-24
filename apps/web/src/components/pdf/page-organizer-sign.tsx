@@ -27,6 +27,7 @@ type PageOrganizerSignActionProps = {
   /** Closes the editor, so the viewer shows the pages the stamp goes on. */
   closeEditor: () => void;
   disabled: boolean;
+  disabledReason: string | undefined;
   isDirty: boolean;
   beginRequest: (
     operation: LiveOrganizerOperation,
@@ -47,6 +48,7 @@ type PageOrganizerSignActionProps = {
 export const PageOrganizerSignAction = ({
   closeEditor,
   disabled,
+  disabledReason,
   isDirty,
   beginRequest,
   operation,
@@ -59,6 +61,11 @@ export const PageOrganizerSignAction = ({
       {(capabilityProps) => (
         <Button
           disabled={disabled || pdfSignFlow.isConnecting}
+          disabledReason={
+            pdfSignFlow.isConnecting
+              ? tPageEditor("connectingToDesktop")
+              : disabledReason
+          }
           onClick={() => {
             const request = beginRequest(operation);
             if (isDirty) {

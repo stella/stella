@@ -4,8 +4,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { SanctionsSource } from "@stll/sanctions";
 import { stableStringify } from "@stll/stable-stringify";
 
-import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import type {
   sanctionsContactScreenings,
   sanctionsScreeningEvents,
@@ -16,6 +15,7 @@ import {
   sanctionsContactMatches,
   sanctionsEditionEntries,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,

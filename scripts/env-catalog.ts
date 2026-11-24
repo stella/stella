@@ -93,6 +93,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "DATA_INVARIANT_CASE_LAW_CANARIES",
   "DATA_INVARIANT_CASE_LAW_DAILY_BANDS",
   "AGENT_CLIENT_STORAGE_V1_ENABLED",
+  "SOFT_LAW_SYNC_ENABLED",
   "AGENT_SANDBOX_DOCKER_NETWORK",
   "AGENT_SANDBOX_DOCKER_SOCKET",
   "AGENT_SANDBOX_HARNESS_BASE_URL",
@@ -126,6 +127,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "CASE_LAW_REPLAY_ENABLED",
   "CASE_LAW_REPLAY_KILL_SWITCH",
   "CASE_LAW_REPLAY_DISABLED_SOURCES",
+  "SOFT_LAW_FULL_TEXT_PERMITTED_SOURCES",
   "KILL_SWITCHES",
   "PUBLIC_LAW_DATABASE_POOL_MAX",
   "PUBLIC_CORPUS_RESERVED_CONNECTIONS",
@@ -168,12 +170,15 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_AGENT_ID_JAG",
   "FEATURE_AI_MEMORY",
   "FEATURE_CHAT_TURN_HANDOVER",
+  "FEATURE_CITATION_CHECK",
   "FEATURE_CONFLICT_CHECK",
+  "FEATURE_ENTERPRISE_SSO",
   "FEATURE_FILE_USAGE_LIMITS",
   "FEATURE_FREE_TIER",
   "FEATURE_GOVERNED_WORKFLOW",
   "FEATURE_GENERATED_VIEWS",
   "FEATURE_INBOX_DOCUMENT_SCOUTS",
+  "FEATURE_INVOICE_LINKS",
   "FEATURE_LEGAL_LISTS",
   "FEATURE_MANAGED_PROVIDER_CHECKS",
   "FEATURE_MCP_READ_FENCE",
@@ -190,6 +195,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FRONTEND_URL",
   "GOOGLE_AUTH_CLIENT_ID",
   "GOTENBERG_URL",
+  "HEIC_PREVIEW_DECODING_ENABLED",
   "HOSTED_USAGE_PROVIDER_BASE_URL",
   "HUGGINGFACE_BASE_URL",
   "INBOUND_MAIL_BUCKET",
@@ -378,6 +384,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Stop background case-law replay at the next batch boundary. Defaults to false.",
   CASE_LAW_REPLAY_DISABLED_SOURCES:
     "Comma-separated adapter keys excluded from background case-law replay.",
+  SOFT_LAW_FULL_TEXT_PERMITTED_SOURCES:
+    "Comma-separated regulator guidance sources whose publisher has permitted full-text reuse; each must be a source served as a listing pending that permission.",
   KILL_SWITCHES:
     'Operator kill-switch overrides: a JSON object of switch id to "on" or "off", such as {"chat":"off"}. A switched-off feature refuses new work with a typed "turned off" refusal; restarting the running build applies a change. Switch ids live in apps/api/src/lib/kill-switches/registry.ts; an unknown id or state refuses startup.',
   UNUSED_CLIENT_RETENTION_DAYS:
@@ -390,6 +398,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Retention in days for completed provider event details; unset disables redaction.",
   AGENT_CLIENT_STORAGE_V1_ENABLED:
     "Enable the shared agent client storage format.",
+  SOFT_LAW_SYNC_ENABLED:
+    "Enable the daily regulator guidance sync for sources with a serving decision.",
   ACTION_LIMIT_CONTACT_URL:
     "Public http(s) contact link shown when an action is paused or not enabled.",
   AGENT_SANDBOX_DOCKER_NETWORK:
@@ -530,6 +540,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Enable tenant-scoped AI memory APIs, prompt retrieval, tools, and workers.",
   FEATURE_INBOX_DOCUMENT_SCOUTS:
     "Enable model-backed inbox producers that read processed documents and review runs.",
+  FEATURE_INVOICE_LINKS:
+    "Kill switch for sending and opening invoice links. Off by default, including local development; also requires the organization invoice-links invitation grant and time-billing access. History and revocation use normal invoice access.",
   FEATURE_GOVERNED_WORKFLOW:
     "Enable governed work obligations and task workflow semantics.",
   FEATURE_LEGAL_LISTS:
@@ -537,7 +549,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   API_FEATURE_ACCESS_GRANTS_SSM_PARAMETER_NAME:
     "Parameter Store name holding API_FEATURE_ACCESS_GRANTS. When set, the API checks the parameter version every minute and reloads the grants only when it changed; unset keeps the grants read at startup.",
   API_FEATURE_ACCESS_GRANTS:
-    "Operator-owned JSON object keyed by registered feature id. Member grants specify type, organizationId, and email; organization grants specify type and organizationId. Both require current membership and verified email. Unknown feature ids reject startup; empty grants hide invitation features.",
+    "Operator-owned JSON object keyed by registered feature id. Member grants specify type, organizationId, and email; organization grants specify type and organizationId. Authenticated decisions require current membership and verified email. Invoice-links accepts only organization grants and requires its deployment flag; public recipients use the invoice organization decision. Unknown feature ids are dropped with an error count; empty grants hide invitation features.",
   FEATURE_ORG_ACCESS_STATE:
     "Enforce the per-organization access state before a model call falls back to the instance provider.",
   FEATURE_FREE_TIER:
@@ -598,6 +610,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "HTTPS, a loopback sidecar, or a private deployment network.",
   GOTENBERG_USERNAME:
     "Username for the Gotenberg sidecar's HTTP basic authentication.",
+  HEIC_PREVIEW_DECODING_ENABLED:
+    "Make previews of HEIC/HEIF photos by decoding them on this server, in " +
+    "the sandboxed PDF worker. Off, such a photo shows that it has no " +
+    "preview and still downloads as uploaded.",
   INGESTION_USER_AGENT:
     "User-Agent sent to court publishers. Defaults to a stella product " +
     "identifier with the build version and a contact URL; set it so a fork " +
@@ -726,6 +742,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Show governed work-obligation fields on a task (owner, acknowledgement, hard deadline).",
   VITE_FEATURE_INBOX:
     "Show the Inbox and the notification bell for everyone, without the per-browser beta toggle.",
+  VITE_FEATURE_PDF_AREA_REDACTION:
+    "Let readers mark areas of a PDF page that the anonymized PDF download blacks out.",
   VITE_POSTHOG_KEY:
     'Public PostHog project key. The placeholder "phc_" disables local capture.',
   VITE_POSTHOG_LOCAL_DEBUG:
@@ -821,6 +839,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   ACTION_REQUEST_MAX_BYTES: ENV_CREDENTIAL_KIND.notCredential,
   ACTION_RESPONSE_MAX_BYTES: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_CLIENT_STORAGE_V1_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  SOFT_LAW_SYNC_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_REGISTRATION_DAILY_LIMIT: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_SANDBOX_DOCKER_NETWORK: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_SANDBOX_DOCKER_SOCKET: ENV_CREDENTIAL_KIND.notCredential,
@@ -915,13 +934,16 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   FEATURE_ACTION_COST_RECORDS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_AGENT_ID_JAG: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_AI_MEMORY: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_CITATION_CHECK: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_CONFIGURED_ACCESS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_CONFLICT_CHECK: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_ENTERPRISE_SSO: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_FILE_USAGE_LIMITS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_FREE_TIER: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_GENERATED_VIEWS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_INBOX_DOCUMENT_SCOUTS: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_INVOICE_LINKS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_LEGAL_LISTS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_MANAGED_PROVIDER_CHECKS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_MCP_READ_FENCE: ENV_CREDENTIAL_KIND.notCredential,
@@ -953,6 +975,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   GOTENBERG_PASSWORD: ENV_CREDENTIAL_KIND.credential,
   GOTENBERG_URL: ENV_CREDENTIAL_KIND.notCredential,
   GOTENBERG_USERNAME: ENV_CREDENTIAL_KIND.notCredential,
+  HEIC_PREVIEW_DECODING_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   HOSTED_USAGE_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
   HOSTED_USAGE_PROVIDER_API_KEY: ENV_CREDENTIAL_KIND.credential,
   HOSTED_USAGE_PROVIDER_API_VERSION: ENV_CREDENTIAL_KIND.notCredential,
@@ -1072,6 +1095,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   SMTP_PASSWORD: ENV_CREDENTIAL_KIND.credential,
   SMTP_PORT: ENV_CREDENTIAL_KIND.notCredential,
   SMTP_USERNAME: ENV_CREDENTIAL_KIND.notCredential,
+  SOFT_LAW_FULL_TEXT_PERMITTED_SOURCES: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_API_PORT: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_API_URL: ENV_CREDENTIAL_KIND.notCredential,
@@ -1118,6 +1142,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   VITE_FEATURE_FOLIO_COLLAB: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_INBOX: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_FEATURE_PDF_AREA_REDACTION: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_USAGE: ENV_CREDENTIAL_KIND.notCredential,
   VITE_POSTHOG_HOST: ENV_CREDENTIAL_KIND.notCredential,
   VITE_POSTHOG_KEY: ENV_CREDENTIAL_KIND.notCredential,
@@ -1413,6 +1438,7 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "HOME",
   "MAX_CONCURRENT_ADAPTER_CYCLES",
   "MAX_CONCURRENT_DB_WRITES",
+  "PROD",
   "RECONCILIATION_FETCH_DELAY_MS",
   "SK_DOCUMENT_BACKFILL_ENABLED",
   "SK_DOCUMENT_FETCH_DELAY_MS",
@@ -1453,6 +1479,16 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "STELLA_SIDECAR_VERSION",
   "STELLA_TIMING",
   "STELLA_WEB_PORT",
+  // Web runtime only, read once at start: how many requests the server
+  // renderer handles at once before it answers 503 with Retry-After (a whole
+  // number from 2 to 1024; unset uses the default sized for a 512 MB-1 GB
+  // task). apps/web/src/ssr-admission.ts parses it.
+  "STELLA_WEB_SSR_MAX_IN_FLIGHT",
+  // Set by the API for each extraction worker run, never deployed: the code
+  // page a tie between readings of a ZIP archive's undeclared file names
+  // goes to (`ibm437` or `ibm852`). apps/api/src/lib/files/zip-name-code-page.ts
+  // reads it in the worker.
+  "STELLA_ZIP_NAME_CODE_PAGE",
   "XDG_CACHE_HOME",
   "XDG_CONFIG_HOME",
   "XDG_STATE_HOME",
@@ -1540,6 +1576,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "APPLE_SIGNING_IDENTITY",
   // The ignored SoftHSM2 test of the PKCS #11 helper names the module to load.
   "SOFTHSM2_MODULE",
+  // The desktop transcribe-window browser test saves its screenshots here when set.
+  "TRANSCRIBE_SCREENSHOTS",
   "MOBILE_BUILD_NUMBER",
   "MOBILE_PROFILE_UUID",
   "MOBILE_WIDGETS_PROFILE_UUID",
@@ -1549,10 +1587,17 @@ export const TOOLING_ENV_KEYS = new Set([
   // file their tests name; the fake Codex app server also logs its CODEX_HOME.
   "FAKE_HARNESS_LOG",
   "CODEX_HOME",
+  "GEMINI_HOME",
+  "STELLA_MCP_URL",
+  "STELLA_MCP_TOKEN",
   // The skill folder the fake harness CLIs' `reads_skill` scenario touches.
   "FAKE_SKILL_PATH",
   // The pause between a paced fake Codex scenario's outputs.
   "FAKE_CODEX_PACE_MS",
+  // The run folder and an unreadable folder the fake ACP agent names in the
+  // paths of its tool calls and permission requests.
+  "FAKE_ACP_WORKSPACE",
+  "FAKE_ACP_UNREADABLE",
   // The local stack's stand-in computer (`agent:up -- --local-runner`) logs
   // at the level this filter names.
   "RUST_LOG",
@@ -1630,8 +1675,11 @@ export const TOOLING_ENV_KEYS = new Set([
   // catalogs.
   "CLI_CONTRACT_BASE_CATALOG",
   "CLI_CONTRACT_HEAD_CATALOG",
-  // The scan engine drift check builds into a scratch directory and compares it.
+  // The WebAssembly drift checks build into a scratch directory and compare it.
   "SCAN_ENGINE_WASM_OUT_DIR",
+  "HEIC_DECODER_WASM_OUT_DIR",
+  "PST_READER_WASM_OUT_DIR",
+  "RECORDING_WASM_OUT_DIR",
   // The manual checks workflow passes its inputs and result files to its scripts.
   "CHECK_CHECK",
   "CHECK_EXIT_FILE",
@@ -1730,6 +1778,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "API_TEST_ARTIFACT_DIR",
   "API_TEST_CHILD_TIMEOUT_MS",
   // Resolved weight identity changes the Turbo test cache key.
+  // Selects a single API lint shard (`lib`, `handlers`, or `rest`) for parallel CI runs.
+  "API_LINT_SHARD",
   "API_TEST_DURATIONS_HASH",
   // Optional main-measured weights path; content identity is keyed separately.
   "API_TEST_DURATIONS_FILE",
@@ -1768,6 +1818,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "E2E_LANDING_URL",
   "E2E_NETWORK_BASELINE",
   "E2E_OUTPUT_DIR",
+  // Nightly route-scale workflow: also walk the small and large matters.
+  "E2E_ROUTE_SCALE",
+  // Playwright coordinator token persists isolated route worlds across worker replacement.
+  "E2E_ROUTE_SMOKE_RUN_ID",
   "E2E_SOAK_REPLAY",
   "E2E_SOAK_SEED",
   "E2E_SOAK_STEPS",
@@ -1776,6 +1830,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "EXPECTED_COMMIT",
   // Flake trial ownership and isolated subprocess fixture handoffs.
   "FLAKE_CHILD_RECORD",
+  // The test job's clock (epoch ms); the repeats end inside the job's timeout.
+  "CI_T0",
   "FLAKE_GATE_FIXTURE_PRELOADED",
   "FLAKE_GATE_TRIAL",
   // Quarantine preload: report directory for its JSON lines; registry path override for fixture trees.
@@ -1787,6 +1843,11 @@ export const TOOLING_ENV_KEYS = new Set([
   "SERVED_MCP_API_PORT",
   "HEAD_SHA",
   "HEAVY_ONLY",
+  // The dispatched cancel-after-job run: the failed job it waits for.
+  "JOB_ID",
+  // Merge-group cancel step: its own job.status, so a job that failed itself
+  // hands off its cancellation before the jobs API lists the failed step.
+  "JOB_STATUS",
   // Scheduled journey checks: endpoint overrides, bounded request/retry timing,
   // and the clock and busy windows file the coverage check reads (fixtures pin them).
   "JOURNEY_BUSY_WINDOWS_FILE",
@@ -1928,6 +1989,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "RETRY_PASSTHROUGH_EXIT_CODES",
   // Credential used only by the restricted account canary.
   "REVIEW_ACCOUNT_PASSWORD",
+  // The dispatched cancel-after-job run: the run attempt whose job failed.
+  "RUN_ATTEMPT",
   "RUN_ID",
   // Nightly issue reporter: workflow run linked from the failure issue.
   "RUN_URL",
@@ -1966,14 +2029,19 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_DEV_INSTANCE",
   "STELLA_DOCKER_KEEPER_LABEL",
   "STELLA_INFRA_OFFSET",
+  // The image a Postgres suite's own throwaway cluster runs: CI's service image.
+  "STELLA_ISOLATED_POSTGRES_IMAGE",
   // Prevents recursive spawning of native file-mode test subprocesses.
   "STELLA_LOCAL_FILE_CHILD",
   "STELLA_PORT_OFFSET",
   "STELLA_QUERY_PLAN_SCALE_PROFILE",
   // Development render census: verify React Refresh with isolated temporary modules.
   "STELLA_RENDER_CENSUS_HMR",
+  // Opt-in conversion tests against a running document converter.
+  "STELLA_RUN_CONVERTER_TESTS",
   "STELLA_RUN_CORPUS_ENGINE_TESTS",
   "STELLA_RUN_POSTGRES_TESTS",
+  "QUERY_PERF_SHARD",
   "STELLA_RUN_QUERY_PERF_TESTS",
   "STELLA_RUN_VALKEY_TESTS",
   "STELLA_SEED_ID_NAMESPACE",

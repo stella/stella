@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { FEATURE_REGISTRY } from "../../src/lib/feature-access/registry";
 import {
   assertFeatureAccessDeclarations,
-  parseDeclarationSource,
+  moduleSummary,
   validateFeatureAccessDeclarations,
 } from "./feature-access-declarations";
 
@@ -62,19 +62,98 @@ const conditional = {
   },
 };
 
+test("reviewed management exempts billing and invoice invitations only on that dependency path", () => {
+  const management = "apps/api/src/routes/feature/management.ts";
+  const ordinary = "apps/api/src/routes/ordinary.ts";
+  const sources = new Map([
+    ...baseSources,
+    [
+      management,
+      'import { run } from "../../feature/core"; export const manage = () => run();',
+    ],
+    [
+      ordinary,
+      'import { manage } from "./feature/management"; import { run } from "../feature/core"; export const runBoth = () => [manage(), run()];',
+    ],
+  ]);
+  const invoiceManagementFiles = new Set([management]);
+  const endpoints = [
+    { file: management, config: {} },
+    { file: ordinary, config: {} },
+  ];
+  const violations = validateFeatureAccessDeclarations({
+    registry: {
+      "time-billing": registry.fixture,
+      "invoice-links": registry.fixture,
+    },
+    endpoints,
+    sources,
+    invoiceManagementFiles,
+  });
+  expect(violations.filter(({ file }) => file === management)).toEqual([]);
+  for (const featureId of ["time-billing", "invoice-links"]) {
+    expect(violations).toContainEqual({
+      file: ordinary,
+      message: `source ownership requires featureAccess ${featureId}`,
+    });
+  }
+  expect(
+    validateFeatureAccessDeclarations({
+      registry: { fixture: registry.fixture },
+      endpoints: [{ file: management, config: {} }],
+      sources,
+      invoiceManagementFiles,
+    }),
+  ).toContainEqual({
+    file: management,
+    message: "source ownership requires featureAccess fixture",
+  });
+});
+
 describe("feature source declarations", () => {
-  test.each(["registry", "admitted"] as const)(
-    "%s dispatch boundaries preserve direct-access ownership enforcement",
-    (type) => {
+  test("the canonical database factory registers schemas without consuming their feature data", () => {
+    const owner = [
+      "apps/api/src/db/sql-client.ts",
+      "export const createDatabase = (options) => options;",
+    ] as const;
+    const registration =
+      'import { createDatabase } from "@/api/db/sql-client"; import * as schema from "../db/schema"; export const db = createDatabase({ relations: schema });';
+    expect(check(registration, {}, [owner])).toEqual([]);
+    expect(
+      check(`${registration} export const leak = schema.featureRows;`, {}, [
+        owner,
+      ]),
+    ).toMatchObject([
+      { message: "source ownership requires featureAccess fixture" },
+    ]);
+  });
+  test("type-only table vocabulary does not consume feature data", () => {
+    expect(
+      check(
+        'export type TableName = "fixture_rows"; export const run = () => true;',
+      ),
+    ).toEqual([]);
+    expect(
+      check("export const run = () => sql`SELECT * FROM fixture_rows`;"),
+    ).toMatchObject([
+      { message: "source ownership requires featureAccess fixture" },
+    ]);
+  });
+  test.each([
+    ["registry", "export const TOOL_SETS = [core];"],
+    ["registry", "export const TOOL_SETS = { a: core };"],
+    [
+      "admitted",
+      'import { isMcpDescriptorFeatureEnabled as admit } from "@/api/mcp/feature-access"; export const run = () => admit({}) && core();',
+    ],
+  ] as const)(
+    "%s dispatch boundaries preserve direct-access ownership enforcement: %s",
+    (type, declaration) => {
       const module = "apps/api/src/dispatch/tools.ts";
       const boundary =
         type === "registry"
           ? { type, module, registry: "TOOL_SETS" }
           : { type, module, admission: "isMcpDescriptorFeatureEnabled" };
-      const declaration =
-        type === "registry"
-          ? "export const TOOL_SETS = [core];"
-          : 'import { isMcpDescriptorFeatureEnabled as admit } from "@/api/mcp/feature-access"; export const run = () => admit({}) && core();';
       const sources = new Map([
         ...baseSources,
         [
@@ -116,7 +195,7 @@ describe("feature source declarations", () => {
       sources.set(
         module,
         type === "registry"
-          ? "export const TOOL_SETS = {};"
+          ? "export const TOOL_SETS = 0;"
           : 'import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access"; export const run = () => true;',
       );
       expect(validate()).toContainEqual({
@@ -297,6 +376,58 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
       check('import { type featureRows } from "@/api/db/schema";'),
     ).toEqual([]);
   });
+  test("required table symbols gate shared-schema consumers without gating sibling tables", () => {
+    const file = "apps/api/src/routes/ordinary.ts";
+    const schemaFile = "apps/api/src/db/schema/feature.ts";
+    const selectedRegistry = {
+      fixture: {
+        ...registry.fixture,
+        ownership: {
+          ...registry.fixture.ownership,
+          tableSchemaFiles: [],
+          tableSchemas: { [schemaFile]: ["featureRows"] },
+        },
+      },
+    } as const;
+    const sources = new Map([
+      ...baseSources,
+      [
+        schemaFile,
+        'export const featureRows = p.pgTable("fixture_rows", {}); export const siblingRows = p.pgTable("sibling_rows", {});',
+      ],
+    ]);
+    const validate = (source: string, config: Record<string, unknown> = {}) => {
+      sources.set(file, source);
+      return validateFeatureAccessDeclarations({
+        registry: selectedRegistry,
+        endpoints: [{ file, config }],
+        sources,
+      });
+    };
+    for (const specifier of ["../db/schema/feature", "../db/schema"]) {
+      expect(validate(`import { siblingRows } from "${specifier}";`)).toEqual(
+        [],
+      );
+      const read = `import { featureRows as rows } from "${specifier}";`;
+      expect(validate(read)).toHaveLength(1);
+      expect(validate(read, required)).toEqual([]);
+    }
+    for (const read of [
+      'import * as tables from "../db/schema/feature"; const rows = tables.featureRows;',
+      "const rows = sql`select * from fixture_rows`;",
+    ]) {
+      expect(validate(read)).toHaveLength(1);
+      expect(validate(read, required)).toEqual([]);
+    }
+    sources.set(
+      schemaFile,
+      'export const siblingRows = p.pgTable("sibling_rows", {});',
+    );
+    expect(validate("")).toContainEqual({
+      file: schemaFile,
+      message: "feature fixture owns a missing table symbol featureRows",
+    });
+  });
   test("helper imports and named reexports preserve table ownership", () => {
     const additional = [
       [
@@ -428,6 +559,8 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
       'import * as tables from "../db/schema/layout"; const rows = Object.values(tables);',
       'import * as tables from "../db/schema/layout"; const key = "layouts"; const rows = tables[key];',
       "const rows = sql`select * from fixture_layouts`;",
+      // An instantiation expression still evaluates its expression.
+      "export const rows = db.query.layouts<Row>;",
     ]) {
       sources.set(file, read);
       expect(
@@ -520,6 +653,43 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
       "apps/api/src/handlers/account-exports/download.ts",
       "apps/api/src/handlers/contacts/get.ts",
     ];
+    for (const action of ["create", "list", "revoke"]) {
+      const file = `apps/api/src/handlers/invoices/sends/${action}.ts`;
+      expect(
+        validateFeatureAccessDeclarations({
+          registry: FEATURE_REGISTRY,
+          endpoints: [{ file, config: {} }],
+          sources,
+        }),
+      ).toContainEqual({
+        file,
+        message: "source ownership requires featureAccess invoice-links",
+      });
+      expect(
+        validateFeatureAccessDeclarations({
+          registry: FEATURE_REGISTRY,
+          endpoints: [
+            {
+              file,
+              config: {
+                featureAccess: { type: "required", featureId: "invoice-links" },
+              },
+            },
+          ],
+          sources,
+        }).filter((violation) => violation.file === file),
+      ).toEqual([]);
+      if (action !== "create") {
+        expect(
+          validateFeatureAccessDeclarations({
+            registry: FEATURE_REGISTRY,
+            endpoints: [{ file, config: {} }],
+            sources,
+            invoiceManagementFiles: new Set([file]),
+          }).filter((violation) => violation.file === file),
+        ).toEqual([]);
+      }
+    }
     const featureFile = "apps/api/src/handlers/lists/verifications/create.ts";
     for (const ordinary of ordinaryHandlers) {
       expect(sources.has(ordinary)).toBe(true);
@@ -657,24 +827,93 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
   });
 });
 
-describe("parsed declaration sources", () => {
-  test("reuse a tree only for the identical file name and source text", () => {
+describe("module summaries", () => {
+  test("reuse a summary only for the identical file name and source text", () => {
     const file = "apps/api/src/feature/parse-cache-probe.ts";
-    const source = "export const value = 1;";
-    const first = parseDeclarationSource(file, source);
-    expect(parseDeclarationSource(file, source)).toBe(first);
-    expect(first.parsed.sourceText).toBe(source);
+    const source = 'export const value = "one";';
+    const first = moduleSummary(file, source);
+    expect(moduleSummary(file, source)).toBe(first);
+    expect(first.exports).toEqual([
+      {
+        type: "declaration",
+        names: new Set(["value"]),
+        constants: new Set(["value"]),
+      },
+    ]);
 
-    const changed = parseDeclarationSource(file, "export const value = 2;");
+    const changed = moduleSummary(file, "export const value = 2;");
     expect(changed).not.toBe(first);
-    expect(changed.parsed.sourceText).toBe("export const value = 2;");
+    expect(changed.exports).toEqual([
+      { type: "declaration", names: new Set(["value"]), constants: new Set() },
+    ]);
 
-    const renamed = parseDeclarationSource(
+    const renamed = moduleSummary(
       "apps/api/src/feature/parse-cache-other.ts",
       "export const value = 2;",
     );
     expect(renamed).not.toBe(changed);
-    expect(renamed.fileName).toBe("apps/api/src/feature/parse-cache-other.ts");
+  });
+
+  test("a summary keeps no syntax tree node", () => {
+    const summary = moduleSummary(
+      "apps/api/src/feature/summary-probe.ts",
+      [
+        'import * as schema from "./schema";',
+        'import { run, type Shape } from "@/api/feature/core";',
+        'export { helper as alias } from "./helper";',
+        'export * from "./barrel";',
+        "export const go = async (shape: Shape) => {",
+        '  await import("./lazy");',
+        "  return db.query.featureRows.findMany({ where: schema.rows.id });",
+        "};",
+        `export const label = \`feature_rows \${run()}\`;`,
+      ].join("\n"),
+    );
+    const nodes: unknown[] = [];
+    const visit = (value: unknown) => {
+      if (value instanceof Set || Array.isArray(value)) {
+        for (const item of value) {
+          visit(item);
+        }
+      } else if (typeof value === "object" && value !== null) {
+        if ("start" in value || "end" in value) {
+          nodes.push(value);
+        }
+        for (const item of Object.values(value)) {
+          visit(item);
+        }
+      }
+    };
+    visit(summary);
+    expect(nodes).toEqual([]);
+    expect(summary.dynamicImports).toEqual(["./lazy"]);
+    expect(summary.dependencies).toEqual([
+      {
+        specifier: "./schema",
+        plan: { type: "symbols", names: ["rows"] },
+      },
+      {
+        specifier: "@/api/feature/core",
+        plan: { type: "symbols", names: ["run"] },
+      },
+      { specifier: "./helper", plan: { type: "module" } },
+      { specifier: "./barrel", plan: { type: "module" } },
+    ]);
+    expect(summary.namedImports).toEqual([
+      { local: "run", imported: "run", specifier: "@/api/feature/core" },
+    ]);
+    expect(summary.querySymbols).toEqual(new Set(["featureRows"]));
+    expect(summary.texts).toEqual(
+      new Set([
+        "./schema",
+        "@/api/feature/core",
+        "./helper",
+        "./barrel",
+        "./lazy",
+        "feature_rows ",
+        "",
+      ]),
+    );
   });
 
   test("a validation over reused trees matches the first and sees edits", () => {

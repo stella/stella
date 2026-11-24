@@ -3,7 +3,7 @@ import { panic } from "better-result";
 import { Temporal } from "@stll/time";
 
 import type { TranslationKey } from "@/i18n/types";
-import type { WebApiRoutes } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api-contract";
 import { APIError } from "@/lib/errors/api";
 
 export type TimeTimer =

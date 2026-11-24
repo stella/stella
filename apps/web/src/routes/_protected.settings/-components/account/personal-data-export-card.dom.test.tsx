@@ -139,9 +139,11 @@ test("a person requests, waits for, and downloads their account export", async (
   renderAccountCard();
 
   fireEvent.click(
-    await screen.findByRole("button", { name: "Request export" }),
+    await screen.findByRole("button", { name: "Prepare export" }),
   );
-  expect(await screen.findByText("Preparing your export…")).toBeTruthy();
+  expect(
+    await screen.findByText("Preparing your export. You can close this page."),
+  ).toBeTruthy();
   expect(requestedPaths).toContain("POST /v1/me/data-exports");
   expect(declaredExportCapabilities).toEqual(["account-exports.create"]);
 
@@ -150,8 +152,9 @@ test("a person requests, waits for, and downloads their account export", async (
     status: "ready",
     expiresAt: "2099-01-01T12:00:00.000Z",
   };
-  expect(await screen.findByText("Your export is ready.")).toBeTruthy();
-  expect(screen.getByText(/Available until/u)).toBeTruthy();
+  expect(
+    await screen.findByText(/^Your export is ready; the link works until /u),
+  ).toBeTruthy();
 
   const downloadLink = screen.getByRole("link", { name: "Download" });
   expect(downloadLink.getAttribute("href")).toContain(
@@ -176,10 +179,10 @@ test("a failed export offers a replacement request", async () => {
       exact: true,
     }),
   ).toBeTruthy();
-  fireEvent.click(
-    within(failure).getByRole("button", { name: "Request a new export" }),
-  );
-  expect(await screen.findByText("Preparing your export…")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Prepare again" }));
+  expect(
+    await screen.findByText("Preparing your export. You can close this page."),
+  ).toBeTruthy();
   expect(requestedPaths).toContain("POST /v1/me/data-exports");
 });
 
@@ -190,9 +193,11 @@ test("an expired export offers a replacement request", async () => {
   };
   renderAccountCard();
 
-  expect(await screen.findByText("This export has expired.")).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Request a new export" }));
-  expect(await screen.findByText("Preparing your export…")).toBeTruthy();
+  expect(await screen.findByText("The link has expired.")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Prepare again" }));
+  expect(
+    await screen.findByText("Preparing your export. You can close this page."),
+  ).toBeTruthy();
   expect(requestedPaths).toContain("POST /v1/me/data-exports");
 });
 
@@ -219,7 +224,7 @@ test("a replacement request supersedes an older in-flight status read", async ()
 
   const deferredPost = Promise.withResolvers<Response>();
   deferredPostResponse = deferredPost.promise;
-  fireEvent.click(screen.getByRole("button", { name: "Request a new export" }));
+  fireEvent.click(screen.getByRole("button", { name: "Prepare again" }));
   await waitFor(() => expect(staleGetSignal?.aborted).toBe(true));
 
   latestExport = {
@@ -227,7 +232,9 @@ test("a replacement request supersedes an older in-flight status read", async ()
     status: "requested",
   };
   deferredPost.resolve(Response.json(latestExport));
-  expect(await screen.findByText("Preparing your export…")).toBeTruthy();
+  expect(
+    await screen.findByText("Preparing your export. You can close this page."),
+  ).toBeTruthy();
 
   const deferredPoll = Promise.withResolvers<Response>();
   deferredLatestExportResponse = deferredPoll.promise;
@@ -242,7 +249,9 @@ test("a replacement request supersedes an older in-flight status read", async ()
         .length,
     ).toBeGreaterThanOrEqual(3);
   });
-  expect(screen.getByText("Preparing your export…")).toBeTruthy();
+  expect(
+    screen.getByText("Preparing your export. You can close this page."),
+  ).toBeTruthy();
   deferredPoll.resolve(Response.json({ latest: latestExport }));
   await waitFor(() => {
     expect(

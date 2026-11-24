@@ -1,11 +1,13 @@
 import { useTranslations } from "use-intl";
 
+import { MarkdownHybridEditor } from "@stll/markdown-editor";
 import { Button } from "@stll/ui/button";
 import { CheckIcon, XIcon } from "@stll/ui/icons";
 
 import type { MarkdownFileDraft } from "@/components/inspector/use-markdown-file-draft";
-import { MarkdownHybridEditor } from "@/components/markdown/markdown-hybrid-editor";
+import { isSafeMarkdownPreviewImageSrc } from "@/components/markdown-preview.logic";
 import { detached } from "@/lib/detached";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
 
 type MarkdownFileViewerProps = {
   draft: MarkdownFileDraft;
@@ -49,7 +51,9 @@ export const MarkdownFileViewer = ({
   return (
     <div className="contents" data-print-root="">
       <MarkdownHybridEditor
-        imagePolicy="data-only"
+        allowsImageSource={isSafeMarkdownPreviewImageSrc}
+        label={t("markdownEditor.rawLabel")}
+        onOpenLink={openIsolatedWindow}
         key={tabId}
         markdown={text}
         onMarkdownChange={setDraft}
@@ -72,11 +76,22 @@ export const MarkdownDraftActions = ({
   }
   return (
     <>
-      <Button disabled={isSaving} onClick={discard} size="xs" variant="ghost">
+      <Button
+        disabled={isSaving}
+        disabledReason={t("common.saving")}
+        onClick={discard}
+        size="xs"
+        variant="ghost"
+      >
         <XIcon className="size-3.5" />
         {t("common.cancel")}
       </Button>
-      <Button disabled={isSaving} onClick={save} size="xs">
+      <Button
+        disabled={isSaving}
+        disabledReason={t("common.saving")}
+        onClick={save}
+        size="xs"
+      >
         <CheckIcon className="size-3.5" />
         {t("common.save")}
       </Button>

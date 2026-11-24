@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import type { WebApiRoutes } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api-contract";
 import type { EntityKind } from "@/lib/types";
 
 export const resolveSidebarWorkspaceId = ({

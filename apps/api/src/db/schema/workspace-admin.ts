@@ -232,6 +232,11 @@ export const organizationSettings = p.pgTable(
       .varchar("matter_number_pattern", { length: 128 })
       .notNull()
       .default("{SEQ}"),
+    /**
+     * Token pattern new uploads are renamed to in matters that opt in; null
+     * leaves uploaded names alone. See `@stll/api-contract/document-name`.
+     */
+    documentNamePattern: p.varchar("document_name_pattern", { length: 128 }),
     matterNumberPadding: p
       .integer("matter_number_padding")
       .notNull()
@@ -352,13 +357,17 @@ export const organizationSettings = p.pgTable(
       .notNull()
       .default(false),
     /**
-     * Org-level enablement for the delegated SharePoint / OneDrive
-     * connection. Default-off (fail closed): even where the deployment
-     * feature flag is on, an org must explicitly opt in before its members
-     * can connect a Microsoft account.
+     * File-read opt-in for the delegated Microsoft Graph connection. Older
+     * API tasks use this bit to admit SharePoint reads, so turning files off
+     * must keep denying those tasks during a calendar capability rollout.
      */
     sharepointConnectionEnabled: p
       .boolean("sharepoint_connection_enabled")
+      .notNull()
+      .default(false),
+    /** Calendar reads require their own organization opt-in. */
+    microsoft365CalendarReadEnabled: p
+      .boolean("microsoft365_calendar_read_enabled")
       .notNull()
       .default(false),
     /**

@@ -30,8 +30,7 @@ import {
   entityContextId,
   entityContextReference,
 } from "@/api/db/entity-feature-policies";
-import type { Transaction } from "@/api/db/root";
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import {
   cellMetadata,
   desktopEditSessions,
@@ -52,6 +51,7 @@ import type {
   EntityKind,
   FieldContent,
 } from "@/api/db/schema-validators";
+import type { Transaction } from "@/api/db/types";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -683,7 +683,7 @@ const buildSearchSortKeys = (search: string | undefined): EntitySortKey[] => {
       expr: sql`CASE
         WHEN ${normalizedTitle} = ${normalizedSearch} THEN 0
         WHEN ${normalizedTitle} LIKE ${`${escapeLike(normalizedSearch)}%`} THEN 1
-        WHEN ${normalizedTitle} LIKE ${`%${escapeLike(normalizedSearch)}%`} THEN 2
+        WHEN strpos(${normalizedTitle}, ${normalizedSearch}) > 0 THEN 2
         ELSE 3
       END`,
     }),
@@ -1527,6 +1527,7 @@ const buildSearchConditions = ({
   }
 
   return [
+    // sql-perf-allow: bounded by search_documents primary-key probe (sd.entity_id = entities.id) within the scoped entity query
     sql`EXISTS (
       SELECT 1 FROM ${searchDocuments} sd
       WHERE sd.entity_id = ${entities.id}

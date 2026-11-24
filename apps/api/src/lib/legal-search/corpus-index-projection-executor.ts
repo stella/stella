@@ -5,7 +5,7 @@ import { streamWithConcurrency } from "@stll/concurrency";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { drainCaseLawRankingSignalChanges } from "@/api/lib/legal-search/case-law-ranking-signal-drain";
 import {
@@ -66,6 +66,11 @@ import {
   startCorpusProjectionAppendBatchTx,
   startCorpusProjectionMultipartAppendTx,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
+import {
+  countStoredAstOutcome,
+  emptyStoredAstReadCounts,
+  type StoredAstReadCounts,
+} from "@/api/lib/legal-search/stored-ast-outcome";
 import { logger } from "@/api/lib/observability/logger";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
 
@@ -195,6 +200,14 @@ export type CorpusProjectionAppendCycleResult = {
   unread: number;
   retryScheduled: number;
   blocked: number;
+  /**
+   * Revisions written with their decision's terms cut to a prefix because the
+   * whole did not fit the opening passage. Expected to stay 0: no stored
+   * decision comes near the ceiling, so any count is a decision to look at.
+   */
+  decisionTermsPartial: number;
+  /** Revisions read whose stored AST was not read as written, by outcome. */
+  storedAst: StoredAstReadCounts;
   requestCount: number;
   /** The proof cycle this append cycle ran before it reserved. */
   proof: CorpusProjectionProofCycleResult;
@@ -223,12 +236,16 @@ const emptyResult = ({
   unread: 0,
   retryScheduled: 0,
   blocked: 0,
+  decisionTermsPartial: 0,
+  storedAst: emptyStoredAstReadCounts(),
   requestCount: 0,
 });
 
 type PreparedProjectionEntry = {
   material: CorpusProjectionMaterial;
   documentCount: number;
+  decisionTerms: CorpusProjectionRevisionBlock["decisionTerms"];
+  storedAst: CorpusProjectionRevisionBlock["storedAst"];
   indexId: string;
   ndjson: string;
   ndjsonBytes: number;
@@ -425,9 +442,13 @@ const planProjectionRevisionRequest = ({
   material,
   documentCount,
   parts,
+  decisionTerms,
+  storedAst,
 }: CorpusProjectionRevisionBlock): PreparedProjectionEntry => ({
   material,
   documentCount,
+  decisionTerms,
+  storedAst,
   indexId: material.lease.indexId,
   ndjson: parts[0],
   ndjsonBytes: Buffer.byteLength(parts[0], "utf-8") + 1,
@@ -1209,6 +1230,15 @@ const processPreparedStream = async ({
     const entries: PreparedProjectionEntry[] = [];
     if (prepared.isOk()) {
       entries.push(prepared.value);
+      countStoredAstOutcome(result.storedAst, prepared.value.storedAst);
+      if (prepared.value.decisionTerms === "prefix") {
+        result.decisionTermsPartial += 1;
+        logger.error("corpus_projection.decision_terms_partial", {
+          entity: material.lease.entityId,
+          generation: material.lease.generation,
+          indexId: material.lease.indexId,
+        });
+      }
     } else {
       if (prepared.error.kind === "payload_unavailable") {
         result.unread += 1;

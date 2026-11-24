@@ -1,6 +1,6 @@
 import { inArray, sql } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { isRecord } from "@/api/lib/type-guards";
 

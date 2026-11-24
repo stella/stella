@@ -35,8 +35,10 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { legislationProjectionInputFromCanonical } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { readReservedCorpusProjectionMaterialsTx } from "@/api/lib/legal-search/corpus-index-projection-materials";
 import {
   buildCorpusProjectionRouteOffline,
+  CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT,
   type CorpusProjectionOfflineAdmission,
   type CorpusProjectionOfflineBuildLock,
   type CorpusProjectionOfflineBuildLockHold,
@@ -59,6 +61,11 @@ import {
   CORPUS_PROJECTION_OFFLINE_INDEXER_END_MARGIN_MS,
   CORPUS_PROJECTION_OFFLINE_START_WINDOW_MS,
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
+import {
+  type CorpusProjectionMismatchRederivation,
+  rederiveMismatchedCorpusProjectionDesiredStates,
+  settleRejectedCorpusProjectionMaterials,
+} from "@/api/lib/legal-search/corpus-index-projection-revision-block";
 import {
   CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT,
   CORPUS_PROJECTION_OFFLINE_LONE_KILL_MESSAGE,
@@ -376,6 +383,40 @@ const readStates = async (entityIds: readonly string[]) =>
     })
     .from(corpusIndexProjectionStates)
     .where(inArray(corpusIndexProjectionStates.entityId, [...entityIds]));
+
+const readDesired = async (entityIds: readonly string[]) =>
+  await db
+    .select({
+      entityId: corpusIndexProjectionStates.entityId,
+      desiredAction: corpusIndexProjectionStates.desiredAction,
+      desiredEpoch: corpusIndexProjectionStates.desiredEpoch,
+      desiredFingerprint: corpusIndexProjectionStates.desiredFingerprint,
+      workStatus: corpusIndexProjectionStates.workStatus,
+      failureAttempts: corpusIndexProjectionStates.failureAttempts,
+      lastFailureKind: corpusIndexProjectionStates.lastFailureKind,
+    })
+    .from(corpusIndexProjectionStates)
+    .where(inArray(corpusIndexProjectionStates.entityId, [...entityIds]));
+
+/**
+ * Write canonical content under the desired states without moving them, as a
+ * writer that skipped its desired-state sync would: "e" disagrees with every
+ * seeded desired state, "d" is what they were derived from.
+ */
+const setCanonicalContent = async (
+  entityIds: readonly string[],
+  content: "d" | "e",
+) => {
+  await db
+    .update(legislationDocuments)
+    .set({ contentHash: content.repeat(64) })
+    .where(
+      inArray(
+        legislationDocuments.id,
+        entityIds.map((id) => toSafeId<"legislationDocument">(id)),
+      ),
+    );
+};
 
 /** One projection revision per document line of a shard file. */
 const linesOf = async (shard: CorpusProjectionOfflineShard) =>
@@ -720,6 +761,21 @@ type RunCommand = {
    * passed has expired for the sweep.
    */
   expireLeasesOnSleep?: boolean;
+  /** How mismatched desired states are re-derived; the store's own by default. */
+  rederive?: CorpusProjectionMismatchRederivation;
+  /** The retry delay of a held state, longer than a run where it matters. */
+  retryDelayMs?: number;
+};
+
+/** A retry delay no run of these tests waits out by its own sleeps. */
+const LONG_RETRY_MS = 24 * 60 * 60_000;
+
+/**
+ * A re-derivation that moves no state, standing in for one whose derivation
+ * agrees with the desired state while the material read does not.
+ */
+const KEEP_DESIRED: CorpusProjectionMismatchRederivation = async () => {
+  await Promise.resolve();
 };
 
 type Command = RunCommand | { type: "advance"; ms: number };
@@ -847,13 +903,22 @@ const runBuild = async (
   const deadline = new Date(
     (await now(model)).getTime() + (command.deadlineInMs ?? RUN_MS),
   );
+  const indexId = await routeOf(model);
   const outcome = await Result.tryPromise({
     try: async () =>
       await buildCorpusProjectionRouteOffline({
         runInTransaction: transactionRunner(model),
-        client: engineClientOf(model),
+        client: {
+          ...engineClientOf(model),
+          readPublishedSplitCounts: async ({ includes }) =>
+            Result.ok(
+              includes(indexId)
+                ? [{ indexId, publishedSplits: FAKE_PUBLISHED_SPLITS }]
+                : [],
+            ),
+        },
         ...TARGET,
-        indexId: await routeOf(model),
+        indexId,
         runId: "model",
         shardDirectory,
         deadline,
@@ -861,6 +926,7 @@ const runBuild = async (
           ...POLICY,
           slots: command.slots,
           maxShardRevisions: model.maxShardRevisions,
+          retryDelayMs: command.retryDelayMs ?? POLICY.retryDelayMs,
         },
         deliver: deliverer(model, [...command.deliveries], command.onDelivery),
         lock: lockOf(model),
@@ -883,7 +949,11 @@ const runBuild = async (
                 ? `Text of ${material.lease.entityId}. ${"Words ".repeat(4000)}`
                 : `Text of ${material.lease.entityId}.`,
               ast: null,
+              storedAst: { type: "absent" },
             }),
+          ...(command.rederive === undefined
+            ? {}
+            : { rederive: command.rederive }),
         },
       }),
     catch: (cause) => cause,
@@ -899,6 +969,9 @@ const runBuild = async (
   }
   return outcome.value;
 };
+
+/** What the fake metastore reports the route publishes when a run ends. */
+const FAKE_PUBLISHED_SPLITS = 3;
 
 /** The engine's census of what the fake indexer published. */
 const engineClientOf = (model: Model) => ({
@@ -1226,6 +1299,349 @@ const tally = () => {
 };
 
 describe("offline route build", () => {
+  test("distinguishes current canonical mismatch from supersession, removal and a moved lease", async () => {
+    const model = await newModel(4);
+    const leases = await transactionRunner(model)(
+      async (tx) =>
+        await reserveCorpusProjectionIntentsTx(tx, {
+          ...TARGET,
+          limit: 4,
+          leaseMs: PLAN.leaseMs,
+        }),
+    );
+    expect(leases).toHaveLength(4);
+    const [mismatch, superseded, removed, lost] = leases;
+    if (
+      mismatch === undefined ||
+      superseded === undefined ||
+      removed === undefined ||
+      lost === undefined
+    ) {
+      panic("Expected four reserved canonical inputs");
+    }
+    await db
+      .update(legislationDocuments)
+      .set({ contentHash: "e".repeat(64) })
+      .where(
+        eq(
+          legislationDocuments.id,
+          toSafeId<"legislationDocument">(mismatch.entityId),
+        ),
+      );
+    await changeDesired(superseded.entityId);
+    await db
+      .update(legislationDocuments)
+      .set({ contentHash: null })
+      .where(
+        eq(
+          legislationDocuments.id,
+          toSafeId<"legislationDocument">(removed.entityId),
+        ),
+      );
+    await db
+      .update(corpusIndexProjectionIntents)
+      .set({ leaseToken: "0198e331-e578-7000-8003-000000000001" })
+      .where(eq(corpusIndexProjectionIntents.id, lost.intentId));
+    const materials = await transactionRunner(model)(
+      async (tx) =>
+        await readReservedCorpusProjectionMaterialsTx(tx, { leases }),
+    );
+    expect(materials.ready).toEqual([]);
+    expect(materials.rejected.map(({ status }) => status)).toEqual([
+      "canonical_input_mismatch",
+      "stale",
+      "canonical_input_mismatch",
+      "lease_lost",
+    ]);
+    expect(
+      await settleRejectedCorpusProjectionMaterials({
+        runInTransaction: transactionRunner(model),
+        rejected: materials.rejected,
+        policy: POLICY,
+      }),
+    ).toMatchObject({ cancelled: 3, leaseLost: 1, mismatchHeld: 0 });
+    expect(
+      (await readIntents(model.entityIds))
+        .filter(({ status }) => status === "reserved")
+        .map(({ leaseToken }) => leaseToken),
+    ).toEqual(["0198e331-e578-7000-8003-000000000001"]);
+    // Both mismatches were re-derived from their canonical rows: the changed
+    // content is desired at a new epoch, the removed content is erased.
+    const desired = new Map(
+      (await readDesired([mismatch.entityId, removed.entityId])).map(
+        (state) => [state.entityId, state],
+      ),
+    );
+    expect(desired.get(mismatch.entityId)).toMatchObject({
+      desiredAction: "upsert",
+      desiredEpoch: mismatch.epoch + 1n,
+      workStatus: "eligible",
+    });
+    expect(desired.get(mismatch.entityId)?.desiredFingerprint).not.toBe(
+      mismatch.fingerprint,
+    );
+    expect(desired.get(removed.entityId)).toMatchObject({
+      desiredAction: "erase",
+      workStatus: "eligible",
+    });
+  });
+
+  test("a rejected material is not reserved again until its inputs change or its retry is due", async () => {
+    const model = await newModel(2);
+    const runInTransaction = transactionRunner(model);
+    const reserveAt = async (testNow: Date) =>
+      await runInTransaction(
+        async (tx) =>
+          await reserveCorpusProjectionIntentsTx(tx, {
+            ...TARGET,
+            limit: 2,
+            leaseMs: PLAN.leaseMs,
+            testNow,
+          }),
+      );
+    const [moved, gone] = model.entityIds;
+    if (moved === undefined || gone === undefined) {
+      panic("Expected two canonical inputs");
+    }
+    // The store's re-derivation for one input; for the other a derivation
+    // that agrees with its desired state while the material read does not.
+    const settleAt = async (
+      leases: readonly CorpusProjectionIntentLease[],
+      testNow: Date,
+    ) =>
+      await settleRejectedCorpusProjectionMaterials({
+        runInTransaction,
+        rejected: (
+          await runInTransaction(
+            async (tx) =>
+              await readReservedCorpusProjectionMaterialsTx(tx, { leases }),
+          )
+        ).rejected,
+        policy: POLICY,
+        testNow,
+        rederive: async (run, mismatched) =>
+          await rederiveMismatchedCorpusProjectionDesiredStates(
+            run,
+            mismatched.filter(({ entityId }) => entityId !== gone),
+          ),
+      });
+    const start = await now(model);
+    const first = await reserveAt(start);
+    expect(first.map(({ entityId }) => entityId).toSorted()).toEqual(
+      [moved, gone].toSorted(),
+    );
+    // Both inputs moved without their desired states: both reservations now
+    // name content no canonical row derives.
+    await setCanonicalContent([moved, gone], "e");
+    expect(await settleAt(first, start)).toMatchObject({
+      cancelled: 1,
+      retryScheduled: 1,
+      blocked: 0,
+      mismatchHeld: 1,
+    });
+
+    // The next turn, before the held retry is due, takes only the re-derived
+    // input, at its new content, and that material is ready.
+    const next = await now(model);
+    expect(next.getTime()).toBeLessThan(start.getTime() + POLICY.retryDelayMs);
+    const second = await reserveAt(next);
+    expect(second.map(({ entityId }) => entityId)).toEqual([moved]);
+    const firstMoved =
+      first.find(({ entityId }) => entityId === moved) ??
+      panic("Expected the moved input's first lease");
+    expect(second.at(0)?.epoch).toBe(firstMoved.epoch + 1n);
+    expect(second.at(0)?.fingerprint).not.toBe(firstMoved.fingerprint);
+    const secondMaterials = await runInTransaction(
+      async (tx) =>
+        await readReservedCorpusProjectionMaterialsTx(tx, { leases: second }),
+    );
+    expect(secondMaterials.ready.map(({ lease }) => lease.entityId)).toEqual([
+      moved,
+    ]);
+    expect(await reserveAt(start)).toEqual([]);
+    expect(
+      await reserveAt(new Date(start.getTime() + POLICY.retryDelayMs - 1)),
+    ).toEqual([]);
+
+    // Each due retry reads it once more, under the payload retry limit, and
+    // the limit blocks it: no later turn reserves it again.
+    let retryAt = start;
+    for (let attempt = 2; attempt <= POLICY.payloadRetryLimit; attempt += 1) {
+      retryAt = new Date(retryAt.getTime() + POLICY.retryDelayMs);
+      // db-await-in-loop: each retry is due only after the previous one settled
+      const retried = await reserveAt(retryAt);
+      expect(retried.map(({ entityId }) => entityId)).toEqual([gone]);
+      // db-await-in-loop: settles the retry this turn just reserved
+      await settleAt(retried, retryAt);
+    }
+    const [blocked] = await readDesired([gone]);
+    expect(blocked).toMatchObject({
+      workStatus: "blocked",
+      failureAttempts: POLICY.payloadRetryLimit,
+      lastFailureKind: "canonical_input_mismatch",
+    });
+    expect(await reserveAt(new Date(retryAt.getTime() + 60 * 60_000))).toEqual(
+      [],
+    );
+
+    // A desired-state change resets the block, and the restored input reads.
+    await setCanonicalContent([gone], "d");
+    await changeDesired(gone);
+    const unblocked = await reserveAt(await now(model));
+    expect(unblocked.map(({ entityId }) => entityId)).toEqual([gone]);
+    expect(
+      (
+        await runInTransaction(
+          async (tx) =>
+            await readReservedCorpusProjectionMaterialsTx(tx, {
+              leases: unblocked,
+            }),
+        )
+      ).ready.map(({ lease }) => lease.entityId),
+    ).toEqual([gone]);
+  });
+
+  test("re-derives current-state mismatches and projects them in the same build", async () => {
+    const model = await newModel(SHARD_REVISIONS * 4);
+    const mismatched = model.entityIds.filter(
+      (_id, index) => index < SHARD_REVISIONS || index >= SHARD_REVISIONS * 2,
+    );
+    await db
+      .update(legislationDocuments)
+      .set({ contentHash: "e".repeat(64) })
+      .where(
+        inArray(
+          legislationDocuments.id,
+          mismatched.map((id) => toSafeId<"legislationDocument">(id)),
+        ),
+      );
+    const outcome = await runBuild(model, QUIET_RUN);
+    expect(outcome?.status).toBe("drained");
+    expect(outcome?.progress).toMatchObject({
+      proved: model.entityIds.length,
+      canonicalInputMismatch: {
+        revisions: mismatched.length,
+        consecutivePages: 0,
+      },
+      notStarted: {
+        cancelled: mismatched.length,
+        leaseLost: 0,
+        retryScheduled: 0,
+        blocked: 0,
+      },
+    });
+    const states = await readDesired(model.entityIds);
+    expect(
+      (await readStates(model.entityIds)).every(
+        ({ appliedRevision }) => appliedRevision !== null,
+      ),
+    ).toBe(true);
+    expect(
+      states
+        .filter(({ entityId }) => mismatched.includes(entityId))
+        .every(({ desiredEpoch }) => desiredEpoch === 2n),
+    ).toBe(true);
+  });
+
+  test("bounds consecutive pages of mismatches re-deriving cannot move and resumes them once due", async () => {
+    const heldCount =
+      CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT * SHARD_REVISIONS;
+    const model = await newModel(heldCount + SHARD_REVISIONS * 2);
+    const held = model.entityIds.slice(
+      SHARD_REVISIONS,
+      SHARD_REVISIONS + heldCount,
+    );
+    await setCanonicalContent(held, "e");
+    const heldRun = {
+      ...QUIET_RUN,
+      rederive: KEEP_DESIRED,
+      retryDelayMs: LONG_RETRY_MS,
+    } satisfies RunCommand;
+    const stopped = await runBuild(model, heldRun);
+    expect(stopped?.status).toBe("canonical_input_mismatch");
+    expect(stopped?.progress).toMatchObject({
+      reserved: heldCount + SHARD_REVISIONS,
+      started: SHARD_REVISIONS,
+      proved: SHARD_REVISIONS,
+      canonicalInputMismatch: {
+        revisions: heldCount,
+        pages: CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT,
+        consecutivePages:
+          CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT,
+      },
+      notStarted: { cancelled: 0, leaseLost: 0, retryScheduled: heldCount },
+      outstanding: 0,
+    });
+    expect(stopped?.progress.cursor?.entityId).toBe(
+      model.entityIds.at(SHARD_REVISIONS - 1),
+    );
+    expect(model.deliveries).toHaveLength(1);
+    expect(
+      (await readIntents(model.entityIds)).every(
+        ({ status, leaseToken }) =>
+          (status === "cancelled" || status === "applied") &&
+          leaseToken === null,
+      ),
+    ).toBe(true);
+    expect(
+      (await readDesired(held)).every(
+        ({ workStatus, lastFailureKind }) =>
+          workStatus === "retry_scheduled" &&
+          lastFailureKind === "canonical_input_mismatch",
+      ),
+    ).toBe(true);
+
+    // A run before the retry is due does not take the held states again,
+    // only the healthy tail the stopped run never reached.
+    const early = await runBuild(model, heldRun, stopped?.progress.cursor);
+    expect(early?.progress.reserved).toBe(SHARD_REVISIONS);
+    expect(early?.progress.canonicalInputMismatch.revisions).toBe(0);
+    const heldIntents = await readIntents(held);
+    expect(heldIntents).toHaveLength(heldCount);
+    expect(heldIntents.every(({ status }) => status === "cancelled")).toBe(
+      true,
+    );
+
+    await setCanonicalContent(held, "d");
+    model.offsetMs += LONG_RETRY_MS * 2;
+    const resumed = await runBuild(model, QUIET_RUN, stopped?.progress.cursor);
+    expect(resumed?.status).toBe("drained");
+    expect(resumed?.progress.proved).toBe(heldCount);
+    expect(
+      (await readStates(model.entityIds)).every(
+        ({ appliedRevision }) => appliedRevision !== null,
+      ),
+    ).toBe(true);
+  });
+
+  test("healthy pages reset the streak of held mismatches", async () => {
+    const groups = CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT + 1;
+    const model = await newModel(groups * SHARD_REVISIONS * 2);
+    const held = model.entityIds.filter(
+      (_id, index) => index % (SHARD_REVISIONS * 2) < SHARD_REVISIONS,
+    );
+    await setCanonicalContent(held, "e");
+    const outcome = await runBuild(model, {
+      ...QUIET_RUN,
+      rederive: KEEP_DESIRED,
+      retryDelayMs: LONG_RETRY_MS,
+    });
+    expect(outcome?.status).not.toBe("canonical_input_mismatch");
+    expect(outcome?.progress).toMatchObject({
+      proved: model.entityIds.length - held.length,
+      canonicalInputMismatch: { revisions: held.length, pages: groups },
+      notStarted: { leaseLost: 0, retryScheduled: held.length },
+    });
+    expect(
+      outcome?.progress.canonicalInputMismatch.consecutivePages,
+    ).toBeLessThan(CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT);
+    await setCanonicalContent(held, "d");
+    model.offsetMs += LONG_RETRY_MS * 2;
+    const resumed = await runBuild(model, QUIET_RUN);
+    expect(resumed?.status).toBe("drained");
+    expect(resumed?.progress.proved).toBe(held.length);
+  });
+
   test(
     "an offline route build converges under a crash at any step with no cleanup",
     async () => {
@@ -1798,6 +2214,8 @@ describe("offline route build", () => {
     model.lockHeld = true;
     const outcome = await runBuild(model, QUIET_RUN);
     expect(outcome?.status).toBe("lock_held");
+    // A run that never held the route has nothing to count.
+    expect(outcome?.publishedSplits).toEqual({ read: "not_read" });
     expect(await readIntents(model.entityIds)).toEqual([]);
   });
 
@@ -1806,6 +2224,11 @@ describe("offline route build", () => {
     const first = await runBuild(model, QUIET_RUN);
     expect(first?.status).toBe("drained");
     expect(first?.progress.proved).toBe(ENTITIES);
+    // The receipt names the route's published splits as the run left them.
+    expect(first?.publishedSplits).toEqual({
+      read: "counted",
+      count: FAKE_PUBLISHED_SPLITS,
+    });
     // One entity sorts after the cursor the run resumes from, one before it.
     const seeded = await seedEntities(2);
     const ahead = seeded.at(0) ?? panic("Expected two entities");

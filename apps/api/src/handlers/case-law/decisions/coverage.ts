@@ -7,6 +7,7 @@ import {
   isCaseLawJurisdiction,
 } from "@stll/api-contract/case-law-jurisdictions";
 import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import { classifyFailure } from "@stll/errors";
 
 import { caseLawSources, SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
 import type { SourceTotalOrigin } from "@/api/db/schema";
@@ -79,6 +80,7 @@ import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   ADAPTER_MANIFESTS,
   type AdapterEdition,
+  IMPORT_SOURCE_MANIFESTS,
 } from "@/api/lib/legal-search/adapter-manifest";
 import {
   ADAPTER_KEYS,
@@ -95,6 +97,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import type { PublicLawReadOptions } from "@/api/lib/public-law-read-db";
 import {
   definePublicLawSharedQuery,
@@ -285,6 +288,23 @@ class CoverageError extends TaggedError("CoverageError")<{
 }> {}
 
 /**
+ * The breakdown's own statement is bounded so a cold index degrades the page
+ * instead of stalling it; that bound ending is the designed outcome, graded
+ * as a public read's timeout rather than a defect. The cause is read, not the
+ * error: evidence is memoized on first read, so the error is classified
+ * before anything reads it.
+ */
+const observeCourtsReadFailure = (error: CoverageError, country: string) => {
+  if (isPgError(error.cause, PG_ERROR.QUERY_CANCELED)) {
+    classifyFailure(error, "public_read_timeout");
+  }
+  observeFailure(error, {
+    sink: courtsReadFailure,
+    ctx: { jurisdiction: country },
+  });
+};
+
+/**
  * Who a persisted total came from. Total over the stored origins, so a new
  * origin has to be given a public reading here before it compiles; the page
  * names the reporter because "the publisher says so" and "we counted it by
@@ -332,11 +352,68 @@ export const caseLawSourceJurisdiction = (
     : null;
 };
 
+/**
+ * Where a source row sits on the public pages, and what it states about
+ * itself there. A crawl adapter takes its country and edition from its
+ * manifest. A bulk import takes its country from its manifest and its edition
+ * from the snapshot its last completed run read; until a run completes it has
+ * no edition to state and is not placed. A key neither registry knows cannot
+ * be placed at all. The coverage page and the corpus status both place
+ * sources through this, so they judge a country by the same set.
+ */
+export type CaseLawSourcePlacement =
+  | {
+      type: "placed";
+      country: CaseLawJurisdiction;
+      edition: AdapterEdition;
+      publisher: string;
+      publicHomeUrl: string;
+    }
+  | { type: "import-pending" }
+  | { type: "unregistered" };
+
+export const caseLawSourcePlacement = ({
+  adapterKey,
+  importSnapshotDate,
+}: {
+  adapterKey: string;
+  importSnapshotDate: string | null;
+}): CaseLawSourcePlacement => {
+  const membership = sourceRegistryMembership(adapterKey);
+  if (membership.type === "import") {
+    const manifest = IMPORT_SOURCE_MANIFESTS[membership.importKey];
+    if (!isCaseLawJurisdiction(manifest.country)) {
+      return { type: "unregistered" };
+    }
+    return importSnapshotDate === null
+      ? { type: "import-pending" }
+      : {
+          type: "placed",
+          country: manifest.country,
+          edition: { type: "snapshot", snapshotDate: importSnapshotDate },
+          publisher: manifest.publisher,
+          publicHomeUrl: manifest.publicHomeUrl,
+        };
+  }
+  const manifest = MANIFEST_BY_ADAPTER_KEY.get(adapterKey);
+  const country = caseLawSourceJurisdiction(adapterKey);
+  return manifest === undefined || country === null
+    ? { type: "unregistered" }
+    : {
+        type: "placed",
+        country,
+        edition: manifest.edition,
+        publisher: manifest.publisher,
+        publicHomeUrl: manifest.publicHomeUrl,
+      };
+};
+
 type CaseLawCoverageSourceRow = {
   id: SafeId<"caseLawSource">;
   adapterKey: string;
   enabled: boolean;
   lastSyncAt: Date | null;
+  importSnapshotDate: string | null;
   reportedTotal: number | null;
   reportedTotalAsOf: Date | null;
   reportedTotalOrigin: string | null;
@@ -372,6 +449,7 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
         adapterKey: caseLawSources.adapterKey,
         enabled: caseLawSources.enabled,
         lastSyncAt: caseLawSources.lastSyncAt,
+        importSnapshotDate: caseLawSources.importSnapshotDate,
         reportedTotal: caseLawSources.reportedTotal,
         reportedTotalAsOf: caseLawSources.reportedTotalAsOf,
         reportedTotalOrigin: caseLawSources.reportedTotalOrigin,
@@ -498,10 +576,12 @@ type CoverageLoad = {
   onPartialFailure: (part: CaseLawCoveragePart) => void;
   now: Date;
   readSources: () => Promise<CaseLawCoverageSourceRow[]>;
-  /** Null when the read failed as a whole, so no source gets a number. */
+  /** Unavailable when the read failed as a whole, so no source gets a number. */
   readArrivals: (
     sourceIds: readonly SafeId<"caseLawSource">[],
-  ) => Promise<ReadonlyMap<string, CaseLawSourceArrivals> | null>;
+  ) => Promise<
+    ReadonlyMap<string, CaseLawSourceArrivals> | { status: "unavailable" }
+  >;
   readCensus: (
     sources: readonly Pick<CaseLawCoverageSourceRow, "id" | "adapterKey">[],
   ) => Promise<ReadonlyMap<string, SourceCensus>>;
@@ -519,14 +599,18 @@ type CoverageLoad = {
   }) => Promise<readonly CaseLawCourtStatusRow[]>;
 };
 
-/** A read whose null means it failed; the failure is reported as it is read. */
-const reportingNull = async <Value>(
-  read: () => Promise<Value | null>,
-  onNull: () => void,
+/** Explicit sentinel when an optional coverage read failed as a whole. */
+const CASE_LAW_ARRIVALS_UNAVAILABLE = { status: "unavailable" } as const;
+
+/** A read whose unavailable sentinel means it failed; reported as it is read. */
+const reportingUnavailable = async <Value extends object>(
+  read: () => Promise<Value | { status: "unavailable" }>,
+  onUnavailable: () => void,
 ): Promise<Value | null> => {
   const value = await read();
-  if (value === null) {
-    onNull();
+  if ("status" in value) {
+    onUnavailable();
+    return null;
   }
   return value;
 };
@@ -661,7 +745,7 @@ export const loadCaseLawCoverage = async ({
     sharedUnread.add(part);
     onPartialFailure(part);
   };
-  const arrivals = await reportingNull(
+  const arrivals = await reportingUnavailable(
     async () => await readArrivals(admitted.map(({ id }) => id)),
     () => unreadEverywhere("arrivals"),
   );
@@ -692,17 +776,14 @@ export const loadCaseLawCoverage = async ({
   >();
 
   for (const source of admitted) {
-    // A bulk import source (CourtListener) is registered, but as an import:
-    // its manifest has no edition, and the page judges a source's health by
-    // its edition. Until an import's edition is read from its own provenance
-    // it is left off the page, and not reported: it is known, not missing.
-    if (sourceRegistryMembership(source.adapterKey).type === "import") {
+    const placement = caseLawSourcePlacement(source);
+    if (placement.type === "import-pending") {
+      // A bulk import that has not finished a run has no edition to state
+      // yet. It is known, not missing, so it is left off without a report.
       continue;
     }
-    const manifest = MANIFEST_BY_ADAPTER_KEY.get(source.adapterKey);
-    const country = caseLawSourceJurisdiction(source.adapterKey);
-    if (manifest === undefined || country === null) {
-      // A row whose adapter is not registered cannot be placed at all: the
+    if (placement.type === "unregistered") {
+      // A row whose key no registry knows cannot be placed at all: the
       // source table carries no country of its own, and the manifest that
       // would supply one is exactly what is missing. Every figure on this
       // page hangs off a country, so the row is left out and reported rather
@@ -712,6 +793,7 @@ export const loadCaseLawCoverage = async ({
       reportUnrecognizedSource(source.adapterKey);
       continue;
     }
+    const { country, edition } = placement;
     const sourceArrivals = arrivals?.get(String(source.id)) ?? UNKNOWN_ARRIVALS;
     const entry = byCountry.get(country) ?? {
       sources: [],
@@ -720,15 +802,15 @@ export const loadCaseLawCoverage = async ({
     };
     entry.sources.push({
       adapterKey: source.adapterKey,
-      name: manifest.publisher,
-      publicHomeUrl: manifest.publicHomeUrl,
+      name: placement.publisher,
+      publicHomeUrl: placement.publicHomeUrl,
       health: caseLawSourceHealth({
-        edition: manifest.edition,
+        edition,
         enabled: source.enabled,
         lastSyncAt: source.lastSyncAt,
         now,
       }),
-      edition: manifest.edition,
+      edition,
       lastSyncAt: source.lastSyncAt?.toISOString() ?? null,
       decisionYearFrom: source.decisionYearFrom,
       decisionYearTo: source.decisionYearTo,
@@ -837,10 +919,7 @@ export const loadCaseLawCoverage = async ({
     });
     if (Result.isError(courts)) {
       onPartialFailure("courts");
-      observeFailure(courts.error, {
-        sink: courtsReadFailure,
-        ctx: { jurisdiction: country },
-      });
+      observeCourtsReadFailure(courts.error, country);
     }
     countries.push({
       ...base,
@@ -1153,7 +1232,7 @@ export const computeCaseLawCoverageAnswer = async (
         });
         if (Result.isError(arrivals)) {
           observeFailure(arrivals.error, { sink: arrivalsReadFailure });
-          return null;
+          return CASE_LAW_ARRIVALS_UNAVAILABLE;
         }
         return arrivals.value;
       },

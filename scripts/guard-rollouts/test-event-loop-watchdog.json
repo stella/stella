@@ -1,0 +1,12 @@
+{
+  "id": "test-event-loop-watchdog",
+  "type": "changed-lines",
+  "expiresAt": "2026-11-28T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--cwd=packages/scripts",
+    "run",
+    "test",
+    "src/test-event-loop-watchdog-coverage.test.ts"
+  ]
+}

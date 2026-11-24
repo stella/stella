@@ -22,7 +22,7 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq, gt, inArray, isNotNull, isNull } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { caseLawDecisions } from "@/api/db/schema";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";

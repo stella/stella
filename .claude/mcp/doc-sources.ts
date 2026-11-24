@@ -209,6 +209,7 @@ export const DOC_SOURCES = {
       "@better-auth/core",
       "@better-auth/oauth-provider",
       "@better-auth/cimd",
+      "@better-auth/sso",
     ],
     url: "https://better-auth.com/llms.txt",
   },
@@ -739,6 +740,14 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     expiresAt: "2026-12-04T00:00:00.000Z",
     reason: "no-llms-txt",
   },
+  {
+    checkedAt: "2026-11-22T00:00:00.000Z",
+    dependency: "utif2",
+    explanation:
+      "https://raw.githubusercontent.com/photopea/UTIF.js/HEAD/llms.txt and https://raw.githubusercontent.com/photopea/UTIF.js/master/llms.txt return 404. Use the README and UTIF.d.ts in https://github.com/photopea/UTIF.js directly.",
+    expiresAt: "2026-12-22T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
   ...["@dnd-kit/core", "@dnd-kit/sortable"].map(
     (dependency) =>
       ({
@@ -773,6 +782,14 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
         reason: "no-llms-txt",
       }) satisfies NoLlmsTxtExclusion,
   ),
+  {
+    checkedAt: "2026-11-20T00:00:00.000Z",
+    dependency: "world-atlas",
+    explanation:
+      "https://raw.githubusercontent.com/topojson/world-atlas/HEAD/llms.txt and https://www.naturalearthdata.com/llms.txt return 404. The package ships data only (Natural Earth TopoJSON); use the README at https://github.com/topojson/world-atlas and the TopoJSON specification at https://github.com/topojson/topojson-specification directly.",
+    expiresAt: "2026-12-20T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
   {
     checkedAt: "2026-10-24T00:00:00.000Z",
     dependency: "@noble/hashes",

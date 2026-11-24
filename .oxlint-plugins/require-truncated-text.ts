@@ -85,6 +85,7 @@ const filenameOf = (context): string =>
 const OWNER_FILES: readonly string[] = [
   "packages/ui/src/components/middle-truncate.tsx",
   "packages/ui/src/components/truncated-text.tsx",
+  "packages/ui/src/components/truncated-text-face.tsx",
 ];
 
 const isOwnerFile = (filename: string): boolean =>

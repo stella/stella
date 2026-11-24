@@ -1,18 +1,15 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import type { EditorView } from "@tiptap/pm/view";
-import { Result } from "better-result";
 
-import { setAnonymizationTermsMeta } from "@stll/folio-react";
-import type { AnonymizationTerm } from "@stll/folio-react";
+import type { FolioAnonymizationTerm } from "@stll/folio-react";
 
 import {
   useInspectorAnonymizationStore,
   useIsAnonymizationActive,
 } from "@/components/inspector/inspector-anonymization-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { getAnalytics } from "@/lib/analytics/provider";
 import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
@@ -34,9 +31,9 @@ type UseDocxAnonymizationHighlightsOptions = {
 };
 
 /**
- * Feeds the workspace anonymization terms and the detected entities into
- * Folio's decoration plugin, and returns the handler that publishes the
- * plugin's live match list to the inspector facet.
+ * The workspace anonymization terms and the detected entities, as the
+ * `anonymizationTerms` Folio highlights, and the handler that publishes
+ * their occurrences to the inspector facet.
  */
 export const useDocxAnonymizationHighlights = ({
   editorView,
@@ -59,18 +56,11 @@ export const useDocxAnonymizationHighlights = ({
     anonymizationTermsQueryView,
     "useDocxAnonymizationHighlights:query",
   );
-  const workspaceAnonymizationTerms = useMemo<AnonymizationTerm[]>(() => {
-    if (!anonymizationTermsQuery.data) {
-      return [];
-    }
-    return anonymizationTermsQuery.data.entries
-      .filter((entry) => entry.enabled)
-      .map((entry) => ({
-        canonical: entry.canonical,
-        label: entry.label,
-        variants: entry.variants,
-      }));
-  }, [anonymizationTermsQuery.data]);
+  // The query's own entries, a stable reference while the read stands.
+  const workspaceTermEntries =
+    anonymizationTermsQueryView.type === "items"
+      ? anonymizationTermsQueryView.items.entries
+      : null;
   // Detected-entity highlights — runs the wasm anonymization
   // pipeline against the live doc text and exposes each detected
   // entity as a Folio decoration term. Combined with workspace
@@ -82,7 +72,7 @@ export const useDocxAnonymizationHighlights = ({
   // re-running on every keystroke, and does nothing while the
   // document stays unchanged.
   const [detectedAnonymizationTerms, setDetectedAnonymizationTerms] = useState<
-    AnonymizationTerm[]
+    FolioAnonymizationTerm[]
   >([]);
   // Exposed by the detection effect below so the exclusions-watching
   // effect can kick a fresh run the moment the allowlist changes, and
@@ -94,9 +84,6 @@ export const useDocxAnonymizationHighlights = ({
   // exclusions without re-installing itself on every keystroke /
   // mutation.
   const excludedCanonicalsRef = useRef<readonly string[]>([]);
-  const detectionRetry = useInspectorAnonymizationStore(
-    (state) => state.anonymizationRetryByFieldId[fieldId] ?? 0,
-  );
   const allowlistQuery = useQuery({
     ...anonymizationAllowlistOptions({ workspaceId, entityId }),
     enabled: isAnonymizationActive,
@@ -149,12 +136,8 @@ export const useDocxAnonymizationHighlights = ({
   // detected entities itself; we still need to strip them from
   // the workspace catalog list, because catalog terms are sent
   // straight to Folio without going through the worker.
-  const excludedCanonicalsSet = useMemo(
-    () =>
-      buildExcludedCanonicalsSet(
-        allowlistQuery.data ? allowlistQuery.data.entries : [],
-      ),
-    [allowlistQuery.data],
+  const excludedCanonicalsSet = buildExcludedCanonicalsSet(
+    allowlistQueryView.type === "items" ? allowlistQueryView.items.entries : [],
   );
   useExternalSyncEffect(() => {
     excludedCanonicalsRef.current = [...excludedCanonicalsSet];
@@ -162,82 +145,50 @@ export const useDocxAnonymizationHighlights = ({
     // the user just added to the allowlist disappear.
     detectionRef.current?.run();
   }, [excludedCanonicalsSet]);
-  const mergedAnonymizationTerms = useMemo<AnonymizationTerm[]>(
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const mergedAnonymizationTerms = useMemo<FolioAnonymizationTerm[]>(
     () =>
       mergeAnonymizationTerms({
         isAnonymizationActive,
-        workspaceTerms: workspaceAnonymizationTerms,
+        workspaceTerms:
+          workspaceTermEntries === null
+            ? []
+            : workspaceTermEntries
+                .filter((entry) => entry.enabled)
+                .map((entry) => ({
+                  canonical: entry.canonical,
+                  label: entry.label,
+                  variants: entry.variants,
+                })),
         detectedTerms: detectedAnonymizationTerms,
         excludedCanonicals: excludedCanonicalsSet,
       }),
     [
       isAnonymizationActive,
-      workspaceAnonymizationTerms,
+      workspaceTermEntries,
       detectedAnonymizationTerms,
       excludedCanonicalsSet,
     ],
   );
-  // Dispatch the live term list into the plugin. We can't simply
-  // read matches right after `dispatch` because DOCX content
-  // loads asynchronously: the first dispatch hits an empty doc
-  // (matches=[]), then PM's docChanged transaction rebuilds
-  // matches *later* without our effect re-firing. Publishing is
-  // handled by the match callback below.
-  useExternalSyncEffect(() => {
-    const view = editorView;
-    if (!view) {
+  // Publish Folio's match list to the inspector facet so it can
+  // show counts and filter the workspace vocabulary list. Folio
+  // reports it through `onAnonymizationMatchesChange` each time
+  // the occurrences change. Skipped state updates are no-ops
+  // (zustand suppresses sets that yield identical references);
+  // the entry is cleared on unmount.
+  const handleAnonymizationMatchesChange = (
+    matches: readonly { canonical: string; label: string }[],
+  ) => {
+    const { publishAnonymizationMatches } =
+      useInspectorAnonymizationStore.getState();
+    if (!isAnonymizationActive) {
       return;
     }
-    const dispatched = Result.try(() => {
-      const { key, payload } = setAnonymizationTermsMeta(
-        mergedAnonymizationTerms,
-      );
-      view.dispatch(view.state.tr.setMeta(key, payload));
-    });
-    if (Result.isError(dispatched)) {
-      getAnalytics().captureError(dispatched.error, {
-        fingerprintKey: "useDocxAnonymizationHighlights:failure",
-        scope: {
-          type: "handler",
-          handlerId: "useDocxAnonymizationHighlights:failure",
-        },
-      });
-      useInspectorAnonymizationStore
-        .getState()
-        .markAnonymizationPipelineFailed(fieldId);
-    }
-  }, [editorView, mergedAnonymizationTerms, fieldId, detectionRetry]);
-  // Publish the plugin's live match list to the inspector facet
-  // so it can show counts and filter the workspace vocabulary
-  // list. Skipped state updates are no-ops (zustand suppresses
-  // sets that yield identical references); the entry is cleared
-  // on unmount.
-  // Wired from the plugin via Folio's
-  // `onAnonymizationMatchesChange` prop. The plugin emits
-  // the current match list on every transition (init, term push,
-  // doc edit, async DOCX load); we mirror it into the matches
-  // store so the inspector facet's counter and "matching
-  // workspace terms" list stay in sync.
-  //
-  // The same emission is the document-change signal for entity
-  // detection: every doc edit and DOCX load passes through it, and
-  // detection ignores emissions whose document it already read
-  // (term pushes).
-  const handleAnonymizationMatchesChange = useCallback(
-    (matches: readonly { canonical: string; label: string }[]) => {
-      const { publishAnonymizationMatches } =
-        useInspectorAnonymizationStore.getState();
-      if (!isAnonymizationActive) {
-        return;
-      }
-      detectionRef.current?.noteDocChanged();
-      publishAnonymizationMatches(
-        fieldId,
-        aggregateAnonymizationMatches(matches),
-      );
-    },
-    [fieldId, isAnonymizationActive],
-  );
+    publishAnonymizationMatches(
+      fieldId,
+      aggregateAnonymizationMatches(matches),
+    );
+  };
   useExternalSyncEffect(() => {
     const { clearAnonymizationMatches } =
       useInspectorAnonymizationStore.getState();
@@ -249,7 +200,19 @@ export const useDocxAnonymizationHighlights = ({
     };
   }, [fieldId, isAnonymizationActive]);
 
-  return handleAnonymizationMatchesChange;
+  return {
+    /** Folio highlights these terms and reports their occurrences. */
+    anonymizationTerms: mergedAnonymizationTerms,
+    onAnonymizationMatchesChange: handleAnonymizationMatchesChange,
+    /**
+     * Call on every document change, the DOCX load included: entity
+     * detection rereads the text once it settles, and ignores a document
+     * it already read.
+     */
+    noteDocumentChanged: () => {
+      detectionRef.current?.noteDocChanged();
+    },
+  };
 };
 
 /**
@@ -263,21 +226,22 @@ export const useDocxAnonymizationSelection = (fieldId: string) => {
   // transaction, so we just have to length-gate and publish.
   // The cleanup clears the store so a second tab opening this
   // facet doesn't see a stale prefill from the previous file.
-  const handleSelectionTextChange = useCallback(
-    (selection: { from: number; to: number; text: string }) => {
-      if (selection.from === selection.to) {
-        return;
-      }
-      const single = selection.text.replace(/\s+/gu, " ").trim();
-      if (single.length < 2 || single.length > 200) {
-        return;
-      }
-      useInspectorAnonymizationStore
-        .getState()
-        .publishDocumentTextSelection(fieldId, single);
-    },
-    [fieldId],
-  );
+  const handleSelectionTextChange = (selection: {
+    from: number;
+    to: number;
+    text: string;
+  }) => {
+    if (selection.from === selection.to) {
+      return;
+    }
+    const single = selection.text.replace(/\s+/gu, " ").trim();
+    if (single.length < 2 || single.length > 200) {
+      return;
+    }
+    useInspectorAnonymizationStore
+      .getState()
+      .publishDocumentTextSelection(fieldId, single);
+  };
   useExternalSyncEffect(
     () => () => {
       useInspectorAnonymizationStore
@@ -296,14 +260,11 @@ export const useDocxAnonymizationSelection = (fieldId: string) => {
   //   stay quiet.
   // - Doc-sourced selections aren't echoed back to the editor —
   //   that would re-scroll on its own click.
-  const handleAnonymizationTermClick = useCallback(
-    (canonical: string, label: string) => {
-      useInspectorAnonymizationStore
-        .getState()
-        .selectAnonymizationTerm(canonical, label, "doc", fieldId);
-    },
-    [fieldId],
-  );
+  const handleAnonymizationTermClick = (canonical: string, label: string) => {
+    useInspectorAnonymizationStore
+      .getState()
+      .selectAnonymizationTerm(canonical, label, "doc", fieldId);
+  };
   const sidebarSelectedCanonical = useInspectorAnonymizationStore((s) =>
     s.anonymizationSelection.source === "sidebar" &&
     s.anonymizationSelection.fieldId === fieldId

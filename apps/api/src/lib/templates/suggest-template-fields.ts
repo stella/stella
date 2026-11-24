@@ -173,12 +173,14 @@ export const suggestTemplateFields = async ({
  */
 export const suggestTemplateFieldsOrEmpty = async (
   args: Parameters<typeof suggestTemplateFields>[0],
-): Promise<SuggestedTemplateField[]> => {
+): Promise<
+  { status: "ok"; suggestions: SuggestedTemplateField[] } | { status: "failed" }
+> => {
   try {
-    return await suggestTemplateFields(args);
+    return { status: "ok", suggestions: await suggestTemplateFields(args) };
   } catch (error) {
     args.aiAnalytics.captureError(error);
-    return [];
+    return { status: "failed" };
   }
 };
 

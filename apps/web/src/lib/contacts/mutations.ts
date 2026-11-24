@@ -12,8 +12,10 @@ import { detached } from "@/lib/detached";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
+import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import type { SafeId } from "@/lib/safe-id";
+import { resourceMutation } from "@/lib/workspace-realtime";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 
 type ContactDetail = NonNullable<
@@ -106,13 +108,16 @@ type CreateContactVars = {
 export const useCreateContact = () => {
   const analytics = useAnalytics();
   const t = useTranslations();
+  const queryClient = useQueryClient();
 
   return useIdempotentMutation({
-    mutationFn: async (vars: CreateContactVars, request) => {
-      const response = await api.contacts.put(vars, request);
-
-      return unwrapApiResponse(response);
-    },
+    mutationFn: resourceMutation({
+      mutation: "createContact",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async (vars: CreateContactVars, request: IdempotentRequest) =>
+        unwrapApiResponse(await api.contacts.put(vars, request)),
+    }),
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useCreateContact:failure",

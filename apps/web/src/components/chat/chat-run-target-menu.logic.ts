@@ -21,7 +21,6 @@ import {
   DESKTOP_RUNNER_LINKED_FOLDER_STATE,
   type DesktopRunnerApprovalMode,
   type DesktopRunnerLinkedFolderState,
-  type DesktopRunnerReasoningEffort,
 } from "@stll/api-contract/desktop-runner";
 
 import type { TranslationKey } from "@/i18n/types";
@@ -49,10 +48,16 @@ export const LOCAL_RUN_PERMISSION_KEYS = {
   { label: TranslationKey; description: TranslationKey }
 >;
 
+/** Agents the member installs and signs in to outside stella desktop. */
+const MEMBER_INSTALLED_HARNESSES: ReadonlySet<ChatLocalRunHarness> = new Set([
+  "antigravity",
+]);
+
 /** Product names of the harnesses, shown as they are in every locale. */
 export const CHAT_LOCAL_HARNESS_NAMES = {
   codex: "Codex",
   "claude-code": "Claude Code",
+  antigravity: "Antigravity",
 } as const satisfies Record<ChatLocalRunHarness, string>;
 
 type HarnessState = ChatLocalHarnessReadiness["state"];
@@ -124,17 +129,24 @@ export const chatLocalHarnessOptions = (
     return null;
   }
   const connected = readiness.runners.filter((runner) => runner.connected);
-  return CHAT_LOCAL_RUN_HARNESSES.map((harness) => {
-    if (connected.length === 0) {
-      return { harness, state: "offline" };
-    }
+  return CHAT_LOCAL_RUN_HARNESSES.flatMap((harness) => {
     const reports = connected.flatMap((runner) =>
       runner.harnesses.filter((report) => report.id === harness),
     );
-    return optionOf(
-      harness,
-      reports.find((report) => report.state === "ready") ?? reports.at(0),
-    );
+    // An agent the member installs themselves is listed only where a
+    // computer looks for it; stella desktop installs the others.
+    if (MEMBER_INSTALLED_HARNESSES.has(harness) && reports.length === 0) {
+      return [];
+    }
+    if (connected.length === 0) {
+      return [{ harness, state: "offline" }];
+    }
+    return [
+      optionOf(
+        harness,
+        reports.find((report) => report.state === "ready") ?? reports.at(0),
+      ),
+    ];
   });
 };
 
@@ -436,28 +448,6 @@ export const localRunTargetFor = ({
 };
 
 /**
- * The reasoning efforts the selected local model offers, or `null` when the
- * turn runs in the cloud, its harness cannot take a turn, or the model offers
- * no choice; the menu then shows none.
- */
-export const reasoningEffortChoices = (
-  selected: ChatRunTarget,
-  options: readonly ChatLocalHarnessOption[],
-): readonly DesktopRunnerReasoningEffort[] | null => {
-  if (selected.kind !== "local") {
-    return null;
-  }
-  const option = options.find(({ harness }) => harness === selected.harness);
-  if (option?.state !== "ready") {
-    return null;
-  }
-  const efforts =
-    option.models.find(({ id }) => id === selected.model)?.reasoningEfforts ??
-    [];
-  return efforts.length === 0 ? null : efforts;
-};
-
-/**
  * Whether a permission mode can be chosen: `computer` when the computer
  * cannot run the harness in it, `organization` when it is above what the
  * organization allows.
@@ -543,4 +533,60 @@ export const effectiveRunTarget = (
     offered: option?.state === "ready" ? option.approvalModes : undefined,
   });
   return approvals === chosen.approvals ? chosen : { ...chosen, approvals };
+};
+
+/**
+ * Why a new chat started in the cloud rather than on the member's last
+ * choice on their computer: that harness cannot take a turn now, or the
+ * member's computers could not be read.
+ */
+export type ChatCloudStart = {
+  harness: ChatLocalRunHarness;
+  why:
+    | {
+        type: "unavailable";
+        state: Exclude<LocalRunTargetState, { type: "ready" }>;
+      }
+    | { type: "check_failed" };
+};
+
+/**
+ * Where a new chat whose member last chose `remembered` starts, once their
+ * computers are read: there while its harness can take a turn, in the cloud
+ * otherwise, with the reason the where chip gives. A model the harness no
+ * longer offers keeps the computer: the model chip says so, and the member
+ * picks another of that harness's models.
+ */
+export const newChatStart = (
+  remembered: ChatLocalRunTarget,
+  readiness: ChatLocalRunReadiness | "check_failed",
+):
+  | { type: "remembered"; target: ChatLocalRunTarget }
+  | { type: "cloud"; reason: ChatCloudStart } => {
+  if (readiness === "check_failed") {
+    return {
+      type: "cloud",
+      reason: { harness: remembered.harness, why: { type: "check_failed" } },
+    };
+  }
+  const state = localRunTargetState(readiness, remembered);
+  switch (state.type) {
+    case "ready":
+    case "model_unavailable":
+      return { type: "remembered", target: remembered };
+    case "harness":
+    case "not_allowed":
+    case "folder":
+    case "folder_pending":
+      return {
+        type: "cloud",
+        reason: {
+          harness: remembered.harness,
+          why: { type: "unavailable", state },
+        },
+      };
+    default:
+      state satisfies never;
+      return panic("Unknown local run target state");
+  }
 };

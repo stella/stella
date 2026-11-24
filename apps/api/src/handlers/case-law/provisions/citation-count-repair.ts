@@ -1,13 +1,13 @@
 import { panic } from "better-result";
 import { asc, eq, gt, type SQL, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisions,
   caseLawStatuteCitationCountState,
   STATUTE_CITATION_COUNT_STATE_KEY,
   STATUTE_CITATION_COUNT_STATUS,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { commitReplaySafeIngestionBatch } from "@/api/lib/replay-safe-ingestion";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
 

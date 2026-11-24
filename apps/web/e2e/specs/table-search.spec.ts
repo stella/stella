@@ -4,6 +4,11 @@ import path from "node:path";
 
 import { apiPut, apiStatus, apiUploadDocx } from "../helpers/api";
 import { createUploadedDocumentRoute } from "../helpers/document";
+import {
+  expectSavedView,
+  openSavedView,
+  savedViewTab,
+} from "../helpers/saved-views";
 import { expect, test } from "../helpers/test";
 import {
   PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
@@ -84,11 +89,9 @@ test.describe("find in table", () => {
       waitUntil: "domcontentloaded",
     });
 
-    const tableTab = page.getByRole("tab", { exact: true, name: "Table" });
-    await expect(tableTab).toBeVisible({
+    const tableTab = await openSavedView(page, "Table", {
       timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
-    await tableTab.click();
 
     const matchingRow = page.getByRole("button", {
       exact: true,
@@ -189,11 +192,9 @@ test.describe("find in table", () => {
     await page.goto(`/workspaces/${testWorkspace.id}/${testWorkspace.viewId}`, {
       waitUntil: "domcontentloaded",
     });
-    const tableTab = page.getByRole("tab", { exact: true, name: "Table" });
-    await expect(tableTab).toBeVisible({
+    await openSavedView(page, "Table", {
       timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
-    await tableTab.click();
     const otherRow = page.getByRole("button", { exact: true, name: otherName });
     await expect(otherRow).toBeVisible({
       timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
@@ -290,20 +291,22 @@ test.describe("find in table", () => {
       waitUntil: "domcontentloaded",
     });
 
-    const tableTab = page.getByRole("tab", { exact: true, name: "Table" });
-    const secondTab = page.getByRole("tab", {
-      exact: true,
-      name: secondViewName,
-    });
-    await expect(tableTab).toBeVisible({
+    const tableTab = savedViewTab(page, "Table");
+    const secondTab = savedViewTab(page, secondViewName);
+    await expectSavedView(page, "Table", {
       timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
-    await expect(secondTab).toBeVisible();
+    await expectSavedView(page, secondViewName);
 
     // Both views into history, ending on the first, so the switch below is a
     // back navigation.
-    await secondTab.click();
-    await tableTab.click();
+    //
+    // A switch changes the URL at once and keeps the outgoing view mounted
+    // until the target's loader settles. The selected tab is drawn by the
+    // view on screen, so it is what says a switch has landed; a press made
+    // before then reaches the outgoing view's bar, which the switch removes.
+    await openSavedView(page, secondViewName);
+    await openSavedView(page, "Table");
 
     const matchingRow = page.getByRole("button", {
       exact: true,
@@ -325,9 +328,13 @@ test.describe("find in table", () => {
     // assertions below already describe: the test cannot fail spuriously, it
     // can only stop exercising the race.
     await page.goBack({ waitUntil: "commit" });
+    await expect(secondTab).toHaveAttribute("aria-selected", "true");
     await expect(findInput).toBeHidden();
 
     await page.goForward({ waitUntil: "commit" });
+    await expect(tableTab).toHaveAttribute("aria-selected", "true", {
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_15_SECONDS_MS,
+    });
     await expect(
       page.getByRole("button", { exact: true, name: "alpha" }),
     ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_15_SECONDS_MS });
@@ -351,6 +358,9 @@ test.describe("find in table", () => {
     await expect(allColumnsRow).toBeVisible();
 
     await page.goBack({ waitUntil: "commit" });
+    await expect(secondTab).toHaveAttribute("aria-selected", "true");
+    // The view switched to never took the term.
+    await expect(otherRow).toBeVisible();
     await page.keyboard.press("ControlOrMeta+f");
     await expect(page.getByRole("searchbox")).toBeFocused();
     await expect(columnsToggle).toHaveAttribute("aria-expanded", "false");
@@ -398,11 +408,9 @@ test.describe("find in table", () => {
       waitUntil: "domcontentloaded",
     });
 
-    const tableTab = page.getByRole("tab", { exact: true, name: "Table" });
-    await expect(tableTab).toBeVisible({
+    await openSavedView(page, "Table", {
       timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
-    await tableTab.click();
     await expect(
       page.getByRole("button", { exact: true, name: rowName }),
     ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
@@ -503,11 +511,9 @@ test.describe("find in table", () => {
       waitUntil: "domcontentloaded",
     });
 
-    const tableTab = page.getByRole("tab", { exact: true, name: "Table" });
-    await expect(tableTab).toBeVisible({
+    await openSavedView(page, "Table", {
       timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
-    await tableTab.click();
 
     const row = page.getByRole("button", { exact: true, name: rowName });
     await expect(row).toBeVisible({

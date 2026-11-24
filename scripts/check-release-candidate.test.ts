@@ -2,8 +2,11 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const subject = new URL("check-release-candidate.sh", import.meta.url).pathname;
+const subject = fileURLToPath(
+  new URL("check-release-candidate.sh", import.meta.url),
+);
 const withCandidate = (
   verify: (
     root: string,
@@ -128,10 +131,26 @@ test("staging and heavy run the trusted candidate checker before source executio
     expect(field(field(helperCheckout, "with"), "ref")).toBe(
       `\${{ github.workflow_sha }}`,
     );
+    // The workflow revision's package.json only pins the Bun version the
+    // candidate verifier runs on.
     expect(field(field(helperCheckout, "with"), "sparse-checkout")).toBe(
-      "scripts/retry.sh",
+      "package.json\nscripts/retry.sh\n",
     );
     expect(field(helperStage, "name")).toBe("Stage network retry helper");
+    const names: unknown[] = Array.isArray(steps)
+      ? steps.map((value) => field(value, "name"))
+      : [];
+    const setupIndex = names.indexOf(
+      "Setup Bun for the release candidate check",
+    );
+    expect(setupIndex).toBeGreaterThan(
+      names.indexOf("Stage network retry helper"),
+    );
+    expect(setupIndex).toBeLessThan(names.indexOf("Check release candidate"));
+    const setup: unknown = Array.isArray(steps) ? steps[setupIndex] : undefined;
+    expect(field(field(setup, "with"), "bun-version-file")).toBe(
+      ".network-retry/package.json",
+    );
     const step: unknown = Array.isArray(steps)
       ? steps.find(
           (value) => field(value, "name") === "Check release candidate",

@@ -1,4 +1,6 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import type { InvokeArgs } from "@tauri-apps/api/core";
+import type { RenderResult } from "@testing-library/react";
 import { panic } from "better-result";
 import { afterAll, expect, test } from "bun:test";
 import fc from "fast-check";
@@ -21,10 +23,6 @@ const { clearMocks, mockIPC, mockWindows } =
 const { emit } = await import("@tauri-apps/api/event");
 const { DesktopIntlProvider, defaultMessages } = await import("../src/i18n");
 const { default: App } = await import("../src/mainview/App");
-
-afterAll(async () => {
-  await GlobalRegistrator.unregister();
-});
 
 type PreferenceKey = keyof DesktopNotificationPreferences;
 
@@ -58,17 +56,7 @@ const INITIAL_SNAPSHOT = {
   sessions: [],
   trustedSelfHostConnections: [],
   update: {
-    baseUrl: null,
-    channel: null,
-    currentHash: null,
     currentVersion: null,
-    lastCheckedAt: null,
-    latestHash: null,
-    latestVersion: null,
-    status: "idle",
-    statusMessage: "",
-    updateAvailable: false,
-    updateReady: false,
   },
 } satisfies AppSnapshot;
 
@@ -107,12 +95,21 @@ const isPreferences = (
     (key) => key in value && typeof Reflect.get(value, key) === "boolean",
   );
 
+type NativeCommand = (
+  command: string,
+  args: InvokeArgs | undefined,
+) => Promise<unknown>;
+
 /**
  * The native side as the window sees it: commands run in call order and each
  * change pushes `state-changed`; replies and pushes are held so the scheduler
- * picks when each lands, with pushes kept in emission order.
+ * picks when each lands, with pushes kept in emission order. Once closed, a
+ * push still held is dropped instead of emitted, so none reaches a window that
+ * was torn down.
  */
-const installBackend = (order: ResponseOrder) => {
+const createBackend = (order: ResponseOrder) => {
+  let open = true;
+  let stateReads = 0;
   let snapshot: AppSnapshot = INITIAL_SNAPSHOT;
   const pushes: AppSnapshot[] = [];
   const pushDeliveries: Promise<void>[] = [];
@@ -126,48 +123,57 @@ const installBackend = (order: ResponseOrder) => {
           "state-changed",
           () => pushes.shift() ?? panic("state-changed delivered twice"),
         )
-        .then(async (payload) => await emit("state-changed", payload)),
+        .then(async (payload) => {
+          if (!open) {
+            return undefined;
+          }
+          return await emit("state-changed", payload);
+        }),
     );
   };
-  mockWindows("main");
-  mockIPC(
-    async (command, args) => {
-      switch (command) {
-        case "get_state": {
-          const current = snapshot;
-          return await order.hold("get_state", () => current);
-        }
-        case "update_notification_preferences": {
-          const prefs: unknown = Reflect.get(args ?? {}, "prefs");
-          if (!isPreferences(prefs)) {
-            return panic("update_notification_preferences without prefs");
-          }
-          if (outcomes.shift() === "failed") {
-            return await order.hold("update_notification_preferences", () => {
-              throw new TypeError("Synthetic save failure");
-            });
-          }
-          snapshot = { ...snapshot, notificationPreferences: prefs };
-          pushStateChanged();
-          const reply = snapshot;
-          return await order.hold(
-            "update_notification_preferences",
-            () => reply,
-          );
-        }
-        case "account_get_state":
-          return ACCOUNT;
-        // Decides whether the Activity tab shows; this account has no timeline.
-        case "is_activity_enabled":
-          return false;
-        default:
-          unexpected.push(command);
-          return panic(`Unexpected native command: ${command}`);
+  const handle: NativeCommand = async (command, args) => {
+    switch (command) {
+      case "get_state": {
+        stateReads += 1;
+        const current = snapshot;
+        return await order.hold("get_state", () => current);
       }
-    },
-    { shouldMockEvents: true },
-  );
+      case "update_notification_preferences": {
+        const prefs: unknown = Reflect.get(args ?? {}, "prefs");
+        if (!isPreferences(prefs)) {
+          return panic("update_notification_preferences without prefs");
+        }
+        if (outcomes.shift() === "failed") {
+          return await order.hold("update_notification_preferences", () => {
+            throw new TypeError("Synthetic save failure");
+          });
+        }
+        snapshot = { ...snapshot, notificationPreferences: prefs };
+        pushStateChanged();
+        const reply = snapshot;
+        return await order.hold("update_notification_preferences", () => reply);
+      }
+      case "account_get_state":
+        return ACCOUNT;
+      // Decide whether the Activity and Dictation pages show; this account
+      // has neither.
+      case "is_activity_enabled":
+        return false;
+      case "dictation_get_snapshot":
+        return { available: false };
+      // Settings follows the updater from its first render.
+      case "updater_state":
+        return { revision: 1, state: { status: "idle" } };
+      default:
+        unexpected.push(command);
+        return panic(`Unexpected native command: ${command}`);
+    }
+  };
   return {
+    close: () => {
+      open = false;
+    },
+    handle,
     drainPushes: async () => {
       await Promise.all(pushDeliveries);
     },
@@ -175,14 +181,73 @@ const installBackend = (order: ResponseOrder) => {
       outcomes.push(outcome);
     },
     preferences: () => snapshot.notificationPreferences,
+    stateReads: () => stateReads,
     unexpected,
     unsentSaves: () => outcomes.length,
   };
 };
 
+const flushAct = async (run: () => Promise<void>) => {
+  await act(async () => {
+    await run();
+  });
+};
+
+type Backend = ReturnType<typeof createBackend>;
+
+// The window's event listeners live in the IPC mock, so one mock serves every
+// run and each run swaps in its own backend behind it.
+let backend: Backend | null = null;
+mockWindows("main");
+mockIPC(
+  async (command, args) =>
+    await (backend ?? panic(`Native command outside a run: ${command}`)).handle(
+      command,
+      args,
+    ),
+  { shouldMockEvents: true },
+);
+
+// Mounting the whole settings window is most of a run's cost, so it mounts
+// once. Every later run starts it over the way a changed account does: the
+// shown snapshot is dropped, every pending reply is outdated, and the state is
+// read again, now from that run's backend.
+let settingsWindow: RenderResult | null = null;
+const startWindow = async (): Promise<RenderResult> => {
+  const mounted =
+    settingsWindow ??
+    render(
+      <DesktopIntlProvider language="en" messages={defaultMessages}>
+        <App />
+      </DesktopIntlProvider>,
+    );
+  if (settingsWindow === null) {
+    settingsWindow = mounted;
+  } else {
+    await flushAct(async () => {
+      await emit("desktop-account-changed");
+    });
+  }
+  // Unheld replies (the account read) land inside this act scope.
+  await flushAct(async () => undefined);
+  return mounted;
+};
+
+afterAll(async () => {
+  backend?.close();
+  const mounted = settingsWindow;
+  if (mounted !== null) {
+    await act(async () => {
+      mounted.unmount();
+    });
+  }
+  clearMocks();
+  await GlobalRegistrator.unregister();
+});
+
 const rowFor = (container: HTMLElement, key: PreferenceKey) =>
-  [...container.querySelectorAll("label")].find((element) =>
-    element.textContent.includes(PREFERENCE_LABELS[key]),
+  [...container.querySelectorAll('[data-slot="settings-row"]')].find(
+    (element) => element.textContent.includes(PREFERENCE_LABELS[key]),
   ) ?? panic(`No notification row for ${key}`);
 
 // The labelled native input takes the click; the visible checkbox reports state.
@@ -195,12 +260,6 @@ const shownChecked = (container: HTMLElement, key: PreferenceKey) =>
     .querySelector('[role="checkbox"]')
     ?.getAttribute("aria-checked") === "true";
 
-const flushAct = async (run: () => Promise<void>) => {
-  await act(async () => {
-    await run();
-  });
-};
-
 test("notification preferences show the backend's newest state in every response order", async () => {
   await assertProperty(
     "notification preferences show the backend's newest state in every response order",
@@ -208,25 +267,22 @@ test("notification preferences show the backend's newest state in every response
       scenario: steps,
       act: flushAct,
       run: async (order, scenario) => {
-        const backend = installBackend(order);
-        const view = render(
-          <DesktopIntlProvider language="en" messages={defaultMessages}>
-            <App />
-          </DesktopIntlProvider>,
-        );
+        const current = createBackend(order);
+        backend = current;
         try {
-          // Unheld replies (the account read) land inside this act scope.
-          await flushAct(async () => undefined);
+          const view = await startWindow();
           await order.settle();
+          // The window starts from this run's backend, not the last run's.
+          expect(current.stateReads()).toBeGreaterThan(0);
           for (const step of scenario) {
             switch (step.type) {
               case "toggle":
-                backend.expectSave(step.outcome);
+                current.expectSave(step.outcome);
                 await flushAct(async () => {
                   fireEvent.click(toggleInput(view.container, step.key));
                 });
                 // Every click must issue its save before responses are released.
-                expect(backend.unsentSaves()).toBe(0);
+                expect(current.unsentSaves()).toBe(0);
                 break;
               case "release":
                 await order.releaseOne();
@@ -236,23 +292,20 @@ test("notification preferences show the backend's newest state in every response
             }
           }
           await order.settle();
-          await flushAct(backend.drainPushes);
+          await flushAct(current.drainPushes);
           const shown = Object.fromEntries(
             PREFERENCE_KEYS.map((key) => [
               key,
               shownChecked(view.container, key),
             ]),
           );
-          expect(backend.unsentSaves()).toBe(0);
-          expect(shown).toEqual(backend.preferences());
-          expect(backend.unexpected).toEqual([]);
+          expect(current.unsentSaves()).toBe(0);
+          expect(shown).toEqual(current.preferences());
+          expect(current.unexpected).toEqual([]);
         } finally {
           await order.settle();
-          await flushAct(backend.drainPushes);
-          await flushAct(async () => {
-            view.unmount();
-          });
-          clearMocks();
+          await flushAct(current.drainPushes);
+          current.close();
         }
       },
     }),

@@ -3,7 +3,6 @@ import { and, asc, eq, gt, inArray, isNull, not } from "drizzle-orm";
 
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,
@@ -12,14 +11,15 @@ import {
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
-  CORPUS_INDEX_MANIFESTS,
   type CorpusIndexManifest,
   corpusIndexManifestScopeJurisdictions,
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { registeredCorpusIndexGenerationsQuery } from "@/api/lib/legal-search/corpus-index-projected-generations";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import {
   buildCorpusIndexProjectionDesiredStateValues,
@@ -283,7 +283,9 @@ const selectUnprojectable = async (
  * Which of the page's unprojectable ids have a desired state in some
  * generation of the family. Those are owed one in this generation too; the
  * rest are shown by no generation and wait for their settle transaction. A
- * primary-key probe per declared generation, bounded by the page.
+ * primary-key probe per registered generation, bounded by the page. The
+ * registry names the generations, not this process: a state held only by a
+ * generation a newer release registered counts as well.
  */
 const selectProjectedAnywhere = async (
   tx: Transaction,
@@ -293,9 +295,7 @@ const selectProjectedAnywhere = async (
   if (entityIds.length === 0) {
     return new Set();
   }
-  const generations = Object.values(CORPUS_INDEX_MANIFESTS).flatMap(
-    (manifest) => (manifest.family === family ? [manifest.generation] : []),
-  );
+  const generations = registeredCorpusIndexGenerationsQuery(tx, family);
   const rows = await tx
     .selectDistinct({ entityId: corpusIndexProjectionStates.entityId })
     .from(corpusIndexProjectionStates)
@@ -516,6 +516,25 @@ const runCorpusBootstrapPage = async <
   };
 };
 
+/*
+ * The page's source lock. A page reads every source its range touches and
+ * holds it to commit, so its lock must not wait on what writers do to a
+ * source row all the time: lease renewals, observation orders, checkpoints
+ * and totals are plain updates, and a share lock waits on each of them (and
+ * a page that waits past its lock timeout is refused whole). A key-share lock
+ * waits on none of them, and still keeps the source row from being deleted
+ * or re-keyed under the page, which is all the join needs.
+ *
+ * A source-policy change does not wait on the page either, and does not need
+ * to: the page locks every decision it seeds for update, and the sweep that
+ * follows a policy change (`reconcileCorpusProjectionDesiredStateTx`) locks
+ * each decision for update before it re-derives the decision's states. So for
+ * each decision the sweep either runs after the page committed and rewrites
+ * what the page wrote from the old policy, or runs before the page locked it
+ * and leaves a state the page then finds and skips. Canonical writers keep
+ * the share lock: they write the decision, not only its states.
+ */
+
 /** The validated options one family's page runs on. */
 type FamilyBootstrapOptions<TEntityId extends string> = {
   tx: Transaction;
@@ -574,9 +593,7 @@ const bootstrapCaseLaw = async ({
         )
         .orderBy(asc(caseLawDecisions.id))
         .limit(limit)
-        // Canonical mutations lock source policy before the decision. Bootstrap
-        // uses the same order; a short policy update may delay this bounded claim.
-        .for("share", { of: caseLawSources }),
+        .for("key share", { of: caseLawSources }),
     lockUnseededRows: async (unseededIds) =>
       await tx
         .select({
@@ -759,7 +776,7 @@ const bootstrapLegislation = async ({
         )
         .orderBy(asc(legislationDocuments.id))
         .limit(limit)
-        .for("share", { of: legislationSources }),
+        .for("key share", { of: legislationSources }),
     lockUnseededRows: async (unseededIds) =>
       await tx
         .select({

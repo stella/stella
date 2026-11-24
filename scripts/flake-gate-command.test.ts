@@ -11,7 +11,7 @@ const packageManifestSchema = v.object({
   ciGateTestRunners: v.optional(v.record(v.string(), v.unknown()), {}),
 });
 
-test("preserves quoted Bun test flags and values while dropping positional selectors", () => {
+test("preserves quoted Bun test flags and values while capturing positional selectors", () => {
   expect(
     parseBunTestScript(
       `bun test --preload "setup fixtures.ts" --timeout 9000 -t 'GET /cases' src/old.test.ts`,
@@ -26,6 +26,7 @@ test("preserves quoted Bun test flags and values while dropping positional selec
       "-t",
       "GET /cases",
     ],
+    filters: ["src/old.test.ts"],
   });
 });
 
@@ -37,6 +38,7 @@ test("the test-runner -- terminator drops every following token", () => {
   ).toEqual({
     type: "supported",
     flags: ["--preload", "setup.ts"],
+    filters: ["src/old.test.ts"],
   });
 });
 
@@ -126,12 +128,27 @@ test("the generic parser records unsupported shell shapes independently of dedic
         "script": "packages/cli/package.json:test",
       },
       {
+        "command": "bun run test:bun && bash ../../scripts/cargo-test.sh",
+        "reason": "shell-syntax",
+        "script": "packages/heic-decoder/package.json:test",
+      },
+      {
         "command": "bun ../../scripts/prepare-mcp-apps.ts && bun test",
         "reason": "shell-syntax",
         "script": "packages/mcp-apps/package.json:test",
       },
       {
-        "command": "bun run test:bun && cargo test",
+        "command": "bun run test:bun && bash ../../scripts/cargo-test.sh --features assemble",
+        "reason": "shell-syntax",
+        "script": "packages/pst-reader/package.json:test",
+      },
+      {
+        "command": "bun run test:bun && bash ../../scripts/cargo-test.sh",
+        "reason": "shell-syntax",
+        "script": "packages/recording-wasm/package.json:test",
+      },
+      {
+        "command": "bun run test:bun && bash ../../scripts/cargo-test.sh",
         "reason": "shell-syntax",
         "script": "packages/scan-engine/package.json:test",
       },

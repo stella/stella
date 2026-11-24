@@ -4,7 +4,7 @@ import {
   type LegislationExpressionKind,
 } from "@stll/api-contract/legislation-expression";
 
-import type { McpToolName } from "@/api/lib/api-handlers";
+import type { McpToolName } from "@/api/http/handler-config-types";
 import { PROVISION_READ_STATUSES } from "@/api/lib/legal-search/legislation-provision-vocabulary";
 import { LIMITS } from "@/api/lib/limits";
 import type { McpMode } from "@/api/mcp/constants";
@@ -129,6 +129,10 @@ const WORKFLOW_STEPS: readonly ReferenceSection[] = [
       `read. A \`${PROMULGATED}\` entry is the text as first published, ` +
       "kept as history: it never applied, even when " +
       `\`${LEGISLATION_APPLICABLE_WINDOW_DISPOSITION}\`. ` +
+      "A work the corpus holds only as published, with no consolidation, " +
+      "is read as that text on any date from its publication, and the " +
+      `reply says \`expressionKind: ${PROMULGATED}\`: quote it as the text ` +
+      "as published, never as the text in force. " +
       "An ELI the corpus does not hold, a date no " +
       "consolidation covers, and a date the publisher's own inconsistent " +
       "dates leave without an in-force reading are different answers, and " +
@@ -153,7 +157,9 @@ const WORKFLOW_STEPS: readonly ReferenceSection[] = [
       `under \`status\`: ${PROVISION_READ_STATUSES.join(", ")}. Only ` +
       "`found` carries `text`; `invalid` carries that entry's own `issues[]` " +
       "and the rest carry a `message` saying what to change, so resend only " +
-      "the entries the reply names. Provision text is cut at " +
+      "the entries the reply names. A `found` entry carries the same " +
+      "`expressionKind` and `windowDisposition` as the statute it was read " +
+      "from. Provision text is cut at " +
       `${LIMITS.legislationProvisionTextChars} characters with ` +
       "`truncated` set; when `nextTextCursor` is present, pass it as " +
       "`text_cursor` on the same entry and concatenate the text windows until " +

@@ -1,4 +1,4 @@
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools-types";
 import {
   type CreateDocumentDraft,
   selectCreateDocumentDrafts,

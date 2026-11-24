@@ -53,7 +53,7 @@ import {
   type LookupRegistry,
 } from "@/components/templates/template-field-manifest";
 import Tooltip from "@/components/tooltip";
-import { useFormattingLocale } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { LANG_ENDONYMS } from "@/i18n/i18n-store";
 import type { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
@@ -378,6 +378,7 @@ const CompanyLookupConfig = ({
   onUpdate: (patch: Partial<TemplateEditableField>) => void;
 }) => {
   const t = useTranslations();
+  const formatter = useFormatter();
   const locale = useFormattingLocale();
   const registry = field.lookup?.registry ?? preferredRegistry(locale);
   const formats = optionalArray(field.lookup?.formats);
@@ -479,6 +480,9 @@ const CompanyLookupConfig = ({
         <Button
           className="self-start"
           disabled={formats.length >= LOOKUP_FORMATS_MAX}
+          disabledReason={t("templates.lookupFormatLimit", {
+            max: formatter.number(LOOKUP_FORMATS_MAX),
+          })}
           onClick={addFormat}
           size="sm"
           type="button"

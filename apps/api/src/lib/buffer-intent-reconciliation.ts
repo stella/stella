@@ -7,8 +7,7 @@ import {
 } from "@stll/api-contract/workspace-status";
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import {
   BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
   bufferObjectCleanupIntents,
@@ -17,18 +16,20 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { PendingUploadPurposeData } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  organizationObjectIntentLockKey,
-  withAggregateRowQuery,
-} from "@/api/lib/db/aggregate-lock";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { createFileKey } from "@/api/lib/file-key";
 import {
   type DeleteOrganizationFileError,
   deleteOrganizationFileWithSignal,
 } from "@/api/lib/files/delete-organization-file";
+import {
+  insertWritingObjectCleanupIntents,
+  lockOrganizationObjectIntentsForWriter,
+} from "@/api/lib/files/object-cleanup-intent-fence";
 import type { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
@@ -36,6 +37,8 @@ import { S3_OBJECT_WRITE_CERTAINTY } from "@/api/lib/s3";
 import type { S3ObjectWriteCertainty } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
 import type { LegalHoldActiveError } from "@/api/lib/workspaces/legal-holds/errors";
+
+export { lockOrganizationObjectIntentsForWriter } from "@/api/lib/files/object-cleanup-intent-fence";
 
 type DeleteObject = (
   key: string,
@@ -156,15 +159,6 @@ class BufferIntentOwnershipError extends TaggedError(
   "BufferIntentOwnershipError",
 )<{ message: string }> {}
 
-export const lockOrganizationObjectIntentsForWriter = async (
-  tx: Transaction,
-  organizationId: SafeId<"organization">,
-): Promise<void> => {
-  await tx.execute(
-    sql`SELECT pg_advisory_xact_lock_shared(hashtext(${organizationObjectIntentLockKey(organizationId)}))`,
-  );
-};
-
 type ActiveWorkspaceBufferIntentOptions = {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
@@ -250,6 +244,8 @@ export const reserveObjectCleanupIntents = async ({
     await lockOrganizationObjectIntentsForWriter(tx, organizationId);
 
     if (uniqueWorkspaceIds.length > 0) {
+      // Readers keep the shared matter lock they take today; publication
+      // takes the matter's update lock first, through the aggregate owner.
       const lockedWorkspaces = await tx
         .select({ id: workspaces.id, status: workspaces.status })
         .from(workspaces)
@@ -275,8 +271,8 @@ export const reserveObjectCleanupIntents = async ({
         });
       }
     }
-    // audit: skip; crash-recovery ownership for the later audited mutation.
-    await tx.insert(bufferObjectCleanupIntents).values(
+    await insertWritingObjectCleanupIntents(
+      tx,
       intents.map(({ id, objectKey, ownerWorkspaceId }) => ({
         chatThreadId: chatThreadId ?? null,
         id,
@@ -286,7 +282,6 @@ export const reserveObjectCleanupIntents = async ({
         ),
         objectKey,
         organizationId,
-        status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,
         workspaceId: ownerWorkspaceId,
       })),
     );

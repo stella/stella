@@ -3,6 +3,7 @@ import {
   parseCiBrowserSuiteLegs,
 } from "./ci-browser-suites";
 
+export const DESKTOP_BROWSER_SHARD_COUNT = 3;
 export const UI_PLAYGROUND_SHARD_COUNT = 6;
 
 export type UiPlaygroundMatrixLeg = {
@@ -37,6 +38,12 @@ const playgroundLegs = (
   return legs;
 };
 
+const desktopLegs = (count: number): UiPlaygroundMatrixLeg[] =>
+  Array.from({ length: count }, (_, index) => ({
+    suite: `desktop-${index + 1}`,
+    specs: [],
+  }));
+
 export const planUiPlaygroundMatrix = ({
   selectedSpecs,
   allSpecs,
@@ -46,19 +53,22 @@ export const planUiPlaygroundMatrix = ({
 }: PlanUiPlaygroundMatrixOptions): UiPlaygroundMatrixLeg[] => {
   if (eventName !== "pull_request") {
     return [
-      { suite: "desktop", specs: [] },
+      ...desktopLegs(DESKTOP_BROWSER_SHARD_COUNT),
       { suite: "ui", specs: [] },
       ...playgroundLegs(allSpecs, UI_PLAYGROUND_SHARD_COUNT),
     ];
   }
 
-  // The desktop leg runs its whole suite; changed-spec legs carry their
-  // specs. An empty selection keeps one leg so the matrix stays valid.
+  // Desktop legs shard the desktop Playwright suite; changed-spec legs carry
+  // their specs. An empty selection keeps one leg so the matrix stays valid.
+  let initialDesktopLegs: UiPlaygroundMatrixLeg[] = [];
+  if (desktopRequired) {
+    initialDesktopLegs = desktopLegs(DESKTOP_BROWSER_SHARD_COUNT);
+  } else if (selectedSpecs.length === 0 && suiteLegs.length === 0) {
+    initialDesktopLegs = [{ suite: "desktop-1", specs: [] }];
+  }
   const fixedLegs = [
-    ...(desktopRequired ||
-    (selectedSpecs.length === 0 && suiteLegs.length === 0)
-      ? [{ suite: "desktop", specs: [] }]
-      : []),
+    ...initialDesktopLegs,
     ...suiteLegs.map(({ suite, specs }) => ({ suite, specs })),
   ];
   if (selectedSpecs.length === 0) {

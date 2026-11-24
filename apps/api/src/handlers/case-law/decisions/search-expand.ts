@@ -10,10 +10,10 @@ import {
   isWholeEntryIdentifier,
   parseDecisionQuery,
 } from "@stll/api-contract/decision-query-intent";
-import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
+import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/decision-reporter-grammar";
 import { Temporal } from "@stll/time";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { envBase } from "@/api/env-base";
 import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";

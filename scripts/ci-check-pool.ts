@@ -41,6 +41,7 @@ import { constrainedMemory } from "node:process";
 import {
   CHECK_POOL_JOBS,
   checkBudgetMinutes,
+  checkBudgetP95Seconds,
   type CheckBudgets,
   checkPeakRssMiB,
   type CheckPoolJob,
@@ -572,7 +573,10 @@ const processTable = (): ProcessRow[] => {
   }
   const listed = Bun.spawnSync(
     ["ps", "-A", "-S", "-o", "pid=,ppid=,pgid=,time="],
-    { stdout: "pipe", stderr: "pipe" },
+    {
+      stdout: "pipe",
+      stderr: "pipe",
+    },
   );
   if (listed.exitCode !== 0) {
     throw new CheckPoolError(`ps failed: ${listed.stderr.toString()}`);
@@ -1129,6 +1133,7 @@ export const selectChecks = (
 export const partitionChecks = (
   checks: readonly PoolCheck[],
   partition: string | undefined,
+  weight?: (check: PoolCheck) => number,
 ): PoolCheck[] => {
   if (partition === undefined) {
     return [...checks];
@@ -1147,7 +1152,31 @@ export const partitionChecks = (
       "CI_CHECK_POOL_PARTITION must have the form <index>/<count>",
     );
   }
-  return checks.filter((_, checkIndex) => checkIndex % count === index - 1);
+  if (weight === undefined) {
+    return checks.filter((_, checkIndex) => checkIndex % count === index - 1);
+  }
+  const totals = Array.from({ length: count }, () => 0);
+  const assigned = Array.from({ length: checks.length }, () => 0);
+  const ordered = checks
+    .map((check, checkIndex) => ({
+      checkIndex,
+      weight: Math.max(0, weight(check)),
+    }))
+    .toSorted(
+      (left, right) =>
+        right.weight - left.weight || left.checkIndex - right.checkIndex,
+    );
+  for (const item of ordered) {
+    let bestBin = 0;
+    for (let bin = 1; bin < count; bin += 1) {
+      if ((totals[bin] ?? 0) < (totals[bestBin] ?? 0)) {
+        bestBin = bin;
+      }
+    }
+    totals[bestBin] = (totals[bestBin] ?? 0) + item.weight;
+    assigned[item.checkIndex] = bestBin;
+  }
+  return checks.filter((_, checkIndex) => assigned[checkIndex] === index - 1);
 };
 
 /** The workflow that declares every pooled job; a test binds the two. */
@@ -1450,10 +1479,12 @@ const main = async () => {
     steps: json(process.env["CI_CHECK_POOL_STEPS"], "steps context"),
     inputs: json(process.env["CI_CHECK_POOL_INPUTS"], "inputs context"),
   });
+  const budgets = readCheckBudgets(root);
   const planned = planChecks(
     partitionChecks(
       selectChecks(readCheckPool(job), value),
       process.env["CI_CHECK_POOL_PARTITION"],
+      (check) => checkBudgetP95Seconds(budgets, job, check.name),
     ),
     context,
   );
@@ -1464,7 +1495,6 @@ const main = async () => {
     ? Number(override)
     : Math.max(1, availableParallelism() - 1);
   const selected = planned.filter(({ status }) => status === "selected").length;
-  const budgets = readCheckBudgets(root);
   const runnerBytes = runnerMemoryBytes(totalmem(), constrainedMemory());
   const memory: MemoryAdmission = {
     budgetMiB: memoryBudgetMiB(runnerBytes),

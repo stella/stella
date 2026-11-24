@@ -4,7 +4,6 @@ import { and, asc, eq } from "drizzle-orm";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import {
   BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
   bufferObjectCleanupIntents,
@@ -13,6 +12,7 @@ import {
   folioCollabPublications,
   folioCollabRooms,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -24,6 +24,7 @@ import {
 } from "@/api/lib/buffer-intent-reconciliation";
 import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { COLLABORATION_DOCUMENT_SOURCE } from "@/api/lib/document-source";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
 import type { WriteFileVersionResult } from "@/api/lib/entity-versions/write-file-version";
@@ -514,6 +515,8 @@ export const publishCheckpointInTransaction = async ({
   const fieldId = createSafeId<"field">();
   const nextCheckpointFileId = createSafeId<"userFile">();
   const versionWrite = await writeFileVersion({
+    // The publish request authorized the member before this transaction.
+    authority: CALLER_AUTHORIZED,
     afterWrite: async ({ versionNumber }) => {
       await recordRoomPublication({
         checkpointKey,

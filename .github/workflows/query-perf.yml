@@ -31,6 +31,10 @@ jobs:
       !(github.event_name == 'workflow_dispatch'
       && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@'))
       || github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -58,7 +62,7 @@ jobs:
           ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -84,3 +88,4 @@ jobs:
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           STELLA_RUN_QUERY_PERF_TESTS: "true"
+          QUERY_PERF_SHARD: ${{ matrix.shard }}

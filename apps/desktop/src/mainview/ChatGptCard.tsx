@@ -1,5 +1,6 @@
 import { useTranslations } from "use-intl";
 
+import { OpenAILogoIcon } from "@stll/ui/brand-icons";
 import { Button } from "@stll/ui/button";
 
 import type {
@@ -27,7 +28,10 @@ export const ChatGptCard = ({
     <div className="space-y-3 px-4 py-3">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">{t("chatGpt")}</p>
+          <p className="flex items-center gap-2 text-sm font-medium">
+            <OpenAILogoIcon className="size-4 shrink-0" />
+            <span>{t("chatGpt")}</span>
+          </p>
           <p className="text-muted-foreground mt-1 text-sm leading-relaxed text-pretty">
             {t(statusMessage(status), {
               email: status.state === "connected" ? (status.email ?? "") : "",

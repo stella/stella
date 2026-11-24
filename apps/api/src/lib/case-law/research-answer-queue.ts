@@ -2,8 +2,8 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import { answerNeedsRun } from "@stll/api-contract";
 
-import type { Transaction } from "@/api/db/root";
 import { caseLawResearchAnswers } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";

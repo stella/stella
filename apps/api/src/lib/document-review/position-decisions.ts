@@ -12,8 +12,8 @@
 
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DOCUMENT_REVIEW_DECISION } from "@/api/lib/document-review/run-contract";
 import { authorizedWorkspaceIdSubquery } from "@/api/lib/workspaces/authorized-workspace-ids";

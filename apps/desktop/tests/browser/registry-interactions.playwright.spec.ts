@@ -143,17 +143,7 @@ const SETTINGS_SNAPSHOT = {
   sessions: [],
   trustedSelfHostConnections: [],
   update: {
-    baseUrl: null,
-    channel: null,
-    currentHash: null,
     currentVersion: null,
-    lastCheckedAt: null,
-    latestHash: null,
-    latestVersion: null,
-    status: "idle",
-    statusMessage: "",
-    updateAvailable: false,
-    updateReady: false,
   },
 } satisfies AppSnapshot;
 type Audit = {
@@ -233,6 +223,7 @@ const installNativeBoundary = async (
           },
           expiresAt: CONNECTED_EXPIRES_AT,
           server: ACCOUNT_SERVER,
+          avatar: null,
         }
       : { status: connection.status, server: ACCOUNT_SERVER }
   ) satisfies DesktopAccountSnapshot;
@@ -322,6 +313,7 @@ const installNativeBoundary = async (
           welcomeStatus: "completed",
         }),
         get_state: () => settingsSnapshot,
+        updater_state: () => ({ revision: 1, state: { status: "idle" } }),
         dictation_get_snapshot: () => ({ available: false }),
         shortcut_get_snapshot: () => ({
           defaultKeys: { code: "KeyV", modifiers: ["shift", "super"] },
@@ -332,6 +324,7 @@ const installNativeBoundary = async (
         // No connection status: the section stays hidden, as with local agents off.
         chatgpt_auth_get_status: () => null,
         claude_code_auth_get_status: () => null,
+        antigravity_get_status: () => null,
         // No install status either, read the same as the refusal with local agents off.
         harness_get_status: () => null,
         local_skill_folders_get: () => null,
@@ -835,6 +828,24 @@ test("waits for composition to end before sending edited registry queries", asyn
       command: "registry_search",
       args: { query: "Composed", registry: "ares" },
     });
+});
+
+test("the empty registry search names the selected registry", async ({
+  page,
+}) => {
+  await openClipboard(page);
+  await activateRegistry(page, "");
+  const hint = (registry: string) =>
+    enMessages.clipboard.registrySearchHint.replace(
+      "{registry}",
+      () => `⁨${registry}⁩`,
+    );
+  await expect(page.getByText(hint("Czech commercial registry"))).toBeVisible();
+  await page
+    .getByRole("button", { name: enMessages.clipboard.registrySelect })
+    .click();
+  await page.getByRole("menuitemradio", { name: "Companies House" }).click();
+  await expect(page.getByText(hint("Companies House"))).toBeVisible();
 });
 
 test("repeats the current query for a deliberately selected registry", async ({
@@ -1375,8 +1386,11 @@ for (const language of ["en", "ar"] as const) {
         { settings: true },
       );
       await page.goto("/#general");
+      // The sidebar names the state too; the badge is the General page's.
       await expect(
-        page.getByText(messages.settings.connectionExpired, { exact: true }),
+        page
+          .locator("[data-slot=settings-page]")
+          .getByText(messages.settings.connectionExpired, { exact: true }),
       ).toBeVisible();
       await expect(
         page.getByText(withHost(messages.settings.reconnectHostDescription), {
@@ -1451,10 +1465,14 @@ for (const language of ["en", "ar"] as const) {
           }
           const area = surface === "welcome" ? page.getByRole("dialog") : page;
           if (surface === "settings") {
+            // The sidebar names the state too; the badge is the General
+            // page's.
             await expect(
-              page.getByText(messages.settings.reconnectNeeded, {
-                exact: true,
-              }),
+              page
+                .locator("[data-slot=settings-page]")
+                .getByText(messages.settings.reconnectNeeded, {
+                  exact: true,
+                }),
             ).toBeVisible();
           }
           await area
@@ -1687,24 +1705,27 @@ for (const language of ["en", "ar"] as const) {
       test(`${status} Settings header keeps its complete subtitle at the native window size`, async ({
         page,
       }) => {
-        await page.setViewportSize({ width: 480, height: 460 });
+        // The smallest the settings window can be made.
+        await page.setViewportSize({ width: 640, height: 460 });
         await installNativeBoundary(
           page,
           status === "connected" ? connected() : { status: "disconnected" },
           { settings: true },
         );
         await page.goto("/#general");
-        const subtitle = page.getByText(
+        const settingsPage = page.locator("[data-slot=settings-page]");
+        const subtitle =
           status === "connected"
-            ? "member@example.test"
-            : withHost(messages.settings.connectToHostDescription),
-          { exact: true },
-        );
+            ? settingsPage.locator("#desktop-account-description")
+            : settingsPage.getByText(
+                withHost(messages.settings.connectToHostDescription),
+                { exact: true },
+              );
         await expect(subtitle).toHaveCount(1);
         await expect(subtitle).toBeVisible();
         if (status === "connected") {
           await expect(
-            page.getByText("Synthetic Member", { exact: true }),
+            settingsPage.getByText("Synthetic Member", { exact: true }),
           ).toBeVisible();
         } else {
           await expect(
@@ -1714,9 +1735,13 @@ for (const language of ["en", "ar"] as const) {
             }),
           ).toHaveCount(1);
         }
+        if (status === "connected") {
+          await expect(subtitle).toContainText("member@example.test");
+        }
+        // The email and server read left to right in any interface language.
         await expect(subtitle).toHaveCSS(
           "direction",
-          language === "ar" ? "rtl" : "ltr",
+          language === "ar" && status === "disconnected" ? "rtl" : "ltr",
         );
         const geometry = await subtitle.evaluate((element) => {
           const style = getComputedStyle(element);
@@ -1803,7 +1828,11 @@ test("foreground Settings interactions record use without passing event data", a
   await installNativeBoundary(page, connected(), { settings: true });
   await page.goto("/#general");
   await page
-    .getByRole("tab", { name: enMessages.settings.general, exact: true })
+    .getByRole("navigation")
+    .getByRole("button", {
+      name: enMessages.settings.pages.general,
+      exact: true,
+    })
     .click();
   await expect
     .poll(async () =>

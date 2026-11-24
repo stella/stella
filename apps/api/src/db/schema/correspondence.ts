@@ -1,5 +1,6 @@
 import type { SQLWrapper } from "drizzle-orm";
 
+import type { CertifiedEmailEnvelope } from "@stll/api-contract/certified-email";
 import {
   CORRESPONDENCE_AUTH_RESULTS,
   CORRESPONDENCE_CHANNELS,
@@ -148,6 +149,11 @@ export const correspondence = p.pgTable.withRLS(
     messageId: p.text("message_id"),
     // A data-box message's envelope as stated in its file; null for email.
     dataBox: jsonb("data_box_envelope").$type<DataBoxStatedEnvelope>(),
+    // A certified email's certification data as stated in its file; null
+    // on the other channels.
+    certifiedEmail: jsonb(
+      "certified_email_envelope",
+    ).$type<CertifiedEmailEnvelope>(),
     contentHash: p.varchar("content_hash", { length: 64 }).notNull(),
     dedupKey: p.varchar("dedup_key", { length: 64 }).notNull(),
     from: jsonb("sender").$type<CorrespondenceAddress>().notNull(),
@@ -250,7 +256,7 @@ export const correspondence = p.pgTable.withRLS(
     ),
     p.check(
       "correspondence_direction_check",
-      sql`((${table.channel} = 'email' and ${table.direction} in (${valuesSql(CORRESPONDENCE_DIRECTIONS)})) or (${table.channel} = 'data_box' and ${table.direction} is null)) is true`,
+      sql`((${table.channel} <> 'data_box' and ${table.direction} in (${valuesSql(CORRESPONDENCE_DIRECTIONS)})) or (${table.channel} = 'data_box' and ${table.direction} is null)) is true`,
     ),
     p.check(
       "correspondence_channel_check",
@@ -259,6 +265,11 @@ export const correspondence = p.pgTable.withRLS(
     p.check(
       "correspondence_data_box_check",
       sql`((${table.channel} = 'data_box') = (${table.dataBox} is not null) and (${table.channel} <> 'data_box' or (${table.source} = 'upload' and ${table.messageId} is not null and jsonb_typeof(${table.dataBox}) = 'object' and ${table.dataBox}->>'messageId' = ${table.messageId} and not (${table.dataBox} ? 'directionBasis')))) is true`,
+    ),
+    // A certified email is only ever read from an uploaded file.
+    p.check(
+      "correspondence_certified_email_check",
+      sql`((${table.channel} = 'pec') = (${table.certifiedEmail} is not null) and (${table.channel} <> 'pec' or (${table.source} = 'upload' and jsonb_typeof(${table.certifiedEmail}) = 'object' and ${table.certifiedEmail}->>'system' = 'pec'))) is true`,
     ),
     p.check(
       "correspondence_handling_check",

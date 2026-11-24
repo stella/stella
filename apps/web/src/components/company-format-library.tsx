@@ -248,6 +248,7 @@ export const CompanyFormatPicker = ({ library }: CompanyFormatLibraryProps) => {
           <Button
             variant="ghost"
             disabled={library.saved.isFetchingNextPage}
+            disabledReason={t("caseLaw.loadingMore")}
             onClick={() =>
               detached(
                 library.saved.fetchNextPage(),
@@ -298,6 +299,11 @@ export const CompanyFormatLibrary = ({
               size="sm"
               variant="outline"
               disabled={isDefault || library.setDefault.isPending}
+              disabledReason={
+                library.setDefault.isPending
+                  ? t("common.saving")
+                  : t("templates.lookupOrganizationDefaultUnchanged")
+              }
               onClick={() =>
                 library.setDefault.mutate(library.selected?.id ?? null)
               }
@@ -315,6 +321,11 @@ export const CompanyFormatLibrary = ({
               isMyDefault ||
               (clearsMyDefault && library.userDefaultFormat === null) ||
               library.setMyDefault.isPending
+            }
+            disabledReason={
+              library.setMyDefault.isPending
+                ? t("common.saving")
+                : t("templates.lookupPersonalDefaultUnchanged")
             }
             onClick={() =>
               library.setMyDefault.mutate(library.selected?.id ?? null)
@@ -344,6 +355,11 @@ export const CompanyFormatLibrary = ({
               library.create.isPending ||
               library.name.trim() === "" ||
               library.format.trim() === ""
+            }
+            disabledReason={
+              library.create.isPending
+                ? t("common.saving")
+                : t("templates.enterLookupFormatDetails")
             }
             onClick={() =>
               library.create.mutate({

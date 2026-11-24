@@ -1,8 +1,8 @@
 import { sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { legalListVerificationRuns } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   VERIFICATION_PIPELINE_VERSION,
   VERIFICATION_RUN_ACTIVE_STATUSES,

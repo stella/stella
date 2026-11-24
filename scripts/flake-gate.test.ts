@@ -22,6 +22,8 @@ import {
   BUDGET_MS,
   executeGate,
   failureAnnotation,
+  gateBudgetMs,
+  JOB_REPEAT_WINDOW_MS,
   MAX_CHANGED_TEST_FILES,
   planRepeats,
   renderReport,
@@ -48,15 +50,22 @@ test("CI repeats changed tests only on pull requests in one existing test shard"
     new URL("../.github/workflows/ci.yml", import.meta.url),
   ).text();
   expect(source).toContain("github.event_name == 'pull_request'");
-  expect(source).toContain("matrix.shard == 'rest-web'");
+  expect(source).toContain("matrix.shard == 'rest'");
   expect(source).toContain(
     [
       `cat > "$RUNNER_TEMP/changed-files.json" <<'CHANGED_FILES_JSON'\n`,
       "          $",
       "{{ needs.ci-plan.outputs.changed_files }}\n",
       "          CHANGED_FILES_JSON\n",
-      `          CHANGED_FILES_PATH="$RUNNER_TEMP/changed-files.json" bun scripts/flake-gate.ts --blocking`,
     ].join(""),
+  );
+  // The repeats end before the job's timeout: the shard's runner step starts
+  // the clock the gate reads.
+  expect(source).toContain(
+    `run: nproc; free -g; date +CI_T0=%s%3N>>"$GITHUB_ENV"`,
+  );
+  expect(source).toContain(
+    `CHANGED_FILES_PATH="$RUNNER_TEMP/changed-files.json" bun scripts/flake-gate.ts --blocking`,
   );
   expect(source).not.toContain("CHANGED_FILES_JSON: $");
   // Repeated tests read the API runtime their own jobs generate.
@@ -349,7 +358,10 @@ test.each(["api", "web"] as const)(
       const target = { ...targetFor(root), runner };
       expect(
         await runOnce({ target, seed: 11, timeoutMs: 10_000 }),
-      ).toMatchObject({ passed: true, ranTests: true });
+      ).toMatchObject({
+        passed: true,
+        ranTests: true,
+      });
       write(root, "empty.ts", 'console.log("0 pass");');
       expect(
         await runOnce({
@@ -361,6 +373,34 @@ test.each(["api", "web"] as const)(
     });
   },
 );
+
+test("a Bun file whose every test is skipped on this runner is not gated", async () => {
+  await withFixture(async (root) => {
+    write(
+      root,
+      "fixture.test.ts",
+      'import {test} from "bun:test"; test.skipIf(true)("needs a browser", () => {});',
+    );
+    expect(
+      await runOnce({ target: targetFor(root), seed: 11, timeoutMs: 10_000 }),
+    ).toEqual({
+      type: "no-tests",
+      reason: "not gated (every test is skipped on this runner)",
+    });
+    write(
+      root,
+      "fixture.test.ts",
+      'import {test} from "bun:test"; test.skipIf(true)("needs a browser", () => {}); test("runs", () => {});',
+    );
+    expect(
+      await runOnce({ target: targetFor(root), seed: 11, timeoutMs: 10_000 }),
+    ).toMatchObject({
+      type: "executed",
+      passed: true,
+      ranTests: true,
+    });
+  });
+});
 
 test("a failed Bun trial exposes its captured failure without changing its verdict", async () => {
   await withFixture(async (root) => {
@@ -428,6 +468,46 @@ test("the gate reports bounded output only for the first failed trial of each fi
   expect(reportExitCode(report, true)).toBe(1);
 });
 
+test("files outside a package test script directory filter are skipped", async () => {
+  await withFixture((root) => {
+    write(
+      root,
+      "apps/visual-preview/package.json",
+      JSON.stringify({
+        name: "@stll/visual-preview",
+        scripts: { test: "bun test src", "test:browser": "bun test browser" },
+      }),
+    );
+    write(
+      root,
+      "apps/visual-preview/browser/render.test.ts",
+      'import { test } from "bun:test";\ntest("browser", () => {});\n',
+    );
+    write(
+      root,
+      "apps/visual-preview/src/unit.test.ts",
+      'import { test } from "bun:test";\ntest("unit", () => {});\n',
+    );
+    const { targets, skipped } = selectTargets({
+      root,
+      changed: [
+        "apps/visual-preview/browser/render.test.ts",
+        "apps/visual-preview/src/unit.test.ts",
+      ],
+      hasDb: false,
+    });
+    expect(targets.map(({ file }) => file)).toEqual([
+      "apps/visual-preview/src/unit.test.ts",
+    ]);
+    expect(skipped).toEqual([
+      {
+        file: "apps/visual-preview/browser/render.test.ts",
+        reason: "not gated (excluded by package test script)",
+      },
+    ]);
+  });
+});
+
 test("fixture strings and comments do not classify a Bun test as Playwright", async () => {
   await withFixture((root) => {
     write(
@@ -482,7 +562,10 @@ test("mixed runtime packages select their Bun-only command", async () => {
       "./unit.test.ts",
     ]);
     expect(await runOnce({ target, seed: 1, timeoutMs: 10_000 })).toMatchObject(
-      { type: "executed", passed: true },
+      {
+        type: "executed",
+        passed: true,
+      },
     );
   });
 });
@@ -513,7 +596,10 @@ test("selected files replace package directory filters and exclude failing sibli
       throw new TypeError("Expected selected target");
     }
     expect(await runOnce({ target, seed: 1, timeoutMs: 10_000 })).toMatchObject(
-      { type: "executed", passed: true },
+      {
+        type: "executed",
+        passed: true,
+      },
     );
   });
 });
@@ -1157,4 +1243,33 @@ test("a failing trial that names tests without details still names them", async 
   const markdown = renderReport(report);
   expect(markdown).toContain("math > adds");
   expect(markdown).not.toContain("named no test");
+});
+
+test("the gate spends its cap, or only what the job has left before its deadline", () => {
+  const now = 1_800_000_000_000;
+  // The clock a window ago plus `left` leaves exactly `left` before the deadline.
+  const clockLeaving = (left: number) =>
+    String(now - JOB_REPEAT_WINDOW_MS + left);
+  expect(gateBudgetMs(undefined, now)).toBe(BUDGET_MS);
+  expect(gateBudgetMs("", now)).toBe(BUDGET_MS);
+  expect(gateBudgetMs(String(now), now)).toBe(BUDGET_MS);
+  expect(gateBudgetMs(clockLeaving(90_000), now)).toBe(90_000);
+  expect(gateBudgetMs(clockLeaving(-1), now)).toBe(0);
+  expect(() => gateBudgetMs("soon", now)).toThrow("not an epoch millisecond");
+});
+
+test("a report shows the budget its run had", () => {
+  const report: Report = {
+    cleanup: {
+      type: "best-effort",
+      platform: "darwin",
+      note: "cleanup: best-effort",
+    },
+    results: [],
+    skipped: [],
+    errors: [],
+    elapsedMs: 60_000,
+    budgetMs: 90_000,
+  };
+  expect(renderReport(report)).toContain("Budget: 1.50 test-minutes");
 });

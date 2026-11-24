@@ -16,9 +16,10 @@
  *     one `<job id>.log` per failed job. Prints `::error` annotations, writes
  *     the JSON digest and appends a short Markdown summary. Cancelled jobs
  *     without a failed step are listed apart: they are never a cause.
- *   tail <test-output.log>
+ *   tail <test-output.log> [--summary <file>]
  *     Prints the failing tests of a test run (with their error lines) so a
- *     failing step's log ends with its failures.
+ *     failing step's log ends with its failures, and appends them to the
+ *     job's summary so the job names them even when its run is cancelled.
  *   show <run id or URL> [--repo <owner/repo>]
  *     Prints a run's digest: its `ci-failures` artifact, or, when the run has
  *     none (still running, or the gate passed), one built from the jobs API
@@ -176,6 +177,8 @@ const shortPath = (value: string): string =>
 type LogLine = {
   readonly text: string;
   readonly scope: string;
+  /** The Turbo task (`test`, `typecheck`) of a scoped line; empty otherwise. */
+  readonly task: string;
   readonly annotation?: "error" | "continuation";
 };
 
@@ -195,8 +198,12 @@ const logLine = (raw: string): LogLine => {
   );
   const turbo = TURBO_PREFIX.exec(text);
   return turbo
-    ? { text: text.slice(turbo[0].length), scope: turbo[1] ?? turbo[2] ?? "" }
-    : { text, scope: "" };
+    ? {
+        text: text.slice(turbo[0].length),
+        scope: turbo[1] ?? turbo[2] ?? "",
+        task: turbo[3] ?? "",
+      }
+    : { text, scope: "", task: "" };
 };
 
 const logLines = (rawLines: readonly string[]): LogLine[] =>
@@ -218,6 +225,7 @@ const logLines = (rawLines: readonly string[]): LogLine[] =>
     return message.split("\n").map((text, index) => ({
       text,
       scope: line.scope,
+      task: line.task,
       annotation: index === 0 ? ("error" as const) : ("continuation" as const),
     }));
   });
@@ -305,7 +313,10 @@ const LOCATION_TOKEN =
 const DIGITS = /^\d+$/u;
 const TSC = /^(.+?)(?:\((\d+),\d+\)|:(\d+):\d+)(?::| -) error (TS\d+): (.*)$/u;
 const BUN_RESULT = /^\((pass|fail|skip|todo)\) (.*?)(?: \[[\d.]+m?s\])?$/u;
-const BUN_FILE_HEADER = /^(\S+\.(?:test|spec)\.[cm]?[jt]sx?):$/u;
+// On GitHub Actions Bun opens a log group per file; behind Turbo's prefix the
+// runner leaves the `::group::` command as text.
+const BUN_FILE_HEADER =
+  /^(?:::group::|##\[group\])?(\S+\.(?:test|spec)\.[cm]?[jt]sx?):$/u;
 const ERROR_HEADLINE =
   /^\s*(?:error:|(?:\w*Error|AssertionError)(?:\s*\[\w+\])?:|Expected|Received|expect\()/u;
 const PLAYWRIGHT_HEAD = /^\s*(?:\d+\)|[✘x]\s+\d+) \[([^\]]+)\] › /u;
@@ -566,6 +577,106 @@ export const testFailures = (rawLines: readonly string[]): TestFailure[] => {
   }
   return [...best.values()];
 };
+
+// The kill line of the Bun test event-loop watchdog
+// (EVENT_LOOP_BLOCKED_MARKER in packages/scripts/src/test-event-loop-watchdog-policy.ts;
+// a test binds the two). Bun's own timeout cannot end such a test.
+export const EVENT_LOOP_BLOCKED_MARKER = "Test event loop blocked:";
+const TURBO_TASK_START =
+  /^cache (?:miss, executing|bypass, force executing|hit, replaying logs) \S+$/u;
+const TURBO_TASK_FAILED =
+  /^(@[\w.-]+\/[\w.-]+|[\w.-]+)#(test[\w:-]*): +ERROR /u;
+// A test task's closing line: Bun's run summary, a Cargo test result or the
+// package runner's own exit. Any later output reopens the task.
+const TEST_TASK_CLOSED =
+  /^(?:Ran \d+ tests? across \d+ files?\.|test result: |error: script ".*" (?:exited with code|was terminated by signal) )/u;
+
+const isTestTask = (task: string): boolean =>
+  task === "test" || task.startsWith("test:");
+
+/** Watchdog kills, named by the file header their task printed last. */
+const eventLoopBlockLines = (lines: readonly LogLine[]): FailureLine[] => {
+  const currentFile = new Map<string, string>();
+  return lines.flatMap(({ text, scope }) => {
+    const trimmed = text.trim();
+    const header = BUN_FILE_HEADER.exec(trimmed);
+    if (header?.[1] !== undefined) {
+      currentFile.set(scope, header[1]);
+      return [];
+    }
+    if (!trimmed.startsWith(EVENT_LOOP_BLOCKED_MARKER)) {
+      return [];
+    }
+    const file = currentFile.get(scope);
+    const prefix = scope === "" ? "" : `${scope}: `;
+    return [
+      {
+        message: truncate(
+          `${prefix}${file === undefined ? "" : `${file}: `}${trimmed}`,
+        ),
+      },
+    ];
+  });
+};
+
+type InterruptedTask = {
+  readonly scope: string;
+  readonly task: string;
+  /** The last Bun file header the task printed. */
+  readonly file?: string;
+};
+
+/**
+ * Turbo test tasks that started and had not closed when the log ended: a
+ * failing task stops the run and Turbo kills the others mid-file, so a task
+ * that hung beside the failure is named here instead of staying invisible.
+ */
+const interruptedTasks = (lines: readonly LogLine[]): InterruptedTask[] => {
+  const tasks = new Map<
+    string,
+    { task: string; file: string | undefined; open: boolean }
+  >();
+  for (const { text, scope, task } of lines) {
+    const trimmed = text.trim();
+    if (scope === "") {
+      const failed = TURBO_TASK_FAILED.exec(trimmed);
+      const known =
+        failed?.[1] === undefined ? undefined : tasks.get(failed[1]);
+      if (known !== undefined) {
+        known.open = false;
+      }
+      continue;
+    }
+    if (!isTestTask(task)) {
+      continue;
+    }
+    if (TURBO_TASK_START.test(trimmed)) {
+      tasks.set(scope, { task, file: undefined, open: true });
+      continue;
+    }
+    const known = tasks.get(scope);
+    if (known === undefined || trimmed === "") {
+      continue;
+    }
+    const header = BUN_FILE_HEADER.exec(trimmed);
+    if (header?.[1] !== undefined) {
+      known.file = header[1];
+    }
+    known.open =
+      !TEST_TASK_CLOSED.test(trimmed) &&
+      !trimmed.startsWith(EVENT_LOOP_BLOCKED_MARKER);
+  }
+  return [...tasks]
+    .filter(([, { open }]) => open)
+    .map(([scope, { task, file }]) => ({
+      scope,
+      task,
+      ...(file === undefined ? {} : { file }),
+    }));
+};
+
+const interruptedTaskLine = ({ scope, task, file }: InterruptedTask) =>
+  `${scope}#${task} was still running when the run stopped${file === undefined ? "" : `, in ${file}`}`;
 
 /** Failing Bun tests with the file header they were printed under. */
 export const failedTests = (rawLines: readonly string[]): FailedTest[] =>
@@ -898,16 +1009,50 @@ export const checkOutputLines = (
 };
 
 /**
- * The first actionable lines of one failed step. The most specific format
- * found wins, so a test failure is never crowded out by fixture output.
+ * The first actionable lines of one failed step. A test that blocked its
+ * event loop leads; the most specific other format found follows, so a test
+ * failure is never crowded out by fixture output; test tasks the run stopped
+ * mid-file close the list, since one of them may have starved the failure.
  */
 export const failureLines = (
   rawLines: readonly string[],
   limit = MAX_LINES_PER_STEP,
 ): FailureLine[] => {
-  const lines = logLines(rawLines).filter(
-    ({ text }) => !EXIT_MARKER.test(text),
+  const logged = logLines(rawLines);
+  const blocked = eventLoopBlockLines(logged);
+  const interrupted = interruptedTasks(logged).map((task) => ({
+    message: truncate(interruptedTaskLine(task)),
+  }));
+  const causes = causeLines({ rawLines, logged, limit });
+  if (blocked.length === 0 && interrupted.length === 0) {
+    return causes;
+  }
+  // Watchdog reports lead, but leave one line for an independent cause.
+  const leading = blocked.slice(
+    0,
+    Math.max(1, causes.length > 0 ? limit - 1 : limit),
   );
+  const causeRoom = Math.max(
+    causes.length > 0 ? 1 : 0,
+    limit - leading.length - interrupted.length,
+  );
+  return dedupe([
+    ...leading,
+    ...causes.slice(0, causeRoom),
+    ...interrupted,
+  ]).slice(0, limit);
+};
+
+const causeLines = ({
+  rawLines,
+  logged,
+  limit,
+}: {
+  readonly rawLines: readonly string[];
+  readonly logged: readonly LogLine[];
+  readonly limit: number;
+}): FailureLine[] => {
+  const lines = logged.filter(({ text }) => !EXIT_MARKER.test(text));
   const installFailures = dedupe(
     lines.flatMap(({ text }) => {
       const message = withoutErrorCommand(text);
@@ -1483,13 +1628,95 @@ export const inert = (line: string): string => {
     : line;
 };
 
-/** The failures of a test run, printed last so the log ends with them. */
+/** GitHub rejects a step summary over 1 MiB whole, so the tail's section
+ *  stays well inside it; the job log keeps the full tail. */
+export const TAIL_SUMMARY_MAX_BYTES = 256 * 1024;
+
+/** A test run's tail as a job summary section, fenced longer than any
+ *  backtick run inside it so no test output can close the fence, and cut at
+ *  a line to at most `maxBytes` of UTF-8 with a note pointing to the log. */
+export const tailSummaryMarkdown = (
+  tail: string,
+  maxBytes: number = TAIL_SUMMARY_MAX_BYTES,
+): string => {
+  const encoder = new TextEncoder();
+  const bytes = (text: string): number => encoder.encode(text).length;
+  const fenceFor = (body: string): string =>
+    "`".repeat(
+      Math.max(
+        3,
+        1 +
+          Math.max(0, ...[...body.matchAll(/`+/gu)].map(([run]) => run.length)),
+      ),
+    );
+  const render = (body: string, marker: string, note: string): string =>
+    `### Failing tests\n\n${marker}text\n${body}\n${marker}\n${note}`;
+  const marker = fenceFor(tail);
+  const whole = render(tail, marker, "");
+  if (bytes(whole) <= maxBytes) {
+    return whole;
+  }
+  const lines = tail.split("\n");
+  const note = (kept: number): string =>
+    `\nThe summary shows ${kept} of ${lines.length} lines; the job log has the full list.\n`;
+  // A kept part's fence is never longer than the whole tail's.
+  let used = bytes(render("", marker, note(lines.length)));
+  const kept: string[] = [];
+  for (const line of lines) {
+    const cost = bytes(line) + 1;
+    if (used + cost > maxBytes) {
+      break;
+    }
+    kept.push(line);
+    used += cost;
+  }
+  const body = kept.join("\n");
+  return render(body, fenceFor(body), note(kept.length));
+};
+
+/**
+ * The failures of a test run, printed last so the log ends with them: test
+ * files that blocked their event loop and test tasks the run stopped mid-file
+ * first, since either can starve the tests that then fail beside them.
+ */
 export const renderTail = (rawLines: readonly string[]): string => {
+  const logged = logLines(rawLines);
+  const blocked = eventLoopBlockLines(logged);
+  const interrupted = interruptedTasks(logged);
+  const stopped = [
+    ...(blocked.length === 0
+      ? []
+      : [
+          `---- test files that blocked their event loop (${blocked.length}) ----`,
+          ...blocked.map(({ message }) => inert(message)),
+        ]),
+    ...(interrupted.length === 0
+      ? []
+      : [
+          `---- test tasks still running when the run stopped (${interrupted.length}) ----`,
+          ...interrupted.map((task) =>
+            inert(truncate(interruptedTaskLine(task))),
+          ),
+        ]),
+  ];
+  const failures = testFailureTail(rawLines, logged);
+  if (stopped.length === 0) {
+    return failures;
+  }
+  return [...stopped, failures === "" ? "----" : failures].join("\n");
+};
+
+const testFailureTail = (
+  rawLines: readonly string[],
+  logged: readonly LogLine[],
+): string => {
   const failures = testFailures(rawLines);
   if (failures.length === 0) {
-    const lines = failureLines(rawLines).filter(({ message }) =>
-      ANCHOR.test(message),
-    );
+    const lines = causeLines({
+      rawLines,
+      logged,
+      limit: MAX_LINES_PER_STEP,
+    }).filter(({ message }) => ANCHOR.test(message));
     if (lines.length === 0) {
       return "";
     }
@@ -1741,18 +1968,26 @@ const flagValue = (
 
 const USAGE =
   "Usage: bun scripts/ci-failure-digest.ts digest --jobs <jobs.json> --logs <dir> --json <out.json> [--summary <file>] [--gate <job>]\n" +
-  "       bun scripts/ci-failure-digest.ts tail <test-output.log>\n" +
+  "       bun scripts/ci-failure-digest.ts tail <test-output.log> [--summary <file>]\n" +
   "       bun scripts/ci-failure-digest.ts show <run id or URL> [--repo <owner/repo>]";
 
 const main = (args: readonly string[]): number => {
   const [command, ...rest] = args;
-  if (command === "tail" && rest.length === 1 && rest[0] !== undefined) {
+  if (
+    command === "tail" &&
+    (rest.length === 1 || (rest.length === 3 && rest[1] === "--summary")) &&
+    rest[0] !== undefined
+  ) {
     if (!existsSync(rest[0])) {
       return 0;
     }
     const tail = renderTail(readFileSync(rest[0], "utf-8").split("\n"));
     if (tail !== "") {
       process.stdout.write(`\n${tail}\n`);
+      const summary = flagValue(rest, "--summary");
+      if (summary !== undefined) {
+        appendFileSync(summary, tailSummaryMarkdown(tail));
+      }
     }
     return 0;
   }

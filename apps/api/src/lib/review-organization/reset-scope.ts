@@ -4,7 +4,6 @@ import { getTableConfig } from "drizzle-orm/pg-core";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import { stella, WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
-import type { Transaction } from "@/api/db/root";
 import {
   chatThreads,
   CORRESPONDENCE_REVIEW_RESET_SETTING,
@@ -12,6 +11,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { runScopedWorkInTransaction } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
@@ -38,6 +38,11 @@ export const REVIEW_RESET_KEPT_TABLES = {
   account_exports:
     "Account-owned export ledger: an organization audit archive belongs to the requesting account and keeps no reference to the organization.",
   organization_settings: "Organization settings, not reviewer content.",
+  sso_provider: "Sign-in configuration set by operators, not reviewer content.",
+  organization_sso_policy:
+    "Sign-in policy set by operators, not reviewer content.",
+  organization_sso_domain:
+    "Sign-in domain verification records set by operators, not reviewer content.",
   billing_draft_user_settings:
     "Per-user billing draft consent and preferences, not reviewer content.",
   conflict_checks:
@@ -70,6 +75,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   buffer_object_cleanup_intents:
     "Storage tombstones: they must outlive the rows they erase.",
   entity_deletion_cleanup_requests:
+    "Storage tombstones: they must outlive the rows they erase.",
+  agent_skill_original_cleanup_requests:
     "Storage tombstones: they must outlive the rows they erase.",
   template_deletion_cleanup_requests:
     "Storage tombstones: they must outlive the rows they erase.",
@@ -149,6 +156,8 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "desktop_runner_runs",
   "desktop_runners",
   "desktop_time_entry_batches",
+  "dictation_learned_fixes",
+  "dictation_vocabulary_terms",
   "document_processing_runs",
   "document_reference_counters",
   "document_review_findings",

@@ -121,6 +121,17 @@ describe("BOE client", () => {
     });
   });
 
+  test("reads an empty-string search data field as no hits", async () => {
+    installFetch(() =>
+      jsonResponse({ data: "", status: { code: "200", text: "ok" } }),
+    );
+
+    expect(await searchConsolidatedLegislation({})).toEqual({
+      data: [],
+      status: { code: "200", text: "ok" },
+    });
+  });
+
   test("rejects a successful response with an unexpected JSON shape", async () => {
     installFetch(() =>
       jsonResponse({

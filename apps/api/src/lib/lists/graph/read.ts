@@ -23,7 +23,6 @@ import { alias } from "drizzle-orm/pg-core";
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 import { compareCodeUnit } from "@stll/collation";
 
-import type { Transaction } from "@/api/db/root";
 import {
   entities,
   legalGraphEdges,
@@ -33,6 +32,7 @@ import {
   legalListItemSources,
   legalListVerificationRuns,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readBounded, readCursorPage } from "@/api/lib/db/read-bounded";
 import { escapeLike } from "@/api/lib/escape-like";

@@ -76,6 +76,7 @@ export const InstallPackButton = ({
   return (
     <Button
       disabled={busy}
+      disabledReason={t("common.installing")}
       onClick={() => {
         detached(onClick(), "install-pack-button.click");
       }}

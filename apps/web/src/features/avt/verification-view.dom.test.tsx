@@ -867,8 +867,8 @@ test("a governing record changes the verdict and escalation keeps the conflict o
   expect(
     screen
       .getByRole("button", { name: messages.avt.confirm.recordConflict })
-      .hasAttribute("disabled"),
-  ).toBe(true);
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
   expect(runText(claimButton(5))).toContain("Record conflict");
   // Escalating reads the run again, and the conflict needs attention again.
   serveAttention(true);
@@ -1349,9 +1349,13 @@ test("the original PDF mounts its viewer and claim boxes inside the PDF store", 
     const { client } = await mount(run);
     await seedPdfFile(client, run, await onePagePdf());
     openOriginal();
-    await nextFrame();
-    await nextFrame();
-    expect(document.querySelector("[data-avt-original-pdf]")).not.toBeNull();
+    // The viewer mounts once the seeded file is read, which can take more than
+    // a couple of frames on a loaded runner.
+    await waitFor(() => {
+      expect(document.querySelector("[data-avt-original-pdf]") === null).toBe(
+        false,
+      );
+    });
     await waitFor(() => {
       expect(
         client

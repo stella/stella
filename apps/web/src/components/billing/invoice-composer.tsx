@@ -38,14 +38,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Switch } from "@stll/ui/switch";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@stll/ui/table";
+import { Table, TableBody, TableCell, TableRow } from "@stll/ui/table";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
@@ -103,15 +96,16 @@ import type {
   ComposerVatDecision,
   EntryChoice,
 } from "./invoice-composer.logic";
-
-type ComposerStep = "items" | "details" | "issue";
-const COMPOSER_STEPS: readonly ComposerStep[] = ["items", "details", "issue"];
-
-const STEP_LABELS = {
-  items: "billing.invoiceComposer.steps.items",
-  details: "common.details",
-  issue: "billing.invoiceComposer.steps.issue",
-} as const satisfies Record<ComposerStep, TranslationKey>;
+import {
+  COMPOSER_STEPS,
+  ComposerFooterFrame,
+  ComposerFrame,
+  ComposerStepList,
+  ComposerTimeEntriesTable,
+  InvoiceExpensesSection,
+  InvoiceTimeSection,
+} from "./invoice-composer.pending";
+import type { ComposerStep } from "./invoice-composer.pending";
 
 const VAT_TREATMENT_LABELS = {
   domestic_vat: "billing.invoiceComposer.noVat",
@@ -356,77 +350,78 @@ export const InvoiceComposer = ({
     });
 
   return (
-    <div className="flex min-h-full flex-col">
-      <div className="flex flex-1 flex-col gap-4 p-4 sm:p-6">
-        <StepNav hasItems={hasItems} onStep={setStep} step={step} />
-        {step === "items" && (
-          <ItemsStep
-            choices={choices}
-            {...(client === undefined ? {} : { client })}
-            currency={currency}
-            entries={entries}
-            expenses={expenses}
-            includedExpenseIds={includedExpenseIds}
-            onChoice={(entry, change) =>
-              setChoices((current) =>
-                new Map(current).set(entry.id, {
-                  ...entryChoice(current, entry),
-                  ...change,
-                }),
-              )
-            }
-            onExpense={(expense, included) =>
-              setIncludedExpenseIds((current) => {
-                const next = new Set(current);
-                if (included) {
-                  next.add(expense.id);
-                } else {
-                  next.delete(expense.id);
-                }
-                return next;
-              })
-            }
-            prefill={{ ...prefill, vat }}
-          />
-        )}
-        {step === "details" && (
-          <DetailsStep
-            vat={vat}
-            currency={currency}
-            dueDate={dueDate}
-            dueDays={dueDays}
-            invoiceDate={invoiceDate}
-            language={language}
-            onDueDays={setDueDays}
-            onInvoiceDate={setInvoiceDate}
-            onLanguage={setLanguage}
-            prefill={prefill}
-            supplyDate={supplyDate}
-          />
-        )}
-        {step === "issue" && (
-          <IssueStep
-            blockers={prefill.issueBlockers}
-            buyerName={prefill.buyer.buyerName}
-            currency={currency}
-            dueDate={dueDate}
-            lineCount={includedEntryIds.length + includedExpenses.length}
-            totals={totals}
-          />
-        )}
-      </div>
-      <ComposerFooter
-        currency={currency}
-        canSave={hasItems && vat.reason !== "no_vat_rate"}
-        canIssue={prefill.issueBlockers.length === 0}
-        hasItems={hasItems}
-        onSave={send}
-        onStep={setStep}
-        pending={submit.isPending}
-        step={step}
-        totals={totals}
-      />
-    </div>
+    <ComposerFrame
+      navigation={<StepNav hasItems={hasItems} onStep={setStep} step={step} />}
+      footer={
+        <ComposerFooter
+          currency={currency}
+          canSave={hasItems && vat.reason !== "no_vat_rate"}
+          issueBlocker={prefill.issueBlockers.at(0)}
+          hasItems={hasItems}
+          onSave={send}
+          onStep={setStep}
+          pending={submit.isPending}
+          step={step}
+          totals={totals}
+        />
+      }
+    >
+      {step === "items" && (
+        <ItemsStep
+          choices={choices}
+          {...(client === undefined ? {} : { client })}
+          currency={currency}
+          entries={entries}
+          expenses={expenses}
+          includedExpenseIds={includedExpenseIds}
+          onChoice={(entry, change) =>
+            setChoices((current) =>
+              new Map(current).set(entry.id, {
+                ...entryChoice(current, entry),
+                ...change,
+              }),
+            )
+          }
+          onExpense={(expense, included) =>
+            setIncludedExpenseIds((current) => {
+              const next = new Set(current);
+              if (included) {
+                next.add(expense.id);
+              } else {
+                next.delete(expense.id);
+              }
+              return next;
+            })
+          }
+          prefill={{ ...prefill, vat }}
+        />
+      )}
+      {step === "details" && (
+        <DetailsStep
+          vat={vat}
+          currency={currency}
+          dueDate={dueDate}
+          dueDays={dueDays}
+          invoiceDate={invoiceDate}
+          language={language}
+          onDueDays={setDueDays}
+          onInvoiceDate={setInvoiceDate}
+          onLanguage={setLanguage}
+          prefill={prefill}
+          supplyDate={supplyDate}
+        />
+      )}
+      {step === "issue" && (
+        <IssueStep
+          blockers={prefill.issueBlockers}
+          buyerName={prefill.buyer.buyerName}
+          currency={currency}
+          dueDate={dueDate}
+          lineCount={includedEntryIds.length + includedExpenses.length}
+          totals={totals}
+        />
+      )}
+    </ComposerFrame>
   );
 };
 
@@ -608,14 +603,16 @@ type StepNavProps = {
 
 const StepNav = ({ step, hasItems, onStep }: StepNavProps) => {
   const t = useTranslations();
-  const current = COMPOSER_STEPS.indexOf(step);
+  const format = useFormatter();
+  const current = COMPOSER_STEPS.findIndex(({ id }) => id === step);
   return (
-    <ol className="flex flex-wrap gap-2">
-      {COMPOSER_STEPS.map((candidate, index) => (
+    <ComposerStepList>
+      {COMPOSER_STEPS.map(({ id: candidate, label }, index) => (
         <li key={candidate}>
           <Button
             aria-current={candidate === step ? "step" : undefined}
             disabled={index > current && !hasItems}
+            disabledReason={t("billing.invoiceComposer.addItemsFirst")}
             onClick={() => onStep(candidate)}
             size="chip"
             variant={candidate === step ? "default" : "secondary"}
@@ -624,14 +621,14 @@ const StepNav = ({ step, hasItems, onStep }: StepNavProps) => {
               <CheckIcon aria-hidden />
             ) : (
               <span aria-hidden className="tabular-nums">
-                {index + 1}
+                {format.number(index + 1)}
               </span>
             )}
-            {t(STEP_LABELS[candidate])}
+            {t(label)}
           </Button>
         </li>
       ))}
-    </ol>
+    </ComposerStepList>
   );
 };
 
@@ -791,20 +788,19 @@ const ItemsStep = ({
           })}
         </Callout>
       )}
-      <Frame>
-        <FrameHeader>
-          <FrameTitle>{t("billing.invoiceComposer.timeEntries")}</FrameTitle>
-          <FrameDescription>
-            <span className="tabular-nums">
-              {t("billing.invoiceComposer.timeSummary", {
-                count: includedCount,
-                hours: format.number(includedMinutes(entries, choices) / 60, {
-                  maximumFractionDigits: 2,
-                }),
-              })}
-            </span>
-          </FrameDescription>
-        </FrameHeader>
+      <InvoiceTimeSection
+        title={t("billing.invoiceComposer.timeEntries")}
+        description={
+          <span className="tabular-nums">
+            {t("billing.invoiceComposer.timeSummary", {
+              count: includedCount,
+              hours: format.number(includedMinutes(entries, choices) / 60, {
+                maximumFractionDigits: 2,
+              }),
+            })}
+          </span>
+        }
+      >
         {entries.length === 0 ? (
           <FramePanel>
             <p className="text-muted-foreground text-sm">
@@ -820,12 +816,9 @@ const ItemsStep = ({
             onChoice={onChoice}
           />
         )}
-      </Frame>
+      </InvoiceTimeSection>
       {!flatFee && (
-        <Frame>
-          <FrameHeader>
-            <FrameTitle>{t("common.expenses")}</FrameTitle>
-          </FrameHeader>
+        <InvoiceExpensesSection title={t("common.expenses")}>
           {expenses.length === 0 ? (
             <FramePanel>
               <p className="text-muted-foreground text-sm">
@@ -840,7 +833,7 @@ const ItemsStep = ({
               onExpense={onExpense}
             />
           )}
-        </Frame>
+        </InvoiceExpensesSection>
       )}
     </div>
   );
@@ -864,111 +857,85 @@ const TimeEntriesTable = ({
   const t = useTranslations();
   const format = useFormatter();
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead className="w-10">
-            <span className="sr-only">
-              {t("billing.invoiceComposer.include")}
-            </span>
-          </TableHead>
-          <TableHead>{t("common.date")}</TableHead>
-          <TableHead>{t("billing.narrative")}</TableHead>
-          <TableHead className="text-end">
-            {t("billing.invoiceComposer.billedHours")}
-          </TableHead>
-          <TableHead className="text-end">
-            {t("billing.invoiceComposer.rate")}
-          </TableHead>
-          <TableHead className="text-end">{t("billing.amount")}</TableHead>
-          <TableHead>{t("billing.invoiceComposer.noCharge")}</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {entries.map((entry) => {
-          const choice = entryChoice(choices, entry);
-          const excluded = !choice.included;
-          return (
-            <TableRow key={entry.id}>
-              <TableCell>
-                <Checkbox
-                  aria-label={t("billing.invoiceComposer.include")}
-                  checked={choice.included}
-                  onCheckedChange={(checked) =>
-                    onChoice(entry, { included: checked })
-                  }
-                />
-              </TableCell>
-              <TableCell className="whitespace-nowrap">
-                <RowText
-                  className="text-muted-foreground tabular-nums"
-                  excluded={excluded}
-                >
-                  {format.dateTime(
-                    plainDateEpoch(entry.dateWorked),
-                    SHORT_DATE,
-                  )}
-                </RowText>
-              </TableCell>
-              <TableCell className="min-w-0">
-                <RowText excluded={excluded}>
-                  <TruncatedText lines={2}>
-                    {entry.invoiceNarrative ?? entry.narrative}
-                  </TruncatedText>
-                </RowText>
-                {entry.timekeeperName !== null && (
-                  <span className="text-muted-foreground block text-xs">
-                    {entry.timekeeperName}
-                  </span>
+    <ComposerTimeEntriesTable renderLabel={t}>
+      {entries.map((entry) => {
+        const choice = entryChoice(choices, entry);
+        const excluded = !choice.included;
+        return (
+          <TableRow key={entry.id}>
+            <TableCell>
+              <Checkbox
+                aria-label={t("billing.invoiceComposer.include")}
+                checked={choice.included}
+                onCheckedChange={(checked) =>
+                  onChoice(entry, { included: checked })
+                }
+              />
+            </TableCell>
+            <TableCell className="whitespace-nowrap">
+              <RowText
+                className="text-muted-foreground tabular-nums"
+                excluded={excluded}
+              >
+                {format.dateTime(plainDateEpoch(entry.dateWorked), SHORT_DATE)}
+              </RowText>
+            </TableCell>
+            <TableCell className="min-w-0">
+              <RowText excluded={excluded}>
+                <TruncatedText lines={2}>
+                  {entry.invoiceNarrative ?? entry.narrative}
+                </TruncatedText>
+              </RowText>
+              {entry.timekeeperName !== null && (
+                <span className="text-muted-foreground block text-xs">
+                  {entry.timekeeperName}
+                </span>
+              )}
+            </TableCell>
+            <TableCell className="text-end">
+              <BilledHoursInput
+                disabled={locked || excluded}
+                key={`${entry.id}:${choice.billedMinutes}`}
+                loggedMinutes={entry.durationMinutes}
+                minutes={choice.billedMinutes}
+                recordedMinutes={entry.billedMinutes}
+                onCommit={(billedMinutes) => onChoice(entry, { billedMinutes })}
+              />
+            </TableCell>
+            <TableCell className="text-end whitespace-nowrap">
+              <RowText
+                className="text-muted-foreground tabular-nums"
+                excluded={excluded}
+              >
+                {formatCurrencyAmount(entry.rateAtEntry, currency)}
+              </RowText>
+            </TableCell>
+            <TableCell className="text-end whitespace-nowrap">
+              <RowText
+                className={cn(
+                  "font-medium tabular-nums",
+                  choice.noCharge && "text-muted-foreground line-through",
                 )}
-              </TableCell>
-              <TableCell className="text-end">
-                <BilledHoursInput
-                  disabled={locked || excluded}
-                  key={`${entry.id}:${choice.billedMinutes}`}
-                  loggedMinutes={entry.durationMinutes}
-                  minutes={choice.billedMinutes}
-                  recordedMinutes={entry.billedMinutes}
-                  onCommit={(billedMinutes) =>
-                    onChoice(entry, { billedMinutes })
-                  }
-                />
-              </TableCell>
-              <TableCell className="text-end whitespace-nowrap">
-                <RowText
-                  className="text-muted-foreground tabular-nums"
-                  excluded={excluded}
-                >
-                  {formatCurrencyAmount(entry.rateAtEntry, currency)}
-                </RowText>
-              </TableCell>
-              <TableCell className="text-end whitespace-nowrap">
-                <RowText
-                  className={cn(
-                    "font-medium tabular-nums",
-                    choice.noCharge && "text-muted-foreground line-through",
-                  )}
-                  excluded={excluded}
-                >
-                  {formatCurrencyAmount(
-                    entryAmount(entry, { ...choice, noCharge: false }),
-                    currency,
-                  )}
-                </RowText>
-              </TableCell>
-              <TableCell>
-                <Switch
-                  aria-label={t("billing.invoiceComposer.noCharge")}
-                  checked={choice.noCharge}
-                  disabled={locked || excluded}
-                  onCheckedChange={(noCharge) => onChoice(entry, { noCharge })}
-                />
-              </TableCell>
-            </TableRow>
-          );
-        })}
-      </TableBody>
-    </Table>
+                excluded={excluded}
+              >
+                {formatCurrencyAmount(
+                  entryAmount(entry, { ...choice, noCharge: false }),
+                  currency,
+                )}
+              </RowText>
+            </TableCell>
+            <TableCell>
+              <Switch
+                aria-label={t("billing.invoiceComposer.noCharge")}
+                checked={choice.noCharge}
+                disabled={locked || excluded}
+                onCheckedChange={(noCharge) => onChoice(entry, { noCharge })}
+              />
+            </TableCell>
+          </TableRow>
+        );
+      })}
+    </ComposerTimeEntriesTable>
   );
 };
 
@@ -1329,11 +1296,40 @@ type ComposerFooterProps = {
   hasItems: boolean;
   /** False while nothing is billable or no VAT rate is in force. */
   canSave: boolean;
-  /** False while a precondition of issuing is missing; a draft still saves. */
-  canIssue: boolean;
+  issueBlocker: InvoiceIssueBlocker | undefined;
   pending: boolean;
   onStep: (step: ComposerStep) => void;
   onSave: (issue: boolean) => void;
+};
+
+type InvoiceDraftDisabledReasonOptions = {
+  pending: boolean;
+  hasItems: boolean;
+  canSave: boolean;
+  t: (
+    key:
+      | "common.saving"
+      | "billing.invoiceComposer.addItemsFirst"
+      | "billing.invoiceComposer.vatReasons.noVatRate",
+  ) => string;
+};
+
+const invoiceDraftDisabledReason = ({
+  pending,
+  hasItems,
+  canSave,
+  t,
+}: InvoiceDraftDisabledReasonOptions) => {
+  if (pending) {
+    return t("common.saving");
+  }
+  if (!hasItems) {
+    return t("billing.invoiceComposer.addItemsFirst");
+  }
+  if (!canSave) {
+    return t("billing.invoiceComposer.vatReasons.noVatRate");
+  }
+  return undefined;
 };
 
 const ComposerFooter = ({
@@ -1342,29 +1338,41 @@ const ComposerFooter = ({
   currency,
   hasItems,
   canSave,
-  canIssue,
+  issueBlocker,
   pending,
   onStep,
   onSave,
 }: ComposerFooterProps) => {
   const t = useTranslations();
-  const index = COMPOSER_STEPS.indexOf(step);
-  const previous = COMPOSER_STEPS[index - 1];
-  const next = COMPOSER_STEPS[index + 1];
+  const index = COMPOSER_STEPS.findIndex(({ id }) => id === step);
+  const previous = COMPOSER_STEPS[index - 1]?.id;
+  const next = COMPOSER_STEPS[index + 1]?.id;
+  const draftDisabledReason = invoiceDraftDisabledReason({
+    pending,
+    hasItems,
+    canSave,
+    t,
+  });
+  const issueDisabledReason =
+    draftDisabledReason ??
+    (issueBlocker === undefined
+      ? undefined
+      : t(INVOICE_ISSUE_BLOCKER_FIXES[issueBlocker].messageKey));
   return (
-    <div className="bg-background sticky bottom-0 flex flex-wrap items-center gap-3 border-t px-4 py-3 sm:px-6">
-      <span className="text-muted-foreground text-sm tabular-nums">
-        {totals !== null &&
-          t("billing.invoiceComposer.totalsSummary", {
-            net: formatCurrencyAmount(totals.netAmountMinor, currency),
-            vat: formatCurrencyAmount(totals.vatAmountMinor, currency),
-            total: formatCurrencyAmount(totals.grossAmountMinor, currency),
-          })}
-      </span>
-      <span className="flex-1" />
+    <ComposerFooterFrame
+      summary={
+        totals !== null &&
+        t("billing.invoiceComposer.totalsSummary", {
+          net: formatCurrencyAmount(totals.netAmountMinor, currency),
+          vat: formatCurrencyAmount(totals.vatAmountMinor, currency),
+          total: formatCurrencyAmount(totals.grossAmountMinor, currency),
+        })
+      }
+    >
       {previous !== undefined && (
         <Button
           disabled={pending}
+          disabledReason={t("common.saving")}
           onClick={() => onStep(previous)}
           variant="ghost"
         >
@@ -1376,20 +1384,26 @@ const ComposerFooter = ({
         <>
           <Button
             disabled={!canSave || pending}
+            disabledReason={draftDisabledReason}
             onClick={() => onSave(false)}
             variant="outline"
           >
             {t("billing.invoiceComposer.saveDraft")}
           </Button>
           <Button
-            disabled={!canSave || !canIssue || pending}
+            disabled={issueDisabledReason !== undefined}
+            disabledReason={issueDisabledReason}
             onClick={() => onSave(true)}
           >
             {t("billing.invoiceComposer.issueInvoice")}
           </Button>
         </>
       ) : (
-        <Button disabled={!hasItems} onClick={() => onStep(next)}>
+        <Button
+          disabled={!hasItems}
+          disabledReason={t("billing.invoiceComposer.addItemsFirst")}
+          onClick={() => onStep(next)}
+        >
           {t(
             next === "details"
               ? "billing.invoiceComposer.continueToDetails"
@@ -1398,7 +1412,7 @@ const ComposerFooter = ({
           <DirectionalIcon className="size-4" icon={ArrowRightIcon} />
         </Button>
       )}
-    </div>
+    </ComposerFooterFrame>
   );
 };
 

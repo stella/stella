@@ -4,7 +4,6 @@ import { and, asc, eq, gte, inArray, isNull, lte, ne, sql } from "drizzle-orm";
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { todayFor } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import {
   BILLING_STATUS,
   billingArrangements,
@@ -12,6 +11,7 @@ import {
   timeEntries,
   workspaces,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { readInvoiceIssueBlockers } from "@/api/lib/billing/invoice-issue-readiness";

@@ -15,12 +15,20 @@ const environment = {
   documentsBucket: "documents",
   documentsEndpoint: "https://s3.eu-west-1.amazonaws.com",
   posthogHost: "https://events.example.test/capture",
-  sandboxUrl: "https://app.example.test/api/v1/visual-sandbox/browser",
+  sandboxUrls: [
+    "https://app.example.test/api/visual-sandbox",
+    "https://internal-api.example.test/mcp-app-sandbox",
+  ],
 } satisfies ContentSecurityPolicyEnvironment;
+
+const NONCE = { kind: "nonce", nonce: "nonce" } as const;
 
 describe("document content security policy", () => {
   test("contains the complete strict allowlist without broad source wildcards", () => {
-    const policy = buildContentSecurityPolicy("request-nonce", environment);
+    const policy = buildContentSecurityPolicy(
+      { kind: "nonce", nonce: "request-nonce" },
+      environment,
+    );
     const directives = policy
       .split("; ")
       .map((directive) => directive.split(" ").at(0));
@@ -48,7 +56,7 @@ describe("document content security policy", () => {
   });
 
   test("includes each configured origin exactly once", () => {
-    const policy = buildContentSecurityPolicy("nonce", environment);
+    const policy = buildContentSecurityPolicy(NONCE, environment);
     const connectDirective = policy
       .split("; ")
       .find((directive) => directive.startsWith("connect-src "));
@@ -63,13 +71,51 @@ describe("document content security policy", () => {
     }
   });
 
+  test("frames every sandbox the app embeds, each origin once", () => {
+    const frameDirective = buildContentSecurityPolicy(NONCE, environment)
+      .split("; ")
+      .find((directive) => directive.startsWith("frame-src "));
+    expect(frameDirective).toBe(
+      "frame-src 'self' blob: https://app.example.test https://internal-api.example.test",
+    );
+  });
+
   test("admits thumbnail requests and their configured storage redirects", () => {
-    const imageDirective = buildContentSecurityPolicy("nonce", environment)
+    const imageDirective = buildContentSecurityPolicy(NONCE, environment)
       .split("; ")
       .find((directive) => directive.startsWith("img-src "));
     expect(imageDirective).toBe(
       "img-src 'self' data: blob: https://lh3.googleusercontent.com https://app.example.test https://documents.s3.eu-west-1.amazonaws.com",
     );
+  });
+
+  test("a shareable document admits its inline scripts by hash alone", () => {
+    const policy = buildContentSecurityPolicy(
+      { kind: "hashes", hashes: ["first-hash", "second-hash"] },
+      environment,
+    );
+    expect(policy).not.toContain("'nonce-");
+    expect(policy).toContain(
+      "script-src 'self' 'sha256-first-hash' 'sha256-second-hash' 'wasm-unsafe-eval' https://events.example.test;",
+    );
+    // Every other directive is the private document's.
+    const otherDirectives = (value: string) =>
+      value
+        .split("; ")
+        .filter((directive) => !directive.startsWith("script-src "));
+    expect(otherDirectives(policy)).toEqual(
+      otherDirectives(buildContentSecurityPolicy(NONCE, environment)),
+    );
+  });
+
+  test("a document without inline scripts admits same-origin files only", () => {
+    const scriptDirective = buildContentSecurityPolicy(
+      { kind: "hashes", hashes: [] },
+      { ...environment, posthogHost: undefined },
+    )
+      .split("; ")
+      .find((directive) => directive.startsWith("script-src "));
+    expect(scriptDirective).toBe("script-src 'self' 'wasm-unsafe-eval'");
   });
 
   test("uses the endpoint origin for path-style self-hosted buckets", () => {

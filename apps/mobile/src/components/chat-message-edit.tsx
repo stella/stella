@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { use, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { panic, Result } from "better-result";
 import { ActionSheetIOS, Alert, Platform, View } from "react-native";
@@ -12,7 +12,10 @@ import { Text } from "@stll/ui/text";
 import { Textarea } from "@stll/ui/textarea";
 
 import { ChatAttachmentChip } from "@/components/chat-attachment-chip";
+import { DictateButton } from "@/components/dictate-button";
+import { ThreadMatter } from "@/components/thread-matter";
 import type { useChatTurn } from "@/components/use-chat-turn";
+import { useDictationField } from "@/components/use-dictation-field";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
@@ -81,12 +84,18 @@ const ChatMessageEdit = ({
   const { end } = useSession();
   const [opened] = useState(() => editDraftOf(entry.parts ?? []));
   const [text, setText] = useState(opened.text);
+  const field = useDictationField(text, setText);
+  const matterId = use(ThreadMatter);
   const [kept, setKept] = useState(opened.kept);
   const [read, setRead] = useState<ChatLocalFilesUndoRead>();
   const [undoFiles, setUndoFiles] = useState(false);
   const [problem, setProblem] = useState<LocalFilesUndoProblem | null>(null);
   const [undoing, setUndoing] = useState(false);
   const [sending, setSending] = useState(false);
+  // Sending waits for a dictation to land in the draft: an accepted edit
+  // closes the form, which drops it. Dictation cannot start once sending, so
+  // the draft sent is the one with the dictated text.
+  const [dictating, setDictating] = useState(false);
   const [notice, setNotice] = useState<EditNotice>();
   // Read by the follow, which outlives a render: the form may close meanwhile.
   const open = useRef(true);
@@ -148,7 +157,7 @@ const ChatMessageEdit = ({
 
   const choice = editFilesChoice({ read, checked: undoFiles, problem });
   const draft: EditDraft = { text, kept };
-  const canSend = hasEditContent(draft) && !busy && !sending;
+  const canSend = hasEditContent(draft) && !busy && !sending && !dictating;
 
   /** Asks the computer to undo the files and follows it while the form is open. */
   const undoFilesFirst = async () =>
@@ -173,6 +182,7 @@ const ChatMessageEdit = ({
       return;
     }
     const undoFirst = editUndoesFilesFirst(choice);
+    const learned = field.learnOnceSent(draft.text);
     setSending(true);
     setNotice(undefined);
     setProblem(null);
@@ -207,7 +217,9 @@ const ChatMessageEdit = ({
         }
       }
       const outcome = await onSend(draft);
-      if (outcome.type === "refused" && open.current) {
+      if (outcome.type === "accepted") {
+        learned();
+      } else if (open.current) {
         setSending(false);
         setNotice(outcome.notice);
       }
@@ -226,6 +238,7 @@ const ChatMessageEdit = ({
               key={attachment.key}
               mimeType={attachment.mimeType}
               name={attachment.name}
+              unscannedContent={attachment.unscannedContent}
               onRemove={
                 sending
                   ? undefined
@@ -243,8 +256,15 @@ const ChatMessageEdit = ({
         accessibilityLabel={t("edit.input")}
         autoFocus
         editable={!sending}
-        onChangeText={setText}
+        {...field.inputProps}
         value={text}
+      />
+      <DictateButton
+        disabled={sending}
+        field="message"
+        matterId={matterId}
+        onBusyChange={setDictating}
+        onText={field.insert}
       />
       <Text variant="caption">{t("edit.notice")}</Text>
       {editRestartsConversation(read) ? (

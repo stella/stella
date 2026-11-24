@@ -65,6 +65,7 @@ export const ChatTitleSuggestButton = ({
       aria-label={label}
       className={cn("shrink-0", className)}
       disabled={usedAnonymization || !hasMessages || isPending}
+      disabledReason={label}
       onClick={onTrigger}
       onMouseDown={(event) => {
         event.preventDefault();

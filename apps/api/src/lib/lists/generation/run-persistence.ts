@@ -9,12 +9,12 @@ import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   legalListGenerationCandidates,
   legalListGenerationCandidateSources,
   legalListGenerationRuns,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,

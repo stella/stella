@@ -1,10 +1,18 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
 import { AI_ERROR_KINDS } from "@stll/api-contract/ai-errors";
-import { CHAT_TOOL_LABELS } from "@stll/api-contract/chat-tool-activity";
+import {
+  CODE_TOOL_RESEARCHES,
+  type CodeToolResearch,
+} from "@stll/api-contract/chat-code-step";
+import {
+  CHAT_TOOL_LABELS,
+  PROCESS_SUMMARY_PHRASES,
+  type ProcessSummaryPhrase,
+} from "@stll/api-contract/chat-tool-activity";
 import { UI_LOCALES } from "@stll/locales";
 
 import { CHAT_FAILURE_KEYS } from "@/state/chat-failure";
@@ -15,13 +23,20 @@ import type { MobileMessages } from "./catalogs";
 const REPO_ROOT = path.resolve(import.meta.dir, "../../../..");
 
 /** The web's catalogue for a locale, read as the web ships it. */
-const webCatalog = (locale: string): unknown =>
-  JSON.parse(
-    readFileSync(
-      path.join(REPO_ROOT, "apps/web/src/i18n/langs", `${locale}.json`),
-      "utf-8",
-    ),
-  );
+const webCatalog = (locale: string): unknown => {
+  const dir = path.join(REPO_ROOT, "apps/web/src/i18n/namespaces", locale);
+  const entries: [string, unknown][] = [];
+  for (const file of readdirSync(dir)
+    .filter((name) => name.endsWith(".json"))
+    .toSorted()) {
+    const parsed = v.parse(
+      nodeSchema,
+      JSON.parse(readFileSync(path.join(dir, file), "utf-8")),
+    );
+    entries.push(...Object.entries(parsed));
+  }
+  return Object.fromEntries(entries);
+};
 
 const nodeSchema = v.record(v.string(), v.unknown());
 
@@ -41,6 +56,30 @@ const WEB_TITLE_KEYS: Readonly<Record<string, readonly string[]>> = {
   show_visual: ["chat", "generatedView"],
   "skill-edit": ["common", "edit"],
 };
+
+/** Where the web keeps the title of each research a code step does
+ *  (`CODE_TOOL_RESEARCH_TITLE_KEYS` in `tool-call-title.logic.ts`). */
+const WEB_RESEARCH_TITLE_KEYS = {
+  caseLaw: ["chat", "toolCall", "searchingCaseLaw"],
+  legislation: ["chat", "toolCall", "readingLegislation"],
+  legislationAndCaseLaw: ["chat", "toolCall", "searchingLegislationAndCaseLaw"],
+} as const satisfies Record<CodeToolResearch, readonly string[]>;
+
+/**
+ * Where the phone (`answer-steps`) and the web (`chat-step-summary`) keep
+ * each phrase of a run's summary: under `processSummary`, except the two
+ * counts both share with other rows.
+ */
+const SHARED_SUMMARY_KEYS: Partial<
+  Record<ProcessSummaryPhrase, { phone: string[]; web: string[] }>
+> = {
+  lookups: { phone: ["lookupCount"], web: ["chat", "toolCall", "lookupCount"] },
+  steps: { phone: ["stepCount"], web: ["common", "stepCount"] },
+};
+const phoneSummaryKey = (phrase: ProcessSummaryPhrase) =>
+  SHARED_SUMMARY_KEYS[phrase]?.phone ?? ["processSummary", phrase];
+const webSummaryKey = (phrase: ProcessSummaryPhrase) =>
+  SHARED_SUMMARY_KEYS[phrase]?.web ?? ["chat", "processSummary", phrase];
 
 /**
  * Where the web keeps each phrase of a coding agent's own steps: the title
@@ -188,8 +227,26 @@ describe("an answer's steps", () => {
         title: at(web, WEB_TITLE_KEYS[label] ?? ["chat", "tool", label]),
       }).toEqual({ label, title });
     }
+    // A code step is titled by the research it does, from the same rules
+    // the web uses (`codeStepResearch`), in the web's words.
+    expect(Object.keys(chat.toolResearch).toSorted()).toEqual(
+      [...CODE_TOOL_RESEARCHES].toSorted(),
+    );
+    expect(webMessages(web, WEB_RESEARCH_TITLE_KEYS)).toEqual(
+      chat.toolResearch,
+    );
     expect(at(web, ["chat", "processSummary"])).toEqual(chat.processSummary);
     expect(at(web, ["common", "stepCount"])).toBe(chat.stepCount);
+    // Each phrase a run's summary is made of (`summarizeProcessRun`), read
+    // where the phone keeps it, in the web's words.
+    for (const phrase of PROCESS_SUMMARY_PHRASES) {
+      const phone = at(chat, phoneSummaryKey(phrase));
+      expect({ phrase, phone }).toEqual({
+        phrase,
+        phone: at(web, webSummaryKey(phrase)),
+      });
+      expect(typeof phone).toBe("string");
+    }
     expect(at(web, ["chat", "reasoning"])).toBe(chat.reasoning);
     expect(at(web, ["chat", "historyTrimmed"])).toBe(chat.historyTrimmed);
     expect(webMessages(web, WEB_LOCAL_RUN_KEYS)).toEqual(chat.localRun);

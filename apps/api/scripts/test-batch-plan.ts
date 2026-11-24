@@ -41,6 +41,10 @@ export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set([
   // The full-size refresh corpus retains PGlite and screening-index memory;
   // sharing with monitoring-drain peaked at 2633 MB against the 2560 MB cap.
   "src/lib/lists/sanctions/refresh-event-loop.db.test.ts",
+  // Unmeasured, so planned at the fallback estimate; alone it peaked at
+  // 1440 MB on Linux, and sharing with corpus-index-projection-publish-fence
+  // reached 2660 MB against the 2560 MB cap.
+  "src/lib/legal-search/corpus-index-projection-served-copy-legacy.db.test.ts",
   // Sets the deployment's public address before the environment is read.
   "src/lib/oauth-native-client-documents.db.test.ts",
   // Owns the CIMD transport module and the AS JWKS fetch for the whole process.
@@ -69,6 +73,23 @@ export const TEST_BATCH_RSS_HEADROOM_RATIO = 0.7;
 export const UNMEASURED_TEST_RSS_RATIO = 0.4;
 export const MIN_TEST_RSS_CLASS_MEASUREMENTS = 20;
 export const SOLO_TEST_RSS_RATIO = 0.6;
+
+/**
+ * Solo increments do not add up for files that each boot an embedded Postgres
+ * in one process: a finished file's database may still be resident when the
+ * next one boots, and whether it is varies with how far the collector got.
+ * On hosted runners, sitemap-shard-refresh (1248 MB alone) and
+ * active-draft-context.integration (773 MB alone) peaked between 1300 MB and
+ * 2571 MB together, 550 MB above the sum of their solo peaks, against a
+ * 1788 MB increment estimate. Collecting right after each close did not help:
+ * the forced collection's own transient raised the pair's peak from about
+ * 1290 MB to as much as 1683 MB in a direct reproduction.
+ *
+ * Such files therefore share a process only while their summed solo peaks plus
+ * this allowance stay within the class cap. 550 MB is the largest overlap
+ * measured in 20 CI runs (80 API shard jobs) on 2026-11-23.
+ */
+export const EMBEDDED_POSTGRES_OVERLAP_ALLOWANCE_MB = 550;
 
 export const TEST_RSS_EXECUTION_CLASS = {
   db: "db",
@@ -343,6 +364,13 @@ export const splitMemoryBoundedBatches = ({
   for (const batch of batches) {
     let current: string[] = [];
     let totalMb = rssTable.baselineMb;
+    let embeddedPostgresPeakMb = 0;
+    const flush = () => {
+      result.push(current);
+      current = [];
+      totalMb = rssTable.baselineMb;
+      embeddedPostgresPeakMb = 0;
+    };
     for (const file of batch) {
       const weight = rssFileWeight({
         file,
@@ -369,23 +397,29 @@ export const splitMemoryBoundedBatches = ({
         singletonPeak >= budgetMb * SOLO_TEST_RSS_RATIO
       ) {
         if (current.length > 0) {
-          result.push(current);
-          current = [];
-          totalMb = rssTable.baselineMb;
+          flush();
         }
         result.push([file]);
         continue;
       }
+      const bootsEmbeddedPostgres = dbTestPaths.has(file);
       if (
         current.length > 0 &&
-        totalMb + weight.incrementalMb > compositionBudgetMb
+        (totalMb + weight.incrementalMb > compositionBudgetMb ||
+          (bootsEmbeddedPostgres &&
+            embeddedPostgresPeakMb > 0 &&
+            embeddedPostgresPeakMb +
+              weight.peakMb +
+              EMBEDDED_POSTGRES_OVERLAP_ALLOWANCE_MB >
+              budgetMb))
       ) {
-        result.push(current);
-        current = [];
-        totalMb = rssTable.baselineMb;
+        flush();
       }
       current.push(file);
       totalMb += weight.incrementalMb;
+      if (bootsEmbeddedPostgres) {
+        embeddedPostgresPeakMb += weight.peakMb;
+      }
     }
     if (current.length > 0) {
       result.push(current);
@@ -405,6 +439,28 @@ export const splitMemoryBoundedBatches = ({
     }
   }
   return result;
+};
+
+/**
+ * What a batch's embedded-Postgres files may hold together: their summed solo
+ * peaks plus the measured overlap allowance. Zero for at most one such file,
+ * which its solo measurement already covers.
+ */
+export const embeddedPostgresOverlapPeakRss = ({
+  files,
+  rssTable,
+  budgetMb,
+  dbTestPaths,
+}: BatchPeakRssOptions) => {
+  const embedded = files.filter((file) => dbTestPaths.has(file));
+  if (embedded.length < 2) {
+    return 0;
+  }
+  let peakMb = EMBEDDED_POSTGRES_OVERLAP_ALLOWANCE_MB;
+  for (const file of embedded) {
+    peakMb += rssFileWeight({ file, rssTable, budgetMb, dbTestPaths }).peakMb;
+  }
+  return peakMb;
 };
 
 export type TestRssMeasurement = {

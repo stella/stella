@@ -4,7 +4,7 @@ import type { SQL } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   withAggregateLock,

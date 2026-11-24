@@ -12,9 +12,9 @@ import {
   sql,
 } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { caseLawDecisions } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { lockCaseLawDecisionRows } from "@/api/lib/db/aggregate-lock";
@@ -234,10 +234,6 @@ const requeueEmptiedDocumentBatchTx = async (
       .update(caseLawDecisions)
       .set({ fulltext: null, documentFetchAttempts: 0 })
       .where(inArray(caseLawDecisions.id, ids));
-    await recordCorpusWithdrawalAuditEvent(tx, {
-      decisionId: ids,
-      reason: "Requeue settled empty documents for deferred PDF parsing",
-    });
     if (lock !== null) {
       await synchronizeLockedCaseLawProjectionBatchTx(tx, {
         lock,
@@ -245,6 +241,11 @@ const requeueEmptiedDocumentBatchTx = async (
         decisionIds: ids,
       });
     }
+    // After the desired-state write: see `recordCorpusWithdrawalAuditEvent`.
+    await recordCorpusWithdrawalAuditEvent(tx, {
+      decisionId: ids,
+      reason: "Requeue settled empty documents for deferred PDF parsing",
+    });
   }
   await extendRequeuedDecisions(tx, ids);
   const requeued = new Set(ids);

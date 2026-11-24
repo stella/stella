@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 import * as v from "valibot";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { workspaces } from "@/api/db/schema";
 import type { AgentSkillScope } from "@/api/db/schema";
 import type { SkillBinding } from "@/api/lib/agent-skills/binding";

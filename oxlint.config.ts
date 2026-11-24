@@ -7,6 +7,7 @@ import concurrencyExceptions from "./.oxlint-plugins/no-hand-rolled-concurrency-
 import {
   nativeEntries,
   nativeRuleId,
+  reactNativeRuleModules,
 } from "./.oxlint-plugins/no-native-ui-registry.ts";
 import { GLOBALLY_MOUNTED_UI } from "./.oxlint-plugins/no-route-context-in-panel-tabs.ts";
 import { PUBLIC_LAW_MIXED_MODULES } from "./.oxlint-plugins/public-law-decision-surface-modules.ts";
@@ -38,8 +39,10 @@ import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
 import {
   DESIGN_SYSTEM_CONSUMER_FILES,
   PRODUCT_FRONTEND_FILES,
+  REACT_NATIVE_CONSUMER_FILES,
 } from "./scripts/product-frontend-files.ts";
 import { PROVIDER_CLIENT_MODULES } from "./scripts/provider-client-modules.ts";
+import reactCompilerBailouts from "./scripts/react-compiler-bailouts.json" with { type: "json" };
 import {
   DECLARATION_FILE_GLOB,
   RESULT_CONVENTION_ENABLED_GLOBS,
@@ -317,6 +320,11 @@ const NO_NATIVE_UI_RULE_IDS = nativeEntries().map(({ module }) =>
   nativeRuleId(module),
 );
 
+// The same rules for components that have a React Native renderer, for the
+// app that renders through them.
+const NO_NATIVE_UI_REACT_NATIVE_RULE_IDS =
+  reactNativeRuleModules().map(nativeRuleId);
+
 const fixtureRuleOverrides = [
   {
     files: [".oxlint-plugins/__fixtures__/no-raw-sha256.fixture.ts"],
@@ -347,6 +355,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("require-stable-geometry.fixture.ts", [
     "require-stable-geometry/require-stable-geometry",
+  ]),
+  fixtureRuleOverride("require-invoice-link-delivery-gate.fixture.ts", [
+    "require-invoice-link-delivery-gate/require-invoice-link-delivery-gate",
   ]),
   fixtureRuleOverride("no-raw-e2e-router-push.fixture.ts", [
     "no-raw-e2e-router-push/no-raw-e2e-router-push",
@@ -385,6 +396,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("retention-source-independence.fixture.ts", [
     "retention-source-independence/retention-source-independence",
+  ]),
+  fixtureRuleOverride("settings-layout-primitives.fixture.ts", [
+    "settings-layout-primitives/settings-layout-primitives",
   ]),
   fixtureRuleOverride("retention-oracle-owner.fixture.ts", [
     "retention-oracle-owner/retention-oracle-owner",
@@ -483,6 +497,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-first-observer-entry.fixture.ts", [
     "no-first-observer-entry/no-first-observer-entry",
+  ]),
+  fixtureRuleOverride("no-manual-memo.fixture.tsx", [
+    "no-manual-memo/no-manual-memo",
   ]),
   fixtureRuleOverride("no-hookless-use-function.fixture.ts", [
     "no-hookless-use-function/no-hookless-use-function",
@@ -662,6 +679,18 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-native-ui.fixture.tsx", NO_NATIVE_UI_RULE_IDS),
   fixtureRuleOverride("plain-button-placement-only.fixture.tsx", [
     "plain-button-placement-only/plain-button-placement-only",
+  ]),
+  fixtureRuleOverride("disabled-switch-needs-reason.fixture.tsx", [
+    "disabled-switch-needs-reason/disabled-switch-needs-reason",
+  ]),
+  fixtureRuleOverride("no-checkbox-in-settings-row.fixture.tsx", [
+    "no-checkbox-in-settings-row/no-checkbox-in-settings-row",
+  ]),
+  fixtureRuleOverride("require-entity-actions-row.fixture.tsx", [
+    "require-entity-actions-row/require-entity-actions-row",
+  ]),
+  fixtureRuleOverride("require-timestamp-tooltip.fixture.tsx", [
+    "require-timestamp-tooltip/require-timestamp-tooltip",
   ]),
   fixtureRuleOverride("no-person-select.fixture.tsx", [
     "no-person-select/no-person-select",
@@ -938,6 +967,20 @@ const browserSurfaceFiles = [
   "apps/landing/src/**/*.{ts,tsx}",
   "apps/playground/src/**/*.{ts,tsx}",
   "packages/ui/src/**/*.{ts,tsx}",
+] as const;
+
+// Sources bundled for a browser, webview or React Native host, where
+// `import.meta.url` is not a `file:` URL. Their tests run in Bun.
+const browserBundleFiles = [
+  ...browserSurfaceFiles,
+  "apps/extension/src/**/*.{ts,tsx}",
+  "apps/mobile/src/**/*.{ts,tsx}",
+  "apps/outlook/src/**/*.{ts,tsx}",
+  "apps/visual-preview/browser/**/*.{ts,tsx}",
+  "packages/browser-page/src/**/*.{ts,tsx}",
+  "packages/chat/src/**/*.{ts,tsx}",
+  "packages/mcp-apps/src/**/*.{ts,tsx}",
+  "packages/workspace-ui/src/**/*.{ts,tsx}",
 ] as const;
 
 // Shared `no-restricted-imports` entries.
@@ -1281,6 +1324,8 @@ const reactCompilerRulesOff = {
 // component CSS or inline <style> blocks instead, so list each spelling rather
 // than exempting broad prefixes that could hide a Tailwind typo.
 const customCssClassNames = [
+  // Root colour-scheme selector defined by packages/ui/src/styles/theme.css.
+  "dark",
   "animate-flow-in",
   "animate-slide-in",
   "auth-gradient",
@@ -1395,7 +1440,7 @@ const bunNativeFiles = [
   "apps/api/src/handlers/legal-resolve/authorization.test.ts",
   "apps/api/src/handlers/legislation/search-relaxed.contract.test.ts",
   "apps/api/src/handlers/lists/verifications/get.db.test.ts",
-  "apps/api/src/handlers/sharepoint/graph-oauth.ts",
+  "apps/api/src/lib/auth/microsoft365/graph-oauth.ts",
   "apps/api/src/handlers/soft-law/adapters/edpb.test.ts",
   "apps/api/src/handlers/soft-law/adapters/edpb.ts",
   "apps/api/src/handlers/soft-law/adapters/wp29.test.ts",
@@ -1430,7 +1475,6 @@ const bunNativeFiles = [
   "apps/api/src/lib/email/inbound/original-signature.test.ts",
   "apps/api/src/lib/email/inbound/upload.db.test.ts",
   "apps/api/src/lib/entities/window-cursor.ts",
-  "apps/api/src/lib/files/email-attachment-token.ts",
   "apps/api/src/lib/files/email-to-html.test.ts",
   "apps/api/src/lib/files/email-to-html.ts",
   "apps/api/src/lib/files/organization-file-usage-reconcile.ts",
@@ -1860,7 +1904,9 @@ const config = defineConfig({
       {
         routeFiles: [
           "apps/web/src/routes/knowledge/tools.tsx",
+          "apps/web/src/routes/knowledge/-member/tools.page.tsx",
           "apps/web/src/routes/knowledge/-member/member-tools-page.tsx",
+          "apps/web/src/routes/knowledge/-components/catalogue/tool-detail-inspector-registration.tsx",
         ],
       },
     ],
@@ -2072,6 +2118,9 @@ const config = defineConfig({
     // wasm-bindgen glue is committed verbatim and checked by rebuilding it;
     // product-code rewrites would be replaced by the next generation.
     "packages/scan-engine/generated/scan_engine.js",
+    "packages/heic-decoder/generated/heic_decoder.js",
+    "packages/pst-reader/generated/pst_reader.js",
+    "packages/recording-wasm/generated/recording.js",
     // Snowball stemmers: generated output plus the upstream JS runtime,
     // transcribed verbatim. Product-code rules would rewrite the algorithm
     // (prefer-code-point changes UTF-16 semantics; no-bitwise has no
@@ -2100,6 +2149,7 @@ const config = defineConfig({
     // The package's plugins load through local re-exports; the modules say why.
     "./scripts/oxlint-presets/stella-lowercase-plugin.mjs",
     "./.oxlint-plugins/no-raw-cache-control.ts",
+    "./.oxlint-plugins/no-raw-cloudfront-viewer-header.ts",
     "./.oxlint-plugins/confine-sql-close.ts",
     "./.oxlint-plugins/confine-online-ddl.ts",
     "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
@@ -2113,6 +2163,10 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-date-input.ts",
     "./.oxlint-plugins/no-native-ui.ts",
     "./.oxlint-plugins/plain-button-placement-only.ts",
+    "./.oxlint-plugins/disabled-switch-needs-reason.ts",
+    "./.oxlint-plugins/no-checkbox-in-settings-row.ts",
+    "./.oxlint-plugins/require-entity-actions-row.ts",
+    "./.oxlint-plugins/require-timestamp-tooltip.ts",
     "./.oxlint-plugins/no-raw-date-parsing.ts",
     "./.oxlint-plugins/prefer-temporal.ts",
     "./.oxlint-plugins/no-raw-locale-format.ts",
@@ -2126,6 +2180,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-ad-hoc-inline-rename.ts",
     "./.oxlint-plugins/no-first-observer-entry.ts",
+    "./.oxlint-plugins/no-manual-memo.ts",
     "./.oxlint-plugins/no-plan-scan-node-literals.ts",
     "./.oxlint-plugins/no-hookless-use-function.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
@@ -2146,6 +2201,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-mcp-error-result.ts",
     "./.oxlint-plugins/failure-sink-handle.ts",
     "./.oxlint-plugins/require-fingerprint-fields.ts",
+    "./.oxlint-plugins/require-invoice-link-delivery-gate.ts",
     "./.oxlint-plugins/no-redacted-log-attribute-key.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
     "./.oxlint-plugins/no-nanoid.ts",
@@ -2168,6 +2224,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-test-support-import.ts",
     "./.oxlint-plugins/retention-source-independence.ts",
     "./.oxlint-plugins/retention-oracle-owner.ts",
+    "./.oxlint-plugins/settings-layout-primitives.ts",
     "./.oxlint-plugins/no-banned-glyph.ts",
     "./.oxlint-plugins/no-hand-built-document-run-queue.ts",
     "./.oxlint-plugins/no-hand-built-step-marker.ts",
@@ -2218,6 +2275,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-router-invalidation.ts",
     "./.oxlint-plugins/no-optional-mutation-command.ts",
     "./.oxlint-plugins/no-beforeload-redirect.ts",
+    "./.oxlint-plugins/route-pending-component.ts",
     "./.oxlint-plugins/require-safe-route-handlers.ts",
     "./.oxlint-plugins/require-workspace-handler-config.ts",
     "./.oxlint-plugins/require-write-contract.ts",
@@ -2234,6 +2292,7 @@ const config = defineConfig({
     "./.oxlint-plugins/citation-evidence-text-fence.ts",
     "./.oxlint-plugins/no-source-raw-projection.ts",
     "./.oxlint-plugins/no-unguarded-case-law-replay-write.ts",
+    "./.oxlint-plugins/no-api-env-in-public-reader.ts",
     "./.oxlint-plugins/no-bare-case-law-source-ingestion-lease.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-literal-derived-attribute.ts",
@@ -2275,6 +2334,7 @@ const config = defineConfig({
     "./.oxlint-plugins/decision-shaped-output-schema.ts",
     "./.oxlint-plugins/require-complete-compaction-generation.ts",
     "./.oxlint-plugins/no-model-timeout-abort-signal.ts",
+    "./.oxlint-plugins/no-module-url-pathname.ts",
     "./.oxlint-plugins/require-audit-on-mutation.ts",
     "./.oxlint-plugins/require-running-entry-guard.ts",
     "./.oxlint-plugins/require-worker-database-login-posture.ts",
@@ -2366,6 +2426,7 @@ const config = defineConfig({
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/semantic-controls.ts",
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
+    "./.oxlint-plugins/disabled-control-needs-reason.ts",
     "./.oxlint-plugins/no-button-whitespace-normal.ts",
     "./.oxlint-plugins/no-dialog-trigger-menu-item.ts",
     "./.oxlint-plugins/no-decorated-search-input.ts",
@@ -2392,6 +2453,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-path-relative.ts",
     "./.oxlint-plugins/no-direct-unicode-normalize.ts",
     "./.oxlint-plugins/no-adhoc-email-fold.ts",
+    "./.oxlint-plugins/no-raw-case-number-key-equality.ts",
     "./.oxlint-plugins/no-local-letter-spacing.ts",
     "./.oxlint-plugins/no-local-paragraph-label.ts",
     "./.oxlint-plugins/no-ambient-dev-docker.ts",
@@ -2471,7 +2533,8 @@ const config = defineConfig({
         "apps/landing/src/components/ProductPage.astro",
         "apps/landing/src/pages/security.astro",
         "apps/landing/src/pages/support.astro",
-        "apps/web/src/routes/tools/-components/public-tools-index.tsx",
+        "apps/web/src/routes/tools/-index.page.tsx",
+        "apps/web/src/routes/tools/-index.pending.tsx",
         ".oxlint-plugins/__fixtures__/narrative-prose-component.fixture.tsx",
       ],
       rules: {
@@ -2593,6 +2656,18 @@ const config = defineConfig({
       ],
       rules: { "no-test-support-import/no-test-support-import": "error" },
     },
+    // Settings and admin pages compose from @stll/ui/settings; see the rule's
+    // row in .oxlint-plugins/restricted-import.ts.
+    {
+      files: [
+        "apps/web/src/routes/_protected.settings/**/*.{ts,tsx}",
+        "apps/web/src/routes/_protected.admin/**/*.{ts,tsx}",
+      ],
+      excludeFiles: ["**/*.test.{ts,tsx}"],
+      rules: {
+        "settings-layout-primitives/settings-layout-primitives": "error",
+      },
+    },
     fixtureRuleOverride("require-static-timeout-label.fixture.ts", [
       "require-static-timeout-label/require-static-timeout-label",
     ]),
@@ -2687,7 +2762,7 @@ const config = defineConfig({
         "no-direct-status-set/no-direct-status-set": [
           "error",
           {
-            owner: STATUS_TRANSITION_OWNERSHIP.owner[0],
+            owners: STATUS_TRANSITION_OWNERSHIP.owner,
             columns: STATUS_TRANSITION_OWNERSHIP.enforcement.columns,
           },
         ],
@@ -2711,7 +2786,7 @@ const config = defineConfig({
         "no-direct-status-set/no-direct-status-set": [
           "error",
           {
-            owner: STATUS_TRANSITION_OWNERSHIP.owner[0],
+            owners: STATUS_TRANSITION_OWNERSHIP.owner,
             columns: STATUS_TRANSITION_OWNERSHIP.enforcement.columns,
           },
         ],
@@ -2862,6 +2937,12 @@ const config = defineConfig({
             allowedFiles: [
               {
                 path: "packages/ui/src/components/select.tsx",
+                reason:
+                  "Base UI's Select.Value renders the chosen label itself; the open list shows it in full.",
+                utilities: ["truncate"],
+              },
+              {
+                path: "packages/ui/src/components/select-classes.ts",
                 reason:
                   "Base UI's Select.Value renders the chosen label itself; the open list shows it in full.",
                 utilities: ["truncate"],
@@ -3150,6 +3231,31 @@ const config = defineConfig({
       ],
       rules: {
         "no-beforeload-redirect/no-beforeload-redirect": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/route-pending-component.fixture.tsx",
+      ],
+      rules: {
+        "route-pending-component/route-pending-component": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/route-pending-component.fixture.shell.pending.fixture.tsx",
+      ],
+      rules: {
+        "route-pending-component/pending-module-imports": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/route-pending-component.fixture.shell.page.fixture.tsx",
+        ".oxlint-plugins/__fixtures__/route-pending-component.fixture.unpaired.page.fixture.tsx",
+      ],
+      rules: {
+        "route-pending-component/page-module-shell": "error",
       },
     },
     {
@@ -3630,6 +3736,28 @@ const config = defineConfig({
       rules: { "no-raw-path-relative/no-raw-path-relative": "error" },
     },
     {
+      // A module URL is a file: URL wherever code runs from a filesystem
+      // (tooling, servers, the CLI, Bun tests); its pathname is not a native
+      // path. In browser bundles it is an http URL whose pathname is a URL
+      // path, so their sources are out of scope.
+      files: [
+        "apps/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+        "packages/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+        "scripts/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+        ".oxlint-plugins/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+      ],
+      excludeFiles: [...browserBundleFiles],
+      rules: { "no-module-url-pathname/no-module-url-pathname": "error" },
+    },
+    {
+      // Tests, browser bundle tests included, run in Bun, where
+      // import.meta.url is a file: URL; suites that run in a real browser
+      // stay out of scope.
+      files: ["apps/**/*.test.{ts,tsx}", "packages/**/*.test.{ts,tsx}"],
+      excludeFiles: ["**/*.browser.test.{ts,tsx}"],
+      rules: { "no-module-url-pathname/no-module-url-pathname": "error" },
+    },
+    {
       // Pre-install tooling cannot import the workspace path owner before dependencies exist.
       files: [...CI_INSTALL_PREINSTALL_FILES],
       rules: { "no-raw-path-relative/no-raw-path-relative": "off" },
@@ -3694,6 +3822,31 @@ const config = defineConfig({
       ],
       rules: {
         "no-local-paragraph-label/no-local-paragraph-label": "error",
+      },
+    },
+    {
+      // Case-number keys are compared through
+      // apps/api/src/lib/case-law/case-number-match-key.ts, which reads a key
+      // printed with a four-digit year and one printed with two as one case.
+      // Excepted: the case-law review tables, keyed by the copy a review row
+      // keeps of its citation's own key and compared byte for byte with it
+      // (polarity/reviews.ts); one-off maintenance scripts, which run once
+      // against the keys of their day; and tests, which state expected rows
+      // independently of the owner.
+      files: [
+        "apps/api/src/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-raw-case-number-key-equality.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/lib/case-law/case-number-match-key.ts",
+        "apps/api/src/handlers/case-law/polarity/reviews.ts",
+        "apps/api/src/scripts/**",
+        "apps/api/src/tests/**",
+        "apps/api/src/**/*.test.ts",
+      ],
+      rules: {
+        "no-raw-case-number-key-equality/no-raw-case-number-key-equality":
+          "error",
       },
     },
     {
@@ -4307,6 +4460,29 @@ const config = defineConfig({
       ],
       rules: {
         "no-disabled-tooltip-trigger/no-disabled-tooltip-trigger": "error",
+      },
+    },
+    {
+      // A disabled Button must say why it cannot act (`disabledReason`).
+      // Shared web Buttons show the reason on hover and focus.
+      files: [
+        "apps/*/src/**/*.tsx",
+        "packages/*/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/disabled-control-needs-reason.fixture.tsx",
+      ],
+      // Mirrors isExcludedSource for handwritten web TSX. Mobile and
+      // platform-native files can use Buttons without this prop.
+      excludeFiles: [
+        "apps/mobile/**",
+        "**/*.native.tsx",
+        "**/e2e/**",
+        "**/tests/**",
+        "**/__tests__/**",
+        "**/*.{gen,test,type-test,spec}.*",
+        "**/*.{gen,test,type-test,spec}.*/**",
+      ],
+      rules: {
+        "disabled-control-needs-reason/disabled-control-needs-reason": "error",
       },
     },
     {
@@ -4983,6 +5159,22 @@ const config = defineConfig({
       },
     },
     {
+      // The React Compiler memoizes every function it compiles. A file holding
+      // a function it skips keeps its manual memoization until the bailout is
+      // fixed; `scripts/rc-bailouts.ts --check` guards those functions.
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "apps/web/src/**/*.{test,spec}.{ts,tsx}",
+        "apps/web/src/hooks/use-effect.ts",
+        ...new Set(
+          Object.keys(reactCompilerBailouts).map((key) =>
+            key.slice(0, key.indexOf("::")),
+          ),
+        ),
+      ],
+      rules: { "no-manual-memo/no-manual-memo": "error" },
+    },
+    {
       files: [...PRODUCT_FRONTEND_FILES],
       rules: {
         "require-cn-for-classname-composition/require-cn-for-classname-composition":
@@ -5323,6 +5515,14 @@ const config = defineConfig({
       rules: {
         "no-unguarded-case-law-replay-write/no-unguarded-case-law-replay-write":
           "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-api-env-in-public-reader.fixture.ts",
+      ],
+      rules: {
+        "no-api-env-in-public-reader/no-api-env-in-public-reader": "error",
       },
     },
     {
@@ -5894,6 +6094,21 @@ const config = defineConfig({
         "no-beforeload-redirect/no-beforeload-redirect": "error",
         "no-raw-route-query-client/no-raw-route-query-client": "error",
         "require-loader-prefetch/require-loader-prefetch": "error",
+        "route-pending-component/route-pending-component": "error",
+      },
+    },
+    {
+      // A route's pending half ships in the entry chunk and renders before
+      // any provider: its imports are closed (see the rule's policy file).
+      files: ["apps/web/src/**/*.pending.tsx"],
+      rules: {
+        "route-pending-component/pending-module-imports": "error",
+      },
+    },
+    {
+      files: ["apps/web/src/**/*.page.tsx"],
+      rules: {
+        "route-pending-component/page-module-shell": "error",
       },
     },
     {
@@ -5949,10 +6164,12 @@ const config = defineConfig({
               "apps/api/src/env-db-load-gate.ts",
               "apps/api/src/env-online-index.ts",
               "apps/api/src/env-db-timeouts.ts",
+              "apps/api/src/env-public-corpus.ts",
               "apps/api/src/env-replay.ts",
               "apps/api/src/env-eu-completion.ts",
               "apps/api/src/env-parsed-input-state-backfill.ts",
               "apps/api/src/env-ingestion.ts",
+              "apps/api/src/env-soft-law.ts",
               "apps/api/src/env-schema.ts",
               "apps/api/src/env-document-processing-worker.ts",
               "apps/api/src/env-file-derivative-worker.ts",
@@ -5980,6 +6197,10 @@ const config = defineConfig({
               // validates them on boot.
               "apps/api/src/lib/business-registries/dispatch.ts",
               "apps/api/src/lib/db/assert-migrations-applied.ts",
+              // The extraction worker's one input besides its arguments: the
+              // code page the API hands each run (its child env is PATH plus
+              // the variables `subprocess.ts` declares).
+              "apps/api/src/lib/files/zip-name-code-page.ts",
               "apps/api/src/lib/runtime-worker-path.ts",
               "apps/api/src/lib/s3.ts",
               "apps/api/src/lib/scheduler/runner.ts",
@@ -6264,6 +6485,15 @@ const config = defineConfig({
       },
     },
     {
+      // The public case-law reader loads without tenant content settings:
+      // nothing its value imports reach may import the full API environment.
+      files: ["apps/api/src/**/*.ts", "packages/**/*.{ts,tsx}"],
+      excludeFiles: ["**/*.test.{ts,tsx}"],
+      rules: {
+        "no-api-env-in-public-reader/no-api-env-in-public-reader": "error",
+      },
+    },
+    {
       // A document run queue has one owner,
       // apps/api/src/lib/queue/document-run-queue.ts; a module that reads a
       // document run table does not build its own BullMQ queue or worker.
@@ -6466,6 +6696,14 @@ const config = defineConfig({
       rules: {
         "failure-sink-handle/failure-sink-handle": "error",
         "require-fingerprint-fields/require-fingerprint-fields": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/handlers/invoice-links/**/*.{ts,tsx}"],
+      excludeFiles: ["apps/api/src/handlers/invoice-links/**/*.test.{ts,tsx}"],
+      rules: {
+        "require-invoice-link-delivery-gate/require-invoice-link-delivery-gate":
+          "error",
       },
     },
     {
@@ -7002,6 +7240,25 @@ const config = defineConfig({
       ],
       rules: {
         "no-raw-cache-control/no-raw-cache-control": "error",
+      },
+    },
+    {
+      // CloudFront viewer headers are read only behind the origin proof, by
+      // the modules the rule names as owners.
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-raw-cloudfront-viewer-header.fixture.ts",
+      ],
+      excludeFiles: [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "apps/api/src/tests/**/*.ts",
+        "**/__tests__/**",
+      ],
+      rules: {
+        "no-raw-cloudfront-viewer-header/no-raw-cloudfront-viewer-header":
+          "error",
       },
     },
     {
@@ -7877,6 +8134,24 @@ const config = defineConfig({
       ),
     },
     {
+      // The React Native app renders through @stll/ui's native renderers
+      // (`<component>.native.tsx`) and never the React Native component one
+      // of them replaces (a raw Pressable, ActivityIndicator, Modal or Text).
+      // Only components with a native renderer have a rule here. Tests render
+      // bare harness markup.
+      files: [...REACT_NATIVE_CONSUMER_FILES],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "**/__fixtures__/**",
+      ],
+      rules: Object.fromEntries(
+        NO_NATIVE_UI_REACT_NATIVE_RULE_IDS.map(
+          (rule) => [rule, "error"] as const,
+        ),
+      ),
+    },
+    {
       // A plain Button draws no box, so its className only places it; the
       // look belongs to its content or to a variant. Its own scope: the
       // design pass (oxlint.design.config.ts) copies the scope above, and
@@ -7889,6 +8164,30 @@ const config = defineConfig({
       ],
       rules: {
         "plain-button-placement-only/plain-button-placement-only": "error",
+      },
+    },
+    {
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "**/__fixtures__/**",
+      ],
+      rules: {
+        "disabled-switch-needs-reason/disabled-switch-needs-reason": "error",
+        "require-entity-actions-row/require-entity-actions-row": "error",
+        "require-timestamp-tooltip/require-timestamp-tooltip": "error",
+      },
+    },
+    {
+      files: ["apps/web/src/routes/_protected.settings/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "**/__fixtures__/**",
+      ],
+      rules: {
+        "no-checkbox-in-settings-row/no-checkbox-in-settings-row": "error",
       },
     },
     {
@@ -7915,7 +8214,7 @@ const config = defineConfig({
         "apps/web/src/components/auth/password-sign-in-form.tsx",
         "apps/web/src/components/auth/sign-in-panel.tsx",
         "apps/web/src/components/organization/invite-member-dialog.tsx",
-        "apps/web/src/routes/auth/-components/social-recovery-panel.tsx",
+        "apps/web/src/routes/auth/-error.page.tsx",
       ],
       rules: {
         "require-valibot-message/require-valibot-message": "error",

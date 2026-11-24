@@ -1,12 +1,13 @@
 import { panic, Result } from "better-result";
 import { eq, inArray } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   caseLawCorpusUploadIntents,
   caseLawDecisionAliases,
   caseLawDecisions,
   caseLawDecisionSourceIdentities,
+  caseLawHeldDecisionAttachments,
 } from "@/api/db/schema";
 import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { redactCaseLawDecisionWithSupplementHolders } from "@/api/handlers/case-law/ingestion/supplement-erasure";
@@ -18,8 +19,10 @@ import { lockCaseLawDecisionRows } from "@/api/lib/db/aggregate-lock";
 import { corpusProjectionRemovalIsPendingTx } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
 import { eraseDecisionReconciliationPayloadsTx } from "@/api/lib/legal-search/reconciliation-store";
 import type { RemovalEvidence } from "@/api/lib/legal-search/removal-evidence";
+import type { RemovalRetryItem } from "@/api/lib/legal-search/removal-reconciliation-store";
 
 type PublisherRemovalOptions = {
+  retryItem?: RemovalRetryItem | undefined;
   scopedDb: ScopedDb;
   decisionId: SafeId<"caseLawDecision">;
   evidence: RemovalEvidence;
@@ -31,12 +34,14 @@ export const removePublisherDecision = async ({
   scopedDb,
   decisionId,
   evidence,
+  retryItem,
   redact = redactCaseLawDecisionWithSupplementHolders,
 }: PublisherRemovalOptions) => {
   const redacted = await redact({
     scopedDb,
     decisionId,
     evidence,
+    retryItem,
     leaseWaitMs: 0,
   });
   if (redacted.isErr()) {
@@ -82,6 +87,17 @@ export const removePublisherDecision = async ({
         })
         .from(caseLawDecisionSourceIdentities)
         .where(inArray(caseLawDecisionSourceIdentities.decisionId, ids));
+      // A copy another source held as an attachment to this decision is
+      // the same decision: its listed payloads go with it.
+      identities.push(
+        ...(await tx
+          .select({
+            sourceId: caseLawHeldDecisionAttachments.sourceId,
+            sourceDocumentId: caseLawHeldDecisionAttachments.sourceDocumentId,
+          })
+          .from(caseLawHeldDecisionAttachments)
+          .where(inArray(caseLawHeldDecisionAttachments.hostDecisionId, ids))),
+      );
       for (const row of rows) {
         if (row.redactedAt === null) {
           panic("Publisher removal requires a fenced decision");

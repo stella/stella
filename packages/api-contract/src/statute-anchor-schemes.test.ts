@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   E_SBIRKA_ANCHORS,
+  MAGYAR_KOZLONY_ANCHORS,
   SLOV_LEX_ANCHORS,
   US_CODE_ANCHORS,
 } from "@stll/legal-ast/statute-anchor-scheme";
@@ -33,6 +34,7 @@ describe("statute anchor schemes", () => {
   test("each publisher keeps its own grammar, whatever case the code is stored in", () => {
     expect(statuteAnchorSchemeFor("CZE")).toBe(E_SBIRKA_ANCHORS);
     expect(statuteAnchorSchemeFor("svk")).toBe(SLOV_LEX_ANCHORS);
+    expect(statuteAnchorSchemeFor("Hun")).toBe(MAGYAR_KOZLONY_ANCHORS);
     expect(statuteAnchorSchemeFor(" usa ")).toBe(US_CODE_ANCHORS);
   });
 
@@ -67,7 +69,7 @@ describe("statute anchor schemes", () => {
       CZE: { type: "nested", separator: "-" },
       EU: { type: "nested", separator: "-" },
       GBR: { type: "flat" },
-      HUN: { type: "flat" },
+      HUN: { type: "nested", separator: "-" },
       POL: { type: "flat" },
       SVK: { type: "nested", separator: "." },
       USA: { type: "nested", separator: "/" },

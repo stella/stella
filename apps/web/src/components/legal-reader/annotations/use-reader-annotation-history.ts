@@ -75,8 +75,10 @@ export const useReaderAnnotationHistory = ({
 }): ReaderAnnotationController => {
   const t = useTranslations();
   // A fresh identity on every scope transition also invalidates A → B → A.
+  const [prevScope, setPrevScope] = useState(scope);
   const [currentScope, setCurrentScope] = useState(() => ({ scope }));
-  if (currentScope.scope !== scope) {
+  if (prevScope !== scope) {
+    setPrevScope(scope);
     setCurrentScope({ scope });
   }
   const state = useRef({

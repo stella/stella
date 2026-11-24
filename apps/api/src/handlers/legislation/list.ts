@@ -9,6 +9,7 @@ import { LAW_YEAR_BOUNDS } from "@stll/api-contract/law-year";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import { LEGISLATION_LIST_VALIDITIES } from "@stll/api-contract/legislation-status";
 import type { LegislationListValidity } from "@stll/api-contract/legislation-status";
+import { MAGYAR_KOZLONY_NUMBERED_WORK_PATTERN } from "@stll/api-contract/magyar-kozlony-designation";
 import { STATUTE_ELI_IDENTITY_PATTERN } from "@stll/api-contract/statute-identity";
 import {
   STATUTE_LIST_SORT_KEY_KINDS,
@@ -45,6 +46,7 @@ import {
 } from "@/api/lib/custom-schema";
 import { escapeLike, escapeLikeSql } from "@/api/lib/escape-like";
 import {
+  ACT_COLLECTION_PATTERN,
   ACT_NUMBER_PATTERN,
   actNumberCondition,
   actYearCondition,
@@ -84,9 +86,6 @@ import {
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 
-/** A publisher collection segment of an ELI: `sb`, `ul1`, `zz`. */
-const COLLECTION_PATTERN = /^[a-z0-9]{1,8}$/u;
-
 export const listStatutesQuerySchema = v.object({
   country: tPublicLawCountry,
   query: v.optional(v.pipe(v.string(), v.maxLength(256))),
@@ -105,9 +104,17 @@ export const listStatutesQuerySchema = v.object({
   number: v.optional(
     v.pipe(v.string(), v.regex(new RegExp(ACT_NUMBER_PATTERN.source, "u"))),
   ),
-  /** The collection the number was published in, when the caller knows it. */
+  /**
+   * The collection the number was published in (`sb`), or the Magyar
+   * Közlöny series it is numbered in (`korm-rendelet`), when the caller
+   * knows it.
+   */
   collection: v.optional(
-    v.pipe(v.string(), v.regex(new RegExp(COLLECTION_PATTERN.source, "u"))),
+    v.pipe(
+      v.string(),
+      v.maxLength(64),
+      v.regex(new RegExp(ACT_COLLECTION_PATTERN.source, "u")),
+    ),
   ),
   /** Calendar date whose applicable consolidation each work should return. */
   asOf: v.optional(apiDateSchema),
@@ -379,12 +386,14 @@ END)`;
 /**
  * The act's number as its ELI names it, read with the pattern the year
  * filter and the rows' number labels are read with, so the order by number
- * is the order of the numbers the rows print. Null for an ELI naming none.
+ * is the order of the numbers the rows print; a numbered Magyar Közlöny act
+ * by the number its designation opens with. Null for an identifier naming
+ * none.
  */
-const actNumber = sql<number | null>`((regexp_match(
-  ${legislationDocuments.eli},
-  ${STATUTE_ELI_IDENTITY_PATTERN}
-))[3])::integer`;
+const actNumber = sql<number | null>`(COALESCE(
+  (regexp_match(${legislationDocuments.eli}, ${STATUTE_ELI_IDENTITY_PATTERN}))[3],
+  (regexp_match(${legislationDocuments.eli}, ${MAGYAR_KOZLONY_NUMBERED_WORK_PATTERN}))[1]
+))::integer`;
 
 /**
  * What each column order sorts by: the value the row displays for that
@@ -500,6 +509,7 @@ export const listStatutesHandler = async (
     actNumberCondition({
       number: query.number,
       collection: query.collection,
+      country: countryRead.country,
     }) === null
   ) {
     return status(400, { message: "Invalid act number" });
@@ -596,13 +606,14 @@ export const buildListStatutesQuery = (
   }
 
   if (query.year !== undefined) {
-    conditions.push(actYearCondition(query.year));
+    conditions.push(actYearCondition(query.year, country));
   }
 
   if (query.number !== undefined) {
     const byNumber = actNumberCondition({
       number: query.number,
       collection: query.collection,
+      country,
     });
     if (byNumber === null) {
       return panic("List statutes query received an invalid act number");
@@ -613,6 +624,7 @@ export const buildListStatutesQuery = (
   const trimmedQuery = query.query?.trim() || null;
 
   if (trimmedQuery !== null) {
+    // sql-perf-allow: index legislation_documents_title_fold_trgm_idx and legislation_documents_eli_trgm_idx
     const titleOrEli = or(
       sql`${legislationTitleFold(legislationDocuments.title)} LIKE '%' || ${escapeLikeSql(legislationTitleFold(trimmedQuery))} || '%'`,
       ilike(legislationDocuments.eli, `%${escapeLike(trimmedQuery)}%`),

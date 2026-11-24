@@ -51,7 +51,7 @@
   {
     "access": "read",
     "command": ["case-law", "search"],
-    "description": "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \"running\": not a failure. After retryAfterMs, repeat the call with continuation_token; \"partial\" is never the full answer. Reader: `url`; publisher: `source_url`.",
+    "description": "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict needs every word, not necessarily adjacent (quote a phrase for that); otherwise function words are optional and some_terms hits may appear; terms names each hit's words. searches[] has queryUsed/warnings; on time_budget or partial_matches_budget nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \"running\": not a failure. After retryAfterMs, repeat the call with continuation_token; \"partial\" is never the full answer. Reader: `url`; publisher: `source_url`.",
     "name": "search_case_law",
     "title": "Search case law"
   },
@@ -247,14 +247,14 @@
   {
     "access": "read",
     "command": ["legislation", "provisions"],
-    "description": "Read statute provisions: items[] entries are { eli, anchor } with optional as_of and language, or document_id from read_provision_history for an exact consolidation. document_id and as_of are mutually exclusive. Use publisher anchors from read_statute's outline (par_1729, par_1729-odst_1). Entries return in input order: found carries text; invalid, not_found, uncovered_date (no applicable consolidation, including inconsistent publisher dates), provision_not_found and text_withheld (AI use barred) carry messages. Continue long text with nextTextCursor as text_cursor on the same entry until null. url opens the stella reader when served, otherwise the publisher; source_url is the publisher source.",
+    "description": "Read statute provisions: items[] entries are { eli, anchor } with optional as_of and language, or document_id from read_provision_history for an exact consolidation. document_id and as_of are mutually exclusive. Use publisher anchors from read_statute's outline (par_1729, par_1729-odst_1). Entries return in input order: found carries text and governingText (enclosing units' lead-in and closing wording; governingTextTruncated if cut); invalid, not_found, uncovered_date (no applicable consolidation, including inconsistent publisher dates), provision_not_found and text_withheld (AI use barred) carry messages. Continue long text with nextTextCursor as text_cursor on the same entry until null. url opens the stella reader when served, otherwise the publisher; source_url is the publisher source.",
     "name": "read_statute_provisions",
     "title": "Read statute provisions"
   },
   {
     "access": "read",
     "command": ["legislation", "history"],
-    "description": "Read one provision's wording in each consolidation of the work, newest validity window first, so two wordings can be compared without downloading whole statutes. Takes the work's `eli` and an `anchor` from read_statute's outline. A consolidation that does not carry the anchor is left out of `items`. Pass the returned nextCursor back as cursor for older versions. Long wording returns nextTextCursor on its item; pass it back as text_cursor with the same eli, anchor, and version-page cursor until it is null. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
+    "description": "Read one provision's wording in each consolidation of the work, newest validity window first, so two wordings can be compared without downloading whole statutes. Takes the work's `eli` and an `anchor` from read_statute's outline. A consolidation that does not carry the anchor is left out of `items`. Pass the returned nextCursor back as cursor for older versions. Long wording returns nextTextCursor on its item; pass it back as text_cursor with the same eli, anchor, and version-page cursor until it is null. Items carry governingText as read_statute_provisions does. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
     "name": "read_provision_history",
     "title": "Read provision history"
   },
@@ -275,14 +275,14 @@
   {
     "access": "read",
     "command": ["guidance", "search"],
-    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations, FAQs and similar documents issued by data-protection and labour regulators. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
+    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations and FAQs from data-protection, labour, tax and administrative authorities, e.g. Czech GFŘ and MF pokyny or MV závěry on administrative procedure. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
     "name": "search_guidance",
     "title": "Search regulator guidance"
   },
   {
     "access": "read",
     "command": ["guidance", "read"],
-    "description": "Read one regulator guidance document by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
+    "description": "Read one regulator guidance document (data-protection, labour, tax or administrative) by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
     "name": "read_guidance",
     "title": "Read regulator guidance"
   },
@@ -590,7 +590,7 @@
   {
     "access": "read",
     "command": ["capability", "case-law", "ingestion-get"],
-    "description": "Report case-law corpus ingestion health for operators. Per source: adapter key and whether an adapter is still registered for it, enabled flag, sync cursor, decisions held against the total the publisher reports, decisions inserted in the last hour and last day, failures and the top error types in the last day, the last ingestion event, and standing reconciliation counts (slices surveyed, short slices, parked and terminal items, pending removals and unprobeable identities). The fleet event total is an estimate from database statistics and may lag recent writes. Requires organization audit-log access.",
+    "description": "Report case-law corpus ingestion health for operators. Per source: adapter key and whether an adapter is still registered for it, enabled flag, sync cursor, decisions held against the total the publisher reports, decisions inserted in the last hour and last day, failures and the top error types in the last day, the last ingestion event, and standing reconciliation counts (slices surveyed, short slices, parked and terminal items, pending removals and unprobeable identities), and whether the source is parked: failing the same way for so long that it asks its publisher once a day, since when, and its next attempt. The fleet event total is an estimate from database statistics and may lag recent writes. Requires organization audit-log access.",
     "name": "capability:case-law.ingestion.get",
     "title": "case-law.ingestion.get"
   },
@@ -1234,7 +1234,7 @@
   {
     "access": "write",
     "command": ["capability", "entities", "placements-suggest"],
-    "description": "Propose a folder placement and a tidied file name for up to 100 documents of a matter, given the folders that already exist plus an optional locale and free-text instructions. Returns one suggestion per file (folder path, suggested name, detected date, document type) and the empty folders it suggests removing. Suggestions only: nothing is moved, renamed, or deleted, so apply what you want with entities.move and entities.rename. Per-document summaries are generated and cached where missing, and the call consumes AI usage.",
+    "description": "Propose a folder placement and a tidied file name for up to 100 documents of a matter, given the folders that already exist plus an optional locale and free-text instructions. Returns one suggestion per file (folder path, suggested name, detected date, document type) and the empty folders it suggests removing. Suggestions only: nothing is moved, renamed, or deleted, so apply what you want with entities.move and entities.rename. With suggestMatter it also proposes a matter name and the client's name and type, read from the documents, for turning a personal matter into a client matter. Per-document summaries are generated and cached where missing, and the call consumes AI usage.",
     "name": "capability:entities.placements.suggest",
     "title": "entities.placements.suggest"
   },
@@ -1594,6 +1594,27 @@
     "description": "Prepare a new invoice for a matter without creating it: the matter's approved, billable, not-yet-invoiced time entries (with timekeeper names) and approved billable expenses, oldest first (a matter with more than 500 of either is refused); the proposed currency, issue date (today in the organization's zone) and payment term; the default seller profile (or sellerProfileId); the buyer copied from the matter's client; the VAT treatment and rate the lines would get, each with where it came from; and the organization's VAT rate periods, since billing fewer items can move the supply date into another rate; plus issueBlockers, what would stop invoices.transition from finalizing the new invoice (invoice_seller_profile_missing, invoice_number_series_missing; empty when it can be issued). Pass the chosen ids to invoices.create, which applies the same prefill.",
     "name": "capability:invoices.prefill",
     "title": "invoices.prefill"
+  },
+  {
+    "access": "write",
+    "command": ["capability", "invoices", "sends-create"],
+    "description": "Email an issued invoice to the given addresses as a secure stella link to view and download it. Replies go to the seller email when it belongs to a verified current organization member, otherwise the sender's verified email. A finalized invoice becomes sent. Refused for drafts and void invoices. Each send makes a new link; see invoices.sends.list.",
+    "name": "capability:invoices.sends.create",
+    "title": "invoices.sends.create"
+  },
+  {
+    "access": "read",
+    "command": ["capability", "invoices", "sends-list"],
+    "description": "List the emails an invoice was sent with, newest first with cursor pagination: recipients, time, delivery, reply-to, and whether its link is active, expired, revoked or failed, with when it was first opened. defaultRecipients are the client's email addresses, primary first; replyTo is where replies to a new send would go, or null when the reader has no verified sending address. Pass nextCursor as cursor to read older sends.",
+    "name": "capability:invoices.sends.list",
+    "title": "invoices.sends.list"
+  },
+  {
+    "access": "write",
+    "command": ["capability", "invoices", "sends-revoke"],
+    "description": "Revoke the link an invoice email carried, so it no longer opens the invoice. Revoking twice keeps the first revocation; send the invoice again for a new link.",
+    "name": "capability:invoices.sends.revoke",
+    "title": "invoices.sends.revoke"
   },
   {
     "access": "write",
@@ -2111,14 +2132,14 @@
   {
     "access": "read",
     "command": ["capability", "matters", "correspondence-get"],
-    "description": "Read one matter correspondence record with its filers and attachments. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the file sourceEntityId in the matter (an email file, or a data-box .zfo file); its headers are as stated in that file and are not verified. A data_box record carries its envelope in dataBox, the files of the message as attachments, and in dataBoxContacts the organization contacts whose data boxes list the sender or recipient box ID (null on email).",
+    "description": "Read one matter correspondence record with its filers and attachments. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the file sourceEntityId in the matter (an email file, or a data-box .zfo file); its headers are as stated in that file and are not verified. A data_box record carries its envelope in dataBox, the files of the message as attachments, and in dataBoxContacts the organization contacts whose data boxes list the sender or recipient box ID (null on email). A pec record is an uploaded Italian certified email: certifiedEmail carries the provider's certification data as stated in the file (kind, certified sender and recipients, delivery outcome, certification time, provider message ID; the provider signature is not verified), and from, to, subject and body are the original message's when the file carries it.",
     "name": "capability:matters.correspondence.get",
     "title": "matters.correspondence.get"
   },
   {
     "access": "read",
     "command": ["capability", "matters", "correspondence-list"],
-    "description": "List correspondence filed in a matter, newest received first; filter by channel (email or data_box). When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the file sourceEntityId in the matter (an email file, or a data-box .zfo file); its headers are as stated in that file and are not verified. A data_box record carries its envelope in dataBox (message ID, sender and recipient box IDs, names and reference numbers, delivery and acceptance times); its from and to addresses are box IDs and its subject is the message annotation.",
+    "description": "List correspondence filed in a matter, newest received first; filter by channel (email, data_box or pec). When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the file sourceEntityId in the matter (an email file, or a data-box .zfo file); its headers are as stated in that file and are not verified. A data_box record carries its envelope in dataBox (message ID, sender and recipient box IDs, names and reference numbers, delivery and acceptance times); its from and to addresses are box IDs and its subject is the message annotation. A pec record is an uploaded Italian certified email whose certifiedEmail carries the provider's certification data as stated in the file (not verified).",
     "name": "capability:matters.correspondence.list",
     "title": "matters.correspondence.list"
   },
@@ -2237,7 +2258,7 @@
   {
     "access": "write",
     "command": ["capability", "matters", "update"],
-    "description": "Change a matter: its name, client, reference, billing reference, the language its billing narratives are written in, colour, or lead (who must already be a member of it). Only the fields you pass are written. clientId attaches a client to a personal matter or replaces the client of a client matter; members are managed separately. Pass expectedClientId (null for a personal matter) to change the client only if its current assignment still matches; otherwise returns version_conflict.",
+    "description": "Change a matter: its name, client, reference, billing reference, the language its billing narratives are written in, colour, automatic document naming, or lead (who must already be a member of it). Only the fields you pass are written. clientId attaches a client to a personal matter or replaces the client of a client matter; members are managed separately. Pass expectedClientId (null for a personal matter) to change the client only if its current assignment still matches; otherwise returns version_conflict.",
     "name": "capability:matters.update",
     "title": "matters.update"
   },
@@ -2496,6 +2517,61 @@
     "title": "organization-settings.deepl-availability.get"
   },
   {
+    "access": "write",
+    "command": [
+      "capability",
+      "organization-settings",
+      "dictation-vocabulary-add"
+    ],
+    "description": "Add words to the organization's dictation list, which every member's dictation uses to spell names and terms. A word already listed (in any case) is skipped. The request is refused whole when the new words would take the list over its limit.",
+    "name": "capability:organization-settings.dictation-vocabulary.add",
+    "title": "organization-settings.dictation-vocabulary.add"
+  },
+  {
+    "access": "read",
+    "command": [
+      "capability",
+      "organization-settings",
+      "dictation-vocabulary-check"
+    ],
+    "description": "Check words before adding them to the organization's dictation list: how many the list already holds (in any case) and how many words it holds now. Nothing is stored.",
+    "name": "capability:organization-settings.dictation-vocabulary.check",
+    "title": "organization-settings.dictation-vocabulary.check"
+  },
+  {
+    "access": "destructive",
+    "command": [
+      "capability",
+      "organization-settings",
+      "dictation-vocabulary-delete"
+    ],
+    "description": "Delete words from the organization's dictation list by id. Ids not in the list are ignored. Returns how many were deleted and how many words the list still holds.",
+    "name": "capability:organization-settings.dictation-vocabulary.delete",
+    "title": "organization-settings.dictation-vocabulary.delete"
+  },
+  {
+    "access": "read",
+    "command": [
+      "capability",
+      "organization-settings",
+      "dictation-vocabulary-export"
+    ],
+    "description": "Every word of the organization's dictation list, in alphabetical order, for export or backup.",
+    "name": "capability:organization-settings.dictation-vocabulary.export",
+    "title": "organization-settings.dictation-vocabulary.export"
+  },
+  {
+    "access": "read",
+    "command": [
+      "capability",
+      "organization-settings",
+      "dictation-vocabulary-list"
+    ],
+    "description": "List the organization's dictation words in alphabetical order, a page at a time, optionally only those containing a search text (case insensitive). Also returns how many words the list holds, how many match, and the most it may hold.",
+    "name": "capability:organization-settings.dictation-vocabulary.list",
+    "title": "organization-settings.dictation-vocabulary.list"
+  },
+  {
     "access": "read",
     "command": [
       "capability",
@@ -2509,7 +2585,7 @@
   {
     "access": "read",
     "command": ["capability", "organization-settings", "get"],
-    "description": "Read the organization's general settings: document processing mode, matter-number pattern, padding, and whether titles show that number, practice jurisdictions, prompt caching, organization AI instructions, memory extraction, time policy, the time zone whose calendar decides the organization's day, and localRunMaxApprovalMode, the most a chat turn run on a member's computer may do without asking. declaredFeatureIds identifies policies in force; capabilities contains caller decisions; deploymentFeatures supplies deployment availability. timeZoneSource says whether the zone was chosen or derived from the primary practice jurisdiction (Europe/Prague for CZ and SK, UTC otherwise). primaryJurisdictionTimeZone is the zone the primary jurisdiction implies, regardless of an organization override. An organization that has never saved settings gets the defaults rather than an error.",
+    "description": "Read the organization's general settings: document processing mode, matter-number pattern, padding, and whether titles show that number, practice jurisdictions, prompt caching, organization AI instructions, memory extraction, time policy, the time zone whose calendar decides the organization's day, and localRunMaxApprovalMode, the most a chat turn run on a member's computer may do without asking. declaredFeatureIds identifies policies in force; capabilities contains caller decisions; deploymentFeatures supplies legalLists and invoiceLinks deployment availability. timeZoneSource says whether the zone was chosen or derived from the primary practice jurisdiction (Europe/Prague for CZ and SK, UTC otherwise). primaryJurisdictionTimeZone is the zone the primary jurisdiction implies, regardless of an organization override. An organization that has never saved settings gets the defaults rather than an error.",
     "name": "capability:organization-settings.get",
     "title": "organization-settings.get"
   },
@@ -2759,7 +2835,7 @@
   {
     "access": "write",
     "command": ["capability", "rates", "entries-create"],
-    "description": "Add one rate line to a rate table: an hourly rate in integer minor currency units, effective from a date and optionally until another. Pass userId for a person-specific rate, role for an organization-role rate, or omit both for the table fallback. Set at most one person or role; optionally pass activityCodeId for an activity-only or person/role plus activity rate. Refused when dates overlap a line for the same selector or userId is not an organization member, or when the table is at its line limit.",
+    "description": "Add one rate line to a rate table: an hourly rate in integer minor currency units, naming the table currency those units use, effective from a date and optionally until another. Pass userId for a person-specific rate, role for an organization-role rate, or omit both for the table fallback. Set at most one person or role; optionally pass activityCodeId for an activity-only or person/role plus activity rate. Refused when dates overlap a line for the same selector or userId is not an organization member, or when the table is at its line limit. A stale currency is refused; call rates.list and retry with the table's current currency.",
     "name": "capability:rates.entries.create",
     "title": "rates.entries.create"
   },
@@ -2780,7 +2856,7 @@
   {
     "access": "write",
     "command": ["capability", "rates", "entries-update"],
-    "description": "Change one rate line's hourly rate or effective dates in a rate table. Changing the dates re-checks for overlap against the other lines for the same person, role, or table default and is refused on a conflict; the selector a line applies to cannot be changed here.",
+    "description": "Change one rate line's hourly rate or effective dates in a rate table, naming the table currency its minor units use. Changing the dates re-checks for overlap against the other lines for the same person, role, or table default and is refused on a conflict; the selector a line applies to cannot be changed here. A stale currency is refused; call rates.list and retry with the table's current currency.",
     "name": "capability:rates.entries.update",
     "title": "rates.entries.update"
   },
@@ -3077,6 +3153,13 @@
     "description": "Draft a skill bundle with the model: returns SKILL.md markdown plus up to eight companion files under assets/, references/, scripts/. Pass intent, optionally examples, and, to revise an existing draft, previousDraft with previousResources and feedback. Nothing is stored: pass the result to skills.create and the resource endpoints to keep it. Consumes AI usage.",
     "name": "capability:skills.drafts.generate",
     "title": "skills.drafts.generate"
+  },
+  {
+    "access": "write",
+    "command": ["capability", "skills", "export"],
+    "description": "Export one agent skill the caller can read as a portable skill package: a folder named after the skill's slug holding SKILL.md (frontmatter with its settings, then the instructions), every file of the skill (an uploaded or imported file byte for byte as it was stored, text kept from a PDF or DOCX without its original as .md), and .stella/manifest.json (format version, display name, slash command, and a SHA-256 per file). `format` is `zip` or `skill`: the same archive under a .zip or .skill file name, which skills.upload imports again. A skill bound to a matter or client exports without that binding. Returns a short-lived downloadUrl, fileName and expiresAt; hand the URL to the user without reading the archive bytes.",
+    "name": "capability:skills.export",
+    "title": "skills.export"
   },
   {
     "access": "write",

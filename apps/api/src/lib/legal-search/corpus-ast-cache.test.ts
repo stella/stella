@@ -53,6 +53,7 @@ const fakeStore = ({ lengths = {}, failing = new Set() }: FakeStoreOptions) => {
     return {
       ast: astFor(storedKey),
       decodedLength: lengths[storedKey] ?? 1000,
+      outcome: { type: "read" },
     };
   };
   return { read, readsOf: (storedKey: string) => reads.get(storedKey) ?? 0 };

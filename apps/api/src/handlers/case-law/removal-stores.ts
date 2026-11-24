@@ -1,7 +1,6 @@
 import { panic } from "better-result";
 import { eq, or } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawCitationDoctrineReviews,
   caseLawCitationReviews,
@@ -15,6 +14,7 @@ import {
   caseLawProvisionCitations,
   caseLawStatuteCitationMemberships,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { invalidateRemovedCitationAuthorityTx } from "@/api/handlers/case-law/citation-authority";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -158,6 +158,10 @@ export const CASE_LAW_REMOVAL_STORES = {
   case_law_decision_supplements: {
     type: "removed-by-owner",
     owner: "erasure supplement cleanup",
+  },
+  case_law_held_decision_attachments: {
+    type: "tombstone",
+    owner: "erasure held-decision attachment park",
   },
   case_law_search_documents: {
     type: "removed-by-owner",

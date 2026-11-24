@@ -413,7 +413,7 @@ jobs:
       # merge group validates the queued tree, so it needs no patch identity.
       - name: Checkout patch-id inputs
         if: (github.event_name == 'pull_request' && github.event.action != 'enqueued') || github.event_name == 'merge_group'
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           fetch-depth: 0
@@ -921,7 +921,7 @@ jobs:
         # are enough to list changed paths, and git fetches any other blob a
         # step reads (a `git show <base>:<file>`, say) on first access. Jobs
         # that never look past HEAD keep the default shallow checkout.
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -1259,8 +1259,8 @@ jobs:
             : > "$RUNNER_TEMP/api-test-files"
             {
               echo 'ci_tests_required=true'
-              echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","api-5","api-6","rest-web"]}'
-              echo 'api_test_shards=6'
+              echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","api-5","api-6","api-7","api-8","rest","web"]}'
+              echo 'api_test_shards=8'
               echo 'test_scope='
               echo 'api_test_files_encoded='
             } >> "$GITHUB_OUTPUT"
@@ -1575,7 +1575,7 @@ jobs:
           elif [[ "$PACKAGE_CHECKS_REQUIRED" != true ]]; then
             {
               echo 'ci_tests_required=false'
-              echo 'ci_tests_matrix={"shard":["rest-web"]}'
+              echo 'ci_tests_matrix={"shard":["rest"]}'
               echo 'api_test_shards=0'
               echo 'test_scope='
               echo 'api_test_files_encoded='
@@ -1593,12 +1593,17 @@ jobs:
         name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          JOB_STATUS: ${{ job.status }}
         with:
           retries: 0
-          script: |
+          script: &merge_group_cancel_script |
             let diagnostic;
             let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
+            let ownJob;
+            const failedHere = process.env.JOB_STATUS === "failure";
+            const failed = (step) => step.conclusion === "failure";
             try {
               const jobs = await Promise.race([
                 github.paginate(
@@ -1615,13 +1620,13 @@ jobs:
                   evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
                 }),
               ]);
+              ownJob = jobs.find((job) => job.status === "in_progress" && job.runner_name === process.env.RUNNER_NAME);
               const failures = jobs.flatMap((job) => (job.steps || [])
-                .filter((step) => step.conclusion === "failure")
+                .filter(failed)
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
-              // A lost runner leaves a failed job whose step ended cancelled (or that never ran a step); with no failed
-              // step and no such evidence the jobs API may still be catching up, so cancel as before.
+              if (failedHere && !ownJob?.steps?.some(failed)) failures.push(`${ownJob?.name || context.job}: failed step not yet listed`);
               const lost = jobs.filter((job) => job.conclusion === "failure"
-                && !(job.steps || []).some((step) => step.conclusion === "failure")
+                && !(job.steps || []).some(failed)
                 && (job.steps || []).every((step) => !step.status || step.status === "completed")
                 && (!(job.steps || []).length || job.steps.some((step) => step.conclusion === "cancelled")));
               if (!failures.length && lost.length) {
@@ -1641,6 +1646,20 @@ jobs:
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
+            }
+            if (ownJob && (failedHere || ownJob.steps?.some(failed))) {
+              try {
+                await github.rest.actions.createWorkflowDispatch({
+                  ...context.repo,
+                  workflow_id: "cancel-failed-run.yml",
+                  ref: "main",
+                  inputs: { run_id: String(context.runId), run_attempt: process.env.GITHUB_RUN_ATTEMPT, job_id: String(ownJob.id) },
+                });
+                core.notice(`${context.job}: the run is cancelled once this job ends, so this job keeps its failure conclusion.`);
+                return;
+              } catch {
+                core.error(`${context.job}: the cancellation could not be handed off; cancelling the run now.`);
+              }
             }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
@@ -1774,7 +1793,7 @@ jobs:
       &quick-checks-steps # parser-version-guard reads Git history, so the checkout is full.
       - name: Checkout
         id: checkout
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -1825,6 +1844,10 @@ jobs:
           path: ${{ runner.temp }}/bun-install/*.log
           retention-days: 7
           if-no-files-found: ignore
+
+      - name: Check script test declarations
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: &script_test_declarations bun scripts/run-unlisted-script-tests.ts --check-declarations
 
       # Workflow job classifications fail more red pull requests than any
       # other check and take seconds, so they run here, before the heavy
@@ -2186,7 +2209,7 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -2486,7 +2509,7 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         id: checkout
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -2663,7 +2686,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        partition: [1, 2]
+        partition: [1, 2, 3]
     permissions:
       contents: read
       actions: write
@@ -2677,7 +2700,7 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         id: checkout
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -2782,7 +2805,7 @@ jobs:
           CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'pull_request') && steps.policy.outcome == 'success' }}
         # The repository owner publishes this versioned shared contract.
-        uses: stella/.github/.github/actions/changeset-policy@0cc2def60afb3e0fac0df9f541baf926f77889fa # v1.8.0
+        uses: stella/.github/.github/actions/changeset-policy@2664e46f02aea7164ba71bcdd485a686166993a4 # v1.8.0
         with:
           release-paths: ${{ steps.policy.outputs.release_paths }}
           generated-paths: ${{ steps.policy.outputs.generated_paths }}
@@ -2908,6 +2931,14 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
+      - name: Check script test declarations
+        env:
+          CI_CHECK_KIND: STATIC
+          CI_CHECK_INPUTS: tracked-tree+generated-inputs
+        id: script_test_declarations
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_script_test_declarations != 'true') }}
+        run: *script_test_declarations
+
       - name: Prepare route network manifest
         env:
           CI_CHECK_KIND: CONTEXTUAL
@@ -2969,7 +3000,7 @@ jobs:
           CI_CHECK_POOL_INPUTS: ${{ toJSON(inputs) }}
           CI_CHECK_POOL_TOKEN: ${{ github.token }}
           CI_COMPARISON_BASE: ${{ needs.ci-plan.outputs.target_base_sha }}
-          CI_CHECK_POOL_PARTITION: ${{ format('{0}/2', matrix.partition) }}
+          CI_CHECK_POOL_PARTITION: ${{ format('{0}/3', matrix.partition) }}
         # ci-plan's outputs reach the pool through this script's text, never
         # the environment (see ci-result's outcome step).
         run: |
@@ -3126,14 +3157,14 @@ jobs:
       - name: Test .claude/mcp
         # Outside the workspace, so no shard filter selects it: one shard owns
         # it outright.
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && matrix.shard == 'rest-web') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && matrix.shard == 'rest') }}
         run: bun --cwd .claude/mcp test
 
       # The API test runner sizes its parallel lanes from the runner's cores
       # and memory (apps/api/scripts/test-lanes.ts); print what it sees.
       - name: Runner resources
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        run: nproc; free -g
+        run: nproc; free -g; date +CI_T0=%s%3N>>"$GITHUB_ENV"
 
       - name: Test API or rest
         id: test-api-or-rest
@@ -3141,7 +3172,7 @@ jobs:
         env:
           AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
           TEST_SCOPE: ${{ needs.ci-plan.outputs.test_scope }}
-          SHARD: ${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}
+          SHARD: ${{ matrix.shard }}
           API_TEST_TIMINGS_DIR: ${{ runner.temp }}/api-test-timings-${{ matrix.shard }}
           API_TEST_ARTIFACT_DIR: ${{ runner.temp }}/api-test-${{ matrix.shard }}
           API_TEST_FILES_ENCODED: ${{ needs.ci-plan.outputs.api_test_files_encoded }}
@@ -3171,20 +3202,22 @@ jobs:
           set -o pipefail
           plan="$RUNNER_TEMP/test-plan-$SHARD.json"
           output="$RUNNER_TEMP/test-output-$SHARD.log"
-          # The upload step reads this path; the rest-web leg writes the rest shard's file.
+          # The upload step reads this path; each leg writes its own shard's file.
           echo "output=$output" >> "$GITHUB_OUTPUT"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
           # On failure the log ends with the failing tests and their errors.
+          # A heavy_only run may check out a digest script without --summary;
+          # it refuses the flag, so the tail is printed again without it.
           bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
             status=$?
-            timeout 60 bun scripts/ci-failure-digest.ts tail "$output" || true
+            timeout 60 bun scripts/ci-failure-digest.ts tail "$output" --summary "$GITHUB_STEP_SUMMARY" || timeout 60 bun scripts/ci-failure-digest.ts tail "$output" || true
             exit "$status"
           }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
 
       - name: Test the stella browser host
         # The runner's Chrome in a desktop session: headful, sandbox on.
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && needs.ci-plan.outputs.package_checks_required == 'true' && matrix.shard == 'rest-web' && (steps.affected.outputs.flag == '' || contains(needs.ci-plan.outputs.test_scope, '@stll/agent-engine')) }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && needs.ci-plan.outputs.package_checks_required == 'true' && matrix.shard == 'rest' && (steps.affected.outputs.flag == '' || contains(needs.ci-plan.outputs.test_scope, '@stll/agent-engine')) }}
         timeout-minutes: 5
         env:
           STELLA_BROWSER_E2E_EXECUTABLE: /opt/google/chrome/chrome
@@ -3210,52 +3243,11 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Test web
-        id: test-web
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && matrix.shard == 'rest-web') }}
-        env:
-          AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
-          TEST_SCOPE: ${{ needs.ci-plan.outputs.test_scope }}
-          SHARD: web
-        run: |
-          args=()
-          if [[ -n "$AFFECTED_FLAG" ]]; then
-            read -r -a args <<<"$TEST_SCOPE"
-          fi
-          read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
-          API_TEST_SHARD=$(bun scripts/test-shards.ts --api-shard "$SHARD")
-          export API_TEST_SHARD
-          # A cached pass replays only under the quarantine that produced it.
-          FLAKY_TEST_QUARANTINE_DIGEST=$(bun scripts/flaky-test-quarantine.ts digest)
-          export FLAKY_TEST_QUARANTINE_DIGEST
-          set -o pipefail
-          plan="$RUNNER_TEMP/test-plan-$SHARD.json"
-          output="$RUNNER_TEMP/test-output-$SHARD.log"
-          # The upload step reads this path; the rest-web leg writes the rest shard's file.
-          echo "output=$output" >> "$GITHUB_OUTPUT"
-          bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
-          # On failure the log ends with the failing tests and their errors.
-          bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
-            status=$?
-            timeout 60 bun scripts/ci-failure-digest.ts tail "$output" || true
-            exit "$status"
-          }
-          bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
-
-      - name: Upload failed web test output
-        if: failure() && steps.test-web.outcome == 'failure'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: test-output-web
-          path: ${{ steps.test-web.outputs.output }}
-          retention-days: 7
-          if-no-files-found: ignore
-
       - name: Repeat changed tests
         if: >-
           !cancelled()
           && github.event_name == 'pull_request'
-          && matrix.shard == 'rest-web'
+          && (matrix.shard == 'rest' || (matrix.shard == 'web' && !contains(fromJSON(needs.ci-plan.outputs.ci_tests_matrix).shard, 'rest')))
           && needs.ci-plan.outputs.package_checks_required == 'true'
         # A file, not an environment variable: a large diff exceeds the size
         # limit of one variable and the step cannot start.
@@ -3398,8 +3390,7 @@ jobs:
           path: ${{ runner.temp }}/postgres-test-durations.json
           key: postgres-test-durations-${{ github.run_id }}
 
-  # The browser-backed suites. They share one Playwright install, so they stay
-  # in a single job rather than one per suite.
+  # Browser-backed suites (shared Playwright container).
   ci-browser:
     needs: [ci-plan, pr-heavy-gate]
     if: >-
@@ -3429,7 +3420,7 @@ jobs:
       - &full_checkout_input_sha
         id: checkout
         name: Checkout
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -3615,18 +3606,19 @@ jobs:
           bun --filter @stll/ui test:browser -- "${specs[@]}"
 
       - name: Test desktop browser interactions
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (matrix.suite == 'desktop' && steps.desktop-browser-tests.outputs.required == 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (startsWith(matrix.suite, 'desktop-') && steps.desktop-browser-tests.outputs.required == 'true') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-desktop-browser-interactions.json
+          S: ${{ matrix.suite }}
         run: |
           cd apps/desktop
-          bun run test:browser
+          bun run test:browser -- --shard="${S#desktop-}/3"
 
       - name: Upload desktop browser failures
-        if: matrix.suite == 'desktop' && failure() && steps.desktop-browser-tests.outputs.required == 'true'
+        if: startsWith(matrix.suite, 'desktop-') && failure() && steps.desktop-browser-tests.outputs.required == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: desktop-browser-failures
+          name: desktop-browser-failures-${{ matrix.suite }}
           path: apps/desktop/test-results/
           retention-days: 7
           if-no-files-found: ignore
@@ -3690,16 +3682,21 @@ jobs:
         || github.event_name == 'workflow_dispatch')
       )
       )
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [lib, handlers, rest]
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
       contents: read
       actions: write
     env:
+      API_LINT_SHARD: ${{ matrix.shard }}
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -3774,6 +3771,7 @@ jobs:
           bun run code-check:affected -- --leg api --base "$CHECK_BASE_REF"
 
       - name: Result consumption
+        if: matrix.shard == 'rest'
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
@@ -3804,6 +3802,9 @@ jobs:
             let diagnostic;
             let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
+            let ownJob;
+            const failedHere = process.env.JOB_STATUS === "failure";
+            const failed = (step) => step.conclusion === "failure";
             try {
               const jobs = await Promise.race([
                 github.paginate(
@@ -3820,13 +3821,13 @@ jobs:
                   evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
                 }),
               ]);
+              ownJob = jobs.find((job) => job.status === "in_progress" && job.runner_name === process.env.RUNNER_NAME);
               const failures = jobs.flatMap((job) => (job.steps || [])
-                .filter((step) => step.conclusion === "failure")
+                .filter(failed)
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
-              // A lost runner leaves a failed job whose step ended cancelled (or that never ran a step); with no failed
-              // step and no such evidence the jobs API may still be catching up, so cancel as before.
+              if (failedHere && !ownJob?.steps?.some(failed)) failures.push(`${ownJob?.name || context.job}: failed step not yet listed`);
               const lost = jobs.filter((job) => job.conclusion === "failure"
-                && !(job.steps || []).some((step) => step.conclusion === "failure")
+                && !(job.steps || []).some(failed)
                 && (job.steps || []).every((step) => !step.status || step.status === "completed")
                 && (!(job.steps || []).length || job.steps.some((step) => step.conclusion === "cancelled")));
               if (!failures.length && lost.length) {
@@ -3846,6 +3847,20 @@ jobs:
               await core.summary.write();
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
+            }
+            if (ownJob && (failedHere || ownJob.steps?.some(failed))) {
+              try {
+                await github.rest.actions.createWorkflowDispatch({
+                  ...context.repo,
+                  workflow_id: "cancel-failed-run.yml",
+                  ref: "main",
+                  inputs: { run_id: String(context.runId), run_attempt: process.env.GITHUB_RUN_ATTEMPT, job_id: String(ownJob.id) },
+                });
+                core.notice(`${context.job}: the run is cancelled once this job ends, so this job keeps its failure conclusion.`);
+                return;
+              } catch {
+                core.error(`${context.job}: the cancellation could not be handed off; cancelling the run now.`);
+              }
             }
             await github.rest.actions.cancelWorkflowRun({
               ...context.repo,
@@ -3879,7 +3894,7 @@ jobs:
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -4197,6 +4212,7 @@ jobs:
           API_TEST_TIMINGS_DIR: ${{ runner.temp }}/postgres-test-timings
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           REDIS_URL: redis://127.0.0.1:6379
+          STELLA_ISOLATED_POSTGRES_IMAGE: ${{ needs.ci-plan.outputs.postgres }}
           CI_POSTGRES_TEST_SELECTION_ENCODED: ${{ (github.event_name == 'merge_group' || (github.event_name == 'pull_request' && needs.ci-plan.outputs.postgres_pr_required == 'true')) && needs.ci-plan.outputs.postgres_test_selection_encoded || '' }}
         # The full volume benchmark runs in nightly postgres-suites; this job
         # retains its bounded correctness slice alongside every other suite.
@@ -4427,7 +4443,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -4512,7 +4528,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -4971,14 +4987,15 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      - name: Bundle size report
+      - name: Startup bundle gates
+        # Blocking: the startup graph's gates (scripts/bundle-startup-gates.ts).
         run: |
           bun scripts/bundle-baseline.ts --self-test
           bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check
 
       - name: Bundle duplicate content guard
-        # Blocking, unlike the warning-only size report above: a chunk that
-        # repeats a large block of identical content is a build defect.
+        # Blocking: a chunk that repeats a large block of identical content
+        # is a build defect.
         run: bun scripts/bundle-baseline.ts --check-duplicates
 
       - name: Prod-deps web boot smoke
@@ -5062,7 +5079,7 @@ jobs:
       - *ci_image_mirror_login
       - &setup_bun_cached
         name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           bun-version-file: package.json
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -5147,7 +5164,9 @@ jobs:
       )
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # Passing runs take 7 to 9 min (the three bundles about 5 to 7); 20 min
+    # allows about 2.5x contention headroom for a slow hosted runner.
+    timeout-minutes: 20
     permissions:
       contents: read
       actions: write
@@ -5270,6 +5289,7 @@ jobs:
           retention-days: 1
 
   route-smoke:
+    name: route-smoke (${{ matrix.mode }})
     needs: [ci-plan, web-build, heavy-web-build]
     # Affected browser suites certify the queued tree at every queue depth.
     if: >-
@@ -5285,6 +5305,10 @@ jobs:
       )
       )
       )
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [network-baseline, phone-layouts]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -5325,6 +5349,7 @@ jobs:
           dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Prepare merge-base network budget
+        if: matrix.mode == 'network-baseline'
         timeout-minutes: 5
         uses: ./.github/actions/prepare-network-baseline
         with:
@@ -5343,13 +5368,13 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure flaky-test quarantine
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        if: ${{ matrix.mode == 'network-baseline' && !cancelled() && steps.checkout.outcome == 'success' }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Check route network baseline
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        if: ${{ matrix.mode == 'network-baseline' && !cancelled() && steps.checkout.outcome == 'success' }}
         continue-on-error: ${{ github.event_name == 'merge_group' }}
-        timeout-minutes: 6
+        timeout-minutes: 8
         id: network-baseline
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-route-network-baseline.json
@@ -5359,23 +5384,17 @@ jobs:
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e -- route-smoke.spec.ts --project=route-smoke
 
       - name: Explain network baseline failure
-        if: failure() && steps.network-baseline.outcome == 'failure'
+        if: matrix.mode == 'network-baseline' && failure() && steps.network-baseline.outcome == 'failure'
         run: |
           echo "::error::Network baseline failed. Fix unintended regressions; for intentional route changes, add the baseline:record label to this PR, then review the recorded budgets and resolve the recorder's review thread."
 
-      # The phone run follows the stack, not the checkout, so it gets its own
-      # quarantine setup under the same condition.
       - name: Configure flaky-test quarantine for phone layouts
-        if: >-
-          !cancelled()
-          && steps.e2e-stack.outcome == 'success'
+        if: matrix.mode == 'phone-layouts' && !cancelled() && steps.e2e-stack.outcome == 'success'
         uses: ./.github/actions/flaky-test-quarantine
 
       # Same stack and route table, on the narrowest current iPhone in WebKit.
       - name: Check phone layouts
-        if: >-
-          !cancelled()
-          && steps.e2e-stack.outcome == 'success'
+        if: matrix.mode == 'phone-layouts' && !cancelled() && steps.e2e-stack.outcome == 'success'
         timeout-minutes: 8
         id: phone-layout
         env:
@@ -5385,7 +5404,7 @@ jobs:
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:phone
 
       - name: Upload phone layout report
-        if: always() && steps.phone-layout.outcome != 'skipped'
+        if: always() && matrix.mode == 'phone-layouts' && steps.phone-layout.outcome != 'skipped'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: phone-layout-pr-blob
@@ -5393,7 +5412,7 @@ jobs:
           retention-days: 7
 
       - name: Upload route smoke report
-        if: always()
+        if: always() && matrix.mode == 'network-baseline'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: route-smoke-pr-blob
@@ -5404,7 +5423,7 @@ jobs:
         if: failure() && steps.e2e-stack.outcome != 'skipped'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: server-logs-route-smoke
+          name: server-logs-route-smoke-${{ matrix.mode }}
           path: |
             /tmp/api.log
             /tmp/web-production.log
@@ -5414,7 +5433,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: route-smoke-timings
+          name: route-smoke-timings-${{ matrix.mode }}
           path: .cache/playwright-timings/*.json
           retention-days: 7
           if-no-files-found: ignore
@@ -6103,59 +6122,11 @@ jobs:
     steps:
       - name: Cancel merge group after failure in this job
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          JOB_STATUS: ${{ job.status }}
         with:
           retries: 0
-          script: |
-            let diagnostic;
-            let failureSummary = "failed-step lookup unavailable";
-            let evidenceTimer;
-            try {
-              const jobs = await Promise.race([
-                github.paginate(
-                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
-                  {
-                    ...context.repo,
-                    run_id: context.runId,
-                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
-                    per_page: 100,
-                    request: { timeout: 10000 },
-                  },
-                ),
-                new Promise((_, reject) => {
-                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
-                }),
-              ]);
-              const failures = jobs.flatMap((job) => (job.steps || [])
-                .filter((step) => step.conclusion === "failure")
-                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
-              // A lost runner leaves a failed job whose step ended cancelled (or that never ran a step); with no failed
-              // step and no such evidence the jobs API may still be catching up, so cancel as before.
-              const lost = jobs.filter((job) => job.conclusion === "failure"
-                && !(job.steps || []).some((step) => step.conclusion === "failure")
-                && (job.steps || []).every((step) => !step.status || step.status === "completed")
-                && (!(job.steps || []).length || job.steps.some((step) => step.conclusion === "cancelled")));
-              if (!failures.length && lost.length) {
-                core.notice(`${lost.map((job) => job.name).join(", ")}: the runner was lost before any step failed; the run continues.`);
-                return;
-              }
-              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
-              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
-            } catch {
-              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
-            } finally {
-              clearTimeout(evidenceTimer);
-            }
-            core.error(diagnostic);
-            try {
-              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
-              await core.summary.write();
-            } catch {
-              core.error(`${context.job}: cancellation step summary could not be written`);
-            }
-            await github.rest.actions.cancelWorkflowRun({
-              ...context.repo,
-              run_id: context.runId,
-            });
+          script: *merge_group_cancel_script
 
   # One HTML report from the browser suites' blob reports, when a suite
   # failed. Diagnostic only: ci-result evaluates the suites themselves, so
@@ -6452,7 +6423,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.1
+          toolchain: 1.100.0
           targets: ${{ matrix.target }}
 
       - name: Resolve Windows build toolchain
@@ -6631,7 +6602,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.1
+          toolchain: 1.100.0
           targets: wasm32-unknown-unknown
 
       - name: Restore Rust build cache
@@ -6650,9 +6621,11 @@ jobs:
 
       - name: Check generated WebAssembly from a fresh Cargo cache
         id: wasm-check
-        env:
-          SCAN_ENGINE_WASM_OUT_DIR: ${{ runner.temp }}/scan-engine-wasm
-        run: bash packages/scan-engine/scripts/test-wasm-offline.sh
+        run: |
+          bash packages/scan-engine/scripts/test-wasm-offline.sh
+          bash packages/heic-decoder/scripts/test-wasm-offline.sh
+          bash packages/pst-reader/scripts/test-wasm-offline.sh
+          bash packages/recording-wasm/scripts/test-wasm-offline.sh
 
       - name: Record fresh WebAssembly checksums
         if: failure() && steps.wasm-check.outcome == 'failure'
@@ -6669,6 +6642,9 @@ jobs:
           name: scan-engine-wasm
           path: |
             ${{ runner.temp }}/scan-engine-wasm/
+            ${{ runner.temp }}/heic-decoder-wasm/
+            ${{ runner.temp }}/pst-reader-wasm/
+            ${{ runner.temp }}/recording-wasm/
             ${{ runner.temp }}/scan-engine-wasm.sha256
             ${{ runner.temp }}/scan-engine-wasm.toolchain
           retention-days: 7
@@ -6685,10 +6661,10 @@ jobs:
         timeout-minutes: 10
         env:
           CARGO_NET_RETRY: "5"
-        run: bash .github/actions/cargo-deny/fetch.sh packages/scan-engine/Cargo.toml
+        run: for p in scan-engine heic-decoder pst-reader recording-wasm; do bash .github/actions/cargo-deny/fetch.sh packages/$p/Cargo.toml; done
 
       - name: License audit
-        run: cargo deny --offline --manifest-path packages/scan-engine/Cargo.toml check --config packages/scan-engine/deny.toml --hide-inclusion-graph bans licenses sources
+        run: for p in scan-engine heic-decoder pst-reader recording-wasm; do cargo deny --offline --manifest-path packages/$p/Cargo.toml check --config packages/$p/deny.toml --hide-inclusion-graph bans licenses sources; done
 
       - name: Save Rust build cache
         if: success()
@@ -6765,9 +6741,22 @@ jobs:
         name: Setup Rust
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.1
+          toolchain: 1.100.0
           targets: ${{ matrix.target }}
           components: clippy
+
+      - &desktop_rust_cache
+        name: Cache Rust dependencies and build artifacts
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+            ~/.cargo/git/db
+            apps/desktop/src-tauri/target
+          key: ${{ runner.os }}-desktop-rust-${{ github.job }}-${{ matrix.target }}-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-desktop-rust-${{ github.job }}-${{ matrix.target }}-
 
       # The locked crates download once, retried as a unit; every later
       # cargo command runs --frozen and never reaches the registry itself.
@@ -6776,10 +6765,6 @@ jobs:
         timeout-minutes: 10
         run: bash scripts/retry.sh cargo fetch --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --target ${{ matrix.target }}
 
-      # No cargo cache action here: the job is path-filtered to desktop
-      # changes, so it runs rarely and a cold compile (well under the
-      # timeout) is acceptable. It also keeps the LGPL-3.0 rust-cache
-      # action out of the dependency-review-enforced diff.
       - name: Check
         shell: pwsh
         run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --frozen
@@ -6933,6 +6918,7 @@ jobs:
     steps:
       - *desktop_rust_checkout
       - *desktop_rust_toolchain
+      - *desktop_rust_cache
       - *desktop_rust_fetch
       - name: Clippy
         shell: pwsh
@@ -6962,7 +6948,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -7118,7 +7104,7 @@ jobs:
 
       - name: Dependency Review
         if: steps.changes.outputs.required == 'true' || steps.actions.outputs.required == 'true'
-        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        uses: actions/dependency-review-action@bbc44d14a204704ccc493733616cd1e93a0321ec # v5.0.1
         with:
           # The action derives both refs from a pull_request payload on its own;
           # a merge group carries them under its own event key.
@@ -7839,8 +7825,16 @@ jobs:
               .[].jobs[] | select(.conclusion == "cancelled" or .conclusion == "failure" or .conclusion == "timed_out")
               | [.name, .conclusion, (.check_run_url // "missing")] | @tsv
               ' <<< "$cancelled_jobs")
+            # A failed job hands its run's cancellation off and keeps its
+            # failure conclusion (its cancel step succeeded); a job the run's
+            # cancellation reached first ends cancelled. Either names the
+            # failed step that ended the run.
             failed_steps=$(jq -r '
-              .[].jobs[] | select(.conclusion == "cancelled") | . as $job
+              .[].jobs[]
+              | select(.conclusion == "cancelled"
+                  or (.conclusion == "failure"
+                    and any((.steps // [])[]; .name == "Cancel merge group after failure in this job" and .conclusion == "success")))
+              | . as $job
               | (.steps // [])[] | select(.conclusion == "failure")
               | "\($job.name) / \(.number): \(.name) (\($job.html_url))"
               | gsub("%"; "%25") | gsub("\r"; "%0D") | gsub("\n"; "%0A")
@@ -7850,7 +7844,7 @@ jobs:
               echo "$failure_summary"
               printf '%s\n' "$failure_summary" >> "$GITHUB_STEP_SUMMARY"
               while IFS= read -r failed_step; do
-                echo "::error::Cancelled CI job contains a failed step: $failed_step"
+                echo "::error::CI job failed: $failed_step"
               done <<< "$failed_steps"
               exit 1
             fi
@@ -8242,7 +8236,7 @@ jobs:
       # Reporting only: the verdict above is unchanged.
       - name: Setup Bun for the failure digest
         if: failure() && steps.outcome.outcome == 'failure'
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: .workflow-tooling/package.json

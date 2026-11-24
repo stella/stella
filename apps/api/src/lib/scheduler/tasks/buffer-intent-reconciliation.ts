@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { reconcileStaleBufferIntentsGlobally } from "@/api/lib/buffer-intent-reconciliation";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 

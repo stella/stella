@@ -1,15 +1,17 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
 
+import { isPrintedCourtJurisdiction } from "@stll/api-contract/court-identity";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
-import type { Transaction } from "@/api/db/root";
 import {
+  caseLawDecisionAliases,
   caseLawDecisionFallbackIdentities,
   caseLawDecisionJudges,
   caseLawDecisions,
   caseLawDecisionSourceIdentities,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { normalizeDecisionIdentifier } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   DECISION_DATE_OUT_OF_BOUNDS,
@@ -25,7 +27,11 @@ import {
 import { planSupplementComposition } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
-import { resolveDecisionCourtId } from "@/api/lib/case-law/decision-court-identity";
+import {
+  type DecisionCourtIdentityError,
+  DecisionCourtUnrecognizedError,
+  resolveDecisionCourt,
+} from "@/api/lib/case-law/decision-court-identity";
 import {
   decisionContentEvidenceCompatible,
   decisionPublicationCompatible,
@@ -37,6 +43,8 @@ import {
   fallbackEcliComparisonKey,
 } from "@/api/lib/case-law/fallback-decision-identity";
 import type { DecisionStorageIdentity } from "@/api/lib/case-law/fallback-decision-identity";
+import type { PlainTextError } from "@/api/lib/case-law/plain-text";
+import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -44,6 +52,7 @@ import {
   type StatedEcliIdentity,
 } from "@/api/lib/legal-search/adapter-manifest";
 import { DANGEROUS_CHARS } from "@/api/lib/legal-search/corpus-sanitize";
+import type { HeldDecisionAttachment } from "@/api/lib/legal-search/held-decision-attachment";
 import {
   observedDocketOf,
   sanitizeResult,
@@ -83,6 +92,7 @@ type ObserveDecisionOptions = {
   metadataUrlSchema?: unknown;
   input: IngestionResult;
   sourceId: SafeId<"caseLawSource">;
+  heldDecisionAttachment?: HeldDecisionAttachment<string> | null;
 };
 
 /**
@@ -93,15 +103,65 @@ export const observeDecision = ({
   metadataUrlSchema,
   input,
   sourceId,
+  heldDecisionAttachment,
 }: ObserveDecisionOptions): Result<
   ObservedDecision,
-  StoredCorpusValidationError
+  | StoredCorpusValidationError
+  | DecisionCourtIdentityError
+  | DecisionCourtUnrecognizedError
+  | PlainTextError
 > => {
   const sanitized = sanitizeResult(input, metadataUrlSchema);
   if (sanitized.isErr()) {
     return sanitized;
   }
-  const observed = sanitized.value;
+  if (sanitized.value.plainTextOutcome.type === "item_build_failed") {
+    return Result.err(sanitized.value.plainTextOutcome.error);
+  }
+  // A directory jurisdiction's adapter maps its source's court id and rejects
+  // what the directory does not admit before a result gets here; one that
+  // reaches the write path unresolved is an adapter defect, and writing it
+  // would store a court the index cannot partition, so the run stops on it.
+  // A printed-name jurisdiction's court is read onto its directory court
+  // here, for every adapter at once; a name the directory cannot place is
+  // this decision's rejection, recorded with the batch's other failures, and
+  // never a new court.
+  const court = resolveDecisionCourt(sanitized.value);
+  if (Result.isError(court)) {
+    if (
+      heldDecisionAttachment !== undefined &&
+      heldDecisionAttachment !== null
+    ) {
+      return Result.err(
+        new DecisionCourtUnrecognizedError({
+          message: `Attaching record's court is not recognized (${court.error.reason})`,
+          cause: court.error,
+        }),
+      );
+    }
+    return isPrintedCourtJurisdiction(sanitized.value.country)
+      ? court
+      : panic(court.error.message, court.error);
+  }
+  // The name the adapter stated stays beside the one the row is stored
+  // under: in the metadata's `court`, where an adapter that prints a court
+  // keeps it, and where this puts it for one that does not.
+  const printed = sanitized.value.court;
+  const keepsPrinted =
+    court.value.court === printed ||
+    typeof sanitized.value.metadata["court"] === "string";
+  const official = toPlainText(court.value.court);
+  const officialCourt = Result.isError(official)
+    ? panic(`A directory court name is not plain text: ${court.value.court}`)
+    : official.value;
+  const observed: IngestionResult = {
+    ...sanitized.value,
+    court: officialCourt,
+    ...(court.value.courtId === null ? {} : { courtId: court.value.courtId }),
+    ...(keepsPrinted
+      ? {}
+      : { metadata: { ...sanitized.value.metadata, court: printed } }),
+  };
   const docket = observedDocketOf(input);
   if (docket.type !== "kept") {
     // The row is written either way; the event is the flag an operator
@@ -127,14 +187,6 @@ export const observeDecision = ({
         : [input.legacyCaseNumber.replace(DANGEROUS_CHARS, "")]),
     ]),
   ];
-  // An adapter maps its source's court to a directory id and rejects what the
-  // directory does not admit before a result gets here. One that reaches the
-  // write path unresolved is an adapter defect, and writing it would store a
-  // court the index cannot partition, so the run stops on it.
-  const courtId = resolveDecisionCourtId(observed);
-  if (Result.isError(courtId)) {
-    return panic(courtId.error.message, courtId.error);
-  }
   const rejectedDecisionDate =
     observed.decisionDate === undefined ? input.decisionDate : undefined;
   if (rejectedDecisionDate !== undefined) {
@@ -787,6 +839,26 @@ const findExistingDecisionTx = async (
   return { claimedDecisionId, existing, ecliIdentity };
 };
 
+/**
+ * Take the transaction-scoped locks on a record's publisher identities: every
+ * writer that decides what those identities name (a decision of their own,
+ * or a held decision they enrich) holds them while it decides.
+ */
+export const lockSourceIdentitiesTx = async (
+  tx: Transaction,
+  sourceId: SafeId<"caseLawSource">,
+  sortedIdentities: readonly string[],
+): Promise<void> => {
+  for (const identity of sortedIdentities) {
+    // SAFETY: candidates are hard-capped by `observeDecision`; sorted
+    // sequential acquisition prevents deadlocks between overlapping sets.
+    // db-await-in-loop: bounded identity lock set must be sequential
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext('case_law_source_identity'), hashtext(${`${sourceId}:${identity}`}))`,
+    );
+  }
+};
+
 type ResolveDecisionIdentityOptions = ObservedDecision & {
   sourceId: SafeId<"caseLawSource">;
   statedEcliIdentity: StatedEcliIdentity;
@@ -820,14 +892,7 @@ export const resolveDecisionIdentityTx = async (
     storedDecisionId,
   }: ResolveDecisionIdentityOptions,
 ) => {
-  for (const identity of sourceIdentityCandidates) {
-    // SAFETY: candidates are hard-capped above; sorted sequential
-    // acquisition prevents deadlocks between overlapping identity sets.
-    // db-await-in-loop: bounded identity lock set must be sequential
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext('case_law_source_identity'), hashtext(${`${sourceId}:${identity}`}))`,
-    );
-  }
+  await lockSourceIdentitiesTx(tx, sourceId, sourceIdentityCandidates);
 
   const claims =
     sourceIdentityCandidates.length === 0
@@ -998,3 +1063,35 @@ export type DecisionIdentity = Awaited<
 
 /** The stored row identity resolution matched, as it read it. */
 export type ExistingDecision = NonNullable<DecisionIdentity["existing"]>;
+
+/** Release only provisional claims with no physical or approved canonical owner. */
+export const clearUnbackedSourceIdentitiesTx = async (
+  tx: Transaction,
+  {
+    sourceId,
+    sourceDocumentIds,
+  }: {
+    sourceId: SafeId<"caseLawSource">;
+    sourceDocumentIds: readonly string[];
+  },
+): Promise<void> => {
+  if (sourceDocumentIds.length === 0) {
+    return;
+  }
+  // audit: skip — provisional publisher-identity reconciliation; public data
+  await tx.delete(caseLawDecisionSourceIdentities).where(
+    and(
+      eq(caseLawDecisionSourceIdentities.sourceId, sourceId),
+      inArray(caseLawDecisionSourceIdentities.sourceDocumentId, [
+        ...sourceDocumentIds,
+      ]),
+      sql`NOT EXISTS (SELECT 1 FROM ${caseLawDecisions}
+      WHERE ${caseLawDecisions.id} = ${canonicalDecisionIdSql(caseLawDecisionSourceIdentities.decisionId)}
+        OR ${caseLawDecisions.id} = ${caseLawDecisionSourceIdentities.decisionId}
+        OR (${caseLawDecisions.sourceId} = ${caseLawDecisionSourceIdentities.sourceId}
+          AND ${caseLawDecisions.sourceDocumentId} = ${caseLawDecisionSourceIdentities.sourceDocumentId}))`,
+      sql`NOT EXISTS (SELECT 1 FROM ${caseLawDecisionAliases}
+        WHERE ${caseLawDecisionAliases.retiredDecisionId} = ${caseLawDecisionSourceIdentities.decisionId})`,
+    ),
+  );
+};

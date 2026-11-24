@@ -3,14 +3,16 @@ import { and, eq } from "drizzle-orm";
 
 import { SHAREPOINT_REFUSAL_CODE } from "@stll/api-contract/sharepoint";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { sharepointConnections } from "@/api/db/schema";
 import { assertSharepointConnectionEnabled } from "@/api/handlers/sharepoint/enablement";
+import type { SharepointGraphError } from "@/api/handlers/sharepoint/graph-client";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import {
-  ensureSharepointAccessToken,
+  acquireSharepointAccessToken,
   markReconnectRequired,
-  type SharepointGraphError,
-} from "@/api/handlers/sharepoint/graph-client";
+} from "@/api/lib/auth/microsoft365/graph-token";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -20,6 +22,8 @@ type WithSharepointGraphOptions<T, E> = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   safeDb: SafeDb;
+  recordAuditEvent: AuditRecorder;
+  signal?: AbortSignal | undefined;
   /** `E` covers the caller's own failures beside Graph's, such as storage. */
   call: (
     accessToken: AccessToken,
@@ -27,9 +31,10 @@ type WithSharepointGraphOptions<T, E> = {
 };
 
 /**
- * Runs one delegated Graph call as the signed-in person: checks both
+ * Runs one delegated Graph file read as the signed-in person: checks both
  * enablement gates, loads that person's own connection in the active
- * organization, refreshes its token when needed, and runs `call`. When Graph
+ * organization, acquires a token that carries the file capability
+ * (refreshing it when needed), and runs `call`. When Graph
  * no longer accepts the token (a revoked grant), the connection is marked for
  * reconnect so the status endpoint reports it.
  */
@@ -37,6 +42,8 @@ export const withSharepointGraph = async <T, E = never>({
   organizationId,
   userId,
   safeDb,
+  recordAuditEvent,
+  signal,
   call,
 }: WithSharepointGraphOptions<T, E>): Promise<
   Result<
@@ -65,6 +72,7 @@ export const withSharepointGraph = async <T, E = never>({
             refreshTokenIv: sharepointConnections.refreshTokenIv,
             expiresAt: sharepointConnections.expiresAt,
             status: sharepointConnections.status,
+            scope: sharepointConnections.scope,
           })
           .from(sharepointConnections)
           .where(
@@ -92,8 +100,15 @@ export const withSharepointGraph = async <T, E = never>({
     // token crypto's user-scoping guard receives a typed owner id.
     const connection = { ...row, userId: brandPersistedUserId(row.userId) };
 
-    const { accessToken, accessTokenIv } = yield* Result.await(
-      ensureSharepointAccessToken({ connection, safeDb }),
+    const { accessToken, accessTokenEncrypted } = yield* Result.await(
+      acquireSharepointAccessToken({
+        connection,
+        safeDb,
+        capability: "files.read",
+        permit: grantThirdPartyOutboundPermit(),
+        recordAuditEvent,
+        signal,
+      }),
     );
 
     const result = await call(accessToken);
@@ -104,8 +119,9 @@ export const withSharepointGraph = async <T, E = never>({
     ) {
       yield* Result.await(
         markReconnectRequired({
-          connection: { ...connection, accessTokenIv },
+          connection: { ...connection, accessTokenEncrypted },
           safeDb,
+          recordAuditEvent,
         }),
       );
     }

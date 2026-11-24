@@ -1,6 +1,6 @@
 import { TaggedError } from "better-result";
 
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db-types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";

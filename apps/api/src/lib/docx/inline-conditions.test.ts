@@ -759,8 +759,10 @@ describe("fillTemplate with inline conditions", () => {
       ),
     );
 
-    const adapter: AiOccurrenceAdapter = async ({ occurrences }) =>
-      occurrences.map((_, i) => `RENDERING-${String(i + 1)}`);
+    const adapter: AiOccurrenceAdapter = async ({ occurrences }) => ({
+      type: "adapted",
+      renderings: occurrences.map((_, i) => `RENDERING-${String(i + 1)}`),
+    });
     const adapted = await adaptAiFields({
       file: docx,
       fields: [{ path: "law", aiAdapt: true }],

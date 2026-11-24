@@ -8,8 +8,10 @@ import {
 } from "@stll/api-contract/legislation-expression";
 import { statuteChangeCountsSchema } from "@stll/api-contract/statute-version-changes";
 import { documentAstSchema } from "@stll/legal-ast/document-ast";
+import { GOVERNING_WORDING_POSITIONS } from "@stll/legal-ast/provision-preview";
 import type { StatuteChangeCounts } from "@stll/legal-ast/statute-compare";
 
+import { PROVISION_WORDING_CHANGES } from "@/api/handlers/legislation/provision-wording-change";
 import type { provisionPreviewOutput } from "@/api/lib/chat/decision-reader-projections";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import {
@@ -17,12 +19,27 @@ import {
   emptyAstSchema,
 } from "@/api/lib/legal-search/document-types";
 import {
+  type LegislationAmendmentEffect,
+  legislationAmendmentEffectSchema,
+} from "@/api/lib/legal-search/legislation-amendment-effect";
+import {
+  LEGISLATION_AMENDMENT_CHANNEL_LIMIT,
+  LEGISLATION_AMENDMENT_CHANNEL_MAX_BYTES,
+  LEGISLATION_AMENDMENT_LEGACY_CHANNEL,
+} from "@/api/lib/legal-search/legislation-amendment-observations";
+import {
   LEGISLATION_AMENDMENT_PAGE_MAX,
   type readLegislationAmendments,
   type readLegislationAmendmentSnapshot,
+  storedLegislationAmendmentRelation,
 } from "@/api/lib/legal-search/legislation-amendments";
 import { LEGISLATION_AMENDMENT_CHANGE_KINDS } from "@/api/lib/legal-search/legislation-ingestion-types";
-import type { LegislationAmendmentCoverage } from "@/api/lib/legal-search/legislation-ingestion-types";
+import type {
+  LegislationAmendmentChannelObservation,
+  LegislationAmendmentCoverage,
+  LegislationAmendmentPositiveEvidence,
+  LegislationAmendmentStoredCoverage,
+} from "@/api/lib/legal-search/legislation-ingestion-types";
 import type { ProvisionPreview } from "@/api/lib/legal-search/legislation-provision-preview";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -63,30 +80,137 @@ const windowFields = {
   versionValidTo: nullableBoundedString(readerTextBytes.versionValidTo),
   ...labelFields,
 };
+const amendmentEffectResponseSchema = v.variant("type", [
+  legislationAmendmentEffectSchema.options[0],
+  v.object({
+    ...legislationAmendmentEffectSchema.options[1].entries,
+    text: nullableBoundedString(8192),
+  }),
+  legislationAmendmentEffectSchema.options[2],
+]);
+const amendmentRelationResponseSchema = v.object({
+  publisherId: boundedString(8192),
+  amendingEli: boundedString(readerTextBytes.eli),
+  amendingTitle: nullableBoundedString(readerTextBytes.title),
+  amendingAnchor: nullableBoundedString(8192),
+  affectedAnchor: boundedString(8192),
+  changeKind: v.picklist(LEGISLATION_AMENDMENT_CHANGE_KINDS),
+  effective: amendmentEffectResponseSchema,
+  publisherInstruction: nullableBoundedString(8192),
+});
+const observationFields = {
+  channel: boundedString(LEGISLATION_AMENDMENT_CHANNEL_MAX_BYTES),
+  observedAt: boundedString(32),
+};
+const positiveEvidenceFields = {
+  observedAt: observationFields.observedAt,
+  relation: amendmentRelationResponseSchema,
+  retainedConditional: v.optional(
+    v.object({
+      observedAt: v.pipe(
+        observationFields.observedAt,
+        v.description(
+          "Time of the latest incorporated conditional contribution; individual fields may originate earlier.",
+        ),
+      ),
+      relation: v.pipe(
+        amendmentRelationResponseSchema,
+        v.description(
+          "Bounded same-channel conditional projection, distinct from the latest raw relation.",
+        ),
+      ),
+    }),
+  ),
+};
+const amendmentObservationsSchema = v.pipe(
+  v.array(
+    v.variant("status", [
+      v.object({
+        status: v.picklist(["present", "historical"]),
+        ...observationFields,
+        ...positiveEvidenceFields,
+      }),
+      v.object({
+        status: v.literal("absent"),
+        ...observationFields,
+        lastPositive: v.nullable(v.object(positiveEvidenceFields)),
+      }),
+    ]),
+  ),
+  v.maxLength(LEGISLATION_AMENDMENT_CHANNEL_LIMIT),
+);
+
+const resolvedAmendmentEffectSchema = v.union([
+  amendmentEffectResponseSchema,
+  v.object({ type: v.literal("conflicting") }),
+]);
+
+const amendmentCoverageSchema = v.union([
+  v.object({ type: v.literal("complete") }),
+  v.object({
+    type: v.literal("partial"),
+    unlocatedRelations: v.number(),
+    reason: boundedString(8192),
+  }),
+  v.object({ type: v.literal("not-stated"), reason: boundedString(8192) }),
+]);
+const amendmentCoverageAggregationSchema = v.object({
+  representativeChannel: boundedString(LEGISLATION_AMENDMENT_CHANNEL_MAX_BYTES),
+  channels: v.pipe(
+    v.array(
+      v.object({
+        channel: boundedString(LEGISLATION_AMENDMENT_CHANNEL_MAX_BYTES),
+        coverage: amendmentCoverageSchema,
+      }),
+    ),
+    v.maxLength(LEGISLATION_AMENDMENT_CHANNEL_LIMIT),
+  ),
+  distinctUnlocatedTotal: v.variant("type", [
+    v.object({ type: v.literal("exact"), count: v.number() }),
+    v.object({ type: v.literal("unknown") }),
+  ]),
+});
 const statuteAmendmentPageSchema = v.object({
   items: v.pipe(
     v.array(
       v.object({
         publisherId: boundedString(8192),
+        /**
+         * Other publisher links that state the same instruction (same
+         * amending act, provision, change and effective day). The publisher
+         * records them separately and they are stored as published; a read
+         * shows the instruction once and names every link.
+         */
+        duplicatePublisherIds: v.pipe(
+          v.array(boundedString(8192)),
+          v.maxLength(LEGISLATION_AMENDMENT_PAGE_MAX),
+        ),
         amendingEli: boundedString(readerTextBytes.eli),
         amendingTitle: nullableBoundedString(readerTextBytes.title),
         affectedAnchor: boundedString(8192),
         changeKind: v.picklist(LEGISLATION_AMENDMENT_CHANGE_KINDS),
         effectiveDate: nullableBoundedString(32),
         effectiveText: nullableBoundedString(8192),
+        effective: resolvedAmendmentEffectSchema,
+        observations: amendmentObservationsSchema,
       }),
     ),
     v.maxLength(LEGISLATION_AMENDMENT_PAGE_MAX),
   ),
   observedAt: boundedString(32),
   coverage: v.union([
-    v.object({ type: v.literal("complete") }),
     v.object({
-      type: v.literal("partial"),
-      unlocatedRelations: v.number(),
-      reason: boundedString(8192),
+      ...amendmentCoverageSchema.options[0].entries,
+      aggregation: v.optional(amendmentCoverageAggregationSchema),
     }),
-    v.object({ type: v.literal("not-stated"), reason: boundedString(8192) }),
+    v.object({
+      ...amendmentCoverageSchema.options[1].entries,
+      aggregation: v.optional(amendmentCoverageAggregationSchema),
+    }),
+    v.object({
+      ...amendmentCoverageSchema.options[2].entries,
+      aggregation: v.optional(amendmentCoverageAggregationSchema),
+    }),
   ]),
   truncated: v.boolean(),
 });
@@ -97,7 +221,7 @@ export type StatuteAmendmentPage = v.InferOutput<
 
 // Field by field: a stored snapshot written before its keys were closed must
 // still pass the closed response schema.
-const projectedCoverage = (
+const projectedCoverageReport = (
   coverage: LegislationAmendmentCoverage,
 ): StatuteAmendmentPage["coverage"] => {
   switch (coverage.type) {
@@ -120,6 +244,188 @@ const projectedCoverage = (
   }
 };
 
+const projectedCoverage = (
+  coverage: LegislationAmendmentStoredCoverage,
+): StatuteAmendmentPage["coverage"] => {
+  const report = projectedCoverageReport(coverage);
+  if (coverage.aggregation === undefined) {
+    return report;
+  }
+  return {
+    ...report,
+    aggregation: {
+      representativeChannel: coverage.aggregation.representativeChannel,
+      channels: coverage.aggregation.channels.map(
+        ({ channel, coverage: item }) => ({
+          channel,
+          coverage: projectedCoverageReport(item),
+        }),
+      ),
+      distinctUnlocatedTotal: coverage.aggregation.distinctUnlocatedTotal,
+    },
+  };
+};
+
+type AmendmentRow = Awaited<
+  ReturnType<typeof readLegislationAmendments>
+>["items"][number];
+
+/**
+ * One entry per instruction: links that name the same amending act,
+ * provision, change and effective day (or the same stated effective text)
+ * are the publisher restating one instruction. The first link in page order
+ * leads; the others travel as its duplicates, so no link id is dropped. The
+ * change kind is part of the key: two kinds on one day are two instructions.
+ */
+const amendmentPositiveDedupeKey = (
+  item: LegislationAmendmentPositiveEvidence,
+) => ({
+  observedAt: item.observedAt,
+  relation: { ...item.relation, publisherId: "" },
+  ...(item.retainedConditional === undefined
+    ? {}
+    : {
+        retainedConditional: {
+          ...item.retainedConditional,
+          relation: { ...item.retainedConditional.relation, publisherId: "" },
+        },
+      }),
+});
+const amendmentObservationDedupeKey = (
+  item: LegislationAmendmentChannelObservation,
+) => {
+  if (item.status !== "absent") {
+    return {
+      status: item.status,
+      channel: item.channel,
+      ...amendmentPositiveDedupeKey(item),
+    };
+  }
+  return {
+    ...item,
+    lastPositive:
+      item.lastPositive === null
+        ? null
+        : amendmentPositiveDedupeKey(item.lastPositive),
+  };
+};
+
+const dedupeAmendments = (
+  rows: readonly AmendmentRow[],
+): { row: AmendmentRow; duplicates: AmendmentRow[] }[] => {
+  const groups = new Map<
+    string,
+    { row: AmendmentRow; duplicates: AmendmentRow[] }
+  >();
+  for (const row of rows) {
+    const key = JSON.stringify([
+      row.amendingEli,
+      row.affectedAnchor,
+      row.changeKind,
+      row.effectiveDate,
+      row.effectiveDate === null ? row.effectiveText : null,
+      row.effectDetails,
+      row.observations?.map(amendmentObservationDedupeKey),
+    ]);
+    const group = groups.get(key);
+    if (group === undefined) {
+      groups.set(key, { row, duplicates: [] });
+    } else {
+      group.duplicates.push(row);
+    }
+  }
+  return [...groups.values()];
+};
+
+const projectAmendmentEffect = (
+  effect: LegislationAmendmentEffect,
+): LegislationAmendmentEffect => {
+  switch (effect.type) {
+    case "date":
+      return { type: "date", on: effect.on };
+    case "not-stated":
+      return { type: "not-stated", text: nullableText(effect.text, 8192) };
+    case "conditional": {
+      const text = truncateTextBytes(effect.condition.text, 8192);
+      return {
+        type: "conditional",
+        condition: {
+          text:
+            text.trim().length === 0
+              ? truncateTextBytes(effect.condition.text.trimStart(), 8192)
+              : text,
+          label: nullableText(effect.condition.label, 8192),
+        },
+        workingDate: effect.workingDate,
+        actualDate: effect.actualDate,
+      };
+    }
+    default:
+      effect satisfies never;
+      return panic("Unhandled amendment effect");
+  }
+};
+
+const projectAmendmentRelation = (
+  relation: ReturnType<typeof storedLegislationAmendmentRelation>,
+) => ({
+  publisherId: truncateTextBytes(relation.publisherId, 8192),
+  amendingEli: truncateTextBytes(relation.amendingEli, readerTextBytes.eli),
+  amendingTitle: nullableText(relation.amendingTitle, readerTextBytes.title),
+  amendingAnchor: nullableText(relation.amendingAnchor, 8192),
+  affectedAnchor: truncateTextBytes(relation.affectedAnchor, 8192),
+  changeKind: relation.changeKind,
+  effective: projectAmendmentEffect(relation.effective),
+  publisherInstruction: nullableText(relation.publisherInstruction, 8192),
+});
+
+const projectAmendmentPositiveEvidence = (
+  item: LegislationAmendmentPositiveEvidence,
+) => ({
+  observedAt: item.observedAt,
+  relation: projectAmendmentRelation(item.relation),
+  ...(item.retainedConditional === undefined
+    ? {}
+    : {
+        retainedConditional: {
+          observedAt: item.retainedConditional.observedAt,
+          relation: projectAmendmentRelation(item.retainedConditional.relation),
+        },
+      }),
+});
+
+const projectAmendmentObservation = (
+  item: LegislationAmendmentChannelObservation,
+) => {
+  switch (item.status) {
+    case "present":
+      return {
+        status: "present",
+        channel: item.channel,
+        ...projectAmendmentPositiveEvidence(item),
+      } as const;
+    case "historical":
+      return {
+        status: "historical",
+        channel: item.channel,
+        ...projectAmendmentPositiveEvidence(item),
+      } as const;
+    case "absent":
+      return {
+        status: "absent",
+        channel: item.channel,
+        observedAt: item.observedAt,
+        lastPositive:
+          item.lastPositive === null
+            ? null
+            : projectAmendmentPositiveEvidence(item.lastPositive),
+      } as const;
+    default:
+      item satisfies never;
+      return panic("Unhandled amendment observation state");
+  }
+};
+
 type ProjectStatuteAmendmentsOptions = {
   page: Awaited<ReturnType<typeof readLegislationAmendments>>;
   snapshot: Awaited<ReturnType<typeof readLegislationAmendmentSnapshot>>;
@@ -133,14 +439,34 @@ export const projectStatuteAmendments = ({
   }
   const coverage = snapshot.coverage;
   return {
-    items: page.items.map((row) => ({
+    items: dedupeAmendments(page.items).map(({ row, duplicates }) => ({
       publisherId: truncateTextBytes(row.publisherId, 8192),
+      duplicatePublisherIds: duplicates.map((duplicate) =>
+        truncateTextBytes(duplicate.publisherId, 8192),
+      ),
       amendingEli: truncateTextBytes(row.amendingEli, readerTextBytes.eli),
       amendingTitle: nullableText(row.amendingTitle, readerTextBytes.title),
       affectedAnchor: truncateTextBytes(row.affectedAnchor, 8192),
       changeKind: row.changeKind,
       effectiveDate: row.effectiveDate,
       effectiveText: nullableText(row.effectiveText, 8192),
+      effective:
+        row.effectDetails?.type === "conflicting"
+          ? { type: "conflicting" }
+          : projectAmendmentEffect(
+              row.effectDetails ??
+                storedLegislationAmendmentRelation(row).effective,
+            ),
+      observations: (
+        row.observations ?? [
+          {
+            status: "present",
+            channel: LEGISLATION_AMENDMENT_LEGACY_CHANNEL,
+            observedAt: snapshot.observedAt.toISOString(),
+            relation: storedLegislationAmendmentRelation(row),
+          } satisfies LegislationAmendmentChannelObservation,
+        ]
+      ).map(projectAmendmentObservation),
     })),
     observedAt: snapshot.observedAt.toISOString(),
     coverage: projectedCoverage(coverage),
@@ -223,15 +549,49 @@ export const statuteReaderSuccessResponseSchema = v.object({
   fulltext: v.union([v.string(), v.null()]),
 });
 
-const provisionHistoryItemSchema = v.object({
+const provisionHistoryVersionFields = {
   country: boundedString(readerTextBytes.country),
   slug: nullableBoundedString(readerTextBytes.slug),
   sourceUrl: nullableBoundedString(readerTextBytes.sourceUrl),
   documentId: resourceIdSchema("legislationDocument"),
   allowsDerivedAi: v.boolean(),
   ...windowFields,
+};
+const foundProvisionHistoryItemSchema = v.object({
+  ...provisionHistoryVersionFields,
+  status: v.literal("found"),
+  /**
+   * How this wording relates to the consolidation just before it, compared
+   * on the full text; see `PROVISION_WORDING_CHANGES`.
+   */
+  wordingChange: v.picklist(PROVISION_WORDING_CHANGES),
   text: boundedString(readerTextBytes.provisionText),
+  /**
+   * Wording outside the read subdivision that governs it; see
+   * `governingWording` in `@stll/legal-ast/provision-preview`.
+   */
+  governingText: v.pipe(
+    v.array(
+      v.object({
+        anchor: boundedString(readerTextBytes.anchor),
+        position: v.picklist(GOVERNING_WORDING_POSITIONS),
+        text: boundedString(readerTextBytes.provisionText),
+      }),
+    ),
+    v.maxLength(LIMITS.legislationGoverningTextMax),
+  ),
+  /** Present when governing wording past the bound was left out. */
+  governingTextTruncated: v.optional(v.literal(true)),
 });
+/** A consolidation whose structure could not be read: no wording, no claim. */
+const unavailableProvisionHistoryItemSchema = v.object({
+  ...provisionHistoryVersionFields,
+  status: v.literal("unavailable"),
+});
+const provisionHistoryItemSchema = v.variant("status", [
+  foundProvisionHistoryItemSchema,
+  unavailableProvisionHistoryItemSchema,
+]);
 export const provisionHistorySuccessResponseSchema = v.object({
   items: v.pipe(
     v.array(provisionHistoryItemSchema),
@@ -347,7 +707,13 @@ export const projectStatuteReader = (row: ReaderRow): Reader => {
 };
 
 type HistoryItem = v.InferOutput<typeof provisionHistoryItemSchema>;
-export const projectProvisionHistoryItem = (row: HistoryItem): HistoryItem => ({
+type FoundHistoryItem = v.InferOutput<typeof foundProvisionHistoryItemSchema>;
+export const projectProvisionHistoryItem = (row: HistoryItem): HistoryItem =>
+  row.status === "found"
+    ? projectFoundProvisionHistoryItem(row)
+    : { ...projectHistoryVersion(row), status: row.status };
+
+const projectHistoryVersion = (row: HistoryItem) => ({
   country: truncateTextBytes(row.country, readerTextBytes.country),
   slug: nullableText(row.slug, readerTextBytes.slug),
   sourceUrl: nullableText(row.sourceUrl, readerTextBytes.sourceUrl),
@@ -364,7 +730,26 @@ export const projectProvisionHistoryItem = (row: HistoryItem): HistoryItem => ({
     row.versionValidTo,
     readerTextBytes.versionValidTo,
   ),
+});
+
+const projectFoundProvisionHistoryItem = (
+  row: FoundHistoryItem,
+): FoundHistoryItem => ({
+  ...projectHistoryVersion(row),
+  status: row.status,
+  wordingChange: row.wordingChange,
   text: truncateTextBytes(row.text, readerTextBytes.provisionText),
+  ...(row.governingTextTruncated === true ||
+  row.governingText.length > LIMITS.legislationGoverningTextMax
+    ? { governingTextTruncated: true as const }
+    : {}),
+  governingText: row.governingText
+    .slice(0, LIMITS.legislationGoverningTextMax)
+    .map((wording) => ({
+      anchor: truncateTextBytes(wording.anchor, readerTextBytes.anchor),
+      position: wording.position,
+      text: truncateTextBytes(wording.text, readerTextBytes.provisionText),
+    })),
 });
 
 type PreviewTransport = v.InferOutput<

@@ -84,17 +84,14 @@ export const OriginalDocxView = ({
   // array is made once.
   const [plugins] = React.useState(() => [createDocumentPlugin(setDoc)]);
 
-  const locations = React.useMemo(
-    () =>
-      doc === null
-        ? NOT_YET_LOCATED
-        : locateClaimsInDocument({
-            doc,
-            blocks: run.blocks,
-            claims: run.claims,
-          }),
-    [doc, run.blocks, run.claims],
-  );
+  const locations =
+    doc === null
+      ? NOT_YET_LOCATED
+      : locateClaimsInDocument({
+          doc,
+          blocks: run.blocks,
+          claims: run.claims,
+        });
 
   const claimById = new Map(claims.map((claim) => [claim.id, claim]));
   const marks = locations.located.flatMap((location) => {
@@ -250,6 +247,7 @@ export const OriginalDocxView = ({
           interactionMode: "preview-only",
           pdfPageSource: "document",
           scaleOffset: 0,
+          underOverlayBar: false,
           viewId,
           workspaceId,
         })}

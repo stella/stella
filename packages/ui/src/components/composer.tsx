@@ -4,7 +4,11 @@ import type { ReactNode } from "react";
 
 import { ChevronDownIcon } from "../icons";
 import { cn } from "../lib/utils";
-import { COMPOSER_PLACEHOLDER_CLASS } from "./composer-tokens";
+import {
+  COMPOSER_PLACEHOLDER_CLASS,
+  COMPOSER_STATUS_ROW_CENTERED_CLASS,
+  COMPOSER_STATUS_ROW_CLASS,
+} from "./composer-tokens";
 import {
   Menu,
   MenuPopup,
@@ -29,6 +33,8 @@ export {
   COMPOSER_LEADING_GROUP_CLASS,
   COMPOSER_SEND_BUTTON_CLASS,
   COMPOSER_PICKER_TRIGGER_CLASS,
+  COMPOSER_STATUS_ROW_CENTERED_CLASS,
+  COMPOSER_STATUS_ROW_CLASS,
 } from "./composer-tokens";
 
 /** Where the placeholder sits over the editor, in each stature. */
@@ -77,6 +83,14 @@ type ComposerStatusRowProps = {
 };
 
 /**
+ * The rendered status row is the `composer-status` container: the same row
+ * renders under the wide main chat and in a narrow side pane, so a control
+ * that compacts itself queries the row's width (`@max-xl/composer-status:`),
+ * not the viewport's. A loading view's row draws no such control.
+ */
+const COMPOSER_STATUS_CONTAINER_CLASS = "@container/composer-status";
+
+/**
  * The slim status row rendered beneath a composer box: a `text-xs` row with
  * a start cluster and an end slot pinned to the far edge. Shared by every
  * surface so the shell can never drift. Renders nothing when both slots are
@@ -96,7 +110,8 @@ export const ComposerStatusRow = ({
     return (
       <div
         className={cn(
-          "text-muted-foreground @container mt-1.5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-1 text-xs",
+          COMPOSER_STATUS_ROW_CENTERED_CLASS,
+          COMPOSER_STATUS_CONTAINER_CLASS,
           className,
         )}
       >
@@ -110,12 +125,13 @@ export const ComposerStatusRow = ({
   return (
     <div
       className={cn(
-        "text-muted-foreground mt-1.5 flex items-center justify-between gap-2 px-1 text-xs",
+        COMPOSER_STATUS_ROW_CLASS,
+        COMPOSER_STATUS_CONTAINER_CLASS,
         className,
       )}
     >
       {start}
-      {end !== undefined && <div className="ms-auto">{end}</div>}
+      {end !== undefined && <div className="ms-auto min-w-0">{end}</div>}
     </div>
   );
 };

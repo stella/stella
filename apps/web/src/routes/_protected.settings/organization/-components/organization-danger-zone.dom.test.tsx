@@ -170,7 +170,7 @@ test("renewing-subscription deletion stays open and offers plan and usage recove
   const confirm = within(dialog).getByRole("button", {
     name: messages.admin.deleteOrganization,
   });
-  expect(confirm).toHaveProperty("disabled", true);
+  expect(confirm.getAttribute("aria-disabled")).toBe("true");
   expect(requests).toHaveLength(0);
   fireEvent.change(within(dialog).getByRole("textbox"), {
     target: { value: "Novak Legal" },
@@ -225,7 +225,7 @@ test("successful leave remains completed when destination refresh fails", async 
     ).toBe("status"),
   );
   expect(completed()).toBe(1);
-  expect(leave).toHaveProperty("disabled", true);
+  expect(leave.getAttribute("aria-disabled")).toBe("true");
   fireEvent.click(leave);
   expect(requests).toBe(1);
 });
@@ -244,8 +244,10 @@ test("deletion waits for a current activity log archive the owner can request", 
   );
   mount(true, undefined, null);
   expect(
-    screen.getByRole("button", { name: messages.admin.deleteOrganization }),
-  ).toHaveProperty("disabled", true);
+    screen
+      .getByRole("button", { name: messages.admin.deleteOrganization })
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
 
   fireEvent.click(
     screen.getByRole("button", { name: messages.admin.auditArchiveRequest }),
@@ -261,8 +263,10 @@ test("deletion waits for a current activity log archive the owner can request", 
     path: "/v1/organizations/audit-export",
   });
   expect(
-    screen.getByRole("button", { name: messages.admin.deleteOrganization }),
-  ).toHaveProperty("disabled", true);
+    screen
+      .getByRole("button", { name: messages.admin.deleteOrganization })
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
 });
 
 test("an outdated archive offers a new export and keeps deletion closed", () => {
@@ -274,8 +278,10 @@ test("an outdated archive offers a new export and keeps deletion closed", () => 
     screen.getByRole("button", { name: messages.admin.auditArchiveRequestNew }),
   ).toBeDefined();
   expect(
-    screen.getByRole("button", { name: messages.admin.deleteOrganization }),
-  ).toHaveProperty("disabled", true);
+    screen
+      .getByRole("button", { name: messages.admin.deleteOrganization })
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
 });
 
 test("a deletion refused for an outdated archive says to export again", async () => {
@@ -306,8 +312,10 @@ test("a ready archive the owner has not downloaded keeps deletion closed", () =>
     messages.admin.auditArchiveDownloadFirst,
   );
   expect(
-    screen.getByRole("button", { name: messages.admin.deleteOrganization }),
-  ).toHaveProperty("disabled", true);
+    screen
+      .getByRole("button", { name: messages.admin.deleteOrganization })
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
 });
 
 test("returning to the page rereads a failed archive another session replaced", async () => {
@@ -317,11 +325,13 @@ test("returning to the page rereads a failed archive another session replaced", 
   mount(true, undefined, { id: CURRENT_ARCHIVE.id, status: "failed" });
   const deleteButton = () =>
     screen.getByRole("button", { name: messages.admin.deleteOrganization });
-  expect(deleteButton()).toHaveProperty("disabled", true);
+  expect(deleteButton().getAttribute("aria-disabled")).toBe("true");
 
   returnToPage();
 
-  await waitFor(() => expect(deleteButton()).toHaveProperty("disabled", false));
+  await waitFor(() =>
+    expect(deleteButton().getAttribute("aria-disabled")).toBeNull(),
+  );
   expect(reads).toEqual(["GET /v1/organizations/audit-export"]);
 });
 
@@ -335,7 +345,7 @@ test("a failed archive refresh says so and keeps deletion closed", async () => {
   mount();
   const deleteButton = () =>
     screen.getByRole("button", { name: messages.admin.deleteOrganization });
-  expect(deleteButton()).toHaveProperty("disabled", false);
+  expect(deleteButton().getAttribute("aria-disabled")).toBeNull();
 
   returnToPage();
 
@@ -344,6 +354,6 @@ test("a failed archive refresh says so and keeps deletion closed", async () => {
       messages.common.somethingWentWrong,
     ),
   );
-  expect(deleteButton()).toHaveProperty("disabled", true);
+  expect(deleteButton().getAttribute("aria-disabled")).toBe("true");
   expect(reads).toEqual(["GET /v1/organizations/audit-export"]);
 });

@@ -27,6 +27,7 @@ import {
 } from "@stll/api-contract/chat";
 
 import { arrayOrEmpty } from "@/api/lib/array";
+import { stepLedgerProviderMiddleware } from "@/api/lib/chat/step-ledger-provider-copy";
 import { isRecord } from "@/api/lib/type-guards";
 
 /** Internal snapshot evidence, consumed before persistence and client delivery. */
@@ -234,6 +235,31 @@ const providerToolMetadata = (metadata: unknown) => {
 
 type ToolCallExecutorOptions = { id: string; name: string };
 
+type SubagentMessagePart = Extract<
+  NonNullable<StreamChatChunksOptions["messages"]>[number],
+  { parts: unknown }
+>["parts"][number];
+
+/** Every call a sub-agent part's child holds, at every depth, with the
+ *  executor the child's run stamped on it. */
+const recordChildExecutors = (
+  part: Extract<SubagentMessagePart, { type: "subagent" }>,
+  executors: Map<string, ChatToolExecutor>,
+): void => {
+  for (const message of part.subagent.messages) {
+    for (const child of message.parts) {
+      if (child.type === "subagent") {
+        recordChildExecutors(child, executors);
+        continue;
+      }
+      const executor = chatToolExecutor(child);
+      if (child.type === "tool-call" && executor !== null) {
+        executors.set(child.id, executor);
+      }
+    }
+  }
+};
+
 export const streamChatChunks = async function* (
   options: StreamChatChunksOptions,
 ): AsyncIterable<PublicStreamChunk> {
@@ -254,6 +280,13 @@ export const streamChatChunks = async function* (
       return {
         ...message,
         parts: message.parts.map((part) => {
+          if (part.type === "subagent") {
+            // A sub-agent's child runs its own engine, which strips its calls
+            // when it resumes them; their owners are recorded here so a
+            // snapshot of this run names them too.
+            recordChildExecutors(part, storedExecutors);
+            return part;
+          }
           if (part.type !== "tool-call") {
             return part;
           }
@@ -298,6 +331,8 @@ export const streamChatChunks = async function* (
       }
     },
   });
+  // Last, so it reads the provider copy every middleware before it settled.
+  middleware.push(stepLedgerProviderMiddleware);
   for await (const chunk of chat({
     ...options,
     promptCache: "none",
@@ -306,6 +341,16 @@ export const streamChatChunks = async function* (
     middleware,
   })) {
     if (chunk.type === "TOOL_CALL_START") {
+      // A sub-agent child's call was stamped by the child's own run, from the
+      // child's tool list; this run's tools do not name it.
+      if (
+        chunk.subagentRunId !== undefined &&
+        chatToolExecutor({ type: "tool-call", metadata: chunk.metadata }) !==
+          null
+      ) {
+        yield chunk;
+        continue;
+      }
       const executor = executorForCall({
         id: chunk.toolCallId,
         name: chunk.toolCallName,
@@ -324,6 +369,12 @@ export const streamChatChunks = async function* (
         ...chunk,
         messages: chunk.messages.map((message) => {
           if (message.role !== "assistant" || message.toolCalls === undefined) {
+            return message;
+          }
+          // A sub-agent child's row (`subagentRunId`): its calls belong to the
+          // child's tools, not this run's, and keep what the child stamped.
+          const childRun: unknown = Reflect.get(message, "subagentRunId");
+          if (typeof childRun === "string") {
             return message;
           }
           const tanstack = isRecord(message.metadata?.["tanstack"])

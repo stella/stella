@@ -1,0 +1,9 @@
+{
+  "readerCollection": {
+    "partialText": "Zobrazeny jsou publikované části; úplnost nebyla ověřena.",
+    "provenanceOmitted": "Vynechané záznamy o publikacích: {omittedCount, number} z {totalCount, number}.",
+    "sourceAttribution": "Sbírková publikace: <link>{source}</link>. Získáno {date}.",
+    "sourceAttributionUnknownDate": "Sbírková publikace: <link>{source}</link>. Datum získání není známo.",
+    "unclassifiedText": "Rozsah tohoto sbírkového textu není znám."
+  }
+}

@@ -14,6 +14,7 @@ import {
 import type { SQL } from "drizzle-orm";
 
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import { legalDayTimeZone } from "@stll/api-contract/public-country-legal-day";
 import { statuteGazetteEliCollection } from "@stll/api-contract/statute-gazette";
 import { readStatuteQueryScope } from "@stll/api-contract/statute-query-capability";
 import type { StatuteQueryCountry } from "@stll/api-contract/statute-query-capability";
@@ -36,13 +37,13 @@ import {
 import { normalizeUnicode } from "@stll/text-normalize";
 import { todayFor } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import {
   LEGISLATION_WORK_NAME_KEY_MAX_CHARS,
   legislationDocuments,
   legislationWorkNames,
 } from "@/api/db/schema";
 import type { LegislationWorkNameDerivation } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { actNumberCondition } from "@/api/lib/legal-search/legislation-act-number";
@@ -610,12 +611,6 @@ export const citedKeysQuery = (
     .groupBy(legislationWorkNames.country, legislationWorkNames.citedKey)
     .limit(CITED_KEY_LIMIT);
 
-/** The zone whose calendar day a jurisdiction's acts take effect on. */
-const LEGAL_DAY_TIME_ZONE = {
-  cze: "Europe/Prague",
-  svk: "Europe/Bratislava",
-} as const satisfies Record<StatuteQueryCountry, string>;
-
 const foldedTitle = (text: string) =>
   normalizeUnicode(text, "NFC").replace(/\s+/gu, " ").trim().toLowerCase();
 
@@ -696,7 +691,7 @@ const statuteQueryReferences = (
       const declined = declinedTitleReference(
         query,
         scope.country,
-        todayFor(LEGAL_DAY_TIME_ZONE[scope.country]).toString(),
+        todayFor(legalDayTimeZone(scope.country)).toString(),
       );
       return declined === null ? [] : [declined];
     }
@@ -793,6 +788,7 @@ export const readNamedLegislationWorks = async (
               const actCondition = actNumberCondition({
                 number: `${reference.number}/${reference.year}`,
                 collection: reference.collection ?? undefined,
+                country: reference.country,
               });
               if (actCondition === null) {
                 return panic(

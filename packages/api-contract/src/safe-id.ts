@@ -1,3 +1,4 @@
+// parser-output-unchanged: Adding outboundAction does not change parser IDs or parsed records.
 // parser-output-unchanged: Removal retry ID branding does not change parsed decision identities.
 // parser-output-unchanged: Adding citation doctrine review, search-history, chat revision, reader answer and chat tool grant ID kinds does not change parser IDs or parsed records.
 // parser-output-unchanged: [at-asylgh] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
@@ -80,6 +81,7 @@ export type SafeIdType =
   | "fileChatThread"
   | "templateChatThread"
   | "templateDeletionCleanupRequest"
+  | "agentSkillOriginalCleanupRequest"
   | "clause"
   | "clauseCategory"
   | "clauseVariant"
@@ -109,6 +111,7 @@ export type SafeIdType =
   | "usageEvent"
   | "desktopEditHandoff"
   | "desktopEditSession"
+  | "dictationVocabularyTerm"
   | "legalListClaim"
   | "legalListClaimReviewEvent"
   | "legalGraphEdge"
@@ -155,6 +158,7 @@ export type SafeIdType =
   | "infoSoudTrackedCase"
   | "invoice"
   | "invoiceLine"
+  | "invoiceSend"
   | "invoicePayment"
   | "justification"
   | "legislationDocument"
@@ -209,6 +213,7 @@ export type SafeIdType =
   // parser-output-unchanged: Adds the data export id kind; no parser reads or emits it.
   | "dataExport"
   | "schedulerJobRun"
+  | "outboundAction"
   | "sharepointConnection"
   | "sharepointOAuthState"
   | "styleSet"

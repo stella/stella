@@ -37,7 +37,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, type SQL, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerations,
   corpusIndexGroupEnrollments,
@@ -45,6 +44,7 @@ import {
   corpusIndexProjectionStates,
   corpusIndexRouteProofs,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import type {

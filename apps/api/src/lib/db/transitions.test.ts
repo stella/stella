@@ -94,6 +94,13 @@ test("state-column ownership covers every scoped runtime transition", () => {
     scope: [],
     stateColumn: "state",
   };
+  // An outbound action moves through one send lifecycle per action id.
+  const outboundAction = {
+    tableName: "outboundActions",
+    key: "id",
+    scope: [],
+    stateColumn: "status",
+  };
   expect(registered.toSorted(order)).toEqual(
     [
       ...Object.values(SANCTIONS_MONITORING_TRANSITION_IDENTITIES),
@@ -113,6 +120,7 @@ test("state-column ownership covers every scoped runtime transition", () => {
         scope: [],
         stateColumn: "phase",
       },
+      outboundAction,
       // A provider event receipt moves by its event id.
       {
         tableName: "hostedUsageWebhookEvents",
@@ -122,6 +130,13 @@ test("state-column ownership covers every scoped runtime transition", () => {
       },
       ...Object.values(READER_ANSWER_TRANSITION_IDENTITIES),
       ...Object.values(FOLIO_COLLAB_TRANSITION_IDENTITIES),
+      // A sign-in moves through its review once per session.
+      {
+        tableName: "sessionSignIns",
+        key: "sessionId",
+        scope: [],
+        stateColumn: "review",
+      },
     ].toSorted(order),
   );
 });

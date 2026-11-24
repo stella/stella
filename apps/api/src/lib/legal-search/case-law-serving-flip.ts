@@ -26,13 +26,13 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, gt, notExists, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisions,
   corpusIndexGenerations,
   corpusIndexJurisdictionServing,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import {
   parseCorpusIndexClusterForGeneration,
@@ -58,6 +58,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-convergence";
 import { eraseServedElsewhereDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
+  type CorpusIndexProjectionFenceBusyError,
   lockCorpusIndexProjectionPromotionTx,
   lockCorpusIndexProjectionRevisionTx,
   readCorpusIndexProjectionRevisionTx,
@@ -113,7 +114,9 @@ export type CaseLawServingFlipRefusal =
   | CorpusGenerationNotConvergedError
   | IndexRefusal
   | CensusRefusal
-  | CorpusGenerationProjectionMovedError;
+  | CorpusGenerationProjectionMovedError
+  /** Writers held the projection fence past its lock timeout; retry later. */
+  | CorpusIndexProjectionFenceBusyError;
 
 export type CaseLawServingFlipContext = {
   /** A read-only transaction; it takes no fence and no row lock. */
@@ -317,6 +320,10 @@ const hasUnseededDecisionTx = async (
  * 6. in the flipping transaction, under the activation and promotion fences,
  *    the projection revision is still the one the proof was taken at.
  *
+ * Either exclusive fence (the proof's and the flip's) refuses with
+ * `CorpusIndexProjectionFenceBusyError` when writers hold it past its lock
+ * timeout; nothing was written, and the flip can run again.
+ *
  * `dry_run` proves 1 to 5 and writes nothing.
  */
 export const flipCaseLawJurisdictionServing = async (
@@ -396,22 +403,27 @@ export const flipCaseLawJurisdictionServing = async (
     revision,
     convergence: await readCorpusIndexProjectionConvergenceTx(tx, target),
   });
-  const snapshot =
+  const snapshotted =
     options.mode === "apply"
-      ? await context.writeTransaction(
-          async (tx) =>
-            await snapshotTx(
-              tx,
-              await lockCorpusIndexProjectionRevisionTx(tx, target),
-            ),
-        )
-      : await context.readTransaction(
-          async (tx) =>
-            await snapshotTx(
-              tx,
-              await readCorpusIndexProjectionRevisionTx(tx, target),
-            ),
+      ? await context.writeTransaction(async (tx) => {
+          const fenced = await lockCorpusIndexProjectionRevisionTx(tx, target);
+          return fenced.isErr()
+            ? Result.err(fenced.error)
+            : Result.ok(await snapshotTx(tx, fenced.value));
+        })
+      : Result.ok(
+          await context.readTransaction(
+            async (tx) =>
+              await snapshotTx(
+                tx,
+                await readCorpusIndexProjectionRevisionTx(tx, target),
+              ),
+          ),
         );
+  if (snapshotted.isErr()) {
+    return Result.err(snapshotted.error);
+  }
+  const snapshot = snapshotted.value;
   const converged = requireConverged(target, snapshot.convergence);
   if (converged.isErr()) {
     return Result.err(converged.error);
@@ -455,10 +467,11 @@ export const flipCaseLawJurisdictionServing = async (
       Result<CaseLawServingFlipOutcome, CaseLawServingFlipRefusal>
     > => {
       await lockCorpusIndexGenerationActivationTx(tx, target.family);
-      const currentRevision = await lockCorpusIndexProjectionPromotionTx(
-        tx,
-        target,
-      );
+      const fenced = await lockCorpusIndexProjectionPromotionTx(tx, target);
+      if (fenced.isErr()) {
+        return Result.err(fenced.error);
+      }
+      const currentRevision = fenced.value;
       if (currentRevision !== snapshot.revision) {
         return Result.err(
           new CorpusGenerationProjectionMovedError({

@@ -1,12 +1,13 @@
 import { Result } from "better-result";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   documentWriteRefusalHandlerError,
   DocumentWriteRefusedError,
 } from "@/api/lib/entities/authorize-document-write";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { validateParentId } from "@/api/lib/entities/validate-parent-id";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
@@ -50,6 +51,7 @@ export const createBlankDocument = async ({
   }
 
   return await createEntityFromBuffer({
+    authority: CALLER_AUTHORIZED,
     scopedDb,
     organizationId,
     workspaceId,

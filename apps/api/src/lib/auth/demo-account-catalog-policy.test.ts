@@ -60,6 +60,7 @@ const RESOURCE_WRITE_ACCOUNT_ACCESS = {
   legalReaderAnnotation: ACCOUNT_ACCESS.sandbox,
   savedSearch: ACCOUNT_ACCESS.sandbox,
   searchHistory: ACCOUNT_ACCESS.sandbox,
+  dictationLearnedFix: ACCOUNT_ACCESS.sandbox,
   conflictCheck: ACCOUNT_ACCESS.sandbox,
 } as const satisfies Record<keyof typeof statements, AccountAccess>;
 
@@ -109,6 +110,7 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/files/routes.ts#printPdfEndpoint",
   "apps/api/src/handlers/files/routes.ts#scrubbedDownloadEndpoint",
   "apps/api/src/handlers/files/routes.ts#stampedDownloadEndpoint",
+  "apps/api/src/handlers/invoices/sends/create.ts",
   "apps/api/src/handlers/mcp-connectors/approve-authorization.ts",
   "apps/api/src/handlers/mcp-connectors/connect.ts",
   "apps/api/src/handlers/mcp-connectors/create-connection.ts",
@@ -147,6 +149,11 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/organization-settings/delete-ai-config.ts",
   "apps/api/src/handlers/organization-settings/delete-deepl-key.ts",
   "apps/api/src/handlers/organization-settings/delete-web-search-key.ts",
+  "apps/api/src/handlers/organization-settings/dictation-vocabulary/add.ts",
+  "apps/api/src/handlers/organization-settings/dictation-vocabulary/check.ts",
+  "apps/api/src/handlers/organization-settings/dictation-vocabulary/delete.ts",
+  "apps/api/src/handlers/organization-settings/dictation-vocabulary/export.ts",
+  "apps/api/src/handlers/organization-settings/dictation-vocabulary/list.ts",
   "apps/api/src/handlers/organization-settings/local-runs/update.ts",
   "apps/api/src/handlers/organization-settings/members/billing-access/update.ts",
   "apps/api/src/handlers/organization-settings/practice-jurisdictions/update.ts",
@@ -155,6 +162,15 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/organization-settings/read-deepl-config.ts",
   "apps/api/src/handlers/organization-settings/read-web-search-config.ts",
   "apps/api/src/handlers/organization-settings/sanctions-monitoring/update.ts",
+  "apps/api/src/handlers/organization-settings/sso/create-domain.ts",
+  "apps/api/src/handlers/organization-settings/sso/create-provider.ts",
+  "apps/api/src/handlers/organization-settings/sso/create-saml-provider.ts",
+  "apps/api/src/handlers/organization-settings/sso/delete-domain.ts",
+  "apps/api/src/handlers/organization-settings/sso/delete-provider.ts",
+  "apps/api/src/handlers/organization-settings/sso/get.ts",
+  "apps/api/src/handlers/organization-settings/sso/test-provider.ts",
+  "apps/api/src/handlers/organization-settings/sso/update-policy.ts",
+  "apps/api/src/handlers/organization-settings/sso/verify-domain.ts",
   "apps/api/src/handlers/organization-settings/update-ai-config.ts",
   "apps/api/src/handlers/organization-settings/update-deepl-key.ts",
   "apps/api/src/handlers/organization-settings/update-web-search-key.ts",
@@ -164,6 +180,9 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/organizations/audit-export/get.ts",
   "apps/api/src/handlers/organizations/create.ts",
   "apps/api/src/handlers/organizations/slug/update.ts",
+  "apps/api/src/handlers/outbound-actions/confirm.ts",
+  "apps/api/src/handlers/outbound-actions/discard.ts",
+  "apps/api/src/handlers/outbound-actions/read.ts",
   "apps/api/src/handlers/reports/exports/get.ts",
   "apps/api/src/handlers/reports/views/export.ts",
   "apps/api/src/handlers/seller-profiles/archive.ts",
@@ -175,6 +194,7 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/sharepoint/connect.ts",
   "apps/api/src/handlers/sharepoint/disconnect.ts",
   "apps/api/src/handlers/sharepoint/oauth-callback.ts",
+  "apps/api/src/handlers/sharepoint/set-capabilities.ts",
   "apps/api/src/handlers/sharepoint/set-enablement.ts",
   "apps/api/src/handlers/style-sets/download.ts",
   "apps/api/src/handlers/template-packs/visibility/update.ts",
@@ -227,6 +247,7 @@ const REVIEWED_ACCOUNT_CONTROL_OPERATIONS = [
   "apps/api/src/handlers/api-keys/personal/rotate.ts",
   "apps/api/src/handlers/api-keys/revoke.ts",
   "apps/api/src/handlers/api-keys/rotate.ts",
+  "apps/api/src/handlers/invoices/sends/create.ts",
   "apps/api/src/handlers/mcp-connectors/approve-authorization.ts",
   "apps/api/src/handlers/mcp-connectors/connect.ts",
   "apps/api/src/handlers/mcp-connectors/create-connection.ts",
@@ -259,6 +280,15 @@ const REVIEWED_ACCOUNT_CONTROL_OPERATIONS = [
   "apps/api/src/handlers/organization-settings/read-deepl-config.ts",
   "apps/api/src/handlers/organization-settings/read-web-search-config.ts",
   "apps/api/src/handlers/organization-settings/sanctions-monitoring/update.ts",
+  "apps/api/src/handlers/organization-settings/sso/create-domain.ts",
+  "apps/api/src/handlers/organization-settings/sso/create-provider.ts",
+  "apps/api/src/handlers/organization-settings/sso/create-saml-provider.ts",
+  "apps/api/src/handlers/organization-settings/sso/delete-domain.ts",
+  "apps/api/src/handlers/organization-settings/sso/delete-provider.ts",
+  "apps/api/src/handlers/organization-settings/sso/get.ts",
+  "apps/api/src/handlers/organization-settings/sso/test-provider.ts",
+  "apps/api/src/handlers/organization-settings/sso/update-policy.ts",
+  "apps/api/src/handlers/organization-settings/sso/verify-domain.ts",
   "apps/api/src/handlers/organization-settings/update-ai-config.ts",
   "apps/api/src/handlers/organization-settings/update-deepl-key.ts",
   "apps/api/src/handlers/organization-settings/update-web-search-key.ts",
@@ -268,9 +298,13 @@ const REVIEWED_ACCOUNT_CONTROL_OPERATIONS = [
   "apps/api/src/handlers/organizations/audit-export/get.ts",
   "apps/api/src/handlers/organizations/create.ts",
   "apps/api/src/handlers/organizations/slug/update.ts",
+  "apps/api/src/handlers/outbound-actions/confirm.ts",
+  "apps/api/src/handlers/outbound-actions/discard.ts",
+  "apps/api/src/handlers/outbound-actions/read.ts",
   "apps/api/src/handlers/sharepoint/connect.ts",
   "apps/api/src/handlers/sharepoint/disconnect.ts",
   "apps/api/src/handlers/sharepoint/oauth-callback.ts",
+  "apps/api/src/handlers/sharepoint/set-capabilities.ts",
   "apps/api/src/handlers/sharepoint/set-enablement.ts",
   "apps/api/src/handlers/usage/assign-seat.ts",
   "apps/api/src/handlers/usage/create-hosted-management.ts",
@@ -315,43 +349,60 @@ describe("handler account policy census", () => {
     );
   });
 
-  test("standard operations apply account access before their implementation", async () => {
-    testState.setConfig("DEMO_ACCOUNT_EMAIL", "account@example.test");
-    const definitionSchema = v.object({ handler: v.function() });
-
-    for (const endpoint of (await discoverSafeHandlers()).endpoints) {
-      if (!REVIEWED_STANDARD_OPERATIONS.some((id) => id === endpoint.id)) {
-        continue;
-      }
-      const module = v.parse(
-        v.record(v.string(), v.unknown()),
-        await import(
-          new URL(`../../../../../${endpoint.file}`, import.meta.url).href
-        ),
-      );
-      const { handler } = v.parse(
-        definitionSchema,
-        module[endpoint.exportName ?? "default"],
-      );
+  test.each([
+    {
+      account: "demo",
+      email: "demo@example.test",
+      operations: REVIEWED_STANDARD_OPERATIONS,
+    },
+    {
+      account: "review",
+      email: "review@example.test",
+      operations: REVIEWED_ACCOUNT_CONTROL_OPERATIONS,
+    },
+  ])(
+    "$account operations apply account access before their implementation",
+    async ({ email, operations }) => {
       const context = createTestHandlerContext({
         audit: NO_AUDIT,
         safeDb: NO_DB,
         scopedDb: NO_DB,
-        user: { email: "account@example.test" },
+        user: { email },
       });
-      // Feature-gated operations admit the enrolled caller, so the account
-      // check is what refuses them.
-      const response = await handler({
-        ...context,
-        featureAccessSnapshot: enrolledTimeBillingSnapshot({
-          userId: context.user.id,
-          organizationId: context.session.activeOrganizationId,
-        }),
+      testState.patchConfig({
+        DEMO_ACCOUNT_EMAIL: "demo@example.test",
+        APP_REVIEW_ACCOUNT_EMAIL: "review@example.test",
+        APP_REVIEW_ORGANIZATION_ID: context.session.activeOrganizationId,
       });
-      expect(response, endpoint.id).toMatchObject({
-        code: 403,
-        response: { code: "account_access_unavailable" },
-      });
-    }
-  });
+      const definitionSchema = v.object({ handler: v.function() });
+      for (const endpoint of (await discoverSafeHandlers()).endpoints) {
+        if (!operations.some((id) => id === endpoint.id)) {
+          continue;
+        }
+        const module = v.parse(
+          v.record(v.string(), v.unknown()),
+          await import(
+            new URL(`../../../../../${endpoint.file}`, import.meta.url).href
+          ),
+        );
+        const { handler } = v.parse(
+          definitionSchema,
+          module[endpoint.exportName ?? "default"],
+        );
+        // Feature-gated operations admit the enrolled caller, so the account
+        // check is what refuses them.
+        const response = await handler({
+          ...context,
+          featureAccessSnapshot: enrolledTimeBillingSnapshot({
+            userId: context.user.id,
+            organizationId: context.session.activeOrganizationId,
+          }),
+        });
+        expect(response, endpoint.id).toMatchObject({
+          code: 403,
+          response: { code: "account_access_unavailable" },
+        });
+      }
+    },
+  );
 });

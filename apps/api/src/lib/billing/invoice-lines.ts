@@ -22,7 +22,6 @@ import type {
 } from "@stll/invoicing";
 import { applyMarkupCents, timeEntryAmount } from "@stll/money";
 
-import type { Transaction } from "@/api/db/root";
 import {
   expenses,
   INVOICE_ATTACHMENT,
@@ -32,6 +31,7 @@ import {
   invoices,
   timeEntries,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -171,7 +171,8 @@ type TimeEntryForLine = {
   id: SafeId<"timeEntry">;
   billedMinutes: number;
   rateAtEntry: CentsAmount;
-  narrative: string;
+  /** Token-authorized reads put the selected document description in invoiceNarrative. */
+  narrative?: string;
   invoiceNarrative: string | null;
   noCharge: boolean;
 };

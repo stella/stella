@@ -1,8 +1,8 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 
-import type { ChatMessage } from "@/components/chat/chat-ui-tools";
+import type { ChatMessage } from "@/components/chat/chat-ui-tools-types";
 import {
   resolveSuggestedPromptsAvailability,
   resolveSuggestedPromptsTurnOwner,
@@ -27,7 +27,7 @@ type UseSuggestedFollowupPromptsOptions = {
  * Follow-up prompts for a thread's last assistant turn. They are fetched only
  * while the draft is empty and nothing else owns the turn (generation, a
  * pending approval, or an ask-user card reopened for editing), so typing does
- * not trigger the query.
+ * not trigger the query; prompts already fetched stay shown while typing.
  */
 export const useSuggestedFollowupPrompts = ({
   activeOrganizationId,
@@ -42,44 +42,51 @@ export const useSuggestedFollowupPrompts = ({
   const [editingAskUserToolCallIds, setEditingAskUserToolCallIds] = useState<
     ReadonlySet<string>
   >(() => new Set<string>());
-  const handleAskUserEditingChange = useCallback(
-    (toolCallId: string, isEditing: boolean) => {
-      setEditingAskUserToolCallIds((current) => {
-        if (current.has(toolCallId) === isEditing) {
-          return current;
-        }
-        const next = new Set(current);
-        if (isEditing) {
-          next.add(toolCallId);
-        } else {
-          next.delete(toolCallId);
-        }
-        return next;
-      });
-    },
-    [],
-  );
-  const editorIsInitiallyEmpty = useIsChatDraftEmpty(threadRef);
-  const suggestedPromptsAvailability = resolveSuggestedPromptsAvailability({
-    editorIsEmpty: editorIsInitiallyEmpty,
-    error,
-    isGenerating,
+  const handleAskUserEditingChange = (
+    toolCallId: string,
+    isEditing: boolean,
+  ) => {
+    setEditingAskUserToolCallIds((current) => {
+      if (current.has(toolCallId) === isEditing) {
+        return current;
+      }
+      const next = new Set(current);
+      if (isEditing) {
+        next.add(toolCallId);
+      } else {
+        next.delete(toolCallId);
+      }
+      return next;
+    });
+  };
+  const editorIsEmpty = useIsChatDraftEmpty(threadRef);
+  const turnOwner = resolveSuggestedPromptsTurnOwner({
+    approvalPendingMessageId,
+    hasReopenedAskUser: editingAskUserToolCallIds.size > 0,
     lastMessage: lastMessage ?? null,
-    turnAbandoned,
-    turnOwner: resolveSuggestedPromptsTurnOwner({
-      approvalPendingMessageId,
-      hasReopenedAskUser: editingAskUserToolCallIds.size > 0,
-      lastMessage: lastMessage ?? null,
-    }),
   });
+  const availabilityWhile = (editorIsEmptyNow: boolean) =>
+    resolveSuggestedPromptsAvailability({
+      editorIsEmpty: editorIsEmptyNow,
+      error,
+      isGenerating,
+      lastMessage: lastMessage ?? null,
+      turnAbandoned,
+      turnOwner,
+    });
+  // The suggestions sit in the transcript under the answer they follow, so
+  // once fetched they stay while the person types: hiding them would move
+  // the answer being read. Only the fetch waits for an empty draft; a
+  // disabled query still returns what it already holds for this answer.
+  const shownAvailability = availabilityWhile(true);
   const lastMessageId =
-    suggestedPromptsAvailability.status === "eligible"
-      ? suggestedPromptsAvailability.lastMessageId
+    shownAvailability.status === "eligible"
+      ? shownAvailability.lastMessageId
       : "";
   const suggestedPromptsDataQuery = useQuery(
     chatThreadSuggestedPromptsOptions({
       activeOrganizationId,
-      enabled: suggestedPromptsAvailability.status === "eligible",
+      enabled: availabilityWhile(editorIsEmpty).status === "eligible",
       lastMessageId,
       threadRef,
     }),
@@ -89,19 +96,15 @@ export const useSuggestedFollowupPrompts = ({
     suggestedPromptsDataView,
     "useSuggestedFollowupPrompts:query",
   );
-  const suggestedPromptsData =
-    suggestedPromptsDataView.type === "items"
-      ? suggestedPromptsDataView.items
-      : undefined;
   const suggestedPrompts =
-    suggestedPromptsAvailability.status === "eligible" && suggestedPromptsData
-      ? suggestedPromptsData.prompts
+    shownAvailability.status === "eligible" &&
+    suggestedPromptsDataView.type === "items"
+      ? suggestedPromptsDataView.items.prompts
       : [];
 
   return {
     handleAskUserEditingChange,
     lastMessageId,
-    suggestedFollowupPrompt: suggestedPrompts.at(0) ?? undefined,
     suggestedPrompts,
   };
 };

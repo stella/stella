@@ -159,7 +159,7 @@ describe("projecting a selection onto inspector tabs", () => {
     ]);
   });
 
-  test("skips folders and files the inspector cannot render", () => {
+  test("opens every requested file, including a download-only file", () => {
     const unrenderable = entity(
       "raw",
       "document",
@@ -170,14 +170,15 @@ describe("projecting a selection onto inspector tabs", () => {
       }),
     );
 
-    // The fixture must actually be unrenderable, or the assertion is vacuous.
-    expect(targetsOf([unrenderable], WORKSPACE_ID)).toEqual([]);
+    expect(targetsOf([unrenderable], WORKSPACE_ID)).toMatchObject([
+      { id: "field-raw" },
+    ]);
     expect(
       targetsOf(
         [entity("folder", "folder"), unrenderable, pdfEntity("doc")],
         WORKSPACE_ID,
       ).map((target) => target.id),
-    ).toEqual(["field-doc"]);
+    ).toEqual(["field-raw", "field-doc"]);
   });
 
   test("opens the first displayable file, not the first file", () => {
@@ -192,8 +193,8 @@ describe("projecting a selection onto inspector tabs", () => {
           type: "file",
           version: 1,
           id: "file-zip",
-          fileName: "archive.zip",
-          mimeType: "application/zip",
+          fileName: "archive.7z",
+          mimeType: "application/x-7z-compressed",
           sizeBytes: 1,
           encrypted: false,
           sha256Hex: "a".repeat(64),
@@ -244,6 +245,7 @@ describe("projecting a selection onto inspector tabs", () => {
         fileName: "brief.docx",
         mimeType: "application/octet-stream",
         pdfFileId: "pdf-docx",
+        encrypted: false,
         propertyId: "property-docx",
         workspaceId: WORKSPACE_ID,
       },

@@ -50,7 +50,7 @@ import type { SkippedImportFile } from "./import-skill-dialog.logic";
 
 const MAX_SELECTED_SKILLS = 20;
 /** What the file chooser offers: a skill pack or a bare markdown skill. */
-const SKILL_PACK_ACCEPT = ".zip,.md,application/zip,text/markdown";
+const SKILL_PACK_ACCEPT = ".zip,.skill,.md,application/zip,text/markdown";
 const FIRST_STRONG_ISOLATE = String.fromCodePoint(8296);
 const POP_DIRECTIONAL_ISOLATE = String.fromCodePoint(8297);
 const isolateBidi = (value: string): string =>
@@ -370,6 +370,7 @@ const ImportSkillDialogBody = ({
             <Button
               className="min-h-11 sm:min-h-0"
               disabled={url.trim().length === 0 || busy}
+              disabledReason={busy ? t("common.loading") : t("common.enterUrl")}
               onClick={() => discover.mutate()}
               type="button"
               variant="outline"
@@ -392,6 +393,7 @@ const ImportSkillDialogBody = ({
               aria-busy={uploadPack.isPending || undefined}
               className="min-h-11 sm:min-h-0"
               disabled={busy}
+              disabledReason={t("common.loading")}
               onClick={() =>
                 openFilePicker({
                   accept: SKILL_PACK_ACCEPT,
@@ -475,6 +477,7 @@ const ImportSkillDialogBody = ({
                   Math.min(discovery.skills.length, MAX_SELECTED_SKILLS) && (
                   <Button
                     disabled={busy}
+                    disabledReason={t("common.loading")}
                     onClick={selectAll}
                     size="xs"
                     type="button"
@@ -488,7 +491,7 @@ const ImportSkillDialogBody = ({
               {discovery.skills.length > MAX_SELECTED_SKILLS && (
                 <p className="text-muted-foreground text-xs">
                   {tSkills("selectionLimit", {
-                    count: format.number(MAX_SELECTED_SKILLS),
+                    count: MAX_SELECTED_SKILLS,
                   })}
                 </p>
               )}
@@ -594,7 +597,15 @@ const ImportSkillDialogBody = ({
       </FileDropZone>
 
       <DialogFooter>
-        <DialogClose render={<Button disabled={busy} variant="ghost" />}>
+        <DialogClose
+          render={
+            <Button
+              disabled={busy}
+              disabledReason={t("common.loading")}
+              variant="ghost"
+            />
+          }
+        >
           {skippedFiles.length > 0 && discovery === null
             ? t("common.done")
             : t("common.cancel")}
@@ -603,6 +614,11 @@ const ImportSkillDialogBody = ({
           <Button
             aria-busy={importSkills.isPending || undefined}
             disabled={selected.size === 0 || busy}
+            disabledReason={
+              busy
+                ? t("common.loading")
+                : t("knowledge.agentSkills.selectSkillToImport")
+            }
             onClick={() => importSkills.mutate(discovery)}
             type="button"
           >

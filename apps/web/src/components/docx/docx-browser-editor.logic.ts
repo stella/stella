@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import type { DocxCompatibility } from "@stll/folio-react";
+
 import type { DocxEditSafety } from "@/lib/chat-edit-mode";
 import { selectStableArrayBuffer } from "@/lib/files/array-buffer-utils";
 
@@ -182,6 +184,12 @@ export const getDocxLeaveAction = (
       return panic("Unsupported DOCX edit-session state");
   }
 };
+
+/** Whether the editor can take an evidence reference. */
+export const canInsertEvidenceReference = (
+  canUnlock: boolean,
+  compatibility: DocxCompatibility | null,
+) => canUnlock && compatibility?.canSafelyEdit !== false;
 
 type CollaborationPublicationCut = {
   documentMutationRevision: number;

@@ -579,6 +579,8 @@ describe("empty-result onboarding next step", () => {
           textAvailability: "available",
           matchingPassages: 1,
           match: "all_terms",
+          matchedTerms: [],
+          missingTerms: [],
           sourceUrl: "https://example.test",
         },
       ],

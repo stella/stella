@@ -1,16 +1,16 @@
 /**
- * Two-layer, fail-closed enablement gate for the SharePoint connection:
+ * Two-layer, fail-closed enablement gate for SharePoint file reads:
  *   1. deployment feature flag `FEATURE_SHAREPOINT` (a disabled deployment
  *      returns 404 so the feature's existence is not advertised); and
- *   2. per-organization opt-in `organization_settings.sharepointConnectionEnabled`
- *      (default false) — mirrors the org-level native-tool gating pattern.
+ *   2. per-organization file opt-in `organization_settings.sharepointConnectionEnabled`
+ *      (default false). Older API tasks use this same bit for file reads.
  *
  * Every SharePoint handler calls this first. Both checks fail closed.
  */
 
 import { Result } from "better-result";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

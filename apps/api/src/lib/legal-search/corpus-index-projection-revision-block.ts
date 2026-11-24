@@ -1,22 +1,29 @@
-import { type InferOk, panic, Result } from "better-result";
+import { type InferOk, panic, Result, UnhandledException } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import { corpusIndexProjectionStates } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { PayloadBudgetError } from "@/api/lib/compression";
+import type { ChunkBudgetError } from "@/api/lib/corpus-index/chunking";
 import { settleBoth } from "@/api/lib/corpus-index/core";
 import {
   MAX_TRANSPORT_WRAPPER_DEPTH,
   TRANSPORT_WRAPPERS,
 } from "@/api/lib/errors/handler-error-resolution";
 import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
+import { corpusIndexDecisionTerms } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   buildCorpusProjectionDocuments,
   legislationV2NeedsPassages,
 } from "@/api/lib/legal-search/corpus-index-projection-builder";
+import {
+  type CorpusIndexProjectionSubject,
+  CorpusIndexProjectionSubjectMissingError,
+  reconcileCorpusProjectionDesiredStateTx,
+} from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
   type CorpusProjectionAppendEntry,
   planCorpusProjectionAppendRequests,
@@ -38,16 +45,23 @@ import {
   type CorpusProjectionReservationFailure,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 import {
-  readCorpusAst,
   readCorpusText,
+  readSizedCorpusAst,
 } from "@/api/lib/legal-search/corpus-reads";
 import {
   readCorpusAtAuthoritativePointer,
   readCorpusForRecovery,
+  type SizedCorpusAst,
 } from "@/api/lib/legal-search/corpus-storage";
+import { CaseLawDocumentLanguageUndeclaredError } from "@/api/lib/legal-search/morphology/corpus-language";
+import type { StoredAstOutcome } from "@/api/lib/legal-search/stored-ast-outcome";
 import { logger } from "@/api/lib/observability/logger";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
 import { S3ObjectBudgetError } from "@/api/lib/s3";
+import {
+  brandPersistedCaseLawDecisionId,
+  brandPersistedLegislationDocumentId,
+} from "@/api/lib/safe-id-boundaries";
 
 /**
  * What both delivery paths of a reserved revision share: reading its payload,
@@ -271,7 +285,79 @@ export type CorpusProjectionMaterialRejectionCounts = {
   unread: number;
   retryScheduled: number;
   blocked: number;
+  /**
+   * Canonical mismatches whose desired state still named the reservation
+   * after it was re-derived, so they wait out a retry or are blocked. They
+   * are also counted in `retryScheduled` or `blocked`.
+   */
+  mismatchHeld: number;
 };
+
+/** Re-derive mismatched leases' desired states from their canonical rows. */
+export type CorpusProjectionMismatchRederivation = (
+  runInTransaction: ProjectionTransactionRunner,
+  leases: readonly CorpusProjectionIntentLease[],
+) => Promise<void>;
+
+const subjectOfLease = ({
+  family,
+  entityId,
+}: CorpusProjectionIntentLease): CorpusIndexProjectionSubject => {
+  switch (family) {
+    case "case_law":
+      return { family, entityId: brandPersistedCaseLawDecisionId(entityId) };
+    case "legislation":
+      return {
+        family,
+        entityId: brandPersistedLegislationDocumentId(entityId),
+      };
+    default:
+      family satisfies never;
+      return panic(`Unhandled family: ${String(family)}`);
+  }
+};
+
+/**
+ * Re-derive the desired state of each mismatched entity from its canonical
+ * row, one subject per transaction in the canonical writers' lock order, as
+ * a repair does. A subject whose canonical row is gone, or whose repair is
+ * held to keep a served copy, keeps its desired state; the classification
+ * that follows then schedules it a retry.
+ */
+export const rederiveMismatchedCorpusProjectionDesiredStates: CorpusProjectionMismatchRederivation =
+  async (runInTransaction, leases) => {
+    await mapSequentially(
+      leases,
+      async (lease): Promise<"reconciled" | "held" | "missing"> => {
+        const subject = subjectOfLease(lease);
+        const reconciled = await Result.tryPromise({
+          try: async () =>
+            await runInTransaction(
+              async (tx) =>
+                await reconcileCorpusProjectionDesiredStateTx(tx, subject),
+            ),
+          catch: (cause) =>
+            cause instanceof Error ? cause : new UnhandledException({ cause }),
+        });
+        if (reconciled.isOk()) {
+          if (reconciled.value.isOk()) {
+            return "reconciled";
+          }
+          logger.warn("corpus_projection.mismatch_repair_held", {
+            entity: lease.entityId,
+            generation: lease.generation,
+          });
+          return "held";
+        }
+        if (
+          reconciled.error instanceof CorpusIndexProjectionSubjectMissingError
+        ) {
+          return "missing";
+        }
+        return await Promise.reject(reconciled.error);
+      },
+    );
+  };
 
 type SettleRejectedCorpusProjectionMaterialsOptions = {
   runInTransaction: ProjectionTransactionRunner;
@@ -281,27 +367,64 @@ type SettleRejectedCorpusProjectionMaterialsOptions = {
     "retryDelayMs" | "payloadRetryLimit"
   >;
   testNow?: Date | undefined;
+  /**
+   * Database-test seam: a re-derivation that leaves some states where they
+   * are, standing in for one whose derivation agrees with the desired state
+   * while the material read does not.
+   */
+  rederive?: CorpusProjectionMismatchRederivation | undefined;
 };
 
 /**
- * Settle the reservations a material read refused: a stale one is cancelled,
- * an unreadable one is scheduled for a retry under the payload retry limit,
- * and one whose lease is gone needs nothing.
+ * Settle the reservations a material read refused. No refused reservation
+ * leaves its desired state runnable at the same place with the same inputs,
+ * so the next reservation never takes the same work again unchanged:
+ * - a stale one is cancelled; its desired state already moved on and queues
+ *   the newer work;
+ * - a canonical mismatch has its desired state re-derived from the canonical
+ *   row. Where that moved the state, the reservation is cancelled and the
+ *   moved state is runnable at once. Where the state still names it, the
+ *   state waits out a retry under the payload retry limit and is blocked at
+ *   that limit, until a desired-state change resets it;
+ * - an unreadable one is scheduled for a retry under the same limit;
+ * - one whose lease is gone needs nothing.
  */
 export const settleRejectedCorpusProjectionMaterials = async ({
   runInTransaction,
   rejected,
   policy,
   testNow,
+  rederive = rederiveMismatchedCorpusProjectionDesiredStates,
 }: SettleRejectedCorpusProjectionMaterialsOptions): Promise<CorpusProjectionMaterialRejectionCounts> => {
   const staleLeases = rejected
     .filter(({ status }) => status === "stale")
     .map(({ lease }) => lease);
+  const mismatched = rejected.filter(
+    ({ status }) => status === "canonical_input_mismatch",
+  );
   const unreadable = rejected.filter(({ status }) => status === "unreadable");
   const cancellation = await cancelCorpusProjectionReservations({
     runInTransaction,
     leases: staleLeases,
-    errorMessage: "projection material is no longer readable or current",
+    errorMessage: "projection material is no longer current",
+    testNow,
+  });
+  await rederive(
+    runInTransaction,
+    mismatched.map(({ lease }) => lease),
+  );
+  const mismatches = await classifyCorpusProjectionReservationFailures({
+    runInTransaction,
+    failures: mismatched.map(({ lease, reason }) => ({
+      lease,
+      failure: {
+        status: "retry_scheduled",
+        kind: "canonical_input_mismatch",
+        retryDelayMs: policy.retryDelayMs,
+        maxAttempts: policy.payloadRetryLimit,
+        message: reason,
+      },
+    })),
     testNow,
   });
   const retries = await classifyCorpusProjectionReservationFailures({
@@ -319,14 +442,19 @@ export const settleRejectedCorpusProjectionMaterials = async ({
     testNow,
   });
   return {
-    cancelled: cancellation.cancelled + retries.staleCancelled,
+    cancelled:
+      cancellation.cancelled +
+      mismatches.staleCancelled +
+      retries.staleCancelled,
     leaseLost:
       rejected.filter(({ status }) => status === "lease_lost").length +
       cancellation.leaseLost +
+      mismatches.leaseLost +
       retries.leaseLost,
     unread: unreadable.length,
-    retryScheduled: retries.retryScheduled,
-    blocked: retries.blocked,
+    retryScheduled: mismatches.retryScheduled + retries.retryScheduled,
+    blocked: mismatches.blocked + retries.blocked,
+    mismatchHeld: mismatches.retryScheduled + mismatches.blocked,
   };
 };
 
@@ -341,19 +469,40 @@ const rereadMaterial = async (
   return current.ready.at(0) ?? null;
 };
 
-/** Indexing can recover structure only beside usable document text. */
-export const projectionAstOfResult = <T>(
-  astRead: Result<T, StoredCorpusValidationError>,
+/** A revision's AST as indexing reads it, and what that read came to. */
+export type ProjectionAst = {
+  ast: SizedCorpusAst["ast"];
+  storedAst: StoredAstOutcome;
+};
+
+/**
+ * Indexing can recover structure only beside usable document text. A stored
+ * AST the reader refuses then indexes the text alone, and the read is the
+ * typed `unreadable` outcome, so the batch counts it rather than passing it.
+ */
+export const projectionAstOfRead = (
+  astRead: Result<SizedCorpusAst, StoredCorpusValidationError>,
   text: string,
-): Result<T | null, StoredCorpusValidationError> => {
+): Result<ProjectionAst, StoredCorpusValidationError> => {
   if (astRead.isOk()) {
-    return Result.ok(astRead.value);
+    return Result.ok({
+      ast: astRead.value.ast,
+      storedAst: astRead.value.outcome,
+    });
   }
   if (text.trim().length === 0) {
-    return astRead;
+    return Result.err(astRead.error);
   }
-  return Result.ok(null);
+  return Result.ok({
+    ast: null,
+    storedAst: { type: "unreadable", reason: "stored_ast_invalid" },
+  });
 };
+
+const NO_STORED_AST = {
+  ast: null,
+  storedAst: { type: "absent" },
+} as const satisfies ProjectionAst;
 
 export const loadCorpusProjectionPayload = async (
   runInTransaction: ProjectionTransactionRunner,
@@ -371,16 +520,21 @@ export const loadCorpusProjectionPayload = async (
       rereadStoredKey: async () => (await current())?.textS3Key ?? null,
     });
     if (material.astS3Key === null) {
-      return Result.ok({ text: await textPromise, ast: null });
+      return Result.ok({ text: await textPromise, ...NO_STORED_AST });
     }
     const storedAstPointer = material.astS3Key;
+    const report = {
+      documentId: material.input.documentId,
+      jurisdiction: material.input.jurisdiction,
+    };
     const loadAst = async () =>
       await readCorpusForRecovery({
         documentId: material.lease.entityId,
         read: async () =>
           await readCorpusAtAuthoritativePointer({
             storedKey: storedAstPointer,
-            read: readCorpusAst,
+            read: async (storedKey) =>
+              await readSizedCorpusAst(storedKey, { report }),
             rereadStoredKey: async () => {
               const replacement = await current();
               return replacement?.astS3Key ?? null;
@@ -389,8 +543,8 @@ export const loadCorpusProjectionPayload = async (
       });
     if (material.family === "case_law") {
       const [text, astRead] = await settleBoth(textPromise, loadAst());
-      const ast = yield* projectionAstOfResult(astRead, text);
-      return Result.ok({ text, ast });
+      const projected = yield* projectionAstOfRead(astRead, text);
+      return Result.ok({ text, ...projected });
     }
     const text = await textPromise;
     if (
@@ -400,10 +554,10 @@ export const loadCorpusProjectionPayload = async (
         revision: material.lease.intentId,
       })
     ) {
-      return Result.ok({ text, ast: null });
+      return Result.ok({ text, ...NO_STORED_AST });
     }
-    const ast = yield* projectionAstOfResult(await loadAst(), text);
-    return Result.ok({ text, ast });
+    const projected = yield* projectionAstOfRead(await loadAst(), text);
+    return Result.ok({ text, ...projected });
   });
 
 export type CorpusProjectionPayloadReader = typeof loadCorpusProjectionPayload;
@@ -413,7 +567,10 @@ type LoadedCorpusProjectionPayload = InferOk<
 >;
 
 export type CorpusProjectionRevisionBuildFailure = {
-  kind: "payload_unavailable" | "revision_too_large";
+  kind:
+    | "payload_unavailable"
+    | "revision_too_large"
+    | "document_language_undeclared";
   message: string;
 };
 
@@ -471,7 +628,11 @@ export const corpusProjectionRevisionBuildFailure = (
           message: failure.message,
         },
       };
+    // Neither shrinks nor changes language on a retry. A corrected row, or a
+    // declaration of the language (which changes the decision's fingerprint,
+    // see the descriptor), makes it eligible again.
     case "revision_too_large":
+    case "document_language_undeclared":
       return {
         lease,
         failure: {
@@ -496,9 +657,61 @@ export type CorpusProjectionRevisionBlock = {
   material: CorpusProjectionMaterial;
   documentCount: number;
   parts: readonly [string, ...string[]];
+  /**
+   * How the decision's terms were written, on a generation that maps them:
+   * `prefix` when they did not fit the opening passage and were cut, which
+   * the executor counts and reports, because a reader then learns the
+   * decision's words from its passages rather than from the decision field.
+   */
+  decisionTerms: CorpusProjectionDecisionTermsWritten;
+  /**
+   * What the read of the revision's stored AST came to, already reported
+   * per document; the batch counts it, so a degraded, structureless or
+   * unreadable AST never passes a run silently.
+   */
+  storedAst: StoredAstOutcome;
+};
+
+type CorpusProjectionDecisionTermsWritten = "not_mapped" | "whole" | "prefix";
+
+/** Read off the documents as the engine receives them: the opening carries the mark. */
+const decisionTermsWritten = (
+  material: CorpusProjectionMaterial,
+  documents: readonly Record<string, unknown>[],
+): CorpusProjectionDecisionTermsWritten => {
+  const field =
+    material.family === "case_law"
+      ? corpusIndexDecisionTerms(material.manifest)
+      : null;
+  if (field === null) {
+    return "not_mapped";
+  }
+  return documents.some((document) => document[field.partialField] === true)
+    ? "prefix"
+    : "whole";
 };
 
 /** A revision's documents, serialized once and checked against the ceilings. */
+/**
+ * The failure a revision whose documents could not be built records. A
+ * decision in a language its jurisdiction does not declare names itself, its
+ * jurisdiction and its language, so the blocked state says which row to
+ * correct or which declaration to extend.
+ */
+const revisionBuildErrorFailure = (
+  material: CorpusProjectionMaterial,
+  error: ChunkBudgetError | CaseLawDocumentLanguageUndeclaredError,
+): CorpusProjectionRevisionBuildFailure =>
+  CaseLawDocumentLanguageUndeclaredError.is(error)
+    ? {
+        kind: "document_language_undeclared",
+        message: `case-law decision ${material.input.documentId} of ${error.jurisdiction} is written in "${error.language}", a language its jurisdiction does not declare`,
+      }
+    : {
+        kind: "revision_too_large",
+        message: "projection payload exceeds the structural build ceiling",
+      };
+
 const buildCorpusProjectionRevisionBlock = (
   material: CorpusProjectionMaterial,
   payload: LoadedCorpusProjectionPayload,
@@ -530,10 +743,7 @@ const buildCorpusProjectionRevisionBlock = (
     }
   })();
   if (built.isErr()) {
-    return Result.err({
-      kind: "revision_too_large",
-      message: "projection payload exceeds the structural build ceiling",
-    });
+    return Result.err(revisionBuildErrorFailure(material, built.error));
   }
   const entry = {
     revision: material.lease.intentId,
@@ -557,6 +767,8 @@ const buildCorpusProjectionRevisionBlock = (
     material,
     documentCount: entry.documents.length,
     parts: [first, ...rest],
+    decisionTerms: decisionTermsWritten(material, entry.documents),
+    storedAst: payload.storedAst,
   });
 };
 

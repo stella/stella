@@ -83,7 +83,6 @@ export const PublicInspectorDock = ({
   const sidebarWidth = useSidebarInlineSize();
   const viewportWidth = useViewportWidth();
   const { resetWidth, resizeHandleProps, width } = useSharedInspectorPaneWidth({
-    openedFrom: "public-law",
     sidebarWidth,
     viewportWidth,
   });

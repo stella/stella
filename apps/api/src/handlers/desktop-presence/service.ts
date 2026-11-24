@@ -8,7 +8,7 @@ import type {
 } from "@stll/api-contract/desktop-presence";
 
 import { member } from "@/api/db/auth-schema";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { desktopPresence } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {

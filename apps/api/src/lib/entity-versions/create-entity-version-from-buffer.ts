@@ -4,9 +4,9 @@ import { and, eq } from "drizzle-orm";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import type { Transaction } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { pendingUploads } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   captureError,
   createErrorCapture,
@@ -25,6 +25,7 @@ import {
 } from "@/api/lib/buffer-intent-reconciliation";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { DocumentSource } from "@/api/lib/document-source";
+import type { BufferWriteAuthority } from "@/api/lib/entities/buffer-write-authority";
 import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
 import type {
@@ -88,6 +89,8 @@ type CreateEntityVersionFromBufferInput = {
   source: DocumentSource | null;
   writePolicy: FileVersionWritePolicy;
   scanWarnings?: string[] | undefined;
+  /** Required: a delayed member action rechecks its authority before any lock. */
+  authority: BufferWriteAuthority;
   afterWrite?:
     | ((
         tx: Transaction,
@@ -173,6 +176,7 @@ export const createEntityVersionFromBuffer = async ({
   source,
   writePolicy,
   scanWarnings,
+  authority,
   afterWrite,
   dependencies = CREATE_ENTITY_VERSION_FROM_BUFFER_DEPENDENCIES,
 }: CreateEntityVersionFromBufferInput): Promise<CreateEntityVersionFromBufferResult> => {
@@ -235,7 +239,9 @@ export const createEntityVersionFromBuffer = async ({
   });
   let written: Extract<WriteFileVersionResult, { status: "ok" }>;
   try {
-    const cleanupObject = async (): Promise<boolean> => {
+    const cleanupObject = async (): Promise<
+      { status: "deleted" } | { status: "failed" }
+    > => {
       const cleanup = Result.flatten(
         await Result.tryPromise({
           try: async () =>
@@ -258,9 +264,9 @@ export const createEntityVersionFromBuffer = async ({
             objectKey,
           }),
         );
-        return false;
+        return { status: "failed" };
       }
-      return true;
+      return { status: "deleted" };
     };
 
     try {
@@ -315,8 +321,11 @@ export const createEntityVersionFromBuffer = async ({
     // object; a rolled-back intent remains recoverable by the bounded janitor.
     const transactionState = { durableReferencePrepared: false };
     const writeResult = await safeDb(async (tx) => {
+      // The version writer rechecks a delayed actor's authority first, before
+      // its document and matter locks.
       const versionWriteResult = await dependencies.writeFileVersion({
         tx,
+        authority,
         organizationId,
         workspaceId,
         entityId,
@@ -389,7 +398,7 @@ export const createEntityVersionFromBuffer = async ({
     if (Result.isError(writeResult)) {
       if (
         !transactionState.durableReferencePrepared &&
-        (await cleanupObject())
+        (await cleanupObject()).status === "deleted"
       ) {
         await abandonBufferIntent({
           safeDb,
@@ -403,7 +412,7 @@ export const createEntityVersionFromBuffer = async ({
     const writeOutcome = writeResult.value;
 
     if (writeOutcome.status !== "ok") {
-      if (await cleanupObject()) {
+      if ((await cleanupObject()).status === "deleted") {
         await abandonBufferIntent({
           safeDb,
           intent,

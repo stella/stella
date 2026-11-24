@@ -2,18 +2,21 @@ import { Suspense, useState, useTransition } from "react";
 
 import { Result } from "better-result";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { ActivityIndicator, Platform, ScrollView, View } from "react-native";
+import { Platform, ScrollView, View } from "react-native";
 import { useFormatter, useTimeZone, useTranslations } from "use-intl";
 
 import { Input } from "@stll/ui/input";
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
 import { ChoiceChip } from "@/components/choice-chip";
+import { DictateButton } from "@/components/dictate-button";
 import { DueDatePicker } from "@/components/due-date-picker";
 import { screenStyles } from "@/components/empty-state-screen";
 import { MatterPicker } from "@/components/matter-picker";
 import { MemberList } from "@/components/task-assignees";
+import { useDictationField } from "@/components/use-dictation-field";
 import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
 import { epochMilliseconds } from "@/connection/clock";
@@ -30,7 +33,6 @@ import {
   newTaskAssignees,
 } from "@/state/tasks";
 import type { DueChoice } from "@/state/tasks";
-import { useAppColors } from "@/theme";
 
 /**
  * A new task, presented as a sheet over the tasks: its name, when it is due
@@ -48,7 +50,6 @@ const NewTaskScreen = () => {
 const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
   const t = useTranslations("tasks");
   const tabs = useTranslations("tabs");
-  const colors = useAppColors();
   const router = useRouter();
   const { end } = useSession();
   const changed = useChanged();
@@ -57,6 +58,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
   const params = useLocalSearchParams<{ matterId?: string }>();
   const today = dayAt(epochMilliseconds(), timeZone);
   const [name, setName] = useState("");
+  const field = useDictationField(name, setName);
   const [due, setDue] = useState<DueChoice>("none");
   const [pickedOn, setPickedOn] = useState(() =>
     today.add({ days: 1 }).toString(),
@@ -76,6 +78,8 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
     return new Set(session === undefined ? [] : [session.userId]);
   });
   const [failure, setFailure] = useState<WriteFailure | null>(null);
+  // Adding waits for a dictation to land in the name: closing the form drops it.
+  const [dictating, setDictating] = useState(false);
   const [adding, startAdding] = useTransition();
   const [matters] = useState(async () => {
     const result = await listMatters({ fetch, source });
@@ -84,10 +88,11 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
     }
     return result;
   });
-  const ready = name.trim() !== "" && matterId !== null && !adding;
+  const ready =
+    name.trim() !== "" && matterId !== null && !adding && !dictating;
 
   const add = () => {
-    if (matterId === null) {
+    if (matterId === null || dictating) {
       return;
     }
     const days = DUE_CHOICES.find((choice) => choice.key === due)?.days ?? null;
@@ -95,6 +100,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
       { days, picked: due === "pick" ? pickedOn : null },
       today,
     );
+    const learned = field.learnOnceSent(name.trim());
     startAdding(async () => {
       setFailure(null);
       const created = await createTask({
@@ -109,6 +115,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
         source,
       });
       if (Result.isOk(created)) {
+        learned();
         changed("tasks");
         router.back();
         return;
@@ -156,11 +163,17 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
         <Input
           accessibilityLabel={t("name")}
           autoFocus
-          onChangeText={setName}
+          {...field.inputProps}
           onSubmitEditing={add}
           placeholder={t("name")}
           returnKeyType="done"
           value={name}
+        />
+        <DictateButton
+          field="task"
+          matterId={matterId ?? undefined}
+          onBusyChange={setDictating}
+          onText={field.insert}
         />
         <WriteFailureNotice failure={failure} message={t("addFailed")} />
         <View className="gap-2">
@@ -213,7 +226,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
           <View className="px-1">
             <Text variant="section">{t("matterTitle")}</Text>
           </View>
-          <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
+          <Suspense fallback={<Loader />}>
             <MatterPicker
               matters={matters}
               onSelect={(id) => {
@@ -229,7 +242,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
             <View className="px-1">
               <Text variant="section">{t("assignedTo")}</Text>
             </View>
-            <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
+            <Suspense fallback={<Loader />}>
               <MemberList
                 assigned={chosen}
                 load={members.load}

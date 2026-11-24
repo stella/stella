@@ -1,6 +1,3 @@
-export const THEME_STORAGE_KEY = "stella-ui-theme";
-export const PALETTE_STORAGE_KEY = "stella-ui-palette";
-
 export const MAX_PARALLEL_FILE_UPLOADS = 5;
 
 export { getStorageKey } from "@stll/api-contract/browser-storage";

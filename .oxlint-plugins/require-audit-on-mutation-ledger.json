@@ -1,13 +1,5 @@
 [
   {
-    "id": "apps/api/src/lib/account-deletion-effect-store.ts::claimNextAccountDeletionEffectChunk",
-    "writes": {
-      "update:accountDeletionEffectChunks": 2,
-      "update:accountDeletionRequests": 1
-    },
-    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
-  },
-  {
     "id": "apps/api/src/lib/account-deletion-effect-store.ts::completeAccountDeletionEffectChunk",
     "writes": {
       "update:accountDeletionEffectChunks": 1
@@ -32,14 +24,6 @@
     "id": "apps/api/src/lib/account-deletion-steps.ts::clearWorkspaceLeadRole",
     "writes": {
       "update:workspaces": 1
-    },
-    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
-  },
-  {
-    "id": "apps/api/src/lib/account-deletion-steps.ts::deleteChatThreadsAndFileLinks",
-    "writes": {
-      "delete:chatThreads": 1,
-      "delete:fileChatThreads": 1
     },
     "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
   },
@@ -130,16 +114,6 @@
     "id": "apps/api/src/lib/account-deletion-steps.ts::resetFolioCollabUserState",
     "writes": {
       "delete:folioCollabRoomTokens": 1
-    },
-    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
-  },
-  {
-    "id": "apps/api/src/lib/account-deletion-steps.ts::revokeAuthCredentialsAndInvitations",
-    "writes": {
-      "delete:account": 1,
-      "delete:apikey": 1,
-      "delete:invitation": 2,
-      "delete:twoFactor": 1
     },
     "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
   },
@@ -894,7 +868,6 @@
     "id": "apps/api/src/lib/files/organization-file-usage.ts::reconcileOrganizationFileObject.try",
     "writes": {
       "insert:organizationFileObjects": 1,
-      "insert:organizationFileUsage": 1,
       "update:organizationFileObjects": 1,
       "update:organizationFileUsage": 1
     },
@@ -912,7 +885,6 @@
     "id": "apps/api/src/lib/files/organization-file-usage.ts::reserveOrganizationFileBytes.try",
     "writes": {
       "insert:organizationFileObjects": 1,
-      "insert:organizationFileUsage": 1,
       "update:organizationFileObjects": 1,
       "update:organizationFileUsage": 1
     },
@@ -921,8 +893,7 @@
   {
     "id": "apps/api/src/lib/files/organization-file-usage.ts::reserveOrganizationFilesBytesOnce.try",
     "writes": {
-      "insert:organizationFileUsage": 1,
-      "insert:organization_file_objects": 1
+      "insert:organizationFileUsage": 1
     },
     "reason": "Document storage step called by an audited operation; confirm the caller records the event."
   },
@@ -1157,13 +1128,6 @@
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
-    "id": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts::resumeRetiringCorpusIndexGenerationTx",
-    "writes": {
-      "update:corpusIndexGenerations": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
     "id": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts::setServingCorpusIndexGenerationTx",
     "writes": {
       "update:corpusIndexGenerations": 2
@@ -1224,13 +1188,6 @@
     "id": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts::chargeExpiredAppendStatesTx",
     "writes": {
       "update:corpusIndexProjectionStates": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts::claimCorpusProjectionCleanupSettlementTx",
-    "writes": {
-      "update:corpusIndexProjectionIntents": 1
     },
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
@@ -1565,16 +1522,6 @@
     "writes": {
       "insert:chat_thread_search_documents": 1,
       "update:chat_thread_search_documents": 1
-    },
-    "reason": "Search projection derived from a write that is audited at its source."
-  },
-  {
-    "id": "apps/api/src/lib/search/index-entity.ts::upsertSearchDocument",
-    "writes": {
-      "delete:search_document_preview_passages": 1,
-      "insert:search_document_preview_passages": 1,
-      "insert:search_documents": 1,
-      "update:search_documents": 1
     },
     "reason": "Search projection derived from a write that is audited at its source."
   },

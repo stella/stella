@@ -1,11 +1,4 @@
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-} from "react";
+import { lazy, Suspense, useCallback, useLayoutEffect, useRef } from "react";
 import type { ReactNode, RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
@@ -15,12 +8,7 @@ import { useTranslations } from "use-intl";
 import { resolveFindMatchRange } from "@stll/folio-core/prosemirror/findReplaceSelection";
 import type { DocxEditorRef } from "@stll/folio-react";
 import { Button } from "@stll/ui/button";
-import {
-  AlertTriangleIcon,
-  MonitorIcon,
-  MoonIcon,
-  SunIcon,
-} from "@stll/ui/icons";
+import { AlertTriangleIcon } from "@stll/ui/icons";
 import {
   Menu,
   MenuPopup,
@@ -32,7 +20,7 @@ import { Separator } from "@stll/ui/separator";
 import "@stll/folio-react/editor.css";
 
 import "./peek-docx.css";
-import { composeRefs } from "@stll/ui/utils";
+import { cn, composeRefs } from "@stll/ui/utils";
 
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import {
@@ -47,6 +35,7 @@ import {
   PdfSignPlacementBar,
   PdfSignPlacementLayer,
 } from "@/components/inspector/pdf-sign-placement-viewer";
+import { VIEWER_OVERLAY_BAR_TOP_CLEARANCE } from "@/components/inspector/viewer-overlay-bar";
 import { ZoomControls } from "@/components/inspector/zoom-controls";
 import type { ZoomDirection } from "@/components/inspector/zoom-controls";
 import { DocumentMarkPageLayer } from "@/components/pdf/annotations/document-marks-layer";
@@ -54,6 +43,10 @@ import { PageAnonymization } from "@/components/pdf/page-anonymization";
 import { PageCitation } from "@/components/pdf/page-citation";
 import { PdfSelectionActions } from "@/components/pdf/pdf-selection-actions";
 import { PDF_SELECTION_CHAT } from "@/components/pdf/pdf-selection-toolbar";
+import {
+  PDF_COLOR_MODE_ICONS,
+  PdfColorModeIcon,
+} from "@/components/pdf/pdf-viewer.pending";
 import { resolvePendingPdfCitationPageId } from "@/components/pdf/peek/pdf-citation-navigation.logic";
 import {
   fetchPrintPdf,
@@ -132,6 +125,12 @@ type PeekPdfViewerProps = {
   scaleOffset: number;
   mimeType?: string | undefined;
   interactionMode?: "preview-only" | "with-ai" | undefined;
+  /**
+   * Whether the viewer's controls float over the top inline-end corner of the
+   * pages (`ViewerOverlayBar`). The first page then starts below the bar, so
+   * at the top of the scroll the bar covers none of it.
+   */
+  underOverlayBar: boolean;
   searchText?: SearchTextQuery | undefined;
   activeSearchMatchIndex?: number | undefined;
   onSearchMatchSummaryChange?:
@@ -203,6 +202,7 @@ const PeekPdfViewerContent = ({
   mimeType,
   interactionMode = "with-ai",
   searchText = "",
+  underOverlayBar,
   activeSearchMatchIndex = 0,
   onSearchMatchSummaryChange,
   onPeekNavigate,
@@ -229,34 +229,22 @@ const PeekPdfViewerContent = ({
   );
   const file = fileQuery.data;
 
-  const renderPageOverlay = useCallback(
-    (pageId: string) => (
-      <>
-        <PeekPageOverlays
-          activePropertyId={activePropertyId}
-          entityId={entityId}
-          fieldId={fieldId}
-          onPeekNavigate={onPeekNavigate}
-          pageId={pageId}
-          viewId={viewId}
-          workspaceId={workspaceId}
-        />
-        {pdfPageOverlay?.(pageId)}
-        {interactionMode === "preview-only" ? null : (
-          <PdfSignPlacementLayer pageId={pageId} />
-        )}
-      </>
-    ),
-    [
-      activePropertyId,
-      entityId,
-      fieldId,
-      interactionMode,
-      onPeekNavigate,
-      pdfPageOverlay,
-      viewId,
-      workspaceId,
-    ],
+  const renderPageOverlay = (pageId: string) => (
+    <>
+      <PeekPageOverlays
+        activePropertyId={activePropertyId}
+        entityId={entityId}
+        fieldId={fieldId}
+        onPeekNavigate={onPeekNavigate}
+        pageId={pageId}
+        viewId={viewId}
+        workspaceId={workspaceId}
+      />
+      {pdfPageOverlay?.(pageId)}
+      {interactionMode === "preview-only" ? null : (
+        <PdfSignPlacementLayer pageId={pageId} />
+      )}
+    </>
   );
 
   if (fileQuery.isError) {
@@ -299,24 +287,19 @@ const PeekPdfViewerContent = ({
         fieldId={fieldId}
         pendingPdfPageScroll={pendingPdfPageScroll}
       />
-      <PDFViewport
-        buffer={file.buffer}
-        className="document-preview-surface h-full"
-        contentClassName="relative space-y-2 px-2 pt-2"
-        fileId={fieldId}
-        pageSource={pdfPageSource}
-        invertColors={resolvePDFInvertColors({
-          colorMode,
-          isImageOrigin,
-        })}
-        scaleOffset={scaleOffset}
+      <PeekPdfViewport
         activeSearchMatchIndex={activeSearchMatchIndex}
+        buffer={file.buffer}
+        colorMode={colorMode}
+        fileId={fieldId}
+        isImageOrigin={isImageOrigin}
         onSearchMatchSummaryChange={onSearchMatchSummaryChange}
         onWheelZoom={onWheelZoom}
+        pageSource={pdfPageSource}
+        renderPageOverlay={renderPageOverlay}
+        scaleOffset={scaleOffset}
         searchText={searchText}
-        renderPage={(props) => (
-          <PDFPage {...props} renderOverlay={renderPageOverlay} />
-        )}
+        underOverlayBar={underOverlayBar}
       />
     </>
   );
@@ -344,6 +327,62 @@ const PeekPdfViewerContent = ({
     </FileViewerWithAI>
   );
 };
+
+type PeekPdfViewportProps = {
+  buffer: ArrayBuffer;
+  /** Names the parsed document; distinct per set of bytes on screen. */
+  fileId: string;
+  pageSource: PDFPageSource;
+  /** The zoom over the fit-to-width scale, as the zoom controls set it. */
+  scaleOffset: number;
+  colorMode: PDFColorMode;
+  /**
+   * Whether the viewer's controls float over the top inline-end corner of the
+   * pages (`ViewerOverlayBar`). The first page then starts below the bar, so
+   * at the top of the scroll the bar covers none of it.
+   */
+  underOverlayBar: boolean;
+  isImageOrigin?: boolean | undefined;
+  onWheelZoom?: ((deltaY: number) => void) | undefined;
+  searchText?: SearchTextQuery | undefined;
+  activeSearchMatchIndex?: number | undefined;
+  onSearchMatchSummaryChange?:
+    ((summary: SearchMatchSummary) => void) | undefined;
+  renderPageOverlay?: ((pageId: string) => ReactNode) | undefined;
+};
+
+/**
+ * The inspector's PDF pages, whatever file the bytes come from: the file's
+ * own PDF, or one a signed container holds. Inside a measured PDF provider
+ * the pages fit the panel's width, follow the zoom controls and zoom with
+ * ctrl or cmd and the wheel, the same in every preview that draws a PDF.
+ */
+export const PeekPdfViewport = ({
+  buffer,
+  colorMode,
+  fileId,
+  isImageOrigin = false,
+  pageSource,
+  renderPageOverlay,
+  underOverlayBar,
+  ...props
+}: PeekPdfViewportProps) => (
+  <PDFViewport
+    {...props}
+    buffer={buffer}
+    className="document-preview-surface h-full"
+    contentClassName={cn(
+      "relative space-y-2",
+      underOverlayBar ? VIEWER_OVERLAY_BAR_TOP_CLEARANCE : "pt-2",
+    )}
+    fileId={fileId}
+    invertColors={resolvePDFInvertColors({ colorMode, isImageOrigin })}
+    pageSource={pageSource}
+    renderPage={(pageProps) => (
+      <PDFPage {...pageProps} renderOverlay={renderPageOverlay} />
+    )}
+  />
+);
 
 const PeekPdfCitationNavigation = ({
   clearPendingPdfPageScroll,
@@ -399,12 +438,6 @@ const PeekViewerErrorFallback = ({ onRetry }: { onRetry: () => void }) => {
   );
 };
 
-const PDF_COLOR_MODE_ICONS = {
-  light: SunIcon,
-  dark: MoonIcon,
-  system: MonitorIcon,
-} as const satisfies Record<PDFColorMode, typeof SunIcon>;
-
 type PeekPdfColorControl = {
   colorMode: PDFColorMode;
   onColorModeChange: (colorMode: PDFColorMode) => void;
@@ -424,7 +457,6 @@ const PDFColorModeControl = ({
   onColorModeChange,
 }: PeekPdfColorControl) => {
   const t = useTranslations();
-  const PDFColorModeIcon = PDF_COLOR_MODE_ICONS[colorMode];
 
   return (
     <Menu>
@@ -433,7 +465,7 @@ const PDFColorModeControl = ({
         render={<Button size="icon-xs" variant="ghost" />}
         title={t("workspaces.pdf.adjustForDarkMode")}
       >
-        <PDFColorModeIcon className="size-3.5" />
+        <PdfColorModeIcon colorMode={colorMode} />
       </MenuTrigger>
       <MenuPopup className="w-auto" align="end">
         <MenuRadioGroup className="flex" value={colorMode}>
@@ -521,22 +553,20 @@ const PeekDocxViewer = ({
   const searchHighlightFrameRef = useRef<number | null>(null);
   const searchResultCacheRef = useRef<DocxSearchResultCache | null>(null);
   const { containerRef: fitZoomRef, fitZoom: targetZoom } = useDocxFitZoom({
+    fit:
+      fitMode === "page"
+        ? { type: "width", fitWidth: DOCX_PAGE_FIT_WIDTH, maxAutoZoom: 1 }
+        : { type: "width" },
     scaleOffset,
-    ...(fitMode === "page" && {
-      fitWidth: DOCX_PAGE_FIT_WIDTH,
-      maxAutoZoom: 1,
-    }),
   });
   // Stable ref callback so React doesn't detach/re-attach the fit-zoom
   // ResizeObserver every render.
-  const composedContainerRef = useMemo(
-    () => composeRefs(containerRef, fitZoomRef),
-    [fitZoomRef],
-  );
+  const composedContainerRef = composeRefs(containerRef, fitZoomRef);
   useDocxBlockScroll({ editorRef, fieldId });
   const searchTextKey =
     searchText === undefined ? undefined : searchTextQueryKey(searchText);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const highlightSearchResult = useCallback(() => {
     if (searchText === undefined) {
       return true;
@@ -599,6 +629,7 @@ const PeekDocxViewer = ({
     searchTextKey,
   ]);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const scheduleSearchHighlight = useCallback(() => {
     if (searchHighlightFrameRef.current !== null) {
       cancelAnimationFrame(searchHighlightFrameRef.current);
@@ -622,7 +653,7 @@ const PeekDocxViewer = ({
     scheduleSearchHighlight();
   }, [scheduleSearchHighlight]);
 
-  const handleDocumentReady = useCallback(() => {
+  const handleDocumentReady = () => {
     searchResultCacheRef.current = null;
     // Folio paints a read-only document before it builds the editor view, and
     // host plugins only see the document through that view.
@@ -630,12 +661,12 @@ const PeekDocxViewer = ({
       editorRef.current?.ensureEditorView({ focus: false });
     }
     scheduleSearchHighlight();
-  }, [plugins, scheduleSearchHighlight]);
+  };
 
-  const handleEditorViewReady = useCallback(() => {
+  const handleEditorViewReady = () => {
     searchResultCacheRef.current = null;
     scheduleSearchHighlight();
-  }, [scheduleSearchHighlight]);
+  };
 
   // Sync scaleOffset from inspector +/- buttons to Folio zoom
   useLayoutEffect(() => {

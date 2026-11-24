@@ -27,8 +27,14 @@ import {
   MCP_READER_UI_APP_DIRECTORIES,
   MCP_SHARED_UI_MODULE_FILES,
 } from "./lib/mcp-reader-ui-guard";
+import { resolveMetafilePath } from "./lib/metafile-path";
 import { namespaceMembers } from "./lib/namespace-members";
+import {
+  READER_FONT_STYLESHEET,
+  SHARED_GENERATED_MODULE,
+} from "./lib/plugin-filters";
 import { precompiledMessagesPlugin } from "./lib/precompiled-messages";
+import { STYLE_SOURCES_COMMAND, unscannedStyleSources } from "./style-sources";
 
 const checking = Bun.argv.includes("--check");
 const generatedAssets = new Map<string, string>();
@@ -52,7 +58,7 @@ const generatedAssetPlugin = {
         return undefined;
       },
     );
-    builder.onLoad({ filter: /shared\/generated\//u }, ({ path: file }) => {
+    builder.onLoad({ filter: SHARED_GENERATED_MODULE }, ({ path: file }) => {
       const contents = generatedAssets.get(file);
       if (contents === undefined) {
         return undefined;
@@ -71,13 +77,16 @@ await writeGenerated(
   `${JSON.stringify(MCP_APP_MESSAGES, null, 2)}\n`,
 );
 const styleInput = path.resolve(generatedRoot, "../style.css");
-const styles = await postcss([tailwindcss()]).process(
-  await Bun.file(styleInput).text(),
-  { from: styleInput },
-);
+const styleSource = await Bun.file(styleInput).text();
+const styles = await postcss([tailwindcss()]).process(styleSource, {
+  from: styleInput,
+});
 const webRoot = path.resolve(import.meta.dirname, "../../../apps/web");
 const repoRoot = path.resolve(import.meta.dirname, "../../..");
+const canonicalRepoRoot = realpathSync(repoRoot);
 const readerMessages = new Map<string, Map<string, string>>();
+const { buildCatalogs } = await import("../../scripts/src/i18n-namespaces");
+await buildCatalogs(path.join(webRoot, "src/i18n"));
 const localeRoot = path.join(webRoot, "src/i18n/langs");
 for (const file of [
   ...new Bun.Glob("*.json").scanSync({ cwd: localeRoot }),
@@ -129,7 +138,7 @@ const inlineReaderFonts = {
   name: "inline-reader-fonts",
   setup(builder: Bun.PluginBuilder) {
     builder.onLoad(
-      { filter: /source-serif-4\/.*\.css$/u },
+      { filter: READER_FONT_STYLESHEET },
       async ({ path: cssPath }) => {
         let contents = await Bun.file(cssPath).text();
         for (const match of [
@@ -286,7 +295,7 @@ const readModuleGraph = (metafile: Bun.BuildMetafile): ModuleGraph => {
   }
   const inputs = new Set(
     Object.keys(metafile.inputs).map((file) =>
-      canonicalFile(path.resolve(file)),
+      canonicalFile(resolveMetafilePath(file)),
     ),
   );
   // Bun names a metafile path from the working directory, and an import
@@ -294,8 +303,8 @@ const readModuleGraph = (metafile: Bun.BuildMetafile): ModuleGraph => {
   // missing from the inputs; it still has a file.
   const resolveImport = (importer: string, target: string) => {
     const candidates = [
-      path.resolve(target),
-      path.resolve(path.dirname(importer), target),
+      resolveMetafilePath(target),
+      resolveMetafilePath(target, path.dirname(importer)),
     ].map(canonicalFile);
     return (
       candidates.find((file) => inputs.has(file)) ??
@@ -306,7 +315,7 @@ const readModuleGraph = (metafile: Bun.BuildMetafile): ModuleGraph => {
   return {
     imports: new Map(
       Object.entries(metafile.inputs).map(([key, { imports }]) => {
-        const importer = path.resolve(key);
+        const importer = resolveMetafilePath(key);
         return [
           canonicalFile(importer),
           imports
@@ -329,7 +338,7 @@ const readModuleGraph = (metafile: Bun.BuildMetafile): ModuleGraph => {
           ([file, { bytesInOutput }]) =>
             bytesInOutput > 0 && !isStylesheet(file),
         )
-        .map(([file]) => canonicalFile(path.resolve(file))),
+        .map(([file]) => canonicalFile(resolveMetafilePath(file))),
     ),
   };
 };
@@ -441,8 +450,26 @@ const analyseMcpApp = async (directory: McpAppDirectory) => {
       `MCP app ${app} bundles the ICU message parser; format precompiled catalogues instead: ${messageParserInputs.join(", ")}`,
     );
   }
+  // The stylesheet scans the shared UI modules the apps import, not whole
+  // packages; a module it misses would render without its utilities.
+  const unscanned = unscannedStyleSources(
+    Object.keys(metafile.inputs).map((file) =>
+      repoRelativePath(
+        canonicalRepoRoot,
+        canonicalFile(resolveMetafilePath(file)),
+      ),
+    ),
+    styleSource,
+  );
+  if (unscanned.length > 0) {
+    panic(
+      `MCP app ${app} imports modules its stylesheet does not scan: ${unscanned.join(", ")}. Run ${STYLE_SOURCES_COMMAND}`,
+    );
+  }
   const apiInputs = Object.keys(metafile.inputs).filter((file) =>
-    repoRelativePath(repoRoot, path.resolve(file)).startsWith("apps/api/"),
+    repoRelativePath(repoRoot, resolveMetafilePath(file)).startsWith(
+      "apps/api/",
+    ),
   );
   if (apiInputs.length > 0) {
     panic(`MCP app ${app} reaches API source: ${apiInputs.join(", ")}`);
@@ -453,7 +480,7 @@ const analyseMcpApp = async (directory: McpAppDirectory) => {
   );
   if (readerDirectory !== undefined) {
     const inputs = Object.keys(metafile.inputs)
-      .map((file) => repoRelativePath(repoRoot, path.resolve(file)))
+      .map((file) => repoRelativePath(repoRoot, resolveMetafilePath(file)))
       .filter((file) => /^(?:apps|packages)\//u.test(file))
       .toSorted();
     const loadModule = async (file: string) => ({

@@ -76,7 +76,7 @@ export const DocumentAiSourceBar = ({
     selectJustificationByFieldId(s.justifications, fieldId),
   );
 
-  const slots = useMemo(() => {
+  const slots = (() => {
     if (!justification || !entity || !properties) {
       return [];
     }
@@ -89,7 +89,7 @@ export const DocumentAiSourceBar = ({
         return { fieldId: f.id, property: prop };
       })
       .filter((s) => s !== null);
-  }, [entity, justification, properties]);
+  })();
 
   const currentIdx = slots.findIndex((s) => s.fieldId === fieldId);
   const prevSlot = currentIdx > 0 ? slots[currentIdx - 1] : null;
@@ -111,6 +111,7 @@ export const DocumentAiSourceBar = ({
   const pages = useOptionalPDFStore((s) => s.pages);
   const justificationId = justification?.id;
   const boundingBoxes = justification?.boundingBoxes;
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const activeDocumentJustificationContent = useMemo(
     () =>
       justification
@@ -128,6 +129,7 @@ export const DocumentAiSourceBar = ({
         : null,
     [activeTab.id, justification],
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const citations = useMemo(
     () =>
       activeDocumentJustificationContent
@@ -450,6 +452,7 @@ export const DocumentAiSourceBar = ({
         <Button
           aria-label={t("common.previous")}
           disabled={!prevSlot}
+          disabledReason={t("inspector.firstSourceReached")}
           onClick={() => {
             if (!prevSlot) {
               return;
@@ -477,6 +480,7 @@ export const DocumentAiSourceBar = ({
         <Button
           aria-label={t("common.next")}
           disabled={!nextSlot}
+          disabledReason={t("inspector.lastSourceReached")}
           onClick={() => {
             if (!nextSlot) {
               return;

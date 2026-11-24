@@ -23,17 +23,9 @@ import { Button } from "@stll/ui/button";
 import {
   BookmarkIcon,
   BookmarkPlusIcon,
-  CalendarIcon,
   DuplicateIcon,
-  FileCheckIcon,
-  FolderTreeIcon,
-  GanttChartIcon,
-  KanbanIcon,
-  LayoutDashboardIcon,
-  MailIcon,
   PencilIcon,
   PlusIcon,
-  TableIcon,
   Trash2Icon,
 } from "@stll/ui/icons";
 import {
@@ -77,20 +69,10 @@ import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { EMPTY_AVT_LAYOUT, switcherViews } from "@/lib/workspaces/view-layout";
 import { SaveAsTemplateDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog";
 import { TemplatePickerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog";
+import { VIEW_LAYOUT_ICONS } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-icons.logic";
 import { unavailableViewLayouts } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-options.logic";
 import type { ViewLayoutPreviewKind } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
 import { ViewLayoutPreview } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
-
-const layoutIcons = {
-  overview: LayoutDashboardIcon,
-  table: TableIcon,
-  filesystem: FolderTreeIcon,
-  kanban: KanbanIcon,
-  calendar: CalendarIcon,
-  timeline: GanttChartIcon,
-  avt: FileCheckIcon,
-  correspondence: MailIcon,
-} as const satisfies Record<ViewLayoutType, React.ElementType>;
 
 const LAYOUT_LABEL_KEYS = {
   overview: "workspaces.views.layouts.overview",
@@ -224,6 +206,7 @@ export const ViewSwitcher = ({
         render={
           <Button
             disabled={createView.isPending}
+            disabledReason={t("common.creating")}
             size="icon-xs"
             variant="ghost"
           />
@@ -236,7 +219,7 @@ export const ViewSwitcher = ({
           options={[
             ...createLayoutOptions.map((layoutType) => ({
               kind: layoutType,
-              icon: layoutIcons[layoutType],
+              icon: VIEW_LAYOUT_ICONS[layoutType],
               label: t(LAYOUT_LABEL_KEYS[layoutType]),
               onSelect: () => {
                 createView.mutate(
@@ -292,6 +275,7 @@ export const ViewSwitcher = ({
         addControl={addControl}
         ariaLabel={t("workspaces.views.switcherLabel")}
         direction={direction}
+        overflowLabel={t("common.showMore")}
         editing={
           renamingViewId
             ? {
@@ -362,7 +346,7 @@ export const ViewSwitcher = ({
           },
         }}
         renderIcon={(view) => {
-          const Icon = layoutIcons[view.layout.type];
+          const Icon = VIEW_LAYOUT_ICONS[view.layout.type];
           return <Icon className="size-3.5 shrink-0" />;
         }}
         reorder={
@@ -562,7 +546,7 @@ const useViewActionsMenu = ({
       return null;
     }
     const { id, layout } = view;
-    const Icon = layoutIcons[layout.type];
+    const Icon = VIEW_LAYOUT_ICONS[layout.type];
     return (
       <>
         {canUpdateView && (
@@ -604,7 +588,7 @@ const useViewActionsMenu = ({
                   return [
                     {
                       kind: layoutType,
-                      icon: layoutIcons[layoutType],
+                      icon: VIEW_LAYOUT_ICONS[layoutType],
                       label: t(LAYOUT_LABEL_KEYS[layoutType]),
                       onSelect: () => {
                         convertView.mutate(

@@ -19,7 +19,7 @@ import {
 } from "@stll/api-contract/sharepoint";
 import { sha256Hex } from "@stll/sha256/bun";
 
-import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db-types";
 import { entities, entityVersions } from "@/api/db/schema";
 import {
   downloadSharepointFile,
@@ -37,6 +37,7 @@ import {
   documentWriteRefusalHandlerError,
   DocumentWriteRefusedError,
 } from "@/api/lib/entities/authorize-document-write";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -440,6 +441,7 @@ export const importSharepointFile = async ({
     case "create": {
       const created = await storeOrFail(async () =>
         createEntityFromBuffer({
+          authority: CALLER_AUTHORIZED,
           scopedDb: target.scopedDb,
           organizationId: target.organizationId,
           workspaceId: target.workspaceId,
@@ -493,6 +495,7 @@ export const importSharepointFile = async ({
       }
       const versioned = await storeOrFail(async () =>
         createEntityVersionFromBuffer({
+          authority: CALLER_AUTHORIZED,
           safeDb: target.safeDb,
           organizationId: target.organizationId,
           workspaceId: target.workspaceId,

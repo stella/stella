@@ -8,7 +8,6 @@ import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -18,6 +17,7 @@ import {
   chatThreads,
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import { redactCaseLawDecision } from "@/api/handlers/case-law/erasure";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { generateAdmittedThreadTitle } from "@/api/handlers/chat/generate-thread-title";

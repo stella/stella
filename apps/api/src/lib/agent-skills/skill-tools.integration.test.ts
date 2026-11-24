@@ -2,9 +2,9 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills, auditLogs } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   NO_SKILL_BINDING_SCOPE,
   resolveSkillBindingScope,

@@ -77,13 +77,17 @@ const registrySearchHint = (
   registryId: string,
 ) => {
   if (connection?.status !== "connected") {
-    return t("registrySearchHint");
+    return t("registryDisconnected");
   }
-  const capabilities = connection.registries.find(
-    ({ id }) => id === registryId,
-  )?.searchCapabilities;
+  const registry = connection.registries.find(({ id }) => id === registryId);
+  if (!registry) {
+    return t("registrySelect");
+  }
+  const capabilities = registry.searchCapabilities;
   if (capabilities?.nameSearch !== "unsupported") {
-    return t("registrySearchHint");
+    // Isolated so a left-to-right registry name keeps its order in a
+    // right-to-left sentence.
+    return t("registrySearchHint", { registry: `⁨${registry.name}⁩` });
   }
   return t("registryIdentifierSearchHint", {
     identifiers: capabilities.identifierKinds.join(", "),
@@ -616,6 +620,11 @@ export const RegistrySearch = ({
                 variant="ghost"
                 className="h-11 max-w-48 min-w-0 text-xs"
                 disabled={!connected}
+                disabledReason={
+                  connection?.status === "unavailable"
+                    ? t("registryErrorState")
+                    : emptyText
+                }
               />
             }
             aria-label={t("registrySelect")}
@@ -679,6 +688,7 @@ export const RegistrySearch = ({
               <Button
                 data-registry-card
                 disabled={card.status === "formatting"}
+                disabledReason={t("registryFormatting")}
                 onKeyDown={(event) => {
                   if (
                     event.nativeEvent.isComposing ||
@@ -768,6 +778,7 @@ export const RegistrySearch = ({
                         className="h-11 w-full justify-between text-xs"
                         variant="ghost"
                         disabled={card.status === "formatting"}
+                        disabledReason={t("registryFormatting")}
                       />
                     }
                     aria-label={t("registryFormat")}

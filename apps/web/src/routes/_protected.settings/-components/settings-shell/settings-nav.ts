@@ -1,30 +1,14 @@
-import {
-  BanknoteIcon,
-  BrainIcon,
-  BuildingIcon,
-  ClockIcon,
-  CpuIcon,
-  EyeOffIcon,
-  FileTextIcon,
-  FlaskConicalIcon,
-  GaugeIcon,
-  HashIcon,
-  HistoryIcon,
-  LandmarkIcon,
-  ListOrderedIcon,
-  MonitorIcon,
-  PlugIcon,
-  UserIcon,
-  UsersIcon,
-  WrenchIcon,
-} from "@stll/ui/icons";
-
 import type { Role } from "@/lib/auth-client";
 import { isBillingSettingsAccessible } from "@/lib/organization/billing-settings.logic";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
+import {
+  ACCOUNT_SECTION,
+  ORGANIZATION_SECTIONS,
+} from "@/routes/_protected.settings/-components/settings-shell/settings-shell.pending";
 
 /** Per-member conditions that hide a navigation item. */
-type SettingsNavGate = "memory" | "beta" | "timeBilling" | "billing" | "usage";
+type SettingsNavGate =
+  "memory" | "beta" | "timeBilling" | "billing" | "usage" | "enterpriseSso";
 
 export type SettingsNavAccess = {
   role: Role | undefined;
@@ -36,137 +20,12 @@ export type SettingsNavAccess = {
   timeBilling: boolean;
   /** Plan and usage is available on this deployment. */
   usage: boolean;
+  /** Enterprise SSO is enabled on this deployment. */
+  enterpriseSso?: boolean;
 };
 
-// Literal keys keep t() from demanding ICU values a widened
-// TranslationKey would require.
-const ACCOUNT_SECTION = {
-  id: "account",
-  labelKey: "settings.account.title",
-  items: [
-    {
-      to: "/settings/account/profile",
-      labelKey: "common.profile",
-      icon: UserIcon,
-    },
-    {
-      to: "/settings/account/desktop",
-      labelKey: "settings.account.desktop",
-      icon: MonitorIcon,
-    },
-    {
-      to: "/settings/account/connections",
-      labelKey: "settings.connections.title",
-      icon: PlugIcon,
-    },
-    {
-      // Personal + firm + matter memory in one panel. RLS scopes what each
-      // member sees; firm-library creation is gated inside the panel.
-      to: "/settings/account/memory",
-      labelKey: "memory.pageTitle",
-      icon: BrainIcon,
-      gate: "memory",
-    },
-    {
-      to: "/settings/account/beta",
-      labelKey: "settings.account.beta",
-      icon: FlaskConicalIcon,
-      gate: "beta",
-    },
-  ],
-} as const;
-
-const ORGANIZATION_SECTIONS = [
-  {
-    id: "organization",
-    labelKey: "common.organization",
-    items: [
-      {
-        to: "/settings/organization/general",
-        labelKey: "admin.general",
-        icon: BuildingIcon,
-      },
-      {
-        to: "/settings/organization/members",
-        labelKey: "common.members",
-        icon: UsersIcon,
-      },
-      {
-        to: "/settings/organization/usage",
-        labelKey: "admin.planAndUsage",
-        icon: GaugeIcon,
-        gate: "usage",
-      },
-      {
-        to: "/settings/organization/audit-logs",
-        labelKey: "settings.organization.auditLogs",
-        icon: HistoryIcon,
-      },
-    ],
-  },
-  {
-    id: "ai",
-    labelKey: "admin.ai",
-    items: [
-      {
-        to: "/settings/organization/ai",
-        labelKey: "admin.modelsAndProviders",
-        icon: CpuIcon,
-      },
-      {
-        to: "/settings/organization/anonymization",
-        labelKey: "settings.organization.anonymization.title",
-        icon: EyeOffIcon,
-      },
-      {
-        to: "/settings/organization/tools",
-        labelKey: "knowledge.sections.tools.title",
-        icon: WrenchIcon,
-      },
-    ],
-  },
-  {
-    id: "firm-setup",
-    labelKey: "admin.firmSetup",
-    items: [
-      {
-        to: "/settings/organization/matter-numbering",
-        labelKey: "settings.organization.matterNumbering",
-        icon: HashIcon,
-      },
-      {
-        to: "/settings/organization/document-types",
-        labelKey: "settings.organization.documentTypes.title",
-        icon: FileTextIcon,
-      },
-      {
-        to: "/settings/organization/time-policy",
-        labelKey: "settings.organization.timePolicy.title",
-        icon: ClockIcon,
-        gate: "timeBilling",
-      },
-      {
-        to: "/settings/organization/number-series",
-        labelKey: "billing.numberSeries.title",
-        icon: ListOrderedIcon,
-        gate: "billing",
-      },
-      {
-        to: "/settings/organization/vat-rates",
-        labelKey: "billing.vatRates.title",
-        icon: LandmarkIcon,
-        gate: "billing",
-      },
-      {
-        to: "/settings/organization/billing",
-        labelKey: "admin.billingProfiles",
-        icon: BanknoteIcon,
-        gate: "billing",
-      },
-    ],
-  },
-] as const;
-
+// Both phases draw the sections (./settings-shell.pending.tsx); this
+// module decides which of them, and which of their rows, a member sees.
 type SettingsNavSectionSource =
   typeof ACCOUNT_SECTION | (typeof ORGANIZATION_SECTIONS)[number];
 type SettingsNavItem = SettingsNavSectionSource["items"][number];
@@ -181,12 +40,14 @@ export const settingsNavSections = ({
   beta,
   timeBilling,
   usage,
+  enterpriseSso = false,
 }: SettingsNavAccess) => {
   const open: Record<SettingsNavGate, boolean> = {
     memory,
     beta,
     timeBilling,
     usage,
+    enterpriseSso,
     billing: isBillingSettingsAccessible({ previewEnabled: timeBilling, role }),
   };
   const sections: readonly SettingsNavSectionSource[] =

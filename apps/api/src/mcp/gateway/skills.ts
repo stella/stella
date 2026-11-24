@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 
-import type { SafeDbError } from "@/api/db/safe-db";
+import type { SafeDbError } from "@/api/db/safe-db-types";
 import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
 import {
   narrowModelOfferedSkills,
@@ -35,7 +35,13 @@ import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestResources } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
+import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import {
+  modeAllowsSkillTools,
+  servesBuiltInSkillTools,
+} from "@/api/mcp/gateway/mode-policy";
+import {
+  hasGrantedScope,
   loadOfferedStaticMcpToolDefinitions,
   usableStaticMcpToolNames,
 } from "@/api/mcp/gateway/static-tool-visibility";
@@ -57,10 +63,10 @@ export type ResolvedSkillTool = AvailableChatSkill & {
 /**
  * The skill catalog starts from the one chat serves so installed rows keep
  * chat's private-over-team precedence and continue to shadow a built-in with
- * the same slug. Built-ins are removed before naming because MCP serves their
- * guidance as resources rather than tools. Exposed names are assigned over
- * the whole installed catalog, so hiding an unavailable skill never renames
- * another one.
+ * the same slug. Built-ins are tools only for an agent run
+ * (`servesBuiltInSkillTools`); other clients read their guidance as
+ * resources. Exposed names are assigned over the whole catalog, so hiding an
+ * unavailable skill never renames another one.
  */
 const loadSkillTools = async ({
   context,
@@ -83,7 +89,9 @@ const loadSkillTools = async ({
       userId: context.userId,
     }),
   );
-  const exposed = exposeSkillTools(skills);
+  const exposed = exposeSkillTools(skills, {
+    includeBuiltIns: servesBuiltInSkillTools(context),
+  });
   if (!anySkillRequiresTools(skills)) {
     return exposed.map((skill) =>
       Object.assign(skill, { availability: AVAILABLE }),
@@ -306,21 +314,69 @@ const throwOnLoadFault = <T>(result: Result<T, SafeDbError>): T => {
 /**
  * Filters and names an already precedence-resolved catalog, exported so tests
  * and the orientation eval derive collision-safe installed-skill names through
- * the served code path rather than a hand-written mirror of it.
+ * the served code path rather than a hand-written mirror of it. Installed
+ * skills are named first, so serving built-ins as well never renames one.
  */
 export const exposeSkillTools = (
   skills: readonly AvailableChatSkill[],
+  { includeBuiltIns = false }: { includeBuiltIns?: boolean } = {},
 ): (AvailableChatSkill & { exposedName: string })[] => {
   const seenToolNames = new Set<string>();
+  const exposedNames = new Map<AvailableChatSkill, string>();
+  const nameAll = (source: AvailableChatSkill["source"]) => {
+    for (const skill of skills) {
+      if (skill.source === source) {
+        exposedNames.set(
+          skill,
+          collisionSafeToolName({
+            baseName: namespaceSkillToolName(skill.name),
+            rawName: skill.name,
+            seen: seenToolNames,
+          }),
+        );
+      }
+    }
+  };
+  nameAll(CHAT_SKILL_SOURCE.installed);
+  if (includeBuiltIns) {
+    nameAll(CHAT_SKILL_SOURCE.builtIn);
+  }
 
-  return skills
-    .filter(({ source }) => source === CHAT_SKILL_SOURCE.installed)
-    .map((skill) => ({
-      ...skill,
-      exposedName: collisionSafeToolName({
-        baseName: namespaceSkillToolName(skill.name),
-        rawName: skill.name,
-        seen: seenToolNames,
+  return skills.flatMap((skill) => {
+    const exposedName = exposedNames.get(skill);
+    return exposedName === undefined ? [] : [{ ...skill, exposedName }];
+  });
+};
+
+/**
+ * The skill tools a session is served, exactly as `tools/list` lists them:
+ * the surface and the credential allow skill tools, the session holds
+ * `stella:skills`, and each tool's name is enabled for the caller. The prompt
+ * of a run on the member's computer lists the same set
+ * (`handlers/chat/local-run-skills.ts`), so its catalog and its MCP server
+ * cannot disagree.
+ */
+export const loadServedSkillTools = async ({
+  context,
+  mode,
+  scopes,
+}: {
+  context: McpRequestResources;
+  mode: McpMode;
+  scopes?: readonly string[] | undefined;
+}): Promise<readonly ResolvedSkillTool[]> => {
+  if (
+    !modeAllowsSkillTools(mode, context) ||
+    !hasGrantedScope(scopes, "stella:skills")
+  ) {
+    return [];
+  }
+  return (await loadVisibleSkillTools({ context, mode, scopes })).filter(
+    (skill) =>
+      isMcpDescriptorFeatureEnabled({
+        context,
+        kind: "tools",
+        id: skill.exposedName,
       }),
-    }));
+  );
 };

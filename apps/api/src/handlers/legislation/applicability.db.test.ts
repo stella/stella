@@ -213,6 +213,54 @@ const neverInForce = version({
   to: null,
 });
 
+// A Work the corpus holds only as promulgated: no consolidation and no
+// unversioned text. It reads as its text as promulgated from the day its
+// window opens, labelled as such.
+const PROMULGATED_ONLY_ELI = "CZ/2050/1";
+const PROMULGATED_ONLY_SLUG = "promulgated-only-1";
+const promulgatedOnly = version({
+  eli: PROMULGATED_ONLY_ELI,
+  slug: PROMULGATED_ONLY_SLUG,
+  kind: "promulgated",
+  from: "2015-01-01",
+  to: null,
+});
+
+// The same text beside a consolidation that ended, and beside a withdrawn
+// one: the Work holds a version of an applicable kind, so a date no
+// consolidation covers stays uncovered.
+const BESIDE_ENDED_ELI = "CZ/2050/2";
+const BESIDE_ENDED_SLUG = "promulgated-beside-ended-2";
+const besideEnded = {
+  ended: version({
+    eli: BESIDE_ENDED_ELI,
+    slug: BESIDE_ENDED_SLUG,
+    from: "2010-01-01",
+    to: "2012-01-01",
+  }),
+  promulgated: version({
+    eli: BESIDE_ENDED_ELI,
+    slug: BESIDE_ENDED_SLUG,
+    kind: "promulgated",
+    from: "2010-06-01",
+    to: null,
+  }),
+};
+const BESIDE_WITHDRAWN_ELI = "CZ/2050/3";
+version({
+  eli: BESIDE_WITHDRAWN_ELI,
+  disposition: "withdrawn",
+  basis: "publisher-unlisted",
+  from: "2010-01-01",
+  to: null,
+});
+version({
+  eli: BESIDE_WITHDRAWN_ELI,
+  kind: "promulgated",
+  from: "2010-06-01",
+  to: null,
+});
+
 // --- The bypass matrix -----------------------------------------------------
 //
 // One shape per way a version can fail eligibility. For each: a Work holding
@@ -729,20 +777,99 @@ describe("the gap reason", () => {
   });
 });
 
+// --- Promulgated-only Works ----------------------------------------------
+
+const resolveEli = async (eli: string, asOf?: string) =>
+  await resolveStatuteExpression(
+    { eli, ...(asOf === undefined ? {} : { asOf }) },
+    legislationDb,
+    "pages",
+  );
+
+const kindOf = (result: unknown): unknown =>
+  typeof result === "object" && result !== null && "expressionKind" in result
+    ? result.expressionKind
+    : null;
+
+describe("a Work held only as promulgated", () => {
+  test("reads as its text as promulgated, without a date and on any date from its publication", async () => {
+    for (const asOf of [undefined, "2015-01-01", "2020-06-01"]) {
+      expect(await resolveEli(PROMULGATED_ONLY_ELI, asOf)).toEqual({
+        type: "promulgated-only",
+        id: promulgatedOnly,
+      });
+      const byEli = await readEli(PROMULGATED_ONLY_ELI, asOf);
+      expect([idOf(byEli), kindOf(byEli)]).toEqual([
+        promulgatedOnly,
+        "promulgated",
+      ]);
+      const bySlug = await readSlug(PROMULGATED_ONLY_SLUG, asOf);
+      expect([idOf(bySlug), kindOf(bySlug)]).toEqual([
+        promulgatedOnly,
+        "promulgated",
+      ]);
+    }
+  });
+
+  test("a date before its publication stays uncovered", async () => {
+    expect(await resolveEli(PROMULGATED_ONLY_ELI, "2014-12-31")).toEqual({
+      type: "uncovered-date",
+    });
+    expect(idOf(await readEli(PROMULGATED_ONLY_ELI, "2014-12-31"))).toBeNull();
+    expect(
+      idOf(await readSlug(PROMULGATED_ONLY_SLUG, "2014-12-31")),
+    ).toBeNull();
+  });
+
+  test("it is never what applied: the batch resolve and dated citations still find no text", async () => {
+    expect(await resolveOne(PROMULGATED_ONLY_ELI, "2020-06-01")).toMatchObject({
+      id: null,
+    });
+    expect(
+      (await worksAtDate(PROMULGATED_ONLY_ELI, "2020-06-01")).idByKey.size,
+    ).toBe(0);
+  });
+
+  test("beside any consolidation, ended or withdrawn, a date none covers stays uncovered", async () => {
+    // The promulgated text in each Work has the window that answers a
+    // Work held only as promulgated on this date (see above).
+    for (const eli of [BESIDE_ENDED_ELI, BESIDE_WITHDRAWN_ELI]) {
+      expect(await resolveEli(eli, "2020-06-01")).toEqual({
+        type: "uncovered-date",
+      });
+      expect(idOf(await readEli(eli, "2020-06-01"))).toBeNull();
+    }
+    expect(idOf(await readSlug(BESIDE_ENDED_SLUG, "2020-06-01"))).toBeNull();
+    // The consolidation still answers its own dates.
+    expect(await resolveEli(BESIDE_ENDED_ELI, "2011-01-01")).toEqual({
+      type: "expression",
+      id: besideEnded.ended,
+    });
+  });
+});
+
 // --- Bypass matrix ---------------------------------------------------------
 
 /** One shape's row of the bypass matrix, across every applicability read. */
 const matrixTests = (shape: ShapeName, works: MatrixWorks) => {
-  test(`${shape}: the point-in-time reads never answer with it`, async () => {
-    expect(idOf(await readEli(works.alone.eli, MATRIX_AS_OF))).toBeNull();
-    expect(
-      await resolveStatuteExpression(
-        { eli: works.alone.eli, asOf: MATRIX_AS_OF },
-        legislationDb,
-        "pages",
-      ),
-    ).not.toMatchObject({ type: "expression" });
-    expect(idOf(await readSlug(works.alone.slug, MATRIX_AS_OF))).toBeNull();
+  test(`${shape}: the point-in-time reads never answer with it as the text in force`, async () => {
+    const resolved = await resolveStatuteExpression(
+      { eli: works.alone.eli, asOf: MATRIX_AS_OF },
+      legislationDb,
+      "pages",
+    );
+    expect(resolved).not.toMatchObject({ type: "expression" });
+    if (shape === "promulgated") {
+      // A Work held only as promulgated reads as that text, never as the
+      // text in force; see "a Work held only as promulgated".
+      expect(resolved).toEqual({
+        type: "promulgated-only",
+        id: works.alone.id,
+      });
+    } else {
+      expect(idOf(await readEli(works.alone.eli, MATRIX_AS_OF))).toBeNull();
+      expect(idOf(await readSlug(works.alone.slug, MATRIX_AS_OF))).toBeNull();
+    }
     expect((await resolveOne(works.alone.eli, MATRIX_AS_OF)).id).toBeNull();
     expect(
       (await worksAtDate(works.alone.eli, MATRIX_AS_OF)).idByKey.size,

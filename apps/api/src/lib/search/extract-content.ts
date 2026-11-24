@@ -9,19 +9,37 @@
  * security sandbox.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
-import { resolveDataBoxMessageMimeType } from "@stll/api-contract/data-box";
+import {
+  legalFileFormat,
+  signatureFormatCandidate,
+} from "@stll/api-contract/document-format";
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
+import type { PST_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
+import { MBOX_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
 import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import {
+  EXTRACTION_WORKER_ERROR_CODE,
   ExtractionWorkerError,
   extractionWorkerErrorCode,
   SUBPROCESS_TERMINATION_REASON,
+  type SubprocessError,
 } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import {
+  DOCUMENT_ARCHIVE_MAX_BYTES,
+  isDocumentArchiveMimeType,
+  MAILBOX_TEXT_WORKER_MODE,
+  PST_WORKER_MODE,
+  pstWorkerArguments,
+} from "@/api/lib/files/archive-preview-protocol";
+import {
+  ZIP_NAME_CODE_PAGE_ENV,
+  type ZipNameCodePage,
+} from "@/api/lib/files/zip-name-code-page";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
@@ -31,14 +49,16 @@ import {
 } from "@/api/lib/runtime-worker-path";
 import {
   canExtractMimeType,
+  isOfficeDocumentMimeType,
   normalizeMimeType,
 } from "@/api/lib/search/extractable-mime-types";
 import {
   ATTACHMENT_EXTRACTION_OUTCOME,
   parseAttachmentIssues,
+  STANDALONE_ATTACHMENT_MODE,
 } from "@/api/lib/search/extraction-worker-attachments";
 import { parseWorkerErrorClass } from "@/api/lib/search/extraction-worker-error";
-import { spawnWorker } from "@/api/lib/subprocess";
+import { spawnBinaryWorker, spawnWorker } from "@/api/lib/subprocess";
 import {
   DOC_MIME_TYPE,
   EPUB_MIME_TYPE,
@@ -48,11 +68,52 @@ import {
   XLS_MIME_TYPE,
 } from "@/api/mime-types";
 
-const WORKER_PATH = resolveRuntimeWorkerPath({
+const EXTRACTION_WORKER_PATH = resolveRuntimeWorkerPath({
   outputFile: RUNTIME_WORKER_FILES.extraction,
   sourceDir: import.meta.dir,
   sourceFile: "extraction-worker.ts",
 });
+
+type ExtractionWorkerRun = {
+  /**
+   * The code page a tie between readings of a ZIP archive's undeclared file
+   * names goes to, from the organization whose file the run reads
+   * (`readZipNameCodePage`). Null only for a mode that opens no ZIP archive
+   * at any depth; such a run keeps the specification's.
+   */
+  zipNameCodePage: ZipNameCodePage | null;
+};
+
+const extractionWorkerEnv = ({ zipNameCodePage }: ExtractionWorkerRun) =>
+  zipNameCodePage === null ? {} : { [ZIP_NAME_CODE_PAGE_ENV]: zipNameCodePage };
+
+/**
+ * Runs the extraction worker in one of its modes. Every run goes through
+ * here or `runExtractionBinaryWorker`, so none starts without the code page
+ * its archives' names are read in.
+ */
+const runExtractionWorker = async ({
+  zipNameCodePage,
+  ...options
+}: Omit<Parameters<typeof spawnWorker>[0], "env" | "workerPath"> &
+  ExtractionWorkerRun) =>
+  await spawnWorker({
+    ...options,
+    workerPath: EXTRACTION_WORKER_PATH,
+    env: extractionWorkerEnv({ zipNameCodePage }),
+  });
+
+/** `runExtractionWorker` for a mode that answers in bytes. */
+export const runExtractionBinaryWorker = async ({
+  zipNameCodePage,
+  ...options
+}: Omit<Parameters<typeof spawnBinaryWorker>[0], "env" | "workerPath"> &
+  ExtractionWorkerRun) =>
+  await spawnBinaryWorker({
+    ...options,
+    workerPath: EXTRACTION_WORKER_PATH,
+    env: extractionWorkerEnv({ zipNameCodePage }),
+  });
 
 /**
  * Recovers a usable MIME type for files stored under a generic type
@@ -92,6 +153,14 @@ export const resolveExtractionMimeType = ({
   fileName: string;
   mimeType: string;
 }): string => {
+  // A `.sig` or `.xml` file goes to the signature reader, which finds no
+  // text in one whose bytes are not a signature.
+  const legal =
+    legalFileFormat(mimeType, fileName) ??
+    signatureFormatCandidate(mimeType, fileName);
+  if (legal) {
+    return legal.mimeType;
+  }
   const normalized = normalizeMimeType(mimeType);
   if (canExtractMimeType(normalized)) {
     return normalized;
@@ -100,10 +169,6 @@ export const resolveExtractionMimeType = ({
   const emailMimeType = resolveEmailMimeType({ fileName, mimeType });
   if (emailMimeType) {
     return emailMimeType;
-  }
-  const dataBoxMimeType = resolveDataBoxMessageMimeType({ fileName, mimeType });
-  if (dataBoxMimeType) {
-    return dataBoxMimeType;
   }
 
   const dotIndex = fileName.lastIndexOf(".");
@@ -143,26 +208,81 @@ type ExtractFileTextResultOptions = {
    * character past its own limit and refuses when it gets that many.
    */
   maxChars?: number;
+  /** Standalone chat uploads have no separately filed attachment documents. */
+  includeContainerAttachments?: boolean;
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** The reading organization's (`readZipNameCodePage`). */
+  zipNameCodePage: ZipNameCodePage;
 };
 
+// A `.sig` file goes to the signature reader, which finds no text in one
+// whose bytes are not a signature.
+const extractionMimeTypeOf = ({ mimeType, fileName }: ScannedFile) =>
+  legalFileFormat(mimeType, fileName)?.mimeType ??
+  signatureFormatCandidate(mimeType, fileName)?.mimeType ??
+  normalizeMimeType(mimeType);
+
 export const extractFileTextResult = async (
-  { bytes: buffer, mimeType }: ScannedFile,
+  file: ScannedFile,
+  options: ExtractFileTextResultOptions,
+): Promise<Result<string | null, ExtractionWorkerError>> =>
+  await extractTextInWorker(file, options);
+
+/**
+ * An Office document's text, which the worker reads with the Office reader:
+ * it opens no ZIP archive's names, so it needs no organization's code page.
+ * Any other type is a caller's defect, never read without one.
+ */
+export const extractOfficeDocumentTextResult = async (
+  file: ScannedFile,
+  options: Omit<ExtractFileTextResultOptions, "zipNameCodePage">,
+): Promise<Result<string | null, ExtractionWorkerError>> =>
+  isOfficeDocumentMimeType(extractionMimeTypeOf(file))
+    ? await extractTextInWorker(file, { ...options, zipNameCodePage: null })
+    : panic("Only an Office document is read without a ZIP name code page");
+
+const extractTextInWorker = async (
+  file: ScannedFile,
   {
     maxChars = LIMITS.extractedContentMaxChars,
+    includeContainerAttachments = false,
     signal,
     timeoutMs = LIMITS.extractionTimeoutMs,
-  }: ExtractFileTextResultOptions = {},
+    zipNameCodePage,
+  }: Omit<ExtractFileTextResultOptions, "zipNameCodePage"> &
+    ExtractionWorkerRun,
 ): Promise<Result<string | null, ExtractionWorkerError>> => {
-  const normalizedMimeType = normalizeMimeType(mimeType);
+  const { bytes: buffer } = file;
+  const normalizedMimeType = extractionMimeTypeOf(file);
   if (!canExtractMimeType(normalizedMimeType)) {
     return Result.ok(null);
   }
 
-  const result = await spawnWorker({
-    workerPath: WORKER_PATH,
-    args: [normalizedMimeType, String(maxChars)],
+  if (
+    isDocumentArchiveMimeType(normalizedMimeType) &&
+    buffer.byteLength > DOCUMENT_ARCHIVE_MAX_BYTES
+  ) {
+    return Result.err(
+      new ExtractionWorkerError({
+        code: EXTRACTION_WORKER_ERROR_CODE.parser,
+        message: "The document exceeds the archive reading limit",
+        exitCode: null,
+        mimeType: normalizedMimeType,
+        sizeBytes: buffer.byteLength,
+        termination: null,
+        workerErrorClass: null,
+      }),
+    );
+  }
+
+  const result = await runExtractionWorker({
+    zipNameCodePage,
+    args: [
+      normalizedMimeType,
+      String(maxChars),
+      ...(includeContainerAttachments ? [STANDALONE_ATTACHMENT_MODE] : []),
+    ],
     ...(signal ? { signal } : {}),
     stdin: new Blob([buffer]),
     timeoutMs,
@@ -172,26 +292,89 @@ export const extractFileTextResult = async (
   });
 
   if (Result.isError(result)) {
-    const termination =
-      result.error.termination === null
-        ? null
-        : {
-            reason: result.error.termination.reason,
-            signalCode: result.error.termination.signalCode,
-          };
-    const error = new ExtractionWorkerError({
-      code: extractionWorkerErrorCode(termination),
-      message: result.error.message,
-      exitCode: result.error.exitCode,
-      mimeType: normalizedMimeType,
-      sizeBytes: buffer.byteLength,
-      termination,
-      workerErrorClass: parseWorkerErrorClass(result.error.message),
-    });
-    return Result.err(error);
+    return Result.err(
+      extractionWorkerError(result.error, {
+        mimeType: normalizedMimeType,
+        sizeBytes: buffer.byteLength,
+      }),
+    );
   }
 
   return Result.ok(result.value || null);
+};
+
+const extractionWorkerError = (
+  error: SubprocessError,
+  { mimeType, sizeBytes }: { mimeType: string; sizeBytes: number },
+) => {
+  const termination =
+    error.termination === null
+      ? null
+      : {
+          reason: error.termination.reason,
+          signalCode: error.termination.signalCode,
+        };
+  return new ExtractionWorkerError({
+    code: extractionWorkerErrorCode(termination),
+    message: error.message,
+    exitCode: error.exitCode,
+    mimeType,
+    sizeBytes,
+    termination,
+    workerErrorClass: parseWorkerErrorClass(error.message),
+  });
+};
+
+/** A mailbox format whose stored files are streamed into the worker. */
+export type StreamedMailboxFormat =
+  typeof MBOX_FILE_FORMAT | typeof PST_FILE_FORMAT;
+
+/**
+ * A stored mailbox's text, streamed from the store into the worker: a
+ * `.mbox` is read one message at a time as it streams in, a `.pst` is
+ * written to a temporary file the worker reads at an offset. The mailbox is
+ * never held whole in memory on either side, whatever its size.
+ */
+export const extractMailboxStreamText = async ({
+  stream,
+  sizeBytes,
+  fileName,
+  format = MBOX_FILE_FORMAT,
+  maxChars = LIMITS.extractedContentMaxChars,
+  signal,
+  timeoutMs = LIMITS.extractionTimeoutMs,
+}: {
+  stream: ReadableStream<Uint8Array>;
+  sizeBytes: number;
+  fileName: string;
+  format?: StreamedMailboxFormat;
+  maxChars?: number;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}): Promise<Result<string | null, ExtractionWorkerError>> => {
+  const result = await runExtractionWorker({
+    // A mailbox's text is its messages' own text; no attachment is opened.
+    zipNameCodePage: null,
+    args:
+      format.kind === "pst"
+        ? [
+            PST_WORKER_MODE.text,
+            String(maxChars),
+            ...pstWorkerArguments({ mailboxName: fileName, timeoutMs }),
+          ]
+        : [MAILBOX_TEXT_WORKER_MODE, String(maxChars), fileName],
+    ...(signal ? { signal } : {}),
+    stdin: stream,
+    timeoutMs,
+  });
+  return Result.isError(result)
+    ? Result.err(
+        extractionWorkerError(result.error, {
+          mimeType: format.mimeType,
+          sizeBytes,
+        }),
+      )
+    : Result.ok(result.value || null);
 };
 
 /**
@@ -201,8 +384,8 @@ export const extractFileTextResult = async (
  */
 export const extractFileText = async (
   file: ScannedFile,
-  context?: Record<string, string>,
-  options: Pick<ExtractFileTextResultOptions, "maxChars"> = {},
+  context: Record<string, string> | undefined,
+  options: Pick<ExtractFileTextResultOptions, "maxChars" | "zipNameCodePage">,
 ): Promise<string | null> => {
   const first = await extractFileTextResult(file, options);
   if (!Result.isError(first)) {

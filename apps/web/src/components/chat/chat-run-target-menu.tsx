@@ -8,8 +8,9 @@ import {
   CHAT_CLOUD_RUN_TARGET,
   CHAT_RUN_TARGET_KIND,
   type ChatLocalRunHarness,
-  type ChatLocalRunTarget,
   type ChatRunTarget,
+  type DesktopSetUpHarness,
+  isDesktopSetUpHarness,
 } from "@stll/api-contract/chat-run-target";
 import { desktopAgentSettingsUrl } from "@stll/api-contract/desktop-account-link";
 import { DESKTOP_RUNNER_LINKED_FOLDER_STATE } from "@stll/api-contract/desktop-runner";
@@ -24,10 +25,11 @@ import {
 } from "@stll/ui/menu";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
-import { EFFORT_LABEL_KEY } from "@/components/chat/chat-model-options-menu.logic";
+import { LocalHarnessIcon } from "@/components/ai-provider-icons";
 import {
   CHAT_LOCAL_HARNESS_NAMES,
   CHAT_OWN_FOLDER_VALUE,
+  type ChatCloudStart,
   type ChatLocalFolderOption,
   chatLocalFolderOptions,
   type ChatLocalHarnessOption,
@@ -40,7 +42,6 @@ import {
   type LocalRunTargetState,
   type PermissionAvailability,
   permissionView,
-  reasoningEffortChoices,
   runFolderValue,
   runOnPlaceValue,
   sameRunTarget,
@@ -87,13 +88,11 @@ const UNAVAILABLE_PERMISSION_KEY = {
   TranslationKey
 >;
 
-/** The radio value of leaving the reasoning effort to the harness. */
-const HARNESS_DEFAULT_EFFORT = "harness-default";
-
 /** How a harness that runs in one mode behaves, said once in its place. */
 const FIXED_PERMISSION_KEY = {
   codex: "chat.localRun.permissionSandboxed",
   "claude-code": "chat.localRun.permissionAskDescription",
+  antigravity: "chat.localRun.permissionAskDescription",
 } as const satisfies Record<ChatLocalRunHarness, TranslationKey>;
 
 /**
@@ -156,6 +155,29 @@ export const useLocalRunTargetStateLabel = () => {
 };
 
 /**
+ * Why a new chat started in the cloud although the member last chose their
+ * computer, as the where chip says it.
+ */
+export const useCloudStartLabel = () => {
+  const t = useTranslations();
+  const stateLabel = useLocalRunTargetStateLabel();
+  return ({ harness, why }: ChatCloudStart): string => {
+    switch (why.type) {
+      case "unavailable":
+        return t("chat.runOn.startedInCloud", {
+          harness: CHAT_LOCAL_HARNESS_NAMES[harness],
+          state: stateLabel(why.state) ?? t("chat.localRun.stateUnavailable"),
+        });
+      case "check_failed":
+        return t("chat.runOn.startedInCloudCheckFailed");
+      default:
+        why satisfies never;
+        return panic("Unknown cloud start");
+    }
+  };
+};
+
+/**
  * What a member does about a harness that cannot take a turn now, said in
  * its row of the where chip; a usage limit says when it lifts instead.
  */
@@ -167,10 +189,18 @@ const UNAVAILABLE_HINT_KEY = {
   offline: "chat.runOn.hintOffline",
 } as const satisfies Record<UnavailableState, TranslationKey>;
 
-const useHarnessHint = () => {
+/**
+ * Agents the member installs and signs in to themselves, outside stella
+ * desktop: what to do about one that cannot take a turn yet.
+ */
+const MEMBER_SETUP_HINT_KEY =
+  "chat.runOn.hintAntigravity" satisfies TranslationKey;
+
+export const useHarnessHint = () => {
   const t = useTranslations();
   const stateLabel = useHarnessStateLabel();
   return (option: ChatLocalHarnessOption): string | null => {
+    const memberSetup = !isDesktopSetUpHarness(option.harness);
     switch (option.state) {
       case "ready":
         return null;
@@ -180,6 +210,9 @@ const useHarnessHint = () => {
       case "not_installed":
       case "unsupported":
       case "unavailable":
+        return memberSetup
+          ? t(MEMBER_SETUP_HINT_KEY)
+          : t(UNAVAILABLE_HINT_KEY[option.state]);
       case "offline":
         return t(UNAVAILABLE_HINT_KEY[option.state]);
       default:
@@ -211,7 +244,11 @@ const NO_HARNESS_OPTIONS: readonly ChatLocalHarnessOption[] = [];
  * The member's computers could not be read: nothing is claimed about them,
  * and the member can read them again.
  */
-const ReadinessRetry = ({ retry }: { retry: () => Promise<unknown> }) => {
+export const ReadinessRetry = ({
+  retry,
+}: {
+  retry: () => Promise<unknown>;
+}) => {
   const t = useTranslations();
   return (
     <>
@@ -237,10 +274,12 @@ const ReadinessRetry = ({ retry }: { retry: () => Promise<unknown> }) => {
  */
 const OfflineHarnessItem = ({
   activeOrganizationId,
+  harness,
   name,
   hint,
 }: {
   activeOrganizationId: string;
+  harness: ChatLocalRunHarness;
   name: string;
   hint: string;
 }) => {
@@ -257,13 +296,19 @@ const OfflineHarnessItem = ({
     >
       {/* PlaceLabel's layout; the description is a status region that
           stays mounted, so the change to the opening message is announced. */}
-      <span className="flex min-w-0 flex-col py-0.5">
-        <span>{name}</span>
-        <span
-          className="text-muted-foreground text-2xs text-pretty"
-          role="status"
-        >
-          {opening ? t("settings.account.desktopCardOpeningTitle") : hint}
+      <span className="flex min-w-0 items-start gap-2 py-0.5">
+        <LocalHarnessIcon
+          className="mt-0.5 size-4 shrink-0"
+          harness={harness}
+        />
+        <span className="flex min-w-0 flex-col">
+          <span>{name}</span>
+          <span
+            className="text-muted-foreground text-2xs text-pretty"
+            role="status"
+          >
+            {opening ? t("settings.account.desktopCardOpeningTitle") : hint}
+          </span>
         </span>
       </span>
     </MenuItem>
@@ -272,7 +317,7 @@ const OfflineHarnessItem = ({
 
 /** A harness the member sets up at its card in stella desktop's Settings. */
 type DesktopSetupOption = {
-  harness: ChatLocalRunHarness;
+  harness: DesktopSetUpHarness;
   state: Exclude<UnavailableState, "offline">;
 };
 
@@ -280,7 +325,7 @@ type DesktopSetupOption = {
 const SIGN_IN_STEPS_KEY = {
   codex: "chat.runOn.stepsSignInCodex",
   "claude-code": "chat.runOn.stepsSignInClaudeCode",
-} as const satisfies Record<ChatLocalRunHarness, TranslationKey>;
+} as const satisfies Record<DesktopSetUpHarness, TranslationKey>;
 
 /**
  * The way to the harness's card by hand, said once the link to it was
@@ -334,13 +379,19 @@ const DesktopSetupHarnessItem = ({
     >
       {/* PlaceLabel's layout; the description is a status region that
           stays mounted, so the change to the steps is announced. */}
-      <span className="flex min-w-0 flex-col py-0.5">
-        <span>{name}</span>
-        <span
-          className="text-muted-foreground text-2xs text-pretty"
-          role="status"
-        >
-          {opened ? steps(option) : hint}
+      <span className="flex min-w-0 items-start gap-2 py-0.5">
+        <LocalHarnessIcon
+          className="mt-0.5 size-4 shrink-0"
+          harness={option.harness}
+        />
+        <span className="flex min-w-0 flex-col">
+          <span>{name}</span>
+          <span
+            className="text-muted-foreground text-2xs text-pretty"
+            role="status"
+          >
+            {opened ? steps(option) : hint}
+          </span>
         </span>
       </span>
     </MenuItem>
@@ -353,6 +404,8 @@ type ChatRunTargetMenuProps = {
   enabled: boolean;
   selected: ChatRunTarget;
   onSelect: (target: ChatRunTarget) => void;
+  /** Why a new chat started in the cloud, said first; `null` otherwise. */
+  startedInCloud: ChatCloudStart | null;
 };
 
 /**
@@ -367,9 +420,11 @@ export const ChatRunTargetMenu = ({
   enabled,
   selected,
   onSelect,
+  startedInCloud,
 }: ChatRunTargetMenuProps) => {
   const t = useTranslations();
   const hint = useHarnessHint();
+  const cloudStartLabel = useCloudStartLabel();
   const runnersView = queryView(
     useQuery({
       ...localRunnersOptions(activeOrganizationId),
@@ -394,6 +449,14 @@ export const ChatRunTargetMenu = ({
 
   return (
     <>
+      {startedInCloud !== null && (
+        <>
+          <p className="text-muted-foreground px-2 py-1.5 text-xs text-pretty">
+            {cloudStartLabel(startedInCloud)}
+          </p>
+          <MenuSeparator />
+        </>
+      )}
       <MenuRadioGroup value={runOnPlaceValue(selected)}>
         {/* Picking a place or an agent is the choice the menu exists for,
             so it closes; a permission pick keeps it open for another. */}
@@ -422,6 +485,7 @@ export const ChatRunTargetMenu = ({
             return (
               <OfflineHarnessItem
                 activeOrganizationId={activeOrganizationId}
+                harness={option.harness}
                 hint={hint(option) ?? ""}
                 key={option.harness}
                 name={name}
@@ -436,12 +500,27 @@ export const ChatRunTargetMenu = ({
             );
           }
           if (option.state !== "ready") {
+            const { harness } = option;
+            if (!isDesktopSetUpHarness(harness)) {
+              // Set up outside stella desktop: there is nothing to open.
+              return (
+                <MenuItem disabled key={harness}>
+                  <span className="flex min-w-0 items-start gap-2">
+                    <LocalHarnessIcon
+                      className="mt-1 size-4 shrink-0"
+                      harness={harness}
+                    />
+                    <PlaceLabel description={hint(option) ?? ""} title={name} />
+                  </span>
+                </MenuItem>
+              );
+            }
             return (
               <DesktopSetupHarnessItem
                 hint={hint(option) ?? ""}
                 key={option.harness}
                 name={name}
-                option={{ harness: option.harness, state: option.state }}
+                option={{ harness, state: option.state }}
               />
             );
           }
@@ -462,9 +541,15 @@ export const ChatRunTargetMenu = ({
               onClick={() => choose(target)}
               value={runOnPlaceValue(target)}
             >
-              <TruncatedText render={<BidiText as="span" />}>
-                {name}
-              </TruncatedText>
+              <span className="flex min-w-0 items-center gap-2">
+                <LocalHarnessIcon
+                  className="size-4 shrink-0"
+                  harness={option.harness}
+                />
+                <TruncatedText render={<BidiText as="span" />}>
+                  {name}
+                </TruncatedText>
+              </span>
             </MenuRadioItem>
           );
         })}
@@ -524,162 +609,6 @@ export const ChatRunTargetMenu = ({
                   }
                   title={t(LOCAL_RUN_PERMISSION_KEYS[mode].label)}
                 />
-              </MenuRadioItem>
-            ))}
-          </MenuRadioGroup>
-        </>
-      )}
-    </>
-  );
-};
-
-type LocalModelOptionsProps = {
-  activeOrganizationId: string;
-  enabled: boolean;
-  selected: ChatLocalRunTarget;
-  onSelect: (target: ChatRunTarget) => void;
-};
-
-/**
- * The model chip's menu for a chat on the member's computer: the agent's
- * recommended model first, then the rest by the names the agent gives them,
- * then the reasoning efforts the chosen model offers. A model the agent no
- * longer offers stays listed, marked so, until another is picked.
- */
-export const LocalModelOptions = ({
-  activeOrganizationId,
-  enabled,
-  selected,
-  onSelect,
-}: LocalModelOptionsProps) => {
-  const t = useTranslations();
-  const hint = useHarnessHint();
-  const runnersView = queryView(
-    useQuery({
-      ...localRunnersOptions(activeOrganizationId),
-      enabled,
-    }),
-  );
-  const readiness =
-    runnersView.type === "items" ? runnersView.items : undefined;
-  const harness = CHAT_LOCAL_HARNESS_NAMES[selected.harness];
-  if (runnersView.type === "error") {
-    return <ReadinessRetry retry={runnersView.retry} />;
-  }
-  if (runnersView.type === "pending") {
-    return (
-      <p className="text-muted-foreground px-2.5 py-2 text-xs">
-        {t("common.loading")}
-      </p>
-    );
-  }
-  // A turn in a linked folder runs on the folder's computer: its models are
-  // that computer's.
-  const options = chatLocalHarnessOptionsFor(readiness, selected);
-  const option = options?.find(
-    (candidate) => candidate.harness === selected.harness,
-  );
-  if (option?.state !== "ready") {
-    return (
-      <p className="text-muted-foreground px-2.5 py-2 text-xs text-pretty">
-        {option === undefined
-          ? t("chat.localRun.stateUnavailable")
-          : hint(option)}
-      </p>
-    );
-  }
-  // An agent that marks no default (an older desktop) gets its models in
-  // its own order, none called recommended.
-  const recommended =
-    option.models.find(({ isDefault }) => isDefault === true) ?? null;
-  const others = option.models.filter(({ id }) => id !== recommended?.id);
-  const offered = option.models.some(({ id }) => id === selected.model);
-  const choose = (model: string) => {
-    if (model !== selected.model) {
-      onSelect(
-        localRunTargetFor({
-          selected,
-          option,
-          model,
-          maxApprovals: localRunMaxApprovals(readiness),
-        }),
-      );
-    }
-  };
-  const efforts = reasoningEffortChoices(
-    selected,
-    options ?? NO_HARNESS_OPTIONS,
-  );
-  const chooseEffort = (target: ChatLocalRunTarget) => {
-    if (!sameRunTarget(target, selected)) {
-      onSelect(target);
-    }
-  };
-  return (
-    <>
-      <MenuRadioGroup value={selected.model}>
-        <MenuGroupLabel>
-          {t("chat.runOn.harnessModels", { harness })}
-        </MenuGroupLabel>
-        {recommended !== null && (
-          <MenuRadioItem
-            closeOnClick
-            onClick={() => choose(recommended.id)}
-            value={recommended.id}
-          >
-            <PlaceLabel
-              description={recommended.label}
-              title={t("chat.runOn.modelDefault")}
-            />
-          </MenuRadioItem>
-        )}
-        {others.map((model) => (
-          <MenuRadioItem
-            closeOnClick
-            key={model.id}
-            onClick={() => choose(model.id)}
-            value={model.id}
-          >
-            <TruncatedText render={<BidiText as="span" />}>
-              {model.label}
-            </TruncatedText>
-          </MenuRadioItem>
-        ))}
-        {!offered && (
-          <MenuRadioItem disabled value={selected.model}>
-            <PlaceLabel
-              description={t("chat.localRun.stateModelUnavailable")}
-              title={selected.model}
-            />
-          </MenuRadioItem>
-        )}
-      </MenuRadioGroup>
-      {efforts !== null && (
-        <>
-          <MenuSeparator />
-          <MenuRadioGroup
-            value={selected.reasoningEffort ?? HARNESS_DEFAULT_EFFORT}
-          >
-            <MenuGroupLabel>
-              {t("chat.modelSelector.effortLabel")}
-            </MenuGroupLabel>
-            <MenuRadioItem
-              onClick={() =>
-                chooseEffort({ ...selected, reasoningEffort: null })
-              }
-              value={HARNESS_DEFAULT_EFFORT}
-            >
-              {t("chat.modelSelector.effortValues.providerDefault")}
-            </MenuRadioItem>
-            {efforts.map((effort) => (
-              <MenuRadioItem
-                key={effort}
-                onClick={() =>
-                  chooseEffort({ ...selected, reasoningEffort: effort })
-                }
-                value={effort}
-              >
-                {t(EFFORT_LABEL_KEY[effort])}
               </MenuRadioItem>
             ))}
           </MenuRadioGroup>

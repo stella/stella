@@ -123,6 +123,7 @@ export const LeadSection = ({ workspaceId }: LeadSectionProps) => {
             <Button
               aria-label={t("common.remove")}
               disabled={updateWorkspace.isPending}
+              disabledReason={t("common.saving")}
               onClick={() => handleSelect(null)}
               size="icon-xs"
               variant="ghost"

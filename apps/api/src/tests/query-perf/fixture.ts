@@ -15,6 +15,7 @@ import { queryPerfDatabaseName, type QueryPerfProfileId } from "./profiles";
 import {
   QUERY_PERF_CONNECTION_SETTINGS,
   QUERY_PERF_DIAGNOSTIC_CONNECTION_SETTINGS,
+  queryPerfTemplateCopySettings,
 } from "./settings";
 
 type QueryPerfFixtureOptions<T> = {
@@ -225,14 +226,26 @@ export const withQueryPerfFixture = async <T>({
           );
           await deadline.run(
             "CREATE DATABASE from template",
-            async () =>
-              await admin.execute(
-                seededTemplate === undefined
-                  ? sql`CREATE DATABASE ${sql.identifier(fixtureName)} TEMPLATE ${sql.identifier(migratedTemplate)}`
-                  : // A seeded template is large: copying its files beats
-                    // writing every page of it to the WAL.
-                    sql`CREATE DATABASE ${sql.identifier(fixtureName)} TEMPLATE ${sql.identifier(seededTemplate)} STRATEGY = FILE_COPY`,
-              ),
+            async (remainingMs) => {
+              // Every template copy runs on its own session, bounded by the
+              // profile's remaining budget rather than the generic statement
+              // bound (CREATE DATABASE cannot run in a transaction, so the
+              // bound is the session's).
+              const { db: copy, sql: copyClient } = openClient({
+                connection: queryPerfTemplateCopySettings(remainingMs),
+              });
+              try {
+                return await copy.execute(
+                  seededTemplate === undefined
+                    ? sql`CREATE DATABASE ${sql.identifier(fixtureName)} TEMPLATE ${sql.identifier(migratedTemplate)}`
+                    : // A seeded template is large: copying its files beats
+                      // writing every page of it to the WAL.
+                      sql`CREATE DATABASE ${sql.identifier(fixtureName)} TEMPLATE ${sql.identifier(seededTemplate)} STRATEGY = FILE_COPY`,
+                );
+              } finally {
+                await forceClosePool(copyClient);
+              }
+            },
           );
         } catch (error) {
           await diagnostics();

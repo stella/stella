@@ -203,12 +203,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
-    path: "apps/api/src/handlers/sharepoint/graph-oauth.ts",
-    class: "third-party",
-    reason: "Exchanges credentials with Microsoft identity endpoints.",
-    transports: ["module:@stll/fetch"],
-  },
-  {
     path: "apps/api/src/handlers/soft-law/publisher-access.ts",
     class: "third-party",
     reason: "Sends publisher requests through the soft-law access policy.",
@@ -739,12 +733,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/business-registries/default-formats"],
   },
   {
-    path: "apps/web/src/routes/dev/-components/autocomplete-playground.tsx",
-    class: "operator-configured-infrastructure",
-    reason: "Exercises autocomplete streaming through the configured API.",
-    transports: ["module:@stll/fetch"],
-  },
-  {
     path: "apps/web/src/components/docx/use-edit-session.ts",
     class: "operator-configured-infrastructure",
     reason: "Downloads edit-session documents from API-issued storage URLs.",
@@ -891,12 +879,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
-    path: "apps/web/src/lib/files/queries.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Reads and saves email attachments through the configured API.",
-    transports: ["module:@stll/fetch"],
-  },
-  {
     path: "apps/web/src/lib/files/storage-fetch.ts",
     class: "operator-configured-infrastructure",
     reason:
@@ -971,7 +953,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
-    path: "apps/web/src/routes/agent-claim.tsx",
+    path: "apps/web/src/routes/-agent-claim.page.tsx",
     class: "operator-configured-infrastructure",
     reason: "Confirms agent identity claims through the configured API.",
     transports: ["module:@stll/fetch"],
@@ -1033,6 +1015,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch"],
   },
   {
+    path: "packages/agent-engine/src/sidecar/mcp-stdio-bridge.ts",
+    class: "package-owned-client",
+    reason:
+      "Relays a stdio-only harness's MCP messages to stella's local MCP proxy; it refuses any URL that is not loopback HTTP and does not follow redirects.",
+    transports: ["global:fetch"],
+  },
+  {
     path: "packages/agent-engine/src/sidecar/outputs.ts",
     class: "operator-configured-infrastructure",
     reason:
@@ -1082,11 +1071,25 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch"],
   },
   {
+    path: "packages/cli/src/commands/update.ts",
+    class: "package-owned-client",
+    reason:
+      "Standalone CLI downloads verified release assets through a bounded injectable transport.",
+    transports: ["global:fetch"],
+  },
+  {
     path: "packages/cli/src/mcp-client.ts",
     class: "package-owned-client",
     reason:
       "Standalone CLI owns MCP transport and observes response evidence and action-admission refusals.",
     transports: ["module:@modelcontextprotocol/client"],
+  },
+  {
+    path: "packages/cli/src/save-download.ts",
+    class: "package-owned-client",
+    reason:
+      "Standalone CLI saves a server-issued download URL to the path the caller named, under its download deadline.",
+    transports: ["global:fetch"],
   },
   {
     path: "packages/cli/src/upload-document.ts",
@@ -1202,6 +1205,15 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
     reason: "Issues request authority for provider credential validation.",
   },
   {
+    path: "apps/api/src/handlers/organization-settings/sso/create-provider.ts",
+    reason:
+      "Issues request authority for OIDC discovery metadata validation before persisting a provider.",
+  },
+  {
+    path: "apps/api/src/handlers/organization-settings/sso/test-provider.ts",
+    reason: "Issues request authority for OIDC discovery metadata validation.",
+  },
+  {
     path: "apps/api/src/handlers/case-law/public-routes.ts",
     reason: "Direct boundary for public case-law reads.",
   },
@@ -1217,6 +1229,10 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
   {
     path: "apps/api/src/handlers/chat/tools/business-registry-tools.ts",
     reason: "Native chat tool boundary for registry requests.",
+  },
+  {
+    path: "apps/api/src/handlers/chat/tools/calendar-tools.ts",
+    reason: "Native chat tool boundary for delegated calendar reads.",
   },
   {
     path: "apps/api/src/handlers/chat/tools/counterparty-check-tools.ts",
@@ -1320,6 +1336,16 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
   {
     path: "apps/api/src/handlers/organization-settings/update-ai-config.ts",
     reason: "Issues request authority for provider configuration validation.",
+  },
+  {
+    path: "apps/api/src/handlers/sharepoint/oauth-callback.ts",
+    reason:
+      "Direct OAuth callback boundary for token exchange and account lookup.",
+  },
+  {
+    path: "apps/api/src/handlers/sharepoint/session.ts",
+    reason:
+      "Direct route boundary for delegated Microsoft file reads and imports.",
   },
   {
     path: "apps/api/src/handlers/reports/report-export-queue.ts",

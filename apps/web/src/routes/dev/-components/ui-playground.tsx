@@ -201,7 +201,7 @@ import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import type {
   ChatToolCallPart,
   PersistedChatMessage,
-} from "@/components/chat/chat-ui-tools";
+} from "@/components/chat/chat-ui-tools-types";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { DatePickerPopover } from "@/components/date-picker-popover";
@@ -414,7 +414,11 @@ export function UiPlayground() {
                     </Button>
                   ))}
                   <Button loading>Saving</Button>
-                  <Button disabled variant="outline">
+                  <Button
+                    disabled
+                    disabledReason={t("common.disabledButtonExample")}
+                    variant="outline"
+                  >
                     Disabled
                   </Button>
                   <Button aria-label="Settings" size="icon" variant="ghost">
@@ -839,6 +843,9 @@ export function UiPlayground() {
                           render={
                             <Button
                               disabled={!destructiveConfirmation.confirmed}
+                              disabledReason={t(
+                                "common.enterConfirmationPhrase",
+                              )}
                               variant="destructive"
                             />
                           }
@@ -1793,17 +1800,20 @@ function ToolActivityPlayground() {
       </div>
       <ToolCallCard
         activeOrganizationId="playground"
+        failureOutcome="terminal"
         durationMs={8000}
         part={COMPLETED_TOOL_STEP}
       />
       <ToolCallCard
         activeOrganizationId="playground"
+        failureOutcome="terminal"
         durationMs={2000}
         part={COMPLETED_CODE_TOOL_STEP}
         showDetails
       />
       <ToolCallCard
         activeOrganizationId="playground"
+        failureOutcome="terminal"
         part={RUNNING_TOOL_STEP}
       />
     </div>

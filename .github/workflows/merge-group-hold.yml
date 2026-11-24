@@ -41,7 +41,7 @@ jobs:
             /scripts/retry.sh
       - name: Check out merge-group history for the resolver
         if: github.event_name == 'merge_group'
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         timeout-minutes: 2
         with:
           ref: ${{ github.event.merge_group.head_sha }}
@@ -69,9 +69,16 @@ jobs:
           persist-credentials: false
           sparse-checkout-cone-mode: false
           sparse-checkout: |
+            /package.json
             /scripts/check-merge-group-hold.mjs
             /scripts/merge-group-entries.mjs
             /scripts/gh-retry.sh
+      - name: Setup Bun
+        if: github.event_name == 'merge_group'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        timeout-minutes: 2
+        with:
+          bun-version-file: .hold-tooling/package.json
       - name: Refuse held pull requests
         if: github.event_name == 'merge_group'
         timeout-minutes: 2
@@ -81,7 +88,7 @@ jobs:
           MERGE_GROUP_BASE_SHA: ${{ steps.target-base.outputs.base_sha }}
           # Every STELLA_PR_HOLD_<n> value: a hold variable refuses its pull request without the label.
           HOLD_VARS: ${{ toJSON(vars) }}
-        run: node scripts/check-merge-group-hold.mjs
+        run: bun scripts/check-merge-group-hold.mjs
       - name: Pass pull request checks
         if: github.event_name == 'pull_request'
         run: "true"
@@ -112,13 +119,19 @@ jobs:
           persist-credentials: false
           sparse-checkout-cone-mode: false
           sparse-checkout: |
+            /package.json
             /scripts/check-merge-group-hold.mjs
             /scripts/merge-group-entries.mjs
             /scripts/gh-retry.sh
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        timeout-minutes: 2
+        with:
+          bun-version-file: package.json
       - name: Restore active hold labels and remove held pull requests from the queue
         timeout-minutes: 2
         env:
           GH_TOKEN: ${{ github.token }}
           PR_HOLD_VALUE: ${{ vars[format('STELLA_PR_HOLD_{0}', github.event.pull_request.number)] }}
           PR_HOLD_CONTEXT: ${{ vars.STELLA_PR_HOLD_CONTEXT }}
-        run: node scripts/check-merge-group-hold.mjs
+        run: bun scripts/check-merge-group-hold.mjs

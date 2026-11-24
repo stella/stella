@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { chatMessages, chatThreads } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 
 export type GeneratedDocumentActiveDraftContext = {
@@ -29,13 +29,18 @@ export const createGeneratedDocumentActiveDraftContext = ({
   version: 1,
 });
 
+/**
+ * A draft may start a chat (the send writes the thread's first message, also
+ * into a row a setting stored before it) or continue one whose history
+ * already binds it.
+ */
 export const canUseChatThreadForGeneratedDocumentDraft = ({
+  firstSend,
   hasPersistedContext,
-  threadType,
 }: {
+  firstSend: boolean;
   hasPersistedContext: boolean;
-  threadType: "created" | "existing";
-}): boolean => threadType === "created" || hasPersistedContext;
+}): boolean => firstSend || hasPersistedContext;
 
 /**
  * Confirms that a server-stamped message already binds this exact owned chat

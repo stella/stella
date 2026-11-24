@@ -236,6 +236,41 @@ type DocumentRowProps = {
   onOpenRun: (runId: string) => void;
 };
 
+type VerificationDisabledReasonOptions = {
+  canVerify: boolean;
+  statusLoad: StatusLoad;
+  starting: boolean;
+  t: (
+    key:
+      | "avt.documents.permissionRequired"
+      | "common.loadFailed"
+      | "common.loading"
+      | "avt.documents.starting"
+      | "common.verifying",
+  ) => string;
+};
+
+const verificationDisabledReason = ({
+  canVerify,
+  statusLoad,
+  starting,
+  t,
+}: VerificationDisabledReasonOptions) => {
+  if (!canVerify) {
+    return t("avt.documents.permissionRequired");
+  }
+  if (statusLoad === "failed") {
+    return t("common.loadFailed");
+  }
+  if (statusLoad !== "loaded") {
+    return t("common.loading");
+  }
+  if (starting) {
+    return t("avt.documents.starting");
+  }
+  return t("common.verifying");
+};
+
 const DocumentRow = ({
   latest,
   explainsTestimony,
@@ -259,6 +294,12 @@ const DocumentRow = ({
   const active = latest?.status === "queued" || latest?.status === "running";
   const verifyDisabled =
     !canVerify || statusLoad !== "loaded" || active || starting;
+  const verifyDisabledReason = verificationDisabledReason({
+    canVerify,
+    statusLoad,
+    starting,
+    t,
+  });
   const target = { entityId: file.entityId, fileFieldId: file.fieldId };
 
   return (
@@ -323,6 +364,7 @@ const DocumentRow = ({
         <div className="flex items-center gap-1">
           <Button
             disabled={verifyDisabled}
+            disabledReason={verifyDisabledReason}
             loading={starting}
             onClick={() => onVerify(target)}
             size="sm"
@@ -335,6 +377,7 @@ const DocumentRow = ({
           </Button>
           <ParagraphRangeStart
             disabled={verifyDisabled}
+            disabledReason={verifyDisabledReason}
             onEdit={onRangeEdit}
             onOpenChange={setRangeOpen}
             onVerify={(paragraphs) => onVerify({ ...target, paragraphs })}

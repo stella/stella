@@ -5,7 +5,7 @@ import {
   askUserOutputSchema,
 } from "@stll/api-contract/chat-ask-user";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { SafeId } from "@/api/lib/branded-types";

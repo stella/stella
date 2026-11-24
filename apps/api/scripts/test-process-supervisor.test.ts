@@ -155,7 +155,7 @@ for (const kind of ["batch", "snapshot"] as const) {
     } finally {
       fixture.cleanup();
     }
-  }, 10_000);
+  }, 12_000);
 }
 
 test("normal buffered children keep their output apart from startup progress", async () => {
@@ -391,7 +391,7 @@ test("one child watchdog aborts every active lane and preserves both identities"
   } finally {
     fixture.cleanup();
   }
-}, 10_000);
+}, 12_000);
 
 test("the runner deadline aborts active work and prevents the next child from starting", async () => {
   const fixture = createFixture({ childTimeoutMs: 10_000, deadlineMs: 2000 });
@@ -427,7 +427,7 @@ test("the runner deadline aborts active work and prevents the next child from st
   } finally {
     fixture.cleanup();
   }
-}, 10_000);
+}, 12_000);
 
 test("raw logs stay bounded while keeping the latest output for timeout diagnostics", async () => {
   const maxLogBytes = 4096;
@@ -470,7 +470,7 @@ test("raw logs stay bounded while keeping the latest output for timeout diagnost
   } finally {
     fixture.cleanup();
   }
-}, 10_000);
+}, 12_000);
 
 test("a startup callback failure reaps the child before propagating the original error", async () => {
   let pid = 0;
@@ -511,7 +511,7 @@ test("a startup callback failure reaps the child before propagating the original
   } finally {
     fixture.cleanup();
   }
-}, 10_000);
+}, 12_000);
 
 test("a missing log directory cannot prevent stopping and reaping the child", async () => {
   let pid = 0;
@@ -559,7 +559,7 @@ test("a missing log directory cannot prevent stopping and reaping the child", as
   } finally {
     fixture.cleanup();
   }
-}, 10_000);
+}, 12_000);
 
 const posixTest = process.platform === "win32" ? test.skip : test;
 

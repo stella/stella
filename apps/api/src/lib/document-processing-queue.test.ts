@@ -217,6 +217,43 @@ describe("OCR derivative durability", () => {
     expect(stageSource).toContain("code: SEARCHABLE_PDF_FAILURE_CODE");
   });
 
+  test("binds derivative publication to a live claim and durable cleanup intent", () => {
+    const stageStart = queueSource.indexOf(
+      "const writeOcrSearchablePdfDerivative",
+    );
+    const stageEnd = queueSource.indexOf(
+      "\nconst markRunCancelled",
+      stageStart,
+    );
+    const stageSource = queueSource.slice(stageStart, stageEnd);
+    const reserve = stageSource.indexOf("reserveObjectCleanupIntent");
+    const storageWrite = stageSource.indexOf(
+      "storeOcrSearchablePdfDerivative",
+      reserve,
+    );
+    const claimFence = stageSource.lastIndexOf(
+      "eq(documentProcessingRuns.claimedBy, claimToken)",
+    );
+    const intentFence = stageSource.indexOf(
+      "lockObjectCleanupIntentsForWriter",
+      storageWrite,
+    );
+    const retire = stageSource.indexOf(
+      "retirePublishedObjectCleanupIntentsInTransaction",
+      intentFence,
+    );
+
+    expect(stageStart).toBeGreaterThan(-1);
+    expect(stageEnd).toBeGreaterThan(stageStart);
+    expect(reserve).toBeGreaterThan(-1);
+    expect(storageWrite).toBeGreaterThan(reserve);
+    expect(claimFence).toBeGreaterThan(storageWrite);
+    expect(intentFence).toBeGreaterThan(claimFence);
+    expect(retire).toBeGreaterThan(intentFence);
+    expect(stageSource).toContain("if (cleanupIntentId === null)");
+    expect(stageSource).toContain("return published");
+  });
+
   test("uses the metered OCR write when file usage limits are enabled", async () => {
     const calls: string[] = [];
     const pdfBytes = new Uint8Array([1, 2, 3]);
@@ -288,7 +325,62 @@ describe("OCR derivative durability", () => {
   });
 });
 
+describe("OCR near-duplicate signature", () => {
+  // A scanned PDF has no native text, so the OCR text is the only text a
+  // signature can come from.
+  test("records the signature from OCR text once it becomes the projection", () => {
+    const processStart = queueSource.indexOf(
+      "export const processDocumentProcessingRun",
+    );
+    const processEnd = queueSource.indexOf("\nconst errorCode", processStart);
+    const processSource = queueSource.slice(processStart, processEnd);
+    const persistence = processSource.indexOf(
+      "const persistenceOutcome = await persistOcrProjection",
+    );
+    const signature = processSource.indexOf(
+      "await recordNearDuplicateSignature(database",
+    );
+    const guard = processSource.lastIndexOf(
+      'if (persistenceOutcome === "persisted")',
+      signature,
+    );
+
+    expect(persistence).toBeGreaterThan(-1);
+    expect(guard).toBeGreaterThan(persistence);
+    expect(signature).toBeGreaterThan(guard);
+    expect(processSource.slice(signature, signature + 400)).toContain(
+      "text: result.value.text",
+    );
+  });
+});
+
 describe("lease heartbeat", () => {
+  test("aborts the attempt when a renewal no longer owns the run", () => {
+    const heartbeatStart = queueSource.indexOf(
+      "const startDocumentProcessingLeaseHeartbeat",
+    );
+    const heartbeatEnd = queueSource.indexOf(
+      "\nconst readCurrentDocumentSource",
+      heartbeatStart,
+    );
+    const heartbeatSource = queueSource.slice(heartbeatStart, heartbeatEnd);
+    const processStart = queueSource.indexOf(
+      "export const processDocumentProcessingRun",
+    );
+    const processEnd = queueSource.indexOf("\nconst errorCode", processStart);
+    const processSource = queueSource.slice(processStart, processEnd);
+
+    expect(heartbeatStart).toBeGreaterThan(-1);
+    expect(heartbeatSource).toContain(
+      ".returning({ id: documentProcessingRuns.id })",
+    );
+    expect(heartbeatSource).toContain("if (!renewed.at(0))");
+    expect(heartbeatSource).toContain("leaseController.abort()");
+    expect(processSource).toContain("AbortSignal.any([");
+    expect(processSource).toContain("heartbeat.signal");
+    expect(processSource).toContain("signal: attemptSignal");
+  });
+
   test("reports a deadline without accumulating stalled renewals", async () => {
     let finishRenewal: () => void = () => undefined;
     const stalledRenewal = new Promise<void>((resolve) => {
@@ -446,6 +538,7 @@ describe("reconciliation fault isolation", () => {
     expect(results).toEqual({
       "deadline-scout": { count: 0, hasMore: false },
       delivery: { count: 5, hasMore: false },
+      "document-naming": { count: 0, hasMore: false },
       reindex: { count: 2, hasMore: false },
       repair: { count: 0, hasMore: true },
       retry: { count: 3, hasMore: true },
@@ -879,7 +972,7 @@ describe("bounded search-index replay", () => {
           name: "reindex",
           run: async () => ({
             count: Number(
-              await runSearchIndexReplayAttempt({
+              (await runSearchIndexReplayAttempt({
                 indexEntity: async () => await new Promise<void>(() => {}),
                 onFailure: async (error) => {
                   replayError = error;
@@ -890,7 +983,7 @@ describe("bounded search-index replay", () => {
                   return true;
                 },
                 timeoutMs: 5, // timeout under test
-              }),
+              })) === "replayed",
             ),
             hasMore: false,
           }),
@@ -1308,6 +1401,7 @@ describe("reconciliationLeftWorkBehind", () => {
     expect(declared).toEqual([
       "deadline-scout",
       "delivery",
+      "document-naming",
       "reindex",
       "repair",
       "retry",

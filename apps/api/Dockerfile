@@ -53,7 +53,9 @@ ENV NODE_ENV=production
 COPY --from=pruner /app/out/full/ .
 # Generator inputs outside the pruned API workspace graph.
 COPY --from=install-inputs /app/apps/web/src/fonts.css /app/apps/web/src/fonts.css
-COPY --from=install-inputs /app/apps/web/src/i18n/langs/ /app/apps/web/src/i18n/langs/
+COPY --from=install-inputs /app/apps/web/src/i18n/namespaces/ /app/apps/web/src/i18n/namespaces/
+COPY --from=install-inputs /app/apps/web/src/i18n/namespaces.json /app/apps/web/src/i18n/namespaces.json
+COPY --from=install-inputs /app/packages/scripts/src/i18n-namespaces.ts /app/packages/scripts/src/i18n-namespaces.ts
 COPY --from=install-inputs /app/apps/web/public/fonts/ /app/apps/web/public/fonts/
 COPY --from=install-inputs /app/scripts/generated-artifacts.ts /app/scripts/generated-artifacts.ts
 RUN bun apps/api/scripts/generate-mcp-app-contracts.ts && bun packages/mcp-apps/scripts/build-mcp-apps.ts
@@ -148,11 +150,12 @@ RUN bun build \
 #     ["bun", "/app/decision-analysis-candidates.js", "--country", "CZE"]
 #     ["bun", "/app/decision-analysis-input.js", "--ids-file", "/tmp/ids.txt"]
 #     ["bun", "/app/decision-analysis-save.js", "--input", "/tmp/analyses.json"]
-# - repair-publisher-absent-text.js, repair-cz-ns-court.js: one-shot repairs
-#   of rows an earlier write path produced; both report without writing until
-#   `--apply`.
+# - repair-publisher-absent-text.js, repair-cz-ns-court.js,
+#   repair-court-identity.js: one-shot repairs of rows an earlier write path
+#   produced; each reports without writing until `--apply`.
 #     ["bun", "/app/repair-publisher-absent-text.js", "--apply"]
 #     ["bun", "/app/repair-cz-ns-court.js", "--apply"]
+#     ["bun", "/app/repair-court-identity.js", "--apply", "--source", "cz-regional"]
 # - classify-citations.js: citation polarity pass. `--recheck` re-reads a
 #   language's labelled citations against the rule tier and tightens a label
 #   only towards a more severe reading, which is the pass to run after new
@@ -163,10 +166,12 @@ RUN bun build \
 #   `--apply`.
 #     ["bun", "/app/apply-reviewed-citation-labels.js", "--file", "/tmp/labels.json",
 #      "--results", "/tmp/results.jsonl", "--apply"]
-# - corpus-generation.js: corpus generation registry: status, register, and
-#   the serving flip, which checks the target's indexes on the search endpoint
-#   first; reports without writing until `--apply`.
+# - corpus-generation.js: corpus generation registry: status, register, the
+#   serving flip, which checks the target's indexes on the search endpoint
+#   first, and retire, which deletes a retired generation's engine indexes
+#   and projection history; reports without writing until `--apply`.
 #     ["bun", "/app/corpus-generation.js", "serve", "--family", "case_law", "--generation", "<generation>"]
+#     ["bun", "/app/corpus-generation.js", "retire", "--family", "case_law", "--generation", "<generation>"]
 # - corpus-snippet-compare.js: read-only snippet comparison over the serving
 #   corpus index. It reads its query set from a JSON file, so the committed
 #   sample ships next to the bundle.
@@ -235,6 +240,7 @@ RUN bun build \
     apps/api/src/scripts/decision-analysis-save.ts \
     apps/api/src/scripts/repair-publisher-absent-text.ts \
     apps/api/src/scripts/repair-cz-ns-court.ts \
+    apps/api/src/scripts/repair-court-identity.ts \
     apps/api/scripts/classify-citations.ts \
     apps/api/src/scripts/apply-reviewed-citation-labels.ts \
     apps/api/src/scripts/corpus-generation.ts \
@@ -350,12 +356,15 @@ RUN mkdir -p /app/bundles/runtime/workers && \
       /app/bundles/runtime/workers/pptx_parser_bg.wasm && \
     cp node_modules/@embedpdf/pdfium/dist/pdfium.wasm \
       /app/bundles/runtime/workers/pdfium.wasm && \
+    cp packages/heic-decoder/generated/heic_decoder_bg.wasm \
+      /app/bundles/runtime/workers/heic_decoder_bg.wasm && \
+    cp packages/pst-reader/generated/pst_reader_bg.wasm \
+      /app/bundles/runtime/workers/pst_reader_bg.wasm && \
     cp apps/api/src/lib/ocr-local/latin-v5-dict.txt \
       /app/bundles/runtime/workers/latin-v5-dict.txt
-# Local OCR runtime assets: the pinned ONNX models, plus the onnxruntime
-# native binding, which the bundled worker resolves relative to its own
-# location (`../bin/...`), so the directory must sit beside the workers.
-RUN cd apps/api && bun src/scripts/fetch-ocr-models.ts /app/ocr-models
+# Local OCR runtime assets: the onnxruntime native binding, which the
+# bundled worker resolves relative to its own location (`../bin/...`), so the
+# directory must sit beside the workers. The models come from `ocr-models`.
 # Materialize only this image's ONNX Runtime closure. The package contains
 # binaries for every supported OS and architecture; copying its whole `bin`
 # directory adds more than 200 MB of unreachable files. The materializer
@@ -370,6 +379,15 @@ RUN DATABASE_URL=postgres://smoke:smoke@localhost:5432/smoke \
     S3_BUCKET=smoke \
     S3_REGION=eu-central-1 \
     bun apps/legal-atlas-runner/dist/index.js run eu-ecj-refetch --help
+
+# The pinned local OCR models, alone at the stage root. Trusted CI builds
+# replace this stage with the same files from a private registry copy
+# (scripts/ci-service-images.ts); every other build downloads them here.
+FROM builder AS ocr-models-fetch
+RUN cd apps/api && bun src/scripts/fetch-ocr-models.ts /ocr-models
+
+FROM scratch AS ocr-models
+COPY --from=ocr-models-fetch /ocr-models/ /
 
 # Run the API as non-root. Built from the bare base image: every entrypoint is
 # a `bun build --target bun` bundle (the scripts share /app/chunk-*.js) run by
@@ -411,11 +429,13 @@ COPY --chown=stella:stella --from=builder /app/apps/api/drizzle /app/apps/api/dr
 # bundled worker resolves this package-owned directory as `../bin`; the image
 # smoke executes a real model so a broken native closure fails the build.
 COPY --chown=stella:stella --from=builder /app/runtime-onnx/bin /app/runtime/bin
-COPY --chown=stella:stella --from=builder /app/ocr-models /app/ocr-models
+COPY --chown=stella:stella --from=ocr-models / /app/ocr-models
 COPY --chown=stella:stella --from=install-inputs \
     /app/apps/landing/public/fonts/CabinetGrotesk-Regular.otf \
     /app/runtime/fonts/CabinetGrotesk-Regular.otf
 COPY --chown=stella:stella --from=builder /app/apps/api/src/lib/file-scan/yara /app/yara
+# The isolated extraction worker inherits no application environment.
+RUN ln -s /app/yara /app/runtime/workers/yara
 # Bundled template packs: the manifest is compiled into the binary, the DOCX
 # bytes are read from TEMPLATE_PACKS_CONTENT_DIR when a pack is installed.
 # Copied from the unpruned context stage. A build whose context has no content
@@ -435,7 +455,11 @@ CMD ["bun", "--no-env-file", "/app/server.js"]
 # image build instead of the first request that reaches it. The final stage
 # below re-selects the runner and forces this stage into the build by copying
 # its marker.
+FROM builder AS runtime-asset-fixtures
+RUN cd apps/api && bun src/tests/fixtures/write-image-smoke-zfo.ts /tmp/image-smoke.zfo
+
 FROM runner AS runtime-asset-smoke
+COPY --from=runtime-asset-fixtures /tmp/image-smoke.zfo /tmp/image-smoke.zfo
 RUN bun --no-env-file /app/image-smoke.js && touch /tmp/image-smoke-ok
 
 FROM runner

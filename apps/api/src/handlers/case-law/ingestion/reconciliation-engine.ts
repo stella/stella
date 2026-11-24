@@ -44,8 +44,7 @@ import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { sanitizeQueryErrorText } from "@stll/errors";
 import { DAY_IN_MS } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   caseLawCoverageSlices,
   caseLawDecisions,
@@ -53,6 +52,7 @@ import {
   caseLawSources,
   RECONCILIATION_ITEM_STATUS,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { abortableSleep } from "@/api/handlers/case-law/ingestion/abortable-sleep";
 import {
   recordSliceCoverage,
@@ -93,6 +93,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { censusScope } from "@/api/lib/case-law/completeness-census";
 import { recordCompletenessCensus } from "@/api/lib/case-law/completeness-census-writer";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
+import { selectAttachmentDocumentIds } from "@/api/lib/case-law/held-attachment-reads";
 import {
   rowHoldsDocumentFor,
   supplementIsMergedFor,
@@ -633,7 +634,7 @@ const selectHeldDocumentIds = async (
     return [];
   }
   const detail = detailCondition(requireDetail, rowRules);
-  const { decisions, supplements } = await scopedDb(async (tx) => ({
+  const { decisions, supplements, attached } = await scopedDb(async (tx) => ({
     decisions: await tx
       .select({
         sourceDocumentId: caseLawDecisions.sourceDocumentId,
@@ -668,6 +669,7 @@ const selectHeldDocumentIds = async (
         ),
       )
       .limit(documentIds.length),
+    attached: await selectAttachmentDocumentIds(tx, { sourceId, documentIds }),
   }));
   const supplementStateById = new Map(
     supplements.map(
@@ -682,6 +684,10 @@ const selectHeldDocumentIds = async (
   );
   return documentIds.filter((sourceDocumentId) => {
     const row = rowsById.get(sourceDocumentId);
+    // A record settled as an attachment to another source's decision.
+    if (row === undefined && attached.has(sourceDocumentId)) {
+      return true;
+    }
     const supplementState = supplementStateById.get(sourceDocumentId);
     if (supplementState === "merged") {
       return row === undefined || row.settled;

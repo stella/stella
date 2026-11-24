@@ -378,7 +378,9 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/main-heavy.test.ts",
     "scripts/validate-main-heavy-sha.test.ts",
   ],
-  "ci-checks-rest/Test cancellation evidence": [],
+  "ci-checks-rest/Test cancellation evidence": [
+    "scripts/ci-cancellation-contract.test.ts",
+  ],
   "ci-checks-rest/Test thin merge queue contracts": [
     "scripts/ci-expression-context.ts",
     "scripts/ci-plan-variables.ts",
@@ -434,6 +436,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/e2e-runner-inputs.ts",
     "scripts/e2e-spec-shards-core.ts",
     "scripts/e2e-spec-shards.test.ts",
+    "scripts/production-e2e-inputs.mjs",
     "scripts/ui-playground-selection.ts",
   ],
   "ci-checks-rest/Test geometry shard plan": [
@@ -927,8 +930,8 @@ test("derived capability runtime inputs retain API readers and shell bodies reta
 test("i18n sync follows locale catalogs and its source lock on pull requests", () => {
   const check = "ci-checks-rest/Check i18n sync";
   for (const changed of [
-    "apps/web/src/i18n/langs/en.json",
-    "apps/web/src/i18n/langs/fr.json",
+    "apps/web/src/i18n/namespaces/en/core.json",
+    "apps/web/src/i18n/namespaces/fr/core.json",
     "apps/web/src/i18n/i18n-source-lock.json",
     "packages/transactional/i18n/langs/de.json",
     "TERMINOLOGY.md",

@@ -35,15 +35,18 @@ const answer = (
   }
   const court = args["court"];
   if (court === undefined) {
-    return {
-      facets: {
-        court: [
-          { courts: [{ value: CONSTITUTIONAL }] },
-          { courts: [{ value: SUPREME }] },
-        ],
-      },
-      results: [],
-    };
+    // As the deployment answers: court facets only for a search that asks.
+    const requested = args["facets"];
+    const courtFacets =
+      Array.isArray(requested) && requested.includes("court")
+        ? {
+            court: [
+              { courts: [{ value: CONSTITUTIONAL }] },
+              { courts: [{ value: SUPREME }] },
+            ],
+          }
+        : null;
+    return { facets: courtFacets, results: [] };
   }
   const hit = Object.values(hits).find((entry) => entry.court === court);
   return { facets: null, results: hit ? [hit] : [] };
@@ -169,6 +172,35 @@ describe("the case-law identity canary", () => {
     expect(outcome?.detail).toContain(`${SUPREME}: sampled ${CONSTITUTIONAL}`);
   });
 
+  test("a court its facet names by another spelling of the same court passes", async () => {
+    const storedSpelling = "Nejvyšší soud České republiky";
+    const respelled: CallCaseLawTool = async (name, args) => {
+      if (name !== "search_case_law") {
+        return await deployment(exact)(name, args);
+      }
+      if (args["court"] === undefined) {
+        return {
+          type: "ok",
+          payload: {
+            facets: { court: [{ courts: [{ value: storedSpelling }] }] },
+            results: [],
+          },
+        };
+      }
+      return {
+        type: "ok",
+        payload: {
+          facets: null,
+          results: args["court"] === storedSpelling ? [hits[SUPREME]] : [],
+        },
+      };
+    };
+    const outcome = (await sampleCaseLawIdentities(respelled)).find(
+      (entry) => entry.country === "CZE",
+    )?.outcome;
+    expect(outcome?.status).toBe("passed");
+  });
+
   test("a court sampled without an ECLI is named as docket only", async () => {
     const withoutEcli: CallCaseLawTool = async (name, args) =>
       name === "search_case_law" && args["court"] === SUPREME
@@ -190,7 +222,108 @@ describe("the case-law identity canary", () => {
     });
   });
 
+  test("the seed search asks for court facets", async () => {
+    const seeds: unknown[] = [];
+    const recording: CallCaseLawTool = async (name, args) => {
+      if (name === "search_case_law" && args["court"] === undefined) {
+        seeds.push(args["facets"]);
+      }
+      return await deployment(exact)(name, args);
+    };
+    await sampleCaseLawIdentities(recording);
+    expect(seeds.length).toBeGreaterThan(0);
+    for (const facets of seeds) {
+      expect(facets).toContain("court");
+    }
+  });
+
   test("a country whose search is closed has nothing to sample", async () => {
     expect((await outcomeFor(exact, "AUT"))?.status).toBe("not_applicable");
+  });
+
+  test("a search still running is followed by its continuation token", async () => {
+    const correct = deployment(exact);
+    const followed: Record<string, unknown>[] = [];
+    const outcome = (
+      await sampleCaseLawIdentities(async (name, args) => {
+        const court = args["court"];
+        if (name !== "search_case_law" || typeof court !== "string") {
+          return await correct(name, args);
+        }
+        if (args["continuation_token"] === undefined) {
+          return {
+            type: "ok",
+            payload: {
+              status: "running",
+              continuationToken: `token-${court}`,
+              retryAfterMs: 0,
+            },
+          };
+        }
+        followed.push(args);
+        return await correct(name, args);
+      })
+    ).find((entry) => entry.country === "CZE")?.outcome;
+    expect(outcome?.status).toBe("passed");
+    expect(new Set(followed.map((args) => args["continuation_token"]))).toEqual(
+      new Set([`token-${CONSTITUTIONAL}`, `token-${SUPREME}`]),
+    );
+  });
+
+  test("a search that never finishes fails instead of reading as unreadable", async () => {
+    const correct = deployment(exact);
+    const outcome = (
+      await sampleCaseLawIdentities(async (name, args) =>
+        name === "search_case_law" && args["court"] === SUPREME
+          ? {
+              type: "ok",
+              payload: {
+                status: "running",
+                continuationToken: "token",
+                retryAfterMs: 0,
+              },
+            }
+          : await correct(name, args),
+      )
+    ).find((entry) => entry.country === "CZE")?.outcome;
+    expect(outcome?.status).toBe("failed");
+    expect(outcome?.detail).toContain(`${SUPREME}: search still running after`);
+  });
+
+  test("the last follow-up's wait is not spent once the budget is gone", async () => {
+    const correct = deployment(exact);
+    const waits: number[] = [];
+    const outcome = (
+      await sampleCaseLawIdentities(
+        async (name, args) => {
+          if (
+            name !== "search_case_law" ||
+            args["country"] !== "CZE" ||
+            args["court"] !== SUPREME
+          ) {
+            return await correct(name, args);
+          }
+          // Each token counts the follow-ups so far; the answer to the
+          // tenth, the last the budget allows, asks for its own wait.
+          const token = args["continuation_token"];
+          const followUps = typeof token === "string" ? Number(token) : 0;
+          return {
+            type: "ok",
+            payload: {
+              status: "running",
+              continuationToken: String(followUps + 1),
+              retryAfterMs: followUps === 10 ? 5000 : 1,
+            },
+          };
+        },
+        {
+          wait: async (milliseconds) => {
+            waits.push(milliseconds);
+          },
+        },
+      )
+    ).find((entry) => entry.country === "CZE")?.outcome;
+    expect(outcome?.detail).toContain(`${SUPREME}: search still running after`);
+    expect(waits).toEqual(Array.from({ length: 10 }, () => 1));
   });
 });

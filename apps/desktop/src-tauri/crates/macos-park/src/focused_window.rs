@@ -10,6 +10,9 @@ use core_foundation::{
 use std::{ffi::c_void, ptr};
 
 const AX_SUCCESS: i32 = 0;
+/// The element has no such attribute, or no value for it: not a failed read.
+const AX_ATTRIBUTE_UNSUPPORTED: i32 = -25205;
+const AX_NO_VALUE: i32 = -25212;
 const AX_TIMEOUT_SECONDS: f32 = 0.15;
 // Reject oversized values rather than dropping a private-window suffix.
 const MAX_ATTRIBUTE_UTF16_UNITS: isize = 16_384;
@@ -98,6 +101,37 @@ fn set_timeout(element: &CFType) -> bool {
     AXUIElementSetMessagingTimeout(element.as_CFTypeRef(), AX_TIMEOUT_SECONDS)
       == AX_SUCCESS
   }
+}
+
+/// Whether `element` is a password field, by its role and subrole; `None`
+/// when either cannot be read, so a caller treats the element as one. An
+/// element without a subrole is not one.
+fn secure_text_field(element: &CFType) -> Option<bool> {
+  for name in ["AXRole", "AXSubrole"] {
+    let cf_name = CFString::new(name);
+    let mut value = ptr::null();
+    // SAFETY: The live AX element and CFString remain owned during the call;
+    // the output points to stack storage. Successful Copy results are retained.
+    let status = unsafe {
+      AXUIElementCopyAttributeValue(
+        element.as_CFTypeRef(),
+        cf_name.as_concrete_TypeRef(),
+        &mut value,
+      )
+    };
+    let text = match status {
+      AX_SUCCESS => owned_type(value)?.downcast::<CFString>()?,
+      AX_ATTRIBUTE_UNSUPPORTED | AX_NO_VALUE if name == "AXSubrole" => continue,
+      _ => return None,
+    };
+    if text.char_len() > MAX_ATTRIBUTE_UTF16_UNITS {
+      return None;
+    }
+    if text == SECURE_TEXT_FIELD {
+      return Some(true);
+    }
+  }
+  Some(false)
 }
 
 fn string_attribute(element: &CFType, name: &str) -> Result<Option<String>, ()> {
@@ -193,6 +227,34 @@ fn selection_start(element: &CFType) -> Option<CFIndex> {
   (copied != 0 && range.location >= 0).then_some(range.location)
 }
 
+/// Whether the focused element of process `pid` is a password field, read
+/// without prompting or logging. False when it cannot be read.
+pub fn focused_field_is_secure(pid: i32) -> bool {
+  if pid <= 0 || !accessibility_trusted() {
+    return false;
+  }
+  // SAFETY: A positive process ID is accepted by AX; its Create result is owned
+  // below. A process exit yields failed attribute reads, not pointer misuse.
+  let Some(application) = owned_type(unsafe { AXUIElementCreateApplication(pid) })
+  else {
+    return false;
+  };
+  if !set_timeout(&application) {
+    return false;
+  }
+  let Some(element) = attribute(&application, "AXFocusedUIElement") else {
+    return false;
+  };
+  // SAFETY: The framework's type-ID query has no arguments or ownership effects.
+  if element.type_of() != unsafe { AXUIElementGetTypeID() } || !set_timeout(&element) {
+    return false;
+  }
+  ["AXRole", "AXSubrole"].into_iter().any(|name| {
+    string_attribute(&element, name).ok().flatten().as_deref()
+      == Some(SECURE_TEXT_FIELD)
+  })
+}
+
 /// Up to `max_characters` characters right before the insertion point of the
 /// focused text element of process `pid`, read without prompting or logging.
 /// `None` for a password field, an element without text or an insertion
@@ -212,11 +274,10 @@ pub fn text_before_cursor(pid: i32, max_characters: usize) -> Option<String> {
   if element.type_of() != unsafe { AXUIElementGetTypeID() } || !set_timeout(&element) {
     return None;
   }
-  // A password field never gives its text away, whatever else it reports.
-  for name in ["AXRole", "AXSubrole"] {
-    if string_attribute(&element, name).ok()?.as_deref() == Some(SECURE_TEXT_FIELD) {
-      return None;
-    }
+  // A password field never gives its text away, whatever else it reports,
+  // and an element whose role cannot be read is treated as one.
+  if secure_text_field(&element)? {
+    return None;
   }
   let end = selection_start(&element)?;
   let value = attribute(&element, "AXValue")?.downcast::<CFString>()?;
@@ -249,6 +310,36 @@ pub fn text_before_cursor(pid: i32, max_characters: usize) -> Option<String> {
       .skip(count.saturating_sub(max_characters))
       .collect(),
   )
+}
+
+/// The text selected in the focused element of process `pid`, when it holds
+/// at most `max_utf16_units` UTF-16 units: read once, without prompting or
+/// logging, only when the person asks to fix a dictated word. `None` for a
+/// password field, an element without a selection, a longer selection and
+/// whenever a read fails.
+pub fn selected_text(pid: i32, max_utf16_units: usize) -> Option<String> {
+  if pid <= 0 || max_utf16_units == 0 || !accessibility_trusted() {
+    return None;
+  }
+  // SAFETY: A positive process ID is accepted by AX; its Create result is owned
+  // below. A process exit yields failed attribute reads, not pointer misuse.
+  let application = owned_type(unsafe { AXUIElementCreateApplication(pid) })?;
+  if !set_timeout(&application) {
+    return None;
+  }
+  let element = attribute(&application, "AXFocusedUIElement")?;
+  // SAFETY: The framework's type-ID query has no arguments or ownership effects.
+  if element.type_of() != unsafe { AXUIElementGetTypeID() } || !set_timeout(&element) {
+    return None;
+  }
+  // A password field never gives its text away, whatever else it reports,
+  // and an element whose role cannot be read is treated as one.
+  if secure_text_field(&element)? {
+    return None;
+  }
+  let selected = attribute(&element, "AXSelectedText")?.downcast::<CFString>()?;
+  let length = usize::try_from(selected.char_len()).ok()?;
+  (length > 0 && length <= max_utf16_units).then(|| selected.to_string())
 }
 
 #[cfg(test)]

@@ -130,12 +130,20 @@ export const TABLE_RETENTION = {
   billing_arrangements: {
     boundedBy: "Organization-owned billing configuration and deletion.",
   },
+  dictation_learned_fixes: {
+    boundedBy:
+      "One row of at most 30 fixes per organization and user, deleted on organization offboarding, account deletion or with its organization or user.",
+  },
   buffer_object_cleanup_intents: {
     boundedBy: "Durable cleanup queue drained by buffer-intent reconciliation.",
   },
   desktop_edit_sessions: {
     boundedBy:
       "Authenticated account-owned editing sessions with expiry and revocation.",
+  },
+  dictation_vocabulary_terms: {
+    boundedBy:
+      "At most MAX_ORGANIZATION_DICTATION_TERMS words per organization, deleted with it.",
   },
   document_processing_runs: {
     boundedBy:
@@ -147,6 +155,10 @@ export const TABLE_RETENTION = {
   },
   document_types: {
     boundedBy: "Organization-owned document configuration and deletion.",
+  },
+  agent_skill_original_cleanup_requests: {
+    boundedBy:
+      "Durable erasure queue of skill file originals; agentSkills.cleanOriginalObjects deletes each row once its objects are erased.",
   },
   entity_deletion_cleanup_requests: {
     boundedBy: "Durable deletion queue drained by entity deletion cleanup.",
@@ -169,6 +181,14 @@ export const TABLE_RETENTION = {
   },
   organization_file_usage: {
     boundedBy: "Organization-owned file accounting and deletion.",
+  },
+  email_delivery_failures: {
+    ttlColumn: "failed_at",
+    sweeper: "emailDeliverability.receive",
+  },
+  kept_transcript_deletions: {
+    boundedBy:
+      "One provider id per transcript still kept at the provider, deleted once the provider confirms its delete; dictation.deleteKeptTranscripts retries the rest and reports any kept past an hour.",
   },
   hosted_customer_erasures: {
     boundedBy:
@@ -263,6 +283,10 @@ export const TABLE_RETENTION = {
   user: { boundedBy: "Account lifecycle and authenticated account deletion." },
   session: {
     boundedBy: "Account lifecycle, session expiry, and session revocation.",
+  },
+  session_sign_ins: {
+    boundedBy:
+      "One row per session, cascade-deleted with the session it describes.",
   },
   account: { boundedBy: "Cascade-deleted with its account owner." },
   two_factor: {

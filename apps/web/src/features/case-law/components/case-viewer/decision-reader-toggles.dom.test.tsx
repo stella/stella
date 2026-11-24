@@ -16,6 +16,15 @@ import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
+// The provider's module graph reaches DOM-aware UI code, so it loads after
+// the DOM is registered, like the reader components below.
+const { defaultPresentationPrefs } =
+  await import("@/lib/account/presentation-prefs/preferences");
+const { PresentationPrefsProvider } =
+  await import("@/lib/account/presentation-prefs/provider");
+const { createTestPresentationPrefsSync } =
+  await import("@/lib/account/presentation-prefs/sync.test-fixtures");
+
 /**
  * A card whose wording the decision's list did not carry reads it itself.
  * Reads wait for `answerReads` so a test can let the card draw its
@@ -262,6 +271,7 @@ const decision = {
   judges: [],
   language: "cs",
   sourceAttributionUrl: null,
+  bodySource: { textSource: "host" },
   textFields: {
     abstract: absent,
     headnote: absent,
@@ -435,7 +445,12 @@ const renderReaders = async () => {
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <FormattingProvider locale="en" timeZone="UTC">
         <QueryClientProvider client={client}>
-          <RouterProvider router={router} />
+          <PresentationPrefsProvider
+            initialPrefs={defaultPresentationPrefs}
+            sync={createTestPresentationPrefsSync()}
+          >
+            <RouterProvider router={router} />
+          </PresentationPrefsProvider>
         </QueryClientProvider>
       </FormattingProvider>
     </IntlProvider>,

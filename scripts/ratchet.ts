@@ -457,7 +457,18 @@ const keyText = (key: Node): string | null =>
 const propertyNameText = (property: ObjectProperty): string | null =>
   property.computed ? null : keyText(property.key);
 
+// An identifier spells its name, or writes it with a `\u` escape.
+const mayNameIdentifier = (content: string, name: string): boolean =>
+  content.includes(name) || content.includes("\\u");
+
 const countRawNumericCoercions: FileCounter = (content, { file }) => {
+  if (
+    !mayNameIdentifier(content, "Number") &&
+    !mayNameIdentifier(content, "parseInt") &&
+    !mayNameIdentifier(content, "parseFloat")
+  ) {
+    return 0;
+  }
   const { program } = parseSyntax({ fileName: file, text: content });
   let total = 0;
   walk(program, (node) => {
@@ -494,6 +505,86 @@ const isExcludedRawNumericCoercionSource = (file: string): boolean =>
   file.includes("/scripts/") ||
   file.includes("/evals/") ||
   file === "packages/agent-input/src/numeric-token.ts";
+
+const TEXT_DECODER_CONSTRUCTORS: ReadonlySet<string> = new Set([
+  "TextDecoder",
+  "TextDecoderStream",
+]);
+
+// Buffer#toString encodings that read bytes as text without refusing any.
+const LENIENT_BUFFER_ENCODINGS: ReadonlySet<string> = new Set([
+  "utf-8",
+  "latin1",
+  "binary",
+]);
+
+// One per lenient reading of bytes as text: `new TextDecoder(…)` or
+// `new TextDecoderStream(…)` without a literal `fatal: true` option, and
+// `.toString("utf-8" | "latin1" | "binary")`. Each turns bytes it
+// cannot read into U+FFFD or reads them in a fixed charset instead of
+// refusing them. On a user's file that silently loses a legacy charset;
+// such bytes go through `decodeDeclared` (@stll/mojibake), which owns the
+// decision.
+const countLenientTextDecoders: FileCounter = (content, { file }) => {
+  const { program } = parseSyntax({ fileName: file, text: content });
+  let total = 0;
+  walk(program, (node) => {
+    if (node.type === "CallExpression") {
+      const encoding = node.arguments.at(0);
+      const encodingText =
+        encoding === undefined ? null : stringLiteralValue(encoding);
+      if (
+        isPropertyAccess(node.callee) &&
+        node.callee.property.name === "toString" &&
+        node.arguments.length === 1 &&
+        encodingText !== null &&
+        LENIENT_BUFFER_ENCODINGS.has(encodingText.toLowerCase())
+      ) {
+        total += 1;
+      }
+      return;
+    }
+    if (
+      node.type !== "NewExpression" ||
+      node.callee.type !== "Identifier" ||
+      !TEXT_DECODER_CONSTRUCTORS.has(node.callee.name)
+    ) {
+      return;
+    }
+    // The last property that can set `fatal` decides it: a later spread may
+    // carry `fatal: false`.
+    const options = node.arguments.at(1);
+    const decidingProperty =
+      options?.type === "ObjectExpression"
+        ? options.properties.findLast(
+            (property) =>
+              property.type === "SpreadElement" ||
+              (isPropertyAssignment(property, options) &&
+                propertyNameText(property) === "fatal"),
+          )
+        : undefined;
+    const fatal =
+      decidingProperty === undefined ||
+      decidingProperty.type === "SpreadElement"
+        ? undefined
+        : decidingProperty.value;
+    if (fatal?.type !== "Literal" || fatal.value !== true) {
+      total += 1;
+    }
+  });
+  return total;
+};
+
+const LENIENT_TEXT_DECODER_SOURCE_GLOBS = [
+  "apps/*/src/**/*.{ts,tsx}",
+  "packages/*/src/**/*.{ts,tsx}",
+] as const;
+
+const isExcludedLenientTextDecoderSource = (file: string): boolean =>
+  isExcludedSource(file) ||
+  file.includes("/scripts/") ||
+  file.includes("/evals/") ||
+  file.startsWith("packages/mojibake/src/");
 
 // `transition` is also an ordinary word and a discriminator value
 // (`kind: "transition"`), so it counts only in a class-list position.
@@ -1149,10 +1240,6 @@ const stripComments = ({ content, file }: SourceText): string =>
     stripCommentTrivia({ content, file }),
   );
 
-// An identifier spells its name, or writes it with a `\u` escape.
-const mayNameIdentifier = (content: string, name: string): boolean =>
-  content.includes(name) || content.includes("\\u");
-
 // The export a `{ name }` or `{ name as local }` import entry reads; null for
 // default and namespace imports.
 const namedImport = ({ importName }: StaticImportEntry): string | null => {
@@ -1226,6 +1313,35 @@ const countShadowedUserNameHelpers: FileCounter = (content, { file }) =>
     pattern: /\b(?:const|function)\s+(?:getDisplayName|getInitials)\b/gu,
     required: /getDisplayName|getInitials/u,
   });
+
+// Invented test, seed, browser-spec and marketing data should read as a real
+// file, so a placeholder party, firm or person name counts: "Acme",
+// "John Doe", "Jan Novák", "Test User", "Example Ltd", lorem ipsum,
+// "[COMPANY NAME]". Czech "vzorový" (template) is an ordinary word, so only a
+// capitalised form used as a name, firm or address counts ("Jan Vzorový",
+// "Vzorová společnost", "Vzorová 1"), never "Vzorová smlouva" or lowercase.
+const PLACEHOLDER_PARTY_NAME =
+  /(?<![\p{L}\p{N}_])(?:J(?:ohn|ane) Doe|John Smith|Acme|[Ll]orem ipsum|J[aá]n Novák|Jana Nováková|(?:Example|Sample|Demo|Test|Foo|Dummy) (?:Corp(?:oration)?|Inc|Ltd|LLC|GmbH|Company|Client|Customer|Firm|Holdings|Person|User|Lawyer|Org(?:anization)?)|Vzorov\p{L}*(?!\s+(?!spole[čc]nos[tť])\p{Ll})|Firma,?\s+s\.\s?r\.\s?o\.)(?![\p{L}\p{N}_])|\[(?:COMPANY|CLIENT|FIRM|PARTY|PERSON) NAME\]/gu;
+const PLACEHOLDER_PARTY_NAME_PRESENT = new RegExp(
+  PLACEHOLDER_PARTY_NAME.source,
+  "u",
+);
+const PLACEHOLDER_SCRIPT_FILE = /\.[cm]?[jt]sx?$/u;
+// Locale catalogs hold product copy, where "Vzorová" is an ordinary word.
+const LOCALE_PATH = /(?:^|\/)(?:locales?|i18n)\//u;
+
+// Comments in script files are skipped; data fixtures count as written.
+const countPlaceholderPartyNames: FileCounter = (content, { file }) => {
+  if (!PLACEHOLDER_PARTY_NAME_PRESENT.test(content)) {
+    return 0;
+  }
+  return countMatches(
+    PLACEHOLDER_SCRIPT_FILE.test(file)
+      ? stripComments({ content, file })
+      : content,
+    PLACEHOLDER_PARTY_NAME,
+  );
+};
 
 // Both patterns below need `title={` or `dateStyle` in the stripped text.
 const AD_HOC_RELATIVE_TIME_REQUIRED = /title=\{|dateStyle/u;
@@ -1424,6 +1540,31 @@ const countWeakMcpProjectionTies: FileCounter = (content, { file }) => {
  * so a regex is hidden by the very characters that make it worth checking. A
  * guard a new regex can evade by containing a quote is not a guard.
  */
+const SUPER_LINEAR_REGEX_CACHE = new Map<string, boolean>();
+
+const isSuperLinearRegex = (pattern: string, flags: string): boolean => {
+  const key = `${pattern}\0${flags}`;
+  const cached = SUPER_LINEAR_REGEX_CACHE.get(key);
+  if (cached !== undefined) {
+    return cached;
+  }
+  let expression: RegExp;
+  try {
+    expression = new RegExp(pattern, flags);
+  } catch {
+    SUPER_LINEAR_REGEX_CACHE.set(key, false);
+    return false;
+  }
+  let result = false;
+  try {
+    result = analyse(expression).reports.length > 0;
+  } catch {
+    // Unanalysable pattern is not evidence of a finding.
+  }
+  SUPER_LINEAR_REGEX_CACHE.set(key, result);
+  return result;
+};
+
 const countSuperLinearRegexes: FileCounter = (content, { file }) => {
   // Pick the dialect from the extension. TSX for every file would
   // misread a generic arrow such as `<Ts>(…) =>` in a .ts file as JSX,
@@ -1437,20 +1578,8 @@ const countSuperLinearRegexes: FileCounter = (content, { file }) => {
     if (node.type !== "Literal" || !("regex" in node)) {
       return;
     }
-    let expression: RegExp;
-    try {
-      expression = new RegExp(node.regex.pattern, node.regex.flags);
-    } catch {
-      // A pattern this runtime cannot compile cannot run either.
-      return;
-    }
-    try {
-      if (analyse(expression).reports.length > 0) {
-        total += 1;
-      }
-    } catch {
-      // The analyser bails on constructs it does not model; an
-      // unanalysable pattern is not evidence of a finding.
+    if (isSuperLinearRegex(node.regex.pattern, node.regex.flags)) {
+      total += 1;
     }
   });
   return total;
@@ -2312,6 +2441,9 @@ const countDirectFailureSinks: FileCounter = (content, { file }) =>
 // `callbacks.captureError(…)`-shaped seams: adapters that also do generation
 // bookkeeping, inventoried apart from the terminal sinks above.
 const countAnalyticsCallbackSeams: FileCounter = (content, { file }) => {
+  if (!mayNameIdentifier(content, "captureError")) {
+    return 0;
+  }
   const { program } = parseSyntax({ fileName: file, text: content });
   let count = 0;
   walk(program, (node) => {
@@ -2333,6 +2465,9 @@ const failureSinkSpecs = ({
   content,
   file,
 }: SourceText): ObjectExpression[] => {
+  if (!mayNameIdentifier(content, FAILURE_SINK_FACTORY)) {
+    return [];
+  }
   const { program } = parseSyntax({ fileName: file, text: content });
   const specs: ObjectExpression[] = [];
   walk(program, (node) => {
@@ -2562,6 +2697,32 @@ const countReviewOnlyInstructionRules: FileCounter = (content) => {
   return parsed.reviewOnlyRules;
 };
 
+const OUTBOUND_TRANSPORT_REFS_CACHE = new WeakMap<
+  ScanContext,
+  Map<string, readonly string[]>
+>();
+
+const cachedOutboundTransportReferences = (
+  context: ScanContext,
+  file: string,
+): readonly string[] => {
+  let byFile = OUTBOUND_TRANSPORT_REFS_CACHE.get(context);
+  if (byFile === undefined) {
+    byFile = new Map<string, readonly string[]>();
+    OUTBOUND_TRANSPORT_REFS_CACHE.set(context, byFile);
+  }
+  const cached = byFile.get(file);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const refs = outboundTransportReferences({
+    file,
+    text: readSource(context, file),
+  });
+  byFile.set(file, refs);
+  return refs;
+};
+
 const countOutboundIndirectAccessExceptions = (
   context: ScanContext,
 ): RepoMetricResult => {
@@ -2572,10 +2733,9 @@ const countOutboundIndirectAccessExceptions = (
   ]).filter(
     (file) =>
       isOutboundProductionModule(file) &&
-      outboundTransportReferences({
-        file,
-        text: readSource(context, file),
-      }).includes("indirect:transport"),
+      cachedOutboundTransportReferences(context, file).includes(
+        "indirect:transport",
+      ),
   );
   const files: Record<string, number> = Object.fromEntries(
     flagged.map((file) => [file, 1]),
@@ -3160,10 +3320,10 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
         if (!isApiProductionModule(file) || TRANSPORT_OWNER_MODULES.has(file)) {
           continue;
         }
-        for (const capability of outboundTransportReferences({
+        for (const capability of cachedOutboundTransportReferences(
+          context,
           file,
-          text: readSource(context, file),
-        })) {
+        )) {
           if (
             capability !== "permit:grant" &&
             !LOCAL_MODULE_CAPABILITIES.has(capability)
@@ -3262,6 +3422,17 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     perFile: true,
     growth: "shrink-only",
     count: countRawNumericCoercions,
+  },
+  {
+    scope: "file",
+    id: "lenient-text-decoders",
+    description:
+      '`new TextDecoder(…)`/`new TextDecoderStream(…)` without a literal `fatal: true`, and `.toString("utf-8" | "latin1" | "binary")`, in app and package source outside @stll/mojibake; a lenient reading turns a legacy-charset file into U+FFFD or the wrong letters, so user file bytes go through decodeDeclared; tests, scripts and evals are excluded; a new file starts at zero and each file only shrinks',
+    include: LENIENT_TEXT_DECODER_SOURCE_GLOBS,
+    exclude: isExcludedLenientTextDecoderSource,
+    perFile: true,
+    growth: "shrink-only",
+    count: countLenientTextDecoders,
   },
   {
     scope: "file",
@@ -3377,6 +3548,30 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "placeholder-party-names",
+    description:
+      "placeholder party, firm or person names (Acme, John Doe, Jan Novák, Test User, Vzorová společnost, lorem ipsum, [COMPANY NAME]) in tests, fixtures, seeds, browser specs and marketing previews; invented data reads as a real file",
+    include: [
+      "apps/*/src/**/*.test.{ts,tsx}",
+      "apps/*/scripts/**/*.test.{ts,tsx}",
+      "apps/*/tests/**/*.{ts,tsx}",
+      "packages/*/src/**/*.test.{ts,tsx}",
+      "packages/*/scripts/**/*.test.{ts,tsx}",
+      "apps/*/src/**/__fixtures__/**/*.{ts,tsx,json,xml,html,xhtml,txt,md,csv,yml,yaml}",
+      "apps/*/scripts/**/__fixtures__/**/*.{ts,tsx,json,xml,html,xhtml,txt,md,csv,yml,yaml}",
+      "packages/*/src/**/__fixtures__/**/*.{ts,tsx,json,xml,html,xhtml,txt,md,csv,yml,yaml}",
+      "apps/api/scripts/seed-*.ts",
+      "apps/web/e2e/**/*.{ts,tsx,json}",
+      "packages/playwright-tools/src/**/*.{ts,json}",
+      "apps/landing/src/components/react/previews/**/*.{ts,tsx}",
+      "apps/landing/src/data/**/*.ts",
+    ],
+    exclude: (file) =>
+      file.endsWith(".d.ts") || /\.gen\./u.test(file) || LOCALE_PATH.test(file),
+    count: countPlaceholderPartyNames,
+  },
+  {
+    scope: "file",
     id: "raw-user-avatar-primitive",
     description:
       "imports of @stll/ui/avatar outside the shared owner and explicit non-user exceptions",
@@ -3385,10 +3580,11 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
       isExcludedSource(file) ||
       [
         "apps/web/src/components/public-workspace-shell.tsx",
-        "apps/web/src/routes/auth/organization.tsx",
+        "apps/web/src/routes/auth/-organization.page.tsx",
         "apps/web/src/routes/dev/-components/ui-playground.tsx",
         "apps/web/src/components/ai-suggestions/review-panel.impl.tsx",
       ].includes(file),
+    perFile: true,
     count: countRawUserAvatarPrimitive,
   },
   {
@@ -4857,6 +5053,29 @@ const SELF_TEST_RAW_NUMERIC_COERCIONS = [
 ].join("\n");
 const EXPECTED_RAW_NUMERIC_COERCIONS = 5;
 
+const SELF_TEST_LENIENT_TEXT_DECODERS = [
+  "new TextDecoder().decode(bytes);",
+  'new TextDecoder("utf-8").decode(bytes);',
+  'new TextDecoder("windows-1250", { ignoreBOM: true });',
+  'new TextDecoder("utf-8", { fatal: false });',
+  'new TextDecoder("utf-8", options);',
+  'new TextDecoder("utf-8", { fatal: true }).decode(bytes);',
+  'new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });',
+  'new TextDecoder("utf-8", { fatal: true, ...options });',
+  "new TextEncoder().encode(text);",
+  "new TextDecoderStream();",
+  'new TextDecoderStream("utf-8", { fatal: true });',
+  'Buffer.from(bytes).toString("utf-8");',
+  'bytes.toString("UTF-8");',
+  'bytes.toString("latin1");',
+  'bytes.toString("base64");',
+  "value.toString();",
+  "value.toString(16);",
+  "// new TextDecoder().decode(bytes)",
+  'const example = "new TextDecoder()";',
+].join("\n");
+const EXPECTED_LENIENT_TEXT_DECODERS = 10;
+
 const LEGACY_PAINT_TRANSITION_FIXTURE_LINES = [
   `const directClass = "transition transition-colors";`,
   `const helper = cn("rounded", active && "transition");`,
@@ -4978,6 +5197,9 @@ const SELF_TEST_NULLISH = `${NULLISH_FIXTURE_LINES.join("\n")}\n`;
 // string/template false positives (e, f, g) are excluded.
 const EXPECTED_NULLISH = 5;
 
+// Two disabled Buttons that say nothing (the bare flag, and one with only a
+// tooltip); a reasoned one, a never-disabled one, another control, and the
+// same text in a comment and a string do not count.
 const LEGACY_REALTIME_INVALIDATION_FIXTURE_LINES = [
   'const direct = { type: "invalidate-query", data: ["entities"] };',
   "const named = { type: REALTIME_EVENT_TYPE.INVALIDATE_QUERY, data: key };",
@@ -5061,6 +5283,25 @@ const SELF_TEST_TOLERATED_BROWSER_ERRORS = `${TOLERATED_BROWSER_ERROR_FIXTURE_LI
 // and the comment are excluded.
 const EXPECTED_TOLERATED_BROWSER_ERRORS = 2;
 const EXPECTED_SHADOWED_USER_NAME_HELPERS = 2;
+const PLACEHOLDER_PARTY_NAME_FIXTURE_LINES = [
+  'const client = { name: "Acme s.r.o.", contact: "John Doe" };',
+  'const defendant = "žalovaná Vzorová společnost Omega a.s.";',
+  'const witness = "Jan Vzorový, bytem Vzorová 1, Praha";',
+  'const seeded = ["Test User", "[COMPANY NAME]", "Jana Nováková"];',
+  'const template = "Vzorová smlouva o dílo podle vzorový dokument";',
+  'const unrelated = ["AcmeClient", "Testing Company", "Jan Nováček"];',
+  '// "Jane Doe" in a comment must not count.',
+];
+const SELF_TEST_PLACEHOLDER_PARTY_NAMES = `${PLACEHOLDER_PARTY_NAME_FIXTURE_LINES.join("\n")}\n`;
+const SELF_TEST_PLACEHOLDER_PARTY_NAMES_JSON =
+  '{ "parties": ["Example Ltd", "Novák & Partners"], "note": "lorem ipsum" }\n';
+const PLACEHOLDER_PARTY_NAME_LOCALE_FIXTURE =
+  "apps/web/src/__fixtures__/locales/cs.json";
+// Acme, John Doe, Vzorová (firm), Jan Vzorový, Vzorová 1 (address), Test User,
+// [COMPANY NAME] and Jana Nováková in the test file, then Example Ltd and
+// lorem ipsum in the data fixture. The template title, lowercase adjective,
+// longer identifiers, the comment and the locale catalog are excluded.
+const EXPECTED_PLACEHOLDER_PARTY_NAMES = 10;
 const EXPECTED_AD_HOC_RELATIVE_TIME_FORMATTING = 3;
 
 const SHARED_API_HELPER_FIXTURE_LINES = [
@@ -6199,6 +6440,57 @@ const asCastSelfTestFailures = (snapshot: Baseline): string[] => {
   return failures;
 };
 
+const LENIENT_TEXT_DECODER_EXCLUDED_FIXTURES = [
+  "apps/api/src/lenient-text-decoders.test.ts",
+  "apps/api/src/lenient-text-decoders.gen.ts",
+  "apps/api/src/scripts/lenient-text-decoders.ts",
+  "packages/mojibake/src/lenient-text-decoders.ts",
+] as const;
+
+const lenientTextDecoderSelfTestFailures = (snapshot: Baseline): string[] => {
+  const failures: string[] = [];
+  const id = "lenient-text-decoders";
+  const file = "apps/api/src/lenient-text-decoders.ts";
+  const metric = RATCHET_METRICS.find((entry) => entry.id === id);
+  const measured = requireSnapshot(snapshot, id);
+  if (metric?.scope !== "file") {
+    return [`${id} is not registered as a file metric`];
+  }
+  if (metric.growth !== "shrink-only" || metric.perFile !== true) {
+    failures.push(`${id} is not per-file shrink-only`);
+  }
+  if (measured.count !== EXPECTED_LENIENT_TEXT_DECODERS) {
+    failures.push(
+      `${id} counted ${measured.count}, expected ${EXPECTED_LENIENT_TEXT_DECODERS}`,
+    );
+  }
+  for (const excluded of LENIENT_TEXT_DECODER_EXCLUDED_FIXTURES) {
+    if (excluded in measured.files) {
+      failures.push(`${id} counted excluded source ${excluded}`);
+    }
+  }
+  const after = metric.count(
+    `${SELF_TEST_LENIENT_TEXT_DECODERS}\nnew TextDecoder().decode(upload);`,
+    { file, role: "head" },
+  );
+  const change = diffMetric(
+    id,
+    { count: after, files: { [file]: after } },
+    {
+      count: EXPECTED_LENIENT_TEXT_DECODERS,
+      files: { [file]: EXPECTED_LENIENT_TEXT_DECODERS },
+    },
+    metricGate(metric),
+  );
+  if (
+    after !== EXPECTED_LENIENT_TEXT_DECODERS + 1 ||
+    change.status !== "regressed"
+  ) {
+    failures.push(`${id} did not reject a newly added lenient TextDecoder`);
+  }
+  return failures;
+};
+
 const rawNumericCoercionSelfTestFailures = (snapshot: Baseline): string[] => {
   const failures: string[] = [];
   const id = "raw-numeric-coercions";
@@ -6740,6 +7032,14 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
+      "apps/api/src/lenient-text-decoders.ts",
+      SELF_TEST_LENIENT_TEXT_DECODERS,
+    );
+    for (const excluded of LENIENT_TEXT_DECODER_EXCLUDED_FIXTURES) {
+      writeFixture(root, excluded, "new TextDecoder().decode(bytes);");
+    }
+    writeFixture(
+      root,
       "apps/web/src/legacy-paint-transitions.tsx",
       SELF_TEST_LEGACY_PAINT_TRANSITIONS,
     );
@@ -6806,6 +7106,21 @@ const runSelfTest = (): number => {
       root,
       "apps/web/e2e/specs/tolerated-browser-errors.spec.ts",
       SELF_TEST_TOLERATED_BROWSER_ERRORS,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/placeholder-party-names.test.ts",
+      SELF_TEST_PLACEHOLDER_PARTY_NAMES,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/__fixtures__/placeholder-parties.json",
+      SELF_TEST_PLACEHOLDER_PARTY_NAMES_JSON,
+    );
+    writeFixture(
+      root,
+      PLACEHOLDER_PARTY_NAME_LOCALE_FIXTURE,
+      '{ "client": "Jan Novák" }\n',
     );
     writeFixture(
       root,
@@ -7145,6 +7460,7 @@ const runSelfTest = (): number => {
 
     failures.push(...asCastSelfTestFailures(snapshot));
     failures.push(...rawNumericCoercionSelfTestFailures(snapshot));
+    failures.push(...lenientTextDecoderSelfTestFailures(snapshot));
     failures.push(...failureSinkSelfTestFailures(snapshot));
     failures.push(...ownerHandleAllowlistSelfTestFailures(snapshot));
 
@@ -7218,6 +7534,7 @@ const runSelfTest = (): number => {
       ],
       ["raw-user-avatar-primitive", EXPECTED_RAW_USER_AVATAR_PRIMITIVES],
       ["e2e-tolerated-browser-errors", EXPECTED_TOLERATED_BROWSER_ERRORS],
+      ["placeholder-party-names", EXPECTED_PLACEHOLDER_PARTY_NAMES],
       ["undeclared-api-client-writes", EXPECTED_UNDECLARED_API_CLIENT_WRITES],
       ["shadowed-user-name-helpers", EXPECTED_SHADOWED_USER_NAME_HELPERS],
       [
@@ -7244,6 +7561,13 @@ const runSelfTest = (): number => {
       requireSnapshot(snapshot, "implicit-root-connection-shapes").files
     ) {
       failures.push("implicit-root-connection-shapes did not exempt a door");
+    }
+
+    if (
+      PLACEHOLDER_PARTY_NAME_LOCALE_FIXTURE in
+      requireSnapshot(snapshot, "placeholder-party-names").files
+    ) {
+      failures.push("placeholder-party-names did not exclude a locale file");
     }
 
     failures.push(...legacyPaintSelfTestFailures(snapshot));

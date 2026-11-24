@@ -1,12 +1,12 @@
 import { inArray, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   chatMessageRevisions,
   chatMessages,
   chatThreadCompactions,
   chatThreads,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionReferencesIn } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";

@@ -21,11 +21,13 @@ import type {
   VisitorWithHooks,
 } from "@oxlint/plugins";
 
+import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 import { type IconEntry, readIconEntries } from "./icon-ownership.ts";
 import {
   type AstNode,
   canonicalModuleId,
   dynamicModuleSourceForEnforcement,
+  filenameForContext,
   getImportedName,
   getPropertyName,
   invokedCallee,
@@ -92,11 +94,52 @@ type RestrictedImportEntry = {
   owners: readonly string[];
 };
 
+const BARE_PACKAGE_NEEDLES = new WeakMap<
+  ModuleMatcher & ((id: string) => boolean),
+  string
+>();
+
 // A bare package and every subpath of it (`nanoid`, `nanoid/non-secure`).
-const packageWithSubpaths =
-  (name: string) =>
-  (moduleId: string): boolean =>
+const packageWithSubpaths = (name: string) => {
+  const matcher = (moduleId: string): boolean =>
     moduleId === name || moduleId.startsWith(`${name}/`);
+  BARE_PACKAGE_NEEDLES.set(matcher, name);
+  return matcher;
+};
+
+const REPO_PATH_PREFIX = /^(?:apps|packages|scripts|\.)\//u;
+
+const barePackageNeedleFor = (matcher: ModuleMatcher): string | null => {
+  if (typeof matcher === "string") {
+    return REPO_PATH_PREFIX.test(matcher) ? null : matcher;
+  }
+  return BARE_PACKAGE_NEEDLES.get(matcher) ?? null;
+};
+
+const entryCanMatchSource = (
+  entry: RestrictedImportEntry,
+  text: string,
+): boolean => {
+  if (text.includes("\\")) {
+    return true;
+  }
+  if (
+    entry.restriction.type === "module" &&
+    entry.restriction.dynamicImports === DYNAMIC_IMPORTS.readableOnly &&
+    text.includes("import")
+  ) {
+    return true;
+  }
+  const needles: string[] = [];
+  for (const matcher of entry.modules) {
+    const needle = barePackageNeedleFor(matcher);
+    if (needle === null) {
+      return true;
+    }
+    needles.push(needle);
+  }
+  return needles.some((needle) => text.includes(needle));
+};
 
 // lucide exports every glyph as `X`, `XIcon` and `LucideX`.
 const lucideGlyphNames = (glyphs: readonly string[]): ReadonlySet<string> =>
@@ -126,6 +169,8 @@ const RETENTION_ORACLE_MODULE =
 const RETENTION_ORACLE_MODULE_FILE = `${RETENTION_ORACLE_MODULE}.ts`;
 const RETENTION_CHECK_MODULE_FILE =
   "apps/api/src/handlers/case-law/ingestion/retention/retention-check.ts";
+
+const SETTINGS_ROUTES = "apps/web/src/routes/_protected.settings";
 
 const LUCIDE = packageWithSubpaths("lucide-react");
 // Every icon reaches the app through one module, so a glyph restricted to an
@@ -297,6 +342,60 @@ const RESTRICTED_IMPORT_RULES = {
       owners: [],
     },
   ],
+  // Settings and admin pages are composed from one set of pieces (sections
+  // of rows on one list surface) so they cannot drift back into ad-hoc cards
+  // or inventory tables. The scope (the settings and admin route trees) is
+  // set by the rule's override in oxlint.config.ts. `@stll/ui` also
+  // publishes each component under `components/`.
+  "settings-layout-primitives": [
+    {
+      messageId: "settingsLayoutCard",
+      message:
+        "Compose settings and admin pages from '@stll/ui/settings' " +
+        "(SettingsSection, SettingsRow, SettingsPanel), not '{{name}}'.",
+      modules: ["@stll/ui/frame", "@stll/ui/components/frame"],
+      restriction: {
+        type: "module",
+        typeOnlyImports: TYPE_ONLY_IMPORTS.allowed,
+        dynamicImports: DYNAMIC_IMPORTS.restricted,
+      },
+      owners: [],
+    },
+    {
+      messageId: "settingsLayoutTable",
+      message:
+        "List named things on a settings or admin page as '@stll/ui/settings' " +
+        "rows, not with '{{name}}'. A table stays only where people compare " +
+        "values across columns; add its file to this row's owners with that " +
+        "reason.",
+      modules: [
+        "@stll/ui/table",
+        "@stll/ui/components/table",
+        "@stll/ui/table-shell",
+      ],
+      restriction: {
+        type: "module",
+        typeOnlyImports: TYPE_ONLY_IMPORTS.allowed,
+        dynamicImports: DYNAMIC_IMPORTS.restricted,
+      },
+      owners: [
+        // The audit log: time, actor, action and target across columns.
+        `${SETTINGS_ROUTES}/-organization.audit-logs.page.tsx`,
+        `${SETTINGS_ROUTES}/-organization.audit-logs.pending.tsx`,
+        // A change: each field's value before and after.
+        `${SETTINGS_ROUTES}/organization/-components/audit-change-details.tsx`,
+        // Members, sorted by name, role and joining date.
+        `${SETTINGS_ROUTES}/-organization.members.page.tsx`,
+        `${SETTINGS_ROUTES}/-organization.members.pending.tsx`,
+        // Invitations: role, status, invited and expiry dates beside members.
+        `${SETTINGS_ROUTES}/organization/-components/members-invitations.tsx`,
+        `${SETTINGS_ROUTES}/organization/-components/members-invitations.pending.tsx`,
+        // VAT rates, number series and seller profiles: rates, validity
+        // dates and number patterns across columns.
+        `${SETTINGS_ROUTES}/organization/-components/organization/billing-settings-table.pending.tsx`,
+      ],
+    },
+  ],
   // nanoid is a removed dependency: IDs come from Bun.randomUUIDv7() and
   // custom alphabets from crypto.getRandomValues().
   "no-nanoid": [
@@ -317,6 +416,18 @@ const RESTRICTED_IMPORT_RULES = {
   // Route code has one approved helper; other exports stay at the boundary.
   "confine-server-reads": [
     {
+      messageId: "confineRequestScenarios",
+      message:
+        "Run server-request scenarios through @/testing/request-test so framework HTTP error handling cannot swallow failures.",
+      modules: [TANSTACK_START_SERVER],
+      restriction: {
+        type: "exports",
+        names: new Set(["requestHandler"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: ["apps/web/src/testing/request-test.ts"],
+    },
+    {
       messageId: "confineServerReads",
       message: "Use the approved server request helper for this access.",
       modules: [TANSTACK_START_SERVER],
@@ -331,8 +442,10 @@ const RESTRICTED_IMPORT_RULES = {
         ]),
         hit: EXPORT_HIT.binding,
       },
-      // Reads only the sidebar's own open-state cookie, a layout choice.
-      owners: ["apps/web/src/components/sidebar/sidebar-state.ts"],
+      owners: [
+        "apps/web/src/lib/account/ssr-api-headers.ts",
+        "apps/web/src/lib/account/presentation-prefs/server.ts",
+      ],
     },
   ],
   // `<MatterIcon>` always resolves a matter colour (or paints the deliberate
@@ -788,9 +901,60 @@ export const restrictedImportMeta = (ruleName: RestrictedImportRuleName) => ({
   ),
 });
 
+type RestrictedImportOptions = {
+  /** A rule in its first-week rollout reports only the lines a change
+   *  touched; names its file in scripts/guard-rollouts/. */
+  rollout?: string | undefined;
+};
+
+const attachExportVisitors = (
+  visitors: VisitorWithHooks,
+  context: Context,
+  reportExport: (
+    node: Ranged,
+    resolved: ResolvedImport | null,
+    hit: ExportHit,
+  ) => void,
+): void => {
+  // `ns.X`, `ns["X"]`, `require("m").X`, `(await import("m")).X`.
+  visitors.MemberExpression = (node) => {
+    reportExport(node, exportOfExpression(context, node), EXPORT_HIT.binding);
+  };
+  visitors.JSXMemberExpression = (node) => {
+    reportExport(node, exportOfJsxMember(context, node), EXPORT_HIT.binding);
+  };
+  // `const { X } = ns`, `const { X } = await import("m")`.
+  visitors.VariableDeclarator = (node) => {
+    if (!isAstNode(node.id) || node.id.type !== "ObjectPattern") {
+      return;
+    }
+    const base = exportOfExpression(context, node.init);
+    if (base === null || !isNamespaceLike(base)) {
+      return;
+    }
+    for (const property of node.id.properties) {
+      if (!isAstNode(property) || property.type !== "Property") {
+        continue;
+      }
+      const key =
+        property.computed && !isStringLiteral(property.key)
+          ? null
+          : getPropertyName(property.key);
+      if (key !== null) {
+        reportExport(
+          property,
+          { moduleId: base.moduleId, imported: key },
+          EXPORT_HIT.binding,
+        );
+      }
+    }
+  };
+};
+
 export const restrictedImportVisitors = (
   context: Context,
   ruleName: RestrictedImportRuleName,
+  { rollout }: RestrictedImportOptions = {},
 ): VisitorWithHooks => {
   const entries: readonly RestrictedImportEntry[] =
     RESTRICTED_IMPORT_RULES[ruleName];
@@ -801,6 +965,16 @@ export const restrictedImportVisitors = (
     entry: RestrictedImportEntry,
     name: string,
   ): void => {
+    if (
+      rollout !== undefined &&
+      !guardEnforcesLine({
+        guard: rollout,
+        file: filenameForContext(context),
+        line: context.sourceCode.getLocFromIndex(node.range[0]).line,
+      })
+    ) {
+      return;
+    }
     context.report({ node, messageId: entry.messageId, data: { name } });
   };
 
@@ -900,9 +1074,25 @@ export const restrictedImportVisitors = (
     }
   };
 
-  return {
+  const hasExports = entries.some(
+    (entry) => entry.restriction.type === "exports",
+  );
+  const hasModule = entries.some(
+    (entry) => entry.restriction.type === "module",
+  );
+  const hasCallHit = entries.some(
+    (entry) =>
+      entry.restriction.type === "exports" &&
+      entry.restriction.hit === EXPORT_HIT.call,
+  );
+
+  const visitors: VisitorWithHooks = {
     before() {
-      active = entries.filter((entry) => !isFileIn(context, entry.owners));
+      const text = context.sourceCode.text;
+      active = entries.filter(
+        (entry) =>
+          !isFileIn(context, entry.owners) && entryCanMatchSource(entry, text),
+      );
       return active.length > 0;
     },
     ImportDeclaration(node) {
@@ -937,52 +1127,32 @@ export const restrictedImportVisitors = (
         }
       }
     },
-    CallExpression(node) {
-      const required = dynamicModuleSourceForEnforcement(node, context);
-      if (required !== null) {
-        reportModuleLoad(node, required, MODULE_LOADING.static);
-        return;
-      }
-      reportExport(
-        node,
-        isAstNode(node)
-          ? exportOfExpression(context, invokedCallee(node))
-          : null,
-        EXPORT_HIT.call,
-      );
-    },
-    // `ns.X`, `ns["X"]`, `require("m").X`, `(await import("m")).X`.
-    MemberExpression(node) {
-      reportExport(node, exportOfExpression(context, node), EXPORT_HIT.binding);
-    },
-    JSXMemberExpression(node) {
-      reportExport(node, exportOfJsxMember(context, node), EXPORT_HIT.binding);
-    },
-    // `const { X } = ns`, `const { X } = await import("m")`.
-    VariableDeclarator(node) {
-      if (!isAstNode(node.id) || node.id.type !== "ObjectPattern") {
-        return;
-      }
-      const base = exportOfExpression(context, node.init);
-      if (base === null || !isNamespaceLike(base)) {
-        return;
-      }
-      for (const property of node.id.properties) {
-        if (!isAstNode(property) || property.type !== "Property") {
-          continue;
-        }
-        const key =
-          property.computed && !isStringLiteral(property.key)
-            ? null
-            : getPropertyName(property.key);
-        if (key !== null) {
-          reportExport(
-            property,
-            { moduleId: base.moduleId, imported: key },
-            EXPORT_HIT.binding,
-          );
-        }
-      }
-    },
   };
+
+  if (hasModule || hasCallHit) {
+    visitors.CallExpression = (node) => {
+      if (hasModule) {
+        const required = dynamicModuleSourceForEnforcement(node, context);
+        if (required !== null) {
+          reportModuleLoad(node, required, MODULE_LOADING.static);
+          return;
+        }
+      }
+      if (hasCallHit) {
+        reportExport(
+          node,
+          isAstNode(node)
+            ? exportOfExpression(context, invokedCallee(node))
+            : null,
+          EXPORT_HIT.call,
+        );
+      }
+    };
+  }
+
+  if (hasExports) {
+    attachExportVisitors(visitors, context, reportExport);
+  }
+
+  return visitors;
 };

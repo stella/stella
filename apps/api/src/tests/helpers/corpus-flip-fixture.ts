@@ -10,7 +10,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisions,
   caseLawSources,
@@ -18,6 +17,7 @@ import {
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { CorpusIndexFlipEngine } from "@/api/lib/legal-search/corpus-index-generation-flip";
 import { registeredCorpusIndexGroups } from "@/api/lib/legal-search/corpus-index-group-contract";
@@ -392,6 +392,11 @@ export const createCorpusFlipFixture = (runInTransaction: Runner) => {
         .where(eq(caseLawSources.id, FIXTURE_SOURCE));
     });
 
+  /** The engine loses a decision's documents, as a lost split would. */
+  const loseRevision = (generation: FlipGeneration, n: number, epoch = 1) => {
+    engine.delete(revisionId(generation, n, epoch));
+  };
+
   const reset = () => {
     engine.clear();
     lost.clear();
@@ -412,5 +417,6 @@ export const createCorpusFlipFixture = (runInTransaction: Runner) => {
     seedErased,
     seedPending,
     readyPair,
+    loseRevision,
   };
 };

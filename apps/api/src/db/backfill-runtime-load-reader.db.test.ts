@@ -10,7 +10,7 @@ import {
 import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import { createDatabaseLoadVerdictReader } from "@/api/db/backfill-runtime";
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { withFreshIndicatorDatabase } from "@/api/tests/database-load-indicator-fixture";
 import {

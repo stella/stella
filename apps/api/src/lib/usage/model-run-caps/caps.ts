@@ -17,9 +17,9 @@ import { and, eq, sql } from "drizzle-orm";
 import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
 import { declareFingerprintFields } from "@stll/errors";
 
-import type { Transaction } from "@/api/db/root";
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { modelRunBudgets } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

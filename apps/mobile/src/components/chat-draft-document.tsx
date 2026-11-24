@@ -1,16 +1,11 @@
 import { useState } from "react";
 
-import {
-  Modal,
-  Pressable,
-  StyleSheet,
-  useColorScheme,
-  View,
-} from "react-native";
+import { StyleSheet, useColorScheme, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Sheet } from "@stll/ui/sheet";
 import { Text } from "@stll/ui/text";
 
 import { ChatAttachmentChip } from "@/components/chat-attachment-chip";
@@ -46,28 +41,28 @@ export const ChatDraftDocuments = ({
   return (
     <View className="flex-row flex-wrap gap-2">
       {drafts.map((draft) => (
-        <Pressable
+        <Button
           accessibilityHint={t("documentOpen")}
-          accessibilityRole="button"
           key={draft.toolCallId}
           onPress={() => {
             setOpen(draft);
           }}
+          variant="plain"
         >
           <ChatAttachmentChip
             detail={t("documentReady")}
             mimeType={DOCX_MIME_TYPE}
             name={draft.fileName}
           />
-        </Pressable>
+        </Button>
       ))}
-      <Modal
-        animationType="slide"
-        onRequestClose={() => {
-          setOpen(null);
+      <Sheet
+        onOpenChange={(next) => {
+          if (!next) {
+            setOpen(null);
+          }
         }}
-        presentationStyle="pageSheet"
-        visible={open !== null}
+        open={open !== null}
       >
         {open === null ? null : (
           <DraftPages
@@ -77,7 +72,7 @@ export const ChatDraftDocuments = ({
             }}
           />
         )}
-      </Modal>
+      </Sheet>
     </View>
   );
 };

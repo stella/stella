@@ -5,25 +5,36 @@ import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { MarkdownHybridEditor } from "@stll/markdown-editor";
+import type { MarkdownHybridEditorHandle } from "@stll/markdown-editor";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Field, FieldLabel } from "@stll/ui/field";
-import { Frame, FramePanel } from "@stll/ui/frame";
 import { List, ListItem, ListItemContent, ListItemTitle } from "@stll/ui/list";
+import { ListItemSkeleton } from "@stll/ui/list-shell";
 import { SearchField } from "@stll/ui/search-field";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 
 import { ContactPicker } from "@/components/contact-picker";
-import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-hybrid-editor";
-import { MarkdownHybridEditor } from "@/components/markdown/markdown-hybrid-editor";
+import { isSafeMarkdownPreviewImageSrc } from "@/components/markdown-preview.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
+
+import {
+  BillingDraftsCardFrame,
+  BillingDraftsCardPending,
+} from "./billing-drafts-card.pending";
+
+/** Placeholder knowledge files while the list loads. */
+const KNOWLEDGE_FILE_ROWS_PENDING = [0, 1, 2] as const;
 
 const billingDraftKeys = {
   all: () => ["billing-draft-configuration"] as const,
@@ -161,21 +172,15 @@ export const BillingDraftsCard = () => {
   });
   if (config.isError) {
     return (
-      <Frame>
-        <FramePanel>
+      <SettingsSection>
+        <SettingsPanel>
           <QueryViewFeedback view={queryView(config)} />
-        </FramePanel>
-      </Frame>
+        </SettingsPanel>
+      </SettingsSection>
     );
   }
   if (!config.data) {
-    return (
-      <Frame>
-        <FramePanel>
-          <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
-        </FramePanel>
-      </Frame>
-    );
+    return <BillingDraftsCardPending />;
   }
   const attachedIds = config.data.files
     .filter((file) => file.clientId === (client?.id ?? null))
@@ -183,157 +188,144 @@ export const BillingDraftsCard = () => {
 
   const nextCursor = files.data?.nextCursor;
   return (
-    <Frame>
-      <FramePanel>
-        <div className="flex flex-col gap-4">
-          <h2 className="text-sm font-medium">
-            {t("settings.organization.billingDrafts.title")}
-          </h2>
-          <p className="text-muted-foreground text-xs">
-            {t("settings.organization.billingDrafts.description")}
-          </p>
-          {(files.isError || editor.isError) &&
-            (files.isError ? (
-              <QueryViewFeedback view={queryView(files)} />
-            ) : (
-              <QueryViewFeedback view={queryView(editor)} />
-            ))}
-          <Field className="flex-row items-center gap-2">
-            <Checkbox
-              checked={config.data.mode === "enabled"}
-              disabled={mutation.isPending}
-              onCheckedChange={(enabled) =>
-                mutation.mutate({ mode: enabled ? "enabled" : "disabled" })
-              }
-            />
-            <FieldLabel>
-              {t("settings.organization.billingDrafts.title")}
-            </FieldLabel>
-          </Field>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => setClient(null)}>
-              {t("settings.organization.billingDrafts.firm")}
-            </Button>
-            <ContactPicker
-              onSelect={(contact) =>
-                setClient({
-                  id: toSafeId<"contact">(contact.id),
-                  displayName: contact.displayName,
-                })
-              }
-            />
-            {client && (
-              <span className="text-sm">
-                <BidiText>{client.displayName}</BidiText>
-              </span>
-            )}
-          </div>
-          {client && (
-            <Field className="flex-row items-center gap-2">
-              <Checkbox
-                checked={config.data.timeBillingFormat === "ledes"}
-                onCheckedChange={(enabled) =>
-                  mutation.mutate({
-                    clientId: client.id,
-                    timeBillingFormat: enabled ? "ledes" : "categories",
-                  })
-                }
-                disabled={mutation.isPending}
-              />
-              <FieldLabel>
-                {t("settings.organization.billingDrafts.ledes")}
-              </FieldLabel>
-            </Field>
-          )}
-          <Link to="/knowledge/tools" className="text-sm underline">
-            {t("navigation.knowledge")}
-          </Link>
-          <SearchField
-            value={search}
-            onValueChange={(value) => {
-              setSearch(value);
-              setCursor(undefined);
-            }}
-            clearLabel={t("common.reset")}
-            placeholder={t("common.search")}
+    <BillingDraftsCardFrame>
+      {(files.isError || editor.isError) &&
+        (files.isError ? (
+          <QueryViewFeedback view={queryView(files)} />
+        ) : (
+          <QueryViewFeedback view={queryView(editor)} />
+        ))}
+      <Field className="flex-row items-center gap-2">
+        <Checkbox
+          checked={config.data.mode === "enabled"}
+          disabled={mutation.isPending}
+          onCheckedChange={(enabled) =>
+            mutation.mutate({ mode: enabled ? "enabled" : "disabled" })
+          }
+        />
+        <FieldLabel>
+          {t("settings.organization.billingDrafts.title")}
+        </FieldLabel>
+      </Field>
+      <div className="flex items-center gap-2">
+        <Button variant="outline" onClick={() => setClient(null)}>
+          {t("settings.organization.billingDrafts.firm")}
+        </Button>
+        <ContactPicker
+          onSelect={(contact) =>
+            setClient({
+              id: toSafeId<"contact">(contact.id),
+              displayName: contact.displayName,
+            })
+          }
+        />
+        {client && (
+          <span className="text-sm">
+            <BidiText>{client.displayName}</BidiText>
+          </span>
+        )}
+      </div>
+      {client && (
+        <Field className="flex-row items-center gap-2">
+          <Checkbox
+            checked={config.data.timeBillingFormat === "ledes"}
+            onCheckedChange={(enabled) =>
+              mutation.mutate({
+                clientId: client.id,
+                timeBillingFormat: enabled ? "ledes" : "categories",
+              })
+            }
+            disabled={mutation.isPending}
           />
-          {files.isPending && (
-            <p className="text-muted-foreground text-sm">
-              {t("common.loading")}
-            </p>
-          )}
-          <List>
-            {files.data?.items.map((file) => (
-              <ListItem key={file.id}>
-                <Checkbox
-                  aria-label={file.path}
-                  checked={attachedIds.includes(file.id)}
-                  disabled={mutation.isPending}
-                  onCheckedChange={(attach) => {
-                    let resourceIds = attachedIds.filter(
-                      (id) => id !== file.id,
-                    );
-                    if (attach) {
-                      resourceIds = client
-                        ? [...attachedIds, file.id]
-                        : [file.id];
-                    }
-                    mutation.mutate({
-                      ...(client ? { clientId: client.id } : {}),
-                      resourceIds,
-                    });
-                  }}
-                />
-                <ListItemContent>
-                  <ListItemTitle>{file.path}</ListItemTitle>
-                  <p className="text-muted-foreground text-xs">
-                    {file.skillName}
-                  </p>
-                </ListItemContent>
-                <Button
-                  variant="ghost"
-                  disabled={save.isPending}
-                  onClick={() => {
-                    setEditing(file);
-                    setContent(undefined);
-                  }}
-                >
-                  {t("common.edit")}
-                </Button>
-              </ListItem>
-            ))}
-          </List>
-          {nextCursor && (
-            <Button variant="outline" onClick={() => setCursor(nextCursor)}>
-              {t("common.next")}
+          <FieldLabel>
+            {t("settings.organization.billingDrafts.ledes")}
+          </FieldLabel>
+        </Field>
+      )}
+      <Link to="/knowledge/tools" className="text-sm underline">
+        {t("navigation.knowledge")}
+      </Link>
+      <SearchField
+        value={search}
+        onValueChange={(value) => {
+          setSearch(value);
+          setCursor(undefined);
+        }}
+        clearLabel={t("common.reset")}
+        placeholder={t("common.search")}
+      />
+      <List>
+        {files.isPending &&
+          KNOWLEDGE_FILE_ROWS_PENDING.map((index) => (
+            <ListItemSkeleton index={index} key={index} />
+          ))}
+        {files.data?.items.map((file) => (
+          <ListItem key={file.id}>
+            <Checkbox
+              aria-label={file.path}
+              checked={attachedIds.includes(file.id)}
+              disabled={mutation.isPending}
+              onCheckedChange={(attach) => {
+                let resourceIds = attachedIds.filter((id) => id !== file.id);
+                if (attach) {
+                  resourceIds = client ? [...attachedIds, file.id] : [file.id];
+                }
+                mutation.mutate({
+                  ...(client ? { clientId: client.id } : {}),
+                  resourceIds,
+                });
+              }}
+            />
+            <ListItemContent>
+              <ListItemTitle>{file.path}</ListItemTitle>
+              <p className="text-muted-foreground text-xs">{file.skillName}</p>
+            </ListItemContent>
+            <Button
+              variant="ghost"
+              disabled={save.isPending}
+              disabledReason={t("common.saving")}
+              onClick={() => {
+                setEditing(file);
+                setContent(undefined);
+              }}
+            >
+              {t("common.edit")}
             </Button>
-          )}
-          {editing && editor.data && (
-            <>
-              <MarkdownHybridEditor
-                ref={editorHandle}
-                key={`${editing.id}:${editorRevision}`}
-                markdown={content ?? editor.data.content}
-                onMarkdownChange={setContent}
-                imagePolicy="data-only"
-              />
-              <Button
-                disabled={save.isPending}
-                onClick={() => {
-                  if (!editorHandle.current) {
-                    panic("Knowledge editor save requires a mounted editor");
-                  }
-                  const source = editorHandle.current.captureForSave();
-                  setContent(source);
-                  save.mutate({ file: editing, source });
-                }}
-              >
-                {t("common.save")}
-              </Button>
-            </>
-          )}
-        </div>
-      </FramePanel>
-    </Frame>
+          </ListItem>
+        ))}
+      </List>
+      {nextCursor && (
+        <Button variant="outline" onClick={() => setCursor(nextCursor)}>
+          {t("common.next")}
+        </Button>
+      )}
+      {editing && editor.data && (
+        <>
+          <MarkdownHybridEditor
+            ref={editorHandle}
+            key={`${editing.id}:${editorRevision}`}
+            markdown={content ?? editor.data.content}
+            onMarkdownChange={setContent}
+            allowsImageSource={isSafeMarkdownPreviewImageSrc}
+            label={t("markdownEditor.rawLabel")}
+            onOpenLink={openIsolatedWindow}
+          />
+          <Button
+            disabled={save.isPending}
+            disabledReason={t("common.saving")}
+            onClick={() => {
+              if (!editorHandle.current) {
+                panic("Knowledge editor save requires a mounted editor");
+              }
+              const source = editorHandle.current.captureForSave();
+              setContent(source);
+              save.mutate({ file: editing, source });
+            }}
+          >
+            {t("common.save")}
+          </Button>
+        </>
+      )}
+    </BillingDraftsCardFrame>
   );
 };

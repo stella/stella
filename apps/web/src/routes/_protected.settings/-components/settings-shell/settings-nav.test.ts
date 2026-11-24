@@ -26,6 +26,7 @@ describe("settingsNavSections", () => {
         "account",
         [
           "/settings/account/profile",
+          "/settings/account/security",
           "/settings/account/desktop",
           "/settings/account/connections",
           "/settings/account/memory",
@@ -46,6 +47,7 @@ describe("settingsNavSections", () => {
         [
           "/settings/organization/ai",
           "/settings/organization/anonymization",
+          "/settings/organization/dictation",
           "/settings/organization/tools",
         ],
       ],
@@ -104,5 +106,6 @@ describe("settingsNavSections", () => {
     }
     expect(shown).toContain("/settings/organization/matter-numbering");
     expect(shown).toContain("/settings/account/profile");
+    expect(shown).toContain("/settings/account/security");
   });
 });

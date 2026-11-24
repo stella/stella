@@ -33,6 +33,7 @@ import {
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
+import { BROWSER_CONTROL_TOOL_NAME } from "@stll/api-contract/browser-control";
 import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import {
   isApprovedClientCallAwaitingResult,
@@ -60,7 +61,7 @@ import type { ChatTurnBudget } from "@stll/chat-limits";
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { userFiles } from "@/api/db/schema";
 import type { UsageEventLane } from "@/api/db/schema";
 import type { AnonymizationRefusal } from "@/api/handlers/chat/anonymization-refusal";
@@ -71,10 +72,20 @@ import {
 import { NO_ANSWER_QUOTE_CHECKER } from "@/api/handlers/chat/answer-quote-checks";
 import type { AnswerQuoteChecker } from "@/api/handlers/chat/answer-quote-checks";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
+import { chatUploadMimeType } from "@/api/handlers/chat/attachment-validation";
 import {
   chunkCarriesAnswer,
   snapshotMessageAddsAnswer,
 } from "@/api/handlers/chat/attempt-answer";
+import {
+  browseWebResultsForModel,
+  createBrowseWebAgent,
+  NO_SUSPENDED_BROWSE_RUNS,
+  prepareSuspendedBrowseRuns,
+  type SuspendedBrowseHistory,
+  type SuspendedBrowseRuns,
+  withSuspendedBrowseRuns,
+} from "@/api/handlers/chat/browse-web-agent";
 import {
   applyChatPartPersistenceBudget,
   attachTerminalTurnOutcome,
@@ -290,6 +301,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import type { ChatTerminalError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
+import type { ZipNameCodePage } from "@/api/lib/files/zip-name-code-page";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -709,6 +721,11 @@ export const streamChat = async ({
 }: StreamChatProps): Promise<StreamChatOutcome> => {
   const admittedAt = performance.now();
   const messages = pruneOrphanedToolParts(rawMessages);
+  const { browserTool, turnTools } = browseTurnTools({
+    localRun,
+    sandboxRun,
+    tools,
+  });
   const agentBoundaryError = resolveAgentRunBoundaryError({
     boundary: thirdPartyBoundary,
     runMode,
@@ -777,6 +794,22 @@ export const streamChat = async ({
     messages: rawPreparedMessages.value,
     workspaceIds: tenantWorkspaceIds,
   });
+  const browseTurn = await prepareBrowseTurn({
+    boundary: thirdPartyBoundary,
+    browserTool,
+    messages,
+    workspaceIds: tenantWorkspaceIds,
+  });
+  if (Result.isError(browseTurn)) {
+    return {
+      type: "refused",
+      response: thirdPartyBoundaryRefusalResponse(browseTurn.error),
+    };
+  }
+  const providerMessageList = withSuspendedBrowseRuns(
+    preparedMessageList,
+    browseTurn.value.history,
+  );
 
   const turnModelSelection = resolveChatTurnModel({
     messages: rawMessages,
@@ -807,7 +840,10 @@ export const streamChat = async ({
   // turn-killing panic (the guard only panics for the system prompt).
   const modelTools = guardModelToolSchemas({
     tools: chatToolMapToArray(
-      prepareToolsForThirdParty({ boundary: thirdPartyBoundary, tools }),
+      prepareToolsForThirdParty({
+        boundary: thirdPartyBoundary,
+        tools: turnTools,
+      }),
     ),
     workspaceIds: tenantWorkspaceIds,
   });
@@ -885,7 +921,7 @@ export const streamChat = async ({
     };
   }
 
-  const resolvedFallbackModel =
+  const fallbackOutcome =
     turnModelSelection.fallbackPolicy === "automatic"
       ? await resolveFallbackTextModel({
           organizationId,
@@ -895,7 +931,9 @@ export const streamChat = async ({
           primaryModel,
           threadId,
         })
-      : null;
+      : ({ status: "none" } as const);
+  const resolvedFallbackModel =
+    fallbackOutcome.status === "resolved" ? fallbackOutcome.model : null;
   // Drop a fallback that would crash on a document the primary accepted, or
   // that cannot carry this turn's tools; a failover must not resurrect a
   // capability mismatch the primary already cleared.
@@ -967,11 +1005,12 @@ export const streamChat = async ({
     runId,
     parentRunId,
     resume: preparedResume,
+    browse: browseTurn.value.turn,
     safeDb,
     surfaces: {
       // The provider's copy only: persistence keeps the stored parts.
       messages: guardProviderHistory({
-        messages: preparedMessageList,
+        messages: providerMessageList,
         workspaceIds: tenantWorkspaceIds,
       }),
       system: guardedSystem,
@@ -1672,6 +1711,11 @@ type ResolveFallbackTextModelProps = {
   threadId: SafeId<"chatThread">;
 };
 
+type FallbackTextModelOutcome =
+  | { status: "resolved"; model: ResolvedTanStackTextModel }
+  | { status: "same-as-primary" }
+  | { status: "failed" };
+
 const resolveFallbackTextModel = async ({
   organizationId,
   modelAdmission,
@@ -1679,7 +1723,7 @@ const resolveFallbackTextModel = async ({
   managedAIResidency,
   primaryModel,
   threadId,
-}: ResolveFallbackTextModelProps): Promise<ResolvedTanStackTextModel | null> => {
+}: ResolveFallbackTextModelProps): Promise<FallbackTextModelOutcome> => {
   try {
     const fallbackModel = await resolveTanStackTextModel({
       userId: modelAdmission.userId,
@@ -1694,9 +1738,9 @@ const resolveFallbackTextModel = async ({
       fallbackModel.provider === primaryModel.provider &&
       fallbackModel.modelId === primaryModel.modelId
     ) {
-      return null;
+      return { status: "same-as-primary" };
     }
-    return fallbackModel;
+    return { status: "resolved", model: fallbackModel };
   } catch (error) {
     captureError(
       error,
@@ -1705,7 +1749,7 @@ const resolveFallbackTextModel = async ({
         threadId,
       }),
     );
-    return null;
+    return { status: "failed" };
   }
 };
 
@@ -1821,6 +1865,7 @@ type RunChatAttemptsProps = {
   runId: string;
   parentRunId: string | undefined;
   resume: RunAgentResumeItem[] | undefined;
+  browse: BrowseWebTurn | undefined;
   safeDb: SafeDb;
   surfaces: GuardedChatSurfaces;
   thirdPartyBoundary: ChatThirdPartyBoundary;
@@ -1831,6 +1876,117 @@ type RunChatAttemptsProps = {
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
 };
+
+/** What a turn's `browse_web` sub-agent runs with: the browser tool the turn
+ *  registered, and the runs a resume continues. */
+type BrowseWebTurn = {
+  browserTool: ChatTool;
+  suspendedRuns: SuspendedBrowseRuns;
+};
+
+/**
+ * The tools this turn's own model gets, and the browser tool its
+ * `browse_web` child gets instead when the turn browses. A model turn browses
+ * through the sub-agent: the browser tool, approval gate included, moves to
+ * its child, so page snapshots never reach this turn's model. A run on the
+ * member's computer or in a sandbox has no such child.
+ */
+const browseTurnTools = ({
+  localRun,
+  sandboxRun,
+  tools,
+}: Pick<StreamChatProps, "localRun" | "sandboxRun" | "tools">): {
+  browserTool: ChatTool | undefined;
+  turnTools: ChatToolMap;
+} => {
+  const { [BROWSER_CONTROL_TOOL_NAME]: browserTool, ...rest } = tools;
+  return browserTool !== undefined &&
+    localRun === undefined &&
+    sandboxRun === undefined
+    ? { browserTool, turnTools: rest }
+    : { browserTool: undefined, turnTools: tools };
+};
+
+/**
+ * What a browsing turn's `browse_web` child runs with, and the suspended runs
+ * its history carries back (`prepareSuspendedBrowseRuns`); a turn that does
+ * not browse has neither.
+ */
+const prepareBrowseTurn = async ({
+  boundary,
+  browserTool,
+  messages,
+  workspaceIds,
+}: {
+  boundary: ChatThirdPartyBoundary;
+  browserTool: ChatTool | undefined;
+  messages: readonly ChatMessage[];
+  workspaceIds: readonly SafeId<"workspace">[];
+}): Promise<
+  Result<
+    { history: SuspendedBrowseHistory; turn: BrowseWebTurn | undefined },
+    AnonymizationRefusal
+  >
+> => {
+  if (browserTool === undefined) {
+    return Result.ok({ history: NO_SUSPENDED_BROWSE_RUNS, turn: undefined });
+  }
+  const history = await prepareSuspendedBrowseRuns({
+    boundary,
+    messages,
+    workspaceIds,
+  });
+  return Result.isError(history)
+    ? Result.err(history.error)
+    : Result.ok({
+        history: history.value,
+        turn: { browserTool, suspendedRuns: history.value.runs },
+      });
+};
+
+/** The `browse_web` sub-agent an attempt offers when its turn browses, on
+ *  the attempt's admission, metering and boundary. */
+const browseWebSubagents = ({
+  browse,
+  feature,
+  managedAIResidency,
+  modelAdmission,
+  organizationId,
+  orgAIConfig,
+  safeDb,
+  surfaces,
+  thirdPartyBoundary,
+  threadId,
+  turnBudget,
+  usageLane,
+  userId,
+  workspaceId,
+}: RunChatAttemptProps) =>
+  browse === undefined
+    ? {}
+    : {
+        subagents: {
+          agents: [
+            createBrowseWebAgent({
+              admission: modelAdmission,
+              browserTool: browse.browserTool,
+              feature,
+              managedAIResidency,
+              organizationId,
+              orgAIConfig,
+              safeDb,
+              suspendedRuns: browse.suspendedRuns,
+              tenantWorkspaceIds: surfaces.tenantWorkspaceIds,
+              thirdPartyBoundary,
+              threadId,
+              turnBudget: turnBudget.childMiddleware,
+              usageLane,
+              userId,
+              workspaceId,
+            }),
+          ],
+        },
+      };
 
 const runChatAttempts = async function* ({
   abortController,
@@ -1857,6 +2013,7 @@ const runChatAttempts = async function* ({
   runId,
   parentRunId,
   resume,
+  browse,
   safeDb,
   surfaces,
   thirdPartyBoundary,
@@ -1912,6 +2069,7 @@ const runChatAttempts = async function* ({
     runId,
     parentRunId,
     resume,
+    browse,
     task: "chat",
     safeDb,
     sandboxRun,
@@ -1967,6 +2125,7 @@ const runChatAttempts = async function* ({
     promptCacheKey,
     promptCachingEnabled,
     task: "reasoning",
+    browse,
     safeDb,
     // The provider-fallback attempt serves the same user turn, so it
     // settles against the same budget lane.
@@ -2011,6 +2170,7 @@ type RunChatAttemptProps = {
   runId?: string | undefined;
   parentRunId?: string | undefined;
   resume?: RunAgentResumeItem[] | undefined;
+  browse: BrowseWebTurn | undefined;
   task: ChatAttemptTask;
   safeDb: SafeDb;
   /**
@@ -2031,37 +2191,40 @@ type RunChatAttemptProps = {
   workspaceId: SafeId<"workspace"> | null;
 };
 
-const runChatAttempt = async function* ({
-  abortController,
-  abortSignal,
-  compactionFeature,
-  onHistoryTrimmed,
-  externalMcpToolSource,
-  feature,
-  model,
-  modelId,
-  organizationId,
-  modelAdmission,
-  orgAIConfig,
-  managedAIResidency,
-  promptCacheKey,
-  promptCachingEnabled,
-  runId,
-  parentRunId,
-  resume,
-  task,
-  safeDb,
-  sandboxRun,
-  usageLane,
-  state,
-  surfaces,
-  thirdPartyBoundary,
-  threadId,
-  toolCallIds,
-  turnBudget,
-  userId,
-  workspaceId,
-}: RunChatAttemptProps): AsyncIterable<PublicStreamChunk> {
+const runChatAttempt = async function* (
+  props: RunChatAttemptProps,
+): AsyncIterable<PublicStreamChunk> {
+  const {
+    abortController,
+    abortSignal,
+    compactionFeature,
+    onHistoryTrimmed,
+    externalMcpToolSource,
+    feature,
+    model,
+    modelId,
+    organizationId,
+    modelAdmission,
+    orgAIConfig,
+    managedAIResidency,
+    promptCacheKey,
+    promptCachingEnabled,
+    runId,
+    parentRunId,
+    resume,
+    task,
+    safeDb,
+    sandboxRun,
+    usageLane,
+    state,
+    surfaces,
+    thirdPartyBoundary,
+    threadId,
+    toolCallIds,
+    turnBudget,
+    userId,
+    workspaceId,
+  } = props;
   // The one place the guard's brands are widened back to the plain types the
   // provider SDK takes: everything below this line is dispatch.
   const {
@@ -2207,6 +2370,7 @@ const runChatAttempt = async function* ({
         ...(runId === undefined ? {} : { runId }),
         ...(parentRunId === undefined ? {} : { parentRunId }),
         ...(resume === undefined ? {} : { resume }),
+        ...browseWebSubagents(props),
         middleware: [
           analytics.middleware,
           createChatRuntimeMiddleware({
@@ -2400,7 +2564,10 @@ const createChatRuntimeMiddleware = ({
       // Superseded tool results (earlier page snapshots) shrink before
       // compaction measures the history, so a browsing turn holds one page
       // instead of every page.
-      const projectedMessages = retainToolResultsForModel(config.messages);
+      // A browsing run's answer reads as untrusted web content.
+      const projectedMessages = browseWebResultsForModel(
+        retainToolResultsForModel(config.messages),
+      );
       const compactedMessages = await compactModelMessagesForModel({
         abortSignal,
         aiAnalytics: compactionAnalytics,
@@ -4521,6 +4688,27 @@ type OutgoingChunkTransformerOptions = {
   holdStellaHrefs?: boolean | undefined;
 };
 
+/** A content event whose delta the transformer may hold back in part. */
+type HeldContentChunk = Extract<
+  StreamChunk,
+  {
+    type:
+      | EventType.REASONING_MESSAGE_CONTENT
+      | EventType.TEXT_MESSAGE_CONTENT
+      | EventType.TOOL_CALL_ARGS;
+  }
+>;
+
+/**
+ * The fields that route a content event to the run that produced it: a child
+ * run's `subagentRunId`, which the engine sets on each of that run's events.
+ * A released delta that lost it would land in the parent's message.
+ */
+const routingOf = (chunk: HeldContentChunk): { subagentRunId?: string } => {
+  const subagentRunId: unknown = Reflect.get(chunk, "subagentRunId");
+  return typeof subagentRunId === "string" ? { subagentRunId } : {};
+};
+
 /** An event whose text arrives in message chunks without an END of its own. */
 type TextLikeChunk = Extract<
   StreamChunk,
@@ -4537,7 +4725,9 @@ const createOutgoingChunkTransformer = ({
   restorationPairs,
   holdStellaHrefs = false,
 }: OutgoingChunkTransformerOptions) => {
-  const buffers = new Map<string, string>();
+  // Held text with the event it came from, so what is released later keeps
+  // that event's routing (`routingOf`).
+  const buffers = new Map<string, { chunk: HeldContentChunk; text: string }>();
   const emittedPlaceholders = new Set(initialRestorationPlaceholders);
   const toolNamesByCallId = new Map<string, string>();
   const lenientCollector =
@@ -4600,75 +4790,69 @@ const createOutgoingChunkTransformer = ({
     return deanonymizeFromBoundary({ boundary, text: resolved });
   };
 
-  const flushText = ({
-    messageId,
+  /** `text` released as `chunk`'s delta, restored for the reader. */
+  const releaseHeld = ({
+    chunk,
     text,
   }: {
-    messageId: string;
+    chunk: HeldContentChunk;
     text: string;
   }): StreamChunk[] => {
     if (text.length === 0) {
       return [];
     }
-
-    return [
-      ...emitRestorationDelta(collectTextPlaceholders(text)),
-      {
-        type: EventType.TEXT_MESSAGE_CONTENT,
-        messageId,
-        delta: transformText(text),
-        timestamp: Temporal.Now.instant().epochMilliseconds,
-      },
-    ];
+    const timestamp = Temporal.Now.instant().epochMilliseconds;
+    const routing = routingOf(chunk);
+    switch (chunk.type) {
+      case EventType.TOOL_CALL_ARGS:
+        return [
+          ...emitRestorationDelta(
+            collectPlaceholdersFromText(text, lenientCollector),
+          ),
+          {
+            type: EventType.TOOL_CALL_ARGS,
+            toolCallId: chunk.toolCallId,
+            delta:
+              boundary.type === "anonymized"
+                ? deanonymizeToolInputText(boundary, text)
+                : text,
+            timestamp,
+            ...routing,
+          },
+        ];
+      case EventType.TEXT_MESSAGE_CONTENT:
+        return [
+          ...emitRestorationDelta(collectTextPlaceholders(text)),
+          {
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId: chunk.messageId,
+            delta: transformText(text),
+            timestamp,
+            ...routing,
+          },
+        ];
+      case EventType.REASONING_MESSAGE_CONTENT:
+        return [
+          ...emitRestorationDelta(collectTextPlaceholders(text)),
+          {
+            type: EventType.REASONING_MESSAGE_CONTENT,
+            messageId: chunk.messageId,
+            delta: transformText(text),
+            timestamp,
+            ...routing,
+          },
+        ];
+      default:
+        chunk satisfies never;
+        return panic("Unhandled held content event");
+    }
   };
 
-  const flushReasoning = ({
-    messageId,
-    text,
-  }: {
-    messageId: string;
-    text: string;
-  }): StreamChunk[] => {
-    if (text.length === 0) {
-      return [];
-    }
-
-    return [
-      ...emitRestorationDelta(collectTextPlaceholders(text)),
-      {
-        type: EventType.REASONING_MESSAGE_CONTENT,
-        messageId,
-        delta: transformText(text),
-        timestamp: Temporal.Now.instant().epochMilliseconds,
-      },
-    ];
-  };
-
-  const flushToolArguments = ({
-    text,
-    toolCallId,
-  }: {
-    text: string;
-    toolCallId: string;
-  }): StreamChunk[] => {
-    if (text.length === 0) {
-      return [];
-    }
-
-    return [
-      ...emitRestorationDelta(
-        collectPlaceholdersFromText(text, lenientCollector),
-      ),
-      {
-        type: EventType.TOOL_CALL_ARGS,
-        toolCallId,
-        delta:
-          boundary.type === "anonymized"
-            ? deanonymizeToolInputText(boundary, text)
-            : text,
-        timestamp: Temporal.Now.instant().epochMilliseconds,
-      },
-    ];
+  /** The text held under `key`, released, and the hold dropped. */
+  const releaseHeldKey = (key: string): StreamChunk[] => {
+    const held = buffers.get(key);
+    buffers.delete(key);
+    return held === undefined ? [] : releaseHeld(held);
   };
 
   // The longest prefix every text rewrite can see whole: a placeholder for
@@ -4773,64 +4957,40 @@ const createOutgoingChunkTransformer = ({
 
     if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
       const key = `text:${chunk.messageId}`;
-      const buffer = `${buffers.get(key) ?? ""}${chunk.delta}`;
+      const buffer = `${buffers.get(key)?.text ?? ""}${chunk.delta}`;
       const prefixLength = completeTextPrefixLength(buffer);
-      buffers.set(key, buffer.slice(prefixLength));
-      return flushText({
-        messageId: chunk.messageId,
-        text: buffer.slice(0, prefixLength),
-      });
+      buffers.set(key, { chunk, text: buffer.slice(prefixLength) });
+      return releaseHeld({ chunk, text: buffer.slice(0, prefixLength) });
     }
 
     if (chunk.type === EventType.TEXT_MESSAGE_END) {
-      const key = `text:${chunk.messageId}`;
-      const pending = buffers.get(key) ?? "";
-      buffers.delete(key);
-      return [
-        ...flushText({ messageId: chunk.messageId, text: pending }),
-        chunk,
-      ];
+      return [...releaseHeldKey(`text:${chunk.messageId}`), chunk];
     }
 
     if (chunk.type === EventType.REASONING_MESSAGE_CONTENT) {
       const key = `reasoning:${chunk.messageId}`;
-      const buffer = `${buffers.get(key) ?? ""}${chunk.delta}`;
+      const buffer = `${buffers.get(key)?.text ?? ""}${chunk.delta}`;
       const prefixLength = completeTextPrefixLength(buffer);
-      buffers.set(key, buffer.slice(prefixLength));
-      return flushReasoning({
-        messageId: chunk.messageId,
-        text: buffer.slice(0, prefixLength),
-      });
+      buffers.set(key, { chunk, text: buffer.slice(prefixLength) });
+      return releaseHeld({ chunk, text: buffer.slice(0, prefixLength) });
     }
 
     if (chunk.type === EventType.REASONING_MESSAGE_END) {
-      const key = `reasoning:${chunk.messageId}`;
-      const pending = buffers.get(key) ?? "";
-      buffers.delete(key);
-      return [
-        ...flushReasoning({ messageId: chunk.messageId, text: pending }),
-        chunk,
-      ];
+      return [...releaseHeldKey(`reasoning:${chunk.messageId}`), chunk];
     }
 
     if (chunk.type === EventType.TOOL_CALL_ARGS) {
       const key = `tool:${chunk.toolCallId}`;
-      const buffer = `${buffers.get(key) ?? ""}${chunk.delta}`;
+      const buffer = `${buffers.get(key)?.text ?? ""}${chunk.delta}`;
       const prefixLength =
         boundary.type === "anonymized"
           ? getDeanonymisablePrefixLength(buffer)
           : buffer.length;
-      buffers.set(key, buffer.slice(prefixLength));
-      return flushToolArguments({
-        text: buffer.slice(0, prefixLength),
-        toolCallId: chunk.toolCallId,
-      });
+      buffers.set(key, { chunk, text: buffer.slice(prefixLength) });
+      return releaseHeld({ chunk, text: buffer.slice(0, prefixLength) });
     }
 
     if (chunk.type === EventType.TOOL_CALL_END) {
-      const key = `tool:${chunk.toolCallId}`;
-      const pending = buffers.get(key) ?? "";
-      buffers.delete(key);
       const toolName =
         toolCallNameOf(chunk) ?? toolNamesByCallId.get(chunk.toolCallId);
       if (toolName !== undefined) {
@@ -4863,10 +5023,7 @@ const createOutgoingChunkTransformer = ({
         });
       }
       return [
-        ...flushToolArguments({
-          text: pending,
-          toolCallId: chunk.toolCallId,
-        }),
+        ...releaseHeldKey(`tool:${chunk.toolCallId}`),
         input === undefined && output === undefined
           ? chunk
           : {
@@ -4931,33 +5088,10 @@ const createOutgoingChunkTransformer = ({
       : [...closeChunkMessage(), ...transformChunk(chunk)];
 
   transform.flush = (): StreamChunk[] => {
-    const chunks: StreamChunk[] = [...closeChunkMessage()];
-    for (const [key, value] of buffers) {
-      if (key.startsWith("text:")) {
-        chunks.push(
-          ...flushText({
-            messageId: key.slice("text:".length),
-            text: value,
-          }),
-        );
-      }
-      if (key.startsWith("reasoning:")) {
-        chunks.push(
-          ...flushReasoning({
-            messageId: key.slice("reasoning:".length),
-            text: value,
-          }),
-        );
-      }
-      if (key.startsWith("tool:")) {
-        chunks.push(
-          ...flushToolArguments({
-            toolCallId: key.slice("tool:".length),
-            text: value,
-          }),
-        );
-      }
-    }
+    const chunks: StreamChunk[] = [
+      ...closeChunkMessage(),
+      ...[...buffers.values()].flatMap((held) => releaseHeld(held)),
+    ];
     buffers.clear();
     return chunks;
   };
@@ -5721,6 +5855,8 @@ type HydrateMessagesProps = {
   safeDb: SafeDb;
   sendMode: ChatSendMode;
   userId: SafeId<"user">;
+  /** The organization's, for an archive among the attachments. */
+  zipNameCodePage: ZipNameCodePage;
 };
 
 const localRunFilePath = (file: Pick<StoredUserFile, "fileName" | "id">) =>
@@ -5760,17 +5896,17 @@ export const localRunAttachmentsOf = async ({
     return Result.ok([...attachments.values()]);
   });
 
-type XlsxCacheWrite = {
+type AttachmentTextCacheWrite = {
   file: StoredUserFile;
   text: string;
 };
 
-const persistXlsxCacheWrites = async ({
+const persistAttachmentTextCacheWrites = async ({
   cacheWrites,
   safeDb,
   userId,
 }: {
-  cacheWrites: readonly XlsxCacheWrite[];
+  cacheWrites: readonly AttachmentTextCacheWrite[];
   safeDb: SafeDb;
   userId: SafeId<"user">;
 }) => {
@@ -5812,6 +5948,7 @@ export const hydrateMessages = async ({
   safeDb,
   sendMode,
   userId,
+  zipNameCodePage,
 }: HydrateMessagesProps) =>
   await Result.gen(async function* () {
     const userFilesById = yield* Result.await(
@@ -5822,7 +5959,7 @@ export const hydrateMessages = async ({
       }),
     );
     const hydratedMessages: ChatMessage[] = [];
-    const cacheWrites: XlsxCacheWrite[] = [];
+    const cacheWrites: AttachmentTextCacheWrite[] = [];
 
     for (const message of messages) {
       const parts: ChatMessage["parts"] = [];
@@ -5855,7 +5992,7 @@ export const hydrateMessages = async ({
           );
           // An image or PDF stays out of the run's stored messages: the agent
           // reads the copy. Text it could not extract without tools stays too.
-          if (!canHydrateFilePartAsPlainText(userFile.mimeType)) {
+          if (!canHydrateFilePartAsPlainText(chatUploadMimeType(userFile))) {
             continue;
           }
         }
@@ -5867,6 +6004,7 @@ export const hydrateMessages = async ({
             mimeType: userFile.mimeType,
             sendMode,
             s3Key: userFile.s3Key,
+            zipNameCodePage,
           }),
         );
 
@@ -5904,7 +6042,7 @@ export const hydrateMessages = async ({
             }
             default:
               hydratedPart.cache satisfies never;
-              return panic("Unsupported XLSX cache status");
+              return panic("Unsupported attachment text cache status");
           }
         }
 
@@ -5918,7 +6056,7 @@ export const hydrateMessages = async ({
     }
 
     yield* Result.await(
-      persistXlsxCacheWrites({
+      persistAttachmentTextCacheWrites({
         cacheWrites,
         safeDb,
         userId,

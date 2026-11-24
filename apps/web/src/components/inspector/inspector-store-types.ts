@@ -8,8 +8,8 @@ import type { PastedTextAttrs } from "@/components/chat-pasted-text-extension";
 import type { CaseDecisionPlacement } from "@/components/inspector/case-decision-view";
 import type { FileTab } from "@/components/inspector/file-tab";
 import type { StructuredCloneable } from "@/components/inspector/view-registry";
+import type { ChatThreadId } from "@/features/chat/chat-thread-ref-types";
 import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-key";
-import type { ChatThreadId } from "@/lib/chat-thread-ref";
 import type { skillDetailOptions } from "@/lib/knowledge/queries";
 
 export type ExternalTabId = `external:${string}`;
@@ -327,6 +327,7 @@ type FileFieldReplacement = {
   id: string;
   fileName?: string | undefined;
   label?: string | undefined;
+  encrypted?: boolean | undefined;
   mimeType?: string | undefined;
   pdfFileId?: string | null | undefined;
   propertyId?: string | undefined;
@@ -351,6 +352,23 @@ export const INSPECTOR_PANE_INTENT = {
 
 type InspectorPaneIntent =
   (typeof INSPECTOR_PANE_INTENT)[keyof typeof INSPECTOR_PANE_INTENT];
+
+/**
+ * Whether an opener takes the inspector's focus. Every opener says which:
+ * - `claim`: the tab is what the user asked for (a click, or a navigation
+ *   whose point is this tab), so it becomes the active tab.
+ * - `ifIdle`: a page opens it on its own while mounting. The tab joins the
+ *   rail but becomes active only when no tab is, so it never takes the
+ *   place of what the user had open; a narrow inspector has no rail to go
+ *   back to it.
+ */
+export const INSPECTOR_FOCUS_INTENT = {
+  claim: "claim",
+  ifIdle: "if-idle",
+} as const;
+
+export type InspectorFocusIntent =
+  (typeof INSPECTOR_FOCUS_INTENT)[keyof typeof INSPECTOR_FOCUS_INTENT];
 
 type InspectorTabsActions = {
   createGroup: (args: { name: string; color: string }) => string;
@@ -391,13 +409,14 @@ type InspectorTabsActions = {
       SkillResourceTabSource & {
         refreshContent?: boolean | undefined;
         target?: SkillResourceTab["target"];
+        focus: InspectorFocusIntent;
       },
   ) => void;
   updateSkillResourceTabContent: (
     tabId: SkillResourceTabId,
     content: string,
   ) => void;
-  openChat: (args?: {
+  openChat: (args: {
     id?: ChatThreadId;
     label?: string;
     workspaceId?: string | undefined;
@@ -407,6 +426,7 @@ type InspectorTabsActions = {
     /** The thread is known to have messages on the server. */
     started?: true;
     pane?: InspectorPaneIntent;
+    focus: InspectorFocusIntent;
   }) => void;
   setChatContext: (tabId: string, matterIds: string[]) => void;
   /** Records that a chat tab's conversation has a message on the server. */

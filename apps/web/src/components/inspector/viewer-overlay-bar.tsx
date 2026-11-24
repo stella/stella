@@ -22,6 +22,7 @@ export const ViewerOverlayBar = ({
       "bg-background/80 supports-[backdrop-filter]:bg-background/65 absolute end-2 top-2 z-10 flex items-center gap-1 rounded-md border p-0.5 shadow-sm backdrop-blur",
       className,
     )}
+    data-slot="viewer-overlay-bar"
   >
     {children}
   </div>

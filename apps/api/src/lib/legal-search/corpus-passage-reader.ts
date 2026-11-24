@@ -17,8 +17,8 @@ import { mapWithConcurrency } from "@stll/concurrency";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
-import type { Transaction } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { chunkDocument } from "@/api/lib/corpus-index/chunking";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
 import {
@@ -133,15 +133,21 @@ const hydratingPayloadSource = async (
   return {
     readText: async (storedKey) =>
       await readCorpusText(storedKey, { readTombstones }),
-    readAst: async (storedKey) =>
-      (
+    readAst: async (storedKey) => {
+      const documentId =
+        documentByAstKey.get(storedKey) ??
+        panic("Passage AST pointer has no document");
+      return (
         await readCorpusForRecovery({
-          documentId:
-            documentByAstKey.get(storedKey) ??
-            panic("Passage AST pointer has no document"),
-          read: async () => await readCorpusAst(storedKey, { readTombstones }),
+          documentId,
+          read: async () =>
+            await readCorpusAst(storedKey, {
+              readTombstones,
+              report: { documentId },
+            }),
         })
-      ).unwrapOr(null),
+      ).unwrapOr(null);
+    },
   };
 };
 

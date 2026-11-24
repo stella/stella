@@ -3,7 +3,7 @@ import { Result } from "better-result";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { sanitizeErrorForOutput } from "@stll/errors";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { wrappedErrorDetail } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import {
   absorbStandaloneSupplementRow,

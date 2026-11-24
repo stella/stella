@@ -28,7 +28,10 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { QueryViewFeedback } from "@/components/query-view-feedback";
+import {
+  QueryViewFeedback,
+  SettledQueryViewFeedback,
+} from "@/components/query-view-feedback";
 import { getInternalPropertyId } from "@/components/workspaces/entity-utils";
 import { useKanbanSelectionOwner } from "@/components/workspaces/kanban/kanban-selection";
 import type { KanbanDraggedCard } from "@/components/workspaces/kanban/kanban-selection.logic";
@@ -58,6 +61,11 @@ import {
   ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
   preflightAttachedTemplateUpload,
 } from "@/lib/files/attached-template-upload-preflight";
+import {
+  exactDuplicateLookup,
+  resolveExactDuplicates,
+} from "@/lib/files/exact-duplicate-queries";
+import { useExactDuplicateUploadStore } from "@/lib/files/exact-duplicate-upload-store";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
@@ -104,6 +112,10 @@ import { KanbanColumn } from "@/routes/_protected.workspaces/$workspaceId/-compo
 import type { KanbanCalculations } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
 import { KanbanSelectionSurface } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-selection-surface";
 import { KanbanSubgroupBoard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-subgroup-board";
+import {
+  canRenderKanbanBoard,
+  KANBAN_BOARD_CLASS,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.pending";
 import { viewEntityKinds } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 
 type KanbanViewProps = {
@@ -129,6 +141,9 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const format = useFormatter();
   const labels = useBatchUploadLabels();
   const analytics = useAnalytics();
+  const askAboutDuplicateFiles = useExactDuplicateUploadStore(
+    (store) => store.ask,
+  );
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const upsertField = useUpsertField();
   const renameEntity = useRenameEntity();
@@ -274,11 +289,13 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   }
 
   const schema = useWorkspaceKanbanSchema(properties);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const grouping = useMemo(
     () => resolveWorkspaceKanbanGrouping(configuredGroupBy, schema),
     [configuredGroupBy, schema],
   );
   const groupByPropertyId = getKanbanGroupingPropertyId(grouping);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const subgroupDefinition = useMemo(
     () =>
       resolveWorkspaceKanbanSubgroup(
@@ -324,17 +341,13 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       !hiddenProperties.includes(id),
   );
 
-  const fieldIds = useMemo(
-    () =>
-      visibleEntityFieldIds({
-        hiddenProperties,
-        properties,
-        requiredPropertyIds: [groupByProperty, subgroupByProperty]
-          .filter((property) => property !== null)
-          .map((property) => property.id),
-      }),
-    [groupByProperty, hiddenProperties, properties, subgroupByProperty],
-  );
+  const fieldIds = visibleEntityFieldIds({
+    hiddenProperties,
+    properties,
+    requiredPropertyIds: [groupByProperty, subgroupByProperty]
+      .filter((property) => property !== null)
+      .map((property) => property.id),
+  });
 
   const { filters, sorts } = view.layout;
   const hasSupportedSubgroup =
@@ -365,6 +378,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const subgroupView = queryView(subgroupQuery);
   const subgroupQueryData =
     subgroupView.type === "items" ? subgroupView.items : undefined;
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- inlining this conditional pushes the component past the complexity limit
   const subgroupEntities = useMemo(
     () =>
       subgroupQueryData
@@ -372,6 +386,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         : [],
     [subgroupQueryData],
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const subgroup = useMemo(
     () =>
       resolveWorkspaceKanbanDynamicSubgroup(
@@ -380,7 +395,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       ),
     [subgroupDefinition, subgroupEntities],
   );
-  const subgroupMatrix = useMemo(() => {
+  const subgroupMatrix = (() => {
     if (
       !hasSupportedSubgroup ||
       !isKanbanGroupingRenderable(subgroup) ||
@@ -405,15 +420,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       resolveGroupValue: ({ grouping: axis, row }) =>
         resolveWorkspaceKanbanGroupValue(axis, row),
     });
-  }, [
-    grouping,
-    hasSupportedSubgroup,
-    isAssigneeSubgroup,
-    subgroup,
-    subgroupByPropertyId,
-    subgroupEntities,
-    t,
-  ]);
+  })();
 
   // A view scoped to a kind (a task list, a message board) only ever shows
   // that kind, so it offers totals only over the properties that kind
@@ -583,6 +590,32 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       default:
         preflight satisfies never;
         panic(`Unhandled attached-template preflight: ${String(preflight)}`);
+    }
+
+    const duplicates = await resolveExactDuplicates({
+      files: filesToUpload,
+      lookup: exactDuplicateLookup(workspaceId),
+      onError: (error) =>
+        analytics.captureError(error, {
+          fingerprintKey: "KanbanView.handleFileUpload.duplicates:failure",
+          scope: {
+            type: "handler",
+            handlerId: "KanbanView.handleFileUpload.duplicates:failure",
+          },
+        }),
+    });
+    if (duplicates.length > 0) {
+      const uploadAnyway = new Set(
+        await new Promise<readonly File[]>((resolve) => {
+          askAboutDuplicateFiles({ duplicates, onResolved: resolve });
+        }),
+      );
+      const skipped = new Set(
+        duplicates
+          .map(({ file }) => file)
+          .filter((file) => !uploadAnyway.has(file)),
+      );
+      filesToUpload = filesToUpload.filter((file) => !skipped.has(file));
     }
 
     const results = await uploadFileEntitiesBatched({
@@ -1051,7 +1084,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   if (visibleSubgroupMatrix !== null) {
     return (
       <>
-        <QueryViewFeedback view={subgroupView} />
+        <SettledQueryViewFeedback view={subgroupView} />
         <KanbanSelectionSurface className="h-full" selection={selection}>
           <KanbanSubgroupBoard
             canCreateTaskInLane={canCreateTaskInLane}
@@ -1176,19 +1209,6 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   );
 };
 
-// Drops write one column value per card, so the board needs fixed single-select columns.
-function canRenderKanbanBoard(
-  propertyId: string | null,
-  grouping: ReturnType<typeof resolveWorkspaceKanbanGrouping>,
-): propertyId is string {
-  return (
-    propertyId !== null &&
-    isKanbanGroupingRenderable(grouping) &&
-    (grouping.type !== "property" ||
-      grouping.property.content.type === "single-select")
-  );
-}
-
 type KanbanGroupColumnProps = Omit<
   ComponentProps<typeof KanbanColumn>,
   "entities"
@@ -1229,13 +1249,16 @@ const KanbanGroupColumn = ({
     ? queryData.pages.flatMap((page) => page.entities)
     : [];
 
+  // A column whose page is on its way stands with its header and card
+  // placeholders; only a failed read says so above it.
   return (
     <>
-      <QueryViewFeedback view={columnView} />
+      <SettledQueryViewFeedback view={columnView} />
       <KanbanColumn
         {...props}
         columnValue={columnValue}
         entities={entities}
+        entitiesPending={columnView.type === "pending"}
         hasMore={query.hasNextPage}
         isLoadingMore={query.isFetchingNextPage}
         onLoadMore={() => {
@@ -1323,7 +1346,7 @@ const KanbanBoard = ({ children, onReorderColumn }: KanbanBoardProps) => {
   });
 
   return (
-    <div className="flex h-full gap-4 overflow-x-auto p-4" ref={scrollRef}>
+    <div className={KANBAN_BOARD_CLASS} ref={scrollRef}>
       {children}
     </div>
   );

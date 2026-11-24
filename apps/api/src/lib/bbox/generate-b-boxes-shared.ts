@@ -1,7 +1,7 @@
 import { PDF } from "@libpdf/core";
 import { panic, Result, TaggedError } from "better-result";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import type {
   DocxFolioJustificationBlock,
   JustificationBlock,

@@ -10,6 +10,7 @@ import {
   fetchBoundedSsrResponse,
   SsrStreamTimeoutError,
 } from "./ssr-response-stream";
+import type { SsrDeadlineEnding } from "./ssr-response-stream";
 
 const encoder = new TextEncoder();
 const SHELL = "<html><body><main>Server shell</main>";
@@ -354,3 +355,59 @@ test.each(["before reading", "during reading"])(
     expect(errors).toEqual([reason]);
   },
 );
+
+const readDeadlineCutDocument = async (deadlineEnding: SsrDeadlineEnding) => {
+  const recovery = "<script>recover()</script></body></html>";
+  const errors: unknown[] = [];
+  const response = await fetchBoundedSsrResponse({
+    request: new Request("https://stella.test/law/cases"),
+    lifetimeMs: 1,
+    deadlineEnding: () => deadlineEnding,
+    fetchResponse: async (_request, rendererSignal) =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(encoder.encode(SHELL));
+            // React answers the deadline abort with recovery instructions
+            // and then finishes its stream normally.
+            rendererSignal.addEventListener(
+              "abort",
+              () => {
+                controller.enqueue(encoder.encode(recovery));
+                controller.close();
+              },
+              { once: true },
+            );
+          },
+        }),
+        { headers: { "Content-Type": "text/html; charset=utf-8" } },
+      ),
+    reportError: (error) => {
+      errors.push(error);
+    },
+  });
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new TypeError("SSR response body missing");
+  }
+  const decoder = new TextDecoder();
+  expect(decoder.decode((await reader.read()).value)).toBe(SHELL);
+  expect(decoder.decode((await reader.read()).value)).toBe(recovery);
+  if (deadlineEnding === "error") {
+    expect(await rejectionOf(reader.read())).toBeInstanceOf(
+      SsrStreamTimeoutError,
+    );
+  } else {
+    expect((await reader.read()).done).toBe(true);
+  }
+  expect(errors).toHaveLength(1);
+  expect(errors.at(0)).toBeInstanceOf(SsrStreamTimeoutError);
+};
+
+test("a document cut off by the deadline completes after its recovery bytes", async () => {
+  await readDeadlineCutDocument("close");
+});
+
+test("a shareable document cut off by the deadline fails after its recovery bytes", async () => {
+  await readDeadlineCutDocument("error");
+});

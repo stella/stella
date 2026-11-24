@@ -14,6 +14,7 @@
     "./citation-link": "./src/citation-link.tsx",
     "./citation-treatment": "./src/citation-treatment.ts",
     "./cited-provision": "./src/cited-provision.tsx",
+    "./collection-attribution": "./src/collection-attribution.tsx",
     "./court-name": "./src/court-name.tsx",
     "./decision-identity": "./src/decision-identity.tsx",
     "./decision-title": "./src/decision-title.ts",
@@ -36,6 +37,7 @@
     "./reader-outline": "./src/reader-outline.ts",
     "./reader-search": "./src/reader-search.ts",
     "./reader-text-pieces.logic": "./src/reader-text-pieces.logic.ts",
+    "./reader-text-scale": "./src/reader-text-scale.ts",
     "./reader-text-scale.logic": "./src/reader-text-scale.logic.ts",
     "./reader-types": "./src/reader-types.ts",
     "./reader.css": "./src/reader.css",
@@ -43,8 +45,7 @@
     "./reference-peek-layering": "./src/reference-peek-layering.ts",
     "./reference-peek.logic": "./src/reference-peek.logic.ts",
     "./sanitize-href": "./src/sanitize-href.ts",
-    "./source-link-policy": "./src/source-link-policy.tsx",
-    "./use-reader-text-scale": "./src/use-reader-text-scale.ts"
+    "./source-link-policy": "./src/source-link-policy.tsx"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
@@ -61,8 +62,7 @@
     "@stll/legal-atlas": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "@stll/ui": "workspace:*",
-    "better-result": "catalog:",
-    "valibot": "catalog:"
+    "better-result": "catalog:"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "21.0.4",

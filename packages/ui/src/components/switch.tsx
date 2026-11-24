@@ -6,17 +6,12 @@ import type * as React from "react";
 import { Switch as SwitchPrimitive } from "@base-ui/react/switch";
 
 import { cn } from "../lib/utils";
-
-/**
- * `default` is a setting's own control; `sm` sits in a dense row or a menu
- * beside small type.
- */
-type SwitchSize = "sm" | "default";
-
-const SWITCH_ROOT_SIZE_CLASS_NAME = {
-  default: "h-5 w-9",
-  sm: "h-4 w-7",
-} as const satisfies Record<SwitchSize, string>;
+import {
+  SWITCH_ROOT_CLASS_NAME,
+  SWITCH_ROOT_SIZE_CLASS_NAME,
+  type SwitchSize,
+} from "./toggle-classes";
+import { renderTooltipTrigger } from "./tooltip-trigger-helper";
 
 const SWITCH_THUMB_SIZE_CLASS_NAME = {
   default:
@@ -26,28 +21,48 @@ const SWITCH_THUMB_SIZE_CLASS_NAME = {
 
 type SwitchProps = SwitchPrimitive.Root.Props & {
   size?: SwitchSize | undefined;
+  /**
+   * Why the switch cannot be toggled right now, in the reader's terms.
+   * Shown as a tooltip while `disabled` is true.
+   */
+  disabledReason?: React.ReactNode;
 };
 
-const Switch = ({ className, size = "default", ...props }: SwitchProps) => (
-  <SwitchPrimitive.Root
-    className={cn(
-      "focus-visible:ring-ring focus-visible:ring-offset-background data-checked:bg-primary data-unchecked:bg-input relative inline-flex shrink-0 items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-offset-1 data-disabled:opacity-64",
-      SWITCH_ROOT_SIZE_CLASS_NAME[size],
-      className,
-    )}
-    data-size={size}
-    data-slot="switch"
-    {...props}
-  >
-    <SwitchPrimitive.Thumb
+const Switch = ({
+  className,
+  disabled,
+  disabledReason,
+  size = "default",
+  ...props
+}: SwitchProps) => {
+  const trigger = (
+    <SwitchPrimitive.Root
       className={cn(
-        "bg-background pointer-events-none block rounded-full shadow-xs transition-transform",
-        SWITCH_THUMB_SIZE_CLASS_NAME[size],
+        SWITCH_ROOT_CLASS_NAME,
+        SWITCH_ROOT_SIZE_CLASS_NAME[size],
+        className,
       )}
-      data-slot="switch-thumb"
-    />
-  </SwitchPrimitive.Root>
-);
+      data-size={size}
+      data-slot="switch"
+      disabled={disabled}
+      {...props}
+    >
+      <SwitchPrimitive.Thumb
+        className={cn(
+          "bg-background pointer-events-none block rounded-full shadow-xs transition-transform",
+          SWITCH_THUMB_SIZE_CLASS_NAME[size],
+        )}
+        data-slot="switch-thumb"
+      />
+    </SwitchPrimitive.Root>
+  );
+
+  return renderTooltipTrigger({
+    keepTriggerMounted: disabledReason !== undefined,
+    tooltip: disabled ? disabledReason : undefined,
+    trigger,
+  });
+};
 
 /**
  * A setting row: its label and an optional description at the start, the
@@ -58,6 +73,7 @@ const Switch = ({ className, size = "default", ...props }: SwitchProps) => (
 const SwitchField = ({
   className,
   description,
+  disabledReason,
   label,
   size,
   ...props
@@ -89,6 +105,7 @@ const SwitchField = ({
       </span>
       <Switch
         aria-describedby={description === undefined ? undefined : descriptionId}
+        disabledReason={disabledReason}
         size={size}
         {...props}
       />

@@ -57,6 +57,31 @@ export const StyleSetPickerDialog = ({
   </Dialog>
 );
 
+type StyleSetCreateDisabledReasonOptions = {
+  creating: boolean;
+  name: string;
+  t: (
+    key:
+      | "common.creating"
+      | "knowledge.playbooks.nameRequired"
+      | "styleSets.loadFailed",
+  ) => string;
+};
+
+const styleSetCreateDisabledReason = ({
+  creating,
+  name,
+  t,
+}: StyleSetCreateDisabledReasonOptions) => {
+  if (creating) {
+    return t("common.creating");
+  }
+  if (name.trim() === "") {
+    return t("knowledge.playbooks.nameRequired");
+  }
+  return t("styleSets.loadFailed");
+};
+
 const StyleSetPickerDialogBody = ({
   initialName,
   onCreate,
@@ -74,6 +99,11 @@ const StyleSetPickerDialogBody = ({
     type: "stella",
   });
   const [creating, setCreating] = useState(false);
+  const createDisabledReason = styleSetCreateDisabledReason({
+    creating,
+    name,
+    t,
+  });
 
   const submit = async () => {
     const normalizedName = name.trim();
@@ -174,6 +204,7 @@ const StyleSetPickerDialogBody = ({
             name.trim() === "" ||
             (selection.type === "custom" && isError)
           }
+          disabledReason={createDisabledReason}
           onClick={handleSubmit}
         >
           {creating ? t("common.loading") : t("styleSets.create")}

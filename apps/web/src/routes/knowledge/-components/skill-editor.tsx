@@ -49,6 +49,8 @@ import { FileDropZone } from "@/components/file-drop-zone";
 import { FileTree } from "@/components/file-tree/file-tree";
 import type { FileTreeNode } from "@/components/file-tree/file-tree";
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
+import { skillEditorChatSkill } from "@/components/inspector/inspector-active-skill";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import {
   buildSkillResourceTabId,
   useInspectorTabsStore,
@@ -71,6 +73,8 @@ import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 
 import { SkillAvailabilitySummary } from "./skill-availability-field";
+import { SkillFilesPending } from "./skill-detail.pending";
+import { SkillExportMenu } from "./skill-export-menu";
 import {
   rebaseSkillMetadataDraft,
   skillMetadataDraft,
@@ -110,6 +114,20 @@ type SelectedFile =
 type SkillEditorProps = {
   skillId: string;
 };
+
+const resolveSkillMetadataDraft = ({
+  draft,
+  next,
+  previous,
+}: {
+  draft: Parameters<typeof rebaseSkillMetadataDraft>[0]["draft"];
+  next: Parameters<typeof rebaseSkillMetadataDraft>[0]["next"];
+  previous:
+    Parameters<typeof rebaseSkillMetadataDraft>[0]["previous"] | undefined;
+}) =>
+  previous === undefined
+    ? skillMetadataDraft(next)
+    : rebaseSkillMetadataDraft({ draft, next, previous });
 
 export function SkillEditor({ skillId }: SkillEditorProps) {
   const t = useTranslations();
@@ -191,21 +209,21 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   // render: fields the user has not edited follow it, unsaved edits in the
   // others survive. The command defaults to the slugified name, so it reads as
   // /skill-name until the user edits or clears it; it persists on blur.
-  if (detail.data && detail.data !== lastDetailData) {
-    setLastDetailData(detail.data);
-    const rebased =
-      lastDetailData === undefined
-        ? skillMetadataDraft(detail.data)
-        : rebaseSkillMetadataDraft({
-            draft: { command, description, enabled, invocation, name },
-            next: detail.data,
-            previous: lastDetailData,
-          });
-    setName(rebased.name);
-    setDescription(rebased.description);
-    setEnabled(rebased.enabled);
-    setInvocation(rebased.invocation);
-    setCommand(rebased.command);
+  const nextDetailData = detail.data ?? lastDetailData;
+  if (nextDetailData !== lastDetailData) {
+    setLastDetailData(nextDetailData);
+    if (nextDetailData !== undefined) {
+      const rebased = resolveSkillMetadataDraft({
+        draft: { command, description, enabled, invocation, name },
+        next: nextDetailData,
+        previous: lastDetailData,
+      });
+      setName(rebased.name);
+      setDescription(rebased.description);
+      setEnabled(rebased.enabled);
+      setInvocation(rebased.invocation);
+      setCommand(rebased.command);
+    }
   }
 
   const resources: SkillResource[] = detail.data ? detail.data.resources : [];
@@ -300,6 +318,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         ? MARKDOWN_MIME
         : "text/plain",
       content: resource.content,
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
   };
 
@@ -323,6 +342,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         label: SKILL_BODY_FILE_NAME,
         mimeType: MARKDOWN_MIME,
         content: bodyContent,
+        focus: INSPECTOR_FOCUS_INTENT.claim,
       });
       return;
     }
@@ -648,13 +668,16 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
               label: SKILL_BODY_FILE_NAME,
               mimeType: MARKDOWN_MIME,
               content: detail.data.body,
+              // Landing on the editor opens SKILL.md beside what the
+              // inspector already shows, never in its place.
+              focus: INSPECTOR_FOCUS_INTENT.ifIdle,
             });
           }}
         />
       )}
       {/* Identity, status, and how the skill runs. The files below are the main
           surface; editing happens in the inspector. */}
-      <div className="border-b p-4">
+      <div className="border-b p-4" data-slot="skill-editor-identity">
         {/* Name + description read as a title/summary; the status controls sit
             in the top-right corner, the identity stays a readable width. */}
         <div className="flex items-start gap-4">
@@ -695,12 +718,13 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 aria-label={t("chat.newChat")}
                 onClick={() =>
                   openChat({
-                    activeSkill: {
-                      skillDisplayName: detail.data.name,
+                    activeSkill: skillEditorChatSkill({
+                      name: detail.data.name,
                       skillId,
-                      skillName: detail.data.slug,
-                    },
+                      slug: detail.data.slug,
+                    }),
                     label: detail.data.name,
+                    focus: INSPECTOR_FOCUS_INTENT.claim,
                   })
                 }
                 size="icon-sm"
@@ -709,6 +733,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 <NewChatIcon className="size-4" />
               </Button>
             )}
+            <SkillExportMenu skillId={skillId} />
             {detail.data && (
               <span className="text-muted-foreground rounded-md border px-1.5 py-0.5 text-xs">
                 {detail.data.scope === "team"
@@ -724,6 +749,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 <Button
                   aria-label={tSkills("disableSkill")}
                   disabled={patchMetadata.isPending}
+                  disabledReason={t("common.saving")}
                   onClick={toggleEnabled}
                   size="icon-sm"
                   variant="secondary"
@@ -733,6 +759,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
               ) : (
                 <Button
                   disabled={patchMetadata.isPending}
+                  disabledReason={t("common.saving")}
                   onClick={toggleEnabled}
                   size="sm"
                 >
@@ -817,7 +844,10 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         }}
       >
         <div className="mb-2 flex items-center gap-1 px-1">
-          <p className="text-muted-foreground me-auto text-xs font-semibold tracking-wider uppercase">
+          <p
+            className="text-muted-foreground me-auto text-xs font-semibold tracking-wider uppercase"
+            data-slot="skill-editor-files"
+          >
             {t("common.files")}
           </p>
           {allFolderIds.size > 0 && (
@@ -828,11 +858,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
             />
           )}
         </div>
-        {detail.isLoading && (
-          <p className="text-muted-foreground px-1 text-xs">
-            {t("common.loading")}
-          </p>
-        )}
+        {detail.isLoading && <SkillFilesPending />}
         {detail.error && (
           <p className="text-destructive px-1 text-sm">
             {userErrorFromThrown(detail.error, t("common.unexpectedError"))}
@@ -1210,6 +1236,7 @@ function FolderCreateActions({
   onCreateFile,
   onCreateFolder,
 }: FolderCreateActionsProps) {
+  const tCommon = useTranslations("common");
   const tSkills = useTranslations("knowledge.agentSkills");
   const [newFileOpen, setNewFileOpen] = useState(false);
   const [filename, setFilename] = useState("");
@@ -1267,6 +1294,9 @@ function FolderCreateActions({
             />
             <Button
               disabled={createPending || filename.trim().length === 0}
+              disabledReason={
+                createPending ? tCommon("creating") : tSkills("enterFileName")
+              }
               onClick={submitNewFile}
               size="sm"
             >
@@ -1303,6 +1333,7 @@ function FileRowActions({
       <Button
         aria-label={tSkills("renameFile")}
         disabled={renamePending}
+        disabledReason={t("common.saving")}
         onClick={() => onStartRename(entry)}
         size="icon-sm"
         variant="ghost"
@@ -1315,6 +1346,7 @@ function FileRowActions({
             <Button
               aria-label={tSkills("deleteFile")}
               disabled={deletePending}
+              disabledReason={t("common.deleting")}
               size="icon-sm"
               variant="ghost"
             >
@@ -1337,6 +1369,7 @@ function FileRowActions({
             </Button>
             <Button
               disabled={deletePending}
+              disabledReason={t("common.deleting")}
               onClick={() => {
                 setConfirmingDelete(false);
                 onDeleteFile(entry);
@@ -1448,6 +1481,9 @@ function RootAddMenu({
             />
             <Button
               disabled={createPending || path.trim().length === 0}
+              disabledReason={
+                createPending ? t("common.creating") : tSkills("enterFileName")
+              }
               onClick={submitNewFile}
               size="sm"
             >

@@ -5,7 +5,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import type { ChatLocalRunTarget } from "@stll/api-contract/chat-run-target";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
-import type { WebApiRoutes } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api-contract";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 const previousFetch = globalThis.fetch;
@@ -102,7 +102,9 @@ const serve = () => {
         ];
         return new Response(
           events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(""),
-          { headers: { "Content-Type": "text/event-stream" } },
+          {
+            headers: { "Content-Type": "text/event-stream" },
+          },
         );
       }
       unexpected.push(`${request.method} ${pathname}`);

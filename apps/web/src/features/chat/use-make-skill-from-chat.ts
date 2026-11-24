@@ -5,10 +5,10 @@ import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/toast";
 
+import type { ChatThreadRef } from "@/features/chat/chat-thread-ref-types";
 import { useSingleFlight } from "@/hooks/use-single-flight";
 import { api } from "@/lib/api";
 import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -55,7 +55,10 @@ export const useOpenSavedSkill = () => {
   return (skillId: string) => {
     stellaToast.add({ title: t("chat.makeSkill.drafted"), type: "success" });
     detached(
-      navigate({ to: "/knowledge/tools/$entry", params: { entry: skillId } }),
+      navigate({
+        to: "/knowledge/tools/skills/$skillId",
+        params: { skillId },
+      }),
       "make-skill.open-saved",
     );
   };

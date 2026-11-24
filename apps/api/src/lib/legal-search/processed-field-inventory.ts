@@ -1,3 +1,4 @@
+// parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
@@ -384,6 +385,23 @@ export const PROCESSED_FIELD_INVENTORY = {
       recordedEvidence(
         "src/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs-2026-R0137.pdf",
         "src/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs-2026-S0383.pdf",
+      ),
+    ),
+  },
+  [ADAPTER_KEYS.CZ_ISIR]: {
+    "court-paragraph-numbers": providedField(
+      PARAGRAPH_NUMBERS_FROM_TEXT,
+      recordedEvidence(
+        "src/handlers/case-law/ingestion/parsers/__fixtures__/cz-isir-3-vsph-1361-2023.json",
+        "src/handlers/case-law/ingestion/parsers/__fixtures__/cz-isir-103-vsph-257-2026.json",
+      ),
+    ),
+  },
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: {
+    "court-paragraph-numbers": providedField(
+      PARAGRAPH_NUMBERS_FROM_TEXT,
+      recordedEvidence(
+        "src/handlers/case-law/ingestion/adapters/__fixtures__/cz-ns-sbirka-5819.html.gz",
       ),
     ),
   },

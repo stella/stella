@@ -18,8 +18,7 @@ import { unionAll } from "drizzle-orm/pg-core";
 
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 
-import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
@@ -27,6 +26,7 @@ import {
   caseLawReplayBlocked,
   PARSED_INPUT_STATE,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import { processStoredDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
@@ -46,10 +46,7 @@ import { composeWithStoredSupplements } from "@/api/handlers/case-law/ingestion/
 import { withdrawCaseLawDecisionDocument } from "@/api/handlers/case-law/withdraw-document";
 import type { WithdrawCaseLawDecisionDocumentOutcome } from "@/api/handlers/case-law/withdraw-document";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  corpusCarriesDocument,
-  payloadCarriesDocument,
-} from "@/api/lib/case-law/stored-payload";
+import { corpusCarriesDocument } from "@/api/lib/case-law/stored-payload";
 import { lockCaseLawDecisionRows } from "@/api/lib/db/aggregate-lock";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import {
@@ -58,6 +55,7 @@ import {
 } from "@/api/lib/db/timestamp-cas";
 import type { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { payloadCarriesDocument } from "@/api/lib/legal-search/corpus-content-hash";
 import { openCorpusPackBatch } from "@/api/lib/legal-search/corpus-pack-batch";
 import type {
   CorpusPackBatch,

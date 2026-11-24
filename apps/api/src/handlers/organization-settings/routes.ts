@@ -19,6 +19,11 @@ import readDeepLAvailability from "@/api/handlers/organization-settings/deepl-av
 import deleteAIConfig from "@/api/handlers/organization-settings/delete-ai-config";
 import deleteDeepLKey from "@/api/handlers/organization-settings/delete-deepl-key";
 import deleteWebSearchKey from "@/api/handlers/organization-settings/delete-web-search-key";
+import addDictationVocabulary from "@/api/handlers/organization-settings/dictation-vocabulary/add";
+import checkDictationVocabulary from "@/api/handlers/organization-settings/dictation-vocabulary/check";
+import deleteDictationVocabulary from "@/api/handlers/organization-settings/dictation-vocabulary/delete";
+import exportDictationVocabulary from "@/api/handlers/organization-settings/dictation-vocabulary/export";
+import listDictationVocabulary from "@/api/handlers/organization-settings/dictation-vocabulary/list";
 import getDocumentOcrAvailability from "@/api/handlers/organization-settings/document-ocr-availability/get";
 import getFeatureAccess from "@/api/handlers/organization-settings/feature-access/get";
 import enrolFeature from "@/api/handlers/organization-settings/feature-enrolments/enrol";
@@ -33,6 +38,15 @@ import readAIConfig from "@/api/handlers/organization-settings/read-ai-config";
 import readDeepLConfig from "@/api/handlers/organization-settings/read-deepl-config";
 import readWebSearchConfig from "@/api/handlers/organization-settings/read-web-search-config";
 import updateSanctionsMonitoring from "@/api/handlers/organization-settings/sanctions-monitoring/update";
+import createOrganizationSsoDomain from "@/api/handlers/organization-settings/sso/create-domain";
+import createOrganizationSsoProvider from "@/api/handlers/organization-settings/sso/create-provider";
+import createOrganizationSamlSsoProvider from "@/api/handlers/organization-settings/sso/create-saml-provider";
+import deleteOrganizationSsoDomain from "@/api/handlers/organization-settings/sso/delete-domain";
+import deleteOrganizationSsoProvider from "@/api/handlers/organization-settings/sso/delete-provider";
+import readOrganizationSso from "@/api/handlers/organization-settings/sso/get";
+import testOrganizationSsoProvider from "@/api/handlers/organization-settings/sso/test-provider";
+import updateOrganizationSsoPolicy from "@/api/handlers/organization-settings/sso/update-policy";
+import verifyOrganizationSsoDomain from "@/api/handlers/organization-settings/sso/verify-domain";
 import updateOrganizationSettings from "@/api/handlers/organization-settings/update";
 import updateAIConfig from "@/api/handlers/organization-settings/update-ai-config";
 import updateDeepLKey from "@/api/handlers/organization-settings/update-deepl-key";
@@ -75,6 +89,23 @@ export const organizationSettingsRoute = mount(
       {
         prefix: "/verification-decision-model",
         middleware: [deploymentFeatureGate("FEATURE_LEGAL_LISTS")],
+      },
+    ),
+    routes(
+      {
+        "/": { GET: readOrganizationSso },
+        "/policy": { PUT: updateOrganizationSsoPolicy },
+        "/providers": { POST: createOrganizationSsoProvider },
+        "/providers/saml": { POST: createOrganizationSamlSsoProvider },
+        "/providers/test": { POST: testOrganizationSsoProvider },
+        "/providers/:providerId": { DELETE: deleteOrganizationSsoProvider },
+        "/domains": { POST: createOrganizationSsoDomain },
+        "/domains/:domainId/verify": { POST: verifyOrganizationSsoDomain },
+        "/domains/:domainId": { DELETE: deleteOrganizationSsoDomain },
+      },
+      {
+        prefix: "/sso",
+        middleware: [deploymentFeatureGate("FEATURE_ENTERPRISE_SSO")],
       },
     ),
     routes({
@@ -135,6 +166,13 @@ export const organizationSettingsRoute = mount(
         GET: readAnonymizationBlacklist,
         PUT: updateAnonymizationBlacklist,
       },
+      "/dictation-vocabulary": {
+        GET: listDictationVocabulary,
+        POST: addDictationVocabulary,
+        DELETE: deleteDictationVocabulary,
+      },
+      "/dictation-vocabulary/check": { POST: checkDictationVocabulary },
+      "/dictation-vocabulary/export": { GET: exportDictationVocabulary },
     }),
     routes(
       {

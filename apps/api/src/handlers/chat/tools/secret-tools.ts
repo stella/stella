@@ -11,7 +11,7 @@ import {
   USE_CONNECTOR_SECRET_TOOL_NAME,
 } from "@stll/api-contract/chat-secret";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import {
   mcpConnectorAuthorizationReviews,
   mcpConnectors,

@@ -17,7 +17,7 @@ import { Loader } from "@stll/ui/loader";
 
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
-import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools";
+import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools-types";
 import type { TranslationKey } from "@/i18n/types";
 import { mcpConnectorConnection } from "@/lib/api";
 import { detached } from "@/lib/detached";
@@ -139,7 +139,12 @@ const ContinuationRetry = ({
         {t("chat.requestSecret.continuationError")}
       </p>
       <div className="flex flex-wrap justify-end gap-2">
-        <Button disabled={isContinuing} onClick={onRetry} type="button">
+        <Button
+          disabled={isContinuing}
+          disabledReason={t("chat.connectConnector.continuing")}
+          onClick={onRetry}
+          type="button"
+        >
           {isContinuing ? (
             <Loader className="size-4" variant="decorative" />
           ) : null}
@@ -197,6 +202,33 @@ type ConnectActionsProps = {
   onDecline: () => void;
 };
 
+type ConnectorBusyReasonOptions = {
+  phase: ConnectPhase["type"];
+  t: (
+    key:
+      | "common.connecting"
+      | "common.verifying"
+      | "chat.connectConnector.continuing",
+  ) => string;
+};
+
+const connectorBusyReason = ({ phase, t }: ConnectorBusyReasonOptions) => {
+  switch (phase) {
+    case "connecting":
+      return t("common.connecting");
+    case "confirming":
+      return t("common.verifying");
+    case "failed":
+    case "idle":
+    case "token-required":
+    case "waiting":
+      return t("chat.connectConnector.continuing");
+    default:
+      phase satisfies never;
+      return panic("Unhandled connector busy phase");
+  }
+};
+
 const ConnectActions = ({
   connectorSlug,
   isBusy,
@@ -212,10 +244,12 @@ const ConnectActions = ({
     isAwaitingSignIn ||
     (phase.type === "failed" && phase.reason === "not-connected");
   const isWorking = phase.type === "connecting" || phase.type === "confirming";
+  const busyReason = connectorBusyReason({ phase: phase.type, t });
   return (
     <div className="flex flex-wrap justify-end gap-2">
       <Button
         disabled={isBusy}
+        disabledReason={busyReason}
         onClick={onDecline}
         type="button"
         variant="ghost"
@@ -239,6 +273,7 @@ const ConnectActions = ({
       {canCheck ? (
         <Button
           disabled={isBusy}
+          disabledReason={busyReason}
           onClick={onCheck}
           type="button"
           variant="outline"
@@ -247,7 +282,12 @@ const ConnectActions = ({
         </Button>
       ) : null}
       {isAwaitingSignIn ? null : (
-        <Button disabled={isBusy} onClick={onConnect} type="button">
+        <Button
+          disabled={isBusy}
+          disabledReason={busyReason}
+          onClick={onConnect}
+          type="button"
+        >
           {isWorking ? (
             <Loader className="size-4" variant="decorative" />
           ) : null}

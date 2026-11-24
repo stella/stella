@@ -1,11 +1,11 @@
 import { Result } from "better-result";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { ScoutKey } from "@stll/api-contract/signals";
 
-import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { SCOUT_RUN_STATUS, scoutRuns } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -83,7 +83,12 @@ export const runScout = async ({
           insertedCount: emitted.insertedIds.length,
           finishedAt: new Date(),
         })
-        .where(eq(scoutRuns.id, runId));
+        .where(
+          and(
+            eq(scoutRuns.id, runId),
+            eq(scoutRuns.status, SCOUT_RUN_STATUS.RUNNING),
+          ),
+        );
       return emitted;
     });
   } catch (error) {
@@ -99,7 +104,12 @@ export const runScout = async ({
               error: errorTag(error),
               finishedAt: new Date(),
             })
-            .where(eq(scoutRuns.id, runId)),
+            .where(
+              and(
+                eq(scoutRuns.id, runId),
+                eq(scoutRuns.status, SCOUT_RUN_STATUS.RUNNING),
+              ),
+            ),
         ),
     );
     if (Result.isError(recorded)) {

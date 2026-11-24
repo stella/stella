@@ -4,6 +4,8 @@ import * as v from "valibot";
 import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
 import readDecisionAnchorRedirectsRoute from "@/api/handlers/case-law/decisions/anchor-redirects";
+import readBrowseCalendar from "@/api/handlers/case-law/decisions/browse-calendar";
+import listBrowseCourts from "@/api/handlers/case-law/decisions/browse-courts";
 import {
   listDecisionFacetsHandler,
   listDecisionFacetsQuerySchema,
@@ -244,6 +246,10 @@ const readDecision = createSafePublicSubjectFollowUpHandler({
   config: {
     contract: "patch",
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    contentDelivery: {
+      type: "public",
+      reason: "Returns published court collection text.",
+    },
     mcp: { type: "tool", name: "read_case_law_decision" },
     cache: { kind: "none" },
     params: v.object({ decisionId: resourceIdSchema("caseLawDecision") }),
@@ -280,6 +286,10 @@ const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
   config: {
     contract: "patch",
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    contentDelivery: {
+      type: "public",
+      reason: "Returns published court collection text.",
+    },
     mcp: { type: "covered", by: "read_case_law_decision" },
     cache: { kind: "none" },
     params: v.object({
@@ -510,6 +520,8 @@ const listSitemapShards = createSafeBoundedPublicHandler(
 export const publicCaseLawRoute = routes(
   {
     "/coverage": { GET: readCaseLawCoverage },
+    "/browse/courts": { GET: listBrowseCourts },
+    "/browse/calendar": { GET: readBrowseCalendar },
     "/decisions": { GET: listDecisions },
     "/decisions/facets": { GET: listDecisionFacets },
     "/decisions/filter-validation": { GET: validateDecisionFilters },

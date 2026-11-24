@@ -1,5 +1,144 @@
 # @stll/workspace-ui
 
+## 0.24.4
+
+### Patch Changes
+
+- Updated dependencies [[`1ab906c`](https://github.com/stella/stella/commit/1ab906cc4ad7916de5ef21284416343ea2e2810c)]:
+  - @stll/ui@0.88.0
+
+## 0.24.3
+
+### Patch Changes
+
+- Updated dependencies [[`1798f66`](https://github.com/stella/stella/commit/1798f6615a61ddf02e091d925269ed735bef75fe)]:
+  - @stll/ui@0.87.0
+
+## 0.24.2
+
+### Patch Changes
+
+- Updated dependencies [[`b280d21`](https://github.com/stella/stella/commit/b280d21b8b6bc7149a342a08f2d78036f1099186)]:
+  - @stll/ui@0.86.0
+
+## 0.24.1
+
+### Patch Changes
+
+- Updated dependencies [[`6bc0546`](https://github.com/stella/stella/commit/6bc0546997b8d2bec84322aebee4c8249415af63), [`e1d953a`](https://github.com/stella/stella/commit/e1d953a644572aabd221066d6b567d05f17cbb5b)]:
+  - @stll/ui@0.85.0
+
+## 0.24.0
+
+### Minor Changes
+
+- [#9246](https://github.com/stella/stella/pull/9246) [`f292e0a`](https://github.com/stella/stella/commit/f292e0af50fa6912cdced0f28f0b4cfd22c61c01) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `FileConversionRefusal` adds `{ kind: "no_preview", format, cause }`: an image this deployment makes no preview of, because it does not decode the format (`"decoding_off"`) or cannot read the file's pictures (`"unreadable"`). `format` is the file's short tag, such as `"HEIC"`.
+
+### Patch Changes
+
+- Updated dependencies [[`98abe28`](https://github.com/stella/stella/commit/98abe2841a69b052cdfd34cfd8e42fe5d7a53105)]:
+  - @stll/ui@0.84.1
+
+## 0.23.3
+
+### Patch Changes
+
+- Updated dependencies [[`06795f2`](https://github.com/stella/stella/commit/06795f299fc300e130bd3c92a749e01ecf4c0853)]:
+  - @stll/ui@0.84.0
+
+## 0.23.2
+
+### Patch Changes
+
+- Updated dependencies [[`10ef464`](https://github.com/stella/stella/commit/10ef464329c555633c59a8307bbd6bf85e22fe5a)]:
+  - @stll/ui@0.83.0
+
+## 0.23.1
+
+### Patch Changes
+
+- Updated dependencies [[`39eabb8`](https://github.com/stella/stella/commit/39eabb8eee2640bdda32e928239460602aefc23b)]:
+  - @stll/ui@0.82.0
+
+## 0.23.0
+
+### Minor Changes
+
+- [#9193](https://github.com/stella/stella/pull/9193) [`94387e7`](https://github.com/stella/stella/commit/94387e7ca464e5f26cf95913f20b0a4a503b79b9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/inline-overflow` holds the policy that decides which items of a single-line row fit and which move into a trailing "show more" menu (`resolveInlineOverflow`, `splitInlineOverflow`), and `@stll/ui/use-inline-overflow` measures a row for it. `InspectorFacetBar` runs on them. `WorkspaceViewSwitcher` takes a required `overflowLabel` and moves the views that do not fit into a menu after the tabs, keeping the active or renamed view on screen, instead of scrolling the tabs; the strip's add control no longer draws a divider.
+
+### Patch Changes
+
+- Updated dependencies [[`9db6ee1`](https://github.com/stella/stella/commit/9db6ee1cbde7b4e6b85210e46bf93c705034e64b), [`94387e7`](https://github.com/stella/stella/commit/94387e7ca464e5f26cf95913f20b0a4a503b79b9), [`7192259`](https://github.com/stella/stella/commit/7192259afbb8e3e3ffbbb906b9be3129e1ab3882), [`f55e84a`](https://github.com/stella/stella/commit/f55e84a17a4847c2d6722799990f5932fdd7b004), [`62c29aa`](https://github.com/stella/stella/commit/62c29aa31dfa732c9962227ae90b54ccb4bddbd6), [`b0f575f`](https://github.com/stella/stella/commit/b0f575f1ef2b403299e222e2dc21293b916785c7)]:
+  - @stll/ui@0.81.0
+
+## 0.22.0
+
+### Minor Changes
+
+- [#9081](https://github.com/stella/stella/pull/9081) [`d357728`](https://github.com/stella/stella/commit/d357728224fb93f2fda81a1fb619a2f6f7fe5557) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Buttons expose the disabled reason as an accessible description and retain keyboard focus when it changes. A disabled inline text run requires a reason. File, search, and secret inputs accept a localized `disabledReason` for their action buttons. Split buttons use `primaryDisabledReason` for their primary action. Review controls use `disabledReason`, `applyingReason`, or `actionDisabledReason` to explain pending and restricted decisions.
+
+  Condition builder labels now include `noFields` and `groupFull` to explain why a condition or group cannot be added.
+
+### Patch Changes
+
+- Updated dependencies [[`d357728`](https://github.com/stella/stella/commit/d357728224fb93f2fda81a1fb619a2f6f7fe5557)]:
+  - @stll/ui@0.80.0
+
+## 0.21.2
+
+### Patch Changes
+
+- Updated dependencies [[`2d31b6d`](https://github.com/stella/stella/commit/2d31b6d446bf6c1a38c09d27d0b56456dcbed015)]:
+  - @stll/ui@0.79.0
+
+## 0.21.1
+
+### Patch Changes
+
+- Updated dependencies [[`b6194a7`](https://github.com/stella/stella/commit/b6194a73bae3624e7afb0f8a6b21ac9facdb97f8)]:
+  - @stll/ui@0.78.0
+
+## 0.21.0
+
+### Minor Changes
+
+- [#9017](https://github.com/stella/stella/pull/9017) [`25a0c38`](https://github.com/stella/stella/commit/25a0c386561c724d1c7cc0100c7a0a08c2e39b24) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose the width every kanban board column takes (`KANBAN_COLUMN_WIDTH_CLASS`) from `@stll/ui/kanban-column-header-shell`, so a loading view can lay its column headers out where the board will. `WorkspaceViewSwitcherFace` takes an optional `renderName` for a tab name the caller draws itself.
+
+- [#9005](https://github.com/stella/stella/pull/9005) [`47c898e`](https://github.com/stella/stella/commit/47c898e35450bb16260efaef0bf1144cd59a355d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add loading faces for a select trigger and a segmented icon toggle to `@stll/ui/control-face`, and for the view filter button and chip to `@stll/ui/view-toolbar-shell`, each built from the same classes as the control it stands in for. Add `@stll/workspace-ui/sorts-face`, the sort chips' loading face.
+
+### Patch Changes
+
+- Updated dependencies [[`ebe8ae8`](https://github.com/stella/stella/commit/ebe8ae88a7847490bc6d40153ab3a80a97cebc4e), [`be836e0`](https://github.com/stella/stella/commit/be836e098b22eb7fc70661f150c0dfc11c6a3220), [`e7a4e0c`](https://github.com/stella/stella/commit/e7a4e0c73395c7481f051aefb03a2306bbf1f5ef), [`10a2406`](https://github.com/stella/stella/commit/10a2406e96662f08eb556a0155676732d511cdfc), [`37117f6`](https://github.com/stella/stella/commit/37117f6e007640ac3eeff769935081020d49ad74), [`c3b4e95`](https://github.com/stella/stella/commit/c3b4e95a62d63062c0013dc3d8c8fbb79c6d3cbf), [`25a0c38`](https://github.com/stella/stella/commit/25a0c386561c724d1c7cc0100c7a0a08c2e39b24), [`47c898e`](https://github.com/stella/stella/commit/47c898e35450bb16260efaef0bf1144cd59a355d), [`4a564f6`](https://github.com/stella/stella/commit/4a564f686b8ee215910fcfa46860fb2e1f06086b), [`846c016`](https://github.com/stella/stella/commit/846c016a47690b5c6c88db2f78881aa68758668a), [`036acf9`](https://github.com/stella/stella/commit/036acf965aae01184cee165c28dd8d7c0a4443b9), [`6d0d7f7`](https://github.com/stella/stella/commit/6d0d7f79e8792da0ef60232ce75cf98b6ee204b0), [`47c898e`](https://github.com/stella/stella/commit/47c898e35450bb16260efaef0bf1144cd59a355d)]:
+  - @stll/ui@0.77.0
+
+## 0.20.0
+
+### Minor Changes
+
+- [#8963](https://github.com/stella/stella/pull/8963) [`c2cddf2`](https://github.com/stella/stella/commit/c2cddf2c635ac648c258913fc9c51d2d4fa9d225) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Light modules for loading views drawn before the page mounts. `@stll/ui/truncated-text-face` holds `TruncatedTextFace` and the line classes `TruncatedText` is built from, with no tooltip or popover. `@stll/ui/view-toolbar-shell` holds `ViewChromeBar` and `ViewToolbarChrome`, which `@stll/ui/view-toolbar` re-exports. `@stll/workspace-ui/view-strip` holds the view strip, its tab face and `WorkspaceViewSwitcherFace`, whose tab names are now faces with no hint; `@stll/workspace-ui/view-switcher-face` re-exports them beside `WorkspaceViewTabName`. A strip's `direction` is optional and follows the document when left out.
+
+- [#8894](https://github.com/stella/stella/pull/8894) [`a6c1f0f`](https://github.com/stella/stella/commit/a6c1f0fb49c74499b19c1e2d8c9e7fbe210a3517) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `@stll/workspace-ui/view-switcher-face`: `WorkspaceViewSwitcherFace` draws the saved-view strip without its behaviour, for a loading view, and `WorkspaceViewStrip` and `WorkspaceViewTabFace` are the row and tab both switchers share.
+
+### Patch Changes
+
+- [#8880](https://github.com/stella/stella/pull/8880) [`1f4ee37`](https://github.com/stella/stella/commit/1f4ee37011a600e45f2c4b4204ac25688e5a372f) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update `tldts` to `7.5.2`.
+  Update `lucide-react` to `1.72.0`.
+  Update `use-intl` to `4.15.1`.
+- Updated dependencies [[`86022ca`](https://github.com/stella/stella/commit/86022ca85d6a2d92a262628f29d720d5a0e1eb03), [`f8831e4`](https://github.com/stella/stella/commit/f8831e47629b27bdcaf4041f19b8196b6d30dab5), [`3d7121a`](https://github.com/stella/stella/commit/3d7121a5dfe6b34b74729dea7157b33f0a5d171a), [`1f4ee37`](https://github.com/stella/stella/commit/1f4ee37011a600e45f2c4b4204ac25688e5a372f), [`b261ece`](https://github.com/stella/stella/commit/b261ece00959cc1349dec67471de4b46e2009fec), [`6709183`](https://github.com/stella/stella/commit/67091834bf8af1291247c7be3f5540d311167ead), [`1f24eba`](https://github.com/stella/stella/commit/1f24eba240c916800932ff33c288521f32b539e3), [`e82f6b6`](https://github.com/stella/stella/commit/e82f6b6a289f2a9e6d01f60b5f7cacb29ce57d1c), [`c2cddf2`](https://github.com/stella/stella/commit/c2cddf2c635ac648c258913fc9c51d2d4fa9d225), [`f6360bf`](https://github.com/stella/stella/commit/f6360bff82e3a13fcaa16dc85db2097f1300c9c9), [`efaf23f`](https://github.com/stella/stella/commit/efaf23fe907e7596cc676851985b4a90f9882e57), [`c2cddf2`](https://github.com/stella/stella/commit/c2cddf2c635ac648c258913fc9c51d2d4fa9d225)]:
+  - @stll/ui@0.76.0
+
+## 0.19.0
+
+### Minor Changes
+
+- [#8846](https://github.com/stella/stella/pull/8846) [`e8aa798`](https://github.com/stella/stella/commit/e8aa7988f19952963102e45c4a95af1005045437) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `WorkspaceShell` takes an optional `skipToContentLabel`. When set, the shell renders a visually hidden skip link as its first tab stop that moves focus to the main region. `WorkspaceFrame` passes it through in the `host-responsive` composition.
+
+### Patch Changes
+
+- [#8618](https://github.com/stella/stella/pull/8618) [`e229034`](https://github.com/stella/stella/commit/e22903462cf3734c29b0a97f2f48dc3023e758c8) Thanks [@dependabot](https://github.com/apps/dependabot)! - Ship with the refreshed catalog dependencies: lucide-react 1.71.0 for `@stll/ui` and use-intl 4.14.10 for `@stll/workspace-ui`.
+- Updated dependencies [[`9083d12`](https://github.com/stella/stella/commit/9083d12e2b853c009066c81117fea294e3b548dc), [`9e0fd52`](https://github.com/stella/stella/commit/9e0fd526ef113a0ccf90546b8ef92ea5fff36318), [`e229034`](https://github.com/stella/stella/commit/e22903462cf3734c29b0a97f2f48dc3023e758c8), [`54d4095`](https://github.com/stella/stella/commit/54d409572d79298687864e424ed8dd555ea075e2), [`0dad4da`](https://github.com/stella/stella/commit/0dad4da417b4a99c6141363e2c05a757a314fb72), [`7c534ed`](https://github.com/stella/stella/commit/7c534ed29c09e58efc43fcb3d985941eb52e12b6), [`e8aa798`](https://github.com/stella/stella/commit/e8aa7988f19952963102e45c4a95af1005045437)]:
+  - @stll/ui@0.75.0
+
 ## 0.18.4
 
 ### Patch Changes

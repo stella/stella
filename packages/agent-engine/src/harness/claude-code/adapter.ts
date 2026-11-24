@@ -472,6 +472,8 @@ type ConnectFailure = {
     | "start_rejected"
     | "sandbox_unavailable";
   message: string;
+  /** The CLI did not answer a startup request in time: a slow start. */
+  timedOut?: true;
 };
 
 type ConnectOptions = {
@@ -554,7 +556,13 @@ const connect = async ({
   }
   return Result.err(
     Result.isError(initialized)
-      ? { reason: "harness_unavailable", message: initialized.error.message }
+      ? {
+          reason: "harness_unavailable",
+          message: initialized.error.message,
+          ...(initialized.error.reason === "timed_out"
+            ? { timedOut: true as const }
+            : {}),
+        }
       : {
           reason: "protocol_violation",
           message: "The harness answered initialize with an unexpected shape.",
@@ -562,25 +570,41 @@ const connect = async ({
   );
 };
 
+/** The sign-in method a release that leaves out `tokenSource` stands for. */
+const SUBSCRIPTION_SIGN_IN = "claude.ai";
+
+/** A field's value, unless it is missing, blank or `none`. */
+const given = (value: string | undefined): string | null =>
+  value === undefined || value.trim() === "" || value === "none" ? null : value;
+
 /**
  * Only a subscription sign-in runs a turn. An API key in use (one created by
  * a Console sign-in, say) would bill the API, so it reads as signed out.
+ *
+ * Older releases name the subscription sign-in in `tokenSource`; 2.1.309
+ * leaves `tokenSource` out for one and reports the first-party account
+ * (`email`, `subscriptionType`) instead, while a signed-out CLI still says
+ * `tokenSource: "none"`.
  */
 const authOf = ({ account }: Initialized): HarnessAuth => {
-  const apiKey =
-    account.apiKeySource !== undefined && account.apiKeySource !== "none";
-  if (
-    apiKey ||
-    account.tokenSource === undefined ||
-    account.tokenSource === "none"
-  ) {
+  if (given(account.apiKeySource) !== null || account.tokenSource === "none") {
     return { type: "signed_out" };
   }
-  return {
-    type: "signed_in",
-    method: account.tokenSource,
-    plan: account.subscriptionType ?? null,
-  };
+  const plan = given(account.subscriptionType);
+  const tokenSource = given(account.tokenSource);
+  if (tokenSource !== null) {
+    return { type: "signed_in", method: tokenSource, plan };
+  }
+  const firstParty =
+    account.apiProvider === undefined || account.apiProvider === "firstParty";
+  if (
+    account.tokenSource === undefined &&
+    firstParty &&
+    (plan !== null || given(account.email) !== null)
+  ) {
+    return { type: "signed_in", method: SUBSCRIPTION_SIGN_IN, plan };
+  }
+  return { type: "signed_out" };
 };
 
 /**
@@ -781,7 +805,16 @@ type OpenedSession = {
 };
 type OpenFailure =
   | { type: "connect"; failure: ConnectFailure }
-  | { type: "start"; error: HarnessStartError };
+  | { type: "start"; error: HarnessStartError; timedOut?: true };
+
+/**
+ * The CLI was started but missed a startup deadline: a first launch after an
+ * update, or a busy computer. Worth one more start; a refusal is not.
+ */
+const startTimedOut = (failure: OpenFailure) =>
+  failure.type === "connect"
+    ? failure.failure.timedOut === true
+    : failure.timedOut === true;
 
 /** A turn's session on `cli`, which hands it the process's messages. */
 const turnSession = (
@@ -839,10 +872,15 @@ const openSession = async (
   session.attach(client);
   const fail = async (
     error: HarnessStartError,
+    timedOut = false,
   ): Promise<Result<OpenedSession, OpenFailure>> => {
     session.abandon();
     await client.kill();
-    return Result.err({ type: "start", error });
+    return Result.err({
+      type: "start",
+      error,
+      ...(timedOut ? { timedOut: true as const } : {}),
+    });
   };
   if (authOf(init).type === "signed_out") {
     return fail(
@@ -883,6 +921,7 @@ const openSession = async (
         reason: "start_rejected",
         message: "The harness could not connect to the stella MCP server.",
       }),
+      Result.isError(registered) && registered.error.reason === "timed_out",
     );
   }
   return Result.ok({ session, client, cli });
@@ -891,7 +930,10 @@ const openSession = async (
 const startError = (failure: OpenFailure): HarnessStartError =>
   failure.type === "start"
     ? failure.error
-    : new HarnessStartError(failure.failure);
+    : new HarnessStartError({
+        reason: failure.failure.reason,
+        message: failure.failure.message,
+      });
 
 /**
  * The session a new process opens for `request`, and what the turn reports
@@ -940,6 +982,12 @@ const openTurn = async (
   });
   let { target, continuation } = openingOf(input.continuation, fresh);
   let opened = await openSession(options, input, target, skills);
+  // One more start after a slow one, on the same continuation: a session the
+  // first start was opening gets ids of its own again.
+  if (Result.isError(opened) && startTimedOut(opened.error)) {
+    ({ target, continuation } = openingOf(input.continuation, fresh));
+    opened = await openSession(options, input, target, skills);
+  }
   if (
     Result.isError(opened) &&
     target.type !== "fresh" &&
@@ -969,7 +1017,7 @@ const openTurn = async (
     await client.kill();
     return prompt;
   }
-  const held = heldProcess(options, cli, client, skills);
+  const held = heldProcess(options, input, { cli, client, skills });
   sendTurn({
     session,
     client,
@@ -1020,18 +1068,60 @@ const removePlugin = async (
  * What a CLI process holds for every turn it hosts: the skill plugin it was
  * started with, removed once the process is gone.
  */
-type HeldProcess = { skills: SkillPlugin | null; gone: Promise<void> };
+type HeldProcess = {
+  skills: SkillPlugin | null;
+  gone: Promise<void>;
+  /** What the process runs at, switched in place by later turns. */
+  settings: HeldSettings;
+};
+
+/**
+ * What a turn sets that a kept process can switch: the model and effort by
+ * control request, and the approval mode's permission mode. `launch` is what
+ * the approval mode fixes at the CLI's start (its sandbox and pre-allowed
+ * tools); a turn whose mode starts the CLI otherwise needs a new process.
+ */
+type HeldSettings = {
+  model: string;
+  effort: string | null;
+  launch: string;
+};
+
+const heldSettings = (
+  options: ClaudeCodeHarnessAdapterOptions,
+  input: HarnessTurnInput,
+  skills: SkillPlugin | null,
+): HeldSettings => ({
+  model: input.model,
+  effort: input.reasoningEffort,
+  launch: JSON.stringify([
+    settingsArgs(options, input, skills),
+    allowedToolsArgs({
+      approvals: input.policy.approvals,
+      browserServerName: input.browser?.serverName ?? null,
+      serverName: input.mcp.serverName,
+    }),
+  ]),
+});
 
 const HELD = new WeakMap<ClaudeProcess, HeldProcess>();
 
 const heldProcess = (
   options: ClaudeCodeHarnessAdapterOptions,
-  cli: ClaudeProcess,
-  client: ClaudeCliClient,
-  skills: SkillPlugin | null,
+  input: HarnessTurnInput,
+  {
+    cli,
+    client,
+    skills,
+  }: {
+    cli: ClaudeProcess;
+    client: ClaudeCliClient;
+    skills: SkillPlugin | null;
+  },
 ): HeldProcess => {
   const held = {
     skills,
+    settings: heldSettings(options, input, skills),
     gone: (async () => {
       await client.exited;
       if (skills !== null) {
@@ -1105,19 +1195,43 @@ const continueTurn = async (
     });
   }
   const client = cli.client;
-  // A kept process may have left the mode it started in (an approved plan
-  // switches to Ask's mode): every turn starts in its own mode, or in a
-  // fresh process when the CLI will not switch.
-  const reset = await client.request("set_permission_mode", {
-    mode: PERMISSION_MODE[input.policy.approvals],
-  });
-  if (Result.isError(reset)) {
+  const relaunch = async () => {
     await settlesWithin(cli.stopAll(client), options.gracePeriodMs);
     await client.kill();
     return startTurn(options, {
       ...input,
       continuation: { type: "resume", sessionId: live.sessionId },
     });
+  };
+  // The turn runs at its own model, effort and mode, switched here so the
+  // work the process holds goes on; what the CLI fixed at its start, or a
+  // switch it refuses, needs a new process.
+  const wanted = heldSettings(options, input, held.skills);
+  if (wanted.launch !== held.settings.launch) {
+    return relaunch();
+  }
+  if (wanted.model !== held.settings.model) {
+    const switched = await client.request("set_model", { model: wanted.model });
+    if (Result.isError(switched)) {
+      return relaunch();
+    }
+  }
+  if (wanted.effort !== held.settings.effort) {
+    const switched = await client.request("apply_flag_settings", {
+      settings: { effortLevel: wanted.effort },
+    });
+    if (Result.isError(switched)) {
+      return relaunch();
+    }
+  }
+  held.settings = wanted;
+  // A kept process may have left the mode it started in (an approved plan
+  // switches to Ask's mode): every turn starts in its own mode.
+  const reset = await client.request("set_permission_mode", {
+    mode: PERMISSION_MODE[input.policy.approvals],
+  });
+  if (Result.isError(reset)) {
+    return relaunch();
   }
   const session = turnSession(options, input, cli, live.sessionId);
   session.attach(client);

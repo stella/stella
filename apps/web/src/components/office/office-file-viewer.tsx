@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type {
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
@@ -7,11 +7,9 @@ import type {
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 import { contentDir } from "@stll/ui/use-content-dir";
-import { cn } from "@stll/ui/utils";
 
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
@@ -19,6 +17,7 @@ import {
   type DesktopOpenTarget,
   useDesktopFileOpen,
 } from "@/components/inspector/use-desktop-file-open";
+import { OfficeDocumentCanvas } from "@/components/office/office-document-canvas";
 import {
   INITIAL_OFFICE_EDIT_INTENT_STATE,
   isOfficeEditIntentKey,
@@ -30,8 +29,6 @@ import type {
   OfficeViewerSpreadsheetSelection,
   OfficeViewerStatus,
 } from "@/components/office/silurus-office-viewer";
-import { SilurusOfficeFileViewer } from "@/components/office/silurus-office-viewer";
-import { useTheme } from "@/components/theme-provider";
 import {
   DesktopRequiredDialog,
   useDesktopActionGate,
@@ -44,7 +41,6 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { registerOfficeCitationNavigation } from "@/lib/files/office-citations";
 import { fileOptions } from "@/lib/files/queries";
 import { useActionCapabilities } from "@/lib/organization/feature-access/capability-actions";
-import "@/components/office/office-file-viewer.css";
 
 const OFFICE_AI_DOCK_CLEARANCE_PX = 96;
 const PRESENTATION_TRAILING_PADDING_PX = 112;
@@ -69,13 +65,11 @@ export const OfficeFileViewer = ({
 }: OfficeFileViewerProps) => {
   const t = useTranslations();
   const analytics = useAnalytics();
-  const { resolvedTheme } = useTheme();
   const desktopGate = useDesktopActionGate("edit-file");
   const desktopCapability =
     useActionCapabilities("desktop").capabilities.desktop;
   const editIntentStateRef = useRef(INITIAL_OFFICE_EDIT_INTENT_STATE);
   const navigationSequenceRef = useRef(0);
-  const [attempt, setAttempt] = useState(0);
   const [viewerStatus, setViewerStatus] = useState<OfficeViewerStatus>({
     type: "loading",
   });
@@ -94,86 +88,69 @@ export const OfficeFileViewer = ({
   const requestDesktopOpenAttention = useInspectorCommandStore(
     (state) => state.requestDesktopOpenAttention,
   );
-  const handleStatusChange = useCallback((status: OfficeViewerStatus) => {
+  const handleStatusChange = (status: OfficeViewerStatus) => {
     setViewerStatus(status);
-  }, []);
-  const handleViewerError = useCallback(
-    (error: Error) => {
-      analytics.captureError(error, {
-        fingerprintKey: "OfficeFileViewer:failure",
-        scope: { type: "handler", handlerId: "OfficeFileViewer:failure" },
-      });
-    },
-    [analytics],
-  );
-  const handleNavigationError = useCallback(
-    (error: Error) => {
-      analytics.captureError(error, {
-        fingerprintKey: "OfficeFileViewer:failure-2",
-        scope: { type: "handler", handlerId: "OfficeFileViewer:failure-2" },
-      });
-      notifyUserError(error, t("errors.actionFailed"));
-    },
-    [analytics, t],
-  );
-  const handleNavigationApplied = useCallback((sequence: number) => {
+  };
+  const handleViewerError = (error: Error) => {
+    analytics.captureError(error, {
+      fingerprintKey: "OfficeFileViewer:failure",
+      scope: { type: "handler", handlerId: "OfficeFileViewer:failure" },
+    });
+  };
+  const handleNavigationError = (error: Error) => {
+    analytics.captureError(error, {
+      fingerprintKey: "OfficeFileViewer:failure-2",
+      scope: { type: "handler", handlerId: "OfficeFileViewer:failure-2" },
+    });
+    notifyUserError(error, t("errors.actionFailed"));
+  };
+  const handleNavigationApplied = (sequence: number) => {
     setNavigationRequest((current) =>
       current?.sequence === sequence ? null : current,
     );
-  }, []);
-  const handleEditIntentKeyDown = useCallback(
-    (event: ReactKeyboardEvent<HTMLDivElement>) => {
-      if (
-        desktopCapability.type !== "available" ||
-        desktopEditTarget === null ||
-        viewerStatus.type !== "ready" ||
-        !isOfficeEditIntentKey(event.nativeEvent)
-      ) {
-        return;
-      }
+  };
+  const handleEditIntentKeyDown = (
+    event: ReactKeyboardEvent<HTMLDivElement>,
+  ) => {
+    if (
+      desktopCapability.type !== "available" ||
+      desktopEditTarget === null ||
+      viewerStatus.type !== "ready" ||
+      !isOfficeEditIntentKey(event.nativeEvent)
+    ) {
+      return;
+    }
 
-      const result = registerOfficeEditIntentKeystroke({
-        state: editIntentStateRef.current,
-        timestamp: event.timeStamp,
-      });
-      editIntentStateRef.current = result.state;
-      if (!result.shouldPrompt) {
-        return;
-      }
+    const result = registerOfficeEditIntentKeystroke({
+      state: editIntentStateRef.current,
+      timestamp: event.timeStamp,
+    });
+    editIntentStateRef.current = result.state;
+    if (!result.shouldPrompt) {
+      return;
+    }
 
-      requestDesktopOpenAttention(fieldId);
-      stellaToast.add({
-        action: {
-          label: desktopGate.label,
-          onClick: () => {
-            desktopGate.run(() => {
-              detached(openInDesktop(), "office-file-viewer.open-in-desktop");
-            });
-          },
+    requestDesktopOpenAttention(fieldId);
+    stellaToast.add({
+      action: {
+        label: desktopGate.label,
+        onClick: () => {
+          desktopGate.run(() => {
+            detached(openInDesktop(), "office-file-viewer.open-in-desktop");
+          });
         },
-        description: t("workspaces.files.desktopEdit.editLocallyPrompt"),
-        timeout: 10_000,
-        title: t("workspaces.files.desktopEdit.action"),
-        type: "info",
-      });
-    },
-    [
-      desktopEditTarget,
-      desktopCapability.type,
-      desktopGate,
-      fieldId,
-      openInDesktop,
-      requestDesktopOpenAttention,
-      t,
-      viewerStatus.type,
-    ],
-  );
-  const handleViewerPointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      event.currentTarget.focus({ preventScroll: true });
-    },
-    [],
-  );
+      },
+      description: t("workspaces.files.desktopEdit.editLocallyPrompt"),
+      timeout: 10_000,
+      title: t("workspaces.files.desktopEdit.action"),
+      type: "info",
+    });
+  };
+  const handleViewerPointerDown = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    event.currentTarget.focus({ preventScroll: true });
+  };
 
   useExternalSyncEffect(
     () =>
@@ -250,53 +227,19 @@ export const OfficeFileViewer = ({
             </div>
           </div>
         )}
-        <div
-          className={cn(
-            format === "xlsx"
-              ? "stella-office-spreadsheet relative min-h-0 flex-1"
-              : "relative min-h-0 flex-1",
-          )}
-          data-color-scheme={resolvedTheme}
-        >
-          <SilurusOfficeFileViewer
-            className="h-full min-h-0 w-full"
-            documentBuffer={fileQuery.data.buffer}
-            format={format}
-            key={`${fieldId}:${String(attempt)}:${String(PRESENTATION_TRAILING_PADDING_PX)}`}
-            navigationRequest={navigationRequest}
-            onNavigationApplied={handleNavigationApplied}
-            onNavigationError={handleNavigationError}
-            onError={handleViewerError}
-            onSpreadsheetSelectionChange={setSpreadsheetSelection}
-            onStatusChange={handleStatusChange}
-            presentationPaddingBottomPx={PRESENTATION_TRAILING_PADDING_PX}
-            spreadsheetFooterHeightPx={TOOLBAR_ROW_HEIGHT_PX}
-          />
-          {viewerStatus.type === "loading" && (
-            <div className="bg-muted absolute inset-0 flex items-center justify-center">
-              <span className="text-muted-foreground text-sm">
-                {t("common.loading")}
-              </span>
-            </div>
-          )}
-          {viewerStatus.type === "failed" && (
-            <div className="bg-background absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
-              <p className="text-muted-foreground max-w-sm text-sm">
-                {t("common.somethingWentWrong")}
-              </p>
-              <Button
-                onClick={() => {
-                  setViewerStatus({ type: "loading" });
-                  setAttempt((current) => current + 1);
-                }}
-                size="xs"
-                variant="secondary"
-              >
-                {t("common.retry")}
-              </Button>
-            </div>
-          )}
-        </div>
+        <OfficeDocumentCanvas
+          documentBuffer={fileQuery.data.buffer}
+          documentKey={fieldId}
+          format={format}
+          navigationRequest={navigationRequest}
+          onNavigationApplied={handleNavigationApplied}
+          onNavigationError={handleNavigationError}
+          onError={handleViewerError}
+          onSpreadsheetSelectionChange={setSpreadsheetSelection}
+          onStatusChange={handleStatusChange}
+          presentationPaddingBottomPx={PRESENTATION_TRAILING_PADDING_PX}
+          spreadsheetFooterHeightPx={TOOLBAR_ROW_HEIGHT_PX}
+        />
       </div>
     </FileViewerWithAI>
   );

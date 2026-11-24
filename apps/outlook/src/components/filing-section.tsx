@@ -149,6 +149,7 @@ const FilingPanel = ({
         shown === null ? undefined : (
           <Button
             disabled={active || pending !== null}
+            disabledReason={active ? t("savingEmail") : t("saveNotFinalized")}
             onClick={() => setPicking(!showPicker)}
             size="xs"
             variant="ghost"
@@ -212,6 +213,7 @@ const FilingPanel = ({
         <Button
           className="w-full"
           disabled={active}
+          disabledReason={t("savingEmail")}
           loading={active}
           onClick={() => onFile(shown)}
           size="lg"

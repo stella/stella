@@ -1,10 +1,11 @@
 import { expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { trackedMcpGeneratedFiles } from "./check-mcp-generated-tracking";
 
 test("MCP generated outputs stay outside the Git index", () => {
   const tracked = Bun.spawnSync(["git", "ls-files", "-z"], {
-    cwd: new URL("..", import.meta.url).pathname,
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
   });
   expect(tracked.exitCode).toBe(0);
   expect(

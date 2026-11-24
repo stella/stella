@@ -8,10 +8,15 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import {
+  isPrintedCourtJurisdiction,
+  readPrintedCourt,
+} from "@stll/api-contract/court-identity";
+import {
   PUBLIC_COUNTRY_CAPABILITIES,
   PUBLIC_COUNTRY_SURFACE_OPEN,
 } from "@stll/api-contract/public-country-capability";
 import { mapWithConcurrency } from "@stll/concurrency";
+import { sleep } from "@stll/concurrency/sleep";
 
 /** The jurisdictions whose courts the probe samples. */
 const CASE_LAW_IDENTITY_PROBE_COUNTRIES = ["CZE", "SVK", "AUT"] as const;
@@ -31,6 +36,10 @@ const FACET_SEED_QUERY = {
 
 const TOOL_CALL_CONCURRENCY = 4;
 const FAILURES_REPORTED_MAX = 5;
+/** How many times one search follows its continuation before giving up. */
+const SEARCH_CONTINUATIONS_MAX = 10;
+/** The longest a follow-up waits, whatever retryAfterMs asks. */
+const SEARCH_CONTINUATION_WAIT_MAX_MS = 5000;
 
 type CaseLawToolOutcome =
   { type: "ok"; payload: unknown } | { type: "error"; detail: string };
@@ -40,6 +49,9 @@ export type CallCaseLawTool = (
   name: "resolve_case_law_decision" | "search_case_law",
   args: Record<string, unknown>,
 ) => Promise<CaseLawToolOutcome>;
+
+/** How the probe waits before following a running search. */
+type WaitFor = (milliseconds: number) => Promise<void>;
 
 type CaseLawIdentityProbeOutcome =
   | { status: "passed"; detail: string }
@@ -62,6 +74,13 @@ const searchPayloadSchema = v.object({
     }),
   ),
   results: v.array(searchHitSchema),
+});
+
+/** A search the deployment is still running: follow it, it is not an answer. */
+const runningSearchSchema = v.object({
+  status: v.literal("running"),
+  continuationToken: v.string(),
+  retryAfterMs: v.number(),
 });
 
 const resolvePayloadSchema = v.variant("status", [
@@ -149,14 +168,63 @@ const resolutionFailure = async (
 
 const searchOf = async (
   callTool: CallCaseLawTool,
+  wait: WaitFor,
   args: Record<string, unknown>,
 ): Promise<v.InferOutput<typeof searchPayloadSchema> | string> => {
-  const outcome = await callTool("search_case_law", args);
-  if (outcome.type === "error") {
-    return outcome.detail;
+  let callArgs = args;
+  for (let attempt = 0; attempt <= SEARCH_CONTINUATIONS_MAX; attempt++) {
+    const outcome = await callTool("search_case_law", callArgs);
+    if (outcome.type === "error") {
+      return outcome.detail;
+    }
+    const running = v.safeParse(runningSearchSchema, outcome.payload);
+    if (!running.success) {
+      const parsed = v.safeParse(searchPayloadSchema, outcome.payload);
+      return parsed.success ? parsed.output : "unreadable search payload";
+    }
+    if (attempt === SEARCH_CONTINUATIONS_MAX) {
+      // No follow-up comes after the last one, so its wait is not spent.
+      break;
+    }
+    // The same arguments plus the token collect the work already running.
+    callArgs = {
+      ...args,
+      continuation_token: running.output.continuationToken,
+    };
+    await wait(
+      Math.min(
+        Math.max(0, running.output.retryAfterMs),
+        SEARCH_CONTINUATION_WAIT_MAX_MS,
+      ),
+    );
   }
-  const parsed = v.safeParse(searchPayloadSchema, outcome.payload);
-  return parsed.success ? parsed.output : "unreadable search payload";
+  return `search still running after ${String(SEARCH_CONTINUATIONS_MAX)} continuations`;
+};
+
+/**
+ * Whether a sampled decision's court is the court its facet named. Facets
+ * name courts as stored, so one directory court can appear under several
+ * spellings; where the directory reads printed names, both are compared by
+ * the court they read to.
+ */
+const isSameCourt = (
+  country: ProbeCountry,
+  sampled: string,
+  named: string,
+): boolean => {
+  if (sampled === named) {
+    return true;
+  }
+  if (!isPrintedCourtJurisdiction(country)) {
+    return false;
+  }
+  const sampledCourt = readPrintedCourt(country, sampled);
+  const namedCourt = readPrintedCourt(country, named);
+  return (
+    sampledCourt.type === "court" &&
+    namedCourt.type === "court" &&
+    sampledCourt.court.id === namedCourt.court.id
+  );
 };
 
 const SEARCH_CLOSED: CaseLawIdentityProbeOutcome = {
@@ -166,10 +234,13 @@ const SEARCH_CLOSED: CaseLawIdentityProbeOutcome = {
 
 const probeCountry = async (
   callTool: CallCaseLawTool,
+  wait: WaitFor,
   country: ProbeCountry,
 ): Promise<CaseLawIdentityProbeOutcome> => {
-  const seeded = await searchOf(callTool, {
+  // Facets are opt-in: a search that does not name them returns none.
+  const seeded = await searchOf(callTool, wait, {
     country,
+    facets: ["court"],
     limit: 1,
     queries: [FACET_SEED_QUERY[country]],
   });
@@ -193,7 +264,7 @@ const probeCountry = async (
     limit: TOOL_CALL_CONCURRENCY,
     operation: async (court) => ({
       court,
-      sample: await searchOf(callTool, {
+      sample: await searchOf(callTool, wait, {
         country,
         court,
         limit: 1,
@@ -212,12 +283,16 @@ const probeCountry = async (
     if (hit === undefined) {
       return [`${court}: no decision`];
     }
-    return hit.court === court ? [] : [`${court}: sampled ${hit.court}`];
+    return isSameCourt(country, hit.court, court)
+      ? []
+      : [`${court}: sampled ${hit.court}`];
   });
   const hits = samples.flatMap(({ court, sample }) =>
     typeof sample === "string"
       ? []
-      : sample.results.slice(0, 1).filter((hit) => hit.court === court),
+      : sample.results
+          .slice(0, 1)
+          .filter((hit) => isSameCourt(country, hit.court, court)),
   );
   // Some courts publish no ECLI; their sample proves the docket only, so the
   // detail names them instead of counting the court as fully probed.
@@ -261,6 +336,7 @@ const probeCountry = async (
  */
 export const sampleCaseLawIdentities = async (
   callTool: CallCaseLawTool,
+  { wait = sleep }: { wait?: WaitFor } = {},
 ): Promise<{ country: ProbeCountry; outcome: CaseLawIdentityProbeOutcome }[]> =>
   await Promise.all(
     CASE_LAW_IDENTITY_PROBE_COUNTRIES.map(async (country) => ({
@@ -268,7 +344,7 @@ export const sampleCaseLawIdentities = async (
       outcome: PUBLIC_COUNTRY_SURFACE_OPEN.search[
         PUBLIC_COUNTRY_CAPABILITIES[country].caseLaw
       ]
-        ? await probeCountry(callTool, country)
+        ? await probeCountry(callTool, wait, country)
         : SEARCH_CLOSED,
     })),
   );

@@ -15,6 +15,7 @@ import {
   FILE_SECURITY_REMEDIATION,
 } from "@stll/api-contract";
 import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
+import { UNSCANNED_CONTENT_WARNING } from "@stll/api-contract/file-scan-warnings";
 import { ZipArchive } from "@stll/docx-core/zip";
 import { ATTACHED_TEMPLATE_SECURITY_RULE } from "@stll/docx-utils";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
@@ -42,6 +43,8 @@ import {
   legacyTmpUploadKey,
   PRESIGN_URL_EXPIRY_SECONDS,
 } from "@/api/lib/uploads/runtime";
+import { eicarTestFile } from "@/api/tests/fixtures/eicar";
+import { makeZipArchive } from "@/api/tests/fixtures/zip-archive";
 import { createApprovalHarness } from "@/api/tests/helpers/chat-approval-harness";
 import { docxWithMarkers } from "@/api/tests/helpers/docx-with-markers";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -700,6 +703,72 @@ describe("presigned upload mutation flow", () => {
     ).toEqual([]);
   });
 
+  test("stores a ZIP with a password-protected file, with the warning that it was not scanned", async () => {
+    const bytes = makeZipArchive([
+      { name: "letters/locked.pdf", data: "Locked letter", flags: 0x00_01 },
+      { name: "letters/readme.txt", data: "Readable notes" },
+    ]);
+    const presignResult = await presignZip("protected.zip", bytes);
+    const uploadId = getUploadId(presignResult);
+    await stageBytes(presignResult, bytes);
+
+    const finalized = await finalizeUpload.handler(
+      asTestRaw<FinalizeCtx>(
+        createContext({
+          params: { workspaceId: ids.wsA1, uploadId },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+    if (!("finalizedResult" in finalized)) {
+      throw new Error(`Upload did not finalize: ${JSON.stringify(finalized)}`);
+    }
+    const result = finalized.finalizedResult;
+    if (result.type !== "entity_version") {
+      throw new Error(`Expected an entity version, received ${result.type}`);
+    }
+
+    const stored = await testDb
+      .select({ content: fields.content })
+      .from(fields)
+      .where(eq(fields.entityVersionId, result.entityVersionId));
+    expect(stored.filter(({ content }) => content.type === "file")).toEqual([
+      {
+        content: expect.objectContaining({
+          type: "file",
+          fileName: "protected.zip",
+          scanWarnings: [UNSCANNED_CONTENT_WARNING.encrypted],
+        }),
+      },
+    ]);
+  });
+
+  test("refuses a ZIP whose readable file is malware although another is password-protected", async () => {
+    const bytes = makeZipArchive([
+      { name: "letters/locked.pdf", data: "Locked letter", flags: 0x00_01 },
+      { name: "tools/readme.txt", data: eicarTestFile() },
+    ]);
+    const presignResult = await presignZip("mixed.zip", bytes);
+    const uploadId = getUploadId(presignResult);
+    await stageBytes(presignResult, bytes);
+
+    const finalized = await finalizeAsOwner(uploadId);
+
+    expect(finalized).toMatchObject({
+      code: 422,
+      response: {
+        code: API_FILE_SECURITY_REJECTED_ERROR_CODE,
+        issues: [{ code: "eicar_test_file", path: "file" }],
+      },
+    });
+    expect(await uploadStatus(uploadId)).toBe("rejected");
+    expect(
+      [...fake.objects.keys()].filter((key) => key.includes(uploadId)),
+    ).toEqual([]);
+  });
+
   test("does not let workspace A abort workspace B upload IDs", async () => {
     const uploadId = createSafeId<"pendingUpload">();
     await testDb.insert(pendingUploads).values({
@@ -913,7 +982,7 @@ describe("presigned upload finalize lifecycle", () => {
 
     expect(result).toEqual({
       code: 404,
-      response: { message: "Upload not found" },
+      response: { code: "upload_not_found", message: "Upload not found" },
     });
     expect(
       await testDb.query.pendingUploads.findFirst({
@@ -947,6 +1016,44 @@ const presignDocxVersion = async (
   );
   seededUploadIds.push(getUploadId(presignResult));
   return presignResult;
+};
+
+const presignZip = async (
+  name: string,
+  bytes: Uint8Array,
+): Promise<unknown> => {
+  const presignResult = await presignUpload.handler(
+    asTestRaw<PresignCtx>(
+      createContext({
+        body: {
+          purpose: "entity_version",
+          entityId: ids.entityA1,
+          name,
+          mimeType: "application/zip",
+          size: bytes.byteLength,
+          sha256Hex: hashSha256Hex(bytes),
+        },
+        workspaceId: ids.wsA1,
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
+    ),
+  );
+  seededUploadIds.push(getUploadId(presignResult));
+  return presignResult;
+};
+
+const stageBytes = async (
+  presignResult: unknown,
+  bytes: Uint8Array,
+): Promise<void> => {
+  const grant = readPresignedUpload(presignResult);
+  const staged = await fetch(grant.url, {
+    method: "PUT",
+    body: bytes,
+    headers: grant.headers,
+  });
+  expect(staged.status).toBe(200);
 };
 
 /** Reserve a DOCX version upload for user A1 and PUT its bytes to the store. */

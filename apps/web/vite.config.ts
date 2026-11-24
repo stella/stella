@@ -12,6 +12,7 @@ import { visualizer } from "rollup-plugin-visualizer";
 import {
   defineConfig,
   type Logger,
+  parseSync,
   type Plugin,
   type PluginOption,
 } from "vite";
@@ -108,6 +109,97 @@ const versionManifestPlugin = (): Plugin => ({
     });
   },
 });
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * package.json `imports` entries whose server (`default`) target is another
+ * package, keyed by the `#` specifier.
+ */
+export const serverPackageImports = (
+  manifest: unknown,
+): ReadonlyMap<string, string> => {
+  const imports = isRecord(manifest) ? manifest["imports"] : undefined;
+  if (!isRecord(imports)) {
+    return new Map();
+  }
+  return new Map(
+    Object.entries(imports).flatMap(([specifier, target]) => {
+      const server = isRecord(target) ? target["default"] : target;
+      return typeof server === "string" && !server.startsWith(".")
+        ? [[specifier, server]]
+        : [];
+    }),
+  );
+};
+
+const QUOTED_SPECIFIER = /^(["'])(.*)\1$/su;
+const SCRIPT_MODULE = /\.[cm]?[jt]sx?$/u;
+
+type RewritePackageImportsOptions = {
+  code: string;
+  /** The module path; its extension selects the parser's language. */
+  file: string;
+  targets: ReadonlyMap<string, string>;
+};
+
+/**
+ * Rewrites the module specifiers of imports, re-exports and dynamic imports
+ * that name a `#` import to its package. Other strings are left alone.
+ */
+export const rewritePackageImports = ({
+  code,
+  file,
+  targets,
+}: RewritePackageImportsOptions): string => {
+  const { module } = parseSync(file, code);
+  const spans = [
+    ...module.staticImports.map(({ moduleRequest }) => moduleRequest),
+    ...module.staticExports.flatMap(({ entries }) =>
+      entries.flatMap(({ moduleRequest }) =>
+        moduleRequest === null ? [] : [moduleRequest],
+      ),
+    ),
+    ...module.dynamicImports.map(({ moduleRequest }) => moduleRequest),
+  ].toSorted((a, b) => b.start - a.start);
+  let rewritten = code;
+  for (const { start, end } of spans) {
+    const [, quote = "", specifier = ""] =
+      QUOTED_SPECIFIER.exec(code.slice(start, end)) ?? [];
+    const target = targets.get(specifier);
+    if (target !== undefined) {
+      rewritten = `${rewritten.slice(0, start)}${quote}${target}${quote}${rewritten.slice(end)}`;
+    }
+  }
+  return rewritten;
+};
+
+// The dev server's module runner externalizes a dependency only when the
+// import specifier itself is a package name, and it ignores `external` from
+// plugins. A `#` import that package.json maps to a package is therefore
+// inlined: the napi-rs packages behind `#aho-corasick` and `#regex-set` then
+// evaluate their CommonJS binding loader as ESM and fail on `require`.
+// Importing the package by name in the server environment lets the runtime
+// load it natively, as the production server bundle does.
+const serverPackageImportsPlugin = (): Plugin => {
+  const targets = serverPackageImports(
+    JSON.parse(readFileSync(path.resolve(APP_ROOT, "package.json"), "utf-8")),
+  );
+  return {
+    name: "stella-server-package-imports",
+    apply: "serve",
+    applyToEnvironment: (environment) =>
+      environment.config.consumer === "server",
+    transform(code, id) {
+      const file = id.split("?", 1)[0] ?? id;
+      return SCRIPT_MODULE.test(file) &&
+        [...targets.keys()].some((specifier) => code.includes(specifier))
+        ? rewritePackageImports({ code, file, targets })
+        : null;
+    },
+  };
+};
 
 // Publish the canonical stella logo from @stll/api-contract at
 // `/stella-logo-512.png`, the URL MCP metadata advertises. The package owns the
@@ -354,6 +446,7 @@ export default defineConfig(({ mode, command }) => {
   const plugins: PluginOption[] = [
     stllAhoCorasickWasm(),
     stllRegexSetWasm(),
+    serverPackageImportsPlugin(),
     logCapPlugin(),
     ensurePluginOption(
       devtools({ consolePiping: { enabled: false } }),
@@ -517,6 +610,19 @@ export default defineConfig(({ mode, command }) => {
             }
             if (id.includes("node_modules/@stll/anonymize-data/")) {
               return "vendor-anonymize-data";
+            }
+            if (
+              id.includes("node_modules/@stll/docx-core/dist/zip/archive.js") ||
+              id.includes("node_modules/@stll/docx-core/dist/archive-")
+            ) {
+              // The zip entry only re-exports its archive module. Split
+              // apart, with no eager importer holding the archive, the
+              // bundler emits the entry as an empty chunk that the lazy
+              // `import("@stll/docx-core/zip")` still loads, and the
+              // runtime build contract rejects it. One chunk for both keeps
+              // the reader whole; it loads with the shell (about 6 KiB
+              // gzip), where it was before the inbox views left startup.
+              return "docx-zip";
             }
             // The browser uses some WASM packages directly (for example the
             // outline and key-term matchers). Let those stay with their lazy

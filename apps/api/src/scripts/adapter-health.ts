@@ -218,16 +218,24 @@ const remoteTotalOf = (answer: SourceTotalCount): number | null => {
  * Fetch the named adapter's publisher total with its own timeout.
  * A key with no registered adapter returns null.
  */
-const getSourceTotal = async (adapterKey: string): Promise<number | null> => {
+type SourceTotalOutcome =
+  { status: "ok"; total: number | null } | { status: "failed" };
+
+const getSourceTotal = async (
+  adapterKey: string,
+): Promise<SourceTotalOutcome> => {
   try {
     const adapter = await loadAdapterByKey(adapterKey);
     if (!adapter) {
-      return null;
+      return { status: "ok", total: null };
     }
     const signal = AbortSignal.timeout(SOURCE_TOTAL_TIMEOUT);
-    return remoteTotalOf(await adapter.getTotalCount(signal));
+    return {
+      status: "ok",
+      total: remoteTotalOf(await adapter.getTotalCount(signal)),
+    };
   } catch {
-    return null;
+    return { status: "failed" };
   }
 };
 
@@ -312,7 +320,9 @@ const buildReport = async (
       sourceId: source.id,
       sinceDate,
     });
-    const remoteTotal = await getSourceTotal(source.adapterKey);
+    const remoteTotalOutcome = await getSourceTotal(source.adapterKey);
+    const remoteTotal =
+      remoteTotalOutcome.status === "ok" ? remoteTotalOutcome.total : null;
     const total = metrics.total;
     const inserted = metrics.inserted;
     const si = {

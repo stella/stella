@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
 const root = path.resolve(import.meta.dir, "..");
-const PINNED_VERSION = "1.99.1";
+const PINNED_VERSION = "1.100.0";
 const EXACT_VERSION = /^\d+\.\d+\.\d+$/u;
 
 // Each crate owns its pin; rustup finds it from the package directory, so
@@ -19,6 +19,21 @@ const CRATES = [
     name: "scan-engine",
     toolchainFile: "packages/scan-engine/rust-toolchain.toml",
     marker: "packages/scan-engine",
+  },
+  {
+    name: "heic-decoder",
+    toolchainFile: "packages/heic-decoder/rust-toolchain.toml",
+    marker: "packages/heic-decoder",
+  },
+  {
+    name: "pst-reader",
+    toolchainFile: "packages/pst-reader/rust-toolchain.toml",
+    marker: "packages/pst-reader",
+  },
+  {
+    name: "recording-wasm",
+    toolchainFile: "packages/recording-wasm/rust-toolchain.toml",
+    marker: "packages/recording-wasm",
   },
 ] as const;
 
@@ -57,6 +72,7 @@ const workflowSchema = v.looseObject({
         v.array(
           v.looseObject({
             env: environmentSchema,
+            run: v.optional(v.string()),
             uses: v.optional(v.string()),
             with: environmentSchema,
           }),
@@ -101,8 +117,25 @@ const toolchainUses = (): ToolchainUse[] =>
     });
   });
 
-const jobSource = (file: string, job: string): string =>
-  JSON.stringify(readWorkflow(file).jobs[job]);
+// A repository script a step runs, also when it is a package's own script.
+const STEP_SCRIPT =
+  /(?:^|[\s"'])((?:scripts|packages\/[\w-]+\/scripts)\/[\w./-]+\.sh)\b/gu;
+
+// A job's own definition plus the repository scripts its steps run, so a job
+// that builds crates through a shared script still names them.
+const jobSource = (file: string, job: string): string => {
+  const body = readWorkflow(file).jobs[job];
+  const scripts = (body?.steps ?? []).flatMap(({ run }) =>
+    run === undefined
+      ? []
+      : [...run.matchAll(STEP_SCRIPT)].flatMap(([, script]) =>
+          script !== undefined && existsSync(path.join(root, script))
+            ? [readFileSync(path.join(root, script), "utf-8")]
+            : [],
+        ),
+  );
+  return [JSON.stringify(body), ...scripts].join("\n");
+};
 
 test("Rust toolchains are exact versions, never a floating channel", () => {
   const files = trackedToolchains();

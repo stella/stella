@@ -101,6 +101,7 @@ export const KanbanSubgroupBoard = ({
           <div className="flex justify-center py-2">
             <Button
               disabled={isLoadingMore}
+              disabledReason={t("common.loading")}
               onClick={onLoadMore}
               variant="outline"
             >

@@ -4,12 +4,12 @@ import { and, eq, sql, TransactionRollbackError } from "drizzle-orm";
 import { integer, pgTable, text } from "drizzle-orm/pg-core";
 
 import { organization } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import {
   anonymizationAllowlistEntries,
   anonymizationBlacklistEntries,
   workspaces,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";

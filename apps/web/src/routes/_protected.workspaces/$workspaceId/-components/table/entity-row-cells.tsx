@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type React from "react";
 
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
@@ -47,11 +47,11 @@ import {
   WorkspaceGridRow,
 } from "@/components/workspaces/table/workspace-grid";
 import { getOrderedCells } from "@/components/workspaces/table/workspace-grid-order";
+import { AddPropertyCell } from "@/components/workspaces/table/workspace-table/end-fillers";
 import {
-  AddPropertyCell,
+  PinnedBoundary,
   RowEndFillerCell,
-} from "@/components/workspaces/table/workspace-table/end-fillers";
-import { PinnedBoundary } from "@/components/workspaces/table/workspace-table/internals";
+} from "@/components/workspaces/table/workspace-table/internals";
 import {
   addPropertyColId,
   getGridPinningStyles,
@@ -65,6 +65,7 @@ import { toSafeId } from "@/lib/safe-id";
 import type { PropertyId } from "@/lib/types";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import type { TableContentMode } from "@/lib/workspaces/table-store";
+import { ReviewableTableCell } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-cell-engagement";
 import { VersionOrNewFileDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog";
 import { useVersionOrNewFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-version-or-new-file-drop";
 
@@ -217,13 +218,10 @@ export const DraggableRow = ({
   const rowRef = useRef<HTMLDivElement>(null);
   // Stable ref callback so React doesn't re-run TanStack Virtual's
   // measureElement on every render.
-  const setRowRef = useCallback(
-    (element: HTMLDivElement | null) => {
-      rowRef.current = element;
-      measureElement(element);
-    },
-    [measureElement],
-  );
+  const setRowRef = (element: HTMLDivElement | null) => {
+    rowRef.current = element;
+    measureElement(element);
+  };
   const [bulkEntities, setBulkEntities] = useState<TableTreeNode[] | undefined>(
     undefined,
   );
@@ -394,12 +392,6 @@ export const DraggableRow = ({
       />
     </span>
   );
-
-  useExternalSyncEffect(() => {
-    if (rowRef.current) {
-      measureElement(rowRef.current);
-    }
-  }, [contentMode, expandedCellId, measureElement]);
 
   useExternalSyncEffect(() => {
     const el = rowRef.current;
@@ -671,9 +663,13 @@ const DataRowCells = ({
     const isAddPropertyCell = cell.column.id === addPropertyColId;
     const canExpandCell = !isSelectCell && !isAddPropertyCell;
     const isExpandedCell = expandedCellId === cell.column.id;
+    const Cell =
+      cell.column.columnDef.meta?.contextMenu === "cell"
+        ? ReviewableTableCell
+        : WorkspaceGridCell;
 
     return (
-      <WorkspaceGridCell
+      <Cell
         aria-colindex={cellIndex + 1}
         className={cn(
           "relative",
@@ -715,7 +711,7 @@ const DataRowCells = ({
             {flexRender(cell.column.columnDef.cell, cell.getContext())}
           </EntityCellContent>
         )}
-      </WorkspaceGridCell>
+      </Cell>
     );
   });
 };

@@ -1,0 +1,447 @@
+{
+  "duplicatesCommon": [],
+  "duplicateValues": [
+    "activity.aiDismiss",
+    "activity.aiDraftAllow",
+    "activity.aiDraftRetry",
+    "activity.aiUndo",
+    "activity.cancel",
+    "activity.copied",
+    "activity.entryMatter",
+    "activity.entryStart",
+    "activity.retry",
+    "activity.searchMatters",
+    "activity.settings",
+    "activity.title",
+    "agentSubscriptions.callbackAccount",
+    "agentSubscriptions.cancel",
+    "agentSubscriptions.disconnect",
+    "agentSubscriptions.install.retry",
+    "agentSubscriptions.notice.actionFailed",
+    "clipboard.cancel",
+    "clipboard.close",
+    "clipboard.copySelection",
+    "clipboard.dictation",
+    "clipboard.registryConnect",
+    "clipboard.registryRetry",
+    "clipboard.registrySearching",
+    "clipboard.title",
+    "dialog.accountEmail",
+    "dialog.accountWindowTitle",
+    "dialog.allow",
+    "dialog.cancel",
+    "dialog.close",
+    "dialog.pdfSignMatter",
+    "dialog.pdfSignRetry",
+    "dictation.destination.cloud",
+    "dictation.destination.local",
+    "dictation.destination.title",
+    "dictation.groups.cleanup",
+    "dictation.groups.thisComputer",
+    "dictation.groups.transcription",
+    "dictation.microphone.stopTest",
+    "dictation.microphone.title",
+    "dictation.notice.dismiss",
+    "dictation.removeModel",
+    "dictation.title",
+    "dictation.transcribeRecording.title",
+    "localLinkedFolders.notice.action_failed",
+    "localLinkedFolders.notice.unreadable",
+    "localLinkedFolders.state.unreadable",
+    "localSkills.notice.action_failed",
+    "localSkills.notice.unreadable",
+    "localSkills.remove",
+    "onboarding.connectNotConnected",
+    "onboarding.dictationSetup.screens.microphone",
+    "onboarding.dictationSetup.screens.transcription",
+    "onboarding.dictationSetup.transcription.cloudTitle",
+    "onboarding.dictationSetup.transcription.localTitle",
+    "onboarding.howActivity",
+    "onboarding.howClipboard",
+    "onboarding.howDictation",
+    "onboarding.openActivity",
+    "onboarding.openSettings",
+    "onboarding.tryAgain",
+    "settings.account",
+    "settings.copyDiagnostics",
+    "settings.disconnect",
+    "settings.notConnected",
+    "settings.pages.activity",
+    "settings.pages.clipboard",
+    "settings.pages.dictation",
+    "settings.permissionAllow",
+    "settings.permissionMicrophone",
+    "settings.permissionOpenSettings",
+    "settings.revealAppData",
+    "settings.support",
+    "settings.title",
+    "settings.tryAgain",
+    "shortcut.action.copy",
+    "shortcut.action.start",
+    "shortcut.action.undo",
+    "shortcut.cancel",
+    "signingDriver.notice.action_failed",
+    "signingDriver.remove",
+    "transcribe.cleaned.offerStart",
+    "transcribe.destination.cloud",
+    "transcribe.destination.thisComputer",
+    "transcribe.destination.title",
+    "transcribe.matter.search",
+    "transcribe.matter.searching",
+    "transcribe.matter.title",
+    "transcribe.progress.stop",
+    "transcribe.result.copied",
+    "transcribe.result.copy",
+    "transcribe.result.thisComputer",
+    "transcribe.retry",
+    "transcribe.title",
+    "tray.activity",
+    "tray.dictation",
+    "tray.openActivity",
+    "tray.settings",
+    "tray.support",
+    "tray.supportCopyDiagnostics",
+    "tray.supportRevealAppData"
+  ],
+  "identicalToSource": {
+    "activity.captureModeBrowser": [
+      "de"
+    ],
+    "activity.durationHoursMinutes": [
+      "cs",
+      "es",
+      "et",
+      "fr",
+      "pt-BR",
+      "sk"
+    ],
+    "activity.durationMinutes": [
+      "cs",
+      "es",
+      "et",
+      "fr",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "activity.evidenceApps": [
+      "de",
+      "fr",
+      "pt-BR"
+    ],
+    "activity.hours": [
+      "cs",
+      "es",
+      "et",
+      "fr",
+      "pt-BR",
+      "sk"
+    ],
+    "activity.suggestionRange": [
+      "cs",
+      "es",
+      "et",
+      "fr",
+      "pt-BR",
+      "sk"
+    ],
+    "agentSubscriptions.antigravity.title": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "agentSubscriptions.callbackPlan": [
+      "es",
+      "pl"
+    ],
+    "agentSubscriptions.chatGpt": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "agentSubscriptions.claudeCode.title": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "clipboard.clipName": [
+      "de"
+    ],
+    "clipboard.clips": [
+      "de",
+      "es"
+    ],
+    "clipboard.image": [
+      "fr"
+    ],
+    "clipboard.imageDimensions": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "lt",
+      "lv",
+      "pt-BR",
+      "sk"
+    ],
+    "clipboard.link": [
+      "de",
+      "et",
+      "pl",
+      "pt-BR"
+    ],
+    "clipboard.local": [
+      "es",
+      "fr",
+      "pt-BR"
+    ],
+    "clipboard.registryFormat": [
+      "de",
+      "fr",
+      "pl"
+    ],
+    "clipboard.registryPreviewCompact": [
+      "fr"
+    ],
+    "clipboard.unnamedClip": [
+      "cs",
+      "de",
+      "sk"
+    ],
+    "dialog.handoffWindowTitle": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "dialog.pdfSignAppearance": [
+      "fr"
+    ],
+    "dialog.pdfSignDocument": [
+      "fr"
+    ],
+    "dialog.pdfSignInvisible": [
+      "es",
+      "fr"
+    ],
+    "dialog.pdfSignPin": [
+      "cs",
+      "de",
+      "es",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "dialog.pdfSignVersion": [
+      "de",
+      "fr"
+    ],
+    "dictation.cleanupStyle.notes.title": [
+      "fr"
+    ],
+    "dictation.cleanupStyle.title": [
+      "fr"
+    ],
+    "dictation.destination.cloud": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "dictation.groups.transcription": [
+      "fr"
+    ],
+    "dictation.microphone.bluetoothDevice": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "dictation.modelAttribution": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "onboarding.dictationSetup.screens.microphone": [
+      "fr"
+    ],
+    "onboarding.dictationSetup.screens.transcription": [
+      "fr"
+    ],
+    "onboarding.dictationSetup.transcription.cloudTitle": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "onboarding.dictationSetup.words.examplesLabel": [
+      "es"
+    ],
+    "settings.app": [
+      "de"
+    ],
+    "settings.notifications": [
+      "fr"
+    ],
+    "settings.pages.general": [
+      "es"
+    ],
+    "settings.pages.notifications": [
+      "fr"
+    ],
+    "settings.permissionMicrophone": [
+      "fr"
+    ],
+    "settings.stellaDesktop": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "settings.support": [
+      "de",
+      "fr"
+    ],
+    "shortcut.action.spotlight": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "shortcut.action.start": [
+      "cs",
+      "de",
+      "et",
+      "hu",
+      "pl"
+    ],
+    "transcribe.destination.cloud": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "transcribe.result.cloud": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "transcribe.result.minutes": [
+      "cs",
+      "es",
+      "et",
+      "fr",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "tray.support": [
+      "de",
+      "fr"
+    ]
+  },
+  "unusedKeys": []
+}

@@ -1,4 +1,5 @@
-import { createElement, lazy, Suspense, useMemo, useRef } from "react";
+import { createElement, lazy, Suspense, useRef, useState } from "react";
+import type { PropsWithChildren } from "react";
 
 import type { AppRendererProps } from "@mcp-ui/client";
 import { useQuery } from "@tanstack/react-query";
@@ -17,9 +18,21 @@ import {
   stellaMcpAppBundleSchema,
   stellaMcpAppPartSchema,
 } from "@stll/api-contract/stella-mcp-app";
+import { Button } from "@stll/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { CaseLawIcon, ChevronRightIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
+import { cn } from "@stll/ui/utils";
 
 import { ChatRenderErrorBoundary } from "@/components/chat/chat-render-error-boundary";
-import type { ChatPart } from "@/components/chat/chat-ui-tools";
+import type { ChatPart } from "@/components/chat/chat-ui-tools-types";
+import { stellaAppDisclosure } from "@/components/chat/stella-app-disclosure.logic";
+import type { StellaAppDisclosure } from "@/components/chat/stella-app-disclosure.logic";
 import {
   createStellaAppToolCaller,
   openStellaAppLink,
@@ -30,13 +43,15 @@ import {
 } from "@/components/chat/stella-mcp-app-bridge";
 import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
 import { useTheme } from "@/components/theme-provider";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useMessageLocale } from "@/i18n/message-locale";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { mcpAppSandboxUrl } from "@/lib/api-url";
 import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
 import { getUserFileContentUrl } from "@/lib/user-files";
@@ -206,6 +221,62 @@ const RichContentStatus = ({ loading = false }: { loading?: boolean }) => {
   );
 };
 
+/**
+ * Why the host would not show a rich part. A part reaches the thread because
+ * a writer meant it to show, so every refusal is a defect to find: each one
+ * names itself here and is reported, never a quiet placeholder. A render
+ * failure is not listed; the error boundary that catches it reports it.
+ */
+const RICH_CONTENT_REFUSALS = Object.freeze({
+  "media-source": "A media part has no source the browser may play",
+  "resource-contract": "An MCP App resource breaks its contract",
+  "sandbox-origin": "The app sandbox shares the page's origin",
+  renderer: "No renderer shows this resource type",
+  "app-part-contract": "A stella app part breaks its contract",
+  "app-thread": "A stella app part is shown outside a thread",
+  "app-bundle": "The stella app's document did not load",
+  "app-bundle-uri": "The stella app's document is for another app",
+  "visual-thread": "A generated visual is shown outside a thread",
+} as const satisfies Record<string, string>);
+
+type RichContentRefusal = keyof typeof RICH_CONTENT_REFUSALS;
+
+const richContentRefusalReport = (
+  refusal: RichContentRefusal,
+  cause?: unknown,
+) =>
+  ({
+    error: new ClientTelemetryError({
+      area: "chat-rich-content",
+      message: `[Chat rich content] ${RICH_CONTENT_REFUSALS[refusal]}`,
+      ...(cause === undefined ? {} : { cause }),
+    }),
+    options: {
+      fingerprintKey: `ChatRichContent.refused:${refusal}`,
+      scope: {
+        type: "handler",
+        handlerId: `ChatRichContent.refused:${refusal}`,
+      },
+      context: { type: "detached", operation: "chat.rich-content.render" },
+    },
+  }) as const;
+
+/** The placeholder for a refused part, reported once per mount. */
+const RichContentRefused = ({
+  refusal,
+  cause,
+}: {
+  refusal: RichContentRefusal;
+  cause?: unknown;
+}) => {
+  const analytics = useAnalytics();
+  useMountEffect(() => {
+    const report = richContentRefusalReport(refusal, cause);
+    analytics.captureError(report.error, report.options);
+  });
+  return <RichContentStatus />;
+};
+
 export const withMcpAppFrameTitle = (
   sandboxUrl: URL,
   frameTitle: string,
@@ -244,6 +315,23 @@ const McpAppFrame = ({
   uri: string;
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const analytics = useAnalytics();
+  // The renderer shows its own error text in the frame (a sandbox that never
+  // answered, a bridge that failed); the report is what makes it visible.
+  const reportFrameFailure = (error: Error) => {
+    analytics.captureError(
+      new ClientTelemetryError({
+        area: "chat-rich-content",
+        message: "[Chat rich content] The app frame failed",
+        cause: error,
+      }),
+      {
+        fingerprintKey: "ChatRichContent.frame:failed",
+        scope: { type: "handler", handlerId: "ChatRichContent.frame:failed" },
+        context: { type: "detached", operation: "chat.rich-content.frame" },
+      },
+    );
+  };
   useExternalSyncEffect(() => {
     const container = containerRef.current;
     if (!container) {
@@ -277,6 +365,7 @@ const McpAppFrame = ({
             sandbox={{ url: sandboxUrl }}
             toolName={toolName}
             toolResourceUri={uri}
+            onError={reportFrameFailure}
             {...bridge}
           />
         </Suspense>
@@ -289,7 +378,7 @@ const MediaPart = ({ part }: { part: MediaChatPart }) => {
   const t = useTranslations();
   const source = toRenderableMediaSource(part);
   if (!source) {
-    return <RichContentStatus />;
+    return <RichContentRefused refusal="media-source" />;
   }
   const mimeType = part.source.mimeType;
   if (part.type === "audio") {
@@ -319,17 +408,14 @@ const MediaPart = ({ part }: { part: MediaChatPart }) => {
 const UiResource = ({ part }: { part: UiResourcePart }) => {
   const t = useTranslations();
   const frameTitle = t("chat.richContentTitle");
-  const sandboxUrl = useMemo(
-    () => withMcpAppFrameTitle(mcpAppSandboxUrl(), frameTitle),
-    [frameTitle],
-  );
+  const sandboxUrl = withMcpAppFrameTitle(mcpAppSandboxUrl(), frameTitle);
   const normalized = normalizeUiResourcePart(part);
   if (!normalized) {
-    return <RichContentStatus />;
+    return <RichContentRefused refusal="resource-contract" />;
   }
   const isServerRender = typeof window === "undefined";
   if (!isServerRender && sandboxUrl.origin === window.location.origin) {
-    return <RichContentStatus />;
+    return <RichContentRefused refusal="sandbox-origin" />;
   }
 
   if (isServerRender) {
@@ -371,10 +457,7 @@ const StellaAppFrame = ({
   const locale = useMessageLocale();
   const { resolvedTheme } = useTheme();
   const frameTitle = t("chat.richContentTitle");
-  const sandboxUrl = useMemo(
-    () => withMcpAppFrameTitle(mcpAppSandboxUrl(), frameTitle),
-    [frameTitle],
-  );
+  const sandboxUrl = withMcpAppFrameTitle(mcpAppSandboxUrl(), frameTitle);
   const directory = stellaAppDirectory(part.resource.uri) ?? "";
   const bundle = useQuery({
     queryKey: ["stella-mcp-app-bundle", directory],
@@ -390,7 +473,7 @@ const StellaAppFrame = ({
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
-  const bridge = useMemo((): McpAppBridge => {
+  const bridge = ((): McpAppBridge => {
     const call = readStellaMcpAppCall(part);
     const thread = api.chat.threads({
       threadId: toSafeId<"chatThread">(threadRef.threadId),
@@ -413,7 +496,7 @@ const StellaAppFrame = ({
       onOpenLink: async ({ url }) =>
         await Promise.resolve(openStellaAppLink(url, openIsolatedWindow)),
     };
-  }, [part, threadRef.threadId, resolvedTheme, locale]);
+  })();
   if (bundle.isPending) {
     return (
       <div className="min-h-32 w-full overflow-hidden rounded-md border">
@@ -421,12 +504,11 @@ const StellaAppFrame = ({
       </div>
     );
   }
-  if (
-    bundle.isError ||
-    bundle.data.uri !== part.resource.uri ||
-    sandboxUrl.origin === window.location.origin
-  ) {
-    return <RichContentStatus />;
+  if (bundle.isError) {
+    return <RichContentRefused refusal="app-bundle" cause={bundle.error} />;
+  }
+  if (bundle.data.uri !== part.resource.uri) {
+    return <RichContentRefused refusal="app-bundle-uri" />;
   }
   return (
     <McpAppFrame
@@ -449,14 +531,108 @@ const StellaAppResource = ({
   threadRef: ChatThreadRef | undefined;
 }) => {
   const parsed = v.safeParse(stellaMcpAppPartSchema, part);
-  if (
-    !parsed.success ||
-    threadRef === undefined ||
-    typeof window === "undefined"
-  ) {
-    return <RichContentStatus />;
+  if (!parsed.success) {
+    return <RichContentRefused refusal="app-part-contract" />;
   }
-  return <StellaAppFrame part={parsed.output} threadRef={threadRef} />;
+  if (threadRef === undefined) {
+    return <RichContentRefused refusal="app-thread" />;
+  }
+  // The frame needs the browser; the server renders the place it loads into.
+  if (typeof window === "undefined") {
+    return (
+      <div className="min-h-32 w-full overflow-hidden rounded-md border">
+        <RichContentStatus loading />
+      </div>
+    );
+  }
+  // Checked before the app's document is fetched: a sandbox on the page's
+  // own origin is refused by the sandbox itself.
+  if (mcpAppSandboxUrl().origin === window.location.origin) {
+    return <RichContentRefused refusal="sandbox-origin" />;
+  }
+  const frame = <StellaAppFrame part={parsed.output} threadRef={threadRef} />;
+  const disclosure = stellaAppDisclosure(
+    stellaAppDirectory(parsed.output.resource.uri),
+    readStellaMcpAppCall(parsed.output),
+  );
+  switch (disclosure.type) {
+    case "open":
+      return frame;
+    case "case-law":
+      return (
+        <CaseLawAppDisclosure disclosure={disclosure}>
+          {frame}
+        </CaseLawAppDisclosure>
+      );
+    default:
+      disclosure satisfies never;
+      return panic("Unhandled stella app disclosure");
+  }
+};
+
+/**
+ * A case-law result list starts as one line: what was searched and how many
+ * decisions came back. The app, and its document request, load on first open
+ * and then stay mounted, so closing and reopening keeps the reader's own
+ * filters and scroll position.
+ */
+const CaseLawAppDisclosure = ({
+  children,
+  disclosure,
+}: PropsWithChildren<{
+  disclosure: Extract<StellaAppDisclosure, { type: "case-law" }>;
+}>) => {
+  const t = useTranslations();
+  const [isOpen, setIsOpen] = useState(false);
+  const [hasOpened, setHasOpened] = useState(false);
+  return (
+    <Collapsible
+      className="w-full min-w-0"
+      onOpenChange={(open) => {
+        setIsOpen(open);
+        if (open) {
+          setHasOpened(true);
+        }
+      }}
+      open={isOpen}
+    >
+      <CollapsibleTrigger render={<Button size="sm" variant="muted" />}>
+        <CaseLawIcon aria-hidden="true" className="size-3.5 shrink-0" />
+        <span className="text-foreground shrink-0 font-medium">
+          {t("common.caseLaw")}
+        </span>
+        {disclosure.query.length > 0 && (
+          <>
+            <span aria-hidden="true">·</span>
+            <TruncatedText hint={false} render={<span />}>
+              {disclosure.query}
+            </TruncatedText>
+          </>
+        )}
+        {disclosure.decisionCount !== null && (
+          <>
+            <span aria-hidden="true">·</span>
+            <span className="shrink-0 tabular-nums">
+              {t("caseLaw.citation.decisionCount", {
+                count: disclosure.decisionCount,
+              })}
+            </span>
+          </>
+        )}
+        <DirectionalIcon
+          className={cn(
+            "size-3.5 shrink-0 transition-transform duration-150",
+            isOpen && "rotate-90",
+          )}
+          flip={!isOpen}
+          icon={ChevronRightIcon}
+        />
+      </CollapsibleTrigger>
+      <CollapsiblePanel>
+        {hasOpened && <div className="pt-1">{children}</div>}
+      </CollapsiblePanel>
+    </Collapsible>
+  );
 };
 
 type ChatRichMessagePartProps = {
@@ -490,7 +666,7 @@ export const ChatRichMessagePart = ({
           );
         case "generated-visual":
           if (organizationId === undefined || threadRef === undefined) {
-            return <RichContentStatus />;
+            return <RichContentRefused refusal="visual-thread" />;
           }
           return (
             <ChatRenderErrorBoundary
@@ -507,7 +683,7 @@ export const ChatRichMessagePart = ({
             </ChatRenderErrorBoundary>
           );
         case null:
-          return <RichContentStatus />;
+          return <RichContentRefused refusal="renderer" />;
         default:
           renderer satisfies never;
           return panic("Unhandled UI resource renderer");

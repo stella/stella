@@ -20,10 +20,10 @@ import {
   chatToolLabel,
   isKnownChatToolName,
   isUserInputChatToolName,
+  UNKNOWN_CHAT_TOOL_LABEL,
 } from "@stll/api-contract/chat-tool-activity";
 import type {
   ChatToolLabel,
-  HarnessChatToolName,
   RetiredChatToolName,
 } from "@stll/api-contract/chat-tool-activity";
 import {
@@ -33,136 +33,78 @@ import {
 } from "@stll/api-contract/chat-tool-grants";
 import { isOwnKey } from "@stll/api-contract/own-key";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
-import type { FolioAgentToolName } from "@stll/folio-agents";
 
+import {
+  withSubagentRunParts,
+  withWaitingSubagentRunParts,
+} from "@/components/chat/chat-subagent-parts.logic";
+import type {
+  ChatPartAtAnyDepth,
+  SubagentChatPart,
+  SubagentChildPart,
+} from "@/components/chat/chat-subagent-parts.logic";
+import type {
+  ApprovalToolName,
+  ApprovalToolPart,
+  AskUserInput,
+  AskUserOutput,
+  BuiltInApprovalToolName,
+  BuiltInChatToolCallPart,
+  BuiltInChatToolName,
+  ChatAnonRestoration,
+  ChatAttachmentPart,
+  ChatClientTools,
+  ChatMessageMetadata,
+  ChatPart,
+  ChatToolCallPart,
+  ChatUIMessage,
+  ChatUIPart,
+  ChatUIToolCallPart,
+  HarnessChatToolCallPart,
+  OpaquePersistedChatToolCallPart,
+  PersistedChatMessage,
+  RegisteredChatUIToolCallPart,
+  RegisteredFolioAgentToolCallPart,
+  SharedChatUITools,
+  ToolApprovalGrant,
+} from "@/components/chat/chat-ui-tools-types";
 import { withLocalRunLimitResetsAt } from "@/features/chat/chat-local-run-limit";
 import type { TranslationKey } from "@/i18n/types";
-import type { WebApiRoutes } from "@/lib/api";
 import type {
   ApprovalRequiredBuiltInChatToolName,
   BuiltInChatToolPolicyKindByName,
   ChatMessage,
-  ChatPart as TanStackChatPart,
   ChatUITools,
 } from "@/lib/api-contract";
 import { toAPIError } from "@/lib/errors/api";
 import { withProviderDiagnostic } from "@/lib/errors/provider-diagnostic";
 
+const MCP_CONNECTOR_APPROVAL_GRANT_PREFIX = "mcp-connector:";
+
 export type {
+  ApprovalToolName,
+  ApprovalToolPart,
+  AskUserInput,
+  AskUserOutput,
   ChatAnonRestoration,
+  ChatAttachmentPart,
   ChatClientTools,
   ChatMessage,
-  ChatUITools,
-} from "@/lib/api-contract";
-export type ChatPart = TanStackChatPart;
-type AnswerRevision = Partial<
-  Pick<
-    WebApiRoutes["chat"]["threads"][":threadId"]["messages"]["get"]["response"][200]["messages"][number],
-    "revision" | "edited"
-  >
->;
-export type PersistedChatMessage = ChatMessage & AnswerRevision;
-type TanStackChatToolCallPart = Extract<
-  TanStackChatPart,
-  { type: "tool-call" }
->;
-type BuiltInChatToolName = keyof BuiltInChatToolPolicyKindByName;
-type BuiltInChatToolCallPart = {
-  [TName in BuiltInChatToolName]: Omit<
-    Extract<TanStackChatToolCallPart, { name: TName }>,
-    "input" | "output"
-  > & {
-    input?: ChatUITools[TName]["input"];
-    output?: ChatUITools[TName]["output"];
-  };
-}[BuiltInChatToolName];
-type ExternalMcpChatToolCallPart = Extract<
-  TanStackChatToolCallPart,
-  { name: `mcp__${string}` }
->;
-declare const opaquePersistedChatToolCallProof: unique symbol;
-/**
- * Proof assigned after a persisted tool call passes the protocol-shape guard
- * and its name is confirmed absent from both current tool namespaces.
- */
-export type OpaquePersistedChatToolCallPart = TanStackChatToolCallPart & {
-  readonly [opaquePersistedChatToolCallProof]: true;
-};
-
-/**
- * TanStack deliberately leaves JSON-schema tool payloads unknown. At Stella's
- * rendering boundary, built-in payloads retain the types derived from the same
- * Standard Schema tool map; external MCP and opaque historical payloads remain
- * unknown.
- */
-export type RegisteredChatUIToolCallPart =
-  BuiltInChatToolCallPart | ExternalMcpChatToolCallPart;
-type RegisteredFolioAgentToolName = Extract<
-  keyof ChatUITools,
-  FolioAgentToolName
->;
-export type RegisteredFolioAgentToolCallPart<
-  TName extends RegisteredFolioAgentToolName = RegisteredFolioAgentToolName,
-> = {
-  [TCurrentName in TName]: Extract<
-    RegisteredChatUIToolCallPart,
-    { name: TCurrentName }
-  > & {
-    input: ChatUITools[TCurrentName]["input"];
-  };
-}[TName];
-export type ChatUIToolCallPart =
-  RegisteredChatUIToolCallPart | OpaquePersistedChatToolCallPart;
-export type ChatUIPart =
-  Exclude<TanStackChatPart, { type: "tool-call" }> | ChatUIToolCallPart;
-export type ChatUIMessage = Omit<PersistedChatMessage, "parts"> & {
-  parts: ChatUIPart[];
-};
-export type ChatToolCallPart = TanStackChatToolCallPart;
-export type ChatAttachmentPart = Extract<
+  ChatMessageMetadata,
   ChatPart,
-  { type: "document" | "image" }
-> & {
-  metadata?: {
-    filename?: string | undefined;
-    placeholder?: string | undefined;
-  };
+  ChatToolCallPart,
+  ChatUIMessage,
+  ChatUIPart,
+  ChatUIToolCallPart,
+  ChatUITools,
+  HarnessChatToolCallPart,
+  OpaquePersistedChatToolCallPart,
+  PersistedChatMessage,
+  RegisteredChatUIToolCallPart,
+  RegisteredFolioAgentToolCallPart,
+  SharedChatUITools,
+  ToolApprovalGrant,
 };
-export type ChatMessageMetadata = NonNullable<ChatMessage["metadata"]>;
-export type SharedChatUITools = Pick<ChatUITools, "ask-user">;
-export type AskUserOutput = SharedChatUITools["ask-user"]["output"];
-// These tools have dedicated user-input cards or draft UI instead of the
-// approval flow. Keep them out of the approval set so their owning cards
-// handle the interaction.
-type BuiltInApprovalToolName = Exclude<
-  keyof ChatUITools,
-  "ask-user" | "create-document" | "request_secret" | "connect_connector"
->;
-/**
- * A harness-native step of a coding agent on the member's computer. The
- * member approves one like any other call (`isApprovalToolName` accepts its
- * name), and its input is the contract's (`chat-local-run-tool`).
- */
-type HarnessToolName = HarnessChatToolName;
-export type HarnessChatToolCallPart = Omit<TanStackChatToolCallPart, "name"> & {
-  name: HarnessToolName;
-};
-export type ApprovalToolName =
-  BuiltInApprovalToolName | HarnessToolName | `mcp__${string}`;
-const MCP_CONNECTOR_APPROVAL_GRANT_PREFIX = "mcp-connector:";
-export type ToolApprovalGrant =
-  ApprovalToolName | `${typeof MCP_CONNECTOR_APPROVAL_GRANT_PREFIX}${string}`;
-export type ApprovalToolPart = (
-  RegisteredChatUIToolCallPart | HarnessChatToolCallPart
-) & {
-  name: ApprovalToolName;
-  approval: {
-    approved?: boolean | undefined;
-    id: string;
-    needsApproval: boolean;
-  };
-};
-export type AskUserInput = SharedChatUITools["ask-user"]["input"];
 // Built-in tool names whose backend policy kind is `K`, derived from
 // `BuiltInChatToolPolicyKindByName` (the backend's single source of truth
 // for tool classification) instead of hand-listed, so a backend
@@ -271,6 +213,11 @@ type ChatToolTitleLabel = Exclude<
 const toolTitleKey = (label: ChatToolTitleLabel) =>
   `chat.tool.${label}` as const satisfies TranslationKey;
 
+/** The generic title ("Using tool") of a tool the chat keeps no title for. */
+export const UNKNOWN_CHAT_TOOL_TITLE_KEY = toolTitleKey(
+  UNKNOWN_CHAT_TOOL_LABEL,
+);
+
 const EXTERNAL_INPUT_CHAT_TOOL_NAMES = {
   boe_find_related_laws: true,
   boe_get_law: true,
@@ -339,6 +286,8 @@ export const isNonPersistentGrantChatToolName = (toolName: string): boolean =>
  * renders the write summary before it typechecks.
  */
 const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
+  calendar_list_events: false,
+  calendar_free_busy: false,
   add_comment: false,
   boe_find_related_laws: false,
   boe_get_law: false,
@@ -371,6 +320,7 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   run_playbook: true,
   save_clause: true,
   save_playbook: true,
+  save_skill_package: true,
   save_contact: true,
   save_document: true,
   save_matter: true,
@@ -615,7 +565,7 @@ export const hasApprovalResponseAwaitingModelStep = ({
     return false;
   }
 
-  return message.parts.some(isApprovalRespondedPart);
+  return withSubagentRunParts(message.parts).some(isApprovalRespondedPart);
 };
 
 export const isRunningToolPart = (part: unknown): boolean => {
@@ -660,7 +610,8 @@ export const hasRunningToolCallInLatestAssistantMessage = ({
 
   // Server execution belongs to an active response stream. A ready runtime
   // with complete server input is waiting behind a gate, not still running.
-  return message.parts.some(
+  // A sub-agent run's client call runs on this page like a top-level one.
+  return withSubagentRunParts(message.parts).some(
     (part) =>
       isRunningToolPart(part) &&
       !(
@@ -673,19 +624,26 @@ export const hasRunningToolCallInLatestAssistantMessage = ({
 
 type PersistedChatPart = PersistedChatMessage["parts"][number];
 
-export const isApprovalRequestPart = (part: PersistedChatPart): boolean =>
+export const isApprovalRequestPart = (part: ChatPartAtAnyDepth): boolean =>
   part.type === "tool-call" && part.state === "approval-requested";
 
+/** Whether `parts`, a suspended sub-agent run's included, hold a card only
+ *  the member can answer (`isMemberAnsweredPart`). */
+export const hasUserAnswerablePart = (
+  parts: readonly ChatPartAtAnyDepth[],
+): boolean => withWaitingSubagentRunParts(parts).some(isMemberAnsweredPart);
+
 /**
- * The latest assistant message, if it holds a part `isAwaitedPart` accepts
- * and no later user message supersedes its turn: the runtime appends that
+ * The latest assistant message, if it holds a part `isAwaitedPart` accepts,
+ * directly or inside a suspended sub-agent run, and no later user message supersedes
+ * its turn: the runtime appends that
  * message before the new stream starts, and the server cancels the awaited
  * interaction when it accepts it, so the cards stop being answerable at the
  * same moment their answers stop being accepted.
  */
 const findAwaitedAssistantMessage = (
   messages: readonly PersistedChatMessage[],
-  isAwaitedPart: (part: PersistedChatPart) => boolean,
+  isAwaitedPart: (part: ChatPartAtAnyDepth) => boolean,
 ): PersistedChatMessage | null => {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages.at(index);
@@ -695,7 +653,9 @@ const findAwaitedAssistantMessage = (
     if (message.role !== "assistant") {
       continue;
     }
-    return message.parts.some(isAwaitedPart) ? message : null;
+    return withWaitingSubagentRunParts(message.parts).some(isAwaitedPart)
+      ? message
+      : null;
   }
   return null;
 };
@@ -737,7 +697,7 @@ export const openMemberWaitKeys = ({
   return [
     ...(awaited === null
       ? []
-      : awaited.parts.flatMap((part) =>
+      : withWaitingSubagentRunParts(awaited.parts).flatMap((part) =>
           part.type === "tool-call" && isMemberAnsweredPart(part)
             ? [`part:${part.id}`]
             : [],
@@ -904,6 +864,55 @@ const toTerminalIfRunningToolPart = (part: ChatPart): ChatPart => {
   return { ...part, state: INTERRUPTED_TOOL_CALL_STATE };
 };
 
+/** A server call of a turn that waits on the user: the server runs it once
+ *  the user answers, so hydration leaves it as stored. */
+const isHeldServerCall = (
+  part: ChatPartAtAnyDepth,
+  awaitingUser: boolean,
+): boolean =>
+  awaitingUser &&
+  part.type === "tool-call" &&
+  part.state === "input-complete" &&
+  !isBrowserResolvedChatToolCall(part);
+
+const toTerminalIfRunningChildPart = (
+  part: SubagentChildPart,
+  awaitingUser: boolean,
+): SubagentChildPart => {
+  if (part.type === "subagent") {
+    return toTerminalIfRunningSubagentRun(part, awaitingUser);
+  }
+  if (
+    part.type !== "tool-call" ||
+    isHeldServerCall(part, awaitingUser) ||
+    !isRunningToolPart(part)
+  ) {
+    return part;
+  }
+  return { ...part, state: INTERRUPTED_TOOL_CALL_STATE };
+};
+
+/** A sub-agent run with its dead running calls settled the same way, at every
+ *  depth. An unchanged run is returned by reference. */
+const toTerminalIfRunningSubagentRun = (
+  part: SubagentChatPart,
+  awaitingUser: boolean,
+): SubagentChatPart => {
+  const messages = part.subagent.messages.map((message) => {
+    const parts = message.parts.map((child) =>
+      toTerminalIfRunningChildPart(child, awaitingUser),
+    );
+    return parts.every((child, index) => child === message.parts[index])
+      ? message
+      : { ...message, parts };
+  });
+  return messages.every(
+    (message, index) => message === part.subagent.messages[index],
+  )
+    ? part
+    : { ...part, subagent: { ...part.subagent, messages } };
+};
+
 /**
  * Rewrite running tool-call parts that can no longer complete into a
  * terminal errored state, clearing `isRunningToolPart` — and therefore
@@ -918,9 +927,10 @@ const toTerminalIfRunningToolPart = (part: ChatPart): ChatPart => {
  *
  * `ask-user` and approval-flow parts are user-owned and excluded by
  * `isRunningToolPart`. A complete `create-document` input is resumable by the
- * client and remains live until the draft result is returned. Messages and
- * parts left unchanged are returned by reference so downstream memoization
- * stays stable.
+ * client and remains live until the draft result is returned. A sub-agent
+ * run's calls settle by the same rule, since they keep the turn in flight
+ * the same way. Messages and parts left unchanged are returned by reference
+ * so downstream memoization stays stable.
  */
 export const sanitizeRunningToolCalls = (
   messages: readonly PersistedChatMessage[],
@@ -929,14 +939,16 @@ export const sanitizeRunningToolCalls = (
     if (message.role !== "assistant") {
       return message;
     }
-    const parts = message.parts.map((part) =>
-      message.metadata?.turnOutcome?.type === "awaiting-user" &&
-      part.type === "tool-call" &&
-      part.state === "input-complete" &&
-      !isBrowserResolvedChatToolCall(part)
+    const awaitingUser =
+      message.metadata?.turnOutcome?.type === "awaiting-user";
+    const parts = message.parts.map((part) => {
+      if (part.type === "subagent") {
+        return toTerminalIfRunningSubagentRun(part, awaitingUser);
+      }
+      return isHeldServerCall(part, awaitingUser)
         ? part
-        : toTerminalIfRunningToolPart(part),
-    );
+        : toTerminalIfRunningToolPart(part);
+    });
     const partsChanged = parts.some(
       (part, index) => part !== message.parts[index],
     );
@@ -1146,8 +1158,32 @@ export const isOpaquePersistedChatToolCallPart = (
   return !isKnownChatToolName(value.name) && !isExternalMcpToolName(value.name);
 };
 
+type ToolCallPartShape = {
+  type: "tool-call";
+  id: string;
+  name: string;
+  arguments: string;
+  state: ChatToolCallPart["state"];
+  input?: unknown;
+};
+
+const isToolCallPartShape = (value: unknown): value is ToolCallPartShape =>
+  typeof value === "object" &&
+  value !== null &&
+  "type" in value &&
+  value.type === "tool-call" &&
+  "id" in value &&
+  typeof value.id === "string" &&
+  "name" in value &&
+  typeof value.name === "string" &&
+  "arguments" in value &&
+  typeof value.arguments === "string" &&
+  "state" in value &&
+  typeof value.state === "string" &&
+  isChatToolCallState(value.state);
+
 const isCanonicalBuiltInToolCall = (
-  value: TanStackChatToolCallPart,
+  value: Pick<ToolCallPartShape, "input" | "name" | "state">,
 ): value is BuiltInChatToolCallPart => {
   if (!isKnownChatToolName(value.name)) {
     return false;
@@ -1176,6 +1212,30 @@ const isCanonicalChatUIPart = (part: PersistedChatPart): boolean =>
   isExternalMcpToolName(part.name) ||
   isOpaquePersistedChatToolCallPart(part) ||
   isCanonicalBuiltInToolCall(part);
+
+/**
+ * A sub-agent run's part as the thread renders it, or `null` for one that
+ * fails the check a message's own part passes. The run's messages carry no
+ * registered tool types, so a call's name and input are checked here before
+ * it reaches a card typed by its tool.
+ */
+export const toSubagentChildUIPart = (
+  part: SubagentChildPart,
+): ChatUIPart | null => {
+  if (part.type !== "tool-call") {
+    return part;
+  }
+  if (isOpaquePersistedChatToolCallPart(part)) {
+    return part;
+  }
+  return isRegisteredChatUIToolCallPart(part) ? part : null;
+};
+
+const isRegisteredChatUIToolCallPart = (
+  value: unknown,
+): value is RegisteredChatUIToolCallPart =>
+  isToolCallPartShape(value) &&
+  (isExternalMcpToolName(value.name) || isCanonicalBuiltInToolCall(value));
 
 /** Whether every part of `message` is canonical, checked afresh. */
 export const isCanonicalChatUIMessage = (

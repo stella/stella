@@ -1,11 +1,13 @@
 mod accessibility_guide;
 mod account;
+mod account_avatar;
 mod account_switch;
 mod activity;
 mod activity_calls;
 mod activity_commands;
 mod activity_details;
 mod activity_settings;
+mod activity_setup;
 mod activity_store;
 mod activity_window;
 mod app_lifecycle;
@@ -24,6 +26,7 @@ mod clipboard_commands;
 #[cfg(target_os = "macos")]
 mod clipboard_image_export;
 mod clipboard_screen_capture;
+mod clipboard_settings;
 mod clipboard_shortcut;
 mod clipboard_store;
 mod clipboard_welcome;
@@ -40,19 +43,34 @@ mod device_preference;
 mod device_proof;
 mod diagnostics;
 mod dictation;
+mod dictation_app_settings;
 mod dictation_audio;
 mod dictation_cleanup;
 mod dictation_cloud;
 mod dictation_context;
 #[cfg(dictation)]
 mod dictation_engine;
+mod dictation_fix;
 mod dictation_focus;
 mod dictation_format;
+mod dictation_hold_key;
 #[cfg(dictation)]
 mod dictation_input;
 mod dictation_language;
+mod dictation_learned;
 mod dictation_live;
+mod dictation_media;
+mod dictation_microphone;
+mod dictation_models;
+mod dictation_notice;
 mod dictation_pauses;
+mod dictation_preview;
+mod dictation_retype;
+#[cfg(dictation)]
+mod dictation_sounds;
+mod dictation_spelling;
+mod dictation_trace;
+mod dictation_words;
 #[cfg(dictation)]
 mod dictation_worker;
 mod document_sessions;
@@ -72,6 +90,7 @@ mod harness_sidecar;
 mod http_client;
 mod i18n;
 mod idle_time;
+mod keep_awake;
 mod keychain;
 mod local_linked_folder_commands;
 mod local_linked_folders;
@@ -89,6 +108,7 @@ mod permissions;
 mod pkcs11_module_setting;
 mod pkcs11_signing;
 mod presence;
+mod recording_cleanup;
 mod registry;
 mod relaunch;
 mod runner_protocol;
@@ -99,6 +119,10 @@ mod sse;
 mod test_child_processes;
 mod time_entry_commands;
 mod time_entry_submit;
+mod transcribe_history;
+mod transcribe_recording;
+mod transcribe_save;
+mod transcribe_window;
 mod tray;
 mod types;
 mod updater;
@@ -228,7 +252,15 @@ pub fn run() {
     .manage::<ClipboardAppState>(Arc::clone(&clipboard_manager))
     .manage(clipboard_window::ClipboardEditorSessions::default())
     .manage(clipboard_window::ClipboardStartupTrace::default())
+    .manage(clipboard_window::ClipboardWindowSession::default())
     .manage(dictation::DictationState::load())
+    .manage(app_window::AppWindows::default())
+    .manage(transcribe_recording::TranscribeState::default())
+    .manage(transcribe_history::TranscribeHistoryState::default())
+    .manage(dictation_notice::DictationNotice::default())
+    .manage(dictation_fix::FixPanel::default())
+    .manage(dictation_microphone::MicrophoneTest::default())
+    .manage(dictation_preview::PreviewState::new())
     .manage::<clipboard_shortcut::ClipboardShortcutState>(std::sync::Mutex::new(
       clipboard_shortcut::ClipboardShortcut::load(),
     ))
@@ -244,6 +276,8 @@ pub fn run() {
     .manage(desktop_telemetry.clone())
     .setup(move |app| {
       let handle = app.handle().clone();
+      // Sound a dictation lowered or paused before a crash comes back.
+      dictation_media::restore();
       #[cfg(target_os = "macos")]
       if let Ok(mut clipboard) = clipboard_manager.lock()
         && let Err(error) = clipboard.reconcile_image_exports()
@@ -307,9 +341,11 @@ pub fn run() {
         app.manage(installation);
       }
       harness_commands::manage(&handle);
+      dictation_notice::listen_for_clicks(&handle);
       chatgpt_auth_commands::manage(&handle);
       claude_code_auth_commands::manage(&handle);
       activity::start(handle.clone(), Arc::clone(&activity_manager));
+      transcribe_history::start_retention_sweep(handle.clone());
       {
         let manager = Arc::clone(&manager);
         feature_access::start(
@@ -331,9 +367,12 @@ pub fn run() {
               dictation::apply_feature_gate(app, enabled);
               if enabled {
                 onboarding::feature_enabled(app, feature);
+                dictation_words::seed_account_names(app);
               }
             }
-            feature_gate::DesktopFeature::DictationCloud => {
+            // Either decision changes which models the server lists.
+            feature_gate::DesktopFeature::DictationCloud
+            | feature_gate::DesktopFeature::DictationRetainingModels => {
               dictation::apply_cloud_gate(app);
             }
             feature_gate::DesktopFeature::LocalAgents => {
@@ -379,6 +418,9 @@ pub fn run() {
         });
       }
 
+      // Verify the linked account's picture once per start.
+      account_avatar::refresh(&handle);
+
       // Handle tray menu events
       {
         let manager_for_tray = Arc::clone(&manager);
@@ -406,6 +448,15 @@ pub fn run() {
               tray::MenuAction::OpenActivity => {
                 activity_window::show(&handle);
               }
+              tray::MenuAction::OpenTranscribe => {
+                transcribe_window::show(&handle);
+              }
+              tray::MenuAction::RetypeDictation => {
+                dictation::retype_from_tray(&handle);
+              }
+              tray::MenuAction::FixDictation => {
+                dictation::fix_from_tray(&handle);
+              }
               tray::MenuAction::SetActivityRecording(status) => {
                 if activity::set_recording_from_tray(&handle, status).is_err() {
                   best_effort(
@@ -418,39 +469,15 @@ pub fn run() {
                   activity_window::show(&handle);
                 }
               }
-              tray::MenuAction::CheckForUpdates => {
-                let active_edit_sessions = {
-                  let mgr = manager.lock().await;
-                  mgr.has_active_edit_sessions()
-                };
-
-                match updater::run_check(&handle, active_edit_sessions).await {
-                  updater::CheckOutcome::Deferred { version } => {
-                    tracing::info!(
-                        version = %version,
-                        "tray-triggered updater check deferred while desktop edits are active"
-                    );
-                  }
-                  updater::CheckOutcome::UpToDate => {
-                    if let Err(err) = handle
-                      .notification()
-                      .builder()
-                      .title("Stella is up to date")
-                      .show()
-                    {
-                      tracing::warn!(error = %err, "up-to-date notification failed");
-                    }
-                  }
-                  updater::CheckOutcome::Installed { version } => {
-                    tracing::info!(version = %version, "tray-triggered update installed, relaunching");
-                  }
-                  updater::CheckOutcome::Failed(msg) => {
-                    tracing::warn!(error = %msg, "tray-triggered updater check failed");
-                  }
-                  updater::CheckOutcome::Disabled => {
-                    tracing::debug!("tray updater check skipped: updates are managed");
-                  }
+              tray::MenuAction::SetDictationLanguage(language) => {
+                if let Err(error) = dictation::store_language(&handle, &language) {
+                  tracing::warn!(%error, "dictation language from the tray was not stored");
                 }
+              }
+              tray::MenuAction::CheckForUpdates => {
+                // About runs the check and shows its answer in the window: a
+                // notification can be dropped by the system without an error.
+                show_settings(&handle, SettingsView::UpdateCheck);
               }
               tray::MenuAction::OpenEditRoot => {
                 manager.lock().await.open_edit_root().await;
@@ -536,15 +563,14 @@ pub fn run() {
 
       presence::start(handle.clone());
       desktop_runner::watch_state(&handle);
+      keep_awake::watch_power_source();
 
       // Check for updates in the background after launch settles.
       updater::schedule_startup_check(handle.clone(), Arc::clone(&manager));
 
-      // Hide dock icon on macOS (tray-only app)
+      // A menu bar app on macOS; app windows put it in the Dock while open.
       #[cfg(target_os = "macos")]
-      {
-        app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-      }
+      app_window::start_in_menu_bar(app);
 
       onboarding::show_if_pending(
         &handle,
@@ -595,10 +621,14 @@ pub fn run() {
       tracing::info!("stella desktop started");
       Ok(())
     })
+    .on_page_load(app_window::page_loading)
+    .on_window_event(app_window::window_event)
     .invoke_handler(with_stella_commands!(generate_stella_handler))
     .build(tauri::generate_context!())
     .expect("error while building stella desktop")
     .run(|app, event| match event {
+      #[cfg(target_os = "macos")]
+      tauri::RunEvent::Reopen { .. } => app_window::reopen(app),
       tauri::RunEvent::ExitRequested { api, code, .. } => {
         if app_lifecycle::should_prevent_exit(code) {
           tracing::info!("prevented background desktop process from exiting");
@@ -608,6 +638,9 @@ pub fn run() {
         }
       }
       tauri::RunEvent::Exit => {
+        keep_awake::global().release_for_exit();
+        // Sound a dictation lowered or paused comes back.
+        dictation_media::restore();
         activity::flush_on_exit(app);
         desktop_crash::clean_exit(app);
         #[cfg(target_os = "macos")]
@@ -625,38 +658,48 @@ pub fn run() {
 
 /// The settings window's size. The browser harness reads these lines and
 /// renders the window at this size (`tests/desktop-window-sizes.ts`).
-const SETTINGS_WINDOW_WIDTH: f64 = 600.0;
+const SETTINGS_WINDOW_WIDTH: f64 = 760.0;
 const SETTINGS_WINDOW_HEIGHT: f64 = 620.0;
 /// The smallest the settings window can be resized to.
-const SETTINGS_WINDOW_MIN_WIDTH: f64 = 480.0;
+const SETTINGS_WINDOW_MIN_WIDTH: f64 = 640.0;
 const SETTINGS_WINDOW_MIN_HEIGHT: f64 = 460.0;
 pub(crate) const SETTINGS_WINDOW_LABEL: &str = "main";
 
-/// A Settings window tab native code opens; the ids are `PREFERENCES_TABS`
-/// in `src/mainview/App.tsx`.
+/// A Settings window page native code opens; the ids are `SETTINGS_PAGES`
+/// in `src/mainview/settings-pages.ts`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PreferencesTab {
   General,
+  Dictation,
+  Agents,
   Activity,
   About,
 }
 
 impl PreferencesTab {
   #[cfg(test)]
-  const ALL: [Self; 3] = [Self::General, Self::Activity, Self::About];
+  const ALL: [Self; 5] = [
+    Self::General,
+    Self::Dictation,
+    Self::Agents,
+    Self::Activity,
+    Self::About,
+  ];
 
   const fn id(self) -> &'static str {
     match self {
       Self::General => "general",
+      Self::Dictation => "dictation",
+      Self::Agents => "agents",
       Self::Activity => "activity",
       Self::About => "about",
     }
   }
 }
 
-/// Where on General the Settings window scrolls to for the coding agents:
-/// their whole group, or one agent's card. The ids are `AGENT_SETTINGS_FOCUS`
-/// in `src/mainview/App.tsx`.
+/// Where on the AI and agents page the Settings window scrolls to for the
+/// coding agents: their whole group, or one agent's card. The ids are
+/// `AGENT_SETTINGS_FOCUS` in `src/mainview/settings-pages.ts`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AgentSettingsFocus {
   All,
@@ -683,19 +726,49 @@ impl AgentSettingsFocus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SettingsView {
   Tab(PreferencesTab),
-  /// General, scrolled to the coding agents' sign-ins and installs.
+  /// AI and agents, scrolled to the coding agents' sign-ins and installs.
   Agents(AgentSettingsFocus),
+  /// Dictation, focused on the microphone it records from.
+  Microphone,
+  /// About, running "Check for updates" and showing its answer.
+  UpdateCheck,
 }
 
 impl SettingsView {
-  /// The `activate-tab` event the window reads.
-  fn event_payload(self) -> serde_json::Value {
+  const fn tab(self) -> PreferencesTab {
     match self {
-      Self::Tab(tab) => serde_json::json!({ "tab": tab.id() }),
-      Self::Agents(focus) => serde_json::json!({
-        "tab": PreferencesTab::General.id(),
-        "focus": focus.id(),
-      }),
+      Self::Tab(tab) => tab,
+      Self::Agents(_) => PreferencesTab::Agents,
+      Self::Microphone => PreferencesTab::Dictation,
+      Self::UpdateCheck => PreferencesTab::About,
+    }
+  }
+
+  const fn focus(self) -> Option<&'static str> {
+    match self {
+      Self::Tab(_) => None,
+      Self::Agents(focus) => Some(focus.id()),
+      Self::Microphone => Some("microphone"),
+      Self::UpdateCheck => Some("update-check"),
+    }
+  }
+
+  /// The `activate-tab` event an open window reads.
+  fn event_payload(self) -> serde_json::Value {
+    let tab = self.tab().id();
+    match self.focus() {
+      Some(focus) => serde_json::json!({ "tab": tab, "focus": focus }),
+      None => serde_json::json!({ "tab": tab }),
+    }
+  }
+
+  /// The page a new window loads. The fragment names the view, so it is there
+  /// however long the window takes to start listening for events.
+  fn page(self) -> String {
+    let tab = self.tab().id();
+    match self.focus() {
+      Some(focus) => format!("index.html#{tab}/{focus}"),
+      None => format!("index.html#{tab}"),
     }
   }
 }
@@ -709,22 +782,26 @@ pub(crate) fn show_settings(handle: &tauri::AppHandle, view: SettingsView) {
   #[cfg(target_os = "macos")]
   best_effort(handle.show(), "app could not be shown");
 
-  let payload = view.event_payload();
   if let Some(window) = handle.get_webview_window(SETTINGS_WINDOW_LABEL) {
     best_effort(window.show(), "settings window could not be shown");
     best_effort(window.set_focus(), "settings window could not be focused");
     best_effort(
-      handle.emit_to(SETTINGS_WINDOW_LABEL, "activate-tab", payload),
+      handle.emit_to(SETTINGS_WINDOW_LABEL, "activate-tab", view.event_payload()),
       "settings tab change was not announced",
     );
     return;
   }
 
-  let builder = crate::app_window::builder(handle, SETTINGS_WINDOW_LABEL, "index.html")
-    .title("stella desktop")
-    .inner_size(SETTINGS_WINDOW_WIDTH, SETTINGS_WINDOW_HEIGHT)
-    .min_inner_size(SETTINGS_WINDOW_MIN_WIDTH, SETTINGS_WINDOW_MIN_HEIGHT)
-    .resizable(true);
+  let builder = crate::app_window::builder(
+    handle,
+    SETTINGS_WINDOW_LABEL,
+    view.page(),
+    crate::app_window::WindowKind::App,
+  )
+  .title("stella desktop")
+  .inner_size(SETTINGS_WINDOW_WIDTH, SETTINGS_WINDOW_HEIGHT)
+  .min_inner_size(SETTINGS_WINDOW_MIN_WIDTH, SETTINGS_WINDOW_MIN_HEIGHT)
+  .resizable(true);
   let builder = window_placement::centered_on_target_screen(
     handle,
     builder,
@@ -749,15 +826,6 @@ pub(crate) fn show_settings(handle: &tauri::AppHandle, view: SettingsView) {
           feature_access::refresh_now();
         }
       });
-      // Emit tab activation after a short delay to let the webview load
-      let handle = handle.clone();
-      tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        best_effort(
-          handle.emit_to(SETTINGS_WINDOW_LABEL, "activate-tab", payload),
-          "tab activation was not announced",
-        );
-      });
     }
     Err(e) => {
       tracing::error!(error = %e, "failed to create settings window");
@@ -767,18 +835,30 @@ pub(crate) fn show_settings(handle: &tauri::AppHandle, view: SettingsView) {
 
 #[cfg(test)]
 mod preferences_tab_tests {
-  use super::{AgentSettingsFocus, PreferencesTab};
+  use super::{AgentSettingsFocus, PreferencesTab, SettingsView};
 
-  /// The ids in one `const NAME = [...]` array literal of `App.tsx`.
+  /// The ids in one `const NAME = [...]` array literal of `settings-pages.ts`.
   fn declared(name: &str) -> &'static str {
-    let source = include_str!("../../src/mainview/App.tsx");
+    let source = include_str!("../../src/mainview/settings-pages.ts");
     let (_, declaration) = source
       .split_once(&format!("const {name} = ["))
-      .expect("App.tsx declares the array");
+      .expect("settings-pages.ts declares the array");
     declaration
       .split_once(']')
       .expect("the array is one array literal")
       .0
+  }
+
+  #[test]
+  fn a_new_window_loads_the_view_it_was_opened_for() {
+    assert_eq!(
+      SettingsView::Tab(PreferencesTab::General).page(),
+      "index.html#general"
+    );
+    assert_eq!(
+      SettingsView::UpdateCheck.page(),
+      "index.html#about/update-check"
+    );
   }
 
   #[test]
@@ -794,12 +874,12 @@ mod preferences_tab_tests {
   }
 
   #[test]
-  fn native_tabs_are_tabs_the_settings_window_declares() {
-    let declaration = declared("PREFERENCES_TABS");
+  fn native_pages_are_pages_the_settings_window_declares() {
+    let declaration = declared("SETTINGS_PAGES");
     for tab in PreferencesTab::ALL {
       assert!(
         declaration.contains(&format!("\"{}\"", tab.id())),
-        "{} is not a Settings window tab",
+        "{} is not a Settings window page",
         tab.id()
       );
     }

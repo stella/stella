@@ -10,7 +10,7 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import {
   type PendingUploadFinalizedResult,
   pendingUploads,
@@ -102,7 +102,9 @@ export const finalizeAgentSkill = async function* ({
   }
 
   const installResult = await installSkill({
+    binaryFiles: parsed.value.binaryFiles,
     memberRole,
+    onSlugTaken: "copy",
     onInstalled: async (tx, skill) => {
       const finalized: Extract<
         PendingUploadFinalizedResult,

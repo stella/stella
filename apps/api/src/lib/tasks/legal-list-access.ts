@@ -1,5 +1,5 @@
-import type { Transaction } from "@/api/db/root";
 import { isScopedFeatureEnabled } from "@/api/db/scoped-feature-access";
+import type { Transaction } from "@/api/db/types";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";

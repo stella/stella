@@ -3,7 +3,7 @@ import { and, count, eq, gt, ilike, or } from "drizzle-orm";
 import type { ContactType } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { contacts, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -207,6 +207,7 @@ export const listContactsPage = async ({
       conditions.push(eq(contacts.type, query.type));
     }
     if (query.q) {
+      // sql-perf-allow: bounded by one organization's contacts via contacts_org_display_name_idx (and contacts_org_type_idx when type is set)
       conditions.push(ilike(contacts.displayName, `%${escapeLike(query.q)}%`));
     }
     if (query.cursor) {

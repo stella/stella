@@ -410,6 +410,21 @@ describe("PostHog browser analytics adapter", () => {
     });
   });
 
+  test("initialises the shared SDK once across analytics values", () => {
+    posthogMock.__loaded = true;
+    try {
+      const { client } = createPostHogAnalytics({
+        host: "https://posthog.test",
+        key: "phc_test",
+      });
+
+      expect(initMock).not.toHaveBeenCalled();
+      expect(client).toBe(posthogMock);
+    } finally {
+      posthogMock.__loaded = false;
+    }
+  });
+
   test("points UI links at the PostHog origin when ingesting via a proxy", () => {
     createPostHogAnalytics({
       host: "https://e.example.test",
@@ -1169,6 +1184,70 @@ describe("PostHog browser analytics adapter", () => {
         query_owner: "auth.role:query",
         transport_kind: "network",
       });
+    },
+  );
+
+  class WrappedFeatureFailure extends TaggedError("WrappedFeatureFailure")<{
+    message: string;
+    cause?: unknown;
+  }> {}
+
+  test.each([
+    { cause: new TypeError("Failed to fetch"), transportKind: "network" },
+    {
+      cause: new APIError({
+        status: 0,
+        message: "x",
+        transportKind: "timeout",
+      }),
+      transportKind: "timeout",
+    },
+  ])(
+    "captureError classifies a feature error by its transport cause ($transportKind)",
+    ({ cause, transportKind }) => {
+      const { analytics } = createPostHogAnalytics({
+        host: "https://posthog.test",
+        key: "phc_test",
+      });
+      analytics.captureError(
+        new WrappedFeatureFailure({ message: "Feature request failed", cause }),
+        {
+          fingerprintKey: "feature:query",
+          scope: { type: "handler", handlerId: "feature" },
+        },
+      );
+
+      expect(captureExceptionMock).not.toHaveBeenCalled();
+      expect(captureMock).toHaveBeenLastCalledWith("client_transient", {
+        query_owner: "feature:query",
+        transport_kind: transportKind,
+      });
+    },
+  );
+
+  test.each([
+    new TypeError("Cannot read properties of undefined"),
+    new APIError({
+      status: 500,
+      message: "x",
+      cause: new TypeError("Failed to fetch"),
+    }),
+  ])(
+    "captureError keeps a feature error whose cause is not a transport failure",
+    (cause) => {
+      const { analytics } = createPostHogAnalytics({
+        host: "https://posthog.test",
+        key: "phc_test",
+      });
+      analytics.captureError(
+        new WrappedFeatureFailure({ message: "Feature request failed", cause }),
+        {
+          fingerprintKey: "feature:query",
+          scope: { type: "handler", handlerId: "feature" },
+        },
+      );
+
+      expect(captureExceptionMock).toHaveBeenCalledTimes(1);
     },
   );
 

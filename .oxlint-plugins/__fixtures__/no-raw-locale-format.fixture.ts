@@ -12,6 +12,8 @@ declare const getFormattingLocale: () => string;
 declare const someDate: Date;
 declare const lang: string;
 declare const locale: string;
+declare const optionalLocale: string | undefined;
+declare const store: { getState: () => { lang: string } };
 
 // --- Flagged: bare / absent / base-language locale ---
 // oxlint-disable-next-line no-raw-locale-format/no-raw-locale-format
@@ -20,6 +22,10 @@ const _nf = new Intl.NumberFormat();
 const _dtf = new Intl.DateTimeFormat("en-US");
 // oxlint-disable-next-line no-raw-locale-format/no-raw-locale-format
 const _rtf = new Intl.RelativeTimeFormat(lang);
+// oxlint-disable-next-line no-raw-locale-format/no-raw-locale-format
+const _dtfFallback = new Intl.DateTimeFormat(
+  optionalLocale ?? store.getState().lang,
+);
 // oxlint-disable-next-line no-raw-locale-format/no-raw-locale-format
 const _d1 = someDate.toLocaleDateString();
 // oxlint-disable-next-line no-raw-locale-format/no-raw-locale-format
@@ -36,6 +42,7 @@ export const __noRawLocaleFormatFixture = {
   _nf,
   _dtf,
   _rtf,
+  _dtfFallback,
   _d1,
   _d2,
   _n1,

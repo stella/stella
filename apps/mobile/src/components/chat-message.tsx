@@ -2,7 +2,7 @@ import { use } from "react";
 import type { PropsWithChildren } from "react";
 
 import { panic } from "better-result";
-import { Pressable, Share, View } from "react-native";
+import { Share, View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import type { AIErrorKind } from "@stll/api-contract/ai-errors";
@@ -11,7 +11,11 @@ import { MOBILE_REDIRECT_SCHEMES } from "@stll/api-contract/mobile-client";
 import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
 
-import { AnswerSteps, AnswerSubagent } from "@/components/answer-steps";
+import {
+  AnswerIntent,
+  AnswerSteps,
+  AnswerSubagent,
+} from "@/components/answer-steps";
 import { ChatAttachmentChip } from "@/components/chat-attachment-chip";
 import {
   LimitResetChoice,
@@ -20,9 +24,8 @@ import {
 import { MarkdownView } from "@/components/markdown-view";
 import { ThreadMatter } from "@/components/thread-matter";
 import { APP_VARIANT } from "@/env";
-import type { SentFile } from "@/state/chat-attachments";
 import { CHAT_FAILURE_KEYS, chatFailureStepsKey } from "@/state/chat-failure";
-import type { ChatEntry } from "@/state/chat-messages";
+import type { ChatEntry, ShownFile } from "@/state/chat-messages";
 import { plainText } from "@/state/markdown";
 
 /**
@@ -58,6 +61,7 @@ export const ChatMessage = ({
             key={key}
             mimeType={file.mimeType}
             name={file.name}
+            unscannedContent={file.unscannedContent}
           />
         ))}
         {entry.text === "" ? null : (
@@ -83,6 +87,10 @@ export const ChatMessage = ({
                 key={`text:${block.key}`}
                 markdown={block.markdown}
               />
+            );
+          case "intent":
+            return (
+              <AnswerIntent key={`intent:${block.key}`} text={block.text} />
             );
           case "steps":
             return (
@@ -131,7 +139,7 @@ const UserMessage = ({
     return <View className="items-end gap-1.5">{children}</View>;
   }
   return (
-    <Pressable
+    <Button
       accessibilityActions={[{ name: "longpress", label: t("edit.action") }]}
       className="items-end gap-1.5"
       onAccessibilityAction={({ nativeEvent }) => {
@@ -140,9 +148,10 @@ const UserMessage = ({
         }
       }}
       onLongPress={onLongPress}
+      variant="plain"
     >
       {children}
-    </Pressable>
+    </Button>
   );
 };
 
@@ -229,10 +238,8 @@ const ShareAnswer = ({ text }: { text: string }) => {
   const t = useTranslations("link");
   const matterId = use(ThreadMatter);
   return (
-    <Pressable
-      accessibilityRole="button"
+    <Button
       className="self-start"
-      hitSlop={8}
       onPress={() => {
         const message = plainText(text, {
           appScheme: MOBILE_REDIRECT_SCHEMES[APP_VARIANT],
@@ -240,14 +247,16 @@ const ShareAnswer = ({ text }: { text: string }) => {
         });
         void Share.share({ message });
       }}
+      size="inline"
+      variant="muted"
     >
       <Text variant="caption">{t("share")}</Text>
-    </Pressable>
+    </Button>
   );
 };
 
 /** Each file with a key that tells apart two files of the same name. */
-function keyedFiles(files: readonly SentFile[]) {
+function keyedFiles(files: readonly ShownFile[]) {
   const seen = new Map<string, number>();
   return files.map((file) => {
     const earlier = seen.get(file.name) ?? 0;

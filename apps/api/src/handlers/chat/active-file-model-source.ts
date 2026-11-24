@@ -1,3 +1,8 @@
+import {
+  legalFileFormat,
+  signatureFormatCandidate,
+} from "@stll/api-contract/document-format";
+
 import type { FieldContent } from "@/api/db/schema-validators";
 import { isNativelyRenderableMimeType } from "@/api/lib/files/pdf-derivative-policy";
 import { isOfficeDocumentMimeType } from "@/api/lib/search/extractable-mime-types";
@@ -44,26 +49,32 @@ export const getActiveFileSourceForModel = (
     };
   }
 
-  if (content.pdfFileId !== null) {
+  if (
+    legalFileFormat(content.mimeType, content.fileName) !== undefined ||
+    signatureFormatCandidate(content.mimeType, content.fileName) !==
+      undefined ||
+    (content.pdfFileId === null &&
+      isNativelyRenderableMimeType(content.mimeType) &&
+      isOfficeDocumentMimeType(content.mimeType))
+  ) {
     return {
-      type: "pdf",
-      fileId: content.pdfFileId,
+      type: "extracted-text",
+      fileId: content.id,
       fileName: content.fileName,
-      knownSizeBytes: null,
-      mimeType: PDF_MIME_TYPE,
+      knownSizeBytes: content.sizeBytes,
+      mimeType: content.mimeType,
     };
   }
-
-  return isNativelyRenderableMimeType(content.mimeType) &&
-    isOfficeDocumentMimeType(content.mimeType)
-    ? {
-        type: "extracted-text",
-        fileId: content.id,
-        fileName: content.fileName,
-        knownSizeBytes: content.sizeBytes,
-        mimeType: content.mimeType,
-      }
-    : null;
+  if (content.pdfFileId === null) {
+    return null;
+  }
+  return {
+    type: "pdf",
+    fileId: content.pdfFileId,
+    fileName: content.fileName,
+    knownSizeBytes: null,
+    mimeType: PDF_MIME_TYPE,
+  };
 };
 
 type ActiveFileExtractedContent = {

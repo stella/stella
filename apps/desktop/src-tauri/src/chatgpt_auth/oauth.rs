@@ -445,12 +445,12 @@ fn callback_page(page: &CallbackPage, scheme: OutcomeScheme) -> String {
       .map(|value| OutcomeDetail { label, value })
   })
   .collect();
-  // A failure names the way back as the app shows it: the tab, the section
+  // A failure names the way back as the app shows it: the page, the section
   // and the button's own labels.
   let retry = [
     OutcomeMark {
       name: "section",
-      value: t("settings.general"),
+      value: t("settings.pages.agents"),
       kind: OutcomeMarkKind::Control,
     },
     OutcomeMark {
@@ -573,7 +573,7 @@ mod tests {
       1
     );
     for label in [
-      "General",
+      "AI&#32;and&#32;agents",
       "AI&#32;subscriptions",
       "Continue&#32;with&#32;ChatGPT",
     ] {

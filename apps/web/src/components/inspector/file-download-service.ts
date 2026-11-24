@@ -2,13 +2,16 @@ import { Result } from "better-result";
 
 import type { MarkedPdfExportMode } from "@stll/api-contract/marked-pdf-export";
 import { fetchWithTimeout } from "@stll/fetch";
+import { stellaToast } from "@stll/ui/toast";
 
 import {
   type DownloadVariant,
   getPdfDownloadFileName,
 } from "@/components/inspector/file-download-service.logic";
+import { UNSCANNED_CONTENT_MESSAGE } from "@/components/inspector/unscanned-content-notice";
 import { getTranslator } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
+import { toBrowserApiUrl } from "@/lib/api-origins";
 import { apiUrl } from "@/lib/api-url";
 import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
@@ -155,9 +158,12 @@ export const downloadTabFile = async ({
   }
 
   const downloaded = await Result.tryPromise(async () => {
-    const fetched = await fetchWithTimeout(response.data.presignedUrl, {
-      timeoutMs: DOWNLOAD_TIMEOUT_MS,
-    });
+    const fetched = await fetchWithTimeout(
+      toBrowserApiUrl(response.data.presignedUrl),
+      {
+        timeoutMs: DOWNLOAD_TIMEOUT_MS,
+      },
+    );
     return fetched.ok ? await fetched.blob() : null;
   });
 
@@ -173,4 +179,11 @@ export const downloadTabFile = async ({
     downloaded.value,
     asPdf ? getPdfDownloadFileName(fileName) : fileName,
   );
+  // The downloaded file holds content the upload scan could not read; the
+  // person opening it is told so, as the viewer tells them.
+  const unscannedContent =
+    response.data.kind === "file" ? response.data.unscannedContent : [];
+  for (const reason of unscannedContent) {
+    stellaToast.warning(t(UNSCANNED_CONTENT_MESSAGE[reason]));
+  }
 };

@@ -25,20 +25,23 @@ import type {
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
-import type { Transaction } from "@/api/db/root";
 import {
   BILLING_STATUS,
   expenses,
   INVOICE_ATTACHMENT,
   timeEntries,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
 } from "@/api/lib/audit-log.constants";
+import { revokeInvoiceLinksAfterTransition } from "@/api/lib/billing/invoice-send-revocation";
+import type { InvoiceTransitionEffectContext } from "@/api/lib/billing/invoice-send-revocation";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AcquiredInvoiceMatterLocks } from "@/api/lib/db/aggregate-lock";
+import { lockedInvoiceTransitionSource } from "@/api/lib/db/aggregate-lock/invoice-transition-source";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -58,7 +61,7 @@ type Status<TTable extends StatusTable> = GetColumnData<TTable["status"]> &
   string;
 type FenceKey<TTable extends StatusTable> = Extract<
   keyof TTable["_"]["columns"],
-  "leaseToken" | "attempt" | "claimedAt" | "generation"
+  "leaseToken" | "attempt" | "claimedAt" | "generation" | "accessTokenEncrypted"
 >;
 
 export type TransitionSpec = {
@@ -66,6 +69,7 @@ export type TransitionSpec = {
   readonly edges: Readonly<Record<string, readonly string[]>>;
   readonly terminal: readonly string[];
   readonly fence: string | undefined;
+  readonly invoiceLinkAuthority?: "revoke-on-leaving-issued";
   readonly scope?: readonly string[] | undefined;
 };
 
@@ -234,8 +238,31 @@ const ignoreTransitionAudit = async (): Promise<void> => {
   await Promise.resolve();
 };
 
-const typedColumnParam = (value: unknown, column: AnyPgColumn) =>
-  sql`${sql.param(value, column)}::${sql.raw(column.getSQLType())}`;
+const serializeTransitionColumnValue = (
+  value: unknown,
+  column: AnyPgColumn,
+): unknown => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+  if (column.getSQLType() === "jsonb" || column.getSQLType() === "json") {
+    return value;
+  }
+  const mapped: unknown = column.mapToDriverValue(value);
+  if (mapped instanceof Date) {
+    return mapped.toISOString();
+  }
+  if (typeof mapped === "bigint") {
+    return mapped.toString();
+  }
+  return mapped;
+};
 
 const isScopedStateValue = <
   TTable extends ScopedStateTable,
@@ -333,10 +360,7 @@ const executeScopedUpsertWrites = async <
             ),
             sql`, `,
           )}
-          FROM (VALUES ${incomingRows}) AS incoming (${sql.join(
-            insertColumns.map((column) => sql.identifier(column.name)),
-            sql`, `,
-          )})
+          FROM ${incomingRows}
           WHERE incoming.${sql.identifier(state.name)} IN (${sql.join(
             spec.initial.map((initial) => sql`${sql.param(initial, state)}`),
             sql`, `,
@@ -379,10 +403,7 @@ const executeScopedUpsertWrites = async <
             ),
             sql`, `,
           )}
-          FROM (VALUES ${incomingRows}) AS incoming (${sql.join(
-            insertColumns.map((column) => sql.identifier(column.name)),
-            sql`, `,
-          )})
+          FROM ${incomingRows}
           WHERE ${sql.join(
             identityColumns.map(
               (column) =>
@@ -413,10 +434,7 @@ const executeScopedUpsertWrites = async <
         ),
         sql`, `,
       )}
-      FROM (VALUES ${incomingRows}) AS incoming (${sql.join(
-        insertColumns.map((column) => sql.identifier(column.name)),
-        sql`, `,
-      )})
+      FROM ${incomingRows}
       WHERE ${sql.join(
         identityColumns.map(
           (column) =>
@@ -430,10 +448,7 @@ const executeScopedUpsertWrites = async <
   const verified = await tx.execute(sql`
     SELECT 1
     FROM ${spec.table} AS current
-    JOIN (VALUES ${incomingRows}) AS incoming (${sql.join(
-      insertColumns.map((column) => sql.identifier(column.name)),
-      sql`, `,
-    )})
+    JOIN ${incomingRows}
       ON ${sql.join(
         identityColumns.map(
           (column) =>
@@ -781,23 +796,26 @@ export const transitionUpsertBatch = async <
       panic("An upsert state must belong to the declared lifecycle domain");
     }
   }
-  const incomingRows = sql.join(
-    values.map(
-      (row) =>
-        sql`(${sql.join(
-          insertColumns.map((column, index) => {
-            const key = valueKeys[index];
-            if (key === undefined) {
-              panic("Upsert column key is missing");
-            }
-            const value = row[key];
-            return typedColumnParam(value, column);
-          }),
-          sql`, `,
-        )})`,
+  const incomingPayload = values.map((row) =>
+    Object.fromEntries(
+      insertColumns.map((column, index) => {
+        const key = valueKeys[index];
+        if (key === undefined) {
+          panic("Upsert column key is missing");
+        }
+        return [column.name, serializeTransitionColumnValue(row[key], column)];
+      }),
+    ),
+  );
+  const incomingRows = sql`jsonb_to_recordset(${JSON.stringify(
+    incomingPayload,
+  )}::text::jsonb) AS incoming (${sql.join(
+    insertColumns.map(
+      (column) =>
+        sql`${sql.identifier(column.name)} ${sql.raw(column.getSQLType())}`,
     ),
     sql`, `,
-  );
+  )})`;
   const identityColumns = identityKeys.map((key) => {
     const column = columns[key];
     if (column === undefined) {
@@ -895,6 +913,7 @@ type DefineKeyedTransitionsArgs<
   TOptions extends {
     terminal: readonly Status<TTable>[];
     fence?: FenceKey<TTable>;
+    invoiceLinkAuthority?: "revoke-on-leaving-issued";
   },
   TScope extends readonly (keyof TTable["_"]["columns"] & string)[] | undefined,
 > = {
@@ -915,6 +934,7 @@ export const defineKeyedTransitions = <
   const TOptions extends {
     terminal: readonly Status<TTable>[];
     fence?: FenceKey<TTable>;
+    invoiceLinkAuthority?: "revoke-on-leaving-issued";
   },
   const TScope extends
     readonly (keyof TTable["_"]["columns"] & string)[] | undefined = undefined,
@@ -971,6 +991,9 @@ export const defineKeyedTransitions = <
     options: Object.freeze(options),
     terminal: Object.freeze([...options.terminal]),
     fence: options.fence,
+    ...(options.invoiceLinkAuthority === undefined
+      ? {}
+      : { invoiceLinkAuthority: options.invoiceLinkAuthority }),
   });
 };
 
@@ -983,6 +1006,7 @@ export const defineTransitions = <
   const TOptions extends {
     terminal: readonly Status<TTable>[];
     fence?: FenceKey<TTable>;
+    invoiceLinkAuthority?: "revoke-on-leaving-issued";
   },
 >(
   table: TTable,
@@ -1049,6 +1073,13 @@ export type TransitionTransaction = {
   execute: (query: SQLWrapper | string) => PromiseLike<unknown>;
 } & Pick<Transaction, "rollback">;
 
+type InvoiceEffectArgs<
+  TTx extends TransitionTransaction,
+  TOptions,
+> = TOptions extends { invoiceLinkAuthority: "revoke-on-leaving-issued" }
+  ? { effectContext: InvoiceTransitionEffectContext<TTx> }
+  : { effectContext?: never };
+
 type TransitionArgs<
   TTx extends TransitionTransaction,
   TTable extends LifecycleTable,
@@ -1067,7 +1098,7 @@ type TransitionArgs<
     tx: TTx,
     row: { id: GetColumnData<TTable["id"]>; status: Status<TTable> },
   ) => Promise<void>;
-};
+} & InvoiceEffectArgs<TTx, TOptions>;
 
 type TransitionScopeOptions = {
   table: StatusTable;
@@ -1104,8 +1135,11 @@ type LifecycleMove = {
   to: string;
 };
 
-type LifecycleUpdateArgs = {
-  tx: TransitionTransaction;
+type LifecycleUpdateArgs<
+  TTx extends TransitionTransaction = TransitionTransaction,
+> = {
+  tx: TTx;
+  invoiceEffect?: { context: InvoiceTransitionEffectContext<TTx> };
   table: PgTable;
   identity: { key: string; column: AnyPgColumn };
   ids: readonly unknown[];
@@ -1124,9 +1158,50 @@ type LifecycleUpdateArgs = {
   ) => Promise<void>;
 };
 
+type LifecyclePredicateOptions = Pick<
+  LifecycleUpdateArgs,
+  "identity" | "ids" | "match" | "moves" | "guard"
+> & {
+  scope: LifecycleUpdateArgs["scope"];
+  fence: AnyPgColumn | undefined;
+  expectedFence: unknown;
+};
+
+/** The predicate a lifecycle update selects its rows by. */
+const lifecycleUpdatePredicate = ({
+  identity,
+  ids,
+  match,
+  moves,
+  scope,
+  guard,
+  fence,
+  expectedFence,
+}: LifecyclePredicateOptions) => {
+  const scoped = scope === undefined ? sql`` : transitionScopePredicate(scope);
+  const identityMatch =
+    match === "one"
+      ? sql`${identity.column} = ${sql.param(ids[0], identity.column)}`
+      : sql`${identity.column} IN (${sql.join(
+          ids.map((id) => sql`${sql.param(id, identity.column)}`),
+          sql`, `,
+        )})`;
+  const sources = moves.map(
+    ({ column, from }) =>
+      sql`AND ${column} IN (${sql.join(
+        from.map((value) => sql`${value}`),
+        sql`, `,
+      )})`,
+  );
+  return sql`${identityMatch} ${scoped} ${sql.join(sources, sql` `)}
+    ${fence === undefined ? sql`` : sql`AND ${fence} IS NOT DISTINCT FROM ${sql.param(expectedFence, fence)}`}
+    ${guard === undefined ? sql`` : sql`AND (${guard})`}`;
+};
+
 /** One conditional update; every moved column's expected sources join its predicate. */
-const lifecycleUpdate = async ({
+const lifecycleUpdate = async <TTx extends TransitionTransaction>({
   tx,
+  invoiceEffect,
   table,
   identity,
   ids,
@@ -1137,7 +1212,7 @@ const lifecycleUpdate = async ({
   fence: { key: fenceKey, value: expectedFence, nextValue: nextFence },
   guard,
   recordTransitionAuditEvent,
-}: LifecycleUpdateArgs) => {
+}: LifecycleUpdateArgs<TTx>) => {
   if (
     moves.length === 0 ||
     moves.some(
@@ -1200,47 +1275,63 @@ const lifecycleUpdate = async ({
   if (ids.length === 0) {
     return [];
   }
-  const scoped = scope === undefined ? sql`` : transitionScopePredicate(scope);
-  const identityMatch =
-    match === "one"
-      ? sql`${identity.column} = ${sql.param(ids[0], identity.column)}`
-      : sql`${identity.column} IN (${sql.join(
-          ids.map((id) => sql`${sql.param(id, identity.column)}`),
-          sql`, `,
-        )})`;
-  const sources = moves.map(
-    ({ column, from }) =>
-      sql`AND ${column} IN (${sql.join(
-        from.map((value) => sql`${value}`),
-        sql`, `,
-      )})`,
-  );
+  const predicate = lifecycleUpdatePredicate({
+    identity,
+    ids,
+    match,
+    moves,
+    scope,
+    guard,
+    fence,
+    expectedFence,
+  });
   const returned = moves.map(
     ({ key, column }) => sql`, ${column} AS ${sql.identifier(key)}`,
   );
-  const executed = await tx.execute(sql`
-    UPDATE ${table}
-    SET ${sql.join(assignments, sql`, `)}
-    WHERE ${identityMatch}
-      ${scoped}
-      ${sql.join(sources, sql` `)}
-      ${fence === undefined ? sql`` : sql`AND ${fence} IS NOT DISTINCT FROM ${sql.param(expectedFence, fence)}`}
-      ${guard === undefined ? sql`` : sql`AND (${guard})`}
-    RETURNING ${identity.column} AS "id"${sql.join(returned, sql``)}
-  `);
+  // An invoice transition reads each row's prior status in the same statement,
+  // so link revocation sees the states the update actually left.
+  const source =
+    invoiceEffect === undefined
+      ? null
+      : lockedInvoiceTransitionSource(predicate);
+  const executed = await tx.execute(
+    source === null
+      ? sql`
+        UPDATE ${table}
+        SET ${sql.join(assignments, sql`, `)}
+        WHERE ${predicate}
+        RETURNING ${identity.column} AS "id"${sql.join(returned, sql``)}
+      `
+      : sql`
+        WITH transition_source AS MATERIALIZED (${source})
+        UPDATE ${table}
+        SET ${sql.join(assignments, sql`, `)}
+        FROM transition_source
+        WHERE ${identity.column} = transition_source.source_id
+        RETURNING ${identity.column} AS "id"${sql.join(returned, sql``)},
+          transition_source.previous_status AS "previousStatus"
+      `,
+  );
   const rows = returnedTransitionRows(executed);
   // Stale updates change nothing and record nothing.
   if (rows.length > 0) {
+    if (invoiceEffect !== undefined) {
+      await revokeInvoiceLinksAfterTransition(tx, {
+        context: invoiceEffect.context,
+        rows,
+      });
+    }
     await recordTransitionAuditEvent(rows);
   }
   return rows;
 };
 
-type StatusUpdateArgs = Pick<
-  LifecycleUpdateArgs,
+type StatusUpdateArgs<TTx extends TransitionTransaction> = Pick<
+  LifecycleUpdateArgs<TTx>,
   "tx" | "identity" | "ids" | "match" | "recordTransitionAuditEvent"
 > & {
   spec: TransitionSpec & { table: StatusTable };
+  effectContext: InvoiceTransitionEffectContext<TTx> | undefined;
   scope?: TransitionScopeOptions;
   // Untyped callers still need fence validation when the generic excludes a fence.
   options: {
@@ -1253,7 +1344,7 @@ type StatusUpdateArgs = Pick<
   };
 };
 
-const statusUpdate = async ({
+const statusUpdate = async <TTx extends TransitionTransaction>({
   tx,
   spec,
   identity,
@@ -1262,9 +1353,19 @@ const statusUpdate = async ({
   options,
   scope,
   recordTransitionAuditEvent,
-}: StatusUpdateArgs) =>
+  effectContext,
+}: StatusUpdateArgs<TTx>) =>
   await lifecycleUpdate({
     tx,
+    ...(spec.invoiceLinkAuthority === undefined
+      ? {}
+      : {
+          invoiceEffect: {
+            context:
+              effectContext ??
+              panic("Invoice transitions require bound effect context"),
+          },
+        }),
     table: spec.table,
     identity,
     ids,
@@ -1300,6 +1401,7 @@ export const transition = async <
   spec,
   id,
   options,
+  effectContext,
   recordTransitionAuditEvent,
 }: TransitionArgs<TTx, TTable, TEdges, TOptions>): Promise<
   TransitionResult<GetColumnData<TTable["id"]>, Status<TTable>>
@@ -1322,6 +1424,7 @@ export const transition = async <
     ids: [id],
     match: "one",
     options,
+    effectContext,
     recordTransitionAuditEvent: async ([changed]) => {
       await recordTransitionAuditEvent(
         tx,
@@ -1386,7 +1489,8 @@ type TransitionBatchArgs<
         [K in TScope[number]]: GetColumnData<TTable["_"]["columns"][K]>;
       };
     }
-  : { scope?: never });
+  : { scope?: never }) &
+  InvoiceEffectArgs<TTx, TOptions>;
 
 /** One conditional update per held batch; only changed rows reach its required audit. */
 export const transitionBatch = async <
@@ -1402,6 +1506,7 @@ export const transitionBatch = async <
   spec,
   ids,
   options,
+  effectContext,
   recordTransitionAuditEvent,
   scope,
 }: TransitionBatchArgs<TTx, TTable, TKey, TEdges, TOptions, TScope>) => {
@@ -1432,6 +1537,7 @@ export const transitionBatch = async <
     ids,
     match: "many",
     options,
+    effectContext,
     recordTransitionAuditEvent: async (changed) => {
       await recordTransitionAuditEvent(tx, decode(changed));
     },

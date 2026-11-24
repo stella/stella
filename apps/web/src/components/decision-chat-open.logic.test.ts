@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { decisionChatKey } from "@/features/chat/legal-document-chat-key";
 import {
@@ -62,9 +63,10 @@ describe("opening a decision's conversation", () => {
   });
 
   test("turns a chat already minted for the decision into that conversation", () => {
-    useInspectorTabsStore
-      .getState()
-      .openChat({ activeLegalKey: decisionChatKey(decisionId) });
+    useInspectorTabsStore.getState().openChat({
+      activeLegalKey: decisionChatKey(decisionId),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
     const minted = chatTabs().at(0)?.id;
     expect(minted).not.toBe(serverThread);
 

@@ -232,8 +232,10 @@ const handleVerifyQuote: TypedMcpToolHandler<
   );
 };
 
+export const VERIFY_QUOTE_TOOL_HANDLERS = { verify_quote: handleVerifyQuote };
+
 export const VERIFY_QUOTE_TOOL_SET = defineMcpToolSet(
   definitions,
-  { verify_quote: handleVerifyQuote },
+  VERIFY_QUOTE_TOOL_HANDLERS,
   { verify_quote: defineMcpToolOutput(verifyQuoteOutputSchema) },
 );

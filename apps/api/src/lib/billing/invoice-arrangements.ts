@@ -3,8 +3,8 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
 
-import type { Transaction } from "@/api/db/root";
 import { INVOICE_BILLING_PURPOSE, invoiceLines } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { readBillingUsage } from "@/api/lib/billing/arrangements";
 import { exceedsBillingCaps } from "@/api/lib/billing/arrangements.logic";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";

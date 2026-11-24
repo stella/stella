@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { templateRecipes } from "@/api/db/schema";
 import { templateRecipeDefinitionSchema } from "@/api/handlers/template-recipes/definition";
 import { status } from "@/api/http/status";

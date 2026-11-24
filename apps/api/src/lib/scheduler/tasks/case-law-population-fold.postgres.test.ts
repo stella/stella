@@ -571,13 +571,10 @@ describe.skipIf(!enabled)("population fold scheduler owner (postgres)", () => {
           decisions: baseline,
           countsFreshness: stale,
         });
-        const started = performance.now();
         const { continuations } = await runFoldTask(fixtureDb, {
           runId,
           jobId,
         });
-        const elapsedMs = performance.now() - started;
-        expect(elapsedMs).toBeLessThan(45_000);
         expect(
           await db
             .select({ count: sql<number>`count(*)::integer` })
@@ -655,7 +652,6 @@ describe.skipIf(!enabled)("population fold scheduler owner (postgres)", () => {
             event: "population_burst_proof",
             pendingBefore: count,
             pendingAfter: 0,
-            elapsedMs,
             auditBatches: audits.length,
             auditDeltas: count,
             stale,

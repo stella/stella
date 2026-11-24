@@ -19,7 +19,12 @@ const GIT_ENV = {
 const spawnGit = (cwd: string, args: readonly string[]) =>
   Bun.spawnSync(
     ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", ...args],
-    { cwd, env: GIT_ENV, stdout: "pipe", stderr: "pipe" },
+    {
+      cwd,
+      env: GIT_ENV,
+      stdout: "pipe",
+      stderr: "pipe",
+    },
   );
 const git = (cwd: string, ...args: string[]): string => {
   const result = spawnGit(cwd, args);
@@ -215,6 +220,7 @@ describe("lefthook.yml", () => {
       "format",
       "i18n",
       "lint",
+      "workflows",
     ]);
     for (const [name, command] of staged) {
       // {staged_files} and a bare --staged would bypass the owner and hand a

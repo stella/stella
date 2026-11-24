@@ -246,6 +246,7 @@ const decisionOf = (blocks: DocumentAst["blocks"]) => {
     judges: [],
     language: "cs",
     sourceAttributionUrl: null,
+    bodySource: { textSource: "host" },
     textFields: {
       abstract: absent,
       headnote: absent,
@@ -292,8 +293,8 @@ const FIND_HOSTS = {
   "features/case-law/components/case-decision-inspector-view.tsx": "decision",
   "features/statutes/components/provision-inspector-view.tsx": "statute",
   "features/statutes/components/statute-inspector-view.tsx": "statute",
-  "routes/law/-case-detail.tsx": "decision",
-  "routes/law/-statute-detail.tsx": "statute",
+  "routes/law/-case-detail.page.tsx": "decision",
+  "routes/law/-statute-detail.page.tsx": "statute",
 } as const satisfies Record<string, ReaderTextKind | null>;
 
 /**

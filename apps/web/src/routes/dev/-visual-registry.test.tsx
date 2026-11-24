@@ -14,8 +14,9 @@ import hu from "@/i18n/langs/hu.json";
 import { CHAT_HISTORY_DECISION_FIXTURES } from "./-components/chat-history-decision-fixtures";
 import { ChatHistoryDecisionPlayground } from "./-components/chat-history-decision-playground";
 import { HungarianDecisionPlayground } from "./-components/hungarian-decision-playground";
+import { FixtureSection } from "./-dev.pending";
 import { playbookEditorStates, visualRegistry } from "./-visual-metadata";
-import { FixtureSection, visualSearchSchema } from "./-visual-registry";
+import { visualSearchSchema } from "./-visual-search";
 
 describe("registered visual fixtures", () => {
   for (const [locale, messages] of Object.entries({ hu, ar })) {

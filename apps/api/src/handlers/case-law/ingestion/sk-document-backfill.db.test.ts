@@ -95,7 +95,7 @@ const parsedAst: DocumentAst = {
   metadata: {
     caseNumber: "1T/1/2026",
     ecli: null,
-    court: "Okresný súd",
+    court: "Okresný súd Bratislava I",
     decisionDate: null,
     decisionType: null,
     keywords: [],
@@ -152,7 +152,7 @@ if (!databaseUrl || !runPostgresTests) {
         .values({
           sourceId: values.sourceId ?? sourceId,
           caseNumber: values.caseNumber,
-          court: "Okresný súd",
+          court: "Okresný súd Bratislava I",
           country: "SVK",
           language: "sk",
           fulltext: values.fulltext,

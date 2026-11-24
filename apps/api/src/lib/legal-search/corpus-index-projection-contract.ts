@@ -198,6 +198,10 @@ export type CorpusIndexProjectionAppendMode =
 export const CORPUS_INDEX_PROJECTION_FAILURE_KINDS = [
   "payload_unavailable",
   "revision_too_large",
+  "document_language_undeclared",
+  // A desired state its canonical row no longer derives, and re-deriving it
+  // did not move it (`settleRejectedCorpusProjectionMaterials`).
+  "canonical_input_mismatch",
   "append_unknown",
   "append_rejected",
   "append_transient",

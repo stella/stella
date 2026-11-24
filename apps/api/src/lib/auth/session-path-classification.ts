@@ -90,6 +90,10 @@ const EXACT_AUTH_SESSION_PATHS = new Map<string, AuthSessionPathClassification>(
       "/email-otp/send-verification-otp",
       noSession("verification message request"),
     ],
+    [
+      "/email-otp/sign-in-delivery",
+      noSession("sign-in code delivery follow-up"),
+    ],
     ["/email-otp/check-verification-otp", noSession("verification code check")],
     ["/email-otp/request-password-reset", noSession("password reset request")],
     ["/email-otp/reset-password", noSession("password reset")],
@@ -115,8 +119,12 @@ const EXACT_AUTH_SESSION_PATHS = new Map<string, AuthSessionPathClassification>(
     ["/revoke-session-by-id", noSession("authenticated session revocation")],
     ["/revoke-sessions", noSession("authenticated session revocation")],
     ["/send-verification-email", noSession("verification message request")],
+    ["/session-sign-ins", noSession("authenticated sign-in listing")],
+    ["/session-sign-ins/map", noSession("authenticated sign-in map")],
+    ["/session-sign-ins/review", noSession("authenticated sign-in review")],
     ["/sign-out", noSession("session removal")],
     ["/social-link-hint", noSession("social account lookup")],
+    ["/sign-in/sso", noSession("identity provider redirect")],
     ["/token", noSession("token exchange")],
     ["/oauth2/authorize", noSession("OAuth authorization request")],
     ["/oauth2/consent", noSession("OAuth consent submission")],
@@ -184,6 +192,24 @@ const AUTH_SESSION_PATH_PREFIXES: readonly {
   classification: AuthSessionPathClassification;
 }[] = [
   { prefix: "/callback/", classification: SECOND_FACTOR },
+  {
+    // Rule, chosen deliberately: an SSO sign-in never asks for this app's
+    // second factor, even for an account that enrolled one. The
+    // organization's identity provider owns MFA for its members. Changing
+    // this is a product decision, not a fix; the SSO callback test pins it.
+    prefix: "/sso/callback/",
+    classification: noSecondFactor("organization identity provider sign-in"),
+  },
+  {
+    prefix: "/sso/saml2/sp/acs/",
+    classification: noSecondFactor(
+      "organization SAML identity provider sign-in",
+    ),
+  },
+  {
+    prefix: "/sso/saml2/sp/metadata",
+    classification: noSession("SAML service provider metadata"),
+  },
   {
     prefix: "/.well-known/",
     classification: noSession("OAuth server metadata"),

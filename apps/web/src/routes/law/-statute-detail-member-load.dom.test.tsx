@@ -68,7 +68,8 @@ const { resolveActionCapabilities } =
   await import("@/lib/organization/feature-access/action-capabilities.logic");
 const { NO_STATUTE_COMPARE } =
   await import("@/features/statutes/statute-compare-search");
-const { PublicStatuteViewer } = await import("@/routes/law/-statute-detail");
+const { PublicStatuteViewer } =
+  await import("@/routes/law/-statute-detail.page");
 const { dockedChatLegalPayloads } =
   await import("../../../e2e/helpers/docked-chat-legal-payloads");
 

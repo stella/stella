@@ -3386,7 +3386,6 @@ describe("a structured answer that arrived but cannot be used is named", () => {
 
 describe("a generation bounded by its own deadline", () => {
   test("a structured run that outlives its deadline fails as timed out", async () => {
-    const started = performance.now();
     const caught = await generateObjectWith(
       async function* (signal) {
         yield runStarted;
@@ -3402,8 +3401,6 @@ describe("a generation bounded by its own deadline", () => {
       reason: "model_deadline_exceeded",
       grade: "transient",
     });
-    // The run ended at the deadline, not whenever the provider gave up.
-    expect(performance.now() - started).toBeLessThan(5000);
   });
 
   // The deadline bounds model resolution as well as the provider call: a

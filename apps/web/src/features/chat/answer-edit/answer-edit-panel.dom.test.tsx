@@ -188,8 +188,8 @@ test("streaming disables submitting an edit", async () => {
   expect(
     view
       .getByRole("button", { name: "Request change" })
-      .hasAttribute("disabled"),
-  ).toBe(true);
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
   fireEvent.keyDown(view.getByRole("textbox"), { key: "Enter" });
   await act(async () => undefined);
   expect(requests).toBe(0);
@@ -271,8 +271,10 @@ test("acceptance keeps focus and ignores Escape while the revision write is pend
   fireEvent.click(view.getByRole("button", { name: "Accept" }));
   await waitFor(() =>
     expect(
-      view.getByRole("button", { name: "Accept" }).hasAttribute("disabled"),
-    ).toBe(true),
+      view
+        .getByRole("button", { name: "Accept" })
+        .getAttribute("aria-disabled"),
+    ).toBe("true"),
   );
   const active = document.activeElement;
   if (active === null || active === document.body) {
@@ -425,8 +427,8 @@ test("a committed revision refreshes its original answer after the panel unmount
     expect(
       view
         .getByRole("button", { name: messages.common.accept })
-        .hasAttribute("disabled"),
-    ).toBe(true),
+        .getAttribute("aria-disabled"),
+    ).toBe("true"),
   );
   view.unmount();
   await act(async () => {

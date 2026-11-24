@@ -1,18 +1,27 @@
-import { panic, TaggedError } from "better-result";
-import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
+import { panic, Result, TaggedError } from "better-result";
+import {
+  and,
+  asc,
+  eq,
+  inArray,
+  or,
+  sql,
+  TransactionRollbackError,
+} from "drizzle-orm";
 
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,
   caseLawSources,
   corpusIndexGenerations,
+  corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
 import {
@@ -20,21 +29,26 @@ import {
   lockCaseLawProjectionRepairRows,
   lockCaseLawProjectionRepairStates,
   lockCorpusProjectionRevisionsAfterStates,
+  withAggregateSavepoint,
 } from "@/api/lib/db/aggregate-lock";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { transitionBatch } from "@/api/lib/db/transitions";
 import type { CaseLawRankingSignals } from "@/api/lib/legal-search/case-law-ranking-signals";
 import {
+  CORPUS_FAMILIES,
   CORPUS_INDEX_ACTIVE_GENERATION_STATUSES,
-  isActiveCorpusIndexGenerationStatus,
 } from "@/api/lib/legal-search/corpus-generation-contract";
 import { requireRegisteredCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
-  CORPUS_INDEX_MANIFESTS,
   type CorpusIndexManifest,
   corpusIndexManifestCoversJurisdiction,
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import {
+  type ProjectedCorpusIndexGeneration,
+  readProjectedCorpusIndexGenerationsTx,
+} from "@/api/lib/legal-search/corpus-index-projected-generations";
 import {
   type CaseLawProjectionInput,
   type CorpusIndexProjectionDescriptor,
@@ -42,6 +56,7 @@ import {
   deriveCorpusIndexProjectionDescriptor,
   type LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
+import { corpusProjectionErasureIsRecorded } from "@/api/lib/legal-search/corpus-index-projection-erasure-evidence";
 import { CORPUS_INDEX_PROJECTION_INTENT_LIFECYCLE } from "@/api/lib/legal-search/corpus-index-projection-intent-transition-spec";
 import { readCaseLawProvisionKeys } from "@/api/lib/legal-search/corpus-index-projection-provision-keys";
 import {
@@ -50,21 +65,18 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import { readCaseLawRankingSignals } from "@/api/lib/legal-search/corpus-index-projection-ranking-signals";
 import { lockCorpusIndexProjectionWriterTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
-import { corpusIndexProjectionNamedCopyTrailsTwoChanges } from "@/api/lib/legal-search/corpus-index-projection-sql";
+import { restoreQueuedNamedCopiesTx } from "@/api/lib/legal-search/corpus-index-projection-served-copy-restore";
+import {
+  corpusIndexProjectionIsBlocked,
+  corpusIndexProjectionNamedCopyTrailsTwoChanges,
+  corpusIndexProjectionRevisionCopyIsIntact,
+  corpusIndexProjectionRevisionIsRestorable,
+} from "@/api/lib/legal-search/corpus-index-projection-sql";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 import type { LegislationExpressionClassification } from "@/api/lib/legal-search/legislation-expression-classification";
 import { OBSERVATION_DETAIL } from "@/api/lib/legal-search/partial-observation-sql";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
-
-const CORPUS_INDEX_MANIFEST_COUNT = Object.keys(CORPUS_INDEX_MANIFESTS).length;
-
-const projectionGenerationsForFamily = (
-  family: CorpusIndexProjectionSubject["family"],
-): string[] =>
-  Object.values(CORPUS_INDEX_MANIFESTS).flatMap((manifest) =>
-    manifest.family === family ? [manifest.generation] : [],
-  );
 
 export type CorpusIndexProjectionSubject =
   | {
@@ -373,29 +385,19 @@ const lockCorpusProjectionSourceByIdTx = async (
   }
 };
 
+/**
+ * Whether the family has a generation that takes content. Read through the
+ * projected-generation owner, so a process that does not know one of the
+ * registry's generations is refused here, before its caller writes the
+ * canonical row, rather than told there is nothing to project.
+ */
 const hasActiveCorpusProjectionTx = async (
   tx: Transaction,
   family: CorpusIndexProjectionSubject["family"],
 ): Promise<boolean> =>
-  (
-    await tx
-      .select({ generation: corpusIndexGenerations.generation })
-      .from(corpusIndexGenerations)
-      .where(
-        and(
-          eq(corpusIndexGenerations.family, family),
-          inArray(
-            corpusIndexGenerations.generation,
-            projectionGenerationsForFamily(family),
-          ),
-          inArray(
-            corpusIndexGenerations.status,
-            CORPUS_INDEX_ACTIVE_GENERATION_STATUSES,
-          ),
-        ),
-      )
-      .limit(1)
-  ).length > 0;
+  (await readProjectedCorpusIndexGenerationsTx(tx, family)).some(
+    ({ accepts }) => accepts === "content",
+  );
 
 /**
  * Share-lock source policy before checking activation. Registration takes a
@@ -543,7 +545,7 @@ const lockProjectionInput = async (
   }
 };
 
-type CanonicalProjectionEpochUpdate =
+export type CanonicalProjectionEpochUpdate =
   | {
       family: "case_law";
       epochs: readonly { id: SafeId<"caseLawDecision">; epoch: bigint }[];
@@ -632,54 +634,23 @@ const setCanonicalProjectionEpoch = async (
   }
 };
 
-type RegisteredManifest = {
-  generation: string;
-  manifest: CorpusIndexManifest;
-  /** Whether the generation may still be given content, or only relieved of it. */
-  accepts: "content" | "erase-only";
-};
-
 /**
  * Every generation a canonical mutation has to reach, with what it may be told.
  *
  * A building or serving generation takes the whole descriptor. A retiring one
  * is past taking new content, but its index still holds whatever it was given
  * until that index is deleted, so an erasure has to reach it as well; sending
- * it an upsert instead would re-add the text this mutation is removing.
+ * it an upsert instead would re-add the text this mutation is removing. The
+ * set comes from the registry, and a generation this process has no manifest
+ * for refuses the mutation (`CorpusIndexGenerationUnknownError`) instead of
+ * being left out of it.
  */
 const projectionManifests = async (
   tx: Transaction,
   family: CorpusIndexProjectionSubject["family"],
-): Promise<RegisteredManifest[]> => {
+): Promise<ProjectedCorpusIndexGeneration[]> => {
   await lockCorpusIndexProjectionWriterTx(tx);
-  const rows = await tx
-    .select()
-    .from(corpusIndexGenerations)
-    .where(
-      and(
-        eq(corpusIndexGenerations.family, family),
-        inArray(
-          corpusIndexGenerations.generation,
-          projectionGenerationsForFamily(family),
-        ),
-        inArray(corpusIndexGenerations.status, [
-          ...CORPUS_INDEX_ACTIVE_GENERATION_STATUSES,
-          "retiring",
-        ]),
-      ),
-    )
-    .orderBy(asc(corpusIndexGenerations.generation))
-    .limit(CORPUS_INDEX_MANIFEST_COUNT + 1);
-  if (rows.length > CORPUS_INDEX_MANIFEST_COUNT) {
-    return panic(`Active corpus generation registry exceeds its manifest set`);
-  }
-  return rows.map((row) => ({
-    generation: row.generation,
-    manifest: requireRegisteredCorpusIndexManifest(row),
-    accepts: isActiveCorpusIndexGenerationStatus(row.status)
-      ? "content"
-      : "erase-only",
-  }));
+  return await readProjectedCorpusIndexGenerationsTx(tx, family);
 };
 
 type GenerationProjection = {
@@ -702,7 +673,7 @@ type GenerationProjection = {
 const projectionsFor = async (
   tx: Transaction,
   subject: CorpusIndexProjectionSubject,
-  manifests: readonly RegisteredManifest[],
+  manifests: readonly ProjectedCorpusIndexGeneration[],
   input: Parameters<typeof deriveCorpusIndexProjectionDescriptor>[1],
 ): Promise<GenerationProjection[]> => {
   const uncovered = manifests.filter(
@@ -735,7 +706,7 @@ const projectionsFor = async (
 };
 
 const projectionsFromSnapshot = (
-  manifests: readonly RegisteredManifest[],
+  manifests: readonly ProjectedCorpusIndexGeneration[],
   input: CorpusIndexProjectionInput,
   projected: ReadonlySet<string>,
 ): GenerationProjection[] =>
@@ -937,7 +908,7 @@ const readUndoneErasuresTx = async (
     );
 };
 
-export const SERVED_COPY_RETIREMENT_REASONS = {
+const SERVED_COPY_RETIREMENT_REASONS = {
   undoneErasure: "projection revision retired by an undone erasure",
   legacyUnproven: "projection revision retired as not provably current",
 } as const;
@@ -949,8 +920,12 @@ export const SERVED_COPY_RETIREMENT_REASONS = {
  * the revisions are locked after them, in the projection lock order. Each
  * state is then queued for the append walk at the instant its retired copy
  * can have settled.
+ *
+ * Private to this module on purpose: a copy leaves readers only through a
+ * canonical change written here (an undone erasure) or through the one-off
+ * legacy pass (`retireLegacyErasedServedCopiesTx`). Repairs never reach it.
  */
-export const retireServedCopiesTx = async (
+const retireServedCopiesTx = async (
   tx: Transaction,
   retired: readonly DesiredStateKey[],
   reason: (typeof SERVED_COPY_RETIREMENT_REASONS)[keyof typeof SERVED_COPY_RETIREMENT_REASONS],
@@ -1049,14 +1024,51 @@ export const retireServedCopiesTx = async (
   }
 };
 
-export const writeDesiredStates = async (
+/**
+ * The one-off pass over copies an earlier release left served through a
+ * recorded erasure and its undo (`retireLegacyUnprovenServedCopiesTx`). It is
+ * the only caller outside this module that may retire a named copy, and the
+ * ownership registry confines this import to it.
+ */
+export const retireLegacyErasedServedCopiesTx = async (
   tx: Transaction,
-  values: (typeof corpusIndexProjectionStates.$inferInsert)[],
+  retired: readonly DesiredStateKey[],
+): Promise<void> => {
+  await retireServedCopiesTx(
+    tx,
+    retired,
+    SERVED_COPY_RETIREMENT_REASONS.legacyUnproven,
+  );
+};
+
+/**
+ * Why a write of desired state is a canonical change or a repair.
+ *
+ * - `canonical`: the caller changed the canonical row in this transaction (or
+ *   moved its serving generation), so the desired state must follow at once.
+ *   An erasure it undoes retires the copy the erasure hid, so the entity is
+ *   appended anew and never served the pre-erasure copy again.
+ * - `repair`: no canonical change stands behind the write; it only brings
+ *   desired state back in line with the canonical rows. A repair never takes
+ *   a copy away from readers: the owner holds it first
+ *   (`readNamedCopiesTx`), so it never reaches the retirement.
+ */
+type DesiredStateWriteCause = "canonical" | "repair";
+
+const writeDesiredStates = async (
+  tx: Transaction,
+  values: readonly (typeof corpusIndexProjectionStates.$inferInsert)[],
+  cause: DesiredStateWriteCause,
 ): Promise<void> => {
   if (values.length === 0) {
     return;
   }
   const undone = await readUndoneErasuresTx(tx, values);
+  if (cause === "repair" && undone.length > 0) {
+    return panic(
+      "A held repair reached the desired writer with an undone erasure",
+    );
+  }
   const states = corpusIndexProjectionStates;
   // Judged on the row before this write: once its named copy trails by two
   // changes with other content, an upsert write keeps `desired_at` at the
@@ -1090,7 +1102,7 @@ export const writeDesiredStates = async (
   )`;
   await tx
     .insert(corpusIndexProjectionStates)
-    .values(values)
+    .values([...values])
     .onConflictDoUpdate({
       target: [
         corpusIndexProjectionStates.family,
@@ -1127,6 +1139,408 @@ export const writeDesiredStates = async (
     undone,
     SERVED_COPY_RETIREMENT_REASONS.undoneErasure,
   );
+};
+
+/** How a repair would take a named copy away from readers. */
+const CORPUS_PROJECTION_SERVED_COPY_RISKS = [
+  /** The desired action flips while the state names an upsert copy. */
+  "desired_action_change",
+  /**
+   * A copy queued for cleanup that the projection rows alone still prove
+   * restorable would lose that proof, and the cleanup claim would decide it by
+   * the erasure records instead.
+   */
+  "restorable_cleanup",
+  /**
+   * The named copy's cleanup stalled. The database guard refuses every write
+   * of a state that names a stalled revision, so the repair could only abort.
+   * No worker transition leaves a stall: an operator's `cleanup_pending` ends
+   * this hold.
+   *
+   * No other cleanup status is a risk of its own. A copy a delete may have
+   * reached, or one queued with a recorded reason, is never restored, whatever
+   * the desired epoch is; what its cleanup does next does not read the epoch;
+   * and readers follow the pointer, which an upsert over an upsert leaves as
+   * it is. So moving past such a copy takes nothing from readers, and holding
+   * the repair would only keep the entity's other generations behind until
+   * cleanup acts.
+   */
+  "stalled_cleanup",
+  /**
+   * A copy two changes behind that the legacy pass keeps only because its
+   * work is blocked or its epoch is not canonical would lose that protection.
+   * The pass retires a copy only on a recorded erasure, so a copy with none
+   * recorded since its reservation has nothing to lose
+   * (`corpusProjectionErasureIsRecorded`, the pass's own rule without its
+   * upper bound, so nothing the pass could act on escapes the hold). No
+   * erasure can be recorded between this read and the write: a withdrawal
+   * takes the canonical row's lock before it writes its record, and the caller
+   * holds that lock. One that waited for it records after the write and owes
+   * the state an erasure of its own, which the pass never retires through.
+   */
+  "legacy_retirement",
+] as const;
+export type CorpusProjectionServedCopyRisk =
+  (typeof CORPUS_PROJECTION_SERVED_COPY_RISKS)[number];
+
+const MAX_HELD_COPIES = 16;
+
+/**
+ * What a repair did with each named copy of the states it writes. Exhaustive,
+ * so a caller can count every kind:
+ *
+ * - `restored`: a queued copy still provably the one readers are served went
+ *   back to `applied` before the repair moved any epoch.
+ * - `already_current`: the write costs the copy nothing, so nothing was
+ *   needed (a copy a cleanup claim restored first is one). A copy a delete may
+ *   have reached is not reported: there is none left to keep.
+ * - `held`: the repair was held for it, and nothing was written.
+ */
+const CORPUS_PROJECTION_SERVED_COPY_OUTCOMES = [
+  "restored",
+  "already_current",
+  "held",
+] as const;
+export type CorpusProjectionServedCopyOutcome =
+  (typeof CORPUS_PROJECTION_SERVED_COPY_OUTCOMES)[number];
+
+type ServedCopyKey = { generation: string; entityId: string };
+
+export type CorpusProjectionServedCopyReport =
+  | (ServedCopyKey & { outcome: "restored" })
+  | (ServedCopyKey & { outcome: "already_current" })
+  | (ServedCopyKey & {
+      outcome: "held";
+      risk: CorpusProjectionServedCopyRisk;
+    });
+
+type CorpusProjectionHeldServedCopy = Extract<
+  CorpusProjectionServedCopyReport,
+  { outcome: "held" }
+>;
+
+/** The named copies a written repair kept for readers, none of them held. */
+type CorpusProjectionWrittenServedCopy = Exclude<
+  CorpusProjectionServedCopyReport,
+  { outcome: "held" }
+>;
+
+/** How many named copies ended each way. */
+export const countCorpusProjectionServedCopies = (
+  reports: readonly CorpusProjectionServedCopyReport[],
+): Record<CorpusProjectionServedCopyOutcome, number> => {
+  const count = (outcome: CorpusProjectionServedCopyOutcome) =>
+    reports.filter((report) => report.outcome === outcome).length;
+  return {
+    restored: count("restored"),
+    already_current: count("already_current"),
+    held: count("held"),
+  };
+};
+
+/**
+ * A repair was held before it wrote anything: no desired state, no canonical
+ * epoch and no restore moved. It goes through once the copy no longer needs
+ * the protection, for example once the outstanding erasure or replacement
+ * settles; until then the subject keeps its current desired state.
+ */
+export class CorpusProjectionServedCopyHold extends TaggedError(
+  "CorpusProjectionServedCopyHold",
+)<{
+  message: string;
+  copies: CorpusProjectionHeldServedCopy[];
+  omittedCopies: number;
+}> {}
+
+/** What a written repair reports beside its desired states. */
+export type CorpusProjectionRepairWrite = {
+  servedCopies: CorpusProjectionWrittenServedCopy[];
+};
+
+type DesiredStateValues =
+  readonly (typeof corpusIndexProjectionStates.$inferInsert)[];
+
+/**
+ * The named copies of the states this write changes, each with the way the
+ * write would take it away from readers, if any: judged on the state before
+ * the write (`current`) and as the write leaves it (`next`).
+ * The caller holds the canonical rows and the states it writes, as every
+ * desired writer does, so neither can move before the write.
+ */
+const readNamedCopiesTx = async (
+  tx: Transaction,
+  values: DesiredStateValues,
+) => {
+  if (values.length === 0) {
+    return [];
+  }
+  const states = corpusIndexProjectionStates;
+  const intents = corpusIndexProjectionIntents;
+  const proposals = JSON.stringify(
+    values.map((value) => ({
+      family: value.family,
+      generation: value.generation,
+      entity_id: value.entityId,
+      desired_action: value.desiredAction,
+      desired_epoch: value.desiredEpoch.toString(),
+      desired_fingerprint: value.desiredFingerprint ?? null,
+      desired_index_id: value.desiredIndexId ?? null,
+    })),
+  );
+  const current = {
+    desiredAction: states.desiredAction,
+    desiredEpoch: states.desiredEpoch,
+    desiredFingerprint: states.desiredFingerprint,
+    desiredIndexId: states.desiredIndexId,
+  };
+  const next = {
+    desiredAction: sql`proposal.desired_action`,
+    desiredEpoch: sql`proposal.desired_epoch`,
+    desiredFingerprint: sql`proposal.desired_fingerprint`,
+    desiredIndexId: sql`proposal.desired_index_id`,
+  };
+  const restoreCopy = {
+    revisionId: intents.id,
+    appliedRevision: states.appliedRevision,
+    appliedAction: states.appliedAction,
+    appliedEpoch: states.appliedEpoch,
+    revisionEpoch: intents.epoch,
+    revisionFingerprint: intents.fingerprint,
+    revisionIndexId: intents.indexId,
+    cleanupAttempts: intents.cleanupAttempts,
+    revisionAppliedAt: intents.appliedAt,
+    lastError: intents.lastError,
+  };
+  const stalledCleanup = sql`${intents.status} = 'cleanup_stalled'`;
+  const namedCopy = {
+    appliedRevision: states.appliedRevision,
+    appliedAction: states.appliedAction,
+    appliedEpoch: states.appliedEpoch,
+    appliedFingerprint: states.appliedFingerprint,
+    appliedIndexId: states.appliedIndexId,
+  };
+  const actionChanges = sql`${states.desiredAction} IS DISTINCT FROM ${next.desiredAction}`;
+  const restoreProofLost = sql`(
+    ${intents.status} = 'cleanup_pending'
+    AND ${corpusIndexProjectionRevisionIsRestorable({ ...restoreCopy, ...current })}
+    AND ${corpusIndexProjectionRevisionIsRestorable({ ...restoreCopy, ...next })} IS NOT TRUE
+  )`;
+  const erasureRecorded = sql`(${sql.join(
+    CORPUS_FAMILIES.map(
+      (family) => sql`(
+        ${states.family} = ${family}
+        AND ${corpusProjectionErasureIsRecorded({
+          family,
+          entityId: states.entityId,
+          reservedAt: intents.createdAt,
+          before: null,
+        })}
+      )`,
+    ),
+    sql` OR `,
+  )})`;
+  // The legacy pass keeps a copy with a recorded erasure, two changes behind,
+  // while its work is blocked or its desired epoch is not canonical; a write
+  // that resets the work or makes the epoch canonical would hand the copy to
+  // it.
+  const legacyProtectionLost = sql`(
+    ${intents.status} = 'applied'
+    AND ${corpusIndexProjectionNamedCopyTrailsTwoChanges({ ...namedCopy, ...current })}
+    AND ${corpusIndexProjectionNamedCopyTrailsTwoChanges({ ...namedCopy, ...next })}
+    AND (
+      ${corpusIndexProjectionIsBlocked(states.workStatus)}
+      OR ${states.desiredEpoch} <> ${next.desiredEpoch} - 1
+    )
+    AND ${erasureRecorded}
+  )`;
+  const rows = await tx
+    .select({
+      family: states.family,
+      generation: states.generation,
+      entityId: states.entityId,
+      revisionId: intents.id,
+      copyIsIntact: sql<boolean>`${corpusIndexProjectionRevisionCopyIsIntact({
+        status: intents.status,
+        cleanupAttempts: intents.cleanupAttempts,
+      })}`,
+      risk: sql<CorpusProjectionServedCopyRisk | null>`CASE
+        WHEN ${actionChanges}
+          THEN ${"desired_action_change" satisfies CorpusProjectionServedCopyRisk}
+        WHEN ${restoreProofLost}
+          THEN ${"restorable_cleanup" satisfies CorpusProjectionServedCopyRisk}
+        WHEN ${stalledCleanup}
+          THEN ${"stalled_cleanup" satisfies CorpusProjectionServedCopyRisk}
+        WHEN ${legacyProtectionLost}
+          THEN ${"legacy_retirement" satisfies CorpusProjectionServedCopyRisk}
+      END`,
+    })
+    .from(states)
+    .innerJoin(intents, eq(intents.id, states.appliedRevision))
+    .innerJoin(
+      sql`jsonb_to_recordset(${proposals}::text::jsonb) AS proposal(
+        family text, generation text, entity_id uuid, desired_action text,
+        desired_epoch bigint, desired_fingerprint text, desired_index_id text
+      )`,
+      sql`proposal.family = ${states.family}::text
+        AND proposal.generation = ${states.generation}
+        AND proposal.entity_id = ${states.entityId}`,
+    )
+    .where(eq(states.appliedAction, "upsert"))
+    .orderBy(asc(states.entityId), asc(states.generation))
+    .limit(values.length);
+  return rows.map((row) => ({
+    ...row,
+    risk: row.risk === null ? null : requireServedCopyRisk(row.risk),
+  }));
+};
+
+type NamedCopy = Awaited<ReturnType<typeof readNamedCopiesTx>>[number];
+type ServedCopyAtRisk = NamedCopy & { risk: CorpusProjectionServedCopyRisk };
+
+const copiesAtRisk = (named: readonly NamedCopy[]): ServedCopyAtRisk[] =>
+  named.flatMap((copy) =>
+    copy.risk === null ? [] : [{ ...copy, risk: copy.risk }],
+  );
+
+const servedCopyKey = ({ generation, entityId }: ServedCopyKey) =>
+  `${entityId}/${generation}`;
+
+const compareServedCopyKeys = (left: string, right: string) => {
+  if (left === right) {
+    return 0;
+  }
+  return left < right ? -1 : 1;
+};
+
+/**
+ * The hold for these copies. A copy found at risk before a rolled-back
+ * restore keeps its first risk unless the re-run guard found another.
+ */
+const servedCopyHold = (
+  ...findings: readonly (readonly ServedCopyAtRisk[])[]
+) => {
+  const held = new Map<string, CorpusProjectionHeldServedCopy>();
+  for (const finding of findings) {
+    for (const { generation, entityId, risk } of finding) {
+      held.set(servedCopyKey({ generation, entityId }), {
+        generation,
+        entityId,
+        outcome: "held",
+        risk,
+      });
+    }
+  }
+  // The guard's own order: by entity, then generation.
+  const copies = [...held.entries()]
+    .toSorted(([left], [right]) => compareServedCopyKeys(left, right))
+    .map(([, copy]) => copy);
+  return Result.err(
+    new CorpusProjectionServedCopyHold({
+      message: `Corpus projection repair held: ${copies.length} named copies would leave readers`,
+      copies: copies.slice(0, MAX_HELD_COPIES),
+      omittedCopies: Math.max(0, copies.length - MAX_HELD_COPIES),
+    }),
+  );
+};
+
+const requireServedCopyRisk = (value: string): CorpusProjectionServedCopyRisk =>
+  CORPUS_PROJECTION_SERVED_COPY_RISKS.find((risk) => risk === value) ??
+  panic(`Unknown served-copy risk: ${value}`);
+
+/**
+ * The desired writer for a repair: a write no canonical change stands behind.
+ * It holds the whole write, canonical epochs included, when any of it would
+ * take a named copy away from readers (`CORPUS_PROJECTION_SERVED_COPY_RISKS`),
+ * so a repair that runs first can never retire or expose a copy that a later
+ * one would have protected, and none skips another's protection. Every
+ * repair, in this repository or outside it, writes through this function or
+ * through `reconcileCorpusProjectionDesiredStateTx`. The caller holds the
+ * canonical rows and the states it writes.
+ *
+ * One risk it resolves instead of holding: a queued copy the projection rows
+ * alone still prove restorable (`restorable_cleanup`). When that is every
+ * risk the write carries, the writer restores those copies first, before any
+ * epoch moves, through the claim's own transition
+ * (`restoreQueuedNamedCopiesTx`), then runs the whole guard again over every
+ * generation it writes. Only a clean second guard lets the write through;
+ * otherwise the restores roll back with it and the write is held as before.
+ * Any other risk (an action change, which covers an erasure and its undo, a
+ * copy whose cleanup stalled, or one the legacy pass would take) holds the
+ * write without restoring anything. A queued copy that lost that proof before
+ * the repair is no risk of its own: the repair takes nothing more from it, and
+ * the claim decides it by the erasure records.
+ */
+export const writeRepairedCorpusProjectionDesiredStatesTx = async (
+  tx: Transaction,
+  {
+    epochs,
+    values,
+  }: {
+    epochs: CanonicalProjectionEpochUpdate | null;
+    values: DesiredStateValues;
+  },
+): Promise<
+  Result<CorpusProjectionRepairWrite, CorpusProjectionServedCopyHold>
+> => {
+  const write = async (writer: Transaction) => {
+    if (epochs !== null) {
+      await setCanonicalProjectionEpoch(writer, epochs);
+    }
+    await writeDesiredStates(writer, values, "repair");
+  };
+  const named = await readNamedCopiesTx(tx, values);
+  const atRisk = copiesAtRisk(named);
+  const alreadyCurrent = named.flatMap(
+    ({ generation, entityId, risk, copyIsIntact }) =>
+      risk === null && copyIsIntact
+        ? [{ generation, entityId, outcome: "already_current" } as const]
+        : [],
+  );
+  if (atRisk.length === 0) {
+    await write(tx);
+    return Result.ok({ servedCopies: alreadyCurrent });
+  }
+  if (atRisk.some(({ risk }) => risk !== "restorable_cleanup")) {
+    return servedCopyHold(atRisk);
+  }
+  let held: ServedCopyAtRisk[] | undefined;
+  const attempted = await Result.tryPromise(
+    async () =>
+      await withAggregateSavepoint(tx, async (savepoint) => {
+        const unrestored = new Set(
+          await restoreQueuedNamedCopiesTx(savepoint, atRisk),
+        );
+        const stillAtRisk = copiesAtRisk(
+          await readNamedCopiesTx(savepoint, values),
+        );
+        if (unrestored.size > 0 || stillAtRisk.length > 0) {
+          held = [
+            ...atRisk.filter(({ revisionId }) => unrestored.has(revisionId)),
+            ...stillAtRisk,
+          ];
+          savepoint.rollback();
+        }
+        await write(savepoint);
+      }),
+  );
+  if (attempted.isOk()) {
+    return Result.ok({
+      servedCopies: [
+        ...atRisk.map(
+          ({ generation, entityId }) =>
+            ({ generation, entityId, outcome: "restored" }) as const,
+        ),
+        ...alreadyCurrent,
+      ],
+    });
+  }
+  if (
+    held !== undefined &&
+    attempted.error.cause instanceof TransactionRollbackError
+  ) {
+    return servedCopyHold(atRisk, held);
+  }
+  return abortTransaction(attempted.error.cause);
 };
 
 type DesiredStateSnapshot = {
@@ -1195,6 +1609,7 @@ export const advanceCorpusProjectionDesiredStateTx = async (
         descriptor,
       }),
     ),
+    "canonical",
   );
   return { epoch, generationCount: projections.length };
 };
@@ -1251,15 +1666,22 @@ const reconcileProjectionPlan = ({
   return { epoch, values };
 };
 
+type ReconcileOutcome = {
+  epoch: bigint;
+  changed: boolean;
+  generationCount: number;
+  /** The named copies the repair kept for readers (`CorpusProjectionRepairWrite`). */
+  servedCopies: CorpusProjectionWrittenServedCopy[];
+};
+
 /**
- * Repair or seed desired state from authoritative corpus rows. Plane may call
- * this from bounded sweeps after a projector or source-policy change; exact
- * matches are a fixed point and therefore do not manufacture new epochs.
+ * One subject's reconciliation plan, read under its canonical and state
+ * locks: the epoch every owed generation moves to and the values that move.
  */
-export const reconcileCorpusProjectionDesiredStateTx = async (
+const planSubjectReconciliationTx = async (
   tx: Transaction,
   subject: CorpusIndexProjectionSubject,
-): Promise<{ epoch: bigint; changed: boolean; generationCount: number }> => {
+) => {
   const locked = await lockProjectionInput(tx, subject);
   const projections = await projectionsFor(
     tx,
@@ -1268,11 +1690,8 @@ export const reconcileCorpusProjectionDesiredStateTx = async (
     locked.input,
   );
   if (projections.length === 0) {
-    return {
-      epoch: locked.epoch,
-      changed: false,
-      generationCount: 0,
-    };
+    const values: DesiredStateValues = [];
+    return { locked, generationCount: 0, epoch: locked.epoch, values };
   }
 
   const existing = await tx
@@ -1297,18 +1716,58 @@ export const reconcileCorpusProjectionDesiredStateTx = async (
     existing,
     projections,
   });
+  return { locked, generationCount: projections.length, epoch, values };
+};
+
+/**
+ * Repair or seed desired state from authoritative corpus rows, with no
+ * canonical change behind it. Plane may call this from bounded sweeps after a
+ * projector or source-policy change; exact matches are a fixed point and
+ * therefore do not manufacture new epochs. A repair that would take a named
+ * copy away from readers is held whole, canonical epoch included
+ * (`writeRepairedCorpusProjectionDesiredStatesTx`).
+ */
+export const reconcileCorpusProjectionDesiredStateTx = async (
+  tx: Transaction,
+  subject: CorpusIndexProjectionSubject,
+): Promise<Result<ReconcileOutcome, CorpusProjectionServedCopyHold>> => {
+  const { locked, generationCount, epoch, values } =
+    await planSubjectReconciliationTx(tx, subject);
+  const written = await writeRepairedCorpusProjectionDesiredStatesTx(tx, {
+    epochs:
+      epoch === locked.epoch ? null : projectionEpochUpdate(subject, epoch),
+    values,
+  });
+  if (written.isErr()) {
+    return Result.err(written.error);
+  }
+  return Result.ok({
+    epoch,
+    changed: values.length > 0,
+    generationCount,
+    servedCopies: written.value.servedCopies,
+  });
+};
+
+/**
+ * Reconcile in the transaction that changed the canonical row: the desired
+ * state follows the change at once, an undone erasure included.
+ */
+const synchronizeCorpusProjectionDesiredStateTx = async (
+  tx: Transaction,
+  subject: CorpusIndexProjectionSubject,
+): Promise<void> => {
+  const { locked, epoch, values } = await planSubjectReconciliationTx(
+    tx,
+    subject,
+  );
   if (epoch !== locked.epoch) {
     await setCanonicalProjectionEpoch(
       tx,
       projectionEpochUpdate(subject, epoch),
     );
   }
-  await writeDesiredStates(tx, values);
-  return {
-    epoch,
-    changed: values.length > 0,
-    generationCount: projections.length,
-  };
+  await writeDesiredStates(tx, values, "canonical");
 };
 
 /** Reconcile after a canonical mutation while retaining its source-lock proof. */
@@ -1327,7 +1786,7 @@ export const synchronizeLockedCorpusProjectionDesiredStateTx = async (
       `Corpus projection source lock family ${lock.family} cannot synchronize ${subject.family}`,
     );
   }
-  await reconcileCorpusProjectionDesiredStateTx(tx, subject);
+  await synchronizeCorpusProjectionDesiredStateTx(tx, subject);
 };
 
 /**
@@ -1367,6 +1826,7 @@ export const synchronizeRetiredCaseLawProjectionDesiredStateTx = async (
         descriptor: { action: "erase" },
       }),
     ),
+    "canonical",
   );
 };
 
@@ -1443,14 +1903,18 @@ export const ensureCorpusProjectionDesiredStateTx = async (
       projectionEpochUpdate(subject, epoch),
     );
   }
-  await writeDesiredStates(tx, [
-    buildCorpusIndexProjectionDesiredStateValues({
-      subject,
-      generation,
-      epoch,
-      descriptor,
-    }),
-  ]);
+  await writeDesiredStates(
+    tx,
+    [
+      buildCorpusIndexProjectionDesiredStateValues({
+        subject,
+        generation,
+        epoch,
+        descriptor,
+      }),
+    ],
+    "canonical",
+  );
   return { epoch, created: true };
 };
 
@@ -1501,14 +1965,18 @@ export const eraseServedElsewhereDesiredStateTx = async (
   if (state === undefined || state.desiredAction === "erase") {
     return { changed: false };
   }
-  await writeDesiredStates(tx, [
-    buildCorpusIndexProjectionDesiredStateValues({
-      subject,
-      generation,
-      epoch: state.desiredEpoch,
-      descriptor,
-    }),
-  ]);
+  await writeDesiredStates(
+    tx,
+    [
+      buildCorpusIndexProjectionDesiredStateValues({
+        subject,
+        generation,
+        epoch: state.desiredEpoch,
+        descriptor,
+      }),
+    ],
+    "canonical",
+  );
   return { changed: true };
 };
 
@@ -1632,5 +2100,5 @@ export const synchronizeLockedCaseLawProjectionBatchTx = async (
     family: "case_law",
     epochs: advanced,
   });
-  await writeDesiredStates(tx, values);
+  await writeDesiredStates(tx, values, "canonical");
 };

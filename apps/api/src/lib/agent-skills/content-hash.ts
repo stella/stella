@@ -3,8 +3,8 @@ import { eq, sql } from "drizzle-orm";
 
 import { createSha256, sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import type { Transaction } from "@/api/db/root";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 
 /**
@@ -80,18 +80,38 @@ export const hashSkillContent = (content: SkillContent): string => {
   return hasher.digest("hex");
 };
 
+/**
+ * The digest a file contributes: its original's bytes when it keeps one (the
+ * text of such a file is derived from them), else its text. Prefixed so an
+ * original and a text with the same digest never read alike.
+ */
+const resourceDigest = ({
+  content,
+  originalSha256,
+}: {
+  content: string;
+  originalSha256?: string | null | undefined;
+}) =>
+  originalSha256 === null || originalSha256 === undefined
+    ? hashSha256Hex(content)
+    : `original:${originalSha256}`;
+
 /** Hash of a skill about to be installed from its parsed files. */
 export const hashSkillPackageContent = ({
   resources,
   ...fields
 }: SkillContentFields & {
-  resources: readonly { content: string; path: string }[];
+  resources: readonly {
+    content: string;
+    originalSha256?: string | null | undefined;
+    path: string;
+  }[];
 }): string =>
   hashSkillContent({
     ...fields,
-    resources: resources.map(({ content, path }) => ({
-      contentSha256: hashSha256Hex(content),
-      path,
+    resources: resources.map((resource) => ({
+      contentSha256: resourceDigest(resource),
+      path: resource.path,
     })),
   });
 
@@ -132,7 +152,8 @@ export const skillContentHashAfter = async (
   const resources = await tx
     .select({
       path: agentSkillResources.path,
-      contentSha256: sql<string>`encode(sha256(convert_to(${agentSkillResources.content}, 'UTF8')), 'hex')`,
+      // The same digest `resourceDigest` takes, computed in the database.
+      contentSha256: sql<string>`COALESCE('original:' || ${agentSkillResources.originalSha256}, encode(sha256(convert_to(${agentSkillResources.content}, 'UTF8')), 'hex'))`,
     })
     .from(agentSkillResources)
     .where(eq(agentSkillResources.skillId, skillId));

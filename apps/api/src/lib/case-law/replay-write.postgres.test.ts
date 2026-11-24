@@ -17,7 +17,7 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import { writeDesiredStates } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { writeRepairedCorpusProjectionDesiredStatesTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
@@ -169,8 +169,13 @@ if (!databaseUrl || !enabled) {
               });
             });
           }
-          await db.transaction(
-            async (tx) => await writeDesiredStates(tx, projections),
+          await db.transaction(async (tx) =>
+            (
+              await writeRepairedCorpusProjectionDesiredStatesTx(tx, {
+                epochs: null,
+                values: projections,
+              })
+            ).unwrap(),
           );
         };
         const before = await versions();
@@ -231,9 +236,9 @@ if (!databaseUrl || !enabled) {
               ),
           );
         };
-        // Other suites share this server and their database clones force
-        // checkpoints, so each window retries on its own: requiring both clean
-        // in one attempt fails while either window alone would have measured.
+        // The runner drains cloning workers before this WAL measurement.
+        // A server checkpoint can still overlap a window, so measure each
+        // window separately without relaxing either writer bound.
         const WAL_ATTEMPTS = 10;
         const cleanWalBytes = async (work: () => Promise<void>) => {
           for (let attempt = 0; attempt < WAL_ATTEMPTS; attempt += 1) {

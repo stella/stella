@@ -548,6 +548,7 @@ pub fn feature_enabled(app: &AppHandle, feature: DesktopFeature) {
     DesktopFeature::Dictation if dictation_available(app) => Introduction::Dictation,
     DesktopFeature::Dictation
     | DesktopFeature::DictationCloud
+    | DesktopFeature::DictationRetainingModels
     | DesktopFeature::LocalAgents => return,
   };
   if app.get_webview_window(ONBOARDING_WINDOW_LABEL).is_some() {
@@ -581,12 +582,17 @@ pub fn show(app: &AppHandle) {
     }
     return;
   }
-  let builder = crate::app_window::builder(app, ONBOARDING_WINDOW_LABEL, "index.html")
-    .title("stella desktop")
-    .inner_size(WINDOW_WIDTH, WINDOW_HEIGHT)
-    .resizable(false)
-    .maximizable(false)
-    .visible(false);
+  let builder = crate::app_window::builder(
+    app,
+    ONBOARDING_WINDOW_LABEL,
+    "index.html",
+    crate::app_window::WindowKind::App,
+  )
+  .title("stella desktop")
+  .inner_size(WINDOW_WIDTH, WINDOW_HEIGHT)
+  .resizable(false)
+  .maximizable(false)
+  .visible(false);
   let builder = crate::window_placement::centered_on_target_screen(
     app,
     builder,

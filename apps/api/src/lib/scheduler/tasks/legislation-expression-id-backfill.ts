@@ -11,8 +11,8 @@ import {
   BackfillHeldError,
   createScriptBackfillRuntime,
 } from "@/api/db/backfill-runtime";
-import type { Transaction } from "@/api/db/root";
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 import {
@@ -340,6 +340,17 @@ export const createLegislationExpressionIdBackfill =
               backfillCursor({ cursor }),
               size,
             );
+            await recordSystemAudit(
+              tx,
+              "system:legislation-expression-id-backfill",
+              {
+                subject: runId,
+                counts: {
+                  claimedDocuments:
+                    claimedPage.type === "page" ? claimedPage.claimed : 0,
+                },
+              },
+            );
             return {
               cursor: claimedPage.type === "page" ? claimedPage.last : null,
               done: claimedPage.type === "cycle-complete",
@@ -392,10 +403,6 @@ export const createLegislationExpressionIdBackfill =
       }
     }
 
-    await recordSystemAudit(db, "system:legislation-expression-id-backfill", {
-      subject: runId,
-      counts: { claimedDocuments: page.type === "page" ? page.claimed : 0 },
-    });
     logger.info("scheduler.legislation_expression_ids_backfilled", {
       "legislationExpressionIds.claimed":
         page.type === "page" ? page.claimed : 0,

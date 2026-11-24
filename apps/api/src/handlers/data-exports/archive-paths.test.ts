@@ -4,7 +4,6 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 import { normalizeUnicode } from "@stll/text-normalize";
 
-import { archivePathKey } from "@/api/handlers/data-exports/archive-path-key";
 import {
   ArchivePathAllocator,
   compressionForMimeType,
@@ -18,6 +17,7 @@ import {
   DATA_EXPORT_ARCHIVE_PATH_MAX_BYTES,
   DATA_EXPORT_ARCHIVE_SEGMENT_MAX_BYTES as MAX_SEGMENT_BYTES,
 } from "@/api/lib/data-export/manifest-values";
+import { archivePathKey } from "@/api/lib/files/archive-path-key";
 import { utf8ByteLength } from "@/api/lib/json-schema/utf8-byte-length";
 
 // ICU collation checks the fixture equivalence independently of the allocation key.

@@ -15,7 +15,7 @@ const BOUNDARY_MODULE = "@/components/viewer/recoverable-viewer-boundary";
 const VIEWER_DATA_OPTIONS = new Set([
   "fileOptions",
   "emailHtmlPreviewOptions",
-  "emailAttachmentPreviewOptions",
+  "filePartContentOptions",
   "externalReferencePreviewOptions",
   "textFileOptions",
 ]);
@@ -67,7 +67,7 @@ type ViewerCoverage =
 
 const PDF_PROVIDER = "lib/pdf/pdf-context.tsx";
 const DOCUMENT_ROUTE =
-  "routes/_protected.workspaces/$workspaceId/$viewId.document.tsx";
+  "routes/_protected.workspaces/$workspaceId/-$viewId.document.page.tsx";
 
 const VIEWER_DATA_READERS: Record<string, ViewerCoverage> = {
   [DOCUMENT_ROUTE]: { type: "boundary", owner: DOCUMENT_ROUTE },
@@ -101,9 +101,18 @@ const VIEWER_DATA_READERS: Record<string, ViewerCoverage> = {
     type: "pending",
     reason: "inline error state refetches on try again",
   },
-  "components/inspector/email-attachments-facet.tsx": {
+  "components/file-parts/file-parts.tsx": {
     type: "pending",
-    reason: "inline error message; attachment save stays available",
+    reason:
+      "inline error state refetches on try again; download and save stay available",
+  },
+  "components/inspector/cades-file-viewer.tsx": {
+    type: "boundary",
+    owner: PDF_PROVIDER,
+  },
+  "components/inspector/signed-dossier-viewer.tsx": {
+    type: "boundary",
+    owner: PDF_PROVIDER,
   },
   "components/inspector/external-reference-panel.tsx": {
     type: "pending",
@@ -117,6 +126,11 @@ const VIEWER_DATA_READERS: Record<string, ViewerCoverage> = {
     type: "not-a-viewer",
     reason:
       "reads the PDF for claim boxes; the PeekPdfViewer it mounts shows the file and its load failure",
+  },
+  "components/inspector/email-attachments-facet.tsx": {
+    type: "not-a-viewer",
+    reason:
+      "reads the email preview for its attachment list; file-parts.tsx shows each part",
   },
   "hooks/use-verified-email-citation-target.ts": {
     type: "not-a-viewer",

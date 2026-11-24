@@ -1,16 +1,14 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { STATUTE_COLUMN_IDS } from "@stll/api-contract/public-law-table";
 import {
   STATUTE_LIST_SORT_ORDERS,
   STATUTE_LIST_SORTS,
 } from "@stll/api-contract/statute-list-sort";
 import type { StatuteListSort } from "@stll/api-contract/statute-list-sort";
 
-import {
-  STATUTE_COLUMN_IDS,
-  STATUTE_COLUMN_SORT_KEYS,
-} from "@/features/statutes/statute-columns.logic";
+import { STATUTE_COLUMN_SORT_KEYS } from "@/features/statutes/statute-columns.logic";
 import {
   statuteColumnOrder,
   statuteTableSorting,

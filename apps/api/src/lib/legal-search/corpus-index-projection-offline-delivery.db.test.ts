@@ -31,7 +31,10 @@ import {
   type CorpusIndexIntentStatus,
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
-import { legislationProjectionInputFromCanonical } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import {
+  legislationProjectionInputFromCanonical,
+  reconcileCorpusProjectionDesiredStateTx,
+} from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
   corpusProjectionAppendIngestBudgetMs,
   proveCorpusProjectionRevisionsPresent,
@@ -49,6 +52,7 @@ import {
   abandonCorpusProjectionAppendTx,
   CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT,
   CORPUS_PROJECTION_LEASE_MAX_MS,
+  CORPUS_PROJECTION_OFFLINE_LONE_KILL_MESSAGE,
   type CorpusProjectionIntentLease,
   type CorpusProjectionOfflineRequest,
   type CorpusProjectionOfflineStart,
@@ -1769,6 +1773,67 @@ describe("offline settlement", () => {
     expect(again).toBeDefined();
     expect(again?.epoch).toBe(lease.epoch);
     expect(again?.intentId).not.toBe(lease.intentId);
+  });
+
+  test("a lone-killed revision that published keeps its error once applied, and no repair is held for it", async () => {
+    const model = await newModel(1);
+    const entityId = model.entityIds.at(0) ?? panic("No entity");
+    const { lease } = await startOffline(model, 1);
+    const recordedAt = await now(model);
+    await db.transaction(
+      async (tx) =>
+        await recordAcceptedCorpusProjectionAppendsTx(
+          asTestRaw<Transaction>(tx),
+          {
+            accepted: [
+              {
+                intentId: lease.intentId,
+                leaseToken: lease.leaseToken,
+                documentCount: 1,
+              },
+            ],
+            delivery: {
+              type: "offline_indexer",
+              fault: "documents",
+              killedAlone: true,
+            },
+            testNow: recordedAt,
+          },
+        ),
+    );
+    model.engine.published.set(lease.intentId, 1);
+    model.offsetMs += ENDED_AFTER_MS + 10 * 60_000;
+    await prove(model);
+    const applied = await intentOf(lease.intentId);
+    expect(applied).toMatchObject({
+      status: "applied",
+      lastError: CORPUS_PROJECTION_OFFLINE_LONE_KILL_MESSAGE,
+    });
+    expect((await stateOf(entityId)).appliedRevision).toBe(lease.intentId);
+    await db
+      .update(legislationDocuments)
+      .set({ contentHash: "d".repeat(64) })
+      .where(eq(legislationDocuments.id, toLegislationId(entityId)));
+
+    const outcome = await db.transaction(
+      async (tx) =>
+        await reconcileCorpusProjectionDesiredStateTx(
+          asTestRaw<Transaction>(tx),
+          { family: TARGET.family, entityId: toLegislationId(entityId) },
+        ),
+    );
+
+    expect(outcome.isOk() && outcome.value).toMatchObject({
+      changed: true,
+      servedCopies: [
+        {
+          generation: TARGET.generation,
+          entityId,
+          outcome: "already_current",
+        },
+      ],
+    });
+    expect(await intentOf(lease.intentId)).toEqual(applied);
   });
 
   test("a census dated before the indexer's end never withdraws, however late its proof", async () => {

@@ -1,9 +1,13 @@
 //! Which language a dictation is in. "Automatic" means the languages this
 //! user works in on this computer (preferred languages and keyboard input
 //! languages), narrowed to the ones the speech model lists; or the user picks
-//! one. The choice becomes the model's language hint, which the worker
-//! passes only when the loaded model lists it, and tells cleanup which
-//! languages the speaker uses.
+//! one. A chosen language, or the only inferred one, becomes the language
+//! hint, which the worker passes only when the loaded model lists it. With
+//! several inferred languages there is no hint: one language forced on a
+//! dictation that mixes them (Czech with English terms) makes the model spell
+//! the other language's words the forced language's way, while without a hint
+//! it recognizes each as spoken. Cleanup always learns every language the
+//! speaker uses.
 
 #![cfg_attr(
   not(dictation),
@@ -75,20 +79,17 @@ pub fn infer(tags: impl IntoIterator<Item = String>) -> Vec<&'static str> {
   found
 }
 
-/// The single language hint for one run: the chosen language, or with
-/// automatic the only inferred language, or the first one that is not
-/// English. Never a language outside the inferred set.
+/// The language hint for one run: the chosen language, or with automatic
+/// the only inferred language. Several inferred languages give none, so the
+/// model recognizes each word in the language it was spoken in; the pinned
+/// local model has no language prompt and always does. Never a language
+/// outside the inferred set.
 pub fn hint(choice: &Choice, inferred: &[&'static str]) -> Option<&'static str> {
   match choice {
     Choice::Language(language) => Some(*language),
     Choice::Automatic => match inferred {
-      [] => None,
       [only] => Some(*only),
-      several => several
-        .iter()
-        .find(|language| **language != ENGLISH)
-        .or_else(|| several.first())
-        .copied(),
+      [] | [_, _, ..] => None,
     },
   }
 }
@@ -102,6 +103,50 @@ pub fn speaker_languages(
     Choice::Language(language) => vec![*language],
     Choice::Automatic => inferred.to_vec(),
   }
+}
+
+/// Each model language in its own name, the way a language menu lists it
+/// whatever the interface language.
+pub const fn autonym(language: &str) -> Option<&'static str> {
+  Some(match language.as_bytes() {
+    b"en" => "English",
+    b"de" => "Deutsch",
+    b"fr" => "Français",
+    b"es" => "Español",
+    b"it" => "Italiano",
+    b"pt" => "Português",
+    b"ru" => "Русский",
+    b"uk" => "Українська",
+    b"hr" => "Hrvatski",
+    b"sl" => "Slovenščina",
+    b"lv" => "Latviešu",
+    b"lt" => "Lietuvių",
+    b"et" => "Eesti",
+    b"fi" => "Suomi",
+    b"sv" => "Svenska",
+    b"da" => "Dansk",
+    b"nl" => "Nederlands",
+    b"pl" => "Polski",
+    b"cs" => "Čeština",
+    b"sk" => "Slovenčina",
+    b"hu" => "Magyar",
+    b"ro" => "Română",
+    b"bg" => "Български",
+    b"el" => "Ελληνικά",
+    b"mt" => "Malti",
+    _ => return None,
+  })
+}
+
+/// The choices a quick switch offers: automatic, this computer's languages,
+/// and the chosen language when it is none of them, once each.
+pub fn quick_choices(choice: &Choice, inferred: &[&'static str]) -> Vec<Choice> {
+  let mut choices = vec![Choice::Automatic];
+  choices.extend(inferred.iter().copied().map(Choice::Language));
+  if !choices.contains(choice) {
+    choices.push(choice.clone());
+  }
+  choices
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -170,6 +215,43 @@ pub fn inferred(app: &AppHandle) -> Vec<&'static str> {
 mod tests {
   use super::*;
 
+  #[test]
+  fn every_model_language_has_its_own_name() {
+    for language in MODEL_LANGUAGES {
+      assert!(
+        autonym(language).is_some_and(|name| !name.is_empty()),
+        "{language}"
+      );
+    }
+    assert_eq!(autonym("cs"), Some("Čeština"));
+    assert_eq!(autonym("xx"), None);
+  }
+
+  #[test]
+  fn the_quick_switch_offers_automatic_the_inferred_languages_and_the_choice() {
+    assert_eq!(
+      quick_choices(&Choice::Automatic, &["cs", "en"]),
+      vec![
+        Choice::Automatic,
+        Choice::Language("cs"),
+        Choice::Language("en")
+      ]
+    );
+    assert_eq!(
+      quick_choices(&Choice::Language("de"), &["cs", "en"]),
+      vec![
+        Choice::Automatic,
+        Choice::Language("cs"),
+        Choice::Language("en"),
+        Choice::Language("de"),
+      ]
+    );
+    assert_eq!(
+      quick_choices(&Choice::Language("cs"), &["cs"]),
+      vec![Choice::Automatic, Choice::Language("cs")]
+    );
+  }
+
   fn tags(values: &[&str]) -> Vec<String> {
     values.iter().map(ToString::to_string).collect()
   }
@@ -189,10 +271,20 @@ mod tests {
   }
 
   #[test]
-  fn automatic_hints_the_first_language_that_is_not_english() {
-    assert_eq!(hint(&Choice::Automatic, &["cs", "en"]), Some("cs"));
+  fn automatic_hints_only_the_one_language_it_inferred() {
     assert_eq!(hint(&Choice::Automatic, &["en"]), Some("en"));
+    assert_eq!(hint(&Choice::Automatic, &["cs"]), Some("cs"));
     assert_eq!(hint(&Choice::Automatic, &[]), None);
+  }
+
+  #[test]
+  fn automatic_with_several_languages_hints_none_and_cleanup_gets_them_all() {
+    // Czech speech with English terms: a forced Czech hint spells the
+    // English words the Czech way.
+    for inferred in [vec!["cs", "en"], vec!["cs", "sk"], vec!["pl", "de", "en"]] {
+      assert_eq!(hint(&Choice::Automatic, &inferred), None, "{inferred:?}");
+      assert_eq!(speaker_languages(&Choice::Automatic, &inferred), inferred);
+    }
   }
 
   #[test]

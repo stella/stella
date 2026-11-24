@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import {
   TIME_ENTRY_SOURCE,
   TIME_ENTRY_SUGGESTION_STATUS,

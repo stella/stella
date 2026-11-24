@@ -4,7 +4,7 @@ import { Button } from "@stll/ui/button";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { userMessageFallbackText } from "@/components/chat/chat-thread-messages.logic";
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools-types";
 import Tooltip from "@/components/tooltip";
 import { useStickToBottomContext } from "@/hooks/use-stick-to-bottom";
 import { useFormattingLocale } from "@/i18n/formatting-context";

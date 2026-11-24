@@ -15,6 +15,9 @@ text 170, description 4000.
 - Age rating: every questionnaire answer "None" or "No"; unrestricted web
   access "No" (links open the person's own workspace and stll.app only).
 - Encryption: exempt (`usesNonExemptEncryption: false` in `app.config.ts`).
+- Background mode `audio`: a dictation the person started keeps recording
+  while the screen is locked or another app is in front, until they finish
+  it or it reaches its limit. Nothing records otherwise.
 
 ## App Privacy
 

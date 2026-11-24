@@ -8,6 +8,10 @@ import { ToggleGroup as ToggleGroupPrimitive } from "@base-ui/react/toggle-group
 import { cn } from "../lib/utils";
 import type { ButtonSize } from "./button";
 import { Toggle, type ToggleProps } from "./toggle";
+import {
+  TOGGLE_GROUP_CLASS_NAME,
+  TOGGLE_GROUP_ITEM_CLASS_NAME,
+} from "./toggle-group-classes";
 
 const ToggleGroupSizeContext = createContext<ButtonSize>("xs");
 
@@ -30,10 +34,7 @@ const ToggleGroup = <Value extends string>({
 }: ToggleGroupProps<Value>) => (
   <ToggleGroupSizeContext value={size}>
     <ToggleGroupPrimitive<Value>
-      className={cn(
-        "border-border/70 bg-muted/30 inline-flex w-fit shrink-0 items-center gap-0.5 rounded-lg border p-0.5 data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch",
-        className,
-      )}
+      className={cn(TOGGLE_GROUP_CLASS_NAME, className)}
       data-slot="toggle-group"
       {...props}
     />
@@ -54,10 +55,7 @@ const ToggleGroupItem = <Value extends string>({
   const groupSize = useContext(ToggleGroupSizeContext);
   return (
     <Toggle<Value>
-      className={cn(
-        "data-pressed:bg-background data-pressed:text-foreground",
-        className,
-      )}
+      className={cn(TOGGLE_GROUP_ITEM_CLASS_NAME, className)}
       data-slot="toggle-group-item"
       size={size ?? groupSize}
       variant={variant}

@@ -8,7 +8,7 @@ import type {
 } from "@stll/folio-core";
 import { Temporal } from "@stll/time";
 
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db-types";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { documentVersionRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -23,6 +23,7 @@ import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import type { DocumentSource } from "@/api/lib/document-source";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { comparisonVersionId } from "@/api/lib/entity-versions/comparison-version-id";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import type { EntityVersionFile } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
@@ -262,7 +263,11 @@ const failure = (
   code: CompareFailureCode,
   message: string,
   hint: string,
-): CompareFailure => ({ code, message, hint });
+): CompareFailure => ({
+  code,
+  message,
+  hint,
+});
 
 export const mapCompareDocxError = (
   error: CompareDocxError,
@@ -691,10 +696,12 @@ export const createDocumentCompareGenerator = (
       }
     }
 
-    const author = await dependencies.resolveDocxEditAuthorName({
-      safeDb,
-      userId: user.id,
-    });
+    const author = yield* Result.await(
+      dependencies.resolveDocxEditAuthorName({
+        safeDb,
+        userId: user.id,
+      }),
+    );
     if (author === null) {
       return Result.err(
         new HandlerError({
@@ -889,6 +896,7 @@ export const createDocumentCompareGenerator = (
           await dependencies.withTimeout(
             async () =>
               await dependencies.createEntityVersionFromBuffer({
+                authority: CALLER_AUTHORIZED,
                 safeDb,
                 organizationId: session.activeOrganizationId,
                 workspaceId,

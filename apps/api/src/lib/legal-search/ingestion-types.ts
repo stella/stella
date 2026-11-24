@@ -1,3 +1,5 @@
+// parser-output-unchanged: adds a stored-document constructor; standing crawl and stored replay outputs are unchanged.
+// parser-output-unchanged: a decision type spelled as an address is refused at this boundary; every registered adapter emits printed labels, so their output is unchanged.
 // parser-output-unchanged: Removes migration-only field exclusions after all producers migrate.
 // parser-output-unchanged: Adds nested inventory addresses without changing result construction.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
@@ -424,6 +426,25 @@ const requiredLabel = (raw: string) =>
 const optionalPlainText = (raw: string | undefined) =>
   raw === undefined ? Result.ok(undefined) : toPlainText(raw);
 
+const ADDRESS_RE = /^\s*[a-z][a-z\d+.-]*:\/\//iu;
+
+/**
+ * A decision's type is the label its publisher prints ("rozsudek",
+ * "judgment"). A publisher's codelist address names a type without being
+ * one: it belongs in metadata beside the label, and as the type it would be
+ * shown and filtered on as one. Refused here, at the one boundary every
+ * stored decision crosses, so no adapter can store one.
+ */
+const optionalDecisionTypeLabel = (raw: string | undefined) =>
+  raw !== undefined && ADDRESS_RE.test(raw)
+    ? Result.err(
+        new PlainTextError({
+          message: "A decision type is a printed label, not an address",
+          reason: "address-as-label",
+        }),
+      )
+    : optionalPlainText(raw);
+
 /** Source identifiers, URLs, sourceRaw and AST structure retain their separate contracts. */
 export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
   raw: T,
@@ -467,7 +488,7 @@ export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
       legacyEcli: yield* optionalPlainText(raw.legacyEcli),
       legacyCaseNumber: yield* optionalPlainText(raw.legacyCaseNumber),
       court: yield* requiredLabel(raw.court),
-      decisionType: yield* optionalPlainText(raw.decisionType),
+      decisionType: yield* optionalDecisionTypeLabel(raw.decisionType),
       metadata: yield* toPlainTextMetadataObject(
         raw.metadata,
         metadataUrlSchema,
@@ -633,7 +654,10 @@ export type SliceCoverage = {
 /** A page of ingestion results with an optional cursor. */
 export type SyncPage = {
   decisions: IngestionResult[];
-  /** Failed item builds retained as listing-only rows for reconciliation. */
+  /**
+   * Failed builds must also return their typed rejected inputs in `decisions`.
+   * A count without those inputs holds the page rather than losing the items.
+   */
   itemBuildFailures?: { type: "item_build_failed"; count: number } | undefined;
   /**
    * Supplements read off the same page. The pipeline processes them after
@@ -983,7 +1007,10 @@ export type StoredRawListing =
   | StoredRawReparseRejected;
 
 export type ReadStoredRawListingOptions = {
-  stored: StoredRawReparseInput;
+  stored: Pick<
+    StoredRawReparseInput,
+    "raw" | "contentType" | "sourceDocumentId"
+  >;
   /** The envelope part holding the publisher's listing row. */
   part: string;
   /** The publisher id that row states, read the way the adapter keys it. */
@@ -1726,6 +1753,17 @@ export type SourceFieldInventory = {
   ) => readonly string[] | Promise<readonly string[]>;
 };
 
+/** A selected stored identity admitted for a bounded publisher re-read. */
+export type StoredDocumentBuildInput = {
+  stored: StoredRawReparseInput;
+  /** Full published reference already checked against the selected decision. */
+  reference: string;
+  signal: AbortSignal;
+};
+
+export type StoredDocumentBuildOutcome =
+  ReconciliationBuildOutcome | { type: "incomplete-locator"; detail: string };
+
 /**
  * Interface for court data source adapters.
  *
@@ -1735,6 +1773,10 @@ export type SourceFieldInventory = {
  */
 export type SourceAdapter = {
   key: AdapterKey;
+  /** Refetch exactly one stored publisher identity; never enumerates a listing. */
+  buildStoredDocument?: (
+    input: StoredDocumentBuildInput,
+  ) => Promise<StoredDocumentBuildOutcome>;
   documentStage: DocumentStage;
   observeDocumentStage: (
     options: Omit<DocumentStagePageOptions, "source">,
@@ -1874,6 +1916,55 @@ const replayedPublisherRecord = (
   }
 };
 
+/**
+ * A page fetch that threw, as the failure a cycle stores. It keeps the
+ * cause's own words: they are stored on the cycle event, logged when the
+ * cycle stops and what a park compares, and the wrapper's text alone says
+ * nothing about why the page failed. A thrown adapter failure passes through
+ * as it was raised.
+ */
+const thrownPageFailure = (
+  adapterKey: AdapterKey,
+  cursor: string | null,
+  cause: unknown,
+): AdapterFetchError =>
+  cause instanceof AdapterFetchError
+    ? cause
+    : new AdapterFetchError({
+        message: `Adapter page fetch failed: ${
+          cause instanceof Error ? cause.message : String(cause)
+        }`,
+        adapterKey,
+        cursor,
+        cause,
+      });
+
+const inspectBuiltPublisherRecords = async (
+  outcome: StoredDocumentBuildOutcome,
+  inspectRecord: (result: IngestionResult) => Promise<void>,
+) => {
+  switch (outcome.type) {
+    case "built":
+      await inspectRecord(outcome.decision);
+      if (outcome.companions !== undefined) {
+        for (const companion of outcome.companions) {
+          await inspectRecord(companion);
+        }
+      }
+      break;
+    case "built-supplement":
+      await inspectRecord(outcome.supplement.document);
+      break;
+    case "unkeyable":
+    case "detail-unavailable":
+    case "incomplete-locator":
+      break;
+    default:
+      outcome satisfies never;
+      panic("Unhandled publisher build outcome");
+  }
+};
+
 /** Build an adapter from the source facts declared for its registry key. */
 export const defineSourceAdapter = <
   const TKey extends AdapterKey,
@@ -1905,37 +1996,20 @@ export const defineSourceAdapter = <
   };
   const inspectBuild = <
     TArgs extends unknown[],
-    TOutcome extends ReconciliationBuildOutcome,
+    TOutcome extends StoredDocumentBuildOutcome,
   >(
     operation: (...args: TArgs) => Promise<TOutcome>,
   ) =>
     scoped(async function (this: unknown, ...args: TArgs) {
       const outcome = await operation.apply(this, args);
-      switch (outcome.type) {
-        case "built":
-          await inspectRecord(outcome.decision);
-          if (outcome.companions !== undefined) {
-            for (const companion of outcome.companions) {
-              await inspectRecord(companion);
-            }
-          }
-          break;
-        case "built-supplement":
-          await inspectRecord(outcome.supplement.document);
-          break;
-        case "unkeyable":
-        case "detail-unavailable":
-          break;
-        default:
-          outcome satisfies never;
-          return panic("Unhandled publisher build outcome");
-      }
+      await inspectBuiltPublisherRecords(outcome, inspectRecord);
       return outcome;
     });
   const reconciliation = adapter.reconciliation;
   const createSliceBuildDecision = reconciliation.createSliceBuildDecision;
   const textlessHeldRecheck = reconciliation.textlessHeldRecheck;
   const reparseStoredRaw = adapter.reparseStoredRaw;
+  const buildStoredDocument = adapter.buildStoredDocument;
   const collectionEnrichment = adapter.collectionEnrichment;
   const observeDocumentStage = async (
     options: Omit<DocumentStagePageOptions, "source">,
@@ -1947,6 +2021,10 @@ export const defineSourceAdapter = <
     );
   // Total callback projections make a new callback require a scope decision.
   const callbacks = {
+    buildStoredDocument:
+      buildStoredDocument === undefined
+        ? undefined
+        : inspectBuild(buildStoredDocument),
     observeDocumentStage,
     getTotalCount: scoped(adapter.getTotalCount),
     reparseStoredRaw:
@@ -1971,13 +2049,7 @@ export const defineSourceAdapter = <
         fetchPage: async () => {
           const fetched = await Result.tryPromise({
             try: async () => await adapter.fetchPage(cursor, config, signal),
-            catch: (cause) =>
-              new AdapterFetchError({
-                message: "Adapter page fetch failed",
-                adapterKey: adapter.key,
-                cursor,
-                cause,
-              }),
+            catch: (cause) => thrownPageFailure(adapter.key, cursor, cause),
           });
           const page = fetched.andThen((outcome) => outcome);
           if (Result.isError(page)) {
@@ -2001,8 +2073,11 @@ export const defineSourceAdapter = <
         observe: onDocumentObservation,
       }),
   } satisfies ScopedCallbacks<SourceAdapter>;
-  const { reparseStoredRaw: scopedReparseStoredRaw, ...requiredCallbacks } =
-    callbacks;
+  const {
+    reparseStoredRaw: scopedReparseStoredRaw,
+    buildStoredDocument: scopedStoredDocument,
+    ...requiredCallbacks
+  } = callbacks;
   const reconciliationCallbacks = {
     revisionOf: scoped(reconciliation.revisionOf),
     sliceOf: scoped(reconciliation.sliceOf),
@@ -2060,6 +2135,9 @@ export const defineSourceAdapter = <
   return {
     ...adapter,
     ...requiredCallbacks,
+    ...(scopedStoredDocument === undefined
+      ? {}
+      : { buildStoredDocument: scopedStoredDocument }),
     ...(scopedReparseStoredRaw === undefined
       ? {}
       : { reparseStoredRaw: scopedReparseStoredRaw }),

@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds the Supreme Court collection's opinion types to the facet table, which no parser reads.
 // parser-output-unchanged: adds the Brazilian decision types to the facet table, which no parser reads.
 import { panic } from "better-result";
 
@@ -38,6 +39,26 @@ export const STATED_DECISION_TYPE_KINDS = {
   rozhodnutí: "decision",
   stanovisko: "opinion",
   "stanovisko pléna": "opinion",
+  // The Supreme Court's collection prints, beside its stanoviska, the
+  // plenary and collegium materials that state the court's reading of the
+  // law for the courts below: evaluations of practice, reports, conclusions
+  // and extracts from them. Each is an opinion in the stanovisko's sense.
+  zhodnocení: "opinion",
+  zpráva: "opinion",
+  závěry: "opinion",
+  "výtah z materiálu": "opinion",
+  // The plenary's principles and directives for the courts below, printed
+  // in the same collection.
+  zásady: "opinion",
+  směrnice: "opinion",
+  // The grand chamber's forms, as the collection names them.
+  "rozsudek velkého senátu": "judgment",
+  "usnesení velkého senátu": "order",
+  // The collection's misspellings, read as the type they spell; the stored
+  // value stays as printed.
+  rozhodutí: "decision",
+  rozhodnurí: "decision",
+  "rozsudek.": "judgment",
   "trestní příkaz": "penal_order",
   "tr.příkaz": "penal_order",
   opatření: "court_direction",

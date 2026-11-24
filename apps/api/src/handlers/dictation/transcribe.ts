@@ -7,30 +7,37 @@ import {
   TRANSCRIPTION_MODELS,
   transcriptionEndpointFor,
 } from "@stll/ai-catalog/transcription";
-import type { TranscriptionEndpoint } from "@stll/ai-catalog/transcription";
-import { AI_FAILURE_CODES } from "@stll/api-contract";
+import type {
+  TranscriptionEndpoint,
+  TranscriptionModelId,
+} from "@stll/ai-catalog/transcription";
+import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 import {
   MAX_TRANSCRIPTION_AUDIO_SECONDS,
   MAX_TRANSCRIPTION_MULTIPART_BYTES,
   TRANSCRIPTION_AUDIO_MEDIA_TYPES,
   TRANSCRIPTION_DURATION_TOLERANCE_MS,
+  TRANSCRIPTION_LABELS_SHOWN_FIELD,
 } from "@stll/api-contract/transcription";
 import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 import { classifyFailure } from "@stll/errors";
 
-import type { SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { env } from "@/api/env";
 import { transcribeWithElevenLabs } from "@/api/handlers/dictation/elevenlabs-provider";
 import { consumeDictationLimit } from "@/api/handlers/dictation/limits";
 import {
   transcribeAudio,
   transcriptionResultSchema,
+  VOCABULARY_STATUS,
 } from "@/api/handlers/dictation/provider";
 import type { TranscriptionResult } from "@/api/handlers/dictation/provider";
 import { dictationBodySchema } from "@/api/handlers/dictation/schema";
 import {
   readTranscriptionDeployment,
+  transcriptionRetainsData,
   transcriptionServed,
+  transcriptionServedAnywhere,
 } from "@/api/handlers/dictation/transcription-deployment";
 import type { OrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
@@ -42,13 +49,26 @@ import {
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type { MemberCaller } from "@/api/lib/auth/member-caller";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getManagedOpenRouterCredential } from "@/api/lib/chat/openrouter-credential";
 import { managedProviderUnavailable } from "@/api/lib/chat/provider-data-policy";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import {
+  fitGroqPrompt,
+  readTranscriptionVocabulary,
+} from "@/api/lib/dictation/organization-vocabulary";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  isFeatureAccessSnapshotForPrincipal,
+  isFeatureEnabled,
+} from "@/api/lib/feature-access/policy";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { emitTranscriptionDurationMismatchMetric } from "@/api/lib/observability/request-metrics";
+import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { transcriptionUsageUnits } from "@/api/lib/usage/unit-model";
@@ -57,10 +77,50 @@ import {
   recordUsageEvent,
 } from "@/api/lib/usage/usage-ledger";
 
+// A model whose provider keeps the audio is offered to members with this
+// decision only, on every client that warns about it. The API lists and
+// refuses; the desktop only refreshes its model list when the decision
+// changes.
+export const RETAINING_MODELS_FEATURE_ID =
+  "desktop-dictation-retaining-models" satisfies DesktopFeatureId;
+
+/**
+ * The member may use a model whose provider keeps the audio. The member's
+ * feature decisions come with the request; a caller that arrives without
+ * them for this member reads them, as handler feature admission does.
+ */
+export const readRetainingModelsGrant = async ({
+  featureAccessSnapshot,
+  safeDb,
+  session,
+  user,
+}: {
+  featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
+  safeDb: SafeDb;
+  session: { activeOrganizationId: SafeId<"organization"> };
+  user: { id: SafeId<"user"> };
+}): Promise<Result<boolean, SafeDbError>> => {
+  const principal = {
+    organizationId: session.activeOrganizationId,
+    userId: user.id,
+  };
+  const snapshot: Result<FeatureAccessSnapshot, SafeDbError> =
+    featureAccessSnapshot !== undefined &&
+    isFeatureAccessSnapshotForPrincipal(featureAccessSnapshot, principal)
+      ? Result.ok(featureAccessSnapshot)
+      : await safeDb(
+          async (tx) =>
+            await resolveFeatureAccessSnapshot({ tx, ...principal }),
+        );
+  return snapshot.map((decisions) =>
+    isFeatureEnabled(decisions, RETAINING_MODELS_FEATURE_ID, principal),
+  );
+};
+
 const config = {
   contract: "patch",
   description:
-    "Transcribe one audio chunk without storing the audio or transcript. Upload file, an optional modelId (absent: the cheapest model offered in the organization's region), optional ISO 639-1 language, a JSON array of vocabulary terms, and an optional matterId. Available through REST multipart upload; generic JSON capability transports cannot upload audio.",
+    "Transcribe one audio chunk. stella stores neither the audio nor the transcript; a provider the models list marks retainsData may retain them. Upload file, an optional modelId (absent: the cheapest model offered in the organization's region), optional ISO 639-1 language, a JSON array of vocabulary terms, an optional matterId, and labels=1 only when the client showed the models list's outsideRegion and retainsData labels where the model was chosen. Available through REST multipart upload; generic JSON capability transports cannot upload audio.",
   permissions: { workspace: ["read"], chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.standard,
   access: "write",
@@ -112,8 +172,10 @@ export type DictationCaller = Readonly<OrgSettingsForAuth> &
      *  model named in the request goes there; a default never does. */
     readonly allowOutsideRegion?: boolean;
     /** A caller that warns members when a provider keeps the audio may use
-     *  such a model when it names it; a default never is one. */
-    readonly allowRetainingModels?: boolean;
+     *  such a model when it names it; a default never is one. A function
+     *  reads the member's grant, and only for a named model that keeps it. */
+    readonly allowRetainingModels?:
+      boolean | (() => Promise<Result<boolean, SafeDbError>>);
   };
 type PreflightOptions = {
   caller: UsageCaller;
@@ -167,17 +229,27 @@ const checkUsage = async ({
   );
 };
 
+/** How a chunk the client may send again is counted once: the same key on
+ *  every attempt, and the audit row names the same resource. */
+export type DictationUsageKey = {
+  idempotencyKey: string;
+  resourceId: string;
+};
+
 type SettleOptions = {
   caller: UsageCaller;
   result: Pick<TranscriptionResult, "modelId" | "durationMs">;
   workspaceId: SafeId<"workspace"> | null;
   isByok: boolean;
+  /** Absent: every request is its own usage event. */
+  usageKey?: DictationUsageKey | undefined;
 };
 const settleUsage = async ({
   caller,
   result,
   workspaceId,
   isByok,
+  usageKey,
 }: SettleOptions): Promise<Result<void, SafeDbError | HandlerError<503>>> => {
   if (!isTranscriptionModelId(result.modelId)) {
     return Result.err(managedProviderUnavailable("openrouter"));
@@ -190,7 +262,7 @@ const settleUsage = async ({
   });
   const requestId = Bun.randomUUIDv7();
   return await caller.safeDb(async (tx) => {
-    await recordUsageEvent({
+    const recorded = await recordUsageEvent({
       tx,
       organizationId: caller.session.activeOrganizationId,
       workspaceId,
@@ -200,12 +272,17 @@ const settleUsage = async ({
       serviceTier: "standard",
       isByok,
       ...units,
-      idempotencyKey: requestId,
+      idempotencyKey: usageKey?.idempotencyKey ?? requestId,
     });
+    // A chunk sent again after its answer was lost was counted, and
+    // audited, the first time.
+    if (recorded.status === "duplicate") {
+      return;
+    }
     await caller.recordAuditEvent(tx, {
       action: AUDIT_ACTION.EXECUTE,
       resourceType: AUDIT_RESOURCE_TYPE.USAGE_EVENT,
-      resourceId: requestId,
+      resourceId: usageKey?.resourceId ?? requestId,
       workspaceId,
       metadata: {
         operation: "dictation.transcribe",
@@ -218,6 +295,7 @@ const settleUsage = async ({
 
 type DictationDependencies = {
   transcribe: typeof transcribeAudio;
+  organizationVocabulary: typeof readTranscriptionVocabulary;
   transcribeElevenLabs: typeof transcribeWithElevenLabs;
   deployment: typeof readTranscriptionDeployment;
   credential: typeof getManagedOpenRouterCredential;
@@ -230,9 +308,62 @@ type DictationContext = DictationCaller & {
   body: v.InferOutput<typeof dictationBodySchema>;
   request: Request;
   modelAdmission?: ModelDispatchAdmission;
+  usageKey?: DictationUsageKey;
 };
 
 export type { DictationDependencies };
+
+const ORGANIZATION_VOCABULARY_READ_FAILED = failureSink({
+  event: "dictation.organization_vocabulary.read_failed",
+  expected: [],
+});
+
+type RequestVocabularyOptions = {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  modelId: TranscriptionModelId;
+  /** The request's own words: the speaker's, then its matter's. */
+  own: readonly string[] | undefined;
+  read: typeof readTranscriptionVocabulary;
+};
+
+/**
+ * The vocabulary a chunk is sent with. A model that applies vocabulary gets
+ * the request's own words, then the organization's dictation words up to
+ * the limit; any other model gets the request's words as before. The
+ * organization's words only help: when they cannot be read, the chunk is
+ * transcribed with the request's words and the failure is reported.
+ */
+const requestVocabulary = async ({
+  safeDb,
+  organizationId,
+  modelId,
+  own,
+  read,
+}: RequestVocabularyOptions): Promise<readonly string[] | undefined> => {
+  if (
+    VOCABULARY_STATUS[TRANSCRIPTION_MODELS[modelId].vocabularyMechanism] !==
+    "applied"
+  ) {
+    return own;
+  }
+  const words = await read({ safeDb, organizationId, first: own });
+  if (words.isErr()) {
+    observeFailure(words.error, {
+      sink: ORGANIZATION_VOCABULARY_READ_FAILED,
+      ctx: { operation: "dictation.transcribe" },
+    });
+    return own;
+  }
+  if (words.value.length === 0) {
+    return own;
+  }
+  // A Groq prompt has a token limit; organization words fill only the room
+  // the request's own words leave in it.
+  return TRANSCRIPTION_MODELS[modelId].vocabularyMechanism === "groq-prompt"
+    ? fitGroqPrompt(own, words.value)
+    : words.value;
+};
 
 export const executeDictation = async (
   ctx: DictationContext,
@@ -270,23 +401,24 @@ export const executeDictation = async (
         );
       }
     }
+    // The organization's own OpenRouter key, when it brings one; otherwise,
+    // even on another AI provider of its own, it transcribes on stella's
+    // credential as stella usage.
     const ownKey = ctx.orgAIConfig?.providers.find(
       ({ provider }) => provider === "openrouter",
     )?.apiKey;
-    if (ctx.orgAIConfig !== null && ownKey === undefined) {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          code: AI_FAILURE_CODES.own_key_required,
-          message:
-            "Transcription is not available with your organization's AI provider.",
-          hint: "Configure an organization OpenRouter key in organization AI settings.",
-        }),
-      );
-    }
     const deployment = dependencies.deployment();
+    // The member's grant decides only a named model whose provider keeps the
+    // audio, so a default or any other model never waits on reading it.
+    const grant = ctx.allowRetainingModels;
+    const retainingData =
+      typeof grant === "function"
+        ? body.modelId !== undefined &&
+          transcriptionRetainsData(deployment, body.modelId) &&
+          (yield* Result.await(grant()))
+        : grant === true;
     const served = transcriptionServed(deployment, ctx.orgAIConfig, {
-      retainingData: ctx.allowRetainingModels === true,
+      retainingData,
     });
     const residency = ctx.managedAIResidency;
     const regionalDefault =
@@ -308,6 +440,21 @@ export const executeDictation = async (
               ctx.allowOutsideRegion === true && body.modelId !== undefined,
             served,
           });
+    if (residency !== null && !transcriptionServedAnywhere(served)) {
+      // No credential this organization can transcribe with, in any region.
+      return Result.err(
+        classifyFailure(
+          new HandlerError({
+            status: 503,
+            code: "transcription_model_unavailable",
+            message:
+              "No transcription provider is available to your organization",
+            hint: "Configure an organization OpenRouter key in organization AI settings, or ask your server administrator to configure transcription.",
+          }),
+          "model_unavailable",
+        ),
+      );
+    }
     if (modelId === undefined || endpoint === undefined) {
       return Result.err(
         classifyFailure(
@@ -376,7 +523,13 @@ export const executeDictation = async (
           audio: body.file,
           modelId,
           language: body.language,
-          vocabulary: body.vocabulary,
+          vocabulary: await requestVocabulary({
+            safeDb: ctx.safeDb,
+            organizationId: session.activeOrganizationId,
+            modelId,
+            own: body.vocabulary,
+            read: dependencies.organizationVocabulary,
+          }),
           apiKey:
             ownKey ??
             (yield* Result.await(dependencies.credential(admission.modelTier)))
@@ -403,6 +556,7 @@ export const executeDictation = async (
         },
         workspaceId,
         isByok,
+        usageKey: ctx.usageKey,
       }),
     );
     return Result.ok(result);
@@ -410,6 +564,7 @@ export const executeDictation = async (
 
 export const DEFAULT_DICTATION_DEPENDENCIES = {
   transcribe: transcribeAudio,
+  organizationVocabulary: readTranscriptionVocabulary,
   transcribeElevenLabs: transcribeWithElevenLabs,
   deployment: readTranscriptionDeployment,
   credential: getManagedOpenRouterCredential,
@@ -419,28 +574,53 @@ export const DEFAULT_DICTATION_DEPENDENCIES = {
 } satisfies DictationDependencies;
 
 export const createDictationTranscribeEndpoint = ({
+  admit,
   transcribe = transcribeAudio,
+  organizationVocabulary = readTranscriptionVocabulary,
   transcribeElevenLabs = transcribeWithElevenLabs,
   deployment = readTranscriptionDeployment,
   credential = getManagedOpenRouterCredential,
   limit = consumeDictationLimit,
   preflight = checkUsage,
   settle = settleUsage,
-}: Partial<DictationDependencies> = {}) =>
-  createSafeRootHandler(config, async function* (ctx) {
-    const result = yield* Result.await(
-      executeDictation(ctx, {
-        transcribe,
-        transcribeElevenLabs,
-        deployment,
-        credential,
-        limit,
-        preflight,
-        settle,
-      }),
-    );
-    return Result.ok(result);
-  });
+}: Partial<DictationDependencies> & {
+  admit?: typeof withActionAdmission;
+} = {}) =>
+  createSafeRootHandler(
+    config,
+    async function* (ctx) {
+      // A client that showed the models list's labels where the model was
+      // chosen may name a model outside the region, or one whose provider
+      // keeps the audio when the member is granted such models. Any other
+      // request gets the region's models only.
+      const labelsShown =
+        ctx.body[TRANSCRIPTION_LABELS_SHOWN_FIELD] !== undefined;
+      const result = yield* Result.await(
+        executeDictation(
+          labelsShown
+            ? {
+                ...ctx,
+                allowOutsideRegion: true,
+                allowRetainingModels: async () =>
+                  await readRetainingModelsGrant(ctx),
+              }
+            : ctx,
+          {
+            transcribe,
+            organizationVocabulary,
+            transcribeElevenLabs,
+            deployment,
+            credential,
+            limit,
+            preflight,
+            settle,
+          },
+        ),
+      );
+      return Result.ok(result);
+    },
+    admit === undefined ? undefined : { admit },
+  );
 
 const transcribeDictation = createDictationTranscribeEndpoint();
 

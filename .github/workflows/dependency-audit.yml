@@ -38,7 +38,7 @@ jobs:
       # Pull requests and merge groups audit their changed resolutions in
       # ci.yml; this workflow audits the whole lockfile on main.
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -100,7 +100,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cargo/registry/cache
-          key: cargo-deny-crates-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock', 'packages/scan-engine/Cargo.lock') }}
+          key: cargo-deny-crates-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock', 'packages/scan-engine/Cargo.lock', 'packages/heic-decoder/Cargo.lock', 'packages/pst-reader/Cargo.lock', 'packages/recording-wasm/Cargo.lock') }}
 
       - name: Fetch dependencies and advisory database
         id: fetch
@@ -110,6 +110,9 @@ jobs:
         run: |
           bash .github/actions/cargo-deny/fetch.sh apps/desktop/src-tauri/Cargo.toml db index
           bash .github/actions/cargo-deny/fetch.sh packages/scan-engine/Cargo.toml
+          bash .github/actions/cargo-deny/fetch.sh packages/heic-decoder/Cargo.toml
+          bash .github/actions/cargo-deny/fetch.sh packages/pst-reader/Cargo.toml
+          bash .github/actions/cargo-deny/fetch.sh packages/recording-wasm/Cargo.toml
 
       - name: Save advisory database
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -125,6 +128,18 @@ jobs:
       - name: Scan engine advisories
         if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
         run: cargo deny --offline --manifest-path packages/scan-engine/Cargo.toml check --config packages/scan-engine/deny.toml --hide-inclusion-graph advisories
+
+      - name: HEIC decoder advisories
+        if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
+        run: cargo deny --offline --manifest-path packages/heic-decoder/Cargo.toml check --config packages/heic-decoder/deny.toml --hide-inclusion-graph advisories
+
+      - name: PST reader advisories
+        if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
+        run: cargo deny --offline --manifest-path packages/pst-reader/Cargo.toml check --config packages/pst-reader/deny.toml --hide-inclusion-graph advisories
+
+      - name: Recording reader advisories
+        if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
+        run: cargo deny --offline --manifest-path packages/recording-wasm/Cargo.toml check --config packages/recording-wasm/deny.toml --hide-inclusion-graph advisories
 
   remediate:
     name: Open dependency audit remediation
@@ -146,7 +161,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           bun-version-file: "package.json"
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -179,7 +194,7 @@ jobs:
       - name: Open one remediation
         id: signed-commit
         if: steps.remediation.outputs.changed == 'true'
-        uses: stella/.github/.github/actions/signed-commit@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/.github/actions/signed-commit@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           token: ${{ steps.app-token.outputs.token }}
           mode: refresh-pr

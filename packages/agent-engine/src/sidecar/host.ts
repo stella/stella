@@ -1,5 +1,6 @@
 import { EventType } from "@tanstack/ai";
 import { panic, Result } from "better-result";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
@@ -16,6 +17,8 @@ import type {
 } from "@stll/api-contract/desktop-runner";
 import { createDetached } from "@stll/errors";
 
+import { createAcpHarnessAdapter } from "../harness/acp/adapter";
+import { antigravityDefinition } from "../harness/acp/antigravity";
 import type {
   HarnessAdapter,
   HarnessContinuationRequest,
@@ -92,6 +95,7 @@ import {
   type SidecarRunInput,
   type SidecarRunStart,
 } from "./protocol";
+import { SKIPPED_CAPTURE, SlowCheckpointFolders } from "./slow-folders";
 import { keepStepOutput, stepOutputRunDir } from "./step-outputs";
 import { createStepUploads, stepContentUploader } from "./step-uploads";
 
@@ -169,7 +173,10 @@ const LIVE_SESSION_IDLE_MS = 4 * 60 * 60_000;
 
 /**
  * What a harness process was started with that a later turn cannot change:
- * a turn continues in a kept process only when this is the same.
+ * a turn continues in a kept process only when this is the same. The model,
+ * the reasoning effort and the approval mode are not part of it: the adapter
+ * switches them in the kept process, or starts a new one when its harness
+ * cannot (`HarnessLiveSession`).
  */
 const launchKey = (
   message: SidecarRunStart,
@@ -185,10 +192,9 @@ const launchKey = (
     message.toolPath,
     message.skillFolders,
     networkHosts,
-    message.model,
-    message.reasoningEffort,
     message.instructions,
-    message.policy,
+    message.policy.network,
+    message.policy.fs,
     message.mcp.serverName,
   ]);
 
@@ -393,6 +399,32 @@ const ADAPTERS = {
     });
   },
   opencode: null,
+  antigravity: (launch: HarnessLaunch, options: AdapterOptions) => {
+    // Antigravity takes no configuration overrides or client name.
+    if (
+      launch.launch.configOverrides.length > 0 ||
+      launch.launch.clientName !== null
+    ) {
+      panic("Antigravity adapter: launch settings it cannot apply");
+    }
+    return createAcpHarnessAdapter({
+      definition: antigravityDefinition(launch.executable),
+      executable: launch.executable,
+      configDir: launch.configDir,
+      environment: launchEnvironment(options.environment, launch.launch),
+      clientVersion: launch.clientVersion,
+      gracePeriodMs: HARNESS_GRACE_MS,
+      requestTimeoutMs: HARNESS_REQUEST_TIMEOUT_MS,
+      startupRequestTimeoutMs: HARNESS_STARTUP_REQUEST_TIMEOUT_MS,
+      onBackgroundError: options.onBackgroundError,
+      protocolLog: options.protocolLog,
+      stdioMcpBridge: existsSync(Bun.main)
+        ? [process.execPath, Bun.main]
+        : [process.execPath],
+      platform: process.platform,
+      ...(options.onProcess === null ? {} : { onProcess: options.onProcess }),
+    });
+  },
 } as const satisfies Record<
   AgentHarness,
   ((launch: HarnessLaunch, options: AdapterOptions) => HarnessAdapter) | null
@@ -668,6 +700,7 @@ export class SidecarHost {
   >();
   /** Kept harness processes by their chat's folder, resolved. */
   private readonly live = new Map<string, LiveFolder>();
+  private readonly slowFolders = new SlowCheckpointFolders();
   /** Kept processes being ended, by folder, until each is gone. */
   private readonly endingLive = new Map<string, Promise<void>>();
   private stopping = false;
@@ -1325,19 +1358,26 @@ export class SidecarHost {
     }
     // After the copies and before the harness: the folder as the member left
     // it, attachments included, so the turn's changes can be undone.
-    run.checkpoint = await captureCheckpoint({
-      workspaceDir: run.workspaceDir,
-      runId: message.runId,
-      memberFiles: copied.value,
-      protectedPaths: [
-        message.configDir,
-        message.cacheDir,
-        message.stepOutputDir,
-        ...message.skillFolders.map((folder) => folder.path),
-      ],
-      signal: run.stopCopying.signal,
-      log: this.options.log,
-    });
+    // A folder that keeps running out of time is spared the wait for a while.
+    const capturedAt = Temporal.Now.instant().epochMilliseconds;
+    run.checkpoint = this.slowFolders.skips(run.workspaceDir, capturedAt)
+      ? SKIPPED_CAPTURE
+      : await captureCheckpoint({
+          workspaceDir: run.workspaceDir,
+          runId: message.runId,
+          memberFiles: copied.value,
+          protectedPaths: [
+            message.configDir,
+            message.cacheDir,
+            message.stepOutputDir,
+            ...message.skillFolders.map((folder) => folder.path),
+          ],
+          signal: run.stopCopying.signal,
+          log: this.options.log,
+        });
+    if (run.checkpoint !== SKIPPED_CAPTURE) {
+      this.slowFolders.record(run.workspaceDir, run.checkpoint, capturedAt);
+    }
     if (run.checkpoint.status === "unavailable") {
       this.options.log(
         `a run's folder was not saved: ${run.checkpoint.reason}`,

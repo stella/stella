@@ -1,11 +1,11 @@
-import { lazy, useCallback, useState } from "react";
+import { lazy, useState } from "react";
 
 import { cn } from "@stll/ui/utils";
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
 import { DockedChatStackProvider } from "@/components/chat/docked-chat-stack";
 import { DockedComposerPending } from "@/components/chat/docked-composer";
-import type { ChatThreadId } from "@/lib/chat-thread-ref";
+import type { ChatThreadId } from "@/features/chat/chat-thread-ref-types";
 
 import { FileChatOverlayBoundary } from "./file-chat-overlay-boundary";
 import { FILE_CHAT_OVERLAY_ACTIVATION } from "./file-viewer-with-ai-config";
@@ -173,7 +173,7 @@ export const FileViewerWithAI = ({
 };
 
 const DocxHorizontalScrollbar = () => {
-  const trackRef = useCallback((track: HTMLDivElement | null) => {
+  const trackRef = (track: HTMLDivElement | null) => {
     if (!track?.parentElement) {
       return () => undefined;
     }
@@ -338,13 +338,13 @@ const DocxHorizontalScrollbar = () => {
       pointerCleanup();
       track.removeEventListener("pointerdown", handlePointerDown);
     };
-  }, []);
+  };
 
   return (
     <div
       ref={trackRef}
       aria-hidden="true"
-      className="absolute inset-x-1 bottom-1 z-[100] h-1.5 cursor-pointer"
+      className="absolute inset-x-1 bottom-[calc(var(--document-panel-bottom-inset,0px)+0.25rem)] z-[100] h-1.5 cursor-pointer"
       dir="ltr"
       hidden
     >

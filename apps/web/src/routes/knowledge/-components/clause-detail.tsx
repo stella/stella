@@ -569,12 +569,16 @@ const ClauseLeaveDialog = ({
               }}
               variant="ghost"
               disabled={savingVersion}
+              disabledReason={t("common.saving")}
             >
               {t("clauses.leaveWithoutVersion")}
             </Button>
           )}
           <Button
             disabled={savingVersion || reviewStatus !== "resolved"}
+            disabledReason={
+              savingVersion ? t("common.saving") : t("common.finishReview")
+            }
             onClick={() => {
               detached(
                 saveVersionAndLeave(),
@@ -662,7 +666,7 @@ const ClauseHeader = ({
   const setNavName = useClauseNavStore((s) => s.setName);
   const clearNav = useClauseNavStore((s) => s.clear);
 
-  const saveVersion = useCallback(async () => {
+  const saveVersion = async () => {
     if (reviewStatus !== "resolved") {
       return false;
     }
@@ -670,18 +674,19 @@ const ClauseHeader = ({
     const clean = await onSaveVersion();
     setSavingVersion(false);
     return clean;
-  }, [reviewStatus, onSaveVersion]);
+  };
 
-  const saveVersionAndLeave = useCallback(async () => {
+  const saveVersionAndLeave = async () => {
     const ok = await saveVersion();
     if (ok) {
       onBack();
       return;
     }
     setLeaveDialog("failed");
-  }, [saveVersion, onBack]);
+  };
 
   // Offer a version snapshot for edits made since the last publication.
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const handleBack = useCallback(() => {
     if (reviewStatus !== "resolved") {
       setLeaveDialog("review");
@@ -694,7 +699,7 @@ const ClauseHeader = ({
     onBack();
   }, [dirtySinceVersion, reviewStatus, onBack]);
 
-  const leaveWithoutVersion = useCallback(async () => {
+  const leaveWithoutVersion = async () => {
     if (reviewStatus === "pending") {
       setLeaveDialog("review");
       return;
@@ -704,7 +709,7 @@ const ClauseHeader = ({
       return;
     }
     setLeaveDialog("failed");
-  }, [reviewStatus, onBack, onFlushBody]);
+  };
 
   // Publish the open clause to the breadcrumb (Knowledge › Vzorová ustanovení ›
   // Name) and wire its list crumb back through the same unsaved-version guard
@@ -714,7 +719,7 @@ const ClauseHeader = ({
     return () => clearNav();
   }, [clauseId, detail.title, handleBack, setNavOpen, clearNav]);
 
-  const saveTitle = useCallback(async () => {
+  const saveTitle = async () => {
     const trimmed = titleDraft.trim();
     setEditingTitle(false);
     if (trimmed === "" || trimmed === detail.title) {
@@ -738,28 +743,25 @@ const ClauseHeader = ({
     // Reflect the rename in the breadcrumb instantly, ahead of the refetch.
     setNavName(clauseId, trimmed);
     onRefresh();
-  }, [clauseId, detail.title, titleDraft, t, onRefresh, setNavName]);
+  };
 
-  const saveCategory = useCallback(
-    async (value: string) => {
-      const response = await api.clauses({ clauseId }).post({
-        categoryId: value === "" ? null : toSafeId<"clauseCategory">(value),
+  const saveCategory = async (value: string) => {
+    const response = await api.clauses({ clauseId }).post({
+      categoryId: value === "" ? null : toSafeId<"clauseCategory">(value),
+    });
+
+    if (response.error) {
+      notifyUserError(toAPIError(response.error), t("clauses.saveFailed"), {
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
       });
+      return;
+    }
 
-      if (response.error) {
-        notifyUserError(toAPIError(response.error), t("clauses.saveFailed"), {
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        return;
-      }
-
-      onRefresh();
-    },
-    [clauseId, t, onRefresh],
-  );
+    onRefresh();
+  };
 
   const deleteClause = useMutation({
     mutationFn: async () => {
@@ -780,6 +782,16 @@ const ClauseHeader = ({
       });
     },
   });
+
+  const resolveClauseVersionSaveDisabledReason = () => {
+    if (savingVersion) {
+      return t("common.saving");
+    }
+    if (reviewStatus !== "resolved") {
+      return t("common.finishReview");
+    }
+    return t("common.noChangesToSave");
+  };
 
   return (
     <div className="flex items-center gap-2">
@@ -835,6 +847,7 @@ const ClauseHeader = ({
           disabled={
             !dirtySinceVersion || savingVersion || reviewStatus !== "resolved"
           }
+          disabledReason={resolveClauseVersionSaveDisabledReason()}
           onClick={() => {
             detached(saveVersion(), "clause-detail.save-version");
           }}
@@ -868,6 +881,7 @@ const ClauseHeader = ({
               </AlertDialogClose>
               <Button
                 disabled={deleteClause.isPending}
+                disabledReason={t("common.deleting")}
                 onClick={() => {
                   deleteClause.mutate();
                 }}
@@ -1040,24 +1054,21 @@ const ClauseLanguageField = ({
           label: displayLanguageName(value, { displayLocale: lang }),
         });
 
-  const save = useCallback(
-    async (next: string | null) => {
-      const response = await api.clauses({ clauseId }).post({ language: next });
+  const save = async (next: string | null) => {
+    const response = await api.clauses({ clauseId }).post({ language: next });
 
-      if (response.error) {
-        notifyUserError(toAPIError(response.error), t("clauses.saveFailed"), {
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        return;
-      }
+    if (response.error) {
+      notifyUserError(toAPIError(response.error), t("clauses.saveFailed"), {
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
 
-      onRefresh();
-    },
-    [clauseId, t, onRefresh],
-  );
+    onRefresh();
+  };
 
   const handleChange = (pick: LanguagePick | null) => {
     const next = pick === null ? null : (toLanguageCode(pick.code) ?? null);
@@ -1303,7 +1314,7 @@ const VariantRow = ({
     onChanged();
   };
 
-  const handlePromote = useCallback(async () => {
+  const handlePromote = async () => {
     const body = isClauseParagraphs(variant.body) ? variant.body : [];
     if (body.length === 0) {
       return;
@@ -1322,44 +1333,41 @@ const VariantRow = ({
     });
     setPromoteOpen(false);
     onChanged();
-  }, [variant.body, t, onChanged, onPromote]);
+  };
 
-  const handleReorder = useCallback(
-    async (direction: "up" | "down") => {
-      const neighborIndex = direction === "up" ? index - 1 : index + 1;
-      const neighbor = variants.at(neighborIndex);
-      if (!neighbor) {
-        return;
-      }
+  const handleReorder = async (direction: "up" | "down") => {
+    const neighborIndex = direction === "up" ? index - 1 : index + 1;
+    const neighbor = variants.at(neighborIndex);
+    if (!neighbor) {
+      return;
+    }
 
-      setReordering(true);
-      // Swap sortOrder with the neighbor; the list query orders by
-      // sortOrder asc so the rows visually exchange places.
-      const [first, second] = await Promise.all([
-        api
-          .clauses({ clauseId })
-          .variants({ variantId: variant.id })
-          .post({ sortOrder: neighbor.sortOrder }),
-        api
-          .clauses({ clauseId })
-          .variants({ variantId: neighbor.id })
-          .post({ sortOrder: variant.sortOrder }),
-      ]);
+    setReordering(true);
+    // Swap sortOrder with the neighbor; the list query orders by
+    // sortOrder asc so the rows visually exchange places.
+    const [first, second] = await Promise.all([
+      api
+        .clauses({ clauseId })
+        .variants({ variantId: variant.id })
+        .post({ sortOrder: neighbor.sortOrder }),
+      api
+        .clauses({ clauseId })
+        .variants({ variantId: neighbor.id })
+        .post({ sortOrder: variant.sortOrder }),
+    ]);
 
-      setReordering(false);
+    setReordering(false);
 
-      const failure = first.error ?? second.error;
-      if (failure) {
-        notifyUserError(toAPIError(failure), t("clauses.saveFailed"), {
-          description: userErrorMessage(failure, t("common.unexpectedError")),
-        });
-        return;
-      }
+    const failure = first.error ?? second.error;
+    if (failure) {
+      notifyUserError(toAPIError(failure), t("clauses.saveFailed"), {
+        description: userErrorMessage(failure, t("common.unexpectedError")),
+      });
+      return;
+    }
 
-      onChanged();
-    },
-    [clauseId, index, variant.id, variant.sortOrder, variants, t, onChanged],
-  );
+    onChanged();
+  };
 
   const body = isClauseParagraphs(variant.body) ? variant.body : [];
   const canMoveUp = index > 0;
@@ -1373,6 +1381,9 @@ const VariantRow = ({
           <Button
             aria-label={t("common.moveUp")}
             disabled={!canMoveUp || reordering}
+            disabledReason={
+              reordering ? t("common.saving") : t("common.alreadyFirst")
+            }
             onClick={() => {
               detached(handleReorder("up"), "clause-detail.reorder");
             }}
@@ -1384,6 +1395,9 @@ const VariantRow = ({
           <Button
             aria-label={t("common.moveDown")}
             disabled={!canMoveDown || reordering}
+            disabledReason={
+              reordering ? t("common.saving") : t("common.alreadyLast")
+            }
             onClick={() => {
               detached(handleReorder("down"), "clause-detail.reorder");
             }}
@@ -1440,6 +1454,7 @@ const VariantRow = ({
             </AlertDialogClose>
             <Button
               disabled={deleting}
+              disabledReason={t("common.deleting")}
               onClick={() => {
                 detached(handleDelete(), "clause-detail.delete");
               }}
@@ -1465,6 +1480,7 @@ const VariantRow = ({
             </AlertDialogClose>
             <Button
               disabled={promoting}
+              disabledReason={t("common.saving")}
               onClick={() => {
                 detached(handlePromote(), "clause-detail.promote");
               }}
@@ -1624,6 +1640,7 @@ const VariantFormDialogBody = ({
         </DialogClose>
         <Button
           disabled={saving || !label.trim()}
+          disabledReason={saving ? t("common.saving") : t("common.enterName")}
           onClick={() => {
             detached(handleSave(), "clause-detail.save");
           }}
@@ -1774,7 +1791,7 @@ const VersionRow = ({
   const [restoreOpen, setRestoreOpen] = useState(false);
   const [restoring, setRestoring] = useState(false);
 
-  const handleRestore = useCallback(async () => {
+  const handleRestore = async () => {
     setRestoring(true);
     const restored = await onRestore(version.id);
     setRestoring(false);
@@ -1787,7 +1804,7 @@ const VersionRow = ({
       title: t("clauses.versionRestored"),
     });
     setRestoreOpen(false);
-  }, [version.id, t, onRestore]);
+  };
 
   return (
     <li className="flex items-center gap-2 px-2">
@@ -1833,6 +1850,7 @@ const VersionRow = ({
             </AlertDialogClose>
             <Button
               disabled={restoring}
+              disabledReason={t("common.restoring")}
               onClick={() => {
                 detached(handleRestore(), "clause-detail.restore");
               }}

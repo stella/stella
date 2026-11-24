@@ -21,6 +21,19 @@ describe("Switch", () => {
     expect(markup).toContain("size-3");
     expect(markup).not.toContain("h-5 w-9");
   });
+
+  test("keeps the switch mounted when disabled with a disabledReason", () => {
+    const markup = renderToStaticMarkup(
+      <Switch
+        aria-label="Require SSO"
+        disabled
+        disabledReason="Add an identity provider first"
+      />,
+    );
+
+    expect(markup).toContain("data-disabled");
+    expect(markup).toContain('role="switch"');
+  });
 });
 
 describe("SwitchField", () => {

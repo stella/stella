@@ -164,28 +164,36 @@ type ResolvedCredentials = {
  * Environment keys first (SSO exports, CI); otherwise the ECS container
  * credential endpoint, which is how a task role exposes its keys.
  */
-const resolveCredentials = async (): Promise<ResolvedCredentials | null> => {
+type CredentialsOutcome =
+  | { status: "found"; credentials: ResolvedCredentials }
+  | { status: "missing" }
+  | { status: "failed"; statusCode: number };
+
+const resolveCredentials = async (): Promise<CredentialsOutcome> => {
   const accessKeyId = Bun.env["AWS_ACCESS_KEY_ID"];
   const secretAccessKey = Bun.env["AWS_SECRET_ACCESS_KEY"];
   if (accessKeyId && secretAccessKey) {
     const sessionToken = Bun.env["AWS_SESSION_TOKEN"];
     return {
-      accessKeyId,
-      secretAccessKey,
-      ...(sessionToken ? { sessionToken } : {}),
+      status: "found",
+      credentials: {
+        accessKeyId,
+        secretAccessKey,
+        ...(sessionToken ? { sessionToken } : {}),
+      },
     };
   }
   const relativeUri = Bun.env["AWS_CONTAINER_CREDENTIALS_RELATIVE_URI"];
   // The runtime supplies an absolute path on the fixed credentials endpoint.
   if (!relativeUri?.startsWith("/")) {
-    return null;
+    return { status: "missing" };
   }
   const response = await fetchWithTimeout(
     `http://169.254.170.2/${relativeUri.slice(1)}`,
     { timeoutMs: 5000 },
   );
   if (!response.ok) {
-    return null;
+    return { status: "failed", statusCode: response.status };
   }
   const body: unknown = await response.json();
   if (
@@ -193,23 +201,29 @@ const resolveCredentials = async (): Promise<ResolvedCredentials | null> => {
     typeof body["AccessKeyId"] !== "string" ||
     typeof body["SecretAccessKey"] !== "string"
   ) {
-    return null;
+    return { status: "missing" };
   }
   const token = body["Token"];
   return {
-    accessKeyId: body["AccessKeyId"],
-    secretAccessKey: body["SecretAccessKey"],
-    ...(typeof token === "string" ? { sessionToken: token } : {}),
+    status: "found",
+    credentials: {
+      accessKeyId: body["AccessKeyId"],
+      secretAccessKey: body["SecretAccessKey"],
+      ...(typeof token === "string" ? { sessionToken: token } : {}),
+    },
   };
 };
 
-const credentials = await resolveCredentials();
-if (!credentials) {
+const credentialsOutcome = await resolveCredentials();
+if (credentialsOutcome.status !== "found") {
   console.error(
-    "citation-probe: no AWS credentials (env keys or container endpoint)",
+    credentialsOutcome.status === "failed"
+      ? `citation-probe: AWS container credentials endpoint returned HTTP ${credentialsOutcome.statusCode}`
+      : "citation-probe: no AWS credentials (env keys or container endpoint)",
   );
   process.exit(2);
 }
+const { credentials } = credentialsOutcome;
 
 const region = Bun.env["AWS_REGION"] ?? "eu-central-1";
 

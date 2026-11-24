@@ -37,6 +37,7 @@ export const ReturnSelected = ({
       />
       <Button
         disabled={comment.trim() === ""}
+        disabledReason={t("billing.approval.returnCommentRequired")}
         loading={selected.some(({ id }) => review.isPending(id))}
         onClick={() => review.returnToDraft(selected, comment)}
         size="sm"

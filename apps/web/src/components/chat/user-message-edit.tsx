@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -14,6 +14,7 @@ import {
   createChatPastedTextPart,
   isChatPastedTextPart,
 } from "@stll/api-contract/chat";
+import { knownUnscannedContentReasons } from "@stll/api-contract/file-scan-warnings";
 import { sleep } from "@stll/concurrency/sleep";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -33,7 +34,8 @@ import {
 import { useChatEditorManager } from "@/components/chat-editor-provider";
 import { containsCredentialCandidate } from "@/components/chat-secret-candidate.logic";
 import { AttachmentChip } from "@/components/chat/attachment-chip";
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import { ChatImageThumbnailCard } from "@/components/chat/chat-image-attachment";
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools-types";
 import {
   createUserMessageEditDraft,
   createUserMessageEditSessions,
@@ -51,6 +53,7 @@ import type {
   UserMessageEditSession,
 } from "@/components/chat/user-message-edit.logic";
 import { DocumentIcon } from "@/components/document-icon";
+import { UnscannedContentMark } from "@/components/inspector/unscanned-content-notice";
 import {
   type LocalFilesUndoMessage,
   localFilesUndoOptions,
@@ -76,6 +79,10 @@ import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
+import {
+  getUserFileContentUrl,
+  getUserFileThumbnailUrl,
+} from "@/lib/user-files";
 import { createUuid } from "@/lib/uuid";
 
 /** What a transcript does when the user edits one of their sent messages. */
@@ -206,7 +213,7 @@ export const useUserMessageEditActions = ({
     openSession,
   }));
   const { threadId } = threadRef;
-  return useMemo(() => ({ ...handlers, threadId }), [handlers, threadId]);
+  return { ...handlers, threadId };
 };
 
 const attachmentTitle = (
@@ -349,6 +356,18 @@ const LocalFilesUndoPending = () => {
   );
 };
 
+/** A kept file's chip says what was not scanned of it, as in the thread. */
+const AttachmentUnscannedContent = ({
+  part,
+}: {
+  part: UserMessageEditAttachment["part"];
+}) =>
+  isChatPastedTextPart(part) ? null : (
+    <UnscannedContentMark
+      reasons={knownUnscannedContentReasons(part.metadata?.unscannedContent)}
+    />
+  );
+
 type UserMessageEditFormProps = {
   draft: UserMessageEditDraft;
   /** The edited message and its thread: an edit from it may first undo the
@@ -371,6 +390,106 @@ type UserMessageEditFormProps = {
  * paragraphs, line breaks, bold text and chips load as the composer holds
  * them, and sending writes the markup a new message would carry.
  */
+const sendDisabledKey = ({
+  sending,
+  isGenerating,
+}: {
+  sending: boolean;
+  isGenerating: boolean;
+}) => {
+  if (sending) {
+    return "common.sending";
+  }
+  return isGenerating
+    ? "chat.answerEdit.waitForAnswer"
+    : "chat.sendPromptEmpty";
+};
+
+type UserMessageEditAttachmentsProps = {
+  attachments: readonly UserMessageEditAttachment[];
+  onRemove: (id: string) => void;
+  sending: boolean;
+};
+
+const UserMessageEditAttachments = ({
+  attachments,
+  onRemove,
+  sending,
+}: UserMessageEditAttachmentsProps) => {
+  const t = useTranslations();
+  if (attachments.length === 0) {
+    return null;
+  }
+  return (
+    <div className="flex flex-wrap items-start gap-2">
+      {attachments.map((attachment) => {
+        const title = attachmentTitle(attachment, t("chat.attachment"));
+        const pasted = isChatPastedTextPart(attachment.part);
+        const mimeType = attachmentMimeType(attachment);
+        const removeLabel = t("chat.editMessageRemoveAttachment", {
+          name: title,
+        });
+        const removeAttachment = () => onRemove(attachment.id);
+        if (
+          !isChatPastedTextPart(attachment.part) &&
+          mimeType.startsWith("image/")
+        ) {
+          const url = attachment.part.source.value;
+          const contentUrl = getUserFileContentUrl(url) ?? undefined;
+          const thumbnailUrl =
+            (attachment.part.metadata?.placeholder !== undefined
+              ? getUserFileThumbnailUrl(url)
+              : null) ?? contentUrl;
+          return (
+            <ChatImageThumbnailCard
+              filename={title}
+              fullSrc={contentUrl}
+              key={attachment.id}
+              mimeType={mimeType}
+              remove={
+                sending
+                  ? undefined
+                  : { label: removeLabel, onRemove: removeAttachment }
+              }
+              thumbnailSrc={thumbnailUrl}
+            />
+          );
+        }
+        return (
+          <AttachmentChip
+            // A sent draft is read-only until the server answers.
+            actions={
+              sending
+                ? []
+                : [
+                    {
+                      type: "remove",
+                      label: removeLabel,
+                      icon: ({ className }) => (
+                        <XIcon aria-hidden="true" className={className} />
+                      ),
+                      onClick: removeAttachment,
+                    },
+                  ]
+            }
+            icon={({ className }) =>
+              pasted ? (
+                <TextIcon aria-hidden="true" className={className} />
+              ) : (
+                <DocumentIcon className={className} mimeType={mimeType} />
+              )
+            }
+            key={attachment.id}
+            kind={pasted ? "pasted_text" : "file"}
+            notice={<AttachmentUnscannedContent part={attachment.part} />}
+            title={title}
+          />
+        );
+      })}
+    </div>
+  );
+};
+
 const UserMessageEditForm = ({
   draft,
   isGenerating,
@@ -612,54 +731,15 @@ const UserMessageEditForm = ({
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-2" data-chat-message-edit>
-      {attachments.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {attachments.map((attachment) => {
-            const title = attachmentTitle(attachment, t("chat.attachment"));
-            const pasted = isChatPastedTextPart(attachment.part);
-            return (
-              <AttachmentChip
-                // A sent draft is read-only until the server answers.
-                actions={
-                  sending
-                    ? []
-                    : [
-                        {
-                          type: "remove",
-                          label: t("chat.editMessageRemoveAttachment", {
-                            name: title,
-                          }),
-                          icon: ({ className }) => (
-                            <XIcon aria-hidden="true" className={className} />
-                          ),
-                          onClick: () => {
-                            setAttachments(
-                              attachments.filter(
-                                (candidate) => candidate.id !== attachment.id,
-                              ),
-                            );
-                          },
-                        },
-                      ]
-                }
-                icon={({ className }) =>
-                  pasted ? (
-                    <TextIcon aria-hidden="true" className={className} />
-                  ) : (
-                    <DocumentIcon
-                      className={className}
-                      mimeType={attachmentMimeType(attachment)}
-                    />
-                  )
-                }
-                key={attachment.id}
-                kind={pasted ? "pasted_text" : "file"}
-                title={title}
-              />
-            );
-          })}
-        </div>
-      )}
+      <UserMessageEditAttachments
+        attachments={attachments}
+        onRemove={(id) => {
+          setAttachments(
+            attachments.filter((candidate) => candidate.id !== id),
+          );
+        }}
+        sending={sending}
+      />
       <div className="border-input bg-background focus-within:border-ring focus-within:ring-ring/24 rounded-lg border px-2.5 py-2 focus-within:ring-3">
         <EditorContent editor={editor} />
       </div>
@@ -692,6 +772,7 @@ const UserMessageEditForm = ({
         </Button>
         <Button
           disabled={!canSend}
+          disabledReason={t(sendDisabledKey({ sending, isGenerating }))}
           onClick={() => {
             submitFrom(editor);
           }}
@@ -780,11 +861,12 @@ export const useUserMessageEdit = ({
     editor: (
       // Shown on hover of the message (the `group` of `Message`), on focus and
       // on touch; hidden while the sticky layout pins the message as a
-      // compact header. With a fine pointer it only appears on hover, so it
-      // floats over the bubble's bottom corner instead of reserving an empty
-      // row in every message; the caller's text box is its `relative` anchor.
-      // A touch screen keeps it in flow, since it is always visible there.
-      <div className="pointer-fine:bg-secondary flex justify-end opacity-0 transition-opacity group-hover:opacity-100 group-data-[stuck=true]/sticky:hidden focus-within:opacity-100 pointer-coarse:opacity-100 pointer-fine:absolute pointer-fine:-right-1.5 pointer-fine:-bottom-1 pointer-fine:rounded-md">
+      // compact header. It sits just outside the bubble's start edge, level
+      // with its last line, so it never adds a row under the text or covers
+      // it: the bubble (`MessageContent`) is its anchor, and a bubble never
+      // spans the whole column, so the space beside it is free. A touch
+      // screen always shows it there.
+      <div className="absolute end-full bottom-0.5 me-1 opacity-0 transition-opacity group-hover:opacity-100 group-data-[stuck=true]/sticky:hidden focus-within:opacity-100 pointer-coarse:opacity-100">
         <Button
           aria-label={t("chat.editMessage")}
           onClick={() => {
@@ -804,7 +886,7 @@ export const useUserMessageEdit = ({
   };
 };
 
-/** A sent user message body with its edit action in its bottom corner. */
+/** A sent user message body with its edit action beside the bubble. */
 export const EditableUserMessage = ({
   children,
   ...options
@@ -814,7 +896,7 @@ export const EditableUserMessage = ({
     return editor;
   }
   return (
-    <div className="relative flex min-w-0 flex-col">
+    <div className="flex min-w-0 flex-col">
       {children}
       {editor}
     </div>

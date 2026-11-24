@@ -36,7 +36,10 @@ import type {
   ChatProjectionSchema,
   DehydratedInput,
 } from "@/api/lib/chat/projection-schema";
-import { READ_DOCUMENT_VERSION_PROJECTION } from "@/api/lib/chat/projections";
+import {
+  READ_DOCUMENT_VERSION_PROJECTION,
+  SEARCH_ACROSS_MATTERS_PROJECTION,
+} from "@/api/lib/chat/projections";
 import type {
   LIST_MATTERS_LIST_PROJECTION,
   LIST_PROPERTIES_PROJECTION,
@@ -547,6 +550,60 @@ describe("projectForChat", () => {
     });
   });
 
+  test("a document name carrying a UUID is masked as content, not reported", () => {
+    const refRegistry = createChatRefRegistry();
+    const fileName = `scan-${ROGUE_UUID}.pdf`;
+
+    const listed = project({
+      dehydration: {
+        ...emptyDehydration(),
+        resolvedMatterParams: { matter_id: toSafeId<"workspace">(WS_UUID) },
+      },
+      payload: {
+        documents: [
+          { id: ENTITY_UUID, name: fileName, kind: "file", parentId: null },
+        ],
+        nextCursor: null,
+      },
+      refRegistry,
+      schema: READ_TOOL_REF_FIELD_MAP.list_documents.projection,
+    }).unwrap();
+
+    const documentRef = refRegistry.toEntityRef({
+      entityId: toSafeId<"entity">(ENTITY_UUID),
+      workspaceId: toSafeId<"workspace">(WS_UUID),
+    });
+    const read = project({
+      dehydration: {
+        ...emptyDehydration(),
+        dehydratedEntityRefs: new Map([[ENTITY_UUID, documentRef]]),
+        resolvedEntityParams: { entity_id: toSafeId<"workspace">(WS_UUID) },
+      },
+      payload: {
+        entityId: ENTITY_UUID,
+        name: fileName,
+        version: {
+          id: "version-1",
+          versionNumber: 1,
+          stamp: null,
+          label: null,
+          description: null,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          fields: [],
+        },
+      },
+      refRegistry,
+      schema: READ_DOCUMENT_VERSION_PROJECTION,
+    }).unwrap();
+
+    const maskedName = `scan-${MASKED_CONTENT_ID}.pdf`;
+    expect(listed).toMatchObject({ documents: [{ name: maskedName }] });
+    expect(read).toMatchObject({ name: maskedName });
+    expect(containsRawUuid([listed, read])).toBe(false);
+    expect(degradeLogs()).toEqual([]);
+    expect(exceptionProperties()).toEqual([]);
+  });
+
   test("inputEntityWorkspace mints a new ref for a different entity in the input entity's workspace", () => {
     const refRegistry = createChatRefRegistry();
     const taskRef = refRegistry.toEntityRef({
@@ -691,6 +748,59 @@ describe("projectForChat", () => {
     expect(JSON.stringify(projected)).not.toContain("avatar.png");
   });
 
+  test("list_matters detail masks a UUID inside a recent entity name without a defect", () => {
+    const projected = project({
+      payload: {
+        contactsOverflow: false,
+        matter: {
+          id: WS_UUID,
+          name: "Lindqvist retainer",
+          reference: "REF-1",
+          status: "active",
+          clientName: null,
+        },
+        overview: {
+          entityCount: 1,
+          documentCount: 1,
+          taskCount: 0,
+          recentEntities: [
+            {
+              entityId: ENTITY_UUID,
+              name: `Scan ${ROGUE_UUID}.pdf`,
+              kind: "document",
+              status: null,
+              priority: null,
+              listItemType: null,
+              dueDate: null,
+              mimeType: "application/pdf",
+              fieldId: null,
+              propertyId: null,
+              pdfFileId: null,
+              encrypted: false,
+              createdAt: "2026-01-01T00:00:00.000Z",
+              updatedAt: null,
+              createdBy: null,
+              createdByDeletedAt: null,
+              assignedTo: null,
+              assignedToDeletedAt: null,
+            },
+          ],
+        },
+        contacts: [],
+        members: [],
+      },
+      schema: LIST_MATTERS_PROJECTION,
+    }).unwrap();
+
+    expect(projected).toMatchObject({
+      overview: {
+        recentEntities: [{ name: `Scan ${MASKED_CONTENT_ID}.pdf` }],
+      },
+    });
+    expect(containsRawUuid(projected)).toBe(false);
+    expect(degradeLogs()).toEqual([]);
+  });
+
   test("an entity echo reuses the dehydrated ref even under another workspace source", () => {
     const refRegistry = createChatRefRegistry();
     const entityRef = refRegistry.toEntityRef({
@@ -811,6 +921,33 @@ describe("projectForChat", () => {
       }),
     ]);
     expect(allTelemetry()).not.toContain(ROGUE_UUID);
+  });
+
+  test("a search hit name is content text: an embedded UUID is masked without a degrade report", () => {
+    const projected = project({
+      payload: {
+        hits: [
+          {
+            entityId: ENTITY_UUID,
+            headline: null,
+            kind: "document",
+            name: `scan-${ROGUE_UUID}.pdf`,
+            workspaceId: WS_UUID,
+            workspaceName: "Lindqvist lease renewal",
+          },
+        ],
+        nextCursor: null,
+        totalCount: 1,
+      },
+      schema: SEARCH_ACROSS_MATTERS_PROJECTION,
+    }).unwrap();
+
+    expect(projected).toMatchObject({
+      hits: [{ name: `scan-${MASKED_CONTENT_ID}.pdf` }],
+    });
+    expect(containsRawUuid(projected)).toBe(false);
+    expect(degradeLogs()).toEqual([]);
+    expect(exceptionProperties()).toEqual([]);
   });
 
   test("a bare string array item carrying a UUID keeps its place, masked", () => {

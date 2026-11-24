@@ -99,6 +99,7 @@
     "displayName": { "prefix": "pr-heavy-gate", "suffix": "" },
     "declaredStepNames": [
       "Cancel merge group after failure in this job",
+      "Check script test declarations",
       "Check workflow job classifications",
       "Checkout",
       "Checkout workflow classification tooling",
@@ -234,6 +235,7 @@
       "Check AI verification guards",
       "Check local base selection",
       "Check local skill overrides",
+      "Check script test declarations",
       "Checkout",
       "Configure flaky-test quarantine",
       "Download generated sources",
@@ -283,11 +285,9 @@
       "Test .claude/mcp",
       "Test API or rest",
       "Test the stella browser host",
-      "Test web",
       "Turbo remote cache",
       "Upload API test timings",
       "Upload failed API or rest test output",
-      "Upload failed web test output",
       "Upload quarantined test outcomes",
       "Upload test diagnostics",
       "Verify planned API test durations"
@@ -581,13 +581,13 @@
     "declaredStepNames": [
       "Build web",
       "Bundle duplicate content guard",
-      "Bundle size report",
       "Cancel merge group after failure in this job",
       "Checkout",
       "Install dependencies",
       "Prepare environment",
       "Prod-deps web boot smoke",
       "Setup Bun",
+      "Startup bundle gates",
       "Upload failed Bun install logs",
       "Upload production E2E web build"
     ],
@@ -678,7 +678,7 @@
     ]
   },
   "route-smoke": {
-    "displayName": { "prefix": "route-smoke", "suffix": "" },
+    "displayName": { "prefix": "route-smoke (", "suffix": ")" },
     "declaredStepNames": [
       "Cancel merge group after failure in this job",
       "Check phone layouts",
@@ -978,6 +978,7 @@
     "displayName": { "prefix": "Desktop Rust Tests (", "suffix": ")" },
     "declaredStepNames": [
       "Build test binaries",
+      "Cache Rust dependencies and build artifacts",
       "Cancel merge group after failure in this job",
       "Check",
       "Checkout",
@@ -996,8 +997,10 @@
       "Test signer against the certificate store"
     ],
     "steps": [
+      "Cache Rust dependencies and build artifacts",
       "Checkout",
       "Install desktop transport smoke dependencies",
+      "Post Cache Rust dependencies and build artifacts",
       "Post Checkout",
       "Post Install desktop transport smoke dependencies",
       "Post Setup Bun for the desktop transport smoke",
@@ -1007,13 +1010,19 @@
   "desktop-rust-lint": {
     "displayName": { "prefix": "Desktop Rust Lint (", "suffix": ")" },
     "declaredStepNames": [
+      "Cache Rust dependencies and build artifacts",
       "Cancel merge group after failure in this job",
       "Checkout",
       "Clippy",
       "Fetch Rust dependencies",
       "Setup Rust"
     ],
-    "steps": ["Checkout", "Post Checkout"]
+    "steps": [
+      "Cache Rust dependencies and build artifacts",
+      "Checkout",
+      "Post Cache Rust dependencies and build artifacts",
+      "Post Checkout"
+    ]
   },
   "dependency-audit": {
     "displayName": { "prefix": "bun audit (high/critical)", "suffix": "" },
@@ -1067,6 +1076,7 @@
     "displayName": { "prefix": "ci-quick-checks", "suffix": "" },
     "declaredStepNames": [
       "Cancel merge group after failure in this job",
+      "Check script test declarations",
       "Check workflow job classifications",
       "Checkout",
       "Checkout workflow classification tooling",

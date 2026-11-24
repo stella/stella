@@ -6,9 +6,8 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import type { DestructiveConfirmOutcome } from "@stll/ui/destructive-confirm-dialog";
-import { Frame, FramePanel } from "@stll/ui/frame";
 
-import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { SettledQueryViewFeedback } from "@/components/query-view-feedback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
@@ -23,6 +22,11 @@ import { useQueryViewError } from "@/lib/use-query-view";
 import { resourceMutation } from "@/lib/workspace-realtime";
 
 import { OrganizationAuditArchive } from "./organization-audit-archive";
+import { OrganizationAuditArchivePending } from "./organization-audit-archive.pending";
+import {
+  OrganizationDangerZoneRow,
+  OrganizationDangerZoneSection,
+} from "./organization-danger-zone.pending";
 
 type OrganizationDangerZoneProps = {
   organizationId: string;
@@ -75,6 +79,32 @@ export const OrganizationDangerZone = ({
     auditArchive?.status === "ready" &&
     auditArchive.coversCurrentTrail &&
     auditArchive.downloaded;
+  const resolveAuditArchiveDisabledReason = () => {
+    if (auditExportView.type === "pending") {
+      return t("common.loading");
+    }
+    if (
+      auditExportView.type === "error" ||
+      (auditExportView.type === "items" &&
+        auditExportView.refetchError !== undefined)
+    ) {
+      return t("common.loadFailed");
+    }
+    if (
+      auditArchive?.status === "requested" ||
+      auditArchive?.status === "processing"
+    ) {
+      return t("admin.auditArchiveWorking");
+    }
+    if (auditArchive?.status === "ready") {
+      return t(
+        auditArchive.coversCurrentTrail
+          ? "admin.auditArchiveDownloadFirst"
+          : "admin.auditArchiveOutdated",
+      );
+    }
+    return t("admin.deleteRefusedAuditArchive");
+  };
   const requestAuditArchive = useMutation({
     onMutate: async () => {
       await queryClient.cancelQueries({
@@ -162,6 +192,10 @@ export const OrganizationDangerZone = ({
     const result = await mutation.mutateAsync("delete");
     return result === "refused" ? "keep-open" : undefined;
   };
+  const organizationMutationReason =
+    mutation.variables === "leave"
+      ? t("admin.leavingOrganization")
+      : t("common.deleting");
   const refusalCode = outcome.status === "refused" ? outcome.code : undefined;
   const refusalMessage = (() => {
     if (refusalCode === undefined) {
@@ -183,82 +217,87 @@ export const OrganizationDangerZone = ({
     }
   })();
 
+  const resolveOrganizationDeletionDisabledReason = () => {
+    if (mutation.isPending) {
+      return organizationMutationReason;
+    }
+    if (outcome.status === "completed") {
+      return t("admin.organizationChangeCompleted");
+    }
+    return resolveAuditArchiveDisabledReason();
+  };
+
   return (
     <>
-      <section className="flex flex-col gap-3">
-        <h2 className="text-base font-semibold">
-          {t("settings.account.dangerZone")}
-        </h2>
-        <Frame>
-          <FramePanel>
-            <div className="flex flex-col gap-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-muted-foreground text-sm">
-                  {t("admin.leaveDescription")}
-                </p>
-                <Button
-                  disabled={
-                    mutation.isPending || outcome.status === "completed"
-                  }
-                  loading={mutation.isPending && mutation.variables === "leave"}
-                  onClick={() => mutation.mutate("leave")}
-                  variant="outline"
-                >
-                  {t("admin.leaveOrganization")}
-                </Button>
-              </div>
-              {isOwner && <QueryViewFeedback view={auditExportView} />}
-              {isOwner &&
-                (auditExportView.type === "empty" ||
-                  auditExportView.type === "items") && (
-                  <OrganizationAuditArchive
-                    status={auditArchive}
-                    requestPending={requestAuditArchive.isPending}
-                    onRequest={() => requestAuditArchive.mutate()}
-                  />
-                )}
-              {isOwner && (
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-muted-foreground text-sm">
-                    {t("admin.deleteDescription")}
-                  </p>
-                  <Button
-                    disabled={
-                      mutation.isPending ||
-                      outcome.status === "completed" ||
-                      !auditArchiveCurrent
-                    }
-                    onClick={() => setDeleteOpen(true)}
-                    variant="destructive"
-                  >
-                    {t("admin.deleteOrganization")}
-                  </Button>
-                </div>
-              )}
-              {outcome.status === "completed" && (
-                <p role="status">
-                  {outcome.action === "leave"
-                    ? t("admin.organizationLeft")
-                    : t("admin.organizationDeleted")}
-                </p>
-              )}
-              {outcome.status === "refused" && (
-                <div role="alert" className="flex flex-col gap-2 text-sm">
-                  <p>{refusalMessage}</p>
-                  {outcome.code === SUBSCRIPTION_RENEWS_CODE && (
-                    <a
-                      className="underline"
-                      href="/settings/organization/usage"
-                    >
-                      {t("admin.planAndUsage")}
-                    </a>
-                  )}
-                </div>
-              )}
-            </div>
-          </FramePanel>
-        </Frame>
-      </section>
+      <OrganizationDangerZoneSection>
+        <OrganizationDangerZoneRow
+          action={
+            <Button
+              disabled={mutation.isPending || outcome.status === "completed"}
+              disabledReason={
+                mutation.isPending
+                  ? organizationMutationReason
+                  : t("admin.organizationChangeCompleted")
+              }
+              loading={mutation.isPending && mutation.variables === "leave"}
+              onClick={() => mutation.mutate("leave")}
+              variant="outline"
+            >
+              {t("admin.leaveOrganization")}
+            </Button>
+          }
+          description="admin.leaveDescription"
+        />
+        {isOwner && <SettledQueryViewFeedback view={auditExportView} />}
+        {isOwner && auditExportView.type === "pending" && (
+          <OrganizationAuditArchivePending />
+        )}
+        {isOwner &&
+          (auditExportView.type === "empty" ||
+            auditExportView.type === "items") && (
+            <OrganizationAuditArchive
+              status={auditArchive}
+              requestPending={requestAuditArchive.isPending}
+              onRequest={() => requestAuditArchive.mutate()}
+            />
+          )}
+        {isOwner && (
+          <OrganizationDangerZoneRow
+            action={
+              <Button
+                disabled={
+                  mutation.isPending ||
+                  outcome.status === "completed" ||
+                  !auditArchiveCurrent
+                }
+                disabledReason={resolveOrganizationDeletionDisabledReason()}
+                onClick={() => setDeleteOpen(true)}
+                variant="destructive"
+              >
+                {t("admin.deleteOrganization")}
+              </Button>
+            }
+            description="admin.deleteDescription"
+          />
+        )}
+        {outcome.status === "completed" && (
+          <p role="status">
+            {outcome.action === "leave"
+              ? t("admin.organizationLeft")
+              : t("admin.organizationDeleted")}
+          </p>
+        )}
+        {outcome.status === "refused" && (
+          <div role="alert" className="flex flex-col gap-2 text-sm">
+            <p>{refusalMessage}</p>
+            {outcome.code === SUBSCRIPTION_RENEWS_CODE && (
+              <a className="underline" href="/settings/organization/usage">
+                {t("admin.planAndUsage")}
+              </a>
+            )}
+          </div>
+        )}
+      </OrganizationDangerZoneSection>
       {isOwner && (
         <DestructiveConfirmDialog
           cancelLabel={t("common.cancel")}

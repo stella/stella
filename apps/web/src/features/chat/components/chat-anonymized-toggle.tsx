@@ -41,6 +41,7 @@ export const ChatAnonymizedToggle = ({
       className="text-muted-foreground hover:text-foreground"
       data-pressed={enabled ? "" : undefined}
       disabled={disabled}
+      disabledReason={t("common.loading")}
       onClick={() => onChange(!enabled)}
       size={size}
       tooltip={

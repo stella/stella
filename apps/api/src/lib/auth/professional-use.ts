@@ -10,12 +10,12 @@ import {
 
 import { member } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
-import type { Transaction } from "@/api/db/root";
 import {
   organizationProfessionalUseAcceptances,
   PROFESSIONAL_USE_ACCEPTANCE_SOURCE,
   userProfessionalUseAcceptances,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -45,6 +45,12 @@ const USER_CREATION_ORIGIN = {
   socialRegistration: "social_registration",
   /** The self-host first-account sign-up on the sign-in panel. */
   bootstrapRegistration: "bootstrap_registration",
+  /**
+   * An organization identity provider's callback. Its sign-in carries no
+   * displayed statement version yet, so the account accepts on its first
+   * interactive sign-in.
+   */
+  ssoRegistration: "sso_registration",
   /** An agent's verified identity, provisioned without a browser. */
   agentProvisioning: "agent_provisioning",
   /** The operator command that creates the review account. */
@@ -74,6 +80,7 @@ const STATEMENT_AT_CREATION = {
   email_otp_registration: { type: "shown", displayedVersionIn: "request_body" },
   social_registration: { type: "shown", displayedVersionIn: "oauth_state" },
   bootstrap_registration: { type: "shown", displayedVersionIn: "request_body" },
+  sso_registration: { type: "not_shown" },
   agent_provisioning: { type: "not_shown" },
   operator_command: { type: "not_shown" },
 } as const satisfies Record<UserCreationOrigin, StatementAtCreation>;
@@ -93,11 +100,18 @@ const USER_CREATION_PATH_ORIGINS = new Map([
   ["/sign-in/social", USER_CREATION_ORIGIN.socialRegistration],
   [AGENT_IDENTITY_CREATE_USER_PATH, USER_CREATION_ORIGIN.agentProvisioning],
   [REVIEW_ACCOUNT_CREATE_USER_PATH, USER_CREATION_ORIGIN.operatorCommand],
+  ["/sso/callback/:providerId", USER_CREATION_ORIGIN.ssoRegistration],
+  ["/sso/saml2/sp/acs/:providerId", USER_CREATION_ORIGIN.ssoRegistration],
 ]);
 
-// Every social provider calls back on `/callback/:id`; a request carries the
-// provider (`/callback/google`), a server call the template.
-const SOCIAL_CALLBACK_PREFIX = "/callback/";
+// Every social provider calls back on `/callback/:id`, every SSO provider on
+// `/sso/callback/:providerId`; a request carries the provider
+// (`/callback/google`), a server call the template.
+const CALLBACK_TEMPLATES = [
+  { prefix: "/callback/", template: "/callback/:id" },
+  { prefix: "/sso/callback/", template: "/sso/callback/:providerId" },
+  { prefix: "/sso/saml2/sp/acs/", template: "/sso/saml2/sp/acs/:providerId" },
+] as const;
 
 /**
  * The origin of an account created by the endpoint at `path` (the user
@@ -107,9 +121,9 @@ const SOCIAL_CALLBACK_PREFIX = "/callback/";
 export const requireUserCreationOrigin = (
   path: string | undefined,
 ): UserCreationOrigin => {
-  const endpoint = path?.startsWith(SOCIAL_CALLBACK_PREFIX)
-    ? "/callback/:id"
-    : path;
+  const endpoint =
+    CALLBACK_TEMPLATES.find(({ prefix }) => path?.startsWith(prefix))
+      ?.template ?? path;
   const origin =
     endpoint === undefined
       ? undefined
@@ -248,9 +262,9 @@ export const recordUserProfessionalUseAtCreation = async (
         statementVersion: acceptance.statementVersion,
         source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.registration,
       });
-      return;
+      break;
     case "required":
-      return;
+      break;
     default:
       acceptance satisfies never;
       panic("Unhandled creation acceptance");

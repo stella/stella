@@ -55,8 +55,11 @@ export const HeaderSearchProvider = ({
   const pause = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const searchBar = useRef<SearchBarCommands | null>(null);
   const fieldTab = useRef(search.tab);
-  if (activeTab !== undefined && search.tab !== activeTab) {
-    setSearch(closedSearch(activeTab));
+  const effectiveTab = activeTab ?? search.tab;
+  const [prevTab, setPrevTab] = useState(effectiveTab);
+  if (prevTab !== effectiveTab) {
+    setPrevTab(effectiveTab);
+    setSearch(closedSearch(effectiveTab));
   }
   // The field is the system's and keeps its text; a new tab closes it.
   useEffect(() => {

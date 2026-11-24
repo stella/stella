@@ -20,12 +20,12 @@ import { and, eq, inArray, or, sql } from "drizzle-orm";
 
 import { declareFingerprintFields } from "@stll/errors";
 
-import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerations,
   corpusIndexGroupEnrollments,
   corpusIndexGroupWithdrawals,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
   type CorpusServingGenerationAbsentError,
@@ -572,7 +572,7 @@ const readAttachedGenerationTx = async (
     (row.status !== "building" && row.status !== "serving")
   ) {
     return panic(
-      `A flipped jurisdiction names a generation that is not active: ${family}/${generation}`,
+      `A read names a generation that is not active (building or serving): ${family}/${generation}`,
     );
   }
   requireRegisteredCorpusIndexManifest(row);
@@ -624,6 +624,26 @@ const mergeAttachedTarget = ({
     }).slice(0, CORPUS_READ_TARGET_IDENTITY_LENGTH),
   };
 };
+
+/**
+ * The target a read of one named generation reaches, serving or still
+ * building, resolved the way the serving read resolves a flipped
+ * jurisdiction's generation. For callers that measure a candidate generation
+ * beside the serving one (evaluations); no reader of the public routes uses
+ * it, because only the jurisdiction-serving pointer moves readers.
+ */
+export const readGenerationCorpusIndexTargetTx = async (
+  tx: ReadTransaction,
+  {
+    family,
+    generation,
+    jurisdiction,
+  }: { family: CorpusFamily; generation: string; jurisdiction: string },
+): Promise<Result<ServingCorpusIndexTarget, CorpusIndexGroupNotReadyError>> =>
+  await resolveGenerationTargetTx(tx, {
+    serving: await readAttachedGenerationTx(tx, { family, generation }),
+    jurisdiction,
+  });
 
 /**
  * The generations a family's readers are served from: the family's serving

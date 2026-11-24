@@ -1,0 +1,6 @@
+{
+  "add-column": "sso_provider gains one nullable display_name column, a metadata-only catalog change with no table rewrite, bounded by 1s lock_timeout and 5s statement_timeout.",
+  "create-table-references": "organization_sso_domain is created empty in this migration, so its organization and user foreign keys validate no existing rows and acquire only brief catalog locks under 1s lock_timeout and 5s statement_timeout.",
+  "row-level-security": "Row security is enabled and forced on the new empty organization_sso_domain table before any row or reader exists, under 1s lock_timeout.",
+  "create-policy": "Owner-only and deny-stella policies are metadata additions on the new empty organization_sso_domain table, under 1s lock_timeout."
+}

@@ -1,0 +1,302 @@
+import {
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import type { UseQueryResult } from "@tanstack/react-query";
+import { useLocation } from "@tanstack/react-router";
+import { Result } from "better-result";
+import { useTranslations } from "use-intl";
+
+import { Temporal } from "@stll/time";
+import { Button } from "@stll/ui/button";
+import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
+import { FrameDescription, FrameTitle } from "@stll/ui/frame";
+import { DownloadIcon } from "@stll/ui/icons";
+import { OutcomeScreen } from "@stll/ui/outcome-screen";
+
+import { useFormatter } from "@/i18n/formatting-context";
+import { invoiceLinkDownload, invoiceLinkView } from "@/lib/api";
+import { STALE_TIME } from "@/lib/consts";
+import { APIError } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import { pageTitleLiteral } from "@/lib/page-title";
+import { downloadFile } from "@/lib/utils";
+import {
+  resourceMutation,
+  resourceQueryOptions,
+} from "@/lib/workspace-realtime";
+
+import {
+  invoiceLinkFailure,
+  invoiceLinkTokenFromHash,
+  qrImageSource,
+} from "./-invoice-link.logic";
+import type { InvoiceLinkFile } from "./-invoice-link.logic";
+import {
+  InvoiceFact,
+  InvoiceLinkShell,
+  InvoiceSummaryPending,
+  InvoiceSummaryShape,
+} from "./-invoice-link.pending";
+
+/** The `invoiceLink` message stating each settled outcome. */
+const SETTLEMENT_STATEMENT = {
+  paid: "paid",
+  credited: "credited",
+} as const;
+
+const viewInvoice = invoiceLinkView.open;
+
+type InvoiceLinkView = Awaited<ReturnType<typeof viewInvoice>>;
+
+/**
+ * The link's summary, amount due and payment request. Each view is audited and
+ * rate limited, so repeat renders reuse it for a minute; a later revisit or
+ * refocus reads the current balance instead of a cached one.
+ */
+export const invoiceLinkViewOptions = (
+  token: string | null,
+  view: typeof viewInvoice = viewInvoice,
+) =>
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: ["invoice-link", token],
+      enabled: token !== null,
+      retry: false,
+      staleTime: STALE_TIME.ONE.MINUTE,
+      queryFn: async () => (token === null ? null : await view(token)),
+    }),
+    // A public link reads by its token, outside any member session.
+    { type: "independent" },
+  );
+
+const downloadInvoiceFile = async (
+  token: string,
+  file: InvoiceLinkFile,
+  fileName: string,
+) => {
+  const downloaded = await Result.tryPromise({
+    try: async () => {
+      downloadFile(await invoiceLinkDownload.open({ token, file }), fileName);
+      return Result.ok(undefined);
+    },
+    catch: (cause) =>
+      new APIError({
+        status: 0,
+        message: "Invoice file download failed",
+        cause,
+      }),
+  });
+  return downloaded.isErr() ? Result.err(downloaded.error) : downloaded.value;
+};
+
+/** The invoice a link opens, read with the token in its fragment. */
+export function InvoiceLinkPage() {
+  const token = useLocation({
+    select: (location) => invoiceLinkTokenFromHash(location.hash),
+  });
+  const invoice = useQuery(invoiceLinkViewOptions(token));
+
+  return (
+    <InvoiceLinkShell>
+      <InvoiceLinkBody invoice={invoice} token={token} />
+    </InvoiceLinkShell>
+  );
+}
+
+const InvoiceLinkBody = ({
+  token,
+  invoice,
+}: {
+  token: string | null;
+  invoice: UseQueryResult<InvoiceLinkView | null>;
+}) => {
+  if (token === null) {
+    return <InvoiceLinkUnavailable reason="unavailable" />;
+  }
+  if (invoice.isPending) {
+    return <InvoiceSummaryPending />;
+  }
+  if (invoice.isError) {
+    return (
+      <InvoiceLinkUnavailable reason={invoiceLinkFailure(invoice.error)} />
+    );
+  }
+  if (invoice.data === null) {
+    return <InvoiceLinkUnavailable reason="unavailable" />;
+  }
+  return <InvoiceSummary invoice={invoice.data} token={token} />;
+};
+
+const InvoiceLinkUnavailable = ({
+  reason,
+}: {
+  reason: ReturnType<typeof invoiceLinkFailure>;
+}) => {
+  const t = useTranslations("invoiceLink");
+  const title = t(`failure.${reason}.title`);
+  return (
+    <OutcomeScreen
+      description={t(`failure.${reason}.body`)}
+      documentTitle={pageTitleLiteral(title)}
+      surface="embedded"
+      title={title}
+      tone="error"
+    />
+  );
+};
+
+export const InvoiceSummary = ({
+  invoice,
+  token,
+}: {
+  invoice: InvoiceLinkView;
+  token: string;
+}) => {
+  const t = useTranslations("invoiceLink");
+  const rootT = useTranslations();
+  const format = useFormatter();
+  const queryClient = useQueryClient();
+  const openFile = resourceMutation({
+    mutation: "openInvoiceLinkFile",
+    queryClient,
+    scope: { type: "public-token" },
+    mutationFn: async ({
+      file,
+      fileName,
+    }: {
+      file: InvoiceLinkFile;
+      fileName: string;
+    }) => await downloadInvoiceFile(token, file, fileName),
+  });
+  const download = useMutation({
+    mutationFn: openFile,
+    onSuccess: (result) => {
+      if (result.isErr()) {
+        notifyUserError(result.error, t("downloadFailed"));
+      }
+    },
+    onError: (error) => notifyUserError(error, t("downloadFailed")),
+  });
+  const { eInvoice } = invoice.files;
+
+  return (
+    <InvoiceSummaryShape
+      expiry={t("validUntil", {
+        date: format.dateTime(
+          Temporal.Instant.from(invoice.expiresAt).epochMilliseconds,
+          { dateStyle: "long" },
+        ),
+      })}
+      facts={
+        <div
+          className="flex flex-col gap-4"
+          dir={invoice.dir}
+          lang={invoice.language}
+        >
+          {invoice.buyer === null ? null : (
+            <p className="text-sm">{invoice.buyer}</p>
+          )}
+          <DetailsGrid>
+            {invoice.meta.map((field) => (
+              <InvoiceFact
+                emphasis="none"
+                key={field.label}
+                label={field.label}
+                value={field.value}
+              />
+            ))}
+            {invoice.totals.map((field, index) => (
+              <InvoiceFact
+                emphasis={
+                  index === invoice.totals.length - 1 ? "amount-due" : "none"
+                }
+                key={field.label}
+                label={field.label}
+                value={field.value}
+              />
+            ))}
+          </DetailsGrid>
+          {invoice.settlement.kind === "open" ? null : (
+            <p className="text-sm font-medium">
+              {invoice.settlement.kind === "overpaid"
+                ? t("overpaid", { amount: invoice.settlement.refund })
+                : t(SETTLEMENT_STATEMENT[invoice.settlement.kind])}
+            </p>
+          )}
+          {invoice.payment === null ? null : (
+            <section className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex flex-col gap-2">
+                <h2 className="text-sm font-medium">{invoice.payment.label}</h2>
+                <DetailsGrid>
+                  {invoice.payment.fields.map((field) => (
+                    <DetailsItem key={field.label} label={field.label}>
+                      <span className="tabular-nums" dir="ltr">
+                        {field.value}
+                      </span>
+                    </DetailsItem>
+                  ))}
+                </DetailsGrid>
+                {invoice.payment.accountNumber === null ? null : (
+                  <p className="text-sm tabular-nums" dir="ltr">
+                    {invoice.payment.accountNumber}
+                  </p>
+                )}
+              </div>
+              {invoice.payment.qrSvg === null ? null : (
+                <img
+                  alt={t("paymentQr")}
+                  className="size-36 shrink-0"
+                  src={qrImageSource(invoice.payment.qrSvg)}
+                />
+              )}
+            </section>
+          )}
+        </div>
+      }
+      files={
+        <>
+          <Button
+            loading={download.isPending && download.variables.file === "pdf"}
+            onClick={() =>
+              download.mutate({
+                file: "pdf",
+                fileName: invoice.files.pdf.fileName,
+              })
+            }
+          >
+            <DownloadIcon className="size-4" />
+            {rootT("templates.downloadPdf")}
+          </Button>
+          {eInvoice === null ? null : (
+            <Button
+              loading={
+                download.isPending && download.variables.file === "e_invoice"
+              }
+              onClick={() =>
+                download.mutate({
+                  file: "e_invoice",
+                  fileName: eInvoice.fileName,
+                })
+              }
+              variant="outline"
+            >
+              <DownloadIcon className="size-4" />
+              {t(`downloadEInvoice.${eInvoice.format}`)}
+            </Button>
+          )}
+        </>
+      }
+      header={
+        <div dir={invoice.dir} lang={invoice.language}>
+          <FrameTitle>{invoice.title}</FrameTitle>
+          {invoice.seller === null ? null : (
+            <FrameDescription>{invoice.seller}</FrameDescription>
+          )}
+        </div>
+      }
+    />
+  );
+};

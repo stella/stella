@@ -8,7 +8,7 @@ import type { ReadableInputRow } from "@stll/api-contract/chat-tool-input-rows";
 import { READER_ANNOTATION_KINDS } from "@stll/api-contract/legal-reader-annotations";
 import type { ReaderAnnotationKind } from "@stll/api-contract/legal-reader-annotations";
 
-import type { ApprovalToolName } from "@/components/chat/chat-ui-tools";
+import type { ApprovalToolName } from "@/components/chat/chat-ui-tools-types";
 
 /**
  * Pure (no-React) helpers that turn a chat tool's approval input into readable
@@ -82,6 +82,9 @@ export const buildRegistryWriteSummaryRows = ({
   if (toolName === "save_playbook") {
     return buildSavePlaybookRows({ emptyLabel, input });
   }
+  if (toolName === "save_skill_package") {
+    return buildSaveSkillPackageRows(input);
+  }
 
   const rows: ReadableInputRow[] = [];
   for (const [key, value] of Object.entries(input)) {
@@ -150,6 +153,72 @@ const buildSavePlaybookRows = ({
     rows.push({ key, label: humanizeIdentifier(key), value });
   }
   return rows;
+};
+
+/**
+ * The `name` a SKILL.md's frontmatter gives, read the way a host reads it:
+ * a `name:` line between the opening and closing `---`.
+ */
+export const skillMdName = (skillMd: unknown): string | null => {
+  if (typeof skillMd !== "string") {
+    return null;
+  }
+  const lines = skillMd.split("\n").map((line) => line.trimEnd());
+  if (lines[0] !== "---") {
+    return null;
+  }
+  for (const line of lines.slice(1)) {
+    if (line === "---") {
+      return null;
+    }
+    if (line.startsWith("name:")) {
+      const value = line.slice("name:".length).trim();
+      const quote = value.at(0);
+      return (quote === '"' || quote === "'") && value.endsWith(quote)
+        ? value.slice(1, -1)
+        : value;
+    }
+  }
+  return null;
+};
+
+/**
+ * `save_skill_package` can carry a whole skill. The approver needs which
+ * skill, its scope, and every file the call writes or removes, never the
+ * file texts.
+ */
+const buildSaveSkillPackageRows = (
+  input: Record<string, unknown>,
+): ReadableInputRow[] => {
+  const paths = (value: unknown): string[] =>
+    (Array.isArray(value) ? value : []).flatMap((item: unknown) => {
+      if (typeof item === "string") {
+        return [item];
+      }
+      return isRecord(item) && typeof item["path"] === "string"
+        ? [item["path"]]
+        : [];
+    });
+  const name = skillMdName(input["skillMd"]);
+  const scope = input["scope"];
+  const rows = [
+    { key: "skill", value: name ?? "" },
+    {
+      key: "skill_id",
+      value: typeof input["skillId"] === "string" ? input["skillId"] : "",
+    },
+    { key: "scope", value: typeof scope === "string" ? scope : "" },
+    {
+      key: "skill_md",
+      value: typeof input["skillMd"] === "string" ? "SKILL.md" : "",
+    },
+    // Untruncated: the approver must see every file the call touches.
+    { key: "files", value: paths(input["resources"]).join("; ") },
+    { key: "delete_paths", value: paths(input["deletePaths"]).join("; ") },
+  ];
+  return rows
+    .filter(({ value }) => value.length > 0)
+    .map(({ key, value }) => ({ key, label: humanizeIdentifier(key), value }));
 };
 
 /** The display name of a host file reference, when it carries one. */

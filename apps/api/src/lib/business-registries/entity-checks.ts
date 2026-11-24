@@ -16,6 +16,7 @@ import type { CountryCode } from "@stll/country-codes";
 
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { DateOfBirth } from "@/api/lib/business-registries/date-of-birth";
+import { reserveIsirLookup } from "@/api/lib/business-registries/isir-lookup-budget";
 import { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check";
 import type {
   SanctionsCheckDependencies,
@@ -73,6 +74,8 @@ export type RunEntityCheckSharedProps = {
   subject: CounterpartyCheckSubject;
   signal?: AbortSignal | undefined;
   runCheck?: typeof runEntityCheck | undefined;
+  /** Pays for an insolvency register lookup before it is sent. */
+  reserveLookup?: typeof reserveIsirLookup | undefined;
   /** What the sanctions check reads: the lists, the register, the firm's jurisdictions. */
   sanctions: Omit<SanctionsCheckDependencies, "observer" | "permit"> & {
     runSanctionsCheck?: typeof runSanctionsCheck | undefined;
@@ -239,16 +242,33 @@ const runRegisterCheck = async ({
   subject,
   signal,
   runCheck,
+  reserveLookup = reserveIsirLookup,
 }: {
   check: EntityCheckKind;
   observer: RegistryRequestObservation;
   subject: CounterpartyCheckSubject;
   signal: AbortSignal | undefined;
   runCheck: typeof runEntityCheck;
+  /** Pays for an insolvency register lookup before it is sent. */
+  reserveLookup?: typeof reserveIsirLookup;
 }): Promise<Result<EntityCheckResult, HandlerError>> => {
   const entitySubject = toEntityCheckSubject(check, subject);
   if (entitySubject.isErr()) {
     return Result.err(entitySubject.error);
+  }
+  if (check === "cz-insolvency") {
+    // The register's request limits are shared with the corpus walk.
+    const paid = await reserveLookup(signal);
+    if (paid.isErr()) {
+      return Result.err(
+        new HandlerError({
+          status: 503,
+          code: "upstream_unavailable",
+          message: paid.error.message,
+          retryable: true,
+        }),
+      );
+    }
   }
   const result = await runCheck({
     observer,
@@ -316,6 +336,7 @@ export const runEntityCheckShared = async ({
   subject,
   signal,
   runCheck = runEntityCheck,
+  reserveLookup,
   sanctions,
 }: RunEntityCheckSharedProps): Promise<
   Result<CounterpartyCheckResult, HandlerError>
@@ -327,6 +348,7 @@ export const runEntityCheckShared = async ({
       subject,
       signal,
       runCheck,
+      ...(reserveLookup === undefined ? {} : { reserveLookup }),
     });
   }
   if (subject.type === "tax-id") {

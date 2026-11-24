@@ -32,6 +32,7 @@ import {
   pendingDeletionTasksOptions,
   sessionsOptions,
 } from "@/lib/account/queries";
+import { sessionSignInsOptions } from "@/lib/account/session-sign-ins";
 import { professionalUseOptions } from "@/lib/auth-queries";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { inboxCountOptions } from "@/lib/inbox/queries";
@@ -62,6 +63,11 @@ import {
   entityViewKeys,
   entityViewsOptions,
 } from "@/lib/workspaces/queries/entity-views";
+import {
+  invoiceSendsInfiniteOptions,
+  invoiceSendsOptions,
+  invoicesKeys,
+} from "@/lib/workspaces/queries/invoices";
 import {
   legalListActivityOptions,
   legalListItemsOptions,
@@ -159,6 +165,24 @@ const SEARCH_PROBE = {
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
+  "invoices/sends/list.ts": {
+    kind: "keyed",
+    calls: ["api.invoices()().sends.get"],
+    files: ["lib/workspaces/queries/invoices.ts"],
+    keys: () => [
+      invoiceSendsOptions({
+        workspaceId: WORKSPACE,
+        invoiceId: "invoice-probe",
+        userId: USER,
+      }).queryKey,
+      invoiceSendsInfiniteOptions({
+        workspaceId: WORKSPACE,
+        invoiceId: "invoice-probe",
+        userId: USER,
+      }).queryKey,
+    ],
+  },
+  "outbound-actions/read.ts": { kind: "no-web-caller", calls: [] },
   "account-exports/download.ts": { kind: "not-per-user", reason: DOWNLOAD },
   "account-exports/download/get.ts": { kind: "no-web-caller", calls: [] },
   "account-exports/get.ts": {
@@ -168,6 +192,8 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     keys: () => [accountDataExportLatestOptions(USER).queryKey],
   },
   "account-exports/status/get.ts": { kind: "no-web-caller", calls: [] },
+  // The phone and the desktop sync learned dictation fixes; the web does not dictate.
+  "dictation/learned-fixes/list.ts": { kind: "no-web-caller", calls: [] },
   "organizations/audit-export/get.ts": {
     kind: "keyed",
     calls: ['api.organizations["audit-export"].get'],
@@ -641,10 +667,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   "reports/exports/get.ts": {
     kind: "keyed",
     calls: ["api.workspaces().reports().get"],
-    files: [
-      "lib/workspaces/queries/report-exports.ts",
-      "routes/_protected.workspaces/$workspaceId/reports/$exportId.tsx",
-    ],
+    files: ["lib/workspaces/queries/report-exports.ts"],
     keys: () => [
       reportExportsKeys.detail({
         exportId: "export",
@@ -999,6 +1022,12 @@ const AUTH_CLIENT_READS: Record<string, PerUserRead> = {
       "routes/auth/-components/dev-quick-start-button.tsx",
     ],
     keys: () => [organizationListOptions(USER).queryKey],
+  },
+  "authClient.sessionSignIns.list": {
+    kind: "keyed",
+    calls: ["authClient.sessionSignIns.list"],
+    files: ["lib/account/session-sign-ins.ts"],
+    keys: () => [sessionSignInsOptions(USER).queryKey],
   },
 };
 
@@ -1726,6 +1755,29 @@ describe("per-user reads", () => {
 
     expect(unkeyed).toEqual([]);
   });
+});
+
+test("invoice send keys isolate caller reply-to metadata and retain invoice invalidation", async () => {
+  const scope = { workspaceId: WORKSPACE, invoiceId: "invoice-probe" };
+  const queryClient = new QueryClient();
+  for (const options of [invoiceSendsOptions, invoiceSendsInfiniteOptions]) {
+    const callerKey = Array.from(options({ ...scope, userId: USER }).queryKey);
+    const otherKey = Array.from(
+      options({ ...scope, userId: "another-user" }).queryKey,
+    );
+    queryClient.setQueryData(callerKey, { replyTo: "caller@example.test" });
+    expect(queryClient.getQueryData(otherKey)).toBeUndefined();
+    queryClient.setQueryData(otherKey, { replyTo: "other@example.test" });
+    expect(queryClient.getQueryData(callerKey)).toEqual({
+      replyTo: "caller@example.test",
+    });
+    await queryClient.invalidateQueries({
+      queryKey: invoicesKeys.byId(scope.workspaceId, scope.invoiceId),
+      refetchType: "none",
+    });
+    expect(queryClient.getQueryState(callerKey)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(otherKey)?.isInvalidated).toBe(true);
+  }
 });
 
 test("list detail keys carry caller identity and retain broad invalidation", async () => {

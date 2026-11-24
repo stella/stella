@@ -1,0 +1,21 @@
+{
+  "docxCitationCheck": {
+    "action": "Check citation",
+    "alternatives": "{count, plural, one {# other decision answers to this reference} other {# other decisions answer to this reference}}",
+    "checking": "Checking {citation} …",
+    "contradicts": "Contradicts",
+    "doesNotAddress": "Does not address",
+    "earlier": "Earlier checks",
+    "failed": "The citation check did not complete. Try again.",
+    "goToParagraph": "Go to the paragraph",
+    "noPassage": "No single passage in the decision carries this reading.",
+    "notFound": "No decision matching {citation} in the case-law database",
+    "probability": "{probability, number, percent} likely",
+    "showPassage": "Show the passage",
+    "supports": "Supports",
+    "title": "Citation check",
+    "unavailableDerivedAi": "The publisher of this decision does not permit AI analysis of its text.",
+    "unavailableNoText": "The decision was found, but its text is not available to check against.",
+    "uncertain": "Uncertain"
+  }
+}

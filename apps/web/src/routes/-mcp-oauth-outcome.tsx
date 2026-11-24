@@ -16,6 +16,8 @@ import { useMcpOAuthWindow } from "@/lib/mcp-oauth-channel";
 import { pageTitleLiteral } from "@/lib/page-title";
 import { resourceMutation } from "@/lib/workspace-realtime";
 
+import { MCP_OAUTH_OUTCOME_LABELS } from "./-mcp.oauth-callback.pending";
+
 /** Where integrations are connected and managed. */
 export const MCP_TOOLS_PATH = "/knowledge/tools";
 
@@ -97,36 +99,37 @@ const RetryActions = ({ slug }: { slug: string | undefined }) => {
   );
 };
 
+type McpOAuthOutcomeScreenProps = {
+  outcome: McpOAuthOutcome;
+  slug: string | undefined;
+  closeTab?: OutcomeCloseTab;
+};
+
+/** The outcome's messages and the actions available for this connector. */
+export const useMcpOAuthOutcomeScreen = ({
+  outcome,
+  slug,
+  closeTab,
+}: McpOAuthOutcomeScreenProps) => {
+  const t = useTranslations();
+  const connected = outcome.status === "connected";
+  const labels = MCP_OAUTH_OUTCOME_LABELS[outcome.status];
+  const title = t(labels.title);
+  return {
+    ...(connected ? {} : { actions: <RetryActions slug={slug} /> }),
+    ...(closeTab === undefined ? {} : { closeTab }),
+    description: t(labels.description),
+    documentTitle: pageTitleLiteral(title),
+    title,
+    tone: labels.tone,
+  };
+};
+
 /**
  * Where an integration's sign-in ends. A popup tells its opener and closes;
  * a tab that stays open shows the outcome, and after a failure, the way on.
  */
-export const McpOAuthOutcomeScreen = ({
-  outcome,
-  slug,
-  closeTab,
-}: {
-  outcome: McpOAuthOutcome;
-  slug: string | undefined;
-  closeTab?: OutcomeCloseTab;
-}) => {
-  const t = useTranslations();
-  const connected = outcome.status === "connected";
-  const title = connected
-    ? t("knowledge.mcp.callbackConnectedTitle")
-    : t("knowledge.mcp.callbackFailedTitle");
-  return (
-    <OutcomeScreen
-      actions={connected ? undefined : <RetryActions slug={slug} />}
-      {...(closeTab === undefined ? {} : { closeTab })}
-      description={
-        connected
-          ? t("knowledge.mcp.callbackConnectedDescription")
-          : t("knowledge.mcp.callbackFailedDescription")
-      }
-      documentTitle={pageTitleLiteral(title)}
-      title={title}
-      tone={connected ? "success" : "error"}
-    />
-  );
+export const McpOAuthOutcomeScreen = (props: McpOAuthOutcomeScreenProps) => {
+  const screen = useMcpOAuthOutcomeScreen(props);
+  return <OutcomeScreen {...screen} />;
 };

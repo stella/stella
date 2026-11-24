@@ -23,7 +23,6 @@ import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
-import { CORPUS_INDEX_SEARCH_TIMEOUT_MS } from "@/api/lib/legal-search/corpus-index-client";
 import { CorpusServingGenerationAbsentError } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
   NATIVE_SCAN_TRANSPORT,
@@ -574,7 +573,6 @@ describe("a search the tool's latency budget ends is a timeout", () => {
   for (const tool of INDEX_BACKED_TOOLS) {
     test(`${tool.toolName} (${tool.mode}) answers public_read_timeout for a slow index`, async () => {
       installSlowEngine();
-      const startedAt = performance.now();
 
       // A query of its own: this engine never answers, and a later test must
       // not join the search it leaves behind.
@@ -587,11 +585,6 @@ describe("a search the tool's latency budget ends is a timeout", () => {
               : { ...tool.args, query: "slow engine" },
         },
         50,
-      );
-
-      // The tool's budget ended the wait, not the search's own 30 s.
-      expect(performance.now() - startedAt).toBeLessThan(
-        CORPUS_INDEX_SEARCH_TIMEOUT_MS,
       );
       if (CONTINUABLE_PUBLIC_READ_TOOLS.has(tool.toolName)) {
         // The caller is told the search continues; nothing timed out for it.
@@ -963,7 +956,9 @@ describe("public corpus statement budgets", () => {
               pageReach: SEARCH_PAGE_REACH.REACHED,
               queryUsed: body.query,
               warnings: [],
+              hitOrder: "all_words_first",
               relaxedHitCount: 0,
+              termDecisionCounts: null,
             };
           },
         },

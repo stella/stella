@@ -22,28 +22,11 @@ type DeclarationSource = {
 };
 type Statement = Program["body"][number];
 
-/**
- * Parsed sources by file name, reused across validations in one process (the
- * capability exporter validates on every export). A hit needs the identical
- * name and source text, so it returns exactly the tree a fresh parse builds.
- * Validation only reads trees.
- */
-const parsedSources = new Map<
-  string,
-  { source: string; ast: DeclarationSource }
->();
-export const parseDeclarationSource = (
+// Validation only reads trees.
+const parseDeclarationSource = (
   file: string,
   source: string,
-): DeclarationSource => {
-  const cached = parsedSources.get(file);
-  if (cached?.source === source) {
-    return cached.ast;
-  }
-  const ast = { fileName: file, parsed: parseSource(file, source) };
-  parsedSources.set(file, { source, ast });
-  return ast;
-};
+): DeclarationSource => ({ fileName: file, parsed: parseSource(file, source) });
 const statementsOf = (ast: DeclarationSource) => ast.parsed.program.body;
 const textOf = (ast: DeclarationSource, node: Node) =>
   ast.parsed.sourceText.slice(node.start, node.end);
@@ -54,6 +37,8 @@ type DeclarationOptions = {
   registry: FeatureRegistry;
   endpoints: readonly { file: string; config: Record<string, unknown> }[];
   sources: ReadonlyMap<string, string>;
+  /** Derived from the reviewed invoice management route group. */
+  invoiceManagementFiles?: ReadonlySet<string>;
 };
 export type FeatureAccessDeclarationViolation = {
   file: string;
@@ -243,14 +228,22 @@ const drizzleConstructors = (ast: DeclarationSource) => {
   for (const statement of statementsOf(ast)) {
     if (
       !runtimeImport(statement) ||
-      !statement.source.value.startsWith("drizzle-orm/")
+      !(
+        statement.source.value.startsWith("drizzle-orm/") ||
+        statement.source.value === "@/api/db/sql-client"
+      )
     ) {
       continue;
     }
     for (const binding of statement.specifiers) {
+      if (binding.type !== "ImportSpecifier") {
+        continue;
+      }
+      const exportedName = moduleExportName(binding.imported);
       if (
-        binding.type === "ImportSpecifier" &&
-        moduleExportName(binding.imported) === "drizzle"
+        exportedName === "drizzle" ||
+        (exportedName === "createDatabase" &&
+          statement.source.value === "@/api/db/sql-client")
       ) {
         constructors.add(binding.local.name);
       }
@@ -299,8 +292,309 @@ const registrationOnly = (ast: DeclarationSource, name: string) => {
   );
 };
 
-/** Parses source once; no handler or runtime dependency is loaded. */
+/** How an import reaches its target: the whole module or selected exports. */
+type ImportPlan =
+  | { readonly type: "module" }
+  // No names: the import only registers or declares, so it reaches nothing.
+  | { readonly type: "symbols"; readonly names: readonly string[] };
+/** A top-level statement an export lookup can stop at, in source order. */
+type ExportStatement =
+  | {
+      readonly type: "declaration";
+      readonly names: ReadonlySet<string>;
+      /** Declared names bound to a string constant, which carry no runtime use. */
+      readonly constants: ReadonlySet<string>;
+    }
+  | {
+      readonly type: "list";
+      readonly source: string | undefined;
+      readonly specifiers: readonly {
+        readonly exported: string;
+        readonly local: string;
+      }[];
+    }
+  | { readonly type: "all"; readonly source: string };
+/**
+ * What the graph reads from one module, independent of the registry and of
+ * every other module. A summary replaces the syntax tree it was read from, so
+ * a validation holds one tree at a time instead of every reachable one.
+ */
+export type ModuleSummary = {
+  /** Literal dynamic import specifiers outside dispatch registries. */
+  readonly dynamicImports: readonly string[];
+  /** Runtime imports and value re-exports, in statement order. */
+  readonly dependencies: readonly {
+    readonly specifier: string;
+    readonly plan: ImportPlan;
+  }[];
+  readonly exports: readonly ExportStatement[];
+  /** Runtime named import bindings, in statement order. */
+  readonly namedImports: readonly {
+    readonly local: string;
+    readonly imported: string;
+    readonly specifier: string;
+  }[];
+  /** `db.query.<symbol>` reads in runtime positions. */
+  readonly querySymbols: ReadonlySet<string>;
+  /** String literals and cooked template pieces in runtime positions. */
+  readonly texts: ReadonlySet<string>;
+};
+
+const importPlan = (
+  ast: DeclarationSource,
+  statement: ImportDeclaration,
+): ImportPlan => {
+  const defaultName = statement.specifiers.find(
+    (specifier) => specifier.type === "ImportDefaultSpecifier",
+  )?.local.name;
+  const namespace = statement.specifiers.find(
+    (specifier) => specifier.type === "ImportNamespaceSpecifier",
+  );
+  const named = statement.specifiers.flatMap((specifier) =>
+    specifier.type === "ImportSpecifier" ? [specifier] : [],
+  );
+  if (
+    defaultName !== undefined &&
+    namespace === undefined &&
+    named.length === 0 &&
+    dispatchRegistrationOnly(ast, defaultName)
+  ) {
+    return { type: "symbols", names: [] };
+  }
+  if (named.length !== 0 && defaultName === undefined) {
+    return {
+      type: "symbols",
+      names: named.flatMap((binding) =>
+        binding.importKind === "type" ||
+        registrationOnly(ast, binding.local.name) ||
+        dispatchRegistrationOnly(ast, binding.local.name)
+          ? []
+          : [moduleExportName(binding.imported)],
+      ),
+    };
+  }
+  if (namespace !== undefined) {
+    const { local: namespaceBinding } = namespace;
+    const { name } = namespaceBinding;
+    if (registrationOnly(ast, name)) {
+      return { type: "symbols", names: [] };
+    }
+    const members = new Set<string>();
+    const dynamicReferences = new Set<Node>();
+    walk(ast.parsed.program, (node, ancestors) => {
+      if (identifierName(node) !== name || node === namespaceBinding) {
+        return;
+      }
+      const parent = ancestors.at(-1);
+      const member =
+        parent?.type === "MemberExpression" && parent.object === node
+          ? parent
+          : undefined;
+      if (member?.computed === false && member.property.type === "Identifier") {
+        members.add(member.property.name);
+      } else if (
+        member?.computed === true &&
+        member.property.type === "Literal" &&
+        typeof member.property.value === "string"
+      ) {
+        members.add(member.property.value);
+      } else if (
+        parent?.type === "JSXMemberExpression" &&
+        parent.object === node
+      ) {
+        members.add(parent.property.name);
+      } else {
+        dynamicReferences.add(node);
+      }
+    });
+    return dynamicReferences.size !== 0
+      ? { type: "module" }
+      : { type: "symbols", names: [...members] };
+  }
+  return { type: "module" };
+};
+
+const exportStatement = (statement: Statement): ExportStatement | undefined => {
+  const declared = exportedDeclaration(statement);
+  if (declared?.type === "VariableDeclaration") {
+    const names = new Set<string>();
+    const constants = new Set<string>();
+    for (const { id, init } of declared.declarations) {
+      if (id.type !== "Identifier") {
+        continue;
+      }
+      names.add(id.name);
+      const value = init === null ? undefined : unwrapExpression(init);
+      if (
+        (value?.type === "Literal" && typeof value.value === "string") ||
+        (value?.type === "TemplateLiteral" && value.expressions.length === 0)
+      ) {
+        constants.add(id.name);
+      }
+    }
+    return { type: "declaration", names, constants };
+  }
+  if (
+    (declared?.type === "FunctionDeclaration" ||
+      declared?.type === "TSDeclareFunction" ||
+      declared?.type === "ClassDeclaration") &&
+    declared.id !== null
+  ) {
+    return {
+      type: "declaration",
+      names: new Set([declared.id.name]),
+      constants: new Set(),
+    };
+  }
+  if (
+    statement.type === "ExportNamedDeclaration" &&
+    statement.declaration === null &&
+    statement.exportKind !== "type"
+  ) {
+    return {
+      type: "list",
+      source: statement.source?.value,
+      specifiers: statement.specifiers.flatMap((specifier) =>
+        specifier.exportKind === "type"
+          ? []
+          : [
+              {
+                exported: moduleExportName(specifier.exported),
+                local: moduleExportName(specifier.local),
+              },
+            ],
+      ),
+    };
+  }
+  // `export * as name from` exports a namespace, which no symbol lookup follows.
+  return statement.type === "ExportAllDeclaration" &&
+    statement.exportKind !== "type" &&
+    statement.exported === null
+    ? { type: "all", source: statement.source.value }
+    : undefined;
+};
+
+/** Query symbols and string texts the table-use check matches. */
+const runtimeTexts = (ast: DeclarationSource) => {
+  const querySymbols = new Set<string>();
+  const texts = new Set<string>();
+  walk(ast.parsed.program, (node) => {
+    // Type positions carry no runtime use; an instantiation expression
+    // (`fn<T>`) still runs its expression.
+    if (
+      (isTypeSyntax(node) && node.type !== "TSInstantiationExpression") ||
+      dispatchRegistry(node)
+    ) {
+      return "skip-children";
+    }
+    if (
+      node.type === "MemberExpression" &&
+      node.object.type === "MemberExpression" &&
+      memberName(node.object) === "query"
+    ) {
+      // `db.query.table` or `db.query["table"]`.
+      let symbol = memberName(node);
+      if (
+        node.computed &&
+        node.property.type === "Literal" &&
+        typeof node.property.value === "string"
+      ) {
+        symbol = node.property.value;
+      }
+      if (symbol !== undefined) {
+        querySymbols.add(symbol);
+      }
+    }
+    // String literals and each cooked piece of a template.
+    if (node.type === "Literal" && typeof node.value === "string") {
+      texts.add(node.value);
+    } else if (node.type === "TemplateElement") {
+      texts.add(node.value.cooked ?? node.value.raw);
+    }
+    return undefined;
+  });
+  return { querySymbols, texts };
+};
+
+const summarizeModule = (ast: DeclarationSource): ModuleSummary => {
+  const dynamicImports: string[] = [];
+  walk(ast.parsed.program, (node) => {
+    if (dispatchRegistry(node)) {
+      return "skip-children";
+    }
+    if (
+      node.type === "ImportExpression" &&
+      node.source.type === "Literal" &&
+      typeof node.source.value === "string"
+    ) {
+      dynamicImports.push(node.source.value);
+    }
+    return undefined;
+  });
+  const dependencies: ModuleSummary["dependencies"][number][] = [];
+  const exports: ExportStatement[] = [];
+  const namedImports: ModuleSummary["namedImports"][number][] = [];
+  for (const statement of statementsOf(ast)) {
+    if (runtimeImport(statement)) {
+      const specifier = statement.source.value;
+      dependencies.push({ specifier, plan: importPlan(ast, statement) });
+      for (const binding of statement.specifiers) {
+        if (
+          binding.type === "ImportSpecifier" &&
+          binding.importKind !== "type"
+        ) {
+          namedImports.push({
+            local: binding.local.name,
+            imported: moduleExportName(binding.imported),
+            specifier,
+          });
+        }
+      }
+    } else {
+      const source = runtimeExportSource(statement);
+      if (source !== undefined) {
+        dependencies.push({
+          specifier: source.value,
+          plan: { type: "module" },
+        });
+      }
+    }
+    const exported = exportStatement(statement);
+    if (exported !== undefined) {
+      exports.push(exported);
+    }
+  }
+  return {
+    dynamicImports,
+    dependencies,
+    exports,
+    namedImports,
+    ...runtimeTexts(ast),
+  };
+};
+
+/**
+ * Summaries by file name, reused across validations in one process (the
+ * capability exporter validates on every export). A hit needs the identical
+ * name and source text, so it returns exactly what a fresh read builds.
+ */
+const moduleSummaries = new Map<
+  string,
+  { source: string; summary: ModuleSummary }
+>();
+export const moduleSummary = (file: string, source: string): ModuleSummary => {
+  const cached = moduleSummaries.get(file);
+  if (cached?.source === source) {
+    return cached.summary;
+  }
+  const summary = summarizeModule(parseDeclarationSource(file, source));
+  moduleSummaries.set(file, { source, summary });
+  return summary;
+};
+
+/** Reads sources without loading any handler or runtime dependency. */
 class DeclarationSourceGraph {
+  // Whole trees only for the few modules ownership and scheduler tasks read.
   private readonly parsed = new Map<string, DeclarationSource>();
   private readonly imports = new Map<
     string,
@@ -325,6 +619,10 @@ class DeclarationSourceGraph {
     this.parsed.set(file, ast);
     return ast;
   }
+  summary(file: string) {
+    const source = this.sources.get(file);
+    return source === undefined ? undefined : moduleSummary(file, source);
+  }
   resolve(from: string, specifier: string) {
     const base = moduleBase(from, specifier);
     if (base === undefined) {
@@ -339,61 +637,38 @@ class DeclarationSourceGraph {
       base.replace(/\.js$/u, ".ts"),
     ].find((candidate) => this.sources.has(candidate));
   }
-  private localExport(
-    ast: DeclarationSource,
-    name: string,
-    seen: Set<string>,
-  ): string[] {
-    for (const candidate of statementsOf(ast)) {
-      if (!runtimeImport(candidate)) {
+  private localExport(file: string, name: string, seen: Set<string>): string[] {
+    for (const binding of this.summary(file)?.namedImports ?? []) {
+      if (binding.local !== name) {
         continue;
       }
-      const binding = candidate.specifiers.find(
-        (item) =>
-          item.type === "ImportSpecifier" &&
-          item.importKind !== "type" &&
-          item.local.name === name,
-      );
-      const target = this.resolve(ast.fileName, candidate.source.value);
-      if (binding?.type === "ImportSpecifier" && target !== undefined) {
-        return this.symbolModules(
-          target,
-          moduleExportName(binding.imported),
-          seen,
-        );
+      const target = this.resolve(file, binding.specifier);
+      if (target !== undefined) {
+        return this.symbolModules(target, binding.imported, seen);
       }
     }
-    return [ast.fileName];
+    return [file];
   }
-  /** `statement` is an `export { … }` list or an `export *` re-export. */
   private exportTargets(
-    ast: DeclarationSource,
-    statement: Statement,
+    file: string,
+    statement: Exclude<ExportStatement, { type: "declaration" }>,
     name: string,
     seen: Set<string>,
   ): string[] {
     let exportedName = name;
-    if (statement.type === "ExportNamedDeclaration") {
+    if (statement.type === "list") {
       const symbol = statement.specifiers.find(
-        (element) =>
-          element.exportKind !== "type" &&
-          moduleExportName(element.exported) === name,
+        ({ exported }) => exported === name,
       );
       if (symbol === undefined) {
         return [];
       }
-      const { local: exportedBinding } = symbol;
-      exportedName = moduleExportName(exportedBinding);
-    } else if (
-      statement.type !== "ExportAllDeclaration" ||
-      statement.exported !== null
-    ) {
-      return [];
+      exportedName = symbol.local;
     }
-    if (statement.source === null) {
-      return this.localExport(ast, exportedName, seen);
+    if (statement.source === undefined) {
+      return this.localExport(file, exportedName, seen);
     }
-    const target = this.resolve(ast.fileName, statement.source.value);
+    const target = this.resolve(file, statement.source);
     return target === undefined
       ? []
       : this.symbolModules(target, exportedName, seen);
@@ -409,30 +684,23 @@ class DeclarationSourceGraph {
       return [];
     }
     seen.add(key);
-    const ast = this.sourceFile(file);
-    if (ast === undefined) {
+    const summary = this.summary(file);
+    if (summary === undefined) {
       return [];
     }
-    for (const statement of statementsOf(ast)) {
-      if (declaresSymbol(statement, name)) {
-        const declared = exportedDeclaration(statement);
-        if (declared?.type === "VariableDeclaration") {
-          const declaration = declared.declarations.find(
-            (item) => item.id.type === "Identifier" && item.id.name === name,
-          );
-          const init = declaration?.init ?? undefined;
-          const value = init === undefined ? undefined : unwrapExpression(init);
-          if (
-            (value?.type === "Literal" && typeof value.value === "string") ||
-            (value?.type === "TemplateLiteral" &&
-              value.expressions.length === 0)
-          ) {
-            return [];
-          }
+    for (const statement of summary.exports) {
+      if (statement.type === "declaration") {
+        if (!statement.names.has(name)) {
+          continue;
+        }
+        if (statement.constants.has(name)) {
+          return [];
         }
         const selections = Object.values(this.registry).flatMap(
           ({ ownership }) => {
-            const symbols = ownership?.conditionalTableSchemas?.[file];
+            const symbols =
+              ownership?.tableSchemas?.[file] ??
+              ownership?.conditionalTableSchemas?.[file];
             return symbols === undefined ? [] : [symbols];
           },
         );
@@ -441,154 +709,42 @@ class DeclarationSourceGraph {
           ? [file]
           : [];
       }
-      const exportList =
-        (statement.type === "ExportNamedDeclaration" &&
-          statement.declaration === null) ||
-        statement.type === "ExportAllDeclaration";
-      if (!exportList || statement.exportKind === "type") {
-        continue;
-      }
-      const targets = this.exportTargets(ast, statement, name, seen);
+      const targets = this.exportTargets(file, statement, name, seen);
       if (targets.length !== 0) {
         return targets;
       }
     }
     return [];
   }
-  private importedTargets(
-    ast: DeclarationSource,
-    statement: ImportDeclaration,
-    target: string,
-  ): string[] {
-    const defaultName = statement.specifiers.find(
-      (specifier) => specifier.type === "ImportDefaultSpecifier",
-    )?.local.name;
-    const namespace = statement.specifiers.find(
-      (specifier) => specifier.type === "ImportNamespaceSpecifier",
-    );
-    const named = statement.specifiers.flatMap((specifier) =>
-      specifier.type === "ImportSpecifier" ? [specifier] : [],
-    );
-    if (
-      defaultName !== undefined &&
-      namespace === undefined &&
-      named.length === 0 &&
-      dispatchRegistrationOnly(ast, defaultName)
-    ) {
-      return [];
-    }
-    if (named.length !== 0 && defaultName === undefined) {
-      const targets: string[] = [];
-      for (const binding of named) {
-        if (
-          binding.importKind === "type" ||
-          registrationOnly(ast, binding.local.name) ||
-          dispatchRegistrationOnly(ast, binding.local.name)
-        ) {
-          continue;
-        }
-        const resolved = this.symbolModules(
-          target,
-          moduleExportName(binding.imported),
-        );
-        targets.push(...resolved);
-      }
-      return targets;
-    }
-    if (namespace !== undefined) {
-      const { local: namespaceBinding } = namespace;
-      const { name } = namespaceBinding;
-      if (registrationOnly(ast, name)) {
-        return [];
-      }
-      const members = new Set<string>();
-      const dynamicReferences = new Set<Node>();
-      walk(ast.parsed.program, (node, ancestors) => {
-        if (identifierName(node) !== name || node === namespaceBinding) {
-          return;
-        }
-        const parent = ancestors.at(-1);
-        const member =
-          parent?.type === "MemberExpression" && parent.object === node
-            ? parent
-            : undefined;
-        if (
-          member?.computed === false &&
-          member.property.type === "Identifier"
-        ) {
-          members.add(member.property.name);
-        } else if (
-          member?.computed === true &&
-          member.property.type === "Literal" &&
-          typeof member.property.value === "string"
-        ) {
-          members.add(member.property.value);
-        } else if (
-          parent?.type === "JSXMemberExpression" &&
-          parent.object === node
-        ) {
-          members.add(parent.property.name);
-        } else {
-          dynamicReferences.add(node);
-        }
-      });
-      return dynamicReferences.size !== 0
-        ? [target]
-        : [...members].flatMap((member) => this.symbolModules(target, member));
-    }
-    return [target];
-  }
-  private dynamicTargets(ast: DeclarationSource): string[] {
-    const targets: string[] = [];
-    walk(ast.parsed.program, (node) => {
-      if (dispatchRegistry(node)) {
-        return "skip-children";
-      }
-      if (
-        node.type === "ImportExpression" &&
-        node.source.type === "Literal" &&
-        typeof node.source.value === "string"
-      ) {
-        const target = this.resolve(ast.fileName, node.source.value);
-        if (target !== undefined) {
-          targets.push(target);
-        }
-      }
-      return undefined;
-    });
-    return targets;
-  }
-  dependencies(ast: DeclarationSource) {
-    const cached = this.imports.get(ast.fileName);
+  /** Runtime targets of a module that has a summary. */
+  dependencies(file: string, summary: ModuleSummary) {
+    const cached = this.imports.get(file);
     if (cached !== undefined) {
       return cached;
     }
     const missing: string[] = [];
-    const result = { targets: this.dynamicTargets(ast), missing };
-    for (const statement of statementsOf(ast)) {
-      const source = runtimeImport(statement)
-        ? statement.source
-        : runtimeExportSource(statement);
-      if (source === undefined) {
-        continue;
-      }
-      const specifier = source.value;
-      const target = this.resolve(ast.fileName, specifier);
+    const targets = summary.dynamicImports.flatMap((specifier) => {
+      const target = this.resolve(file, specifier);
+      return target === undefined ? [] : [target];
+    });
+    for (const { specifier, plan } of summary.dependencies) {
+      const target = this.resolve(file, specifier);
       if (target === undefined) {
         if (localSourceImport(specifier)) {
-          result.missing.push(
-            `missing source import ${ast.fileName} -> ${specifier}`,
-          );
+          missing.push(`missing source import ${file} -> ${specifier}`);
         }
         continue;
       }
-      if (statement.type === "ImportDeclaration") {
-        result.targets.push(...this.importedTargets(ast, statement, target));
+      if (plan.type === "module") {
+        targets.push(target);
       } else {
-        result.targets.push(target);
+        for (const name of plan.names) {
+          targets.push(...this.symbolModules(target, name));
+        }
       }
     }
-    this.imports.set(ast.fileName, result);
+    const result = { targets, missing };
+    this.imports.set(file, result);
     return result;
   }
 }
@@ -643,7 +799,8 @@ const isValidDispatchBoundary = (
               declaration.id.type === "Identifier" &&
               declaration.id.name === boundary.registry &&
               declaration.init !== null &&
-              unwrapExpression(declaration.init).type === "ArrayExpression",
+              (unwrapExpression(declaration.init).type === "ArrayExpression" ||
+                unwrapExpression(declaration.init).type === "ObjectExpression"),
           )
         );
       });
@@ -685,6 +842,27 @@ const isValidDispatchBoundary = (
     }
   }
 };
+const ownedTableSchemas = (
+  ownership: NonNullable<FeatureRegistry[string]["ownership"]>,
+) => [
+  ...ownership.tableSchemaFiles.map((file) => ({
+    file,
+    symbols: undefined,
+    requirement: "required" as const,
+  })),
+  ...Object.entries(ownership.tableSchemas ?? {}).map(([file, symbols]) => ({
+    file,
+    symbols,
+    requirement: "required" as const,
+  })),
+  ...Object.entries(ownership.conditionalTableSchemas ?? {}).map(
+    ([file, symbols]) => ({
+      file,
+      symbols,
+      requirement: "conditional" as const,
+    }),
+  ),
+];
 const validateOwnership = (
   registry: FeatureRegistry,
   graph: DeclarationSourceGraph,
@@ -707,8 +885,7 @@ const validateOwnership = (
       ownership === undefined ||
       [
         ...ownership.handlerDirectories,
-        ...ownership.tableSchemaFiles,
-        ...Object.keys(ownership.conditionalTableSchemas ?? {}),
+        ...ownedTableSchemas(ownership).map(({ file }) => file),
         ...ownership.coreModules,
         ...(ownership.conditionalModules ?? []),
       ].length === 0
@@ -731,9 +908,9 @@ const validateOwnership = (
         });
       }
     }
+    const tableSchemas = ownedTableSchemas(ownership);
     for (const file of [
-      ...ownership.tableSchemaFiles,
-      ...Object.keys(ownership.conditionalTableSchemas ?? {}),
+      ...tableSchemas.map(({ file: schemaFile }) => schemaFile),
       ...ownership.coreModules,
       ...(ownership.conditionalModules ?? []),
     ]) {
@@ -744,15 +921,15 @@ const validateOwnership = (
         });
       }
     }
-    for (const file of [
-      ...ownership.tableSchemaFiles,
-      ...Object.keys(ownership.conditionalTableSchemas ?? {}),
-    ]) {
+    for (const {
+      file,
+      symbols: selectedSymbols,
+      requirement,
+    } of tableSchemas) {
       const ast = graph.sourceFile(file);
       if (ast === undefined) {
         continue;
       }
-      const selectedSymbols = ownership.conditionalTableSchemas?.[file];
       const statements = statementsOf(ast);
       const selectedStatements =
         selectedSymbols === undefined
@@ -774,12 +951,7 @@ const validateOwnership = (
       }
       for (const name of exportedTableNames(selectedStatements)) {
         const owners = tableOwners.get(name) ?? new Map<string, Requirement>();
-        owners.set(
-          featureId,
-          ownership.conditionalTableSchemas?.[file] !== undefined
-            ? "conditional"
-            : "required",
-        );
+        owners.set(featureId, requirement);
         tableOwners.set(name, owners);
       }
     }
@@ -867,7 +1039,8 @@ const moduleRequirements = (registry: FeatureRegistry, module: string) => {
         module.startsWith(`${directory.replace(/\/$/u, "")}/`),
       ) ||
       ownership?.coreModules.includes(module) ||
-      ownership?.tableSchemaFiles.includes(module)
+      ownership?.tableSchemaFiles.includes(module) ||
+      ownership?.tableSchemas?.[module] !== undefined
     ) {
       required.set(id, "required");
     }
@@ -881,61 +1054,34 @@ type ModuleUse = readonly [featureId: string, type: Requirement];
  * each module once instead of once per endpoint that reaches it.
  */
 const collectModuleUses = (
-  ast: DeclarationSource,
+  summary: ModuleSummary,
   registry: FeatureRegistry,
   tables: ReturnType<typeof validateOwnership>["tables"],
 ): ModuleUse[] => {
   const uses: ModuleUse[] = [];
-  walk(ast.parsed.program, (node) => {
-    if (dispatchRegistry(node)) {
-      return "skip-children";
-    }
-    if (
-      node.type === "MemberExpression" &&
-      node.object.type === "MemberExpression" &&
-      memberName(node.object) === "query"
-    ) {
-      // `db.query.table` or `db.query["table"]`.
-      let symbol = memberName(node);
+  for (const symbol of summary.querySymbols) {
+    for (const [id, { ownership }] of Object.entries(registry)) {
       if (
-        node.computed &&
-        node.property.type === "Literal" &&
-        typeof node.property.value === "string"
+        Object.values(ownership?.conditionalTableSchemas ?? {}).some(
+          (symbols) => symbols.includes(symbol),
+        )
       ) {
-        symbol = node.property.value;
-      }
-      for (const [id, { ownership }] of Object.entries(registry)) {
-        if (
-          symbol !== undefined &&
-          Object.values(ownership?.conditionalTableSchemas ?? {}).some(
-            (symbols) => symbols.includes(symbol),
-          )
-        ) {
-          uses.push([id, "conditional"]);
-        }
+        uses.push([id, "conditional"]);
       }
     }
-    // String literals and each cooked piece of a template.
-    let text: string | undefined;
-    if (node.type === "Literal" && typeof node.value === "string") {
-      text = node.value;
-    } else if (node.type === "TemplateElement") {
-      text = node.value.cooked ?? node.value.raw;
-    }
-    if (text !== undefined) {
-      for (const { matcher, owners } of tables) {
-        if (matcher.test(text)) {
-          uses.push(...owners);
-        }
+  }
+  for (const text of summary.texts) {
+    for (const { matcher, owners } of tables) {
+      if (matcher.test(text)) {
+        uses.push(...owners);
       }
     }
-    return undefined;
-  });
+  }
   return uses;
 };
 type ModuleFacts = {
   boundary: (module: string) => ReadonlyMap<string, Requirement>;
-  uses: (module: string, ast: DeclarationSource) => readonly ModuleUse[];
+  uses: (module: string, summary: ModuleSummary) => readonly ModuleUse[];
 };
 /**
  * Per-module facts are independent of the endpoint that reaches the module.
@@ -957,12 +1103,12 @@ const moduleFacts = (
       boundaries.set(module, boundary);
       return boundary;
     },
-    uses: (module, ast) => {
+    uses: (module, summary) => {
       const cached = uses.get(module);
       if (cached !== undefined) {
         return cached;
       }
-      const moduleUses = collectModuleUses(ast, registry, tables);
+      const moduleUses = collectModuleUses(summary, registry, tables);
       uses.set(module, moduleUses);
       return moduleUses;
     },
@@ -974,6 +1120,7 @@ type EndpointOptions = {
   graph: DeclarationSourceGraph;
   dispatchModules: ReturnType<typeof validateOwnership>["dispatchModules"];
   modules: ModuleFacts;
+  invoiceManagementFiles: ReadonlySet<string>;
 };
 const inspectEndpoint = ({
   endpoint,
@@ -981,6 +1128,7 @@ const inspectEndpoint = ({
   graph,
   dispatchModules,
   modules,
+  invoiceManagementFiles,
 }: EndpointOptions) => {
   const file = endpoint.file.split("#").at(0) ?? endpoint.file;
   const declaration = parseDeclaration(endpoint.config, file, registry);
@@ -989,7 +1137,14 @@ const inspectEndpoint = ({
     return violations;
   }
   const required = new Map<string, Set<Requirement>>();
-  const add = (id: string, type: Requirement) => {
+  const add = (
+    id: string,
+    type: Requirement,
+    management = invoiceManagementFiles.has(endpoint.file),
+  ) => {
+    if (management && (id === "time-billing" || id === "invoice-links")) {
+      return;
+    }
     const types = required.get(id) ?? new Set<Requirement>();
     types.add(type);
     required.set(id, types);
@@ -1004,37 +1159,41 @@ const inspectEndpoint = ({
     }
   }
   const visited = new Set<string>();
-  const visitModule = (module: string) => {
-    if (visited.has(module)) {
+  const walked = new Set<string>();
+  const visitModule = (module: string, throughManagement = false) => {
+    const management = throughManagement || invoiceManagementFiles.has(module);
+    const walkKey = `${module}:${management ? "management" : "ordinary"}`;
+    if (walked.has(walkKey)) {
       return;
     }
+    walked.add(walkKey);
     visited.add(module);
     // Descriptor registries do not invoke their handlers. Dispatch owners
     // admit the selected descriptor before invocation, not the whole caller.
     if (dispatchModules.has(module)) {
       return;
     }
-    const ast = graph.sourceFile(module);
-    if (ast === undefined) {
+    const summary = graph.summary(module);
+    if (summary === undefined) {
       violations.push({ file, message: `missing source module ${module}` });
       return;
     }
     const boundary = modules.boundary(module);
     for (const [id, type] of boundary) {
-      add(id, type);
+      add(id, type, management);
     }
     if (boundary.size !== 0) {
       return;
     }
-    const dependencies = graph.dependencies(ast);
+    const dependencies = graph.dependencies(module, summary);
     for (const message of dependencies.missing) {
       violations.push({ file, message });
     }
     for (const target of dependencies.targets) {
-      visitModule(target);
+      visitModule(target, management);
     }
-    for (const [id, type] of modules.uses(module, ast)) {
-      add(id, type);
+    for (const [id, type] of modules.uses(module, summary)) {
+      add(id, type, management);
     }
   };
   visitModule(file);
@@ -1176,16 +1335,17 @@ export const validateFeatureAccessDeclarations = ({
   registry,
   endpoints,
   sources,
+  invoiceManagementFiles = new Set<string>(),
 }: DeclarationOptions): FeatureAccessDeclarationViolation[] => {
   const dispatch = dispatchEntryEndpoints(sources);
   const graph = new DeclarationSourceGraph(dispatch.sources, registry);
   const tasks = new Map<string, DeclarationOptions["endpoints"][number]>();
   for (const entry of dispatch.entries) {
-    const ast = graph.sourceFile(entry.file);
-    if (ast === undefined) {
+    const summary = graph.summary(entry.file);
+    if (summary === undefined) {
       continue;
     }
-    for (const file of graph.dependencies(ast).targets) {
+    for (const file of graph.dependencies(entry.file, summary).targets) {
       if (!file.includes("/scheduler/tasks/")) {
         continue;
       }
@@ -1234,6 +1394,7 @@ export const validateFeatureAccessDeclarations = ({
         graph,
         dispatchModules: ownership.dispatchModules,
         modules,
+        invoiceManagementFiles,
       }),
     );
   }

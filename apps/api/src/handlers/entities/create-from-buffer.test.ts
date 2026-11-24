@@ -39,6 +39,7 @@ import {
   authorizeDocumentWrite,
   DocumentWriteRefusedError,
 } from "@/api/lib/entities/authorize-document-write";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
 import {
@@ -102,10 +103,14 @@ const createEntityFromBufferDependencies = {
 const createEntityFromBufferForTest = async (
   input: Omit<
     Parameters<typeof createEntityFromBuffer>[0],
-    "dependencies" | "encryption"
-  > & { encryption?: FileEncryption },
+    "authority" | "dependencies" | "encryption"
+  > & {
+    authority?: Parameters<typeof createEntityFromBuffer>[0]["authority"];
+    encryption?: FileEncryption;
+  },
 ) =>
   await createEntityFromBuffer({
+    authority: CALLER_AUTHORIZED,
     encryption: serverBuiltFileEncryption(),
     ...input,
     dependencies: createEntityFromBufferDependencies,
@@ -370,8 +375,8 @@ describe("createEntityFromBuffer", () => {
       encryption: await detectedEncryptedPdf(),
       parentId,
       provenance: {
-        type: "email_attachment",
-        attachmentId: "ea1.example",
+        type: "file_part",
+        part: "attachment:0",
         sourceEntityId,
         sourceFieldId,
         sourceWorkspaceId: workspaceId,
@@ -406,8 +411,8 @@ describe("createEntityFromBuffer", () => {
       },
       metadata: {
         provenance: {
-          type: "email_attachment",
-          attachmentId: "ea1.example",
+          type: "file_part",
+          part: "attachment:0",
           sourceEntityId,
           sourceFieldId,
           sourceWorkspaceId: workspaceId,

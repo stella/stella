@@ -19,9 +19,13 @@ const IDEMPOTENT_MUTATION = {
   file: "apps/web/src/lib/idempotency/use-idempotent-mutation.ts",
   name: "useIdempotentMutation",
 } as const;
-const ROUTE_READER_HELPERS = new Set([
+/** Route helpers that take the query client first and the query options
+ *  second (`apps/web/src/lib/react-query.ts`). The census and the
+ *  invalidation check both read options from this one list. */
+export const ROUTE_READER_HELPERS: ReadonlySet<string> = new Set([
   "ensureRouteQueryData",
   "ensureRouteInfiniteQueryData",
+  "prefetchRouteQuery",
 ]);
 const READERS = new Set([
   ...ROUTE_READER_HELPERS,
@@ -2195,13 +2199,92 @@ export type MutationQueryCensus = ReturnType<
   typeof inspectMutationQuerySources
 >;
 
-export const generateMutationQueryCensus = (root: string) => {
-  const packageDirectories = [
-    ...new Bun.Glob("packages/*/package.json").scanSync({ cwd: root }),
-  ].toSorted();
+/** The files a census reads: the working tree, or the tree of one commit. */
+export type CensusTree = {
+  /** Repository-relative files matching a glob. */
+  glob: (pattern: string) => string[];
+  read: (file: string) => string;
+};
+
+export const workingTree = (root: string): CensusTree => ({
+  glob: (pattern) => [...new Bun.Glob(pattern).scanSync({ cwd: root })],
+  read: (file) => readFileSync(path.join(root, file), "utf-8"),
+});
+
+const CENSUS_TREE_PREFIXES = ["apps/web/", "packages/"];
+
+/**
+ * The census's files as one commit holds them, read in a single
+ * `git cat-file --batch` so a whole tree costs two processes.
+ */
+export const revisionTree = (root: string, revision: string): CensusTree => {
+  const listing = Bun.spawnSync(
+    [
+      "git",
+      "ls-tree",
+      "-r",
+      "-z",
+      "--name-only",
+      revision,
+      "--",
+      "apps/web",
+      "packages",
+    ],
+    { cwd: root },
+  );
+  if (listing.exitCode !== 0) {
+    return panic(`Cannot list the files of ${revision}`);
+  }
+  const files = listing.stdout
+    .toString()
+    .split("\0")
+    .filter(
+      (file) =>
+        file !== "" &&
+        CENSUS_TREE_PREFIXES.some((prefix) => file.startsWith(prefix)) &&
+        /\.(?:[cm]?[jt]sx?|json)$/u.test(file) &&
+        !file.includes("/node_modules/"),
+    );
+  const batch = Bun.spawnSync(["git", "cat-file", "--batch"], {
+    cwd: root,
+    stdin: Buffer.from(files.map((file) => `${revision}:${file}\n`).join("")),
+  });
+  if (batch.exitCode !== 0) {
+    return panic(`Cannot read the files of ${revision}`);
+  }
+  const output = batch.stdout;
+  const texts = new Map<string, string>();
+  let offset = 0;
+  for (const file of files) {
+    const headerEnd = output.indexOf(0x0a, offset);
+    const header = output.subarray(offset, headerEnd).toString();
+    const size = Number(header.split(" ").at(2));
+    if (!header.includes(" blob ") || !Number.isInteger(size)) {
+      return panic(`Unexpected cat-file header for ${file}: ${header}`);
+    }
+    const start = headerEnd + 1;
+    texts.set(file, output.subarray(start, start + size).toString("utf-8"));
+    offset = start + size + 1;
+  }
+  return {
+    glob: (pattern) => {
+      const glob = new Bun.Glob(pattern);
+      return [...texts.keys()].filter((file) => glob.match(file));
+    },
+    read: (file) =>
+      texts.get(file) ??
+      panic(`${file} is not in the census tree of ${revision}`),
+  };
+};
+
+export const generateMutationQueryCensus = (
+  root: string,
+  tree: CensusTree = workingTree(root),
+) => {
+  const packageDirectories = tree.glob("packages/*/package.json").toSorted();
   const manifests = new Map(
     packageDirectories.map((file) => {
-      const manifest = JSON.parse(readFileSync(path.join(root, file), "utf-8"));
+      const manifest = JSON.parse(tree.read(file));
       return [manifest.name, { directory: path.posix.dirname(file), manifest }];
     }),
   );
@@ -2241,24 +2324,19 @@ export const generateMutationQueryCensus = (root: string) => {
       visitDependencies(dependency.manifest);
     }
   };
-  visitDependencies(
-    JSON.parse(readFileSync(path.join(root, "apps/web/package.json"), "utf-8")),
-  );
+  visitDependencies(JSON.parse(tree.read("apps/web/package.json")));
   const files: string[] = [];
   for (const directory of ["apps/web", ...[...packages].toSorted()]) {
-    for (const file of new Bun.Glob(
+    for (const file of tree.glob(
       `${directory}/src/**/*.{ts,tsx,js,jsx,mts,cts}`,
-    ).scanSync({ cwd: root })) {
+    )) {
       if (isMutationQueryCensusSource(file)) {
         files.push(file);
       }
     }
   }
   const census = inspectMutationQuerySources(
-    files.toSorted().map((file) => ({
-      file,
-      text: readFileSync(path.join(root, file), "utf-8"),
-    })),
+    files.toSorted().map((file) => ({ file, text: tree.read(file) })),
     packageExports,
   );
   return {

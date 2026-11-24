@@ -63,12 +63,12 @@ import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
-import { payloadCarriesDocument } from "@/api/lib/case-law/stored-payload";
 import {
   type TimestampCasToken,
   timestampCasToken,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
+import { payloadCarriesDocument } from "@/api/lib/legal-search/corpus-content-hash";
 import {
   readCorpusAst,
   readCorpusSections,

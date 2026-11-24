@@ -5,13 +5,13 @@ import type { AnyColumn, SQL } from "drizzle-orm";
 import { chunk } from "@stll/concurrency/chunk";
 import { isUuid } from "@stll/uuid-codec";
 
-import type { Transaction } from "@/api/db/root";
 import {
   DATA_EXPORT_MAX_FAILURES,
   organizationDataExports,
   schedulerJobs,
 } from "@/api/db/schema";
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
+import type { Transaction } from "@/api/db/types";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,

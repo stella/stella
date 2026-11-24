@@ -10,6 +10,8 @@ import { BASELINE_PATHS } from "./baseline-paths";
 import {
   generateMutationQueryCensus,
   type MutationQueryCensus,
+  revisionTree,
+  ROUTE_READER_HELPERS,
 } from "./mutation-query-census.ts";
 
 const ROOT = path.resolve(import.meta.dir, "..");
@@ -23,10 +25,6 @@ const MUTATION_HELPER = "resourceMutation";
 const READER_HELPER = "resourceQueryOptions";
 const MUTATION_PRIMITIVES = new Set(["useMutation", "mutationOptions"]);
 const READER_PRIMITIVES = new Set(["queryOptions", "infiniteQueryOptions"]);
-const ROUTE_READER_HELPERS = new Set([
-  "ensureRouteQueryData",
-  "ensureRouteInfiniteQueryData",
-]);
 const READER_EXECUTORS = new Set([
   ...READER_PRIMITIVES,
   ...ROUTE_READER_HELPERS,
@@ -678,6 +676,16 @@ const isValidHelperConfig = (
 
 type MutationContract = { resources: string[]; writes: string[] };
 
+const PUBLIC_TOKEN_SCOPE = "public-token";
+const PUBLIC_ROUTE_PREFIX = "/public/";
+
+/** Whether every write of a contract is a public route a link token opens. */
+const isPublicTokenContract = ({ writes }: MutationContract) =>
+  writes.length > 0 &&
+  writes.every(
+    (write) => write.split(" ").at(1)?.startsWith(PUBLIC_ROUTE_PREFIX) === true,
+  );
+
 const parseMutationContract = (
   module: ModuleIndex,
   property: ts.ObjectLiteralElementLike,
@@ -807,6 +815,30 @@ type MutationContractErrorArgs = {
   contracts: ReadonlyMap<string, MutationContract>;
 };
 
+/** Which closed scope a resourceMutation names; a missing scope is a workspace write. */
+const scopeKind = (scope: ts.Expression | undefined) => {
+  if (scope === undefined) {
+    return "workspace";
+  }
+  const type = objectProperty(scope, "type");
+  const scopeType = type && unwrap(type);
+  if (!scopeType || !ts.isStringLiteral(scopeType)) {
+    return "invalid";
+  }
+  if (
+    ["workspace", "organization", PUBLIC_TOKEN_SCOPE].includes(
+      scopeType.text,
+    ) &&
+    hasExactProperties(scope, ["type"])
+  ) {
+    return scopeType.text;
+  }
+  return scopeType.text === "organization-projection" &&
+    hasExactProperties(scope, ["type", "userId", "organizationId"])
+    ? scopeType.text
+    : "invalid";
+};
+
 const mutationContractError = ({
   call,
   mutationFn,
@@ -828,24 +860,11 @@ const mutationContractError = ({
   ) {
     return "resourceMutation options must contain mutation, queryClient, mutationFn, and optionally scope.";
   }
-  const scope = objectProperty(options, "scope");
-  if (scope !== undefined) {
-    const type = objectProperty(scope, "type");
-    const scopeType = type && unwrap(type);
-    const primary =
-      scopeType &&
-      ts.isStringLiteral(scopeType) &&
-      ["workspace", "organization"].includes(scopeType.text) &&
-      hasExactProperties(scope, ["type"]);
-    const projection =
-      scopeType &&
-      ts.isStringLiteral(scopeType) &&
-      scopeType.text === "organization-projection" &&
-      hasExactProperties(scope, ["type", "userId", "organizationId"]);
-    if (!primary && !projection) {
-      return "resourceMutation scope must name a closed primary scope or explicit organization projection identity.";
-    }
+  const scope = scopeKind(objectProperty(options, "scope"));
+  if (scope === "invalid") {
+    return "resourceMutation scope must name a closed primary scope, an explicit organization projection identity, or a public token.";
   }
+  const publicToken = scope === PUBLIC_TOKEN_SCOPE;
   const mutation = objectProperty(options, "mutation");
   if (!mutation) {
     return "resourceMutation mutation key must be a string literal.";
@@ -857,6 +876,13 @@ const mutationContractError = ({
   const contract = contracts.get(mutationValue.text);
   if (!contract) {
     return `resourceMutation names unknown contract ${mutationValue.text}.`;
+  }
+  // A public token write reaches only public routes, and a write to a public
+  // route carries no member session to scope its invalidation.
+  if (publicToken !== isPublicTokenContract(contract)) {
+    return publicToken
+      ? "A public token resourceMutation must name a contract whose writes are all public routes."
+      : "A contract whose writes are public routes must use the public token scope.";
   }
   const normalizedHelperCall = call.getText().replace(/\s+/gu, " ").trim();
   const normalizedMutationFn = mutationFn
@@ -2603,6 +2629,81 @@ export const inspectMutationQueryInvalidation = (
   return findings.toSorted((left, right) => compareCodeUnit(left.id, right.id));
 };
 
+/**
+ * What a finding's hook reads or writes, independent of the module and the
+ * function it sits in: a reader by its primitive and query key (the key's
+ * factory, else its static prefix, else its expression) and the routes it
+ * reads; a mutation by its hook and the routes it writes. Code moved to
+ * another module or renamed keeps this identity.
+ */
+export type HookIdentities = ReadonlyMap<string, string>;
+
+const routeList = (routes: readonly { method: string; route: string }[]) =>
+  [...new Set(routes.map(({ method, route }) => `${method} ${route}`))]
+    .toSorted(compareCodeUnit)
+    .join(",");
+
+export const hookIdentities = (census: MutationQueryCensus): HookIdentities => {
+  const identities = new Map<string, string>();
+  for (const entry of census.mutations) {
+    identities.set(
+      `${entry.id}:mutation`,
+      ["mutation", entry.callee, routeList(entry.writes)].join("\u0000"),
+    );
+  }
+  for (const entry of census.readers) {
+    const key =
+      entry.key === null
+        ? ""
+        : (entry.key.factory ??
+          (entry.key.staticPrefix.length > 0
+            ? JSON.stringify(entry.key.staticPrefix)
+            : entry.key.expression));
+    identities.set(
+      `${entry.id}:reader`,
+      ["reader", entry.callee, key, routeList(entry.routes)].join("\u0000"),
+    );
+  }
+  return identities;
+};
+
+/**
+ * Recorded entries that are a committed entry moved elsewhere: the committed
+ * entry is gone from the recording, the new one keeps its reason and its
+ * hook identity (as the base revision's census saw the old one and the
+ * current census sees the new one), and each committed entry accounts for one
+ * moved entry. Moving code is not new debt, so these do not count as growth;
+ * any other new entry still does.
+ */
+const movedEntries = (
+  recorded: Record<string, string>,
+  committed: Record<string, string>,
+  identities: { current: HookIdentities; committed: HookIdentities },
+): Set<string> => {
+  const movedAway = new Map<string, string[]>();
+  for (const [id, reason] of Object.entries(committed)) {
+    const identity = identities.committed.get(id);
+    if (id in recorded || identity === undefined) {
+      continue;
+    }
+    const key = `${identity}\u0000${reason}`;
+    movedAway.set(key, [...(movedAway.get(key) ?? []), id]);
+  }
+  const moved = new Set<string>();
+  for (const [id, reason] of Object.entries(recorded)) {
+    const identity = identities.current.get(id);
+    if (id in committed || identity === undefined) {
+      continue;
+    }
+    const sources = movedAway.get(`${identity}\u0000${reason}`);
+    if (sources !== undefined && sources.length > 0) {
+      sources.pop();
+      moved.add(id);
+    }
+  }
+  return moved;
+};
+
 const reasonFor = (finding: Finding) => finding.reason;
 const git = (args: readonly string[]) => {
   const result = Bun.spawnSync(["git", ...args], { cwd: ROOT });
@@ -2628,11 +2729,15 @@ export const checkBaseline = ({
   recorded,
   committed,
   write,
+  identities,
 }: {
   observed: readonly Finding[];
   recorded: Record<string, string>;
   committed: Record<string, string> | null;
   write: boolean;
+  /** Hook identities now and at the base revision; without them nothing moves. */
+  identities?:
+    { current: HookIdentities; committed: HookIdentities } | undefined;
 }) => {
   const invalidDeclarations = observed.filter(
     ({ disposition }) => disposition === "invalid-declaration",
@@ -2666,10 +2771,16 @@ export const checkBaseline = ({
   const byId = new Map(observed.map((finding) => [finding.id, finding]));
   const additions = [...byId.keys()].filter((id) => !(id in recorded));
   const stale = Object.keys(recorded).filter((id) => !byId.has(id));
+  const moved =
+    committed === null || identities === undefined
+      ? new Set<string>()
+      : movedEntries(recorded, committed, identities);
   const growth =
     committed === null
       ? []
-      : Object.keys(recorded).filter((id) => !(id in committed));
+      : Object.keys(recorded).filter(
+          (id) => !(id in committed) && !moved.has(id),
+        );
   const reworded =
     committed === null
       ? []
@@ -2750,11 +2861,26 @@ const main = () => {
     )
   ).trim();
   const committed = committedBaseline(baseRevision);
+  // Only a recording that names entries the base lacks can hold a move; the
+  // base revision's census, which names the old entries' hooks, is built
+  // only then.
+  const committedEntries = committed?.entries;
+  const identities =
+    committedEntries !== undefined &&
+    Object.keys(baseline.entries).some((id) => !(id in committedEntries))
+      ? {
+          current: hookIdentities(census),
+          committed: hookIdentities(
+            generateMutationQueryCensus(ROOT, revisionTree(ROOT, baseRevision)),
+          ),
+        }
+      : undefined;
   const result = checkBaseline({
     observed,
     recorded: baseline.entries,
     committed: committed?.entries ?? null,
     write: process.argv.includes("--write"),
+    identities,
   });
   const errors = [
     ...result.errors,

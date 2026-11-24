@@ -12,6 +12,7 @@ import type {
   AttachmentChipAction,
   AttachmentChipKind,
 } from "@/components/chat/attachment-chip";
+import { ChatDraftImageAttachment } from "@/components/chat/chat-image-attachment";
 import { DocumentIcon } from "@/components/document-icon";
 
 type ChatAttachmentChipItem =
@@ -152,15 +153,47 @@ export const ChatDraftAttachmentChips = ({
     return null;
   }
 
+  const imageFiles: Extract<ChatDraftAttachment, { type: "file" }>[] = [];
+  const chipItems: ChatDraftAttachment[] = [];
+  for (const item of files) {
+    if (item.type === "file" && item.mimeType.startsWith("image/")) {
+      imageFiles.push(item);
+    } else {
+      chipItems.push(item);
+    }
+  }
+
   return (
-    <div className="flex flex-wrap gap-1.5 px-2 pt-2">
-      {files.map((item) => (
-        <ChatAttachmentChip
-          behavior={{ type: "draft", onRemove, onExpand }}
-          item={item}
-          key={item.id}
-        />
-      ))}
+    <div
+      className={cn(
+        "flex flex-col gap-2",
+        imageFiles.length > 0 ? "px-3 pt-3" : "px-2 pt-2",
+      )}
+    >
+      {imageFiles.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {imageFiles.map((item) => (
+            <ChatDraftImageAttachment
+              file={item.file}
+              filename={item.filename}
+              key={item.id}
+              mimeType={item.mimeType}
+              onRemove={() => onRemove(item.id)}
+            />
+          ))}
+        </div>
+      )}
+      {chipItems.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {chipItems.map((item) => (
+            <ChatAttachmentChip
+              behavior={{ type: "draft", onRemove, onExpand }}
+              item={item}
+              key={item.id}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 };

@@ -1,23 +1,19 @@
-import { useCallback } from "react";
 import type { RefObject } from "react";
 
 import type {
   DocxCompatibility,
   DocxEditorRef,
   EditorMode,
+  FolioFieldInsertion,
 } from "@stll/folio-react";
 
 import { useEvidenceReferences } from "@/components/docx/use-evidence-references";
 import { detached } from "@/lib/detached";
 
+import { canInsertEvidenceReference } from "./docx-browser-editor.logic";
 import type { DocxEditModeResult } from "./docx-browser-editor.logic";
 
 export type EvidenceReferencesDialogState = "closed" | "open" | "requested";
-
-const canInsertEvidenceReference = (
-  canUnlock: boolean,
-  compatibility: DocxCompatibility | null,
-) => canUnlock && compatibility?.canSafelyEdit !== false;
 
 type UseEvidenceReferenceInsertionOptions = {
   canUnlock: boolean;
@@ -49,10 +45,10 @@ export const useEvidenceReferenceInsertion = ({
   requestEditMode,
 }: UseEvidenceReferenceInsertionOptions) => {
   const editable = isUnlocked && editorMode !== "viewing";
-  const evidence = useEvidenceReferences(editable);
+  const evidence = useEvidenceReferences();
   const canInsert = canInsertEvidenceReference(canUnlock, compatibility);
 
-  const handleEvidenceReferencesClick = useCallback(() => {
+  const handleEvidenceReferencesClick = () => {
     if (!canInsert || isUnlocked) {
       if (canInsert) {
         editorRef.current?.ensureEditorView({ focus: false });
@@ -66,14 +62,7 @@ export const useEvidenceReferenceInsertion = ({
     if (!didOpenRef.current) {
       detached(requestEditMode(), "evidence-reference.request-edit-mode");
     }
-  }, [
-    canInsert,
-    didOpenRef,
-    editorRef,
-    isUnlocked,
-    onDialogStateChange,
-    requestEditMode,
-  ]);
+  };
 
   return {
     canInsert,
@@ -87,7 +76,10 @@ export const useEvidenceReferenceInsertion = ({
       onOpenChange: (nextOpen: boolean) => {
         onDialogStateChange(nextOpen ? "open" : "closed");
       },
+      insertField: (field: FolioFieldInsertion) =>
+        editorRef.current?.insertField(field) ?? false,
     },
+    derivedFields: evidence.derivedFields,
     document: evidence.document,
     onClick: handleEvidenceReferencesClick,
     plugins: evidence.plugins,

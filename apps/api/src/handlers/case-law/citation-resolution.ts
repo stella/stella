@@ -97,7 +97,7 @@ import type { DecisionSheetSource } from "@stll/api-contract/decision-query-inte
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   caseLawCitationResolutionProgress,
   caseLawCitations,
@@ -126,11 +126,17 @@ import {
   type CitationResolutionRule,
   type CitationResolutionStatus,
   countsByRule,
+  effectiveCitationIdentifierTypeSql,
+  effectiveCitationIdentifierValueSql,
   MERITS_DECISION_TYPES,
   PROCEDURAL_DECISION_TYPES,
   unsettledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  caseNumberKeyAmongSql,
+  caseNumberKeysMatchSql,
+} from "@/api/lib/case-law/case-number-match-key";
 import { languageGroupWorkKeySql } from "@/api/lib/case-law/decision-work";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
@@ -305,7 +311,7 @@ const SHEET_READING_SQL = {
   stated: (value, { sheetNumber, familyKey }, holder) => sql`(
         btrim(${value}) ~ ${String.raw`^[0-9]{1,${String(DECISION_STATED_SHEET_MAX_DIGITS)}}$`}
     AND ${numeralSql(sql`btrim(${value})`)} = ${numeralSql(sheetNumber)}
-    AND ${holder}.citation_key = ${familyKey}
+    AND ${caseNumberKeysMatchSql(sql`${holder}.citation_key`, familyKey)}
     AND ${holder}.docket_family_key IS NOT NULL
   )`,
 } as const satisfies Record<
@@ -379,15 +385,15 @@ export const decisionTypeKeySql = (holder: SQL): SQL =>
  * same constants the extractor writes, so the two cannot drift.
  */
 const hintFamilyCte = (): SQL =>
-  sql`hint_family(hint, decision_types) AS (VALUES ${sql.join(
-    CITATION_DECISION_TYPE_HINTS.map(
-      (hint) =>
-        sql`(${hint}::varchar, ${decisionTypeArray(
-          CITATION_DECISION_TYPE_HINT_FAMILIES[hint],
-        )})`,
-    ),
-    sql`, `,
-  )})`;
+  sql`hint_family(hint, decision_types) AS (
+    SELECT h.hint, h.decision_types
+      FROM jsonb_to_recordset(${JSON.stringify(
+        CITATION_DECISION_TYPE_HINTS.map((hint) => ({
+          hint,
+          decision_types: CITATION_DECISION_TYPE_HINT_FAMILIES[hint],
+        })),
+      )}::text::jsonb) AS h(hint varchar, decision_types varchar[])
+  )`;
 
 /** What one statement settled, in the terms the runner reports. */
 export type CitationResolutionCounts = {
@@ -471,14 +477,6 @@ const EMPTY_COUNTS: CitationResolutionCounts = {
   undeclaredJurisdiction: 0,
 };
 
-const jurisdictionArray = (
-  jurisdictions: readonly CaseLawJurisdiction[],
-): SQL =>
-  sql`ARRAY[${sql.join(
-    jurisdictions.map((jurisdiction) => sql`${jurisdiction}`),
-    sql`, `,
-  )}]::varchar[]`;
-
 /**
  * The declared reach of every jurisdiction as `(citing, allowed[])` rows.
  *
@@ -489,13 +487,15 @@ const jurisdictionArray = (
  * stale.
  */
 const policyCte = (): SQL =>
-  sql`policy(citing_country, resolves_to) AS (VALUES ${sql.join(
-    citationResolutionPolicyRows().map(
-      ({ jurisdiction, resolvesTo }) =>
-        sql`(${jurisdiction}::varchar, ${jurisdictionArray(resolvesTo)})`,
-    ),
-    sql`, `,
-  )})`;
+  sql`policy(citing_country, resolves_to) AS (
+    SELECT p.citing_country, p.resolves_to
+      FROM jsonb_to_recordset(${JSON.stringify(
+        citationResolutionPolicyRows().map(({ jurisdiction, resolvesTo }) => ({
+          citing_country: jurisdiction,
+          resolves_to: resolvesTo,
+        })),
+      )}::text::jsonb) AS p(citing_country varchar, resolves_to varchar[])
+  )`;
 
 type CitationMatchingHoldersSqlOptions = {
   holder: SQL;
@@ -552,7 +552,13 @@ const citationMatchingHoldersSql = ({
       JOIN ${caseLawDecisions} ${holder}
         ON ${holder}.id = identifier.decision_id
      WHERE identifier.type = coalesce(${identifierType}, 'case-number')
-       AND identifier.normalized_value = coalesce(${normalizedIdentifierValue}, ${citationKey})
+       AND ${caseNumberKeysMatchSql(
+         sql.raw("identifier.normalized_value"),
+         effectiveCitationIdentifierValueSql(
+           normalizedIdentifierValue,
+           citationKey,
+         ),
+       )}
        AND ${jurisdictionPredicate}
        AND ${holder}.id <> ${citingDecisionId}
        AND (
@@ -574,7 +580,7 @@ const citationMatchingHoldersSql = ({
            })} AS work_key
       FROM ${caseLawDecisions} ${holder}
      WHERE (${identifierType} IS NULL OR ${identifierType} = 'case-number')
-       AND ${holder}.citation_key = ${citationKey}
+       AND ${caseNumberKeysMatchSql(sql`${holder}.citation_key`, citationKey)}
        AND ${jurisdictionPredicate}
        AND ${holder}.id <> ${citingDecisionId}
        AND (
@@ -587,7 +593,10 @@ const citationMatchingHoldersSql = ({
          FROM ${caseLawDecisionIdentifiers} existing_identifier
          WHERE existing_identifier.decision_id = ${holder}.id
            AND existing_identifier.type = 'case-number'
-           AND existing_identifier.normalized_value = ${citationKey}
+           AND ${caseNumberKeysMatchSql(
+             sql.raw("existing_identifier.normalized_value"),
+             citationKey,
+           )}
        )
   ) candidate
   -- Language manifestations are one judgment, not competing decisions.
@@ -1339,13 +1348,14 @@ export const reopenCitationsForDecisionKey = async (
 ): Promise<number> => {
   const reachedFrom = sql`(
     SELECT pol.citing_country
-      FROM (VALUES ${sql.join(
+      FROM jsonb_to_recordset(${JSON.stringify(
         citationResolutionPolicyRows().map(
-          ({ jurisdiction: citing, resolvesTo }) =>
-            sql`(${citing}::varchar, ${jurisdictionArray(resolvesTo)})`,
+          ({ jurisdiction: citing, resolvesTo }) => ({
+            citing_country: citing,
+            resolves_to: resolvesTo,
+          }),
         ),
-        sql`, `,
-      )}) AS pol(citing_country, resolves_to)
+      )}::text::jsonb) AS pol(citing_country varchar, resolves_to varchar[])
      WHERE ${jurisdiction}::varchar = ANY (pol.resolves_to)
   )`;
 
@@ -1373,7 +1383,7 @@ export const reopenCitationsForDecisionKey = async (
              resolution_rule_id = NULL
         FROM ${caseLawDecisions} citing
        WHERE citing.id = c.citing_decision_id
-         AND c.citation_key = ${citationKey}
+         AND ${caseNumberKeyAmongSql(sql.raw("c.citation_key"), [citationKey])}
          AND ${citationReopenableByKeySql(sql.raw("c.resolution_status"))}
          AND ${affects}
       RETURNING c.id
@@ -1387,7 +1397,7 @@ export const reopenCitationsForDecisionKey = async (
        WHERE citing.id = c.citing_decision_id
          AND cited.id = c.cited_decision_id
          AND cited.id <> ${decisionId}::uuid
-         AND cited.citation_key = ${citationKey}
+         AND ${caseNumberKeyAmongSql(sql.raw("cited.citation_key"), [citationKey])}
          AND c.resolution_status = ${CITATION_RESOLUTION_STATUS.RESOLVED}
          AND ${affects}
       RETURNING c.id
@@ -1426,27 +1436,31 @@ export const reopenCitationsForDecisionIdentifiers = async (
   if (identifiers.length === 0) {
     return NOTHING_REOPENED;
   }
-  const identifierRows = sql.join(
-    identifiers.map(
-      (identifier) =>
-        sql`(${identifier.type}::varchar, ${identifier.normalizedValue}::varchar)`,
-    ),
-    sql`, `,
-  );
+  const arrivingPayload = identifiers.map((identifier) => ({
+    type: identifier.type,
+    normalized_value: identifier.normalizedValue,
+  }));
   const reachedFrom = sql`(
     SELECT pol.citing_country
-      FROM (VALUES ${sql.join(
+      FROM jsonb_to_recordset(${JSON.stringify(
         citationResolutionPolicyRows().map(
-          ({ jurisdiction: citing, resolvesTo }) =>
-            sql`(${citing}::varchar, ${jurisdictionArray(resolvesTo)})`,
+          ({ jurisdiction: citing, resolvesTo }) => ({
+            citing_country: citing,
+            resolves_to: resolvesTo,
+          }),
         ),
-        sql`, `,
-      )}) AS pol(citing_country, resolves_to)
+      )}::text::jsonb) AS pol(citing_country varchar, resolves_to varchar[])
      WHERE ${jurisdiction}::varchar = ANY (pol.resolves_to)
   )`;
 
   const result: unknown = await tx.execute(sql`
-    WITH arriving(type, normalized_value) AS (VALUES ${identifierRows}),
+    WITH arriving(type, normalized_value) AS (
+      SELECT a.type, a.normalized_value
+        FROM jsonb_to_recordset(${JSON.stringify(arrivingPayload)}::text::jsonb) AS a(
+          type varchar,
+          normalized_value varchar
+        )
+    ),
     revived AS (
       UPDATE ${caseLawCitations} citation
          SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
@@ -1456,11 +1470,16 @@ export const reopenCitationsForDecisionIdentifiers = async (
          AND EXISTS (
            SELECT 1
            FROM arriving
-           WHERE arriving.type = coalesce(citation.identifier_type, 'case-number')
-             AND arriving.normalized_value = coalesce(
-               citation.normalized_identifier_value,
-               citation.citation_key
-             )
+           WHERE arriving.type = ${effectiveCitationIdentifierTypeSql(
+             sql.raw("citation.identifier_type"),
+           )}
+             AND ${caseNumberKeysMatchSql(
+               sql.raw("arriving.normalized_value"),
+               effectiveCitationIdentifierValueSql(
+                 sql.raw("citation.normalized_identifier_value"),
+                 sql.raw("citation.citation_key"),
+               ),
+             )}
          )
          AND ${citationReopenableByKeySql(sql.raw("citation.resolution_status"))}
          AND citing.country IN ${reachedFrom}
@@ -1485,7 +1504,10 @@ export const reopenCitationsForDecisionIdentifiers = async (
            FROM arriving
            JOIN ${caseLawDecisionIdentifiers} cited_identifier
              ON cited_identifier.type = arriving.type
-            AND cited_identifier.normalized_value = arriving.normalized_value
+            AND ${caseNumberKeysMatchSql(
+              sql.raw("cited_identifier.normalized_value"),
+              sql.raw("arriving.normalized_value"),
+            )}
            WHERE cited_identifier.decision_id = cited.id
          )
          AND citation.resolution_status = ${CITATION_RESOLUTION_STATUS.RESOLVED}
@@ -1528,13 +1550,11 @@ export const reopenCitationsForKeys = async (
   tx: CitationGraphTransaction,
   citationKeys: readonly string[],
 ): Promise<ReopenedCitations> => {
-  if (citationKeys.length === 0) {
+  const [firstKey, ...otherKeys] = citationKeys;
+  if (firstKey === undefined) {
     return NOTHING_REOPENED;
   }
-  const keys = sql`ARRAY[${sql.join(
-    citationKeys.map((key) => sql`${key}`),
-    sql`, `,
-  )}]::varchar[]`;
+  const keys = [firstKey, ...otherKeys] as const;
   // Disjoint arms again: `revived` reads the negative outcomes, `contested`
   // reads `resolved`, and no row can match both.
   // audit: skip — derived citation graph, not a user action
@@ -1543,7 +1563,7 @@ export const reopenCitationsForKeys = async (
       UPDATE ${caseLawCitations} c
          SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
              resolution_rule_id = NULL
-       WHERE c.citation_key = ANY (${keys})
+       WHERE ${caseNumberKeyAmongSql(sql.raw("c.citation_key"), keys)}
          AND ${citationReopenableByKeySql(sql.raw("c.resolution_status"))}
       RETURNING c.id
     ),
@@ -1554,7 +1574,7 @@ export const reopenCitationsForKeys = async (
              resolution_rule_id = NULL
         FROM ${caseLawDecisions} cited
        WHERE cited.id = c.cited_decision_id
-         AND cited.citation_key = ANY (${keys})
+         AND ${caseNumberKeyAmongSql(sql.raw("cited.citation_key"), keys)}
          AND c.resolution_status = ${CITATION_RESOLUTION_STATUS.RESOLVED}
       RETURNING c.id
     )

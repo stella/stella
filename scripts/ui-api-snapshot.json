@@ -25,6 +25,7 @@
       "AlertDialogTrigger",
       "AlertDialogViewport",
       "AnchoredToastProvider",
+      "AntigravityLogoIcon",
       "ApplicationRail",
       "ApplicationRailButton",
       "ApplicationRailContent",
@@ -59,6 +60,7 @@
       "CalendarHeaderCell",
       "CalendarHeaderRow",
       "Checkbox",
+      "ClaudeLogoIcon",
       "Collapsible",
       "CollapsiblePanel",
       "CollapsibleTrigger",
@@ -159,6 +161,7 @@
       "FrameHeader",
       "FramePanel",
       "FrameTitle",
+      "GeminiLogoIcon",
       "GitHubLogoIcon",
       "HexColorPicker",
       "HighlightedTextarea",
@@ -174,6 +177,7 @@
       "INSPECTOR_PANE_MIN_WIDTH",
       "INSPECTOR_RAIL_WIDTH",
       "InlineRenameInput",
+      "InlineSkeleton",
       "Input",
       "InputGroup",
       "InputGroupAddon",
@@ -285,6 +289,7 @@
       "OUTLINE_EMPHASIS",
       "OVERLAY_COLLISION_PADDING",
       "OVERLAY_LAYER_CLASS_NAMES",
+      "OpenAILogoIcon",
       "OutlineRail",
       "PROPERTY_ROW_GRID",
       "Pagination",
@@ -561,7 +566,15 @@
       "stripDirectionalControls",
       "withoutDirectionalControls"
     ],
-    "./brand-icons": ["DiscordLogoIcon", "GitHubLogoIcon", "XLogoIcon"],
+    "./brand-icons": [
+      "AntigravityLogoIcon",
+      "ClaudeLogoIcon",
+      "DiscordLogoIcon",
+      "GeminiLogoIcon",
+      "GitHubLogoIcon",
+      "OpenAILogoIcon",
+      "XLogoIcon"
+    ],
     "./breadcrumb": [
       "Breadcrumb",
       "BreadcrumbEllipsis",
@@ -679,8 +692,12 @@
       "withoutDirectionalControls"
     ],
     "./components/brand-icons": [
+      "AntigravityLogoIcon",
+      "ClaudeLogoIcon",
       "DiscordLogoIcon",
+      "GeminiLogoIcon",
       "GitHubLogoIcon",
+      "OpenAILogoIcon",
       "XLogoIcon"
     ],
     "./components/breadcrumb": [
@@ -952,7 +969,7 @@
       "useSidebarInlineSize",
       "useSidebarLayout"
     ],
-    "./components/skeleton": ["Skeleton"],
+    "./components/skeleton": ["InlineSkeleton", "Skeleton"],
     "./components/stella-mark": ["StellaMark"],
     "./components/stella-wordmark": ["StellaWordmarkLatin"],
     "./components/table": [
@@ -1010,6 +1027,8 @@
       "COMPOSER_PICKER_TRIGGER_CLASS",
       "COMPOSER_PLACEHOLDER_CLASS",
       "COMPOSER_SEND_BUTTON_CLASS",
+      "COMPOSER_STATUS_ROW_CENTERED_CLASS",
+      "COMPOSER_STATUS_ROW_CLASS",
       "COMPOSER_TEXT_CLASS",
       "ComposerPicker",
       "ComposerPlaceholder",
@@ -1029,9 +1048,31 @@
       "COMPOSER_PICKER_TRIGGER_CLASS",
       "COMPOSER_PLACEHOLDER_CLASS",
       "COMPOSER_SEND_BUTTON_CLASS",
+      "COMPOSER_STATUS_ROW_CENTERED_CLASS",
+      "COMPOSER_STATUS_ROW_CLASS",
       "COMPOSER_TEXT_CLASS"
     ],
     "./context-menu": ["ContextMenu", "ContextMenuActionItems"],
+    "./control-face": [
+      "ButtonFace",
+      "CheckboxFace",
+      "FaceLabelPending",
+      "FieldDescriptionFace",
+      "FieldFace",
+      "FieldTriggerFace",
+      "InputFace",
+      "LabelFace",
+      "SPLIT_BUTTON_PRIMARY_CLASS",
+      "SPLIT_BUTTON_ROOT_CLASS",
+      "SPLIT_BUTTON_TRIGGER_CLASS",
+      "SegmentedIconToggleFace",
+      "SelectTriggerFace",
+      "SplitButtonChevron",
+      "SplitButtonFace",
+      "SwitchFace",
+      "TabsFace",
+      "buttonFaceClassName"
+    ],
     "./control-size": ["CONTROL_SIZE", "CONTROL_SIZES"],
     "./copy-button": [
       "COPIED_RESET_MS",
@@ -1085,6 +1126,7 @@
     ],
     "./destructive-confirm-dialog": ["DestructiveConfirmDialog"],
     "./details-grid": ["DetailsGrid", "DetailsItem"],
+    "./details-list-face": ["DetailsListFace", "DetailsListItemFace"],
     "./dialog": [
       "DIALOG_MOBILE_LAYOUT",
       "DIALOG_SIZE_CLASS_NAMES",
@@ -1113,7 +1155,11 @@
       "caseNumberIdentityLabels",
       "statuteIdentityLabels"
     ],
-    "./document-mark": ["DocumentMark", "isDocumentMarkKind"],
+    "./document-mark": [
+      "DOCUMENT_MARK_KINDS",
+      "DocumentMark",
+      "isDocumentMarkKind"
+    ],
     "./entity-actions": ["EntityActions", "EntityActionsButton"],
     "./field": [
       "Field",
@@ -1158,6 +1204,7 @@
       "wheelDeltaPixels"
     ],
     "./icons": [
+      "AccessibilityIcon",
       "ActivityIcon",
       "AddCommentIcon",
       "AiActionIcon",
@@ -1192,6 +1239,11 @@
       "CalendarClockIcon",
       "CalendarIcon",
       "CaseLawIcon",
+      "ChartColumnIcon",
+      "ChartLineIcon",
+      "ChartNoAxesColumnIcon",
+      "ChartPieIcon",
+      "ChartScatterIcon",
       "CheckCheckIcon",
       "CheckCircle2Icon",
       "CheckIcon",
@@ -1266,6 +1318,7 @@
       "FolderPlusIcon",
       "FolderSyncIcon",
       "FolderTreeIcon",
+      "FollowUpIcon",
       "FunctionSquareIcon",
       "GanttChartIcon",
       "GaugeIcon",
@@ -1376,6 +1429,7 @@
       "SkillIcon",
       "SlashIcon",
       "SlidersHorizontalIcon",
+      "SmartphoneIcon",
       "SparklesIcon",
       "SplitIcon",
       "SquareCheckIcon",
@@ -1388,6 +1442,7 @@
       "StrikethroughIcon",
       "SunIcon",
       "TableIcon",
+      "TabletIcon",
       "TagIcon",
       "TagsIcon",
       "TerminalIcon",
@@ -1422,6 +1477,7 @@
     "./identity-text": ["IdentityText"],
     "./initials": ["getInitials"],
     "./inline-drop-indicator": ["InlineDropIndicator"],
+    "./inline-overflow": ["resolveInlineOverflow", "splitInlineOverflow"],
     "./inline-rename": ["InlineRenameInput"],
     "./inline-reorder": ["reorderInlineIds", "toInlineDropPosition"],
     "./input": ["Input"],
@@ -1438,6 +1494,7 @@
       "InputOTPSeparator",
       "InputOTPSlot"
     ],
+    "./input-otp-face": ["InputOTPGroup", "InputOTPSlotFace"],
     "./inspector": [
       "INSPECTOR_CONTENT_MIN_WIDTH",
       "INSPECTOR_EDITOR_MIN_WIDTH",
@@ -1544,18 +1601,47 @@
       "useKanbanSortable",
       "useKanbanSortableSensors"
     ],
+    "./kanban-card-shell": ["KanbanCardShell"],
+    "./kanban-column-header-shell": [
+      "KANBAN_COLUMN_NAME_CLASS",
+      "KANBAN_COLUMN_WIDTH_CLASS",
+      "KanbanColumnHeaderShell",
+      "KanbanColumnNameFace",
+      "KanbanColumnTitleSlot"
+    ],
+    "./kanban-grouping": [
+      "getKanbanGroupingPropertyId",
+      "getKanbanGroups",
+      "isKanbanGroupingRenderable",
+      "resolveKanbanGroupOptions",
+      "resolveKanbanGrouping",
+      "selectKanbanRows"
+    ],
     "./kbd": ["Kbd", "formatKeys", "kbdPlatformOf", "useKbdPlatform"],
     "./label": ["Label"],
     "./landing": [
       "LANDING_ROW_CLASS",
       "LANDING_SECTION_HEADING_CLASS",
+      "LandingBoxPending",
       "LandingButton",
       "LandingEmpty",
       "LandingGreeting",
       "LandingItemText",
       "LandingLayout",
       "LandingRowIcon",
-      "LandingSection"
+      "LandingRowsPending",
+      "LandingSection",
+      "LandingSectionHeadingPending"
+    ],
+    "./landing-shell": [
+      "LANDING_ROW_CLASS",
+      "LANDING_SECTION_HEADING_CLASS",
+      "LandingBoxPending",
+      "LandingGreeting",
+      "LandingLayout",
+      "LandingRowsPending",
+      "LandingSection",
+      "LandingSectionHeadingPending"
     ],
     "./layout-tokens": [
       "PROPERTY_ROW_GRID",
@@ -1591,6 +1677,19 @@
       "ListItemMedia",
       "ListItemStatus",
       "ListItemTitle"
+    ],
+    "./list-shell": [
+      "LIST_ITEM_ROW_CLASS",
+      "List",
+      "ListGroup",
+      "ListGroupAction",
+      "ListGroupDescription",
+      "ListGroupHeader",
+      "ListGroupHeading",
+      "ListGroupTitle",
+      "ListGroupTitlePending",
+      "ListItemMedia",
+      "ListItemSkeleton"
     ],
     "./loader": ["Loader", "LoaderState"],
     "./matter-colors": [
@@ -1654,6 +1753,7 @@
     "./number-input": ["NumberInput"],
     "./option-color": ["emptyColor", "optionColors", "resolveOptionColor"],
     "./outcome-screen": ["OutcomeScreen"],
+    "./outcome-screen-face": ["OutcomeScreenFace"],
     "./outline-rail": [
       "OUTLINE_CONTROL_MIN_SIZE",
       "OUTLINE_EMPHASIS",
@@ -1674,6 +1774,20 @@
       "PaginationLink",
       "PaginationNext",
       "PaginationPrevious"
+    ],
+    "./pane-width": [
+      "INSPECTOR_CONTENT_MIN_WIDTH",
+      "INSPECTOR_EDITOR_MIN_WIDTH",
+      "INSPECTOR_PANE_DEFAULT_WIDTH",
+      "INSPECTOR_PANE_MAX_WIDTH",
+      "INSPECTOR_PANE_MIN_WIDTH",
+      "INSPECTOR_RAIL_WIDTH",
+      "clampInspectorPaneWidth",
+      "inspectorPaneWidthCss",
+      "resolveInspectorDockWidth",
+      "resolveInspectorPaneMaxWidth",
+      "resolveInspectorPaneWidth",
+      "shouldForceSidebarCollapsed"
     ],
     "./panel-inset": [
       "DOCUMENT_PANEL_BOTTOM_INSET",
@@ -1755,6 +1869,12 @@
       "SelectValue"
     ],
     "./separator": ["ResizeSeparator", "Separator", "TextSeparator"],
+    "./settings": [
+      "SettingsPanel",
+      "SettingsRow",
+      "SettingsSection",
+      "settingsRowIds"
+    ],
     "./sheet": [
       "Sheet",
       "SheetBackdrop",
@@ -1803,7 +1923,7 @@
       "useSidebarInlineSize",
       "useSidebarLayout"
     ],
-    "./skeleton": ["Skeleton"],
+    "./skeleton": ["InlineSkeleton", "Skeleton"],
     "./split-button": ["SplitButton"],
     "./status-mark": ["StatusMark"],
     "./stella-mark": ["StellaMark"],
@@ -1824,6 +1944,24 @@
       "TableRow"
     ],
     "./table-chart": ["TableChart"],
+    "./table-shell": [
+      "HEAD_CONTENT_CLASS",
+      "SORT_ICON_SLOT_CLASS",
+      "SortDirectionIcon",
+      "SortableHeadFace",
+      "Table",
+      "TableBody",
+      "TableCaption",
+      "TableCellFace",
+      "TableFooter",
+      "TableHead",
+      "TableHeadLabel",
+      "TableHeader",
+      "TableRow",
+      "TableSkeletonRows",
+      "ariaSortOf",
+      "sortableHeadButtonClassName"
+    ],
     "./tabs": [
       "Tabs",
       "TabsContent",
@@ -1868,12 +2006,21 @@
       "TooltipTrigger"
     ],
     "./truncated-text": ["TruncatedText", "isTextOverflowing"],
+    "./truncated-text-face": [
+      "TRUNCATED_TEXT_LINES_CLASS",
+      "TruncatedTextFace"
+    ],
     "./typed-character": ["typedCharacter"],
     "./use-contained-handler": ["containedEventHandler", "containedHandler"],
     "./use-content-dir": [
       "contentDir",
       "isStructuredInputType",
       "useContentDir"
+    ],
+    "./use-inline-overflow": [
+      "INLINE_OVERFLOW_ITEM_ATTRIBUTE",
+      "INLINE_OVERFLOW_TRIGGER_ATTRIBUTE",
+      "useInlineOverflow"
     ],
     "./use-latest": ["useLatest"],
     "./use-mobile": ["useIsMobile"],
@@ -1884,6 +2031,12 @@
       "ViewChromeBar",
       "ViewFilterButton",
       "ViewFilterChip",
+      "ViewToolbarChrome"
+    ],
+    "./view-toolbar-shell": [
+      "ViewChromeBar",
+      "ViewFilterButtonFace",
+      "ViewFilterChipFace",
       "ViewToolbarChrome"
     ],
     "./week": ["getFirstWeekday", "getLocaleWeekInfo", "getWeekendDays"],
@@ -1978,6 +2131,39 @@
       "plain",
       "secondary"
     ],
+    "ButtonFace.layout": ["wrap"],
+    "ButtonFace.size": [
+      "chip",
+      "default",
+      "icon",
+      "icon-2xs",
+      "icon-lg",
+      "icon-round",
+      "icon-sm",
+      "icon-xl",
+      "icon-xs",
+      "inline",
+      "inspector-row",
+      "lg",
+      "row",
+      "sm",
+      "touch",
+      "xl",
+      "xs"
+    ],
+    "ButtonFace.variant": [
+      "composer",
+      "default",
+      "destructive",
+      "destructive-ghost",
+      "destructive-outline",
+      "ghost",
+      "link",
+      "muted",
+      "muted-destructive",
+      "outline",
+      "secondary"
+    ],
     "ButtonTextRun.layout": ["wrap"],
     "ButtonTextRun.variant": ["link", "plain"],
     "Checkbox.appearance": ["cell", "default"],
@@ -1988,7 +2174,7 @@
     "ComboboxTrigger.variant": ["field", "plain"],
     "CommandItem.size": ["default", "row"],
     "ComposerPlaceholder.stature": ["compact", "large"],
-    "CourtBadge.size": ["default", "inline"],
+    "CourtBadge.size": ["default", "inline", "prose"],
     "CourtBadge.weight": ["dashed", "outline", "solid", "tinted"],
     "DatePickerPopover.layer": [
       "chrome",
@@ -2010,6 +2196,7 @@
     ],
     "DateRangeFilter.size": ["compact", "touch"],
     "DateRangeFilter.variant": ["field", "inline"],
+    "DetailsGrid.density": ["compact", "default"],
     "DetailsGrid.labelWidth": ["auto", "lg", "md", "sm"],
     "DetailsGrid.orientation": ["auto", "horizontal", "vertical"],
     "DetailsGrid.variant": ["list", "sheet"],
@@ -2057,17 +2244,43 @@
       "search",
       "search-child"
     ],
-    "DocumentIdentityBadge.size": ["default", "inline"],
+    "DocumentIdentityBadge.size": ["default", "inline", "prose"],
     "DocumentMark.kind": [
+      "asicE",
+      "asicS",
+      "bdoc",
+      "cades",
+      "cadesDetached",
       "csv",
+      "dataBox",
+      "eAkta",
+      "epub",
+      "et3",
       "excel",
+      "fatturaPA",
+      "isdoc",
+      "isdocx",
       "markdown",
+      "mbox",
+      "numbers",
+      "ofd",
       "openDocumentSheet",
       "openDocumentText",
+      "pages",
       "pdf",
       "powerpoint",
+      "pst",
       "rtf",
-      "word"
+      "uyap",
+      "webArchive",
+      "word",
+      "wordPerfect",
+      "works",
+      "xades",
+      "xadesZep",
+      "xml",
+      "zep",
+      "zip"
     ],
     "DropdownMenuCheckboxItem.variant": ["default", "switch"],
     "DropdownMenuItem.variant": ["default", "destructive"],
@@ -2075,8 +2288,11 @@
     "DropdownMenuTrigger.appearance": ["caption", "default"],
     "EntityActionsButton.align": ["center", "end", "start"],
     "EntityActionsButton.side": ["bottom", "left", "right", "top"],
+    "FieldFace.density": ["default", "snug"],
+    "FieldFace.layout": ["inline", "stack"],
     "Form.density": ["compact", "default", "snug"],
     "Form.layout": ["inline", "stack"],
+    "FrameTitle.tone": ["default", "destructive"],
     "HighlightedTextarea.dir": ["ltr", "rtl"],
     "InlineDropIndicator.position": ["after", "before"],
     "InputGroupAddon.align": [
@@ -2094,10 +2310,13 @@
     "KanbanVirtualCell.footerPlacement": ["end", "sticky-start"],
     "Kbd.variant": ["cap", "plain"],
     "Label.variant": ["choice", "choice-card", "default", "muted"],
+    "LandingBoxPending.box": ["composer", "search"],
     "LandingItemText.iconTone": ["matter", "muted"],
     "LandingRowIcon.tone": ["matter", "muted"],
+    "ListGroupTitle.tone": ["default", "destructive"],
     "ListItemDescription.variant": ["code", "paragraph", "text"],
     "ListItemMedia.variant": ["icon", "initial"],
+    "ListItemSkeleton.trailing": ["text"],
     "ListItemStatus.tone": ["destructive", "neutral", "success", "warning"],
     "ListItemTitle.variant": ["name", "statement"],
     "Loader.animation": ["none", "spin"],
@@ -2166,7 +2385,12 @@
     "RunStateMark.state": ["needs-you", "working"],
     "ScrollArea.axis": ["both", "vertical"],
     "SegmentedIconToggle.size": ["compact", "touch"],
+    "SegmentedIconToggleFace.size": ["compact", "touch"],
     "SelectTrigger.align": ["center", "start"],
+    "SettingsPanel.inset": ["flush", "padded"],
+    "SettingsRow.depth": ["nested", "top"],
+    "SettingsRow.interaction": ["label", "none"],
+    "SettingsSection.tone": ["default", "destructive"],
     "SheetContent.side": [
       "block-end",
       "block-start",
@@ -2188,20 +2412,28 @@
     "SidebarMenuButton.size": ["default", "lg", "rail", "sm"],
     "SidebarMenuButton.variant": ["default", "outline"],
     "SidebarMenuSubButton.size": ["md", "sm"],
+    "SortDirectionIcon.direction": ["asc", "desc"],
     "SortableHead.align": ["center", "end", "start"],
     "SortableHead.sortDirection": ["asc", "desc"],
+    "SortableHeadFace.align": ["center", "end", "start"],
+    "SortableHeadFace.sortDirection": ["asc", "desc"],
     "SplitButton.size": ["md", "sm"],
     "SplitButton.surface": ["menu", "popover"],
+    "SplitButtonFace.size": ["md", "sm"],
     "StatusMark.status": ["done", "failed", "pending", "running"],
     "Step.status": ["completed", "current", "upcoming"],
     "Steps.variant": ["compact", "default", "progress"],
     "Switch.size": ["default", "sm"],
+    "SwitchFace.size": ["default", "sm"],
     "SwitchField.size": ["default", "sm"],
-    "Table.density": ["compact", "default"],
+    "Table.cellText": ["single-line", "wrap"],
+    "Table.density": ["compact", "default", "prose"],
     "Table.inset": ["card", "default"],
     "Table.scroll": ["parent", "self"],
     "TableCell.align": ["center", "end", "start"],
     "TableCell.tone": ["default", "muted"],
+    "TableCellFace.align": ["center", "end", "start"],
+    "TableCellFace.tone": ["default", "muted"],
     "TableChart.kind": ["bar", "line", "pie", "scatter"],
     "TableChart.xMode": ["category", "numeric"],
     "TableHead.align": ["center", "end", "start"],

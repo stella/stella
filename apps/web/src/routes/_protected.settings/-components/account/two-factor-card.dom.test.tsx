@@ -73,6 +73,7 @@ const mount = (emailAvailable: boolean) => {
           email: "member@example.test",
           emailVerified: true,
           id: "user",
+          locale: "en",
           name: "Member",
           timezoneId: "UTC",
           twoFactorEnabled: false,
@@ -87,6 +88,7 @@ const mount = (emailAvailable: boolean) => {
     reviewPasswordSignIn: false,
     bootstrap: false,
     social: { google: false, microsoft: false, apple: false },
+    enterpriseSso: false,
     transactionalEmail: emailAvailable,
   });
   render(

@@ -8,6 +8,7 @@
 /* The design system's components live outside this app's source tree, so
  * their class names have to be scanned explicitly. */
 @source "../../../../packages/ui/src/**/*.{ts,tsx}";
+@source "../../../../packages/markdown-editor/src/**/*.{ts,tsx}";
 /* The folio editor chrome uses Tailwind utilities but ships no utility CSS of
  * its own, and node_modules is outside Tailwind's default source detection. */
 @source "../../../../node_modules/@stll/folio-react/dist/**/*.js";
@@ -51,6 +52,72 @@ body:has(.accessibility-guide-window) {
 
 .accessibility-guide-window {
   min-height: 100dvh;
+}
+
+/* The dictation notice is the same kind of borderless transparent panel. */
+body:has(.dictation-notice-window) {
+  background: transparent;
+  overflow: hidden;
+}
+
+.dictation-notice-window {
+  min-height: 100dvh;
+}
+
+/* The dictation fix panel is a borderless transparent panel too. */
+body:has(.dictation-fix-window) {
+  background: transparent;
+  overflow: hidden;
+}
+
+/* The dictation preview is a borderless transparent window that lets clicks
+ * through; its card grows from the edge nearest the status icon. */
+body:has(.dictation-preview-window) {
+  background: transparent;
+  overflow: hidden;
+}
+
+.dictation-preview-window[data-anchor="top"] {
+  align-items: flex-start;
+}
+
+.dictation-preview-window[data-anchor="bottom"] {
+  align-items: flex-end;
+}
+
+/* The newest words stay in view: older lines leave through the top edge,
+ * which fades once the text outgrows the card. */
+.dictation-preview-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  max-height: calc(1.375em * 5);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.dictation-preview-text[data-overflowing="true"] {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    var(--color-black) 1.375em
+  );
+}
+
+.dictation-preview-dot[data-stage="listening"] {
+  animation: dictation-preview-pulse 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dictation-preview-dot[data-stage="listening"] {
+    animation: none;
+  }
+}
+
+@keyframes dictation-preview-pulse {
+  50% {
+    opacity: 0.35;
+  }
 }
 
 body:has(.clipboard-editor-window) {

@@ -62,7 +62,9 @@ import {
   DOCUMENT_PROCESSING_REQUIRED_STATUS,
 } from "@/api/lib/document-processing-contract";
 import { TEMPLATE_WARNING_CODES } from "@/api/lib/docx/template-warnings";
+import { legislationAmendmentEffectSchema } from "@/api/lib/legal-search/legislation-amendment-effect";
 import { LEGISLATION_AMENDMENT_CHANGE_KINDS } from "@/api/lib/legal-search/legislation-ingestion-types";
+import type { LegislationAmendmentCoverage } from "@/api/lib/legal-search/legislation-ingestion-types";
 import {
   SANCTIONS_CLASSIFICATIONS,
   SANCTIONS_ENTITY_TYPES,
@@ -79,6 +81,7 @@ import {
   caseNumberTypeProjection,
   searchTotalProjection,
 } from "./case-law-result-projections";
+import { decisionBodySourceProjection } from "./decision-body-source-projection";
 import { DECISION_REVIEWS_PROJECTION } from "./decision-review-projection";
 import { statuteExpressionLabel } from "./legislation-result-projections";
 import {
@@ -181,7 +184,8 @@ export const LIST_MATTERS_DETAIL_PROJECTION = v.strictObject({
         // recent entity belongs to the one matter this response describes,
         // so its workspace is the payload's `matter.id`.
         entityId: chatEntityRef({ from: "outputPath", path: "matter.id" }),
-        name: v.string(),
+        // The entity's own name (often a file name): content, not a handle.
+        name: contentText(),
         kind: v.string(),
         status: v.nullable(v.string()),
         priority: v.nullable(v.string()),
@@ -297,7 +301,9 @@ export const SEARCH_ACROSS_MATTERS_PROJECTION = v.strictObject({
       entityId: chatEntityRef({ from: "sibling", key: "workspaceId" }),
       workspaceId: chatRef("matter"),
       workspaceName: v.string(),
-      name: v.string(),
+      // The index title: the entity name, else its file name or the start
+      // of its text, so it is document content like the headline.
+      name: contentText(),
       kind: v.picklist(ENTITY_KINDS),
       headline: v.nullable(contentText()),
     }),
@@ -310,13 +316,22 @@ export const SEARCH_ACROSS_MATTERS_PROJECTION = v.strictObject({
  * the numeric char-offset window cursor the egress pipeline writes back.
  */
 export const READ_CONTENT_ACROSS_MATTERS_PROJECTION = v.strictObject({
+  /** One-based positions in the envelope's attachment list. */
+  attachments: v.optional(
+    v.array(
+      v.strictObject({
+        position: v.number(),
+        entityId: chatEntityRef({ from: "outputPath", path: "workspaceId" }),
+      }),
+    ),
+  ),
   charCount: v.number(),
   // The output entity is the request's own `entity_id` input, so hydration
   // reuses the dehydrated ref; the sibling source (the hand entry's
   // declaration, kept verbatim) only backs a non-echo payload.
   entityId: chatEntityRef({ from: "sibling", key: "workspaceId" }),
   kind: v.picklist(ENTITY_KINDS),
-  name: v.string(),
+  name: contentText(),
   text: contentText(),
   truncated: v.boolean(),
   nextCursor: v.nullable(v.string()),
@@ -374,7 +389,7 @@ export const LIST_DOCUMENTS_PROJECTION = v.strictObject({
   documents: v.array(
     v.strictObject({
       id: chatEntityRef({ from: "inputParam", param: "matter_id" }),
-      name: v.string(),
+      name: contentText(),
       kind: v.string(),
       parentId: v.nullable(
         chatEntityRef({ from: "inputParam", param: "matter_id" }),
@@ -409,7 +424,7 @@ const documentFieldContentProjection = v.variant("type", [
       version: v.literal(1),
       type: v.literal("file"),
       id: strippedField(),
-      fileName: v.string(),
+      fileName: contentText(),
       mimeType: v.string(),
       sizeBytes: v.number(),
       encrypted: v.boolean(),
@@ -633,7 +648,7 @@ const documentSearchIndexStateProjection = v.variant("status", [
 export const READ_DOCUMENT_DEFAULT_PROJECTION = v.strictObject({
   entityId: readDocumentEntityId(),
   kind: v.string(),
-  name: v.string(),
+  name: contentText(),
   fields: v.array(documentFieldProjection),
   contentState: documentContentStateProjection,
   searchIndexState: documentSearchIndexStateProjection,
@@ -645,7 +660,7 @@ export const READ_DOCUMENT_DEFAULT_PROJECTION = v.strictObject({
 /** read_document, `version_id` branch: one version's metadata + fields. */
 export const READ_DOCUMENT_VERSION_PROJECTION = v.strictObject({
   entityId: readDocumentEntityId(),
-  name: v.string(),
+  name: contentText(),
   version: v.strictObject({
     id: passthroughId(),
     versionNumber: v.number(),
@@ -663,7 +678,7 @@ export const READ_DOCUMENT_VERSION_PROJECTION = v.strictObject({
  */
 export const READ_DOCUMENT_DIFF_PROJECTION = v.strictObject({
   entityId: readDocumentEntityId(),
-  name: v.string(),
+  name: contentText(),
   diff: v.strictObject({
     // Entity-version handles, no chat ref kind.
     baseVersionId: passthroughId(),
@@ -1272,6 +1287,19 @@ const invoiceEntityReferenceProjection = () =>
  * line item carries its own matter for reference mediation; list mode returns
  * no line items.
  */
+/**
+ * How an invoice stands: only payments make it paid; credit notes covering it
+ * alone make it credited; payments beyond what credit leaves owe a refund.
+ */
+const INVOICE_SETTLEMENT_PROJECTION = v.variant("kind", [
+  projectionBranch(v.strictObject({ kind: v.literal("open") })),
+  projectionBranch(v.strictObject({ kind: v.literal("paid") })),
+  projectionBranch(v.strictObject({ kind: v.literal("credited") })),
+  projectionBranch(
+    v.strictObject({ kind: v.literal("overpaid"), refundAmount: v.number() }),
+  ),
+]);
+
 /** list_invoices, list branch: invoice cards, no line items. */
 export const LIST_INVOICES_LIST_PROJECTION = v.strictObject({
   invoices: v.array(
@@ -1290,6 +1318,7 @@ export const LIST_INVOICES_LIST_PROJECTION = v.strictObject({
       totalAmount: moneySchema,
       paidAmount: moneySchema,
       outstandingAmount: moneySchema,
+      settlement: INVOICE_SETTLEMENT_PROJECTION,
     }),
   ),
   // Opaque `[createdAt, id]` cursor, not UUID-formatted.
@@ -1318,6 +1347,7 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
     totalAmount: moneySchema,
     paidAmount: moneySchema,
     outstandingAmount: moneySchema,
+    settlement: INVOICE_SETTLEMENT_PROJECTION,
     notes: v.nullable(contentText()),
     sellerProfileId: v.nullable(passthroughId()),
     buyerName: v.nullable(v.string()),
@@ -1761,6 +1791,7 @@ const caseLawDecisionProjection = v.strictObject({
   page: v.optional(v.number()),
   pageCount: v.optional(v.number()),
   charCount: v.optional(v.number()),
+  bodySource: v.optional(decisionBodySourceProjection),
   textSource: v.optional(
     v.pipe(
       v.picklist(Object.values(DECISION_TEXT_SOURCE)),
@@ -1910,6 +1941,127 @@ export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
 
 export { READ_CASE_LAW_CITATIONS_PROJECTION } from "./case-law-citation-projection";
 
+// These dates have already passed calendar validation at ingestion; the wire
+// declares their shape without embedding a runtime-only admission function.
+const amendmentWireDateProjection = v.pipe(
+  v.string(),
+  v.maxLength(10),
+  v.regex(/^\d{4}-\d{2}-\d{2}$/u),
+);
+const amendmentEffectBranches = [
+  projectionBranch(
+    v.strictObject({
+      ...legislationAmendmentEffectSchema.options[0].entries,
+      on: amendmentWireDateProjection,
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      ...legislationAmendmentEffectSchema.options[1].entries,
+      text: v.nullable(contentText()),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      ...legislationAmendmentEffectSchema.options[2].entries,
+      condition: v.strictObject({
+        text: contentText(),
+        label: v.nullable(contentText()),
+      }),
+      workingDate: v.nullable(amendmentWireDateProjection),
+      actualDate: v.nullable(amendmentWireDateProjection),
+    }),
+  ),
+] as const;
+const amendmentInputEffectProjection = v.variant(
+  "type",
+  amendmentEffectBranches,
+);
+const amendmentResolvedEffectProjection = v.variant("type", [
+  ...amendmentEffectBranches,
+  projectionBranch(v.strictObject({ type: v.literal("conflicting") })),
+]);
+const amendmentRelationProjection = v.strictObject({
+  publisherId: v.string(),
+  amendingEli: v.string(),
+  amendingTitle: v.nullable(v.string()),
+  amendingAnchor: v.nullable(v.string()),
+  affectedAnchor: v.string(),
+  changeKind: v.picklist(LEGISLATION_AMENDMENT_CHANGE_KINDS),
+  effective: amendmentInputEffectProjection,
+  publisherInstruction: v.nullable(contentText()),
+});
+const amendmentPositiveEvidenceFields = {
+  observedAt: v.string(),
+  relation: amendmentRelationProjection,
+  retainedConditional: v.optional(
+    v.strictObject({
+      observedAt: v.string(),
+      relation: amendmentRelationProjection,
+    }),
+  ),
+};
+const amendmentObservationProjection = v.variant("status", [
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("present"),
+      channel: v.string(),
+      ...amendmentPositiveEvidenceFields,
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("historical"),
+      channel: v.string(),
+      ...amendmentPositiveEvidenceFields,
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("absent"),
+      channel: v.string(),
+      observedAt: v.string(),
+      lastPositive: v.nullable(v.strictObject(amendmentPositiveEvidenceFields)),
+    }),
+  ),
+]);
+const amendmentCoverageFields = {
+  complete: { type: v.literal("complete") },
+  partial: {
+    type: v.literal("partial"),
+    unlocatedRelations: v.number(),
+    reason: v.string(),
+  },
+  "not-stated": { type: v.literal("not-stated"), reason: v.string() },
+} as const satisfies Record<
+  LegislationAmendmentCoverage["type"],
+  v.ObjectEntries
+>;
+const amendmentCoverageReportProjection = v.variant("type", [
+  projectionBranch(v.strictObject(amendmentCoverageFields.complete)),
+  projectionBranch(v.strictObject(amendmentCoverageFields.partial)),
+  projectionBranch(v.strictObject(amendmentCoverageFields["not-stated"])),
+]);
+const amendmentCoverageAggregationFields = {
+  aggregation: v.optional(
+    v.strictObject({
+      representativeChannel: v.string(),
+      channels: v.array(
+        v.strictObject({
+          channel: v.string(),
+          coverage: amendmentCoverageReportProjection,
+        }),
+      ),
+      distinctUnlocatedTotal: v.variant("type", [
+        projectionBranch(
+          v.strictObject({ type: v.literal("exact"), count: v.number() }),
+        ),
+        projectionBranch(v.strictObject({ type: v.literal("unknown") })),
+      ]),
+    }),
+  ),
+};
+
 /**
  * The window of a Work's consolidated versions a statute read returns.
  * Newest validity window first, bounded by the versions page size: enough to
@@ -1920,28 +2072,35 @@ const STATUTE_AMENDMENT_PAGE_PROJECTION = v.nullable(
     items: v.array(
       v.strictObject({
         publisherId: v.string(),
+        duplicatePublisherIds: v.array(v.string()),
         amendingEli: v.string(),
         amendingTitle: v.nullable(v.string()),
         affectedAnchor: v.string(),
         changeKind: v.picklist(LEGISLATION_AMENDMENT_CHANGE_KINDS),
         effectiveDate: v.nullable(v.string()),
         effectiveText: v.nullable(v.string()),
+        effective: amendmentResolvedEffectProjection,
+        observations: v.array(amendmentObservationProjection),
       }),
     ),
     observedAt: v.string(),
     coverage: v.variant("type", [
-      projectionBranch(v.strictObject({ type: v.literal("complete") })),
       projectionBranch(
         v.strictObject({
-          type: v.literal("partial"),
-          unlocatedRelations: v.number(),
-          reason: v.string(),
+          ...amendmentCoverageFields.complete,
+          ...amendmentCoverageAggregationFields,
         }),
       ),
       projectionBranch(
         v.strictObject({
-          type: v.literal("not-stated"),
-          reason: v.string(),
+          ...amendmentCoverageFields.partial,
+          ...amendmentCoverageAggregationFields,
+        }),
+      ),
+      projectionBranch(
+        v.strictObject({
+          ...amendmentCoverageFields["not-stated"],
+          ...amendmentCoverageAggregationFields,
         }),
       ),
     ]),
@@ -2840,6 +2999,7 @@ export const UPDATE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
   matterNumberPattern: v.optional(v.string()),
   matterNumberPadding: v.optional(v.number()),
   matterNumberingEnabled: v.optional(v.boolean()),
+  documentNamePattern: v.optional(v.nullable(v.string())),
   promptCachingEnabled: v.optional(v.boolean()),
   documentProcessingMode: v.optional(v.string()),
   memoryExtractionEnabled: v.optional(v.boolean()),

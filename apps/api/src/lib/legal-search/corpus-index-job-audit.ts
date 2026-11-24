@@ -11,8 +11,10 @@
  * whichever caller happens to make it.
  */
 
-import type { Transaction } from "@/api/db/root";
+import { sql } from "drizzle-orm";
+
 import { caseLawIndexJobs } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 
 /** The column's own width; a reason is a sentence, not a payload. */
@@ -32,6 +34,14 @@ type WithdrawalAuditEvent = {
  * tombstone, and a withdrawal is the opposite claim — the row keeps its
  * identity and its stored payload, and a later parser may replay it into
  * a document again.
+ *
+ * The row is stamped when it is written, not when its transaction began, and
+ * the caller writes it after its desired-state write. A copy is served only
+ * once its apply took the state row, so any copy applied before the
+ * withdrawal reached the state was reserved before this instant, and the
+ * erasure evidence that compares the two
+ * (`corpus-index-projection-erasure-evidence.ts`) orders the withdrawal after
+ * it however long the withdrawing transaction ran.
  */
 export const recordCorpusWithdrawalAuditEvent = async (
   tx: Transaction,
@@ -47,6 +57,7 @@ export const recordCorpusWithdrawalAuditEvent = async (
       decisionId: id,
       operation: "withdraw" as const,
       status: "succeeded" as const,
+      createdAt: sql<Date>`clock_timestamp()`,
       contentHash: null,
       detail: reason.slice(0, REASON_LIMIT),
     })),

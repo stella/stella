@@ -1607,6 +1607,36 @@ type LauncherProps = {
   onReview: (setup: ReviewSetup, seededPositions: Position[]) => void;
 };
 
+type ResolveReviewStartDisabledReasonOptions = {
+  setupRunnable: boolean;
+  playbookReady: boolean;
+  playbookLoading: boolean;
+  t: (
+    key:
+      | "inspector.review.selectReviewBasis"
+      | "knowledge.playbooks.loading"
+      | "knowledge.playbooks.loadFailed"
+      | "inspector.review.selectReviewPositionOrReference",
+  ) => string;
+};
+
+const resolveReviewStartDisabledReason = ({
+  setupRunnable,
+  playbookReady,
+  playbookLoading,
+  t,
+}: ResolveReviewStartDisabledReasonOptions) => {
+  if (!setupRunnable) {
+    return t("inspector.review.selectReviewBasis");
+  }
+  if (!playbookReady) {
+    return playbookLoading
+      ? t("knowledge.playbooks.loading")
+      : t("knowledge.playbooks.loadFailed");
+  }
+  return t("inspector.review.selectReviewPositionOrReference");
+};
+
 const Launcher = ({
   playbooks,
   chatSection,
@@ -1674,6 +1704,12 @@ const Launcher = ({
     isReviewSetupRunnable(setup) &&
     playbookReady &&
     (references.length > 0 || seededPositions.length > 0);
+  const reviewStartDisabledReason = resolveReviewStartDisabledReason({
+    setupRunnable: isReviewSetupRunnable(setup),
+    playbookReady,
+    playbookLoading: selectedPlaybookView.type === "pending",
+    t,
+  });
 
   return (
     <div className="bg-background flex h-full flex-col">
@@ -1737,6 +1773,7 @@ const Launcher = ({
         <Button
           className="flex-1"
           disabled={!canStart}
+          disabledReason={reviewStartDisabledReason}
           onClick={() => {
             if (canStart) {
               onReview(setup, seededPositions);
@@ -2295,6 +2332,7 @@ const ReferenceFilePicker = ({
       <Button
         className="group flex w-full"
         disabled={atLimit}
+        disabledReason={t("inspector.review.referenceLimitReached")}
         onClick={() => setPickerOpen(true)}
         variant="plain"
       >
@@ -2471,6 +2509,11 @@ const PositionConfirmStep = ({
         <Button
           className="flex-1"
           disabled={!canConfirm}
+          disabledReason={
+            enabledCount === 0
+              ? t("inspector.review.selectPositionFirst")
+              : t("inspector.review.completePositionIssues")
+          }
           onClick={onConfirm}
           size="sm"
         >
@@ -4378,6 +4421,7 @@ const ReviewCardActions = ({
             {targetBlockId !== null && (
               <Button
                 disabled={!editorAvailable}
+                disabledReason={t("inspector.review.noEditor")}
                 onClick={() => onScrollToBlock(targetBlockId)}
                 size="xs"
                 variant="muted"
@@ -4413,6 +4457,7 @@ const ReviewCardActions = ({
           <Button
             className="text-muted-foreground hover:text-foreground h-7 px-2"
             disabled={!editorAvailable}
+            disabledReason={t("inspector.review.noEditor")}
             onClick={() => onScrollToBlock(targetBlockId)}
             size="sm"
             variant="ghost"
@@ -4576,6 +4621,7 @@ const FindingDecisionButtons = ({
       <Button
         className="h-7 px-2.5"
         disabled={pending}
+        disabledReason={t("docxReview.applyingReviewDecision")}
         onClick={() => onDecide(REVIEW_DECISION.OPEN)}
         size="sm"
         variant="ghost"
@@ -4590,6 +4636,7 @@ const FindingDecisionButtons = ({
       <Button
         className="h-7 px-2.5"
         disabled={pending}
+        disabledReason={t("docxReview.applyingReviewDecision")}
         onClick={() => onDecide(REVIEW_DECISION.ACCEPTED)}
         size="sm"
       >
@@ -4599,6 +4646,7 @@ const FindingDecisionButtons = ({
       <Button
         className="h-7 px-2.5"
         disabled={pending}
+        disabledReason={t("docxReview.applyingReviewDecision")}
         onClick={() => onDecide(REVIEW_DECISION.DISMISSED)}
         size="sm"
         variant="ghost"
@@ -4652,6 +4700,11 @@ const SuggestionButtons = ({
           <Button
             className="h-7 px-2.5"
             disabled={!editorAvailable || suggestion.status === "applying"}
+            disabledReason={
+              suggestion.status === "applying"
+                ? t("docxReview.applyingReviewDecision")
+                : t("inspector.review.noEditor")
+            }
             onClick={onAccept}
             size="sm"
             {...(editorAvailable
@@ -4664,6 +4717,7 @@ const SuggestionButtons = ({
           <Button
             className="h-7 px-2.5"
             disabled={suggestion.status === "applying"}
+            disabledReason={t("docxReview.applyingReviewDecision")}
             onClick={onReject}
             size="sm"
             variant="outline"
@@ -4730,6 +4784,9 @@ const CounterpartyNotePopover = ({
           <Button
             className="w-full"
             disabled={trimmed.length === 0 || submitting}
+            disabledReason={
+              submitting ? t("common.saving") : t("inspector.review.enterNote")
+            }
             onClick={() => {
               setSubmitting(true);
               detached(
@@ -5215,6 +5272,7 @@ const ChatSuggestionCard = ({
           <Button
             className="text-muted-foreground hover:text-foreground h-7 px-2"
             disabled={!editorAvailable}
+            disabledReason={t("inspector.review.noEditor")}
             onClick={() => onScrollToBlock(first.blockId)}
             size="sm"
             variant="ghost"

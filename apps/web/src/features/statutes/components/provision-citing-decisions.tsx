@@ -195,9 +195,7 @@ export const ProvisionCitingDecisions = ({
       {snapshot?.type === "capped" && (
         <p className="text-muted-foreground text-xs">
           {t("statutes.citingDecisionsSnapshotCapped", {
-            count: format.number(
-              new Set(loaded.map((decision) => decision.decisionId)).size,
-            ),
+            count: new Set(loaded.map((decision) => decision.decisionId)).size,
             limit: format.number(snapshot.limit),
           })}
         </p>
@@ -236,6 +234,7 @@ export const ProvisionCitingDecisions = ({
       {hasNextPage && (
         <Button
           disabled={isFetchingNextPage}
+          disabledReason={t("common.loading")}
           onClick={() =>
             detached(fetchNextPage(), "statutes.citing-decisions-more")
           }

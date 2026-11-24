@@ -204,6 +204,7 @@ const fullDecision = {
     name: "Synthetic source",
   },
   sourceAttributionUrl: null,
+  bodySource: { textSource: "host" },
   sourceLanguages: null,
   sourceUrl: "https://publisher.example.test/decision",
   textFields: {
@@ -235,6 +236,8 @@ const canonicalSearchHit = {
   textAvailability: "available",
   matchingPassages: 1,
   match: "all_terms",
+  matchedTerms: [],
+  missingTerms: [],
 } satisfies PublicLawData<
   typeof api.case.decisions.search.post
 >["hits"][number];
@@ -735,17 +738,17 @@ for (const interactive of [false, true]) {
   });
 }
 
-// Consulted sources sit behind the tray's disclosure; open it so the chips
-// are in the accessibility tree.
+// Consulted sources sit behind the sources row's "+N more consulted"
+// disclosure; open it so the chips are in the accessibility tree.
 const openConsultedSources = async (view: { container: HTMLElement }) => {
   const trigger = await waitFor(() => {
-    const button = [...view.container.querySelectorAll("button")].find(
-      (candidate) => candidate.textContent.startsWith("Also consulted"),
+    const button = view.container.querySelector(
+      "[data-chat-answer-consulted-trigger]",
     );
-    expect(button).toBeDefined();
+    expect(button).not.toBeNull();
     return button;
   });
-  if (trigger !== undefined) {
+  if (trigger !== null) {
     fireEvent.click(trigger);
   }
 };

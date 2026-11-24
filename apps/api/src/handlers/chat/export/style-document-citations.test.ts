@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { markdownToStellaDocument } from "@stll/docx-authoring/markdown";
 import type { BlockContent, ParagraphContent } from "@stll/docx-core/model";
 import { ZipArchive } from "@stll/docx-core/zip";
 
@@ -9,7 +10,6 @@ import {
   styleDocumentCitationsWithCounts,
 } from "@/api/handlers/chat/export/style-document-citations";
 import { formatCourtParagraphMark } from "@/api/lib/case-law/court-paragraph-mark";
-import { markdownToStellaDocument } from "@/api/lib/docx-authoring/from-markdown";
 
 const collectParagraphContent = (
   blocks: readonly BlockContent[],

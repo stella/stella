@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { orderedReplayOptions } from "../.oxlint-plugins/utils.ts";
 import {
@@ -18,6 +19,7 @@ import {
   type TemplateLiteral,
   walk,
 } from "../packages/scripts/src/syntax-tree.ts";
+import { parseSyntax } from "./parse-memo.ts";
 
 type Expression = OxcExpression | SpreadElement;
 
@@ -452,7 +454,9 @@ const schemaReplayColumns = () => {
   if (automaticReplayColumns !== undefined) {
     return automaticReplayColumns;
   }
-  const directory = path.resolve(import.meta.dir, "../apps/api/src/db/schema");
+  const directory = fileURLToPath(
+    new URL("../apps/api/src/db/schema", import.meta.url),
+  );
   const result = new Map<string, readonly string[]>();
   for (const file of readdirSync(directory).filter((name) =>
     name.endsWith(".ts"),
@@ -991,7 +995,7 @@ export const statusWriteCalls = ({
   file,
   columns,
 }: StatusWriteOptions): Node[] => {
-  const source = parseSource(file, content).program;
+  const source = parseSyntax({ fileName: file, text: content }).program;
   const inspector = mutationsFor(source);
   const { lifecycleKeys, mutationKeys } = tablesFor(columns, inspector);
   const { containsStatus, conflictSetWrites } = payloadsFor(

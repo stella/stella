@@ -5,7 +5,7 @@ import type {
   ReaderDocumentTargetType,
 } from "@stll/api-contract/legal-reader-annotations";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { legalReaderAnnotations } from "@/api/db/schema";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder, AuditResourceType } from "@/api/lib/audit-log";

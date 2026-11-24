@@ -1,14 +1,16 @@
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import type {
   CaseLawCorpusDependencies,
   CaseLawJudgeDependencies,
 } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
+import type { AttachToHeldDecisionOptions } from "@/api/handlers/case-law/ingestion/pipeline/held-decision-attachment";
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { SourceRetention } from "@/api/handlers/case-law/ingestion/retention/retention-sources";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { StatedEcliIdentity } from "@/api/lib/legal-search/adapter-manifest";
 import type { CorpusPackBatch } from "@/api/lib/legal-search/corpus-pack-batch";
+import type { HeldDecisionAttachment } from "@/api/lib/legal-search/held-decision-attachment";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 
@@ -124,9 +126,21 @@ export const DECISION_REFRESH = {
 export type DecisionRefresh =
   (typeof DECISION_REFRESH)[keyof typeof DECISION_REFRESH];
 
+/** The selected observation a single-decision recovery is allowed to replace. */
+export type DecisionRecoveryFence = {
+  decisionId: SafeId<"caseLawDecision">;
+  sourceDocumentId: string;
+  sourceHash: string | null;
+  sourceHashVersion: number;
+  sourceRawS3Key: string | null;
+  sourceObservationOrder: bigint | null;
+  rowFingerprint: string;
+};
+
 /** A fresh observation or the exact immutable object a stored parse consumed. */
 export type DecisionInputProvenance =
   | { type: "observation" }
+  | { type: "recovery"; fence: DecisionRecoveryFence }
   | {
       type: "stored";
       sourceRawS3Key: string;
@@ -139,8 +153,13 @@ export type ProcessDecisionAttemptOptions = {
   s3Policy?: S3CredentialRefreshOptions;
   metadataUrlSchema?: unknown;
   statedEcliIdentity: StatedEcliIdentity;
+  /** See `HeldDecisionAttachment`; null for a source that does not declare one. */
+  heldDecisionAttachment: HeldDecisionAttachment<string> | null;
+  heldDecisionPayloadWriter?: AttachToHeldDecisionOptions["rawPayloadWriter"];
   retention: SourceRetention;
   input: IngestionResult;
+  /** An exact caller-provided failure identity, independent of host identity. */
+  recordIdentity?: string | undefined;
   judges: CaseLawJudgeDependencies;
   sourceId: SafeId<"caseLawSource">;
   scopedDb: ScopedDb;
@@ -175,6 +194,7 @@ export type ProcessDecisionOptions = Omit<
   | "refresh"
   | "metadataUrlSchema"
   | "statedEcliIdentity"
+  | "heldDecisionAttachment"
   | "retention"
   | "sourceFingerprintVersion"
   | "sourceFingerprintFromStoredRaw"

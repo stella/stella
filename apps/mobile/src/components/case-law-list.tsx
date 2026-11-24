@@ -1,17 +1,12 @@
 import { Suspense, use, useState, useTransition } from "react";
 
 import { Result } from "better-result";
-import {
-  ActivityIndicator,
-  FlatList,
-  RefreshControl,
-  ScrollView,
-  View,
-} from "react-native";
+import { FlatList, RefreshControl, ScrollView, View } from "react-native";
 import { useLocale, useTranslations } from "use-intl";
 
 import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import { Button } from "@stll/ui/button";
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { DecisionRow } from "@/components/decision-row";
@@ -44,45 +39,55 @@ type DecisionsRequest = {
  * web's case-law index lists them. A choice of jurisdiction heads the list.
  */
 export const CaseLawList = ({ serverUrl }: { serverUrl: string }) => {
-  const colors = useAppColors();
   const locale = useLocale();
   const { settledQuery } = useHeaderSearch();
   const query = settledQuery.slice(0, SEARCH_QUERY_MAX_LENGTH).trim();
-  const loadDecisions = async (
-    country: CaseLawCountry,
-    searched: string,
-  ): Promise<Load<DecisionsPage>> => ({
+  const [country, setCountry] = useState<CaseLawCountry>(() =>
+    defaultCaseLawCountry(locale),
+  );
+
+  return (
+    <CaseLawResults
+      country={country}
+      key={`${country}:${query}`}
+      onCountry={setCountry}
+      query={query}
+      serverUrl={serverUrl}
+    />
+  );
+};
+
+const CaseLawResults = ({
+  country,
+  onCountry,
+  query,
+  serverUrl,
+}: {
+  country: CaseLawCountry;
+  onCountry: (country: CaseLawCountry) => void;
+  query: string;
+  serverUrl: string;
+}) => {
+  const loadDecisions = async (): Promise<Load<DecisionsPage>> => ({
     loadedAt: epochMilliseconds(),
-    result: await listDecisions({ country, fetch, query: searched, serverUrl }),
+    result: await listDecisions({ country, fetch, query, serverUrl }),
   });
-  const [request, setRequest] = useState<DecisionsRequest>(() => {
-    const country = defaultCaseLawCountry(locale);
-    return { country, load: loadDecisions(country, query), query };
-  });
+  const [request, setRequest] = useState<DecisionsRequest>(() => ({
+    country,
+    load: loadDecisions(),
+    query,
+  }));
   const [refreshing, startRefresh] = useTransition();
-  // A settled search the showing load did not ask for starts the next one.
-  if (query !== request.query) {
-    setRequest({
-      country: request.country,
-      load: loadDecisions(request.country, query),
-      query,
-    });
-  }
-  const show = (country: CaseLawCountry) => {
-    setRequest({ country, load: loadDecisions(country, query), query });
-  };
   const reload = () => {
     startRefresh(() => {
-      show(request.country);
+      setRequest({ country, load: loadDecisions(), query });
     });
   };
 
   return (
-    <Suspense
-      fallback={<ActivityIndicator className="flex-1" color={colors.muted} />}
-    >
+    <Suspense fallback={<Loader className="flex-1" />}>
       <LoadedDecisions
-        onCountry={show}
+        onCountry={onCountry}
         onReload={reload}
         refreshing={refreshing}
         request={request}

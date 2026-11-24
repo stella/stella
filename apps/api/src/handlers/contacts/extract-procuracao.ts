@@ -22,6 +22,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
+import { readZipNameCodePage } from "@/api/lib/files/organization-zip-name-code-page";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { getS3 } from "@/api/lib/s3";
 import {
@@ -139,6 +140,10 @@ const extractProcuracao = createSafeRootHandler(
       task: "short-text",
     });
 
+    // Read before the upload is claimed, so a failed read leaves no lease.
+    const zipNameCodePage = yield* Result.await(
+      safeDb(async (tx) => await readZipNameCodePage(tx, organizationId)),
+    );
     const claimToken = Bun.randomUUIDv7();
     const processingStartedAt = new Date();
     const upload = yield* Result.await(
@@ -269,9 +274,11 @@ const extractProcuracao = createSafeRootHandler(
 
       const textResult = await Result.tryPromise({
         try: async () =>
-          await extractFileText(scanned.value, {
-            source: "contacts-extract-procuracao",
-          }),
+          await extractFileText(
+            scanned.value,
+            { source: "contacts-extract-procuracao" },
+            { zipNameCodePage },
+          ),
         catch: (cause) =>
           new HandlerError({
             status: 500,

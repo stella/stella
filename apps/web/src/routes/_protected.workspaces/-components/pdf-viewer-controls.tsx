@@ -1,7 +1,6 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 
-import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { produce } from "immer";
 import { useTranslations } from "use-intl";
@@ -23,17 +22,21 @@ import type { DownloadRendition } from "@/components/inspector/file-download-ser
 import { PdfSignButton } from "@/components/inspector/pdf-sign-action";
 import type { PdfSignTarget } from "@/components/inspector/pdf-sign-action";
 import {
+  PDF_PAGE_FIELD_ROW_CLASS,
+  PDF_ZOOM_GROUP_CLASS,
+  PdfPageCount,
+} from "@/components/pdf/pdf-viewer.pending";
+import {
   fetchPrintPdf,
   printPdfBuffer,
 } from "@/components/pdf/peek/peek-pdf-print";
 import { PeekPdfControls } from "@/components/pdf/peek/peek-pdf-viewer";
-import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
+import { hasPDFColorControl } from "@/lib/pdf/pdf-color-mode";
 import type { PDFColorMode } from "@/lib/pdf/pdf-color-mode";
 import {
   getPDFScaleOffset,
@@ -41,16 +44,25 @@ import {
   PDF_MIN_SCALE_OFFSET,
   PDF_SCALE_OFFSET_STEP,
 } from "@/lib/pdf/pdf-zoom.logic";
-import { queryView } from "@/lib/query-view.logic";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 
 const routeApi = getRouteApi(
   "/_protected/workspaces/$workspaceId/$viewId/document",
 );
 
+/** The open file as the page already holds it. */
+type PdfViewerControlsFile = { fileName: string; mimeType: string };
+
 type PdfViewerControlsProps = {
   workspaceId: string;
   fieldId: string;
+  /**
+   * The open file, from the entity the page loaded; `null` while the page
+   * still resolves it. The controls take it from the page rather than a read
+   * of their own, so they paint complete with the page and never shift the
+   * centred cluster when a late read lands.
+   */
+  file: PdfViewerControlsFile | null;
   currentPage: number;
   downloadRenditions: readonly DownloadRendition[];
   variant?: "row" | "inline" | undefined;
@@ -66,6 +78,7 @@ type PdfViewerControlsProps = {
 export const PdfViewerControls = ({
   workspaceId,
   fieldId,
+  file,
   currentPage,
   downloadRenditions,
   variant = "row",
@@ -79,33 +92,20 @@ export const PdfViewerControls = ({
   const t = useTranslations();
   const format = useFormatter();
   const analytics = useAnalytics();
-  const fileMetadataQuery = useQuery({
-    ...fileMetadataOptions({ workspaceId, fieldId }),
-    enabled: fieldId.length > 0,
-  });
-  const fileMetadataView = queryView(fileMetadataQuery);
-  const fileMetadata =
-    fileMetadataView.type === "items" ? fileMetadataView.items : undefined;
-
   const totalPages = useWorkspaceStore((s) => s.pdfPageCount);
   const scaleOffset = useWorkspaceStore((s) => s.pdfViewer.scaleOffset);
   const setPdfScaleOffset = useWorkspaceStore((s) => s.setPdfScaleOffset);
   const [editingPage, setEditingPage] = useState<number | null>(null);
   const [isPrinting, setIsPrinting] = useState(false);
   const pageInputValue = editingPage ?? currentPage;
-  const isDocx =
-    fileMetadata?.originalMimeType === DOCX_MIME ||
-    fileMetadata?.mimeType === DOCX_MIME;
+  const isDocx = file?.mimeType === DOCX_MIME;
   const pdfColorMode = routeApi.useSearch({
     select: (search) => search.pdfColorMode ?? "system",
   });
   const navigate = useNavigate({
     from: "/workspaces/$workspaceId/$viewId/document",
   });
-  const canAdjustPDFColor =
-    !isDocx &&
-    fileMetadata !== undefined &&
-    !fileMetadata.originalMimeType.startsWith("image/");
+  const canAdjustPDFColor = file !== null && hasPDFColorControl(file.mimeType);
 
   const navigateToScale = (offset: number) => {
     setPdfScaleOffset(Math.round(offset * 10) / 10);
@@ -168,8 +168,7 @@ export const PdfViewerControls = ({
 
   const primaryControls = (
     <div className="flex items-center gap-1">
-      {fieldId.length > 0 && <QueryViewFeedback view={fileMetadataView} />}
-      <div className="flex items-center rounded-md border p-0.5">
+      <div className={PDF_ZOOM_GROUP_CLASS}>
         <PeekPdfControls
           atMax={scaleOffset >= PDF_MAX_SCALE_OFFSET}
           atMin={scaleOffset <= PDF_MIN_SCALE_OFFSET}
@@ -200,6 +199,7 @@ export const PdfViewerControls = ({
           <Separator className="mx-1 h-4" orientation="vertical" />
           <Button
             disabled={currentPage <= 1}
+            disabledReason={t("common.firstPageReached")}
             onClick={() => {
               setEditingPage(null);
               navigateToPage(currentPage - 1);
@@ -212,6 +212,7 @@ export const PdfViewerControls = ({
           </Button>
           <Button
             disabled={currentPage >= totalPages}
+            disabledReason={t("common.lastPageReached")}
             onClick={() => {
               setEditingPage(null);
               navigateToPage(currentPage + 1);
@@ -224,7 +225,7 @@ export const PdfViewerControls = ({
           </Button>
           {/* The "/ total" sits on the field's centre line, so it never
               floats above the box. */}
-          <div className="ms-1.5 me-2 flex items-center gap-x-1.5 text-sm tabular-nums">
+          <div className={PDF_PAGE_FIELD_ROW_CLASS}>
             <Input
               aria-label={t("common.currentPage")}
               autoComplete="off"
@@ -258,12 +259,26 @@ export const PdfViewerControls = ({
               value={pageInputValue}
             />
             <span>/</span>
-            <span>{format.number(totalPages)}</span>
+            <PdfPageCount
+              formattedCount={
+                totalPages > 0 ? format.number(totalPages) : undefined
+              }
+            />
           </div>
         </>
       )}
     </div>
   );
+
+  const resolvePrintDisabledReason = () => {
+    if (isPrinting) {
+      return t("common.printing");
+    }
+    if (printDisabled) {
+      return t("common.loading");
+    }
+    return t("workspaces.files.pdfSelectToPrint");
+  };
 
   const fileActions =
     showFileActions || extraControls !== undefined ? (
@@ -282,13 +297,13 @@ export const PdfViewerControls = ({
             {pdfSignTarget !== null && pdfSignTarget !== undefined && (
               <PdfSignButton target={pdfSignTarget} />
             )}
-            {fileMetadata !== undefined && fieldId.length > 0 && (
+            {file !== null && fieldId.length > 0 && (
               <DownloadSplitButton
                 onDownload={(downloadVariant) =>
                   detached(
                     downloadTabFile({
                       fieldId,
-                      fileName: fileMetadata.fileName,
+                      fileName: file.fileName,
                       variant: downloadVariant,
                       workspaceId,
                       onError: (message, error) => {
@@ -303,6 +318,7 @@ export const PdfViewerControls = ({
             )}
             <Button
               disabled={printDisabled || isPrinting || fieldId.length === 0}
+              disabledReason={resolvePrintDisabledReason()}
               onClick={() => {
                 detached(handlePrint(), "pdf-viewer-controls.print");
               }}

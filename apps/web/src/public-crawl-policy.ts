@@ -1,14 +1,20 @@
+import { createServerOnlyFn } from "@tanstack/react-start";
+
 import { loadCatalogue } from "@stll/catalogue";
 
 import {
   PUBLIC_CASE_LAW_PAGE_COUNTRIES,
   toCaseLawCountryParam,
 } from "./features/case-law/case-law-jurisdiction";
+import { toolsCataloguePathOf } from "./lib/knowledge/public-tools-catalogue-path";
+import type { PublicToolsBasePath } from "./lib/knowledge/public-tools-catalogue-path";
 
 type PublicCrawlRoute = {
   path: `/${string}`;
   route: `/${string}`;
   /**
+   * `catalogue`: the published tools' list, with their pages beside it, when
+   * the tools live where this list does.
    * `jurisdictions`: the path itself, plus a subtree per jurisdiction whose
    * pages are public. A country whose pages are not public stays outside the
    * crawl, whatever it may serve.
@@ -56,9 +62,11 @@ export const PUBLIC_CRAWL_ROUTES = [
     permission: "tools",
     format: "html",
   },
+  // The published tools' list; `/knowledge/tools` is an organization's own
+  // page and stays closed.
   {
-    path: "/knowledge/tools",
-    route: "/knowledge/tools",
+    path: "/knowledge/tools/catalogue",
+    route: "/knowledge/tools/catalogue",
     scope: "catalogue",
     permission: "tools",
     format: "html",
@@ -67,6 +75,13 @@ export const PUBLIC_CRAWL_ROUTES = [
     path: "/knowledge/templates/catalogue",
     route: "/knowledge/templates/catalogue",
     scope: "subtree",
+    permission: "knowledge",
+    format: "html",
+  },
+  {
+    path: "/knowledge/playbooks/catalogue",
+    route: "/knowledge/playbooks/catalogue",
+    scope: "exact",
     permission: "knowledge",
     format: "html",
   },
@@ -81,11 +96,19 @@ export const PUBLIC_CRAWL_ASSETS = [
   },
 ] as const satisfies readonly Omit<PublicCrawlRoute, "route" | "format">[];
 
+/**
+ * The built scripts and styles every public page loads. A crawler renders a
+ * page with them, so they are open whenever any public surface is.
+ */
+export const PUBLIC_CRAWL_RENDER_ASSETS = [
+  { path: "/assets", scope: "subtree" },
+] as const satisfies readonly PublicCrawlRule[];
+
 export type PublicCrawlOptions = {
   publicKnowledgeCrawlAllowed: boolean;
   publicLawCrawlAllowed: boolean;
   publicToolsCrawlAllowed: boolean;
-  toolsBasePath: "/tools" | "/knowledge/tools";
+  toolsBasePath: PublicToolsBasePath;
 };
 
 export type PublicCrawlRule = {
@@ -99,13 +122,22 @@ const publicLawJurisdictionCrawlPaths = (): readonly `/${string}`[] =>
     (country): `/${string}` => `/law/${toCaseLawCountryParam(country)}`,
   );
 
+/**
+ * The catalogue's tool slugs. Only the server lists tool pages (robots.txt,
+ * the tools sitemap and a document's cache headers); the browser asks only
+ * about law pages, so the catalogue stays out of the startup bundle.
+ */
+const catalogueToolSlugs = createServerOnlyFn((): readonly string[] =>
+  loadCatalogue().map(({ slug }) => slug),
+);
+
 export const publicToolCrawlPaths = (
   toolsBasePath: PublicCrawlOptions["toolsBasePath"],
 ): readonly `/${string}`[] => [
-  toolsBasePath,
+  toolsCataloguePathOf(toolsBasePath),
   `${toolsBasePath}/contribute`,
-  ...loadCatalogue().map(
-    ({ slug }): `/${string}` => `${toolsBasePath}/${slug}`,
+  ...catalogueToolSlugs().map(
+    (slug): `/${string}` => `${toolsBasePath}/${slug}`,
   ),
 ];
 
@@ -133,7 +165,7 @@ export const createPublicCrawlRules = ({
       continue;
     }
     if (entry.scope === "catalogue") {
-      if (entry.path === toolsBasePath) {
+      if (entry.path === toolsCataloguePathOf(toolsBasePath)) {
         for (const path of publicToolCrawlPaths(toolsBasePath)) {
           rules.push({ path, scope: "exact" });
         }
@@ -141,6 +173,9 @@ export const createPublicCrawlRules = ({
       continue;
     }
     rules.push({ path: entry.path, scope: entry.scope });
+  }
+  if (rules.length > 0) {
+    rules.push(...PUBLIC_CRAWL_RENDER_ASSETS);
   }
   return rules;
 };
@@ -169,4 +204,48 @@ export const isPublicLawPathIndexable = (
     publicLawCrawlAllowed,
     publicToolsCrawlAllowed: false,
     toolsBasePath: "/tools",
+  });
+
+const CRAWL_URL_BASE = "https://crawl.invalid";
+
+/**
+ * Whether a URL carries a query delimiter before its fragment. A bare
+ * trailing `?` leaves `URL.search` empty, yet robots.txt's `?` rule matches
+ * it, so the delimiter itself decides.
+ */
+export const hasPublicLawQuery = (href: string): boolean =>
+  (href.split("#", 1).at(0) ?? "").includes("?");
+
+/**
+ * The same answer for a whole URL a page is served at. A query string makes
+ * any law page a search, filter or paging variant of a query-free page, so it
+ * is never indexable: robots.txt blocks it (see `publicCrawlRobotsLines`) and
+ * its head says `noindex`, pointing at the hub it varies.
+ */
+export const isPublicLawUrlIndexable = (
+  href: string,
+  publicLawCrawlAllowed: boolean,
+): boolean => {
+  const url = new URL(href, CRAWL_URL_BASE);
+  return (
+    !hasPublicLawQuery(href) &&
+    isPublicLawPathIndexable(url.pathname, publicLawCrawlAllowed)
+  );
+};
+
+/**
+ * robots.txt's path rules for the rules `createPublicCrawlRules` built. A law
+ * subtree allows its query-free URLs only: the `Disallow: <subtree>/*?` line
+ * is longer than the subtree's `Allow`, so it wins under longest-match
+ * precedence.
+ */
+export const publicCrawlRobotsLines = (
+  rules: readonly PublicCrawlRule[],
+): string[] =>
+  rules.flatMap(({ path, scope }) => {
+    if (scope === "exact") {
+      return [`Allow: ${path}$`];
+    }
+    const queryRule = path.startsWith("/law/") ? [`Disallow: ${path}/*?`] : [];
+    return [...queryRule, `Allow: ${path}/`, `Allow: ${path}$`];
   });

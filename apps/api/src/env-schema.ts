@@ -15,6 +15,7 @@ import {
   resolveAppleSignIn,
 } from "@/api/env-apple-sign-in";
 import { envBaseServerSchema, featureFlagSchema } from "@/api/env-base-schema";
+import { softLawFullTextPermittedSourcesSchema } from "@/api/env-soft-law";
 import {
   AUTH_CLIENT_ADDRESS_HEADER,
   ORIGIN_VERIFY_HEADER,
@@ -798,6 +799,7 @@ export const envApiServerSchema = {
     ),
   ),
   FEATURE_TIME_BILLING: featureFlagSchema,
+  FEATURE_INVOICE_LINKS: featureFlagSchema,
   FEATURE_GENERATED_VIEWS: featureFlagSchema,
   /** Dark-launch tenant-scoped AI memory until product and performance review. */
   FEATURE_AI_MEMORY: featureFlagSchema,
@@ -814,10 +816,15 @@ export const envApiServerSchema = {
   // Delegated Microsoft Graph connection: per-user, read-only SharePoint /
   // OneDrive access for future workspace import. Default-off; a deployment
   // opts in only after its Microsoft app registration is granted the
-  // read-only delegated scopes (see handlers/sharepoint/graph-oauth.ts).
+  // read-only delegated scopes (see lib/auth/microsoft365/graph-oauth.ts).
   FEATURE_SHAREPOINT: featureFlagSchema,
   /** Dark-launch internal conflict-of-interest checks until intake review. */
   FEATURE_CONFLICT_CHECK: featureFlagSchema,
+  /**
+   * Dark-launch the editor's citation check: one decision-model request per
+   * checked sentence. Organizations also need the `citation-check` grant.
+   */
+  FEATURE_CITATION_CHECK: featureFlagSchema,
 
   /**
    * Dark-launch gate for the auth.md `identity_assertion` (ID-JAG)
@@ -827,6 +834,13 @@ export const envApiServerSchema = {
    * no issuer is accepted until an operator explicitly trusts one.
    */
   FEATURE_AGENT_ID_JAG: featureFlagSchema,
+
+  /**
+   * Dark-launch gate for organization single sign-on (OIDC). Off: the SSO
+   * sign-in endpoints are not mounted and no organization's SSO
+   * requirement is evaluated, so access is decided exactly as without SSO.
+   */
+  FEATURE_ENTERPRISE_SSO: featureFlagSchema,
 
   /**
    * Web search backend. Only Tavily is wired today; add a new
@@ -961,6 +975,7 @@ export const envApiServerSchema = {
   ),
 
   AGENT_CLIENT_STORAGE_V1_ENABLED: featureFlagSchema,
+  SOFT_LAW_SYNC_ENABLED: featureFlagSchema,
 
   /** Enables agent-sandbox chat runs when true. */
   AGENT_SANDBOX_RUNS_ENABLED: featureFlagSchema,
@@ -971,6 +986,9 @@ export const envApiServerSchema = {
    * and the package falls back to its own `content/` mount.
    */
   TEMPLATE_PACKS_CONTENT_DIR: v.optional(v.string()),
+
+  /** See `env-soft-law.ts`; read there so ingestion scripts need no API environment. */
+  SOFT_LAW_FULL_TEXT_PERMITTED_SOURCES: softLawFullTextPermittedSourcesSchema,
 
   /**
    * Agent-sandbox engine config. The schema keeps these optional
@@ -1158,13 +1176,13 @@ const managedProviderCheckInvariantViolation = ({
   }
   // The free floor runs on the fast tier's own credential and never on the
   // standard one, so a managed free tier without it would refuse every
-  // request; refuse the configuration at boot instead. Without AI_PROVIDER the
-  // deployment may still resolve to OpenRouter from its standard credential.
-  const openRouterMayServe =
-    AI_PROVIDER === "openrouter" ||
-    (AI_PROVIDER === undefined && standardCredential);
+  // request; refuse the configuration at boot instead. A standard credential
+  // serves OpenRouter whatever AI_PROVIDER says: without AI_PROVIDER the
+  // deployment resolves to it, and transcription offers its models under any
+  // provider.
+  const openRouterMayServe = AI_PROVIDER === "openrouter" || standardCredential;
   if (FEATURE_FREE_TIER && openRouterMayServe && !fastCredential) {
-    return "FEATURE_FREE_TIER with AI_PROVIDER=openrouter requires OPENROUTER_FAST_TIER_API_KEY or complete fast-tier OpenRouter WIF configuration.";
+    return "FEATURE_FREE_TIER with a managed OpenRouter credential requires OPENROUTER_FAST_TIER_API_KEY or complete fast-tier OpenRouter WIF configuration.";
   }
   if (FEATURE_MANAGED_PROVIDER_CHECKS) {
     if (AI_PROVIDER !== "openrouter") {

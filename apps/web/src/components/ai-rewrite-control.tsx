@@ -44,9 +44,32 @@ const AI_REWRITE_PRESETS = [
 type AiRewriteControlProps = {
   className?: string | undefined;
   disabled?: boolean | undefined;
+  disabledReason?: string | undefined;
   isPending?: boolean | undefined;
   label?: string | undefined;
   onRewrite: (instruction: string) => void;
+};
+
+type RewriteDisabledReasonOptions = {
+  isPending: boolean;
+  disabled: boolean;
+  disabledReason: string | undefined;
+  t: (key: "rewriting" | "rewriteDisabled") => string;
+};
+
+const rewriteDisabledReason = ({
+  isPending,
+  disabled,
+  disabledReason,
+  t,
+}: RewriteDisabledReasonOptions) => {
+  if (isPending) {
+    return t("rewriting");
+  }
+  if (disabled) {
+    return disabledReason ?? t("rewriteDisabled");
+  }
+  return undefined;
 };
 
 /**
@@ -58,6 +81,7 @@ type AiRewriteControlProps = {
 export const AiRewriteControl = ({
   className,
   disabled = false,
+  disabledReason,
   isPending = false,
   label,
   onRewrite,
@@ -95,7 +119,12 @@ export const AiRewriteControl = ({
         onPrimaryClick={() => runRewrite(AI_REWRITE_PRESETS[0].instruction)}
         onOpenChange={setOpen}
         open={open}
-        primaryDisabled={unavailable}
+        primaryDisabledReason={rewriteDisabledReason({
+          isPending,
+          disabled,
+          disabledReason,
+          t,
+        })}
         primaryContent="icon"
         primaryLabel={actionLabel}
         size="sm"
@@ -148,6 +177,7 @@ export const AiRewriteControl = ({
                 <Button
                   className="mt-1 self-end"
                   disabled={customInstruction.trim().length === 0}
+                  disabledReason={t("enterRewriteInstruction")}
                   onClick={() => runRewrite(customInstruction.trim())}
                   size="sm"
                   type="button"

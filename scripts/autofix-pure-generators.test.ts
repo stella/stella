@@ -53,6 +53,9 @@ const PURE_AUTOFIX = {
   "online-unique-index-names":
     "apps/api/scripts/generate-online-unique-index-names.ts",
   "schema-index": "apps/api/scripts/generate-schema-index.ts",
+  // Walks the MCP apps' committed imports through workspace sources and
+  // rewrites only the stylesheet's sources block.
+  "mcp-app-style-sources": "packages/mcp-apps/scripts/style-sources.ts",
   // Renders the versioned transition spec into its existing migration;
   // directory discovery chooses exactly one committed version-one migration.
   "transition-triggers": "apps/api/scripts/generate-transition-triggers.ts",
@@ -100,8 +103,6 @@ const PURE_AUTOFIX = {
   // Reads `<dir>/en.json` alone and prints its key tree in source order.
   "i18n-messages-landing": "packages/scripts/src/i18n-typegen.ts",
   "i18n-messages-transactional": "packages/scripts/src/i18n-typegen.ts",
-  // Splices the static @stll/locales arrays between fixed markers.
-  "prepaint-locales": "apps/web/scripts/sync-prepaint-locales.ts",
   // `generate` renders the env catalog and schema defaults plus the web
   // Dockerfile; only `doctor` reads the process environment or env files.
   "env-examples": "env:generate",
@@ -142,6 +143,12 @@ const EXCLUDED_AUTOFIX = {
   "desktop-rpc":
     "Cargo test requires native platform dependencies and toolchain state",
   "scan-engine-wasm":
+    "Requires canonical Linux Rust host and external WASM toolchain",
+  "heic-decoder-wasm":
+    "Requires canonical Linux Rust host and external WASM toolchain",
+  "pst-reader-wasm":
+    "Requires canonical Linux Rust host and external WASM toolchain",
+  "recording-wasm":
     "Requires canonical Linux Rust host and external WASM toolchain",
   "chat-transcripts": "Runs service-backed chat recording suites",
   "case-law-publication-migration":
@@ -275,8 +282,8 @@ test("translation content never becomes an autofix output", () => {
   // `i18n:sync` copies English into other locales; that is translation
   // content, so no generator may write a locale catalogue.
   const catalogues = [
-    "apps/web/src/i18n/langs/cs.json",
-    "apps/web/src/i18n/langs/en.json",
+    "apps/web/src/i18n/namespaces/cs/core.json",
+    "apps/web/src/i18n/namespaces/en/core.json",
     "apps/landing/src/i18n/messages/de.json",
     "packages/transactional/i18n/langs/sk.json",
   ];
@@ -303,12 +310,7 @@ test("translation content never becomes an autofix output", () => {
   }
 });
 
-test("locale contract changes select the prepaint locale block", () => {
-  expect(
-    generatorsForFiles(["packages/locales/src/languages.ts"]).map(
-      ({ id }) => id,
-    ),
-  ).toContain("prepaint-locales");
+test("message changes select their own catalogues", () => {
   expect(
     generatorsForFiles(["apps/landing/src/i18n/messages/en.json"]).map(
       ({ id }) => id,

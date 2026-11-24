@@ -1,0 +1,5 @@
+{
+  "metric": "duplicate-token-blocks",
+  "delta": 2,
+  "reason": "The certified email envelope gets its own lazy feature catalog so its strings stay out of the initial bundle. src/i18n/README.md prescribes one static dynamic import per locale beside the feature, so a typecheck catches a missing locale and the bundler keeps each JSON in the feature's chunk; that loader table is the same 13 lines in every feature catalog, and this second catalog repeats the citation check's."
+}

@@ -24,6 +24,7 @@ import type {
  */
 export const MODEL_DOCUMENT_INPUT_OPTIONS = {
   google: [
+    "gemini-4-neon",
     "gemini-4-hydrogen",
     "gemini-4-carbon",
     "gemini-4-argon",
@@ -36,6 +37,8 @@ export const MODEL_DOCUMENT_INPUT_OPTIONS = {
     "gemini-3.1-flash-lite",
   ],
   openrouter: [
+    "openai/gpt-6.2-astra",
+    "openai/gpt-6.2-sol",
     "openai/gpt-6.1-sol",
     "openai/gpt-6.1-terra",
     "openai/gpt-6-astra",
@@ -44,6 +47,7 @@ export const MODEL_DOCUMENT_INPUT_OPTIONS = {
     "openai/gpt-5.6-sol",
     "openai/gpt-5.6-terra",
     "openai/gpt-5.6-luna",
+    "google/gemini-4-neon",
     "google/gemini-4-hydrogen",
     "google/gemini-4-carbon",
     "google/gemini-4-argon",
@@ -64,6 +68,8 @@ export const MODEL_DOCUMENT_INPUT_OPTIONS = {
     "openai/gpt-5.4-mini",
   ],
   openai: [
+    "gpt-6.2-astra",
+    "gpt-6.2-sol",
     "gpt-6.1-sol",
     "gpt-6.1-terra",
     "gpt-6-astra",
@@ -111,6 +117,7 @@ export const MODEL_DOCUMENT_INPUT_OPTIONS = {
 /** Every offered provider/model pair has explicit image-input evidence. */
 export const MODEL_IMAGE_INPUT_CAPABILITIES = {
   google: {
+    "gemini-4-neon": "supported",
     "gemini-4-hydrogen": "supported",
     "gemini-4-carbon": "supported",
     "gemini-4-argon": "supported",
@@ -123,6 +130,8 @@ export const MODEL_IMAGE_INPUT_CAPABILITIES = {
     "gemini-3.1-flash-lite": "supported",
   },
   openrouter: {
+    "openai/gpt-6.2-astra": "supported",
+    "openai/gpt-6.2-sol": "supported",
     "openai/gpt-6.1-sol": "supported",
     "openai/gpt-6.1-terra": "supported",
     "openai/gpt-6-astra": "supported",
@@ -131,6 +140,7 @@ export const MODEL_IMAGE_INPUT_CAPABILITIES = {
     "openai/gpt-5.6-sol": "supported",
     "openai/gpt-5.6-terra": "supported",
     "openai/gpt-5.6-luna": "supported",
+    "google/gemini-4-neon": "supported",
     "google/gemini-4-hydrogen": "supported",
     "google/gemini-4-carbon": "supported",
     "google/gemini-4-argon": "supported",
@@ -151,6 +161,8 @@ export const MODEL_IMAGE_INPUT_CAPABILITIES = {
     "openai/gpt-5.4-mini": "supported",
   },
   openai: {
+    "gpt-6.2-astra": "supported",
+    "gpt-6.2-sol": "supported",
     "gpt-6.1-sol": "supported",
     "gpt-6.1-terra": "supported",
     "gpt-6-astra": "supported",
@@ -207,6 +219,7 @@ export const MODEL_IMAGE_INPUT_CAPABILITIES = {
  * through `resolveReasoningEffort`.
  */
 export const MODEL_REASONING_EFFORTS = {
+  "gemini-4-neon": ["low", "medium", "high", "xhigh"],
   "gemini-4-hydrogen": ["low", "medium", "high", "xhigh"],
   "gemini-4-carbon": ["low", "medium", "high"],
   "gemini-4-argon": ["low", "medium", "high"],
@@ -217,6 +230,8 @@ export const MODEL_REASONING_EFFORTS = {
   "gemini-3.1-pro-preview": ["low", "medium", "high"],
   "gemini-3.5-flash": ["minimal", "low", "medium", "high"],
   "gemini-3.1-flash-lite": ["minimal", "low", "medium", "high"],
+  "openai/gpt-6.2-astra": ["low", "medium", "high", "xhigh", "max"],
+  "openai/gpt-6.2-sol": ["low", "medium", "high", "xhigh", "max"],
   "openai/gpt-6.1-sol": ["low", "medium", "high", "xhigh", "max"],
   "openai/gpt-6.1-terra": ["none", "low", "medium", "high", "xhigh", "max"],
   "openai/gpt-6-astra": ["low", "medium", "high", "xhigh", "max"],
@@ -225,6 +240,7 @@ export const MODEL_REASONING_EFFORTS = {
   "openai/gpt-5.6-sol": ["none", "low", "medium", "high", "xhigh", "max"],
   "openai/gpt-5.6-terra": ["none", "low", "medium", "high", "xhigh", "max"],
   "openai/gpt-5.6-luna": ["none", "low", "medium", "high", "xhigh", "max"],
+  "google/gemini-4-neon": ["low", "medium", "high", "xhigh"],
   "google/gemini-4-hydrogen": ["low", "medium", "high", "xhigh"],
   "google/gemini-4-carbon": ["low", "medium", "high"],
   "google/gemini-4-argon": ["low", "medium", "high"],
@@ -243,6 +259,8 @@ export const MODEL_REASONING_EFFORTS = {
   "anthropic/claude-sonnet-4.6": ["none", "low", "medium", "high", "max"],
   "openai/gpt-5.5": ["none", "low", "medium", "high", "xhigh"],
   "openai/gpt-5.4-mini": ["none", "low", "medium", "high", "xhigh"],
+  "gpt-6.2-astra": ["low", "medium", "high", "xhigh", "max"],
+  "gpt-6.2-sol": ["low", "medium", "high", "xhigh", "max"],
   "gpt-6.1-sol": ["low", "medium", "high", "xhigh", "max"],
   "gpt-6.1-terra": ["none", "low", "medium", "high", "xhigh", "max"],
   "gpt-6-astra": ["low", "medium", "high", "xhigh", "max"],
@@ -292,6 +310,7 @@ export const MODEL_REASONING_EFFORTS = {
  * a truthful named default, so clients must retain a separate Default choice.
  */
 export const MODEL_DEFAULT_REASONING_EFFORTS = {
+  "gemini-4-neon": null,
   "gemini-4-hydrogen": null,
   "gemini-4-carbon": null,
   "gemini-4-argon": null,
@@ -302,6 +321,8 @@ export const MODEL_DEFAULT_REASONING_EFFORTS = {
   "gemini-3.1-pro-preview": null,
   "gemini-3.5-flash": null,
   "gemini-3.1-flash-lite": null,
+  "openai/gpt-6.2-astra": "medium",
+  "openai/gpt-6.2-sol": "medium",
   "openai/gpt-6.1-sol": "medium",
   "openai/gpt-6.1-terra": "medium",
   "openai/gpt-6-astra": "medium",
@@ -310,6 +331,7 @@ export const MODEL_DEFAULT_REASONING_EFFORTS = {
   "openai/gpt-5.6-sol": "medium",
   "openai/gpt-5.6-terra": "medium",
   "openai/gpt-5.6-luna": "medium",
+  "google/gemini-4-neon": "medium",
   "google/gemini-4-hydrogen": "medium",
   "google/gemini-4-carbon": "medium",
   "google/gemini-4-argon": "medium",
@@ -328,6 +350,8 @@ export const MODEL_DEFAULT_REASONING_EFFORTS = {
   "anthropic/claude-sonnet-4.6": "medium",
   "openai/gpt-5.5": "medium",
   "openai/gpt-5.4-mini": "medium",
+  "gpt-6.2-astra": null,
+  "gpt-6.2-sol": null,
   "gpt-6.1-sol": null,
   "gpt-6.1-terra": null,
   "gpt-6-astra": null,
@@ -377,6 +401,7 @@ export const MODEL_DEFAULT_REASONING_EFFORTS = {
  * parameters. Consumers must go through `shouldEmitTemperature`.
  */
 export const MODEL_TEMPERATURE_POLICIES = {
+  "gemini-4-neon": "omit",
   "gemini-4-hydrogen": "omit",
   "gemini-4-carbon": "omit",
   "gemini-4-argon": "omit",
@@ -387,6 +412,8 @@ export const MODEL_TEMPERATURE_POLICIES = {
   "gemini-3.1-pro-preview": "emit",
   "gemini-3.5-flash": "emit",
   "gemini-3.1-flash-lite": "emit",
+  "openai/gpt-6.2-astra": "omit",
+  "openai/gpt-6.2-sol": "omit",
   "openai/gpt-6.1-sol": "omit",
   "openai/gpt-6.1-terra": "omit",
   "openai/gpt-6-astra": "omit",
@@ -395,6 +422,7 @@ export const MODEL_TEMPERATURE_POLICIES = {
   "openai/gpt-5.6-sol": "omit",
   "openai/gpt-5.6-terra": "omit",
   "openai/gpt-5.6-luna": "omit",
+  "google/gemini-4-neon": "omit",
   "google/gemini-4-hydrogen": "omit",
   "google/gemini-4-carbon": "omit",
   "google/gemini-4-argon": "omit",
@@ -413,6 +441,8 @@ export const MODEL_TEMPERATURE_POLICIES = {
   "anthropic/claude-sonnet-4.6": "emit",
   "openai/gpt-5.5": "omit",
   "openai/gpt-5.4-mini": "omit",
+  "gpt-6.2-astra": "omit",
+  "gpt-6.2-sol": "omit",
   "gpt-6.1-sol": "omit",
   "gpt-6.1-terra": "omit",
   "gpt-6-astra": "omit",
@@ -459,6 +489,7 @@ export const MODEL_TEMPERATURE_POLICIES = {
  * `getOutputTokenLimit`.
  */
 export const MODEL_OUTPUT_TOKEN_LIMITS = {
+  "gemini-4-neon": 65_536,
   "gemini-4-hydrogen": 65_536,
   "gemini-4-carbon": 32_768,
   "gemini-4-argon": 32_768,
@@ -469,6 +500,8 @@ export const MODEL_OUTPUT_TOKEN_LIMITS = {
   "gemini-3.1-pro-preview": 65_536,
   "gemini-3.5-flash": 65_536,
   "gemini-3.1-flash-lite": 65_536,
+  "openai/gpt-6.2-astra": 128_000,
+  "openai/gpt-6.2-sol": 128_000,
   "openai/gpt-6.1-sol": 128_000,
   "openai/gpt-6.1-terra": 128_000,
   "openai/gpt-6-astra": 128_000,
@@ -477,6 +510,7 @@ export const MODEL_OUTPUT_TOKEN_LIMITS = {
   "openai/gpt-5.6-sol": 128_000,
   "openai/gpt-5.6-terra": 128_000,
   "openai/gpt-5.6-luna": 128_000,
+  "google/gemini-4-neon": 943_718,
   "google/gemini-4-hydrogen": 943_718,
   "google/gemini-4-carbon": 943_718,
   "google/gemini-4-argon": 943_718,
@@ -495,6 +529,8 @@ export const MODEL_OUTPUT_TOKEN_LIMITS = {
   "anthropic/claude-sonnet-4.6": 128_000,
   "openai/gpt-5.5": 128_000,
   "openai/gpt-5.4-mini": 128_000,
+  "gpt-6.2-astra": 128_000,
+  "gpt-6.2-sol": 128_000,
   "gpt-6.1-sol": 128_000,
   "gpt-6.1-terra": 128_000,
   "gpt-6-astra": 128_000,

@@ -93,6 +93,7 @@ const createCredential = async () => {
           userDeleted: false,
           enrolledFeatureIds: [],
           professionalUse: { status: "required" as const },
+          ssoAccess: { status: "not_evaluated" as const },
         };
   const admit = async () =>
     await resolveMachineApiKeySession(issued.key, {

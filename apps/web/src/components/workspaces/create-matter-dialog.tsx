@@ -53,7 +53,7 @@ export const SelectedClient = ({
   onClear,
   clearLabel,
 }: {
-  client: MatterDraftClient;
+  client: Pick<MatterDraftClient, "displayName" | "type">;
   onClear: () => void;
   clearLabel: string;
 }) => (
@@ -378,6 +378,7 @@ const CreateMatterDialogBody = ({
         </DialogClose>
         <Button
           disabled={!canSubmit}
+          disabledReason={t("common.creating")}
           loading={createWorkspace.isPending}
           onClick={() => {
             detached(handleSubmit(), "create-matter-dialog.submit");

@@ -11,7 +11,7 @@
 
 import { Result } from "better-result";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { fileComparisonUploads } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -79,7 +79,17 @@ export const DEFAULT_DELIVER_TEMPORARY_REDLINE_DEPENDENCIES: DeliverTemporaryRed
     putObject: putTemporaryS3ObjectWithSignal,
   };
 
-export const deliverTemporaryRedline = async (
+type StagedTemporaryRedline = {
+  delivery: TemporaryRedlineDelivery;
+  /** The redline's own row, for a caller that must withdraw it unpublished. */
+  uploadId: SafeId<"fileComparisonUpload">;
+};
+
+/**
+ * Store the redline and sign its link without handing it out. A caller whose
+ * publication is fenced withdraws the staged row and object when it loses.
+ */
+export const stageTemporaryRedline = async (
   {
     bytes,
     fileName,
@@ -91,7 +101,7 @@ export const deliverTemporaryRedline = async (
     userId,
   }: DeliverTemporaryRedlineOptions,
   dependencies: DeliverTemporaryRedlineDependencies = DEFAULT_DELIVER_TEMPORARY_REDLINE_DEPENDENCIES,
-): Promise<Result<TemporaryRedlineDelivery, TemporaryRedlineFailure>> => {
+): Promise<Result<StagedTemporaryRedline, TemporaryRedlineFailure>> => {
   const id = createSafeId<"fileComparisonUpload">();
   const key = fileComparisonObjectKey({ organizationId, uploadId: id });
   const expiresAt = fileComparisonExpiry(FILE_COMPARISON_REDLINE_TTL_SECONDS);
@@ -154,7 +164,18 @@ export const deliverTemporaryRedline = async (
   }
 
   return Result.ok({
-    downloadUrl: downloadUrl.value,
-    expiresAt: expiresAt.toISOString(),
+    delivery: {
+      downloadUrl: downloadUrl.value,
+      expiresAt: expiresAt.toISOString(),
+    },
+    uploadId: id,
   });
 };
+
+export const deliverTemporaryRedline = async (
+  options: DeliverTemporaryRedlineOptions,
+  dependencies: DeliverTemporaryRedlineDependencies = DEFAULT_DELIVER_TEMPORARY_REDLINE_DEPENDENCIES,
+): Promise<Result<TemporaryRedlineDelivery, TemporaryRedlineFailure>> =>
+  (await stageTemporaryRedline(options, dependencies)).map(
+    ({ delivery }) => delivery,
+  );

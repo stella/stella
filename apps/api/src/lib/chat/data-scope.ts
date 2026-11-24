@@ -1,9 +1,9 @@
 import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { chatThreads } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -53,7 +53,8 @@ const lockThreadDataScopeOnTx = async ({
   return lockedThread.dataWorkspaceIds;
 };
 
-const appendMissingWorkspaceIds = ({
+/** `base` followed by every id of `additions` it lacks, in order. */
+export const appendMissingWorkspaceIds = ({
   additions,
   base,
 }: {

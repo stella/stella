@@ -4,7 +4,7 @@ import * as v from "valibot";
 
 import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import {
   documentProcessingRuns,
   entities,

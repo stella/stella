@@ -4,7 +4,7 @@ import * as v from "valibot";
 
 import { numberFromString } from "@stll/api-contract/http-input";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { clauses } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isClauseBody, normalizeClauseBody } from "@/api/lib/clauses/types";
@@ -112,6 +112,7 @@ export const listClausesHandler = async function* ({
   const isSearching = !!query.q;
 
   if (isSearching && query.q) {
+    // sql-perf-allow: bounded by one organization's clause library via clauses_organization_id_idx (and clauses_org_category_idx when categoryId is set)
     const titleMatch = ilike(clauses.title, `%${escapeLike(query.q)}%`);
     const ftsMatch =
       tsQuery.length > 0

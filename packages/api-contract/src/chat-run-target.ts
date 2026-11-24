@@ -15,6 +15,7 @@ import {
   type DesktopRunnerLinkedFolder,
 } from "./desktop-runner";
 import { displayNameSchema } from "./display-name";
+import { UNSCANNED_CONTENT_REASONS } from "./file-scan-warnings";
 import { USER_FILE_URL_PREFIX } from "./user-file-url";
 
 /**
@@ -34,8 +35,24 @@ export const CHAT_RUN_TARGET_KIND = {
 export const CHAT_LOCAL_RUN_HARNESSES = [
   "codex",
   "claude-code",
+  "antigravity",
 ] as const satisfies readonly AgentHarness[];
 export type ChatLocalRunHarness = (typeof CHAT_LOCAL_RUN_HARNESSES)[number];
+
+/**
+ * Harnesses stella desktop installs and signs in to, each at its own card in
+ * the app's Settings; any other the member sets up in the agent itself.
+ */
+export const DESKTOP_SET_UP_HARNESSES = [
+  "codex",
+  "claude-code",
+] as const satisfies readonly ChatLocalRunHarness[];
+export type DesktopSetUpHarness = (typeof DESKTOP_SET_UP_HARNESSES)[number];
+
+export const isDesktopSetUpHarness = (
+  harness: ChatLocalRunHarness,
+): harness is DesktopSetUpHarness =>
+  DESKTOP_SET_UP_HARNESSES.some((candidate) => candidate === harness);
 
 export const isChatLocalRunHarness = (
   harness: AgentHarness,
@@ -132,6 +149,14 @@ export const CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS = {
     ask: CHAT_LOCAL_RUN_WEB_SEARCH.asks,
     auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
     full_auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
+  },
+  // stella answers Antigravity's permission requests: a web fetch asks at
+  // Ask and runs at Auto. It runs in neither plan nor full auto.
+  antigravity: {
+    plan: CHAT_LOCAL_RUN_WEB_SEARCH.off,
+    ask: CHAT_LOCAL_RUN_WEB_SEARCH.asks,
+    auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
+    full_auto: CHAT_LOCAL_RUN_WEB_SEARCH.off,
   },
 } as const satisfies Record<
   ChatLocalRunHarness,
@@ -527,6 +552,8 @@ export const chatLocalRunFileSchema = v.strictObject({
   filename: v.string(),
   mimeType: v.string(),
   placeholder: v.optional(v.string()),
+  /** Why some of the file's content was not scanned when it was stored. */
+  unscannedContent: v.optional(v.array(v.picklist(UNSCANNED_CONTENT_REASONS))),
 });
 export type ChatLocalRunFile = v.InferOutput<typeof chatLocalRunFileSchema>;
 
@@ -538,6 +565,7 @@ export const chatLocalRunFilePart = ({
   filename,
   mimeType,
   placeholder,
+  unscannedContent,
 }: ChatLocalRunFile) =>
   ({
     type: mimeType.startsWith("image/") ? "image" : "document",
@@ -545,6 +573,9 @@ export const chatLocalRunFilePart = ({
     metadata: {
       filename,
       ...(placeholder === undefined ? {} : { placeholder }),
+      ...(unscannedContent === undefined || unscannedContent.length === 0
+        ? {}
+        : { unscannedContent }),
     },
   }) as const;
 

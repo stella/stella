@@ -67,8 +67,68 @@ const BASELINE_FILE = "apps/api/deployment-feature-routes-baseline.json";
  */
 const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
+    "/v1/invoices/:workspaceId/:invoiceId/sends",
+    "cleanup of live invoice links must work after the firm leaves time billing; invoice:update required",
+  ],
+  [
+    "/v1/outbound-actions",
+    "Authenticated confirmation of a user's prepared outbound actions is available on every deployment",
+  ],
+  [
     "/v1/saved-searches",
     "The caller's private saved searches support search on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/structured-document",
+    "Court document previews use matter file read permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/e-invoice",
+    "Structured invoice previews use matter file read permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/signed-dossier",
+    "Signed container previews use matter file read permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/asic",
+    "ASiC previews use matter file read permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/zip",
+    "ZIP archive previews use matter file read permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/mbox",
+    "Mailbox previews use matter file read permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/parts",
+    "Listing the files inside a part of a file uses the matter file read permission on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/cades",
+    "Signed document previews use the matter file read permission on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/part",
+    "Saving a part of a file to a matter uses the matter file read and document create permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/email-reading",
+    "Email readings use the matter file read permission on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/signature",
+    "Signature file previews use the matter file read permission on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/data-box",
+    "Data-box previews use the matter file read permission on every deployment",
+  ],
+  [
+    "/v1/entities/:workspaceId/entity/:entityId/similar",
+    "Listing similar documents in a matter uses the matter read permission on every deployment",
   ],
   [
     "/v1/organization-settings/correspondence/data-boxes",
@@ -95,8 +155,28 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Storing a reviewed skill draft is a private skill create under the skill create permission on every deployment",
   ],
   [
+    "/v1/skills/:skillId/export",
+    "Downloading a skill the caller may read as an Agent Skills archive is available on every deployment",
+  ],
+  [
     "/v1/dictation/transcribe",
     "Authenticated dictation is available on every deployment and enforces its dictation kill switch, provider availability and usage admission",
+  ],
+  [
+    "/v1/dictation/models",
+    "Authenticated dictation lists the region's transcription models on every deployment, and a model whose provider keeps the audio only to a member whose feature decision grants it",
+  ],
+  [
+    "/v1/dictation/learned-fixes",
+    "A member's learned dictation fixes are their own spellings, mounted on every deployment; nothing reaches a model",
+  ],
+  [
+    "/v1/dictation/cleanup",
+    "Authenticated dictation cleanup is available on every deployment and enforces its dictation kill switch, model availability and usage admission",
+  ],
+  [
+    "/v1/dictation/recording-cleanup",
+    "Authenticated recording cleanup is available on every deployment and enforces its dictation kill switch, model availability and usage admission",
   ],
   [
     "/v1/organizations/audit-export",
@@ -124,7 +204,7 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   ],
   [
     "/v1/desktop/matters",
-    "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
+    "Desktop matter search enforces the caller's activity or dictation feature decision and matter access on every deployment",
   ],
   [
     "/v1/chat/runs/active",
@@ -171,6 +251,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "A chat limit reminder is mounted on every deployment; it can be set only for a turn the member's local-agents feature let run",
   ],
   [
+    "/v1/organization-settings/dictation-vocabulary",
+    "The organization's dictation words are managed on every deployment; dictation itself stays behind the members' dictation feature decisions",
+  ],
+  [
     "/v1/organization-settings/local-runs",
     "An administrator's limit on local run permissions is settable on every deployment; it only narrows turns the member's local-agents feature lets start",
   ],
@@ -179,12 +263,20 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
   ],
   [
+    "/public/invoice-links",
+    "Invoice links have no member to enrol; their token verifier requires FEATURE_INVOICE_LINKS and time billing, answering disabled deployments like dead links",
+  ],
+  [
     "/v1/contacts",
     "The organization address book and its contact routes are available on every deployment",
   ],
   [
     "/v1/search-history",
     "Personal search history is available on every deployment",
+  ],
+  [
+    "/v1/file-content",
+    "Redeems a short-lived file grant that a gated or ungated file route issued; the grant carries the issuing decision",
   ],
   [
     "/v1/me/data-exports",
@@ -224,12 +316,32 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Desktop dictation cleanup enforces the caller's dictation feature decision, its dictation kill switch, model availability and usage admission on every deployment",
   ],
   [
+    "/v1/desktop/dictation/cleanup-models",
+    "Desktop dictation lists the cleanup models only for a caller whose dictation feature decision is enabled and whose role may use AI, on every deployment",
+  ],
+  [
+    "/v1/desktop/dictation/learned-fixes",
+    "A desktop member's learned dictation fixes enforce the caller's dictation feature decision on every deployment; nothing reaches a model",
+  ],
+  [
     "/v1/desktop/dictation/models",
     "Desktop dictation lists the region's transcription models only for a caller whose cloud dictation feature decision is enabled, on every deployment",
   ],
   [
+    "/v1/desktop/dictation/recording-cleanup",
+    "Desktop recording cleanup enforces the caller's dictation feature decision, its dictation kill switch, model availability and usage admission on every deployment",
+  ],
+  [
     "/v1/desktop/dictation/transcribe",
     "Desktop dictation transcription enforces the caller's cloud dictation feature decision, its dictation kill switch, provider availability and usage admission on every deployment",
+  ],
+  [
+    "/v1/desktop/dictation/transcripts",
+    "Filing a transcribed recording enforces the caller's dictation feature decision, matter access and document create permission on every deployment",
+  ],
+  [
+    "/v1/desktop/dictation/transcripts/audio",
+    "Finalizing a transcribed recording's audio enforces the caller's dictation feature decision, matter access, document create permission and the caller's own upload on every deployment",
   ],
   [
     "/v1/files/:workspaceId/marked",

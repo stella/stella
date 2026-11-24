@@ -26,9 +26,9 @@ import { hasUsableAst } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { createSha256 } from "@stll/sha256/bun";
 
-import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { caseLawDecisions, caseLawDecisionSupplements } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { composedMetadataUrlSchema } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import type { SafeId } from "@/api/lib/branded-types";
 import { supplementAnchorPrefix } from "@/api/lib/case-law/decision-absorption";

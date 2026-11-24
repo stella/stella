@@ -43,6 +43,15 @@ export const buttonLabelBenches = {
   "wrap-layout": "wrap",
 } as const;
 
+/** Sortable table head benches, each a table wide enough for its labels,
+ * keyed to what sets the head apart. */
+export const sortableHeadBenches = {
+  "empty-body": "no rows, only the full-width empty row",
+  "with-rows": "rows under the heads",
+  "end-aligned": "a numeric column, its arrow before the label",
+  face: "the loading face of the heads",
+} as const;
+
 /** Menu benches, each differing from `plain` in one thing, keyed to what it
  * isolates of a menu's commits. */
 export const menuCommitBenches = {
@@ -71,18 +80,22 @@ export const visualRegistry = {
     label: "Connector sign-in confirmation",
     layout: "plain",
   },
-  "table-chart": { label: "Chat table chart", layout: "plain" },
+  "table-chart": { label: "Answer tables", layout: "plain" },
   "oauth-consent": { label: "OAuth consent", layout: "plain" },
   "outcome-screen": { label: "Outcome screens", layout: "plain" },
   "page-crop": { label: "PDF page crop", layout: "plain" },
+  "pdf-fit-width": { label: "PDF pages fitted to width", layout: "plain" },
   "upload-rejections": { label: "Upload rejection reasons", layout: "plain" },
+  "document-naming": { label: "Document name pattern field", layout: "plain" },
   "chat-long-paste": { label: "Chat long paste", layout: "plain" },
   "chat-composer-reference": {
     label: "Chat composer references",
     layout: "plain",
   },
   "chat-status": { label: "Chat status motion", layout: "plain" },
+  "chat-citation-chips": { label: "Chat citation chips", layout: "plain" },
   "button-label": { label: "Button labels", layout: "plain" },
+  "sortable-head": { label: "Sortable table heads", layout: "plain" },
   "menu-commits": { label: "Menu commits", layout: "plain" },
   "chat-continuation-error": {
     label: "Chat continuation recovery",
@@ -94,8 +107,13 @@ export const visualRegistry = {
     layout: "plain",
   },
   "chat-answer-footer": { label: "Chat answer footer", layout: "plain" },
+  "chat-matter-reads": { label: "Chat matter reads", layout: "plain" },
+  "chat-answer-typography": {
+    label: "Chat answer typography",
+    layout: "plain",
+  },
   "chat-link-icons": { label: "Chat link icons", layout: "plain" },
-  "chat-follow-ups": { label: "Chat follow-up chips", layout: "plain" },
+  "chat-follow-ups": { label: "Chat follow-ups", layout: "plain" },
   "ask-user": { label: "Ask-user questions", layout: "plain" },
   "case-law-text-availability": {
     label: "Case-law text availability",
@@ -105,10 +123,13 @@ export const visualRegistry = {
   "reader-answers": { label: "Reader anchored answers", layout: "plain" },
   "reader-selection": { label: "Reader selection toolbar", layout: "plain" },
   "answer-edit": { label: "Chat answer edits", layout: "plain" },
-  autocomplete: { label: "Autocomplete", layout: "plain" },
   ui: { label: "UI components", layout: "plain" },
   "control-sizes": { label: "Control sizes", layout: "control-sizes" },
   "inspector-pane": { label: "Inspector pane", layout: "inspector-pane" },
+  "inspector-phone-header": {
+    label: "Inspector phone header",
+    layout: "plain",
+  },
   "playbook-editor": { label: "Playbook editor lifecycle", layout: "plain" },
   "provision-header": { label: "Provision header", layout: "provision-header" },
   "shell-pending": { label: "Shell pending", layout: "plain" },
@@ -118,3 +139,9 @@ export const visualRegistry = {
 } as const satisfies Record<string, VisualEntry>;
 
 export type VisualName = keyof typeof visualRegistry;
+
+export const isVisualName = (input: unknown): input is VisualName =>
+  typeof input === "string" && Object.hasOwn(visualRegistry, input);
+
+export const resolveVisualName = (visual: unknown): VisualName =>
+  isVisualName(visual) ? visual : "ui";

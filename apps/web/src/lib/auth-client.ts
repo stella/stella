@@ -24,7 +24,10 @@ import {
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
 import { reportUnhandledAuthClientError } from "@/lib/account/auth-code-report";
 import { notifyStepUp } from "@/lib/account/mcp-step-up";
+import { sessionSignInsClient } from "@/lib/account/session-sign-ins-client";
+import { ssrApiHeaders } from "@/lib/account/ssr-api-headers";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { externalApiOrigin } from "@/lib/api-origins";
 import { browserAuthBaseUrl } from "@/lib/api-url";
 import { AuthClientError } from "@/lib/errors/auth";
 import {
@@ -125,6 +128,7 @@ const authClientPlugins = [
       originConsentId: { type: "string", required: false },
     },
     user: {
+      locale: { type: "string" },
       preferredName: { type: "string", required: false },
       timezoneId: { type: "string" },
       readerAnswerLanguage: { type: "string", required: false },
@@ -140,6 +144,7 @@ const authClientPlugins = [
   // The email-OTP sign-in step (otp-panel.tsx) reads `twoFactorRedirect` off
   // its own response instead and navigates to `/auth/two-factor` explicitly.
   twoFactorClient(),
+  sessionSignInsClient(),
 ];
 
 const customFetchImpl = async (
@@ -147,6 +152,18 @@ const customFetchImpl = async (
   init?: RequestInit,
 ): Promise<Response> => {
   const method = resolveRequestMethod(input, init);
+  if (import.meta.env.SSR) {
+    const headers = new Headers(init?.headers);
+    for (const [name, value] of Object.entries(ssrApiHeaders())) {
+      headers.set(name, value);
+    }
+    return await fetchWithTimeout(input, {
+      ...init,
+      headers,
+      signal: init?.signal ?? undefined,
+      timeout: { type: "headers", ms: AUTH_REQUEST_TIMEOUT_MS },
+    });
+  }
   if (method === "GET") {
     // Serve the boot-time prefetch (see `boot-prefetch.ts`) for the
     // first session/role read so route entry does not wait for the main
@@ -165,14 +182,14 @@ const customFetchImpl = async (
   return await fetchWithTimeout(input, {
     ...init,
     signal: init?.signal ?? undefined,
-    timeoutMs: AUTH_REQUEST_TIMEOUT_MS,
+    timeout: { type: "headers", ms: AUTH_REQUEST_TIMEOUT_MS },
   });
 };
 
 const createStellaAuthClient = (redirectMode: "automatic" | "manual") =>
   createAuthClient({
     disableDefaultFetchPlugins: redirectMode === "manual",
-    baseURL: browserAuthBaseUrl(),
+    baseURL: import.meta.env.SSR ? externalApiOrigin() : browserAuthBaseUrl(),
     plugins: authClientPlugins,
     fetchOptions: {
       customFetchImpl,
@@ -181,7 +198,9 @@ const createStellaAuthClient = (redirectMode: "automatic" | "manual") =>
           return useI18nStore.getState().lang;
         },
       },
-      onRequest: withOauthQueryFromHash,
+      ...(redirectMode === "automatic"
+        ? { onRequest: withOauthQueryFromHash }
+        : {}),
       onError: (context) => {
         if (notifyStepUp(context.error)) {
           return;
@@ -202,10 +221,19 @@ const createStellaAuthClient = (redirectMode: "automatic" | "manual") =>
 
 export const authClient = createStellaAuthClient("automatic");
 
-/** Consent owns the completion view and navigation; the SDK's redirect hook must not race it. */
-export const submitOAuthConsent = async (accept: boolean) => {
+/**
+ * Consent owns navigation and sends the signed request that was displayed
+ * when the user made their decision.
+ */
+export const submitOAuthConsent = async (
+  accept: boolean,
+  oauthQuery: string | null,
+) => {
   const consentClient = createStellaAuthClient("manual");
-  return await consentClient.oauth2.consent({ accept });
+  return await consentClient.oauth2.consent({
+    accept,
+    ...(oauthQuery === null ? {} : { oauth_query: oauthQuery }),
+  });
 };
 
 export const listAuthSessions = async () => {
@@ -280,12 +308,6 @@ export const listAuthSessions = async () => {
     error: null,
   };
 };
-
-export const revokeAuthSession = async ({ sessionId }: { sessionId: string }) =>
-  await authClient.$fetch("/revoke-session-by-id", {
-    method: "POST",
-    body: { sessionId },
-  });
 
 // The two-factor server plugin rewrites a sign-in endpoint's response body to
 // `{ twoFactorRedirect: true, twoFactorMethods }` when the signed-in user has

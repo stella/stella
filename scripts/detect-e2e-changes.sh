@@ -12,7 +12,7 @@ fi
 # The production config owns its spec tree and imported fixtures/helpers.
 # Other E2E configs belong to their existing full-depth jobs.
 if [[ "$scope" == "pr-core" ]]; then
-  exec node "$(dirname "$0")/production-e2e-inputs.mjs" "$@"
+  exec bun "$(dirname "$0")/production-e2e-inputs.mjs" "$@"
 fi
 
 for file in "$@"; do

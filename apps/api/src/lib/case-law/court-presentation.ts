@@ -34,8 +34,12 @@ export type CourtPresentation = {
   courtTier: CourtTierLabel;
 };
 
+/** Explicit sentinel when the DB name-pattern registry could not be read. */
+export const COURT_REGISTRY_UNAVAILABLE = { status: "unavailable" } as const;
+type CourtRegistryUnavailable = typeof COURT_REGISTRY_UNAVAILABLE;
+
 /** Name-pattern weights; compiled court directories remain available when this read fails. */
-export type CourtRegistry = CourtWeightMap | null;
+export type CourtRegistry = CourtWeightMap | CourtRegistryUnavailable;
 
 /**
  * A row whose rank is unavailable carries no abbreviation with this fallback.
@@ -96,9 +100,12 @@ export const courtPresentation = (
   if (decision.country === "USA") {
     // The compiled directory owns both the name and rank; the DB name-pattern
     // registry may be unavailable without affecting this jurisdiction.
-    return rankedPresentation(courtWeights ?? new Map(), decision);
+    return rankedPresentation(
+      "status" in courtWeights ? new Map() : courtWeights,
+      decision,
+    );
   }
-  return courtWeights === null
+  return "status" in courtWeights
     ? { courtAbbreviation: null, courtTier: UNRANKED_TIER }
     : rankedPresentation(courtWeights, decision);
 };
@@ -137,7 +144,7 @@ export const readCourtRegistry = async (
       "error.type": errorTag(registry.error),
       effect: "name_pattern_weights_unavailable",
     });
-    return null;
+    return COURT_REGISTRY_UNAVAILABLE;
   }
   return registry.value;
 };

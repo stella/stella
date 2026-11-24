@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useCallback,
   useDeferredValue,
   useEffect,
@@ -27,8 +28,6 @@ import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { invoke } from "@tauri-apps/api/core";
-import { TauriEvent } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { panic } from "better-result";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
 
@@ -78,6 +77,7 @@ import {
   TagsIcon,
   Trash2Icon,
   VideoIcon,
+  WavesIcon,
   XIcon,
 } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
@@ -85,7 +85,6 @@ import { InlineDropIndicator } from "@stll/ui/inline-drop-indicator";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import {
   type InlineDropPosition,
-  reorderInlineIds,
   toInlineDropPosition,
 } from "@stll/ui/inline-reorder";
 import {
@@ -128,6 +127,7 @@ import {
   useClipboardShortcut,
   useKeyboardLayout,
 } from "../shared/use-clipboard-shortcut";
+import { useDictationAvailability } from "../shared/use-dictation-availability";
 import {
   describeError,
   DESKTOP_TELEMETRY_ERROR_CODES,
@@ -151,7 +151,9 @@ import {
   clipboardItemLink,
   clipboardPastePreview,
   clipboardPointerMoved,
+  clipboardRailItems,
   clipboardRailScrollDelta,
+  clipboardRailSpacers,
   clipboardRailWheelDelta,
   clipboardRailWindow,
   clipboardScopeKeyAction,
@@ -181,7 +183,17 @@ import type {
   ClipboardSearchOptions,
   ClipboardSearchScope,
 } from "./clipboard-logic";
-import { clipboardHistory } from "./clipboard-selection";
+import {
+  clipboardDismissalCopy,
+  clipboardHistory,
+} from "./clipboard-selection";
+import {
+  CLIPBOARD_RETENTION_LABEL_KEYS,
+  clipboardGroupDropIndex,
+  clipboardGroupStepIndex,
+  clipboardSettingsCommands,
+} from "./clipboard-settings";
+import type { ClipboardGroupDialogState } from "./clipboard-settings";
 import {
   markClipboardShellCommit,
   markClipboardSnapshotApplied,
@@ -191,10 +203,12 @@ import {
 import {
   CLIPBOARD_HISTORY_CHANGED_EVENT,
   CLIPBOARD_RETENTIONS,
+  CLIPBOARD_WINDOW_SESSION_EVENT,
   isClipboardCaptureRevision,
   isClipboardCaptureUpdate,
   isClipboardCopyError,
   isClipboardSnapshot,
+  isClipboardWindowSession,
 } from "./clipboard-types";
 import type {
   ClipboardCaptureStatus,
@@ -204,27 +218,28 @@ import type {
   ClipboardGroup,
   ClipboardGroupColor,
   ClipboardItem,
-  ClipboardRetention,
+  ClipboardSettingsSnapshot,
   ClipboardSnapshot,
   ClipboardSourceAppExclusion,
   ClipboardSourceAppVisual,
+  ClipboardWindowSession,
 } from "./clipboard-types";
 import { ClipboardCardPreview } from "./ClipboardCardPreview";
 import {
-  ClipboardGroupFields,
-  nextClipboardGroupColor,
-} from "./ClipboardGroupFields";
+  ClipboardGroupDialogBody,
+  useClipboardGroupDialogFrame,
+} from "./ClipboardGroupDialog";
+import { nextClipboardGroupColor } from "./ClipboardGroupFields";
 import type { ClipboardImagePreviewStatus } from "./ClipboardImagePreview";
+import {
+  ClipboardRailDivider,
+  clipboardRailDivider,
+} from "./ClipboardRailDivider";
 import { ClipboardSourceIcon } from "./ClipboardSourceIcon";
 import { useClipsCopyFailed } from "./clips-copy-routing";
 import { useRailViewport } from "./use-rail-viewport";
 
 const STELLA_WEB_APP_URL = "https://my.stll.app";
-const RETENTION_LABEL_KEYS = {
-  week: "retentionWeek",
-  month: "retentionMonth",
-  year: "retentionYear",
-} as const satisfies Record<ClipboardRetention, string>;
 const CLIPBOARD_CARD_SELECTOR = "[data-clipboard-id]";
 // Which step of a copy failed decides what the user is told: only a `copy`
 // failure means the clip never reached the system clipboard.
@@ -638,11 +653,15 @@ const ClipboardCard = ({
   const [nameDraft, setNameDraft] = useState(item.name ?? "");
   const formatShortcutsVisible =
     active && !editingName && item.type === "formattedText";
+  const [prevShortcutsVisible, setPrevShortcutsVisible] = useState(
+    formatShortcutsVisible,
+  );
   const [shortcutPastePreview, setShortcutPastePreview] =
     useState<ClipboardPastePreview>(NO_CLIPBOARD_PASTE_PREVIEW);
   // The shortcut row unmounts without a pointer leave or blur when the card
   // stops being active, so its preview must not outlive the row.
-  if (!formatShortcutsVisible && shortcutPastePreview.type !== "none") {
+  if (prevShortcutsVisible !== formatShortcutsVisible) {
+    setPrevShortcutsVisible(formatShortcutsVisible);
     setShortcutPastePreview(NO_CLIPBOARD_PASTE_PREVIEW);
   }
   const renderFormat = clipboardCardRenderFormat(item, [
@@ -905,28 +924,7 @@ const ClipboardCard = ({
 };
 
 type ClipboardDialogState =
-  | { type: "closed" }
-  | { type: "clearHistory" }
-  | {
-      color: ClipboardGroupColor;
-      itemId: string | null;
-      name: string;
-      type: "createGroup";
-    }
-  | {
-      groupId: string;
-      groupName: string;
-      mode: ClipboardGroupDeletionMode;
-      type: "deleteGroup";
-    }
-  | {
-      color: ClipboardGroupColor;
-      groupId: string;
-      name: string;
-      type: "editGroup";
-    };
-
-type ClipboardGroupDeletionMode = "deleteClips" | "keepClips";
+  { type: "closed" } | { type: "clearHistory" } | ClipboardGroupDialogState;
 
 type DialogShellProps = {
   children: ReactNode;
@@ -984,6 +982,7 @@ const DialogShell = ({
             </DialogClose>
             <Button
               disabled={submitDisabled}
+              disabledReason={t("enterGroupName")}
               type="submit"
               variant={destructive ? "destructive" : "default"}
             >
@@ -996,6 +995,36 @@ const DialogShell = ({
   );
 };
 
+type ClipboardGroupDialogProps = {
+  dialog: ClipboardGroupDialogState;
+  onChange: (dialog: ClipboardGroupDialogState) => void;
+  onClose: () => void;
+  onSubmit: (dialog: ClipboardGroupDialogState) => void;
+};
+
+/** A group dialog in the Clips window's own dialog style. */
+const ClipboardGroupDialog = ({
+  dialog,
+  onChange,
+  onClose,
+  onSubmit,
+}: ClipboardGroupDialogProps) => {
+  const frame = useClipboardGroupDialogFrame(dialog);
+  return (
+    <DialogShell
+      destructive={frame.destructive}
+      dirty={frame.dirty}
+      onClose={onClose}
+      onSubmit={() => onSubmit(dialog)}
+      submitDisabled={frame.submitDisabled}
+      submitLabel={frame.submitLabel}
+      title={frame.title}
+    >
+      <ClipboardGroupDialogBody dialog={dialog} onChange={onChange} />
+    </DialogShell>
+  );
+};
+
 type ClipboardDialogProps = {
   dialog: ClipboardDialogState;
   onChange: (dialog: ClipboardDialogState) => void;
@@ -1004,14 +1033,17 @@ type ClipboardDialogProps = {
     args?: Record<string, unknown>,
     onSuccess?: () => void,
   ) => void;
-  onGroupDeleted: (groupId: string) => void;
+  onGroupDialogSubmit: (
+    dialog: ClipboardGroupDialogState,
+    onSuccess: () => void,
+  ) => void;
 };
 
 const ClipboardDialog = ({
   dialog,
   onChange,
   onCommand,
-  onGroupDeleted,
+  onGroupDialogSubmit,
 }: ClipboardDialogProps) => {
   const t = useTranslations("clipboard");
   const close = () => onChange({ type: "closed" });
@@ -1036,148 +1068,15 @@ const ClipboardDialog = ({
         </DialogShell>
       );
     case "createGroup":
-      return (
-        <DialogShell
-          onClose={close}
-          onSubmit={() => {
-            onCommand(
-              "clipboard_create_group",
-              {
-                color: dialog.color,
-                itemId: dialog.itemId,
-                name: dialog.name,
-              },
-              close,
-            );
-          }}
-          submitDisabled={!dialog.name.trim()}
-          submitLabel={t("create")}
-          title={t("createGroup")}
-        >
-          <ClipboardGroupFields
-            autoFocus
-            color={dialog.color}
-            name={dialog.name}
-            onChange={({ color, name }) => {
-              onChange({
-                color,
-                itemId: dialog.itemId,
-                name,
-                type: "createGroup",
-              });
-            }}
-          />
-        </DialogShell>
-      );
     case "deleteGroup":
-      return (
-        <DialogShell
-          dirty={dialog.mode !== "keepClips"}
-          destructive
-          onClose={close}
-          onSubmit={() => {
-            onCommand(
-              "clipboard_delete_group",
-              { id: dialog.groupId, mode: dialog.mode },
-              () => {
-                onGroupDeleted(dialog.groupId);
-                close();
-              },
-            );
-          }}
-          submitLabel={
-            dialog.mode === "deleteClips"
-              ? t("deleteGroupDeleteClips")
-              : t("deleteGroup")
-          }
-          title={t("deleteGroup")}
-        >
-          <fieldset>
-            <legend className="text-muted-foreground text-sm leading-relaxed text-pretty">
-              {t("deleteGroupConfirmation", { groupName: dialog.groupName })}
-            </legend>
-            <div className="mt-4 grid gap-2">
-              {(
-                [
-                  {
-                    description: t("deleteGroupKeepClipsDescription"),
-                    label: t("deleteGroupKeepClips"),
-                    mode: "keepClips",
-                  },
-                  {
-                    description: t("deleteGroupDeleteClipsDescription"),
-                    label: t("deleteGroupDeleteClips"),
-                    mode: "deleteClips",
-                  },
-                ] as const
-              ).map((option) => (
-                <Label
-                  aria-label={option.label}
-                  key={option.mode}
-                  variant="choice-card"
-                >
-                  <input
-                    checked={dialog.mode === option.mode}
-                    className="accent-destructive mt-0.5 size-4 shrink-0"
-                    name="delete-group-mode"
-                    onChange={() =>
-                      onChange({
-                        groupId: dialog.groupId,
-                        groupName: dialog.groupName,
-                        mode: option.mode,
-                        type: "deleteGroup",
-                      })
-                    }
-                    type="radio"
-                    value={option.mode}
-                  />
-                  <span className="min-w-0">
-                    <span className="text-foreground block text-sm font-medium">
-                      {option.label}
-                    </span>
-                    <span className="text-muted-foreground mt-0.5 block text-xs leading-relaxed text-pretty">
-                      {option.description}
-                    </span>
-                  </span>
-                </Label>
-              ))}
-            </div>
-          </fieldset>
-        </DialogShell>
-      );
     case "editGroup":
       return (
-        <DialogShell
+        <ClipboardGroupDialog
+          dialog={dialog}
+          onChange={onChange}
           onClose={close}
-          onSubmit={() => {
-            onCommand(
-              "clipboard_update_group",
-              {
-                color: dialog.color,
-                id: dialog.groupId,
-                name: dialog.name,
-              },
-              close,
-            );
-          }}
-          submitDisabled={!dialog.name.trim()}
-          submitLabel={t("editGroup")}
-          title={t("editGroup")}
-        >
-          <ClipboardGroupFields
-            autoFocus
-            color={dialog.color}
-            name={dialog.name}
-            onChange={({ color, name }) => {
-              onChange({
-                color,
-                groupId: dialog.groupId,
-                name,
-                type: "editGroup",
-              });
-            }}
-          />
-        </DialogShell>
+          onSubmit={(submitted) => onGroupDialogSubmit(submitted, close)}
+        />
       );
     default: {
       dialog satisfies never;
@@ -1741,6 +1640,11 @@ const ClipboardWelcomeDialog = ({
           <Button
             className="min-h-11 rounded-xl"
             disabled={autostartChoice.status !== "ready"}
+            disabledReason={
+              autostartChoice.status === "saving"
+                ? t("savingAutostart")
+                : t("loadingAutostart")
+            }
             onClick={completeWelcome}
             type="button"
             variant={
@@ -1762,6 +1666,8 @@ const ClipboardWelcomeDialog = ({
 const ClipboardApp = () => {
   const t = useTranslations("clipboard");
   const locale = useLocale();
+  const tTranscribe = useTranslations("transcribe");
+  const dictationAvailability = useDictationAvailability();
   const railDirection = isUiLocale(locale)
     ? getUiLocaleDirection(locale)
     : "ltr";
@@ -1798,6 +1704,7 @@ const ClipboardApp = () => {
   }, []);
   const railPointerRef = useRef<ClipboardPointerPosition | null>(null);
   const contextMenuTriggerRef = useRef<HTMLElement>(null);
+  const selectionBarRef = useRef<HTMLDivElement>(null);
   const snapshotRequestIdRef = useRef(0);
   const captureUpdatesRef = useRef<ClipboardCaptureUpdate[]>([]);
   const snapshotPendingRef = useRef(false);
@@ -1819,7 +1726,7 @@ const ClipboardApp = () => {
     clipboardHistory,
     {
       snapshot: EMPTY_SNAPSHOT,
-      selection: { ids: [], session: 0 },
+      selection: { ids: [], session: 0, copy: "idle" },
     },
   );
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
@@ -2031,22 +1938,38 @@ const ClipboardApp = () => {
   // The window's group tint fades out on opacity, so its colour outlives the
   // filter: `--clipboard-window-tint` keeps the last group's colour while
   // `--clipboard-group-accent` follows the active group only.
-  const [lastGroupAccent, setLastGroupAccent] = useState<string | null>(null);
-  if (activeGroup !== null && activeGroup.color !== lastGroupAccent) {
-    setLastGroupAccent(activeGroup.color);
+  const activeGroupColor = activeGroup?.color ?? null;
+  const [prevActiveGroupColor, setPrevActiveGroupColor] = useState<
+    string | null
+  >(activeGroupColor);
+  const [lastGroupAccent, setLastGroupAccent] = useState<string | null>(
+    activeGroupColor,
+  );
+  if (prevActiveGroupColor !== activeGroupColor) {
+    setPrevActiveGroupColor(activeGroupColor);
+    if (activeGroupColor !== null) {
+      setLastGroupAccent(activeGroupColor);
+    }
   }
-  const windowTint = activeGroup?.color ?? lastGroupAccent;
+  const windowTint = activeGroupColor ?? lastGroupAccent;
   // Typing must never wait on filtering and card re-render: the rail catches
   // up in a deferred render that further keystrokes interrupt. Clearing stays
   // synchronous (the empty filter is free) so the reopen reset can focus the
   // newest card in the same flushSync commit.
   const deferredQuery = useDeferredValue(query);
   const filterQuery = query === "" ? query : deferredQuery;
-  const filteredItems = filterClipboardItems(
+  // A search inside a group lists the group's matches, then every other
+  // match after a divider.
+  const railItems = clipboardRailItems(
     snapshot.items,
     filterQuery,
     activeGroupId,
     searchOptions,
+  );
+  const filteredItems = railItems.items;
+  const railDivider = clipboardRailDivider(
+    railItems.dividerIndex,
+    CLIPBOARD_CARD_GAP,
   );
   const groupsById = new Map(snapshot.groups.map((group) => [group.id, group]));
   const sourceAppVisuals = new Map(
@@ -2069,12 +1992,12 @@ const ClipboardApp = () => {
       searchSource,
       query === filterQuery
         ? filteredItems
-        : filterClipboardItems(
+        : clipboardRailItems(
             snapshot.items,
             query,
             activeGroupId,
             searchOptions,
-          ),
+          ).items,
     );
   const resolveActionItem = () => {
     const items = resolveActionItems();
@@ -2082,11 +2005,20 @@ const ClipboardApp = () => {
   };
   const railWindow = clipboardRailWindow({
     activeIndex,
+    divider: railDivider,
     itemCount: filteredItems.length,
     overscan: CLIPBOARD_RAIL_OVERSCAN,
     scrollOffset: railViewport.scrollOffset,
     stride: CLIPBOARD_CARD_STRIDE,
     viewportWidth: railViewport.width,
+  });
+
+  const railSpacers = clipboardRailSpacers({
+    divider: railDivider,
+    gap: CLIPBOARD_CARD_GAP,
+    itemCount: filteredItems.length,
+    stride: CLIPBOARD_CARD_STRIDE,
+    window: railWindow,
   });
 
   const requestHide = () => {
@@ -2101,48 +2033,63 @@ const ClipboardApp = () => {
     });
   };
 
-  useEffect(() => {
-    const prepareNextOpen = () => {
-      if (connectionFlowRef.current === "signIn") {
-        return;
-      }
-      if (welcomeOpen) {
-        return;
-      }
-      // The parked panel is painted before its next focus event. Prepare that
-      // frame now, and prevent WebKit from restoring focus to the old card.
-      if (document.activeElement instanceof HTMLElement) {
-        document.activeElement.blur();
-      }
-      railPointerRef.current = null;
-      flushSync(() => {
-        setQuery("");
-        setSearchSource("clips");
-        setSearchComposing(false);
-        setSelectedIndex(0);
-      });
-      timelineRailRef.current?.scrollTo({ behavior: "instant", left: 0 });
-    };
-    const onError = () => {
-      reportDesktopError({
-        code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
-        operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardWindowHide,
-        window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
-      });
-      setError({ message: t("errorUpdateHistory"), source: "operation" });
-    };
-    const stopListening = subscribeDesktopEvent({
-      event: TauriEvent.WINDOW_BLUR,
-      handler: prepareNextOpen,
-      options: { target: { kind: "Window", label: getCurrentWindow().label } },
-      onError,
+  const prepareNextOpen = () => {
+    if (connectionFlowRef.current === "signIn") {
+      return;
+    }
+    if (welcomeOpen) {
+      return;
+    }
+    // The parked panel is painted before it opens again. Prepare that frame
+    // now, and prevent WebKit from restoring focus to the old card.
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    railPointerRef.current = null;
+    flushSync(() => {
+      setQuery("");
+      setSearchSource("clips");
+      setSearchComposing(false);
+      setSelectedIndex(0);
     });
-    window.addEventListener("blur", prepareNextOpen);
-    return () => {
-      stopListening();
-      window.removeEventListener("blur", prepareNextOpen);
-    };
-  }, [t, welcomeOpen]);
+    timelineRailRef.current?.scrollTo({ behavior: "instant", left: 0 });
+  };
+
+  const startSession = () => {
+    dispatchClipboard({ type: "sessionStarted" });
+    setAgeReferenceTime(Temporal.Now.instant().epochMilliseconds);
+    // The pointer may have moved while the window was hidden; the next
+    // pointer move only seeds the position.
+    railPointerRef.current = null;
+    if (connectionFlowRef.current === "signIn") {
+      connectionFlowRef.current = "idle";
+      searchInputRef.current?.focus();
+      return;
+    }
+    if (welcomeOpen) {
+      return;
+    }
+    flushSync(() => {
+      setQuery("");
+      setSearchSource("clips");
+      setSearchComposing(false);
+      setSelectedIndex(0);
+    });
+    const newestItem = filterClipboardItems(
+      snapshot.items,
+      "",
+      activeGroupId,
+    ).at(0);
+    if (newestItem) {
+      revealCard({
+        rail: timelineRailRef.current,
+        id: newestItem.id,
+        focus: true,
+      });
+      return;
+    }
+    timelineRef.current?.focus();
+  };
 
   useEffect(() => {
     const focusActiveCard = () => {
@@ -2156,42 +2103,6 @@ const ClipboardApp = () => {
       }
       timelineRef.current?.focus();
     };
-    const handleWindowFocus = () => {
-      dispatchClipboard({ type: "sessionStarted" });
-      setAgeReferenceTime(Temporal.Now.instant().epochMilliseconds);
-      // The pointer may have moved while the window was hidden; the next
-      // pointer move only seeds the position.
-      railPointerRef.current = null;
-      if (connectionFlowRef.current === "signIn") {
-        connectionFlowRef.current = "idle";
-        searchInputRef.current?.focus();
-        return;
-      }
-      if (welcomeOpen) {
-        return;
-      }
-      flushSync(() => {
-        setQuery("");
-        setSearchSource("clips");
-        setSearchComposing(false);
-        setSelectedIndex(0);
-      });
-      const newestItem = filterClipboardItems(
-        snapshot.items,
-        "",
-        activeGroupId,
-      ).at(0);
-      if (newestItem) {
-        revealCard({
-          rail: timelineRailRef.current,
-          id: newestItem.id,
-          focus: true,
-        });
-        return;
-      }
-      timelineRef.current?.focus();
-    };
-    window.addEventListener("focus", handleWindowFocus);
     // A card other than the active one holds focus when a snapshot landed
     // after an open (a clip copied right before it slid in at the front);
     // focus follows the selection.
@@ -2207,8 +2118,21 @@ const ClipboardApp = () => {
     ) {
       focusActiveCard();
     }
-    return () => window.removeEventListener("focus", handleWindowFocus);
-  }, [activeGroupId, activeItemId, snapshot.items, welcomeOpen]);
+    // Only places focus nobody holds, so the page focus events WebView2 also
+    // fires for focus moves inside the window leave state alone; sessions
+    // follow the native window events below.
+    const placeLostFocus = () => {
+      if (
+        !welcomeOpen &&
+        (document.activeElement === document.body ||
+          document.activeElement === timelineRef.current)
+      ) {
+        focusActiveCard();
+      }
+    };
+    window.addEventListener("focus", placeLostFocus);
+    return () => window.removeEventListener("focus", placeLostFocus);
+  }, [activeItemId, snapshot.items, welcomeOpen]);
 
   const nextGroupColor = nextClipboardGroupColor(snapshot.groups);
   let emptyStateTitle = t("emptyTitle");
@@ -2263,6 +2187,48 @@ const ClipboardApp = () => {
     [t],
   );
 
+  /** Applies the settings a settings command answers with; the change event
+   *  it sends brings the clips it touched. */
+  const applySettingsCommand = useCallback(
+    (
+      command: Promise<ClipboardSettingsSnapshot | null>,
+      onSuccess?: () => void,
+    ) => {
+      setError((current) => (current?.source === "operation" ? null : current));
+      void command
+        .then((settings) => {
+          if (settings) {
+            dispatchClipboard({ type: "settingsReceived", settings });
+            onSuccess?.();
+            return undefined;
+          }
+          reportDesktopError({
+            code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+            operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryUpdate,
+            window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+          });
+          setError({
+            message: t("errorUpdateHistory"),
+            source: "operation",
+          });
+          return undefined;
+        })
+        .catch((error: unknown) => {
+          reportDesktopError({
+            code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+            detail: describeError(error),
+            operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryUpdate,
+            window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+          });
+          setError({
+            message: t("errorUpdateHistory"),
+            source: "operation",
+          });
+        });
+    },
+    [t],
+  );
+
   const closeWelcome = () => {
     setWelcomeDismissed(true);
     setWelcomeRequested(false);
@@ -2271,19 +2237,15 @@ const ClipboardApp = () => {
     }
   };
 
-  const copyItem = (
-    item: ClipboardItem,
-    format: ClipboardCopyFormat = "original",
-  ) => {
+  /** A failure stays on screen, or shows on the next open when the window
+   *  already hid. */
+  const trackCopy = (copying: Promise<unknown>, session: number) => {
     setError((current) => (current?.source === "operation" ? null : current));
-    const { ids, session } = selection;
-    const copying =
-      ids.length > 0
-        ? invoke("clipboard_copy_items", { format, ids })
-        : invoke("clipboard_copy_item", { format, id: item.id });
+    dispatchClipboard({ type: "copyStarted", session });
     void copying
       .then(() => dispatchClipboard({ type: "copySucceeded", session }))
       .catch((error: unknown) => {
+        dispatchClipboard({ type: "copyFailed", session });
         // An unrecognised rejection means the clip never left the window.
         const kind = isClipboardCopyError(error) ? error.kind : "copy";
         const feedback = COPY_FAILURE_FEEDBACK[kind];
@@ -2295,6 +2257,107 @@ const ClipboardApp = () => {
         setError({ message: t(feedback.messageKey), source: "operation" });
       });
   };
+
+  const copySelection = (format: ClipboardCopyFormat) => {
+    const { ids, session } = selection;
+    trackCopy(invoke("clipboard_copy_items", { format, ids }), session);
+  };
+
+  const copyItem = (
+    item: ClipboardItem,
+    format: ClipboardCopyFormat = "original",
+  ) => {
+    if (selection.ids.length > 0) {
+      copySelection(format);
+      return;
+    }
+    trackCopy(
+      invoke("clipboard_copy_item", { format, id: item.id }),
+      selection.session,
+    );
+  };
+
+  const clearSelection = () => {
+    // The selection bar unmounts with focus inside it; hand focus back to the
+    // rail so the keyboard keeps working.
+    const focusInBar =
+      selectionBarRef.current?.contains(document.activeElement) ?? false;
+    dispatchClipboard({ type: "clear" });
+    if (!focusInBar) {
+      return;
+    }
+    // The registry scope has no rail to reveal a card in.
+    if (activeItemId && timelineRailRef.current) {
+      revealCard({
+        rail: timelineRailRef.current,
+        id: activeItemId,
+        focus: true,
+      });
+      return;
+    }
+    timelineRef.current?.focus();
+  };
+
+  // Native presentation owns the session. The page also sees focus and blur
+  // for focus moves inside the window (WebView2), which must neither clear
+  // nor commit a selection.
+  const handleWindowSession = useEffectEvent(
+    (windowSession: ClipboardWindowSession) => {
+      switch (windowSession.type) {
+        case "opened":
+          startSession();
+          return;
+        case "hidden": {
+          const dismissal = clipboardDismissalCopy(
+            selection,
+            windowSession.reason,
+          );
+          if (dismissal.type === "copySelection") {
+            trackCopy(
+              invoke("clipboard_copy_dismissed_selection", {
+                format: "original",
+                ids: dismissal.ids,
+              }),
+              dismissal.session,
+            );
+          }
+          prepareNextOpen();
+          return;
+        }
+        default: {
+          windowSession satisfies never;
+          panic("Unknown clipboard window session event.");
+        }
+      }
+    },
+  );
+
+  useEffect(
+    () =>
+      subscribeDesktopEvent<unknown>({
+        event: CLIPBOARD_WINDOW_SESSION_EVENT,
+        handler: ({ payload }) => {
+          if (!isClipboardWindowSession(payload)) {
+            reportDesktopError({
+              code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+              operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardWindowHide,
+              window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+            });
+            return;
+          }
+          handleWindowSession(payload);
+        },
+        onError: () => {
+          reportDesktopError({
+            code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
+            operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardWindowHide,
+            window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+          });
+          setError({ message: t("errorUpdateHistory"), source: "operation" });
+        },
+      }),
+    [t],
+  );
 
   const copyItemFromEnter = (item: ClipboardItem, shiftKey: boolean) => {
     const format = shiftKey && item.type !== "image" ? "plainText" : "original";
@@ -2522,20 +2585,22 @@ const ClipboardApp = () => {
                 extractClosestEdge(self.data),
                 clipboardElementDirection(element),
               );
-              const reordered =
+              const index =
                 groupId === null || position === null
                   ? null
-                  : reorderInlineIds({
+                  : clipboardGroupDropIndex({
                       draggedId: draggedGroupId,
-                      ids: snapshot.groups.map((group) => group.id),
+                      groups: snapshot.groups,
                       position,
                       targetId: groupId,
                     });
-              if (reordered) {
-                applySnapshotCommand("clipboard_move_group", {
-                  id: draggedGroupId,
-                  index: reordered.indexOf(draggedGroupId),
-                });
+              if (index !== null) {
+                applySettingsCommand(
+                  clipboardSettingsCommands.moveGroup({
+                    id: draggedGroupId,
+                    index,
+                  }),
+                );
               }
               return;
             }
@@ -2555,6 +2620,7 @@ const ClipboardApp = () => {
     return combine(...cleanups);
   }, [
     activeGroupId,
+    applySettingsCommand,
     applySnapshotCommand,
     filterQuery,
     railWindow.end,
@@ -2572,8 +2638,14 @@ const ClipboardApp = () => {
     dragState.type === "reordering" && dragState.over?.groupId === groupId
       ? dragState.over.position
       : null;
-  const moveGroup = (groupId: string, index: number) =>
-    applySnapshotCommand("clipboard_move_group", { id: groupId, index });
+  const moveGroup = (groupId: string, step: -1 | 1) => {
+    const index = clipboardGroupStepIndex(snapshot.groups, groupId, step);
+    if (index !== null) {
+      applySettingsCommand(
+        clipboardSettingsCommands.moveGroup({ id: groupId, index }),
+      );
+    }
+  };
 
   const selectIndex = (index: number) => {
     // Mount a virtualized target before focusing it. Deferring focus to a
@@ -2874,7 +2946,7 @@ const ClipboardApp = () => {
       return;
     }
     if (selection.ids.length > 0) {
-      dispatchClipboard({ type: "clear" });
+      clearSelection();
       return;
     }
     requestHide();
@@ -2924,6 +2996,10 @@ const ClipboardApp = () => {
     ? "paused"
     : "active";
   const captureActionLabel = captureActive ? t("pause") : t("resume");
+  const selectionLabel =
+    selection.ids.length === 0
+      ? null
+      : t("selectionCount", { count: selection.ids.length });
   let persistenceWarningLabel = t("memoryOnly");
   if (snapshot.persistence.status === "deletionOnly") {
     persistenceWarningLabel = t("errorReadHistory");
@@ -2975,9 +3051,17 @@ const ClipboardApp = () => {
         dialog={dialog}
         onChange={setDialog}
         onCommand={applySnapshotCommand}
-        onGroupDeleted={(groupId) => {
-          setSelectedGroupId((currentGroupId) =>
-            currentGroupId === groupId ? null : currentGroupId,
+        onGroupDialogSubmit={(submitted, close) => {
+          applySettingsCommand(
+            clipboardSettingsCommands.submitGroupDialog(submitted),
+            () => {
+              if (submitted.type === "deleteGroup") {
+                setSelectedGroupId((currentGroupId) =>
+                  currentGroupId === submitted.groupId ? null : currentGroupId,
+                );
+              }
+              close();
+            },
           );
         }}
       />
@@ -3092,15 +3176,11 @@ const ClipboardApp = () => {
                     ref={attachTimelineRail}
                     role="list"
                   >
-                    {railWindow.start > 0 ? (
+                    {railSpacers.leading > 0 ? (
                       <div
                         aria-hidden="true"
                         className="shrink-0"
-                        style={{
-                          width:
-                            railWindow.start * CLIPBOARD_CARD_STRIDE -
-                            CLIPBOARD_CARD_GAP,
-                        }}
+                        style={{ width: railSpacers.leading }}
                       />
                     ) : null}
                     {filteredItems
@@ -3117,7 +3197,7 @@ const ClipboardApp = () => {
                         const group = item.groupId
                           ? (groupsById.get(item.groupId) ?? null)
                           : null;
-                        return (
+                        const card = (
                           <ClipboardCard
                             active={index === activeIndex}
                             selected={selection.ids.includes(item.id)}
@@ -3164,17 +3244,21 @@ const ClipboardApp = () => {
                             }
                           />
                         );
+                        return railSpacers.dividerMounted &&
+                          index === railDivider?.index ? (
+                          <Fragment key={item.id}>
+                            <ClipboardRailDivider groupEmpty={index === 0} />
+                            {card}
+                          </Fragment>
+                        ) : (
+                          card
+                        );
                       })}
-                    {railWindow.end < filteredItems.length ? (
+                    {railSpacers.trailing > 0 ? (
                       <div
                         aria-hidden="true"
                         className="shrink-0"
-                        style={{
-                          width:
-                            (filteredItems.length - railWindow.end) *
-                              CLIPBOARD_CARD_STRIDE -
-                            CLIPBOARD_CARD_GAP,
-                        }}
+                        style={{ width: railSpacers.trailing }}
                       />
                     ) : null}
                   </div>
@@ -3221,14 +3305,40 @@ const ClipboardApp = () => {
                   </TooltipTrigger>
                   <TooltipPopup>Stella</TooltipPopup>
                 </Tooltip>
+                {dictationAvailability === "available" ? (
+                  <Button
+                    aria-label={tTranscribe("title")}
+                    className="size-11 shrink-0 rounded-full"
+                    onClick={() => {
+                      void invoke("transcribe_open").catch((error: unknown) => {
+                        reportDesktopError({
+                          code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+                          detail: describeError(error),
+                          operation:
+                            DESKTOP_TELEMETRY_OPERATIONS.clipboardExternalOpen,
+                          window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+                        });
+                        setError({
+                          message: t("errorOpenTranscribeRecording"),
+                          source: "operation",
+                        });
+                      });
+                    }}
+                    size="icon"
+                    tooltip={tTranscribe("title")}
+                    variant="ghost"
+                  >
+                    <WavesIcon aria-hidden="true" className="size-4" />
+                  </Button>
+                ) : null}
                 {snapshot.captureStatus === "paused" ? (
                   <Button
                     aria-label={t("resume")}
                     className="size-11 shrink-0 rounded-full text-(--option-orange)"
                     onClick={() => {
-                      applySnapshotCommand("clipboard_set_capture_status", {
-                        status: "active",
-                      });
+                      applySettingsCommand(
+                        clipboardSettingsCommands.setCaptureStatus("active"),
+                      );
                     }}
                     size="icon"
                     title={t("resume")}
@@ -3411,6 +3521,41 @@ const ClipboardApp = () => {
               </InputGroup>
 
               <div className="flex min-w-0 items-center gap-2">
+                {/* Mounted before any selection exists, so screen readers
+                    announce the first count too. */}
+                <span className="sr-only" role="status">
+                  {selectionLabel}
+                </span>
+                {selectionLabel === null ? null : (
+                  <div
+                    aria-label={selectionLabel}
+                    className="bg-foreground/6 flex shrink-0 items-center gap-0.5 rounded-full ps-3"
+                    data-clipboard-selection-bar=""
+                    ref={selectionBarRef}
+                    role="group"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="text-xs font-medium whitespace-nowrap tabular-nums"
+                    >
+                      {selectionLabel}
+                    </span>
+                    <Button
+                      className="h-11 rounded-full px-3 text-xs"
+                      onClick={() => copySelection("original")}
+                      variant="ghost"
+                    >
+                      {t("copySelection")}
+                    </Button>
+                    <Button
+                      className="h-11 rounded-full px-3 text-xs"
+                      onClick={clearSelection}
+                      variant="ghost"
+                    >
+                      {t("cancel")}
+                    </Button>
+                  </div>
+                )}
                 {controls}
                 {registryFeedback}
                 <nav
@@ -3448,6 +3593,9 @@ const ClipboardApp = () => {
                     aria-label={t("createGroup")}
                     className="size-11 shrink-0 rounded-full"
                     disabled={snapshot.groups.length >= snapshot.groupLimit}
+                    disabledReason={t("groupLimitReached", {
+                      max: snapshot.groupLimit,
+                    })}
                     onClick={() =>
                       setDialog({
                         color: nextGroupColor,
@@ -3498,8 +3646,7 @@ const ClipboardApp = () => {
                                 />
                               ),
                               label: t("moveGroupEarlier"),
-                              onClick: () =>
-                                moveGroup(group.id, groupIndex - 1),
+                              onClick: () => moveGroup(group.id, -1),
                               separatorBefore: true,
                             },
                             {
@@ -3512,8 +3659,7 @@ const ClipboardApp = () => {
                                 />
                               ),
                               label: t("moveGroupLater"),
-                              onClick: () =>
-                                moveGroup(group.id, groupIndex + 1),
+                              onClick: () => moveGroup(group.id, 1),
                             },
                             {
                               icon: <Trash2Icon aria-hidden="true" />,
@@ -3589,9 +3735,11 @@ const ClipboardApp = () => {
                     <MenuItem
                       className="min-h-11 rounded-xl"
                       onClick={() => {
-                        applySnapshotCommand("clipboard_set_capture_status", {
-                          status: nextCaptureStatus,
-                        });
+                        applySettingsCommand(
+                          clipboardSettingsCommands.setCaptureStatus(
+                            nextCaptureStatus,
+                          ),
+                        );
                       }}
                     >
                       {captureActive ? <PauseIcon /> : <PlayIcon />}
@@ -3609,16 +3757,15 @@ const ClipboardApp = () => {
                               className="min-h-11 rounded-xl"
                               key={retention}
                               onClick={() => {
-                                applySnapshotCommand(
-                                  "clipboard_set_retention",
-                                  {
+                                applySettingsCommand(
+                                  clipboardSettingsCommands.setRetention(
                                     retention,
-                                  },
+                                  ),
                                 );
                               }}
                               value={retention}
                             >
-                              {t(RETENTION_LABEL_KEYS[retention])}
+                              {t(CLIPBOARD_RETENTION_LABEL_KEYS[retention])}
                             </MenuRadioItem>
                           ))}
                         </MenuRadioGroup>
@@ -3636,9 +3783,10 @@ const ClipboardApp = () => {
                               className="min-h-11 rounded-xl"
                               key={exclusion.identifier}
                               onClick={() => {
-                                applySnapshotCommand(
-                                  "clipboard_remove_source_app_exclusion",
-                                  { identifier: exclusion.identifier },
+                                applySettingsCommand(
+                                  clipboardSettingsCommands.removeSourceAppExclusion(
+                                    exclusion.identifier,
+                                  ),
                                 );
                               }}
                             >
@@ -3660,9 +3808,11 @@ const ClipboardApp = () => {
                       checked={snapshot.screenCapture === "visible"}
                       className="min-h-11 rounded-xl"
                       onCheckedChange={(checked) => {
-                        applySnapshotCommand("clipboard_set_screen_capture", {
-                          capture: checked ? "visible" : "hidden",
-                        });
+                        applySettingsCommand(
+                          clipboardSettingsCommands.setScreenCapture(
+                            checked ? "visible" : "hidden",
+                          ),
+                        );
                       }}
                       variant="switch"
                     >

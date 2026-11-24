@@ -1,11 +1,7 @@
-import { useId } from "react";
-
 import { useQuery } from "@tanstack/react-query";
-import { useTranslations } from "use-intl";
 
 import { Checkbox } from "@stll/ui/checkbox";
-import { Field, FieldLabel } from "@stll/ui/field";
-import { Frame, FramePanel } from "@stll/ui/frame";
+import { SettingsPanel, settingsRowIds } from "@stll/ui/settings";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -14,6 +10,11 @@ import { organizationSettingsOptions } from "@/queries/organization-settings";
 
 import { AISettingsSectionFeedback } from "./ai-settings-section";
 import type { ToggleSettingsSectionProps } from "./ai-settings-section";
+import {
+  AIToggleCardFrame,
+  AIToggleCardPending,
+  DOCUMENT_PROCESSING_CARD,
+} from "./ai-toggle-card.pending";
 
 const SEARCHABLE_TEXT_MODE = "searchable-text";
 
@@ -23,8 +24,6 @@ export const DocumentProcessingCard = ({
   disabled,
   feedback,
 }: ToggleSettingsSectionProps) => {
-  const t = useTranslations();
-  const checkboxId = useId();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const settingsQuery = useQuery(
     organizationSettingsOptions({
@@ -36,37 +35,45 @@ export const DocumentProcessingCard = ({
   const settings =
     settingsView.type === "items" ? settingsView.items : undefined;
 
+  if (settingsView.type === "pending") {
+    return <AIToggleCardPending {...DOCUMENT_PROCESSING_CARD} />;
+  }
   if (!settings) {
-    return <QueryViewFeedback view={settingsView} />;
+    return (
+      <SettingsPanel>
+        <QueryViewFeedback view={settingsView} />
+      </SettingsPanel>
+    );
   }
 
   const enabled =
     value ?? settings.documentProcessingMode === SEARCHABLE_TEXT_MODE;
+  const ids = settingsRowIds(DOCUMENT_PROCESSING_CARD.id);
   return (
-    <Frame>
-      <QueryViewFeedback view={settingsView} />
-      <FramePanel>
-        <div className="flex flex-col gap-3 p-1">
-          <h2 className="text-sm font-medium">
-            {t("settings.organization.documentProcessing.title")}
-          </h2>
-          <p className="text-muted-foreground text-xs">
-            {t("settings.organization.documentProcessing.description")}
-          </p>
-          <Field className="flex-row items-center gap-2">
-            <Checkbox
-              checked={enabled}
-              disabled={disabled}
-              id={checkboxId}
-              onCheckedChange={onChange}
-            />
-            <FieldLabel htmlFor={checkboxId}>
-              {t("settings.organization.documentProcessing.toggleLabel")}
-            </FieldLabel>
-          </Field>
-          <AISettingsSectionFeedback feedback={feedback} />
-        </div>
-      </FramePanel>
-    </Frame>
+    <AIToggleCardFrame
+      description={DOCUMENT_PROCESSING_CARD.description}
+      id={DOCUMENT_PROCESSING_CARD.id}
+      notice={
+        settingsView.type === "items" &&
+        settingsView.refetchError !== undefined ? (
+          <QueryViewFeedback view={settingsView} />
+        ) : undefined
+      }
+      title={DOCUMENT_PROCESSING_CARD.title}
+      toggle={
+        <Checkbox
+          aria-describedby={ids.description}
+          aria-labelledby={ids.label}
+          id={ids.control}
+          checked={enabled}
+          disabled={disabled}
+          onCheckedChange={onChange}
+        />
+      }
+    >
+      {feedback.status === "idle" ? undefined : (
+        <AISettingsSectionFeedback feedback={feedback} />
+      )}
+    </AIToggleCardFrame>
   );
 };

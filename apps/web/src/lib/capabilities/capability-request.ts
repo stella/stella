@@ -1,6 +1,6 @@
 import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
 
-import type { CapabilityId } from "@/lib/api";
+import type { CapabilityId } from "@/lib/api-contract";
 
 /**
  * API client request options that declare the catalog capability a write
@@ -29,6 +29,18 @@ export const invokeCapability = async <TResult>(
 ): Promise<TResult> => await call(capabilityRequest(capability));
 
 export type AppOnlyWriteId =
+  | "account.delete.send-otp"
+  | "account.delete.verify"
+  | "auth.sso.discover.post"
+  | "organization-settings.sso.domains.delete"
+  | "organization-settings.sso.domains.post"
+  | "organization-settings.sso.domains.verify.post"
+  | "organization-settings.sso.policy.put"
+  | "organization-settings.sso.providers.delete"
+  | "organization-settings.sso.providers.post"
+  | "organization-settings.sso.providers.saml.post"
+  | "organization-settings.sso.providers.test.post"
+  | "case-law.citations.check"
   | "chat.browser-site-grants.create"
   | "chat.browser-site-grants.delete"
   | "chat.local-runners.folder-approval.update"
@@ -43,8 +55,10 @@ export type AppOnlyWriteId =
   | "chat.threads.limit-reminder.set"
   | "chat.threads.model.update"
   | "chat.turns.steer"
+  | "contacts.import.inspect"
+  | "contacts.import.preview"
   | "files.document-properties.update"
-  | "files.email-attachment.save"
+  | "files.part.save"
   | "folio-collaboration.join"
   | "folio-collaboration.refresh-token"
   | "folio-collaboration.seed.acknowledge"
@@ -57,7 +71,8 @@ export type AppOnlyWriteId =
   | "sharepoint.enablement.update"
   | "sharepoint.imports.create"
   | "skills.from-chat.read"
-  | "skills.save-draft.create";
+  | "skills.save-draft.create"
+  | "uploads.entity-create.preflight";
 
 /** Declares an app-only write that deliberately has no automation capability. */
 export const invokeAppOnlyWrite = async <TResult>(

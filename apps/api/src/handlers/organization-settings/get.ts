@@ -21,6 +21,7 @@ import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { localRunApprovalCeilingOf } from "@/api/lib/chat/local-run-approval-ceiling";
+import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   isFeatureAccessSnapshotForPrincipal,
@@ -37,6 +38,25 @@ import {
   ORGANIZATION_TIME_ZONE_SOURCE,
 } from "@/api/lib/organization-time-zone";
 
+/** The deployment features web callers read from organization settings. */
+type WebDeploymentFeature = "legalLists" | "invoiceLinks";
+
+/** The deployment availability contract shared by web callers and discovery. */
+export const WEB_DEPLOYMENT_FEATURES = {
+  legalLists: "FEATURE_LEGAL_LISTS",
+  invoiceLinks: "FEATURE_INVOICE_LINKS",
+} as const satisfies Record<WebDeploymentFeature, DeploymentFeatureFlag>;
+
+// The annotated return type makes a missing registry key a compile error.
+const readWebDeploymentFeatures = (): {
+  [Key in keyof typeof WEB_DEPLOYMENT_FEATURES]: boolean;
+} => ({
+  legalLists: isDeploymentFeatureEnabled(WEB_DEPLOYMENT_FEATURES.legalLists),
+  invoiceLinks: isDeploymentFeatureEnabled(
+    WEB_DEPLOYMENT_FEATURES.invoiceLinks,
+  ),
+});
+
 const config = {
   contract: "patch",
   description:
@@ -45,7 +65,7 @@ const config = {
     "caching, organization AI instructions, memory extraction, time policy, the time zone whose calendar " +
     "decides the organization's day, and localRunMaxApprovalMode, the most a " +
     "chat turn run on a member's computer may do without asking. declaredFeatureIds identifies policies in force; " +
-    "capabilities contains caller decisions; deploymentFeatures supplies deployment availability. " +
+    "capabilities contains caller decisions; deploymentFeatures supplies legalLists and invoiceLinks deployment availability. " +
     "timeZoneSource says whether the zone was " +
     "chosen or derived from the primary practice jurisdiction (Europe/Prague " +
     "for CZ and SK, UTC otherwise). primaryJurisdictionTimeZone is the " +
@@ -68,6 +88,7 @@ type OrganizationSettingsRow = {
   matterNumberingEnabled: boolean;
   matterNumberPadding: number;
   matterNumberPattern: string;
+  documentNamePattern: string | null;
   practiceJurisdictions: PracticeJurisdiction[];
   promptCachingEnabled: boolean;
   aiInstructions: string;
@@ -89,9 +110,7 @@ const projectFeatureAccess = (snapshot: FeatureAccessSnapshot) => {
   );
   return {
     declaredFeatureIds: visibleDecisions.map(([featureId]) => featureId),
-    deploymentFeatures: {
-      legalLists: isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS"),
-    },
+    deploymentFeatures: readWebDeploymentFeatures(),
     capabilities: Object.fromEntries(
       visibleDecisions.map(
         ([featureId]) =>
@@ -151,6 +170,7 @@ export const projectOrganizationSettingsRow = (
     matterNumberPadding:
       row?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING,
     matterNumberingEnabled: row?.matterNumberingEnabled ?? false,
+    documentNamePattern: row?.documentNamePattern ?? null,
     practiceJurisdictions,
     promptCachingEnabled: row?.promptCachingEnabled ?? true,
     aiInstructions: row?.aiInstructions ?? "",
@@ -175,6 +195,7 @@ const readOrganizationSettings = createSafeRootHandler(
             matterNumberPattern: true,
             matterNumberPadding: true,
             matterNumberingEnabled: true,
+            documentNamePattern: true,
             practiceJurisdictions: true,
             promptCachingEnabled: true,
             aiInstructions: true,

@@ -18,6 +18,8 @@ import {
   DRAFT_FAILURE_KINDS,
   draftFailureKind,
   partitionRanges,
+  restoredEdit,
+  revertActions,
   scopedDraftSettingsFrom,
   structureItems,
 } from "../src/activity/billing-draft-logic";
@@ -132,9 +134,9 @@ describe("a card's drafting request", () => {
 
 describe("drafting failures", () => {
   test("the window names every failure the native boundary sends", () => {
-    expect(requestFixture.failures.map(({ type }) => type)).toEqual([
-      ...DRAFT_FAILURE_KINDS,
-    ]);
+    expect(requestFixture.failures.map(({ type }) => type).toSorted()).toEqual(
+      [...DRAFT_FAILURE_KINDS].toSorted(),
+    );
     for (const { type } of requestFixture.failures) {
       expect<string>(draftFailureKind({ type })).toBe(type);
     }
@@ -171,6 +173,7 @@ describe("a card's draft", () => {
               {
                 entryId: CARD_DRAFT_ENTRY_ID,
                 narrative: "Reviewed the break clause of the lease.",
+                narrativeLanguage: "en",
                 matchedEarlierEntryIds: [
                   "00000000-0000-4000-8000-0000000000a1",
                 ],
@@ -181,12 +184,15 @@ describe("a card's draft", () => {
             earlier("00000000-0000-4000-8000-0000000000a1"),
             earlier("00000000-0000-4000-8000-0000000000a2"),
           ],
+          codeNames: [],
         },
         TARGET,
       ),
     ).toEqual({
       narrative: "Reviewed the break clause of the lease.",
+      narrativeLanguage: "en",
       earlierEntries: [earlier("00000000-0000-4000-8000-0000000000a1")],
+      codeNames: [],
       classification: null,
       billable: null,
       flags: [],
@@ -205,6 +211,7 @@ describe("a card's draft", () => {
               {
                 entryId: CARD_DRAFT_ENTRY_ID,
                 narrative: "Analysed the termination provisions.",
+                narrativeLanguage: "en",
                 classification: {
                   type: "ledes",
                   taskCode: "L120",
@@ -232,12 +239,48 @@ describe("a card's draft", () => {
             ],
           },
           earlierEntries: [],
+          codeNames: [
+            {
+              matterId: TARGET.matterId,
+              type: "task",
+              code: "L120",
+              name: "Fact investigation",
+            },
+            {
+              matterId: TARGET.matterId,
+              type: "activity",
+              code: "A104",
+              name: "Review/analyze",
+            },
+            {
+              matterId: OTHER_MATTER_ID,
+              type: "task",
+              code: "L120",
+              name: "Another list's name",
+            },
+          ],
         },
         TARGET,
       ),
     ).toEqual({
       narrative: "Analysed the termination provisions.",
+      narrativeLanguage: "en",
       earlierEntries: [],
+      // Only the card's own matter names its codes.
+      codeNames: [
+        {
+          matterId: TARGET.matterId,
+          type: "task",
+          code: "L120",
+          name: "Fact investigation",
+        },
+        {
+          matterId: TARGET.matterId,
+          type: "activity",
+          code: "A104",
+          name: "Review/analyze",
+        },
+      ],
       classification: { type: "ledes", taskCode: "L120", activityCode: "A104" },
       billable: null,
       flags: [
@@ -256,7 +299,11 @@ describe("a card's draft", () => {
   test("an answer outside the contract or without the card's entry is no draft", () => {
     for (const value of [
       null,
-      { result: { mode: "plain", drafts: [] }, earlierEntries: [] },
+      {
+        result: { mode: "plain", drafts: [] },
+        earlierEntries: [],
+        codeNames: [],
+      },
       {
         result: {
           mode: "plain",
@@ -264,13 +311,15 @@ describe("a card's draft", () => {
             {
               entryId: "entry_2",
               narrative: "Someone else's entry",
+              narrativeLanguage: "en",
               matchedEarlierEntryIds: [],
             },
           ],
         },
         earlierEntries: [],
+        codeNames: [],
       },
-      { result: { mode: "plain" }, earlierEntries: [] },
+      { result: { mode: "plain" }, earlierEntries: [], codeNames: [] },
     ]) {
       expect(cardDraftFrom(value, TARGET)).toBeNull();
     }
@@ -292,6 +341,7 @@ const guided = (operations: unknown[], flags: unknown[] = []): unknown => ({
       {
         entryId: CARD_DRAFT_ENTRY_ID,
         narrative: "Reviewed the lease.",
+        narrativeLanguage: "en",
         classification: LEDES,
         flags,
         matchedEarlierEntryIds: [],
@@ -301,6 +351,7 @@ const guided = (operations: unknown[], flags: unknown[] = []): unknown => ({
     checkedGuidelines: [{ fileId: "guideline-1", fileName: "Guidelines.pdf" }],
   },
   earlierEntries: [],
+  codeNames: [],
 });
 
 const splitInto = (...minutes: number[]): CardStructure => ({
@@ -622,3 +673,42 @@ describe("drafting settings from the native boundary", () => {
 test("the card's AI disclosure is the shared billing drafts disclosure", () => {
   expect(en.activity.aiDraftDisclosure).toBe(AI_DISCLOSURES.billingDrafts.text);
 });
+
+const TEMPLATE = "Work on the lease";
+const revertibleFields = fc.record({
+  narrative: fc.constantFrom(TEMPLATE, "Drafted text", "Typed text"),
+  classification: fc.constantFrom(null, LEDES, GROUP),
+  billable: fc.boolean(),
+});
+
+test(
+  "Undo and Use original each change the card, and never both to the same result",
+  () => {
+    assertProperty(
+      "Undo and Use original each change the card, and never both to the same result",
+      fc.property(
+        revertibleFields,
+        fc.option(revertibleFields, { nil: null }),
+        (fields, undo) => {
+          const edit = { ...fields, undo };
+          const offered = revertActions(edit, TEMPLATE);
+          const restored = restoredEdit(edit, TEMPLATE);
+          const same = (left: unknown, right: unknown) =>
+            JSON.stringify(left) === JSON.stringify(right);
+          expect(offered.restoreTemplate).toBe(!same(fields, restored));
+          if (offered.undo) {
+            expect(same(fields, undo)).toBe(false);
+            if (offered.restoreTemplate) {
+              expect(same(undo, restored)).toBe(false);
+            }
+          } else if (undo !== null && !same(fields, undo)) {
+            // A hidden Undo is one Use original already does.
+            expect(offered.restoreTemplate).toBe(true);
+            expect(same(undo, restored)).toBe(true);
+          }
+        },
+      ),
+    );
+  },
+  propertyTestTimeout(5000),
+);

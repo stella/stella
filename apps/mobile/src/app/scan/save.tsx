@@ -7,10 +7,11 @@ import {
   useNavigation,
   useRouter,
 } from "expo-router";
-import { ActivityIndicator, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
@@ -27,7 +28,6 @@ import {
 } from "@/state/document-upload";
 import { listMatters } from "@/state/matters";
 import { sizeInUnits } from "@/state/scan-pages";
-import { useAppColors } from "@/theme";
 
 /**
  * The reviewed scan, bound into a PDF, on its way into a matter: its name,
@@ -46,7 +46,6 @@ const SaveScanForm = ({ source }: { source: AccessTokenSource }) => {
   const t = useTranslations("scan");
   const tabs = useTranslations("tabs");
   const format = useFormatter();
-  const colors = useAppColors();
   const router = useRouter();
   const navigation = useNavigation();
   const { end } = useSession();
@@ -56,14 +55,17 @@ const SaveScanForm = ({ source }: { source: AccessTokenSource }) => {
     /** The file's type; a scan is always a PDF. */
     mimeType?: string;
     name: string;
-    /** "file" for a document picked from Files; a scan otherwise. */
+    /** "file" for a document picked from Files, "dictation" for dictated text; a scan otherwise. */
     origin?: string;
     pageCount?: string;
     sha256Hex: string;
     size: string;
     uri: string;
   }>();
-  const picked = params.origin === UPLOAD_ORIGIN.file;
+  // A file or a dictation's text has no pages to count; a scan does.
+  const picked =
+    params.origin === UPLOAD_ORIGIN.file ||
+    params.origin === UPLOAD_ORIGIN.dictation;
   const matterT = useTranslations("matter");
   // The review passes both counts; a missing one reads as none.
   const size = parseIntegerToken(params.size, { sign: "unsigned" }).unwrapOr(0);
@@ -109,11 +111,11 @@ const SaveScanForm = ({ source }: { source: AccessTokenSource }) => {
       });
       if (Result.isOk(uploaded)) {
         changed("documents");
-        // This sheet, and for a scan the review under it, which removes the
-        // scan's files as it closes. A sheet closed meanwhile, as Escape can,
-        // leaves the review as it is.
+        // This sheet, and for a scan or a dictation the screen under it,
+        // which removes its files as it closes. A sheet closed meanwhile, as
+        // Escape can, leaves that screen as it is.
         if (navigation.isFocused()) {
-          router.dismiss(picked ? 1 : 2);
+          router.dismiss(params.origin === UPLOAD_ORIGIN.file ? 1 : 2);
         }
         return;
       }
@@ -173,7 +175,7 @@ const SaveScanForm = ({ source }: { source: AccessTokenSource }) => {
               .join(" · ")}
           </Text>
         </View>
-        {uploading ? <ActivityIndicator color={colors.muted} /> : null}
+        {uploading ? <Loader /> : null}
         <WriteFailureNotice
           failure={failure}
           message={picked ? matterT("uploadFailed") : t("uploadFailed")}
@@ -182,7 +184,7 @@ const SaveScanForm = ({ source }: { source: AccessTokenSource }) => {
           <View className="px-1">
             <Text variant="section">{t("matterTitle")}</Text>
           </View>
-          <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
+          <Suspense fallback={<Loader />}>
             <MatterPicker
               matters={matters}
               onSelect={setMatterId}

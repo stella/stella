@@ -25,7 +25,7 @@ import { assistantMessageFallbackText } from "@/components/chat/chat-thread-mess
 import type {
   ChatUITools,
   RegisteredChatUIToolCallPart,
-} from "@/components/chat/chat-ui-tools";
+} from "@/components/chat/chat-ui-tools-types";
 import { normalizeCreateDocumentInput } from "@/components/chat/create-document-draft.logic";
 import { DocumentIcon } from "@/components/document-icon";
 import { MarkdownPreview } from "@/components/markdown-preview";
@@ -322,6 +322,28 @@ type MatterPickerSectionProps = {
   onDownload: () => Promise<void> | void;
 };
 
+type MatterAssignmentDisabledReasonOptions = {
+  isDownloading: boolean;
+  isSubmitting: boolean;
+  t: (
+    key: "common.downloading" | "common.saving" | "common.selectAMatter",
+  ) => string;
+};
+
+const matterAssignmentDisabledReason = ({
+  isDownloading,
+  isSubmitting,
+  t,
+}: MatterAssignmentDisabledReasonOptions) => {
+  if (isDownloading) {
+    return t("common.downloading");
+  }
+  if (isSubmitting) {
+    return t("common.saving");
+  }
+  return t("common.selectAMatter");
+};
+
 const MatterPickerSection = ({
   view,
   onContinue,
@@ -378,6 +400,9 @@ const MatterPickerSection = ({
           clearLabel={t("common.clearSearch")}
           dir={contentDir(search)}
           disabled={isSubmitting || isDownloading}
+          disabledReason={
+            isDownloading ? t("common.downloading") : t("common.saving")
+          }
           onValueChange={setSearch}
           placeholder={t("inspector.matterPicker.searchPlaceholder")}
           value={search}
@@ -426,6 +451,11 @@ const MatterPickerSection = ({
                   <Button
                     aria-pressed={isSelected}
                     disabled={isSubmitting || isDownloading}
+                    disabledReason={
+                      isDownloading
+                        ? t("common.downloading")
+                        : t("common.saving")
+                    }
                     key={m.id}
                     onClick={() => setSelectedMatterId(m.id)}
                     selected={isSelected}
@@ -462,6 +492,9 @@ const MatterPickerSection = ({
       <div className="border-border/50 flex items-center justify-end gap-2 border-t px-3 py-2">
         <Button
           disabled={isSubmitting || isDownloading}
+          disabledReason={
+            isDownloading ? t("common.downloading") : t("common.saving")
+          }
           onClick={() => {
             detached(handleDownload(), "needs-matter-card.download");
           }}
@@ -476,6 +509,11 @@ const MatterPickerSection = ({
           disabled={
             selectedMatter === undefined || isSubmitting || isDownloading
           }
+          disabledReason={matterAssignmentDisabledReason({
+            isDownloading,
+            isSubmitting,
+            t,
+          })}
           onClick={() => {
             detached(handleContinue(), "needs-matter-card.continue");
           }}

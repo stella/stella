@@ -41,6 +41,7 @@ export const ROUTE_PARAM_DISPOSITIONS = {
   registry: notAResource("an external business registry"),
   companyId: notAResource("a company in an external business registry"),
   entry: notAResource("a public tools catalogue entry"),
+  skillId: resourceParam(RESOURCE_TYPE.AGENT_SKILL),
   slug: notAResource("a public address, not an identifier"),
   country: notAResource("a jurisdiction code"),
   court: notAResource("a court code"),
@@ -51,6 +52,7 @@ export const ROUTE_PARAM_DISPOSITIONS = {
   bucket: notAResource("a sitemap partition"),
   code: notAResource("a verification code"),
   tableId: notAResource("a case-law research table"),
+  guidanceId: notAResource("a public regulator guidance document"),
 } as const satisfies Record<string, RouteParamDisposition>;
 
 // Routes whose search parameters say which resource has focus. `Extract`

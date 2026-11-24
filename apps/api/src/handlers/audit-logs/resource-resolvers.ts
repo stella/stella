@@ -7,7 +7,6 @@ import type {
 } from "@stll/api-contract/audit-log";
 
 import { workspaceCheck, workspaceIdCheck } from "@/api/db/rls";
-import type { Transaction } from "@/api/db/root";
 import {
   contacts,
   entities,
@@ -16,6 +15,7 @@ import {
   userFiles,
   workspaces,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -167,6 +167,10 @@ const AUDIT_RESOURCE_RESOLVERS = {
     reason: "No canonical user-facing name source",
   },
   [AUDIT_RESOURCE_TYPE.AI_MEMORY]: {
+    type: "unresolvable",
+    reason: "No canonical user-facing name source",
+  },
+  [AUDIT_RESOURCE_TYPE.OUTBOUND_ACTION]: {
     type: "unresolvable",
     reason: "No canonical user-facing name source",
   },

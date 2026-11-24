@@ -13,6 +13,10 @@ import { ConversationScrollButton } from "@/components/ai-elements/conversation"
 import { AnonymizationPreviewCard } from "@/components/chat/anonymization-preview";
 import { BrowserExtensionChip } from "@/components/chat/browser-extension-chip";
 import {
+  CHAT_COMPOSER_DOCK_END_CLASS,
+  CHAT_COMPOSER_DOCK_START_CLASS,
+} from "@/components/chat/chat-composer-dock.pending";
+import {
   ChatContextMeter,
   type ChatContextUsage,
 } from "@/components/chat/chat-context-meter";
@@ -22,6 +26,7 @@ import {
   type ComposerModelsMenuProps,
 } from "@/components/chat/chat-model-options-menu";
 import { ChatComposerChips } from "@/components/chat/chat-model-selector";
+import type { ChatThreadRef } from "@/features/chat/chat-thread-ref-types";
 import { ChatAnonymizedToggle } from "@/features/chat/components/chat-anonymized-toggle";
 import { ChatWebSearchToggle } from "@/features/chat/components/chat-web-search-toggle";
 import { guideAnchor } from "@/features/guides/guide-anchor";
@@ -30,7 +35,6 @@ import {
   useChatAnonymized,
   useSetChatAnonymized,
 } from "@/lib/chat-anonymized-store";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
 /**
@@ -175,7 +179,7 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
           // the one opposite it are together wider than the row, and a
           // `shrink-0` here would spend the difference on a horizontal
           // scrollbar. The model label truncates instead.
-          className="flex min-w-0 items-center gap-0.5"
+          className={CHAT_COMPOSER_DOCK_END_CLASS}
         >
           {/* An open prompt keeps the button that anchors it, disabled while
               the surface offers no new thread (a rotation is under way). */}
@@ -192,6 +196,7 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
                     <Button
                       aria-label={t("chat.newChat")}
                       disabled={onNewThread === null}
+                      disabledReason={t("chat.alreadyInNewChat")}
                       onClick={onNewThread ?? undefined}
                       size="icon-xs"
                       tooltip={t("chat.newChat")}
@@ -242,7 +247,7 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
         // (muted text-xs, borderless controls), never a second toolbar.
         <div
           aria-hidden={disabled ? true : undefined}
-          className="flex min-w-0 flex-1 items-center gap-1"
+          className={CHAT_COMPOSER_DOCK_START_CLASS}
           data-slot="chat-composer-dock"
           data-status={props.status}
         >

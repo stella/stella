@@ -116,6 +116,12 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  // Deleting what dictation learned names the generation it deletes; a
+  // repeat finds a newer one and changes nothing.
+  "DELETE /v1/dictation/learned-fixes": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "DELETE /v1/document-types/:documentTypeId": {
     type: "non-replay",
     reason: "current-state",
@@ -169,7 +175,19 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "DELETE /v1/organization-settings/dictation-vocabulary": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "DELETE /v1/organization-settings/deepl": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/organization-settings/sso/domains/:domainId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/organization-settings/sso/providers/:providerId": {
     type: "non-replay",
     reason: "current-state",
   },
@@ -413,6 +431,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "credential",
   },
+  "POST /v1/case/citations/check": {
+    type: "non-replay",
+    reason: "read",
+  },
   "POST /v1/case/decisions/search/expand": {
     type: "non-replay",
     reason: "current-state",
@@ -644,6 +666,20 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "POST /v1/dictation/cleanup": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  // Each change carries its device's next number and is applied once, so a
+  // repeat answers the current fixes.
+  "POST /v1/dictation/learned-fixes": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/dictation/recording-cleanup": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/dictation/transcribe": {
     type: "non-replay",
     reason: "external-effect",
@@ -741,6 +777,14 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "POST /v1/organization-settings/dictation-vocabulary": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/organization-settings/dictation-vocabulary/check": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/organization-settings/deepl": {
     type: "non-replay",
     reason: "current-state",
@@ -761,11 +805,39 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "POST /v1/organization-settings/sso/domains": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/organization-settings/sso/domains/:domainId/verify": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/organization-settings/sso/providers": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/organization-settings/sso/providers/saml": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/organization-settings/sso/providers/test": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/organization-settings/verification-decision-model": {
     type: "non-replay",
     reason: "current-state",
   },
   "POST /v1/organization-settings/web-search-key": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/outbound-actions/:actionId/confirm": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/outbound-actions/:actionId/discard": {
     type: "non-replay",
     reason: "current-state",
   },
@@ -1171,6 +1243,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "PUT /v1/organization-settings/sso/policy": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "PUT /v1/organization-settings/members/:memberId/billing": {
     type: "non-replay",
     reason: "current-state",
@@ -1178,6 +1254,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
   "PUT /v1/playbooks/:playbookId": {
     type: "non-replay",
     reason: "current-state",
+  },
+  "PUT /v1/sharepoint/capabilities": {
+    type: "non-replay",
+    reason: "credential",
   },
   "PUT /v1/sharepoint/enablement": {
     type: "non-replay",
@@ -1233,6 +1313,11 @@ const ROOT_MUTATION_DISPOSITIONS = {
 } as const satisfies Record<string, RootMutationDisposition>;
 
 const CREATE_MUTATION_DISPOSITIONS = {
+  "src/handlers/invoices/sends/create.ts": {
+    type: "non-replay",
+    reason:
+      "SMTP and SES delivery cannot roll back with a JSON response receipt: the send commits pending state before transport and records delivery in a separate transaction.",
+  },
   "src/handlers/invoices/payments/create.ts": {
     type: "non-replay",
     reason:
@@ -1299,8 +1384,6 @@ const IDEMPOTENCY_EXCEPTIONS = {
     "Retains native processing-run deduplication by source version.",
   "src/handlers/feedback/create.ts":
     "Submits to the detached feedback store outside the organization transaction.",
-  "src/handlers/files/email-attachment/create.ts":
-    "Saves attachment bytes through the durable upload lifecycle.",
   "src/handlers/flows/create.ts":
     "Synchronizes the scheduled trigger after the database mutation.",
   "src/handlers/lists/items/comments/create.ts":
