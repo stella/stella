@@ -715,3 +715,32 @@ describe("the app's text", () => {
     ).toEqual([]);
   });
 });
+
+describe("the app's transcriptions", () => {
+  /**
+   * The one module that sends a recording to a model by name. Everything
+   * else goes through `transcribeWithinClass`, so a server that cannot serve
+   * the picked model hands the audio only to one of its provider, region
+   * side and retention, never to the server's default.
+   */
+  const SENDER = path.join("state", "dictation.ts");
+
+  const sendsDirectly = (source: string): string[] =>
+    source.match(/\btranscribeRecording\b/gu) ?? [];
+
+  test("finds the sender, and the scan sees the call it forbids elsewhere", () => {
+    expect(appModules).toContain(SENDER);
+    expect(
+      sendsDirectly(readFileSync(path.join(SOURCE_ROOT, SENDER), "utf-8")),
+    ).not.toEqual([]);
+  });
+
+  test.each(appModules.filter((name) => name !== SENDER))(
+    "%s transcribes only within the picked model's class",
+    (name) => {
+      expect(
+        sendsDirectly(readFileSync(path.join(SOURCE_ROOT, name), "utf-8")),
+      ).toEqual([]);
+    },
+  );
+});
