@@ -288,6 +288,7 @@ const MattersTableRow = ({
   return (
     <ContextMenuSurface
       onOpenContextMenu={ctx.onOpenContextMenu}
+      preserveNativeTargets={false}
       render={
         <TableRow
           className={cn(

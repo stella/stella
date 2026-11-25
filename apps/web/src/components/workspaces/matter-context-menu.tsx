@@ -514,6 +514,7 @@ export const MatterContextMenu = ({
   return (
     <ContextMenuSurface
       onOpenContextMenu={onOpenContextMenu}
+      preserveNativeTargets={false}
       render={<div className={className} />}
     >
       {typeof children === "function"

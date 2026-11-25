@@ -1423,6 +1423,7 @@ export const MatterItem = ({
     <>
       <ContextMenuSurface
         onOpenContextMenu={handleMatterContextMenu}
+        preserveNativeTargets={false}
         render={
           <SidebarMenuItem
             data-context-menu-target={ws.id}
