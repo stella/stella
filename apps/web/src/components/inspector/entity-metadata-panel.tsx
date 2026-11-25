@@ -654,7 +654,7 @@ const PersonRow = ({ label, person }: PersonRowProps) => (
 
 type ReadOnlyRowProps = {
   label: string;
-  value: string | null;
+  value: ReactNode;
   title?: string | undefined;
   /** Rendered beside the value, for chips that belong to the same fact. */
   trailing?: ReactNode;

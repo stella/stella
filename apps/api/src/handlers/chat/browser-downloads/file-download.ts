@@ -19,7 +19,7 @@
  * filing that finds the same bytes filed inside that lock rolls its own
  * document back and names the other.
  */
-import { panic, Result, TaggedError } from "better-result";
+import { panic, Result } from "better-result";
 
 import {
   BROWSER_DOWNLOAD_REFUSAL_CODE,
@@ -44,6 +44,10 @@ import {
 } from "@/api/lib/entities/authorize-document-write";
 import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
+import {
+  refuseSecondCopy,
+  SameBytesFiledError,
+} from "@/api/lib/entities/same-bytes-guard";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   FileScanRejectedError,
@@ -94,12 +98,28 @@ export type FileBrowserDownloadDependencies = {
   uploads?: UploadUserFileDependencies;
 };
 
-/** The same bytes were filed into the matter while this filing ran. */
-class FiledMeanwhileError extends TaggedError("FiledMeanwhileError")<{
-  message: string;
-  entityId: SafeId<"entity">;
-  name: string;
-}> {}
+/**
+ * Runs one document write, or names the document that already holds the
+ * same bytes when `refuseSecondCopy` rolled the write back.
+ */
+const createOrNameCopy = async (
+  write: () => ReturnType<typeof createEntityFromBuffer>,
+): Promise<
+  | {
+      type: "created";
+      result: Awaited<ReturnType<typeof createEntityFromBuffer>>;
+    }
+  | { type: "copy"; entityId: SafeId<"entity">; name: string }
+> => {
+  try {
+    return { result: await write(), type: "created" };
+  } catch (error) {
+    if (SameBytesFiledError.is(error)) {
+      return { entityId: error.entityId, name: error.name, type: "copy" };
+    }
+    throw error;
+  }
+};
 
 const isPdf = (bytes: Uint8Array): boolean =>
   bytes.byteLength >= PDF_MAGIC.length &&
@@ -303,7 +323,7 @@ export const fileBrowserDownload = async ({
     };
     const create =
       dependencies.createEntityFromBuffer ?? createEntityFromBuffer;
-    const attempt = await Result.tryPromise(
+    const created = await createOrNameCopy(
       async () =>
         await create({
           authority: CALLER_AUTHORIZED,
@@ -318,48 +338,34 @@ export const fileBrowserDownload = async ({
           encryption,
           scanWarnings: scanned.scanWarnings ?? undefined,
           source,
-          // Runs under the matter's creation lock, so a filing of the same
-          // bytes that committed first is seen here and this one rolls back.
+          // Under the matter's creation lock: a filing of the same bytes that
+          // committed first is seen here, and this one rolls back.
           afterCreate: async (tx, document) => {
-            const meanwhile = await findExactDuplicates({
-              tx,
+            await refuseSecondCopy(tx, {
+              createdEntityId: document.entityId,
+              sha256Hex: contentHash,
               workspaceId: matter.id,
-              sha256Hexes: [contentHash],
-              exceptEntityId: document.entityId,
             });
-            const first = meanwhile.at(0);
-            if (first !== undefined) {
-              throw new FiledMeanwhileError({
-                message: "The same file was filed into the matter meanwhile",
-                entityId: first.entityId,
-                name: first.entityName,
-              });
-            }
           },
         }),
     );
-    if (Result.isError(attempt)) {
-      const { cause } = attempt.error;
-      if (FiledMeanwhileError.is(cause)) {
-        return Result.ok({
-          type: "document" as const,
-          workspaceId: matter.id,
-          entityId: cause.entityId,
-          name: cause.name,
-          duplicate: true,
-        });
-      }
-      throw cause;
+    if (created.type === "copy") {
+      return Result.ok({
+        type: "document" as const,
+        workspaceId: matter.id,
+        entityId: created.entityId,
+        name: created.name,
+        duplicate: true,
+      });
     }
-    const created = attempt.value;
-    if (Result.isError(created)) {
-      return Result.err(storeFailure(created.error));
+    if (Result.isError(created.result)) {
+      return Result.err(storeFailure(created.result.error));
     }
     return Result.ok({
       type: "document" as const,
       workspaceId: matter.id,
-      entityId: created.value.entityId,
-      name: created.value.fileName,
+      entityId: created.result.value.entityId,
+      name: created.result.value.fileName,
       duplicate: false,
     });
   });
