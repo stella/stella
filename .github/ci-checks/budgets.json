@@ -426,6 +426,13 @@
       "p99Seconds": 3,
       "peakRssMiB": 624
     },
+    "React state-write baselines": {
+      "minutes": 10,
+      "samples": 0,
+      "p95Seconds": 0,
+      "p99Seconds": 0,
+      "peakRssMiB": 2048
+    },
     "Oxlint override union guard": {
       "minutes": 5,
       "samples": 17,

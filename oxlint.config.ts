@@ -2268,6 +2268,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-strict-route-read-in-chrome.ts",
     "./.oxlint-plugins/no-route-context-in-panel-tabs.ts",
     "./.oxlint-plugins/no-render-phase-update.ts",
+    "./.oxlint-plugins/no-effect-state-write.ts",
     "./.oxlint-plugins/require-schema-form-options.ts",
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-loader-prefetch.ts",
@@ -2538,6 +2539,17 @@ const config = defineConfig({
       ],
       rules: {
         "no-render-phase-update/no-render-phase-update": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-effect-state-write.fixture.tsx",
+        ...NO_RENDER_PHASE_UPDATE_GOVERNED_PATHS.map(
+          (directory) => `${directory}/**/*.{ts,tsx}`,
+        ),
+      ],
+      rules: {
+        "no-effect-state-write/no-effect-state-write": "error",
       },
     },
     {
