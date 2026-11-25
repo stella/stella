@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "The matter audio player plays an uploaded recording as it is. A recording has no caption track until it is transcribed, so jsx-a11y/media-has-caption is disabled on that one <audio> element instead of shipping an empty <track>."
+}
