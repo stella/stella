@@ -55,21 +55,17 @@ export const readStormWatch = async ({
   quietMs: number;
   timeoutMs: number;
 }): Promise<StormWatchRead | null> => {
+  const isStormWatchState = (value: unknown): value is StormWatchState =>
+    typeof value === "object" &&
+    value !== null &&
+    "report" in value &&
+    typeof value.report === "function" &&
+    "waitQuiet" in value &&
+    typeof value.waitQuiet === "function";
   const watch: unknown = Reflect.get(globalThis, global);
-  if (
-    typeof watch !== "object" ||
-    watch === null ||
-    !("report" in watch) ||
-    typeof watch.report !== "function" ||
-    !("waitQuiet" in watch) ||
-    typeof watch.waitQuiet !== "function"
-  ) {
+  if (!isStormWatchState(watch)) {
     return null;
   }
-  const quiescence: StormWatchQuiescence = await watch.waitQuiet(
-    quietMs,
-    timeoutMs,
-  );
-  const report: StormWatchReport = watch.report();
-  return { report, quiescence };
+  const quiescence = await watch.waitQuiet(quietMs, timeoutMs);
+  return { report: watch.report(), quiescence };
 };

@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactElement, useState } from "react";
 
 import { Button } from "@stll/ui/button";
 
@@ -41,7 +41,13 @@ const SlowLoop = () => {
 };
 
 /** One click starts the loop; nothing outside the page feeds it after. */
-const StartOnClick = ({ label, loop }: { label: string; loop: ReactNode }) => {
+const StartOnClick = ({
+  label,
+  loop,
+}: {
+  label: string;
+  loop: ReactElement;
+}) => {
   const [running, setRunning] = useState(false);
   return running ? (
     loop

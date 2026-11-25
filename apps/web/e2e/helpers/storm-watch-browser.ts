@@ -217,18 +217,28 @@ try {
 }
 
 // Streams: each chunk a reader takes, whether read directly or iterated.
-const markRead = <T>(read: Promise<T>): Promise<T> =>
-  read.then((result) => {
-    stimulus("stream");
-    return result;
-  });
-if (typeof ReadableStreamDefaultReader === "function") {
-  const { read } = ReadableStreamDefaultReader.prototype;
+// The originals are read and called through Reflect, so the patches hold
+// whatever this browser's typings say about them.
+const markRead = async (pending: unknown): Promise<unknown> => {
+  const result: unknown = await Promise.resolve(pending);
+  stimulus("stream");
+  return result;
+};
+const isAsyncIterator = (value: unknown): value is AsyncIterator<unknown> =>
+  typeof value === "object" &&
+  value !== null &&
+  "next" in value &&
+  typeof value.next === "function";
+const read: unknown =
+  typeof ReadableStreamDefaultReader === "function"
+    ? Reflect.get(ReadableStreamDefaultReader.prototype, "read")
+    : undefined;
+if (typeof read === "function") {
   Reflect.set(
     ReadableStreamDefaultReader.prototype,
     "read",
-    function readWithStimulus(this: ReadableStreamDefaultReader) {
-      return markRead(Reflect.apply(read, this, []));
+    async function readWithStimulus(this: ReadableStreamDefaultReader) {
+      return await markRead(Reflect.apply(read, this, []));
     },
   );
 }
@@ -241,13 +251,16 @@ if (typeof streamIterator === "function") {
     ReadableStream.prototype,
     Symbol.asyncIterator,
     function iterateWithStimulus(this: ReadableStream, ...args: unknown[]) {
-      const iterator: AsyncIterator<unknown> = Reflect.apply(
-        streamIterator,
-        this,
-        args,
-      );
-      const next = iterator.next.bind(iterator);
-      iterator.next = (...nextArgs) => markRead(next(...nextArgs));
+      const iterator: unknown = Reflect.apply(streamIterator, this, args);
+      if (!isAsyncIterator(iterator)) {
+        return iterator;
+      }
+      const advance = iterator.next.bind(iterator);
+      iterator.next = async (...nextArgs) => {
+        const step = await advance(...nextArgs);
+        stimulus("stream");
+        return step;
+      };
       return iterator;
     },
   );
@@ -261,7 +274,7 @@ const MESSAGE_SOURCES = [
   globalThis.BroadcastChannel,
   globalThis.Worker,
 ].filter((source) => typeof source === "function");
-const { addEventListener: listen } = EventTarget.prototype;
+const listen: unknown = Reflect.get(EventTarget.prototype, "addEventListener");
 const observed = new WeakMap<EventTarget, Set<string>>();
 const observeMessages = (target: EventTarget, type: string) => {
   if (!MESSAGE_SOURCES.some((source) => target instanceof source)) {
@@ -273,37 +286,41 @@ const observeMessages = (target: EventTarget, type: string) => {
     return;
   }
   types.add(type);
-  listen.call(target, type, () => stimulus("message"));
-};
-EventTarget.prototype.addEventListener = function addEventListener(
-  this: EventTarget,
-  ...args: Parameters<EventTarget["addEventListener"]>
-) {
-  try {
-    observeMessages(this, args[0]);
-  } catch {
-    // Observing a message source must never stop the app listening to it.
+  if (typeof listen === "function") {
+    Reflect.apply(listen, target, [type, () => stimulus("message")]);
   }
-  listen.apply(this, args);
 };
+if (typeof listen === "function") {
+  EventTarget.prototype.addEventListener = function addEventListener(
+    this: EventTarget,
+    ...args: Parameters<EventTarget["addEventListener"]>
+  ) {
+    try {
+      observeMessages(this, args[0]);
+    } catch {
+      // Observing a message source must never stop the app listening to it.
+    }
+    Reflect.apply(listen, this, args);
+  };
+}
 for (const source of MESSAGE_SOURCES) {
   const descriptor = Object.getOwnPropertyDescriptor(
     source.prototype,
     "onmessage",
   );
-  const set = descriptor?.set;
-  if (descriptor === undefined || set === undefined) {
+  const get: unknown = descriptor && Reflect.get(descriptor, "get");
+  const set: unknown = descriptor && Reflect.get(descriptor, "set");
+  if (typeof set !== "function") {
     continue;
   }
-  const { get } = descriptor;
   Object.defineProperty(source.prototype, "onmessage", {
     ...descriptor,
     get(this: EventTarget): unknown {
-      return get?.call(this);
+      return typeof get === "function" ? Reflect.apply(get, this, []) : null;
     },
     set(this: EventTarget, handler: unknown) {
       observeMessages(this, "message");
-      set.call(this, handler);
+      Reflect.apply(set, this, [handler]);
     },
   });
 }

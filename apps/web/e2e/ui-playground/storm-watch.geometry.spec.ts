@@ -80,9 +80,7 @@ test("a loop at frame rate that nothing feeds is a storm, and the report names i
     .click();
 
   const watched = await read(page);
-  const unstimulated = watched.report.reported.find(
-    ({ violation }) => violation.kind === "unstimulated",
-  );
+  const [unstimulated] = watched.report.reported;
   expect(unstimulated, "an unstimulated violation").toBeDefined();
   expect(unstimulated?.components.map(({ name }) => name)).toContain(
     "FrameLoop",
