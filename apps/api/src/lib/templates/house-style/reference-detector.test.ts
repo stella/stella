@@ -11,6 +11,7 @@ import {
   germanContract,
   manifestOf,
   numbered,
+  partsContract,
   provisionKey,
 } from "@/api/lib/templates/house-style/manifest.test-helpers";
 import { detectReferences } from "@/api/lib/templates/house-style/reference-detector";
@@ -542,6 +543,31 @@ describe("English references", () => {
       [
         "See paragraph 1 of Annex 1.",
         ["paragraph 1 of Annex 1", "internal", "1→!withinAnnex 1→annex 1"],
+      ],
+    ]);
+  });
+
+  test("articles numbered under a part in roman numerals", () => {
+    expectCases(partsContract, [
+      [
+        "As set out in Article II.2.1.",
+        ["Article II.2.1", "internal", "II.2.1→II/2.1"],
+      ],
+      [
+        "The obligations in Articles I.2.2 and II.1 apply.",
+        ["Articles I.2.2 and II.1", "internal", "I.2.2→I/2.2 II.1→II/1"],
+      ],
+      [
+        "In accordance with Article I.2.",
+        ["Article I.2", "internal", "I.2→I/2"],
+      ],
+      [
+        "Under Article II of this contract.",
+        ["Article II", "internal", "II→II"],
+      ],
+      [
+        "Under Article II.9.",
+        ["Article II.9", "unknown", "II.9→!missingTarget"],
       ],
     ]);
   });

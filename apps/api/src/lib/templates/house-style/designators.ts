@@ -34,7 +34,8 @@ export type LabelShape = {
   /** Whether a period follows the designator. */
   period: boolean;
   numeral: DesignatorNumeral;
-  /** Components of a decimal designator: `5.1.2` is `[5, 1, 2]`. */
+  /** Components of a decimal designator: `5.1.2` is `[5, 1, 2]`, and
+   *  `II.18.1`, whose part is counted in roman numerals, is `[2, 18, 1]`. */
   path: number[] | null;
   /** Characters of the input the label takes, from its start. */
   length: number;
@@ -53,7 +54,7 @@ const KEYWORDS = [
 ] as const satisfies readonly (readonly [LabelKeyword, RegExp])[];
 
 const DESIGNATOR =
-  /^(\(?)(\d{1,3}(?:\.\d{1,3}){0,4}|[IVXLCDM]{1,7}|[a-z]{1,5}|[A-Z])(\)?)(\.?)(?![\p{L}\p{N}])/u;
+  /^(\(?)((?:\d{1,3}|[IVXLCDM]{1,7}(?=\.\d))(?:\.\d{1,3}){0,4}|[IVXLCDM]{1,7}|[a-z]{1,5}|[A-Z])(\)?)(\.?)(?![\p{L}\p{N}])/u;
 
 const AMBIGUOUS_LOWER = new Set(["i", "v", "x", "l", "c", "d", "m"]);
 
@@ -112,11 +113,21 @@ export const digitsValue = (digits: string): number | null => {
   return parsed.isOk() ? parsed.value : null;
 };
 
-/** The components of a dotted number: `5.1.2` is `[5, 1, 2]`. Null when a
- *  component is not a plain number (`5a`). */
+/** The components of a dotted number: `5.1.2` is `[5, 1, 2]`. Contracts in
+ *  parts count the part in roman numerals, so `II.18.1` is `[2, 18, 1]`.
+ *  Null when a component is not a plain number (`5a`). */
 export const decimalPath = (core: string): number[] | null => {
-  const path: number[] = [];
-  for (const part of core.split(".")) {
+  const [first = "", ...rest] = core.split(".");
+  const head =
+    digitsValue(first) ??
+    (rest.length > 0 && first === first.toUpperCase()
+      ? parseRomanNumeral(first)
+      : null);
+  if (head === null) {
+    return null;
+  }
+  const path = [head];
+  for (const part of rest) {
     const value = digitsValue(part);
     if (value === null) {
       return null;
@@ -130,7 +141,7 @@ const classifyNumeral = (
   core: string,
   keyword: LabelKeyword | null,
 ): DesignatorNumeral | null => {
-  if (/^\d/u.test(core)) {
+  if (/^\d/u.test(core) || (core.includes(".") && decimalPath(core) !== null)) {
     return "decimal";
   }
   const isUpper = core === core.toUpperCase();

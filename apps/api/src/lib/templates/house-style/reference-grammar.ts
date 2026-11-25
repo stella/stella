@@ -63,12 +63,13 @@ export const BEFORE_DESIGNATOR = new RegExp(
 );
 
 /**
- * One designator. Groups: 1 decimal (`5`, `5.1.2`, `106a`), 2 upper roman,
+ * One designator. Groups: 1 decimal (`5`, `5.1.2`, `106a`, and `II.18.1`
+ * with its part in roman numerals), 2 upper roman,
  * 3 and 4 a bracketed letter or lower-case numeral (`a)`, `(ii)`, `(B)`), 5 a bracketed
  * number (`(2)`), 6 a bare letter.
  */
 export const DESIGNATOR_AT = new RegExp(
-  String.raw`(\d{1,4}[a-z]?(?:\.\d{1,3}[a-z]?){0,4})(?![\p{L}\p{N}]|/\d)|([IVXLCDM]{1,7})${NOT_WORD}|(\(?)([a-z]{1,5}|[A-Z])\)|\((\d{1,3})\)|([A-Za-z])${NOT_WORD}`,
+  String.raw`((?:\d{1,4}[a-z]?|[IVXLCDM]{1,7}(?=\.\d))(?:\.\d{1,3}[a-z]?){0,4})(?![\p{L}\p{N}]|/\d)|([IVXLCDM]{1,7})${NOT_WORD}|(\(?)([a-z]{1,5}|[A-Z])\)|\((\d{1,3})\)|([A-Za-z])${NOT_WORD}`,
   "uy",
 );
 

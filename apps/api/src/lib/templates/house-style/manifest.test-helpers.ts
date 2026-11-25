@@ -283,6 +283,28 @@ export const englishAgreement = (citing: string): DocxBlockManifest => {
 };
 
 /**
+ * A contract in two parts, numbered the way framework contracts are: parts
+ * `I.` and `II.`, articles `I.1.`, `II.2.`, sub-articles `II.2.1.`, some as
+ * automatic headings and some typed. `citing` is a paragraph of II.2.1.
+ */
+export const partsContract = (citing: string): DocxBlockManifest =>
+  manifestOf([
+    "FRAMEWORK CONTRACT",
+    { ...heading("Special Conditions"), label: "I." },
+    { ...heading("Subject matter"), label: "I.1." },
+    "The contractor provides the services.",
+    { ...heading("Duration"), label: "I.2." },
+    "I.2.1\tThe contract enters into force on signature.",
+    "I.2.2\tIt runs for four years.",
+    { ...heading("General Conditions"), label: "II." },
+    { ...heading("Definitions"), label: "II.1." },
+    "Terms have the meaning given below.",
+    { ...heading("Termination"), label: "II.2." },
+    { ...heading("Grounds"), label: "II.2.1." },
+    citing,
+  ]);
+
+/**
  * A German contract: `§ 1` to `§ 6` typed as headings, `(1)` to `(3)` as
  * automatic paragraphs, letters under § 3 (1), `Anlage 1` at the end.
  * `citing` is § 4 (2).

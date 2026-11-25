@@ -10,6 +10,7 @@ import {
   heading,
   manifestOf,
   numbered,
+  partsContract,
   provisionKey,
 } from "@/api/lib/templates/house-style/manifest.test-helpers";
 
@@ -165,6 +166,20 @@ describe("buildLabelIndex", () => {
       // The annex's own numbering; never a target for the agreement's text.
       "clause -/1",
       "annex 2",
+    ]);
+  });
+
+  test("parts in roman numerals head dotted articles", () => {
+    expect(keysOf(partsContract("Text."))).toEqual([
+      "article I",
+      "clause I/1",
+      "clause I/2",
+      "clause I/2.1",
+      "clause I/2.2",
+      "article II",
+      "clause II/1",
+      "clause II/2",
+      "clause II/2.1",
     ]);
   });
 
