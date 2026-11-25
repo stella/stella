@@ -31,8 +31,8 @@ export const MEMBER_WAIT_CALL_TIMEOUT_SECONDS =
 /**
  * Which browser tools may ask the member before they run
  * (`decideBrowserStep`): opening a website the chat has not visited, and a
- * step on an element. Reading, finding, going back and switching tabs never
- * ask.
+ * step on an element. Reading, finding, going back, switching tabs and
+ * waiting for downloads never ask.
  */
 const BROWSER_TOOL_MAY_ASK = {
   open: true,
@@ -44,6 +44,8 @@ const BROWSER_TOOL_MAY_ASK = {
   select: true,
   go_back: false,
   switch_tab: false,
+  // Waits on the computer for downloads already started; no step is gated.
+  wait_for_downloads: false,
 } as const satisfies Record<ChatLocalRunBrowserAction, boolean>;
 
 /** The browser tools that may wait on the member, by their MCP names. */

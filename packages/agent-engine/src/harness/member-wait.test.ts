@@ -42,8 +42,11 @@ describe("a tool call that may wait on the member", () => {
         ...BROWSER_TOOLS_THAT_NEVER_ASK,
       ].toSorted(),
     ).toEqual([...CHAT_LOCAL_RUN_BROWSER_ACTIONS].toSorted());
+    // Waiting for downloads sends the browser no command: nothing gates it.
     expect(Object.keys(NEVER_ASKING_COMMANDS).toSorted()).toEqual(
-      [...BROWSER_TOOLS_THAT_NEVER_ASK].toSorted(),
+      BROWSER_TOOLS_THAT_NEVER_ASK.filter(
+        (name) => name !== "wait_for_downloads",
+      ).toSorted(),
     );
   });
 
