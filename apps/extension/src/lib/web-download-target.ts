@@ -56,8 +56,7 @@ export const readWebDownloadTarget = async (
     readBrowserController(),
   ]);
   const target = parseTarget(stored[BROWSER_WEB_DOWNLOAD_TARGET_STORAGE_KEY]);
-  return target !== null &&
-    target.controllerId === pairing &&
+  return target?.controllerId === pairing &&
     controller?.controllerId === pairing
     ? target
     : null;
