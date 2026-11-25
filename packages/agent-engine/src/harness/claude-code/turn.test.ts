@@ -151,6 +151,7 @@ const eventsOf = async (
   session.begin({
     sessionId: harnessSessionId("session-1"),
     continuation: { type: "fresh" },
+    unavailable: [],
   });
   session.promptWritten(PROMPT_UUID);
   for (const message of messages) {

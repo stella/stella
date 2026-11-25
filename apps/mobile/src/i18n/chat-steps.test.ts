@@ -141,6 +141,13 @@ const WEB_LOCAL_RUN_KEYS = {
     showMore: ["common", "showMore"],
   },
   sessionNotResumed: ["chat", "localRun", "sessionNotResumed"],
+  notices: {
+    browserUnavailable: ["chat", "localRun", "notices", "browserUnavailable"],
+    configWarning: ["chat", "localRun", "notices", "configWarning"],
+    recovered: ["chat", "localRun", "notices", "recovered"],
+    retrying: ["chat", "localRun", "notices", "retrying"],
+    retryingAttempt: ["chat", "localRun", "notices", "retryingAttempt"],
+  },
   steered: ["chat", "tool", "user_message"],
   ranOnModel: ["chat", "ranOnModel"],
   request: {

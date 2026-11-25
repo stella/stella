@@ -165,6 +165,7 @@ import { ConnectConnectorCard } from "@/components/chat/connect-connector-card";
 import {
   ContextNotice,
   LocalRunFilesNotSharedNotice,
+  LocalRunNotices,
 } from "@/components/chat/context-notice";
 import { LocalRunLimitReminder } from "@/components/chat/local-run-limit-reminder";
 import { LocalRunQuestionCard } from "@/components/chat/local-run-question-card";
@@ -2412,7 +2413,8 @@ const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
 /** A message without metadata carries no notice of its own. */
 const carriesAnswerNotice = (message: ChatUIMessage): boolean =>
   message.metadata?.contextNotice !== undefined ||
-  message.metadata?.localRunFilesNotShared !== undefined;
+  message.metadata?.localRunFilesNotShared !== undefined ||
+  message.metadata?.localRunNotices !== undefined;
 
 const hasVisibleAssistantParts = (parts: readonly ChatUIPart[]): boolean =>
   toAssistantPartRenderEntries(parts).some((entry) => {
@@ -3029,6 +3031,7 @@ const AssistantMessageParts = (props: AssistantMessagePartsProps) => {
           </AssistantProcessGroup>
         );
       })}
+      <LocalRunNotices metadata={message.metadata} />
       <MessageAttachments parts={message.parts.filter(isChatAttachmentPart)} />
       <LocalRunFilesNotSharedNotice metadata={message.metadata} />
       <WebSearchSources parts={message.parts} />

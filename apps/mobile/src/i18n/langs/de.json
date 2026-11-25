@@ -175,6 +175,13 @@
       "limitReminderScheduled": "Wir benachrichtigen Sie ab {time}.",
       "limitResumeContinue": "Automatisch fortsetzen, sobald es zurückgesetzt ist",
       "limitResumeScheduled": "Wird ab {time} automatisch fortgesetzt.",
+      "notices": {
+        "browserUnavailable": "Der Browser konnte für diese Nachricht nicht gestartet werden. Der Agent hat daher ohne ihn gearbeitet.",
+        "configWarning": "Der Coding-Agent auf Ihrem Computer hat vor seinen eigenen Einstellungen gewarnt und weitergearbeitet. Wenn Ihnen etwas seltsam vorkommt, prüfen Sie seine Einstellungen auf diesem Computer.",
+        "recovered": "Das Modell hat wieder geantwortet, nachdem der Coding-Agent auf Ihrem Computer es erneut versucht hat.",
+        "retrying": "Das Modell antwortet nicht. Der Coding-Agent auf Ihrem Computer versucht es erneut.",
+        "retryingAttempt": "Das Modell antwortet nicht. Der Coding-Agent auf Ihrem Computer versucht es erneut (Versuch {attempt, number} von {maxAttempts, number})."
+      },
       "output": {
         "arriving": "Wird noch vom Computer übertragen, auf dem der Schritt lief",
         "command": "Ausgabe",

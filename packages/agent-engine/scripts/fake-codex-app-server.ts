@@ -1392,6 +1392,38 @@ export const FAKE_SCENARIOS = {
     },
     { sleep: 5000 },
   ],
+  /**
+   * Codex warns twice about its configuration as it starts, then the
+   * browser's direct-call server fails to start; the turn runs on.
+   */
+  config_warning_browser_failed: [
+    ...handshake(),
+    {
+      notify: "configWarning",
+      params: {
+        summary:
+          "Unknown key `model_reasoning` in /opt/agent-settings/settings.toml",
+        details: "line 4, column 1",
+      },
+    },
+    {
+      notify: "configWarning",
+      params: { summary: "Ignoring profile `work`", details: null },
+    },
+    { expect: "thread/start", result: { thread: { id: FAKE_THREAD_ID } } },
+    ...startTurn(),
+    {
+      notify: "mcpServer/startupStatus/updated",
+      params: {
+        name: "stella_browser_direct",
+        status: "failed",
+        error: "connection refused",
+        failureReason: null,
+        threadId: FAKE_THREAD_ID,
+      },
+    },
+    completed(),
+  ],
   /** A member's own MCP server fails; the turn runs on. */
   other_mcp_failed: [
     ...freshTurn(),

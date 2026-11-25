@@ -4,7 +4,10 @@ import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
 import type { ChatMessageMetadata } from "@/components/chat/chat-ui-tools";
-import { ContextNotice } from "@/components/chat/context-notice";
+import {
+  ContextNotice,
+  LocalRunNotices,
+} from "@/components/chat/context-notice";
 import messages from "@/i18n/langs/en.json";
 
 const render = (metadata: ChatMessageMetadata | undefined) =>
@@ -38,5 +41,70 @@ describe("an answer's context notice", () => {
 
   test("stays hidden once the live stream withdraws a replaced attempt's notice", () => {
     expect(render({ contextNotice: null })).toBe("");
+  });
+});
+
+const renderNotices = (metadata: ChatMessageMetadata | undefined) =>
+  renderToStaticMarkup(
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <LocalRunNotices metadata={metadata} />
+    </IntlProvider>,
+  );
+
+const { notices } = messages.chat.localRun;
+
+describe("what an answer's local run said about itself", () => {
+  test("reads each notice as one quiet line in one polite live region", () => {
+    const markup = renderNotices({
+      localRunNotices: [
+        { kind: "config_warning" },
+        { kind: "capability_unavailable", capability: "browser" },
+        { kind: "retrying", status: "retrying", attempt: 2, maxAttempts: 5 },
+      ],
+    });
+
+    expect(markup.match(/role="status"/gu)).toHaveLength(1);
+    expect(markup).toContain('aria-live="polite"');
+    expect(markup.match(/<p /gu)).toHaveLength(3);
+    expect(markup).toContain(notices.configWarning);
+    expect(markup).toContain(notices.browserUnavailable);
+    expect(markup).toContain("is trying again (attempt 2 of 5).");
+  });
+
+  test("a retry without a count reads without one, and a recovered one says so", () => {
+    expect(
+      renderNotices({
+        localRunNotices: [
+          {
+            kind: "retrying",
+            status: "retrying",
+            attempt: null,
+            maxAttempts: null,
+          },
+        ],
+      }),
+    ).toContain(notices.retrying);
+    const recovered = renderNotices({
+      localRunNotices: [
+        { kind: "retrying", status: "recovered", attempt: 2, maxAttempts: 5 },
+      ],
+    });
+    expect(recovered).toContain(notices.recovered);
+    expect(recovered).not.toContain(notices.retrying);
+  });
+
+  test("a retry that ended with its turn leaves only the region, which says nothing", () => {
+    const markup = renderNotices({
+      localRunNotices: [
+        { kind: "retrying", status: "ended", attempt: 1, maxAttempts: 5 },
+      ],
+    });
+    expect(markup).toBe('<div aria-live="polite" role="status"></div>');
+  });
+
+  test("stays away from an answer whose run said nothing", () => {
+    expect(renderNotices(undefined)).toBe("");
+    expect(renderNotices({})).toBe("");
+    expect(renderNotices({ localRunNotices: [] })).toBe("");
   });
 });

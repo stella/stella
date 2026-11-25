@@ -14,6 +14,10 @@ import fc from "fast-check";
 import * as v from "valibot";
 
 import { AI_FAILURE_CODES } from "@stll/api-contract/ai-errors";
+import {
+  chatLocalRunNoticeSchema,
+  DESKTOP_RUNNER_NOTICE_EVENT,
+} from "@stll/api-contract/chat-local-run-notice";
 import { DESKTOP_RUNNER_REQUEST_EVENT } from "@stll/api-contract/chat-local-run-request";
 import {
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
@@ -778,7 +782,17 @@ describe("chunk stream invariants", () => {
       type: "interaction.resolved" as const,
       requestId: `approval-${call.id}`,
     })),
-    fc.constant<HarnessEvent>({ type: "retrying", message: "retry" }),
+    fc.constantFrom<HarnessEvent>(
+      {
+        type: "notice",
+        notice: { kind: "retrying", attempt: 1, maxAttempts: 3 },
+      },
+      { type: "notice", notice: { kind: "config_warning" } },
+      {
+        type: "notice",
+        notice: { kind: "capability_unavailable", capability: "browser" },
+      },
+    ),
     fc
       .constantFrom("gpt-rerouted", "claude-fallback")
       .map((model) => ({ type: "model.rerouted" as const, model })),
@@ -948,6 +962,167 @@ describe("chunk stream invariants", () => {
         },
       ),
     );
+  });
+
+  test("notices are reported once per change, each reads as the chat keeps it, and no retry is left under way at the turn's end", async () => {
+    await assertProperty(
+      "notices are reported once per change, each reads as the chat keeps it, and no retry is left under way at the turn's end",
+      fc.asyncProperty(
+        fc.array(event, { maxLength: 25 }),
+        terminal,
+        async (body, end) => {
+          const chunks = await localChunks(
+            end === null ? body : [...body, end],
+          );
+          const reports = chunks.flatMap((chunk) => {
+            const report = noticeReportOf(chunk);
+            return report === null ? [] : [report];
+          });
+          expect(
+            reports.filter(({ kind }) => kind === "config_warning").length,
+          ).toBeLessThanOrEqual(1);
+          expect(
+            reports.filter(({ kind }) => kind === "capability_unavailable")
+              .length,
+          ).toBeLessThanOrEqual(1);
+          const retries = reports.filter(({ kind }) => kind === "retrying");
+          for (const [index, retry] of retries.entries()) {
+            // A report changes the line it updates.
+            expect(retry).not.toEqual(retries[index - 1]);
+          }
+          const last = retries.at(-1);
+          if (last?.kind === "retrying") {
+            // A stream that ends without a terminal event ends in a failure.
+            expect(last.status).not.toBe("retrying");
+          }
+        },
+      ),
+    );
+  });
+});
+
+/** The notice a chunk reports, read as the chat keeps it. */
+const noticeReportOf = (chunk: StreamChunk) =>
+  chunk.type === EventType.CUSTOM && chunk.name === DESKTOP_RUNNER_NOTICE_EVENT
+    ? v.parse(chatLocalRunNoticeSchema, chunk.value)
+    : null;
+
+describe("what the run says about itself", () => {
+  const started: HarnessEvent = {
+    type: "session.started",
+    sessionId: harnessSessionId("native-notices"),
+    continuation: { type: "fresh" },
+  };
+  const retry = (attempt: number): HarnessEvent => ({
+    type: "notice",
+    notice: { kind: "retrying", attempt, maxAttempts: 5 },
+  });
+  const warning: HarnessEvent = {
+    type: "notice",
+    notice: { kind: "config_warning" },
+  };
+  const reports = async (events: readonly HarnessEvent[]) =>
+    (await localChunks(events)).flatMap((chunk) => {
+      const report = noticeReportOf(chunk);
+      return report === null ? [] : [report];
+    });
+
+  test("a retry updates one line and reads as recovered once the model answers", async () => {
+    expect(
+      await reports([
+        started,
+        retry(1),
+        retry(2),
+        retry(2),
+        { type: "text.delta", messageId: "m-1", delta: "Back." },
+        { type: "text.completed", messageId: "m-1", text: "Back." },
+        { type: "turn.completed", usage: null, boundary: null },
+      ]),
+    ).toEqual([
+      { kind: "retrying", status: "retrying", attempt: 1, maxAttempts: 5 },
+      { kind: "retrying", status: "retrying", attempt: 2, maxAttempts: 5 },
+      { kind: "retrying", status: "recovered", attempt: 2, maxAttempts: 5 },
+    ]);
+  });
+
+  test("a turn that ends still retrying settles the retry as ended", async () => {
+    const endings: HarnessEvent[] = [
+      { type: "turn.interrupted" },
+      {
+        type: "turn.failed",
+        failure: { type: "retry_stalled", message: "stalled" },
+      },
+    ];
+    for (const ending of endings) {
+      expect((await reports([started, retry(1), ending])).at(-1)).toEqual({
+        kind: "retrying",
+        status: "ended",
+        attempt: 1,
+        maxAttempts: 5,
+      });
+    }
+    // A stream cut off without its end fails, and ends the retry with it.
+    expect((await reports([started, retry(3)])).at(-1)).toMatchObject({
+      status: "ended",
+    });
+  });
+
+  test("a config warning is said once per run, and a missing capability once", async () => {
+    const browser: HarnessEvent = {
+      type: "notice",
+      notice: { kind: "capability_unavailable", capability: "browser" },
+    };
+    expect(
+      await reports([
+        started,
+        warning,
+        browser,
+        warning,
+        browser,
+        { type: "turn.completed", usage: null, boundary: null },
+      ]),
+    ).toEqual([
+      { kind: "config_warning" },
+      { kind: "capability_unavailable", capability: "browser" },
+    ]);
+  });
+
+  test("a count the chat cannot show is reported without it", async () => {
+    expect(
+      await reports([
+        started,
+        {
+          type: "notice",
+          notice: { kind: "retrying", attempt: 0, maxAttempts: 2.5 },
+        },
+        { type: "turn.completed", usage: null, boundary: null },
+      ]),
+    ).toEqual([
+      {
+        kind: "retrying",
+        status: "retrying",
+        attempt: null,
+        maxAttempts: null,
+      },
+      {
+        kind: "retrying",
+        status: "recovered",
+        attempt: null,
+        maxAttempts: null,
+      },
+    ]);
+  });
+
+  test("a notice leaves the stored answer's parts as they were", async () => {
+    const answer: HarnessEvent[] = [
+      { type: "text.completed", messageId: "m-1", text: "Done." },
+      { type: "turn.completed", usage: null, boundary: null },
+    ];
+    expect(
+      storedParts(
+        fold(await localChunks([started, retry(1), warning, ...answer])),
+      ),
+    ).toEqual(storedParts(fold(await localChunks([started, ...answer]))));
   });
 });
 

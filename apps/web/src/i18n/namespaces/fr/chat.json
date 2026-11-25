@@ -470,6 +470,13 @@
       "limitReminderScheduled": "Nous vous préviendrons à partir du {time}.",
       "limitResumeContinue": "Continuer automatiquement une fois réinitialisée",
       "limitResumeScheduled": "Reprendra automatiquement à partir du {time}.",
+      "notices": {
+        "browserUnavailable": "Le navigateur n’a pas pu être lancé pour ce message : l’agent a donc travaillé sans lui.",
+        "configWarning": "L’agent de code de votre ordinateur a signalé un problème dans ses propres réglages et a poursuivi. Si quelque chose vous semble anormal, vérifiez ses réglages sur cet ordinateur.",
+        "recovered": "Le modèle a de nouveau répondu après une nouvelle tentative de l’agent de code de votre ordinateur.",
+        "retrying": "Le modèle ne répond pas. L’agent de code de votre ordinateur fait une nouvelle tentative.",
+        "retryingAttempt": "Le modèle ne répond pas. L’agent de code de votre ordinateur fait une nouvelle tentative (tentative {attempt, number} sur {maxAttempts, number})."
+      },
       "permissionAboveLimit": "Non autorisé par votre organisation",
       "permissionAskDescription": "Modifie seul les fichiers du dossier de la conversation ; demande avant tout le reste.",
       "permissionAutoDescription": "Fait seul ce qu’il juge sûr ; demande pour le reste.",

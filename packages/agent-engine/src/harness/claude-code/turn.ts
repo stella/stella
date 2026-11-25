@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import type { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
+import type { ChatLocalRunNoticeCapability } from "@stll/api-contract/chat-local-run-notice";
 import { CHAT_LOCAL_RUN_TOOL_LIMITS } from "@stll/api-contract/chat-local-run-tool";
 import {
   chatLocalRunAnswersRefusal,
@@ -566,16 +567,26 @@ export class ClaudeCodeTurnSession {
     this.written.add(uuid);
   }
 
-  /** The session is open: announce it and release held messages. */
+  /**
+   * The session is open: announce it, and what the turn was offered and
+   * goes without, then release held messages.
+   */
   begin(options: {
     sessionId: HarnessSessionId;
     continuation: HarnessContinuation;
+    unavailable: readonly ChatLocalRunNoticeCapability[];
   }) {
     this.emit({
       type: "session.started",
       sessionId: options.sessionId,
       continuation: options.continuation,
     });
+    for (const capability of options.unavailable) {
+      this.emit({
+        type: "notice",
+        notice: { kind: "capability_unavailable", capability },
+      });
+    }
     this.sessionId = options.sessionId;
     this.began = true;
     for (const message of this.early.splice(0)) {
@@ -752,8 +763,12 @@ export class ClaudeCodeTurnSession {
         const retry = this.parse(ApiRetryMessageSchema, raw, "retry notice");
         if (retry !== null) {
           this.emit({
-            type: "retrying",
-            message: `Retrying after ${retry.error} (attempt ${String(retry.attempt)} of ${String(retry.max_retries)}).`,
+            type: "notice",
+            notice: {
+              kind: "retrying",
+              attempt: retry.attempt,
+              maxAttempts: retry.max_retries,
+            },
           });
         }
         return;

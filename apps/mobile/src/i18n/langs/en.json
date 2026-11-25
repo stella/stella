@@ -175,6 +175,13 @@
       "limitReminderScheduled": "We will notify you after {time}.",
       "limitResumeContinue": "Continue automatically when it resets",
       "limitResumeScheduled": "Continues automatically at {time}.",
+      "notices": {
+        "browserUnavailable": "The browser could not be started for this message, so the agent worked without it.",
+        "configWarning": "The coding agent on your computer warned about its own settings and carried on. If something looks off, check its settings on that computer.",
+        "recovered": "The model responded again after the coding agent on your computer retried.",
+        "retrying": "The model is not responding. The coding agent on your computer is trying again.",
+        "retryingAttempt": "The model is not responding. The coding agent on your computer is trying again (attempt {attempt, number} of {maxAttempts, number})."
+      },
       "output": {
         "arriving": "Still arriving from the computer that ran this step",
         "command": "Output",

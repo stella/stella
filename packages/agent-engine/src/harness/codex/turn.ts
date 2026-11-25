@@ -41,11 +41,11 @@ import {
 import type { AppServerClient, AppServerHandlers } from "./app-server-client";
 import {
   classifyTurnFailure,
+  codexRetryAttempt,
   isAuthFailure,
   isCapacityFailure,
   isPlanUsageLimit,
   mergeRateLimits,
-  readableCodexMessage,
 } from "./errors";
 import {
   codexItemHandling,
@@ -283,6 +283,8 @@ type CodexTurnSessionOptions = {
   detached: Detached;
   /** The server name the turn registered the stella MCP binding under. */
   stellaServer: string;
+  /** The server names of the turn's browser binding; none without one. */
+  browserServers: ReadonlySet<string>;
   capacityRetry: CodexCapacityRetry;
   /** The process's background work at the turn's end. */
   background: HarnessTurnBackground<AppServerClient>;
@@ -345,6 +347,7 @@ export class CodexTurnSession {
 
   private readonly lifecycle: HarnessTurnLifecycle<AppServerClient>;
   private readonly stellaServer: string;
+  private readonly browserServers: ReadonlySet<string>;
   private readonly capacityRetry: CodexCapacityRetry;
   private readonly detached: Detached;
 
@@ -352,6 +355,7 @@ export class CodexTurnSession {
     gracePeriodMs,
     detached,
     stellaServer,
+    browserServers,
     capacityRetry,
     background,
   }: CodexTurnSessionOptions) {
@@ -362,6 +366,7 @@ export class CodexTurnSession {
       background,
     });
     this.stellaServer = stellaServer;
+    this.browserServers = browserServers;
     this.capacityRetry = capacityRetry;
     this.detached = detached;
   }
@@ -556,8 +561,8 @@ export class CodexTurnSession {
         // its reconnect schedule, then fail the same way.
         if (parsed.willRetry && !isAuthFailure(parsed.error)) {
           this.emit({
-            type: "retrying",
-            message: readableCodexMessage(parsed.error.message),
+            type: "notice",
+            notice: { kind: "retrying", ...codexRetryAttempt(parsed.error) },
           });
           return;
         }
@@ -587,13 +592,13 @@ export class CodexTurnSession {
       }
       case "mcpServer/startupStatus/updated": {
         const parsed = this.parse(CODEX_NOTIFICATIONS[method], params, method);
-        // Only stella's own server is the turn's to fail on; a member's
+        if (parsed?.status !== "failed") {
+          return;
+        }
+        // Only stella's own server is the turn's to fail on; without the
+        // browser the turn goes on, and the member is told. A member's
         // other servers are theirs.
-        if (
-          parsed !== null &&
-          parsed.name === this.stellaServer &&
-          parsed.status === "failed"
-        ) {
+        if (parsed.name === this.stellaServer) {
           this.emit({
             type: "turn.failed",
             failure: {
@@ -602,9 +607,21 @@ export class CodexTurnSession {
                 "The harness could not connect to the stella MCP server.",
             },
           });
+        } else if (this.browserServers.has(parsed.name)) {
+          this.emit({
+            type: "notice",
+            notice: { kind: "capability_unavailable", capability: "browser" },
+          });
         }
         return;
       }
+      case "configWarning":
+        // The warning's own text names the member's settings and files: the
+        // chat says only that there was one.
+        if (this.parse(CODEX_NOTIFICATIONS[method], params, method) !== null) {
+          this.emit({ type: "notice", notice: { kind: "config_warning" } });
+        }
+        return;
       case "model/rerouted": {
         const parsed = this.parse(CODEX_NOTIFICATIONS[method], params, method);
         if (parsed !== null && parsed.turnId === this.turnId) {
@@ -738,8 +755,12 @@ export class CodexTurnSession {
     this.turnId = null;
     this.lastError = null;
     this.emit({
-      type: "retrying",
-      message: error?.message ?? "The model is at capacity.",
+      type: "notice",
+      notice: {
+        kind: "retrying",
+        attempt: this.capacityRetries,
+        maxAttempts,
+      },
     });
     this.detached(this.continueAfter(delayMs, error), "codex-turn.continue");
     return true;

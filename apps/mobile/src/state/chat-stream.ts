@@ -11,6 +11,11 @@ import {
 } from "@stll/api-contract/chat-command";
 import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import {
+  CHAT_LOCAL_RUN_NOTICES_METADATA_KEY,
+  type ChatLocalRunNotice,
+  chatLocalRunNoticesOf,
+} from "@stll/api-contract/chat-local-run-notice";
+import {
   CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY,
   type ChatLocalRunRequest,
   type ChatLocalRunRequestAnswer,
@@ -53,7 +58,7 @@ import { answerBlocks, messageText } from "@/state/chat-answer";
 import { attachmentParts } from "@/state/chat-attachments";
 import type { ReadyFile } from "@/state/chat-attachments";
 import { streamedTurnFailure } from "@/state/chat-failure";
-import { contextNoticeIn } from "@/state/chat-messages";
+import { contextNoticeIn, shownLocalRunNotices } from "@/state/chat-messages";
 import type { ChatEntry, ChatRetry } from "@/state/chat-messages";
 import type { LocalRunTarget } from "@/state/chat-pending-input";
 
@@ -258,6 +263,11 @@ export type StreamedAnswer = {
    * beside the running turn, which the card answers while it streams.
    */
   readonly localRunRequests: readonly ChatLocalRunRequest[];
+  /**
+   * What the run on the person's computer said about itself, each notice in
+   * its latest state, as the stream restates it on the answer's metadata.
+   */
+  readonly localRunNotices: readonly ChatLocalRunNotice[];
   /** Why the run failed, once its error event said. */
   readonly failure?: AIErrorKind;
 };
@@ -268,6 +278,7 @@ export const EMPTY_ANSWER: StreamedAnswer = {
   status: "streaming",
   contextNotice: null,
   localRunRequests: [],
+  localRunNotices: [],
 };
 
 /**
@@ -278,6 +289,15 @@ const restatesRequests = (metadata: unknown) =>
   typeof metadata === "object" &&
   metadata !== null &&
   CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY in metadata;
+
+/**
+ * A start that only restates what the run said about itself: the server's
+ * own, never the start of text.
+ */
+const restatesNotices = (metadata: unknown) =>
+  typeof metadata === "object" &&
+  metadata !== null &&
+  CHAT_LOCAL_RUN_NOTICES_METADATA_KEY in metadata;
 
 /** The answer's notice as an event's metadata changes it, or as it was. */
 const noticeAfter = (
@@ -332,6 +352,12 @@ export const applyChatEvent = (
         return {
           ...answer,
           localRunRequests: chatLocalRunRequestsOf(event.metadata),
+        };
+      }
+      if (restatesNotices(event.metadata)) {
+        return {
+          ...answer,
+          localRunNotices: chatLocalRunNoticesOf(event.metadata),
         };
       }
       return {
@@ -498,6 +524,7 @@ export const answerEntry = (
   // The stored answer names its drafts once the thread is read again.
   drafts: [],
   contextNotice: answer.contextNotice,
+  ...shownLocalRunNotices(answer.localRunNotices),
 });
 
 /**

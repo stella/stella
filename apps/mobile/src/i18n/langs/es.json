@@ -175,6 +175,13 @@
       "limitReminderScheduled": "Te avisaremos a partir del {time}.",
       "limitResumeContinue": "Continuar automáticamente cuando se restablezca",
       "limitResumeScheduled": "Continuará automáticamente a partir del {time}.",
+      "notices": {
+        "browserUnavailable": "No se pudo iniciar el navegador para este mensaje, así que el agente trabajó sin él.",
+        "configWarning": "El agente de programación de tu ordenador avisó de un problema en su propia configuración y siguió trabajando. Si algo no te cuadra, revisa su configuración en ese ordenador.",
+        "recovered": "El modelo volvió a responder después de que el agente de programación de tu ordenador lo intentara de nuevo.",
+        "retrying": "El modelo no responde. El agente de programación de tu ordenador lo está intentando de nuevo.",
+        "retryingAttempt": "El modelo no responde. El agente de programación de tu ordenador lo está intentando de nuevo (intento {attempt, number} de {maxAttempts, number})."
+      },
       "output": {
         "arriving": "Todavía está llegando desde el ordenador que ejecutó este paso",
         "command": "Salida",

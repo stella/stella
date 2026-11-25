@@ -470,6 +470,13 @@
       "limitReminderScheduled": "Mēs jums paziņosim pēc {time}.",
       "limitResumeContinue": "Turpināt automātiski, kad tiks atjaunots",
       "limitResumeScheduled": "Automātiski turpināsies pēc {time}.",
+      "notices": {
+        "browserUnavailable": "Šim ziņojumam neizdevās palaist pārlūku, tāpēc aģents strādāja bez tā.",
+        "configWarning": "Programmēšanas aģents jūsu datorā brīdināja par saviem iestatījumiem un turpināja darbu. Ja kaut kas šķiet nepareizi, pārbaudiet tā iestatījumus šajā datorā.",
+        "recovered": "Modelis atkal atbildēja, kad programmēšanas aģents jūsu datorā mēģināja vēlreiz.",
+        "retrying": "Modelis neatbild. Programmēšanas aģents jūsu datorā mēģina vēlreiz.",
+        "retryingAttempt": "Modelis neatbild. Programmēšanas aģents jūsu datorā mēģina vēlreiz ({attempt, number}. mēģinājums no {maxAttempts, number})."
+      },
       "permissionAboveLimit": "Jūsu organizācija to neatļauj",
       "permissionAskDescription": "Tērzēšanas mapes failus rediģē pats; par visu citu jautā.",
       "permissionAutoDescription": "To, ko uzskata par drošu, dara pats; par pārējo jautā.",

@@ -8,6 +8,11 @@ import {
 } from "@stll/api-contract/chat-context-notice";
 import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import {
+  type ChatLocalRunNotice,
+  chatLocalRunNoticesOf,
+  isChatLocalRunNoticeShown,
+} from "@stll/api-contract/chat-local-run-notice";
+import {
   chatLocalRunRequestsOf,
   type LocalRunRequestUnanswered,
   unansweredLocalRunRequest,
@@ -152,6 +157,11 @@ export type ChatEntry = {
    */
   readonly unansweredRequests?: readonly LocalRunRequestUnanswered[];
   /**
+   * What the run on the person's computer said about itself and still has
+   * to say, each notice in its latest state; absent when nothing.
+   */
+  readonly localRunNotices?: readonly ChatLocalRunNotice[];
+  /**
    * A stored message of the person's: its parts as the thread stores them,
    * which an edit sends back. Absent on an answer and on a message still
    * being sent from here.
@@ -234,6 +244,17 @@ const localRunRequestsUnanswered = (
 ];
 
 /**
+ * The notices an answer shows, as a `ChatEntry` field: a retry that ended
+ * with its turn says nothing beside the turn's own failure or stop.
+ */
+export const shownLocalRunNotices = (
+  notices: readonly ChatLocalRunNotice[],
+): Pick<ChatEntry, "localRunNotices"> => {
+  const shown = notices.filter(isChatLocalRunNoticeShown);
+  return shown.length === 0 ? {} : { localRunNotices: shown };
+};
+
+/**
  * What a phone can show of one stored message. System messages and messages
  * with nothing to draw are left out; a failed answer always draws, as the
  * reason it failed.
@@ -288,6 +309,9 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
     ...(limitResetsAt === undefined ? {} : { limitResetsAt }),
     ...(ranOnModel === null ? {} : { ranOnModel }),
     ...(unansweredRequests.length === 0 ? {} : { unansweredRequests }),
+    ...(message.role === "assistant"
+      ? shownLocalRunNotices(chatLocalRunNoticesOf(message.metadata))
+      : {}),
     ...(message.role === "user" ? { parts: message.parts } : {}),
   };
 };

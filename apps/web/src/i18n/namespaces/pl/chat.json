@@ -470,6 +470,13 @@
       "limitReminderScheduled": "Powiadomimy Cię po {time}.",
       "limitResumeContinue": "Kontynuuj automatycznie po odnowieniu",
       "limitResumeScheduled": "Wznowimy automatycznie po {time}.",
+      "notices": {
+        "browserUnavailable": "Nie udało się uruchomić przeglądarki dla tej wiadomości, więc agent pracował bez niej.",
+        "configWarning": "Agent programistyczny na Twoim komputerze ostrzegł o problemie we własnych ustawieniach i kontynuował pracę. Jeśli coś wygląda nie tak, sprawdź jego ustawienia na tym komputerze.",
+        "recovered": "Model znów odpowiedział, gdy agent programistyczny na Twoim komputerze spróbował ponownie.",
+        "retrying": "Model nie odpowiada. Agent programistyczny na Twoim komputerze próbuje ponownie.",
+        "retryingAttempt": "Model nie odpowiada. Agent programistyczny na Twoim komputerze próbuje ponownie (próba {attempt, number} z {maxAttempts, number})."
+      },
       "permissionAboveLimit": "Twoja organizacja na to nie pozwala",
       "permissionAskDescription": "Sam edytuje pliki w folderze czatu; o wszystko inne pyta.",
       "permissionAutoDescription": "Sam robi to, co uznaje za bezpieczne; o resztę pyta.",

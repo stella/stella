@@ -470,6 +470,13 @@
       "limitReminderScheduled": "Teavitame teid alates {time}.",
       "limitResumeContinue": "Jätka automaatselt, kui limiit lähtestub",
       "limitResumeScheduled": "Jätkub automaatselt alates {time}.",
+      "notices": {
+        "browserUnavailable": "Selle sõnumi jaoks ei õnnestunud brauserit käivitada, seega töötas agent ilma selleta.",
+        "configWarning": "Teie arvutis töötav programmeerimisagent hoiatas oma seadete pärast ja jätkas tööd. Kui miski tundub vale, kontrollige tema seadeid selles arvutis.",
+        "recovered": "Mudel vastas jälle pärast seda, kui teie arvutis töötav programmeerimisagent uuesti proovis.",
+        "retrying": "Mudel ei vasta. Teie arvutis töötav programmeerimisagent proovib uuesti.",
+        "retryingAttempt": "Mudel ei vasta. Teie arvutis töötav programmeerimisagent proovib uuesti ({attempt, number}. katse {maxAttempts, number}-st)."
+      },
       "permissionAboveLimit": "Teie organisatsioon seda ei luba",
       "permissionAskDescription": "Muudab vestluse kaustas olevaid faile ise; kõige muu kohta küsib.",
       "permissionAutoDescription": "Teeb ise seda, mida peab ohutuks; ülejäänu kohta küsib.",

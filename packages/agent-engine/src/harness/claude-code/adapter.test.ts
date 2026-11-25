@@ -1446,11 +1446,20 @@ describe("Claude Code adapter over stream-json stdio", () => {
     });
     expect(terminal(events)?.type).toBe("turn.completed");
     expect(promptOf(received())).toContain("The browser is unavailable");
+    // The member is told too, right after the session opens.
+    expect(events.slice(0, 2)).toMatchObject([
+      { type: "session.started" },
+      {
+        type: "notice",
+        notice: { kind: "capability_unavailable", capability: "browser" },
+      },
+    ]);
   });
 
   test("a turn without the browser is told nothing about it", async () => {
-    const { received } = await run("browser_unreachable");
+    const { events, received } = await run("browser_unreachable");
     expect(promptOf(received())).not.toContain("browser");
+    expect(events.map(({ type }) => type)).not.toContain("notice");
   });
 
   test("a start too slow for its deadline is tried once more, and the turn runs", async () => {
@@ -1501,8 +1510,8 @@ describe("Claude Code adapter over stream-json stdio", () => {
     expect(auth.events.map(({ type }) => type)).not.toContain("text.completed");
     const limited = await run("usage_limit");
     expect(limited.events).toContainEqual({
-      type: "retrying",
-      message: "Retrying after overloaded (attempt 1 of 10).",
+      type: "notice",
+      notice: { kind: "retrying", attempt: 1, maxAttempts: 10 },
     });
     // A model-specific window that resets later does not hold the harness.
     expect(terminal(limited.events)).toEqual({

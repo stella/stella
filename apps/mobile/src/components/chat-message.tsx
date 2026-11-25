@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 
 import type { AIErrorKind } from "@stll/api-contract/ai-errors";
 import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
+import type { ChatLocalRunNotice } from "@stll/api-contract/chat-local-run-notice";
 import { MOBILE_REDIRECT_SCHEMES } from "@stll/api-contract/mobile-client";
 import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
@@ -27,6 +28,7 @@ import { ThreadMatter } from "@/components/thread-matter";
 import { APP_VARIANT } from "@/env";
 import { CHAT_FAILURE_KEYS, chatFailureStepsKey } from "@/state/chat-failure";
 import type { ChatEntry, ShownFile } from "@/state/chat-messages";
+import { localRunNoticeLine } from "@/state/local-run-notices";
 import { plainText } from "@/state/markdown";
 
 /**
@@ -116,6 +118,9 @@ export const ChatMessage = ({
           limitResetsAt={entry.limitResetsAt}
           onRetry={onRetry}
         />
+      )}
+      {entry.localRunNotices === undefined ? null : (
+        <LocalRunNotices notices={entry.localRunNotices} />
       )}
       {entry.unansweredRequests === undefined ? null : (
         <LocalRunRequestNotices reasons={entry.unansweredRequests} />
@@ -216,6 +221,34 @@ const SteeredMessage = ({ text }: { text: string }) => {
     <View className="bg-secondary gap-1 rounded-lg px-2.5 py-2">
       <Text variant="caption">{t("localRun.steered")}</Text>
       <Text>{text}</Text>
+    </View>
+  );
+};
+
+/**
+ * What the run on the person's computer said about itself while it went on,
+ * as quiet captions in the words the web uses. A change is announced
+ * politely, never as an alert.
+ */
+const LocalRunNotices = ({
+  notices,
+}: {
+  notices: readonly ChatLocalRunNotice[];
+}) => {
+  const t = useTranslations("chat");
+  return (
+    <View accessibilityLiveRegion="polite" className="gap-1">
+      {notices.map((notice) => {
+        const line = localRunNoticeLine(notice);
+        if (line === null) {
+          return null;
+        }
+        return (
+          <Text key={line.id} variant="caption">
+            {"values" in line ? t(line.message, line.values) : t(line.message)}
+          </Text>
+        );
+      })}
     </View>
   );
 };
