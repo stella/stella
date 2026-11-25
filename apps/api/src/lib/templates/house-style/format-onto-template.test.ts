@@ -25,7 +25,7 @@ const OUTPUT = new Uint8Array([3]);
 type Answer =
   | { refuse: TemplateEngineRefusal; blockId?: string }
   /** Blocks whose output label differs, and targets whose field text does. */
-  | { labelDiffers?: string[]; fieldDiffers?: string[] };
+  | { labelDiffers?: string[]; fieldDiffers?: string[]; labelLost?: string[] };
 
 type FakeEngine = TemplatePlanEngine & { plans: TemplatePlan[] };
 
@@ -40,6 +40,7 @@ const fakeEngine = (
   const reportOf = (plan: TemplatePlan, answer: Answer): TemplatePlanReport => {
     const labelDiffers = "refuse" in answer ? [] : (answer.labelDiffers ?? []);
     const fieldDiffers = "refuse" in answer ? [] : (answer.fieldDiffers ?? []);
+    const labelLost = "refuse" in answer ? [] : (answer.labelLost ?? []);
     const labels = new Map(manifest.blocks.map(({ id, label }) => [id, label]));
     return {
       ok: true,
@@ -54,12 +55,16 @@ const fakeEngine = (
         if (labelDiffers.includes(item.blockId)) {
           outputLabel = "9.";
         }
+        const lost = labelLost.includes(item.blockId);
         return [
           {
             blockId: item.blockId,
             disposition: "placed" as const,
             sourceLabel,
-            outputLabel,
+            outputLabel: lost ? null : outputLabel,
+            ...(item.labelAsText === true && sourceLabel !== null && !lost
+              ? { labelAsText: sourceLabel.trim() }
+              : {}),
           },
         ];
       }),
@@ -208,8 +213,15 @@ describe("formatOntoTemplate", () => {
       { cause: "labelDiffers", blockId: clause },
       { cause: "fieldTextDiffers", blockId: article },
     ]);
+    // Its number is automatic: out of the list, it is written as text.
     expect(numberingOf(formatted.plan, clause)).toMatchObject({
       numbering: null,
+      labelAsText: true,
+    });
+    expect(formatted.note.items).toContainEqual({
+      kind: "labelConvertedToText",
+      blockId: clause,
+      reason: "excluded",
     });
     // Nothing links to the paragraph any more, nor to the article whose
     // field would show another text.
@@ -219,6 +231,42 @@ describe("formatOntoTemplate", () => {
           targetBlockId === clause || targetBlockId === article,
       ),
     ).toEqual([]);
+  });
+
+  test("returns no document when the output would drop a label the source shows", async () => {
+    const clause = blockIdOf(manifest, "Druhé ujednání, oddíl II:");
+    // Out of its list the paragraph takes its number as text; an output
+    // that shows neither is not returned.
+    const engine = fakeEngine(manifest, [
+      { labelLost: [clause] },
+      { labelLost: [clause] },
+    ]);
+    const result = await format(engine);
+    expect(result.isErr() && result.error).toMatchObject({
+      _tag: "TemplateLabelsNotKeptError",
+      phase: "applied",
+      issues: [{ blockId: clause, kind: "lost" }],
+    });
+    expect(engine.plans).toHaveLength(2);
+    expect(numberingOf(engine.plans.at(1), clause)).toMatchObject({
+      numbering: null,
+      labelAsText: true,
+    });
+  });
+
+  test("returns the refusal when a label cannot stand as text", async () => {
+    const clause = blockIdOf(manifest, "Druhé ujednání, oddíl II:");
+    const engine = fakeEngine(manifest, [
+      { labelDiffers: [clause] },
+      { refuse: "label-not-writable", blockId: clause },
+    ]);
+    const result = await format(engine);
+    expect(result.isErr() && result.error).toMatchObject({
+      _tag: "TemplateEngineError",
+      reason: "label-not-writable",
+      blockId: clause,
+    });
+    expect(engine.plans).toHaveLength(2);
   });
 
   test("returns no document when the plan does not settle within the applies allowed", async () => {

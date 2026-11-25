@@ -549,6 +549,7 @@ export const TAGGED_FAILURE_REASON = {
   TableChartDecisionError: "tagged_failure",
   TelemetryError: "tagged_failure",
   TemplateEngineError: "tagged_failure",
+  TemplateLabelsNotKeptError: "tagged_failure",
   TemplatePackContentError: "tagged_failure",
   TemplatePersistenceClaimLostError: "tagged_failure",
   TemplateProfileError: "tagged_failure",

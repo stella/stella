@@ -420,6 +420,22 @@ const countLists = ({
   return null;
 };
 
+/** The label the plan's list prints for a paragraph; null when the
+ *  paragraph joins no list. */
+export const plannedLabelOf = (
+  { numbered, level, counters }: Placement,
+  levelsByList: ReadonlyMap<number, readonly ListLevelFormat[]>,
+): string | null => {
+  const levels =
+    numbered && level !== null
+      ? levelsByList.get(level.abstractNumId)
+      : undefined;
+  const format = levels?.find(({ ilvl }) => ilvl === level?.ilvl);
+  return levels === undefined || format === undefined
+    ? null
+    : renderLabel(format.lvlText, counters, levels);
+};
+
 type Numbered = {
   patches: TemplatePlanNumberingPatch[];
   /** The levels each list counts with, patches applied, by list

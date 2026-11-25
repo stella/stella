@@ -327,6 +327,76 @@ describe("buildTemplatePlan, list instances", () => {
   });
 });
 
+describe("buildTemplatePlan, automatic labels no list prints", () => {
+  const manifest = manifestOf([
+    "SMLOUVA",
+    "Článek I.\nPrvní",
+    numbered("1.", "Odstavec.", 1),
+    // Composite labels this reader cannot restate as a level text.
+    numbered("I. 1)", "Bod se složeným označením.", 2),
+    numbered("I. 2)", "Další bod se složeným označením.", 2),
+    "Závěrečná věta.",
+  ]);
+  const composite = blockIdOf(manifest, "Bod se složeným");
+
+  for (const mode of ["keepSource", "houseScheme"] as const) {
+    test(`are written as text and reported (${mode})`, () => {
+      const { plan, note, labelsNotKept } = build(manifest, mode);
+      expect(itemOf(plan, manifest, "Bod se složeným")).toMatchObject({
+        numbering: null,
+        labelAsText: true,
+      });
+      expect(itemOf(plan, manifest, "Další bod")).toMatchObject({
+        numbering: null,
+        labelAsText: true,
+      });
+      // A numbered paragraph and one without a label take no label text.
+      expect(itemOf(plan, manifest, "Odstavec.")).not.toHaveProperty(
+        "labelAsText",
+      );
+      expect(itemOf(plan, manifest, "Závěrečná")).not.toHaveProperty(
+        "labelAsText",
+      );
+      expect(note.items).toContainEqual({
+        kind: "labelConvertedToText",
+        blockId: composite,
+        reason: "unreadable",
+      });
+      expect(note.counts.labelsConvertedToText).toBe(2);
+      expect(labelsNotKept).toEqual([]);
+    });
+  }
+
+  test("a numbered cell placed with its table keeps its number as text", () => {
+    const table = inColumns(2, [
+      numbered("I. 1)", "Položka", 7),
+      "12 ks",
+      numbered("I. 2)", "Další položka", 7),
+      "3 ks",
+    ]);
+    const { plan, labelsNotKept } = build(table);
+    const nested = sourceItems(plan).at(0)?.nested ?? [];
+    expect(nested.filter(({ labelAsText }) => labelAsText === true)).toEqual([
+      { blockId: "p0", numbering: null, labelAsText: true },
+      { blockId: "p2", numbering: null, labelAsText: true },
+    ]);
+    expect(labelsNotKept).toEqual([]);
+  });
+
+  test("every label of a contract is printed by a list or written as text", () => {
+    for (const contract of [
+      czechContract("Viz čl. II odst. 2 této smlouvy."),
+      czechDecimalContract("Viz čl. 2.1 této smlouvy."),
+      englishAgreement("See Section 2.1 hereof."),
+      germanContract("Siehe § 2 Abs. 1 dieses Vertrages."),
+    ]) {
+      for (const mode of ["keepSource", "houseScheme"] as const) {
+        expect(build(contract, mode).labelsNotKept).toEqual([]);
+      }
+    }
+  });
+});
+
 describe("buildTemplatePlan, what is left unlinked", () => {
   const manifest = czechContract(
     "Viz čl. XX této smlouvy a čl. II odst. 2 této smlouvy.",

@@ -35,6 +35,7 @@ import {
   numberPlacements,
   ordinalOf,
   patternOf,
+  plannedLabelOf,
 } from "@/api/lib/templates/house-style/plan-numbering";
 import type {
   LabelKeptReason,
@@ -120,8 +121,10 @@ type FormattingNoteItem =
     }
   /** A typed label stays text; the paragraph joins no list. */
   | { kind: "labelKeptAsText"; blockId: string; reason: LabelKeptReason }
-  /** An automatic label the output cannot print; the paragraph loses it. */
-  | { kind: "labelNotReproduced"; blockId: string; reason: LabelKeptReason }
+  /** Automatic numbering converted to text: no list of the template prints
+   *  the label, so it is written in front of the paragraph, which joins no
+   *  list. */
+  | { kind: "labelConvertedToText"; blockId: string; reason: LabelKeptReason }
   | { kind: "roleWithoutStyle"; role: HouseStyleRole; blocks: number }
   | {
       kind: "templateBlocksKept";
@@ -137,6 +140,8 @@ export type FormattingNote = {
     placed: number;
     omitted: number;
     numbered: number;
+    /** Paragraphs whose automatic label is written as text. */
+    labelsConvertedToText: number;
     numberingPatches: number;
     referencesLinked: number;
     referencesUnlinked: number;
@@ -209,7 +214,20 @@ type BuildOptions = {
   sourceHighlightColors: readonly string[];
 };
 
-type BuiltPlan = { plan: TemplatePlan; note: FormattingNote };
+/** A placed paragraph that would not show the label the source shows. */
+export type PlannedLabelIssue = {
+  blockId: string;
+  /** `lost`: it would show none. `differs`: its list would print another. */
+  kind: "lost" | "differs";
+};
+
+type BuiltPlan = {
+  plan: TemplatePlan;
+  note: FormattingNote;
+  /** Empty for a plan that keeps every label; a plan with an entry here is
+   *  not to be applied. */
+  labelsNotKept: PlannedLabelIssue[];
+};
 
 /** What every step of one build reads. */
 type Context = {
@@ -441,6 +459,22 @@ const numberingOf = ({
       }
     : null;
 
+/** The automatic label a block shows, or null when it shows none. */
+const shownLabelOf = ({ label }: DocxBlock): string | null => {
+  const shown = (label ?? "").trim();
+  return shown === "" ? null : shown;
+};
+
+/** An automatic label is never dropped: where no list prints it, it is
+ *  written as text. */
+const asTextOf = (
+  block: DocxBlock,
+  numbering: TemplatePlanNumbering | null,
+): { labelAsText?: true } =>
+  numbering === null && shownLabelOf(block) !== null
+    ? { labelAsText: true }
+    : {};
+
 const stripOf = ({
   numbered,
   entry,
@@ -526,15 +560,21 @@ const tableItem = (
   table: DocxBlock,
 ): TemplatePlanSourceItem => {
   const nested: TemplatePlanNestedParagraph[] = [];
-  for (const { id } of insideOf(table, blockById)) {
-    const placement = placementById.get(id);
+  for (const inner of insideOf(table, blockById)) {
+    const placement = placementById.get(inner.id);
     if (placement !== undefined) {
+      const numbering = numberingOf(placement);
       nested.push({
-        blockId: id,
+        blockId: inner.id,
         ...(placement.styleId === null ? {} : { styleId: placement.styleId }),
-        numbering: numberingOf(placement),
+        numbering,
         ...stripOf(placement),
+        ...asTextOf(inner, numbering),
       });
+    } else if (inner.kind === "paragraph" && shownLabelOf(inner) !== null) {
+      // A cell paragraph placed with its table joins no list of the
+      // template; the number it shows goes with it as text.
+      nested.push({ blockId: inner.id, numbering: null, labelAsText: true });
     }
   }
   return {
@@ -573,18 +613,28 @@ const paragraphItems = ({
   if (sampleJoin === "sameLine" && !breaks) {
     mergeNext = allLabel ? "none" : "space";
   }
+  const numbering = numberingOf(placement);
   const item: TemplatePlanSourceItem = {
     kind: "source",
     blockId: block.id,
     hash: block.hash,
     ...(placement.styleId === null ? {} : { styleId: placement.styleId }),
-    numbering: numberingOf(placement),
+    numbering,
     ...stripped,
+    ...asTextOf(block, numbering),
     ...(title === undefined ? {} : { mergeNext }),
   };
   return title === undefined
     ? [item]
-    : [item, { kind: "source", blockId: title.id, hash: title.hash }];
+    : [
+        item,
+        {
+          kind: "source",
+          blockId: title.id,
+          hash: title.hash,
+          ...asTextOf(title, null),
+        },
+      ];
 };
 
 type Body = {
@@ -624,7 +674,9 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
     }
     if (block.kind === "table") {
       const item = tableItem(context, placed, block);
-      placedCount += item.nested?.length ?? 0;
+      placedCount += (item.nested ?? []).filter(({ blockId }) =>
+        placementById.has(blockId),
+      ).length;
       body.push(item);
       continue;
     }
@@ -886,12 +938,18 @@ const noteReadings = (
     // An annex heading is typed by the template's own convention.
     const byConvention =
       keptReason === "noListLevel" && entry?.level === "annex";
-    if (numbered || keptReason === null || byConvention) {
+    // An automatic label that no list prints is reported with the plan
+    // item that writes it as text.
+    if (
+      numbered ||
+      keptReason === null ||
+      byConvention ||
+      entry?.origin !== "manual"
+    ) {
       continue;
     }
     items.push({
-      kind:
-        entry?.origin === "manual" ? "labelKeptAsText" : "labelNotReproduced",
+      kind: "labelKeptAsText",
       blockId: block.id,
       reason: keptReason,
     });
@@ -918,6 +976,137 @@ const noteReadings = (
   for (const [role, count] of stylelessRoles) {
     items.push({ kind: "roleWithoutStyle", role, blocks: count });
   }
+};
+
+/** What a plan asks for one source paragraph's label. */
+type LabelRequest = {
+  numbered: boolean;
+  stripLabel: string | null;
+  labelAsText: boolean;
+};
+
+const NO_NESTED: readonly TemplatePlanNestedParagraph[] = [];
+
+const NO_LABEL_REQUEST: LabelRequest = {
+  numbered: false,
+  stripLabel: null,
+  labelAsText: false,
+};
+
+const labelRequestOf = ({
+  numbering,
+  stripLabel,
+  labelAsText,
+}: TemplatePlanNestedParagraph): LabelRequest => ({
+  numbered: typeof numbering === "object" && numbering !== null,
+  stripLabel: stripLabel ?? null,
+  labelAsText: labelAsText === true,
+});
+
+/** Every source paragraph the body places, with what the plan asks for its
+ *  label. Read off the finished body, not off the steps that built it. */
+const labelRequests = (
+  { blockById }: Context,
+  body: TemplatePlan["body"],
+): Map<string, LabelRequest> => {
+  const requests = new Map<string, LabelRequest>();
+  for (const item of body) {
+    if (item.kind === "slot") {
+      for (const id of item.sourceBlockIds) {
+        requests.set(id, NO_LABEL_REQUEST);
+      }
+    }
+    if (item.kind !== "source") {
+      continue;
+    }
+    requests.set(item.blockId, labelRequestOf(item));
+    const table = blockById.get(item.blockId);
+    if (table?.kind !== "table") {
+      continue;
+    }
+    for (const { id } of insideOf(table, blockById)) {
+      requests.set(id, NO_LABEL_REQUEST);
+    }
+    for (const nested of item.nested ?? NO_NESTED) {
+      requests.set(nested.blockId, labelRequestOf(nested));
+    }
+  }
+  return requests;
+};
+
+type LabelCheckOptions = {
+  context: Context;
+  placed: Placed;
+  levelsByList: ReadonlyMap<number, readonly ListLevelFormat[]>;
+  body: TemplatePlan["body"];
+};
+
+/**
+ * The placed paragraphs that would not show the label the source shows.
+ *
+ * A label the source shows is automatic or typed and stripped. The output
+ * shows it when the paragraph's list prints the same label, or when it is
+ * written as text. The house scheme renumbers on purpose, so there a list
+ * may print another label, but never none.
+ */
+const checkLabels = ({
+  context,
+  placed,
+  levelsByList,
+  body,
+}: LabelCheckOptions): PlannedLabelIssue[] => {
+  const issues: PlannedLabelIssue[] = [];
+  for (const [blockId, request] of labelRequests(context, body)) {
+    const block = context.blockById.get(blockId);
+    if (block?.kind !== "paragraph") {
+      continue;
+    }
+    const shown = shownLabelOf(block);
+    const source = shown ?? request.stripLabel?.trim() ?? null;
+    if (source === null) {
+      continue;
+    }
+    const placement = placed.placementById.get(blockId);
+    const planned =
+      request.numbered && placement !== undefined
+        ? plannedLabelOf(placement, levelsByList)
+        : null;
+    if (!request.numbered) {
+      if (shown === null || !request.labelAsText) {
+        issues.push({ blockId, kind: "lost" });
+      }
+    } else if (
+      request.labelAsText ||
+      (context.mode === "keepSource" && planned?.trim() !== source)
+    ) {
+      issues.push({ blockId, kind: "differs" });
+    }
+  }
+  return issues;
+};
+
+/** The paragraphs whose automatic label the plan writes as text. */
+const noteConvertedLabels = (
+  { items }: Context,
+  { placementById }: Placed,
+  requests: ReadonlyMap<string, LabelRequest>,
+): number => {
+  let converted = 0;
+  for (const [blockId, { labelAsText }] of requests) {
+    if (!labelAsText) {
+      continue;
+    }
+    converted += 1;
+    const placement = placementById.get(blockId);
+    items.push({
+      kind: "labelConvertedToText",
+      blockId,
+      reason:
+        placement?.keptReason ??
+        (placement?.entry === null ? "unreadable" : "noListLevel"),
+    });
+  }
+  return converted;
 };
 
 /**
@@ -992,6 +1181,11 @@ export const buildTemplatePlan = ({
     references,
     highlightColor,
   });
+  const labelsConvertedToText = noteConvertedLabels(
+    context,
+    placed,
+    labelRequests(context, body),
+  );
   noteReadings(context, placed, references, suspicions);
 
   const plan: TemplatePlan = {
@@ -1018,6 +1212,7 @@ export const buildTemplatePlan = ({
         placed: placedCount,
         omitted: placed.omitted.size,
         numbered: placed.placements.filter(({ numbered }) => numbered).length,
+        labelsConvertedToText,
         numberingPatches: patches.length,
         referencesLinked: marks.references.length,
         referencesUnlinked: context.items.filter(
@@ -1027,5 +1222,6 @@ export const buildTemplatePlan = ({
       },
       items: context.items,
     },
+    labelsNotKept: checkLabels({ context, placed, levelsByList, body }),
   };
 };

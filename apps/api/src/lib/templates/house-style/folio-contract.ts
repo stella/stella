@@ -123,6 +123,8 @@ export type TemplatePlanNestedParagraph = {
   styleId?: string;
   numbering?: TemplatePlanNumbering | null;
   stripLabel?: string;
+  /** As on a source item. */
+  labelAsText?: boolean;
 };
 
 export type TemplatePlanSourceItem = {
@@ -134,6 +136,12 @@ export type TemplatePlanSourceItem = {
   numbering?: TemplatePlanNumbering | null;
   /** Literal manual label at the start of the block's text, removed. */
   stripLabel?: string;
+  /** Writes the block's automatic label as text in front of its text, for
+   *  a label no list of the template prints. The paragraph it leads joins
+   *  no list. The engine writes only a label that reads the same wherever
+   *  the file is opened: not a bullet glyph, not a number a language
+   *  spells. */
+  labelAsText?: boolean;
   /** Joins the next plan item, a bare source paragraph, into this one. */
   mergeNext?: TemplatePlanMerge;
   /** Table only: the paragraph style of its cells. */
@@ -202,6 +210,8 @@ export type TemplatePlanReport = {
     sourceLabel: string | null;
     /** The automatic label the output paragraph renders. */
     outputLabel: string | null;
+    /** The automatic label written as text in front of the block. */
+    labelAsText?: string;
   }[];
   references: {
     results: {
@@ -232,6 +242,8 @@ export type TemplatePlanReport = {
  *  other refusal is `other`. */
 export type TemplateEngineRefusal =
   | "strip-label-mismatch"
+  /** The automatic label of the block cannot stand as text. */
+  | "label-not-writable"
   | "merge-invalid"
   | "reference-span-invalid"
   | "reference-target-unplaced"

@@ -9,8 +9,15 @@
 // again: the block keeps its typed label, the reference stays text. The
 // document is never forced through; a refusal with no such way out is
 // returned as it is.
+//
+// A label the source shows is never dropped. A paragraph's list prints it,
+// or it is written as text in front of the paragraph; a plan or an output
+// that would do neither is refused, and so is a label that cannot stand as
+// text.
 
 import { panic, Result, TaggedError } from "better-result";
+
+import { declareFingerprintFields } from "@stll/errors";
 
 import {
   acceptDecisions,
@@ -26,7 +33,10 @@ import type {
 } from "@/api/lib/templates/house-style/folio-contract";
 import { buildLabelIndex } from "@/api/lib/templates/house-style/label-index";
 import { buildTemplatePlan } from "@/api/lib/templates/house-style/plan-builder";
-import type { FormattingNote } from "@/api/lib/templates/house-style/plan-builder";
+import type {
+  FormattingNote,
+  PlannedLabelIssue,
+} from "@/api/lib/templates/house-style/plan-builder";
 import type { NumberingMode } from "@/api/lib/templates/house-style/plan-numbering";
 import { detectReferences } from "@/api/lib/templates/house-style/reference-detector";
 import { findTopicSuspicions } from "@/api/lib/templates/house-style/reference-suspicions";
@@ -77,6 +87,25 @@ class TemplateProfileRejectedError extends TaggedError(
   issues: TemplateProfileIssue[];
 }> {}
 
+/** Labels kept per error; a document rarely has more to show. */
+const LABEL_ISSUES_MAX = 50;
+
+/** The output would not show a label the source shows. Nothing is
+ *  returned for such a document. */
+class TemplateLabelsNotKeptError extends TaggedError(
+  "TemplateLabelsNotKeptError",
+)<{
+  message: string;
+  /** `planned`: the plan was not applied. `applied`: the engine's report
+   *  showed it and no repair was left. */
+  phase: "planned" | "applied";
+  issues: PlannedLabelIssue[];
+}> {
+  static {
+    declareFingerprintFields(this, ["phase"]);
+  }
+}
+
 type FormatOptions = {
   engine: TemplatePlanEngine;
   source: Uint8Array;
@@ -115,6 +144,8 @@ const exclusionFor = (
     case "reference-target-unplaced":
     case "highlight-span-invalid":
       return "marks";
+    // Writing the label as text was the way out already.
+    case "label-not-writable":
     case "tracked-changes":
     case "unsupported-content":
     case "other":
@@ -164,6 +195,35 @@ const changedLabels = (
     .map(({ blockId }) => blockId);
 };
 
+/**
+ * The placed paragraphs of an output that do not show the label the source
+ * shows: no list prints it and it is not written as text. The house scheme
+ * renumbers on purpose, so there another label counts as shown.
+ */
+const unkeptLabels = (
+  mode: NumberingMode,
+  { blocks }: TemplatePlanReport,
+): PlannedLabelIssue[] => {
+  const issues: PlannedLabelIssue[] = [];
+  for (const block of blocks) {
+    const source = (block.sourceLabel ?? "").trim();
+    if (block.disposition === "omitted" || source === "") {
+      continue;
+    }
+    const printed = (block.outputLabel ?? "").trim();
+    const written = (block.labelAsText ?? "").trim();
+    if (printed === "" && written === "") {
+      issues.push({ blockId: block.blockId, kind: "lost" });
+    } else if (
+      (written !== "" && (written !== source || printed !== "")) ||
+      (written === "" && mode === "keepSource" && printed !== source)
+    ) {
+      issues.push({ blockId: block.blockId, kind: "differs" });
+    }
+  }
+  return issues;
+};
+
 const sum = (entries: readonly { count: number }[]): number =>
   entries.reduce((total, { count }) => total + count, 0);
 
@@ -180,7 +240,12 @@ export const formatOntoTemplate = async ({
   mode,
   resolveAmbiguities,
 }: FormatOptions): Promise<
-  Result<Formatted, TemplateEngineError | TemplateProfileRejectedError>
+  Result<
+    Formatted,
+    | TemplateEngineError
+    | TemplateProfileRejectedError
+    | TemplateLabelsNotKeptError
+  >
 > => {
   const [analyzed, inspected, highlighted] = await Promise.all([
     engine.analyze(source),
@@ -266,6 +331,15 @@ export const formatOntoTemplate = async ({
       exclusions,
       sourceHighlightColors: highlighted.value,
     });
+    if (built.labelsNotKept.length > 0) {
+      return Result.err(
+        new TemplateLabelsNotKeptError({
+          message: "The plan would not show a label the document shows",
+          phase: "planned",
+          issues: built.labelsNotKept.slice(0, LABEL_ISSUES_MAX),
+        }),
+      );
+    }
     // Each attempt is built from the engine's answer to the one before.
     const applied = await engine.apply({
       source,
@@ -300,9 +374,21 @@ export const formatOntoTemplate = async ({
           exclude("targets", targetBlockId, "fieldTextDiffers") || repaired;
       }
     }
-    if (!repaired) {
-      settled = { built, docx, report };
+    if (repaired) {
+      continue;
     }
+    // Nothing is left to take back, so what the report shows is final.
+    const unkept = unkeptLabels(mode, report);
+    if (unkept.length > 0) {
+      return Result.err(
+        new TemplateLabelsNotKeptError({
+          message: "The output would not show a label the document shows",
+          phase: "applied",
+          issues: unkept.slice(0, LABEL_ISSUES_MAX),
+        }),
+      );
+    }
+    settled = { built, docx, report };
   }
   // An output whose report still asks for a repair prints a number or a
   // field text the source does not: it is not returned.

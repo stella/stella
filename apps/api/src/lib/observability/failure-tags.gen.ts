@@ -536,6 +536,7 @@ export const FAILURE_TAGS = [
   "TableChartDecisionError",
   "TelemetryError",
   "TemplateEngineError",
+  "TemplateLabelsNotKeptError",
   "TemplatePackContentError",
   "TemplatePersistenceClaimLostError",
   "TemplateProfileError",
