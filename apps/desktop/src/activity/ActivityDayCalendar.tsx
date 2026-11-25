@@ -8,6 +8,7 @@ import { useFormatter, useLocale, useTranslations } from "use-intl";
 import { DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH } from "@stll/api-contract/desktop-time-entries";
 import type {
   DesktopMatter,
+  DesktopMatterResolution,
   DesktopTimeEntryBatch,
   DesktopTimeEntryBatchResponse,
   DesktopTimeEntryMatterCandidate,
@@ -48,6 +49,7 @@ import {
   segmentTitles,
   suggestionPieces,
   suggestionSummary,
+  UNAVAILABLE_MATTER_TOPIC,
 } from "./activity-calendar-logic";
 import type {
   ActivityBlock,
@@ -55,6 +57,8 @@ import type {
   SuggestionSummary,
 } from "./activity-calendar-logic";
 import { calendarDate, timedSegments } from "./activity-logic";
+import { outageRanges, STOP_REASON_KEYS } from "./activity-outages";
+import type { OutageRange } from "./activity-outages";
 import type {
   ActivityAppExclusion,
   ActivityDaySnapshot,
@@ -85,8 +89,25 @@ import type {
   BillingDraftSettingsControl,
 } from "./billing-draft-settings";
 import type { CaptureModeCommand } from "./capture-modes";
-import { EVIDENCE_DETAIL_LIMIT, matchDay } from "./day-review-logic";
+import {
+  EVIDENCE_DETAIL_LIMIT,
+  matchDay,
+  recordedMatterIds,
+  segmentEvidence,
+  unresolvedMatterIds,
+} from "./day-review-logic";
 import type { MatchedSegment } from "./day-review-logic";
+import {
+  acceptProposal,
+  declineProposal,
+  EMPTY_MATTER_LEARNING,
+  forgetMatters,
+  learn,
+  ruleProposals,
+  suggestedMatterIds,
+} from "./matter-learning";
+import { useMatterLearning } from "./matter-learning-store";
+import { resolveMatters } from "./matter-resolve";
 import { SuggestionPieceLabel } from "./SuggestionPieceLabel";
 import { explainedBrowsers, missingTitlesReason } from "./title-capture-logic";
 import type { ExplainedBrowser } from "./title-capture-logic";
@@ -98,7 +119,11 @@ const ENTRIES_COLUMN_ID = "entries";
 type CandidateState =
   | { type: "loading" }
   | { type: "failed" }
-  | { type: "ready"; matters: DesktopTimeEntryMatterCandidate[] };
+  | {
+      type: "ready";
+      matters: DesktopTimeEntryMatterCandidate[];
+      resolved: DesktopMatterResolution[];
+    };
 type BatchItem = {
   entry: DesktopTimeEntryBatch["entries"][number];
   ranges: { start: string; end: string }[];
@@ -395,7 +420,7 @@ export const ActivityDayCalendar = ({
   const t = useTranslations("activity");
   const format = useFormatter();
   const locale = useLocale();
-  const { candidates, refreshCandidates } = useMatterCandidates();
+  const nowMs = Temporal.Now.instant().epochMilliseconds;
   const [localDrafts, setLocalDrafts] = useState<DraftedEntries>([]);
   const { submission, submitBatch, errorMessage } = useBatchSubmission({
     date: snapshot.date,
@@ -409,19 +434,15 @@ export const ActivityDayCalendar = ({
   const titlesNotices = useTitlesNotices(snapshot, onCaptureCommand);
 
   const timeZone = Temporal.Now.timeZoneId();
-  const nowMs = Temporal.Now.instant().epochMilliseconds;
-  const matters = candidates.type === "ready" ? candidates.matters : [];
   const draftedEntries = [...snapshot.draftedEntries, ...localDrafts];
-  const day = matchDay({
-    segments: timedSegments(snapshot.segments),
-    candidates: matters,
-    captureDetails: snapshot.captureDetails,
-    manualAssignments: snapshot.manualAssignments,
-    draftedEntries,
-  });
+  const { day, matters, candidates, refreshCandidates, ...learning } =
+    useDayMatters({ snapshot, draftedEntries, nowMs });
   const suggestions = matchedSuggestions(day.groups, leftOut);
+  const outages = outageRanges(snapshot.outages);
   const editingDisabledReason = getEditingDisabledReason(submission, t);
-  const editable = editingDisabledReason === undefined;
+  // While Activity cannot record, its history is read-only.
+  const editable =
+    editingDisabledReason === undefined && snapshot.stoppedReason === null;
   const drafting = useBillingDraftSettings(true);
   const narratives = useSuggestionDrafts({
     drafting,
@@ -498,7 +519,7 @@ export const ActivityDayCalendar = ({
           },
         ],
       },
-      () => openNext(suggestion),
+      afterSaved(suggestion),
     );
   };
   /** An accepted split or move creates its entries in one confirmed batch,
@@ -531,9 +552,14 @@ export const ActivityDayCalendar = ({
           timezoneId: timeZone,
         }),
       },
-      () => openNext(suggestion),
+      afterSaved(suggestion),
     );
   };
+  const afterSaved =
+    (suggestion: ActivitySuggestion) => (items: readonly BatchItem[]) => {
+      learning.learnFrom(suggestion, items);
+      openNext(suggestion);
+    };
   const reject = (suggestion: ActivitySuggestion) => {
     if (suggestion.type === "matched") {
       setLeftOut((current) => new Set([...current, suggestion.id]));
@@ -554,6 +580,7 @@ export const ActivityDayCalendar = ({
   const columns = useCalendarColumns({
     phase: candidates.type === "loading" ? "pending" : "ready",
     segments: day.segments,
+    outages,
     granularity: preferences.granularity,
     sourceAppVisuals: snapshot.sourceAppVisuals,
     rangeSelection: editable,
@@ -630,14 +657,17 @@ export const ActivityDayCalendar = ({
         />
       </div>
       {notice}
-      {day.segments.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          {t(emptyDayMessage(snapshot))}
-        </p>
-      ) : null}
-      {candidates.type === "failed" ? (
+      <DayStatus
+        empty={day.segments.length === 0}
+        outages={outages}
+        snapshot={snapshot}
+      />
+      {/* Matters cannot be read while Activity cannot record; the stop
+          notice already says why. */}
+      {candidates.type === "failed" && snapshot.stoppedReason === null ? (
         <CandidatesFailedAlert onRetry={refreshCandidates} />
       ) : null}
+      <MatterLearningNotice learning={learning} day={day} />
       <SubmissionFeedback
         submission={submission}
         errorMessage={errorMessage}
@@ -663,6 +693,7 @@ export const ActivityDayCalendar = ({
           // empty hours up to the day's edge.
           instants: [
             ...day.segments.flatMap(({ startMs, endMs }) => [startMs, endMs]),
+            ...outages.flatMap(({ startMs, endMs }) => [startMs, endMs]),
             ...(snapshot.date === snapshot.today ? [nowMs] : []),
             // A range set on its card stays in view wherever it is moved.
             ...rangeEdges(openCard),
@@ -707,6 +738,38 @@ const CandidatesFailedAlert = ({ onRetry }: { onRetry: () => void }) => {
         {t("retry")}
       </Button>
     </div>
+  );
+};
+
+type DayStatusProps = {
+  /** Nothing was recorded on the day. */
+  empty: boolean;
+  outages: readonly OutageRange[];
+  snapshot: ActivityDaySnapshot;
+};
+
+/** What the day says above its grid. A day Activity could not record says
+ * why, so it never reads as a day off. */
+const DayStatus = ({ empty, outages, snapshot }: DayStatusProps) => {
+  const t = useTranslations("activity");
+  const longest = outages.at(0);
+  return (
+    <>
+      {empty ? (
+        <p className="text-muted-foreground text-sm">
+          {longest === undefined
+            ? t(emptyDayMessage(snapshot))
+            : t("emptyStopped", {
+                reason: t(STOP_REASON_KEYS[longest.reason]),
+              })}
+        </p>
+      ) : null}
+      {snapshot.outages.status === "unreadable" ? (
+        <p className="text-muted-foreground text-sm">
+          {t("outagesUnreadable")}
+        </p>
+      ) : null}
+    </>
   );
 };
 
@@ -805,6 +868,8 @@ type CalendarColumnsOptions = {
   /** `pending` while the matters that group the day are still read. */
   phase: "pending" | "ready";
   segments: readonly MatchedSegment[];
+  /** Time the member wanted recorded and Activity could not record. */
+  outages: readonly OutageRange[];
   granularity: DayCalendarGranularity;
   sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
   rangeSelection: boolean;
@@ -822,6 +887,7 @@ type CalendarColumnsOptions = {
 function useCalendarColumns({
   phase,
   segments,
+  outages,
   granularity,
   sourceAppVisuals,
   rangeSelection,
@@ -905,8 +971,12 @@ function useCalendarColumns({
           />
         );
       }
+      const unavailable = block.topic === UNAVAILABLE_MATTER_TOPIC;
       const topic =
-        block.matter?.name ?? appName ?? block.title ?? t("mixedActivity");
+        block.matter?.name ??
+        (unavailable ? t("matterUnavailable") : appName) ??
+        block.title ??
+        t("mixedActivity");
       const detail =
         block.matter === null && appName === null ? null : block.title;
       const label = [topic, duration, detail]
@@ -945,6 +1015,21 @@ function useCalendarColumns({
       };
     },
   );
+
+  for (const outage of outages) {
+    const range = formatRange(outage.startMs, outage.endMs);
+    const reason = t(STOP_REASON_KEYS[outage.reason]);
+    activity.push({
+      accessibleLabel: t("unrecordedLabel", { range, reason }),
+      caption: range,
+      endMs: outage.endMs,
+      id: `outage:${String(outage.startMs)}:${outage.reason}`,
+      kind: "unrecorded",
+      startMs: outage.startMs,
+      title: <bdi>{t("unrecorded", { reason })}</bdi>,
+      tone: { type: "neutral" },
+    });
+  }
 
   const entries: DayCalendarBlock[] = draftedBlocks(
     draftedEntries,
@@ -1629,7 +1714,10 @@ function useBatchSubmission({
   const [errorMessage, setError] = useState<string | null>(null);
   const sending = useRef(false);
 
-  const submitBatch = (pending: PendingBatch, onSaved: () => void) => {
+  const submitBatch = (
+    pending: PendingBatch,
+    onSaved: (items: readonly BatchItem[]) => void,
+  ) => {
     if (sending.current) {
       return;
     }
@@ -1669,7 +1757,7 @@ function useBatchSubmission({
           return undefined;
         }
         updateSubmission({ type: "saved", count: entries.length });
-        onSaved();
+        onSaved(pending.items);
         return undefined;
       })
       .catch((error: unknown) => {
@@ -1696,7 +1784,221 @@ function useBatchSubmission({
   return { submission, submitBatch, errorMessage };
 }
 
-function useMatterCandidates() {
+type LearningStore = ReturnType<typeof useMatterLearning>;
+
+type DayMattersOptions = {
+  snapshot: ActivityDaySnapshot;
+  draftedEntries: DraftedEntries;
+  nowMs: number;
+};
+/** The day matched: against the shortlist plus each id a record, rule or
+ * learned weight names, resolved under the member's access before anything
+ * is suggested. */
+function useDayMatters({ snapshot, draftedEntries, nowMs }: DayMattersOptions) {
+  const timed = timedSegments(snapshot.segments);
+  const learningStore = useMatterLearning();
+  const learning =
+    learningStore.state.type === "ready"
+      ? learningStore.state.value
+      : EMPTY_MATTER_LEARNING;
+  const { candidates, refreshCandidates } = useMatterCandidates([
+    ...recordedMatterIds(snapshot),
+    ...suggestedMatterIds({
+      evidence: timed.map((segment) =>
+        segmentEvidence(segment, snapshot.captureDetails),
+      ),
+      learning,
+      nowMs,
+    }),
+  ]);
+  useForgetInaccessible({ candidates, learningStore });
+  const matters = candidates.type === "ready" ? candidates.matters : [];
+  const day = matchDay({
+    segments: timed,
+    candidates: matters,
+    resolved: candidates.type === "ready" ? candidates.resolved : [],
+    captureDetails: snapshot.captureDetails,
+    manualAssignments: snapshot.manualAssignments,
+    draftedEntries,
+    learning,
+    nowMs,
+  });
+  // Saved entries teach this computer their evidence (`learnFromConfirmation`).
+  const learnFrom = (
+    suggestion: ActivitySuggestion,
+    items: readonly BatchItem[],
+  ) =>
+    learnFromConfirmation({
+      learningStore,
+      captureDetails: snapshot.captureDetails,
+      suggestion,
+      items,
+    });
+  return {
+    day,
+    matters,
+    candidates,
+    refreshCandidates,
+    learningStore,
+    learnFrom,
+  };
+}
+
+type LearnFromConfirmationOptions = {
+  learningStore: LearningStore;
+  captureDetails: boolean;
+  suggestion: ActivitySuggestion;
+  /** The entries saved for the suggestion. */
+  items: readonly BatchItem[];
+};
+/**
+ * What the suggestion's time showed counts toward the matter its saved
+ * entries were filed under, and against the suggested matter if that
+ * differs: a split or a full move teaches the matter that holds all of it.
+ * A partial move teaches nothing, because a move divides time by duration,
+ * not by which window or document moved, so no piece of evidence is known
+ * to belong to either matter.
+ */
+const learnFromConfirmation = ({
+  learningStore,
+  captureDetails,
+  suggestion,
+  items,
+}: LearnFromConfirmationOptions) => {
+  const [matterId, ...others] = new Set(
+    items.map(({ entry }) => entry.matterId),
+  );
+  if (matterId === undefined || others.length > 0) {
+    return;
+  }
+  learningStore.update((current) =>
+    learn(current, {
+      evidence: suggestion.segments.map((segment) =>
+        segmentEvidence(segment, captureDetails),
+      ),
+      matterId,
+      suggestedMatterId: suggestion.matter?.id ?? null,
+      nowMs: Temporal.Now.instant().epochMilliseconds,
+    }),
+  );
+};
+
+/** Forgets learned weights for matters a read answered the member can no
+ * longer open. Rules stay until the member removes them. */
+function useForgetInaccessible({
+  candidates,
+  learningStore,
+}: {
+  candidates: CandidateState;
+  learningStore: LearningStore;
+}) {
+  const { state, update } = learningStore;
+  const known =
+    state.type === "ready"
+      ? new Set([
+          ...state.value.learned.map(({ matterId }) => matterId),
+          ...state.value.tallies.map(({ matterId }) => matterId),
+        ])
+      : new Set<string>();
+  const forgotten =
+    candidates.type === "ready"
+      ? candidates.resolved
+          .flatMap((resolution) =>
+            resolution.type === "inaccessible" && known.has(resolution.id)
+              ? [resolution.id]
+              : [],
+          )
+          .sort()
+          .join(" ")
+      : "";
+  useEffect(() => {
+    if (forgotten === "") {
+      return;
+    }
+    update((current) => forgetMatters(current, new Set(forgotten.split(" "))));
+  }, [forgotten, update]);
+}
+
+/** The next rule to propose, and why learning is not working, if it is not. */
+const MatterLearningNotice = ({
+  learning: {
+    learningStore: { state, saveFailed, update, retry },
+  },
+  day: { openMatters },
+}: {
+  learning: { learningStore: LearningStore };
+  day: { openMatters: ReadonlyMap<string, DesktopTimeEntryMatterCandidate> };
+}) => {
+  const t = useTranslations("activity");
+  const tOnboarding = useTranslations("onboarding");
+  if (state.type === "failed") {
+    return (
+      <div
+        role="alert"
+        className="text-destructive flex items-center gap-2 text-sm"
+      >
+        {t("matterLearningFailed")}
+        <Button size="sm" variant="ghost" onClick={retry}>
+          {t("retry")}
+        </Button>
+      </div>
+    );
+  }
+  if (saveFailed) {
+    return (
+      <p role="alert" className="text-destructive text-sm">
+        {t("matterLearningSaveFailed")}
+      </p>
+    );
+  }
+  if (state.type !== "ready") {
+    return null;
+  }
+  const proposal = ruleProposals(state.value).find(({ matterId }) =>
+    openMatters.has(matterId),
+  );
+  const matter =
+    proposal === undefined ? undefined : openMatters.get(proposal.matterId);
+  if (proposal === undefined || matter === undefined) {
+    return null;
+  }
+  return (
+    <div
+      role="status"
+      className="bg-muted flex flex-wrap items-center gap-2 rounded-md px-3 py-2 text-sm"
+    >
+      <span className="min-w-0 flex-1 text-pretty">
+        {t(
+          proposal.field === "documentPath"
+            ? "ruleProposalDocument"
+            : "ruleProposalTitle",
+          { value: proposal.value, matter: matter.name },
+        )}
+      </span>
+      <Button
+        size="sm"
+        onClick={() =>
+          update((current) =>
+            acceptProposal(current, proposal, crypto.randomUUID()),
+          )
+        }
+      >
+        {t("ruleProposalAccept")}
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => update((current) => declineProposal(current, proposal))}
+      >
+        {tOnboarding("notNow")}
+      </Button>
+    </div>
+  );
+};
+
+/** The shortlist, plus every matter id the day names outside it, resolved
+ * under the member's own access as the day names it. */
+function useMatterCandidates(recordedIds: readonly string[]) {
   const [candidates, setCandidates] = useState<CandidateState>({
     type: "loading",
   });
@@ -1706,7 +2008,7 @@ function useMatterCandidates() {
     invoke<DesktopTimeEntryMatterCandidate[]>("time_entry_candidates")
       .then((matters) => {
         if (request === candidateRequest.current) {
-          setCandidates({ type: "ready", matters });
+          setCandidates({ type: "ready", matters, resolved: [] });
         }
         return undefined;
       })
@@ -1722,6 +2024,48 @@ function useMatterCandidates() {
       candidateRequest.current += 1;
     };
   }, [refreshCandidates]);
+  // One key per set of unanswered ids, so a day that names a new matter
+  // asks once, and an answered day asks nothing.
+  const unresolved =
+    candidates.type === "ready"
+      ? unresolvedMatterIds({
+          ids: recordedIds,
+          candidates: candidates.matters,
+          resolved: candidates.resolved,
+        }).join(" ")
+      : "";
+  useEffect(() => {
+    if (unresolved === "") {
+      return;
+    }
+    const request = candidateRequest.current;
+    resolveMatters(
+      unresolved.split(" "),
+      async (ids) =>
+        await invoke<DesktopMatterResolution[]>("time_entry_resolve_matters", {
+          ids,
+        }),
+    )
+      .then((resolved) => {
+        if (request === candidateRequest.current) {
+          setCandidates((current) =>
+            current.type === "ready"
+              ? {
+                  type: "ready",
+                  matters: current.matters,
+                  resolved: [...current.resolved, ...resolved],
+                }
+              : current,
+          );
+        }
+        return undefined;
+      })
+      .catch(() => {
+        if (request === candidateRequest.current) {
+          setCandidates({ type: "failed" });
+        }
+      });
+  }, [unresolved]);
   return { candidates, refreshCandidates };
 }
 

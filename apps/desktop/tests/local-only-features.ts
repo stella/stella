@@ -70,6 +70,11 @@ export const LOCAL_ONLY_FEATURES = [
     commandOwners: [
       { module: "src/activity_commands.rs", prefixes: ["activity_"] },
       { module: "src/time_entry_commands.rs", prefixes: ["time_entry_"] },
+      // The member's matter rules and learned weights, this window only.
+      {
+        module: "src/activity_matter_learning.rs",
+        prefixes: ["activity_"],
+      },
       // The one command that sends a selected entry out for a stella AI
       // draft, only with the user's consent on the server.
       {
@@ -97,6 +102,7 @@ export const LOCAL_ONLY_FEATURES = [
         "src/activity/billing-draft-settings.ts",
         "src/activity/billing-draft-transport.ts",
         "src/activity/day-review-logic.ts",
+        "src/activity/matter-learning-store.ts",
       ],
     },
     windows: ["activity"],
@@ -107,6 +113,12 @@ export const LOCAL_ONLY_FEATURES = [
     callerType: "ActivitySettingsCaller",
     commandOwners: [
       { module: "src/activity_settings.rs", prefixes: ["activity_"] },
+      // The rules alone, and the matters they name under current access.
+      { module: "src/activity_matter_rules.rs", prefixes: ["activity_"] },
+      {
+        module: "src/time_entry_settings_commands.rs",
+        prefixes: ["time_entry_resolve_rule_"],
+      },
     ],
     id: "activity_settings",
     telemetry: "fixedCodes",
@@ -116,6 +128,8 @@ export const LOCAL_ONLY_FEATURES = [
         "src/activity/ActivitySettings.tsx",
         "src/activity/ActivityCaptureDetails.tsx",
         "src/activity/billing-draft-settings.ts",
+        "src/activity/MatterRulesSettings.tsx",
+        "src/activity/matter-rules-store.ts",
       ],
     },
     windows: ["activity", "main"],

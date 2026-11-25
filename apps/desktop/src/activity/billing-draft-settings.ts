@@ -20,7 +20,7 @@ import {
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import { scopedDraftSettingsFrom } from "./billing-draft-logic";
-import type { ScopedDraftSettings } from "./billing-draft-logic";
+import type { DraftPolicy, ScopedDraftSettings } from "./billing-draft-logic";
 import { BillingDraftConsent } from "./billing-draft-transport";
 import type { DraftConsentStatus } from "./billing-draft-transport";
 
@@ -33,6 +33,9 @@ export type BillingDraftSettings =
       /** What the organization lets this user draft: nothing, plain
        * descriptions, or guided drafts with codes and flags. */
       mode: DesktopBillingDraftEffectiveMode;
+      /** Who decides drafting on this computer; under managed policy the
+       * mode is off. */
+      policy: DraftPolicy;
       consent: DraftConsentStatus;
       preference: string | null;
     };
@@ -98,8 +101,16 @@ type Loaded =
   | {
       type: "ready";
       mode: DesktopBillingDraftEffectiveMode;
+      policy: DraftPolicy;
       preference: string | null;
     };
+
+const loadedFrom = ({ policy, settings }: ScopedDraftSettings): Loaded => ({
+  type: "ready",
+  mode: settings.effectiveMode,
+  policy,
+  preference: settings.preference,
+});
 
 /**
  * The caller's AI drafting settings and their one consent owner. A withdrawal
@@ -127,6 +138,7 @@ export const useBillingDraftSettings = (
     return {
       type: "ready",
       mode: loaded.mode,
+      policy: loaded.policy,
       consent: consentStatus,
       preference: loaded.preference,
     };
@@ -181,11 +193,7 @@ export const useBillingDraftSettings = (
           if (!consent.confirm(next.settings.consent, generation)) {
             return false;
           }
-          setLoaded({
-            type: "ready",
-            mode: next.settings.effectiveMode,
-            preference: next.settings.preference,
-          });
+          setLoaded(loadedFrom(next));
           return true;
         });
         if (result.isErr() || !result.value) {
@@ -227,11 +235,7 @@ export const useBillingDraftSettings = (
         return;
       }
       consent.configure(next.scopeKey);
-      setLoaded({
-        type: "ready",
-        mode: next.settings.effectiveMode,
-        preference: next.settings.preference,
-      });
+      setLoaded(loadedFrom(next));
       // A withdrawal the server never confirmed is sent again first.
       if (consent.getSnapshot() === "withdrawal-unconfirmed") {
         await setConsent("revoked");
@@ -284,11 +288,7 @@ export const useBillingDraftSettings = (
           if (next === null) {
             return false;
           }
-          setLoaded({
-            type: "ready",
-            mode: next.settings.effectiveMode,
-            preference: next.settings.preference,
-          });
+          setLoaded(loadedFrom(next));
           return true;
         });
         if (result.isErr() || !result.value) {

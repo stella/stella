@@ -24,6 +24,10 @@ export const CaptureDetailsControl = ({
   settings,
 }: CaptureDetailsControlProps) => {
   const t = useTranslations("activity");
+  // Managed policy leaves nothing to choose; the notice says who decided.
+  if (settings.detailsAccess === "managed") {
+    return <DetailsAccessNotice access="managed" onCommand={onCommand} />;
+  }
   return (
     <div className="flex flex-col gap-2">
       <Label className="items-start gap-2" htmlFor="activity-capture-details">
@@ -88,6 +92,10 @@ const DetailsAccessNotice = ({
         <p className="text-muted-foreground text-xs">
           {t("detailsUnavailable")}
         </p>
+      );
+    case "managed":
+      return (
+        <p className="text-muted-foreground text-xs">{t("detailsManaged")}</p>
       );
     default:
       access satisfies never;

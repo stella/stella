@@ -10,6 +10,7 @@ import {
   runWithRequestId,
 } from "@/api/lib/observability/request-context";
 import { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
+import { McpAuthenticationError } from "@/api/mcp/errors";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { sendServedRequest } from "@/api/tests/helpers/served-request";
@@ -66,6 +67,60 @@ const awaitedStage: Middleware = async (_ctx, inner) => {
   await Bun.sleep(5);
   return await inner();
 };
+
+describe("MCP body admission", () => {
+  // A body that records whether anything read it.
+  const watchedRequest = (headers: Record<string, string>) => {
+    const read = { pulled: false };
+    // No high-water mark: the stream pulls only when something reads it.
+    const body = new ReadableStream<Uint8Array>(
+      {
+        pull(controller) {
+          read.pulled = true;
+          controller.enqueue(new TextEncoder().encode(initializeBody));
+          controller.close();
+        },
+      },
+      { highWaterMark: 0 },
+    );
+    const request = new Request("http://localhost/mcp", {
+      body,
+      duplex: "half",
+      headers: {
+        accept: "application/json, text/event-stream",
+        "content-type": "application/json",
+        ...headers,
+      },
+      method: "POST",
+    });
+    return { read, request };
+  };
+
+  test("a request without a token is refused before its body is read", async () => {
+    const { read, request } = watchedRequest({});
+    const response = await handlerWith()(request);
+    expect({ status: response.status, pulled: read.pulled }).toEqual({
+      status: 401,
+      pulled: false,
+    });
+  });
+
+  test("a rejected token is refused before its body is read", async () => {
+    const { read, request } = watchedRequest({
+      authorization: "Bearer rejected",
+    });
+    const response = await handlerWith({
+      authenticateMcpRequest: async () =>
+        Result.err(
+          new McpAuthenticationError({ message: "Invalid or expired token" }),
+        ),
+    })(request);
+    expect({ status: response.status, pulled: read.pulled }).toEqual({
+      status: 401,
+      pulled: false,
+    });
+  });
+});
 
 describe("MCP over a served socket", () => {
   test("answers initialize when the bounded body arrived with its headers", async () => {

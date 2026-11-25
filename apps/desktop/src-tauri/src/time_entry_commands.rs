@@ -12,6 +12,7 @@ use crate::{
   local_window::{ActivityAccountFeature, ActivityCaller, LocalCaller},
   time_entry_submit::{
     self, ConfirmedBatch, ConfirmedTimeEntry, CreatedEntry, Matter, MatterCandidate,
+    MatterResolution,
   },
 };
 
@@ -144,6 +145,20 @@ pub async fn time_entry_candidates(
   require_account(&caller, &gates, &account)?;
   drop(account);
   Ok(candidates)
+}
+
+#[tauri::command]
+pub async fn time_entry_resolve_matters(
+  caller: ActivityCaller,
+  gates: State<'_, FeatureGates>,
+  accounts: State<'_, AccountState>,
+  ids: Vec<String>,
+) -> Result<Vec<MatterResolution>, String> {
+  let account = linked_account(&caller, &gates, &accounts).await?;
+  let resolved = time_entry_submit::resolve_matters(&account, &ids).await?;
+  require_account(&caller, &gates, &account)?;
+  drop(account);
+  Ok(resolved)
 }
 
 #[tauri::command]
@@ -315,9 +330,7 @@ mod tests {
       gates
         .install(
           generation,
-          Some(namespace.clone()),
-          Some(chrono::Utc::now() + chrono::Duration::hours(1)),
-          features,
+          crate::feature_gate::answered(&namespace, features),
         )
         .unwrap();
       assert_eq!(require_account(&caller, &gates, &account).is_ok(), enabled);
@@ -331,9 +344,10 @@ mod tests {
     gates
       .install(
         gates.generation().unwrap(),
-        Some(namespace),
-        Some(chrono::Utc::now() + chrono::Duration::hours(1)),
-        HashSet::from([DesktopFeature::ActivityTimeline]),
+        crate::feature_gate::answered(
+          &namespace,
+          HashSet::from([DesktopFeature::ActivityTimeline]),
+        ),
       )
       .unwrap();
     assert!(require_account(&caller, &gates, &account).is_err());

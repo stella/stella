@@ -85,6 +85,10 @@ export const shortSegmentThresholdMs = (granularity: DayCalendarGranularity) =>
 /** Pauses up to this long do not split one topic's block. */
 export const TOPIC_BRIDGE_GAP_MS = 2 * MINUTE_MS;
 
+/** The one topic of all time filed under matters the member can no longer
+ * open: it never names them, nor tells them apart. */
+export const UNAVAILABLE_MATTER_TOPIC = "matter-unavailable";
+
 /**
  * One topic's stretch of the day in the Activity column: a matter's time, or,
  * where nothing matched a matter, one document or window's time. The apps it
@@ -246,6 +250,9 @@ export const activityBlocks = (
   const topicOf = (segment: MatchedSegment) => {
     if (segment.matter !== null) {
       return `matter:${segment.matter.id}`;
+    }
+    if (segment.recordedMatter === "unavailable") {
+      return UNAVAILABLE_MATTER_TOPIC;
     }
     if (segment.call) {
       return `call:${segment.appIdentifier}`;
@@ -724,6 +731,7 @@ export const manualSuggestion = ({
   return {
     apps: appTotals(clipped),
     confidence: "manual",
+    reason: { type: "none" },
     durationMs,
     // The card and the selection show the range as the user set it.
     endMs: Math.max(range.startMs, range.endMs),

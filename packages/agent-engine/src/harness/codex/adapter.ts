@@ -36,7 +36,7 @@ import {
   startAppServer,
 } from "./app-server-client";
 import { CodexProcess, type CodexProcessSettings } from "./background";
-import { usageLimitResetsAt } from "./errors";
+import { readableCodexMessage, usageLimitResetsAt } from "./errors";
 import {
   CODEX_CLIENT_INFO,
   CODEX_OPT_OUT_NOTIFICATIONS,
@@ -523,7 +523,7 @@ const beginTurn = async ({
       new HarnessStartError({
         reason: "start_rejected",
         message: Result.isError(started)
-          ? started.error.message
+          ? readableCodexMessage(started.error.message)
           : "The harness answered turn/start with an unexpected shape.",
       }),
     );

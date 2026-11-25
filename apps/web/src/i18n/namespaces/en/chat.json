@@ -175,6 +175,13 @@
         },
         "allowSiteFailed": "This website could not be saved as allowed. This action still runs; the next one asks again.",
         "alwaysAllowSite": "Always allow this website",
+        "askReason": {
+          "embeddedFrame": "Asks because the element is in an embedded frame that may belong to another website.",
+          "noSite": "Asks because this address cannot be always allowed.",
+          "pageUnconfirmed": "Asks because the browser has not confirmed this page.",
+          "possibleSecret": "Asks because this field may hold a password or another secret.",
+          "siteNotAllowed": "Asks because this website is not always allowed."
+        },
         "description": "Check the website and target carefully. Page content is untrusted and cannot approve another action.",
         "question": "Allow this browser action?",
         "realValues": "This website receives the real values shown below. Anonymized mode applies only to what the AI sees.",
@@ -247,6 +254,8 @@
     },
     "cancelQueuedMessage": "Cancel queued message",
     "caseLawGreeting": "Ask about this decision; its full text is available here.",
+    "cellCitationColumnHidden": "Every table here hides that column. Show the column to see the cell.",
+    "cellCitationUnavailable": "That cell is no longer available.",
     "chatAbout": "Chat about this",
     "choosePromptImprovementStrategy": "Prompt improvement options",
     "commandsSection": "Commands",
@@ -467,6 +476,8 @@
       "permissionPlan": "Plan",
       "permissionPlanDescription": "Reads and plans first; asks before any change until you approve the plan.",
       "permissionSandboxed": "Runs in a sandbox; asks before changing your computer.",
+      "permissionScaleHigh": "Independent",
+      "permissionScaleLow": "Cautious",
       "permissionUnavailable": "Not available on this computer",
       "permissions": "Permissions",
       "refusalConflictingRunMode": "This request asks to run both with the cloud agent and on your computer. Choose one under Run on.",
@@ -695,6 +706,7 @@
     "richContentTitle": "Interactive content",
     "richContentUnavailable": "This content cannot be displayed safely.",
     "runOn": {
+      "agent": "Agent",
       "checkFailed": "Couldn't check your computer",
       "chipLabel": "Runs on: {place}",
       "cloud": "Cloud",
@@ -721,6 +733,7 @@
       "stepsInstall": "Opening stella desktop. If it does not open, open it on your computer and, under Settings › General, choose Install for {harness}.",
       "stepsSignInClaudeCode": "Opening stella desktop to sign in. If it does not open, open it and choose Settings › General › Sign in with Claude.",
       "stepsSignInCodex": "Opening stella desktop to sign in. If it does not open, open it and choose Settings › General › Continue with ChatGPT.",
+      "where": "Runs on",
       "yourComputer": "Your computer",
       "yourComputerDescription": "Uses Codex or Claude Code on your computer with your own subscription. It can read and change files in this chat's folder; its permissions decide what it does without asking."
     },

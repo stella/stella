@@ -5,7 +5,6 @@ import type { ReactNode } from "react";
 import { ChevronDownIcon } from "../icons";
 import { cn } from "../lib/utils";
 import {
-  COMPOSER_PLACEHOLDER_CLASS,
   COMPOSER_STATUS_ROW_CENTERED_CLASS,
   COMPOSER_STATUS_ROW_CLASS,
 } from "./composer-tokens";
@@ -20,51 +19,12 @@ import { TruncatedText } from "./truncated-text";
 
 export {
   COMPOSER_CONTROL_BUTTON_SIZE,
-  COMPOSER_BOX_CLASS,
-  COMPOSER_BOX_FOCUS_CLASS,
-  COMPOSER_BOX_ANONYMIZED_CLASS,
-  COMPOSER_COMPACT_ROW_CLASS,
-  COMPOSER_COMPACT_TEXT_CELL_CLASS,
   COMPOSER_TEXT_CLASS,
-  COMPOSER_LARGE_TEXT_WELL_CLASS,
-  COMPOSER_LARGE_EDITOR_CLASS,
-  COMPOSER_PLACEHOLDER_CLASS,
-  COMPOSER_LARGE_ACTION_ROW_CLASS,
-  COMPOSER_LEADING_GROUP_CLASS,
   COMPOSER_SEND_BUTTON_CLASS,
   COMPOSER_PICKER_TRIGGER_CLASS,
   COMPOSER_STATUS_ROW_CENTERED_CLASS,
   COMPOSER_STATUS_ROW_CLASS,
 } from "./composer-tokens";
-
-/** Where the placeholder sits over the editor, in each stature. */
-const COMPOSER_PLACEHOLDER_POSITION_CLASS = {
-  compact: "start-0 end-0 top-1/2 -translate-y-1/2",
-  large: "start-3 end-3 top-2",
-} as const;
-
-/**
- * The placeholder painted over an empty editor, cut to one line. It takes no
- * pointer and is hidden from assistive tech, so it shows no hint.
- */
-export const ComposerPlaceholder = ({
-  children,
-  stature,
-}: {
-  children: ReactNode;
-  stature: keyof typeof COMPOSER_PLACEHOLDER_POSITION_CLASS;
-}) => (
-  <TruncatedText
-    aria-hidden="true"
-    className={cn(
-      COMPOSER_PLACEHOLDER_CLASS,
-      COMPOSER_PLACEHOLDER_POSITION_CLASS[stature],
-    )}
-    hint={false}
-  >
-    {children}
-  </TruncatedText>
-);
 
 type ComposerStatusRowProps = {
   /** Left cluster: matter picker, web-search / anonymize toggles, ... */

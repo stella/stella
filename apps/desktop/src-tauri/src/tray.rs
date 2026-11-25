@@ -7,7 +7,10 @@ use tauri::{
 };
 
 use crate::PreferencesTab;
-use crate::activity::{ActivityRecordingStatus, TrayActivitySnapshot};
+use crate::activity::{
+  ActivityRecordingStatus, StoppedHistory, TrayActivity, TrayActivitySnapshot,
+};
+use crate::activity_capture::ActivityStopped;
 use crate::dictation::TrayDictation;
 use crate::dictation_hold_key::KeyNames;
 use crate::dictation_language::{self, Choice};
@@ -39,6 +42,8 @@ const PAUSE_ACTIVITY_ACTION: &str = "activity-pause";
 const RESUME_ACTIVITY_ACTION: &str = "activity-resume";
 const ACTIVITY_STATUS_ITEM: &str = "activity-status";
 const ACTIVITY_NOW_ITEM: &str = "activity-now";
+/// Opens the account settings, like the top-level reconnect item.
+const ACTIVITY_RECONNECT_ACTION: &str = "activity-reconnect";
 const MILLIS_PER_TENTH_HOUR: u64 = 360_000;
 
 /// One tray image and the recording badge drawn over it.
@@ -275,13 +280,6 @@ fn set_tray_icon(
   Ok(())
 }
 
-const OPEN_ABOUT_ACTION: &str = "open-about";
-const CHECK_FOR_UPDATES_ACTION: &str = "check-for-updates";
-const UPDATES_MANAGED_ITEM: &str = "updates-managed";
-const OPEN_EDIT_ROOT_ACTION: &str = "open-edit-root";
-const COPY_DIAGNOSTICS_ACTION: &str = "copy-diagnostics";
-const EMAIL_SUPPORT_ACTION: &str = "email-support";
-const OPEN_SUPPORT_ROOT_ACTION: &str = "open-support-root";
 const SESSION_OPEN_PREFIX: &str = "session-open:";
 const SESSION_REVEAL_PREFIX: &str = "session-reveal:";
 const SESSION_FINISH_PREFIX: &str = "session-finish:";
@@ -320,13 +318,18 @@ fn can_retry_session(session: &SessionSnapshot) -> bool {
       || session.pending_finalize)
 }
 
-fn get_tray_status_label(snapshot: &AppSnapshot) -> String {
+/// The line heading the open edits; `None` while there are none, so an idle
+/// menu starts with its actions.
+fn get_tray_status_label(snapshot: &AppSnapshot) -> Option<String> {
+  if snapshot.sessions.is_empty() {
+    return None;
+  }
   let needs_attention = snapshot
     .sessions
     .iter()
     .any(|s| s.takeover_detected || s.status == crate::types::SessionStatus::Error);
   if needs_attention {
-    return t("tray.needsAttention").to_string();
+    return Some(t("tray.needsAttention").to_string());
   }
 
   let active_syncs = snapshot
@@ -338,15 +341,10 @@ fn get_tray_status_label(snapshot: &AppSnapshot) -> String {
     })
     .count();
   if active_syncs > 0 {
-    return t_plural("tray.documentsSyncing", active_syncs);
+    return Some(t_plural("tray.documentsSyncing", active_syncs));
   }
 
-  let active = snapshot.sessions.len();
-  if active > 0 {
-    return t_plural("tray.activeEdits", active);
-  }
-
-  t("tray.noActiveEdits").to_string()
+  Some(t_plural("tray.activeEdits", snapshot.sessions.len()))
 }
 
 /// Rebuilds the tray menu from `snapshot`. The menu is the one native string
@@ -476,7 +474,7 @@ fn refresh_on_main_thread(
   main_thread: &TrayMainThread,
 ) {
   let binding = activity_binding(app);
-  let activity = crate::activity::tray_snapshot(app);
+  let activity = crate::activity::tray_activity(app);
   let menu =
     build_tray_menu_with_activity(app, snapshot, activity.as_ref(), main_thread);
   let Some(tray) = app.tray_by_id("main") else {
@@ -488,15 +486,19 @@ fn refresh_on_main_thread(
   let menu = if current {
     menu
   } else {
-    build_tray_menu_with_activity(app, snapshot, None, main_thread)
+    let activity =
+      crate::activity::tray_activity(app).map(TrayActivity::without_projection);
+    build_tray_menu_with_activity(app, snapshot, activity.as_ref(), main_thread)
   };
   if let Ok(menu) = menu {
     best_effort(tray.set_menu(Some(menu)), "tray menu was not updated");
   }
   let recording = current
-    && activity
-      .as_ref()
-      .is_some_and(|activity| activity.status == ActivityRecordingStatus::Recording);
+    && matches!(
+      &activity,
+      Some(TrayActivity::Live(Some(snapshot)))
+        if snapshot.status == ActivityRecordingStatus::Recording
+    );
   if let Ok(icon) = recording_icon(recording) {
     best_effort(set_tray_icon(&tray, icon), "tray icon was not updated");
   }
@@ -511,19 +513,27 @@ fn activity_binding(app: &AppHandle) -> Option<(u64, String)> {
 fn build_tray_menu_with_activity(
   app: &AppHandle,
   snapshot: &AppSnapshot,
-  activity: Option<&TrayActivitySnapshot>,
+  activity: Option<&TrayActivity>,
   _main_thread: &TrayMainThread,
 ) -> tauri::Result<Menu<Wry>> {
   let mut builder = MenuBuilder::new(app);
 
-  // Status line
-  builder = builder.item(
-    &MenuItemBuilder::with_id("status", get_tray_status_label(snapshot))
-      .enabled(false)
-      .build(app)?,
-  );
+  // What needs the user right now: open edits, a running transcription, a
+  // lost sign-in. Idle, the menu starts with its actions.
+  let mut needs_user = false;
+  if let Some(status) = get_tray_status_label(snapshot) {
+    builder = builder.item(
+      &MenuItemBuilder::with_id("status", status)
+        .enabled(false)
+        .build(app)?,
+    );
+    for session in &snapshot.sessions {
+      builder = builder.item(&build_session_menu(app, session)?);
+    }
+    needs_user = true;
+  }
   // An open Transcribe window is easy to lose behind other apps; it comes
-  // back from right under the status line.
+  // back from the top of the menu.
   if let Some(transcription) = crate::transcribe_recording::tray_state(app) {
     builder = builder.item(
       &MenuItemBuilder::with_id(
@@ -532,14 +542,16 @@ fn build_tray_menu_with_activity(
       )
       .build(app)?,
     );
+    needs_user = true;
   }
-  builder = builder.separator();
-
   if crate::account::reconnect_needed() {
     builder = builder.item(
       &MenuItemBuilder::with_id(RECONNECT_ACCOUNT_ACTION, t("tray.reconnectAccount"))
         .build(app)?,
     );
+    needs_user = true;
+  }
+  if needs_user {
     builder = builder.separator();
   }
 
@@ -550,6 +562,9 @@ fn build_tray_menu_with_activity(
         .build(app)?,
     );
   }
+  if let Some(activity) = activity {
+    builder = builder.item(&build_activity_menu(app, activity)?);
+  }
   let dictation = dictation_menu(
     crate::dictation::tray_state(app),
     KeyNames::CURRENT,
@@ -558,122 +573,14 @@ fn build_tray_menu_with_activity(
   if let Some(dictation) = &dictation {
     builder = builder.item(&build_dictation_menu(app, dictation)?);
   }
-  let first_group = clipboard_enabled || dictation.is_some();
-  let activity_enabled = crate::activity::is_enabled(app);
-  if activity_enabled {
-    if first_group {
-      builder = builder.separator();
-    }
-    builder = builder.item(&build_activity_menu(app, activity)?);
-  }
-  if first_group || activity_enabled {
+  if clipboard_enabled || activity.is_some() || dictation.is_some() {
     builder = builder.separator();
   }
 
-  // Settings
+  // Updates, support and About live in Settings; the updater checks on its
+  // own.
   builder = builder.item(
     &MenuItemBuilder::with_id(OPEN_PREFERENCES_ACTION, t("tray.settings"))
-      .build(app)?,
-  );
-
-  // Check for updates, unless the organization deploys them itself. It opens
-  // About, which shows a check or install already under way.
-  if crate::managed_policy::current().updates_disabled {
-    builder = builder.item(
-      &MenuItemBuilder::with_id(UPDATES_MANAGED_ITEM, t("tray.updatesManaged"))
-        .enabled(false)
-        .build(app)?,
-    );
-  } else {
-    builder = builder.item(
-      &MenuItemBuilder::with_id(CHECK_FOR_UPDATES_ACTION, t("tray.checkForUpdates"))
-        .build(app)?,
-    );
-  }
-
-  // Support submenu
-  let support_menu = SubmenuBuilder::new(app, t("tray.support"))
-    .item(
-      &MenuItemBuilder::with_id(EMAIL_SUPPORT_ACTION, t("tray.supportEmailSupport"))
-        .build(app)?,
-    )
-    .separator()
-    .item(
-      &MenuItemBuilder::with_id(
-        COPY_DIAGNOSTICS_ACTION,
-        t("tray.supportCopyDiagnostics"),
-      )
-      .build(app)?,
-    )
-    .item(
-      &MenuItemBuilder::with_id(
-        OPEN_SUPPORT_ROOT_ACTION,
-        t("tray.supportRevealAppData"),
-      )
-      .build(app)?,
-    )
-    .build()?;
-  builder = builder.item(&support_menu);
-
-  // Active edits submenu
-  let mut edits_builder = SubmenuBuilder::new(app, t("tray.activeEditsSubmenu"));
-  if snapshot.sessions.is_empty() {
-    edits_builder = edits_builder.item(
-      &MenuItemBuilder::with_id("no-edits", t("tray.noActiveEdits"))
-        .enabled(false)
-        .build(app)?,
-    );
-  } else {
-    for session in &snapshot.sessions {
-      let session_menu = SubmenuBuilder::new(app, &session.file_name)
-        .item(
-          &MenuItemBuilder::with_id(
-            format!("status-{}", session.id),
-            format_session_status(session),
-          )
-          .enabled(false)
-          .build(app)?,
-        )
-        .separator()
-        .item(
-          &MenuItemBuilder::with_id(
-            format!("{SESSION_OPEN_PREFIX}{}", session.id),
-            t("tray.openFile"),
-          )
-          .build(app)?,
-        )
-        .item(
-          &MenuItemBuilder::with_id(
-            format!("{SESSION_REVEAL_PREFIX}{}", session.id),
-            t("tray.revealInFolder"),
-          )
-          .build(app)?,
-        )
-        .item(
-          &MenuItemBuilder::with_id(
-            format!("{SESSION_FINISH_PREFIX}{}", session.id),
-            t("tray.finishEditing"),
-          )
-          .enabled(!session.takeover_detected)
-          .build(app)?,
-        )
-        .item(
-          &MenuItemBuilder::with_id(
-            format!("{SESSION_RETRY_PREFIX}{}", session.id),
-            t("tray.retryNow"),
-          )
-          .enabled(can_retry_session(session))
-          .build(app)?,
-        )
-        .build()?;
-      edits_builder = edits_builder.item(&session_menu);
-    }
-  }
-  builder = builder.item(&edits_builder.build()?);
-
-  builder = builder.separator();
-  builder = builder.item(
-    &MenuItemBuilder::with_id(OPEN_ABOUT_ACTION, t("tray.aboutStellaDesktop"))
       .build(app)?,
   );
   builder = builder.separator();
@@ -682,6 +589,54 @@ fn build_tray_menu_with_activity(
   );
 
   builder.build()
+}
+
+/// One open edit: its state, then what can be done with it.
+fn build_session_menu(
+  app: &AppHandle,
+  session: &SessionSnapshot,
+) -> tauri::Result<Submenu<Wry>> {
+  SubmenuBuilder::new(app, &session.file_name)
+    .item(
+      &MenuItemBuilder::with_id(
+        format!("status-{}", session.id),
+        format_session_status(session),
+      )
+      .enabled(false)
+      .build(app)?,
+    )
+    .separator()
+    .item(
+      &MenuItemBuilder::with_id(
+        format!("{SESSION_OPEN_PREFIX}{}", session.id),
+        t("tray.openFile"),
+      )
+      .build(app)?,
+    )
+    .item(
+      &MenuItemBuilder::with_id(
+        format!("{SESSION_REVEAL_PREFIX}{}", session.id),
+        t("tray.revealInFolder"),
+      )
+      .build(app)?,
+    )
+    .item(
+      &MenuItemBuilder::with_id(
+        format!("{SESSION_FINISH_PREFIX}{}", session.id),
+        t("tray.finishEditing"),
+      )
+      .enabled(!session.takeover_detected)
+      .build(app)?,
+    )
+    .item(
+      &MenuItemBuilder::with_id(
+        format!("{SESSION_RETRY_PREFIX}{}", session.id),
+        t("tray.retryNow"),
+      )
+      .enabled(can_retry_session(session))
+      .build(app)?,
+    )
+    .build()
 }
 
 fn build_dictation_menu(
@@ -756,12 +711,53 @@ fn build_dictation_language_menu(
   menu.build()
 }
 
+/// What a stopped Activity entry offers: the reason, and a way back to the
+/// account when linking again lets it record.
+fn stopped_activity_items(
+  stopped: ActivityStopped,
+) -> (&'static str, Option<(&'static str, &'static str)>) {
+  (
+    stopped.reason.tray_key(),
+    stopped
+      .reason
+      .reconnect_helps()
+      .then_some((ACTIVITY_RECONNECT_ACTION, "tray.reconnectAccount")),
+  )
+}
+
 fn build_activity_menu(
   app: &AppHandle,
-  activity: Option<&TrayActivitySnapshot>,
+  activity: &TrayActivity,
 ) -> tauri::Result<Submenu<Wry>> {
   let mut menu = SubmenuBuilder::new(app, t("tray.activity"));
-  if let Some(activity) = activity {
+  let snapshot = match activity {
+    TrayActivity::Live(snapshot) => snapshot.as_ref(),
+    TrayActivity::Stopped(stopped, history) => {
+      let (status, action) = stopped_activity_items(*stopped);
+      menu = menu
+        .item(
+          &MenuItemBuilder::with_id(ACTIVITY_STATUS_ITEM, t(status))
+            .enabled(false)
+            .build(app)?,
+        )
+        .separator();
+      if let Some((action, label)) = action {
+        menu = menu.item(&MenuItemBuilder::with_id(action, t(label)).build(app)?);
+      }
+      // What was recorded stays readable while Activity cannot record.
+      match history {
+        StoppedHistory::Readable => {
+          menu = menu.item(
+            &MenuItemBuilder::with_id(OPEN_ACTIVITY_ACTION, t("tray.openActivity"))
+              .build(app)?,
+          );
+        }
+        StoppedHistory::Unavailable => {}
+      }
+      return menu.build();
+    }
+  };
+  if let Some(activity) = snapshot {
     menu = menu.item(
       &MenuItemBuilder::with_id(ACTIVITY_STATUS_ITEM, activity_status_label(activity))
         .enabled(false)
@@ -803,7 +799,10 @@ pub fn handle_menu_action(action: &str) -> MenuAction {
   if action == QUIT_ACTION {
     return MenuAction::Quit;
   }
-  if action == OPEN_PREFERENCES_ACTION || action == RECONNECT_ACCOUNT_ACTION {
+  if action == OPEN_PREFERENCES_ACTION
+    || action == RECONNECT_ACCOUNT_ACTION
+    || action == ACTIVITY_RECONNECT_ACTION
+  {
     return MenuAction::OpenPreferences(PreferencesTab::General);
   }
   if action == OPEN_CLIPBOARD_ACTION {
@@ -829,24 +828,6 @@ pub fn handle_menu_action(action: &str) -> MenuAction {
   }
   if action == RESUME_ACTIVITY_ACTION {
     return MenuAction::SetActivityRecording(ActivityRecordingStatus::Recording);
-  }
-  if action == OPEN_ABOUT_ACTION {
-    return MenuAction::OpenPreferences(PreferencesTab::About);
-  }
-  if action == CHECK_FOR_UPDATES_ACTION {
-    return MenuAction::CheckForUpdates;
-  }
-  if action == OPEN_EDIT_ROOT_ACTION {
-    return MenuAction::OpenEditRoot;
-  }
-  if action == COPY_DIAGNOSTICS_ACTION {
-    return MenuAction::CopyDiagnostics;
-  }
-  if action == EMAIL_SUPPORT_ACTION {
-    return MenuAction::EmailSupport;
-  }
-  if action == OPEN_SUPPORT_ROOT_ACTION {
-    return MenuAction::RevealSupportRoot;
   }
 
   if let Some(language) = get_session_id_from_action(action, DICTATION_LANGUAGE_PREFIX)
@@ -880,11 +861,6 @@ pub enum MenuAction {
   SetActivityRecording(ActivityRecordingStatus),
   /// The stored dictation language choice the quick switch picked.
   SetDictationLanguage(String),
-  CheckForUpdates,
-  OpenEditRoot,
-  CopyDiagnostics,
-  EmailSupport,
-  RevealSupportRoot,
   OpenSessionFile(String),
   RevealSession(String),
   FinishSession(String),
@@ -988,10 +964,35 @@ mod tests {
 
   #[test]
   fn reconnect_opens_the_account_settings() {
-    assert!(matches!(
-      handle_menu_action(RECONNECT_ACCOUNT_ACTION),
-      MenuAction::OpenPreferences(PreferencesTab::General)
-    ));
+    for action in [RECONNECT_ACCOUNT_ACTION, ACTIVITY_RECONNECT_ACTION] {
+      assert!(matches!(
+        handle_menu_action(action),
+        MenuAction::OpenPreferences(PreferencesTab::General)
+      ));
+    }
+  }
+
+  #[test]
+  fn a_stopped_activity_names_its_reason_and_offers_reconnecting_where_it_helps() {
+    use crate::activity_capture::StopReason;
+    init_i18n();
+    for reason in StopReason::ALL {
+      let (status, action) = stopped_activity_items(ActivityStopped {
+        reason: *reason,
+        intent: ActivityRecordingStatus::Recording,
+      });
+      assert_eq!(status, reason.tray_key());
+      assert_ne!(t(status), status, "{reason:?} has English text");
+      let expected = match reason {
+        StopReason::ReconnectNeeded | StopReason::SignedOut => {
+          Some((ACTIVITY_RECONNECT_ACTION, "tray.reconnectAccount"))
+        }
+        StopReason::NotAvailable
+        | StopReason::BlockedByPolicy
+        | StopReason::NotConfirmed => None,
+      };
+      assert_eq!(action, expected, "{reason:?}");
+    }
   }
 
   #[test]
@@ -1429,28 +1430,37 @@ mod tests {
   fn test_status_label_no_sessions() {
     init_i18n();
     let snap = make_snapshot(vec![]);
-    assert_eq!(get_tray_status_label(&snap), "No active edits");
+    assert_eq!(get_tray_status_label(&snap), None);
   }
 
   #[test]
   fn test_status_label_one_active() {
     init_i18n();
     let snap = make_snapshot(vec![make_session(SessionStatus::Ready)]);
-    assert_eq!(get_tray_status_label(&snap), "1 active edit");
+    assert_eq!(
+      get_tray_status_label(&snap).as_deref(),
+      Some("1 active edit")
+    );
   }
 
   #[test]
   fn test_status_label_needs_attention() {
     init_i18n();
     let snap = make_snapshot(vec![make_session(SessionStatus::Error)]);
-    assert_eq!(get_tray_status_label(&snap), "Needs attention");
+    assert_eq!(
+      get_tray_status_label(&snap).as_deref(),
+      Some("Needs attention")
+    );
   }
 
   #[test]
   fn test_status_label_syncing() {
     init_i18n();
     let snap = make_snapshot(vec![make_session(SessionStatus::Syncing)]);
-    assert_eq!(get_tray_status_label(&snap), "1 document syncing");
+    assert_eq!(
+      get_tray_status_label(&snap).as_deref(),
+      Some("1 document syncing")
+    );
   }
 
   // -- get_session_id_from_action --
@@ -1499,38 +1509,6 @@ mod tests {
     assert!(matches!(
       handle_menu_action("open-clipboard"),
       MenuAction::OpenClipboard
-    ));
-  }
-
-  #[test]
-  fn test_handle_menu_action_about() {
-    assert!(matches!(
-      handle_menu_action("open-about"),
-      MenuAction::OpenPreferences(PreferencesTab::About)
-    ));
-  }
-
-  #[test]
-  fn test_handle_menu_action_check_updates() {
-    assert!(matches!(
-      handle_menu_action("check-for-updates"),
-      MenuAction::CheckForUpdates
-    ));
-  }
-
-  #[test]
-  fn test_handle_menu_action_copy_diagnostics() {
-    assert!(matches!(
-      handle_menu_action("copy-diagnostics"),
-      MenuAction::CopyDiagnostics
-    ));
-  }
-
-  #[test]
-  fn test_handle_menu_action_email_support() {
-    assert!(matches!(
-      handle_menu_action("email-support"),
-      MenuAction::EmailSupport
     ));
   }
 

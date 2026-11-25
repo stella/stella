@@ -74,7 +74,14 @@ export const ACP_AGENT_REQUESTS = {
   requestPermission: "session/request_permission",
 } as const;
 
-export const ACP_AGENT_NOTIFICATIONS = { update: "session/update" } as const;
+export const ACP_AGENT_NOTIFICATIONS = {
+  update: "session/update",
+  /** The agent withdraws a request it sent, such as a permission request. */
+  cancelRequest: "$/cancel_request",
+} as const;
+
+/** `$/cancel_request`: the request the agent stopped waiting for. */
+export const AcpCancelRequestSchema = v.object({ requestId: RequestId });
 
 const looseRecord = v.record(v.string(), v.unknown());
 

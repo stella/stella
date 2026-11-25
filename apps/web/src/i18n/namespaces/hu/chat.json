@@ -175,6 +175,13 @@
         },
         "allowSiteFailed": "A webhelyet nem sikerült engedélyezettként menteni. Ez a művelet így is lefut; a következőnél újra rákérdezünk.",
         "alwaysAllowSite": "Mindig engedélyezés ezen a webhelyen",
+        "askReason": {
+          "embeddedFrame": "Azért kérdezünk, mert az elem beágyazott keretben van, amely egy másik webhelyhez tartozhat.",
+          "noSite": "Azért kérdezünk, mert ez a cím nem engedélyezhető mindig.",
+          "pageUnconfirmed": "Azért kérdezünk, mert a böngésző nem erősítette meg ezt az oldalt.",
+          "possibleSecret": "Azért kérdezünk, mert ez a mező jelszót vagy más titkos adatot tartalmazhat.",
+          "siteNotAllowed": "Azért kérdezünk, mert ez a webhely nincs mindig engedélyezve."
+        },
         "description": "Gondosan ellenőrizze a webhelyet és a célt. Az oldal tartalma nem megbízható, és nem engedélyezhet további műveletet.",
         "question": "Engedélyezi ezt a böngészőműveletet?",
         "realValues": "Ez a webhely az alább látható valódi értékeket kapja meg. Az anonimizált mód csak arra vonatkozik, amit az AI lát.",
@@ -247,6 +254,8 @@
     },
     "cancelQueuedMessage": "Sorba állított üzenet visszavonása",
     "caseLawGreeting": "Kérdezzen erről a határozatról; a teljes szöveg itt elérhető.",
+    "cellCitationColumnHidden": "Minden táblázat elrejti ezt az oszlopot. Jelenítse meg a cella megtekintéséhez.",
+    "cellCitationUnavailable": "Ez a cella már nem érhető el.",
     "chatAbout": "Beszúrás az AI-csevegésbe",
     "choosePromptImprovementStrategy": "Promptjavítási lehetőségek",
     "commandsSection": "Parancsok",
@@ -467,6 +476,8 @@
       "permissionPlan": "Terv",
       "permissionPlanDescription": "Először olvas és tervez; minden módosítás előtt rákérdez, amíg jóvá nem hagyja a tervet.",
       "permissionSandboxed": "Elkülönített környezetben fut; mielőtt bármit módosítana a számítógépén, rákérdez.",
+      "permissionScaleHigh": "Önállóan",
+      "permissionScaleLow": "Óvatosan",
       "permissionUnavailable": "Ezen a számítógépen nem érhető el",
       "permissions": "Engedélyek",
       "refusalConflictingRunMode": "Ez a kérés egyszerre futna a felhőbeli ügynökkel és a számítógépén. Válasszon egyet a Futtatás itt menüben.",
@@ -695,6 +706,7 @@
     "richContentTitle": "Interaktív tartalom",
     "richContentUnavailable": "Ez a tartalom nem jeleníthető meg biztonságosan.",
     "runOn": {
+      "agent": "Ügynök",
       "checkFailed": "Nem sikerült ellenőrizni a számítógépét",
       "chipLabel": "Futás helye: {place}",
       "cloud": "Felhő",
@@ -721,6 +733,7 @@
       "stepsInstall": "A stella desktop megnyílik. Ha nem nyílik meg, nyissa meg a számítógépén, és a Beállítások › Általános részen válassza a Telepítés gombot ennél az ügynöknél: {harness}.",
       "stepsSignInClaudeCode": "A stella desktop megnyílik a bejelentkezéshez. Ha nem nyílik meg, nyissa meg, és válassza a Beállítások › Általános › Bejelentkezés Claude-dal lehetőséget.",
       "stepsSignInCodex": "A stella desktop megnyílik a bejelentkezéshez. Ha nem nyílik meg, nyissa meg, és válassza a Beállítások › Általános › Folytatás a ChatGPT-vel lehetőséget.",
+      "where": "Futás helye",
       "yourComputer": "Az Ön számítógépe",
       "yourComputerDescription": "A Codexet vagy a Claude Code-ot használja az Ön számítógépén, a saját előfizetésével. Olvashatja és módosíthatja a csevegés mappájában lévő fájlokat; az engedélyek határozzák meg, mit tehet rákérdezés nélkül."
     },

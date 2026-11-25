@@ -1071,23 +1071,75 @@ pub async fn invalidate(
   Ok(())
 }
 
-// Whether the saved link can no longer be used. The tray offers a visible
-// way back instead of features silently disappearing.
-static RECONNECT_NEEDED: std::sync::atomic::AtomicBool =
-  std::sync::atomic::AtomicBool::new(false);
-
-pub(crate) fn reconnect_needed() -> bool {
-  RECONNECT_NEEDED.load(std::sync::atomic::Ordering::Relaxed)
+/// Why the saved link can no longer be used. The tray and the account view
+/// offer a visible way back instead of features silently disappearing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReconnectCause {
+  /// This computer's device proof is gone.
+  DeviceProof,
+  /// The server refused the desktop credential.
+  Server,
 }
 
-pub(crate) fn set_reconnect_needed(app: &tauri::AppHandle, needed: bool) {
-  if RECONNECT_NEEDED.swap(needed, std::sync::atomic::Ordering::Relaxed) != needed {
+/// What a read learned about the saved link.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LinkObservation {
+  /// The saved account and its device proof were read.
+  DeviceProofReadable,
+  DeviceProofLost,
+  /// The server accepted the credential, whatever it decided about features.
+  ServerAccepted,
+  /// The server answered 401 to the credential.
+  ServerRefused,
+  /// No link is saved, or the saved one was just replaced.
+  LinkReplaced,
+}
+
+/// A readable device proof says nothing about the server's view of the
+/// credential, so it clears only a lost proof.
+fn next_reconnect_cause(
+  current: Option<ReconnectCause>,
+  observation: LinkObservation,
+) -> Option<ReconnectCause> {
+  match observation {
+    LinkObservation::DeviceProofReadable => {
+      current.filter(|cause| *cause != ReconnectCause::DeviceProof)
+    }
+    LinkObservation::DeviceProofLost => Some(ReconnectCause::DeviceProof),
+    LinkObservation::ServerAccepted | LinkObservation::LinkReplaced => None,
+    LinkObservation::ServerRefused => Some(ReconnectCause::Server),
+  }
+}
+
+static RECONNECT_CAUSE: std::sync::Mutex<Option<ReconnectCause>> =
+  std::sync::Mutex::new(None);
+
+fn reconnect_cause() -> Option<ReconnectCause> {
+  *RECONNECT_CAUSE
+    .lock()
+    .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+pub(crate) fn reconnect_needed() -> bool {
+  reconnect_cause().is_some()
+}
+
+pub(crate) fn observe_link(app: &tauri::AppHandle, observation: LinkObservation) {
+  let changed = {
+    let mut cause = RECONNECT_CAUSE
+      .lock()
+      .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let next = next_reconnect_cause(*cause, observation);
+    std::mem::replace(&mut *cause, next) != next
+  };
+  if changed {
     crate::activity::refresh_tray(app);
   }
 }
 
 pub fn notify(app: &tauri::AppHandle) {
   use tauri::Manager;
+  observe_link(app, LinkObservation::LinkReplaced);
   if let (Some(sessions), Some(account)) = (
     app.try_state::<crate::commands::AppState>(),
     app.try_state::<AccountState>(),
@@ -1157,17 +1209,22 @@ pub async fn account_get_state(
   drop(manager);
   crate::session_manager::SessionManager::attach_pending_listeners(sessions.inner())
     .await;
-  set_reconnect_needed(
-    &app,
-    matches!(&current, Err(error) if error == crate::device_proof::RECONNECT),
-  );
   match current {
-    Ok(Some(saved)) => return Ok(saved.snapshot()),
+    Ok(Some(saved)) => {
+      observe_link(&app, LinkObservation::DeviceProofReadable);
+      // A credential the server refused looks intact locally; only linking
+      // again brings it back.
+      if reconnect_cause() == Some(ReconnectCause::Server) {
+        return Ok(DesktopAccountSnapshot::ReconnectRequired { server });
+      }
+      return Ok(saved.snapshot());
+    }
     Err(error) if error == crate::device_proof::RECONNECT => {
+      observe_link(&app, LinkObservation::DeviceProofLost);
       return Ok(DesktopAccountSnapshot::ReconnectRequired { server });
     }
     Err(error) => return Err(error),
-    Ok(None) => {}
+    Ok(None) => observe_link(&app, LinkObservation::LinkReplaced),
   }
   if state.lock().await.expired().await? {
     return Ok(DesktopAccountSnapshot::Expired { server });
@@ -2693,6 +2750,40 @@ mod tests {
           .to_rfc3339(),
       },
     }
+  }
+
+  #[test]
+  fn a_refused_credential_needs_reconnecting_until_the_server_accepts_a_link() {
+    use LinkObservation::{
+      DeviceProofLost, DeviceProofReadable, LinkReplaced, ServerAccepted, ServerRefused,
+    };
+    let causes = [
+      None,
+      Some(ReconnectCause::DeviceProof),
+      Some(ReconnectCause::Server),
+    ];
+    for current in causes {
+      assert_eq!(
+        next_reconnect_cause(current, ServerRefused),
+        Some(ReconnectCause::Server)
+      );
+      assert_eq!(
+        next_reconnect_cause(current, DeviceProofLost),
+        Some(ReconnectCause::DeviceProof)
+      );
+      assert_eq!(next_reconnect_cause(current, ServerAccepted), None);
+      assert_eq!(next_reconnect_cause(current, LinkReplaced), None);
+    }
+    // Reading the saved link locally never hides the server's refusal.
+    assert_eq!(
+      next_reconnect_cause(Some(ReconnectCause::Server), DeviceProofReadable),
+      Some(ReconnectCause::Server)
+    );
+    assert_eq!(
+      next_reconnect_cause(Some(ReconnectCause::DeviceProof), DeviceProofReadable),
+      None
+    );
+    assert_eq!(next_reconnect_cause(None, DeviceProofReadable), None);
   }
 
   #[test]

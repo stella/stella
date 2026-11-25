@@ -3,14 +3,8 @@ import type { ReactNode } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import {
-  COMPOSER_BOX_CLASS,
-  COMPOSER_BOX_FOCUS_CLASS,
-  COMPOSER_LARGE_ACTION_ROW_CLASS,
-  COMPOSER_LARGE_TEXT_WELL_CLASS,
-  COMPOSER_LEADING_GROUP_CLASS,
-  ComposerStatusRow,
-} from "@stll/ui/composer";
+import { ComposerStatusRow } from "@stll/ui/composer";
+import { ComposerFrame } from "@stll/ui/composer-frame";
 import { Form } from "@stll/ui/form";
 import { SearchIcon } from "@stll/ui/icons";
 import { Textarea } from "@stll/ui/textarea";
@@ -64,17 +58,21 @@ export const LawEntryBox = ({
         }}
         role="search"
       >
-        {/* The chat composer's shell, shared with the chat input through the
-            composer's class constants. */}
-        <div className={cn(COMPOSER_BOX_CLASS, COMPOSER_BOX_FOCUS_CLASS)}>
-          <div
-            className={cn("relative min-w-0", COMPOSER_LARGE_TEXT_WELL_CLASS)}
-          >
+        {/* The chat composer's frame, shared with the chat input. */}
+        <ComposerFrame
+          leading={
+            askScope !== null &&
+            trimmed.length > 0 && (
+              <PublicLawAskInChat askScope={askScope} question={trimmed} />
+            )
+          }
+          ring="focus"
+          stature="large"
+          text={
             <Textarea
               aria-label={searchLabel}
               autoComplete="off"
               appearance="composer"
-              fieldSizing="fixed"
               dir={contentDir(query)}
               maxLength={maxLength}
               onChange={(event) => onQueryChange(event.currentTarget.value)}
@@ -92,29 +90,22 @@ export const LawEntryBox = ({
               rows={1}
               value={query}
             />
-          </div>
-          <div className={COMPOSER_LARGE_ACTION_ROW_CLASS}>
-            <div className={cn(COMPOSER_LEADING_GROUP_CLASS, "me-auto")}>
-              {askScope !== null && trimmed.length > 0 && (
-                <PublicLawAskInChat askScope={askScope} question={trimmed} />
-              )}
-            </div>
-            <div className="flex items-center gap-0.5">
-              <Button
-                aria-label={searchLabel}
-                className={cn(trimmed.length === 0 && "opacity-50")}
-                disabled={trimmed.length === 0}
-                disabledReason={t("common.enterSearchQuery")}
-                size="icon-round"
-                tooltip={searchLabel}
-                type="submit"
-                variant="composer"
-              >
-                <SearchIcon className="size-3.5" />
-              </Button>
-            </div>
-          </div>
-        </div>
+          }
+          trailing={
+            <Button
+              aria-label={searchLabel}
+              className={cn(trimmed.length === 0 && "opacity-50")}
+              disabled={trimmed.length === 0}
+              disabledReason={t("common.enterSearchQuery")}
+              size="icon-round"
+              tooltip={searchLabel}
+              type="submit"
+              variant="composer"
+            >
+              <SearchIcon className="size-3.5" />
+            </Button>
+          }
+        />
       </Form>
       <ComposerStatusRow
         end={status}

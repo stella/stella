@@ -414,6 +414,24 @@ export const classBaseName = (token: string): string => {
   return boundary === -1 ? token : token.slice(boundary + 1);
 };
 
+/**
+ * The source text of a template chunk, or null for anything that is not one.
+ * `TemplateElement.value` is a plain `{ raw, cooked }` record, not a node, so
+ * `isAstNode` never matches it; read it by shape.
+ */
+export const templateElementRaw = (node: unknown): string | null => {
+  if (!isAstNode(node) || node.type !== "TemplateElement") {
+    return null;
+  }
+  const { value } = node;
+  return typeof value === "object" &&
+    value !== null &&
+    "raw" in value &&
+    typeof value.raw === "string"
+    ? value.raw
+    : null;
+};
+
 /** The variant prefixes of a token, or "" when it carries none. */
 export const classVariants = (token: string): string => {
   const boundary = token.lastIndexOf(":");

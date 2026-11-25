@@ -356,7 +356,9 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `ColorPickerContent` `presentation`: `inline`, `popover`
 - `ComboboxTrigger` `variant`: `field`, `plain`
 - `CommandItem` `size`: `default`, `row`
-- `ComposerPlaceholder` `stature`: `compact`, `large`
+- `ComposerFrame` `ring`: `anonymized`, `attention`, `focus`, `none`
+- `ComposerFrame` `surface`: `document`, `page`
+- `ComposerFrame` `stature`: `compact`, `large`
 - `CourtBadge`, `DocumentIdentityBadge` `size`: `default`, `inline`, `prose`
 - `CourtBadge` `weight`: `dashed`, `outline`, `solid`, `tinted`
 - `DatePickerPopover`, `DateRangeFilter`, `SegmentedIconToggle`, `SegmentedIconToggleFace` `size`: `compact`, `touch`
@@ -370,6 +372,7 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `DocumentMark` `kind`: `asicE`, `asicS`, `bdoc`, `cades`, `cadesDetached`, `csv`, `dataBox`, `eAkta`, `epub`, `et3`, `excel`, `fatturaPA`, `isdoc`, `isdocx`, `markdown`, `mbox`, `numbers`, `ofd`, `openDocumentSheet`, `openDocumentText`, `pages`, `pdf`, `powerpoint`, `pst`, `rtf`, `uyap`, `webArchive`, `word`, `wordPerfect`, `works`, `xades`, `xadesZep`, `xml`, `zep`, `zip`
 - `DropdownMenuCheckboxItem`, `MenuCheckboxItem` `variant`: `default`, `switch`
 - `DropdownMenuItem`, `MenuItem` `variant`: `default`, `destructive`
+- `DropdownMenuRadioItem`, `MenuRadioItem` `appearance`: `row`, `segment`
 - `DropdownMenuRadioItem`, `MenuRadioItem` `indicator`: `check`, `none`
 - `DropdownMenuTrigger`, `MenuTrigger`, `PopoverTrigger` `appearance`: `caption`, `default`
 - `FieldFace` `density`: `default`, `snug`

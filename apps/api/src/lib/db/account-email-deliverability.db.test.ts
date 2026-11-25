@@ -7,12 +7,13 @@ import {
   expect,
   test,
 } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, isNotNull } from "drizzle-orm";
 
 import { user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { emailDeliveryFailures } from "@/api/db/schema";
 import {
+  anonymizeDeletedAccountRow,
   markAccountEmailsUndeliverable,
   readAccountEmailUndeliverable,
 } from "@/api/lib/db/account-row";
@@ -233,5 +234,31 @@ describe("account email deliverability", () => {
         .from(emailDeliveryFailures)
         .where(eq(emailDeliveryFailures.address, account.email)),
     ).toEqual([{ reason: "suppressed" }]);
+  });
+
+  test("erasing an account clears the refusal it recorded", async () => {
+    const account = await newAccount();
+    await markAccountEmailsUndeliverable({
+      database: rootDb,
+      emails: [account.email],
+      reason: "suppressed",
+      at,
+    });
+
+    await rootDb.transaction(async (tx) => {
+      await anonymizeDeletedAccountRow(tx, account.userId);
+    });
+
+    expect(
+      await rootDb
+        .select({
+          address: user.emailUndeliverableAddress,
+          reason: user.emailUndeliverableReason,
+          at: user.emailUndeliverableAt,
+          deleted: isNotNull(user.deletedAt),
+        })
+        .from(user)
+        .where(eq(user.id, account.userId)),
+    ).toEqual([{ address: null, reason: null, at: null, deleted: true }]);
   });
 });

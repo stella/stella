@@ -60,6 +60,8 @@ const SNAPSHOT = {
   ],
   today: "2026-10-07",
   unreadable: false,
+  outages: { status: "read", outages: [] },
+  stoppedReason: null,
 } satisfies ActivityDaySnapshot;
 
 const PENDING_BATCH = {
@@ -250,6 +252,7 @@ const installNativeBoundary = async ({
       let draftPreference = draftingFixture.preference ?? null;
       let draftRevision = 1;
       const scopedDraftSettings = () => ({
+        policy: "account",
         scopeKey: '["org_fixture","user_fixture"]',
         settings: {
           revision: `revision-${String(draftRevision)}`,
@@ -282,6 +285,19 @@ const installNativeBoundary = async ({
             date: args["date"] ?? activitySnapshot.date,
           };
         },
+        // No matter rules or learning yet; a save advances nothing the
+        // tests read back.
+        activity_get_matter_learning: () => ({
+          type: "stored",
+          revision: 0,
+          learning: { rules: [], learned: [], tallies: [] },
+        }),
+        activity_save_matter_learning: () => ({ type: "saved", revision: 1 }),
+        activity_get_matter_rules: () => ({
+          type: "stored",
+          revision: 0,
+          rules: [],
+        }),
         // The native settings read: the day's settings and deletion state
         // with the names of its apps, longest first, never its segments.
         activity_get_settings: (args) => {

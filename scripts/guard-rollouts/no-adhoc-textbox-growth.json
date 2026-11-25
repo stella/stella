@@ -1,0 +1,19 @@
+{
+  "id": "no-adhoc-textbox-growth",
+  "rules": ["no-adhoc-textbox-growth/no-adhoc-textbox-growth"],
+  "type": "changed-lines",
+  "expiresAt": "2026-12-01T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-adhoc-textbox-growth/no-adhoc-textbox-growth",
+    "apps",
+    "packages"
+  ]
+}

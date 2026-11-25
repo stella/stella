@@ -231,6 +231,43 @@ export const lockActiveAccountRow = async (
   }
 };
 
+type AccountRowField = keyof typeof user.$inferSelect;
+
+/**
+ * What erasing an account does to each column of its row: `written` columns
+ * are replaced, `kept` ones stay for attribution or are not about the person.
+ * Every column is listed, so a new one has to be classified here and cannot
+ * keep personal data by omission.
+ */
+const ACCOUNT_ROW_ERASURE = {
+  id: "kept",
+  name: "written",
+  email: "written",
+  emailVerified: "written",
+  image: "written",
+  locale: "kept",
+  timezoneId: "kept",
+  preferredName: "written",
+  readerAnswerLanguage: "kept",
+  wordEditShortcut: "written",
+  userShortcuts: "written",
+  guideProgress: "written",
+  detectedCountry: "written",
+  twoFactorEnabled: "kept",
+  emailUndeliverableAddress: "written",
+  emailUndeliverableReason: "written",
+  emailUndeliverableAt: "written",
+  deletedAt: "written",
+  createdAt: "kept",
+  updatedAt: "kept",
+} as const satisfies Record<AccountRowField, "kept" | "written">;
+
+type WrittenAccountRowField = {
+  [
+    Field in AccountRowField
+  ]: (typeof ACCOUNT_ROW_ERASURE)[Field] extends "written" ? Field : never;
+}[AccountRowField];
+
 /**
  * Marks the caller's own account deleted and releases its private contact and
  * login fields. The row stays for attribution in collaborative records.
@@ -248,8 +285,14 @@ export const anonymizeDeletedAccountRow = async (
       name: DELETED_ACCOUNT_DISPLAY_NAME,
       preferredName: null,
       wordEditShortcut: null,
+      userShortcuts: null,
+      guideProgress: null,
+      detectedCountry: null,
+      emailUndeliverableAddress: null,
+      emailUndeliverableReason: null,
+      emailUndeliverableAt: null,
       deletedAt: new Date(),
-    })
+    } satisfies Record<WrittenAccountRowField, unknown>)
     .where(eq(user.id, userId));
 };
 

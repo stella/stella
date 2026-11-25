@@ -80,6 +80,7 @@ import {
 } from "./capture-modes";
 import type { CaptureMode, CaptureModeCommand } from "./capture-modes";
 import { DraftConsent } from "./DraftConsent";
+import { MatterRulesSettings } from "./MatterRulesSettings";
 
 type ActivitySettingsView =
   | { type: "loading" }
@@ -266,9 +267,11 @@ const DetailsAccessFooter = ({
   onCommand: RunCommand;
 }) => {
   const t = useTranslations("activity");
+  // Under managed policy the row itself says details are off.
   switch (access) {
     case "disabled":
     case "ready":
+    case "managed":
       return null;
     case "accessibilityRequired":
       return <TitlesAccessStrip onCommand={onCommand} />;
@@ -307,32 +310,41 @@ const RecordingSettings = ({ onCommand, settings }: SettingsSectionProps) => {
           }
         />
       </SettingsRow>
-      <SettingsRow
-        description={t(
-          settings.captureDetails
-            ? "captureDetailsDescription"
-            : "captureDetailsOffDescription",
-        )}
-        footer={
-          <DetailsAccessFooter
-            access={settings.detailsAccess}
-            onCommand={onCommand}
-          />
-        }
-        id={CAPTURE_DETAILS_ROW_ID}
-        interaction="label"
-        title={t("captureDetails")}
-      >
-        <Checkbox
-          aria-describedby={captureDetailsIds.description}
-          aria-labelledby={captureDetailsIds.label}
-          id={captureDetailsIds.control}
-          checked={settings.captureDetails}
-          onCheckedChange={(enabled) =>
-            onCommand("activity_set_capture_details", { enabled })
-          }
+      {/* Managed policy leaves nothing to choose; the row says who decided. */}
+      {settings.detailsAccess === "managed" ? (
+        <SettingsRow
+          description={t("detailsManaged")}
+          id={CAPTURE_DETAILS_ROW_ID}
+          title={t("captureDetails")}
         />
-      </SettingsRow>
+      ) : (
+        <SettingsRow
+          description={t(
+            settings.captureDetails
+              ? "captureDetailsDescription"
+              : "captureDetailsOffDescription",
+          )}
+          footer={
+            <DetailsAccessFooter
+              access={settings.detailsAccess}
+              onCommand={onCommand}
+            />
+          }
+          id={CAPTURE_DETAILS_ROW_ID}
+          interaction="label"
+          title={t("captureDetails")}
+        >
+          <Checkbox
+            aria-describedby={captureDetailsIds.description}
+            aria-labelledby={captureDetailsIds.label}
+            id={captureDetailsIds.control}
+            checked={settings.captureDetails}
+            onCheckedChange={(enabled) =>
+              onCommand("activity_set_capture_details", { enabled })
+            }
+          />
+        </SettingsRow>
+      )}
       {/* stella AI drafts send the titles recorded above, so they follow. */}
       <BillingDraftConsentSettings />
       <SettingsRow id="activity-retention" title={t("retention")}>
@@ -476,7 +488,11 @@ const CaptureModeList = ({
           className="text-muted-foreground px-1 text-xs text-pretty"
           id="activity-capture-modes-details-off"
         >
-          {t("captureModesDetailsOff")}
+          {t(
+            settings.detailsAccess === "managed"
+              ? "detailsManaged"
+              : "captureModesDetailsOff",
+          )}
         </p>
       )}
       {apps.length === 0 ? (
@@ -1080,6 +1096,7 @@ export const ActivitySettingsPane = () => {
         onExclude={(app) => setDialog({ app, type: "excludeApp" })}
         settings={settings}
       />
+      <MatterRulesSettings />
       <HistoryDeletion
         deletionDisabled={deletionDisabled}
         onDeleteAll={() =>
@@ -1133,7 +1150,8 @@ const WithdrawConsentButton = ({
  * Consent to stella AI drafts, kept on the server. Withdrawing stays possible
  * whenever consent exists, even where the firm has drafting off; it applies
  * in this window at once and is sent again until the server confirms it.
- * Without consent, Settings asks as a time entry card does.
+ * Without consent, Settings asks as a time entry card does. Where managed
+ * policy turns drafts off, the row says so and only withdrawing remains.
  */
 const BillingDraftConsentSettings = () => {
   const t = useTranslations("activity");
@@ -1147,10 +1165,22 @@ const BillingDraftConsentSettings = () => {
       />
     );
   }
-  if (settings.type !== "ready" || aiDraftsChoice(settings) === "notOffered") {
+  if (settings.type !== "ready") {
     return null;
   }
+  const managed = settings.policy === "managedOff";
+  if (aiDraftsChoice(settings) === "notOffered") {
+    return managed ? (
+      <SettingsRow
+        description={t("billingDraftsManaged")}
+        title={t("billingDraftsTitle")}
+      />
+    ) : null;
+  }
   const { consent } = settings;
+  const grantedDescription = managed
+    ? t("billingDraftsManaged")
+    : t("billingDraftsGranted");
   switch (consent) {
     case "granted":
     case "pending-withdrawal":
@@ -1160,7 +1190,7 @@ const BillingDraftConsentSettings = () => {
           <SettingsRow
             description={
               consent === "granted"
-                ? t("billingDraftsGranted")
+                ? grantedDescription
                 : t("billingDraftsWithdrawPending")
             }
             title={t("billingDraftsTitle")}

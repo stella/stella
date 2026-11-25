@@ -81,6 +81,7 @@ const { default: messages } = await import("@/i18n/langs/en.json");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
+const { roleOptions } = await import("@/lib/auth-queries");
 const { organizationSettingsOptions } =
   await import("@/lib/organization/settings-queries");
 const { OrganizationJurisdictionsCard } = await import("./jurisdictions-card");
@@ -105,13 +106,14 @@ const SK: PracticeJurisdiction = { countryCode: "SK", isPrimary: false };
 const drain = async () =>
   await testing.act(async () => await Promise.resolve());
 
-const mountCard = async () => {
+const mountCard = async (role: "owner" | "member" = "owner") => {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, staleTime: Infinity },
       mutations: { retry: false },
     },
   });
+  client.setQueryData(roleOptions.queryKey, role);
   const view = testing.render(
     <QueryClientProvider client={client}>
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
@@ -279,5 +281,15 @@ test("the card keeps the newest selection while the older write's refetch lands"
 
   await commit(second);
   await drain();
+  client.clear();
+});
+
+test("members without organizationSettings update permission cannot edit jurisdictions", async () => {
+  const { client, countryButton } = await mountCard("member");
+  const czButton = countryButton(/^Czechia/u);
+  expect(czButton.getAttribute("aria-disabled")).toBe("true");
+  testing.fireEvent.click(czButton);
+  await drain();
+  expect(writes).toHaveLength(0);
   client.clear();
 });

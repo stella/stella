@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import { createLineReader } from "../harness/json-lines";
+import { MEMBER_WAIT_CALL_TIMEOUT_MS } from "../harness/member-wait";
 
 /**
  * Stdio-to-HTTP bridge for MCP clients (such as ACP agents) that only speak
@@ -24,6 +25,23 @@ export type McpStdioBridgeOptions = {
     input: string | URL | Request,
     init?: RequestInit,
   ) => Promise<Response>;
+  /** How long a request may take (`BRIDGE_TIMEOUTS`); tests shorten them. */
+  timeouts?: BridgeTimeouts;
+};
+
+type BridgeTimeouts = {
+  /** Any request but a tool call: the proxy answers it at once. */
+  requestMs: number;
+  /**
+   * A tool call: a browser step the member must allow waits inside it, so it
+   * is bounded by the member's wait (`MEMBER_WAIT_CALL_TIMEOUT_MS`).
+   */
+  toolCallMs: number;
+};
+
+const BRIDGE_TIMEOUTS: BridgeTimeouts = {
+  requestMs: 120_000,
+  toolCallMs: MEMBER_WAIT_CALL_TIMEOUT_MS,
 };
 
 /** Only local loopback HTTP endpoints are accepted (stella's `McpProxy`). */
@@ -111,14 +129,16 @@ const createSseWriter = (output: (line: string) => void) => {
 };
 
 type BridgeMessage =
-  | { kind: "request"; id: string | number }
+  | { kind: "request"; id: string | number; method: string }
   | { kind: "cancellation"; requestId: string | number | null }
   | { kind: "response" }
   | { kind: "other" };
 
 /**
- * Requests wait their turn; a response or a cancellation from the agent goes
- * out at once, since the request it answers may hold the queue open.
+ * Requests are sent in turn; a response or a cancellation from the agent goes
+ * out at once, since the request it answers may hold the queue open. A tool
+ * call holds the queue only until it is sent: it may wait on the member, and
+ * the agent's other calls go on meanwhile.
  */
 const bridgeMessageOf = (trimmed: string): BridgeMessage => {
   const parsed = Result.try((): unknown => JSON.parse(trimmed));
@@ -148,7 +168,7 @@ const bridgeMessageOf = (trimmed: string): BridgeMessage => {
     };
   }
   if (typeof method === "string") {
-    return validId ? { kind: "request", id } : { kind: "other" };
+    return validId ? { kind: "request", id, method } : { kind: "other" };
   }
   return validId ? { kind: "response" } : { kind: "other" };
 };
@@ -159,11 +179,11 @@ export const runMcpStdioBridge = async ({
   input,
   output,
   fetchImpl = fetch,
+  timeouts = BRIDGE_TIMEOUTS,
 }: McpStdioBridgeOptions): Promise<Result<void, string>> => {
   if (!isLoopbackHttpUrl(url)) {
     return Result.err("MCP bridge URL must be a loopback HTTP endpoint.");
   }
-  const REQUEST_TIMEOUT_MS = 120_000;
   const state: { sessionId: string | null } = { sessionId: null };
   let queue: Promise<void> = Promise.resolve();
   const outOfBand = new Set<Promise<void>>();
@@ -175,7 +195,7 @@ export const runMcpStdioBridge = async ({
   const queued = new Set<string | number>();
   const cancelledBeforeSending = new Set<string | number>();
 
-  const forward = async (line: string) => {
+  const forward = async (line: string, timeoutMs: number) => {
     const trimmed = line.trim();
     if (trimmed === "") {
       return;
@@ -193,7 +213,7 @@ export const runMcpStdioBridge = async ({
       headers["mcp-session-id"] = state.sessionId;
     }
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await Result.tryPromise(
         async () =>
@@ -288,11 +308,14 @@ export const runMcpStdioBridge = async ({
         cancelledBeforeSending.add(message.requestId);
         return;
       }
-      if (message.kind === "cancellation" || message.kind === "response") {
-        const task = forward(line).finally(() => {
+      const outOfBandForward = (timeoutMs: number) => {
+        const task = forward(line, timeoutMs).finally(() => {
           outOfBand.delete(task);
         });
         outOfBand.add(task);
+      };
+      if (message.kind === "cancellation" || message.kind === "response") {
+        outOfBandForward(timeouts.requestMs);
         return;
       }
       if (message.kind === "request") {
@@ -304,8 +327,14 @@ export const runMcpStdioBridge = async ({
           if (cancelledBeforeSending.delete(message.id)) {
             return undefined;
           }
+          if (message.method === "tools/call") {
+            // `forward` posts before its first wait, so the call goes out in
+            // turn; its answer comes whenever the call ends.
+            outOfBandForward(timeouts.toolCallMs);
+            return undefined;
+          }
         }
-        await forward(line);
+        await forward(line, timeouts.requestMs);
         return undefined;
       });
     },

@@ -36,3 +36,6 @@ export type McpSession = {
    */
   memberId?: string;
 };
+
+/** Which kind of credential opened a session, for telemetry and reporting. */
+export type McpCredentialType = NonNullable<McpSession["credential"]>["type"];

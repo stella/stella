@@ -22,6 +22,7 @@ import type {
   MatterActivityCategory,
   MatterActivityFilters,
 } from "@stll/api-contract/matter-activity";
+import { ownEntry } from "@stll/api-contract/own-key";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDbError } from "@/api/db/safe-db-types";
@@ -134,9 +135,7 @@ const mappedChangeKeys = (
   }
   const changedFields: ActivityChangedField[] = [];
   for (const key of Object.keys(changes)) {
-    const field = Object.entries(mapping).find(
-      ([auditKey]) => auditKey === key,
-    )?.[1];
+    const field = ownEntry(mapping, key);
     if (field !== undefined && !changedFields.includes(field)) {
       changedFields.push(field);
     }

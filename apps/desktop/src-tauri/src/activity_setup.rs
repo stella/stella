@@ -46,8 +46,8 @@ pub fn activity_set_recording_status(
   }
   let mut prompt = false;
   update(&app, &state, &caller, |manager| {
-    // Details are on by default, so the first start asks for the
-    // permission that records them.
+    // Details chosen before the first start ask for the permission that
+    // records them once recording starts.
     prompt = manager.recording_status() == ActivityRecordingStatus::Off
       && manager.capture_details();
     manager.set_recording_status(status, Utc::now())
@@ -67,9 +67,13 @@ pub fn activity_set_capture_details(
   state: State<'_, ActivityAppState>,
   enabled: bool,
 ) -> Result<(), String> {
+  // Managed policy only turns details off; turning them off stays possible.
+  if enabled && crate::managed_policy::current().activity_details_disabled {
+    return Err("activity details are turned off by managed policy".to_string());
+  }
   let should_prompt = {
     let mut manager = state.lock().map_err(lock_error)?;
-    caller.require_current(&app)?;
+    caller.require_writable(&app)?;
     manager.require_caller(&caller)?;
     manager.set_capture_details(enabled, Utc::now())?
   };

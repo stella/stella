@@ -4,8 +4,11 @@ mod account_avatar;
 mod account_switch;
 mod activity;
 mod activity_calls;
+mod activity_capture;
 mod activity_commands;
 mod activity_details;
+mod activity_matter_learning;
+mod activity_matter_rules;
 mod activity_settings;
 mod activity_setup;
 mod activity_store;
@@ -118,6 +121,7 @@ mod sse;
 #[cfg(test)]
 mod test_child_processes;
 mod time_entry_commands;
+mod time_entry_settings_commands;
 mod time_entry_submit;
 mod transcribe_history;
 mod transcribe_recording;
@@ -352,6 +356,7 @@ pub fn run() {
         let manager = Arc::clone(&manager);
         feature_access::start(
           handle.clone(),
+          Arc::new(activity_capture::decision_installed),
           Arc::new(move |app, feature, enabled| match feature {
             feature_gate::DesktopFeature::ActivityTimeline => {
               activity::apply_feature_gate(app, enabled);
@@ -475,25 +480,6 @@ pub fn run() {
                 if let Err(error) = dictation::store_language(&handle, &language) {
                   tracing::warn!(%error, "dictation language from the tray was not stored");
                 }
-              }
-              tray::MenuAction::CheckForUpdates => {
-                // About runs the check and shows its answer in the window: a
-                // notification can be dropped by the system without an error.
-                show_settings(&handle, SettingsView::UpdateCheck);
-              }
-              tray::MenuAction::OpenEditRoot => {
-                manager.lock().await.open_edit_root().await;
-              }
-              tray::MenuAction::CopyDiagnostics => {
-                let mgr = manager.lock().await;
-                mgr.copy_diagnostics();
-              }
-              tray::MenuAction::EmailSupport => {
-                SessionManager::email_support();
-              }
-              tray::MenuAction::RevealSupportRoot => {
-                let mgr = manager.lock().await;
-                mgr.reveal_support_root();
               }
               tray::MenuAction::OpenSessionFile(id) => {
                 let mut mgr = manager.lock().await;
@@ -675,18 +661,11 @@ pub(crate) enum PreferencesTab {
   Dictation,
   Agents,
   Activity,
-  About,
 }
 
 impl PreferencesTab {
   #[cfg(test)]
-  const ALL: [Self; 5] = [
-    Self::General,
-    Self::Dictation,
-    Self::Agents,
-    Self::Activity,
-    Self::About,
-  ];
+  const ALL: [Self; 4] = [Self::General, Self::Dictation, Self::Agents, Self::Activity];
 
   const fn id(self) -> &'static str {
     match self {
@@ -694,7 +673,6 @@ impl PreferencesTab {
       Self::Dictation => "dictation",
       Self::Agents => "agents",
       Self::Activity => "activity",
-      Self::About => "about",
     }
   }
 }
@@ -732,8 +710,6 @@ pub(crate) enum SettingsView {
   Agents(AgentSettingsFocus),
   /// Dictation, focused on the microphone it records from.
   Microphone,
-  /// About, running "Check for updates" and showing its answer.
-  UpdateCheck,
 }
 
 impl SettingsView {
@@ -742,7 +718,6 @@ impl SettingsView {
       Self::Tab(tab) => tab,
       Self::Agents(_) => PreferencesTab::Agents,
       Self::Microphone => PreferencesTab::Dictation,
-      Self::UpdateCheck => PreferencesTab::About,
     }
   }
 
@@ -751,7 +726,6 @@ impl SettingsView {
       Self::Tab(_) => None,
       Self::Agents(focus) => Some(focus.id()),
       Self::Microphone => Some("microphone"),
-      Self::UpdateCheck => Some("update-check"),
     }
   }
 
@@ -862,8 +836,8 @@ mod preferences_tab_tests {
       "index.html#general"
     );
     assert_eq!(
-      SettingsView::UpdateCheck.page(),
-      "index.html#about/update-check"
+      SettingsView::Microphone.page(),
+      "index.html#dictation/microphone"
     );
   }
 

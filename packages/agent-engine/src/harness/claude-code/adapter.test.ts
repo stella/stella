@@ -63,6 +63,7 @@ import {
   type HarnessEvent,
   harnessSessionId,
 } from "../events";
+import { MEMBER_WAIT_CALL_TIMEOUT_MS } from "../member-wait";
 import { packageCacheEnvironment } from "../package-cache";
 import { harnessEventsToChunks } from "../stream-chunks";
 import { createClaudeCodeHarnessAdapter } from "./adapter";
@@ -1433,6 +1434,25 @@ describe("Claude Code adapter over stream-json stdio", () => {
     expect(harness.startups()).toHaveLength(1);
   });
 
+  test("a browser server that does not start leaves the turn running without it, and the agent is told", async () => {
+    const { events, received } = await run("browser_unreachable", {
+      overrides: {
+        browser: {
+          serverName: "stella_browser",
+          url: "http://127.0.0.1:9/browser/run-1",
+          token: "browser-token",
+        },
+      },
+    });
+    expect(terminal(events)?.type).toBe("turn.completed");
+    expect(promptOf(received())).toContain("The browser is unavailable");
+  });
+
+  test("a turn without the browser is told nothing about it", async () => {
+    const { received } = await run("browser_unreachable");
+    expect(promptOf(received())).not.toContain("browser");
+  });
+
   test("a start too slow for its deadline is tried once more, and the turn runs", async () => {
     for (const scenario of ["slow_first_start", "slow_first_mcp"] as const) {
       const harness = harnessFor(scenario, { requestTimeoutMs: 2000 });
@@ -1734,6 +1754,34 @@ describe("Claude Code approval modes", () => {
         ),
       ).toContain("mcp__stella_browser");
     }
+  });
+
+  test("the browser server's calls may wait on the member as long as an answer takes; stella's keep the harness's own bound", async () => {
+    const browser = {
+      serverName: "stella_browser",
+      url: "http://127.0.0.1:9/browser/run-1",
+      token: "browser-token",
+    };
+    const { controlRequests } = await run("tool_calls", {
+      overrides: {
+        policy: { network: "open", fs: "workspace", approvals: "ask" },
+        browser,
+      },
+    });
+    const servers = v.parse(
+      v.object({
+        servers: v.object({
+          stella: v.looseObject({ type: v.literal("http") }),
+          stella_browser: v.looseObject({ type: v.literal("http") }),
+        }),
+      }),
+      controlRequests("mcp_set_servers")[0]?.request,
+    ).servers;
+    expect(servers.stella_browser).toMatchObject({
+      url: browser.url,
+      timeout: MEMBER_WAIT_CALL_TIMEOUT_MS,
+    });
+    expect(servers.stella).not.toHaveProperty("timeout");
   });
 
   test("a plan opens with its approval, which shows the plan and offers approve or deny; approving it switches the CLI to Ask's mode once the plan's call has run", async () => {

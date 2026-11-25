@@ -577,7 +577,7 @@
       "auditLogsResourceId": "Erőforrás-azonosító",
       "auditLogsResourceIdentifier": "Erőforrás-azonosító: {id}",
       "auditLogsResourceType": "Erőforrás típusa",
-      "auditLogsResourceTypePlaceholder": "pl. workspace",
+      "auditLogsResourceTypePlaceholder": "pl. ügy",
       "auditLogsSentenceAccess": "{resource} megnyitva.",
       "auditLogsSentenceActivity": "Tevékenység rögzítve ehhez: {resource}.",
       "auditLogsSentenceCancel": "{resource} megszakítva.",

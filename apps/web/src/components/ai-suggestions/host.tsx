@@ -2,7 +2,7 @@
  * Docked AI-chat composer primitives.
  *
  * The shared building blocks every chat surface mounts: the docked
- * `PromptBar` (rich composer + preset chips + attachment tray + the
+ * `PromptBar` (rich composer + preset chips + draft attachments + the
  * send/stop/retry action), the floating glass `ChatThreadCard`, the
  * suggestion stepper, and the `SuggestionCard` used to render an edit
  * suggestion. Surfaces (the file-chat overlay, Template Studio, the
@@ -31,13 +31,9 @@ import type {
   AISuggestionSeverity,
 } from "@stll/folio-react";
 import { Button } from "@stll/ui/button";
-import {
-  COMPOSER_BOX_ANONYMIZED_CLASS,
-  COMPOSER_BOX_FOCUS_CLASS,
-  COMPOSER_COMPACT_TEXT_CELL_CLASS,
-  COMPOSER_CONTROL_BUTTON_SIZE,
-  COMPOSER_PLACEHOLDER_CLASS,
-} from "@stll/ui/composer";
+import { COMPOSER_CONTROL_BUTTON_SIZE } from "@stll/ui/composer";
+import { ComposerFrame } from "@stll/ui/composer-frame";
+import { DOC_FLOAT_SURFACE_CLASS } from "@stll/ui/composer-tokens";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   AiActionIcon,
@@ -65,17 +61,12 @@ import type { ComposerEditModeMenuProps } from "@/components/chat/chat-edit-mode
 import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
 import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
 import type { ComposerContextMenuProps } from "@/components/chat/composer-plus-menu";
-import { ComposerControlSlot } from "@/components/chat/composer-row.pending";
 import {
   DOCKED_CHAT_COLUMN_SLOT,
   DockedChatSurface,
   isPressOutsideDockedChat,
 } from "@/components/chat/docked-chat-stack";
-import {
-  DOC_FLOAT_SURFACE_CLASS,
-  DockedComposer,
-  PromptBarShell,
-} from "@/components/chat/docked-composer";
+import { DockedComposer } from "@/components/chat/docked-composer";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -729,115 +720,134 @@ export const PromptBar = (props: PromptBarProps) => {
     onFocusChange?.(false);
   };
 
+  // The attention pulse, kicked by the inspector chip click to close the
+  // panel→producer loop visually, wins over the steady treatments: it is
+  // transient and meant to catch the eye, not to report ongoing work.
+  let ring: "anonymized" | "attention" | "focus" | "none" = "none";
+  if (attention && !inputDisabled) {
+    ring = "attention";
+  } else if (anonymized) {
+    ring = "anonymized";
+  } else if (!inputDisabled) {
+    ring = "focus";
+  }
+  // One overlay at a time over the text: the busy "working" label, the
+  // editor-loading label, or the host's own empty placeholder. While one
+  // shows, the editor's own placeholder is suppressed so the two texts never
+  // paint on top of each other.
+  let placeholder: ReactNode | undefined;
+  if (showBusyPlaceholder) {
+    placeholder = (
+      <>
+        <Loader className="size-3.5 shrink-0" size="sm" variant="decorative" />
+        <TruncatedText>{t("chat.thinking")}</TruncatedText>
+      </>
+    );
+  } else if (isEmpty && !busy && isSendBlocked) {
+    placeholder = (
+      <>
+        <Loader className="size-3.5 shrink-0" size="sm" variant="decorative" />
+        <TruncatedText>
+          {sendDisabledReason === "editor-loading"
+            ? t("chat.editorLoading")
+            : t("folio.savingDocument")}
+        </TruncatedText>
+      </>
+    );
+  } else if (isEmpty && !busy && emptyPlaceholder !== undefined) {
+    placeholder = emptyPlaceholder;
+  }
+
   const shell = (
-    <PromptBarShell
-      aria-busy={busy}
-      aria-label={t("chat.aiPrompt")}
-      onBlurCapture={handleShellBlur}
-      onFocusCapture={handleShellFocus}
-      onKeyDownCapture={handleShellKeyDown}
-      className={cn(
-        !inputDisabled && !anonymized && COMPOSER_BOX_FOCUS_CLASS,
-        anonymized && COMPOSER_BOX_ANONYMIZED_CLASS,
-        // Attention pulse — kicked by the inspector chip click to
-        // close the panel→producer loop visually. Stronger ring
-        // than the busy state because it's transient and meant to
-        // catch the eye, not communicate ongoing work.
-        attention && !inputDisabled && "border-primary ring-primary/40 ring-4",
-      )}
-      role="toolbar"
-      tabIndex={-1}
-    >
-      {presetChipsVisible &&
-        scopePromptPreset !== null &&
-        presetScopeChooser !== undefined && (
-          <div className="absolute start-1 bottom-full mb-3 flex items-start">
-            <span
-              className={cn(
-                DOC_FLOAT_SURFACE_CLASS,
-                "border-foreground/15 shadow-floating inline-flex items-center gap-1.5 rounded-full border py-1 ps-3 pe-1",
-              )}
-            >
-              <span className="text-muted-foreground text-xs font-medium">
-                {presetScopeChooser.question}
-              </span>
-              <Button
-                onClick={() => resolvePresetScope("selection")}
-                size="chip"
-                type="button"
-                variant="ghost"
-              >
-                {presetScopeChooser.selectionLabel}
-              </Button>
-              <Button
-                onClick={() => resolvePresetScope("document")}
-                size="chip"
-                type="button"
-                variant="ghost"
-              >
-                {presetScopeChooser.documentLabel}
-              </Button>
-            </span>
-          </div>
-        )}
-      {presetChipsVisible && scopePromptPreset === null && (
-        <div className="absolute start-1 bottom-full mb-3 flex flex-col items-start gap-1.5">
-          {presets.map((preset) => (
-            // The opaque surface lives on a wrapper, not the Button:
-            // the ghost variant swaps `background-color` to the
-            // translucent `--accent` on hover, which over the bare
-            // document would make the chip see-through under the
-            // cursor. Over the wrapper's solid surface the same swap
-            // is the standard menu-item tint.
-            <span
-              className={cn(
-                DOC_FLOAT_SURFACE_CLASS,
-                "border-foreground/15 shadow-floating inline-flex rounded-full border",
-              )}
-              key={preset.id}
-            >
-              <Button
-                aria-keyshortcuts="Tab"
-                className="text-foreground h-9 gap-2.5 rounded-full px-3 text-[13px] font-medium"
-                onClick={() => submitPreset(preset)}
-                size="sm"
-                type="button"
-                variant="ghost"
-              >
-                <AiActionIcon aria-hidden="true" className="size-4" />
-                {preset.label}
-              </Button>
-            </span>
-          ))}
-        </div>
-      )}
-      {attachmentsEnabled && (
+    <ComposerFrame
+      above={
         <>
-          {attachments.length > 0 && (
-            // Attachments float above the bar in an opaque tray so the chips
-            // (translucent `bg-muted/50`) stay readable over a document in
-            // floating mode; the bar's own single row is left untouched.
-            <div
-              className={cn(
-                DOC_FLOAT_SURFACE_CLASS,
-                "border-foreground/15 shadow-floating absolute inset-x-1 bottom-full mb-2 overflow-hidden rounded-xl border pb-2",
-              )}
-            >
-              <ChatDraftAttachmentChips
-                files={attachments}
-                onRemove={removeFile}
-                onExpand={expandPastedText}
-              />
+          {presetChipsVisible &&
+            scopePromptPreset !== null &&
+            presetScopeChooser !== undefined && (
+              <div className="absolute start-1 bottom-full mb-3 flex items-start">
+                <span
+                  className={cn(
+                    DOC_FLOAT_SURFACE_CLASS,
+                    "border-foreground/15 shadow-floating inline-flex items-center gap-1.5 rounded-full border py-1 ps-3 pe-1",
+                  )}
+                >
+                  <span className="text-muted-foreground text-xs font-medium">
+                    {presetScopeChooser.question}
+                  </span>
+                  <Button
+                    onClick={() => resolvePresetScope("selection")}
+                    size="chip"
+                    type="button"
+                    variant="ghost"
+                  >
+                    {presetScopeChooser.selectionLabel}
+                  </Button>
+                  <Button
+                    onClick={() => resolvePresetScope("document")}
+                    size="chip"
+                    type="button"
+                    variant="ghost"
+                  >
+                    {presetScopeChooser.documentLabel}
+                  </Button>
+                </span>
+              </div>
+            )}
+          {presetChipsVisible && scopePromptPreset === null && (
+            <div className="absolute start-1 bottom-full mb-3 flex flex-col items-start gap-1.5">
+              {presets.map((preset) => (
+                // The opaque surface lives on a wrapper, not the Button:
+                // the ghost variant swaps `background-color` to the
+                // translucent `--accent` on hover, which over the bare
+                // document would make the chip see-through under the
+                // cursor. Over the wrapper's solid surface the same swap
+                // is the standard menu-item tint.
+                <span
+                  className={cn(
+                    DOC_FLOAT_SURFACE_CLASS,
+                    "border-foreground/15 shadow-floating inline-flex rounded-full border",
+                  )}
+                  key={preset.id}
+                >
+                  <Button
+                    aria-keyshortcuts="Tab"
+                    className="text-foreground h-9 gap-2.5 rounded-full px-3 text-[13px] font-medium"
+                    onClick={() => submitPreset(preset)}
+                    size="sm"
+                    type="button"
+                    variant="ghost"
+                  >
+                    <AiActionIcon aria-hidden="true" className="size-4" />
+                    {preset.label}
+                  </Button>
+                </span>
+              ))}
             </div>
           )}
-          {/* Shared (+) affordance on the left, identical to the main chat
-              composer; opens the attach-file picker via the same controller.
-              The control slot (same pattern the pending badge below uses)
-              seats the circle on the editor cell's single text line: the
-              shell is items-end, so a bare button would otherwise ride
-              below the placeholder's center line. */}
-          <ComposerControlSlot>
-            {minimizedThreadAction ? (
+        </>
+      }
+      attachments={
+        attachmentsEnabled && (
+          // Inside the box on its document paper, above the text and outside
+          // its scroll region, as in the chat bar.
+          <ChatDraftAttachmentChips
+            files={attachments}
+            onRemove={removeFile}
+            onExpand={expandPastedText}
+          />
+        )
+      }
+      aria-busy={busy}
+      aria-label={t("chat.aiPrompt")}
+      empty={isEmpty}
+      leading={
+        <>
+          {/* Shared (+) affordance at the start, identical to the main chat
+              composer; opens the attach-file picker via the same
+              controller. */}
+          {attachmentsEnabled &&
+            (minimizedThreadAction ? (
               <Button
                 aria-label={minimizedThreadAction.label}
                 className="border-border size-7 shrink-0 rounded-full border"
@@ -881,93 +891,37 @@ export const PromptBar = (props: PromptBarProps) => {
                     : undefined
                 }
               />
-            )}
-          </ComposerControlSlot>
-        </>
-      )}
-      {layout === "floating" && pendingCount > 0 && (
-        <ComposerControlSlot className="ps-0.5">
-          <span className="bg-muted text-foreground text-2xs inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 font-semibold tabular-nums">
-            {format.number(pendingCount)}
-          </span>
-        </ComposerControlSlot>
-      )}
-      <div
-        className={cn(
-          COMPOSER_COMPACT_TEXT_CELL_CLASS,
-          "flex flex-1 items-center gap-1.5 px-1.5",
-        )}
-      >
-        {showBusyPlaceholder && (
-          <div
-            className={cn(
-              COMPOSER_PLACEHOLDER_CLASS,
-              "inset-x-1.5 top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center gap-2",
-            )}
-          >
-            <Loader
-              className="size-3.5 shrink-0"
-              size="sm"
-              variant="decorative"
-            />
-            <TruncatedText>{t("chat.thinking")}</TruncatedText>
-          </div>
-        )}
-        {isEmpty && !busy && isSendBlocked && (
-          <div
-            className={cn(
-              COMPOSER_PLACEHOLDER_CLASS,
-              "inset-x-1.5 top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center gap-2",
-            )}
-          >
-            <Loader
-              className="size-3.5 shrink-0"
-              size="sm"
-              variant="decorative"
-            />
-            <TruncatedText>
-              {sendDisabledReason === "editor-loading"
-                ? t("chat.editorLoading")
-                : t("folio.savingDocument")}
-            </TruncatedText>
-          </div>
-        )}
-        {isEmpty &&
-          !busy &&
-          !isSendBlocked &&
-          emptyPlaceholder !== undefined && (
-            <div className="pointer-events-none absolute inset-0 z-10 flex min-w-0 items-center px-1.5">
-              {emptyPlaceholder}
-            </div>
+            ))}
+          {layout === "floating" && pendingCount > 0 && (
+            <span className="bg-muted text-foreground text-2xs ms-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 font-semibold tabular-nums">
+              {format.number(pendingCount)}
+            </span>
           )}
+        </>
+      }
+      onBlurCapture={handleShellBlur}
+      onFocusCapture={handleShellFocus}
+      onKeyDownCapture={handleShellKeyDown}
+      placeholder={placeholder}
+      ring={ring}
+      role="toolbar"
+      stature="compact"
+      surface="document"
+      tabIndex={-1}
+      text={
         <PromptEditorContent
-          // Height is content-driven: the shared compact text cell seats
-          // one `text-sm` line at `leading-5`; multiple wrapped lines stay
-          // tight. The cell grows up to `max-h-32` before scrolling, and
-          // `min-h-0` overrides the provider's `min-h-10` so it shrinks
-          // back as the user deletes content.
           className={cn(
-            "folio-ai-bar-editor text-foreground min-w-0 flex-1 [&_.ProseMirror]:field-sizing-fixed [&_.ProseMirror]:max-h-32 [&_.ProseMirror]:min-h-0 [&_.ProseMirror]:overflow-y-auto [&_.ProseMirror]:leading-5 [&_.ProseMirror]:select-text [&_.ProseMirror]:focus-visible:outline-none [&_.ProseMirror_p]:my-0",
-            // Suppress the composer's own placeholder whenever the host
-            // renders an overlay in the same cell (custom placeholder, the
-            // busy "working" label, or the editor-loading label) — otherwise
-            // the two texts paint on top of each other.
-            isEmpty &&
-              (emptyPlaceholder !== undefined ||
-                showBusyPlaceholder ||
-                isSendBlocked) &&
+            "folio-ai-bar-editor text-foreground min-w-0 [&_.ProseMirror]:select-text [&_.ProseMirror]:focus-visible:outline-none [&_.ProseMirror_p]:my-0",
+            placeholder !== undefined &&
               "folio-ai-bar-editor--custom-placeholder",
             inputDisabled && "pointer-events-none",
           )}
           editor={editor}
         />
-      </div>
-
-      {/* The control slot mirrors the (+) menu's seating: the shell is
-          items-end, so the slot rides the bottom text line as the editor
-          grows. The button owns its tooltip: its action when it can act,
-          and why not when it cannot. */}
-      <ComposerControlSlot>
+      }
+      trailing={
+        // The button owns its tooltip: its action when it can act, and why
+        // not when it cannot.
         <ChatComposerActionButton
           canSend={!composerSubmitDisabled && canSubmit}
           disabledReason={sendDisabledText}
@@ -982,8 +936,8 @@ export const PromptBar = (props: PromptBarProps) => {
           onStop={onStop}
           stopping={stopping}
         />
-      </ComposerControlSlot>
-    </PromptBarShell>
+      }
+    />
   );
 
   // One docked layout for every surface: `DockedComposer` owns the bar's

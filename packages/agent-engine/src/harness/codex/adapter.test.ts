@@ -68,6 +68,7 @@ import {
   type HarnessEvent,
   harnessSessionId,
 } from "../events";
+import { MEMBER_WAIT_CALL_TIMEOUT_SECONDS } from "../member-wait";
 import { packageCacheEnvironment } from "../package-cache";
 import { harnessEventsToChunks } from "../stream-chunks";
 import { createCodexHarnessAdapter } from "./adapter";
@@ -330,6 +331,37 @@ describe("Codex adapter over a stdio app-server", () => {
         context: { usedTokens: 150, windowTokens: FAKE_CONTEXT_WINDOW },
       },
       boundary: harnessBoundary("turn-1"),
+    });
+  });
+
+  test("registers the browser steps that may wait on the member as plain calls only, outside code mode, and the rest where scripts reach them", async () => {
+    const browser = {
+      serverName: "stella_browser",
+      url: "http://127.0.0.1:9/browser/run-1",
+      token: "browser-token",
+    };
+    const { received } = await run("tool_calls", { overrides: { browser } });
+    const threadStart = received().find(
+      ({ method }) => method === "thread/start",
+    );
+    const server = {
+      url: browser.url,
+      http_headers: { Authorization: `Bearer ${browser.token}` },
+      default_tools_approval_mode: "approve",
+      tool_timeout_sec: MEMBER_WAIT_CALL_TIMEOUT_SECONDS,
+    };
+    expect(threadStart?.params).toMatchObject({
+      config: {
+        "mcp_servers.stella_browser": {
+          ...server,
+          disabled_tools: ["open", "click", "type", "press_key", "select"],
+        },
+        "mcp_servers.stella_browser_direct": {
+          ...server,
+          enabled_tools: ["open", "click", "type", "press_key", "select"],
+          omit_tools_from: ["code_mode", "deferred"],
+        },
+      },
     });
   });
 
@@ -1092,6 +1124,27 @@ describe("Codex adapter over a stdio app-server", () => {
     );
     expect(prompt).toContain("Find the leases.");
     expect(prompt).toContain("Search both.");
+  });
+
+  test("a session another Codex process holds open fails the turn instead of starting a new thread", async () => {
+    const harness = harnessFor("resume_active_writer");
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir, {
+        continuation: {
+          type: "resume",
+          sessionId: harnessSessionId(FAKE_RESUMED_THREAD_ID),
+        },
+      }),
+    );
+    expect(Result.isError(started) && started.error.reason).toBe(
+      "start_rejected",
+    );
+    expect(Result.isError(started) && started.error.message).toContain(
+      "open in another Codex window",
+    );
+    expect(
+      harness.received().some(({ method }) => method === "thread/start"),
+    ).toBe(false);
   });
 
   test("the turn's images open turn/start as data URLs; a PDF stays the path the text names", async () => {

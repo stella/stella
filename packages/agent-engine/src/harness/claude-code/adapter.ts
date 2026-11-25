@@ -41,6 +41,7 @@ import {
   harnessSessionId,
   sessionHoldsHistory,
 } from "../events";
+import { MEMBER_WAIT_CALL_TIMEOUT_MS } from "../member-wait";
 import { packageCacheEnvironment } from "../package-cache";
 import { sandboxReads } from "../sandbox-reads";
 import { redactingSkillPaths } from "../skill-redaction";
@@ -423,6 +424,9 @@ const MCP_SERVER_NAME = /^[A-Za-z0-9_-]+$/u;
 /** Missing-session refusals, in the CLI's wording: the session, or the entry a fork keeps through. */
 const SESSION_MISSING =
   /no conversation found|no message found with message\.uuid/iu;
+/** What the agent is told when the browser server did not start. */
+const BROWSER_UNAVAILABLE_NOTE =
+  "(The browser is unavailable for this message: its tools could not be connected. Do not try to use it; if the task needs it, tell the user the browser is unavailable right now.)";
 
 const validateOptions = (options: ClaudeCodeHarnessAdapterOptions) => {
   if (!path.isAbsolute(options.launch.executable)) {
@@ -802,6 +806,8 @@ type OpenedSession = {
   session: ClaudeCodeTurnSession;
   client: ClaudeCliClient;
   cli: ClaudeProcess;
+  /** The browser server the turn asked for runs in the process. */
+  browserServed: boolean;
 };
 type OpenFailure =
   | { type: "connect"; failure: ConnectFailure }
@@ -891,31 +897,39 @@ const openSession = async (
     );
   }
   // Only stella's servers are registered; the run's secrets travel over
-  // stdio, never on the command line or in a file.
+  // stdio, never on the command line or in a file. A browser step the
+  // member must allow waits inside its call, so the browser server's calls
+  // are bounded by the member's wait, never by the harness's default.
   const servers = [
-    input.mcp,
-    ...(input.browser === null ? [] : [input.browser]),
+    { ...input.mcp, timeout: null },
+    ...(input.browser === null
+      ? []
+      : [{ ...input.browser, timeout: MEMBER_WAIT_CALL_TIMEOUT_MS }]),
   ];
   const registered = await client.request("mcp_set_servers", {
     servers: Object.fromEntries(
-      servers.map(({ serverName, token, url }) => [
+      servers.map(({ serverName, token, url, timeout }) => [
         serverName,
-        { type: "http", url, headers: { Authorization: `Bearer ${token}` } },
+        {
+          type: "http",
+          url,
+          headers: { Authorization: `Bearer ${token}` },
+          ...(timeout === null ? {} : { timeout }),
+        },
       ]),
     ),
   });
   const parsed = Result.isOk(registered)
     ? v.safeParse(McpSetServersResponseSchema, registered.value)
     : null;
-  if (
-    parsed === null ||
-    !parsed.success ||
-    servers.some(
-      ({ serverName }) =>
-        !parsed.output.added.includes(serverName) ||
-        parsed.output.errors[serverName] !== undefined,
-    )
-  ) {
+  const added = (serverName: string) =>
+    parsed?.success === true &&
+    parsed.output.added.includes(serverName) &&
+    parsed.output.errors[serverName] === undefined;
+  // Only stella's own server is the turn's to fail on; without the browser
+  // (refused by a managed policy, or failing to start), the turn runs and
+  // the agent is told.
+  if (!added(input.mcp.serverName)) {
     return fail(
       new HarnessStartError({
         reason: "start_rejected",
@@ -924,7 +938,12 @@ const openSession = async (
       Result.isError(registered) && registered.error.reason === "timed_out",
     );
   }
-  return Result.ok({ session, client, cli });
+  return Result.ok({
+    session,
+    client,
+    cli,
+    browserServed: input.browser !== null && added(input.browser.serverName),
+  });
 };
 
 const startError = (failure: OpenFailure): HarnessStartError =>
@@ -1008,7 +1027,7 @@ const openTurn = async (
   if (Result.isError(opened)) {
     return Result.err(startError(opened.error));
   }
-  const { session, client, cli } = opened.value;
+  const { session, client, cli, browserServed } = opened.value;
   const prompt = sessionHoldsHistory(continuation)
     ? buildTurnPrompt({ transcript: input.transcript, mode: "resumed" })
     : Result.ok(standalone);
@@ -1017,7 +1036,12 @@ const openTurn = async (
     await client.kill();
     return prompt;
   }
-  const held = heldProcess(options, input, { cli, client, skills });
+  const held = heldProcess(options, input, {
+    cli,
+    client,
+    skills,
+    browserServed,
+  });
   sendTurn({
     session,
     client,
@@ -1025,6 +1049,7 @@ const openTurn = async (
     sessionId: target.sessionId,
     prompt: prompt.value,
     continuation,
+    browserServed,
   });
   return Result.ok(processTurn(input, session.turn(), held));
 };
@@ -1037,6 +1062,7 @@ const sendTurn = ({
   sessionId,
   prompt,
   continuation,
+  browserServed,
 }: {
   session: ClaudeCodeTurnSession;
   client: ClaudeCliClient;
@@ -1044,13 +1070,25 @@ const sendTurn = ({
   sessionId: HarnessSessionId;
   prompt: string;
   continuation: HarnessContinuation;
+  /** The browser server the turn asked for runs in the process. */
+  browserServed: boolean;
 }) => {
   session.begin({ sessionId, continuation });
+  // The turn's instructions offer the browser; without its server the agent
+  // is told, so it says so rather than reaching for tools it lacks.
+  const told =
+    input.browser !== null && !browserServed
+      ? `${BROWSER_UNAVAILABLE_NOTE}\n\n${prompt}`
+      : prompt;
+  // By its uuid, the turn knows its prompt in work the CLI started itself.
+  const uuid = crypto.randomUUID();
+  session.promptWritten(uuid);
   client.send({
     type: "user",
-    message: { role: "user", content: userContent(input.inputFiles, prompt) },
+    message: { role: "user", content: userContent(input.inputFiles, told) },
     parent_tool_use_id: null,
     session_id: sessionId,
+    uuid,
   });
 };
 
@@ -1073,6 +1111,8 @@ type HeldProcess = {
   gone: Promise<void>;
   /** What the process runs at, switched in place by later turns. */
   settings: HeldSettings;
+  /** The browser server runs in the process. */
+  browserServed: boolean;
 };
 
 /**
@@ -1113,15 +1153,18 @@ const heldProcess = (
     cli,
     client,
     skills,
+    browserServed,
   }: {
     cli: ClaudeProcess;
     client: ClaudeCliClient;
     skills: SkillPlugin | null;
+    browserServed: boolean;
   },
 ): HeldProcess => {
   const held = {
     skills,
     settings: heldSettings(options, input, skills),
+    browserServed,
     gone: (async () => {
       await client.exited;
       if (skills !== null) {
@@ -1252,6 +1295,7 @@ const continueTurn = async (
     sessionId: live.sessionId,
     prompt: prompt.value,
     continuation: { type: "resumed" },
+    browserServed: held.browserServed,
   });
   return Result.ok(processTurn(input, session.turn(), held));
 };

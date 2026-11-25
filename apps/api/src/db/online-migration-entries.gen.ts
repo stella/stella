@@ -205,6 +205,7 @@ export { default as repairs_corpus_projection_offline_delivery_constraint_valida
 export { default as repairs_corpus_projection_offline_fault_constraint_validations } from "./online-migration-entries/repairs-corpus-projection-offline-fault-constraint-validations";
 export { default as repairs_data_box_constraint_validations } from "./online-migration-entries/repairs-data-box-constraint-validations";
 export { default as repairs_decision_date_ceiling_repair } from "./online-migration-entries/repairs-decision-date-ceiling-repair";
+export { default as repairs_deleted_account_row_repair } from "./online-migration-entries/repairs-deleted-account-row-repair";
 export { default as repairs_desktop_runner_question_answers_constraint_validations } from "./online-migration-entries/repairs-desktop-runner-question-answers-constraint-validations";
 export { default as repairs_document_derivative_run_ownership_repairs } from "./online-migration-entries/repairs-document-derivative-run-ownership-repairs";
 export { default as repairs_document_review_finding_decision_backfill } from "./online-migration-entries/repairs-document-review-finding-decision-backfill";

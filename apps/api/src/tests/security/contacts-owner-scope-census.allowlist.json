@@ -177,10 +177,10 @@
       "loadBillingDraftMatters.formats": 1
     }
   },
-  "apps/api/src/handlers/desktop-time-entries/candidates.ts::names-contacts-table": {
-    "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
+  "apps/api/src/handlers/desktop-time-entries/matter-candidate-projection.ts::names-contacts-table": {
+    "reason": "Query builder for the desktop matter shortlist and resolve handlers: both run it in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
     "sites": {
-      "createDesktopMatterCandidatesEndpoint.page": 1
+      "selectMatterCandidates": 1
     }
   },
   "apps/api/src/handlers/dev/routes.ts::names-contacts-table": {

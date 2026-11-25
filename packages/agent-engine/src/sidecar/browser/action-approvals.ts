@@ -75,22 +75,31 @@ const approvalReason = (asked: BrowserApprovalRequest): string => {
   return chatLocalRunShownText(reason, CHAT_LOCAL_RUN_TOOL_LIMITS.approval);
 };
 
-/** The approval's call, as chat keeps it: the step and what it is about. */
+/**
+ * The approval's call, as chat keeps it: the step, what it is about, and
+ * why the member is asked.
+ */
 const approvalCall = (asked: BrowserApprovalRequest) => {
+  const { reason: why } = asked;
   if (asked.action === "open") {
-    return { action: asked.action, url: asked.url };
+    return { action: asked.action, url: asked.url, why };
   }
   const about = { name: asked.name, role: asked.role, url: asked.url };
   switch (asked.action) {
     case "click":
     case "type":
-      return { action: asked.action, asked: about };
+      return { action: asked.action, asked: about, why };
     case "press_key":
-      return { action: asked.action, asked: { ...about, key: asked.key } };
+      return {
+        action: asked.action,
+        asked: { ...about, key: asked.key },
+        why,
+      };
     case "select":
       return {
         action: asked.action,
         asked: { ...about, option: asked.option },
+        why,
       };
     default:
       asked satisfies never;

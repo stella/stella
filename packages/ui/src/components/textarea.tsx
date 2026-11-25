@@ -9,10 +9,7 @@ import { useContentDir } from "../hooks/use-content-dir";
 import { CONTROL_SIZE } from "../lib/control-size";
 import type { ControlSize } from "../lib/control-size";
 import { cn } from "../lib/utils";
-import {
-  COMPOSER_LARGE_EDITOR_CLASS,
-  COMPOSER_TEXT_CLASS,
-} from "./composer-tokens";
+import { COMPOSER_TEXT_CLASS } from "./composer-tokens";
 import { INLINE_FIELD_CLASS_NAME } from "./input-control";
 
 /**
@@ -25,7 +22,11 @@ type TextareaStyle = React.CSSProperties & {
 
 type TextareaProps = React.ComponentProps<"textarea"> & {
   size?: ControlSize | number;
-  /** A borderless editor inside the shared large composer text well. */
+  /**
+   * A borderless editor for the `text` slot of a `ComposerFrame`: it grows
+   * with what is typed, and the frame sets its height floor, caps it and
+   * scrolls it.
+   */
   appearance?: "default" | "composer";
   unstyled?: boolean;
   /**
@@ -88,7 +89,6 @@ const Textarea = ({
     ? cn(
         "placeholder:text-foreground-placeholder block w-full resize-none bg-transparent outline-none [--textarea-pb:0px] [--textarea-pt:0px]",
         COMPOSER_TEXT_CLASS,
-        COMPOSER_LARGE_EDITOR_CLASS,
       )
     : fieldEditorClass;
   const contentDir = useContentDir({

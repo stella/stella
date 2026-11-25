@@ -4,12 +4,15 @@
 //! per-feature decisions; this module never reads or sends feature data. The
 //! decision is refreshed at startup, on every account link or unlink, right
 //! after the computer wakes, and every 2 minutes. Anything but an explicit
-//! `enabled` (no account, a refusal, an unknown status) turns a feature off.
+//! `enabled` (no account, a refusal, an unknown status) turns a feature off,
+//! and the gate records why: a refused credential (401) asks the member to
+//! reconnect, any other refusal means the feature is not available.
 //!
 //! A read that could not happen (the network is down after a wake, the
-//! server failed, the Keychain did not answer in time) decides nothing: the
-//! last decision stands, bounded by the credential's expiry, and the read is
-//! retried within seconds rather than at the next 2 minute tick.
+//! server failed or answered something unreadable, the Keychain did not
+//! answer in time) decides nothing: the last decision stands, bounded by the
+//! credential's expiry, and the read is retried within seconds rather than at
+//! the next 2 minute tick.
 
 use serde::Deserialize;
 use std::{
@@ -19,8 +22,8 @@ use std::{
 };
 use tauri::{AppHandle, Manager};
 
-use crate::account::{self, AccountRequest, AccountState};
-use crate::feature_gate::{DesktopFeature, FeatureGates};
+use crate::account::{self, AccountRequest, AccountState, LinkObservation};
+use crate::feature_gate::{AccountDecision, DesktopFeature, FeatureGates};
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
 use crate::logging::{json_cause_logged, request_cause_logged};
 
@@ -71,25 +74,36 @@ fn enabled_features(body: &[u8]) -> Result<HashSet<DesktopFeature>, String> {
   )
 }
 
-/// Why a read produced no decision from the server.
+/// Why a read produced no list of features from the server.
 #[derive(Debug, PartialEq, Eq)]
 enum FetchFailure {
-  /// The request never got an answer, or the server failed: nothing is
-  /// known, so the last decision stands and the read is retried soon.
+  /// The request never got an answer, the server failed, or its answer
+  /// could not be read: nothing is known, so the last decision stands and
+  /// the read is retried soon.
   Unreached(String),
-  /// The server refused the request or answered with something unreadable:
-  /// gated features go off.
-  Refused(String),
+  /// The request could not be signed because this computer's device proof
+  /// is gone: the member has to link again.
+  DeviceProofLost,
+  /// The server refused the desktop credential: the member has to link
+  /// again.
+  CredentialRefused(String),
+  /// The server accepted the credential and refused this account the
+  /// gated features.
+  Denied(String),
 }
 
-/// A server failure or a rate limit says nothing about the account; any
-/// other refusal does.
+/// A server failure, a rate limit or a redirect says nothing about the
+/// account; a 401 is about the credential; any other refusal is about the
+/// account's features.
 fn failure_for_status(status: reqwest::StatusCode) -> FetchFailure {
   let message = format!("feature access request was refused: {status}");
-  if status.is_server_error() || status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-    FetchFailure::Unreached(message)
+  if status == reqwest::StatusCode::UNAUTHORIZED {
+    FetchFailure::CredentialRefused(message)
+  } else if status.is_client_error() && status != reqwest::StatusCode::TOO_MANY_REQUESTS
+  {
+    FetchFailure::Denied(message)
   } else {
-    FetchFailure::Refused(message)
+    FetchFailure::Unreached(message)
   }
 }
 
@@ -128,7 +142,13 @@ async fn fetch(
 ) -> Result<HashSet<DesktopFeature>, FetchFailure> {
   let mut response =
     signed_request(client().map_err(FetchFailure::Unreached)?, request)
-      .map_err(FetchFailure::Refused)?
+      .map_err(|error| {
+        if error == crate::device_proof::RECONNECT {
+          FetchFailure::DeviceProofLost
+        } else {
+          FetchFailure::Unreached(error)
+        }
+      })?
       .send()
       .await
       .map_err(request_cause_logged("feature access request failed"))
@@ -144,81 +164,134 @@ async fn fetch(
     .map_err(FetchFailure::Unreached)?
   {
     if body.len() + chunk.len() > MAX_RESPONSE_BYTES {
-      return Err(FetchFailure::Refused(
+      return Err(FetchFailure::Unreached(
         "feature access response is too large".to_string(),
       ));
     }
     body.extend_from_slice(&chunk);
   }
-  enabled_features(&body).map_err(FetchFailure::Refused)
-}
-
-struct AccountDecision {
-  namespace: Option<String>,
-  expires_at: Option<chrono::DateTime<chrono::Utc>>,
-  enabled: HashSet<DesktopFeature>,
+  enabled_features(&body).map_err(FetchFailure::Unreached)
 }
 
 /// What one read tells about the account's features.
 enum Outcome {
   Decided(AccountDecision),
-  /// Nothing could be read; the last decision stands.
-  Unknown,
+  /// Nothing could be read; the last decision stands. The account is named
+  /// when it was read but the server was not reached, so a gate that has no
+  /// answer yet knows whose data is local.
+  Unknown {
+    unconfirmed: Option<AccountDecision>,
+  },
+}
+
+/// The decision a failed read leaves, and what it says about the saved link.
+fn decision_for_failure(
+  failure: FetchFailure,
+  namespace: String,
+  expires_at: chrono::DateTime<chrono::Utc>,
+) -> Option<(AccountDecision, LinkObservation)> {
+  match failure {
+    FetchFailure::Unreached(error) => {
+      tracing::warn!(error = %error, "feature access deferred: the server was not reached");
+      None
+    }
+    FetchFailure::DeviceProofLost => {
+      tracing::warn!("feature access skipped: account needs reconnecting");
+      Some((
+        AccountDecision::ReconnectNeeded {
+          namespace: Some(namespace),
+        },
+        LinkObservation::DeviceProofLost,
+      ))
+    }
+    FetchFailure::CredentialRefused(error) => {
+      tracing::warn!(error = %error, "feature access refused the credential; account needs reconnecting");
+      Some((
+        AccountDecision::ReconnectNeeded {
+          namespace: Some(namespace),
+        },
+        LinkObservation::ServerRefused,
+      ))
+    }
+    FetchFailure::Denied(error) => {
+      tracing::warn!(error = %error, "feature access was denied; gated features stay off");
+      Some((
+        AccountDecision::Answered {
+          namespace,
+          expires_at,
+          enabled: HashSet::new(),
+        },
+        LinkObservation::ServerAccepted,
+      ))
+    }
+  }
 }
 
 async fn current_decision(app: &AppHandle) -> Outcome {
-  let closed = || {
-    Outcome::Decided(AccountDecision {
-      namespace: None,
-      expires_at: None,
-      enabled: HashSet::new(),
-    })
-  };
   let Some(state) = app.try_state::<AccountState>() else {
-    return closed();
+    return Outcome::Decided(AccountDecision::SignedOut);
   };
   let request = match account::request_account(&state).await {
     Ok(Some(request)) => {
-      account::set_reconnect_needed(app, false);
+      account::observe_link(app, LinkObservation::DeviceProofReadable);
       request
     }
     Ok(None) => {
-      account::set_reconnect_needed(app, false);
-      return closed();
+      account::observe_link(app, LinkObservation::LinkReplaced);
+      return Outcome::Decided(AccountDecision::SignedOut);
     }
     Err(error) if error == crate::device_proof::RECONNECT => {
-      account::set_reconnect_needed(app, true);
+      account::observe_link(app, LinkObservation::DeviceProofLost);
       tracing::warn!(error = %error, "feature access skipped: account needs reconnecting");
-      return closed();
+      return Outcome::Decided(AccountDecision::ReconnectNeeded { namespace: None });
     }
     // The Keychain did not answer (often while the computer sleeps): the
     // account is still linked, so nothing is decided until it can be read.
     Err(error) => {
       tracing::warn!(error = %error, "feature access deferred: account is unreadable now");
-      return Outcome::Unknown;
+      return Outcome::Unknown { unconfirmed: None };
     }
   };
-  let namespace = Some(request.local_data_namespace());
-  let expires_at = chrono::DateTime::parse_from_rfc3339(&request.credential.expires_at)
-    .ok()
-    .map(|expiry| expiry.with_timezone(&chrono::Utc));
-  let enabled = match fetch(&request).await {
-    Ok(enabled) => enabled,
-    Err(FetchFailure::Unreached(error)) => {
-      tracing::warn!(error = %error, "feature access deferred: the server was not reached");
-      return Outcome::Unknown;
-    }
-    Err(FetchFailure::Refused(error)) => {
-      tracing::warn!(error = %error, "feature access is unavailable; gated features stay off");
-      HashSet::new()
-    }
+  let namespace = request.local_data_namespace();
+  let Ok(expires_at) =
+    chrono::DateTime::parse_from_rfc3339(&request.credential.expires_at)
+      .map(|expiry| expiry.with_timezone(&chrono::Utc))
+  else {
+    // A saved link without a readable expiry cannot be renewed.
+    tracing::warn!(
+      "feature access skipped: the saved credential has no readable expiry"
+    );
+    return Outcome::Decided(AccountDecision::ReconnectNeeded {
+      namespace: Some(namespace),
+    });
   };
+  let fetched = fetch(&request).await;
   drop(request);
-  Outcome::Decided(AccountDecision {
-    namespace,
-    expires_at,
-    enabled,
-  })
+  let (decision, observation) = match fetched {
+    Ok(enabled) => (
+      AccountDecision::Answered {
+        namespace,
+        expires_at,
+        enabled,
+      },
+      LinkObservation::ServerAccepted,
+    ),
+    Err(failure) => {
+      match decision_for_failure(failure, namespace.clone(), expires_at) {
+        Some(decided) => decided,
+        None => {
+          return Outcome::Unknown {
+            unconfirmed: Some(AccountDecision::Unconfirmed {
+              namespace,
+              expires_at,
+            }),
+          };
+        }
+      }
+    }
+  };
+  account::observe_link(app, observation);
+  Outcome::Decided(decision)
 }
 
 fn refresh_signal() -> &'static tokio::sync::Notify {
@@ -249,9 +322,17 @@ pub fn refresh_now() {
 pub type FeatureChangeHandler =
   Arc<dyn Fn(&AppHandle, DesktopFeature, bool) + Send + Sync>;
 
-/// Runs the refresh loop. `on_change` is called with every feature whose
-/// state changed, after the new decision is visible through [`FeatureGates`].
-pub fn start(app: AppHandle, on_change: FeatureChangeHandler) {
+/// Called with the gates after every installed decision.
+pub type DecisionHandler = Arc<dyn Fn(&AppHandle, &FeatureGates) + Send + Sync>;
+
+/// Runs the refresh loop. `on_decision` is called after every installed
+/// decision and `on_change` with every feature whose state changed, both
+/// after the new decision is visible through [`FeatureGates`].
+pub fn start(
+  app: AppHandle,
+  on_decision: DecisionHandler,
+  on_change: FeatureChangeHandler,
+) {
   tauri::async_runtime::spawn(async move {
     let mut interval = tokio::time::interval(REFRESH_INTERVAL);
     let mut wakes = crate::presence::subscribe_wakes();
@@ -283,24 +364,25 @@ pub fn start(app: AppHandle, on_change: FeatureChangeHandler) {
           retry = None;
           decision
         }
-        Outcome::Unknown => {
+        Outcome::Unknown { unconfirmed } => {
           let wait = next_retry(retry);
           tracing::info!(
             retry_in_seconds = wait.as_secs(),
             "feature access read again soon"
           );
           retry = Some(wait);
-          continue;
+          let Some(unconfirmed) = unconfirmed else {
+            continue;
+          };
+          unconfirmed
         }
       };
-      let Some(changed) = gates.install(
-        generation,
-        decision.namespace,
-        decision.expires_at,
-        decision.enabled,
-      ) else {
+      let Some(changed) = gates.install(generation, decision) else {
         continue;
       };
+      // Before any toggle is applied, so a decision is kept before the
+      // process can end.
+      on_decision(&app, gates.inner());
       for feature in changed {
         on_change(&app, feature, gates.is_enabled(feature));
       }
@@ -334,28 +416,75 @@ mod tests {
   }
 
   #[test]
-  fn a_server_failure_decides_nothing_and_a_refusal_turns_features_off() {
+  fn each_status_is_typed_as_unreached_a_refused_credential_or_a_denial() {
     for status in [
       reqwest::StatusCode::INTERNAL_SERVER_ERROR,
       reqwest::StatusCode::BAD_GATEWAY,
       reqwest::StatusCode::SERVICE_UNAVAILABLE,
+      reqwest::StatusCode::GATEWAY_TIMEOUT,
       reqwest::StatusCode::TOO_MANY_REQUESTS,
+      reqwest::StatusCode::FOUND,
+      reqwest::StatusCode::TEMPORARY_REDIRECT,
     ] {
       assert!(
         matches!(failure_for_status(status), FetchFailure::Unreached(_)),
         "{status}"
       );
     }
+    assert!(matches!(
+      failure_for_status(reqwest::StatusCode::UNAUTHORIZED),
+      FetchFailure::CredentialRefused(_)
+    ));
     for status in [
-      reqwest::StatusCode::UNAUTHORIZED,
+      reqwest::StatusCode::BAD_REQUEST,
       reqwest::StatusCode::FORBIDDEN,
       reqwest::StatusCode::NOT_FOUND,
+      reqwest::StatusCode::GONE,
     ] {
       assert!(
-        matches!(failure_for_status(status), FetchFailure::Refused(_)),
+        matches!(failure_for_status(status), FetchFailure::Denied(_)),
         "{status}"
       );
     }
+  }
+
+  #[test]
+  fn a_refused_credential_asks_to_reconnect_and_a_denial_turns_features_off() {
+    let expires_at = chrono::Utc::now() + chrono::Duration::hours(1);
+    let decide =
+      |failure| decision_for_failure(failure, "namespace".into(), expires_at);
+    assert_eq!(decide(FetchFailure::Unreached("offline".into())), None);
+    for (failure, observation) in [
+      (
+        FetchFailure::CredentialRefused("401".into()),
+        LinkObservation::ServerRefused,
+      ),
+      (
+        FetchFailure::DeviceProofLost,
+        LinkObservation::DeviceProofLost,
+      ),
+    ] {
+      assert_eq!(
+        decide(failure),
+        Some((
+          AccountDecision::ReconnectNeeded {
+            namespace: Some("namespace".into())
+          },
+          observation
+        ))
+      );
+    }
+    assert_eq!(
+      decide(FetchFailure::Denied("403".into())),
+      Some((
+        AccountDecision::Answered {
+          namespace: "namespace".into(),
+          expires_at,
+          enabled: HashSet::new(),
+        },
+        LinkObservation::ServerAccepted
+      ))
+    );
   }
 
   #[test]
@@ -449,6 +578,12 @@ mod tests {
             StatusCode::OK,
             r#"{"features":{"activity-timeline":{"status":"enabled"}}}"#,
           ),
+          Some("Bearer stella_dr_denied") if signed => {
+            (StatusCode::FORBIDDEN, "Not available")
+          }
+          Some("Bearer stella_dr_malformed") if signed => {
+            (StatusCode::OK, "<html>portal</html>")
+          }
           _ => (
             StatusCode::UNAUTHORIZED,
             "Reconnect desktop to your account",
@@ -486,7 +621,16 @@ mod tests {
     );
     assert!(matches!(
       fetch(&AccountRequest::fixture(account("stella_dr_bad")).await).await,
-      Err(FetchFailure::Refused(_))
+      Err(FetchFailure::CredentialRefused(_))
+    ));
+    assert!(matches!(
+      fetch(&AccountRequest::fixture(account("stella_dr_denied")).await).await,
+      Err(FetchFailure::Denied(_))
+    ));
+    // An unreadable answer is not a decision about the account.
+    assert!(matches!(
+      fetch(&AccountRequest::fixture(account("stella_dr_malformed")).await).await,
+      Err(FetchFailure::Unreached(_))
     ));
     server.abort();
     let _stopped = server.await;

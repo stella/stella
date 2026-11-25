@@ -175,6 +175,13 @@
         },
         "allowSiteFailed": "Web se nepodařilo uložit jako povolený. Tato akce proběhne; u další se znovu zeptáme.",
         "alwaysAllowSite": "Vždy povolit na tomto webu",
+        "askReason": {
+          "embeddedFrame": "Ptáme se, protože prvek je ve vloženém rámci, který může patřit jinému webu.",
+          "noSite": "Ptáme se, protože tuto adresu nelze vždy povolit.",
+          "pageUnconfirmed": "Ptáme se, protože prohlížeč tuto stránku zatím nepotvrdil.",
+          "possibleSecret": "Ptáme se, protože do tohoto pole se může zadávat heslo nebo jiný tajný údaj.",
+          "siteNotAllowed": "Ptáme se, protože tento web zatím nemáte vždy povolený."
+        },
         "description": "Pečlivě zkontrolujte web a cíl. Obsah stránky není důvěryhodný a nemůže schválit další akci.",
         "question": "Povolit tuto akci v prohlížeči?",
         "realValues": "Tento web obdrží skutečné hodnoty uvedené níže. Anonymizovaný režim se vztahuje jen na to, co vidí AI.",
@@ -247,6 +254,8 @@
     },
     "cancelQueuedMessage": "Zrušit zařazenou zprávu",
     "caseLawGreeting": "Zeptejte se na toto rozhodnutí; plný text je k dispozici.",
+    "cellCitationColumnHidden": "Všechny tabulky tento sloupec skrývají. Zobrazte ho, abyste buňku viděli.",
+    "cellCitationUnavailable": "Tato buňka už není k dispozici.",
     "chatAbout": "Vložit do AI chatu",
     "choosePromptImprovementStrategy": "Možnosti vylepšení zadání",
     "commandsSection": "Příkazy",
@@ -467,6 +476,8 @@
       "permissionPlan": "Plán",
       "permissionPlanDescription": "Nejdřív čte a plánuje; před každou změnou se zeptá, dokud plán neschválíte.",
       "permissionSandboxed": "Běží v izolovaném prostředí; než změní něco ve vašem počítači, zeptá se.",
+      "permissionScaleHigh": "Samostatně",
+      "permissionScaleLow": "Opatrně",
       "permissionUnavailable": "V tomto počítači není k dispozici",
       "permissions": "Oprávnění",
       "refusalConflictingRunMode": "Tento požadavek se má spustit zároveň v cloudovém agentovi i ve vašem počítači. Vyberte jedno v nabídce Spustit na.",
@@ -695,6 +706,7 @@
     "richContentTitle": "Interaktivní obsah",
     "richContentUnavailable": "Tento obsah nelze bezpečně zobrazit.",
     "runOn": {
+      "agent": "Agent",
       "checkFailed": "Počítač se nepodařilo zkontrolovat",
       "chipLabel": "Kde běží: {place}",
       "cloud": "Cloud",
@@ -721,6 +733,7 @@
       "stepsInstall": "Otevírá se stella desktop. Pokud se neotevře, otevřete ho ve svém počítači a v Nastavení › Obecné zvolte u agenta {harness} Nainstalovat.",
       "stepsSignInClaudeCode": "Otevírá se stella desktop k přihlášení. Pokud se neotevře, otevřete ho a zvolte Nastavení › Obecné › Přihlásit se přes Claude.",
       "stepsSignInCodex": "Otevírá se stella desktop k přihlášení. Pokud se neotevře, otevřete ho a zvolte Nastavení › Obecné › Pokračovat s ChatGPT.",
+      "where": "Kde běží",
       "yourComputer": "Váš počítač",
       "yourComputerDescription": "Použije Codex nebo Claude Code ve vašem počítači s vaším vlastním předplatným. Může číst a měnit soubory ve složce tohoto chatu; co smí udělat bez ptaní, určují jeho oprávnění."
     },

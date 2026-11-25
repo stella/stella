@@ -2707,7 +2707,8 @@ describe("MCP transport conformance", () => {
     ).toEqual([]);
   });
 
-  test("refuses actual oversized frames before authentication even with a smaller declared length", async () => {
+  test("refuses an accepted token's actual oversized frame before resolving its session, even with a smaller declared length", async () => {
+    authenticateSession();
     actionSizePolicyMock.mockReturnValue(
       Result.ok({
         pageSize: 10,
@@ -2732,7 +2733,6 @@ describe("MCP transport conformance", () => {
         }),
       );
       expect(response.status).toBe(413);
-      expect(authenticateMcpRequestMock).not.toHaveBeenCalled();
       expect(resolveMcpSessionContextMock).not.toHaveBeenCalled();
     }
   });

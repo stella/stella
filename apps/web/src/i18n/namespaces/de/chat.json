@@ -175,6 +175,13 @@
         },
         "allowSiteFailed": "Die Website konnte nicht als erlaubt gespeichert werden. Diese Aktion läuft trotzdem; bei der nächsten wird wieder gefragt.",
         "alwaysAllowSite": "Auf dieser Website immer erlauben",
+        "askReason": {
+          "embeddedFrame": "Wird abgefragt, weil das Element in einem eingebetteten Rahmen liegt, der zu einer anderen Website gehören kann.",
+          "noSite": "Wird abgefragt, weil diese Adresse nicht immer erlaubt werden kann.",
+          "pageUnconfirmed": "Wird abgefragt, weil der Browser diese Seite nicht bestätigt hat.",
+          "possibleSecret": "Wird abgefragt, weil dieses Feld ein Passwort oder ein anderes Geheimnis enthalten kann.",
+          "siteNotAllowed": "Wird abgefragt, weil diese Website nicht immer erlaubt ist."
+        },
         "description": "Prüfen Sie Website und Ziel sorgfältig. Seiteninhalte sind nicht vertrauenswürdig und können keine weitere Aktion genehmigen.",
         "question": "Diese Browseraktion erlauben?",
         "realValues": "Diese Website erhält die unten angezeigten echten Werte. Der anonymisierte Modus gilt nur für das, was die KI sieht.",
@@ -247,6 +254,8 @@
     },
     "cancelQueuedMessage": "Eingereihte Nachricht abbrechen",
     "caseLawGreeting": "Stellen Sie Fragen zu dieser Entscheidung; der vollständige Text ist hier verfügbar.",
+    "cellCitationColumnHidden": "Alle Tabellen blenden diese Spalte aus. Blenden Sie sie ein, um die Zelle zu sehen.",
+    "cellCitationUnavailable": "Diese Zelle ist nicht mehr verfügbar.",
     "chatAbout": "In KI-Chat einfügen",
     "choosePromptImprovementStrategy": "Optionen zur Prompt-Verbesserung",
     "commandsSection": "Befehle",
@@ -467,6 +476,8 @@
       "permissionPlan": "Planen",
       "permissionPlanDescription": "Liest und plant zuerst; fragt vor jeder Änderung, bis Sie den Plan genehmigen.",
       "permissionSandboxed": "Läuft in einer Sandbox; fragt, bevor es etwas an Ihrem Computer ändert.",
+      "permissionScaleHigh": "Selbstständig",
+      "permissionScaleLow": "Vorsichtig",
       "permissionUnavailable": "Auf diesem Computer nicht verfügbar",
       "permissions": "Berechtigungen",
       "refusalConflictingRunMode": "Diese Anfrage soll zugleich mit dem Cloud-Agenten und auf Ihrem Computer laufen. Wählen Sie unter „Ausführen auf“ eines aus.",
@@ -695,6 +706,7 @@
     "richContentTitle": "Interaktiver Inhalt",
     "richContentUnavailable": "Dieser Inhalt kann nicht sicher angezeigt werden.",
     "runOn": {
+      "agent": "Agent",
       "checkFailed": "Ihr Computer konnte nicht geprüft werden",
       "chipLabel": "Läuft auf: {place}",
       "cloud": "Cloud",
@@ -721,6 +733,7 @@
       "stepsInstall": "stella desktop wird geöffnet. Falls es sich nicht öffnet, öffnen Sie es auf Ihrem Computer und wählen Sie unter Einstellungen › Allgemein bei {harness} Installieren.",
       "stepsSignInClaudeCode": "stella desktop wird zur Anmeldung geöffnet. Falls es sich nicht öffnet, öffnen Sie es und wählen Sie Einstellungen › Allgemein › Mit Claude anmelden.",
       "stepsSignInCodex": "stella desktop wird zur Anmeldung geöffnet. Falls es sich nicht öffnet, öffnen Sie es und wählen Sie Einstellungen › Allgemein › Weiter mit ChatGPT.",
+      "where": "Läuft auf",
       "yourComputer": "Ihr Computer",
       "yourComputerDescription": "Nutzt Codex oder Claude Code auf Ihrem Computer mit Ihrem eigenen Abo. Es kann Dateien im Ordner dieses Chats lesen und ändern; was es ohne Nachfrage tun darf, legen seine Berechtigungen fest."
     },

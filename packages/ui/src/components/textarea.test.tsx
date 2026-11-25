@@ -37,7 +37,6 @@ test("a composer editor keeps its input contract without field chrome", () => {
       appearance="composer"
       aria-label="Search"
       dir="rtl"
-      fieldSizing="fixed"
       rows={1}
       maxLength={32}
       value="قانون"
@@ -49,6 +48,10 @@ test("a composer editor keeps its input contract without field chrome", () => {
   expect(markup).toContain('maxLength="32"');
   expect(markup).toContain('dir="rtl"');
   expect(markup).not.toContain("border-input");
-  expect(textareaClass(markup)).toContain("min-h-15");
+  // It grows with its text; the ComposerFrame around it sets the floor and
+  // the cap, and scrolls it.
+  expect(textareaClass(markup)).toContain("field-sizing-content");
+  expect(textareaClass(markup)).not.toContain("min-h-");
+  expect(textareaClass(markup)).not.toContain("max-h-");
   expect(textareaClass(markup)).not.toContain("px-[calc");
 });

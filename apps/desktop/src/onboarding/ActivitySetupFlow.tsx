@@ -14,8 +14,12 @@ import {
   ACTIVITY_SETUP_SCREENS,
   activitySetupScreens,
   detailsScreenPermissions,
+  shownDetailsChoice,
 } from "./activity-setup-steps";
-import type { ActivitySetupScreen } from "./activity-setup-steps";
+import type {
+  ActivitySetupScreen,
+  DetailsAnswer,
+} from "./activity-setup-steps";
 import { ActivitySetupScreenBody } from "./ActivitySetupScreens";
 import { moveFrom, shownScreen } from "./setup-screens";
 import { SetupStepper, Unread } from "./SetupScreenParts";
@@ -58,7 +62,8 @@ type ActivitySetupFlowProps = {
  * and starting it, window details with the access a Mac needs for them,
  * calls, and consent to stella AI drafts. Each screen writes what Settings →
  * Activity reads the moment it changes, so leaving at any screen keeps what
- * was chosen and the rest keeps its default.
+ * was chosen and the rest keeps its default. The details screen continues
+ * only once one of its answers is picked.
  */
 export const ActivitySetupFlow = ({
   controls,
@@ -78,6 +83,8 @@ export const ActivitySetupFlow = ({
     ACTIVITY_SETUP_SCREENS[0],
   );
   const [busy, setBusy] = useState(false);
+  const [detailsAnswer, setDetailsAnswer] =
+    useState<DetailsAnswer>("unanswered");
   const { snapshot } = controls;
 
   if (snapshot === null) {
@@ -164,6 +171,11 @@ export const ActivitySetupFlow = ({
   // While recording starts, nothing may leave the screen: the start would
   // land after the step it belongs to.
   const starting = busy ? t("activitySetup.starting") : undefined;
+  const detailsChoice = shownDetailsChoice(
+    detailsAnswer,
+    snapshot.captureDetails,
+  );
+  const awaitingDetails = screen === "details" && detailsChoice === "none";
 
   const secondary = (() => {
     if (!recording) {
@@ -201,9 +213,13 @@ export const ActivitySetupFlow = ({
       >
         <ActivitySetupScreenBody
           controls={controls}
+          detailsAnswer={detailsAnswer}
           drafts={drafts}
+          onDetailsAnswer={() => {
+            setDetailsAnswer("answered");
+          }}
           permissions={detailsScreenPermissions({
-            captureDetails: snapshot.captureDetails,
+            captureDetails: detailsChoice === "withDetails",
             permissions,
             platform: DESKTOP_PLATFORM,
           })}
@@ -232,8 +248,11 @@ export const ActivitySetupFlow = ({
               },
         primary: (
           <Button
-            disabled={busy}
-            disabledReason={starting}
+            disabled={busy || awaitingDetails}
+            disabledReason={
+              starting ??
+              (awaitingDetails ? t("activitySetup.details.choose") : undefined)
+            }
             onClick={() => {
               void onContinue();
             }}

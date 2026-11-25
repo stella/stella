@@ -211,6 +211,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
   ],
   [
+    "/v1/desktop/matter-candidates/resolve",
+    "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
+  ],
+  [
     "/v1/desktop/matters",
     "Desktop matter search enforces the caller's activity or dictation feature decision and matter access on every deployment",
   ],

@@ -1,4 +1,6 @@
 import { useState } from "react";
+
+import { useQueryClient } from "@tanstack/react-query";
 /**
  * Shared matter context menu used by both the matter card grid
  * and the sidebar pinned items. Right-click to open.
@@ -7,12 +9,14 @@ import { useState } from "react";
  * `MatterContextMenu` (card right-click) and the sidebar's
  * own Menu component to guarantee 1:1 parity.
  */
-
-import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
+import {
+  ContextMenuSurface,
+  type ContextMenuSurfaceOpenEvent,
+} from "@stll/ui/entity-actions";
 import {
   ArchiveIcon,
   ArchiveRestoreIcon,
@@ -36,7 +40,6 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
-import { contextMenuBelongsTo } from "@/components/context-menu-target";
 import { useCopyControl } from "@/components/copy-control";
 import { AddMemberDialog } from "@/components/workspaces/add-member-dialog";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -384,8 +387,8 @@ type MatterContextMenuChildArgs = {
 };
 
 type MatterContextMenuController = MatterContextMenuChildArgs & {
-  /** Attach to the element that should open the menu on right-click. */
-  onContextMenu: (e: React.MouseEvent) => void;
+  /** Pass to `ContextMenuSurface` to open the menu on right-click. */
+  onOpenContextMenu: (details: ContextMenuSurfaceOpenEvent) => void;
   /** The menu itself; render once near the trigger. */
   menu: React.ReactNode;
   /** Rename + delete + add-member dialogs; render once near the trigger. */
@@ -478,25 +481,14 @@ export const useMatterContextMenu = (
     dialogs,
     menuOpen,
     rename: renameState,
-    onContextMenu: (e) => {
-      if (!contextMenuBelongsTo(e)) {
-        return;
-      }
-      e.preventDefault();
-      e.stopPropagation();
-      const x = e.clientX;
-      const y = e.clientY;
-      const eventTarget = e.target instanceof Element ? e.target : null;
-      const control = eventTarget?.closest("button,a[href],[tabindex]");
-      const opener =
-        control instanceof HTMLElement && e.currentTarget.contains(control)
-          ? control
-          : null;
+    onOpenContextMenu: ({ anchor, returnFocus, event }) => {
       setMenuOpener(
-        opener ??
-          (e.currentTarget instanceof HTMLElement ? e.currentTarget : null),
+        returnFocus ??
+          (event.currentTarget instanceof HTMLElement
+            ? event.currentTarget
+            : null),
       );
-      setMenuAnchor({ getBoundingClientRect: () => new DOMRect(x, y, 0, 0) });
+      setMenuAnchor(anchor);
       setMenuOpen(true);
     },
   };
@@ -516,16 +508,20 @@ export const MatterContextMenu = ({
   className,
   children,
 }: MatterContextMenuProps) => {
-  const { onContextMenu, menu, dialogs, rename, menuOpen } =
+  const { onOpenContextMenu, menu, dialogs, rename, menuOpen } =
     useMatterContextMenu(target);
 
   return (
-    <div className={className} onContextMenu={onContextMenu}>
+    <ContextMenuSurface
+      onOpenContextMenu={onOpenContextMenu}
+      preserveNativeTargets={false}
+      render={<div className={className} />}
+    >
       {typeof children === "function"
         ? children({ rename, menuOpen })
         : children}
       {menu}
       {dialogs}
-    </div>
+    </ContextMenuSurface>
   );
 };

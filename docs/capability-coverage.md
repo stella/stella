@@ -835,7 +835,7 @@ mechanics, and similar), not gaps in coverage.
 | account_lifecycle | 6 |
 | agent_autonomy_ceiling | 1 |
 | assistant_chat | 28 |
-| auth_plumbing | 50 |
+| auth_plumbing | 51 |
 | billing_ui | 1 |
 | chat_thread_ui | 31 |
 | compound_consent | 1 |

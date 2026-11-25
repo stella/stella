@@ -276,3 +276,17 @@ describe("a bare URL as its own link text", () => {
     expect(view.container.textContent).not.toContain("/a/b?x=1");
   });
 });
+
+test("a cell citation renders as a chip carrying its label", async () => {
+  const { toChatCellCitationHref } = await import("@stll/api-contract");
+  const view = renderChip(
+    toChatCellCitationHref({
+      workspaceId: identity.workspaceId,
+      entityId: identity.entityId,
+      propertyId: toSafeId<"property">("55555555-5555-4555-8555-555555555555"),
+    }),
+  );
+  expect(view.container.textContent).toBe(CHIP_LABEL);
+  expect(view.container.querySelector("a")).toBeNull();
+  expect(view.container.querySelector("svg")).not.toBeNull();
+});

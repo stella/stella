@@ -13,6 +13,9 @@ import { type Button, BUTTON_CONTENT, BUTTON_SIZE_CONTENT } from "./button";
 import type { Button as NativeButton } from "./button.native";
 import { nativeButtonClassNames } from "./button.native-classes";
 import { BUTTON_SIZES, type ButtonContract } from "./button.shared";
+import type { ComposerFrame } from "./composer-frame";
+import type { ComposerFrame as NativeComposerFrame } from "./composer-frame.native";
+import type { ComposerFrameContract } from "./composer-frame.shared";
 import type { DocumentMark } from "./document-mark";
 import type { DocumentMark as NativeDocumentMark } from "./document-mark.native";
 import type { DocumentMarkContract } from "./document-mark.shared";
@@ -61,6 +64,10 @@ const CONTRACTS: Record<string, readonly [true, true]> = {
     Accepts<typeof Button, ButtonContract>,
     Accepts<typeof NativeButton, ButtonContract>,
   ],
+  "composer-frame": [true, true] satisfies [
+    Accepts<typeof ComposerFrame, ComposerFrameContract>,
+    Accepts<typeof NativeComposerFrame, ComposerFrameContract>,
+  ],
   "document-mark": [true, true] satisfies [
     Accepts<typeof DocumentMark, DocumentMarkContract>,
     Accepts<typeof NativeDocumentMark, DocumentMarkContract>,
@@ -104,7 +111,7 @@ const CONTRACTS: Record<string, readonly [true, true]> = {
 };
 
 test("each web and React Native renderer accepts its shared contract", () => {
-  expect(Object.keys(CONTRACTS)).toHaveLength(11);
+  expect(Object.keys(CONTRACTS)).toHaveLength(12);
 });
 
 test("the web button sizes exactly the shared sizes", () => {

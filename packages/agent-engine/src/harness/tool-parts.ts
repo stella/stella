@@ -108,6 +108,22 @@ export const HARNESS_TOOL_NAMES = {
 export const LOCAL_BROWSER_MCP_SERVER_NAME = "stella_browser";
 
 /**
+ * The name the browser server is registered under a second time where a
+ * harness runs tools from scripts (Codex code mode): that registration holds
+ * only the tools that may wait on the member (`BROWSER_TOOLS_THAT_MAY_ASK`),
+ * and the harness offers them as plain calls only. A script does not wait
+ * for a nested call, so a step waiting on the member would outlive the
+ * model's turn.
+ */
+export const directOnlyServerName = (serverName: string) =>
+  `${serverName}_direct`;
+
+/** Whether `server` names the run's browser tools, under either registration. */
+const isLocalBrowserServer = (server: string) =>
+  server === LOCAL_BROWSER_MCP_SERVER_NAME ||
+  server === directOnlyServerName(LOCAL_BROWSER_MCP_SERVER_NAME);
+
+/**
  * The call an adapter reports for an MCP tool. A browser step keeps only
  * its kind and, for `open`, the address the agent chose: the element it
  * clicked and the text it typed stay on the computer, and so does its
@@ -126,7 +142,7 @@ export const mcpToolCall = ({
   stellaServer: string;
   tool: string;
 }): HarnessToolCall => {
-  if (server !== LOCAL_BROWSER_MCP_SERVER_NAME) {
+  if (!isLocalBrowserServer(server)) {
     return { id, name: mcpToolCallName({ server, tool, stellaServer }), input };
   }
   if (!isChatLocalRunBrowserAction(tool)) {

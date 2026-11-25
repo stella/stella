@@ -1,10 +1,4 @@
-import {
-  startTransition,
-  useEffect,
-  useEffectEvent,
-  useRef,
-  useState,
-} from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
@@ -862,14 +856,7 @@ const App = () => {
   const [dictationFocus, setDictationFocus] = useState<"microphone" | null>(
     initialView?.dictationFocus ?? null,
   );
-  const initialUpdateCheck = useRef(initialView?.checkForUpdates ?? false);
-  // The tray's "Check for updates" opens About and runs the check there, so
-  // its answer shows in the window rather than in a notification the system
-  // may not show.
   const updateCheck = useUpdateCheck();
-  const runRequestedUpdateCheck = useEffectEvent(() => {
-    void updateCheck.run();
-  });
   const activityAvailability = useActivityAvailability();
   const dictationAvailability = useDictationAvailability();
   // A requested page that depends on the account stays shown while its
@@ -932,17 +919,8 @@ const App = () => {
           // drops one still waiting for its card.
           setAgentSettingsFocus(view.agentFocus);
           setDictationFocus(view.dictationFocus);
-          if (view.checkForUpdates) {
-            runRequestedUpdateCheck();
-          }
         },
         onError: reportSubscriptionFailure,
-        onSubscribed: () => {
-          if (initialUpdateCheck.current) {
-            initialUpdateCheck.current = false;
-            runRequestedUpdateCheck();
-          }
-        },
       }),
     [],
   );

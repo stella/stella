@@ -19,7 +19,10 @@
  * under any inflow after one walk of the route. A repair does restart it: a
  * revision the engine lost or kept is evidence about the index, not about
  * one key (a lost split holds documents of every key range), so the keys
- * already walked are suspect too.
+ * already walked are suspect too. Age restarts it as well: a pass picked up
+ * after it started longer ago than a proof may be old is started over
+ * (`pass_too_old_to_prove`, logged as `corpus_index.route_proof_pass_restarted`),
+ * since its end could only write an expired proof.
  *
  * What a pass costs on the largest route is not measured yet; every page logs
  * `corpus_index.route_proof_page` (pages, revisions, elapsed on the database
@@ -45,6 +48,7 @@ import {
   type CorpusIndexRoute,
   type CorpusIndexRouteCensusPass,
   type CorpusIndexRouteCensusStep,
+  type CorpusIndexRoutePassRestart,
   type CorpusIndexRouteRefusal,
   recordCorpusIndexRouteCensusPageTx,
   startCorpusIndexRouteCensusPageTx,
@@ -227,6 +231,28 @@ const logCensusPage = ({
   });
 };
 
+/** One line per open pass started over instead of resumed, with why. */
+const logPassRestart = ({
+  route,
+  pass,
+  restarted: { reason, abandoned },
+}: {
+  route: CorpusIndexRoute;
+  pass: CorpusIndexRouteCensusPass;
+  restarted: CorpusIndexRoutePassRestart;
+}): void => {
+  logger.info("corpus_index.route_proof_pass_restarted", {
+    family: route.family,
+    generation: route.generation,
+    index: route.indexId,
+    reason,
+    passNumber: pass.number,
+    abandonedPassNumber: abandoned.number,
+    abandonedPassRows: abandoned.inspected,
+    abandonedPassAgeHours: Math.round(abandoned.elapsedMs / 360_000) / 10,
+  });
+};
+
 const walkPage = async (
   {
     runInTransaction,
@@ -351,7 +377,10 @@ const censusPage = async ({
   if (started.type !== "pass") {
     return done(started);
   }
-  const { pass } = started;
+  const { pass, restarted } = started;
+  if (restarted !== null) {
+    logPassRestart({ route, pass, restarted });
+  }
   const pageStartedAt = performance.now();
   const walked = await walkPage(
     { runInTransaction, client, route, limit },

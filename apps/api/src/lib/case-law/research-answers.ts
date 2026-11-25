@@ -8,12 +8,13 @@ import type {
 
 import type { JustificationContent } from "@/api/db/schema";
 import { fieldContentSchema } from "@/api/db/schema-validators";
-import type {
-  CaseLawQuestionContent,
-  FieldContent,
-} from "@/api/db/schema-validators";
+import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
+import type {
+  CaseLawResearchAnswerRun,
+  CaseLawResearchColumnContent,
+} from "@/api/lib/case-law/research-answer-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
@@ -37,7 +38,7 @@ import type { ValidatedAnswer } from "@/api/lib/workflow/ai-validators";
  * same justification shape — so one cell renderer and one output registry serve
  * both surfaces.
  */
-export type CaseLawResearchColumnContent = CaseLawQuestionContent;
+export type { CaseLawResearchAnswerRun, CaseLawResearchColumnContent };
 
 export const defaultResearchColumnTool = (): CaseLawResearchColumnTool => ({
   version: 1,
@@ -57,16 +58,6 @@ export type ResearchPassage = {
 };
 
 /** How an answer was produced; kept beside it so a cell can be audited. */
-export type CaseLawResearchAnswerRun = {
-  version: 1;
-  model: string;
-  completedAt: string;
-  /** True when the decision was too long to send whole and passages were retrieved. */
-  retrieved: boolean;
-  rationale: string;
-  /** The cited passages, in the citation shape a workspace justification uses. */
-  justification: JustificationContent;
-};
 
 type SelectPassagesOptions = {
   /** Total characters of excerpt the selection may hold. */

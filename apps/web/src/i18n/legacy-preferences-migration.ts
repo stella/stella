@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { ownerStorageKey } from "@stll/api-contract/browser-storage";
 import { CASE_LAW_REGION_BY_JURISDICTION } from "@stll/api-contract/case-law-jurisdictions";
+import { isOwnKey } from "@stll/api-contract/own-key";
 import {
   DECISION_COLUMN_IDS,
   STATUTE_COLUMN_IDS,
@@ -117,9 +118,7 @@ const knownColumns = ({
 const legacyPublicCountry = (key: string): string | undefined => {
   const upper = key.toUpperCase();
   return (
-    Object.entries(CASE_LAW_REGION_BY_JURISDICTION).find(
-      ([country]) => country === upper,
-    )?.[0] ??
+    (isOwnKey(CASE_LAW_REGION_BY_JURISDICTION, upper) ? upper : undefined) ??
     Object.entries(CASE_LAW_REGION_BY_JURISDICTION).find(
       ([, region]) => region === upper,
     )?.[0]

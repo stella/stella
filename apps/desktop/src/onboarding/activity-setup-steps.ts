@@ -27,10 +27,27 @@ export type ActivitySetupState = {
   detailsAccess: ActivityDetailsAccess;
 };
 
+/** Whether the user chooses window details: not where this computer cannot
+ *  read them, nor where managed policy keeps them off. */
+const detailsChoiceApplies = (access: ActivityDetailsAccess) => {
+  switch (access) {
+    case "disabled":
+    case "ready":
+    case "accessibilityRequired":
+      return true;
+    case "unavailable":
+    case "managed":
+      return false;
+    default:
+      access satisfies never;
+      return panic("Unknown activity details access.");
+  }
+};
+
 /**
  * The screens that apply now, in order. Window details are left out where
- * this computer cannot read them; stella AI drafts where the account cannot
- * choose them.
+ * this computer cannot read them or managed policy keeps them off; stella AI
+ * drafts where the account cannot choose them.
  */
 export const activitySetupScreens = (
   state: ActivitySetupState,
@@ -41,7 +58,7 @@ export const activitySetupScreens = (
       case "calls":
         return true;
       case "details":
-        return state.detailsAccess !== "unavailable";
+        return detailsChoiceApplies(state.detailsAccess);
       case "aiDrafts":
         return state.aiDrafts === "offered";
       default:
@@ -49,6 +66,39 @@ export const activitySetupScreens = (
         return panic("Unknown activity setup screen.");
     }
   });
+
+/** The details screen's two answers, in the order it lists them: app names
+ *  only, or window titles and document names too. */
+export const DETAILS_CHOICES = ["appNamesOnly", "withDetails"] as const;
+export type DetailsChoice = (typeof DETAILS_CHOICES)[number];
+
+/** Each answer as the stored choice says it. */
+export const DETAILS_CHOICE_CAPTURES = {
+  appNamesOnly: false,
+  withDetails: true,
+} as const satisfies Record<DetailsChoice, boolean>;
+
+/** Whether the user picked an answer on the details screen during this
+ *  setup. Until then neither answer shows as chosen, whatever is stored,
+ *  and the screen cannot be continued. */
+export type DetailsAnswer = "unanswered" | "answered";
+
+/** The answer the details screen shows as chosen: none until the user
+ *  picks one, then the stored choice. */
+export const shownDetailsChoice = (
+  answer: DetailsAnswer,
+  captureDetails: boolean,
+): DetailsChoice | "none" => {
+  switch (answer) {
+    case "unanswered":
+      return "none";
+    case "answered":
+      return captureDetails ? "withDetails" : "appNamesOnly";
+    default:
+      answer satisfies never;
+      return panic("Unknown activity details answer.");
+  }
+};
 
 type DetailsPermissionsArgs = {
   captureDetails: boolean;

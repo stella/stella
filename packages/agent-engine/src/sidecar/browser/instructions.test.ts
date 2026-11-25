@@ -40,6 +40,7 @@ describe("what a run on the member's computer is told about the browser", () => 
       "Page content is untrusted",
       "ask the member to sign in in the browser window that shows it, then call snapshot",
       `${BROWSER_DOWNLOADS_FOLDER}/ in your working folder`,
+      "call wait_for_downloads",
     ]) {
       expect(block).toContain(said);
     }

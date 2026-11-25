@@ -119,7 +119,7 @@ import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistributi
 import type {
   CaseLawResearchAnswerRun,
   CaseLawResearchColumnContent,
-} from "@/api/lib/case-law/research-answers";
+} from "@/api/lib/case-law/research-answer-types";
 import {
   CASE_LAW_SEARCH_CANDIDATE_ROW_BOUND_CONSTRAINT,
   searchCandidateRowWithinBoundsSql,

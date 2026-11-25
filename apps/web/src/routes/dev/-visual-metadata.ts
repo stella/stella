@@ -29,6 +29,7 @@ export const composerReferenceVariants = {
   "large-long": "large",
   "compact-short": "compact",
   "compact-token": "compact",
+  "compact-draft": "compact",
 } as const;
 
 export const composerReferenceStates = Object.keys(composerReferenceVariants);

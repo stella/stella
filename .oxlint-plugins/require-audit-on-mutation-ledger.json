@@ -1367,13 +1367,6 @@
     "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
   },
   {
-    "id": "apps/api/src/lib/scheduler/jobs.ts::ensureDefaultSchedulerJobs",
-    "writes": {
-      "update:schedulerJobs": 1
-    },
-    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
-  },
-  {
     "id": "apps/api/src/lib/scheduler/jobs.ts::ensureOneShotSchedulerJob",
     "writes": {
       "insert:schedulerJobs": 1

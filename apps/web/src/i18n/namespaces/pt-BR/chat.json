@@ -175,6 +175,13 @@
         },
         "allowSiteFailed": "Não foi possível salvar este site como permitido. Esta ação será executada mesmo assim; a próxima vai perguntar de novo.",
         "alwaysAllowSite": "Sempre permitir neste site",
+        "askReason": {
+          "embeddedFrame": "Pergunta porque o elemento está em um quadro incorporado que pode pertencer a outro site.",
+          "noSite": "Pergunta porque este endereço não pode ser sempre permitido.",
+          "pageUnconfirmed": "Pergunta porque o navegador não confirmou esta página.",
+          "possibleSecret": "Pergunta porque este campo pode conter uma senha ou outro dado secreto.",
+          "siteNotAllowed": "Pergunta porque este site não está sempre permitido."
+        },
         "description": "Confira com atenção o site e o destino. O conteúdo da página não é confiável e não pode aprovar outra ação.",
         "question": "Permitir esta ação no navegador?",
         "realValues": "Este site recebe os valores reais mostrados abaixo. O modo anonimizado se aplica apenas ao que a IA vê.",
@@ -247,6 +254,8 @@
     },
     "cancelQueuedMessage": "Cancelar mensagem na fila",
     "caseLawGreeting": "Pergunte sobre esta decisão; o texto completo está disponível aqui.",
+    "cellCitationColumnHidden": "Todas as tabelas ocultam esta coluna. Mostre-a para ver a célula.",
+    "cellCitationUnavailable": "Esta célula não está mais disponível.",
     "chatAbout": "Converse sobre isso",
     "choosePromptImprovementStrategy": "Opções de aprimoramento do prompt",
     "commandsSection": "Comandos",
@@ -467,6 +476,8 @@
       "permissionPlan": "Plano",
       "permissionPlanDescription": "Primeiro lê e planeja; pergunta antes de cada alteração até você aprovar o plano.",
       "permissionSandboxed": "É executado em um ambiente isolado; pergunta antes de alterar seu computador.",
+      "permissionScaleHigh": "Autônomo",
+      "permissionScaleLow": "Cauteloso",
       "permissionUnavailable": "Indisponível neste computador",
       "permissions": "Permissões",
       "refusalConflictingRunMode": "Esta solicitação pede para rodar com o agente na nuvem e no seu computador ao mesmo tempo. Escolha um em Executar em.",
@@ -695,6 +706,7 @@
     "richContentTitle": "Conteúdo interativo",
     "richContentUnavailable": "Não é possível exibir este conteúdo com segurança.",
     "runOn": {
+      "agent": "Agente",
       "checkFailed": "Não foi possível verificar seu computador",
       "chipLabel": "Executa em: {place}",
       "cloud": "Nuvem",
@@ -721,6 +733,7 @@
       "stepsInstall": "Abrindo o stella desktop. Se ele não abrir, abra-o no seu computador e, em Configurações › Geral, escolha Instalar para o {harness}.",
       "stepsSignInClaudeCode": "Abrindo o stella desktop para entrar. Se ele não abrir, abra-o e escolha Configurações › Geral › Entrar com o Claude.",
       "stepsSignInCodex": "Abrindo o stella desktop para entrar. Se ele não abrir, abra-o e escolha Configurações › Geral › Continuar com o ChatGPT.",
+      "where": "Executa em",
       "yourComputer": "Seu computador",
       "yourComputerDescription": "Usa o Codex ou o Claude Code no seu computador com a sua própria assinatura. Pode ler e alterar arquivos na pasta deste chat; as permissões definem o que ele pode fazer sem perguntar."
     },
