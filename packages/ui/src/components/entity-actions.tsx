@@ -89,7 +89,7 @@ export type ContextMenuSurfaceProps = {
    *  selected text. Defaults to true. */
   preserveNativeTargets?: boolean;
   /** Optional host element to attach the listener to directly. */
-  render?: useRender.RenderProp;
+  render?: useRender.RenderProp | undefined;
 };
 
 const isContextMenuKey = (event: KeyboardEvent<HTMLElement>): boolean =>
