@@ -1773,7 +1773,7 @@ export const createMcpHttpRequestHandler = ({
                   policy.requestBytes,
                 );
                 if (Result.isError(bounded)) {
-                  return withMcpCors(
+                  return await withMcpCors(
                     actionSizeErrorResponse(
                       bounded.error,
                       policy.responseBytes,
