@@ -199,7 +199,7 @@ const kindSchema = v.pipe(
 const noteIdSchema = v.pipe(
   v.string(),
   v.uuid(),
-  v.description("The note's id from list_site_notes or the last save."),
+  v.description("The note's id from read_site_notes or the last save."),
 );
 
 /** The content of a note, as the agent writes it. */
@@ -319,7 +319,7 @@ export type SaveBrowserSiteNotesOutput = v.InferOutput<
 >;
 
 /** The agent tool that reads a website's notes, on every surface. */
-export const LIST_SITE_NOTES_TOOL_NAME = "list_site_notes";
+export const READ_SITE_NOTES_TOOL_NAME = "read_site_notes";
 
 /** The agent tool that adds, confirms, replaces or removes notes. */
 export const SAVE_SITE_NOTES_TOOL_NAME = "save_site_notes";

@@ -3,13 +3,13 @@ import { describe, expect, test } from "bun:test";
 import {
   BROWSER_SITE_NOTE_SITES_MAX,
   BROWSER_SITE_NOTES_PER_SITE_MAX,
-  LIST_SITE_NOTES_TOOL_NAME,
+  READ_SITE_NOTES_TOOL_NAME,
   SAVE_SITE_NOTES_TOOL_NAME,
 } from "@stll/api-contract/browser-site-notes";
 
 import {
   browserSiteNotesPromptSection,
-  LIST_SITE_NOTES_DESCRIPTION,
+  READ_SITE_NOTES_DESCRIPTION,
   SAVE_SITE_NOTES_DESCRIPTION,
 } from "./agent-surface";
 
@@ -25,7 +25,7 @@ describe("research website notes in the agent's instructions", () => {
     ]);
     expect(section).toContain("alpha.example.com, beta.example.com:8443");
     expect(section).toContain(
-      `Before your first browser step on one of them, call ${LIST_SITE_NOTES_TOOL_NAME}`,
+      `Before your first browser step on one of them, call ${READ_SITE_NOTES_TOOL_NAME}`,
     );
     expect(section).toContain(SAVE_SITE_NOTES_TOOL_NAME);
   });
@@ -35,9 +35,9 @@ describe("research website notes in the agent's instructions", () => {
       `At most ${String(BROWSER_SITE_NOTES_PER_SITE_MAX)} notes per website and ${String(BROWSER_SITE_NOTE_SITES_MAX)} websites`,
     );
     expect(SAVE_SITE_NOTES_DESCRIPTION).toContain("nothing expires by age");
-    expect(LIST_SITE_NOTES_DESCRIPTION).toContain(
+    expect(READ_SITE_NOTES_DESCRIPTION).toContain(
       "before your first browser step there",
     );
-    expect(LIST_SITE_NOTES_DESCRIPTION).toContain("never approval for a step");
+    expect(READ_SITE_NOTES_DESCRIPTION).toContain("never approval for a step");
   });
 });

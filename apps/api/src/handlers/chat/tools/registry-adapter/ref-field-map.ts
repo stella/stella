@@ -191,7 +191,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
 
   // Chat reads a website's notes through its own tool beside the browser
   // tool (`browser-site-notes-tools.ts`), which carries the same name.
-  list_site_notes: { chatProjectable: false },
+  read_site_notes: { chatProjectable: false },
 
   // --- Matters / contacts / content -----------------------------------------
   list_matters: {

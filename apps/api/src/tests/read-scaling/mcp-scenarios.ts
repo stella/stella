@@ -14,7 +14,7 @@ import {
 
 import { measureCourtCatalogTool } from "./case-law-courts";
 import { measureCreateOrganizationTool } from "./organization-create";
-import { measureListSiteNotesTool } from "./site-notes";
+import { measureReadSiteNotesTool } from "./site-notes";
 import { measureReadGuidanceTool, measureSearchGuidanceTool } from "./soft-law";
 import { measureVerifyQuote } from "./verify-quote";
 
@@ -81,9 +81,9 @@ export const mcpScalingScenarios = [
     measure: measureReadGuidanceTool,
   },
   {
-    name: "list_site_notes" satisfies McpToolName,
+    name: "read_site_notes" satisfies McpToolName,
     kind: "database-read" as const,
-    measure: measureListSiteNotesTool,
+    measure: measureReadSiteNotesTool,
   },
   {
     name: "list_case_law_courts" satisfies McpToolName,

@@ -140,7 +140,7 @@ export const REGISTRY_READ_TOOL_HANDLERS = {
     CASE_LAW_COURT_CATALOG_TOOL_SET.handlers.list_case_law_courts,
   // Non-projectable: chat reads website notes through its own tool beside
   // the browser tool. Wired only to keep this map exhaustive.
-  list_site_notes: SITE_NOTES_TOOL_HANDLERS.list_site_notes,
+  read_site_notes: SITE_NOTES_TOOL_HANDLERS.read_site_notes,
 } satisfies Record<RegistryReadToolName, McpToolHandler>;
 
 type ProjectableRegistryReadToolName = ChatProjectableToolName<

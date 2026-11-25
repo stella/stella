@@ -495,7 +495,6 @@
       "browserSiteDeleteNotes": "Delete notes",
       "browserSiteDeleteNotesFor": "Delete the notes for {site}",
       "browserSiteNoteKinds": {
-        "failed": "Failed",
         "fixed": "Fixed",
         "works": "Works"
       },

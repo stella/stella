@@ -495,7 +495,6 @@
       "browserSiteDeleteNotes": "Usuń notatki",
       "browserSiteDeleteNotesFor": "Usuń notatki dla {site}",
       "browserSiteNoteKinds": {
-        "failed": "Nie działa",
         "fixed": "Naprawione",
         "works": "Działa"
       },

@@ -495,7 +495,6 @@
       "browserSiteDeleteNotes": "Notizen löschen",
       "browserSiteDeleteNotesFor": "Notizen zu {site} löschen",
       "browserSiteNoteKinds": {
-        "failed": "Fehlgeschlagen",
         "fixed": "Behoben",
         "works": "Funktioniert"
       },
@@ -504,7 +503,7 @@
       "browserSiteRemoveApproval": "Freigabe entfernen",
       "browserSiteRemoveApprovalAndNotes": "Freigabe und Notizen entfernen",
       "browserSitesDescription": "Websites, auf denen der Browser des Chats arbeitet. Auf einer freigegebenen Website laufen seine Aktionen ohne Rückfrage; Recherchenotizen halten fest, wie eine Website funktioniert, damit der Chat sie nicht jedes Mal neu lernen muss.",
-      "browserSitesTitle": "Websites",
+      "browserSitesTitle": "Webseiten",
       "cliDescription": "Installieren Sie den stella-Kommandozeilen-Client und melden Sie sich an, um Akten, Dokumente und Vorlagen per Terminal zu automatisieren.",
       "cliInstallLabel": "Installation",
       "cliLoginLabel": "Anmeldung",

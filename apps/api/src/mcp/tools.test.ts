@@ -1962,6 +1962,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "list_clauses",
       "list_playbooks",
       "list_reader_annotations",
+      "read_site_notes",
       "list_time_entries",
       "resolve_rate",
       "list_invoices",

@@ -495,7 +495,6 @@
       "browserSiteDeleteNotes": "Ištrinti pastabas",
       "browserSiteDeleteNotesFor": "Ištrinti svetainės {site} pastabas",
       "browserSiteNoteKinds": {
-        "failed": "Nepavyko",
         "fixed": "Pataisyta",
         "works": "Veikia"
       },

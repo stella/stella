@@ -68,7 +68,7 @@ export const MCP_STATIC_TOOL_NAMES = [
   "create_reader_annotation",
   "update_reader_annotation",
   "delete_reader_annotation",
-  "list_site_notes",
+  "read_site_notes",
   "save_site_notes",
   "list_time_entries",
   "save_time_entry",

@@ -495,7 +495,6 @@
       "browserSiteDeleteNotes": "Jegyzetek törlése",
       "browserSiteDeleteNotesFor": "{site} jegyzeteinek törlése",
       "browserSiteNoteKinds": {
-        "failed": "Sikertelen",
         "fixed": "Javítva",
         "works": "Működik"
       },

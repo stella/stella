@@ -137,7 +137,7 @@ export const BrowserSitesGroup = ({
 
 const NOTE_KIND_LABEL_KEYS = {
   works: "settings.connections.browserSiteNoteKinds.works",
-  failed: "settings.connections.browserSiteNoteKinds.failed",
+  failed: "common.failed",
   fixed: "settings.connections.browserSiteNoteKinds.fixed",
 } as const satisfies Record<BrowserSiteNoteKind, TranslationKey>;
 

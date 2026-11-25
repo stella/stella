@@ -242,12 +242,12 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       command: ["annotation", "delete"],
       scope: "knowledge_write",
     },
-    list_site_notes: {
-      command: ["site-notes", "list"],
+    // Read before a browser step on one website: an agent's lookup that a
+    // command line, which browses nothing, has no use for.
+    read_site_notes: {
+      command: ["site-notes", "read"],
+      excluded: true,
       scope: "read",
-      itemsKey: "notes",
-      // One website keeps at most 30 notes: one bounded page.
-      paginationless: true,
     },
     save_site_notes: {
       command: ["site-notes", "save"],

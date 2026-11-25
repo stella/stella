@@ -18,10 +18,10 @@ const SITE = "https://research.example.org";
 const OTHER_SITES = 90;
 
 /**
- * `list_site_notes` reads one website's notes: the member keeps one note for
+ * `read_site_notes` reads one website's notes: the member keeps one note for
  * it beside `size` notes for other websites, which the read must not walk.
  */
-export const measureListSiteNotesTool = async ({
+export const measureReadSiteNotesTool = async ({
   db,
   organizationId,
   safeDb,
@@ -52,11 +52,11 @@ export const measureListSiteNotesTool = async ({
   try {
     return await runWithMeasuredQueryCounter(async (counter) => {
       const response: unknown =
-        await SITE_NOTES_TOOL_SET.handlers.list_site_notes({
+        await SITE_NOTES_TOOL_SET.handlers.read_site_notes({
           args: { url: `${SITE}/search` },
           context: asTestRaw<
             Parameters<
-              typeof SITE_NOTES_TOOL_SET.handlers.list_site_notes
+              typeof SITE_NOTES_TOOL_SET.handlers.read_site_notes
             >[0]["context"]
           >({ organizationId, safeDb, userId }),
         });
@@ -65,7 +65,7 @@ export const measureListSiteNotesTool = async ({
           ? response["data"]
           : undefined;
       if (!isRecord(payload) || !isUnknownArray(payload["notes"])) {
-        return panic("list_site_notes scaling requires a successful response");
+        return panic("read_site_notes scaling requires a successful response");
       }
       return {
         statements: counter.count,

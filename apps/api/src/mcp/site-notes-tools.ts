@@ -5,7 +5,7 @@ import { browserSiteGrantOrigin } from "@stll/api-contract/browser-site-grants";
 import {
   BROWSER_SITE_NOTE_REFUSAL_CODE,
   browserSiteNotesSchema,
-  LIST_SITE_NOTES_TOOL_NAME,
+  READ_SITE_NOTES_TOOL_NAME,
   readBrowserSiteNotesInputSchema,
   SAVE_SITE_NOTES_TOOL_NAME,
   saveBrowserSiteNotesInputSchema,
@@ -13,7 +13,7 @@ import {
 } from "@stll/api-contract/browser-site-notes";
 
 import {
-  LIST_SITE_NOTES_DESCRIPTION,
+  READ_SITE_NOTES_DESCRIPTION,
   SAVE_SITE_NOTES_DESCRIPTION,
 } from "@/api/lib/chat/browser-site-notes/agent-surface";
 import {
@@ -52,7 +52,7 @@ const NOT_HTTPS_HINT =
 
 const definitions = [
   defineValibotMcpTool({
-    name: LIST_SITE_NOTES_TOOL_NAME,
+    name: READ_SITE_NOTES_TOOL_NAME,
     consumesServices: false,
     annotations: {
       title: "Read website research notes",
@@ -60,7 +60,7 @@ const definitions = [
       openWorldHint: false,
       readOnlyHint: true,
     },
-    description: LIST_SITE_NOTES_DESCRIPTION,
+    description: READ_SITE_NOTES_DESCRIPTION,
     inputSchema: readArgsSchema,
     access: "read",
     permissions: { type: "all", permissions: { chat: ["create"] } },
@@ -92,7 +92,7 @@ const definitions = [
   }),
 ] as const;
 
-const handleListSiteNotes: TypedMcpToolHandler<
+const handleReadSiteNotes: TypedMcpToolHandler<
   v.InferOutput<typeof browserSiteNotesSchema>
 > = async ({ args, context }) => {
   const parsed = v.safeParse(readArgsSchema, args);
@@ -113,7 +113,7 @@ const handleListSiteNotes: TypedMcpToolHandler<
     safeDb: context.safeDb,
   });
   if (Result.isError(notes)) {
-    return internalFailureResult(notes.error, "mcp.list_site_notes.read_error");
+    return internalFailureResult(notes.error, "mcp.read_site_notes.read_error");
   }
   return toolDataResult({ origin, notes: notes.value });
 };
@@ -155,7 +155,7 @@ const handleSaveSiteNotes: TypedMcpToolHandler<
 };
 
 export const SITE_NOTES_TOOL_HANDLERS = {
-  [LIST_SITE_NOTES_TOOL_NAME]: handleListSiteNotes,
+  [READ_SITE_NOTES_TOOL_NAME]: handleReadSiteNotes,
   [SAVE_SITE_NOTES_TOOL_NAME]: handleSaveSiteNotes,
 };
 
@@ -163,7 +163,7 @@ export const SITE_NOTES_TOOL_SET = defineMcpToolSet(
   definitions,
   SITE_NOTES_TOOL_HANDLERS,
   {
-    [LIST_SITE_NOTES_TOOL_NAME]: defineMcpToolOutput(browserSiteNotesSchema),
+    [READ_SITE_NOTES_TOOL_NAME]: defineMcpToolOutput(browserSiteNotesSchema),
     [SAVE_SITE_NOTES_TOOL_NAME]: defineMcpToolOutput(
       saveBrowserSiteNotesOutputSchema,
     ),

@@ -341,7 +341,7 @@ const STEP_REF_READERS = {
   list_clauses: null,
   list_playbooks: null,
   list_reader_annotations: null,
-  list_site_notes: null,
+  read_site_notes: null,
   list_time_entries: null,
   resolve_rate: null,
   list_invoices: null,

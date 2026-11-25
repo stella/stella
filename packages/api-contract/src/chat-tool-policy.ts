@@ -124,7 +124,7 @@ export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   // credentials, one search's address), the member reviews and removes them
   // in Settings, and they never approve a browser step, so reading and
   // keeping them current runs without asking.
-  list_site_notes: CHAT_TOOL_POLICY_KIND.internal,
+  read_site_notes: CHAT_TOOL_POLICY_KIND.internal,
   save_site_notes: CHAT_TOOL_POLICY_KIND.internal,
   web_search: CHAT_TOOL_POLICY_KIND.external,
   // Delegation runs without asking: a subagent executes only tools that need
