@@ -299,3 +299,35 @@ describe("the model a Codex turn ran on", () => {
     expect(events.at(-1)?.type).toBe("turn.completed");
   });
 });
+
+describe("errors Codex says it will retry", () => {
+  const retrying = (message: string) => ({
+    threadId: MAIN_THREAD,
+    turnId: MAIN_TURN,
+    willRetry: true,
+    error: { message, codexErrorInfo: null },
+  });
+
+  test("a refused credential ends the turn at once as a sign-in to renew", async () => {
+    const message =
+      "unexpected status 401 Unauthorized: Missing bearer or basic authentication";
+    const events = await eventsOf((notify) => {
+      notify("error", retrying(message));
+    });
+    expect(events.map(({ type }) => type)).not.toContain("retrying");
+    expect(events.at(-1)).toEqual({
+      type: "turn.failed",
+      failure: { type: "auth_required", message },
+    });
+  });
+
+  test("any other error is a retry, and the turn goes on", async () => {
+    const events = await eventsOf((notify) => {
+      notify("error", retrying("Reconnecting... 2/5"));
+    });
+    expect(events.filter(({ type }) => type === "retrying")).toEqual([
+      { type: "retrying", message: "Reconnecting... 2/5" },
+    ]);
+    expect(events.at(-1)?.type).toBe("turn.completed");
+  });
+});

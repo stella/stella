@@ -1,4 +1,6 @@
+import { Result } from "better-result";
 import type { Temporal } from "temporal-polyfill/full";
+import * as v from "valibot";
 
 import type { HarnessFailure } from "../events";
 import type { CodexRateLimits, CodexTurnError } from "./protocol";
@@ -134,15 +136,111 @@ const isEncryptedHistoryRejection = (error: CodexTurnError | null): boolean =>
   errorCode(error?.codexErrorInfo ?? null) === INVALID_ENCRYPTED_CONTENT ||
   (error?.message.includes(INVALID_ENCRYPTED_CONTENT) ?? false);
 
+/**
+ * Codex's wording of a credential the service refused: expired, revoked or
+ * missing. Codex sends some of these as errors it will retry, which only
+ * replays its reconnect schedule before it fails the same way.
+ */
+const AUTH_TEXT: readonly RegExp[] = [
+  /\b401\s+(?:unauthorized|invalid authentication)\b/iu,
+  /\baccess token (?:expired|could not be refreshed)\b/iu,
+  /\b(?:invalid|missing) (?:api key|authentication|authorization)\b/iu,
+  /\bmissing bearer\b/iu,
+  /\bauthentication credentials\b/iu,
+  /\bexpired credential\b/iu,
+  /\brefresh token (?:has been |is |was )?revoked\b/iu,
+  /\brequires openai auth\b/iu,
+];
+
+/** Signing in again is what the error needs: by its code, status or text. */
+export const isAuthFailure = (error: CodexTurnError | null): boolean => {
+  const info = error?.codexErrorInfo ?? null;
+  if (
+    errorCode(info) === "unauthorized" ||
+    httpStatus(info) === HTTP_UNAUTHORIZED
+  ) {
+    return true;
+  }
+  const message = error?.message ?? "";
+  return AUTH_TEXT.some((pattern) => pattern.test(message));
+};
+
+/**
+ * Codex reads its project configuration from its own working directory, the
+ * run's folder, so a folder deleted or replaced while it runs fails every
+ * configuration load with a bare "No such file or directory".
+ */
+const CONFIG_LOAD_FAILURE =
+  /^(?:failed to load configuration|failed to resolve feature override precedence): .*No such file or directory/su;
+/** The ChatGPT workspace lookup Codex makes before each model request got no answer. */
+const WORKSPACE_ROUTING_UNAVAILABLE: ReadonlySet<string> = new Set([
+  "workspace routing discovery failed",
+  "workspace routing discovery timed out",
+]);
+const SERVICE_ERROR_TYPES = [
+  "invalid_request_error",
+  "server_error",
+  "rate_limit_error",
+  "insufficient_quota",
+  "authentication_error",
+  "permission_error",
+  "not_found_error",
+  "conflict_error",
+  "overloaded_error",
+] as const;
+const HTTP_ERROR_MIN = 400;
+const HTTP_ERROR_MAX = 599;
+
+/** The provider's JSON error, which Codex passes on as its whole text. */
+const ServiceErrorEnvelopeSchema = v.strictObject({
+  type: v.literal("error"),
+  status: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(HTTP_ERROR_MIN),
+    v.maxValue(HTTP_ERROR_MAX),
+  ),
+  error: v.strictObject({
+    type: v.picklist(SERVICE_ERROR_TYPES),
+    message: v.pipe(v.string(), v.trim(), v.nonEmpty()),
+    code: v.optional(v.nullable(v.string())),
+    param: v.optional(v.nullable(v.string())),
+  }),
+});
+
+const parsedJson = (text: string): unknown => {
+  const parsed = Result.try((): unknown => JSON.parse(text));
+  return Result.isOk(parsed) ? parsed.value : undefined;
+};
+
+/**
+ * Codex's error text in words a member can act on: a deleted run folder, an
+ * unreachable ChatGPT workspace lookup, or the message inside the provider's
+ * JSON error. Any other text is returned as it is.
+ */
+export const readableCodexMessage = (message: string): string => {
+  if (CONFIG_LOAD_FAILURE.test(message)) {
+    return "Codex cannot read its configuration because the run's folder was deleted or replaced after Codex started. Check that the folder exists, then send the message again.";
+  }
+  const trimmed = message.trim();
+  if (WORKSPACE_ROUTING_UNAVAILABLE.has(trimmed)) {
+    return `Codex cannot reach chatgpt.com to look up your ChatGPT workspace. Check your network connection and any proxy, VPN or firewall that blocks chatgpt.com, then try again. (${trimmed})`;
+  }
+  const envelope = v.safeParse(ServiceErrorEnvelopeSchema, parsedJson(trimmed));
+  return envelope.success ? envelope.output.error.message : message;
+};
+
 export const classifyTurnFailure = ({
   error,
   rateLimits,
   now,
 }: ClassifyTurnFailureOptions): HarnessFailure => {
-  const message = error?.message ?? "The harness turn failed.";
+  const message = readableCodexMessage(
+    error?.message ?? "The harness turn failed.",
+  );
   const info = error?.codexErrorInfo ?? null;
   const code = errorCode(info);
-  if (code === "unauthorized" || httpStatus(info) === HTTP_UNAUTHORIZED) {
+  if (isAuthFailure(error)) {
     return { type: "auth_required", message };
   }
   if (code === USAGE_LIMIT_EXCEEDED) {
@@ -156,7 +254,7 @@ export const classifyTurnFailure = ({
   if (code === SERVER_OVERLOADED) {
     return { type: "model_at_capacity", message };
   }
-  if (message.includes(SHARING_LIMIT_TEXT)) {
+  if (error?.message.includes(SHARING_LIMIT_TEXT) === true) {
     // This allowance has its own reset, which the plan's rate limits do not say.
     return { type: "usage_limit", message, resetsAt: null };
   }
