@@ -99,7 +99,10 @@ afterEach(() => {
 });
 afterAll(unregisterDomEnvironment);
 
-const mountWorkflow = async (mode: "editor" | "list" | "create" = "editor") => {
+const mountWorkflow = async (
+  mode: "editor" | "list" | "create" = "editor",
+  { cached }: { cached?: FlowDefinitionDetail } = {},
+) => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -212,6 +215,14 @@ const mountWorkflow = async (mode: "editor" | "list" | "create" = "editor") => {
     client.clear();
   });
   await client.query(roleOptions);
+  if (cached !== undefined) {
+    client.setQueryData(
+      flowDetailOptions(session.session.activeOrganizationId, FLOW_ID).queryKey,
+      cached,
+    );
+    read = latest;
+    conflict = false;
+  }
   const saved = spyOn(stellaToast, "add");
   disposals.push(() => saved.mockRestore());
   let completed = 0;
@@ -273,11 +284,12 @@ const mountWorkflow = async (mode: "editor" | "list" | "create" = "editor") => {
     </StrictMode>
   );
   const rendered = render(view());
+  const openedName = cached === undefined ? initial.name : latest.name;
   if (mode !== "list") {
     await rendered.findByDisplayValue(
       mode === "create"
         ? messages.flows.examples.documentSummary.name
-        : initial.name,
+        : openedName,
     );
   } else {
     await rendered.findByText(initial.name);
@@ -382,6 +394,18 @@ test("an initialized workflow keeps its draft and original version across backgr
   expect(f.writes.at(0)).toMatchObject({
     name: "My correspondence draft",
     expectedUpdatedAt: initial.updatedAt,
+  });
+});
+
+test("opening a workflow drafts from a fresh read instead of a cached detail", async () => {
+  const f = await mountWorkflow("editor", { cached: initial });
+  expect(f.rendered.queryByDisplayValue(initial.name)).toBeNull();
+  f.changeName("Edited after opening");
+  f.save();
+  await waitFor(() => expect(f.writes).toHaveLength(1));
+  expect(f.writes.at(0)).toMatchObject({
+    name: "Edited after opening",
+    expectedUpdatedAt: latest.updatedAt,
   });
 });
 
