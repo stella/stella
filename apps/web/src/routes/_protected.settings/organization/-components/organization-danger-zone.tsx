@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -38,6 +39,20 @@ type OrganizationDangerZoneProps = {
 const SUBSCRIPTION_RENEWS_CODE = "organization_subscription_renews";
 const ONLY_OWNER_LEAVE_CODE =
   "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER";
+
+const resolveRefusalMessageKey = (code: string | undefined) => {
+  if (code === undefined) {
+    return "errors.actionFailed";
+  }
+  switch (code) {
+    case SUBSCRIPTION_RENEWS_CODE:
+      return "admin.deleteRefusedSubscription";
+    case ONLY_OWNER_LEAVE_CODE:
+      return "admin.leaveRefusedOnlyOwner";
+    default:
+      return "errors.actionFailed";
+  }
+};
 
 export const OrganizationDangerZone = ({
   organizationId,
@@ -99,6 +114,7 @@ export const OrganizationDangerZone = ({
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
+  const [leaveOpen, setLeaveOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [outcome, setOutcome] = useState<
     | { status: "active" }
@@ -126,9 +142,13 @@ export const OrganizationDangerZone = ({
             },
           });
           setOutcome({ status: "refused", code: result.error.code });
+          if (action === "leave") {
+            setLeaveOpen(false);
+          }
           return "refused" as const;
         }
         setOutcome({ status: "completed", action });
+        setLeaveOpen(false);
         setDeleteOpen(false);
         await onSuccess();
         return "completed" as const;
@@ -145,6 +165,9 @@ export const OrganizationDangerZone = ({
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
+  const confirmLeave = async () => {
+    await mutation.mutateAsync("leave");
+  };
   // The dialog awaits this and keeps itself open on a refusal it shows.
   const confirmDelete = async (): Promise<
     DestructiveConfirmOutcome | undefined
@@ -156,20 +179,11 @@ export const OrganizationDangerZone = ({
     mutation.variables === "leave"
       ? t("admin.leavingOrganization")
       : t("common.deleting");
-  const refusalCode = outcome.status === "refused" ? outcome.code : undefined;
-  const refusalMessage = (() => {
-    if (refusalCode === undefined) {
-      return t("errors.actionFailed");
-    }
-    switch (refusalCode) {
-      case SUBSCRIPTION_RENEWS_CODE:
-        return t("admin.deleteRefusedSubscription");
-      case ONLY_OWNER_LEAVE_CODE:
-        return t("admin.leaveRefusedOnlyOwner");
-      default:
-        return t("errors.actionFailed");
-    }
-  })();
+  const refusalMessage = t(
+    resolveRefusalMessageKey(
+      outcome.status === "refused" ? outcome.code : undefined,
+    ),
+  );
 
   return (
     <>
@@ -184,7 +198,7 @@ export const OrganizationDangerZone = ({
                   : t("admin.organizationChangeCompleted")
               }
               loading={mutation.isPending && mutation.variables === "leave"}
-              onClick={() => mutation.mutate("leave")}
+              onClick={() => setLeaveOpen(true)}
               variant="outline"
             >
               {t("admin.leaveOrganization")}
@@ -235,13 +249,32 @@ export const OrganizationDangerZone = ({
           <div role="alert" className="flex flex-col gap-2 text-sm">
             <p>{refusalMessage}</p>
             {outcome.code === SUBSCRIPTION_RENEWS_CODE && (
-              <a className="underline" href="/settings/organization/usage">
+              <Link className="underline" to="/settings/organization/usage">
                 {t("admin.planAndUsage")}
-              </a>
+              </Link>
             )}
           </div>
         )}
       </OrganizationDangerZoneSection>
+      <DestructiveConfirmDialog
+        cancelLabel={t("common.cancel")}
+        confirmation={organizationName}
+        confirmLabel={t("admin.leaveOrganization")}
+        description={t("admin.leaveDescription")}
+        inputLabel={t("admin.deleteTypeToConfirm", {
+          name: organizationName,
+        })}
+        loading={mutation.isPending && mutation.variables === "leave"}
+        onConfirm={confirmLeave}
+        onOpenChange={(open) => {
+          if (!open && mutation.isPending && mutation.variables === "leave") {
+            return;
+          }
+          setLeaveOpen(open);
+        }}
+        open={leaveOpen}
+        title={t("admin.leaveOrganization")}
+      />
       {isOwner && (
         <DestructiveConfirmDialog
           cancelLabel={t("common.cancel")}
@@ -259,12 +292,12 @@ export const OrganizationDangerZone = ({
                 <span className="mt-2 block" role="alert">
                   {refusalMessage}
                   {outcome.code === SUBSCRIPTION_RENEWS_CODE && (
-                    <a
+                    <Link
                       className="ms-2 underline"
-                      href="/settings/organization/usage"
+                      to="/settings/organization/usage"
                     >
                       {t("admin.planAndUsage")}
-                    </a>
+                    </Link>
                   )}
                 </span>
               )}

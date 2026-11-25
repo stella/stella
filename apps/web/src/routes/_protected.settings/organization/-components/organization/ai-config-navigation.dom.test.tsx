@@ -1635,7 +1635,7 @@ test("one page Save commits both provider drafts and all auxiliary sections", as
     }),
   );
   fireEvent.click(
-    screen.getByRole("checkbox", {
+    screen.getByRole("switch", {
       name: messages.settings.organization.documentProcessing.title,
     }),
   );

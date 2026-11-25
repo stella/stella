@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { CheckboxFace } from "@stll/ui/control-face";
+import { SwitchFace } from "@stll/ui/control-face";
 import { SettingsRow } from "@stll/ui/settings";
 
 import { PendingText } from "@/components/pending-text";
@@ -67,7 +67,7 @@ export const AIToggleCardPending = ({
     description={description}
     id={id}
     title={title}
-    toggle={<CheckboxFace />}
+    toggle={<SwitchFace />}
   />
 );
 

@@ -577,7 +577,7 @@
       "auditLogsResourceId": "Ressursi ID",
       "auditLogsResourceIdentifier": "Ressursi ID: {id}",
       "auditLogsResourceType": "Ressursi tüüp",
-      "auditLogsResourceTypePlaceholder": "nt workspace",
+      "auditLogsResourceTypePlaceholder": "nt toimik",
       "auditLogsSentenceAccess": "{resource} avati.",
       "auditLogsSentenceActivity": "Ressursi {resource} tegevus salvestati.",
       "auditLogsSentenceCancel": "{resource} tühistati.",

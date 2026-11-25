@@ -5363,7 +5363,7 @@
   "settings.organization.auditLogsResourceId": "Resource ID",
   "settings.organization.auditLogsResourceIdentifier": "Resource ID: {id}",
   "settings.organization.auditLogsResourceType": "Resource type",
-  "settings.organization.auditLogsResourceTypePlaceholder": "e.g. workspace",
+  "settings.organization.auditLogsResourceTypePlaceholder": "e.g. matter",
   "settings.organization.auditLogsSentenceAccess": "Opened {resource}.",
   "settings.organization.auditLogsSentenceActivity": "Recorded activity for {resource}.",
   "settings.organization.auditLogsSentenceCancel": "Cancelled {resource}.",
