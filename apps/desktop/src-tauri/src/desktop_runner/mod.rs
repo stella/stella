@@ -242,6 +242,12 @@ impl DesktopRunnerControl {
     }
   }
 
+  /// Whether a local agent run on this computer has not finished yet; the
+  /// updater waits for it before relaunching.
+  pub(crate) fn has_running_run(&self) -> bool {
+    self.journal.has_running_run()
+  }
+
   /// The member linked or unlinked a folder; the host, once there is one,
   /// reports the list again.
   pub(crate) fn linked_folders_changed(&self) {

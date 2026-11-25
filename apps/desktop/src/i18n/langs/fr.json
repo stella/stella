@@ -1219,7 +1219,8 @@
     "updates": {
       "available": "La version {version} est disponible.",
       "checkFailed": "stella desktop n'a pas pu vérifier les mises à jour.",
-      "deferred": "La version {version} attend tant que des documents ouverts sont en cours de modification. Une fois terminé, vérifiez à nouveau pour l'installer, sinon elle s'installera lors de la prochaine vérification automatique.",
+      "deferredAgents": "La version {version} s'installera dès qu'aucun agent ne travaillera plus sur cet ordinateur.",
+      "deferredEdits": "La version {version} s'installera dès que vous aurez fermé les documents ouverts en modification.",
       "downloadProgress": "{percent} % téléchargés",
       "downloading": "Téléchargement de la version {version}. stella desktop redémarrera une fois l'installation terminée.",
       "install": "Installer et redémarrer",

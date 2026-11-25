@@ -144,13 +144,16 @@ test("opened mid-install, the row shows the download and its progress", async ()
   expect(view.getByText("25% downloaded")).toBeDefined();
 
   // Neither a check nor an install can start while it runs, whoever started
-  // it; the button stays reachable and says why.
-  const checkButton = view.getByRole("button", {
-    name: defaultMessages.tray.checkForUpdates,
+  // it; the one button stays reachable and says why.
+  const installButton = view.getByRole("button", {
+    name: messages.install,
     description: messages.installInProgress,
   });
-  expect(checkButton.getAttribute("aria-disabled")).toBe("true");
-  fireEvent.click(checkButton);
+  expect(installButton.getAttribute("aria-disabled")).toBe("true");
+  expect(
+    view.queryByRole("button", { name: defaultMessages.tray.checkForUpdates }),
+  ).toBeNull();
+  fireEvent.click(installButton);
   await act(nextMacrotask);
   expect(view.commands).toEqual(["updater_state"]);
 });
@@ -225,6 +228,13 @@ test("an available update is offered and installs through the updater", async ()
   expect(await view.findByText("Version 0.9.90 is available.")).toBeDefined();
   expect(installs).toBe(0);
 
+  // The check button itself became the one install action.
+  const buttons = view
+    .getAllByRole("button")
+    .filter((button) => button.textContent !== SUPPORT_EMAIL);
+  expect(buttons.map((button) => button.textContent)).toEqual([
+    messages.install,
+  ]);
   fireEvent.click(view.getByRole("button", { name: messages.install }));
   await act(nextMacrotask);
 
@@ -249,18 +259,55 @@ test("an install held for open documents says when it will happen", async () => 
     }),
     install: () => ({
       revision: 4,
-      state: { status: "deferred", version: "0.9.90" },
+      state: { status: "deferred", version: "0.9.90", until: "edit_sessions" },
     }),
   });
 
   await view.checkNow();
   fireEvent.click(await view.findByRole("button", { name: messages.install }));
 
+  const line =
+    "Version 0.9.90 installs once you close the documents open for editing.";
+  // Said once in the row, and again as the reason the button is disabled.
+  expect(await view.findByText(line, { selector: "p" })).toBeDefined();
   expect(
-    await view.findByText(
-      "Version 0.9.90 waits while documents are open for editing. When you finish, check again to install it, or it installs at the next automatic check.",
-    ),
-  ).toBeDefined();
+    view
+      .getByRole("button", { name: messages.install, description: line })
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
+});
+
+test("an update waiting for an agent run says so and forces no restart", async () => {
+  let installs = 0;
+  const view = await renderRow({
+    state: () => ({
+      revision: 5,
+      state: { status: "deferred", version: "0.9.90", until: "agent_runs" },
+    }),
+    install: () => {
+      installs += 1;
+      return IDLE;
+    },
+  });
+
+  const line =
+    "Version 0.9.90 installs once no agent is working on this computer.";
+  // Said once in the row, and again as the reason the button is disabled.
+  expect(await view.findByText(line, { selector: "p" })).toBeDefined();
+  const installButton = view.getByRole("button", {
+    name: messages.install,
+    description: line,
+  });
+  expect(installButton.getAttribute("aria-disabled")).toBe("true");
+  expect(
+    view.queryByRole("button", { name: defaultMessages.tray.checkForUpdates }),
+  ).toBeNull();
+
+  // It installs by itself once the run finished; pressing asks nothing.
+  fireEvent.click(installButton);
+  await act(nextMacrotask);
+  expect(installs).toBe(0);
+  expect(view.commands).toEqual(["updater_state"]);
 });
 
 test("a failed check and a failed install are told apart", async () => {
@@ -276,6 +323,8 @@ test("a failed check and a failed install are told apart", async () => {
     messages.checkFailed,
   );
   expect(view.getByText(SUPPORT_LINE, { exact: false })).toBeDefined();
+  // After a failure the button checks again.
+  expect(view.checkButton()).toBeDefined();
 
   await view.announce({
     revision: 3,
@@ -305,4 +354,18 @@ test("updates the organization manages are named as such", async () => {
   expect(
     await view.findByText(defaultMessages.tray.updatesManaged),
   ).toBeDefined();
+});
+
+// After the report test: a failure reports once per window, so this one,
+// which also reports, must not take that report first.
+test("a waiting update with a blocker the row does not know is not shown", async () => {
+  const view = await renderRow({
+    state: () => ({
+      revision: 5,
+      state: { status: "deferred", version: "0.9.90", until: "lunch" },
+    }),
+  });
+
+  expect(view.queryByText("0.9.90", { exact: false })).toBeNull();
+  expect(view.checkButton()).toBeDefined();
 });

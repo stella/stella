@@ -1219,7 +1219,8 @@
     "updates": {
       "available": "Je k dispozícii verzia {version}.",
       "checkFailed": "stella desktop nemohol skontrolovať aktualizácie.",
-      "deferred": "Verzia {version} čaká, kým upravujete otvorené dokumenty. Keď skončíte, skontrolujte aktualizácie znova a nainštalujte ju, inak sa nainštaluje pri ďalšej automatickej kontrole.",
+      "deferredAgents": "Verzia {version} sa nainštaluje, keď v tomto počítači nebude pracovať žiadny agent.",
+      "deferredEdits": "Verzia {version} sa nainštaluje, keď zatvoríte dokumenty otvorené na úpravy.",
       "downloadProgress": "Stiahnuté {percent} %",
       "downloading": "Sťahuje sa verzia {version}. Po inštalácii sa stella desktop reštartuje.",
       "install": "Nainštalovať a reštartovať",

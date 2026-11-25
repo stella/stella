@@ -10,10 +10,16 @@
 // - Settings → About checks without installing, shows what it found,
 //   and installs through that same check when the user asks. The tray's
 //   "Check for updates" opens About and runs that check there.
-// - When an update is found and no desktop edit sessions are
-//   active, download + install + relaunch. The installer handles
-//   the binary swap; `crate::relaunch` owns the hand-over to the
-//   new binary.
+// - When an update is found, download it, wait until nothing blocks a
+//   relaunch, then install + relaunch. `relaunch_blocker` is the one
+//   answer to "may the app relaunch now?": a document open for desktop
+//   editing or a local agent run still under way blocks it. Install and
+//   relaunch take the `RelaunchClearance` only that check hands out, so no
+//   path reaches them past a blocker. The installer handles the binary
+//   swap; `relaunch` owns the hand-over to the new binary.
+// - A handoff never waits: it checks only when the updater is idle, and an
+//   update it finds while something blocks a relaunch is left to a check
+//   that waits.
 // - When an administrator set `DisableUpdates`, nothing checks: the
 //   organization deploys new versions itself.
 //
@@ -25,7 +31,7 @@
 use std::future::Future;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, PoisonError};
+use std::sync::PoisonError;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
@@ -38,7 +44,10 @@ use tauri_plugin_updater::UpdaterExt;
 use tokio::sync::Mutex;
 
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
-use crate::session_manager::SessionManager;
+
+mod relaunch;
+
+pub(crate) use clearance::RelaunchClearance;
 
 const STARTUP_CHECK_DELAY: Duration = Duration::from_secs(10);
 const WAKE_CHECK_TICK: Duration = Duration::from_secs(30);
@@ -52,20 +61,33 @@ static LAST_CHECK: AtomicU64 = AtomicU64::new(0);
 static UPDATER: UpdaterBoard = UpdaterBoard::new();
 
 const BACKGROUND_CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
+/// How often a downloaded update asks again whether the app may relaunch.
+const RELAUNCH_RECHECK: Duration = Duration::from_secs(10);
 
 // `Installed` means the exit of this process has been requested and
 // the relaunch is under way; callers must not schedule further work.
-// `Disabled` means managed policy turned in-app updates off.
+// `Busy` means another check or install was under way, so this one did not
+// run. `Disabled` means managed policy turned in-app updates off.
 #[derive(Debug)]
 pub enum CheckOutcome {
   Deferred { version: String },
   UpToDate,
   Installed { version: String },
   Failed(String),
+  Busy,
   Disabled,
 }
 
-pub fn schedule_startup_check(handle: AppHandle, manager: Arc<Mutex<SessionManager>>) {
+/// What a found update does while something blocks a relaunch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WhenBlocked {
+  /// Download, then wait until nothing blocks, then install and relaunch.
+  Wait,
+  /// Return at once; a waiting check installs it later.
+  Defer,
+}
+
+pub fn schedule_startup_check(handle: AppHandle) {
   if crate::managed_policy::current().updates_disabled {
     tracing::info!("in-app updates are turned off by managed policy");
     UPDATER.set(&TauriHost(&handle), UpdaterState::Managed);
@@ -91,16 +113,15 @@ pub fn schedule_startup_check(handle: AppHandle, manager: Arc<Mutex<SessionManag
         tokio::time::sleep(WAKE_CHECK_TICK).await;
         continue;
       }
-      let sessions = &*manager;
-      let active_edit_sessions =
-        move || async move { sessions.lock().await.has_active_edit_sessions() };
-
-      match run_check(&handle, active_edit_sessions).await {
+      match run_check(&handle).await {
         CheckOutcome::Deferred { version } => {
           tracing::debug!(
               version = %version,
-              "background updater: deferred while desktop edits are active"
+              "background updater: deferred while a relaunch is blocked"
           );
+        }
+        CheckOutcome::Busy => {
+          tracing::debug!("background updater: another check is under way");
         }
         CheckOutcome::UpToDate => {
           tracing::debug!("background updater: up to date");
@@ -160,78 +181,54 @@ fn record_check(now: u64) {
 }
 
 /// Returns true when callers must stop because the app is relaunching.
-pub async fn check_on_handoff(
-  handle: &AppHandle,
-  manager: &Mutex<SessionManager>,
-) -> bool {
+pub async fn check_on_handoff(handle: &AppHandle) -> bool {
   if cfg!(debug_assertions) {
     return false;
   }
-  let active_edit_sessions =
-    move || async move { manager.lock().await.has_active_edit_sessions() };
-  match run_check(handle, active_edit_sessions).await {
+  match check_for_handoff(handle).await {
     CheckOutcome::Installed { .. } => true,
     CheckOutcome::Failed(error) => {
       tracing::warn!(%error, "handoff updater check failed");
       false
     }
-    CheckOutcome::Deferred { .. } | CheckOutcome::UpToDate | CheckOutcome::Disabled => {
-      false
-    }
+    CheckOutcome::Deferred { .. }
+    | CheckOutcome::UpToDate
+    | CheckOutcome::Busy
+    | CheckOutcome::Disabled => false,
   }
 }
 
-/// What became of a found update before its install: deferred because a
-/// document is open for editing, failed to download, or downloaded and
-/// still clear to install.
-enum PreparedInstall<Package> {
-  Deferred,
-  DownloadFailed(String),
-  Ready(Package),
-}
-
-/// Asks whether desktop edits are active, downloads, and asks again right
-/// before the install: a document can open while the package downloads.
-async fn prepare_install<Package, Active, ActiveFuture, Download, DownloadFuture>(
-  active_edit_sessions: &Active,
-  download: Download,
-) -> PreparedInstall<Package>
-where
-  Active: Fn() -> ActiveFuture,
-  ActiveFuture: Future<Output = bool>,
-  Download: FnOnce() -> DownloadFuture,
-  DownloadFuture: Future<Output = Result<Package, String>>,
-{
-  if active_edit_sessions().await {
-    return PreparedInstall::Deferred;
-  }
-  let package = match download().await {
-    Ok(package) => package,
-    Err(err) => return PreparedInstall::DownloadFailed(err),
-  };
-  if active_edit_sessions().await {
-    return PreparedInstall::Deferred;
-  }
-  PreparedInstall::Ready(package)
-}
-
-/// `active_edit_sessions` is asked when an update is found and again right
-/// before it installs, so an edit that starts during the download defers it.
-/// A check or install already running finishes first; this one then runs.
-pub async fn run_check<Active, ActiveFuture>(
-  handle: &AppHandle,
-  active_edit_sessions: Active,
-) -> CheckOutcome
-where
-  Active: Fn() -> ActiveFuture,
-  ActiveFuture: Future<Output = bool>,
-{
+/// A check for a handoff, which must not wait: it runs only while the
+/// updater is idle, installs at once when nothing blocks a relaunch, and
+/// hands an update it cannot install yet to a check that waits for it.
+pub async fn check_for_handoff(handle: &AppHandle) -> CheckOutcome {
   let host = TauriHost(handle);
   if crate::managed_policy::current().updates_disabled {
     UPDATER.set(&host, UpdaterState::Managed);
     return CheckOutcome::Disabled;
   }
-  UPDATER.run_check(&host, &active_edit_sessions).await
+  let outcome = UPDATER.check_unless_busy(&host, WhenBlocked::Defer).await;
+  if matches!(outcome, CheckOutcome::Deferred { .. }) {
+    let handle = handle.clone();
+    async_runtime::spawn(async move {
+      UPDATER
+        .check_unless_busy(&TauriHost(&handle), WhenBlocked::Wait)
+        .await;
+    });
+  }
+  outcome
+}
+
+/// Checks and, once nothing blocks a relaunch, installs: a found update
+/// downloads at once and waits for the last blocker to clear. A check or
+/// install already running finishes first; this one then runs.
+pub async fn run_check(handle: &AppHandle) -> CheckOutcome {
+  let host = TauriHost(handle);
+  if crate::managed_policy::current().updates_disabled {
+    UPDATER.set(&host, UpdaterState::Managed);
+    return CheckOutcome::Disabled;
+  }
+  UPDATER.run_check(&host, WhenBlocked::Wait).await
 }
 
 /// Settings → About: whether a newer version exists. Installs nothing. While
@@ -243,28 +240,62 @@ pub async fn check_from_settings(handle: &AppHandle) -> UpdaterSnapshot {
     UPDATER.set(&host, UpdaterState::Managed);
     return UPDATER.snapshot();
   }
-  UPDATER.check_unless_busy(&host).await
+  UPDATER.find_unless_busy(&host).await
 }
 
 /// Settings → About: installs through the check the background schedule runs,
-/// so active desktop edits defer it the same way. While another check or
-/// install runs, the answer is what that one is doing.
-pub async fn install_from_settings<Active, ActiveFuture>(
-  handle: &AppHandle,
-  active_edit_sessions: Active,
-) -> UpdaterSnapshot
-where
-  Active: Fn() -> ActiveFuture,
-  ActiveFuture: Future<Output = bool>,
-{
+/// so whatever blocks a relaunch holds it the same way: the update downloads
+/// and installs once the last blocker clears. While another check or install
+/// runs, the answer is what that one is doing.
+pub async fn install_from_settings(handle: &AppHandle) -> UpdaterSnapshot {
   let host = TauriHost(handle);
   if crate::managed_policy::current().updates_disabled {
     UPDATER.set(&host, UpdaterState::Managed);
     return UPDATER.snapshot();
   }
-  UPDATER
-    .install_unless_busy(&host, &active_edit_sessions)
-    .await
+  if let CheckOutcome::Failed(error) =
+    UPDATER.check_unless_busy(&host, WhenBlocked::Wait).await
+  {
+    tracing::warn!(%error, "settings update install failed");
+  }
+  UPDATER.snapshot()
+}
+
+/// Why the app may not relaunch into an update now, if anything blocks it.
+/// The one owner of that answer: every install asks it right before it
+/// installs, through `clearance::ask`.
+async fn relaunch_blocker(handle: &AppHandle) -> Option<RelaunchBlocker> {
+  use tauri::Manager;
+  if let Some(sessions) = handle.try_state::<crate::commands::AppState>()
+    && sessions.lock().await.has_active_edit_sessions()
+  {
+    return Some(RelaunchBlocker::EditSessions);
+  }
+  if handle
+    .try_state::<crate::desktop_runner::DesktopRunnerControl>()
+    .is_some_and(|runner| runner.has_running_run())
+  {
+    return Some(RelaunchBlocker::AgentRuns);
+  }
+  None
+}
+
+mod clearance {
+  use super::{RelaunchBlocker, UpdaterHost};
+
+  /// Proof that nothing blocked a relaunch when the updater last asked. Only
+  /// `ask` makes one, and installing or relaunching takes one, so nothing
+  /// installs past a blocker.
+  pub(crate) struct RelaunchClearance(());
+
+  pub(super) async fn ask<Host: UpdaterHost>(
+    host: &Host,
+  ) -> Result<RelaunchClearance, RelaunchBlocker> {
+    match host.relaunch_blocker().await {
+      None => Ok(RelaunchClearance(())),
+      Some(blocker) => Err(blocker),
+    }
+  }
 }
 
 /// What the updater is doing now, for Settings and diagnostics.
@@ -311,13 +342,39 @@ pub enum UpdaterState {
   Installing {
     version: String,
   },
+  // Found, and installs by itself once `until` no longer holds it.
   Deferred {
     version: String,
+    until: RelaunchBlocker,
   },
   Failed {
     during: UpdaterStep,
   },
   Managed,
+}
+
+// What holds an update back from relaunching the app.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "snake_case")]
+pub enum RelaunchBlocker {
+  // A document is open for desktop editing.
+  EditSessions,
+  // A local agent run on this computer has not finished.
+  AgentRuns,
+}
+
+impl RelaunchBlocker {
+  fn notice(self) -> &'static str {
+    match self {
+      Self::EditSessions => {
+        "stella desktop will update after active desktop edits are finished."
+      }
+      Self::AgentRuns => {
+        "stella desktop will update when the agent run on this computer finishes."
+      }
+    }
+  }
 }
 
 // Which part of the updater's work failed.
@@ -355,12 +412,17 @@ trait UpdaterHost: Sync {
     update: &'a Self::Update,
     progress: &'a (dyn Fn(u64, Option<u64>) + Send + Sync),
   ) -> impl Future<Output = Result<Self::Package, String>> + Send + 'a;
+  /// What blocks a relaunch now; only `clearance::ask` asks it.
+  fn relaunch_blocker(&self) -> impl Future<Output = Option<RelaunchBlocker>> + Send;
+  /// Returns when it is worth asking `relaunch_blocker` again.
+  fn blockers_may_have_changed(&self) -> impl Future<Output = ()> + Send;
   fn install(
     &self,
     update: &Self::Update,
     package: &Self::Package,
+    clearance: &RelaunchClearance,
   ) -> Result<(), String>;
-  fn relaunch(&self) -> Result<(), String>;
+  fn relaunch(&self, clearance: &RelaunchClearance) -> Result<(), String>;
   /// Records when the feed was last asked, for the background schedule.
   fn record_check(&self);
   /// Hands crash reporting back after an update that did not install.
@@ -395,18 +457,27 @@ impl UpdaterHost for TauriHost<'_> {
     download_update_package(update, progress)
   }
 
+  fn relaunch_blocker(&self) -> impl Future<Output = Option<RelaunchBlocker>> + Send {
+    relaunch_blocker(self.0)
+  }
+
+  async fn blockers_may_have_changed(&self) {
+    tokio::time::sleep(RELAUNCH_RECHECK).await;
+  }
+
   fn install(
     &self,
     update: &Self::Update,
     package: &Self::Package,
+    clearance: &RelaunchClearance,
   ) -> Result<(), String> {
-    crate::local_store::install_update(update, package)
+    crate::local_store::install_update(update, package, clearance)
   }
 
-  fn relaunch(&self) -> Result<(), String> {
+  fn relaunch(&self, clearance: &RelaunchClearance) -> Result<(), String> {
     // On Windows the plugin has already handed off to the installer and
     // exited; this only runs where the bundle was swapped in place.
-    crate::relaunch::after_update(self.0)
+    relaunch::after_update(self.0, clearance)
   }
 
   fn record_check(&self) {
@@ -506,21 +577,30 @@ impl UpdaterBoard {
     }
   }
 
-  async fn run_check<Host, Active, ActiveFuture>(
+  async fn run_check<Host: UpdaterHost>(
     &self,
     host: &Host,
-    active_edit_sessions: &Active,
-  ) -> CheckOutcome
-  where
-    Host: UpdaterHost,
-    Active: Fn() -> ActiveFuture,
-    ActiveFuture: Future<Output = bool>,
-  {
+    when_blocked: WhenBlocked,
+  ) -> CheckOutcome {
     let _operation = self.operation.lock().await;
-    self.check_and_install(host, active_edit_sessions).await
+    self.check_and_install(host, when_blocked).await
   }
 
-  async fn check_unless_busy<Host: UpdaterHost>(&self, host: &Host) -> UpdaterSnapshot {
+  /// Checks and installs unless another check or install runs; then `Busy`.
+  async fn check_unless_busy<Host: UpdaterHost>(
+    &self,
+    host: &Host,
+    when_blocked: WhenBlocked,
+  ) -> CheckOutcome {
+    let Ok(_operation) = self.operation.try_lock() else {
+      return CheckOutcome::Busy;
+    };
+    self.check_and_install(host, when_blocked).await
+  }
+
+  /// Asks the feed and installs nothing. While another check or install
+  /// runs, the answer is what that one is doing.
+  async fn find_unless_busy<Host: UpdaterHost>(&self, host: &Host) -> UpdaterSnapshot {
     let Ok(_operation) = self.operation.try_lock() else {
       return self.snapshot();
     };
@@ -541,38 +621,26 @@ impl UpdaterBoard {
     self.snapshot()
   }
 
-  async fn install_unless_busy<Host, Active, ActiveFuture>(
-    &self,
-    host: &Host,
-    active_edit_sessions: &Active,
-  ) -> UpdaterSnapshot
-  where
-    Host: UpdaterHost,
-    Active: Fn() -> ActiveFuture,
-    ActiveFuture: Future<Output = bool>,
-  {
-    let Ok(_operation) = self.operation.try_lock() else {
-      return self.snapshot();
+  /// Announces that `blocker` holds `version` back, telling the member the
+  /// first time and whenever what blocks it changes.
+  fn defer<Host: UpdaterHost>(&self, host: &Host, version: &str, blocker: RelaunchBlocker) {
+    let deferred = UpdaterState::Deferred {
+      version: version.to_owned(),
+      until: blocker,
     };
-    if let CheckOutcome::Failed(error) =
-      self.check_and_install(host, active_edit_sessions).await
-    {
-      tracing::warn!(%error, "settings update install failed");
+    if self.snapshot().state == deferred {
+      return;
     }
-    self.snapshot()
+    host.notify("stella update available", blocker.notice());
+    self.set(host, deferred);
   }
 
   /// Runs with `operation` held.
-  async fn check_and_install<Host, Active, ActiveFuture>(
+  async fn check_and_install<Host: UpdaterHost>(
     &self,
     host: &Host,
-    active_edit_sessions: &Active,
-  ) -> CheckOutcome
-  where
-    Host: UpdaterHost,
-    Active: Fn() -> ActiveFuture,
-    ActiveFuture: Future<Output = bool>,
-  {
+    when_blocked: WhenBlocked,
+  ) -> CheckOutcome {
     let install_failed = || UpdaterState::Failed {
       during: UpdaterStep::Install,
     };
@@ -596,6 +664,13 @@ impl UpdaterBoard {
     };
 
     let version = Host::version(&update);
+    // A check that does not wait leaves the download to the one that does.
+    if when_blocked == WhenBlocked::Defer
+      && let Err(blocker) = clearance::ask(host).await
+    {
+      self.defer(host, &version, blocker);
+      return CheckOutcome::Deferred { version };
+    }
     let progress = |received_bytes: u64, total_bytes: Option<u64>| {
       self.set(
         host,
@@ -606,35 +681,33 @@ impl UpdaterBoard {
         },
       );
     };
-    let prepared = prepare_install(active_edit_sessions, || async {
-      host.notify(
-        "stella update available",
-        &format!("Installing v{version}…"),
-      );
-      progress(0, None);
-      host.download(&update, &progress).await
-    })
-    .await;
-    let package = match prepared {
-      PreparedInstall::Ready(package) => package,
-      PreparedInstall::Deferred => {
-        host.notify(
-          "stella update available",
-          "stella desktop will update after active desktop edits are finished.",
-        );
-        self.set(
-          host,
-          UpdaterState::Deferred {
-            version: version.clone(),
-          },
-        );
-        return CheckOutcome::Deferred { version };
-      }
-      PreparedInstall::DownloadFailed(err) => {
+    host.notify(
+      "stella update available",
+      &format!("Installing v{version}…"),
+    );
+    progress(0, None);
+    let package = match host.download(&update, &progress).await {
+      Ok(package) => package,
+      Err(err) => {
         host.resume_after_failed_update();
         host.notify("stella update failed", &err);
         self.set(host, install_failed());
         return CheckOutcome::Failed(err);
+      }
+    };
+
+    // Asked again right before the install: a document can open or a run
+    // start while the package downloads.
+    let clearance = loop {
+      match clearance::ask(host).await {
+        Ok(clearance) => break clearance,
+        Err(blocker) => {
+          self.defer(host, &version, blocker);
+          if when_blocked == WhenBlocked::Defer {
+            return CheckOutcome::Deferred { version };
+          }
+          host.blockers_may_have_changed().await;
+        }
       }
     };
 
@@ -644,14 +717,14 @@ impl UpdaterBoard {
         version: version.clone(),
       },
     );
-    if let Err(err) = host.install(&update, &package) {
+    if let Err(err) = host.install(&update, &package, &clearance) {
       host.resume_after_failed_update();
       host.notify("stella update failed", &err);
       self.set(host, install_failed());
       return CheckOutcome::Failed(err);
     }
 
-    if let Err(err) = host.relaunch() {
+    if let Err(err) = host.relaunch(&clearance) {
       host.notify(
         "stella update installed",
         "Quit and reopen stella desktop to finish updating.",
@@ -812,76 +885,15 @@ fn notify(handle: &AppHandle, title: &str, body: &str) {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use std::collections::VecDeque;
   use std::sync::atomic::AtomicUsize;
 
-  /// Answers each "are desktop edits active?" in turn, counting the asks.
-  fn edit_state(
-    answers: &'static [bool],
-  ) -> (Arc<AtomicUsize>, impl Fn() -> std::future::Ready<bool>) {
-    let asked = Arc::new(AtomicUsize::new(0));
-    let counter = Arc::clone(&asked);
-    let active = move || {
-      let index = counter.fetch_add(1, Ordering::SeqCst);
-      std::future::ready(answers[index])
-    };
-    (asked, active)
-  }
-
-  #[tokio::test]
-  async fn an_edit_opened_during_the_download_defers_the_install() {
-    let (asked, active) = edit_state(&[false, true]);
-    let downloads = AtomicUsize::new(0);
-    let prepared = prepare_install(&active, || async {
-      downloads.fetch_add(1, Ordering::SeqCst);
-      Ok::<_, String>("package")
-    })
-    .await;
-
-    assert!(matches!(prepared, PreparedInstall::Deferred));
-    assert_eq!(downloads.load(Ordering::SeqCst), 1);
-    assert_eq!(asked.load(Ordering::SeqCst), 2);
-  }
-
-  #[tokio::test]
-  async fn an_edit_open_when_the_update_is_found_skips_the_download() {
-    let (asked, active) = edit_state(&[true]);
-    let downloads = AtomicUsize::new(0);
-    let prepared = prepare_install(&active, || async {
-      downloads.fetch_add(1, Ordering::SeqCst);
-      Ok::<_, String>("package")
-    })
-    .await;
-
-    assert!(matches!(prepared, PreparedInstall::Deferred));
-    assert_eq!(downloads.load(Ordering::SeqCst), 0);
-    assert_eq!(asked.load(Ordering::SeqCst), 1);
-  }
-
-  #[tokio::test]
-  async fn no_edits_before_or_after_the_download_installs() {
-    let (_, active) = edit_state(&[false, false]);
-    let prepared =
-      prepare_install(&active, || async { Ok::<_, String>("package") }).await;
-
-    assert!(matches!(prepared, PreparedInstall::Ready("package")));
-  }
-
-  #[tokio::test]
-  async fn a_failed_download_is_reported_without_asking_again() {
-    let (asked, active) = edit_state(&[false]);
-    let prepared =
-      prepare_install(&active, || async { Err::<&str, _>("offline".to_string()) })
-        .await;
-
-    assert!(
-      matches!(prepared, PreparedInstall::DownloadFailed(err) if err == "offline")
-    );
-    assert_eq!(asked.load(Ordering::SeqCst), 1);
-  }
-
-  /// A release feed and installer a test scripts. With `hold_download`, the
-  /// download stops after its first chunk until the test calls `release`, so
-  /// the test can look at the updater while an install is under way.
+  /// A release feed, installer and relaunch blockers a test scripts. With
+  /// `hold_download`, the download stops after its first chunk until the test
+  /// calls `release`, so the test can look at the updater while an install is
+  /// under way. `blockers` answers each relaunch check in turn and repeats
+  /// its last answer; a wait for blockers to change signals `waiting` and
+  /// returns once the test signals `recheck`.
   struct FakeHost {
     found: Result<Option<&'static str>, String>,
     chunks: &'static [u64],
@@ -891,9 +903,15 @@ mod tests {
     hold_download: bool,
     download_started: tokio::sync::Notify,
     download_released: tokio::sync::Notify,
+    blockers: std::sync::Mutex<VecDeque<Option<RelaunchBlocker>>>,
+    waiting: tokio::sync::Notify,
+    recheck: tokio::sync::Notify,
     finds: AtomicUsize,
     downloads: AtomicUsize,
+    blocker_checks: AtomicUsize,
     installs: AtomicUsize,
+    relaunches: AtomicUsize,
+    notices: std::sync::Mutex<Vec<String>>,
     announced: std::sync::Mutex<Vec<UpdaterSnapshot>>,
   }
 
@@ -908,15 +926,34 @@ mod tests {
         hold_download: false,
         download_started: tokio::sync::Notify::new(),
         download_released: tokio::sync::Notify::new(),
+        blockers: std::sync::Mutex::new(VecDeque::from([None])),
+        waiting: tokio::sync::Notify::new(),
+        recheck: tokio::sync::Notify::new(),
         finds: AtomicUsize::new(0),
         downloads: AtomicUsize::new(0),
+        blocker_checks: AtomicUsize::new(0),
         installs: AtomicUsize::new(0),
+        relaunches: AtomicUsize::new(0),
+        notices: std::sync::Mutex::new(Vec::new()),
         announced: std::sync::Mutex::new(Vec::new()),
       }
     }
 
+    fn blocked_by(self, answers: &[Option<RelaunchBlocker>]) -> Self {
+      *self.blockers.lock().unwrap() = answers.iter().copied().collect();
+      self
+    }
+
     fn announced(&self) -> Vec<UpdaterSnapshot> {
       self.announced.lock().unwrap().clone()
+    }
+
+    fn states(&self) -> Vec<UpdaterState> {
+      self.announced().into_iter().map(|s| s.state).collect()
+    }
+
+    fn count(counter: &AtomicUsize) -> usize {
+      counter.load(Ordering::SeqCst)
     }
   }
 
@@ -951,17 +988,37 @@ mod tests {
       self.download_result.clone().map(|()| "package")
     }
 
+    fn relaunch_blocker(
+      &self,
+    ) -> impl Future<Output = Option<RelaunchBlocker>> + Send {
+      self.blocker_checks.fetch_add(1, Ordering::SeqCst);
+      let mut blockers = self.blockers.lock().unwrap();
+      let answer = if blockers.len() > 1 {
+        blockers.pop_front().flatten()
+      } else {
+        blockers.front().copied().flatten()
+      };
+      std::future::ready(answer)
+    }
+
+    async fn blockers_may_have_changed(&self) {
+      self.waiting.notify_one();
+      self.recheck.notified().await;
+    }
+
     fn install(
       &self,
       _update: &Self::Update,
       package: &Self::Package,
+      _clearance: &RelaunchClearance,
     ) -> Result<(), String> {
       assert_eq!(*package, "package");
       self.installs.fetch_add(1, Ordering::SeqCst);
       self.install_result.clone()
     }
 
-    fn relaunch(&self) -> Result<(), String> {
+    fn relaunch(&self, _clearance: &RelaunchClearance) -> Result<(), String> {
+      self.relaunches.fetch_add(1, Ordering::SeqCst);
       Ok(())
     }
 
@@ -969,15 +1026,13 @@ mod tests {
 
     fn resume_after_failed_update(&self) {}
 
-    fn notify(&self, _title: &str, _body: &str) {}
+    fn notify(&self, _title: &str, body: &str) {
+      self.notices.lock().unwrap().push(body.to_owned());
+    }
 
     fn announce(&self, snapshot: &UpdaterSnapshot) {
       self.announced.lock().unwrap().push(snapshot.clone());
     }
-  }
-
-  fn no_edits() -> std::future::Ready<bool> {
-    std::future::ready(false)
   }
 
   fn downloading(
@@ -992,6 +1047,155 @@ mod tests {
     }
   }
 
+  fn deferred(until: RelaunchBlocker) -> UpdaterState {
+    UpdaterState::Deferred {
+      version: "0.9.90".into(),
+      until,
+    }
+  }
+
+  #[tokio::test]
+  async fn a_running_agent_run_holds_the_relaunch_until_it_finishes() {
+    let board = UpdaterBoard::new();
+    let host = FakeHost::offering("0.9.90")
+      .blocked_by(&[Some(RelaunchBlocker::AgentRuns), None]);
+
+    let update = board.run_check(&host, WhenBlocked::Wait);
+    let run = async {
+      host.waiting.notified().await;
+      // Downloaded and waiting: nothing installed, nothing relaunched.
+      assert_eq!(board.snapshot().state, deferred(RelaunchBlocker::AgentRuns));
+      assert_eq!(FakeHost::count(&host.downloads), 1);
+      assert_eq!(FakeHost::count(&host.installs), 0);
+      assert_eq!(FakeHost::count(&host.relaunches), 0);
+      // The run finishes.
+      host.recheck.notify_one();
+    };
+    let (outcome, ()) = tokio::time::timeout(Duration::from_secs(5), async {
+      tokio::join!(update, run)
+    })
+    .await
+    .expect("the install goes ahead once the run finished");
+
+    assert!(
+      matches!(outcome, CheckOutcome::Installed { version } if version == "0.9.90")
+    );
+    assert_eq!(FakeHost::count(&host.downloads), 1);
+    assert_eq!(FakeHost::count(&host.installs), 1);
+    assert_eq!(FakeHost::count(&host.relaunches), 1);
+    assert_eq!(FakeHost::count(&host.blocker_checks), 2);
+  }
+
+  #[tokio::test]
+  async fn a_waiting_install_says_what_holds_it_each_time_that_changes() {
+    let board = UpdaterBoard::new();
+    let host = FakeHost::offering("0.9.90").blocked_by(&[
+      Some(RelaunchBlocker::EditSessions),
+      Some(RelaunchBlocker::EditSessions),
+      Some(RelaunchBlocker::AgentRuns),
+      None,
+    ]);
+
+    let update = board.run_check(&host, WhenBlocked::Wait);
+    let member = async {
+      for _ in 0..3 {
+        host.waiting.notified().await;
+        assert_eq!(FakeHost::count(&host.relaunches), 0);
+        host.recheck.notify_one();
+      }
+    };
+    let (outcome, ()) = tokio::time::timeout(Duration::from_secs(5), async {
+      tokio::join!(update, member)
+    })
+    .await
+    .expect("the install goes ahead once nothing blocks it");
+
+    assert!(matches!(outcome, CheckOutcome::Installed { .. }));
+    let held: Vec<_> = host
+      .states()
+      .into_iter()
+      .filter(|state| matches!(state, UpdaterState::Deferred { .. }))
+      .collect();
+    assert_eq!(
+      held,
+      vec![
+        deferred(RelaunchBlocker::EditSessions),
+        deferred(RelaunchBlocker::AgentRuns),
+      ]
+    );
+    let notices = host.notices.lock().unwrap().clone();
+    assert_eq!(
+      notices
+        .iter()
+        .filter(|notice| notice.starts_with("stella desktop will update"))
+        .collect::<Vec<_>>(),
+      vec![
+        RelaunchBlocker::EditSessions.notice(),
+        RelaunchBlocker::AgentRuns.notice(),
+      ]
+    );
+    assert_eq!(FakeHost::count(&host.relaunches), 1);
+  }
+
+  #[tokio::test]
+  async fn a_check_that_does_not_wait_defers_for_an_open_edit_and_skips_the_download() {
+    let board = UpdaterBoard::new();
+    let host =
+      FakeHost::offering("0.9.90").blocked_by(&[Some(RelaunchBlocker::EditSessions)]);
+
+    let outcome = board.run_check(&host, WhenBlocked::Defer).await;
+
+    assert!(
+      matches!(outcome, CheckOutcome::Deferred { version } if version == "0.9.90")
+    );
+    assert_eq!(board.snapshot().state, deferred(RelaunchBlocker::EditSessions));
+    assert_eq!(FakeHost::count(&host.downloads), 0);
+    assert_eq!(FakeHost::count(&host.blocker_checks), 1);
+    assert_eq!(FakeHost::count(&host.installs), 0);
+  }
+
+  #[tokio::test]
+  async fn an_edit_opened_during_the_download_defers_the_install() {
+    let board = UpdaterBoard::new();
+    let host = FakeHost::offering("0.9.90")
+      .blocked_by(&[None, Some(RelaunchBlocker::EditSessions)]);
+
+    let outcome = board.run_check(&host, WhenBlocked::Defer).await;
+
+    assert!(matches!(outcome, CheckOutcome::Deferred { .. }));
+    assert_eq!(FakeHost::count(&host.downloads), 1);
+    assert_eq!(FakeHost::count(&host.blocker_checks), 2);
+    assert_eq!(FakeHost::count(&host.installs), 0);
+    assert_eq!(FakeHost::count(&host.relaunches), 0);
+  }
+
+  #[tokio::test]
+  async fn a_failed_download_is_reported_without_asking_about_blockers() {
+    let board = UpdaterBoard::new();
+    let host = FakeHost {
+      download_result: Err("offline".into()),
+      ..FakeHost::offering("0.9.90")
+    };
+
+    let outcome = board.run_check(&host, WhenBlocked::Wait).await;
+
+    assert!(matches!(outcome, CheckOutcome::Failed(error) if error == "offline"));
+    assert_eq!(FakeHost::count(&host.blocker_checks), 0);
+    assert_eq!(FakeHost::count(&host.relaunches), 0);
+  }
+
+  #[tokio::test]
+  async fn a_check_that_must_not_wait_skips_while_another_runs() {
+    let board = UpdaterBoard::new();
+    let host = FakeHost::offering("0.9.90");
+    let _held = board.operation.lock().await;
+
+    let outcome = board.check_unless_busy(&host, WhenBlocked::Defer).await;
+
+    assert!(matches!(outcome, CheckOutcome::Busy));
+    assert_eq!(FakeHost::count(&host.finds), 0);
+  }
+
   #[tokio::test]
   async fn an_install_started_in_the_background_shows_in_later_settings_reads() {
     let board = UpdaterBoard::new();
@@ -1000,7 +1204,7 @@ mod tests {
       ..FakeHost::offering("0.9.90")
     };
 
-    let background = board.run_check(&host, &no_edits);
+    let background = board.run_check(&host, WhenBlocked::Wait);
     let settings = async {
       host.download_started.notified().await;
       // Settings opened mid-download: the read and a check both name the
@@ -1009,12 +1213,16 @@ mod tests {
         board.snapshot().state,
         downloading("0.9.90", 100, Some(300))
       );
-      let checked = board.check_unless_busy(&host).await;
+      let checked = board.find_unless_busy(&host).await;
       assert_eq!(checked.state, downloading("0.9.90", 100, Some(300)));
       assert_eq!(host.finds.load(Ordering::SeqCst), 1);
       // Install from Settings starts no second install either.
-      let installed = board.install_unless_busy(&host, &no_edits).await;
-      assert_eq!(installed.state, downloading("0.9.90", 100, Some(300)));
+      let installed = board.check_unless_busy(&host, WhenBlocked::Wait).await;
+      assert!(matches!(installed, CheckOutcome::Busy));
+      assert_eq!(
+        board.snapshot().state,
+        downloading("0.9.90", 100, Some(300))
+      );
       host.download_released.notify_one();
     };
     let (outcome, ()) = tokio::time::timeout(Duration::from_secs(5), async {
@@ -1041,7 +1249,7 @@ mod tests {
     let board = UpdaterBoard::new();
     let host = FakeHost::offering("0.9.90");
 
-    let checked = board.check_unless_busy(&host).await;
+    let checked = board.find_unless_busy(&host).await;
 
     assert_eq!(
       checked.state,
@@ -1050,20 +1258,18 @@ mod tests {
       }
     );
     assert_eq!(host.downloads.load(Ordering::SeqCst), 0);
-    let states: Vec<_> = host.announced().into_iter().map(|s| s.state).collect();
-    assert_eq!(states, vec![UpdaterState::Checking, checked.state]);
+    assert_eq!(host.states(), vec![UpdaterState::Checking, checked.state]);
   }
 
   #[tokio::test]
   async fn each_check_and_install_outcome_leaves_its_state() {
     let failed = |during| UpdaterState::Failed { during };
-    let cases: Vec<(FakeHost, bool, UpdaterState)> = vec![
+    let cases: Vec<(FakeHost, UpdaterState)> = vec![
       (
         FakeHost {
           found: Ok(None),
           ..FakeHost::offering("0.9.90")
         },
-        false,
         UpdaterState::UpToDate,
       ),
       (
@@ -1071,22 +1277,21 @@ mod tests {
           found: Err("offline".into()),
           ..FakeHost::offering("0.9.90")
         },
-        false,
         failed(UpdaterStep::Check),
       ),
       (
-        FakeHost::offering("0.9.90"),
-        true,
-        UpdaterState::Deferred {
-          version: "0.9.90".into(),
-        },
+        FakeHost::offering("0.9.90").blocked_by(&[Some(RelaunchBlocker::EditSessions)]),
+        deferred(RelaunchBlocker::EditSessions),
+      ),
+      (
+        FakeHost::offering("0.9.90").blocked_by(&[Some(RelaunchBlocker::AgentRuns)]),
+        deferred(RelaunchBlocker::AgentRuns),
       ),
       (
         FakeHost {
           download_result: Err("signature mismatch".into()),
           ..FakeHost::offering("0.9.90")
         },
-        false,
         failed(UpdaterStep::Install),
       ),
       (
@@ -1094,21 +1299,18 @@ mod tests {
           install_result: Err("disk full".into()),
           ..FakeHost::offering("0.9.90")
         },
-        false,
         failed(UpdaterStep::Install),
       ),
       (
         FakeHost::offering("0.9.90"),
-        false,
         UpdaterState::Installing {
           version: "0.9.90".into(),
         },
       ),
     ];
-    for (host, editing, expected) in cases {
+    for (host, expected) in cases {
       let board = UpdaterBoard::new();
-      let active = move || std::future::ready(editing);
-      board.run_check(&host, &active).await;
+      board.run_check(&host, WhenBlocked::Defer).await;
 
       assert_eq!(board.snapshot().state, expected);
       let announced = host.announced();
@@ -1122,6 +1324,11 @@ mod tests {
           .windows(2)
           .all(|pair| pair[0].revision < pair[1].revision),
         "{announced:?}"
+      );
+      // Only an install nothing blocked relaunches.
+      assert_eq!(
+        FakeHost::count(&host.relaunches),
+        usize::from(matches!(expected, UpdaterState::Installing { .. }))
       );
     }
   }
@@ -1197,6 +1404,15 @@ mod tests {
       })
       .expect("updater state serializes"),
       serde_json::json!({ "status": "failed", "during": "install" })
+    );
+    assert_eq!(
+      serde_json::to_value(deferred(RelaunchBlocker::AgentRuns))
+        .expect("updater state serializes"),
+      serde_json::json!({
+        "status": "deferred",
+        "version": "0.9.90",
+        "until": "agent_runs",
+      })
     );
   }
 
@@ -1290,9 +1506,7 @@ mod tests {
     let independently_started = |setup: &str, updater: &str| {
       setup.matches("presence::start(handle.clone());").count() == 1
         && setup
-          .matches(
-            "updater::schedule_startup_check(handle.clone(), Arc::clone(&manager));",
-          )
+          .matches("updater::schedule_startup_check(handle.clone());")
           .count()
           == 1
         && !updater.contains("presence::")

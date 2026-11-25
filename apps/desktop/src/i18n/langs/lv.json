@@ -1219,7 +1219,8 @@
     "updates": {
       "available": "Pieejama versija {version}.",
       "checkFailed": "stella desktop nevarēja pārbaudīt atjauninājumus.",
-      "deferred": "Versija {version} gaida, kamēr tiek rediģēti atvērtie dokumenti. Kad pabeigsiet, pārbaudiet vēlreiz, lai to instalētu, citādi tā tiks instalēta nākamajā automātiskajā pārbaudē.",
+      "deferredAgents": "Versija {version} tiks instalēta, kad šajā datorā vairs nestrādās neviens aģents.",
+      "deferredEdits": "Versija {version} tiks instalēta, kad aizvērsiet rediģēšanai atvērtos dokumentus.",
       "downloadProgress": "Lejupielādēti {percent}%",
       "downloading": "Notiek versijas {version} lejupielāde. Pēc instalēšanas stella desktop tiks restartēta.",
       "install": "Instalēt un restartēt",

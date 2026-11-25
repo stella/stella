@@ -1,7 +1,6 @@
 //! Authenticated handoff redemption and user recovery for both document flows.
 
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
-use crate::session_manager::SessionManager;
 use crate::types::ErrorResponse;
 use std::sync::Arc;
 use std::time::Duration;
@@ -212,14 +211,10 @@ trait RecoveryHost: Sync {
 
 struct DesktopRecovery<'a> {
   app: &'a AppHandle,
-  manager: &'a Mutex<SessionManager>,
 }
 impl RecoveryHost for DesktopRecovery<'_> {
   async fn check_update(&self) -> crate::updater::CheckOutcome {
-    let sessions = self.manager;
-    let active_edit_sessions =
-      move || async move { sessions.lock().await.has_active_edit_sessions() };
-    crate::updater::run_check(self.app, active_edit_sessions).await
+    crate::updater::check_for_handoff(self.app).await
   }
   async fn confirm(&self, failure: &Failure) -> Result<bool, String> {
     crate::deep_link::show_connection_confirmation(
@@ -248,6 +243,7 @@ async fn recover(
       }
       crate::updater::CheckOutcome::Deferred { .. }
       | crate::updater::CheckOutcome::UpToDate
+      | crate::updater::CheckOutcome::Busy
       | crate::updater::CheckOutcome::Disabled => {}
     }
   }
@@ -413,7 +409,6 @@ async fn redeem_with<T: serde::de::DeserializeOwned>(
 }
 
 pub(crate) struct RedeemOptions<'a> {
-  pub manager: &'a Arc<Mutex<SessionManager>>,
   pub app: &'a AppHandle,
   pub target: Target,
   pub api_base_url: &'a str,
@@ -424,13 +419,12 @@ pub(crate) async fn redeem<T: serde::de::DeserializeOwned>(
   options: RedeemOptions<'_>,
 ) -> Result<(T, crate::account::LinkedAccount), Stop> {
   let RedeemOptions {
-    manager,
     app,
     target,
     api_base_url,
     token,
   } = options;
-  if crate::updater::check_on_handoff(app, manager).await {
+  if crate::updater::check_on_handoff(app).await {
     return Err(Stop::Presented(
       "Desktop update installed; reopen the document after relaunch.".into(),
     ));
@@ -449,7 +443,7 @@ pub(crate) async fn redeem<T: serde::de::DeserializeOwned>(
       api_base_url,
       token,
     },
-    &DesktopRecovery { app, manager },
+    &DesktopRecovery { app },
   )
   .await
 }

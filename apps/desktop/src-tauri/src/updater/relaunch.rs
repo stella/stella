@@ -11,12 +11,18 @@
 // bundle: a Gatekeeper-evaluated launch that belongs to no old job. Windows
 // never reaches this module; the updater plugin hands off to the installer,
 // which relaunches the app itself.
+//
+// It is private to the updater and asks for the clearance the updater's one
+// relaunch check hands out, so nothing relaunches past a blocker.
 
 #[cfg(target_os = "macos")]
-pub use macos::after_update;
+pub(super) use macos::after_update;
 
 #[cfg(not(target_os = "macos"))]
-pub fn after_update(handle: &tauri::AppHandle) -> Result<(), String> {
+pub(super) fn after_update(
+  handle: &tauri::AppHandle,
+  _clearance: &super::RelaunchClearance,
+) -> Result<(), String> {
   crate::desktop_crash::clean_exit(handle);
   handle.restart()
 }
@@ -55,7 +61,10 @@ else
 fi
 "#;
 
-  pub fn after_update(handle: &AppHandle) -> Result<(), String> {
+  pub(in crate::updater) fn after_update(
+    handle: &AppHandle,
+    _clearance: &crate::updater::RelaunchClearance,
+  ) -> Result<(), String> {
     let env = handle.env();
     let binary = tauri::process::current_binary(&env)
       .map_err(|err| format!("current binary path unavailable: {err}"))?;

@@ -821,7 +821,6 @@ pub async fn redeem_and_sign(
 
   let (redeemed, account) =
     crate::handoff::redeem::<RedeemResponse>(crate::handoff::RedeemOptions {
-      manager: &manager,
       app: &app_handle,
       target: crate::handoff::Target::PdfSigning,
       api_base_url: &api_base_url,

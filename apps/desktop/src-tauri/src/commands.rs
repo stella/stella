@@ -374,17 +374,13 @@ pub async fn check_for_updates(
   Ok(crate::updater::check_from_settings(&app).await)
 }
 
-/// Settings → About: installs through the check the tray and the
-/// background schedule run, so active desktop edits defer it the same way.
+/// Settings → About: installs through the check the background schedule
+/// runs, so whatever blocks a relaunch holds it the same way.
 #[tauri::command]
 pub async fn install_update(
   app: tauri::AppHandle,
-  state: State<'_, AppState>,
 ) -> Result<crate::updater::UpdaterSnapshot, String> {
-  let sessions = state.inner().as_ref();
-  let active_edit_sessions =
-    move || async move { sessions.lock().await.has_active_edit_sessions() };
-  Ok(crate::updater::install_from_settings(&app, active_edit_sessions).await)
+  Ok(crate::updater::install_from_settings(&app).await)
 }
 
 #[tauri::command]

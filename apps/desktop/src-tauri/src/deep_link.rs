@@ -330,16 +330,15 @@ pub fn handle_url(
           return;
         }
 
-        let sessions = &*manager;
-        let active_edit_sessions =
-          move || async move { sessions.lock().await.has_active_edit_sessions() };
-
-        match updater::run_check(&app_handle, active_edit_sessions).await {
+        match updater::run_check(&app_handle).await {
           updater::CheckOutcome::Deferred { version } => {
             tracing::debug!(
                 version = %version,
-                "deep link updater check deferred while desktop edits are active"
+                "deep link updater check deferred while a relaunch is blocked"
             );
+          }
+          updater::CheckOutcome::Busy => {
+            tracing::debug!("deep link updater check: another check is under way");
           }
           updater::CheckOutcome::UpToDate => {
             tracing::debug!("deep link updater check: up to date");
@@ -1115,7 +1114,6 @@ async fn redeem_and_open_desktop_edit(
     .map_err(|error| error.to_string())?;
   let (redeemed, account) = crate::handoff::redeem::<RedeemedDesktopEditHandoff>(
     crate::handoff::RedeemOptions {
-      manager: &manager,
       app: &app_handle,
       target: crate::handoff::Target::DesktopEdit,
       api_base_url: &api_base_url,

@@ -5,6 +5,7 @@ import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type {
+  RelaunchBlocker,
   UpdaterSnapshot,
   UpdaterState,
   UpdaterStep,
@@ -103,8 +104,9 @@ const createUpdaterStore = () => {
  * Settings' view of the native updater. "Check for updates", on About or in
  * the tray, asks whether a newer version exists without installing it; an
  * update it finds is installed only when the user asks, through the same
- * check the background schedule runs. Both answer with what is already
- * under way when a check or install is running.
+ * check the background schedule runs, and only once nothing on this computer
+ * holds a relaunch back. Both answer with what is already under way when a
+ * check or install is running.
  */
 export const useUpdateCheck = () => {
   const [store] = useState(createUpdaterStore);
@@ -126,7 +128,12 @@ export const useUpdateCheck = () => {
 
 export type UpdateCheck = ReturnType<typeof useUpdateCheck>;
 
-/** The About page's version row, with the updater's button and state. */
+/**
+ * The About page's version row, with the updater's one button and its state.
+ * The button checks until an update is found, then installs it; while the
+ * update downloads, installs or waits for this computer, it stays in place
+ * and says why it cannot be pressed.
+ */
 export const AppVersionRow = ({
   onEmailSupport,
   supportEmail,
@@ -142,9 +149,16 @@ export const AppVersionRow = ({
   const t = useTranslations("settings");
   const tTray = useTranslations("tray");
 
-  // A check in flight shows as loading, which already blocks a second one.
-  const installing =
-    state?.status === "downloading" || state?.status === "installing";
+  const action = updaterAction(state);
+  // Why the install button cannot be pressed now, while it cannot.
+  let blockedReason: string | undefined;
+  if (action.kind === "waiting") {
+    blockedReason = t(DEFERRED_MESSAGES[action.until], {
+      version: action.version,
+    });
+  } else if (action.kind === "installing") {
+    blockedReason = t("updates.installInProgress");
+  }
   return (
     <SettingsRow
       description={versionLabel ?? <VersionPlaceholder />}
@@ -153,12 +167,7 @@ export const AppVersionRow = ({
         state.status === "idle" ||
         state.status === "checking" ? null : (
           <div aria-live="polite" className="flex flex-col gap-1 text-sm">
-            <UpdaterOutcome
-              onInstall={() => {
-                void install();
-              }}
-              state={state}
-            />
+            <UpdaterOutcome state={state} />
             <p className="text-muted-foreground">
               {t.rich("updates.support", {
                 address: supportEmail,
@@ -176,20 +185,71 @@ export const AppVersionRow = ({
       media={<StellaAppIcon className="size-8 rounded-lg" />}
       title={t("stellaDesktop")}
     >
-      <Button
-        disabled={installing}
-        disabledReason={installing ? t("updates.installInProgress") : undefined}
-        loading={state?.status === "checking"}
-        onClick={() => {
-          void run();
-        }}
-        variant="outline"
-      >
-        {tTray("checkForUpdates")}
-      </Button>
+      {action.kind === "check" ? (
+        <Button
+          // A check in flight shows as loading, which already blocks a
+          // second one.
+          loading={action.checking}
+          onClick={() => {
+            void run();
+          }}
+          variant="outline"
+        >
+          {tTray("checkForUpdates")}
+        </Button>
+      ) : (
+        <Button
+          disabled={action.kind !== "install"}
+          disabledReason={blockedReason}
+          loading={action.kind === "installing"}
+          onClick={() => {
+            void install();
+          }}
+        >
+          {t("updates.install")}
+        </Button>
+      )}
     </SettingsRow>
   );
 };
+
+/** What the row's one button does in each updater state. */
+type UpdaterAction =
+  | { kind: "check"; checking: boolean }
+  | { kind: "install" }
+  | { kind: "installing" }
+  | { kind: "waiting"; until: RelaunchBlocker; version: string };
+
+const updaterAction = (state: UpdaterState | null): UpdaterAction => {
+  if (state === null) {
+    return { kind: "check", checking: false };
+  }
+  switch (state.status) {
+    case "idle":
+    case "up_to_date":
+    case "failed":
+    case "managed":
+      return { kind: "check", checking: false };
+    case "checking":
+      return { kind: "check", checking: true };
+    case "available":
+      return { kind: "install" };
+    case "downloading":
+    case "installing":
+      return { kind: "installing" };
+    case "deferred":
+      return { kind: "waiting", until: state.until, version: state.version };
+    default:
+      state satisfies never;
+      return panic("Unknown updater state");
+  }
+};
+
+/** What an update that waits for this computer says it waits for. */
+const DEFERRED_MESSAGES = {
+  agent_runs: "updates.deferredAgents",
+  edit_sessions: "updates.deferredEdits",
+} as const satisfies Record<RelaunchBlocker, string>;
 
 /** Holds the version line's height while the version loads, so the row
  *  does not jump when it arrives. */
@@ -200,38 +260,29 @@ const VersionPlaceholder = () => (
 );
 
 const UpdaterOutcome = ({
-  onInstall,
   state,
 }: {
-  onInstall: () => void;
   state: Exclude<UpdaterState, { status: "idle" } | { status: "checking" }>;
 }) => {
-  const t = useTranslations("settings.updates");
+  const t = useTranslations("settings");
   const tTray = useTranslations("tray");
   switch (state.status) {
     case "up_to_date":
-      return <p>{t("upToDate")}</p>;
+      return <p>{t("updates.upToDate")}</p>;
     case "available":
-      return (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <p>{t("available", { version: state.version })}</p>
-          <Button onClick={onInstall} size="sm">
-            {t("install")}
-          </Button>
-        </div>
-      );
+      return <p>{t("updates.available", { version: state.version })}</p>;
     case "downloading": {
       const percent = downloadedPercent(state);
       return (
         <div className="flex items-start gap-2">
           <Loader className="mt-0.5" size="sm" variant="decorative" />
           <div className="flex flex-col gap-0.5">
-            <p>{t("downloading", { version: state.version })}</p>
+            <p>{t("updates.downloading", { version: state.version })}</p>
             {/* Progress updates several times a second; the line above is
                 what gets announced. */}
             {percent === null ? null : (
               <p aria-live="off" className="text-muted-foreground tabular-nums">
-                {t("downloadProgress", { percent })}
+                {t("updates.downloadProgress", { percent })}
               </p>
             )}
           </div>
@@ -239,15 +290,19 @@ const UpdaterOutcome = ({
       );
     }
     case "installing":
-      return <p>{t("installing", { version: state.version })}</p>;
+      return <p>{t("updates.installing", { version: state.version })}</p>;
     case "deferred":
-      return <p>{t("deferred", { version: state.version })}</p>;
+      return (
+        <p>{t(DEFERRED_MESSAGES[state.until], { version: state.version })}</p>
+      );
     case "managed":
       return <p>{tTray("updatesManaged")}</p>;
     case "failed":
       return (
         <p className="text-destructive-foreground" role="alert">
-          {state.during === "check" ? t("checkFailed") : t("installFailed")}
+          {state.during === "check"
+            ? t("updates.checkFailed")
+            : t("updates.installFailed")}
         </p>
       );
     default:
@@ -277,9 +332,13 @@ type StatePayload<Status extends UpdaterStatus> =
     ? "download"
     : Extract<UpdaterState, { status: Status }> extends { during: UpdaterStep }
       ? "during"
-      : Extract<UpdaterState, { status: Status }> extends { version: string }
-        ? "version"
-        : "none";
+      : Extract<UpdaterState, { status: Status }> extends {
+            until: RelaunchBlocker;
+          }
+        ? "deferred"
+        : Extract<UpdaterState, { status: Status }> extends { version: string }
+          ? "version"
+          : "none";
 
 const STATE_PAYLOADS = {
   idle: "none",
@@ -288,7 +347,7 @@ const STATE_PAYLOADS = {
   available: "version",
   downloading: "download",
   installing: "version",
-  deferred: "version",
+  deferred: "deferred",
   failed: "during",
   managed: "none",
 } as const satisfies { [Status in UpdaterStatus]: StatePayload<Status> };
@@ -321,6 +380,12 @@ const isUpdaterState = (value: unknown): value is UpdaterState => {
         typeof value["receivedBytes"] === "number" &&
         (value["totalBytes"] === null ||
           typeof value["totalBytes"] === "number")
+      );
+    case "deferred":
+      return (
+        typeof value["version"] === "string" &&
+        typeof value["until"] === "string" &&
+        Object.hasOwn(DEFERRED_MESSAGES, value["until"])
       );
     case "during":
       return (
