@@ -242,7 +242,7 @@ describe("browser site notes (database)", () => {
     // The run follows the note, the site has changed: it replaces the note
     // with what works now, and removes one that no longer applies at all.
     await save([add("court filter", "Pick the court from the list.")]);
-    const [, other] = await read();
+    const other = (await read()).find(({ step }) => step === "court filter");
     const saved = await save([
       {
         type: "replace",

@@ -424,14 +424,6 @@
     "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
   },
   {
-    "id": "mcp:read_site_notes",
-    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
-  },
-  {
-    "id": "mcp:save_site_notes",
-    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
-  },
-  {
     "id": "mcp:list_time_entries",
     "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
   },

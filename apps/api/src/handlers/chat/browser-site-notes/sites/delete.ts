@@ -2,11 +2,13 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { BROWSER_CONTROL_LIMITS } from "@stll/api-contract/browser-control";
+import { browserSiteGrantOrigin } from "@stll/api-contract/browser-site-grants";
 import { BROWSER_SITE_NOTE_REFUSAL_CODE } from "@stll/api-contract/browser-site-notes";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { deleteBrowserSiteNotesForSite } from "@/api/lib/chat/browser-site-notes/store";
+import { deleteBrowserSiteNotesForSiteOnTx } from "@/api/lib/chat/browser-site-notes/store";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -38,18 +40,8 @@ const deleteBrowserSiteNotesSite = createSafeRootHandler(
     session,
     user,
   }) {
-    const deleted = yield* Result.await(
-      deleteBrowserSiteNotesForSite({
-        owner: {
-          organizationId: session.activeOrganizationId,
-          userId: user.id,
-        },
-        recordAuditEvent,
-        safeDb,
-        url,
-      }),
-    );
-    if (deleted === null) {
+    const origin = browserSiteGrantOrigin(url);
+    if (origin === null) {
       return Result.err(
         new HandlerError({
           code: BROWSER_SITE_NOTE_REFUSAL_CODE.notHttps,
@@ -58,6 +50,21 @@ const deleteBrowserSiteNotesSite = createSafeRootHandler(
         }),
       );
     }
+    const owner = {
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    };
+    const deleted = yield* Result.await(
+      safeDb(async (tx) => {
+        // The member's collection lock, shared with their website approvals.
+        await withAggregateLock({ tx, aggregate: "chatToolGrants", id: owner });
+        return await deleteBrowserSiteNotesForSiteOnTx(tx, {
+          origin,
+          owner,
+          recordAuditEvent,
+        });
+      }),
+    );
     return Result.ok(deleted);
   },
 );

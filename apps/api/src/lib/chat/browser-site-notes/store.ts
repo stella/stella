@@ -437,12 +437,12 @@ const pruneSite = async (site: SiteWrite) => {
         ),
       ),
     );
-    for (const note of pruned) {
-      await recordAuditEvent(
-        tx,
+    await recordAuditEvent(
+      tx,
+      pruned.map((note) =>
         noteAuditEvent(AUDIT_ACTION.DELETE, origin, note, "pruned"),
-      );
-    }
+      ),
+    );
   }
   return {
     kept: ordered.slice(0, BROWSER_SITE_NOTES_PER_SITE_MAX),
@@ -520,6 +520,7 @@ export const saveBrowserSiteNotes = async ({
     };
     const issues: SaveBrowserSiteNotesOutput["issues"] = [];
     for (const [index, change] of changes.entries()) {
+      // db-await-in-loop: changes apply in order (a later change may name a note an earlier one kept), at most 30 per call
       const issue = await applyChange(site, change, actor);
       if (issue !== null) {
         issues.push({ index, ...issue });
@@ -534,89 +535,70 @@ export const saveBrowserSiteNotes = async ({
 };
 
 /**
- * Remove one of the member's notes, from Settings. Idempotent: a note
+ * Remove one of the member's notes, from Settings, inside the caller's
+ * transaction (which holds the member's collection lock). Idempotent: a note
  * already gone answers `deleted: false`.
  */
-export const deleteBrowserSiteNote = async ({
-  noteId,
-  owner,
-  recordAuditEvent,
-  safeDb,
-}: {
-  noteId: SafeId<"chatBrowserSiteNote">;
-  owner: BrowserSiteNoteOwner;
-  recordAuditEvent: AuditRecorder;
-  safeDb: SafeDb;
-}): Promise<Result<{ deleted: boolean }, SafeDbError>> =>
-  await safeDb(async (tx) => {
-    await withAggregateLock({ tx, aggregate: "chatToolGrants", id: owner });
-    const rows = await tx
-      .delete(chatBrowserSiteNotes)
-      .where(and(ownedBy(owner), eq(chatBrowserSiteNotes.id, noteId)))
-      .returning({
-        id: chatBrowserSiteNotes.id,
-        kind: chatBrowserSiteNotes.kind,
-        origin: chatBrowserSiteNotes.origin,
-      });
-    for (const row of rows) {
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.DELETE,
-        resourceType: AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_NOTE,
-        resourceId: row.id,
-        workspaceId: null,
-        metadata: {
-          browserOrigin: row.origin,
-          noteKind: row.kind,
-          cause: "member",
-        },
-      });
-    }
-    return { deleted: rows.length > 0 };
-  });
+export const deleteBrowserSiteNoteOnTx = async (
+  tx: Transaction,
+  {
+    noteId,
+    owner,
+    recordAuditEvent,
+  }: {
+    noteId: SafeId<"chatBrowserSiteNote">;
+    owner: BrowserSiteNoteOwner;
+    recordAuditEvent: AuditRecorder;
+  },
+): Promise<{ deleted: boolean }> => {
+  const rows = await tx
+    .delete(chatBrowserSiteNotes)
+    .where(and(ownedBy(owner), eq(chatBrowserSiteNotes.id, noteId)))
+    .returning({
+      id: chatBrowserSiteNotes.id,
+      kind: chatBrowserSiteNotes.kind,
+      origin: chatBrowserSiteNotes.origin,
+    });
+  await recordAuditEvent(
+    tx,
+    rows.map((row) =>
+      noteAuditEvent(AUDIT_ACTION.DELETE, row.origin, row, "member"),
+    ),
+  );
+  return { deleted: rows.length > 0 };
+};
 
 /**
- * Remove every note the member keeps for the website `url` is on, from
- * Settings (beside a website approval, or with it).
+ * Remove every note the member keeps for the website `origin` names, from
+ * Settings (beside a website approval, or with it), inside the caller's
+ * transaction.
  */
-export const deleteBrowserSiteNotesForSite = async ({
-  owner,
-  recordAuditEvent,
-  safeDb,
-  url,
-}: {
-  owner: BrowserSiteNoteOwner;
-  recordAuditEvent: AuditRecorder;
-  safeDb: SafeDb;
-  url: string;
-}): Promise<Result<{ deleted: number } | null, SafeDbError>> => {
-  const origin = browserSiteGrantOrigin(url);
-  if (origin === null) {
-    return Result.ok(null);
-  }
-  return await safeDb(async (tx) => {
-    await withAggregateLock({ tx, aggregate: "chatToolGrants", id: owner });
-    const rows = await tx
-      .delete(chatBrowserSiteNotes)
-      .where(onSite(owner, origin))
-      .returning({
-        id: chatBrowserSiteNotes.id,
-        kind: chatBrowserSiteNotes.kind,
-      });
-    for (const row of rows) {
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.DELETE,
-        resourceType: AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_NOTE,
-        resourceId: row.id,
-        workspaceId: null,
-        metadata: {
-          browserOrigin: origin,
-          noteKind: row.kind,
-          cause: "member",
-        },
-      });
-    }
-    return { deleted: rows.length };
-  });
+export const deleteBrowserSiteNotesForSiteOnTx = async (
+  tx: Transaction,
+  {
+    origin,
+    owner,
+    recordAuditEvent,
+  }: {
+    origin: string;
+    owner: BrowserSiteNoteOwner;
+    recordAuditEvent: AuditRecorder;
+  },
+): Promise<{ deleted: number }> => {
+  const rows = await tx
+    .delete(chatBrowserSiteNotes)
+    .where(onSite(owner, origin))
+    .returning({
+      id: chatBrowserSiteNotes.id,
+      kind: chatBrowserSiteNotes.kind,
+    });
+  await recordAuditEvent(
+    tx,
+    rows.map((row) =>
+      noteAuditEvent(AUDIT_ACTION.DELETE, origin, row, "member"),
+    ),
+  );
+  return { deleted: rows.length };
 };
 
 /** A note in the member's data export, as Settings shows it. */

@@ -3,8 +3,9 @@ import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { deleteBrowserSiteNote } from "@/api/lib/chat/browser-site-notes/store";
+import { deleteBrowserSiteNoteOnTx } from "@/api/lib/chat/browser-site-notes/store";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 const config = {
@@ -25,15 +26,19 @@ const deleteBrowserSiteNoteHandler = createSafeRootHandler(
     session,
     user,
   }) {
+    const owner = {
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    };
     const deleted = yield* Result.await(
-      deleteBrowserSiteNote({
-        noteId,
-        owner: {
-          organizationId: session.activeOrganizationId,
-          userId: user.id,
-        },
-        recordAuditEvent,
-        safeDb,
+      safeDb(async (tx) => {
+        // The member's collection lock, shared with their website approvals.
+        await withAggregateLock({ tx, aggregate: "chatToolGrants", id: owner });
+        return await deleteBrowserSiteNoteOnTx(tx, {
+          noteId,
+          owner,
+          recordAuditEvent,
+        });
       }),
     );
     return Result.ok(deleted);

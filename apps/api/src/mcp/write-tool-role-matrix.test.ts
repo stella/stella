@@ -8,6 +8,7 @@ import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
 import type { PermissionInput } from "@stll/permissions";
 import { roles } from "@stll/permissions";
 
+import deleteBrowserSiteNoteEndpoint from "@/api/handlers/chat/browser-site-notes/delete";
 import feedbackCreateEndpoint from "@/api/handlers/feedback/create";
 import readAIConfigEndpoint from "@/api/handlers/organization-settings/read-ai-config";
 import updateAIConfigEndpoint from "@/api/handlers/organization-settings/update-ai-config";
@@ -167,6 +168,19 @@ const ADDITIONAL_REST_OPERATIONS: Readonly<
       ],
       reason:
         "Saving a fill as a new version is a fill followed by a version upload.",
+    },
+  ],
+  save_site_notes: [
+    {
+      endpoints: [
+        {
+          type: "handler",
+          name: "chat.browser-site-notes.delete",
+          config: deleteBrowserSiteNoteEndpoint.config,
+        },
+      ],
+      reason:
+        "Settings removes the same website notes through its route, under the same chat grant.",
     },
   ],
   submit_feedback: [

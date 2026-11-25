@@ -18,6 +18,7 @@ import {
   billingDraftUserSettings,
   billingGuidelineFiles,
   cellMetadata,
+  chatBrowserSiteNotes,
   contacts,
   desktopEditSessions,
   documentProcessingRuns,
@@ -110,6 +111,8 @@ export const prepareEntityReadScalingTables = async (db: GatedTestDb) =>
     auditLogs,
     organizationSettings,
     billingDraftUserSettings,
+    // The member's website notes, which read_site_notes scaling seeds.
+    chatBrowserSiteNotes,
     featureEnrolments,
     desktopDeviceProofReplays,
     contacts,
