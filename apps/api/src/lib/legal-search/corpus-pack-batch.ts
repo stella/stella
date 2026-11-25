@@ -563,7 +563,7 @@ export const openCorpusPackBatch = ({
             return outcomes;
           }
           const planned: PlannedEntry[] = [];
-          for (const entry of decisionEntries) {
+          for (const entry of entries) {
             const prepared = await plan(entry);
             if (prepared !== null) {
               planned.push(prepared);
