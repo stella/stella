@@ -115,7 +115,7 @@ describe("a message queued to hand to a running turn", () => {
     });
     try {
       // The page's read for the server's send landed first.
-      await queryClient.fetchQuery({
+      await queryClient.query({
         queryKey: queueKey,
         queryFn: () => server.queue,
       });
