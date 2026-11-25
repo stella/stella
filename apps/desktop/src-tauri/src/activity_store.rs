@@ -1188,9 +1188,9 @@ mod tests {
       ended_by: crate::activity::GapEnd::Input,
       display: crate::activity::GapDisplay::Locked,
     };
-    store.save_day(date(1), &[recorded.clone()]).unwrap();
+    store.save_day(date(1), std::slice::from_ref(&recorded)).unwrap();
     store.save_gaps(date(1), &[gap]).unwrap();
-    store.save_day(date(1), &[recorded.clone()]).unwrap();
+    store.save_day(date(1), std::slice::from_ref(&recorded)).unwrap();
     assert_eq!(store.load_gaps(date(1)).unwrap(), [gap]);
     store.save_gaps(date(1), &[]).unwrap();
     assert_eq!(store.load_day(date(1)).unwrap(), [recorded]);
