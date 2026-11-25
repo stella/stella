@@ -411,9 +411,7 @@ export const ActivityDayCalendar = ({
   const t = useTranslations("activity");
   const format = useFormatter();
   const locale = useLocale();
-  const { candidates, refreshCandidates } = useMatterCandidates(
-    recordedMatterIds(snapshot),
-  );
+  const { candidates, refreshCandidates } = useMatterCandidates(snapshot);
   const [localDrafts, setLocalDrafts] = useState<DraftedEntries>([]);
   const { submission, submitBatch, errorMessage } = useBatchSubmission({
     date: snapshot.date,
@@ -1795,7 +1793,7 @@ const resolveMatters = async (ids: readonly string[]) => {
 
 /** The shortlist, plus every matter the day's records name outside it,
  * resolved by id under the member's own access as the day names it. */
-function useMatterCandidates(recordedIds: readonly string[]) {
+function useMatterCandidates(snapshot: ActivityDaySnapshot) {
   const [candidates, setCandidates] = useState<CandidateState>({
     type: "loading",
   });
@@ -1826,7 +1824,7 @@ function useMatterCandidates(recordedIds: readonly string[]) {
   const unresolved =
     candidates.type === "ready"
       ? unresolvedMatterIds({
-          ids: recordedIds,
+          ids: recordedMatterIds(snapshot),
           candidates: candidates.matters,
           resolved: candidates.resolved,
         }).join(" ")
