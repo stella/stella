@@ -21,9 +21,9 @@
  * clock, the predicate the flip reads), and gives a route proven current no
  * page while another is not: the run ends once every route is current, so a
  * page on a current route would only delay that. It reads the proofs again
- * after every proof it records and at least every
- * `CORPUS_INDEX_ROUTE_PROOF_REFRESH_MS`, so a proof revoked or expired while
- * it runs is walked again. A pass a current route leaves idle either proves
+ * after every proof it records, and after any page once its last reading is
+ * `CORPUS_INDEX_ROUTE_PROOF_REFRESH_MS` old, so a proof revoked or expired
+ * while it runs is walked again. A pass a current route leaves idle either proves
  * later or, too old to prove, is started over by the store
  * (`pass_too_old_to_prove`). A crash or a stop resumes from the cursor the
  * store holds.
@@ -98,8 +98,8 @@ const ROUTES_MAX = 64;
 /** How long a worker with no route due waits before looking again. */
 const IDLE_POLL_MS = 50;
 /**
- * The longest an `untilCurrent` run trusts its last reading of which routes
- * are current before it reads the proofs again.
+ * How old an `untilCurrent` run's reading of which routes are current may
+ * grow before the next page reads the proofs again.
  */
 export const CORPUS_INDEX_ROUTE_PROOF_REFRESH_MS = 60_000;
 
@@ -602,14 +602,13 @@ const applyStep = async (
         `page failed: ${step.cause instanceof Error ? step.cause.message : String(step.cause)}`,
       );
       return;
-    case "advanced":
-      if (
-        settle(walk.options, report, step.advance) &&
-        walk.options.untilCurrent
-      ) {
+    case "advanced": {
+      const proven = settle(walk.options, report, step.advance);
+      if (walk.options.untilCurrent && (proven || now() >= walk.refreshAt)) {
         await refreshProofs(walk);
       }
       return;
+    }
     default:
       step satisfies never;
       panic("Unhandled route proof step");
@@ -682,11 +681,6 @@ const work = async (walk: Walk): Promise<void> => {
     if (now() >= budget.endsAt || walk.pages >= budget.pages) {
       walk.stop = { type: "budget_spent" };
       return;
-    }
-    if (walk.options.untilCurrent && now() >= walk.refreshAt) {
-      // db-await-in-loop: one bounded read per refresh interval
-      await refreshProofs(walk);
-      continue;
     }
     const taken = takeRoute(walk);
     if (taken.type === "none") {
