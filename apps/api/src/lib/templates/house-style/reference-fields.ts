@@ -61,7 +61,10 @@ type ReferenceFieldErrorReason =
   | "unreadable-label"
   /** The level text names a level or a number format that cannot be
    *  rendered. */
-  | "unrenderable-level";
+  | "unrenderable-level"
+  /** The words of the level text carry punctuation, which the field would
+   *  show in front of the number. */
+  | "punctuated-words";
 
 class ReferenceFieldError extends TaggedError("ReferenceFieldError")<{
   message: string;
@@ -94,10 +97,21 @@ const literalsOf = (levelText: string): string[] =>
 const hasWords = (levelText: string): boolean =>
   literalsOf(levelText).some((literal) => WORDS.test(literal));
 
-/** What is left of a literal with words once the words are dropped: the
- *  brackets that enclose the counter, as in `Článek (%1)`. */
-const bracketsOf = (literal: string): string =>
-  Array.from(literal.matchAll(/[()[\]]/gu), ([bracket]) => bracket).join("");
+/** What a field keeps when it drops the words around it: punctuation and
+ *  brackets. */
+const KEPT_WITH_WORDS = /[.\-–—/:,;()[\]]/u;
+
+/**
+ * Whether a field can show the bare number of a paragraph numbered by
+ * `levelText`. `\t` drops the words of a level text and keeps what stands
+ * between them: `Článek %1.` gives `II`, while `Příloha č. %1` gives `.2`,
+ * the period of `č.` in front of the number. A level whose words carry
+ * punctuation or a bracket therefore cannot be cited by a numbered field.
+ */
+export const showsBareNumber = (levelText: string): boolean =>
+  literalsOf(levelText).every(
+    (literal) => !WORDS.test(literal) || !KEPT_WITH_WORDS.test(literal),
+  );
 
 const renderLevelText = (
   levelText: string,
@@ -110,7 +124,9 @@ const renderLevelText = (
   let rendered = "";
   for (const part of levelText.split(PLACEHOLDER)) {
     if (!PLACEHOLDER.test(part)) {
-      rendered += withoutWords && WORDS.test(part) ? bracketsOf(part) : part;
+      // A literal with words is dropped whole: it holds nothing a field
+      // would keep, or the level is not cited at all.
+      rendered += withoutWords && WORDS.test(part) ? "" : part;
       continue;
     }
     // `%1` is level 0.
@@ -153,16 +169,28 @@ export const selectReferenceField = ({
           "The reference does not print the designator of its target",
         );
       }
+      const withoutWords = hasWords(levelText) || shape.keyword !== null;
+      if (withoutWords && !showsBareNumber(levelText)) {
+        return fail(
+          "punctuated-words",
+          "The field would show punctuation of the level's words",
+        );
+      }
       return Result.ok({
-        instruction:
-          hasWords(levelText) || shape.keyword !== null
-            ? REFERENCE_FIELD_SWITCHES.numberWithoutWords
-            : REFERENCE_FIELD_SWITCHES.number,
+        instruction: withoutWords
+          ? REFERENCE_FIELD_SWITCHES.numberWithoutWords
+          : REFERENCE_FIELD_SWITCHES.number,
         expectedText,
         text: "kept",
       });
     }
     case "houseScheme": {
+      if (!showsBareNumber(levelText)) {
+        return fail(
+          "punctuated-words",
+          "The field would show punctuation of the level's words",
+        );
+      }
       const expectedText = renderLevelText(levelText, numbering);
       if (expectedText === null || expectedText === "") {
         return fail(

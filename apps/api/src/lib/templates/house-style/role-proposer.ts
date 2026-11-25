@@ -1,18 +1,13 @@
-// A first, rule-based reading of what each source block is, mapped onto the
-// template's styles and list levels as plan items. Everything here is a
-// proposal with a confidence: the model step that follows reviews the
-// uncertain ones, and the engine checks whatever plan comes out.
+// A first, rule-based reading of what each source block is: a role with a
+// confidence. Everything here is a proposal: the model step that follows
+// reviews the uncertain ones, the plan builder maps roles onto the template,
+// and the engine checks whatever plan comes out.
 
 import { panic } from "better-result";
 
-import { parseRomanNumeral } from "@stll/api-contract/magyar-kozlony-designation";
-
-import { letterOrdinal } from "@/api/lib/templates/house-style/designators";
 import type {
   DocxBlock,
   DocxBlockManifest,
-  TemplatePlan,
-  TemplatePlanSourceItem,
 } from "@/api/lib/templates/house-style/folio-contract";
 import { buildLabelIndex } from "@/api/lib/templates/house-style/label-index";
 import type {
@@ -20,54 +15,35 @@ import type {
   LabelIndex,
 } from "@/api/lib/templates/house-style/label-index";
 
-export type HouseStyleRole =
-  | "title"
-  | "party"
-  | "articleHeading"
-  | "clause1"
-  | "clause2"
-  | "clause3"
-  | "letter"
-  | "roman"
-  | "continuation"
-  | "signature"
-  | "annexList"
-  | "annexHeading"
-  | "body";
+export const HOUSE_STYLE_ROLES = [
+  "title",
+  "party",
+  "recital",
+  "articleHeading",
+  "clause1",
+  "clause2",
+  "clause3",
+  "letter",
+  "roman",
+  "bullet",
+  "continuation",
+  "signature",
+  "annexList",
+  "annexHeading",
+  "body",
+] as const;
 
-/** Where a role lands in the template. */
-type TemplateRoleTarget = {
-  styleId: string;
-  /** The list level that numbers the role; null for an unnumbered role. */
-  numbering: { numId: number; ilvl: number } | null;
-};
+export type HouseStyleRole = (typeof HOUSE_STYLE_ROLES)[number];
 
-/** Total on purpose: a template that has nothing for a role says so with
- *  `null`, and the proposer reports the blocks that needed it. */
-export type TemplateRoleMap = Readonly<
-  Record<HouseStyleRole, TemplateRoleTarget | null>
->;
-
-type RoleProposal = {
+export type RoleProposal = {
   blockId: string;
   role: HouseStyleRole;
   confidence: number;
   /** Other readings worth offering the model, most likely first. */
   alternatives: { role: HouseStyleRole; confidence: number }[];
   /** The heading block this block's text is merged into; the block has no
-   *  plan item of its own. */
+   *  paragraph of its own in the output. */
   mergedIntoBlockId: string | null;
-};
-
-type RolePlanProposal = {
-  /** Plan items for every placed block, in document order. Tables are
-   *  placed as they are and carry no role. */
-  body: TemplatePlanSourceItem[];
-  omit: TemplatePlan["omit"];
-  proposals: RoleProposal[];
-  /** Proposed roles the template has no target for; their blocks were
-   *  given the `body` target, or none. */
-  unmappedRoles: HouseStyleRole[];
 };
 
 const CONFIDENCE = {
@@ -117,6 +93,13 @@ const SIGNATURE_MARKER = new RegExp(
   String.raw`^\s*(?:ve?[ \u00A0].{0,40}[ \u00A0]dne${NOT_LETTER}|(?:in|at)[ \u00A0].{0,40}[ ,]on${NOT_LETTER}|(?:ort|datum|date|place|místo)[^\n]{0,20}[:.…_]{2,}|(?:za|for and on behalf of|on behalf of|für|im namen)[ \u00A0])|_{4,}|\.{6,}|…{3,}|podpis|signature|unterschrift|signed by|name:|title:|jméno:|funkce:`,
   "iu",
 );
+/** What only a signature block holds: a place-and-date line, a line to sign
+ *  on, the word itself. A cell of an ordinary table may read `Name:`; it
+ *  takes one of these for a table to open the signatures. */
+const SIGNING_MARKER = new RegExp(
+  String.raw`^\s*(?:ve?[ \u00A0].{0,40}[ \u00A0]dne${NOT_LETTER}|(?:in|at)[ \u00A0].{0,40}[ ,]on${NOT_LETTER})|_{4,}|\.{6,}|…{3,}|podpis|signature|unterschrift|signed by`,
+  "iu",
+);
 const CLAUSE_DEPTH_ROLES = [
   "clause1",
   "clause2",
@@ -140,6 +123,10 @@ const isTitleShaped = ({ styleName, text }: DocxBlock): boolean => {
   );
 };
 
+/** A list bullet as the engine reports it: one mark, no number. */
+export const isBulletMark = (label: string): boolean =>
+  /^[^\p{L}\p{N}\s%]$/u.test(label.trim());
+
 type Reading = Omit<RoleProposal, "blockId" | "mergedIntoBlockId">;
 
 const reading = (
@@ -151,7 +138,7 @@ const reading = (
 const isAmbiguousNumeral = ({ shape }: LabelEntry): boolean =>
   shape.numeral === "lowerAmbiguous" || shape.numeral === "upperAmbiguous";
 
-const readEntry = (entry: LabelEntry): Reading => {
+const readEntry = (entry: LabelEntry, zones: Zones): Reading => {
   const labelled =
     entry.origin === "auto" ? CONFIDENCE.autoLabel : CONFIDENCE.typedLabel;
   switch (entry.level) {
@@ -198,7 +185,18 @@ const readEntry = (entry: LabelEntry): Reading => {
             confidence: CONFIDENCE.weakAlternative,
           });
     case "recital":
-      return reading("body", CONFIDENCE.recital);
+      // Recitals stand in front of the operative part. A capital letter
+      // that labels a paragraph inside an article heads a subsection or an
+      // item of a list there.
+      return entry.position > zones.firstProvision
+        ? reading("letter", CONFIDENCE.recital, {
+            role: "continuation",
+            confidence: CONFIDENCE.alternative,
+          })
+        : reading("recital", CONFIDENCE.recital, {
+            role: "body",
+            confidence: CONFIDENCE.alternative,
+          });
     default: {
       entry.level satisfies never;
       return panic("Unhandled level");
@@ -251,8 +249,10 @@ const findZones = (
   { entries }: LabelIndex,
   nested: ReadonlySet<string>,
 ): Zones => {
-  // Cell paragraphs are placed with their table and take no zone; a blank
-  // stand-in keeps every other block at its position.
+  // Cell paragraphs are placed with their table and are no title; a blank
+  // stand-in keeps every other block at its position. What a table holds
+  // still tells where the parties and the signatures are: both are often
+  // laid out in one.
   const blocks = all.map((block): DocxBlock =>
     nested.has(block.id) ? { ...block, kind: "table", text: "" } : block,
   );
@@ -272,7 +272,7 @@ const findZones = (
   const title = Number.isFinite(shaped)
     ? shaped
     : firstPosition(blocks, 0, firstProvision, isText);
-  const identified = firstPosition(blocks, title + 1, firstProvision, (block) =>
+  const identified = firstPosition(all, title + 1, firstProvision, (block) =>
     PARTY_IDENTITY.test(block.text),
   );
   // A party's name often stands alone on the line above its details.
@@ -286,7 +286,7 @@ const findZones = (
       ? identified - 1
       : identified;
   const preamble = firstPosition(
-    blocks,
+    all,
     (Number.isFinite(firstParty) ? firstParty : title) + 1,
     firstProvision,
     (block) => PREAMBLE_MARKER.test(block.text),
@@ -301,8 +301,10 @@ const findZones = (
     signature:
       lastProvision < 0
         ? Number.POSITIVE_INFINITY
-        : firstPosition(blocks, lastProvision + 1, firstAnnexHeading, (block) =>
-            SIGNATURE_MARKER.test(block.text),
+        : firstPosition(all, lastProvision + 1, firstAnnexHeading, (block) =>
+            (nested.has(block.id) ? SIGNING_MARKER : SIGNATURE_MARKER).test(
+              block.text,
+            ),
           ),
     firstAnnexHeading,
   };
@@ -335,9 +337,9 @@ const readFrontMatter = (
     );
   }
   if (position >= zones.preamble) {
-    return reading("body", CONFIDENCE.preamble, {
-      role: "continuation",
-      confidence: CONFIDENCE.weakAlternative,
+    return reading("recital", CONFIDENCE.preamble, {
+      role: "body",
+      confidence: CONFIDENCE.alternative,
     });
   }
   if (position >= zones.firstParty) {
@@ -374,12 +376,15 @@ const readUnlabelled = (
   if (position < zones.firstProvision) {
     return readFrontMatter(block, position, zones);
   }
-  // A bullet or a dash: a list the label index does not count.
+  // A list the label index does not count: bullets and dashes, or a label
+  // it could not read.
   if (block.label !== null) {
-    return reading("continuation", CONFIDENCE.bullet, {
-      role: "letter",
-      confidence: CONFIDENCE.alternative,
-    });
+    return isBulletMark(block.label)
+      ? reading("bullet", CONFIDENCE.autoLabel)
+      : reading("continuation", CONFIDENCE.bullet, {
+          role: "letter",
+          confidence: CONFIDENCE.alternative,
+        });
   }
   const context = index.contextByBlockId.get(block.id);
   const inProvision =
@@ -396,44 +401,35 @@ const readUnlabelled = (
       });
 };
 
-/** The ordinal a list level must show to print the source's designator. */
-const sourceOrdinal = (entry: LabelEntry): number | null => {
-  switch (entry.level) {
-    case "article":
-    case "clause":
-    case "annex":
-      return entry.ordinal;
-    case "letter":
-      return letterOrdinal(entry.core);
-    case "roman":
-      return parseRomanNumeral(entry.core);
-    case "recital":
-      return null;
-    default: {
-      entry.level satisfies never;
-      return panic("Unhandled level");
-    }
-  }
-};
+const LAID_OUT_ROLES: ReadonlySet<HouseStyleRole> = new Set([
+  "party",
+  "signature",
+]);
 
 type ProposeOptions = {
   manifest: Pick<DocxBlockManifest, "blocks">;
-  roleMap: TemplateRoleMap;
   /** Pass the index when the caller already built one from this manifest. */
   index?: LabelIndex;
 };
 
+/** Whether a paragraph shows nothing: no text, no label, no object. */
+export const isBlankParagraph = ({
+  text,
+  label,
+  inlineObjects = 0,
+}: DocxBlock): boolean =>
+  text.trim() === "" && label === null && inlineObjects === 0;
+
 /**
- * Proposes a role and a plan item for every block of the main story. List
- * items carry `restartFrom` wherever the template's list would otherwise
- * count past the source's designator, so the output prints the source's
- * numbers.
+ * Proposes a role for every paragraph of the main story that stands on its
+ * own: not a line of the source's table of contents, not blank, and in a
+ * table only a numbered provision. The second half of a split heading is
+ * reported with the heading it belongs to.
  */
-export const proposeTemplateRoles = ({
+export const proposeBlockRoles = ({
   manifest: { blocks },
-  roleMap,
   index = buildLabelIndex({ blocks }),
-}: ProposeOptions): RolePlanProposal => {
+}: ProposeOptions): RoleProposal[] => {
   const nested = new Set(
     blocks.flatMap((block) =>
       block.cells === undefined
@@ -447,98 +443,56 @@ export const proposeTemplateRoles = ({
       entry.titleBlockId === null ? [] : [[entry.titleBlockId, entry] as const],
     ),
   );
-  const result: RolePlanProposal = {
-    body: [],
-    omit: [],
-    proposals: [],
-    unmappedRoles: [],
-  };
-  const unmapped = new Set<HouseStyleRole>();
-  const countersByList = new Map<number, number[]>();
-
-  const place = (block: DocxBlock, read: Reading, entry: LabelEntry | null) => {
-    result.proposals.push({
-      ...read,
-      blockId: block.id,
-      mergedIntoBlockId: null,
-    });
-    const own = roleMap[read.role];
-    if (own === null) {
-      unmapped.add(read.role);
-    }
-    const target = own ?? roleMap.body;
-    const item: TemplatePlanSourceItem = {
-      kind: "source",
-      blockId: block.id,
-      hash: block.hash,
-    };
-    if (target !== null) {
-      item.styleId = target.styleId;
-      item.numbering = null;
-    }
-    // Only the role's own list numbers the block; the fallback style does
-    // not turn a clause into a numbered body paragraph.
-    const list = own?.numbering ?? null;
-    if (list !== null && entry !== null) {
-      const { numId, ilvl } = list;
-      const counters = countersByList.get(numId);
-      const expected = (counters?.[ilvl] ?? 0) + 1;
-      const ordinal = sourceOrdinal(entry) ?? expected;
-      item.numbering =
-        ordinal === expected
-          ? { numId, ilvl }
-          : { numId, ilvl, restartFrom: ordinal };
-      // Placing an item resets every deeper level of its list.
-      const next = Array.from(
-        { length: ilvl },
-        (_, level) => counters?.[level] ?? 0,
-      );
-      next.push(ordinal);
-      countersByList.set(numId, next);
-      if (entry.origin === "manual") {
-        item.stripLabel = block.text.slice(0, entry.manualLength);
-      }
-    }
-    if (entry !== null && entry.titleBlockId !== null) {
-      item.mergeNext = "lineBreak";
-    }
-    result.body.push(item);
-  };
-
+  const proposals: RoleProposal[] = [];
   for (const [position, block] of blocks.entries()) {
+    if (
+      block.kind === "table" ||
+      index.contentsBlockIds.has(block.id) ||
+      isBlankParagraph(block)
+    ) {
+      continue;
+    }
     if (nested.has(block.id)) {
-      continue;
-    }
-    if (block.kind === "table") {
-      result.body.push({ kind: "source", blockId: block.id, hash: block.hash });
-      continue;
-    }
-    if (index.contentsBlockIds.has(block.id)) {
-      result.omit.push({ blockId: block.id, reason: "sourceToc" });
-      continue;
-    }
-    if (block.text.trim() === "" && block.label === null) {
-      result.omit.push({ blockId: block.id, reason: "empty" });
+      // A cell paragraph is placed with its table. It is read on its own
+      // where it is a provision in its own right: numbered by a list, or a
+      // paragraph of a text that runs in parallel columns.
+      const entry = index.entryByBlockId.get(block.id);
+      if (
+        entry !== undefined &&
+        (entry.origin === "auto" || index.columnByBlockId.has(block.id))
+      ) {
+        proposals.push({
+          ...readEntry(entry, zones),
+          blockId: block.id,
+          mergedIntoBlockId: null,
+        });
+        continue;
+      }
+      // A table of parties or of signatures is laid out, not tabulated: its
+      // paragraphs are party and signature lines.
+      const read = readUnlabelled(block, position, zones, index);
+      if (LAID_OUT_ROLES.has(read.role)) {
+        proposals.push({ ...read, blockId: block.id, mergedIntoBlockId: null });
+      }
       continue;
     }
     const owner = titleOwner.get(block.id);
     if (owner !== undefined) {
-      result.proposals.push({
-        ...readEntry(owner),
+      proposals.push({
+        ...readEntry(owner, zones),
         blockId: block.id,
         mergedIntoBlockId: owner.blockId,
       });
       continue;
     }
-    const entry = index.entryByBlockId.get(block.id) ?? null;
-    place(
-      block,
-      entry === null
+    const entry = index.entryByBlockId.get(block.id);
+    proposals.push({
+      ...(entry === undefined
         ? readUnlabelled(block, position, zones, index)
-        : readEntry(entry),
-      entry,
-    );
+        : readEntry(entry, zones)),
+      blockId: block.id,
+      mergedIntoBlockId: null,
+    });
   }
-  result.unmappedRoles = [...unmapped];
-  return result;
+  return proposals;
 };
