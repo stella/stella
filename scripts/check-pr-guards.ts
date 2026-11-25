@@ -13,6 +13,7 @@ export type PrGuard = {
   readonly id: string;
   readonly label: string;
   readonly command: readonly string[];
+  readonly env?: Readonly<Record<string, string>>;
   readonly fixHint: string;
 };
 
@@ -34,18 +35,29 @@ const isUiApiFile = (file: string): boolean =>
 const isPublishedPackageSource = (file: string): boolean =>
   /^packages\/[^/]+\/(?:src\/|package\.json$|api-report\.json$)/u.test(file);
 
-const isCaseLawIngestionFile = (file: string): boolean =>
-  file.startsWith("apps/api/src/handlers/case-law/ingestion/");
+const isParserGuardFile = (file: string): boolean =>
+  file.startsWith("apps/api/src/handlers/case-law/ingestion/") ||
+  file.startsWith("apps/api/src/handlers/legislation/ingestion/") ||
+  file.startsWith("apps/api/src/lib/legal-search/parsers/") ||
+  file.startsWith("apps/api/src/lib/case-law/") ||
+  file.startsWith("packages/legal-ast/");
 
 const isDesignBaselineScope = (file: string): boolean =>
-  file.startsWith("apps/web/src/") ||
-  file.startsWith("apps/desktop/src/") ||
+  file.startsWith("apps/") ||
+  file.startsWith("packages/") ||
+  file.startsWith(".claude/mcp/") ||
   file === "scripts/design-lint-baseline.json";
+
+const isScriptTestFile = (file: string): boolean =>
+  /^scripts\/.*\.test\.ts$/u.test(file) ||
+  file === "scripts/script-test-inputs.json";
 
 /** Select the fast local repo guards relevant to `changedFiles`. */
 export const selectPrGuards = (
   changedFiles: readonly string[],
+  options: { readonly baseRef?: string } = {},
 ): readonly PrGuard[] => {
+  const baseRef = options.baseRef ?? "origin/main";
   const guards: PrGuard[] = [];
 
   if (matchesAny(changedFiles, isOxlintFile)) {
@@ -92,19 +104,30 @@ export const selectPrGuards = (
     guards.push({
       id: "package-api-report",
       label: "Published package API reports",
-      command: ["bun", "run", "check:package-api"],
+      command: ["bun", "run", "check:package-api", baseRef],
       fixHint:
         "Run `bun run update:package-api` and commit the updated api-report.json.",
     });
   }
 
-  if (matchesAny(changedFiles, isCaseLawIngestionFile)) {
+  if (matchesAny(changedFiles, isParserGuardFile)) {
     guards.push({
       id: "parser-version-guard",
-      label: "Case-law parser version guard",
+      label: "Parser version guard",
       command: ["bun", "scripts/check-parser-versions.ts"],
+      env: { BASE_SHA: baseRef },
       fixHint:
         "Bump the parser version or add a `// parser-output-unchanged: <reason>` comment for pure refactors.",
+    });
+  }
+
+  if (matchesAny(changedFiles, isScriptTestFile)) {
+    guards.push({
+      id: "test-input-coverage",
+      label: "Script test input coverage",
+      command: ["bun", "scripts/check-test-input-coverage.ts"],
+      fixHint:
+        "Register new scripts/*.test.ts files in scripts/script-test-inputs.json.",
     });
   }
 
@@ -168,7 +191,7 @@ const parseArgs = (argv: readonly string[]) => {
 if (import.meta.main) {
   const { baseRef, listOnly } = parseArgs(process.argv.slice(2));
   const changedFiles = readChangedFiles(baseRef);
-  const guards = selectPrGuards(changedFiles);
+  const guards = selectPrGuards(changedFiles, { baseRef });
 
   if (guards.length === 0) {
     console.log(
@@ -193,6 +216,7 @@ if (import.meta.main) {
     }
     const result = spawnSync(bin, args, {
       cwd: REPO_ROOT,
+      env: guard.env ? { ...process.env, ...guard.env } : process.env,
       stdio: "inherit",
     });
     const elapsed = ((performance.now() - start) / 1000).toFixed(1);
