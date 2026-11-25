@@ -1300,7 +1300,8 @@
     "updates": {
       "available": "Elérhető a(z) {version} verzió.",
       "checkFailed": "A stella desktop nem tudta ellenőrizni a frissítéseket.",
-      "deferred": "A(z) {version} verzió vár, amíg megnyitott dokumentumokat szerkeszt. Ha végzett, ellenőrizze újra a telepítéshez, különben a következő automatikus ellenőrzéskor települ.",
+      "deferredAgents": "A(z) {version} verzió akkor települ, amikor már egy ügynök sem dolgozik ezen a számítógépen.",
+      "deferredEdits": "A(z) {version} verzió akkor települ, amikor bezárja a szerkesztésre megnyitott dokumentumokat.",
       "downloadProgress": "{percent}% letöltve",
       "downloading": "A(z) {version} verzió letöltése folyamatban. A stella desktop a telepítés után újraindul.",
       "install": "Telepítés és újraindítás",

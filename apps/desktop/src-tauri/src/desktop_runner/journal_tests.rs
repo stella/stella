@@ -496,3 +496,51 @@ fn background_counts_are_held_for_the_next_socket_until_they_end() {
   // A new socket hears only what still runs.
   assert_eq!(journal.background_reports(), vec![background(RUN, 2)]);
 }
+
+#[test]
+fn only_an_accepted_run_that_has_not_finished_counts_as_running() {
+  let journal = SharedJournal::default();
+  // No journal open: no runner ever ran for this account.
+  assert!(!journal.has_running_run());
+
+  journal.replace(
+    "account".to_owned(),
+    Journal::open(JournalBacking::Memory, 0),
+  );
+  let refused = "0192f3a0-6b1c-7d2e-8f30-000000000003";
+  journal
+    .insert(
+      refused.to_owned(),
+      Decision::Rejected {
+        reason: RejectReason::HarnessNotInstalled,
+      },
+      0,
+    )
+    .unwrap();
+  assert!(!journal.has_running_run());
+
+  journal
+    .insert(RUN.to_owned(), Decision::Accepted, 0)
+    .unwrap();
+  assert!(journal.has_running_run());
+  journal
+    .record_output(RUN, RunOutput::Event(chunk("a")), None)
+    .unwrap();
+  assert!(journal.has_running_run());
+
+  // Finished but not yet acknowledged: the journal still holds it for the
+  // API, yet no turn runs any more.
+  journal
+    .record_output(
+      RUN,
+      RunOutput::Finished {
+        outcome: crate::runner_protocol::RunOutcome::Completed,
+        harness_session_id: None,
+        harness_boundary: None,
+      },
+      None,
+    )
+    .unwrap();
+  assert!(journal.get(RUN).unwrap().is_held());
+  assert!(!journal.has_running_run());
+}

@@ -1300,7 +1300,8 @@
     "updates": {
       "available": "Saadaval on versioon {version}.",
       "checkFailed": "stella desktop ei saanud värskendusi kontrollida.",
-      "deferred": "Versioon {version} ootab, kuni avatud dokumente muudetakse. Kui olete lõpetanud, kontrollige uuesti, et see installida, muidu installitakse see järgmisel automaatsel kontrollil.",
+      "deferredAgents": "Versioon {version} installitakse, kui selles arvutis ei tööta ükski agent.",
+      "deferredEdits": "Versioon {version} installitakse, kui sulgete muutmiseks avatud dokumendid.",
       "downloadProgress": "{percent}% alla laaditud",
       "downloading": "Laaditakse alla versiooni {version}. Pärast installimist taaskäivitub stella desktop.",
       "install": "Installi ja taaskäivita",

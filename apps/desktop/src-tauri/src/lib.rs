@@ -116,7 +116,6 @@ mod pkcs11_signing;
 mod presence;
 mod recording_cleanup;
 mod registry;
-mod relaunch;
 mod runner_protocol;
 mod session_manager;
 mod session_store;
@@ -557,7 +556,7 @@ pub fn run() {
       keep_awake::watch_power_source();
 
       // Check for updates in the background after launch settles.
-      updater::schedule_startup_check(handle.clone(), Arc::clone(&manager));
+      updater::schedule_startup_check(handle.clone());
 
       // A menu bar app on macOS; app windows put it in the Dock while open.
       #[cfg(target_os = "macos")]

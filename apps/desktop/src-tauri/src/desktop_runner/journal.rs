@@ -167,6 +167,12 @@ impl RunRecord {
     self.decision == Decision::Accepted && !self.is_done()
   }
 
+  /// Accepted and still producing messages: a turn is under way on this
+  /// computer.
+  pub(crate) fn is_running(&self) -> bool {
+    self.decision == Decision::Accepted && !self.tail.finished
+  }
+
   /// Finished, and the API stored every message.
   pub(crate) fn is_done(&self) -> bool {
     self.tail.finished && self.ack_seq >= self.tail.last_seq
@@ -1022,6 +1028,15 @@ impl SharedJournal {
       .journal
       .as_ref()
       .and_then(|(_, journal)| journal.get(run_id).cloned())
+  }
+
+  /// Whether a run this desktop accepted has not finished yet.
+  pub(crate) fn has_running_run(&self) -> bool {
+    self
+      .state()
+      .journal
+      .as_ref()
+      .is_some_and(|(_, journal)| journal.records().any(RunRecord::is_running))
   }
 
   pub(crate) fn records(&self) -> Vec<RunRecord> {

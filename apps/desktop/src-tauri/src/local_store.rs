@@ -483,9 +483,12 @@ pub fn disable_autostart(app: &tauri::AppHandle) -> Result<(), String> {
     .map_err(|error| format!("autostart disable failed: {error}"))
 }
 
+/// On Windows the installer takes over and quits the app, so an install is a
+/// relaunch too: it asks for the updater's relaunch clearance.
 pub fn install_update(
   update: &tauri_plugin_updater::Update,
   package: &crate::updater::VerifiedUpdatePackage,
+  _clearance: &crate::updater::RelaunchClearance<'_>,
 ) -> Result<(), String> {
   update
     .install(package.as_bytes())

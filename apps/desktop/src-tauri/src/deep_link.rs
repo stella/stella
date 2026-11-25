@@ -330,16 +330,15 @@ pub fn handle_url(
           return;
         }
 
-        let sessions = &*manager;
-        let active_edit_sessions =
-          move || async move { sessions.lock().await.has_active_edit_sessions() };
-
-        match updater::run_check(&app_handle, active_edit_sessions).await {
+        match updater::run_check(&app_handle).await {
           updater::CheckOutcome::Deferred { version } => {
             tracing::debug!(
                 version = %version,
-                "deep link updater check deferred while desktop edits are active"
+                "deep link updater check deferred while a relaunch is blocked"
             );
+          }
+          updater::CheckOutcome::Busy => {
+            tracing::debug!("deep link updater check: another check is under way");
           }
           updater::CheckOutcome::UpToDate => {
             tracing::debug!("deep link updater check: up to date");
@@ -444,6 +443,9 @@ async fn redeem_handoff(
   if crate::handoff::monotonic_now() >= run.expires {
     return Err(crate::handoff::Failure::Expired.into());
   }
+  // Held until this returns, on every path: from the handoff's update check
+  // on, no update relaunches the app before its document is open.
+  let handoff = crate::updater::reserve_handoff().await;
   let trusted = match run.target {
     crate::handoff::Target::DesktopEdit => {
       is_trusted_api_base_url(manager, &run.api_base_url).await
@@ -462,6 +464,7 @@ async fn redeem_handoff(
         app.clone(),
         run.api_base_url.clone(),
         run.token.clone(),
+        &handoff,
       )
       .await
     }
@@ -471,6 +474,7 @@ async fn redeem_handoff(
         app.clone(),
         run.api_base_url.clone(),
         run.token.clone(),
+        &handoff,
       )
       .await
     }
@@ -1101,6 +1105,7 @@ async fn redeem_and_open_desktop_edit(
   app_handle: AppHandle,
   api_base_url: String,
   handoff_token: String,
+  handoff: &crate::updater::HandoffReservation<'static>,
 ) -> Result<(), crate::handoff::Stop> {
   let http_client = {
     let mgr = manager.lock().await;
@@ -1115,8 +1120,8 @@ async fn redeem_and_open_desktop_edit(
     .map_err(|error| error.to_string())?;
   let (redeemed, account) = crate::handoff::redeem::<RedeemedDesktopEditHandoff>(
     crate::handoff::RedeemOptions {
-      manager: &manager,
       app: &app_handle,
+      handoff,
       target: crate::handoff::Target::DesktopEdit,
       api_base_url: &api_base_url,
       token: &handoff_token,

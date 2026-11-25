@@ -1,9 +1,7 @@
 //! Authenticated handoff redemption and user recovery for both document flows.
 
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
-use crate::session_manager::SessionManager;
 use crate::types::ErrorResponse;
-use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Manager};
 use tokio::sync::Mutex;
@@ -212,14 +210,11 @@ trait RecoveryHost: Sync {
 
 struct DesktopRecovery<'a> {
   app: &'a AppHandle,
-  manager: &'a Mutex<SessionManager>,
+  handoff: &'a crate::updater::HandoffReservation<'static>,
 }
 impl RecoveryHost for DesktopRecovery<'_> {
   async fn check_update(&self) -> crate::updater::CheckOutcome {
-    let sessions = self.manager;
-    let active_edit_sessions =
-      move || async move { sessions.lock().await.has_active_edit_sessions() };
-    crate::updater::run_check(self.app, active_edit_sessions).await
+    crate::updater::check_for_handoff(self.app, self.handoff).await
   }
   async fn confirm(&self, failure: &Failure) -> Result<bool, String> {
     crate::deep_link::show_connection_confirmation(
@@ -248,6 +243,7 @@ async fn recover(
       }
       crate::updater::CheckOutcome::Deferred { .. }
       | crate::updater::CheckOutcome::UpToDate
+      | crate::updater::CheckOutcome::Busy
       | crate::updater::CheckOutcome::Disabled => {}
     }
   }
@@ -413,8 +409,10 @@ async fn redeem_with<T: serde::de::DeserializeOwned>(
 }
 
 pub(crate) struct RedeemOptions<'a> {
-  pub manager: &'a Arc<Mutex<SessionManager>>,
   pub app: &'a AppHandle,
+  /// Held by the caller until the handoff's document is open or the handoff
+  /// stopped; no other update relaunches the app meanwhile.
+  pub handoff: &'a crate::updater::HandoffReservation<'static>,
   pub target: Target,
   pub api_base_url: &'a str,
   pub token: &'a str,
@@ -424,13 +422,13 @@ pub(crate) async fn redeem<T: serde::de::DeserializeOwned>(
   options: RedeemOptions<'_>,
 ) -> Result<(T, crate::account::LinkedAccount), Stop> {
   let RedeemOptions {
-    manager,
     app,
+    handoff,
     target,
     api_base_url,
     token,
   } = options;
-  if crate::updater::check_on_handoff(app, manager).await {
+  if crate::updater::check_on_handoff(app, handoff).await {
     return Err(Stop::Presented(
       "Desktop update installed; reopen the document after relaunch.".into(),
     ));
@@ -449,7 +447,7 @@ pub(crate) async fn redeem<T: serde::de::DeserializeOwned>(
       api_base_url,
       token,
     },
-    &DesktopRecovery { app, manager },
+    &DesktopRecovery { app, handoff },
   )
   .await
 }
@@ -822,6 +820,7 @@ async fn take_parked_for_account_at(
 #[cfg(test)]
 mod tests {
   use super::*;
+  use std::sync::Arc;
 
   const TEST_NOW: Duration = Duration::from_secs(1_000);
   use std::future::Future;
