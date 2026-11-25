@@ -491,6 +491,13 @@
       "refusalReasoningEffortUnavailable": "O agente de programação do seu computador não oferece este nível de raciocínio para o modelo. Escolha outro em Nível de raciocínio.",
       "refusalTooLarge": "Esta conversa é longa demais para ser enviada ao seu computador. Comece um novo chat para executá-la lá.",
       "refusalUnavailable": "Executar chats no seu computador não está disponível para sua conta.",
+      "request": {
+        "cancelled": "Sem resposta: esta resposta foi interrompida.",
+        "runFailed": "Sem resposta: o agente parou com um erro antes desta etapa.",
+        "runFinished": "Não é necessário: o agente terminou sem esta etapa.",
+        "runLost": "Sem resposta: seu computador parou de processar esta resposta.",
+        "withdrawn": "Não é mais necessário: o agente continuou sem esta etapa."
+      },
       "selectionStateLabel": "{selection} · {state}",
       "sessionNotResumed": "O agente de programação do seu computador não conseguiu retomar de onde parou, então continuou a partir das mensagens deste chat.",
       "stateLimitUntil": "Limite atingido até {time}",

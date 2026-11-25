@@ -6,6 +6,10 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import type { LocalRunQuestionPause } from "@stll/api-contract/chat-local-run-question";
+import {
+  CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY,
+  type ChatLocalRunRequest,
+} from "@stll/api-contract/chat-local-run-request";
 import type { ChatLocalRunQuestion } from "@stll/api-contract/chat-run-target";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
@@ -326,7 +330,7 @@ describe("local run question card", () => {
   });
 });
 
-// --- The thread page, reloaded while the turn waits on the question --------
+// --- The thread page, while the run waits on the question beside its turn --
 
 const API_ORIGIN = "http://localhost:3001";
 const ORGANIZATION_ID = "00000000-0000-7000-8000-00000000ffff";
@@ -334,9 +338,22 @@ const THREAD_ID = "00000000-0000-7000-8000-0000000000b1";
 const TURN_ID = "00000000-0000-7000-8000-0000000000b2";
 const RUN_ID = "run-local-question";
 const QUESTION_CALL_ID = "local:run-1:item_q";
+const ANSWER_MESSAGE_ID = "00000000-0000-7000-8000-0000000000c2";
+const ANSWER_PATH = `/v1/chat/threads/${THREAD_ID}/turns/${TURN_ID}/requests/${INTERRUPT_ID}/answer`;
 
-/** The thread as the API stores a turn paused on a local run's question. */
-const pausedPage = () => ({
+/** The question as the run asks it: a request beside its running turn. */
+const questionRequest = (
+  status: "pending" | "resolved" | "cancelled" = "pending",
+): ChatLocalRunRequest => ({
+  requestId: INTERRUPT_ID,
+  toolCallId: QUESTION_CALL_ID,
+  ask: { kind: "question", questions: [governingLaw] },
+  status,
+});
+
+/** The thread as the API stores it while the run waits on its question:
+ *  the answer's metadata holds the request, as the stream restated it. */
+const askingPage = () => ({
   activeTurnId: TURN_ID,
   lastActivityAt: "2026-01-01T00:00:11.000Z",
   olderCursor: null,
@@ -353,24 +370,9 @@ const pausedPage = () => ({
     {
       createdAt: "2026-01-01T00:00:11.000Z",
       edited: false,
-      id: "00000000-0000-7000-8000-0000000000c2",
+      id: ANSWER_MESSAGE_ID,
       metadata: {
-        resumeSnapshot: {
-          resumeState: { runId: RUN_ID, threadId: THREAD_ID },
-          pendingInterrupts: [
-            {
-              id: INTERRUPT_ID,
-              reason: "user_input",
-              message: governingLaw.prompt,
-              toolCallId: QUESTION_CALL_ID,
-              metadata: {
-                kind: "question",
-                toolName: "request_user_input",
-                questions: [governingLaw],
-              },
-            },
-          ],
-        },
+        [CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY]: [questionRequest()],
       },
       parts: [
         { type: "text", content: "One thing first." },
@@ -389,20 +391,6 @@ const pausedPage = () => ({
   ],
 });
 
-/** The events a chat request streams back, given the run id it names. */
-type ChatAnswer = (runId: unknown) => Record<string, unknown>[];
-
-const settledRun: ChatAnswer = (runId) => [
-  { type: "RUN_STARTED", runId, threadId: THREAD_ID, timestamp: 1 },
-  {
-    type: "RUN_FINISHED",
-    runId,
-    threadId: THREAD_ID,
-    finishReason: "stop",
-    timestamp: 2,
-  },
-];
-
 const EMPTY_PAGE = {
   activeTurnId: null,
   lastActivityAt: null,
@@ -410,26 +398,124 @@ const EMPTY_PAGE = {
   messages: [],
 };
 
-type ThreadPage = ReturnType<typeof pausedPage> | typeof EMPTY_PAGE;
+type ThreadPage = ReturnType<typeof askingPage> | typeof EMPTY_PAGE;
+
+/** The events a chat request streams back, given the run id it names. */
+type ChatEvents = (runId: unknown) => Record<string, unknown>[];
+
+/** A run on the member's computer that asks its question and goes on
+ *  waiting for it: the turn keeps running, its stream stays open. */
+const askingRun: ChatEvents = (runId) => [
+  { type: "RUN_STARTED", runId, threadId: THREAD_ID, timestamp: 1 },
+  {
+    type: "TEXT_MESSAGE_START",
+    messageId: ANSWER_MESSAGE_ID,
+    role: "assistant",
+    timestamp: 2,
+  },
+  {
+    type: "TEXT_MESSAGE_CONTENT",
+    messageId: ANSWER_MESSAGE_ID,
+    delta: "One thing first.",
+    timestamp: 3,
+  },
+  { type: "TEXT_MESSAGE_END", messageId: ANSWER_MESSAGE_ID, timestamp: 4 },
+  {
+    type: "TOOL_CALL_START",
+    toolCallId: QUESTION_CALL_ID,
+    toolCallName: "request_user_input",
+    toolName: "request_user_input",
+    timestamp: 5,
+  },
+  {
+    type: "TOOL_CALL_ARGS",
+    toolCallId: QUESTION_CALL_ID,
+    delta: "{}",
+    timestamp: 6,
+  },
+  {
+    type: "TOOL_CALL_END",
+    toolCallId: QUESTION_CALL_ID,
+    toolCallName: "request_user_input",
+    toolName: "request_user_input",
+    input: {},
+    timestamp: 7,
+  },
+  {
+    type: "TEXT_MESSAGE_START",
+    messageId: ANSWER_MESSAGE_ID,
+    role: "assistant",
+    timestamp: 8,
+    metadata: { [CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY]: [questionRequest()] },
+  },
+];
+
+/** The run once the answer reached it: it restates the request resolved
+ *  (cancelled, when the member dismissed it), and finishes. */
+const answeredRun = (
+  runId: unknown,
+  status: "resolved" | "cancelled",
+): Record<string, unknown>[] => [
+  {
+    type: "TEXT_MESSAGE_START",
+    messageId: ANSWER_MESSAGE_ID,
+    role: "assistant",
+    timestamp: 9,
+    metadata: {
+      [CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY]: [questionRequest(status)],
+    },
+  },
+  {
+    type: "RUN_FINISHED",
+    runId,
+    threadId: THREAD_ID,
+    finishReason: "stop",
+    timestamp: 10,
+  },
+];
 
 const serveThread = ({
-  page: firstPage = pausedPage(),
-  answers = [],
+  page: firstPage = askingPage(),
 }: {
   page?: ThreadPage;
-  answers?: ChatAnswer[];
 } = {}) => {
+  const encoder = new TextEncoder();
+  /** The chat requests the page posted: a send, never a resume. */
   const posted: Record<string, unknown>[] = [];
+  /** The answers to the run's request the page posted. */
+  const answers: { path: string; body: unknown }[] = [];
   const unexpected: string[] = [];
-  /** How often the page asked the server where the paused turn stands. */
+  /** How often the page asked the server where the turn stands. */
   const turnReads: string[] = [];
   let page = firstPage;
   let revision = 1;
+  /** The open stream of the run the page sent, and the run's id. */
+  let running:
+    | {
+        controller: ReadableStreamDefaultController<Uint8Array>;
+        runId: unknown;
+      }
+    | undefined;
+  const write = (events: Record<string, unknown>[]) => {
+    for (const event of events) {
+      running?.controller.enqueue(
+        encoder.encode(`data: ${JSON.stringify(event)}\n\n`),
+      );
+    }
+  };
   routeRequest = async (input, init) => {
     await Promise.resolve();
     const request = input instanceof Request ? input : undefined;
     const url = new URL(input instanceof Request ? input.url : input);
     const method = init?.method ?? request?.method ?? "GET";
+    const bodyOf = async (): Promise<Record<string, unknown>> => {
+      const text =
+        typeof init?.body === "string" ? init.body : await request?.text();
+      const body: unknown = JSON.parse(text ?? "null");
+      return typeof body === "object" && body !== null && !Array.isArray(body)
+        ? Object.fromEntries(Object.entries(body))
+        : panic("The page posted a request without a JSON body");
+    };
     if (url.origin !== API_ORIGIN) {
       unexpected.push(`${method} ${url.href}`);
       return Response.json({}, { status: 404 });
@@ -454,29 +540,55 @@ const serveThread = ({
         webSearchEnabled: false,
       });
     }
+    // A page loaded while the turn runs reads where it stands and joins its
+    // stream, which replays the run from its start.
     if (
       method === "GET" &&
       url.pathname === `/v1/chat/threads/${THREAD_ID}/turns/${TURN_ID}/resume`
     ) {
       turnReads.push(url.pathname);
-      return Response.json({
-        type: "transcript",
-        turnId: TURN_ID,
-        resumeSnapshot: pausedPage().messages[1]?.metadata.resumeSnapshot,
-      });
+      return Response.json({ type: "running", turnId: TURN_ID, runId: RUN_ID });
+    }
+    if (
+      method === "GET" &&
+      url.pathname === `/v1/chat/threads/${THREAD_ID}/turns/${TURN_ID}/join`
+    ) {
+      turnReads.push(url.pathname);
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start: (controller) => {
+            running = { controller, runId: RUN_ID };
+            write(askingRun(RUN_ID));
+          },
+        }),
+        { headers: { "content-type": "text/event-stream" } },
+      );
+    }
+    if (method === "POST" && url.pathname === ANSWER_PATH) {
+      const body = await bodyOf();
+      answers.push({ path: url.pathname, body });
+      // The run takes the answer and finishes.
+      if (running !== undefined) {
+        const dismissed =
+          JSON.stringify(body) ===
+          JSON.stringify({ answer: { type: "dismiss" } });
+        write(answeredRun(running.runId, dismissed ? "cancelled" : "resolved"));
+        running.controller.close();
+        running = undefined;
+      }
+      return Response.json({ outcome: { type: "answered" } });
     }
     if (method === "POST" && url.pathname === "/v1/chat") {
-      const text =
-        typeof init?.body === "string" ? init.body : await request?.text();
-      const body: unknown = JSON.parse(text ?? "null");
-      if (typeof body !== "object" || body === null || Array.isArray(body)) {
-        return panic("The page posted a chat request without a JSON body");
-      }
-      posted.push(Object.fromEntries(Object.entries(body)));
+      const body = await bodyOf();
+      posted.push(body);
       const runId: unknown = Reflect.get(body, "runId");
-      const events = (answers[posted.length - 1] ?? settledRun)(runId);
       return new Response(
-        events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(""),
+        new ReadableStream<Uint8Array>({
+          start: (controller) => {
+            running = { controller, runId };
+            write(askingRun(runId));
+          },
+        }),
         {
           headers: {
             "content-type": "text/event-stream",
@@ -497,6 +609,7 @@ const serveThread = ({
   };
   return {
     posted,
+    answers,
     unexpected,
     turnReads,
     /** The server stores a new state of the thread for the next read. */
@@ -507,71 +620,7 @@ const serveThread = ({
   };
 };
 
-/** A run on the member's computer that asks its question and pauses. */
-const askingRun: ChatAnswer = (runId) => [
-  { type: "RUN_STARTED", runId, threadId: THREAD_ID, timestamp: 1 },
-  {
-    type: "TEXT_MESSAGE_START",
-    messageId: "msg-local",
-    role: "assistant",
-    timestamp: 2,
-  },
-  {
-    type: "TEXT_MESSAGE_CONTENT",
-    messageId: "msg-local",
-    delta: "One thing first.",
-    timestamp: 3,
-  },
-  { type: "TEXT_MESSAGE_END", messageId: "msg-local", timestamp: 4 },
-  {
-    type: "TOOL_CALL_START",
-    toolCallId: QUESTION_CALL_ID,
-    toolCallName: "request_user_input",
-    toolName: "request_user_input",
-    timestamp: 5,
-  },
-  {
-    type: "TOOL_CALL_ARGS",
-    toolCallId: QUESTION_CALL_ID,
-    delta: "{}",
-    timestamp: 6,
-  },
-  {
-    type: "TOOL_CALL_END",
-    toolCallId: QUESTION_CALL_ID,
-    toolCallName: "request_user_input",
-    toolName: "request_user_input",
-    input: {},
-    timestamp: 7,
-  },
-  {
-    type: "RUN_FINISHED",
-    runId,
-    threadId: THREAD_ID,
-    finishReason: "tool_calls",
-    timestamp: 8,
-    outcome: {
-      type: "interrupt",
-      interrupts: [
-        {
-          id: INTERRUPT_ID,
-          reason: "user_input",
-          message: governingLaw.prompt,
-          toolCallId: QUESTION_CALL_ID,
-          metadata: {
-            kind: "question",
-            toolName: "request_user_input",
-            questions: [governingLaw],
-          },
-        },
-      ],
-    },
-  },
-];
-
-const resumeOf = (body: Record<string, unknown>): unknown => body["resume"];
-
-/** The question card the page shows for the paused interrupt. */
+/** The question card the page shows for the run's request. */
 const questionCard = async (container: HTMLElement): Promise<HTMLElement> =>
   await waitFor(() => {
     const card = container.querySelector(
@@ -582,8 +631,55 @@ const questionCard = async (container: HTMLElement): Promise<HTMLElement> =>
       : panic("The question card is not shown");
   });
 
-describe("a turn paused on a local run's question", () => {
-  test("shows the question again after a reload and answers that interrupt", async () => {
+/** Settles once the page no longer asks the question: the run restated it
+ *  closed. */
+const questionClosed = async (container: HTMLElement) => {
+  await waitFor(() => {
+    if (
+      container.querySelector(`[data-local-run-question="${INTERRUPT_ID}"]`)
+    ) {
+      panic("The question card is still shown");
+    }
+  });
+};
+
+const answerSent = async (server: ReturnType<typeof serveThread>) => {
+  await waitFor(() => {
+    if (server.answers.length === 0) {
+      panic("The answer is not sent yet");
+    }
+  });
+};
+
+/** A page that sends the first message and shows the run's question. */
+const openAskingRun = async () => {
+  const server = serveThread({ page: EMPTY_PAGE });
+  const live = await openChatThreadDomPage({
+    organizationId: ORGANIZATION_ID,
+    threadId: THREAD_ID,
+  });
+  let sent: Promise<unknown> | undefined;
+  await act(async () => {
+    sent = live.session().sendMessage({
+      content: "Draft the lease",
+      id: toSafeId<"chatMessage">("00000000-0000-7000-8000-0000000000c1"),
+    });
+    await Promise.resolve();
+  });
+  const card = await questionCard(live.view.container);
+  return {
+    card,
+    live,
+    server,
+    /** Settles once the run the page sent has finished. */
+    finished: async () => {
+      await sent;
+    },
+  };
+};
+
+describe("a local run's question beside its running turn", () => {
+  test("shows the question again after a reload and answers its request", async () => {
     const server = serveThread();
     const { view } = await openChatThreadDomPage({
       organizationId: ORGANIZATION_ID,
@@ -594,82 +690,49 @@ describe("a turn paused on a local run's question", () => {
     fireEvent.click(
       within(card).getByRole("button", { name: messages.chat.askUser.submit }),
     );
-    await waitFor(() => {
-      if (server.posted.length === 0) {
-        panic("The answer is not sent yet");
-      }
-    });
-    expect(server.posted.map(resumeOf)).toEqual([
-      [
-        {
-          interruptId: INTERRUPT_ID,
-          payload: { answers: { law: ["Czech"] } },
-          status: "resolved",
-        },
-      ],
+    await answerSent(server);
+    expect(server.answers).toEqual([
+      {
+        path: ANSWER_PATH,
+        body: { answer: { type: "question", answers: { law: ["Czech"] } } },
+      },
     ]);
+    // The turn never paused: the page joined it, and nothing resumes it.
+    expect(server.turnReads).toContain(
+      `/v1/chat/threads/${THREAD_ID}/turns/${TURN_ID}/join`,
+    );
+    expect(server.posted).toEqual([]);
+    // The run restated it resolved: the page asks no more.
+    await questionClosed(view.container);
     expect(server.unexpected).toEqual([]);
   });
 
-  test("shows the question as the run asks it, and answers that interrupt", async () => {
-    const server = serveThread({ page: EMPTY_PAGE, answers: [askingRun] });
-    const live = await openChatThreadDomPage({
-      organizationId: ORGANIZATION_ID,
-      threadId: THREAD_ID,
-    });
-    let sent: Promise<unknown> | undefined;
-    await act(async () => {
-      sent = live.session().sendMessage({
-        content: "Draft the lease",
-        id: toSafeId<"chatMessage">("00000000-0000-7000-8000-0000000000c1"),
-      });
-      await Promise.resolve();
-    });
-    const card = await questionCard(live.view.container);
+  test("shows the question as the run asks it, while the turn runs, and answers its request", async () => {
+    const { card, finished, server } = await openAskingRun();
     fireEvent.click(within(card).getByRole("button", { name: "Slovak" }));
     fireEvent.click(
       within(card).getByRole("button", { name: messages.chat.askUser.submit }),
     );
-    await waitFor(() => {
-      if (server.posted.length < 2) {
-        panic("The answer is not sent yet");
-      }
-    });
-    expect(server.posted.map(resumeOf)).toEqual([
-      undefined,
-      [
-        {
-          interruptId: INTERRUPT_ID,
-          payload: { answers: { law: ["Slovak"] } },
-          status: "resolved",
-        },
-      ],
+    await answerSent(server);
+    expect(server.answers).toEqual([
+      {
+        path: ANSWER_PATH,
+        body: { answer: { type: "question", answers: { law: ["Slovak"] } } },
+      },
     ]);
-    await sent;
+    await finished();
+    // One send, the member's message; the answer went beside it.
+    expect(server.posted).toHaveLength(1);
     expect(server.unexpected).toEqual([]);
   });
 
-  test("keeps what the member picked when the thread is read again after the pause", async () => {
-    const server = serveThread({ page: EMPTY_PAGE, answers: [askingRun] });
-    const live = await openChatThreadDomPage({
-      organizationId: ORGANIZATION_ID,
-      threadId: THREAD_ID,
-    });
-    let sent: Promise<unknown> | undefined;
-    await act(async () => {
-      sent = live.session().sendMessage({
-        content: "Draft the lease",
-        id: toSafeId<"chatMessage">("00000000-0000-7000-8000-0000000000c1"),
-      });
-      await Promise.resolve();
-    });
-    const card = await questionCard(live.view.container);
-    await sent;
+  test("keeps what the member picked when the thread is read again while the run waits", async () => {
+    const { card, finished, live, server } = await openAskingRun();
     fireEvent.click(within(card).getByRole("button", { name: "Slovak" }));
 
-    // The read that follows the pause lands after the pick, with the paused
-    // turn as the server stored it.
-    server.store(pausedPage());
+    // A read of the thread lands after the pick, with the answer as the
+    // server stored it.
+    server.store(askingPage());
     await act(async () => {
       await invalidateChatThread({
         queryClient: live.queryClient,
@@ -688,25 +751,18 @@ describe("a turn paused on a local run's question", () => {
       name: messages.chat.askUser.submit,
     });
     expect(isDisabled(submit)).toBe(false);
-    // The paused turn was not read from the server again.
+    // The running turn was not read from the server again.
     expect(server.turnReads).toEqual([]);
     fireEvent.click(submit);
-    await waitFor(() => {
-      if (server.posted.length < 2) {
-        panic("The answer is not sent yet");
-      }
-    });
-    expect(resumeOf(server.posted.at(1) ?? {})).toEqual([
-      {
-        interruptId: INTERRUPT_ID,
-        payload: { answers: { law: ["Slovak"] } },
-        status: "resolved",
-      },
+    await answerSent(server);
+    expect(server.answers.map(({ body }) => body)).toEqual([
+      { answer: { type: "question", answers: { law: ["Slovak"] } } },
     ]);
+    await finished();
     expect(server.unexpected).toEqual([]);
   });
 
-  test("dismissing it resumes the interrupt cancelled", async () => {
+  test("dismissing it sends a dismissal of its request", async () => {
     const server = serveThread();
     const { view } = await openChatThreadDomPage({
       organizationId: ORGANIZATION_ID,
@@ -718,13 +774,12 @@ describe("a turn paused on a local run's question", () => {
         name: messages.chat.localRunQuestion.dismiss,
       }),
     );
-    await waitFor(() => {
-      if (server.posted.length === 0) {
-        panic("The dismissal is not sent yet");
-      }
-    });
-    expect(server.posted.map(resumeOf)).toEqual([
-      [{ interruptId: INTERRUPT_ID, status: "cancelled" }],
+    await answerSent(server);
+    expect(server.answers).toEqual([
+      { path: ANSWER_PATH, body: { answer: { type: "dismiss" } } },
     ]);
+    expect(server.posted).toEqual([]);
+    await questionClosed(view.container);
+    expect(server.unexpected).toEqual([]);
   });
 });

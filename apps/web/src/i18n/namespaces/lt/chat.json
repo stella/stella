@@ -491,6 +491,13 @@
       "refusalReasoningEffortUnavailable": "Programavimo agentas jūsų kompiuteryje šiam modeliui nesiūlo šio samprotavimo lygio. Pasirinkite kitą meniu Samprotavimo lygis.",
       "refusalTooLarge": "Šis pokalbis per ilgas, kad jį būtų galima perduoti jūsų kompiuteriui. Pradėkite naują pokalbį, kad paleistumėte jį ten.",
       "refusalUnavailable": "Pokalbių paleidimas jūsų kompiuteryje jūsų paskyrai nepasiekiamas.",
+      "request": {
+        "cancelled": "Neatsakyta: šis atsakymas sustabdytas.",
+        "runFailed": "Neatsakyta: agentas sustojo dėl klaidos prieš šį veiksmą.",
+        "runFinished": "Nereikia: agentas baigė be šio veiksmo.",
+        "runLost": "Neatsakyta: jūsų kompiuteris nustojo apdoroti šį atsakymą.",
+        "withdrawn": "Nebereikia: agentas tęsė be šio veiksmo."
+      },
       "selectionStateLabel": "{selection} · {state}",
       "sessionNotResumed": "Programavimo agentas jūsų kompiuteryje negalėjo grįžti ten, kur sustojo, todėl tęsė darbą remdamasis šio pokalbio žinutėmis.",
       "stateLimitUntil": "Limitas pasiektas iki {time}",

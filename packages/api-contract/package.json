@@ -267,6 +267,7 @@
     "./chat-run-target": "./src/chat-run-target.ts",
     "./chat-send-intent": "./src/chat-send-intent.ts",
     "./chat-local-run-question": "./src/chat-local-run-question.ts",
+    "./chat-local-run-request": "./src/chat-local-run-request.ts",
     "./ai-errors": "./src/ai-errors.ts",
     "./chat-local-run-tool": "./src/chat-local-run-tool.ts",
     "./chat-local-run-steps": "./src/chat-local-run-steps.ts",

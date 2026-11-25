@@ -1,5 +1,11 @@
-import { afterEach, expect, test } from "bun:test";
+import { panic } from "better-result";
+import { afterEach, describe, expect, test } from "bun:test";
 
+import {
+  CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY,
+  type ChatLocalRunRequest,
+  type ChatLocalRunRequestAnswerOutcome,
+} from "@stll/api-contract/chat-local-run-request";
 import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
   CHAT_LOCAL_RUN_STEER_EVENT,
@@ -12,6 +18,8 @@ import {
   type ChatTurnSteering,
 } from "@stll/api-contract/chat-send-intent";
 
+import { openMemberWaitKeys } from "@/components/chat/chat-ui-tools";
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -39,10 +47,20 @@ const installRunningTurn = () => {
   const encoder = new TextEncoder();
   let sent = 0;
   let joined: ReadableStreamDefaultController<Uint8Array> | null = null;
+  /** Whether the run log ended, before the page joined it or after. */
+  let ended = false;
   const queued: unknown[] = [];
   /** The bodies of the steers the page posted, in order. */
   const steers: unknown[] = [];
   const steerPosted = Promise.withResolvers<undefined>();
+  /** The answers to the run's requests the page posted, in order. */
+  const answers: { path: string; body: unknown }[] = [];
+  let answerPosted = Promise.withResolvers<undefined>();
+  /** What the server says to each answer, in order; held until the test
+   *  settles it. */
+  const answerReplies: PromiseWithResolvers<Response>[] = [];
+  /** Writes the page made other than steering and answering. */
+  const others: string[] = [];
   const write = (
     controller: ReadableStreamDefaultController<Uint8Array>,
     event: unknown,
@@ -65,6 +83,18 @@ const installRunningTurn = () => {
         // Taken to the computer; the turn's stream says what became of it.
         return Response.json({ steer: { type: "queued" } });
       }
+      const pathname = new URL(url, "http://localhost").pathname;
+      if (/\/requests\/[^/]+\/answer$/u.test(pathname)) {
+        const request =
+          input instanceof Request
+            ? input
+            : new Request(new URL(url, "http://localhost"), init);
+        answers.push({ path: pathname, body: await request.json() });
+        const reply = Promise.withResolvers<Response>();
+        answerReplies.push(reply);
+        answerPosted.resolve(undefined);
+        return await reply.promise;
+      }
       if (url.includes("/join")) {
         return new Response(
           new ReadableStream<Uint8Array>({
@@ -73,10 +103,20 @@ const installRunningTurn = () => {
               for (const event of queued.splice(0)) {
                 write(controller, event);
               }
+              if (ended) {
+                controller.close();
+              }
             },
           }),
           { headers: { "Content-Type": "text/event-stream" } },
         );
+      }
+      // Reading where the turn stands is how a rejoin begins; anything else
+      // (a send, a continuation) would be the page acting on the turn.
+      const method =
+        init?.method ?? (input instanceof Request ? input.method : "GET");
+      if (method !== "GET") {
+        others.push(`${method} ${pathname}`);
       }
       return Response.json({
         type: "running",
@@ -96,28 +136,50 @@ const installRunningTurn = () => {
         }
       }
     },
-    end: () => joined?.close(),
+    end: () => {
+      if (!ended) {
+        ended = true;
+        joined?.close();
+      }
+    },
     steers,
     /** Settles once the page has posted a steer. */
     steerPosted: steerPosted.promise,
+    answers,
+    others,
+    /** Settles once the page has posted an answer since the last reply. */
+    answerPosted: () => answerPosted.promise,
+    /** The server's reply to the latest answer the page posted. */
+    replyToAnswer: (response: Response) => {
+      const reply =
+        answerReplies.at(-1) ?? panic("No answer is waiting on a reply");
+      answerPosted = Promise.withResolvers<undefined>();
+      reply.resolve(response);
+    },
   };
 };
 
+const TURN_ID = "018f0000-0000-7000-8000-00000000000b";
+
+const QUESTION_MESSAGE: PersistedChatMessage = {
+  id: "question",
+  role: "user",
+  parts: [{ type: "text", content: "Which leases end this year?" }],
+};
+
 /** A page loaded while its thread's turn still runs: a reload mid-turn. */
-const openLoadedTurn = (activeTurnSteering?: ChatTurnSteering) =>
+const openLoadedTurn = (
+  activeTurnSteering?: ChatTurnSteering,
+  initialMessages: PersistedChatMessage[] = [QUESTION_MESSAGE],
+  onError: (error: Error) => void = () => undefined,
+) =>
   createChatRuntime({
-    activeTurnId: toSafeId<"chatTurn">("018f0000-0000-7000-8000-00000000000b"),
+    activeTurnId: toSafeId<"chatTurn">(TURN_ID),
     activeTurnSteering,
     context: undefined,
-    initialMessages: [
-      {
-        id: "question",
-        role: "user",
-        parts: [{ type: "text", content: "Which leases end this year?" }],
-      },
-    ],
+    initialMessages,
     key: { scope: "global", threadId: toChatThreadId(THREAD_ID) },
-    onError: () => undefined,
+    onError,
     onFinish: () => undefined,
     reloadThread: () => undefined,
   });
@@ -335,4 +397,339 @@ test("a message handed to the running turn is always one the page queued, at the
   } finally {
     unsubscribe();
   }
+});
+
+// --- What the run on the member's computer asks, beside its running turn ---
+
+const ANSWER_ID = "answer-local";
+const CALL_ID = "local:run-local:item_cmd";
+const QUESTION_CALL_ID = "local:run-local:item_q";
+const APPROVAL_REQUEST_ID = "018f0000-0000-7000-8000-0000000000a1";
+const QUESTION_REQUEST_ID = "018f0000-0000-7000-8000-0000000000a2";
+
+const approvalRequest = {
+  requestId: APPROVAL_REQUEST_ID,
+  toolCallId: CALL_ID,
+  status: "pending",
+  ask: {
+    kind: "approval",
+    message: "Run the formatter over the draft",
+    reason: null,
+    toolName: "command_execution",
+    input: { command: "format draft.txt" },
+    approvalKind: null,
+    decisions: ["approve", "approve_for_session", "deny"],
+  },
+} as const satisfies ChatLocalRunRequest;
+
+const questionRequest = {
+  requestId: QUESTION_REQUEST_ID,
+  toolCallId: QUESTION_CALL_ID,
+  status: "pending",
+  ask: {
+    kind: "question",
+    questions: [
+      {
+        id: "law",
+        header: "Governing law",
+        prompt: "Which law governs the lease?",
+        options: [
+          { label: "Czech", description: "" },
+          { label: "Slovak", description: "" },
+        ],
+        allowsFreeText: false,
+        multiSelect: false,
+        secret: false,
+      },
+    ],
+  },
+} as const satisfies ChatLocalRunRequest;
+
+/** The run opens its answer and a call of `toolName`, as the stream does. */
+const openedCall = (toolCallId: string, toolName: string) => [
+  { type: "RUN_STARTED", runId: RUN_ID, threadId: THREAD_ID },
+  { type: "TEXT_MESSAGE_START", messageId: ANSWER_ID, role: "assistant" },
+  {
+    type: "TOOL_CALL_START",
+    parentMessageId: ANSWER_ID,
+    toolCallId,
+    toolCallName: toolName,
+    toolName,
+  },
+  { type: "TOOL_CALL_ARGS", toolCallId, delta: "{}" },
+  {
+    type: "TOOL_CALL_END",
+    toolCallId,
+    toolCallName: toolName,
+    toolName,
+    input: {},
+  },
+];
+
+/** The stream restating every request of the answer, as the API does. */
+const restated = (...requests: ChatLocalRunRequest[]) => ({
+  type: "TEXT_MESSAGE_START",
+  messageId: ANSWER_ID,
+  role: "assistant",
+  metadata: { [CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY]: requests },
+});
+
+const outcome = (value: ChatLocalRunRequestAnswerOutcome) =>
+  Response.json({ outcome: value });
+
+const answerPath = (requestId: string) =>
+  `/chat/threads/${THREAD_ID}/turns/${TURN_ID}/requests/${requestId}/answer`;
+
+type Snapshot = ReturnType<ReturnType<typeof openLoadedTurn>["getSnapshot"]>;
+
+/** Whether the page holds the call `request` is about, with the request as
+ *  the stream last restated it on the call's answer. */
+const holdsRequest = (snapshot: Snapshot, request: ChatLocalRunRequest) =>
+  snapshot.messages.some(
+    ({ metadata, parts }) =>
+      parts.some(
+        (part) => part.type === "tool-call" && part.id === request.toolCallId,
+      ) &&
+      JSON.stringify(metadata?.[CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY]) ===
+        JSON.stringify([request]),
+  );
+
+/** A page rejoined on the running turn, which has asked `request`. */
+const openAsking = async (
+  request: ChatLocalRunRequest,
+  toolName: string,
+  onError?: (error: Error) => void,
+) => {
+  const server = installRunningTurn();
+  const runtime = openLoadedTurn(undefined, [QUESTION_MESSAGE], onError);
+  const unsubscribe = runtime.subscribe(() => undefined);
+  server.send(...openedCall(request.toolCallId, toolName), restated(request));
+  await awaitSnapshot(runtime, (snapshot) => holdsRequest(snapshot, request));
+  return {
+    server,
+    runtime,
+    /** The run ends, and the page with it. */
+    close: async () => {
+      if (runtime.getSnapshot().isLoading) {
+        server.send({
+          type: "RUN_FINISHED",
+          runId: RUN_ID,
+          threadId: THREAD_ID,
+        });
+        server.end();
+        await awaitSnapshot(runtime, (snapshot) => !snapshot.isLoading);
+      }
+      unsubscribe();
+    },
+  };
+};
+
+describe("a step the run asks the member to approve", () => {
+  test("is answered once, at the run's request, while its turn still runs", async () => {
+    const { close, runtime, server } = await openAsking(
+      approvalRequest,
+      "command_execution",
+    );
+    try {
+      const response = { approved: true, id: APPROVAL_REQUEST_ID } as const;
+      // A second click while the first answer is on its way joins it.
+      const first = runtime.resolveToolApproval(response);
+      const second = runtime.resolveToolApproval(response);
+      await server.answerPosted();
+      expect(runtime.getSnapshot().isLoading).toBe(true);
+      server.replyToAnswer(outcome({ type: "answered" }));
+      await Promise.all([first, second]);
+
+      expect(server.answers).toHaveLength(1);
+      expect(server.answers[0]?.path).toEndWith(
+        answerPath(APPROVAL_REQUEST_ID),
+      );
+      expect(server.answers[0]?.body).toEqual({
+        answer: { type: "approval", decision: "approve" },
+      });
+      // The turn never paused: nothing resumed it or sent it again.
+      expect(server.others).toEqual([]);
+      expect(runtime.getSnapshot()).toMatchObject({
+        isLoading: true,
+        error: undefined,
+      });
+
+      server.send(restated({ ...approvalRequest, status: "resolved" }), {
+        type: "RUN_FINISHED",
+        runId: RUN_ID,
+        threadId: THREAD_ID,
+      });
+      server.end();
+      await awaitSnapshot(runtime, (snapshot) => !snapshot.isLoading);
+    } finally {
+      await close();
+    }
+  });
+
+  test.each([
+    [{ approved: true }, "approve"],
+    [{ approved: true, scope: "session" }, "approve_for_session"],
+    [{ approved: false }, "deny"],
+  ] as const)("answers %o as %s", async (response, decision) => {
+    const { close, runtime, server } = await openAsking(
+      approvalRequest,
+      "command_execution",
+    );
+    try {
+      const answering = runtime.resolveToolApproval({
+        ...response,
+        id: APPROVAL_REQUEST_ID,
+      });
+      await server.answerPosted();
+      server.replyToAnswer(outcome({ type: "answered" }));
+      await answering;
+      expect(server.answers.map(({ body }) => body)).toEqual([
+        { answer: { type: "approval", decision } },
+      ]);
+    } finally {
+      await close();
+    }
+  });
+
+  test("an answer that did not reach the run fails visibly, and the next click sends it again", async () => {
+    const errors: Error[] = [];
+    const { close, runtime, server } = await openAsking(
+      approvalRequest,
+      "command_execution",
+      (error) => {
+        errors.push(error);
+      },
+    );
+    try {
+      const response = { approved: true, id: APPROVAL_REQUEST_ID } as const;
+      const failed = runtime.resolveToolApproval(response);
+      await server.answerPosted();
+      server.replyToAnswer(
+        Response.json({ message: "Unavailable" }, { status: 503 }),
+      );
+      await failed;
+      expect(errors).not.toEqual([]);
+      expect(runtime.getSnapshot().error).toBeDefined();
+
+      const retried = runtime.resolveToolApproval(response);
+      await server.answerPosted();
+      server.replyToAnswer(outcome({ type: "answered" }));
+      await retried;
+      expect(server.answers.map(({ body }) => body)).toEqual([
+        { answer: { type: "approval", decision: "approve" } },
+        { answer: { type: "approval", decision: "approve" } },
+      ]);
+    } finally {
+      await close();
+    }
+  });
+});
+
+describe("a question the run asks beside its turn", () => {
+  test("is read from the answer's metadata as the stream restates it, and closes when it does", async () => {
+    const { close, runtime, server } = await openAsking(
+      questionRequest,
+      "request_user_input",
+    );
+    try {
+      expect(runtime.getSnapshot()).toMatchObject({
+        isLoading: true,
+        localRunQuestion: {
+          interruptId: QUESTION_REQUEST_ID,
+          questions: questionRequest.ask.questions,
+        },
+      });
+
+      server.send(restated({ ...questionRequest, status: "resolved" }));
+      await awaitSnapshot(
+        runtime,
+        (snapshot) => snapshot.localRunQuestion === null,
+      );
+      expect(runtime.getSnapshot().isLoading).toBe(true);
+    } finally {
+      await close();
+    }
+  });
+
+  test("reads the same on a page reloaded mid-turn as on the page that streamed it", async () => {
+    const { close, runtime } = await openAsking(
+      questionRequest,
+      "request_user_input",
+    );
+    try {
+      const live = runtime.getSnapshot();
+      expect(openMemberWaitKeys(live)).toContain(
+        `interrupt:${QUESTION_REQUEST_ID}`,
+      );
+      // The answer as the thread stores it: the stream's metadata, and no
+      // resume snapshot behind it.
+      expect(live.messages.at(-1)?.metadata).not.toHaveProperty(
+        "resumeSnapshot",
+      );
+
+      // A reload mid-turn: the page loads the stored answer and joins the
+      // turn, whose stream replays the run from its start.
+      const rejoined = installRunningTurn();
+      rejoined.send(
+        ...openedCall(QUESTION_CALL_ID, "request_user_input"),
+        restated(questionRequest),
+      );
+      const reloaded = openLoadedTurn(undefined, [...live.messages]);
+      const unsubscribeReloaded = reloaded.subscribe(() => undefined);
+      try {
+        await awaitSnapshot(
+          reloaded,
+          (snapshot) =>
+            snapshot.status === "streaming" &&
+            snapshot.localRunQuestion !== null,
+        );
+        expect(reloaded.getSnapshot().localRunQuestion).toEqual(
+          live.localRunQuestion,
+        );
+        expect(openMemberWaitKeys(reloaded.getSnapshot())).toEqual(
+          openMemberWaitKeys(live),
+        );
+      } finally {
+        rejoined.send({
+          type: "RUN_FINISHED",
+          runId: RUN_ID,
+          threadId: THREAD_ID,
+        });
+        rejoined.end();
+        await awaitSnapshot(reloaded, (snapshot) => !snapshot.isLoading);
+        unsubscribeReloaded();
+      }
+    } finally {
+      await close();
+    }
+  });
+
+  test.each([
+    [{ law: ["Czech"] }, { type: "question", answers: { law: ["Czech"] } }],
+    [null, { type: "dismiss" }],
+  ] as const)(
+    "answers %o at the run's request as %o",
+    async (given, answer) => {
+      const { close, runtime, server } = await openAsking(
+        questionRequest,
+        "request_user_input",
+      );
+      try {
+        const delivery = runtime.answerLocalRunQuestion(
+          QUESTION_REQUEST_ID,
+          given,
+        );
+        await server.answerPosted();
+        server.replyToAnswer(outcome({ type: "answered" }));
+        expect(await delivery).toBe("sent");
+        expect(server.answers.map(({ body }) => body)).toEqual([{ answer }]);
+        expect(server.answers[0]?.path).toEndWith(
+          answerPath(QUESTION_REQUEST_ID),
+        );
+        expect(server.others).toEqual([]);
+      } finally {
+        await close();
+      }
+    },
+  );
 });

@@ -133,6 +133,7 @@ import { ChatTurnDuration } from "@/components/chat/chat-turn-duration";
 import { ChatTurnStatus } from "@/components/chat/chat-turn-status";
 import { turnPhaseFromParts } from "@/components/chat/chat-turn-status.logic";
 import type {
+  ApprovalToolPart,
   AskUserOutput,
   ChatAnonRestoration,
   ChatAttachmentPart,
@@ -167,6 +168,12 @@ import {
 import { LocalRunLimitReminder } from "@/components/chat/local-run-limit-reminder";
 import { LocalRunQuestionCard } from "@/components/chat/local-run-question-card";
 import { localRunQuestionCallId } from "@/components/chat/local-run-question.logic";
+import { LocalRunRequestNotice } from "@/components/chat/local-run-request-notice";
+import {
+  awaitedLocalRunApproval,
+  localRunRequestOfCall,
+  unansweredLocalRunRequest,
+} from "@/components/chat/local-run-request.logic";
 import { localRunSubagentConversation } from "@/components/chat/local-run-step-output";
 import { LocalRunSubagentGroup } from "@/components/chat/local-run-subagent-card";
 import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
@@ -2645,10 +2652,86 @@ const stepFindsContext = ({
   stepRefTargets: readChatStepRefTargets(message.metadata?.refContext),
 });
 
+/**
+ * A tool call's card. A step a run on the member's computer asked about
+ * waits beside the running turn, so its card asks while the turn runs, and
+ * says neutrally when the run went on without it (`localRunRequestOfCall`).
+ */
+const renderToolCallPart = (
+  part: Extract<ChatPart, { type: "tool-call" }>,
+  {
+    action,
+    activeFileName,
+    activeOrganizationId,
+    answerCitations,
+    failureOutcome,
+    isAwaitingUser,
+    isGenerating,
+    isTurnActive,
+    message,
+    shouldShowToolCalls,
+    stepRefTargets,
+    threadRef,
+    turnStatus,
+  }: AssistantMessagePartsProps & {
+    action: ReturnType<typeof openPlaybookAction>;
+    answerCitations: ReturnType<typeof stepFindsContext>["answerCitations"];
+    failureOutcome: "recovered" | "terminal";
+    isTurnActive: boolean;
+    stepRefTargets: ReturnType<typeof stepFindsContext>["stepRefTargets"];
+  },
+): ReactNode => {
+  const approvalCard = (asked: ApprovalToolPart, awaiting: boolean) => (
+    <ToolApprovalCard
+      action={action}
+      activeFileName={activeFileName}
+      isAwaitingUser={awaiting}
+      isTurnActive={isTurnActive}
+      key={part.id}
+      part={asked}
+    />
+  );
+  const toolCallCard = (
+    <ToolCallCard
+      action={action}
+      activeOrganizationId={activeOrganizationId}
+      answerCitations={answerCitations}
+      key={part.id}
+      failureOutcome={failureOutcome}
+      part={part}
+      turnStatus={turnStatus}
+      showDetails={shouldShowToolCalls}
+      stepRefTargets={stepRefTargets}
+      threadId={threadRef?.threadId}
+    />
+  );
+  const request = localRunRequestOfCall(message.metadata, part.id);
+  const awaited = awaitedLocalRunApproval(part, request, isGenerating);
+  if (awaited !== null && isApprovalPart(awaited)) {
+    return approvalCard(awaited, true);
+  }
+  const unanswered = unansweredLocalRunRequest(request, isGenerating);
+  if (unanswered !== null) {
+    return (
+      <LocalRunRequestNotice
+        card={toolCallCard}
+        key={part.id}
+        reason={unanswered}
+      />
+    );
+  }
+  if (isApprovalPart(part)) {
+    return approvalCard(part, isAwaitingUser);
+  }
+  if (isPendingApprovalPart(part)) {
+    return <PendingToolApprovalCard key={part.id} part={part} />;
+  }
+  return toolCallCard;
+};
+
 const AssistantMessageParts = (props: AssistantMessagePartsProps) => {
   const {
     threadRef,
-    activeFileName,
     activeOrganizationId,
     assistantTextDensity,
     isAwaitingUser,
@@ -2865,39 +2948,14 @@ const AssistantMessageParts = (props: AssistantMessagePartsProps) => {
     }
 
     if (part.type === "tool-call") {
-      const action = openPlaybookAction({ part, onOpenPlaybook, label });
-
-      if (isApprovalPart(part)) {
-        return (
-          <ToolApprovalCard
-            action={action}
-            activeFileName={activeFileName}
-            isAwaitingUser={isAwaitingUser}
-            isTurnActive={isTurnActive}
-            key={part.id}
-            part={part}
-          />
-        );
-      }
-
-      if (isPendingApprovalPart(part)) {
-        return <PendingToolApprovalCard key={part.id} part={part} />;
-      }
-
-      return (
-        <ToolCallCard
-          action={action}
-          activeOrganizationId={activeOrganizationId}
-          answerCitations={answerCitations}
-          key={part.id}
-          failureOutcome={failureOutcome}
-          part={part}
-          turnStatus={turnStatus}
-          showDetails={shouldShowToolCalls}
-          stepRefTargets={stepRefTargets}
-          threadId={threadRef?.threadId}
-        />
-      );
+      return renderToolCallPart(part, {
+        ...props,
+        action: openPlaybookAction({ part, onOpenPlaybook, label }),
+        answerCitations,
+        failureOutcome,
+        isTurnActive,
+        stepRefTargets,
+      });
     }
 
     return null;

@@ -208,12 +208,18 @@ export const createActionApprovals = () => {
      * Answers the question `requestId` (the id it was asked under); false
      * when it is not one of these, so the harness's own approvals go on.
      */
-    answer: (requestId: string, decision: ApprovalDecision): boolean => {
+    answer: (
+      requestId: string,
+      decision: ApprovalDecision,
+      /** Runs before the question's end is reported: the answer reached it. */
+      taken: () => void = () => undefined,
+    ): boolean => {
       const settle = pending.get(requestId);
       if (settle === undefined) {
         return false;
       }
       pending.delete(requestId);
+      taken();
       settle(decision);
       return true;
     },

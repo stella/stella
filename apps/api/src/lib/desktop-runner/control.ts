@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
+import type { DesktopRunnerRequestEvent } from "@stll/api-contract/chat-local-run-request";
 import type { ChatLocalRunSteerOutcome } from "@stll/api-contract/chat-run-target";
 import {
   CHAT_TURN_STEERING,
@@ -72,6 +73,7 @@ import {
   readRun,
   readRunInputText,
   readRunOutputFile,
+  readRunRequestClosure,
   readSteerableChatRun,
   readStoredRunEvents,
   readThreadBackgroundTasks,
@@ -977,6 +979,14 @@ export const createDesktopRunnerControl = ({
     ): Promise<Result<ChatRunForRequest | null, DatabaseError>> =>
       await Result.tryPromise({
         try: async () => await readChatRunForRequest(db, options),
+        catch: toDatabaseError,
+      }),
+    /** How the run reported request `requestId` closed, if it did. */
+    readRunRequestClosure: async (
+      options: Parameters<typeof readRunRequestClosure>[1],
+    ): Promise<Result<DesktopRunnerRequestEvent | null, DatabaseError>> =>
+      await Result.tryPromise({
+        try: async () => await readRunRequestClosure(db, options),
         catch: toDatabaseError,
       }),
     /** The run a handed-over chat turn reads on (`readHandedOverChatRun`). */

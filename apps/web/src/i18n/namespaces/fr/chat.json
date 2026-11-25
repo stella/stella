@@ -491,6 +491,13 @@
       "refusalReasoningEffortUnavailable": "L’agent de code de votre ordinateur ne propose pas ce niveau de raisonnement pour le modèle. Choisissez-en un autre sous Niveau de raisonnement.",
       "refusalTooLarge": "Cette conversation est trop longue pour être transmise à votre ordinateur. Commencez une nouvelle conversation pour l’y exécuter.",
       "refusalUnavailable": "L’exécution des conversations sur votre ordinateur n’est pas disponible pour votre compte.",
+      "request": {
+        "cancelled": "Sans réponse : cette réponse a été arrêtée.",
+        "runFailed": "Sans réponse : l’agent s’est arrêté sur une erreur avant cette étape.",
+        "runFinished": "Inutile : l’agent a terminé sans cette étape.",
+        "runLost": "Sans réponse : votre ordinateur a cessé de traiter cette réponse.",
+        "withdrawn": "Plus nécessaire : l’agent a continué sans cette étape."
+      },
       "selectionStateLabel": "{selection} · {state}",
       "sessionNotResumed": "L’agent de code de votre ordinateur n’a pas pu reprendre là où il s’était arrêté : il a donc poursuivi à partir des messages de cette conversation.",
       "stateLimitUntil": "Limite atteinte jusqu’à {time}",

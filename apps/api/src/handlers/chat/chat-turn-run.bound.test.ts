@@ -3,6 +3,10 @@ import { describe, expect, test } from "bun:test";
 
 import { harnessSessionId } from "@stll/agent-engine";
 import {
+  CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY,
+  chatLocalRunRequestsOf,
+} from "@stll/api-contract/chat-local-run-request";
+import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
   CHAT_RUN_TARGET_KIND,
   type ChatRunTarget,
@@ -16,7 +20,7 @@ import { withTimeout } from "@/api/lib/with-timeout";
 import {
   createComputer,
   harnessChunks,
-  isPause,
+  isAsk,
   localSource,
   REQUEST_ID,
   THREAD_ID,
@@ -145,6 +149,19 @@ const startTurn = ({ clock, runsOn, source }: TurnOptions) => {
         { label: "turn output", timeoutMs: HAPPY_PATH_TIMEOUT_MS },
       );
     },
+    /**
+     * What the run asked the member, as the turn last restated it on the
+     * answer: what a viewer folds, and the stored answer keeps.
+     */
+    requests: () =>
+      chatLocalRunRequestsOf(
+        emitted.findLast(
+          (chunk) =>
+            chunk.type === EventType.TEXT_MESSAGE_START &&
+            isRecord(chunk.metadata) &&
+            CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY in chunk.metadata,
+        )?.metadata,
+      ),
     /** The run's end and what its response delivered. */
     ended: async () =>
       await withTimeout(
@@ -208,7 +225,7 @@ describe("a turn on the member's computer", () => {
     expect(computer.queued.interrupts).toBe(0);
   });
 
-  test("waits on the member for hours, then works on for hours once answered", async () => {
+  test("waits on the member for hours while it runs, then works on once answered", async () => {
     const clock = createDeadlineClock();
     const computer = createComputer();
     const toolCall = {
@@ -245,57 +262,170 @@ describe("a turn on the member's computer", () => {
       { type: "text.completed", messageId: "answer", text: "All tests pass." },
       { type: "turn.completed", usage: null, boundary: null },
     ]);
-    const pauseAt = chunks.findIndex(isPause) + 1;
-    expect(pauseAt).toBeGreaterThan(0);
-    const asking = startTurn({
+    const askAt = chunks.findIndex(isAsk) + 1;
+    expect(askAt).toBeGreaterThan(0);
+    const turn = startTurn({
       clock,
       runsOn: CHAT_RUN_TARGET_KIND.local,
       source: localSource(computer),
     });
     computer.approvalRequest();
-    computer.events(chunks.slice(0, pauseAt));
+    computer.events(chunks.slice(0, askAt));
+    await turn.emits(
+      (chunk) =>
+        chunk.type === EventType.TEXT_MESSAGE_START &&
+        isRecord(chunk.metadata) &&
+        CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY in chunk.metadata,
+    );
 
-    // The turn that asked is over once it waits: the wait holds no run.
-    expect((await asking.ended()).end).toBe("stored");
-    expect(asking.outcomes).toMatchObject([{ type: "awaiting-user" }]);
-    expect(
-      asking.ownership.run(asking.run.execution.executionId),
-    ).toBeUndefined();
-    expect(computer.chatReadSeq()).toBe(pauseAt + 1);
-
+    // The request is pending beside the turn, which keeps running: no
+    // pause, no deadline, nothing stopped.
+    expect(turn.requests()).toMatchObject([
+      {
+        requestId: REQUEST_ID,
+        status: "pending",
+        ask: { kind: "approval", decisions: ["approve", "deny"] },
+      },
+    ]);
     clock.advance(CHAT_METERED_PROVIDER_TIMEOUT_MS);
     clock.advance(8 * HOUR_MS);
+    expect(turn.run.control.abortController.signal.aborted).toBe(false);
+    expect(turn.outcomes).toEqual([]);
     expect(computer.queued.interrupts).toBe(0);
 
-    const answered = startTurn({
+    // The member's answer reached the run, which works on.
+    computer.events(chunks.slice(askAt));
+    computer.finish();
+    const { end, body } = await turn.ended();
+    expect(end).toBe("stored");
+    expect(turn.outcomes).toEqual([{ type: "completed" }]);
+    expect(body).toContain("All tests pass.");
+    expect(turn.requests()).toMatchObject([
+      { requestId: REQUEST_ID, status: "resolved" },
+    ]);
+    expect(computer.queued.interrupts).toBe(0);
+    expect(clock.armed()).toBe(0);
+  });
+
+  test("a stop while a step waits on the member ends the turn stopped and interrupts the computer once", async () => {
+    const clock = createDeadlineClock();
+    const computer = createComputer();
+    const chunks = await harnessChunks([
+      {
+        type: "session.started",
+        sessionId: harnessSessionId("session-stopped-ask"),
+        continuation: { type: "fresh" },
+      },
+      {
+        type: "approval.requested",
+        request: {
+          requestId: REQUEST_ID,
+          kind: "command",
+          toolCall: {
+            id: "item_8",
+            name: "command_execution",
+            input: { command: "bun test" },
+          },
+          reason: "Run the test suite",
+          options: [
+            { id: "accept", decision: "approve" },
+            { id: "decline", decision: "deny" },
+          ],
+        },
+      },
+    ]);
+    const turn = startTurn({
       clock,
       runsOn: CHAT_RUN_TARGET_KIND.local,
-      source: localSource(computer, [
-        { interruptId: REQUEST_ID, status: "resolved", payload: true },
-      ]),
+      source: localSource(computer),
     });
-    const resultAt = chunks.findIndex(
-      (chunk) => chunk.type === EventType.TOOL_CALL_RESULT,
+    computer.approvalRequest();
+    computer.events(chunks.slice(0, chunks.findIndex(isAsk) + 1));
+    await turn.emits(
+      (chunk) =>
+        chunk.type === EventType.TEXT_MESSAGE_START &&
+        isRecord(chunk.metadata) &&
+        CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY in chunk.metadata,
     );
-    expect(resultAt).toBeGreaterThanOrEqual(pauseAt);
-    computer.events(chunks.slice(pauseAt, resultAt + 1));
-    await answered.emits((chunk) => chunk.type === EventType.TOOL_CALL_RESULT);
-    expect(computer.queued.approvals).toBe(1);
 
-    clock.advance(CHAT_METERED_PROVIDER_TIMEOUT_MS);
-    clock.advance(3 * HOUR_MS);
+    const stopped = turn.run.stop();
 
-    expect(answered.run.control.abortController.signal.aborted).toBe(false);
-    expect(answered.outcomes).toEqual([]);
-    computer.events(chunks.slice(resultAt + 1));
+    expect((await turn.ended()).end).toBe("stored");
+    expect(await stopped).toBe("stored");
+    expect(turn.outcomes).toMatchObject([{ type: "cancelled" }]);
+    // The question stays as the stream last said; a stopped turn's request
+    // can no longer be answered, and every reader reads it as stopped
+    // (`unansweredLocalRunRequest`, `answerRunRequest`).
+    expect(turn.requests()).toMatchObject([
+      { requestId: REQUEST_ID, status: "pending" },
+    ]);
+    expect(computer.queued.interrupts).toBe(1);
+  });
+
+  test("shows the answer a run gave while a step waited on the member, and closes the step's question as not needed", async () => {
+    const clock = createDeadlineClock();
+    const computer = createComputer();
+    const step = {
+      id: "browser-step-1",
+      name: "local_browser",
+      input: { action: "click" },
+    };
+    const search = {
+      id: "item_9",
+      name: "command_execution",
+      input: { command: "grep -r lease ." },
+    };
+    // The harness asks about one step, works on beside it, writes its
+    // final answer and ends while the question is still open.
+    const chunks = await harnessChunks([
+      {
+        type: "session.started",
+        sessionId: harnessSessionId("session-parallel"),
+        continuation: { type: "fresh" },
+      },
+      {
+        type: "approval.requested",
+        request: {
+          requestId: REQUEST_ID,
+          kind: "tool",
+          toolCall: step,
+          reason: "Click the button on the page",
+          options: [
+            { id: "approve", decision: "approve" },
+            { id: "deny", decision: "deny" },
+          ],
+        },
+      },
+      { type: "tool.started", toolCall: search },
+      {
+        type: "tool.completed",
+        toolCall: search,
+        result: { content: "3 matches", status: "succeeded" },
+      },
+      {
+        type: "text.completed",
+        messageId: "answer",
+        text: "Here is the summary of the three matches.",
+      },
+      { type: "turn.completed", usage: null, boundary: null },
+    ]);
+    const turn = startTurn({
+      clock,
+      runsOn: CHAT_RUN_TARGET_KIND.local,
+      source: localSource(computer),
+    });
+    computer.approvalRequest();
+    computer.events(chunks);
     computer.finish();
-    const { end, body } = await answered.ended();
+    const { end, body } = await turn.ended();
     expect(end).toBe("stored");
-    expect(answered.outcomes).toEqual([{ type: "completed" }]);
-    expect(body).toContain("All tests pass.");
+    expect(turn.outcomes).toEqual([{ type: "completed" }]);
+    expect(body).toContain("Here is the summary of the three matches.");
+    expect(body).not.toContain("RUN_ERROR");
+    expect(turn.requests()).toMatchObject([
+      { requestId: REQUEST_ID, status: "expired", expiry: "run_finished" },
+    ]);
     expect(computer.queued.interrupts).toBe(0);
-    // No deadline was armed for any of the three runs' turns.
-    expect(clock.armed()).toBe(0);
   });
 
   test("fails with the computer's reason once the gateway gave its silent computer up", async () => {

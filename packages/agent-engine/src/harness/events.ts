@@ -273,8 +273,16 @@ export type HarnessEvent =
     }
   | { type: "approval.requested"; request: HarnessApprovalRequest }
   | { type: "question.requested"; request: HarnessQuestionRequest }
-  /** A pending approval or blocking question was answered or withdrawn. */
-  | { type: "interaction.resolved"; requestId: string }
+  /**
+   * A pending approval or blocking question was answered or withdrawn.
+   * `closed` says how, where the sidecar knows (`sidecar/host`): an adapter
+   * leaves it unset, which reads as answered.
+   */
+  | {
+      type: "interaction.resolved";
+      requestId: string;
+      closed?: HarnessInteractionClosed;
+    }
   /** A transient provider error the harness is retrying on its own. */
   | { type: "retrying"; message: string }
   /**
@@ -300,6 +308,13 @@ export type HarnessEvent =
     }
   | { type: "turn.interrupted" }
   | { type: "turn.failed"; failure: HarnessFailure };
+
+/**
+ * How a pending request closed: the member's answer reached the harness,
+ * the member's stop ended it, or the harness withdrew it while its turn
+ * went on (a call that ended, a subagent that settled).
+ */
+export type HarnessInteractionClosed = "answered" | "stopped" | "withdrawn";
 
 /**
  * The runner protocol's outcome for each failure. Interrupted turns report

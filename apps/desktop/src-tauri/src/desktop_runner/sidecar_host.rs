@@ -595,6 +595,14 @@ async fn pump(
       break outcome;
     }
   };
+  // How the run ended, beside the release of its hold: a run that ends while
+  // the member still has a question open closes it (the holder reports it),
+  // and this line says when and why the computer let the run go.
+  tracing::info!(
+    target: LOG_TARGET,
+    outcome = outcome.wire_name(),
+    "a run ended; its hold is released"
+  );
   locked(&shared.runs).remove(&run_id);
   locked(&shared.grants).remove(&run_id);
   drop(lease);

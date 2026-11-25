@@ -1,5 +1,5 @@
 import { EventType } from "@tanstack/ai";
-import type { RunAgentResumeItem, StreamChunk } from "@tanstack/ai";
+import type { StreamChunk } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
 import { type HarnessEvent, harnessEventsToChunks } from "@stll/agent-engine";
@@ -58,7 +58,8 @@ export const harnessChunks = async (events: HarnessEvent[]) => {
   return chunks;
 };
 
-export const isPause = (chunk: StreamChunk) =>
+/** The chunk that announces a request: the run asks and may go on. */
+export const isAsk = (chunk: StreamChunk) =>
   chunk.type === EventType.RUN_FINISHED && chunk.outcome?.type === "interrupt";
 
 /**
@@ -68,12 +69,12 @@ export const isPause = (chunk: StreamChunk) =>
 export const createComputer = () => {
   const runBell = createLocalRunBell();
   const stored: StoredRunEvent[] = [];
-  const queued = { interrupts: 0, approvals: 0 };
+  const queued = { interrupts: 0 };
   let state: DesktopRunnerRunView["state"] = "running";
   /** Whether the run's harness last reported `steer`. */
   let steering: ChatTurnSteering = CHAT_TURN_STEERING.notSteerable;
   let chatReadSeq = 0;
-  let approvalRequest: StoredRunEvent | undefined;
+  let outcome: DesktopRunnerRunView["outcome"] = null;
   /** The text each steer handed the run, as the API queued it. */
   const inputs = new Map<string, string>();
   /** What the turn made of the run's steer reports, in order. */
@@ -119,7 +120,7 @@ export const createComputer = () => {
         harness: DESTINATION.harness,
         harnessVersion: DESTINATION.harnessVersion,
         state,
-        outcome: null,
+        outcome,
         rejectReason: null,
         harnessSessionId: null,
         ackSeq: stored.length,
@@ -143,24 +144,6 @@ export const createComputer = () => {
         harness: DESTINATION.harness,
         chatReadSeq,
       }),
-    readChatRunForRequest: async () =>
-      Result.ok(
-        approvalRequest === undefined
-          ? null
-          : {
-              runId: RUNNER_RUN_ID,
-              harness: DESTINATION.harness,
-              state,
-              chatReadSeq,
-              askedBy: DESKTOP_RUNNER_DESKTOP_MESSAGE.runApprovalRequest,
-              request: approvalRequest.message,
-            },
-      ),
-    answerApproval: async () => {
-      queued.approvals += 1;
-      return Result.ok({ type: "queued" });
-    },
-    answerQuestion: async () => panic("No question is asked here"),
     pairAppCall: async () => panic("No app call is reported here"),
     readRunOutputFile: async () => panic("No output file is reported here"),
     readRunInputText: async ({ inputId }) =>
@@ -226,7 +209,7 @@ export const createComputer = () => {
       }
     },
     approvalRequest: () => {
-      approvalRequest = store((seq) => ({
+      store((seq) => ({
         type: DESKTOP_RUNNER_DESKTOP_MESSAGE.runApprovalRequest,
         seq,
         requestId: REQUEST_ID,
@@ -236,6 +219,7 @@ export const createComputer = () => {
     },
     finish: () => {
       state = "finished";
+      outcome = "completed";
       store((seq) => ({
         type: DESKTOP_RUNNER_DESKTOP_MESSAGE.runFinished,
         seq,
@@ -252,32 +236,24 @@ export const createComputer = () => {
 };
 
 export const localSource =
-  (
-    computer: ReturnType<typeof createComputer>,
-    resume?: readonly RunAgentResumeItem[],
-  ) =>
+  (computer: ReturnType<typeof createComputer>) =>
   (abortSignal: AbortSignal, handOverSignal = new AbortController().signal) =>
-    createLocalChatRun(
-      computer.context,
-      resume === undefined
-        ? {
-            type: "start",
-            browserSiteGrants: [],
-            target: {
-              kind: "local",
-              harness: DESTINATION.harness,
-              model: DESTINATION.model,
-              approvals: DESTINATION.approvals,
-              reasoningEffort: DESTINATION.reasoningEffort,
-            },
-          }
-        : { type: "resume", harness: DESTINATION.harness },
-    ).stream({
+    createLocalChatRun(computer.context, {
+      type: "start",
+      browserSiteGrants: [],
+      target: {
+        kind: "local",
+        harness: DESTINATION.harness,
+        model: DESTINATION.model,
+        approvals: DESTINATION.approvals,
+        reasoningEffort: DESTINATION.reasoningEffort,
+      },
+    }).stream({
       chatRunId: "chat-run-bound",
       chatTurnId: TURN_ID,
       messages: [],
       instructions: "You are stella.",
-      resume,
+      resume: undefined,
       abortSignal,
       handOverSignal,
     });

@@ -59,6 +59,7 @@ export type AppOnlyWriteId =
   | "chat.threads.limit-reminder.cancel"
   | "chat.threads.limit-reminder.set"
   | "chat.threads.model.update"
+  | "chat.turns.request.answer"
   | "chat.turns.steer"
   | "contacts.import.inspect"
   | "contacts.import.preview"

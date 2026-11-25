@@ -27,6 +27,7 @@ import { useMessageEdit } from "@/components/chat-message-edit";
 import { ChatQueueList } from "@/components/chat-queue-list";
 import type { QueueThreadState } from "@/components/chat-queue-list";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
+import { LocalRunRequestCard } from "@/components/local-run-request-card";
 import { PagingFooter, RetryButton } from "@/components/retry-button";
 import type { PagingState } from "@/components/retry-button";
 import { ThreadMatter } from "@/components/thread-matter";
@@ -430,6 +431,12 @@ const ThreadMessages = ({
             {live === null ? null : (
               <LiveTurnView accepted={turn.accepted} turn={live} />
             )}
+            {live?.answer.status === "streaming" ? (
+              <LocalRunRequestCard
+                onAnswer={turn.answerRequest}
+                requests={live.answer.localRunRequests}
+              />
+            ) : null}
             {showsPendingInput(
               live === null
                 ? null

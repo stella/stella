@@ -54,6 +54,7 @@ import {
   harnessBoundary,
   type HarnessEvent,
   type HarnessFailure,
+  type HarnessInteractionClosed,
   harnessSessionId,
 } from "../harness/events";
 import { readSkillFolderNetworkHosts } from "../harness/skill-network-hosts";
@@ -311,6 +312,8 @@ type HeldRun = {
    * approvals and blocking questions.
    */
   requests: Map<string, string>;
+  /** The runner request ids the member's answer was handed over for. */
+  answered: Set<string>;
   /** The run's `outputs/` folder when it started; `null` until it opened. */
   outputs: OutputSnapshot | null;
   /** Cut by a stop, so sharing a stopped run's files ends at once. */
@@ -535,6 +538,25 @@ const runnerRequestIdOf = (
     }
   }
   return nativeId;
+};
+
+/**
+ * A closed request of `run` under its runner id, saying how it closed:
+ * answered when the member's answer reached it, stopped when the run's turn
+ * was stopped first, else withdrawn by the harness while the turn went on.
+ */
+const resolvedInteraction = (
+  run: Pick<HeldRun, "answered" | "requests" | "stop">,
+  event: Extract<HarnessEvent, { type: "interaction.resolved" }>,
+): HarnessEvent => {
+  const requestId = runnerRequestIdOf(run.requests, event.requestId);
+  const unanswered: HarnessInteractionClosed =
+    run.stop === RUN_STOP.none ? "withdrawn" : "stopped";
+  return {
+    ...event,
+    requestId,
+    closed: run.answered.has(requestId) ? "answered" : unanswered,
+  };
 };
 
 /** The event stream for a run that ends before its harness starts. */
@@ -781,7 +803,9 @@ export class SidecarHost {
           const native = run.requests.get(message.requestId);
           if (
             native !== undefined &&
-            run.approvals.answer(native, message.decision)
+            run.approvals.answer(native, message.decision, () => {
+              run.answered.add(message.requestId);
+            })
           ) {
             return;
           }
@@ -998,6 +1022,7 @@ export class SidecarHost {
       stop: this.stopping ? RUN_STOP.cancel : RUN_STOP.none,
       stopCopying: new AbortController(),
       requests: new Map(),
+      answered: new Set(),
       outputs: null,
       outputSharing: new AbortController(),
       checkpoint: null,
@@ -1241,6 +1266,9 @@ export class SidecarHost {
       return;
     }
     const turn = run.turn;
+    // Marked before the harness hears it: the harness may close the
+    // request the moment it takes the answer.
+    run.answered.add(requestId);
     const answer = async () => {
       const answered = await turn.respond(response(native));
       if (Result.isError(answered)) {
@@ -1597,10 +1625,7 @@ export class SidecarHost {
             break;
           }
           case "interaction.resolved":
-            yield {
-              ...event,
-              requestId: runnerRequestIdOf(run.requests, event.requestId),
-            };
+            yield resolvedInteraction(run, event);
             break;
           case "turn.completed":
             outcome.value = "completed";

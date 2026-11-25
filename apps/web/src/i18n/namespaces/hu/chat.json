@@ -491,6 +491,13 @@
       "refusalReasoningEffortUnavailable": "A számítógépén futó kódoló ügynök nem kínálja ezt a gondolkodási szintet a modellhez. Válasszon másikat a Gondolkodási szint menüben.",
       "refusalTooLarge": "Ez a beszélgetés túl hosszú ahhoz, hogy átadja a számítógépének. Kezdjen új csevegést, hogy ott futtassa.",
       "refusalUnavailable": "A csevegések futtatása a számítógépén nem érhető el a fiókjában.",
+      "request": {
+        "cancelled": "Nincs válasz: ez a válasz le lett állítva.",
+        "runFailed": "Nincs válasz: az ügynök hibával leállt e lépés előtt.",
+        "runFinished": "Nincs rá szükség: az ügynök e lépés nélkül végzett.",
+        "runLost": "Nincs válasz: a számítógépe leállította ennek a válasznak a feldolgozását.",
+        "withdrawn": "Már nincs rá szükség: az ügynök e lépés nélkül folytatta."
+      },
       "selectionStateLabel": "{selection} · {state}",
       "sessionNotResumed": "A számítógépén futó kódoló ügynök nem tudta onnan folytatni, ahol abbahagyta, ezért a csevegés üzeneteiből dolgozott tovább.",
       "stateLimitUntil": "Korlát elérve eddig: {time}",

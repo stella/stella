@@ -491,6 +491,13 @@
       "refusalReasoningEffortUnavailable": "Programmēšanas aģents jūsu datorā šim modelim nepiedāvā šo spriešanas līmeni. Izvēlieties citu izvēlnē Spriešanas līmenis.",
       "refusalTooLarge": "Šī saruna ir pārāk gara, lai to nodotu jūsu datoram. Sāciet jaunu tērzēšanu, lai to palaistu tur.",
       "refusalUnavailable": "Tērzēšanu palaišana jūsu datorā jūsu kontam nav pieejama.",
+      "request": {
+        "cancelled": "Nav atbildēts: šī atbilde tika apturēta.",
+        "runFailed": "Nav atbildēts: aģents apstājās ar kļūdu pirms šī soļa.",
+        "runFinished": "Nav vajadzīgs: aģents pabeidza bez šī soļa.",
+        "runLost": "Nav atbildēts: jūsu dators pārtrauca apstrādāt šo atbildi.",
+        "withdrawn": "Vairs nav vajadzīgs: aģents turpināja bez šī soļa."
+      },
       "selectionStateLabel": "{selection} · {state}",
       "sessionNotResumed": "Programmēšanas aģents jūsu datorā nevarēja atsākt no vietas, kur apstājās, tāpēc tas turpināja darbu, balstoties uz šīs tērzēšanas ziņām.",
       "stateLimitUntil": "Limits sasniegts līdz {time}",

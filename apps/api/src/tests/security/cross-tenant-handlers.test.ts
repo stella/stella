@@ -150,6 +150,7 @@ import createChatToolGrant from "@/api/handlers/chat/tool-grants/create";
 import deleteChatToolGrant from "@/api/handlers/chat/tool-grants/delete";
 import listChatToolGrants from "@/api/handlers/chat/tool-grants/list";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
+import answerChatTurnRequest from "@/api/handlers/chat/turns/answer-request";
 import cancelChatTurn from "@/api/handlers/chat/turns/cancel";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import steerChatTurn from "@/api/handlers/chat/turns/steer";
@@ -3159,6 +3160,39 @@ const isolationCases: IsolationCase[] = [
     },
   },
   {
+    // B's turn has no run on a computer, so its own answer finds no
+    // request; A's never finds the turn at all.
+    name: "chat turn request answer",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(answerChatTurnRequest, workspaceA, {
+        params: {
+          threadId: chatTurnThreadB,
+          turnId: chatTurnB,
+          requestId: CHAT_TURN_REQUEST_ID,
+        },
+        body: { answer: { type: "approval", decision: "approve" } },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(answerChatTurnRequest, sameUserWorkspaceB, {
+        params: {
+          threadId: chatTurnThreadB,
+          turnId: chatTurnB,
+          requestId: CHAT_TURN_REQUEST_ID,
+        },
+        body: { answer: { type: "approval", decision: "approve" } },
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+      expect(recordField(result, "message")).toBe("Chat turn not found");
+    },
+    expectPositive: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+      expect(recordField(result, "message")).toBe(
+        "Chat turn request not found",
+      );
+    },
+  },
+  {
     name: "chat turn cancel",
     runAAgainstB: async ({ workspaceA }) => ({
       response: await runHandler(cancelChatTurn, workspaceA, {
@@ -5054,6 +5088,9 @@ const getPageItems = (result: unknown): Record<string, unknown>[] => {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
+
+/** A request no run of the turn asked: the handler finds the turn, not it. */
+const CHAT_TURN_REQUEST_ID = "0198c0de-0000-7000-8000-0000000000c1";
 
 testState.beforeAll(() => {
   testState.setConfig("FEATURE_TIME_BILLING", true);
