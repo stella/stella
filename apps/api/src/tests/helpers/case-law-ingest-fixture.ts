@@ -7,10 +7,12 @@
  *
  * Each record cites two others of the stream by reporter citation (one
  * earlier, one later), so citations resolve both against stored rows and
- * against decisions that arrive after them. Every 41st record repeats an
- * earlier record's docket (a second decision of one case: its slug and its
- * docket key collide), and every 97th repeats an earlier record's cluster
- * with revised text (a second observation of one publisher identity).
+ * against decisions that arrive after them. Every 41st record repeats the
+ * previous record's docket and primary reporter citation (a second decision
+ * reported under one citation: its case number, slug and docket key
+ * collide, and citations to it are ambiguous), and every 97th repeats an
+ * earlier record's cluster with revised text (a second observation of one
+ * publisher identity).
  */
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
@@ -200,7 +202,7 @@ export const courtListenerFixtureRecords = ({
           ...first,
           id: String(namespace * 1_000_000 + identity * 10),
           cluster_id: clusterId,
-          ...fixtureReporterCitation(namespace, identity),
+          ...fixtureReporterCitation(namespace, docketOf),
         },
         ...rest.map((citation, part) => ({
           ...citation,
