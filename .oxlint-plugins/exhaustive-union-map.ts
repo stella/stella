@@ -176,7 +176,9 @@ const typedLiteral = (
 };
 
 /** If `node` is `keyof typeof <Ident>`, returns the `<Ident>` AST node. */
-const keyofTypeofTarget = (node: unknown): AstNode | null => {
+const keyofTypeofTarget = (
+  node: unknown,
+): ESTree.IdentifierReference | null => {
   if (
     !isAstNode(node) ||
     node.type !== "TSTypeOperator" ||
