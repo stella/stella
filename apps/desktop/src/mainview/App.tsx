@@ -570,7 +570,10 @@ const AgentsPane = ({
           focus={agentSettingsFocus}
           onFocusShown={onAgentSettingsShown}
           renderGroup={(content) => (
-            <SettingsSection title={tSubscriptions("title")}>
+            <SettingsSection
+              description={tSubscriptions("sectionDescription")}
+              title={tSubscriptions("title")}
+            >
               <SettingsPanel inset="flush">{content}</SettingsPanel>
             </SettingsSection>
           )}

@@ -11,6 +11,8 @@ use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime};
 
+use crate::runner_protocol::HarnessReport;
+
 /// How long `--version` may take before the executable counts as unusable.
 const VERSION_TIMEOUT: Duration = Duration::from_secs(5);
 const VERSION_POLL: Duration = Duration::from_millis(20);
@@ -160,14 +162,36 @@ fn stamp(path: &Path) -> Option<FileStamp> {
 /// regular probe and every run start do not run `--version` again.
 static VERSIONS: Mutex<Option<(FileStamp, String)>> = Mutex::new(None);
 
-/// Status of the member-installed Antigravity CLI for desktop Settings.
+/// Status of the member-installed Antigravity CLI for desktop Settings. Its
+/// sign-in is the run probe's answer, so Settings and every run agree.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum AntigravityCliStatus {
   NotInstalled,
-  TooOld { version: String },
-  SignedOut { version: String },
-  SignedIn { version: String },
+  TooOld {
+    version: String,
+  },
+  SignedOut {
+    version: String,
+  },
+  SignedIn {
+    version: String,
+  },
+  /// Installed, but its sign-in could not be asked about.
+  Unchecked {
+    version: String,
+    reason: AntigravityUncheckedReason,
+  },
+}
+
+/// Why the CLI's sign-in could not be asked about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AntigravityUncheckedReason {
+  /// This computer is not connected to stella yet, so no probe runs.
+  NotConnected,
+  /// The probe started the CLI and got no usable answer.
+  CheckFailed,
 }
 
 const ANTIGRAVITY_MIN_VERSION: (u64, u64, u64) = (1, 5, 0);
@@ -188,37 +212,50 @@ pub(crate) fn version_at_least(version: &str, min: (u64, u64, u64)) -> bool {
   parts.next().is_none() && (major, minor, patch) >= min
 }
 
-pub(crate) fn antigravity_cli_token_path(
-  gemini_home: Option<&Path>,
-  home: Option<&Path>,
-) -> Option<PathBuf> {
-  let base = match gemini_home {
-    Some(dir) if !dir.as_os_str().is_empty() => dir.to_path_buf(),
-    _ => home?.join(".gemini"),
-  };
-  Some(base.join("antigravity-cli").join("antigravity-oauth-token"))
-}
-
-pub(crate) fn antigravity_status(refresh: bool) -> AntigravityCliStatus {
+/// The version of an installed CLI that serves ACP, or the status that says
+/// why there is none. `refresh` reads the version again.
+pub(crate) fn antigravity_installed(
+  refresh: bool,
+) -> Result<String, AntigravityCliStatus> {
   if refresh {
     *VERSIONS
       .lock()
       .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
   }
   let Some((_executable, version)) = antigravity() else {
-    return AntigravityCliStatus::NotInstalled;
+    return Err(AntigravityCliStatus::NotInstalled);
   };
   if !version_at_least(&version, ANTIGRAVITY_MIN_VERSION) {
-    return AntigravityCliStatus::TooOld { version };
+    return Err(AntigravityCliStatus::TooOld { version });
   }
-  let gemini_home = std::env::var_os("GEMINI_HOME").map(PathBuf::from);
-  let home = dirs::home_dir().filter(|home| home.is_absolute());
-  let signed_in = antigravity_cli_token_path(gemini_home.as_deref(), home.as_deref())
-    .is_some_and(|token| token.is_file());
-  if signed_in {
-    AntigravityCliStatus::SignedIn { version }
-  } else {
-    AntigravityCliStatus::SignedOut { version }
+  Ok(version)
+}
+
+/// The status of an installed CLI of `version`, from the run probe's
+/// `report`. The CLI keeps its sign-in where it likes (the system keychain,
+/// from 1.5), so only the CLI can say whether it has one; the probe asks it.
+/// `None`: no probe can run yet (this computer is not connected to stella).
+pub(crate) fn antigravity_sign_in(
+  version: String,
+  report: Option<&HarnessReport>,
+) -> AntigravityCliStatus {
+  match report {
+    None => AntigravityCliStatus::Unchecked {
+      version,
+      reason: AntigravityUncheckedReason::NotConnected,
+    },
+    // A quota reached is still a signed-in CLI.
+    Some(HarnessReport::Ready(_) | HarnessReport::LimitUntil(_)) => {
+      AntigravityCliStatus::SignedIn { version }
+    }
+    Some(HarnessReport::NeedsLogin(_)) => AntigravityCliStatus::SignedOut { version },
+    Some(HarnessReport::Unsupported(_)) => AntigravityCliStatus::TooOld { version },
+    // Removed between the two looks.
+    Some(HarnessReport::NotInstalled(_)) => AntigravityCliStatus::NotInstalled,
+    Some(HarnessReport::Unavailable(_)) => AntigravityCliStatus::Unchecked {
+      version,
+      reason: AntigravityUncheckedReason::CheckFailed,
+    },
   }
 }
 
@@ -259,20 +296,86 @@ mod tests {
   use super::*;
 
   #[test]
-  fn checks_antigravity_minimum_version_and_token_path() {
+  fn checks_antigravity_minimum_version() {
     assert!(!version_at_least("1.4.9", ANTIGRAVITY_MIN_VERSION));
     assert!(version_at_least("1.5.0", ANTIGRAVITY_MIN_VERSION));
     assert!(version_at_least("1.6.12", ANTIGRAVITY_MIN_VERSION));
     assert!(version_at_least("2.0.0", ANTIGRAVITY_MIN_VERSION));
+  }
+
+  /// The run probe's reports of the CLI, as the sidecar sends them.
+  fn report(json: serde_json::Value) -> HarnessReport {
+    serde_json::from_value(json).unwrap()
+  }
+
+  #[test]
+  fn the_sign_in_is_the_run_probes_answer() {
+    use AntigravityCliStatus as Status;
+    let version = || "1.5.17".to_owned();
+    let ready = report(serde_json::json!({
+      "state": "ready", "id": "antigravity", "version": "1.5.17",
+      "capabilities": [], "approvalModes": ["ask"], "models": [],
+    }));
+    let limited = report(serde_json::json!({
+      "state": "limit_until", "id": "antigravity", "version": "1.5.17",
+      "resetsAt": "2026-11-26T00:00:00Z",
+    }));
+    let signed_out = report(serde_json::json!({
+      "state": "needs_login", "id": "antigravity", "version": "1.5.17",
+    }));
+    let unsupported = report(serde_json::json!({
+      "state": "unsupported", "id": "antigravity", "version": "1.5.17",
+    }));
+    let missing = report(serde_json::json!({
+      "state": "not_installed", "id": "antigravity",
+    }));
+    let unavailable = report(serde_json::json!({
+      "state": "unavailable", "id": "antigravity", "reason": "probe_failed",
+    }));
+    let cases = [
+      (Some(&ready), Status::SignedIn { version: version() }),
+      (Some(&limited), Status::SignedIn { version: version() }),
+      (Some(&signed_out), Status::SignedOut { version: version() }),
+      (Some(&unsupported), Status::TooOld { version: version() }),
+      (Some(&missing), Status::NotInstalled),
+      (
+        Some(&unavailable),
+        Status::Unchecked {
+          version: version(),
+          reason: AntigravityUncheckedReason::CheckFailed,
+        },
+      ),
+      (
+        None,
+        Status::Unchecked {
+          version: version(),
+          reason: AntigravityUncheckedReason::NotConnected,
+        },
+      ),
+    ];
+    for (probed, expected) in cases {
+      assert_eq!(antigravity_sign_in(version(), probed), expected);
+    }
+  }
+
+  #[test]
+  fn settings_reads_the_status_in_its_wire_shape() {
     assert_eq!(
-      antigravity_cli_token_path(None, Some(Path::new("/home/m"))),
-      Some(PathBuf::from(
-        "/home/m/.gemini/antigravity-cli/antigravity-oauth-token"
-      ))
+      serde_json::to_value(AntigravityCliStatus::Unchecked {
+        version: "1.5.17".to_owned(),
+        reason: AntigravityUncheckedReason::NotConnected,
+      })
+      .unwrap(),
+      serde_json::json!({
+        "state": "unchecked", "version": "1.5.17", "reason": "not_connected",
+      })
     );
     assert_eq!(
-      antigravity_cli_token_path(Some(Path::new("/g")), Some(Path::new("/home/m"))),
-      Some(PathBuf::from("/g/antigravity-cli/antigravity-oauth-token"))
+      serde_json::to_value(AntigravityCliStatus::SignedOut {
+        version: "1.5.17".to_owned(),
+      })
+      .unwrap(),
+      serde_json::json!({ "state": "signed_out", "version": "1.5.17" })
     );
   }
 

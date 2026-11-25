@@ -1,55 +1,113 @@
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { AntigravityLogoIcon } from "@stll/ui/brand-icons";
 import { Button } from "@stll/ui/button";
+import { ListItemMedia } from "@stll/ui/list";
+import { SettingsRow } from "@stll/ui/settings";
 
-import type { AntigravityStatus } from "./antigravity-status";
+import type {
+  AntigravityStatus,
+  AntigravityUncheckedReason,
+} from "./antigravity-status";
+import { SignedInLine } from "./SignedInLine";
 
-/** The member-installed Antigravity CLI: its version and sign-in state. */
+/**
+ * Where "Check again" is: `idle` until it is pressed, `checking` while the
+ * CLI is asked, `checked` once it answered, so an answer that did not change
+ * still says it was looked at.
+ */
+export type AntigravityCheck = "idle" | "checking" | "checked";
+
+/**
+ * The member-installed Antigravity CLI: its version and whether it is signed
+ * in, as the CLI itself told the run probe. It signs in from its own
+ * terminal command; it has no sign-in command stella could start.
+ */
 export const AntigravityCard = ({
   status,
+  check,
   onCheckAgain,
 }: {
   status: AntigravityStatus;
+  check: AntigravityCheck;
   onCheckAgain: () => void;
 }) => {
   const t = useTranslations("agentSubscriptions");
+  const checking = check === "checking";
   return (
-    <div className="space-y-3 px-4 py-3">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-2 text-sm font-medium">
-            <AntigravityLogoIcon className="size-4 shrink-0" />
-            <span>{t("antigravity.title")}</span>
+    <SettingsRow
+      description={
+        // Read out when a check ends, whatever it found.
+        <span role="status">
+          {checking ? (
+            t("antigravity.checking")
+          ) : (
+            <AntigravityStatusLine
+              checked={check === "checked"}
+              status={status}
+            />
+          )}
+        </span>
+      }
+      footer={
+        status.state === "not_installed" ? null : (
+          <p className="text-muted-foreground text-xs">
+            {t("install.ready", {
+              name: t("antigravity.title"),
+              version: status.version,
+            })}
           </p>
-          <p className="text-muted-foreground mt-1 text-sm leading-relaxed text-pretty">
-            {t(statusMessage(status))}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Button onClick={onCheckAgain} variant="outline">
-            {t("antigravity.checkAgain")}
-          </Button>
-        </div>
-      </div>
-      {status.state === "not_installed" ? null : (
-        <p className="text-muted-foreground text-xs">
-          {t("install.ready", {
-            name: t("antigravity.title"),
-            version: status.version,
-          })}
-        </p>
-      )}
-    </div>
+        )
+      }
+      media={
+        <ListItemMedia>
+          <AntigravityLogoIcon />
+        </ListItemMedia>
+      }
+      title={t("antigravity.title")}
+    >
+      <Button loading={checking} onClick={onCheckAgain} variant="outline">
+        {t("antigravity.checkAgain")}
+      </Button>
+    </SettingsRow>
   );
 };
 
-const STATE_MESSAGES = {
-  not_installed: "antigravity.notInstalled",
-  too_old: "antigravity.tooOld",
-  signed_out: "antigravity.signedOut",
-  signed_in: "antigravity.signedIn",
-} as const satisfies Record<AntigravityStatus["state"], string>;
+/** One line: signed in, or why not and what to do. */
+const AntigravityStatusLine = ({
+  status,
+  checked,
+}: {
+  status: AntigravityStatus;
+  /** A check the member asked for just ended. */
+  checked: boolean;
+}) => {
+  const t = useTranslations("agentSubscriptions");
+  switch (status.state) {
+    case "signed_in":
+      // The CLI does not tell stella its account.
+      return <SignedInLine email={null} />;
+    case "signed_out":
+      return t(
+        checked ? "antigravity.stillSignedOut" : "antigravity.signedOut",
+      );
+    case "unchecked":
+      return t(UNCHECKED_MESSAGES[status.reason]);
+    case "not_installed":
+      return t("antigravity.notInstalled");
+    case "too_old":
+      return t("antigravity.tooOld");
+    default:
+      status satisfies never;
+      return panic("Unknown Antigravity state");
+  }
+};
 
-const statusMessage = (status: AntigravityStatus) =>
-  STATE_MESSAGES[status.state];
+const UNCHECKED_MESSAGES = {
+  not_connected: "antigravity.notConnected",
+  check_failed: "antigravity.checkFailed",
+} as const satisfies Record<
+  AntigravityUncheckedReason,
+  `antigravity.${string}`
+>;

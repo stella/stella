@@ -320,9 +320,12 @@
   "agentSubscriptions": {
     "antigravity": {
       "checkAgain": "Patikrinti dar kartą",
+      "checkFailed": "Nepavyko patikrinti prisijungimo. Po akimirkos patikrinkite dar kartą.",
+      "checking": "Tikrinamas prisijungimas…",
+      "notConnected": "Prisijungimas bus patikrintas, kai šis kompiuteris prisijungs prie „stella“.",
       "notInstalled": "Įdiekite „Antigravity“ 1.5 ar naujesnę versiją ir prisijunkite per ją.",
-      "signedIn": "Prisijungta prie „Antigravity“",
-      "signedOut": "Prisijunkite per „Antigravity“ CLI, kad galėtumėte naudoti „stella“.",
+      "signedOut": "Neprisijungta. Paleiskite agy terminale ir prisijunkite ten.",
+      "stillSignedOut": "Vis dar neprisijungta. Paleiskite agy terminale, prisijunkite ten ir patikrinkite dar kartą.",
       "title": "Antigravity",
       "tooOld": "Atnaujinkite „Antigravity“ iki 1.5 ar naujesnės versijos ir prisijunkite per ją."
     },
@@ -338,7 +341,6 @@
     "claudeCode": {
       "apiKey": "Claude Code prisijungęs API raktu, kurio stella nenaudoja. Atsijunkite ir prisijunkite su savo Claude prenumerata.",
       "checkAgain": "Tikrinti dar kartą",
-      "description": "Naudokite savo Claude prenumeratą vietiniams agentams programoje stella. Naudojimas skaičiuojamas pagal jūsų Claude prenumeratą, atskirai nuo programos stella prenumeratos.",
       "failure": {
         "notCompleted": "Prisijungimas nebuvo baigtas. Bandykite dar kartą.",
         "timedOut": "Prisijungimas užtruko per ilgai. Bandykite dar kartą.",
@@ -346,19 +348,10 @@
       },
       "notInstalled": "Claude Code šiame kompiuteryje dar neįdiegtas.",
       "openSignInPage": "Atidaryti prisijungimo puslapį",
-      "signIn": "Prisijungti su Claude",
-      "signOut": "Atsijungti",
-      "signedIn": "Prisijungta prie Claude",
-      "signedInAs": "Prisijungta prie Claude · {email}",
       "title": "Claude Code",
       "unknown": "Nepavyko patikrinti prisijungimo prie Claude Code. Po akimirkos patikrinkite dar kartą."
     },
-    "connected": "ChatGPT prijungtas",
-    "connectedAs": "ChatGPT prijungtas · {email}",
     "continueAs": "Tęsti kaip {email}",
-    "continueWithChatGpt": "Tęsti su ChatGPT",
-    "description": "Naudokite savo ChatGPT prenumeratą DI užklausoms programoje stella. Naudojimas skaičiuojamas pagal jūsų ChatGPT prenumeratą, atskirai nuo programos stella prenumeratos.",
-    "disconnect": "Atjungti",
     "enterCallbackAddress": "Įklijuokite visą adresą iš naršyklės prisijungimo kortelės.",
     "failure": {
       "browserUnavailable": "Nepavyko atidaryti naršyklės. Bandykite dar kartą.",
@@ -386,12 +379,13 @@
       },
       "install": "Įdiegti",
       "notInstalled": "{name} šiame kompiuteryje dar neįdiegtas.",
-      "ready": "{name} {version} įdiegtas.",
+      "ready": "Įdiegta: {name} {version}",
       "retry": "Bandyti dar kartą",
       "verifying": "Tikrinama {name} {version}"
     },
     "manageUsage": "Tvarkyti naudojimą",
     "needsReconnect": "Jūsų ChatGPT ryšys nebegalioja. Prisijunkite iš naujo, kad galėtumėte toliau naudoti planą.",
+    "notSignedIn": "Neprisijungta",
     "notice": {
       "actionFailed": "Nepavyko. Bandykite dar kartą.",
       "pasteRejected": "Šis adresas nepriklauso dabartiniam prisijungimui. Nukopijuokite visą adresą iš atsidariusio naršyklės skirtuko.",
@@ -399,6 +393,11 @@
     },
     "pasteDescription": "Jei prisijungus naršyklė parodo klaidos puslapį, nukopijuokite jo adresą ir įklijuokite čia.",
     "pasteSubmit": "Baigti prisijungimą",
+    "sectionDescription": "Naudokite savo DI prenumeratas vietiniams „stella“ agentams. Naudojimas įskaičiuojamas į atitinkamą prenumeratą, atskirai nuo „stella“ prenumeratos.",
+    "signIn": "Prisijungti",
+    "signOut": "Atsijungti",
+    "signedIn": "Prisijungta",
+    "signedInAs": "Prisijungta kaip {email}",
     "signingIn": "Baikite prisijungti naršyklėje.",
     "title": "DI prenumeratos",
     "useDifferentAccount": "Naudoti kitą paskyrą"

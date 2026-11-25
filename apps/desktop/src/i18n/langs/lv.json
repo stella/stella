@@ -320,9 +320,12 @@
   "agentSubscriptions": {
     "antigravity": {
       "checkAgain": "Pārbaudīt vēlreiz",
+      "checkFailed": "Neizdevās pārbaudīt pierakstīšanos. Pēc brīža pārbaudiet vēlreiz.",
+      "checking": "Pārbauda pierakstīšanos…",
+      "notConnected": "Pierakstīšanās tiks pārbaudīta, kad šis dators pieslēgsies stella.",
       "notInstalled": "Instalējiet Antigravity 1.5 vai jaunāku versiju un pierakstieties tajā.",
-      "signedIn": "Pierakstījies Antigravity",
-      "signedOut": "Pierakstieties Antigravity CLI, lai to izmantotu stella.",
+      "signedOut": "Nav pierakstījies. Palaidiet agy terminālī un pierakstieties tur.",
+      "stillSignedOut": "Joprojām nav pierakstījies. Palaidiet agy terminālī, pierakstieties tur un pārbaudiet vēlreiz.",
       "title": "Antigravity",
       "tooOld": "Atjauniniet Antigravity uz 1.5 vai jaunāku versiju un pierakstieties tajā."
     },
@@ -338,7 +341,6 @@
     "claudeCode": {
       "apiKey": "Claude Code ir pierakstīts ar API atslēgu, ko stella neizmanto. Izrakstieties un pēc tam pierakstieties ar savu Claude abonementu.",
       "checkAgain": "Pārbaudīt vēlreiz",
-      "description": "Izmantojiet savu Claude abonementu vietējiem aģentiem lietotnē stella. Lietojums tiek uzskaitīts jūsu Claude abonementā, atsevišķi no lietotnes stella abonementa.",
       "failure": {
         "notCompleted": "Pierakstīšanās netika pabeigta. Mēģiniet vēlreiz.",
         "timedOut": "Pierakstīšanās ilga pārāk ilgi. Mēģiniet vēlreiz.",
@@ -346,19 +348,10 @@
       },
       "notInstalled": "Claude Code šajā datorā vēl nav instalēts.",
       "openSignInPage": "Atvērt pierakstīšanās lapu",
-      "signIn": "Pierakstīties ar Claude",
-      "signOut": "Izrakstīties",
-      "signedIn": "Pierakstījies Claude",
-      "signedInAs": "Pierakstījies Claude · {email}",
       "title": "Claude Code",
       "unknown": "Neizdevās pārbaudīt pierakstīšanos Claude Code. Pēc brīža pārbaudiet vēlreiz."
     },
-    "connected": "ChatGPT savienots",
-    "connectedAs": "ChatGPT savienots · {email}",
     "continueAs": "Turpināt kā {email}",
-    "continueWithChatGpt": "Turpināt ar ChatGPT",
-    "description": "Izmantojiet savu ChatGPT abonementu AI pieprasījumiem lietotnē stella. Lietojums tiek uzskaitīts jūsu ChatGPT abonementā, atsevišķi no lietotnes stella abonementa.",
-    "disconnect": "Atvienot",
     "enterCallbackAddress": "Ielīmējiet pilnu adresi no pārlūka pierakstīšanās cilnes.",
     "failure": {
       "browserUnavailable": "Pārlūkprogrammu neizdevās atvērt. Mēģiniet vēlreiz.",
@@ -386,12 +379,13 @@
       },
       "install": "Instalēt",
       "notInstalled": "{name} šajā datorā vēl nav instalēts.",
-      "ready": "{name} {version} ir instalēts.",
+      "ready": "Instalēts: {name} {version}",
       "retry": "Mēģināt vēlreiz",
       "verifying": "Pārbauda {name} {version}"
     },
     "manageUsage": "Pārvaldīt lietojumu",
     "needsReconnect": "Jūsu ChatGPT savienojums ir beidzies. Pierakstieties vēlreiz, lai turpinātu izmantot savu plānu.",
+    "notSignedIn": "Nav pierakstījies",
     "notice": {
       "actionFailed": "Neizdevās. Mēģiniet vēlreiz.",
       "pasteRejected": "Šī adrese nav no pašreizējās pierakstīšanās. Nokopējiet pilnu adresi no atvērtās pārlūkprogrammas cilnes.",
@@ -399,6 +393,11 @@
     },
     "pasteDescription": "Ja pēc pierakstīšanās pārlūkprogramma parāda kļūdas lapu, nokopējiet tās adresi un ielīmējiet to šeit.",
     "pasteSubmit": "Pabeigt pierakstīšanos",
+    "sectionDescription": "Izmantojiet savus AI plānus stella lokālajiem aģentiem. Lietojums tiek ieskaitīts attiecīgajā plānā, atsevišķi no stella abonementa.",
+    "signIn": "Pierakstīties",
+    "signOut": "Izrakstīties",
+    "signedIn": "Pierakstījies",
+    "signedInAs": "Pierakstījies kā {email}",
     "signingIn": "Pabeidziet pierakstīšanos pārlūkprogrammā.",
     "title": "AI abonementi",
     "useDifferentAccount": "Izmantot citu kontu"

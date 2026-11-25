@@ -69,8 +69,12 @@ pub fn harness_get_status(
   )
 }
 
+/// The member's Antigravity CLI: installed or not, and whether it is signed
+/// in, which only the CLI can say. `refresh` reads its version again and
+/// asks it again now; it answers once the CLI has.
 #[tauri::command]
 pub async fn antigravity_get_status(
+  app: AppHandle,
   gates: State<'_, FeatureGates>,
   refresh: Option<bool>,
 ) -> Result<AntigravityCliStatus, HarnessCommandError> {
@@ -78,11 +82,17 @@ pub async fn antigravity_get_status(
     return Err(HarnessCommandError::FeatureDisabled);
   }
   let refresh = refresh.unwrap_or(false);
-  tauri::async_runtime::spawn_blocking(move || {
-    member_agents::antigravity_status(refresh)
+  let installed = tauri::async_runtime::spawn_blocking(move || {
+    member_agents::antigravity_installed(refresh)
   })
   .await
-  .map_err(|_error| HarnessCommandError::Unavailable)
+  .map_err(|_error| HarnessCommandError::Unavailable)?;
+  Ok(match installed {
+    Ok(version) => {
+      crate::desktop_runner::antigravity_status(&app, version, refresh).await
+    }
+    Err(status) => status,
+  })
 }
 
 #[tauri::command]

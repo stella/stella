@@ -320,9 +320,12 @@
   "agentSubscriptions": {
     "antigravity": {
       "checkAgain": "Verificar novamente",
+      "checkFailed": "Não foi possível verificar o login. Verifique de novo em instantes.",
+      "checking": "Verificando o login…",
+      "notConnected": "O login será verificado assim que este computador se conectar à stella.",
       "notInstalled": "Instale o Antigravity 1.5 ou posterior e entre por ele.",
-      "signedIn": "Conectado ao Antigravity",
-      "signedOut": "Entre pela CLI do Antigravity para usá-lo na stella.",
+      "signedOut": "Não conectado. Execute agy em um terminal e entre por lá.",
+      "stillSignedOut": "Ainda não conectado. Execute agy em um terminal, entre por lá e verifique novamente.",
       "title": "Antigravity",
       "tooOld": "Atualize o Antigravity para 1.5 ou posterior e entre por ele."
     },
@@ -338,7 +341,6 @@
     "claudeCode": {
       "apiKey": "O Claude Code está conectado com uma chave de API, que o stella não usa. Saia e depois entre com sua assinatura do Claude.",
       "checkAgain": "Verificar de novo",
-      "description": "Use sua assinatura do Claude para os agentes locais no stella. O uso é descontado do seu plano do Claude, separado da sua assinatura do stella.",
       "failure": {
         "notCompleted": "O login não foi concluído. Tente de novo.",
         "timedOut": "O login demorou demais. Tente de novo.",
@@ -346,19 +348,10 @@
       },
       "notInstalled": "O Claude Code ainda não está instalado neste computador.",
       "openSignInPage": "Abrir a página de login",
-      "signIn": "Entrar com o Claude",
-      "signOut": "Sair",
-      "signedIn": "Conectado ao Claude",
-      "signedInAs": "Conectado ao Claude · {email}",
       "title": "Claude Code",
       "unknown": "Não foi possível verificar o login no Claude Code. Verifique de novo em instantes."
     },
-    "connected": "ChatGPT conectado",
-    "connectedAs": "ChatGPT conectado · {email}",
     "continueAs": "Continuar como {email}",
-    "continueWithChatGpt": "Continuar com o ChatGPT",
-    "description": "Use seu plano do ChatGPT para solicitações de IA no stella. O uso é descontado do seu plano do ChatGPT, separado da sua assinatura do stella.",
-    "disconnect": "Desconectar",
     "enterCallbackAddress": "Cole o endereço completo da aba de login do navegador.",
     "failure": {
       "browserUnavailable": "Não foi possível abrir o navegador. Tente de novo.",
@@ -386,12 +379,13 @@
       },
       "install": "Instalar",
       "notInstalled": "O {name} ainda não está instalado neste computador.",
-      "ready": "O {name} {version} está instalado.",
+      "ready": "{name} {version} instalado",
       "retry": "Tentar de novo",
       "verifying": "Verificando o {name} {version}"
     },
     "manageUsage": "Gerenciar uso",
     "needsReconnect": "Sua conexão com o ChatGPT expirou. Faça login de novo para continuar usando seu plano.",
+    "notSignedIn": "Não conectado",
     "notice": {
       "actionFailed": "Não funcionou. Tente de novo.",
       "pasteRejected": "Este endereço não é do login atual. Copie o endereço completo da guia do navegador que foi aberta.",
@@ -399,6 +393,11 @@
     },
     "pasteDescription": "Se o navegador mostrar uma página de erro depois do login, copie o endereço dela e cole aqui.",
     "pasteSubmit": "Concluir login",
+    "sectionDescription": "Use seus próprios planos de IA nos agentes locais da stella. O uso conta para cada plano, separado da sua assinatura da stella.",
+    "signIn": "Entrar",
+    "signOut": "Sair",
+    "signedIn": "Conectado",
+    "signedInAs": "Conectado como {email}",
     "signingIn": "Conclua o login no navegador.",
     "title": "Assinaturas de IA",
     "useDifferentAccount": "Usar outra conta"

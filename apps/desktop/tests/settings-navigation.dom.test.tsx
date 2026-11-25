@@ -269,7 +269,7 @@ test("a link to a coding agent opens AI and agents and brings its card into view
   const scrolled: string[] = [];
   const original = HTMLElement.prototype.scrollIntoView;
   HTMLElement.prototype.scrollIntoView = function scrollIntoView() {
-    scrolled.push(this.dataset["agentSettings"] ?? "");
+    scrolled.push(this.dataset["settingsTarget"] ?? "");
   };
   try {
     const { findByText, nav } = await renderApp({});
@@ -288,11 +288,11 @@ test("a link to a coding agent opens AI and agents and brings its card into view
           "Claude Code",
         ),
       )
-    ).closest<HTMLElement>("[data-agent-settings]");
+    ).closest<HTMLElement>("[data-settings-target]");
     await waitFor(() => {
       expect(document.activeElement).toBe(card);
     });
-    expect(scrolled.filter(Boolean)).toEqual(["claude-code"]);
+    expect(scrolled.filter(Boolean)).toEqual(["agents-claude-code"]);
   } finally {
     HTMLElement.prototype.scrollIntoView = original;
   }
@@ -311,7 +311,7 @@ test("a focus sent with any other page is ignored", async () => {
   await act(async () => {
     await drainReactScheduler();
   });
-  expect(document.activeElement?.closest("[data-agent-settings]")).toBeNull();
+  expect(document.activeElement?.closest("[data-settings-target]")).toBeNull();
 });
 
 test("an unknown page id keeps the open page", async () => {
@@ -346,5 +346,5 @@ test("leaving AI and agents drops a link's focus before its card shows", async (
   expect(currentEntries(nav)).toEqual([
     { current: "page", name: pages.agents },
   ]);
-  expect(document.activeElement?.closest("[data-agent-settings]")).toBeNull();
+  expect(document.activeElement?.closest("[data-settings-target]")).toBeNull();
 });

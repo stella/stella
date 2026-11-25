@@ -320,9 +320,12 @@
   "agentSubscriptions": {
     "antigravity": {
       "checkAgain": "Skontrolovať znova",
+      "checkFailed": "Prihlásenie sa nepodarilo overiť. O chvíľu to skontrolujte znova.",
+      "checking": "Overuje sa prihlásenie…",
+      "notConnected": "Prihlásenie sa overí, keď sa tento počítač pripojí k aplikácii stella.",
       "notInstalled": "Nainštalujte Antigravity 1.5 alebo novší a prihláste sa v ňom.",
-      "signedIn": "Prihlásené do Antigravity",
-      "signedOut": "Prihláste sa v Antigravity CLI, aby ste ho mohli používať v aplikácii stella.",
+      "signedOut": "Neprihlásené. Spustite agy v termináli a prihláste sa v ňom.",
+      "stillSignedOut": "Stále neprihlásené. Spustite agy v termináli, prihláste sa v ňom a potom to skontrolujte znova.",
       "title": "Antigravity",
       "tooOld": "Aktualizujte Antigravity na 1.5 alebo novší a prihláste sa v ňom."
     },
@@ -338,7 +341,6 @@
     "claudeCode": {
       "apiKey": "Claude Code je prihlásený kľúčom API, ktorý stella nepoužíva. Odhláste sa a potom sa prihláste so svojím predplatným Claude.",
       "checkAgain": "Overiť znova",
-      "description": "Používajte svoje predplatné Claude pre lokálnych agentov v aplikácii stella. Využitie sa započítava do plánu Claude, oddelene od predplatného aplikácie stella.",
       "failure": {
         "notCompleted": "Prihlásenie sa nedokončilo. Skúste to znova.",
         "timedOut": "Prihlásenie trvalo príliš dlho. Skúste to znova.",
@@ -346,19 +348,10 @@
       },
       "notInstalled": "Claude Code ešte nie je na tomto počítači nainštalovaný.",
       "openSignInPage": "Otvoriť stránku prihlásenia",
-      "signIn": "Prihlásiť sa cez Claude",
-      "signOut": "Odhlásiť sa",
-      "signedIn": "Prihlásené do Claude",
-      "signedInAs": "Prihlásené do Claude · {email}",
       "title": "Claude Code",
       "unknown": "Prihlásenie do Claude Code sa nepodarilo overiť. O chvíľu to overte znova."
     },
-    "connected": "ChatGPT pripojený",
-    "connectedAs": "ChatGPT pripojený · {email}",
     "continueAs": "Pokračovať ako {email}",
-    "continueWithChatGpt": "Pokračovať s ChatGPT",
-    "description": "Používajte svoj plán ChatGPT na požiadavky na AI v aplikácii stella. Využitie sa započítava do plánu ChatGPT, oddelene od predplatného aplikácie stella.",
-    "disconnect": "Odpojiť",
     "enterCallbackAddress": "Vložte celú adresu z karty prehliadača, v ktorej ste sa prihlásili.",
     "failure": {
       "browserUnavailable": "Prehliadač sa nepodarilo otvoriť. Skúste to znova.",
@@ -386,12 +379,13 @@
       },
       "install": "Nainštalovať",
       "notInstalled": "{name} ešte nie je na tomto počítači nainštalovaný.",
-      "ready": "{name} {version} je nainštalovaný.",
+      "ready": "Nainštalované: {name} {version}",
       "retry": "Skúsiť znova",
       "verifying": "Kontrola {name} {version}"
     },
     "manageUsage": "Spravovať využitie",
     "needsReconnect": "Pripojenie k ChatGPT vypršalo. Prihláste sa znova, aby ste mohli plán ďalej používať.",
+    "notSignedIn": "Neprihlásené",
     "notice": {
       "actionFailed": "Nepodarilo sa to. Skúste to znova.",
       "pasteRejected": "Táto adresa nepatrí k aktuálnemu prihláseniu. Skopírujte celú adresu z karty prehliadača, ktorá sa otvorila.",
@@ -399,6 +393,11 @@
     },
     "pasteDescription": "Ak prehliadač po prihlásení zobrazí chybovú stránku, skopírujte jej adresu a vložte ju sem.",
     "pasteSubmit": "Dokončiť prihlásenie",
+    "sectionDescription": "Lokálni agenti v aplikácii stella môžu využívať vaše vlastné plány AI. Využitie sa započítava do daného plánu, oddelene od predplatného aplikácie stella.",
+    "signIn": "Prihlásiť sa",
+    "signOut": "Odhlásiť sa",
+    "signedIn": "Prihlásené",
+    "signedInAs": "Prihlásené ako {email}",
     "signingIn": "Dokončite prihlásenie v prehliadači.",
     "title": "Predplatné AI",
     "useDifferentAccount": "Použiť iný účet"

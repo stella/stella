@@ -320,9 +320,12 @@
   "agentSubscriptions": {
     "antigravity": {
       "checkAgain": "Check again",
+      "checkFailed": "Couldn't check the sign-in. Check again in a moment.",
+      "checking": "Checking the sign-in…",
+      "notConnected": "The sign-in is checked once this computer connects to stella.",
       "notInstalled": "Install Antigravity 1.5 or later, then sign in from it.",
-      "signedIn": "Signed in to Antigravity",
-      "signedOut": "Sign in from the Antigravity CLI to use it in stella.",
+      "signedOut": "Not signed in. Run agy in a terminal and sign in there.",
+      "stillSignedOut": "Still not signed in. Run agy in a terminal, sign in there, then check again.",
       "title": "Antigravity",
       "tooOld": "Update Antigravity to 1.5 or later, then sign in from it."
     },
@@ -338,7 +341,6 @@
     "claudeCode": {
       "apiKey": "Claude Code is signed in with an API key, which stella does not use. Sign out, then sign in with your Claude subscription.",
       "checkAgain": "Check again",
-      "description": "Use your Claude subscription for local agents in stella. Usage counts toward your Claude plan, separately from your stella subscription.",
       "failure": {
         "notCompleted": "The sign-in did not finish. Try again.",
         "timedOut": "The sign-in took too long. Try again.",
@@ -346,19 +348,10 @@
       },
       "notInstalled": "Claude Code is not installed on this computer yet.",
       "openSignInPage": "Open sign-in page",
-      "signIn": "Sign in with Claude",
-      "signOut": "Sign out",
-      "signedIn": "Signed in to Claude",
-      "signedInAs": "Signed in to Claude · {email}",
       "title": "Claude Code",
       "unknown": "Couldn't check the Claude Code sign-in. Check again in a moment."
     },
-    "connected": "ChatGPT connected",
-    "connectedAs": "ChatGPT connected · {email}",
     "continueAs": "Continue as {email}",
-    "continueWithChatGpt": "Continue with ChatGPT",
-    "description": "Use your ChatGPT plan for AI requests in stella. Usage counts toward your ChatGPT plan, separately from your stella subscription.",
-    "disconnect": "Disconnect",
     "enterCallbackAddress": "Paste the full address from the sign-in browser tab.",
     "failure": {
       "browserUnavailable": "Your browser could not be opened. Try again.",
@@ -386,12 +379,13 @@
       },
       "install": "Install",
       "notInstalled": "{name} is not installed on this computer yet.",
-      "ready": "{name} {version} is installed.",
+      "ready": "{name} {version} installed",
       "retry": "Try again",
       "verifying": "Checking {name} {version}"
     },
     "manageUsage": "Manage usage",
     "needsReconnect": "Your ChatGPT connection has expired. Sign in again to keep using your plan.",
+    "notSignedIn": "Not signed in",
     "notice": {
       "actionFailed": "That did not work. Try again.",
       "pasteRejected": "This address is not from the current sign-in. Copy the full address from the browser tab that opened.",
@@ -399,6 +393,11 @@
     },
     "pasteDescription": "If the browser shows an error page after you sign in, copy its address and paste it here.",
     "pasteSubmit": "Finish sign-in",
+    "sectionDescription": "Use your own AI plans for local agents in stella. Usage counts toward each plan, separately from your stella subscription.",
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "signedIn": "Signed in",
+    "signedInAs": "Signed in as {email}",
     "signingIn": "Finish signing in in your browser.",
     "title": "AI subscriptions",
     "useDifferentAccount": "Use a different account"
