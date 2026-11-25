@@ -25,6 +25,7 @@ import {
   STORM_WATCH_GLOBAL,
   type StormWatchRead,
 } from "../helpers/storm-watch-contract";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
 // What the watch sees does not depend on the theme or reading direction.
 const MEASURED_PROJECT = "light-ltr";
@@ -38,6 +39,25 @@ const read = async (page: Page): Promise<StormWatchRead> => {
     throw new TypeError("The page has no storm watch");
   }
   return result;
+};
+
+// The click refills the bucket, so a loop drains it only after a few seconds,
+// longer on a slow machine where frames come slower: read until it has.
+const readUntilReported = async (page: Page): Promise<StormWatchRead> => {
+  let watched: StormWatchRead | undefined;
+  await expect
+    .poll(
+      async () => {
+        watched = await read(page);
+        return watched.report.reported.length;
+      },
+      { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
+    )
+    .toBeGreaterThan(0);
+  if (watched === undefined) {
+    throw new TypeError("The storm watch was never read");
+  }
+  return watched;
 };
 
 test.beforeEach(async ({ context }, testInfo) => {
@@ -84,7 +104,7 @@ test("a loop at frame rate that nothing feeds is a storm, and the report names i
     .getByRole("button")
     .click();
 
-  const watched = await read(page);
+  const watched = await readUntilReported(page);
   const [unstimulated] = watched.report.reported;
   expect(unstimulated, "an unstimulated violation").toBeDefined();
   expect(unstimulated?.components.map(({ name }) => name)).toContain(
@@ -124,8 +144,8 @@ test("a storm on a page the test opened and closed still counts", async ({
     .locator('[data-playground-section="storm-watch:frame-loop"]')
     .getByRole("button")
     .click();
-  // Reading waits out the loop, so the page has reported before it closes.
-  expect((await read(beside)).report.reported.length).toBeGreaterThan(0);
+  // The page has reported before it closes.
+  await readUntilReported(beside);
   await beside.close();
 
   const checks = await stormWatchChecks(context, page);
