@@ -1447,10 +1447,7 @@
     "packages/business-registries/src/entity-checks/run.ts:settle/answer:query:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata."
   },
   "migratedMutationTargets": {
-    "transitionInvoice": [
-      "invoicesKeys.all",
-      "timeEntriesKeys.all"
-    ],
+    "transitionInvoice": ["invoicesKeys.all", "timeEntriesKeys.all"],
     "renameEntity": [
       "entitiesKeys.all",
       "entityViewKeys.all",
@@ -1468,26 +1465,11 @@
       "knowledgeKeys.mcp.all",
       "mcpQueryRoot"
     ],
-    "addMcpServer": [
-      "catalogueKeys.all",
-      "knowledgeKeys.mcp.all"
-    ],
-    "connectMcpServer": [
-      "catalogueKeys.all",
-      "knowledgeKeys.mcp.all"
-    ],
-    "saveMcpToken": [
-      "catalogueKeys.all",
-      "knowledgeKeys.mcp.all"
-    ],
-    "recordClaimReview": [
-      "avtKeys.reviewHistoryOfRun",
-      "avtKeys.run"
-    ],
-    "acceptRoutineClaims": [
-      "avtKeys.reviewHistoryOfRun",
-      "avtKeys.run"
-    ],
+    "addMcpServer": ["catalogueKeys.all", "knowledgeKeys.mcp.all"],
+    "connectMcpServer": ["catalogueKeys.all", "knowledgeKeys.mcp.all"],
+    "saveMcpToken": ["catalogueKeys.all", "knowledgeKeys.mcp.all"],
+    "recordClaimReview": ["avtKeys.reviewHistoryOfRun", "avtKeys.run"],
+    "acceptRoutineClaims": ["avtKeys.reviewHistoryOfRun", "avtKeys.run"],
     "createTask": [
       "entitiesKeys.all",
       "legalListsQueryRoot",
@@ -1495,8 +1477,6 @@
       "taskKeys.all",
       "workspacesKeys.overview"
     ],
-    "createListItemSource": [
-      "legalListKeys.items"
-    ]
+    "createListItemSource": ["legalListKeys.items"]
   }
 }
