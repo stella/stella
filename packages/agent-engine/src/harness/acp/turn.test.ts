@@ -542,7 +542,7 @@ describe("AcpTurnSession permission requests", () => {
       kind: "respond",
       body: { id: 7, result: { outcome: { outcome: "cancelled" } } },
     });
-    const late = turn.respond({
+    const late = await turn.respond({
       type: "approval",
       requestId: requestId ?? "",
       decision: "approve",
