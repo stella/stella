@@ -86,7 +86,7 @@
     "calendarResponseNotAnswered": "Na pozvánku ste neodpovedali.",
     "calendarResponseOrganizer": "Ste organizátor.",
     "calendarResponseTentative": "Pozvánku ste predbežne prijali.",
-    "calendarTruncated": "Zobrazuje sa len {count, plural, one {prvá # udalosť} few {prvé # udalosti} many {prvých # udalostí} other {prvých # udalostí}} tohto dňa.",
+    "calendarTruncated": "Zobrazuje sa len {count, plural, one {prvá # udalosť} few {prvé # udalosti} other {prvých # udalostí}} tohto dňa.",
     "calendarTurnedOff": "Udalosti kalendára nie sú dostupné: vaša organizácia v aplikácii stella nezapla čítanie kalendára.",
     "callIn": "Hovor v aplikácii {app}",
     "cancel": "Zrušiť",

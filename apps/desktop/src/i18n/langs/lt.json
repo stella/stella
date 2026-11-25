@@ -86,7 +86,7 @@
     "calendarResponseNotAnswered": "Į kvietimą neatsakėte.",
     "calendarResponseOrganizer": "Esate organizatorius.",
     "calendarResponseTentative": "Kvietimą priėmėte preliminariai.",
-    "calendarTruncated": "Rodoma ne daugiau kaip {count, plural, one {# šios dienos įvykis} few {# šios dienos įvykiai} many {# šios dienos įvykio} other {# šios dienos įvykių}}.",
+    "calendarTruncated": "Rodoma ne daugiau kaip {count, plural, one {# šios dienos įvykis} few {# šios dienos įvykiai} other {# šios dienos įvykių}}.",
     "calendarTurnedOff": "Kalendoriaus įvykiai nepasiekiami: jūsų organizacija nėra įjungusi kalendoriaus skaitymo programoje stella.",
     "callIn": "Skambutis: {app}",
     "cancel": "Atšaukti",
