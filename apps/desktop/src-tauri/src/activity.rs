@@ -2,7 +2,8 @@
 //!
 //! Every five seconds, while the user has opted in and the feature is
 //! enabled, the sampler reads the foreground app identifier/name and idle
-//! time. Window titles and documents require a separate, default-off opt-in.
+//! time. Window titles and documents require a separate, default-off opt-in,
+//! and managed policy can keep them off whatever the user chose.
 //! Consecutive samples of one app merge into a segment; five idle minutes end
 //! it, and idle time is never recorded. Excluded apps are recorded as nothing.
 //! While a known call app holds the microphone (`activity_calls`), the time
@@ -46,8 +47,8 @@ const CHANGED_EVENT: &str = "activity-timeline-changed";
 const SAMPLE_INTERVAL: Duration = Duration::from_secs(5);
 /// A sample later than this after the previous one means the machine slept
 /// or the sampler stalled; the open segment ends at the last sample.
-const MAX_SAMPLE_GAP: Duration = Duration::from_secs(15);
-const IDLE_THRESHOLD: Duration = Duration::from_secs(5 * 60);
+pub(crate) const MAX_SAMPLE_GAP: Duration = Duration::from_secs(15);
+pub(crate) const IDLE_THRESHOLD: Duration = Duration::from_secs(5 * 60);
 const INPUT_TIMESTAMP_TOLERANCE: chrono::Duration = chrono::Duration::milliseconds(10);
 // Allow clock-read jitter, but end the mapping before a wall correction can
 // introduce synthetic activity into the current segment.
@@ -101,16 +102,20 @@ pub enum ActivityRecordingStatus {
   Paused,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// New settings record nothing (recording `Off`) and, once started, app
+/// names only: every field's default.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActivitySettings {
   pub recording_status: ActivityRecordingStatus,
   pub retention: ActivityRetention,
   #[serde(default)]
   pub excluded_apps: Vec<AppExclusion>,
-  /// A new timeline records window titles and documents until the user turns
-  /// them off. Settings saved before details existed carry no consent, so a
-  /// missing field reads as off.
+  /// The user's own choice to record window titles and documents, off until
+  /// they choose it. A saved choice is kept as saved; settings saved before
+  /// details existed carry no consent, so a missing field reads as off. Read
+  /// it through [`ActivitySettings::records_details`], which applies managed
+  /// policy.
   #[serde(default)]
   pub capture_details: bool,
   #[serde(default)]
@@ -124,18 +129,18 @@ pub struct ActivitySettings {
   pub extra: BTreeMap<String, serde_json::Value>,
 }
 
-impl Default for ActivitySettings {
-  fn default() -> Self {
-    Self {
-      recording_status: ActivityRecordingStatus::default(),
-      retention: ActivityRetention::default(),
-      excluded_apps: Vec::new(),
-      capture_details: true,
-      app_name_only_apps: Vec::new(),
-      browser_title_apps: Vec::new(),
-      ignore_calls: false,
-      extra: BTreeMap::new(),
-    }
+impl ActivitySettings {
+  /// Whether new activity records window titles and documents: the user's
+  /// choice, which managed policy can only turn off.
+  pub fn records_details(&self) -> bool {
+    self.records_details_under(crate::managed_policy::current())
+  }
+
+  fn records_details_under(
+    &self,
+    policy: &crate::managed_policy::ManagedPolicy,
+  ) -> bool {
+    self.capture_details && !policy.activity_details_disabled
   }
 }
 
@@ -235,6 +240,8 @@ define_activity_details_access! {
     allow(dead_code, reason = "only platforms without window details report it")
   )]
   Unavailable,
+  /// Managed policy keeps details off, whatever the user chose.
+  Managed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -447,6 +454,32 @@ pub struct ActivityDaySnapshot {
   drafted_entries: Vec<ActivityDraftedEntry>,
   manual_assignments: Vec<ActivityManualAssignment>,
   pending_batch: Option<ActivityPendingBatch>,
+  /// Stretches of the day the member wanted recorded and Activity could not
+  /// record.
+  outages: ActivityDayOutages,
+  /// Why Activity cannot record now; the history is then read-only.
+  stopped_reason: Option<crate::activity_capture::StopReason>,
+}
+
+/// A day's outages, or that their file could not be read.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum ActivityDayOutages {
+  Read {
+    outages: Vec<crate::activity_capture::CaptureOutage>,
+  },
+  Unreadable,
+}
+
+/// The instants a local day spans, `[start, end)`.
+pub(crate) fn local_day_span(date: NaiveDate) -> (DateTime<Utc>, DateTime<Utc>) {
+  let start = day_start(&Local, date);
+  let end = date
+    .checked_add_days(Days::new(1))
+    .map_or(start + chrono::Duration::days(1), |next| {
+      day_start(&Local, next)
+    });
+  (start, end)
 }
 
 #[derive(Deserialize)]
@@ -462,6 +495,32 @@ static PREVIEW_APPS: std::sync::LazyLock<Vec<PreviewApp>> =
   });
 
 impl ActivityDaySnapshot {
+  /// Adds what the plain capture files say about the day: its outages and,
+  /// while Activity cannot record for `namespace`, why.
+  pub(crate) fn add_capture<R: Runtime>(
+    &mut self,
+    app: &AppHandle<R>,
+    namespace: &str,
+  ) {
+    let date = parse_date(&self.date).ok();
+    self.outages = match date {
+      Some(date) => {
+        let (start, end) = local_day_span(date);
+        match crate::activity_capture::outages_between(namespace, start, end) {
+          Ok(outages) => ActivityDayOutages::Read { outages },
+          Err(_) => {
+            tracing::warn!("activity outages could not be read");
+            ActivityDayOutages::Unreadable
+          }
+        }
+      }
+      None => ActivityDayOutages::Unreadable,
+    };
+    self.stopped_reason = match capture_binding(app) {
+      Some(_) => None,
+      None => crate::activity_capture::stopped().map(|stopped| stopped.reason),
+    };
+  }
   pub(crate) fn resolve_app_visuals(&mut self) {
     self.source_app_visuals = crate::foreground_app_visual::cached_app_visuals(
       self
@@ -547,7 +606,15 @@ pub enum TrayActivity {
   /// The feature is on; the day's projection once the store is loaded.
   Live(Option<TrayActivitySnapshot>),
   /// It cannot record for a member who turned it on.
-  Stopped(crate::activity_capture::ActivityStopped),
+  Stopped(crate::activity_capture::ActivityStopped, StoppedHistory),
+}
+
+/// Whether a stopped Activity's history can be opened, read-only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StoppedHistory {
+  Readable,
+  /// No account is linked to read it for.
+  Unavailable,
 }
 
 impl TrayActivity {
@@ -555,7 +622,7 @@ impl TrayActivity {
   pub fn without_projection(self) -> Self {
     match self {
       Self::Live(_) => Self::Live(None),
-      Self::Stopped(stopped) => Self::Stopped(stopped),
+      Self::Stopped(stopped, history) => Self::Stopped(stopped, history),
     }
   }
 }
@@ -566,7 +633,7 @@ struct DetailCaptureApp<'a> {
 }
 
 fn details_enabled(settings: &ActivitySettings, app: DetailCaptureApp<'_>) -> bool {
-  settings.capture_details
+  settings.records_details()
     && !is_excluded(&settings.app_name_only_apps, app.identifier)
     && (!crate::activity_details::is_browser(app.identifier, app.name)
       || is_excluded(&settings.browser_title_apps, app.identifier))
@@ -574,7 +641,7 @@ fn details_enabled(settings: &ActivitySettings, app: DetailCaptureApp<'_>) -> bo
 
 static MONOTONIC_EPOCH: OnceLock<Instant> = OnceLock::new();
 
-fn monotonic_now() -> Duration {
+pub(crate) fn monotonic_now() -> Duration {
   MONOTONIC_EPOCH.get_or_init(Instant::now).elapsed()
 }
 
@@ -622,6 +689,35 @@ pub fn is_enabled<R: Runtime>(app: &AppHandle<R>) -> bool {
     && app
       .try_state::<FeatureGates>()
       .is_some_and(|gates| gates.is_enabled(DesktopFeature::ActivityTimeline))
+}
+
+/// The account Activity may record for: the server enabled it, or it
+/// records on the account's confirmed grant while the server has not been
+/// reached. Server actions never follow this; they check [`is_enabled`].
+pub fn capture_binding<R: Runtime>(app: &AppHandle<R>) -> Option<(u64, String)> {
+  if !is_supported() {
+    return None;
+  }
+  crate::activity_capture::capture_binding(app)
+}
+
+/// The account whose recorded history the member may read: wherever
+/// Activity may record, and read-only while it is stopped for a member who
+/// turned it on.
+pub fn history_binding<R: Runtime>(app: &AppHandle<R>) -> Option<(u64, String)> {
+  if !is_supported() {
+    return None;
+  }
+  capture_binding(app).or_else(|| crate::activity_capture::stopped_binding(app))
+}
+
+/// Announces a change of what Activity may do; a window whose history is no
+/// longer readable closes.
+pub(crate) fn capture_changed(app: &AppHandle) {
+  if history_binding(app).is_none() {
+    crate::activity_window::close(app);
+  }
+  emit_changed(app);
 }
 
 fn store_root() -> Option<PathBuf> {
@@ -997,7 +1093,7 @@ impl ActivityManager {
   }
 
   pub fn capture_details(&self) -> bool {
-    self.settings.capture_details
+    self.settings.records_details()
   }
 
   pub fn recording_status(&self) -> ActivityRecordingStatus {
@@ -2334,7 +2430,7 @@ impl ActivityManager {
       retention: self.settings.retention,
       excluded_apps: self.settings.excluded_apps.clone(),
       other_account_history_days,
-      capture_details: self.settings.capture_details,
+      capture_details: self.settings.records_details(),
       detect_calls: !self.settings.ignore_calls,
       app_name_only_apps: self.settings.app_name_only_apps.clone(),
       details_access,
@@ -2349,6 +2445,10 @@ impl ActivityManager {
       manual_assignments,
       pending_batch,
       drafted_entries,
+      outages: ActivityDayOutages::Read {
+        outages: Vec::new(),
+      },
+      stopped_reason: None,
     }
   }
 
@@ -2377,7 +2477,7 @@ impl ActivityManager {
       retention: self.settings.retention,
       excluded_apps: self.settings.excluded_apps.clone(),
       other_account_history_days,
-      capture_details: self.settings.capture_details,
+      capture_details: self.settings.records_details(),
       detect_calls: !self.settings.ignore_calls,
       app_name_only_apps: self.settings.app_name_only_apps.clone(),
       details_access,
@@ -2395,7 +2495,7 @@ impl ActivityManager {
   ) -> ActivitySetupSnapshot {
     ActivitySetupSnapshot {
       recording_status: self.settings.recording_status,
-      capture_details: self.settings.capture_details,
+      capture_details: self.settings.records_details(),
       detect_calls: !self.settings.ignore_calls,
       details_access,
     }
@@ -2657,28 +2757,28 @@ pub(crate) fn refresh_tray(app: &AppHandle) {
 
 /// The tray's Activity entry; `None` when there is nothing to show.
 pub fn tray_activity(app: &AppHandle) -> Option<TrayActivity> {
-  if is_enabled(app) {
+  if capture_binding(app).is_some() {
     return Some(TrayActivity::Live(tray_snapshot(app)));
   }
-  crate::activity_capture::stopped().map(TrayActivity::Stopped)
+  let stopped = crate::activity_capture::stopped()?;
+  Some(TrayActivity::Stopped(
+    stopped,
+    if history_binding(app).is_some() {
+      StoppedHistory::Readable
+    } else {
+      StoppedHistory::Unavailable
+    },
+  ))
 }
 
 fn tray_snapshot(app: &AppHandle) -> Option<TrayActivitySnapshot> {
-  if !is_enabled(app) {
-    return None;
-  }
-  let gates = app.try_state::<FeatureGates>()?;
-  let binding = gates.account_binding(DesktopFeature::ActivityTimeline)?;
+  let binding = capture_binding(app)?;
   let state = app.try_state::<ActivityAppState>()?;
   let manager = state.lock().ok()?;
   manager.require_account_binding(&binding).ok()?;
   let snapshot = manager.tray_snapshot(Utc::now())?;
   drop(manager);
-  if gates
-    .account_binding(DesktopFeature::ActivityTimeline)
-    .as_ref()
-    != Some(&binding)
-  {
+  if capture_binding(app).as_ref() != Some(&binding) {
     return None;
   }
   Some(snapshot)
@@ -2688,17 +2788,10 @@ pub fn set_recording_from_tray(
   app: &AppHandle,
   status: ActivityRecordingStatus,
 ) -> Result<(), String> {
-  if !is_enabled(app) {
-    return Err("activity timeline is unavailable".to_string());
-  }
   if status == ActivityRecordingStatus::Off {
     return Err("activity tray action is invalid".to_string());
   }
-  let gates = app
-    .try_state::<FeatureGates>()
-    .ok_or_else(|| "activity account is unavailable".to_string())?;
-  let binding = gates
-    .account_binding(DesktopFeature::ActivityTimeline)
+  let binding = capture_binding(app)
     .ok_or_else(|| "activity account is unavailable".to_string())?;
   let state = app
     .try_state::<ActivityAppState>()
@@ -2707,11 +2800,7 @@ pub fn set_recording_from_tray(
     .lock()
     .map_err(with_cause_logged("activity timeline is unavailable"))?;
   manager.require_account_binding(&binding)?;
-  if gates
-    .account_binding(DesktopFeature::ActivityTimeline)
-    .as_ref()
-    != Some(&binding)
-  {
+  if capture_binding(app).as_ref() != Some(&binding) {
     return Err("activity account is unavailable".to_string());
   }
   manager.set_recording_from_tray(status, Utc::now())?;
@@ -2761,10 +2850,7 @@ fn initialize_account_with(
 /// Installs only the current account's namespace. A slow keychain lookup
 /// cannot publish a store after its account generation has been superseded.
 pub fn initialize(app: &AppHandle) {
-  let Some(gates) = app.try_state::<FeatureGates>() else {
-    return;
-  };
-  let Some(binding) = gates.account_binding(DesktopFeature::ActivityTimeline) else {
+  let Some(binding) = history_binding(app) else {
     return;
   };
   let Some(state) = app.try_state::<ActivityAppState>() else {
@@ -2781,12 +2867,7 @@ pub fn initialize(app: &AppHandle) {
     .name("stella-activity-init".to_string())
     .spawn(move || {
       if initialize_account_with(&state, binding, open_persistence, |binding| {
-        app.try_state::<FeatureGates>().is_some_and(|gates| {
-          gates
-            .account_binding(DesktopFeature::ActivityTimeline)
-            .as_ref()
-            == Some(binding)
-        })
+        history_binding(&app).as_ref() == Some(binding)
       }) {
         emit_changed(&app);
       }
@@ -2817,7 +2898,8 @@ fn disable_feature(state: &ActivityAppState, now: DateTime<Utc>) -> Result<(), S
 }
 
 /// Starts or stops the feature after the server decision changed. Turning
-/// it off stops sampling and closes the window; linked history still expires.
+/// it off stops sampling; linked history still expires. The window stays
+/// while the capture check keeps the history readable (`capture_changed`).
 pub fn apply_feature_gate(app: &AppHandle, enabled: bool) {
   if enabled {
     initialize(app);
@@ -2828,7 +2910,6 @@ pub fn apply_feature_gate(app: &AppHandle, enabled: bool) {
   {
     tracing::warn!("activity timeline could not be written when disabled");
   }
-  crate::activity_window::close(app);
   emit_changed(app);
 }
 
@@ -2923,13 +3004,18 @@ fn call_observation(
   }
 }
 
+/// Whether Activity may record into the manager's loaded account now.
+fn capture_permitted(app: &AppHandle, manager: &ActivityManager) -> bool {
+  capture_binding(app)
+    .is_some_and(|binding| manager.require_account_binding(&binding).is_ok())
+}
+
 fn sample(app: &AppHandle, state: &ActivityAppState, calls: &mut CallDetector) {
-  let enabled = is_enabled(app);
   let (generation, settings) = {
     let Ok(mut manager) = state.lock() else {
       return;
     };
-    if !enabled || !manager.is_recording() {
+    if !capture_permitted(app, &manager) || !manager.is_recording() {
       if manager.open.is_some() && manager.stop(Utc::now()).is_err() {
         tracing::warn!("activity timeline could not be written");
       }
@@ -2978,7 +3064,8 @@ fn sample(app: &AppHandle, state: &ActivityAppState, calls: &mut CallDetector) {
   let Ok(mut manager) = state.lock() else {
     return;
   };
-  if !manager.accepts_observation(generation, is_enabled(app)) {
+  let permitted = capture_permitted(app, &manager);
+  if !manager.accepts_observation(generation, permitted) {
     return;
   }
   let Some(idle) = idle else {
@@ -2991,7 +3078,7 @@ fn sample(app: &AppHandle, state: &ActivityAppState, calls: &mut CallDetector) {
   };
   let Some(closed) = manager.commit_observation(ObservationCommit {
     generation,
-    enabled: is_enabled(app),
+    enabled: permitted,
     now,
     monotonic,
     idle,
@@ -3053,8 +3140,9 @@ pub fn start(app: AppHandle, state: ActivityAppState) {
       );
       loop {
         std::thread::sleep(SAMPLE_INTERVAL);
-        sample(&app, &state, &mut calls);
+        // The check decides what this sample may do, so it runs first.
         capture.tick(&app, &state);
+        sample(&app, &state, &mut calls);
         if last_tray_refresh.elapsed() >= TRAY_REFRESH_INTERVAL {
           refresh_tray(&app);
           last_tray_refresh = Instant::now();
@@ -3107,11 +3195,262 @@ mod tests {
       ActivityPersistence::MemoryOnly,
       ActivitySettings {
         recording_status: ActivityRecordingStatus::Recording,
+        capture_details: true,
         ..ActivitySettings::default()
       },
       at(0),
     );
     manager
+  }
+
+  /// A seeded generator, so every run checks the same sequences.
+  struct SplitMix(u64);
+
+  impl SplitMix {
+    fn next(&mut self) -> u64 {
+      self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
+      let mut z = self.0;
+      z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+      z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+      z ^ (z >> 31)
+    }
+
+    fn below(&mut self, bound: u64) -> u64 {
+      self.next() % bound
+    }
+  }
+
+  #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+  enum ServerRead {
+    Enabled,
+    Denied,
+    CredentialRefused,
+    Unreached,
+  }
+
+  const CAPTURE_NAMESPACE: &str =
+    "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0";
+  /// Ten active minutes of five-second samples.
+  const QUIET_LIMIT: u32 = 120;
+
+  struct CaptureModel {
+    records: PathBuf,
+    expiry: DateTime<Utc>,
+    wall: DateTime<Utc>,
+    monotonic: Duration,
+    gates: FeatureGates,
+    monitor: crate::activity_capture::CaptureMonitor,
+    manager: ActivityManager,
+    loaded: Option<crate::activity_capture::LoadedChoice>,
+    /// An explicit refusal came after the last answer that enabled Activity.
+    refused: bool,
+    /// Active samples since the last one that recorded.
+    quiet: u32,
+  }
+
+  impl CaptureModel {
+    fn new(records: PathBuf) -> Self {
+      Self {
+        monitor: crate::activity_capture::CaptureMonitor::new(Some(
+          crate::activity_capture::CaptureRecords::at(records.clone()),
+        )),
+        records,
+        // Far past the virtual clock and the real one the gate also reads.
+        expiry: Utc::now() + chrono::Duration::days(3650),
+        wall: at(0),
+        monotonic: Duration::from_secs(1_000),
+        gates: FeatureGates::default(),
+        manager: ActivityManager::new(),
+        loaded: None,
+        refused: false,
+        quiet: 0,
+      }
+    }
+
+    fn read(&mut self, read: ServerRead) {
+      use crate::feature_gate::AccountDecision;
+      let decision = match read {
+        ServerRead::Enabled => AccountDecision::Answered {
+          namespace: CAPTURE_NAMESPACE.into(),
+          expires_at: self.expiry,
+          enabled: std::collections::HashSet::from([DesktopFeature::ActivityTimeline]),
+        },
+        ServerRead::Denied => AccountDecision::Answered {
+          namespace: CAPTURE_NAMESPACE.into(),
+          expires_at: self.expiry,
+          enabled: std::collections::HashSet::new(),
+        },
+        ServerRead::CredentialRefused => AccountDecision::ReconnectNeeded {
+          namespace: Some(CAPTURE_NAMESPACE.into()),
+        },
+        ServerRead::Unreached => AccountDecision::Unconfirmed {
+          namespace: CAPTURE_NAMESPACE.into(),
+          expires_at: self.expiry,
+        },
+      };
+      self
+        .gates
+        .install(self.gates.generation().unwrap(), decision)
+        .unwrap();
+      crate::activity_capture::record_decision(
+        &self.gates,
+        &crate::activity_capture::CaptureRecords::at(self.records.clone()),
+        self.wall,
+      )
+      .unwrap();
+      self.refused = match read {
+        ServerRead::Enabled => false,
+        ServerRead::Denied | ServerRead::CredentialRefused => true,
+        ServerRead::Unreached => self.refused,
+      };
+    }
+
+    /// A new process: nothing decided, no store open, and the first read
+    /// right away.
+    fn restart(&mut self, read: ServerRead) {
+      self.gates = FeatureGates::default();
+      self.monitor = crate::activity_capture::CaptureMonitor::new(Some(
+        crate::activity_capture::CaptureRecords::at(self.records.clone()),
+      ));
+      self.manager = ActivityManager::new();
+      self.loaded = None;
+      self.read(read);
+    }
+
+    /// One sampler iteration: check, then sample, as `start` runs them.
+    fn tick(&mut self, active: bool) {
+      self.monotonic += SAMPLE_INTERVAL;
+      self.wall += chrono::Duration::from_std(SAMPLE_INTERVAL).unwrap();
+      self.monitor.check(&crate::activity_capture::CheckInput {
+        now: self.wall,
+        monotonic: self.monotonic,
+        active,
+        access: self
+          .gates
+          .access_at(DesktopFeature::ActivityTimeline, self.wall),
+        binding: self.gates.local_binding(),
+        credential_expiry: self.gates.credential_expiry(),
+        loaded: self.loaded.clone(),
+      });
+      let binding = crate::activity_capture::capture_binding_in(
+        &self.gates,
+        self.monitor.published(),
+        self.wall,
+      );
+      if let Some(binding) = &binding
+        && self.manager.require_account_binding(binding).is_err()
+      {
+        self.manager.install_account(
+          binding.clone(),
+          ActivityPersistence::MemoryOnly,
+          ActivitySettings {
+            recording_status: ActivityRecordingStatus::Recording,
+            ..ActivitySettings::default()
+          },
+          self.wall,
+        );
+        self.loaded = Some(crate::activity_capture::LoadedChoice {
+          namespace: CAPTURE_NAMESPACE.into(),
+          intent: ActivityRecordingStatus::Recording,
+          persisted: true,
+        });
+      }
+      let permitted = binding
+        .is_some_and(|binding| self.manager.require_account_binding(&binding).is_ok());
+      assert!(!(self.refused && permitted), "recording after a refusal");
+      let idle = if active {
+        Duration::ZERO
+      } else {
+        IDLE_THRESHOLD + SAMPLE_INTERVAL
+      };
+      let committed = self.manager.commit_observation(ObservationCommit {
+        generation: self.manager.observation_generation,
+        enabled: permitted,
+        now: self.wall,
+        monotonic: self.monotonic,
+        idle,
+        observation: if active {
+          active_observation()
+        } else {
+          Observation::Idle { idle }
+        },
+        partition: partition_in(&Local, self.wall),
+      });
+      assert!(
+        !(self.refused && committed.is_some()),
+        "a sample was committed after a refusal"
+      );
+      if !active {
+        return;
+      }
+      self.quiet = if committed.is_some() {
+        0
+      } else {
+        self.quiet + 1
+      };
+      if self.quiet >= QUIET_LIMIT {
+        assert!(self.monitor.is_stopped(), "a quiet stop is not shown");
+        assert!(
+          self.monitor.outage_covers(self.wall),
+          "a quiet stop is not recorded as an outage"
+        );
+      }
+    }
+  }
+
+  fn active_observation() -> Observation {
+    active("app")
+  }
+
+  fn server_read(random: &mut SplitMix) -> ServerRead {
+    match random.below(4) {
+      0 => ServerRead::Enabled,
+      1 => ServerRead::Denied,
+      2 => ServerRead::CredentialRefused,
+      _ => ServerRead::Unreached,
+    }
+  }
+
+  #[test]
+  fn recording_intent_ends_in_a_segment_or_a_typed_outage_and_never_after_a_refusal() {
+    for seed in 0..48_u64 {
+      let records = std::env::temp_dir()
+        .join(format!("stella-capture-property-{}", uuid::Uuid::new_v4()));
+      let mut model = CaptureModel::new(records.clone());
+      let mut random = SplitMix(seed);
+      // The member turned recording on while Activity was enabled.
+      model.read(ServerRead::Enabled);
+      model.tick(true);
+      for _ in 0..300 {
+        match random.below(20) {
+          0 => model.read(server_read(&mut random)),
+          1 => model.restart(server_read(&mut random)),
+          2 => {
+            // The computer sleeps: both clocks move on, nothing samples.
+            let slept = Duration::from_secs(60 * (1 + random.below(120)));
+            model.monotonic += slept;
+            model.wall += chrono::Duration::from_std(slept).unwrap();
+          }
+          3 => {
+            let hours = i64::try_from(random.below(5)).unwrap() - 2;
+            model.wall += chrono::Duration::hours(hours);
+          }
+          _ => {
+            let active = random.below(10) != 0;
+            for _ in 0..(1 + random.below(60)) {
+              model.tick(active);
+            }
+          }
+        }
+      }
+      // However the sequence ended, a long enough stretch settles it.
+      for _ in 0..(QUIET_LIMIT + 1) {
+        model.tick(true);
+      }
+      if records.exists() {
+        std::fs::remove_dir_all(&records).unwrap();
+      }
+    }
   }
 
   fn segments(manager: &ActivityManager) -> Vec<(String, i64, i64)> {
@@ -3138,6 +3477,65 @@ mod tests {
         end: at(60).to_rfc3339(),
       }]],
     }
+  }
+
+  #[test]
+  fn new_settings_record_app_names_only() {
+    assert!(!ActivitySettings::default().capture_details);
+    let mut manager = ActivityManager::new();
+    manager.install(
+      ActivityPersistence::MemoryOnly,
+      ActivitySettings {
+        recording_status: ActivityRecordingStatus::Recording,
+        ..ActivitySettings::default()
+      },
+      at(0),
+    );
+    manager.observe(at(0), active_details("word"));
+    manager.observe(at(5), active_details("word"));
+    manager.stop(at(5)).unwrap();
+    let recorded: Vec<_> = manager.days.values().flatten().collect();
+    assert_eq!(recorded.len(), 1);
+    assert_eq!(recorded[0].window_title, None);
+    assert_eq!(recorded[0].document, None);
+  }
+
+  // The default changed after users saved their choice; a saved choice is
+  // read as saved, in either direction.
+  #[test]
+  fn a_saved_details_choice_is_kept() {
+    let saved = |capture: Option<bool>| {
+      let mut value = serde_json::to_value(ActivitySettings::default()).unwrap();
+      let fields = value.as_object_mut().unwrap();
+      match capture {
+        Some(capture) => fields.insert("captureDetails".into(), capture.into()),
+        None => fields.remove("captureDetails"),
+      };
+      serde_json::from_value::<ActivitySettings>(value)
+        .unwrap()
+        .capture_details
+    };
+    assert!(saved(Some(true)));
+    assert!(!saved(Some(false)));
+    assert!(!saved(None));
+  }
+
+  #[test]
+  fn managed_policy_keeps_details_off_without_changing_the_choice() {
+    let chosen = ActivitySettings {
+      capture_details: true,
+      ..ActivitySettings::default()
+    };
+    let open = crate::managed_policy::ManagedPolicy::default();
+    let managed = crate::managed_policy::ManagedPolicy {
+      activity_details_disabled: true,
+      ..crate::managed_policy::ManagedPolicy::default()
+    };
+    assert!(chosen.records_details_under(&open));
+    assert!(!chosen.records_details_under(&managed));
+    assert!(!ActivitySettings::default().records_details_under(&open));
+    assert!(!ActivitySettings::default().records_details_under(&managed));
+    assert!(chosen.capture_details);
   }
 
   #[test]
@@ -6113,6 +6511,20 @@ mod tests {
     assert_eq!(
       contract["recordingStatuses"],
       serde_json::Value::Array(statuses)
+    );
+    let stop_reasons = crate::activity_capture::StopReason::ALL
+      .iter()
+      .map(|reason| {
+        let serde_json::Value::String(name) = serde_json::to_value(reason).unwrap()
+        else {
+          panic!("an activity stop reason must serialize as a string");
+        };
+        (name, serde_json::Value::Bool(true))
+      })
+      .collect::<serde_json::Map<_, _>>();
+    assert_eq!(
+      contract["stopReasons"],
+      serde_json::Value::Object(stop_reasons)
     );
     assert_eq!(contract["changedEvent"], CHANGED_EVENT);
   }

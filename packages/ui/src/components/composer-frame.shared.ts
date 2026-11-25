@@ -42,8 +42,9 @@ export type ComposerFrameContract = ComposerStature & {
   text: ReactNode;
   /** Draft attachments, above the text and outside its scroll region. */
   attachments?: ReactNode;
-  /** Chrome anchored above the box (preset chips, a floating attachment
-   *  tray), positioned by the surface from the box's top edge outward. */
+  /** Chrome anchored above the box (preset chips), positioned by the
+   *  surface from the box's top edge outward. Draft attachments go in
+   *  `attachments`, never here. */
   above?: ReactNode;
   /** The controls at the start: the (+) menu, a scope control. */
   leading?: ReactNode;

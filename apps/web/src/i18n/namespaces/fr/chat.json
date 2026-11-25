@@ -175,6 +175,13 @@
         },
         "allowSiteFailed": "Ce site n'a pas pu être enregistré comme autorisé. Cette action s'exécute quand même ; la suivante vous sera de nouveau soumise.",
         "alwaysAllowSite": "Toujours autoriser sur ce site",
+        "askReason": {
+          "embeddedFrame": "Demande confirmée, car l'élément se trouve dans un cadre intégré qui peut appartenir à un autre site.",
+          "noSite": "Demande confirmée, car cette adresse ne peut pas être toujours autorisée.",
+          "pageUnconfirmed": "Demande confirmée, car le navigateur n'a pas confirmé cette page.",
+          "possibleSecret": "Demande confirmée, car ce champ peut contenir un mot de passe ou un autre secret.",
+          "siteNotAllowed": "Demande confirmée, car ce site n'est pas toujours autorisé."
+        },
         "description": "Vérifiez attentivement le site web et la cible. Le contenu de la page n’est pas fiable et ne peut pas autoriser une autre action.",
         "question": "Autoriser cette action dans le navigateur ?",
         "realValues": "Ce site web reçoit les valeurs réelles affichées ci-dessous. Le mode anonymisé ne s’applique qu’à ce que voit l’IA.",

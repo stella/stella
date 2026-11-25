@@ -2,7 +2,7 @@
  * Docked AI-chat composer primitives.
  *
  * The shared building blocks every chat surface mounts: the docked
- * `PromptBar` (rich composer + preset chips + attachment tray + the
+ * `PromptBar` (rich composer + preset chips + draft attachments + the
  * send/stop/retry action), the floating glass `ChatThreadCard`, the
  * suggestion stepper, and the `SuggestionCard` used to render an edit
  * suggestion. Surfaces (the file-chat overlay, Template Studio, the
@@ -825,24 +825,18 @@ export const PromptBar = (props: PromptBarProps) => {
               ))}
             </div>
           )}
-          {attachmentsEnabled && attachments.length > 0 && (
-            // Attachments float above the bar in an opaque tray so the chips
-            // (translucent `bg-muted/50`) stay readable over a document in
-            // floating mode; the bar's own row is left untouched.
-            <div
-              className={cn(
-                DOC_FLOAT_SURFACE_CLASS,
-                "border-foreground/15 shadow-floating absolute inset-x-1 bottom-full mb-2 overflow-hidden rounded-xl border pb-2",
-              )}
-            >
-              <ChatDraftAttachmentChips
-                files={attachments}
-                onRemove={removeFile}
-                onExpand={expandPastedText}
-              />
-            </div>
-          )}
         </>
+      }
+      attachments={
+        attachmentsEnabled && (
+          // Inside the box on its document paper, above the text and outside
+          // its scroll region, as in the chat bar.
+          <ChatDraftAttachmentChips
+            files={attachments}
+            onRemove={removeFile}
+            onExpand={expandPastedText}
+          />
+        )
       }
       aria-busy={busy}
       aria-label={t("chat.aiPrompt")}

@@ -60,6 +60,8 @@ const SNAPSHOT = {
   ],
   today: "2026-10-07",
   unreadable: false,
+  outages: { status: "read", outages: [] },
+  stoppedReason: null,
 } satisfies ActivityDaySnapshot;
 
 const PENDING_BATCH = {
@@ -250,6 +252,7 @@ const installNativeBoundary = async ({
       let draftPreference = draftingFixture.preference ?? null;
       let draftRevision = 1;
       const scopedDraftSettings = () => ({
+        policy: "account",
         scopeKey: '["org_fixture","user_fixture"]',
         settings: {
           revision: `revision-${String(draftRevision)}`,

@@ -16,6 +16,7 @@ import {
   cardDraftEntry,
   cardDraftFrom,
   DRAFT_FAILURE_KINDS,
+  DRAFT_POLICIES,
   draftFailureKind,
   partitionRanges,
   restoredEdit,
@@ -646,21 +647,31 @@ describe("drafting settings from the native boundary", () => {
     preference: null,
   } as const;
 
-  test("an answer names the account it belongs to", () => {
-    expect(
-      scopedDraftSettingsFrom({ scopeKey: '["firm","user"]', settings }),
-    ).toEqual({ scopeKey: '["firm","user"]', settings });
+  test("an answer names the account it belongs to and who decides drafting", () => {
+    for (const policy of DRAFT_POLICIES) {
+      expect(
+        scopedDraftSettingsFrom({
+          policy,
+          scopeKey: '["firm","user"]',
+          settings,
+        }),
+      ).toEqual({ policy, scopeKey: '["firm","user"]', settings });
+    }
   });
 
-  test("an answer without its account or outside the contract is refused", () => {
+  test("an answer without its account, its policy or outside the contract is refused", () => {
     for (const value of [
       settings,
-      { scopeKey: "", settings },
+      { policy: "account", scopeKey: "", settings },
+      { scopeKey: '["firm","user"]', settings },
+      { policy: "forcedOn", scopeKey: '["firm","user"]', settings },
       {
+        policy: "account",
         scopeKey: '["firm","user"]',
         settings: { ...settings, consent: "yes" },
       },
       {
+        policy: "account",
         scopeKey: '["firm","user"]',
         settings: { ...settings, organizationMode: "enabled" },
       },

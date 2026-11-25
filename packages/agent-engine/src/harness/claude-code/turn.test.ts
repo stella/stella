@@ -119,9 +119,21 @@ const unreadableIn = (message: { type: string }): string[] => {
   return [];
 };
 
-/** A turn of the adapter fed `messages`, then completed: what it emits. */
+/** A message the CLI writes: its type, and whatever else it carries. */
+type CliMessage = { type: string } & Readonly<Record<string, unknown>>;
+
+const SUCCESS: CliMessage = {
+  type: "result",
+  subtype: "success",
+  is_error: false,
+};
+/** The uuid the turn's prompt went to the CLI with. */
+const PROMPT_UUID = "prompt-uuid";
+
+/** A turn of the adapter fed `messages`, then `last`: what it emits. */
 const eventsOf = async (
-  messages: readonly { type: string }[],
+  messages: readonly CliMessage[],
+  last: CliMessage = SUCCESS,
 ): Promise<HarnessEvent[]> => {
   const session = new ClaudeCodeTurnSession({
     gracePeriodMs: 10,
@@ -140,14 +152,11 @@ const eventsOf = async (
     sessionId: harnessSessionId("session-1"),
     continuation: { type: "fresh" },
   });
+  session.promptWritten(PROMPT_UUID);
   for (const message of messages) {
     session.handlers.message(message.type, message);
   }
-  session.handlers.message("result", {
-    type: "result",
-    subtype: "success",
-    is_error: false,
-  });
+  session.handlers.message(last.type, last);
   const events: HarnessEvent[] = [];
   for await (const event of session.turn().events) {
     events.push(event);
@@ -240,5 +249,102 @@ describe("the model a Claude Code turn ran on", () => {
       { type: "model.rerouted", model: "claude-fallback" },
     ]);
     expect(await reroutes("local")).toEqual([]);
+  });
+});
+
+describe("calls the CLI takes back", () => {
+  /** An assistant message at transcript entry `uuid` calling `ids`. */
+  const calling = (uuid: string, ids: readonly string[], extra = {}) => ({
+    type: "assistant",
+    message: {
+      id: `msg-${uuid}`,
+      content: ids.map((id) => ({
+        type: "tool_use",
+        id,
+        name: "Read",
+        input: { file_path: "/workspace/drafts/lease.md" },
+      })),
+    },
+    parent_tool_use_id: null,
+    uuid,
+    ...extra,
+  });
+  const completions = (events: readonly HarnessEvent[]) =>
+    events.flatMap((event) =>
+      event.type === "tool.completed"
+        ? [{ id: event.toolCall.id, status: event.result.status }]
+        : [],
+    );
+
+  test("a refused response's calls end as stopped once the fallback takes them back", async () => {
+    const events = await eventsOf([
+      calling("entry-1", ["use-1"]),
+      {
+        type: "system",
+        subtype: "model_refusal_fallback",
+        fallback_model: "claude-fallback",
+        retracted_message_uuids: ["entry-1"],
+      },
+    ]);
+    expect(completions(events)).toEqual([{ id: "use-1", status: "cancelled" }]);
+    expect(events.at(-1)?.type).toBe("turn.completed");
+  });
+
+  test("a retry closes the calls it supersedes, but not one it makes again", async () => {
+    const events = await eventsOf([
+      calling("entry-1", ["use-1", "use-2"]),
+      calling("entry-2", ["use-2"], { supersedes: ["entry-1"] }),
+      // Taken back once: a second notice names nothing left open.
+      {
+        type: "system",
+        subtype: "model_refusal_fallback",
+        fallback_model: "claude-fallback",
+        retracted_message_uuids: ["entry-1"],
+      },
+    ]);
+    expect(completions(events)).toEqual([{ id: "use-1", status: "cancelled" }]);
+  });
+});
+
+describe("how a Claude Code result ends the turn", () => {
+  test("a success marked as an error that says to run /login needs a new sign-in", async () => {
+    const result = "Not logged in · Please run /login";
+    const events = await eventsOf([], {
+      type: "result",
+      subtype: "success",
+      is_error: true,
+      result,
+    });
+    expect(events.at(-1)).toEqual({
+      type: "turn.failed",
+      failure: { type: "auth_required", message: result },
+    });
+  });
+
+  test("a result of work the CLI started on its own does not end the turn; the turn's own result does", async () => {
+    const events = await eventsOf(
+      [
+        {
+          type: "result",
+          subtype: "success",
+          is_error: true,
+          result: "A background task failed.",
+          origin: { kind: "task-notification" },
+          user_message_uuids: [],
+        },
+      ],
+      { ...SUCCESS, origin: { kind: "human" } },
+    );
+    expect(events.map(({ type }) => type)).not.toContain("turn.failed");
+    expect(events.at(-1)?.type).toBe("turn.completed");
+  });
+
+  test("a cycle the CLI started that took in the turn's prompt is the turn's end", async () => {
+    const events = await eventsOf([], {
+      ...SUCCESS,
+      origin: { kind: "task-notification" },
+      user_message_uuids: [PROMPT_UUID],
+    });
+    expect(events.at(-1)?.type).toBe("turn.completed");
   });
 });

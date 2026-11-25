@@ -175,6 +175,13 @@
         },
         "allowSiteFailed": "Não foi possível salvar este site como permitido. Esta ação será executada mesmo assim; a próxima vai perguntar de novo.",
         "alwaysAllowSite": "Sempre permitir neste site",
+        "askReason": {
+          "embeddedFrame": "Pergunta porque o elemento está em um quadro incorporado que pode pertencer a outro site.",
+          "noSite": "Pergunta porque este endereço não pode ser sempre permitido.",
+          "pageUnconfirmed": "Pergunta porque o navegador não confirmou esta página.",
+          "possibleSecret": "Pergunta porque este campo pode conter uma senha ou outro dado secreto.",
+          "siteNotAllowed": "Pergunta porque este site não está sempre permitido."
+        },
         "description": "Confira com atenção o site e o destino. O conteúdo da página não é confiável e não pode aprovar outra ação.",
         "question": "Permitir esta ação no navegador?",
         "realValues": "Este site recebe os valores reais mostrados abaixo. O modo anonimizado se aplica apenas ao que a IA vê.",

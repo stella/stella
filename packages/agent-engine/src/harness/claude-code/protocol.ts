@@ -220,6 +220,11 @@ export const AssistantMessageSchema = v.object({
   error: v.optional(v.string()),
   /** The message's entry in the session's transcript. */
   uuid: v.optional(v.string()),
+  /**
+   * On the first message of a retry: the entries of the earlier response
+   * the CLI took back. Their calls without a result never get one.
+   */
+  supersedes: v.optional(v.array(v.string())),
 });
 
 const TextBlockSchema = v.object({
@@ -303,7 +308,29 @@ export const ResultMessageSchema = v.object({
   modelUsage: v.optional(
     v.record(v.string(), v.object({ contextWindow: v.optional(v.number()) })),
   ),
+  /**
+   * What started the work this result ends: absent or `human` for messages
+   * written to the CLI; a cycle the CLI started on its own (a background
+   * task's notification, among others) names its kind.
+   */
+  origin: v.nullish(v.looseObject({ kind: v.string() })),
+  /** The messages written to the CLI that this work answered, by uuid. */
+  user_message_uuids: v.optional(v.array(v.string())),
+  /** The same, from a CLI that names only the last one. */
+  user_message_uuid: v.optional(v.string()),
 });
+
+/**
+ * Origins of work the CLI started on its own, never a message written to it.
+ * Any other kind, an unknown one included, is the turn's own.
+ */
+export const CLAUDE_AUTONOMOUS_ORIGINS: ReadonlySet<string> = new Set([
+  "task-notification",
+  "peer",
+  "coordinator",
+  "observer",
+  "observer-activity",
+]);
 export type ClaudeResultMessage = v.InferOutput<typeof ResultMessageSchema>;
 
 export const SystemMessageSchema = v.object({
@@ -326,6 +353,11 @@ export const ApiRetryMessageSchema = v.object({
 export const ModelRefusalFallbackSchema = v.object({
   fallback_model: v.string(),
   scope: v.optional(v.picklist(["session", "local"])),
+  /**
+   * The entries of the refused response the CLI took back; their calls
+   * without a result never get one.
+   */
+  retracted_message_uuids: v.optional(v.array(v.string())),
 });
 
 export const StreamEventMessageSchema = v.object({

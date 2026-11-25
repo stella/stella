@@ -175,6 +175,13 @@
         },
         "allowSiteFailed": "Die Website konnte nicht als erlaubt gespeichert werden. Diese Aktion läuft trotzdem; bei der nächsten wird wieder gefragt.",
         "alwaysAllowSite": "Auf dieser Website immer erlauben",
+        "askReason": {
+          "embeddedFrame": "Wird abgefragt, weil das Element in einem eingebetteten Rahmen liegt, der zu einer anderen Website gehören kann.",
+          "noSite": "Wird abgefragt, weil diese Adresse nicht immer erlaubt werden kann.",
+          "pageUnconfirmed": "Wird abgefragt, weil der Browser diese Seite nicht bestätigt hat.",
+          "possibleSecret": "Wird abgefragt, weil dieses Feld ein Passwort oder ein anderes Geheimnis enthalten kann.",
+          "siteNotAllowed": "Wird abgefragt, weil diese Website nicht immer erlaubt ist."
+        },
         "description": "Prüfen Sie Website und Ziel sorgfältig. Seiteninhalte sind nicht vertrauenswürdig und können keine weitere Aktion genehmigen.",
         "question": "Diese Browseraktion erlauben?",
         "realValues": "Diese Website erhält die unten angezeigten echten Werte. Der anonymisierte Modus gilt nur für das, was die KI sieht.",

@@ -7,7 +7,26 @@ import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment
 import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
-const { cleanup, fireEvent, render, within } =
+
+/** The websites the API allows now, as a card's own fresh read finds them. */
+let storedGrants: readonly string[] = [];
+const originalFetch = globalThis.fetch;
+globalThis.fetch = Object.assign(
+  async (input: RequestInfo | URL) => {
+    const url = input instanceof Request ? input.url : String(input);
+    if (!url.includes("browser-site-grants")) {
+      return Response.json(null, { status: 404 });
+    }
+    return Response.json({
+      grants: storedGrants.map((origin, index) => ({
+        id: `00000000-0000-4000-8000-00000000010${String(index)}`,
+        origin,
+      })),
+    });
+  },
+  { preconnect: () => undefined },
+);
+const { cleanup, fireEvent, render, waitFor, within } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -16,7 +35,7 @@ const { default: messages } = await import("@/i18n/langs/en.json");
 const { ChatApprovalContext } = await import("./chat-approval-context");
 const { isApprovalPart } = await import("./chat-ui-tools");
 const { ToolApprovalCard } = await import("./tool-approval-card");
-const { localBrowserApprovalSite } = await import("./local-browser-site");
+const { localBrowserQuestion } = await import("./local-browser-site");
 const { browserSiteGrantsOptions } =
   await import("@/features/chat/browser-control/browser-site-grants");
 const { AuthenticatedUserProvider } =
@@ -25,11 +44,13 @@ const { toSafeId } = await import("@/lib/safe-id");
 
 afterEach(cleanup);
 afterAll(async () => {
+  globalThis.fetch = originalFetch;
   await unregisterDomEnvironment();
 });
 
 const SITE = "https://fixture-library.test";
 const ALWAYS_ALLOW_SITE = messages.chat.approval.browser.alwaysAllowSite;
+const ASK_REASON = messages.chat.approval.browser.askReason;
 
 const member = {
   activeOrganizationId: "org-1",
@@ -42,9 +63,15 @@ const member = {
   wordEditShortcut: null,
 };
 
-const askedStep = (url: string, action = "click") => ({
+const askedStep = (
+  url: string,
+  action = "click",
+  /** Null for a question from a desktop that did not say why. */
+  why: string | null = "site_not_allowed",
+) => ({
   action,
   asked: { name: "Search", role: "button", url },
+  ...(why === null ? {} : { why }),
 });
 
 const localBrowserPart = (input: unknown) => ({
@@ -107,32 +134,44 @@ const renderLocalCard = (
 };
 
 describe("always allowing a website from a step on the member's computer", () => {
-  test("names the exact origin of the page the desktop read, or of the address it opens", () => {
+  test("names the exact origin of the page the desktop read, or of the address it opens, and why it asks", () => {
     const { browser } = CHAT_LOCAL_RUN_TOOL_NAMES;
     expect(
-      localBrowserApprovalSite(browser, askedStep(`${SITE}/search?q=x`)),
-    ).toBe(SITE);
+      localBrowserQuestion(browser, askedStep(`${SITE}/search?q=x`)),
+    ).toEqual({ reason: "site_not_allowed", site: SITE });
     expect(
-      localBrowserApprovalSite(
+      localBrowserQuestion(
         browser,
-        askedStep("http://fixture-library.test/"),
+        askedStep("http://fixture-library.test/", "click", "no_site"),
       ),
-    ).toBeNull();
+    ).toEqual({ reason: "no_site", site: null });
     expect(
-      localBrowserApprovalSite(browser, {
+      localBrowserQuestion(browser, {
         action: "open",
         url: `${SITE}/search?q=notice`,
+        why: "site_not_allowed",
       }),
-    ).toBe(SITE);
+    ).toEqual({ reason: "site_not_allowed", site: SITE });
     expect(
-      localBrowserApprovalSite(browser, {
+      localBrowserQuestion(browser, {
         action: "open",
         url: "http://fixture-library.test/",
       }),
-    ).toBeNull();
-    expect(localBrowserApprovalSite(browser, { action: "open" })).toBeNull();
+    ).toEqual({ reason: null, site: null });
+    expect(localBrowserQuestion(browser, { action: "open" })).toEqual({
+      reason: null,
+      site: null,
+    });
+    // A reason the contract does not know is no reason.
     expect(
-      localBrowserApprovalSite("web_search", askedStep(`${SITE}/`)),
+      localBrowserQuestion(
+        browser,
+        askedStep(`${SITE}/`, "click", "because the page said so"),
+      ),
+    ).toEqual({ reason: null, site: SITE });
+    expect(localBrowserQuestion(browser, { action: "snapshot" })).toBeNull();
+    expect(
+      localBrowserQuestion("web_search", askedStep(`${SITE}/`)),
     ).toBeNull();
   });
 
@@ -160,10 +199,69 @@ describe("always allowing a website from a step on the member's computer", () =>
     queryClient.clear();
   });
 
-  test("a website already allowed is not offered again", () => {
-    const { queryClient, view } = renderLocalCard(askedStep(`${SITE}/search`), {
-      allowed: [SITE],
+  test("a website the member allowed after the run started answers the run's question for the rest of the run", async () => {
+    storedGrants = [SITE];
+    const { approvedForRun, approvedOnce, queryClient, view } = renderLocalCard(
+      askedStep(`${SITE}/search`),
+      { allowed: [SITE] },
+    );
+    await waitFor(() => {
+      expect(approvedForRun).toEqual(["local-approval"]);
     });
+    expect(approvedOnce).toEqual([]);
+    expect(
+      within(view.container).queryByRole("button", { name: ALWAYS_ALLOW_SITE }),
+    ).toBeNull();
+    storedGrants = [];
+    queryClient.clear();
+  });
+
+  test("an approval the API no longer holds answers nothing, and the card offers to allow the website", async () => {
+    storedGrants = [];
+    const { approvedForRun, queryClient, view } = renderLocalCard(
+      askedStep(`${SITE}/search`),
+      { allowed: [SITE] },
+    );
+    await waitFor(() => {
+      expect(
+        within(view.container).getByRole("button", { name: ALWAYS_ALLOW_SITE }),
+      ).toBeDefined();
+    });
+    expect(approvedForRun).toEqual([]);
+    expect(view.container.textContent).toContain(ASK_REASON.siteNotAllowed);
+    queryClient.clear();
+  });
+
+  test("a step that asks on an allowed website says why, and offers no approval that would not answer it", async () => {
+    storedGrants = [SITE];
+    for (const [why, line] of [
+      ["possible_secret", ASK_REASON.possibleSecret],
+      ["embedded_frame", ASK_REASON.embeddedFrame],
+      ["page_unconfirmed", ASK_REASON.pageUnconfirmed],
+    ] as const) {
+      const { approvedForRun, approvedOnce, queryClient, view } =
+        renderLocalCard(askedStep(`${SITE}/search`, "type", why), {
+          allowed: [SITE],
+        });
+      expect(view.container.textContent).toContain(line);
+      expect(
+        within(view.container).queryByRole("button", {
+          name: ALWAYS_ALLOW_SITE,
+        }),
+      ).toBeNull();
+      expect(approvedForRun).toEqual([]);
+      expect(approvedOnce).toEqual([]);
+      cleanup();
+      queryClient.clear();
+    }
+    storedGrants = [];
+  });
+
+  test("a question from a desktop that did not say why offers a website only while it is not allowed", () => {
+    const { queryClient, view } = renderLocalCard(
+      askedStep(`${SITE}/search`, "click", null),
+      { allowed: [SITE] },
+    );
     expect(
       within(view.container).queryByRole("button", { name: ALWAYS_ALLOW_SITE }),
     ).toBeNull();

@@ -74,6 +74,35 @@ const click = async (view: View, name: string) => {
 
 const RECORDING = { ...ACTIVITY_OFF, recordingStatus: "recording" } as const;
 
+type DetailsChoice = keyof typeof setup.details.choices;
+
+const detailsChoice = (view: View, choice: DetailsChoice) =>
+  view.getByRole("radio", {
+    name: (name) => name.startsWith(setup.details.choices[choice]),
+  });
+
+const isChecked = (element: HTMLElement) =>
+  element instanceof HTMLInputElement && element.checked;
+
+const answerDetails = async (view: View, choice: DetailsChoice) => {
+  fireEvent.click(detailsChoice(view, choice));
+  await act(nextMacrotask);
+};
+
+/** From the details screen to the screen after it, choosing app names. */
+const pastDetails = async (view: View) => {
+  await heading(view, setup.details.title);
+  await answerDetails(view, "appNamesOnly");
+  await click(view, onboarding.continue);
+};
+
+/** From a started first screen to the drafts screen. */
+const toDrafts = async (view: View) => {
+  await click(view, onboarding.continue);
+  await pastDetails(view);
+  await click(view, onboarding.continue);
+};
+
 test("the first screen tells what is recorded and sent, and starts nothing on its own", async () => {
   const native = nativeSide();
   const view = await renderSetup(native);
@@ -117,18 +146,40 @@ test("Start recording starts it and moves on to window details", async () => {
   expect(native.activity.recordingStatus).toBe("recording");
 });
 
-test("the details screen writes the stored choice and asks for Accessibility only while it is on", async () => {
+test("the details screen offers both answers, neither chosen, and continues only once one is", async () => {
   const native = nativeSide({ activity: RECORDING });
   const view = await renderSetup(native);
   await click(view, onboarding.continue);
   await heading(view, setup.details.title);
 
-  await view.findByText(settings.permissionAccessibility);
-  const details = view.getByRole("switch", { name: activity.captureDetails });
-  expect(details.getAttribute("aria-checked")).toBe("true");
-  fireEvent.click(details);
+  for (const choice of ["appNamesOnly", "withDetails"] as const) {
+    expect(isChecked(detailsChoice(view, choice))).toBe(false);
+  }
+  // What each answer records and where it stays, from the disclosure.
+  view.getByText(activity.disclosure.recorded.app);
+  view.getByText(activity.disclosure.recorded.details);
+  view.getByText(activity.disclosure.detailsStay);
+  expect(view.queryByText(settings.permissionAccessibility)).toBeNull();
+  const next = view.getByRole("button", { name: onboarding.continue });
+  // A disabled button with a reason stays focusable: `aria-disabled`.
+  expect(next.getAttribute("aria-disabled")).toBe("true");
+  fireEvent.click(next);
   await act(nextMacrotask);
+  await heading(view, setup.details.title);
+  expect(sentCommands(native)).not.toContain("activity_set_capture_details");
 
+  await answerDetails(view, "withDetails");
+  expect(native.calls).toContainEqual({
+    args: { enabled: true },
+    command: "activity_set_capture_details",
+  });
+  await waitFor(() => {
+    expect(isChecked(detailsChoice(view, "withDetails"))).toBe(true);
+  });
+  await view.findByText(settings.permissionAccessibility);
+  await view.findByText(setup.details.browsers);
+
+  await answerDetails(view, "appNamesOnly");
   expect(native.calls).toContainEqual({
     args: { enabled: false },
     command: "activity_set_capture_details",
@@ -136,14 +187,34 @@ test("the details screen writes the stored choice and asks for Accessibility onl
   await waitFor(() => {
     expect(view.queryByText(settings.permissionAccessibility)).toBeNull();
   });
-  await view.findByText(setup.details.appNamesOnly);
+  await click(view, onboarding.continue);
+  await heading(view, setup.calls.title);
+  expect(native.activity.captureDetails).toBe(false);
+});
+
+test("a choice saved before is not shown as chosen; the screen asks again", async () => {
+  const native = nativeSide({
+    activity: { ...RECORDING, captureDetails: true, detailsAccess: "ready" },
+  });
+  const view = await renderSetup(native);
+  await click(view, onboarding.continue);
+  await heading(view, setup.details.title);
+
+  for (const choice of ["appNamesOnly", "withDetails"] as const) {
+    expect(isChecked(detailsChoice(view, choice))).toBe(false);
+  }
+  expect(view.queryByText(settings.permissionAccessibility)).toBeNull();
+  // Leaving without an answer keeps what was saved.
+  await click(view, onboarding.skipRest);
+  expect(sentCommands(native)).not.toContain("activity_set_capture_details");
+  expect(native.activity.captureDetails).toBe(true);
 });
 
 test("the calls screen writes the stored choice", async () => {
   const native = nativeSide({ activity: RECORDING });
   const view = await renderSetup(native);
   await click(view, onboarding.continue);
-  await click(view, onboarding.continue);
+  await pastDetails(view);
   await heading(view, setup.calls.title);
 
   fireEvent.click(view.getByRole("switch", { name: activity.detectCalls }));
@@ -158,9 +229,7 @@ test("the calls screen writes the stored choice", async () => {
 test("the drafts screen asks with the card's consent and grants it on the account", async () => {
   const native = nativeSide({ activity: RECORDING });
   const view = await renderSetup(native);
-  for (let screen = 0; screen < 3; screen += 1) {
-    await click(view, onboarding.continue);
-  }
+  await toDrafts(view);
   await heading(view, activity.billingDraftsTitle);
 
   await view.findByText((content) =>
@@ -183,9 +252,7 @@ test("the drafts screen asks with the card's consent and grants it on the accoun
 test("a grant the server refuses says so and can be tried again", async () => {
   const native = nativeSide({ activity: RECORDING, grantRefusals: 1 });
   const view = await renderSetup(native);
-  for (let screen = 0; screen < 3; screen += 1) {
-    await click(view, onboarding.continue);
-  }
+  await toDrafts(view);
   await heading(view, activity.billingDraftsTitle);
 
   const allow = () => view.getByRole("switch", { name: setup.aiDrafts.allow });
@@ -213,9 +280,7 @@ test("a withdrawal the server has not confirmed shows as pending and is sent aga
     withdrawRefusals: 1,
   });
   const view = await renderSetup(native);
-  for (let screen = 0; screen < 3; screen += 1) {
-    await click(view, onboarding.continue);
-  }
+  await toDrafts(view);
   await heading(view, activity.billingDraftsTitle);
 
   const allow = await view.findByRole("switch", {
@@ -243,9 +308,7 @@ test("the introduction offers to open activity once recording has started, pause
     onboarding: ACTIVITY_INTRODUCTION,
   });
   const view = await renderSetup(native);
-  for (let screen = 0; screen < 3; screen += 1) {
-    await click(view, onboarding.continue);
-  }
+  await toDrafts(view);
   await heading(view, activity.billingDraftsTitle);
   view.getByRole("button", { name: onboarding.openActivity });
   expect(sentCommands(native)).not.toContain("activity_set_recording_status");
@@ -266,13 +329,29 @@ test("without drafting for the firm, calls is the last screen", async () => {
   ]);
 });
 
-test("where details cannot be read, their screen is left out", async () => {
-  const native = nativeSide({
-    activity: { ...RECORDING, detailsAccess: "unavailable" },
-  });
+test("where details cannot be read or policy keeps them off, their screen is left out", async () => {
+  for (const detailsAccess of ["unavailable", "managed"] as const) {
+    const native = nativeSide({ activity: { ...RECORDING, detailsAccess } });
+    const view = await renderSetup(native);
+    await click(view, onboarding.continue);
+    await heading(view, setup.calls.title);
+    expect(sentCommands(native)).not.toContain("activity_set_capture_details");
+    await act(nextMacrotask);
+    cleanup();
+  }
+});
+
+test("where policy turns drafts off, calls is the last screen and nothing asks for consent", async () => {
+  const native = nativeSide({ activity: RECORDING, draftPolicy: "managedOff" });
   const view = await renderSetup(native);
-  await click(view, onboarding.continue);
-  await heading(view, setup.calls.title);
+  await heading(view, onboarding.activityTitle);
+  const steps = [...view.container.querySelectorAll("[data-slot=step]")];
+  expect(steps.map((step) => step.textContent)).toEqual([
+    setup.screens.recording,
+    setup.screens.details,
+    setup.screens.calls,
+  ]);
+  expect(sentCommands(native)).not.toContain("billing_draft_grant_consent");
 });
 
 test("Skip the rest leaves the step with what was chosen", async () => {
@@ -305,9 +384,8 @@ test("the introduction runs the same screens and ends in Done", async () => {
   view.getByRole("navigation", { name: onboarding.introduceActivityTitle });
 
   await click(view, activity.welcomeStart);
-  for (let screen = 0; screen < 2; screen += 1) {
-    await click(view, onboarding.continue);
-  }
+  await pastDetails(view);
+  await click(view, onboarding.continue);
   await heading(view, activity.billingDraftsTitle);
   view.getByRole("button", { name: onboarding.openActivity });
   await click(view, onboarding.done);

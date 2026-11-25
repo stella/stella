@@ -55,6 +55,8 @@ import type {
   SuggestionSummary,
 } from "./activity-calendar-logic";
 import { calendarDate, timedSegments } from "./activity-logic";
+import { outageRanges, STOP_REASON_KEYS } from "./activity-outages";
+import type { OutageRange } from "./activity-outages";
 import type {
   ActivityAppExclusion,
   ActivityDaySnapshot,
@@ -420,8 +422,11 @@ export const ActivityDayCalendar = ({
     draftedEntries,
   });
   const suggestions = matchedSuggestions(day.groups, leftOut);
+  const outages = outageRanges(snapshot.outages);
   const editingDisabledReason = getEditingDisabledReason(submission, t);
-  const editable = editingDisabledReason === undefined;
+  // While Activity cannot record, its history is read-only.
+  const editable =
+    editingDisabledReason === undefined && snapshot.stoppedReason === null;
   const drafting = useBillingDraftSettings(true);
   const narratives = useSuggestionDrafts({
     drafting,
@@ -554,6 +559,7 @@ export const ActivityDayCalendar = ({
   const columns = useCalendarColumns({
     phase: candidates.type === "loading" ? "pending" : "ready",
     segments: day.segments,
+    outages,
     granularity: preferences.granularity,
     sourceAppVisuals: snapshot.sourceAppVisuals,
     rangeSelection: editable,
@@ -630,12 +636,14 @@ export const ActivityDayCalendar = ({
         />
       </div>
       {notice}
-      {day.segments.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          {t(emptyDayMessage(snapshot))}
-        </p>
-      ) : null}
-      {candidates.type === "failed" ? (
+      <DayStatus
+        empty={day.segments.length === 0}
+        outages={outages}
+        snapshot={snapshot}
+      />
+      {/* Matters cannot be read while Activity cannot record; the stop
+          notice already says why. */}
+      {candidates.type === "failed" && snapshot.stoppedReason === null ? (
         <CandidatesFailedAlert onRetry={refreshCandidates} />
       ) : null}
       <SubmissionFeedback
@@ -663,6 +671,7 @@ export const ActivityDayCalendar = ({
           // empty hours up to the day's edge.
           instants: [
             ...day.segments.flatMap(({ startMs, endMs }) => [startMs, endMs]),
+            ...outages.flatMap(({ startMs, endMs }) => [startMs, endMs]),
             ...(snapshot.date === snapshot.today ? [nowMs] : []),
             // A range set on its card stays in view wherever it is moved.
             ...rangeEdges(openCard),
@@ -707,6 +716,38 @@ const CandidatesFailedAlert = ({ onRetry }: { onRetry: () => void }) => {
         {t("retry")}
       </Button>
     </div>
+  );
+};
+
+type DayStatusProps = {
+  /** Nothing was recorded on the day. */
+  empty: boolean;
+  outages: readonly OutageRange[];
+  snapshot: ActivityDaySnapshot;
+};
+
+/** What the day says above its grid. A day Activity could not record says
+ * why, so it never reads as a day off. */
+const DayStatus = ({ empty, outages, snapshot }: DayStatusProps) => {
+  const t = useTranslations("activity");
+  const longest = outages.at(0);
+  return (
+    <>
+      {empty ? (
+        <p className="text-muted-foreground text-sm">
+          {longest === undefined
+            ? t(emptyDayMessage(snapshot))
+            : t("emptyStopped", {
+                reason: t(STOP_REASON_KEYS[longest.reason]),
+              })}
+        </p>
+      ) : null}
+      {snapshot.outages.status === "unreadable" ? (
+        <p className="text-muted-foreground text-sm">
+          {t("outagesUnreadable")}
+        </p>
+      ) : null}
+    </>
   );
 };
 
@@ -805,6 +846,8 @@ type CalendarColumnsOptions = {
   /** `pending` while the matters that group the day are still read. */
   phase: "pending" | "ready";
   segments: readonly MatchedSegment[];
+  /** Time the member wanted recorded and Activity could not record. */
+  outages: readonly OutageRange[];
   granularity: DayCalendarGranularity;
   sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
   rangeSelection: boolean;
@@ -822,6 +865,7 @@ type CalendarColumnsOptions = {
 function useCalendarColumns({
   phase,
   segments,
+  outages,
   granularity,
   sourceAppVisuals,
   rangeSelection,
@@ -945,6 +989,21 @@ function useCalendarColumns({
       };
     },
   );
+
+  for (const outage of outages) {
+    const range = formatRange(outage.startMs, outage.endMs);
+    const reason = t(STOP_REASON_KEYS[outage.reason]);
+    activity.push({
+      accessibleLabel: t("unrecordedLabel", { range, reason }),
+      caption: range,
+      endMs: outage.endMs,
+      id: `outage:${String(outage.startMs)}:${outage.reason}`,
+      kind: "unrecorded",
+      startMs: outage.startMs,
+      title: <bdi>{t("unrecorded", { reason })}</bdi>,
+      tone: { type: "neutral" },
+    });
+  }
 
   const entries: DayCalendarBlock[] = draftedBlocks(
     draftedEntries,

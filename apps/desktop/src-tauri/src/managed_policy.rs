@@ -1,7 +1,8 @@
 //! Settings an organization's administrator fixes for every user of a
-//! machine: turning off in-app updates, keeping the activity timeline or
-//! clipboard history off, and naming the self-hosted server the app trusts
-//! without asking.
+//! machine: turning off in-app updates, keeping the activity timeline, its
+//! window details, its stella AI drafts or clipboard history off, and naming
+//! the self-hosted server the app trusts without asking. Every switch only
+//! turns something off: no key can turn a feature on or choose for a user.
 //!
 //! macOS reads the app's preference domain through a configuration profile
 //! or the machine-wide preferences file; Windows reads
@@ -18,6 +19,8 @@ use crate::feature_gate::DesktopFeature;
 
 pub const DISABLE_UPDATES: &str = "DisableUpdates";
 pub const DISABLE_ACTIVITY: &str = "DisableActivity";
+pub const DISABLE_ACTIVITY_DETAILS: &str = "DisableActivityDetails";
+pub const DISABLE_ACTIVITY_AI_DRAFTS: &str = "DisableActivityAiDrafts";
 pub const DISABLE_CLIPBOARD: &str = "DisableClipboard";
 pub const SERVER_WEB_ORIGIN: &str = "ServerWebOrigin";
 pub const SERVER_API_URL: &str = "ServerApiURL";
@@ -31,6 +34,12 @@ const WINDOWS_POLICY_KEY: &str = r"Software\Policies\stella\Desktop";
 pub struct ManagedPolicy {
   pub updates_disabled: bool,
   pub activity_disabled: bool,
+  /// Activity records app names only: no window titles or documents,
+  /// whatever the user chose.
+  pub activity_details_disabled: bool,
+  /// No stella AI drafts from recorded activity, whatever the user and the
+  /// server allow.
+  pub activity_ai_drafts_disabled: bool,
   /// No clipboard history: nothing is recorded, and neither the shortcut,
   /// the tray nor a link opens its window.
   pub clipboard_disabled: bool,
@@ -65,6 +74,8 @@ impl ManagedPolicy {
     Self {
       updates_disabled: source.flag(DISABLE_UPDATES),
       activity_disabled: source.flag(DISABLE_ACTIVITY),
+      activity_details_disabled: source.flag(DISABLE_ACTIVITY_DETAILS),
+      activity_ai_drafts_disabled: source.flag(DISABLE_ACTIVITY_AI_DRAFTS),
       clipboard_disabled: source.flag(DISABLE_CLIPBOARD),
       server: managed_server(source),
     }
@@ -79,6 +90,8 @@ pub fn current() -> &'static ManagedPolicy {
       tracing::info!(
         updates_disabled = policy.updates_disabled,
         activity_disabled = policy.activity_disabled,
+        activity_details_disabled = policy.activity_details_disabled,
+        activity_ai_drafts_disabled = policy.activity_ai_drafts_disabled,
         clipboard_disabled = policy.clipboard_disabled,
         server = policy
           .server
@@ -256,6 +269,52 @@ mod tests {
       policy.blocked_features(),
       HashSet::from([DesktopFeature::ActivityTimeline])
     );
+  }
+
+  #[test]
+  fn the_activity_details_flag_turns_off_window_details_only() {
+    let policy = ManagedPolicy::from_source(&Fixture {
+      flags: HashMap::from([(DISABLE_ACTIVITY_DETAILS, true)]),
+      ..Fixture::default()
+    });
+    assert_eq!(
+      policy,
+      ManagedPolicy {
+        activity_details_disabled: true,
+        ..ManagedPolicy::default()
+      }
+    );
+    assert!(policy.blocked_features().is_empty());
+  }
+
+  #[test]
+  fn the_activity_ai_drafts_flag_turns_off_drafts_only() {
+    let policy = ManagedPolicy::from_source(&Fixture {
+      flags: HashMap::from([(DISABLE_ACTIVITY_AI_DRAFTS, true)]),
+      ..Fixture::default()
+    });
+    assert_eq!(
+      policy,
+      ManagedPolicy {
+        activity_ai_drafts_disabled: true,
+        ..ManagedPolicy::default()
+      }
+    );
+    assert!(policy.blocked_features().is_empty());
+  }
+
+  // A flag set to false is the same as no flag: there is nothing to force on.
+  #[test]
+  fn activity_flags_set_to_false_change_nothing() {
+    let policy = ManagedPolicy::from_source(&Fixture {
+      flags: HashMap::from([
+        (DISABLE_ACTIVITY, false),
+        (DISABLE_ACTIVITY_DETAILS, false),
+        (DISABLE_ACTIVITY_AI_DRAFTS, false),
+      ]),
+      ..Fixture::default()
+    });
+    assert_eq!(policy, ManagedPolicy::default());
   }
 
   #[test]

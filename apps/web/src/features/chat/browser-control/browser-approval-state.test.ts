@@ -177,7 +177,7 @@ describe("the browser gate on what the extension reported", () => {
                   }
                   return granted
                     ? { type: "run", by: "site-grant", origin: SITE }
-                    : { type: "ask", site: SITE };
+                    : { type: "ask", site: SITE, reason: "site_not_allowed" };
                 }
                 if (signIn) {
                   return { type: "needs_member" };
@@ -190,11 +190,19 @@ describe("the browser gate on what the extension reported", () => {
                   return { type: "run", by: "level" };
                 }
                 const typing = step.command.action === "fill";
-                const proven =
-                  history === "same" || (history === "noValue" && !typing);
-                return granted && proven
+                if (history !== "same" && history !== "noValue") {
+                  return {
+                    type: "ask",
+                    site: SITE,
+                    reason: "page_unconfirmed",
+                  };
+                }
+                if (typing && history === "noValue") {
+                  return { type: "ask", site: SITE, reason: "possible_secret" };
+                }
+                return granted
                   ? { type: "run", by: "site-grant", origin: SITE }
-                  : { type: "ask", site: SITE };
+                  : { type: "ask", site: SITE, reason: "site_not_allowed" };
               })();
               expect({
                 level,
@@ -393,6 +401,7 @@ describe("the websites a chat has been on", () => {
     expect(decideOpen(state, `${SITE}/a`, THREAD)).toEqual({
       type: "ask",
       site: SITE,
+      reason: "site_not_allowed",
     });
     state.observeVisit(THREAD, pageRead(PAGE_URL, "revision-1", "draft"));
     expect(decideOpen(state, `${SITE}/other?q=1`, THREAD)).toEqual({
@@ -403,15 +412,18 @@ describe("the websites a chat has been on", () => {
     expect(decideOpen(state, "https://other.test/", THREAD)).toEqual({
       type: "ask",
       site: "https://other.test",
+      reason: "site_not_allowed",
     });
     // Another chat of the web tab, or no known chat, has been on none.
     expect(decideOpen(state, `${SITE}/a`, "thread-2")).toEqual({
       type: "ask",
       site: SITE,
+      reason: "site_not_allowed",
     });
     expect(decideOpen(state, `${SITE}/a`, null)).toEqual({
       type: "ask",
       site: SITE,
+      reason: "site_not_allowed",
     });
   });
 

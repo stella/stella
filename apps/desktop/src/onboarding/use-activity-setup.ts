@@ -46,7 +46,8 @@ export type ActivitySetupControls = {
   reload: () => void;
   /** Starts recording; resolves to whether it started. */
   start: () => Promise<boolean>;
-  setCaptureDetails: (enabled: boolean) => Promise<void>;
+  /** Resolves to whether the change landed. */
+  setCaptureDetails: (enabled: boolean) => Promise<boolean>;
   setDetectCalls: (enabled: boolean) => Promise<void>;
 };
 
@@ -121,11 +122,8 @@ export const useActivitySetup = (): ActivitySetupControls => {
     reload: () => {
       void readAgain();
     },
-    setCaptureDetails: async (enabled) => {
-      await run(async () =>
-        invoke("activity_set_capture_details", { enabled }),
-      );
-    },
+    setCaptureDetails: async (enabled) =>
+      run(async () => invoke("activity_set_capture_details", { enabled })),
     setDetectCalls: async (enabled) => {
       await run(async () => invoke("activity_set_detect_calls", { enabled }));
     },

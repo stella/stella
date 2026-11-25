@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Label } from "@stll/ui/label";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Step, Steps } from "@stll/ui/steps";
 import { Switch } from "@stll/ui/switch";
@@ -13,8 +14,8 @@ import { cn } from "@stll/ui/utils";
 /**
  * The pieces every one-choice-per-screen setup step is built from, so
  * Dictation and Activity look and read alike: the stepper above the title,
- * the title with one plain line, the screen's cards, a switch card, facts,
- * and the line that offers to read again.
+ * the title with one plain line, the screen's cards, a switch card, choice
+ * cards, facts, and the line that offers to read again.
  */
 
 /** Grid columns for each number of screens, written out for Tailwind. */
@@ -134,6 +135,42 @@ export const SwitchCard = ({
     </div>
   );
 };
+
+/** One answer of a choice with its name and what it means, as a card of
+ *  its own; the cards of one choice sit in one `role="radiogroup"` and
+ *  share a `name`. */
+export const ChoiceCard = ({
+  checked,
+  description,
+  name,
+  onChoose,
+  title,
+  value,
+}: {
+  checked: boolean;
+  description: string;
+  name: string;
+  onChoose: () => void;
+  title: string;
+  value: string;
+}) => (
+  <Label variant="choice-card">
+    <input
+      checked={checked}
+      className="accent-primary mt-0.5 size-4 shrink-0"
+      name={name}
+      onChange={onChoose}
+      type="radio"
+      value={value}
+    />
+    <span className="min-w-0">
+      <span className="text-foreground block text-sm font-medium">{title}</span>
+      <span className="text-muted-foreground mt-0.5 block text-sm leading-relaxed text-pretty">
+        {description}
+      </span>
+    </span>
+  </Label>
+);
 
 /** What a screen sends and keeps, one plain line each. */
 export const Facts = ({ facts }: { facts: readonly string[] }) => (

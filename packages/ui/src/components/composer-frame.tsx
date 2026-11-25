@@ -169,7 +169,9 @@ export const ComposerFrame = ({
       data-composer-layout={layout}
     >
       {above}
-      {attachments}
+      {attachments !== undefined && (
+        <div data-slot="composer-attachments">{attachments}</div>
+      )}
       <div className={COMPOSER_GRID_CLASS[layout]}>
         <div className={COMPOSER_TEXT_CELL_CLASS[layout]}>
           <ScrollArea

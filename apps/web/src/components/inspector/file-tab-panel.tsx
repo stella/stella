@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import type {
   Dispatch,
-  MouseEvent,
   ReactElement,
   ReactNode,
   RefObject,
@@ -12,6 +11,7 @@ import { useTranslations } from "use-intl";
 
 import type { DocxCompatibility } from "@stll/folio-react";
 import { Button } from "@stll/ui/button";
+import type { ContextMenuSurfaceOpenEvent } from "@stll/ui/entity-actions";
 import { CheckIcon, GitCommitHorizontalIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
@@ -98,7 +98,7 @@ type FileTabPanelProps = {
   documentReviewPaneFieldId: string | null;
   pdfRouteJustification: string | null;
   peekPdfViewId: string;
-  ribbonLabelContextMenuOpenAt: (event: MouseEvent<HTMLElement>) => void;
+  ribbonLabelContextMenuOpenAt: (details: ContextMenuSurfaceOpenEvent) => void;
   scaleOffsets: ReadonlyMap<string, number>;
   setDocxCompatibilityByTab: Dispatch<
     SetStateAction<Map<string, DocxCompatibility>>

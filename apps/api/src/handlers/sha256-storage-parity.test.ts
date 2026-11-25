@@ -62,7 +62,7 @@ for (const text of texts) {
     );
   });
 
-  test(`feedback deduplication preserves report JSON and nullable instance: ${JSON.stringify(text)}`, () => {
+  test(`feedback deduplication preserves report JSON, nullable instance and reporter: ${JSON.stringify(text)}`, () => {
     const report = {
       kind: "bug",
       area: "documents",
@@ -70,10 +70,22 @@ for (const text of texts) {
       whatHappened: text,
       context: { client: "web", route: text },
     } as const satisfies FeedbackReportInput;
+    const reporters = [
+      { via: "intake", userId: null, organizationId: null },
+      { via: "web", userId: text, organizationId: text },
+    ] as const;
     for (const instance of [undefined, text]) {
-      expect(feedbackFingerprint(report, instance)).toBe(
-        sha256Hex(JSON.stringify([report, instance ?? null])),
-      );
+      for (const reporter of reporters) {
+        expect(feedbackFingerprint(report, instance, reporter)).toBe(
+          sha256Hex(
+            JSON.stringify([
+              report,
+              instance ?? null,
+              [reporter.via, reporter.userId, reporter.organizationId],
+            ]),
+          ),
+        );
+      }
     }
   });
 

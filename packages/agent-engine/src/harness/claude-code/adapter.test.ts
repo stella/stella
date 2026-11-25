@@ -1433,6 +1433,25 @@ describe("Claude Code adapter over stream-json stdio", () => {
     expect(harness.startups()).toHaveLength(1);
   });
 
+  test("a browser server that does not start leaves the turn running without it, and the agent is told", async () => {
+    const { events, received } = await run("browser_unreachable", {
+      overrides: {
+        browser: {
+          serverName: "stella_browser",
+          url: "http://127.0.0.1:9/browser/run-1",
+          token: "browser-token",
+        },
+      },
+    });
+    expect(terminal(events)?.type).toBe("turn.completed");
+    expect(promptOf(received())).toContain("The browser is unavailable");
+  });
+
+  test("a turn without the browser is told nothing about it", async () => {
+    const { received } = await run("browser_unreachable");
+    expect(promptOf(received())).not.toContain("browser");
+  });
+
   test("a start too slow for its deadline is tried once more, and the turn runs", async () => {
     for (const scenario of ["slow_first_start", "slow_first_mcp"] as const) {
       const harness = harnessFor(scenario, { requestTimeoutMs: 2000 });

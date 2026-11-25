@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, gt, notInArray, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, or, sql } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
@@ -33,10 +33,8 @@ import {
   SCHEDULER_REPAIR_BACKFILL_IDS,
 } from "@/api/lib/scheduler/backfill-config";
 import { reconcileFlowSchedule } from "@/api/lib/scheduler/reconcile-flow-schedule";
-import {
-  REGISTERED_SCHEDULER_TASK_NAMES,
-  type RegisteredSchedulerTaskName,
-} from "@/api/lib/scheduler/registry";
+import type { RegisteredSchedulerTaskName } from "@/api/lib/scheduler/registry";
+import { RETIRED_SCHEDULER_TASK_NAMES } from "@/api/lib/scheduler/retired-tasks";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import { SWEEP_ACTION_COSTS_TASK } from "@/api/lib/scheduler/tasks/action-cost-retention";
 import { BACKFILL_AGENT_CLIENT_STORAGE_TASK } from "@/api/lib/scheduler/tasks/agent-client-storage-backfill";
@@ -1029,24 +1027,32 @@ export const ensureDefaultSchedulerJobs = async (): Promise<void> => {
     panic(`scheduler jobs declared but not registered: ${missing.join(", ")}`);
   }
 
-  // A persisted job whose task this build cannot run is undrivable: the
-  // scheduler would keep claiming it and executing nothing, invisibly. Rows
-  // reach that state when a deployment removes a task, because the loop
-  // above only upserts declared jobs and never retires what an older build
-  // declared. The registry is the discriminator, not the declared list, so
-  // dynamically registered jobs (scheduled flows) are untouched. Disable
-  // rather than delete: the row remains as an audit record, and a
-  // rollback requires an explicit operator re-enable.
-  // One guarded update, so a concurrent change to a row's task or enabled
-  // state cannot be overwritten from a stale read; only rows the update
-  // actually changed are logged.
+  await retireSchedulerJobs(RETIRED_SCHEDULER_TASK_NAMES);
+};
+
+/**
+ * A persisted job whose task was removed is undrivable: the scheduler would
+ * keep claiming it and executing nothing, invisibly. Registration only upserts
+ * declared jobs, so a removed task is retired here by its name. A task this
+ * build merely does not know is left alone: during a rolling deploy it belongs
+ * to the newer build, and disabling it from an older replica would stop that
+ * job until a newer replica boots again. Disable rather than delete: the row
+ * remains as an audit record, and a rollback requires an explicit operator
+ * re-enable. One guarded update, so a concurrent change to a row's task or
+ * enabled state cannot be overwritten from a stale read; only rows the update
+ * actually changed are logged.
+ */
+export const retireSchedulerJobs = async (
+  retiredTaskNames: ReadonlySet<string>,
+): Promise<void> => {
+  // audit: skip — scheduler system state with no member actor; each retired job is logged below.
   const retired = await rootDb
     .update(schedulerJobs)
     .set({ enabled: false })
     .where(
       and(
         eq(schedulerJobs.enabled, true),
-        notInArray(schedulerJobs.task, [...REGISTERED_SCHEDULER_TASK_NAMES]),
+        inArray(schedulerJobs.task, [...retiredTaskNames]),
       ),
     )
     .returning({ id: schedulerJobs.id, task: schedulerJobs.task });

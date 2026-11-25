@@ -50,6 +50,7 @@
     "batchFailed": "Koncepty se nepodařilo vytvořit. Zkuste to znovu.",
     "billingDraftsForgetPreference": "Zapomenout preferenci",
     "billingDraftsGranted": "stella AI navrhuje popisy vašich časových záznamů z podrobností, které každý záznam zobrazuje.",
+    "billingDraftsManaged": "Vaše organizace v tomto počítači vypnula návrhy od stella AI.",
     "billingDraftsPreference": "Vaše preference pro návrhy",
     "billingDraftsRevoked": "stella AI nenavrhne žádný popis, dokud ji nepovolíte.",
     "billingDraftsTitle": "Návrhy stella AI",
@@ -99,6 +100,7 @@
     "deleteOtherAccountHistory": "Smazat historii jiných účtů",
     "deleteOtherAccountHistoryConfirmation": "Smazat historii jiných účtů na tomto zařízení za {days, plural, one {# den} few {# dny} other {# dní}}? Smazání nelze vrátit zpět.",
     "deletionOnly": "Uloženou aktivitu nelze otevřít, protože v klíčence chybí její klíč. Pro nový začátek můžete smazat uloženou aktivitu a údaje pro obnovení čekajících konceptů.",
+    "detailsManaged": "Vaše organizace v tomto počítači vypnula záznam názvů oken a dokumentů. Názvy aplikací se zaznamenávají dál.",
     "detailsUnavailable": "Podrobnosti na tomto zařízení nejsou dostupné. Názvy aplikací se nadále zaznamenávají.",
     "detectCalls": "Zaznamenávat hovory",
     "detectCallsDescription": "Když Teams, Zoom nebo prohlížeč používá mikrofon, počítá se tento čas jako hovor, i když jen posloucháte nebo pracujete v jiné aplikaci. Zvuk se nikdy nenahrává.",
@@ -116,6 +118,7 @@
       },
       "aiDraftProvider": "poskytovateli AI, kterého používá vaše kancelář, nebo poskytovateli stella AI",
       "control": "Nic se nezaznamenává, dokud nestisknete Začít zaznamenávat. Kdykoli můžete pozastavit, vyloučit aplikace nebo smazat kterýkoli den.",
+      "detailsStay": "Názvy oken a dokumentů zůstávají v tomto počítači, pokud si nevyžádáte návrh od stella AI",
       "never": {
         "audio": "Zvuk z mikrofonu",
         "keystrokes": "Stisky kláves ani psaný text",
@@ -128,7 +131,7 @@
         "app": "Která aplikace je v popředí, každých pár sekund",
         "browserTitles": "Názvy karet prohlížeče, jen v prohlížečích, které povolíte",
         "calls": "Čas v hovorech, pokud to nevypnete",
-        "details": "Názvy oken a na Macu celá cesta ke každému otevřenému dokumentu včetně složek, dokud je nevypnete"
+        "details": "Názvy oken a na Macu celá cesta ke každému otevřenému dokumentu včetně složek, jen pokud je zvolíte"
       },
       "recordedTitle": "Co se zaznamenává",
       "sent": {
@@ -149,6 +152,7 @@
     "earlierTimeStaysUntitled": "Dřívější čas zůstane bez názvů.",
     "earliestDayReached": "Prohlížíte si nejstarší dostupný den.",
     "empty": "V tento den se nic nezaznamenalo.",
+    "emptyStopped": "Nic nebylo zaznamenáno. Aktivita byla zastavena: {reason}",
     "emptyToday": "Dnes se zatím nic nezaznamenalo. Práce se tu bude objevovat průběžně.",
     "emptyTodayPaused": "Zaznamenávání je pozastavené. Dnešní práci začnete zaznamenávat tlačítkem Pokračovat.",
     "encrypted": "Šifrováno v tomto zařízení",
@@ -187,6 +191,7 @@
     "noMatters": "Žádné spisy nenalezeny. Zkuste jiné hledání.",
     "openAccessibilitySettings": "Otevřít nastavení Zpřístupnění",
     "otherAccountHistory": "Na tomto zařízení zůstává historie jiných účtů za {days, plural, one {# den} few {# dny} other {# dní}}.",
+    "outagesUnreadable": "Časy, kdy Aktivita nemohla zaznamenávat, nelze zobrazit.",
     "pause": "Pozastavit",
     "paused": "Pozastaveno",
     "pendingActivityProtected": "Před smazáním aktivity dokončete čekající vytváření konceptů.",
@@ -213,6 +218,14 @@
     "searchingMatters": "Hledání spisů…",
     "selectRange": "Vybrat úsek",
     "settings": "Nastavení",
+    "stopReason": {
+      "blockedByPolicy": "Vypnuto vaší organizací",
+      "notAvailable": "Pro tento účet není k dispozici",
+      "notConfirmed": "Aplikace stella zatím není dostupná",
+      "reconnectNeeded": "Je nutné znovu připojit účet",
+      "signedOut": "Odhlášeno"
+    },
+    "stoppedNotice": "Aktivita nemůže zaznamenávat: {reason}. Co zaznamenala, zůstává zde k nahlédnutí; změny jsou vypnuté, dokud nebude znovu zaznamenávat.",
     "suggestionPieceLabel": "Navržený záznam: {matter}, {range}, {duration}, celkem {hours} h",
     "suggestionPieces": "{count, plural, one {# úsek} few {# úseky} other {# úseků}} · {hours} h",
     "suggestionRange": "{range} · {hours} h",
@@ -225,6 +238,8 @@
     "unreadableEraseAction": "Smazat nečitelnou aktivitu",
     "unreadableEraseConfirmation": "Nečitelná uložená aktivita a údaje pro obnovení jejích čekajících konceptů budou smazány. Vytvořené koncepty již mohou existovat. Tuto akci nelze vrátit zpět.",
     "unreadableEraseNotice": "Některou uloženou aktivitu nelze přečíst. Nečitelnou uloženou aktivitu a údaje pro obnovení jejích konceptů můžete smazat.",
+    "unrecorded": "Nezaznamenáno: {reason}",
+    "unrecordedLabel": "Nezaznamenáno: {reason}, {range}",
     "unrecoverableOtherHistoryConfirmation": "Uložená historie jiných účtů bude smazána, včetně údajů pro obnovení čekajících konceptů s chybějícími klíči nebo nečitelnými soubory. Vytvořené koncepty již mohou existovat. Tuto akci nelze vrátit zpět.",
     "welcomeLearnMore": "Více informací",
     "welcomePreviewMatter": "Prodloužení nájmu Riverside",
@@ -929,6 +944,7 @@
   },
   "notification": {
     "activityStoppedNotAvailableBody": "Aktivita už pro tento účet není k dispozici. Co bylo zaznamenáno, zůstává na tomto počítači.",
+    "activityStoppedNotConfirmedBody": "Od spuštění se nepodařilo spojit s aplikací stella. Aktivita začne znovu zaznamenávat, jakmile to půjde.",
     "activityStoppedPolicyBody": "Vaše organizace vypnula Aktivitu na tomto počítači. Co bylo zaznamenáno, zůstává na tomto počítači.",
     "activityStoppedReconnectBody": "Znovu se připojte ke svému účtu stella, aby záznam pokračoval.",
     "activityStoppedSignedOutBody": "Znovu se přihlaste ke svému účtu stella, aby záznam pokračoval.",
@@ -970,9 +986,13 @@
         "title": "Hovory"
       },
       "details": {
-        "appNamesOnly": "Zaznamenávají se jen názvy aplikací.",
-        "body": "Při procházení dne podle nich snáz rozlišíte jednotlivé spisy.",
+        "body": "Zvolte, co má Aktivita zaznamenávat. Podle názvů oken a dokumentů při procházení dne snáz rozlišíte jednotlivé spisy.",
         "browsers": "Prohlížeče zaznamenávají názvy karet, až když to povolíte. Aktivita se na každý prohlížeč zeptá, jakmile ho poprvé uvidí.",
+        "choices": {
+          "appNamesOnly": "Zaznamenávat jen názvy aplikací",
+          "withDetails": "Zaznamenávat také názvy oken a dokumentů"
+        },
+        "choose": "Pro pokračování vyberte jednu z možností.",
         "title": "Názvy oken a dokumentů"
       },
       "screens": {
@@ -1425,6 +1445,7 @@
     "activityRecording": "Aktivita: Záznam · dnes {hours} h",
     "activityResume": "Pokračovat v záznamu",
     "activityStoppedNotAvailable": "Aktivita: Zastaveno · Pro tento účet není k dispozici",
+    "activityStoppedNotConfirmed": "Aktivita: Zastaveno · Aplikace stella zatím není dostupná",
     "activityStoppedPolicy": "Aktivita: Zastaveno · Vypnuto vaší organizací",
     "activityStoppedReconnect": "Aktivita: Zastaveno · Je nutné znovu připojit účet",
     "activityStoppedSignedOut": "Aktivita: Zastaveno · Odhlášeno",

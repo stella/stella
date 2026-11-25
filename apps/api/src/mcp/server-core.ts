@@ -1703,25 +1703,6 @@ export const createMcpHttpRequestHandler = ({
                     });
               return withMcpCors(bounded, accepted, mode);
             };
-            // With the size policy on, the body is read once here; the
-            // transport cap below checks the metered size instead of reading
-            // it again.
-            let metered: BoundedRequest | undefined;
-            if (policy !== undefined) {
-              const bounded = await boundActionRequest(
-                incomingRequest,
-                policy.requestBytes,
-              );
-              if (Result.isError(bounded)) {
-                return withMcpCors(
-                  actionSizeErrorResponse(bounded.error, policy.responseBytes),
-                  undefined,
-                  mode,
-                );
-              }
-              metered = bounded.value;
-            }
-
             // Preserve the existing transport frame limit while admission is disabled.
             if (
               policy === undefined &&
@@ -1779,10 +1760,30 @@ export const createMcpHttpRequestHandler = ({
                 );
               }
 
-              // The transport cap is enforced only for an accepted token: a caller
-              // without one is refused from the headers alone, so it cannot hold
-              // connections and buffers open by streaming a body that is discarded
-              // anyway.
+              // The body is read only for an accepted token: a caller without
+              // one is refused from the headers alone, so it cannot hold
+              // connections and buffers open by streaming a body that is
+              // discarded anyway. With the size policy on, the body is read
+              // once here; the transport cap below checks the metered size
+              // instead of reading it again.
+              let metered: BoundedRequest | undefined;
+              if (policy !== undefined) {
+                const bounded = await boundActionRequest(
+                  incomingRequest,
+                  policy.requestBytes,
+                );
+                if (Result.isError(bounded)) {
+                  return await withMcpCors(
+                    actionSizeErrorResponse(
+                      bounded.error,
+                      policy.responseBytes,
+                    ),
+                    accepted,
+                    mode,
+                  );
+                }
+                metered = bounded.value;
+              }
               const frame = await withCappedRequestBody(
                 incomingRequest,
                 metered,
