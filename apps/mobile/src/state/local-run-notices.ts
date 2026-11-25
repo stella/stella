@@ -4,6 +4,7 @@ import {
   type ChatLocalRunNotice,
   type ChatLocalRunNoticeCapability,
   chatLocalRunNoticeKey,
+  endedChatLocalRunNotices,
 } from "@stll/api-contract/chat-local-run-notice";
 
 /**
@@ -69,3 +70,19 @@ export const localRunNoticeLine = (
       return panic("Unknown local run notice");
   }
 };
+
+/**
+ * The lines an answer's notices read as. An answer no longer arriving (a
+ * stop cut its stream off) reads a retry still under way as ended, as the
+ * stored answer has it.
+ */
+export const localRunNoticeLines = (
+  notices: readonly ChatLocalRunNotice[],
+  live: boolean,
+): LocalRunNoticeLine[] =>
+  (live ? notices : (endedChatLocalRunNotices(notices) ?? notices)).flatMap(
+    (notice) => {
+      const line = localRunNoticeLine(notice);
+      return line === null ? [] : [line];
+    },
+  );

@@ -1437,7 +1437,7 @@ describe("Codex adapter over a stdio app-server", () => {
     const limited = await run("usage_limit");
     expect(limited.events).toContainEqual({
       type: "notice",
-      notice: { kind: "retrying", attempt: null, maxAttempts: null },
+      notice: { kind: "retrying", attempt: 1, maxAttempts: null },
     });
     // A usage limit is the member's allowance, not the model's capacity: the
     // turn is not continued.

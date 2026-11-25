@@ -38,6 +38,7 @@ import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import {
   CHAT_LOCAL_RUN_NOTICES_METADATA_KEY,
   chatLocalRunNoticesOf,
+  endedChatLocalRunNotices,
 } from "@stll/api-contract/chat-local-run-notice";
 import {
   CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY,
@@ -5784,13 +5785,16 @@ const attachLocalRunRequests = (
  * The answer with what its local run said about itself, each notice in its
  * latest state, as the stream restated it
  * (`CHAT_LOCAL_RUN_NOTICES_METADATA_KEY`): a reloaded answer shows the same
- * notices as the live one did.
+ * notices as the live one did. The answer is captured where its stream
+ * ends, so a retry still under way ended with it: a stop or a cut ends the
+ * read before the run settles it.
  */
 const attachLocalRunNotices = (
   message: ChatMessage,
   streamed: UIMessage,
 ): ChatMessage => {
-  const notices = chatLocalRunNoticesOf(streamed.metadata);
+  const streamedNotices = chatLocalRunNoticesOf(streamed.metadata);
+  const notices = endedChatLocalRunNotices(streamedNotices) ?? streamedNotices;
   return notices.length === 0
     ? message
     : {

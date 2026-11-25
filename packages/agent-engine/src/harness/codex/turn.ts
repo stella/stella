@@ -41,7 +41,6 @@ import {
 import type { AppServerClient, AppServerHandlers } from "./app-server-client";
 import {
   classifyTurnFailure,
-  codexRetryAttempt,
   isAuthFailure,
   isCapacityFailure,
   isPlanUsageLimit,
@@ -342,6 +341,12 @@ export class CodexTurnSession {
   /** Plan updates reported so far in this turn. */
   private planUpdates = 0;
   private capacityRetries = 0;
+  /**
+   * Retries Codex announced since the turn last reported anything else:
+   * the attempt a retry notice names. Codex states its count only in its
+   * display text, which is not read.
+   */
+  private reconnects = 0;
   /** Messages whose text streamed in part and whose item has not completed. */
   private readonly openMessages = new Set<string>();
 
@@ -502,6 +507,9 @@ export class CodexTurnSession {
   }
 
   private emit(event: HarnessEvent) {
+    if (event.type !== "notice") {
+      this.reconnects = 0;
+    }
     this.lifecycle.emit(event);
   }
 
@@ -560,9 +568,14 @@ export class CodexTurnSession {
         // A refused credential does not heal by retrying: Codex would replay
         // its reconnect schedule, then fail the same way.
         if (parsed.willRetry && !isAuthFailure(parsed.error)) {
+          this.reconnects += 1;
           this.emit({
             type: "notice",
-            notice: { kind: "retrying", ...codexRetryAttempt(parsed.error) },
+            notice: {
+              kind: "retrying",
+              attempt: this.reconnects,
+              maxAttempts: null,
+            },
           });
           return;
         }

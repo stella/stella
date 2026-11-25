@@ -14,7 +14,10 @@ import {
   parseChatEvent,
   type StreamedAnswer,
 } from "@/state/chat-stream";
-import { localRunNoticeLine } from "@/state/local-run-notices";
+import {
+  localRunNoticeLine,
+  localRunNoticeLines,
+} from "@/state/local-run-notices";
 
 const ANSWER_ID = "answer-1";
 const CREATED_AT = "2026-11-25T10:00:00.000Z";
@@ -134,5 +137,21 @@ describe("what the run on the person's computer said about itself", () => {
       },
       null,
     ]);
+  });
+
+  test("an answer no longer arriving reads a retry still under way as ended", () => {
+    expect(
+      localRunNoticeLines([warning, retrying], true).map(
+        ({ message }) => message,
+      ),
+    ).toEqual([
+      "localRun.notices.configWarning",
+      "localRun.notices.retryingAttempt",
+    ]);
+    expect(
+      localRunNoticeLines([warning, retrying], false).map(
+        ({ message }) => message,
+      ),
+    ).toEqual(["localRun.notices.configWarning"]);
   });
 });

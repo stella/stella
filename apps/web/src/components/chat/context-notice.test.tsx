@@ -44,10 +44,13 @@ describe("an answer's context notice", () => {
   });
 });
 
-const renderNotices = (metadata: ChatMessageMetadata | undefined) =>
+const renderNotices = (
+  metadata: ChatMessageMetadata | undefined,
+  isTurnActive = true,
+) =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <LocalRunNotices metadata={metadata} />
+      <LocalRunNotices isTurnActive={isTurnActive} metadata={metadata} />
     </IntlProvider>,
   );
 
@@ -100,6 +103,19 @@ describe("what an answer's local run said about itself", () => {
       ],
     });
     expect(markup).toBe('<div aria-live="polite" role="status"></div>');
+  });
+
+  test("a retry still under way when the turn stopped running reads as ended", () => {
+    const metadata: ChatMessageMetadata = {
+      localRunNotices: [
+        { kind: "config_warning" },
+        { kind: "retrying", status: "retrying", attempt: 2, maxAttempts: 5 },
+      ],
+    };
+    expect(renderNotices(metadata)).toContain("(attempt 2 of 5)");
+    const stopped = renderNotices(metadata, false);
+    expect(stopped).not.toContain("trying again");
+    expect(stopped).toContain(notices.configWarning);
   });
 
   test("stays away from an answer whose run said nothing", () => {

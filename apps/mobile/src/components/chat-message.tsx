@@ -28,7 +28,7 @@ import { ThreadMatter } from "@/components/thread-matter";
 import { APP_VARIANT } from "@/env";
 import { CHAT_FAILURE_KEYS, chatFailureStepsKey } from "@/state/chat-failure";
 import type { ChatEntry, ShownFile } from "@/state/chat-messages";
-import { localRunNoticeLine } from "@/state/local-run-notices";
+import { localRunNoticeLines } from "@/state/local-run-notices";
 import { plainText } from "@/state/markdown";
 
 /**
@@ -120,7 +120,7 @@ export const ChatMessage = ({
         />
       )}
       {entry.localRunNotices === undefined ? null : (
-        <LocalRunNotices notices={entry.localRunNotices} />
+        <LocalRunNotices live={live} notices={entry.localRunNotices} />
       )}
       {entry.unansweredRequests === undefined ? null : (
         <LocalRunRequestNotices reasons={entry.unansweredRequests} />
@@ -231,24 +231,20 @@ const SteeredMessage = ({ text }: { text: string }) => {
  * politely, never as an alert.
  */
 const LocalRunNotices = ({
+  live,
   notices,
 }: {
+  live: boolean;
   notices: readonly ChatLocalRunNotice[];
 }) => {
   const t = useTranslations("chat");
   return (
     <View accessibilityLiveRegion="polite" className="gap-1">
-      {notices.map((notice) => {
-        const line = localRunNoticeLine(notice);
-        if (line === null) {
-          return null;
-        }
-        return (
-          <Text key={line.id} variant="caption">
-            {"values" in line ? t(line.message, line.values) : t(line.message)}
-          </Text>
-        );
-      })}
+      {localRunNoticeLines(notices, live).map((line) => (
+        <Text key={line.id} variant="caption">
+          {"values" in line ? t(line.message, line.values) : t(line.message)}
+        </Text>
+      ))}
     </View>
   );
 };

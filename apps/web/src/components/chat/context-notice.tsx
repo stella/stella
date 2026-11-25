@@ -6,6 +6,7 @@ import {
   type ChatLocalRunNoticeCapability,
   chatLocalRunNoticeKey,
   chatLocalRunNoticesOf,
+  endedChatLocalRunNotices,
   isChatLocalRunNoticeShown,
 } from "@stll/api-contract/chat-local-run-notice";
 
@@ -111,19 +112,26 @@ const useNoticeText = () => {
  * without. Quiet lines, not errors: the server keeps each one updated on the
  * answer (one line per condition; a retry that recovers reads as recovered,
  * one that ended with its turn reads as nothing), so the answer reads the
- * same live and after reload. One polite live region announces a change
- * without interrupting.
+ * same live and after reload. Once the turn is no longer running, a retry
+ * the stream left under way (a stop cut it off) reads as ended, as the
+ * stored answer has it. One polite live region announces a change without
+ * interrupting.
  */
 export const LocalRunNotices = ({
+  isTurnActive,
   metadata,
 }: {
+  isTurnActive: boolean;
   metadata: ChatMessageMetadata | undefined;
 }) => {
   const text = useNoticeText();
-  const notices = chatLocalRunNoticesOf(metadata);
-  if (notices.length === 0) {
+  const reported = chatLocalRunNoticesOf(metadata);
+  if (reported.length === 0) {
     return null;
   }
+  const notices = isTurnActive
+    ? reported
+    : (endedChatLocalRunNotices(reported) ?? reported);
   const lines = notices.filter(isChatLocalRunNoticeShown).flatMap((notice) => {
     const shown = text(notice);
     return shown === null

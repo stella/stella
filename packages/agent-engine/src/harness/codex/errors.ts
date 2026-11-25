@@ -213,22 +213,6 @@ const parsedJson = (text: string): unknown => {
   return Result.isOk(parsed) ? parsed.value : undefined;
 };
 
-/** Codex's reconnect notice: `Reconnecting... 2/5`, then the cause. */
-const RECONNECT_ATTEMPT = /^Reconnecting\.{3} (\d+)\/(\d+)\b/u;
-
-/**
- * Which attempt a retry Codex announced is, of how many, from its reconnect
- * notice; both `null` when the error names no count.
- */
-export const codexRetryAttempt = (
-  error: CodexTurnError,
-): { attempt: number | null; maxAttempts: number | null } => {
-  const counted = RECONNECT_ATTEMPT.exec(error.message.trim());
-  return counted === null
-    ? { attempt: null, maxAttempts: null }
-    : { attempt: Number(counted[1]), maxAttempts: Number(counted[2]) };
-};
-
 /**
  * Codex's error text in words a member can act on: a deleted run folder, an
  * unreachable ChatGPT workspace lookup, or the message inside the provider's

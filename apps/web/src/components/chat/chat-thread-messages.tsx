@@ -3031,7 +3031,10 @@ const AssistantMessageParts = (props: AssistantMessagePartsProps) => {
           </AssistantProcessGroup>
         );
       })}
-      <LocalRunNotices metadata={message.metadata} />
+      <LocalRunNotices
+        isTurnActive={isTurnActive}
+        metadata={message.metadata}
+      />
       <MessageAttachments parts={message.parts.filter(isChatAttachmentPart)} />
       <LocalRunFilesNotSharedNotice metadata={message.metadata} />
       <WebSearchSources parts={message.parts} />

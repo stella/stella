@@ -220,4 +220,38 @@ describe("what a local run says about itself", () => {
       { kind: "retrying", status: "ended", attempt: 1, maxAttempts: 3 },
     ]);
   });
+
+  test("an answer whose stream ended while its run still retried is stored with the retry ended", () => {
+    // A stop or a cut ends the read before the run settles its retry.
+    const retrying: ChatLocalRunNotice = {
+      kind: "retrying",
+      status: "retrying",
+      attempt: 2,
+      maxAttempts: 5,
+    };
+    const streamed = liveAnswer([
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: "answer",
+        role: "assistant",
+        timestamp: 0,
+        metadata: {
+          [CHAT_LOCAL_RUN_NOTICES_METADATA_KEY]: [
+            { kind: "config_warning" },
+            retrying,
+          ],
+        },
+      },
+      {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: "answer",
+        delta: "Reading the lease.",
+        timestamp: 0,
+      },
+    ]);
+    expect(chatLocalRunNoticesOf(reloaded(streamed).metadata)).toEqual([
+      { kind: "config_warning" },
+      { ...retrying, status: "ended" },
+    ]);
+  });
 });

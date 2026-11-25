@@ -322,23 +322,30 @@ describe("errors Codex says it will retry", () => {
     });
   });
 
-  test("any other error is a retry, counted as Codex counts it, and the turn goes on", async () => {
+  test("any other error is a retry, counted until the turn makes progress, and the turn goes on", async () => {
     const events = await eventsOf((notify) => {
       notify(
         "error",
-        retrying("Reconnecting... 2/5 (stream disconnected before completion)"),
+        retrying("Reconnecting... 1/5 (stream disconnected before completion)"),
       );
+      notify("error", retrying("Reconnecting... 2/5"));
+      notify("item/agentMessage/delta", {
+        threadId: MAIN_THREAD,
+        turnId: MAIN_TURN,
+        itemId: "m-1",
+        delta: "Back.",
+      });
       notify("error", retrying("stream error: connection reset"));
     });
+    const attempt = (count: number): HarnessEvent => ({
+      type: "notice",
+      notice: { kind: "retrying", attempt: count, maxAttempts: null },
+    });
     expect(events.filter(({ type }) => type === "notice")).toEqual([
-      {
-        type: "notice",
-        notice: { kind: "retrying", attempt: 2, maxAttempts: 5 },
-      },
-      {
-        type: "notice",
-        notice: { kind: "retrying", attempt: null, maxAttempts: null },
-      },
+      attempt(1),
+      attempt(2),
+      // A retry after progress is a new one.
+      attempt(1),
     ]);
     // The provider's own text is not part of the notice.
     expect(JSON.stringify(events)).not.toContain("stream disconnected");
