@@ -1022,6 +1022,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch"],
   },
   {
+    path: "packages/agent-engine/src/sidecar/browser-download-filing.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Posts a PDF the member's browser downloaded for a local run to the configured stella API origin with the run's agent token, under a bounded deadline and refusing redirects.",
+    transports: ["global:fetch"],
+  },
+  {
     path: "packages/agent-engine/src/sidecar/outputs.ts",
     class: "operator-configured-infrastructure",
     reason:
