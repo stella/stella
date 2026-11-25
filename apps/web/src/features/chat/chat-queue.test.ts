@@ -1,4 +1,4 @@
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -87,5 +87,59 @@ describe("a message queued to hand to a running turn", () => {
       hold: null,
       items: [STORED],
     });
+  });
+
+  test("never stays queued once the server sent it before the write answered", async () => {
+    const queryClient = new QueryClient();
+    // What the server holds: it already sent the message as the next turn.
+    const server = { queue: { hold: null, items: [] } as ChatQueue };
+    const reads: ChatQueue[] = [];
+    const observer = new QueryObserver(queryClient, {
+      queryKey: queueKey,
+      queryFn: async () => {
+        await Promise.resolve();
+        reads.push(server.queue);
+        return server.queue;
+      },
+      staleTime: Infinity,
+    });
+    const settled = Promise.withResolvers<undefined>();
+    let shownQueued = false;
+    const unsubscribe = observer.subscribe(({ data, isFetching }) => {
+      if (data?.items.some(({ id }) => id === STORED.id) === true) {
+        shownQueued = true;
+      }
+      if (shownQueued && !isFetching && data?.items.length === 0) {
+        settled.resolve(undefined);
+      }
+    });
+    try {
+      // The page's read for the server's send landed first.
+      await queryClient.fetchQuery({
+        queryKey: queueKey,
+        queryFn: () => server.queue,
+      });
+      expect(queryClient.getQueryData(queueKey)).toEqual(server.queue);
+
+      // Then the write's answer: the message shows at once...
+      await enqueueAndCacheChatMessage({
+        enqueue: async () => await Promise.resolve({ item: STORED }),
+        queryClient,
+        thread: THREAD,
+      });
+      expect(queryClient.getQueryData<ChatQueue>(queueKey)?.items).toEqual([
+        STORED,
+      ]);
+
+      // ...and a read behind the append takes it out again.
+      await settled.promise;
+      expect(reads.length).toBeGreaterThan(0);
+      expect(queryClient.getQueryData(queueKey)).toEqual({
+        hold: null,
+        items: [],
+      });
+    } finally {
+      unsubscribe();
+    }
   });
 });

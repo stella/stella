@@ -7,6 +7,7 @@ import type { QueuedMessageFilesOnRemove } from "@stll/api-contract/chat-queue";
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { api } from "@/lib/api";
 import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
+import { detached } from "@/lib/detached";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
@@ -88,8 +89,8 @@ export const enqueueChatMessage = async (
   );
 
 /**
- * Queue `send` and show it in the cached queue at once, answering the item
- * as this write stored it. Whatever later hands the message to a running
+ * Queue `send` and show it in the cached queue at once, then read the queue
+ * again behind it, answering the item as this write stored it. Whatever later hands the message to a running
  * turn steers exactly this id and revision, never a read of the cached
  * queue: that cache may not be loaded yet (the message would never be
  * handed over), or a realtime read may already hold a revision edited since
@@ -115,6 +116,17 @@ export const enqueueAndCacheChatMessage = async ({
         ? current
         : { hold: current.hold, items: [...current.items, item] },
   });
+  // The append shows the message at once, but the write's answer can land
+  // after the server already sent it and this page read the queue for that:
+  // a read started after the append reconciles the cache with the server,
+  // so a sent message never stays queued until some later read.
+  detached(
+    queryClient.invalidateQueries({
+      queryKey: chatQueueOptions(thread).queryKey,
+      exact: true,
+    }),
+    "chat-queue.read-after-enqueue",
+  );
   return item;
 };
 
