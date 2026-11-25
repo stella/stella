@@ -476,26 +476,30 @@ export const LAW_MCP_TOOL_DEFINITIONS = scopeDefinitionsToSurface([
  * a new audience states its projection here rather than inheriting another
  * one's by falling through a conditional.
  */
-const MCP_TOOL_DEFINITIONS_BY_MODE = {
+const MCP_TOOL_DEFINITIONS_BY_MODE: Readonly<
+  Record<McpMode, readonly McpToolDefinition[]>
+> = {
   advanced: DEFAULT_MCP_TOOL_DEFINITIONS,
   default: PURPOSE_BUILT_MCP_TOOL_DEFINITIONS,
   anonymized: ANONYMIZED_MCP_TOOL_DEFINITIONS,
   documents: DOCUMENTS_MCP_TOOL_DEFINITIONS,
   law: LAW_MCP_TOOL_DEFINITIONS,
-} as const satisfies Record<McpMode, readonly McpToolDefinition[]>;
+};
 
 const toToolDefinitionMap = (definitions: readonly McpToolDefinition[]) =>
   new Map<string, McpToolDefinition>(
     definitions.map((tool) => [tool.name, tool]),
   );
 
-const MCP_TOOL_DEFINITION_MAPS = {
+const MCP_TOOL_DEFINITION_MAPS: Readonly<
+  Record<McpMode, ReadonlyMap<string, McpToolDefinition>>
+> = {
   advanced: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.advanced),
   default: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.default),
   anonymized: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.anonymized),
   documents: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.documents),
   law: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.law),
-} satisfies Record<McpMode, Map<string, McpToolDefinition>>;
+};
 
 /**
  * Each tool's runtime contract, with the schema it advertises: a write tool's
