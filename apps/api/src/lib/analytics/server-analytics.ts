@@ -7,9 +7,9 @@ import type {
 
 import type { CustomerDistinctId } from "@/api/lib/auth/principal-audience";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ResolvedTanStackTextModelInfo } from "@/api/lib/chat/tanstack-ai-model-info";
 import type { ReleaseFailureEventProperties } from "@/api/lib/observability/release-failure-contract";
 import { RELEASE_FAILURE_EVENT } from "@/api/lib/observability/release-failure-contract";
-import type { ResolvedTanStackTextModelInfo } from "@/api/lib/tanstack-ai-model-info";
 import type { McpMode, McpTransport } from "@/api/mcp/constants";
 import type { McpErrorCode } from "@/api/mcp/error-codes";
 import type { McpCredentialType } from "@/api/mcp/session";

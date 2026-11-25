@@ -14,6 +14,10 @@ import type {
   FolioToolCallResultFor,
 } from "@stll/folio-agents/tool-contract";
 
+import type {
+  ChatMessageMetadata,
+  ChatTurnOutcome,
+} from "@/api/handlers/chat/persisted-chat-types";
 import type { AutoApplySuggestChangesOutput } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
 import type {
   ChatBuiltinApprovalToolName,
@@ -25,10 +29,6 @@ import type {
   ChatClientToolsFor,
   ChatUIToolsFor,
 } from "@/api/lib/chat/chat-tool-types";
-import type {
-  ChatMessageMetadata,
-  ChatTurnOutcome,
-} from "@/api/lib/chat/persisted-chat-types";
 import type {
   PersistedJsonObject,
   PersistedToolProviderMetadata,
@@ -55,7 +55,7 @@ export type {
   PersistedChatMessageContentV3,
   PersistedSubagentHandle,
   PersistedSubagentPart,
-} from "@/api/lib/chat/persisted-chat-types";
+} from "@/api/handlers/chat/persisted-chat-types";
 
 type SchemaInferredChatUITools = ChatUIToolsFor<ChatTools>;
 type RegisteredFolioAgentToolName = Extract<

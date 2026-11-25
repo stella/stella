@@ -91,6 +91,10 @@ import {
 } from "@/api/lib/chat/provider-data-policy";
 import { withProviderImageInput } from "@/api/lib/chat/provider-image-input";
 import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
+import type {
+  ResolvedTanStackTextModelInfo,
+  TanStackTextProvider,
+} from "@/api/lib/chat/tanstack-ai-model-info";
 import { validateDataUrl } from "@/api/lib/data-url";
 import {
   markProviderAdapterError,
@@ -110,10 +114,6 @@ import {
   createManagedOpenRouterText,
   createStellaOpenRouterText,
 } from "@/api/lib/stella-openrouter-text-adapter";
-import type {
-  ResolvedTanStackTextModelInfo,
-  TanStackTextProvider,
-} from "@/api/lib/tanstack-ai-model-info";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   MANAGED_MODEL_TIER,

@@ -6,6 +6,7 @@ import type {
   CaseLawResearchColumnTool,
 } from "@stll/api-contract";
 
+import type { JustificationContent } from "@/api/db/schema";
 import { fieldContentSchema } from "@/api/db/schema-validators";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
