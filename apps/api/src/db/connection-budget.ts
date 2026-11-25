@@ -28,7 +28,6 @@ type ProcessAssumption = {
 
 // Reference envelope, including overlapping replacements. Validate the actual
 // deployment and other clients before using this envelope to change capacity.
-
 const DATABASE_PROCESS_ASSUMPTIONS = {
   api: {
     maxReplicas: 8,
@@ -115,7 +114,7 @@ const DATABASE_PROCESS_ASSUMPTIONS = {
     pools: DATABASE_POOL_DEFAULTS,
     publicPool: "shared",
   },
-} as const;
+} as const satisfies Record<string, ProcessAssumption>;
 
 type ProcessName = keyof typeof DATABASE_PROCESS_ASSUMPTIONS;
 const SHARED_POOL_PROCESSES = [

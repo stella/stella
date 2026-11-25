@@ -176,13 +176,11 @@ export type ChatSend = (
   draft: ChatInputDraft,
 ) => Promise<ChatSendOutcome> | ChatSendOutcome;
 
-type ChatMentionSourceKind = "context" | "files" | "caseLaw";
-
 export const CHAT_MENTION_SOURCE_LABELS = {
   context: "chat.composerMenu.context",
   files: "common.files",
   caseLaw: "common.caseLaw",
-} as const satisfies Record<ChatMentionSourceKind, TranslationKey>;
+} as const satisfies Record<string, TranslationKey>;
 
 type ChatMentionSourceLabelKey =
   (typeof CHAT_MENTION_SOURCE_LABELS)[keyof typeof CHAT_MENTION_SOURCE_LABELS];

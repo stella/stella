@@ -11,6 +11,8 @@
 //
 // Only a type import: the lint rule loads this file.
 
+import type { SystemRunActor } from "./actors";
+
 export const SYSTEM_AUDIT_MODULES = {
   "apps/api/src/lib/scheduler/tasks/case-law-coverage-refresh.ts":
     "system:case-law-coverage-refresh",
@@ -60,7 +62,7 @@ export const SYSTEM_AUDIT_MODULES = {
     "system:case-law-background-replay",
   "apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts":
     "system:eu-corpus-completion",
-} as const;
+} as const satisfies Record<string, SystemRunActor>;
 
 export type SystemAuditModule = keyof typeof SYSTEM_AUDIT_MODULES;
 

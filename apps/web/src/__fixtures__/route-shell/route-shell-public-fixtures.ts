@@ -13,11 +13,7 @@ import type { Route as CourtBrowseRoute } from "@/routes/law/$country/courts/$";
 import type { Route as JurisdictionHubRoute } from "@/routes/law/$country/index";
 import type { Route as StatuteRoute } from "@/routes/law/$country/statutes/$slug/index";
 
-const defineRouteExceptions = (
-  entries: Readonly<Record<string, string>>,
-): Readonly<Record<string, string>> => entries;
-
-export const publicRouteExceptions = defineRouteExceptions({
+export const publicRouteExceptions = {
   "/": "RootRedirect immediately navigates according to the audience; it has no stable leaf body. Destination routes are covered separately.",
   "/law/cases/research/":
     "Retired research link redirects to the case-law results, covered separately.",
@@ -45,7 +41,7 @@ export const publicRouteExceptions = defineRouteExceptions({
     "KnowledgeMemberOnly redirects anonymous visitors to the Knowledge landing before its page body mounts.",
   "/knowledge/company-formats/$registry/$companyId:anonymous":
     "KnowledgeMemberOnly redirects anonymous visitors to the Knowledge landing before its page body mounts.",
-});
+} as const;
 
 const absentText = { type: "absent", reason: "not_published" } as const;
 

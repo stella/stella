@@ -162,14 +162,12 @@ export const adjustStampBox = ({
   );
 };
 
-type StampArrowKey = "ArrowDown" | "ArrowLeft" | "ArrowRight" | "ArrowUp";
-
 const KEY_DIRECTIONS = {
   ArrowDown: { x: 0, y: 1 },
   ArrowLeft: { x: -1, y: 0 },
   ArrowRight: { x: 1, y: 0 },
   ArrowUp: { x: 0, y: -1 },
-} as const satisfies Record<StampArrowKey, Vector>;
+} as const satisfies Record<string, Vector>;
 
 const isArrowKey = (key: string): key is keyof typeof KEY_DIRECTIONS =>
   Object.hasOwn(KEY_DIRECTIONS, key);
@@ -182,14 +180,14 @@ export const stampKeyAdjustment = ({
   key: string;
   shiftKey: boolean;
 }): { deltaPt: Vector; mode: StampAdjustMode } | null => {
-  if (!isArrowKey(key)) {
-    return null;
+  if (Object.hasOwn(KEY_DIRECTIONS, key) && isArrowKey(key)) {
+    const direction = KEY_DIRECTIONS[key];
+    return {
+      deltaPt: { x: direction.x * KEY_STEP_PT, y: direction.y * KEY_STEP_PT },
+      mode: shiftKey ? "resize" : "move",
+    };
   }
-  const direction = KEY_DIRECTIONS[key];
-  return {
-    deltaPt: { x: direction.x * KEY_STEP_PT, y: direction.y * KEY_STEP_PT },
-    mode: shiftKey ? "resize" : "move",
-  };
+  return null;
 };
 
 const clampFraction = (value: number) => clamp(value, 0, 1);

@@ -112,7 +112,7 @@ export const ACTION_KINDS = {
     admission: "period",
     serviceCredentials: MANAGED_SERVICE,
   },
-} as const;
+} as const satisfies Record<string, ActionKindDefinition>;
 
 export type ActionKind = keyof typeof ACTION_KINDS;
 
@@ -149,7 +149,7 @@ export const ACTION_KIND_COUNTED_BY = {
 export const QUEUED_ACTION_KIND = {
   extraction: "workflow.start",
   flow: "flow.start",
-} as const;
+} as const satisfies Record<string, PeriodActionKind>;
 
 export const BACKGROUND_ACTION_KIND = {
   extraction: "workflow.background",

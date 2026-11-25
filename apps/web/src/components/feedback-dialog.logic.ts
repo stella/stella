@@ -104,11 +104,7 @@ export const FEEDBACK_DEFAULT_KIND = "bug" as const satisfies FeedbackKind;
  *  `*` matches exactly one path segment, so matter and country ids need no
  *  entry of their own. The longest matching pattern wins, which keeps the
  *  result independent of declaration order. */
-const defineFeedbackRoutes = <const T extends Record<string, FeedbackArea>>(
-  entries: T,
-): T => entries;
-
-export const ROUTE_AREA_PATTERNS = defineFeedbackRoutes({
+export const ROUTE_AREA_PATTERNS = {
   "/admin": "web_app",
   "/settings/organization": "web_app",
   "/chat": "chat",
@@ -129,7 +125,7 @@ export const ROUTE_AREA_PATTERNS = defineFeedbackRoutes({
   "/workspaces/*/reports": "billing",
   "/workspaces/*/timesheets": "billing",
   "/workspaces/*/*/document": "documents",
-});
+} as const;
 
 const SEGMENT_WILDCARD = "*";
 

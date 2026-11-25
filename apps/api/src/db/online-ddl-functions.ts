@@ -33,7 +33,7 @@ export const DDL_FUNCTIONS = {
     reason:
       "Replaces the feature policy on every entity feature gate relation in one call; the online repair replaces each relation's policy on its own through replacePolicy instead.",
   },
-} as const;
+} as const satisfies Record<string, DdlFunctionDeclaration>;
 
 export type DdlFunctionName = keyof typeof DDL_FUNCTIONS;
 

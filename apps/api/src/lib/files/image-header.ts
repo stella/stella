@@ -727,7 +727,7 @@ const IMAGE_HEADER_READERS = {
   "image/png": readPngHeader,
   "image/tiff": readTiffHeader,
   "image/webp": readWebpHeader,
-} as const;
+} as const satisfies Record<string, (bytes: Uint8Array) => ImageHeader | null>;
 
 export type HeaderReadableImageMimeType = keyof typeof IMAGE_HEADER_READERS;
 
