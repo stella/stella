@@ -1564,6 +1564,35 @@ export const installPgliteCaseLawContentChangedAt = async (
   }
 };
 
+/** Install the trigger that stores every citation's identifier match key. */
+export const installPgliteCitationIdentifierMatchKey = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261125150000_case_law_citation_match_key",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith(
+        "CREATE FUNCTION case_law_citations_identifier_match_key",
+      ) ||
+      source.startsWith(
+        "CREATE TRIGGER case_law_citations_identifier_match_key",
+      )
+    );
+  });
+  if (statements.length !== 2) {
+    panic("Expected the citation match-key function and trigger");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 /**
  * Install the sitemap change-log functions and triggers from the production
  * migration after schema push.

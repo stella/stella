@@ -4,6 +4,10 @@ import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
+  CITATION_ARRIVAL_DRAIN_OWNER,
+  drainCitationArrivalsAfterWrite,
+} from "@/api/handlers/case-law/citation-arrivals";
+import {
   CASE_LAW_BATCH_FAILURE,
   CaseLawBatchApplyError,
   prepareCaseLawIngestionBatch,
@@ -764,6 +768,7 @@ export const applyDecisionBatch = async (
               corpusBatch: corpusBatchFor(index),
               polarityRules,
               graphTurn,
+              citationArrivals: CITATION_ARRIVAL_DRAIN_OWNER.PAGE,
               ...(signal === undefined ? {} : { signal }),
             },
             resolveSourceContract,
@@ -812,6 +817,13 @@ export const applyDecisionBatch = async (
     // failing, counted as such: raising from a `finally` would replace
     // whatever stopped the loop and skip the failure rows below.
     settlePack({ tally, flushed: await pack.flush(), queued, context });
+    // The citations the page's decisions answer, reopened and settled once
+    // for the page rather than once per decision. The arrivals committed with
+    // their rows, so a drain that fails leaves them for the next one.
+    await drainCitationArrivalsAfterWrite(scopedDb, {
+      step: "pipeline.applyDecisionBatch.citation_arrivals",
+      attributes: { adapterKey: context.adapterKey },
+    });
     // Written unconditionally, so a halted batch still records the failures
     // it most needs recorded.
     failureLedger = await recordIngestionFailures({

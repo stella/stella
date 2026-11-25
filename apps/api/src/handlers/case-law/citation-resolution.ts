@@ -114,6 +114,7 @@ import {
   runCitationGraphTransaction,
   tryCitationGraphTransaction,
 } from "@/api/handlers/case-law/citation-graph-transaction";
+import { citationIdentifierMatchKeySql } from "@/api/handlers/case-law/citation-identifier-match-key";
 import { citationResolutionPolicyRows } from "@/api/handlers/case-law/citation-jurisdiction-policy";
 import {
   CITATION_CANDIDATE_SCAN_CAP,
@@ -136,6 +137,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   caseNumberKeyAmongSql,
   caseNumberKeysMatchSql,
+  caseNumberMatchKeySql,
 } from "@/api/lib/case-law/case-number-match-key";
 import { languageGroupWorkKeySql } from "@/api/lib/case-law/decision-work";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -1244,22 +1246,28 @@ export type ReopenedCitations = {
   citationIds: readonly SafeId<"caseLawCitation">[];
 };
 
-const NOTHING_REOPENED: ReopenedCitations = { reopened: 0, citationIds: [] };
+export const NOTHING_REOPENED: ReopenedCitations = {
+  reopened: 0,
+  citationIds: [],
+};
 
 /**
  * The reopen statements' last SELECT: how many rows `reopened` holds, and a
  * bounded handful of their ids. `reopened` is a relation of `id`.
  */
-const reopenedSelectSql = (reopened: SQL): SQL => sql`
+const reopenedSelectSql = (
+  reopened: SQL,
+  cap: number = CITATION_ARRIVAL_SETTLE_CAP,
+): SQL => sql`
   SELECT (SELECT count(*)::int FROM (${reopened}) counted) AS reopened,
          (SELECT array_agg(picked.id::text)
             FROM (
               SELECT every.id
                 FROM (${reopened}) every
-               LIMIT ${CITATION_ARRIVAL_SETTLE_CAP}
+               LIMIT ${cap}
             ) picked) AS ids`;
 
-const reopenedOf = (result: unknown): ReopenedCitations => {
+export const reopenedOf = (result: unknown): ReopenedCitations => {
   const row = executedRows(result).at(0);
   if (!isRecord(row)) {
     return NOTHING_REOPENED;
@@ -1287,10 +1295,11 @@ const reopenedOf = (result: unknown): ReopenedCitations => {
 export const settleReopenedCitations = async (
   tx: CitationGraphTransaction,
   reopened: readonly ReopenedCitations[],
+  cap: number = CITATION_ARRIVAL_SETTLE_CAP,
 ): Promise<CitationResolutionCounts> => {
   const ids = [
     ...new Set(reopened.flatMap(({ citationIds }) => citationIds)),
-  ].slice(0, CITATION_ARRIVAL_SETTLE_CAP);
+  ].slice(0, cap);
   if (ids.length === 0) {
     return EMPTY_COUNTS;
   }
@@ -1410,84 +1419,118 @@ export const reopenCitationsForDecisionKey = async (
   return isRecord(row) ? toCount(row["reopened"]) : 0;
 };
 
-type NormalizedDecisionIdentifier = {
+/**
+ * The statement a drain of arriving identifiers runs
+ * (`citation-arrivals.ts`): it reopens every citation the arrivals can answer
+ * differently, through indexes only.
+ *
+ * `revivable` holds the negative outcomes an arriving key can now answer:
+ * `unmatched` rows finding their first holder and `ambiguous` rows whose
+ * candidate set changed, by the stored match key. `contestable` holds the
+ * `resolved` rows drawn to another holder of an arriving key, which the
+ * arrival may make ambiguous. The two read disjoint statuses and each update
+ * re-checks its own, so no row is written twice by one statement.
+ */
+/** A citing decision the arrival can answer: reached, and not older than it. */
+const citingReachedSql = sql`
+  citing.country = ANY (arriving.citing_countries)
+  AND (
+        citing.decision_date IS NULL
+     OR arriving.decision_date IS NULL
+     OR citing.decision_date >= arriving.decision_date
+      )`;
+
+/** One arrival as the reopen statement reads it. */
+export type ArrivingRow = {
+  decision_id: string;
   type: DecisionIdentifierType;
-  normalizedValue: string;
+  match_key: string;
+  decision_date: string | null;
+  /** The citing countries the arrival's jurisdiction can answer. */
+  citing_countries: readonly string[];
 };
 
-type ReopenCitationsForDecisionIdentifiersOptions = {
-  identifiers: readonly NormalizedDecisionIdentifier[];
-  decisionId: SafeId<"caseLawDecision">;
-  jurisdiction: CaseLawJurisdiction;
-  decisionDate: string | null;
+/** Rows stored before the key existed, matched by their folded columns. */
+const UNKEYED_REVIVABLE_SQL = sql`
+      UNION ALL
+      SELECT citation.id
+        FROM arriving
+        JOIN ${caseLawCitations} citation
+          ON ${effectiveCitationIdentifierTypeSql(
+            sql.raw("citation.identifier_type"),
+          )} = arriving.type
+         AND ${citationIdentifierMatchKeySql({
+           normalizedIdentifierValue: sql.raw(
+             "citation.normalized_identifier_value",
+           ),
+           citationKey: sql.raw("citation.citation_key"),
+         })} = arriving.match_key
+        JOIN ${caseLawDecisions} citing
+          ON citing.id = citation.citing_decision_id
+       WHERE citation.identifier_match_key IS NULL
+         AND ${citationReopenableByKeySql(sql.raw("citation.resolution_status"))}
+         AND ${citingReachedSql}`;
+
+type ReopenStatementOptions = {
+  arriving: readonly ArrivingRow[];
+  /** Whether rows without a stored key remain to be matched by their columns. */
+  matchUnkeyed: boolean;
+  cap: number;
 };
 
-/** Reopen typed citations whose candidate set changed with one decision. */
-export const reopenCitationsForDecisionIdentifiers = async (
-  tx: CitationGraphTransaction,
-  {
-    identifiers,
-    decisionId,
-    jurisdiction,
-    decisionDate,
-  }: ReopenCitationsForDecisionIdentifiersOptions,
-): Promise<ReopenedCitations> => {
-  // audit: skip — reopens derived public case-law citation resolutions
-  if (identifiers.length === 0) {
-    return NOTHING_REOPENED;
-  }
-  const arrivingPayload = identifiers.map((identifier) => ({
-    type: identifier.type,
-    normalized_value: identifier.normalizedValue,
-  }));
-  const reachedFrom = sql`(
-    SELECT pol.citing_country
-      FROM jsonb_to_recordset(${JSON.stringify(
-        citationResolutionPolicyRows().map(
-          ({ jurisdiction: citing, resolvesTo }) => ({
-            citing_country: citing,
-            resolves_to: resolvesTo,
-          }),
-        ),
-      )}::text::jsonb) AS pol(citing_country varchar, resolves_to varchar[])
-     WHERE ${jurisdiction}::varchar = ANY (pol.resolves_to)
-  )`;
-
-  const result: unknown = await tx.execute(sql`
-    WITH arriving(type, normalized_value) AS (
-      SELECT a.type, a.normalized_value
-        FROM jsonb_to_recordset(${JSON.stringify(arrivingPayload)}::text::jsonb) AS a(
+/** The one statement that reopens what the arrivals answer differently. */
+export const reopenForArrivalsSql = ({
+  arriving,
+  matchUnkeyed,
+  cap,
+}: ReopenStatementOptions): SQL => {
+  const unkeyed = matchUnkeyed ? UNKEYED_REVIVABLE_SQL : sql``;
+  return sql`
+    WITH arriving AS MATERIALIZED (
+      SELECT a.decision_id, a.type, a.match_key, a.decision_date,
+             a.citing_countries
+        FROM jsonb_to_recordset(${JSON.stringify(arriving)}::text::jsonb) AS a(
+          decision_id uuid,
           type varchar,
-          normalized_value varchar
+          match_key varchar,
+          decision_date date,
+          citing_countries varchar[]
         )
+    ),
+    revivable AS MATERIALIZED (
+      SELECT citation.id
+        FROM arriving
+        JOIN ${caseLawCitations} citation
+          ON ${effectiveCitationIdentifierTypeSql(
+            sql.raw("citation.identifier_type"),
+          )} = arriving.type
+         AND citation.identifier_match_key = arriving.match_key
+        JOIN ${caseLawDecisions} citing
+          ON citing.id = citation.citing_decision_id
+       WHERE ${citationReopenableByKeySql(sql.raw("citation.resolution_status"))}
+         AND ${citingReachedSql}
+      ${unkeyed}
+    ),
+    contestable AS MATERIALIZED (
+      SELECT citation.id
+        FROM arriving
+        JOIN ${caseLawDecisionIdentifiers} holder
+          ON holder.type = arriving.type
+         AND ${caseNumberMatchKeySql(sql.raw("holder.normalized_value"))} = arriving.match_key
+         AND holder.decision_id <> arriving.decision_id
+        JOIN ${caseLawCitations} citation
+          ON citation.cited_decision_id = holder.decision_id
+        JOIN ${caseLawDecisions} citing
+          ON citing.id = citation.citing_decision_id
+       WHERE citation.resolution_status = ${CITATION_RESOLUTION_STATUS.RESOLVED}
+         AND ${citingReachedSql}
     ),
     revived AS (
       UPDATE ${caseLawCitations} citation
          SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
              resolution_rule_id = NULL
-        FROM ${caseLawDecisions} citing
-       WHERE citing.id = citation.citing_decision_id
-         AND EXISTS (
-           SELECT 1
-           FROM arriving
-           WHERE arriving.type = ${effectiveCitationIdentifierTypeSql(
-             sql.raw("citation.identifier_type"),
-           )}
-             AND ${caseNumberKeysMatchSql(
-               sql.raw("arriving.normalized_value"),
-               effectiveCitationIdentifierValueSql(
-                 sql.raw("citation.normalized_identifier_value"),
-                 sql.raw("citation.citation_key"),
-               ),
-             )}
-         )
+       WHERE citation.id IN (SELECT id FROM revivable)
          AND ${citationReopenableByKeySql(sql.raw("citation.resolution_status"))}
-         AND citing.country IN ${reachedFrom}
-         AND (
-               citing.decision_date IS NULL
-            OR ${decisionDate}::date IS NULL
-            OR citing.decision_date >= ${decisionDate}::date
-             )
       RETURNING citation.id
     ),
     contested AS (
@@ -1495,35 +1538,15 @@ export const reopenCitationsForDecisionIdentifiers = async (
          SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
              cited_decision_id = NULL,
              resolution_rule_id = NULL
-        FROM ${caseLawDecisions} citing, ${caseLawDecisions} cited
-       WHERE citing.id = citation.citing_decision_id
-         AND cited.id = citation.cited_decision_id
-         AND cited.id <> ${decisionId}::uuid
-         AND EXISTS (
-           SELECT 1
-           FROM arriving
-           JOIN ${caseLawDecisionIdentifiers} cited_identifier
-             ON cited_identifier.type = arriving.type
-            AND ${caseNumberKeysMatchSql(
-              sql.raw("cited_identifier.normalized_value"),
-              sql.raw("arriving.normalized_value"),
-            )}
-           WHERE cited_identifier.decision_id = cited.id
-         )
+       WHERE citation.id IN (SELECT id FROM contestable)
          AND citation.resolution_status = ${CITATION_RESOLUTION_STATUS.RESOLVED}
-         AND citing.country IN ${reachedFrom}
-         AND (
-               citing.decision_date IS NULL
-            OR ${decisionDate}::date IS NULL
-            OR citing.decision_date >= ${decisionDate}::date
-             )
       RETURNING citation.id
     )
     ${reopenedSelectSql(
       sql`SELECT id FROM revived UNION ALL SELECT id FROM contested`,
+      cap,
     )}
-  `);
-  return reopenedOf(result);
+  `;
 };
 
 /**

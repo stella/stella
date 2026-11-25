@@ -2969,7 +2969,9 @@ const createHarness = ({
             // No claim written before asserted dates is left to read.
             query.startsWith("SELECT 1 FROM public.legal_list_claims") ||
             // No chat turn stored before positions is left to number.
-            query.startsWith("SELECT 1 FROM public.chat_turns")
+            query.startsWith("SELECT 1 FROM public.chat_turns") ||
+            // No citation stored before its match key is left to key.
+            query.startsWith("SELECT 1 FROM public.case_law_citations")
           ) {
             return [];
           }
