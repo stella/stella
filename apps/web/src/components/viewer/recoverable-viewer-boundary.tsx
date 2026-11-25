@@ -44,6 +44,7 @@ export type ViewerSurface =
   | "inspector-mbox"
   | "inspector-pdf"
   | "inspector-text"
+  | "inspector-audio"
   | "search-preview-pdf";
 
 /**

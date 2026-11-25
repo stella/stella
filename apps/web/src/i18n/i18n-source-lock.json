@@ -3846,6 +3846,7 @@
   "inspector.anonymization.unsupportedVisualContent": "This file contains images or vector graphics that cannot be checked for sensitive text. Export is unavailable.",
   "inspector.anonymization.waitForMatches": "Wait for the anonymization scan to finish.",
   "inspector.anonymization.workspaceTermsHeading": "Workspace terms ({count})",
+  "inspector.audioUnplayable": "This recording can't be played here. Download it to listen.",
   "inspector.closeAllTabs": "Close {count, plural, one {# tab} other {all # tabs}}",
   "inspector.closeOtherTabs": "Close {count, plural, one {# other tab} other {# other tabs}}",
   "inspector.closeTab": "Close <bdi>{name}</bdi>",

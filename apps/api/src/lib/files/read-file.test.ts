@@ -138,6 +138,15 @@ describe("a file with nothing to show", () => {
   );
 });
 
+test("a recording is displayed natively from its original", async () => {
+  const { fieldId } = await seedFile("audio/mpeg");
+
+  const answer = await read({ fieldId, purpose: "native-display" });
+
+  expect(answer).toHaveProperty("presignedUrl");
+  expect(answer).toMatchObject({ mimeType: "audio/mpeg" });
+});
+
 describe("a file link and its version", () => {
   test("is looked up, audited and signed in one transaction", async () => {
     const { fieldId } = await seedFile("application/pdf");

@@ -4,6 +4,7 @@ import type { DocumentFormat } from "@stll/api-contract/document-format";
 import { DocumentMark, isDocumentMarkKind } from "@stll/ui/document-mark";
 
 import {
+  FileAudioIcon,
   FileIcon,
   FileImageIcon,
   FileTextIcon,
@@ -40,6 +41,8 @@ const DocumentFormatIcon = ({
   switch (kind) {
     case "image":
       return <FileImageIcon color={color} size={size} />;
+    case "audio":
+      return <FileAudioIcon color={color} size={size} />;
     case "email":
       return <MailIcon color={color} size={size} />;
     case "text":

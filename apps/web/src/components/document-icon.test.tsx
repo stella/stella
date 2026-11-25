@@ -56,7 +56,12 @@ const registeredIdentities = [
 ];
 
 /** Formats that keep their family's glyph: an image may show its thumbnail. */
-const GLYPH_FAMILIES: ReadonlySet<string> = new Set(["image", "email", "text"]);
+const GLYPH_FAMILIES: ReadonlySet<string> = new Set([
+  "image",
+  "audio",
+  "email",
+  "text",
+]);
 
 /**
  * Marks of what a file holds rather than what it is: a FatturaPA invoice is

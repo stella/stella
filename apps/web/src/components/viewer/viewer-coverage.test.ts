@@ -80,6 +80,10 @@ const VIEWER_DATA_READERS: Record<string, ViewerCoverage> = {
     type: "boundary",
     owner: "components/chat/create-document-draft-inspector-view.tsx",
   },
+  "components/inspector/audio-file-viewer.tsx": {
+    type: "boundary",
+    owner: "components/inspector/audio-file-viewer.tsx",
+  },
   "components/inspector/plain-text-file-viewer.tsx": {
     type: "boundary",
     owner: "components/inspector/plain-text-file-viewer.tsx",
