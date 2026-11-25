@@ -176,7 +176,7 @@
             "location": "apps/desktop/src/shared/use-clipboard-shortcut.ts#1"
           },
           {
-            "location": "apps/desktop/src/shared/use-system-theme.ts#1"
+            "location": "apps/desktop/src/shared/use-dictation-availability.ts#1"
           },
           {
             "location": "apps/mobile/src/components/dom-theme.ts#1"
@@ -201,6 +201,9 @@
           },
           {
             "location": "apps/mobile/src/components/use-document-editing.ts#1"
+          },
+          {
+            "location": "apps/mobile/src/components/use-keyboard-status.ts#1"
           },
           {
             "location": "apps/mobile/src/components/use-mark-chat-read.ts#1"
@@ -261,6 +264,9 @@
           },
           {
             "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#2"
           },
           {
             "location": "apps/web/src/components/chat/answer-quote.logic.ts#1"
@@ -537,6 +543,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/table/workspace-table/internals-helpers.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/use-new-matter-visibility.ts#1"
           },
           {
             "location": "apps/web/src/features/avt/graph/use-scroll-viewport.ts#1"
@@ -983,6 +992,9 @@
             "location": "apps/desktop/src/mainview/App.tsx#7"
           },
           {
+            "location": "apps/desktop/src/mainview/AppearanceSetting.tsx#1"
+          },
+          {
             "location": "apps/desktop/src/mainview/ChatGptPasteCallback.tsx#1"
           },
           {
@@ -1106,6 +1118,9 @@
             "location": "apps/desktop/src/shared/ShortcutRecorder.tsx#2"
           },
           {
+            "location": "apps/desktop/src/shared/use-desktop-appearance.tsx#8"
+          },
+          {
             "location": "apps/desktop/src/transcribe/TranscribeApp.tsx#1"
           },
           {
@@ -1149,6 +1164,12 @@
           },
           {
             "location": "apps/mobile/src/app/document/[workspaceId]/[entityId].tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/app/keyboard/dictate.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/app/keyboard/setup.tsx#1"
           },
           {
             "location": "apps/mobile/src/app/law/[decisionId].tsx#1"
@@ -1299,6 +1320,9 @@
           },
           {
             "location": "apps/mobile/src/components/kept-dictations.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/keyboard-dictation-host.tsx#1"
           },
           {
             "location": "apps/mobile/src/components/load-failure.tsx#1"
@@ -1667,7 +1691,16 @@
             "location": "apps/web/src/components/chat/author-name-required-dialog.tsx#1"
           },
           {
+            "location": "apps/web/src/components/chat/browser-extension-preview.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/chat/chat-approval-context.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-composer-dictate-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-composer-dictate-button.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/chat-composer-dock.pending.tsx#1"
@@ -1725,6 +1758,9 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-prompt-improve-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-prose.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/chat-render-error-boundary.tsx#1"
@@ -1857,6 +1893,9 @@
           },
           {
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/tool-approval-card.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/tool-call-card.tsx#1"
@@ -2465,6 +2504,9 @@
             "location": "apps/web/src/components/public-inspector-rail.tsx#1"
           },
           {
+            "location": "apps/web/src/components/public-law-search.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/public-law-table/public-law-filter-popover.tsx#1"
           },
           {
@@ -2646,6 +2688,9 @@
           },
           {
             "location": "apps/web/src/components/theme-provider.tsx#7"
+          },
+          {
+            "location": "apps/web/src/components/timestamp.tsx#1"
           },
           {
             "location": "apps/web/src/components/tooltip.tsx#1"
@@ -2835,6 +2880,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/view-toolbar-filters.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/visibility-section.tsx#1"
           },
           {
             "location": "apps/web/src/components/workspaces/workflow-service-tier-prompt.tsx#1"
@@ -3722,6 +3770,12 @@
             "location": "apps/web/src/routes/_protected.settings/-organization.number-series.pending.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-organization.sso.page.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-organization.sso.pending.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-organization.time-policy.pending.tsx#1"
           },
           {
@@ -3783,6 +3837,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-settings-table.pending.tsx#1"
@@ -4235,9 +4292,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/-filters/team-filter-popover.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/-hooks/use-matter-client-drop.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/-matters.page.tsx#1"
           },
           {
@@ -4257,6 +4311,9 @@
           },
           {
             "location": "apps/web/src/routes/auth/-components/dev-quick-start-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/auth/-components/sso-sign-in-section.tsx#1"
           },
           {
             "location": "apps/web/src/routes/auth/-error.page.tsx#1"
@@ -4296,9 +4353,6 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/answer-edit-playground.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#1"
           },
           {
             "location": "apps/web/src/routes/dev/-components/button-label-playground.tsx#1"
@@ -4947,6 +5001,9 @@
           },
           {
             "location": "packages/ui/src/components/brand-icons.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/brand-icons.tsx#2"
           },
           {
             "location": "packages/ui/src/components/breadcrumb.tsx#3"
@@ -6715,7 +6772,7 @@
             "location": "apps/desktop/src/shared/use-clipboard-shortcut.ts#1"
           },
           {
-            "location": "apps/desktop/src/shared/use-system-theme.ts#1"
+            "location": "apps/desktop/src/shared/use-dictation-availability.ts#1"
           },
           {
             "location": "apps/mobile/src/components/dom-theme.ts#1"
@@ -6740,6 +6797,9 @@
           },
           {
             "location": "apps/mobile/src/components/use-document-editing.ts#1"
+          },
+          {
+            "location": "apps/mobile/src/components/use-keyboard-status.ts#1"
           },
           {
             "location": "apps/mobile/src/components/use-mark-chat-read.ts#1"
@@ -6800,6 +6860,9 @@
           },
           {
             "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#2"
           },
           {
             "location": "apps/web/src/components/chat/answer-quote.logic.ts#1"
@@ -7076,6 +7139,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/table/workspace-table/internals-helpers.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/use-new-matter-visibility.ts#1"
           },
           {
             "location": "apps/web/src/features/avt/graph/use-scroll-viewport.ts#1"
@@ -7522,6 +7588,9 @@
             "location": "apps/desktop/src/mainview/App.tsx#7"
           },
           {
+            "location": "apps/desktop/src/mainview/AppearanceSetting.tsx#1"
+          },
+          {
             "location": "apps/desktop/src/mainview/ChatGptPasteCallback.tsx#1"
           },
           {
@@ -7645,6 +7714,9 @@
             "location": "apps/desktop/src/shared/ShortcutRecorder.tsx#2"
           },
           {
+            "location": "apps/desktop/src/shared/use-desktop-appearance.tsx#8"
+          },
+          {
             "location": "apps/desktop/src/transcribe/TranscribeApp.tsx#1"
           },
           {
@@ -7688,6 +7760,12 @@
           },
           {
             "location": "apps/mobile/src/app/document/[workspaceId]/[entityId].tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/app/keyboard/dictate.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/app/keyboard/setup.tsx#1"
           },
           {
             "location": "apps/mobile/src/app/law/[decisionId].tsx#1"
@@ -7838,6 +7916,9 @@
           },
           {
             "location": "apps/mobile/src/components/kept-dictations.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/keyboard-dictation-host.tsx#1"
           },
           {
             "location": "apps/mobile/src/components/load-failure.tsx#1"
@@ -8206,7 +8287,16 @@
             "location": "apps/web/src/components/chat/author-name-required-dialog.tsx#1"
           },
           {
+            "location": "apps/web/src/components/chat/browser-extension-preview.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/chat/chat-approval-context.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-composer-dictate-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-composer-dictate-button.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/chat-composer-dock.pending.tsx#1"
@@ -8264,6 +8354,9 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-prompt-improve-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-prose.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/chat-render-error-boundary.tsx#1"
@@ -8396,6 +8489,9 @@
           },
           {
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/tool-approval-card.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/tool-call-card.tsx#1"
@@ -9004,6 +9100,9 @@
             "location": "apps/web/src/components/public-inspector-rail.tsx#1"
           },
           {
+            "location": "apps/web/src/components/public-law-search.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/public-law-table/public-law-filter-popover.tsx#1"
           },
           {
@@ -9185,6 +9284,9 @@
           },
           {
             "location": "apps/web/src/components/theme-provider.tsx#7"
+          },
+          {
+            "location": "apps/web/src/components/timestamp.tsx#1"
           },
           {
             "location": "apps/web/src/components/tooltip.tsx#1"
@@ -9374,6 +9476,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/view-toolbar-filters.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/visibility-section.tsx#1"
           },
           {
             "location": "apps/web/src/components/workspaces/workflow-service-tier-prompt.tsx#1"
@@ -10261,6 +10366,12 @@
             "location": "apps/web/src/routes/_protected.settings/-organization.number-series.pending.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-organization.sso.page.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-organization.sso.pending.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-organization.time-policy.pending.tsx#1"
           },
           {
@@ -10322,6 +10433,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-settings-table.pending.tsx#1"
@@ -10774,9 +10888,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/-filters/team-filter-popover.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/-hooks/use-matter-client-drop.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/-matters.page.tsx#1"
           },
           {
@@ -10796,6 +10907,9 @@
           },
           {
             "location": "apps/web/src/routes/auth/-components/dev-quick-start-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/auth/-components/sso-sign-in-section.tsx#1"
           },
           {
             "location": "apps/web/src/routes/auth/-error.page.tsx#1"
@@ -10835,9 +10949,6 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/answer-edit-playground.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#1"
           },
           {
             "location": "apps/web/src/routes/dev/-components/button-label-playground.tsx#1"
@@ -11486,6 +11597,9 @@
           },
           {
             "location": "packages/ui/src/components/brand-icons.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/brand-icons.tsx#2"
           },
           {
             "location": "packages/ui/src/components/breadcrumb.tsx#3"
@@ -12212,6 +12326,9 @@
             "location": "apps/api/src/lib/auth/review-account-plugin.ts#1"
           },
           {
+            "location": "apps/api/src/lib/auth/scim-provisioning.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/auth/sign-in-code-delivery.ts#1"
           },
           {
@@ -12278,6 +12395,9 @@
             "location": "apps/api/src/lib/auth/review-account-plugin.ts#2"
           },
           {
+            "location": "apps/api/src/lib/auth/scim-provisioning.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/auth/sso-organization-guard.ts#3"
           },
           {
@@ -12302,10 +12422,13 @@
             "location": "apps/api/src/lib/auth/registration-adapter.ts#5"
           },
           {
-            "location": "apps/api/src/lib/auth/social-identity-policy.ts#1"
+            "location": "apps/api/src/lib/auth/scim-management.ts#1"
           },
           {
             "location": "apps/api/src/lib/auth/sso-sign-in.ts#9"
+          },
+          {
+            "location": "apps/api/src/lib/auth/social-identity-policy.ts#1"
           },
           {
             "location": "apps/api/src/lib/db/review-account-organization-store.ts#1"
@@ -12442,6 +12565,76 @@
         }
       ],
       "purl": "pkg:npm/%40better-auth/oauth-provider@1.7.25",
+      "scope": "required",
+      "type": "library",
+      "version": "1.7.25"
+    },
+    {
+      "authors": [
+        {
+          "name": "Jonathan Samines"
+        }
+      ],
+      "bom-ref": "pkg:npm/@better-auth/scim@1.7.25",
+      "description": "SCIM plugin for Better Auth",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "apps/api/node_modules/@better-auth/scim/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "apps/api/node_modules/@better-auth/scim/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/auth/scim-management.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/auth/scim-provisioning.ts#11"
+          },
+          {
+            "location": "apps/api/src/lib/auth/scim-provisioning.ts#12"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://www.better-auth.com/docs/plugins/scim"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/better-auth/better-auth.git"
+        }
+      ],
+      "group": "@better-auth",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "scim",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@better-auth/scim/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "apps/api/node_modules/@better-auth/scim/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40better-auth/scim@1.7.25",
       "scope": "required",
       "type": "library",
       "version": "1.7.25"
@@ -13185,6 +13378,9 @@
           },
           {
             "location": "packages/ui/src/calendar/fixtures/day-calendar.fixture.tsx#2"
+          },
+          {
+            "location": "packages/ui/src/components/entity-actions.tsx#5"
           },
           {
             "location": "packages/ui/src/components/fixtures/anchored-popup.fixture.tsx#2"
@@ -18925,7 +19121,7 @@
             "location": "apps/web/src/components/chat/request-secret-card.tsx#3"
           },
           {
-            "location": "apps/web/src/components/chat/tool-approval-card.tsx#3"
+            "location": "apps/web/src/components/chat/tool-approval-card.tsx#4"
           },
           {
             "location": "apps/web/src/components/chat/tool-call-card.tsx#4"
@@ -19294,6 +19490,9 @@
             "location": "apps/web/src/components/workspaces/tasks/task-status-menu.tsx#1"
           },
           {
+            "location": "apps/web/src/components/workspaces/visibility-section.tsx#3"
+          },
+          {
             "location": "apps/web/src/features/avt/add-fact-form.tsx#9"
           },
           {
@@ -19624,6 +19823,9 @@
             "location": "apps/web/src/routes/_protected.settings/-organization.members.page.tsx#3"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-organization.sso.page.tsx#8"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-organization.usage.page.tsx#4"
           },
           {
@@ -19636,7 +19838,7 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/anonymization-deny-list-card.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#3"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/data-boxes-card.tsx#3"
@@ -19883,6 +20085,9 @@
           },
           {
             "location": "apps/web/src/routes/auth/-components/dev-quick-start-button.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/auth/-components/sso-sign-in-section.tsx#3"
           },
           {
             "location": "apps/web/src/routes/auth/-error.page.tsx#4"
@@ -20623,6 +20828,9 @@
             "location": "apps/web/src/features/chat/source-chips.tsx#4"
           },
           {
+            "location": "apps/web/src/features/command-palette/components/upload-document-dialog.tsx#4"
+          },
+          {
             "location": "apps/web/src/features/correspondence/correspondence-attachments.tsx#1"
           },
           {
@@ -20771,6 +20979,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.admin/route.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.admin/sso.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.admin/time-policy.tsx#1"
@@ -20929,7 +21140,7 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/anonymization-deny-list-card.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#4"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-types-card.tsx#15"
@@ -20972,6 +21183,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.number-series.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.sso.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.time-policy.tsx#1"
@@ -22085,6 +22299,9 @@
             "location": "apps/desktop/src/shared/use-clipboard-shortcut.ts#3"
           },
           {
+            "location": "apps/desktop/src/shared/use-dictation-availability.ts#3"
+          },
+          {
             "location": "apps/desktop/src/telemetry/desktop-telemetry.ts#1"
           },
           {
@@ -22125,6 +22342,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/App.tsx#9"
+          },
+          {
+            "location": "apps/desktop/src/mainview/AppearanceSetting.tsx#3"
           },
           {
             "location": "apps/desktop/src/mainview/ClipboardSettings.tsx#11"
@@ -22193,6 +22413,9 @@
             "location": "apps/desktop/src/shared/ShortcutRecorder.tsx#4"
           },
           {
+            "location": "apps/desktop/src/shared/use-desktop-appearance.tsx#10"
+          },
+          {
             "location": "apps/desktop/src/transcribe/TranscribeApp.tsx#3"
           },
           {
@@ -22206,12 +22429,6 @@
           },
           {
             "location": "apps/desktop/src/shared/desktop-events.ts#2"
-          },
-          {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#31"
-          },
-          {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#32"
           },
           {
             "location": "apps/desktop/src/mainview/main.tsx#6"
@@ -22299,7 +22516,7 @@
             "location": "apps/desktop/src/shared/use-clipboard-shortcut.ts#1"
           },
           {
-            "location": "apps/desktop/src/shared/use-system-theme.ts#1"
+            "location": "apps/desktop/src/shared/use-dictation-availability.ts#1"
           },
           {
             "location": "apps/mobile/src/components/dom-theme.ts#1"
@@ -22324,6 +22541,9 @@
           },
           {
             "location": "apps/mobile/src/components/use-document-editing.ts#1"
+          },
+          {
+            "location": "apps/mobile/src/components/use-keyboard-status.ts#1"
           },
           {
             "location": "apps/mobile/src/components/use-mark-chat-read.ts#1"
@@ -22384,6 +22604,9 @@
           },
           {
             "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#2"
           },
           {
             "location": "apps/web/src/components/chat/answer-quote.logic.ts#1"
@@ -22660,6 +22883,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/table/workspace-table/internals-helpers.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/use-new-matter-visibility.ts#1"
           },
           {
             "location": "apps/web/src/features/avt/graph/use-scroll-viewport.ts#1"
@@ -23106,6 +23332,9 @@
             "location": "apps/desktop/src/mainview/App.tsx#7"
           },
           {
+            "location": "apps/desktop/src/mainview/AppearanceSetting.tsx#1"
+          },
+          {
             "location": "apps/desktop/src/mainview/ChatGptPasteCallback.tsx#1"
           },
           {
@@ -23229,6 +23458,9 @@
             "location": "apps/desktop/src/shared/ShortcutRecorder.tsx#2"
           },
           {
+            "location": "apps/desktop/src/shared/use-desktop-appearance.tsx#8"
+          },
+          {
             "location": "apps/desktop/src/transcribe/TranscribeApp.tsx#1"
           },
           {
@@ -23272,6 +23504,12 @@
           },
           {
             "location": "apps/mobile/src/app/document/[workspaceId]/[entityId].tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/app/keyboard/dictate.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/app/keyboard/setup.tsx#1"
           },
           {
             "location": "apps/mobile/src/app/law/[decisionId].tsx#1"
@@ -23422,6 +23660,9 @@
           },
           {
             "location": "apps/mobile/src/components/kept-dictations.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/keyboard-dictation-host.tsx#1"
           },
           {
             "location": "apps/mobile/src/components/load-failure.tsx#1"
@@ -23790,7 +24031,16 @@
             "location": "apps/web/src/components/chat/author-name-required-dialog.tsx#1"
           },
           {
+            "location": "apps/web/src/components/chat/browser-extension-preview.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/chat/chat-approval-context.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-composer-dictate-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-composer-dictate-button.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/chat-composer-dock.pending.tsx#1"
@@ -23848,6 +24098,9 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-prompt-improve-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-prose.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/chat-render-error-boundary.tsx#1"
@@ -23980,6 +24233,9 @@
           },
           {
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/tool-approval-card.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/tool-call-card.tsx#1"
@@ -24588,6 +24844,9 @@
             "location": "apps/web/src/components/public-inspector-rail.tsx#1"
           },
           {
+            "location": "apps/web/src/components/public-law-search.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/public-law-table/public-law-filter-popover.tsx#1"
           },
           {
@@ -24769,6 +25028,9 @@
           },
           {
             "location": "apps/web/src/components/theme-provider.tsx#7"
+          },
+          {
+            "location": "apps/web/src/components/timestamp.tsx#1"
           },
           {
             "location": "apps/web/src/components/tooltip.tsx#1"
@@ -24958,6 +25220,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/view-toolbar-filters.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/visibility-section.tsx#1"
           },
           {
             "location": "apps/web/src/components/workspaces/workflow-service-tier-prompt.tsx#1"
@@ -25845,6 +26110,12 @@
             "location": "apps/web/src/routes/_protected.settings/-organization.number-series.pending.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-organization.sso.page.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-organization.sso.pending.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-organization.time-policy.pending.tsx#1"
           },
           {
@@ -25906,6 +26177,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-settings-table.pending.tsx#1"
@@ -26358,9 +26632,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/-filters/team-filter-popover.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/-hooks/use-matter-client-drop.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/-matters.page.tsx#1"
           },
           {
@@ -26380,6 +26651,9 @@
           },
           {
             "location": "apps/web/src/routes/auth/-components/dev-quick-start-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/auth/-components/sso-sign-in-section.tsx#1"
           },
           {
             "location": "apps/web/src/routes/auth/-error.page.tsx#1"
@@ -26419,9 +26693,6 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/answer-edit-playground.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#1"
           },
           {
             "location": "apps/web/src/routes/dev/-components/button-label-playground.tsx#1"
@@ -27070,6 +27341,9 @@
           },
           {
             "location": "packages/ui/src/components/brand-icons.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/brand-icons.tsx#2"
           },
           {
             "location": "packages/ui/src/components/breadcrumb.tsx#3"
@@ -28423,9 +28697,6 @@
             "location": "apps/web/src/features/avt/original-docx-view.tsx#14"
           },
           {
-            "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#6"
-          },
-          {
             "location": "apps/web/src/routes/knowledge/-components/template-studio.tsx#14"
           },
           {
@@ -28459,9 +28730,6 @@
             "location": "apps/web/src/components/docx/evidence-references.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#9"
-          },
-          {
             "location": "apps/web/src/routes/knowledge/-components/clause-editor.tsx#17"
           },
           {
@@ -28475,9 +28743,6 @@
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/template-studio.tsx#17"
-          },
-          {
-            "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#3"
           },
           {
             "location": "apps/web/src/components/chat-composer-paste.ts#3"
@@ -28507,12 +28772,6 @@
             "location": "apps/web/src/features/avt/original-docx-view.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#7"
-          },
-          {
-            "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#8"
-          },
-          {
             "location": "apps/web/src/routes/knowledge/-components/clause-editor.tsx#16"
           },
           {
@@ -28532,15 +28791,6 @@
           },
           {
             "location": "apps/web/src/components/chat-editor-provider.tsx#14"
-          },
-          {
-            "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#5"
           }
         ]
       },
@@ -28621,7 +28871,7 @@
             "location": "apps/desktop/src/shared/use-clipboard-shortcut.ts#1"
           },
           {
-            "location": "apps/desktop/src/shared/use-system-theme.ts#1"
+            "location": "apps/desktop/src/shared/use-dictation-availability.ts#1"
           },
           {
             "location": "apps/mobile/src/components/dom-theme.ts#1"
@@ -28646,6 +28896,9 @@
           },
           {
             "location": "apps/mobile/src/components/use-document-editing.ts#1"
+          },
+          {
+            "location": "apps/mobile/src/components/use-keyboard-status.ts#1"
           },
           {
             "location": "apps/mobile/src/components/use-mark-chat-read.ts#1"
@@ -28706,6 +28959,9 @@
           },
           {
             "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#2"
           },
           {
             "location": "apps/web/src/components/chat/answer-quote.logic.ts#1"
@@ -28982,6 +29238,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/table/workspace-table/internals-helpers.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/use-new-matter-visibility.ts#1"
           },
           {
             "location": "apps/web/src/features/avt/graph/use-scroll-viewport.ts#1"
@@ -29428,6 +29687,9 @@
             "location": "apps/desktop/src/mainview/App.tsx#7"
           },
           {
+            "location": "apps/desktop/src/mainview/AppearanceSetting.tsx#1"
+          },
+          {
             "location": "apps/desktop/src/mainview/ChatGptPasteCallback.tsx#1"
           },
           {
@@ -29551,6 +29813,9 @@
             "location": "apps/desktop/src/shared/ShortcutRecorder.tsx#2"
           },
           {
+            "location": "apps/desktop/src/shared/use-desktop-appearance.tsx#8"
+          },
+          {
             "location": "apps/desktop/src/transcribe/TranscribeApp.tsx#1"
           },
           {
@@ -29594,6 +29859,12 @@
           },
           {
             "location": "apps/mobile/src/app/document/[workspaceId]/[entityId].tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/app/keyboard/dictate.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/app/keyboard/setup.tsx#1"
           },
           {
             "location": "apps/mobile/src/app/law/[decisionId].tsx#1"
@@ -29744,6 +30015,9 @@
           },
           {
             "location": "apps/mobile/src/components/kept-dictations.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/keyboard-dictation-host.tsx#1"
           },
           {
             "location": "apps/mobile/src/components/load-failure.tsx#1"
@@ -30112,7 +30386,16 @@
             "location": "apps/web/src/components/chat/author-name-required-dialog.tsx#1"
           },
           {
+            "location": "apps/web/src/components/chat/browser-extension-preview.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/chat/chat-approval-context.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-composer-dictate-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-composer-dictate-button.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/chat-composer-dock.pending.tsx#1"
@@ -30170,6 +30453,9 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-prompt-improve-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-prose.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/chat-render-error-boundary.tsx#1"
@@ -30302,6 +30588,9 @@
           },
           {
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/tool-approval-card.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/tool-call-card.tsx#1"
@@ -30910,6 +31199,9 @@
             "location": "apps/web/src/components/public-inspector-rail.tsx#1"
           },
           {
+            "location": "apps/web/src/components/public-law-search.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/public-law-table/public-law-filter-popover.tsx#1"
           },
           {
@@ -31091,6 +31383,9 @@
           },
           {
             "location": "apps/web/src/components/theme-provider.tsx#7"
+          },
+          {
+            "location": "apps/web/src/components/timestamp.tsx#1"
           },
           {
             "location": "apps/web/src/components/tooltip.tsx#1"
@@ -31280,6 +31575,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/view-toolbar-filters.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/visibility-section.tsx#1"
           },
           {
             "location": "apps/web/src/components/workspaces/workflow-service-tier-prompt.tsx#1"
@@ -32167,6 +32465,12 @@
             "location": "apps/web/src/routes/_protected.settings/-organization.number-series.pending.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-organization.sso.page.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-organization.sso.pending.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-organization.time-policy.pending.tsx#1"
           },
           {
@@ -32228,6 +32532,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-settings-table.pending.tsx#1"
@@ -32680,9 +32987,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/-filters/team-filter-popover.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/-hooks/use-matter-client-drop.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/-matters.page.tsx#1"
           },
           {
@@ -32702,6 +33006,9 @@
           },
           {
             "location": "apps/web/src/routes/auth/-components/dev-quick-start-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/auth/-components/sso-sign-in-section.tsx#1"
           },
           {
             "location": "apps/web/src/routes/auth/-error.page.tsx#1"
@@ -32741,9 +33048,6 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/answer-edit-playground.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#1"
           },
           {
             "location": "apps/web/src/routes/dev/-components/button-label-playground.tsx#1"
@@ -33392,6 +33696,9 @@
           },
           {
             "location": "packages/ui/src/components/brand-icons.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/brand-icons.tsx#2"
           },
           {
             "location": "packages/ui/src/components/breadcrumb.tsx#3"
@@ -36020,7 +36327,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/courtlistener/raw.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/courtlistener/record.ts#1"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/courtlistener/record.ts#2"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/courtlistener/rejection.ts#2"
@@ -36038,7 +36345,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-isir.ts#66"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns-sbirka.ts#43"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns-sbirka.ts#44"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts#11"
@@ -36062,10 +36369,10 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-us-throttle.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts#7"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts#9"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts#11"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts#13"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/hu-bhgy.ts#10"
@@ -36077,7 +36384,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts#11"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts#12"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio-attribute-budget.ts#1"
@@ -36107,10 +36414,10 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-tk.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-uodo.ts#8"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-uodo.ts#9"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-uokik.ts#3"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-uokik.ts#4"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/publisher-page.ts#6"
@@ -36131,7 +36438,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts#34"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/sk-collection-parser.ts#1"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/sk-collection-parser.ts#2"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/sk-collections.ts#2"
@@ -36239,7 +36546,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/harvard-xml.ts#14"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/html.ts#15"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/html.ts#16"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/select.ts#1"
@@ -36272,7 +36579,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj-formex-parts.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj.ts#46"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj.ts#47"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/hu-bhgy.ts#2"
@@ -36284,7 +36591,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/parse-xml-error.ts#14"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pdf-bands.ts#31"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pdf-bands.ts#32"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-common-court-inlines.ts#29"
@@ -37376,7 +37683,7 @@
             "location": "apps/api/src/handlers/data-exports/download.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/data-exports/export-source.ts#19"
+            "location": "apps/api/src/handlers/data-exports/export-source.ts#21"
           },
           {
             "location": "apps/api/src/handlers/data-exports/get.ts#1"
@@ -38652,6 +38959,51 @@
           },
           {
             "location": "apps/api/src/handlers/organization-settings/sanctions-monitoring/update.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/sso/approve-pending-member.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/sso/create-domain.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/sso/create-provider.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/sso/create-saml-provider.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/sso/create-scim-token.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/sso/delete-domain.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/sso/delete-provider.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/sso/get.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/sso/parse-saml-metadata.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/sso/reject-pending-member.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/sso/revoke-scim-token.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/sso/sso-error-map.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/sso/test-provider.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/sso/update-policy.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/sso/verify-domain.ts#1"
           },
           {
             "location": "apps/api/src/handlers/organization-settings/update-deepl-key.ts#1"
@@ -40055,6 +40407,15 @@
             "location": "apps/api/src/lib/auth/review-account.ts#1"
           },
           {
+            "location": "apps/api/src/lib/auth/saml-metadata.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/auth/scim-management.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/auth/scim-provisioning.ts#13"
+          },
+          {
             "location": "apps/api/src/lib/auth/service-client.ts#2"
           },
           {
@@ -40074,6 +40435,12 @@
           },
           {
             "location": "apps/api/src/lib/auth/social-token-exchange.ts#4"
+          },
+          {
+            "location": "apps/api/src/lib/auth/sso-discovery.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/auth/sso-domain-verify.ts#1"
           },
           {
             "location": "apps/api/src/lib/auth/sso-organization-guard.ts#6"
@@ -40643,6 +41010,9 @@
             "location": "apps/api/src/lib/corpus-ingestion-checkpoint.ts#1"
           },
           {
+            "location": "apps/api/src/lib/data-export/stored-export-access.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/data-sources/contract.ts#1"
           },
           {
@@ -40770,6 +41140,12 @@
           },
           {
             "location": "apps/api/src/lib/db/sso-access.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/db/sso-management.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/db/sso-provisioning.ts#1"
           },
           {
             "location": "apps/api/src/lib/db/statement-ceiling.ts#1"
@@ -41201,6 +41577,9 @@
             "location": "apps/api/src/lib/file-scan/attached-template.ts#1"
           },
           {
+            "location": "apps/api/src/lib/file-scan/document-parsers.ts#15"
+          },
+          {
             "location": "apps/api/src/lib/file-scan/media-type.ts#1"
           },
           {
@@ -41307,6 +41686,9 @@
           },
           {
             "location": "apps/api/src/lib/files/file-part.ts#12"
+          },
+          {
+            "location": "apps/api/src/lib/files/folio-collab-room-materialization.ts#1"
           },
           {
             "location": "apps/api/src/lib/files/folio-collab-snapshot-loader.ts#1"
@@ -41577,6 +41959,9 @@
           },
           {
             "location": "apps/api/src/lib/flows/flow-executor.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/flows/flow-run-worker.ts#1"
           },
           {
             "location": "apps/api/src/lib/flows/maybe-start-upload-triggered-flows.ts#1"
@@ -41897,7 +42282,7 @@
             "location": "apps/api/src/lib/legal-search/document-builders/html-document-ast.ts#13"
           },
           {
-            "location": "apps/api/src/lib/legal-search/document-builders/html-whitespace.ts#3"
+            "location": "apps/api/src/lib/legal-search/document-builders/html-whitespace.ts#4"
           },
           {
             "location": "apps/api/src/lib/legal-search/document-builders/legislation-citations.ts#18"
@@ -41931,6 +42316,9 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/legislation-act-number.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/legislation-amendment-observations.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/legislation-amendments.ts#1"
@@ -41993,7 +42381,7 @@
             "location": "apps/api/src/lib/legal-search/parsers/hard-wrapped-lines.ts#8"
           },
           {
-            "location": "apps/api/src/lib/legal-search/parsers/rtf-reader.ts#28"
+            "location": "apps/api/src/lib/legal-search/parsers/rtf-reader.ts#29"
           },
           {
             "location": "apps/api/src/lib/legal-search/parsers/run-content-text.ts#1"
@@ -43832,6 +44220,9 @@
             "location": "apps/collab/src/redis-client.ts#1"
           },
           {
+            "location": "apps/collab/src/room-authority.ts#1"
+          },
+          {
             "location": "apps/collab/src/server-test-process.ts#2"
           },
           {
@@ -43898,7 +44289,13 @@
             "location": "apps/desktop/src/registry/registry-format.ts#1"
           },
           {
+            "location": "apps/desktop/src/shared/desktop-appearance.ts#13"
+          },
+          {
             "location": "apps/desktop/src/shared/use-clipboard-shortcut.ts#4"
+          },
+          {
+            "location": "apps/desktop/src/shared/use-dictation-availability.ts#4"
           },
           {
             "location": "apps/desktop/src/transcribe/matter-folder-save.ts#1"
@@ -44180,6 +44577,9 @@
             "location": "apps/mobile/src/state/dictation-learned.ts#1"
           },
           {
+            "location": "apps/mobile/src/state/dictation-preferences.ts#1"
+          },
+          {
             "location": "apps/mobile/src/state/dictation.ts#1"
           },
           {
@@ -44199,6 +44599,9 @@
           },
           {
             "location": "apps/mobile/src/state/kept-dictations.ts#2"
+          },
+          {
+            "location": "apps/mobile/src/state/keyboard-dictation.ts#1"
           },
           {
             "location": "apps/mobile/src/state/local-file.ts#1"
@@ -44462,6 +44865,9 @@
             "location": "apps/web/src/components/chat/chat-decision-citation-metadata.logic.ts#1"
           },
           {
+            "location": "apps/web/src/components/chat/chat-dictation-audio.ts#1"
+          },
+          {
             "location": "apps/web/src/components/chat/chat-run-target-menu.logic.ts#1"
           },
           {
@@ -44565,9 +44971,6 @@
           },
           {
             "location": "apps/web/src/components/docx/use-collaboration-version-publisher.ts#5"
-          },
-          {
-            "location": "apps/web/src/components/docx/use-docx-anonymization.ts#5"
           },
           {
             "location": "apps/web/src/components/docx/use-docx-browser-collaboration.ts#4"
@@ -44772,6 +45175,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/list-source.logic.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/matter-visibility.logic.ts#1"
           },
           {
             "location": "apps/web/src/components/workspaces/request-manual-ocr.ts#1"
@@ -45122,6 +45528,9 @@
             "location": "apps/web/src/features/sharepoint/sharepoint-queries.ts#6"
           },
           {
+            "location": "apps/web/src/features/sso/sso-api.ts#1"
+          },
+          {
             "location": "apps/web/src/features/statutes/open-statute-match.ts#3"
           },
           {
@@ -45384,9 +45793,6 @@
           },
           {
             "location": "apps/web/src/lib/organization/seller-profiles.ts#2"
-          },
-          {
-            "location": "apps/web/src/lib/organization/utils.ts#1"
           },
           {
             "location": "apps/web/src/lib/organization/vat-rates.ts#2"
@@ -45672,9 +46078,6 @@
           },
           {
             "location": "apps/web/src/routes/auth/-invitation-view.logic.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/dev/-components/autocomplete-stream.ts#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/catalogue/catalogue-removal.logic.ts#1"
@@ -46008,6 +46411,9 @@
           },
           {
             "location": "packages/api-contract/src/browser-control.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/browser-step-gate.ts#1"
           },
           {
             "location": "packages/api-contract/src/case-law-anchor-redirects.ts#13"
@@ -46842,6 +47248,9 @@
           },
           {
             "location": "packages/property-testing/src/response-order.ts#1"
+          },
+          {
+            "location": "packages/recording-wasm/src/recording.ts#1"
           },
           {
             "location": "packages/redis-config/src/connection.ts#1"
@@ -47867,7 +48276,7 @@
             "location": "apps/desktop/src/activity/ActivitySuggestionCard.tsx#3"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#33"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#31"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#14"
@@ -47889,6 +48298,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/App.tsx#10"
+          },
+          {
+            "location": "apps/desktop/src/mainview/AppearanceSetting.tsx#4"
           },
           {
             "location": "apps/desktop/src/mainview/DictationCleanupPreferences.tsx#4"
@@ -47972,6 +48384,9 @@
             "location": "apps/desktop/src/shared/ShortcutRejectionText.tsx#1"
           },
           {
+            "location": "apps/desktop/src/shared/use-desktop-appearance.tsx#11"
+          },
+          {
             "location": "apps/desktop/src/transcribe/TranscribeApp.tsx#5"
           },
           {
@@ -47991,6 +48406,12 @@
           },
           {
             "location": "apps/mobile/src/app/document/[workspaceId]/[entityId].tsx#3"
+          },
+          {
+            "location": "apps/mobile/src/app/keyboard/dictate.tsx#3"
+          },
+          {
+            "location": "apps/mobile/src/app/keyboard/setup.tsx#3"
           },
           {
             "location": "apps/mobile/src/app/matter/[workspaceId]/info.tsx#3"
@@ -48096,6 +48517,9 @@
           },
           {
             "location": "apps/mobile/src/components/kept-dictations.tsx#3"
+          },
+          {
+            "location": "apps/mobile/src/components/keyboard-dictation-host.tsx#3"
           },
           {
             "location": "apps/mobile/src/components/legal-file-preview-text.tsx#1"
@@ -48269,7 +48693,13 @@
             "location": "apps/web/src/components/chat/chat-composer-action-button.tsx#1"
           },
           {
+            "location": "apps/web/src/components/chat/chat-composer-dictate-button.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/chat/chat-composer-dock.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-context-meter.tsx#3"
           },
           {
             "location": "apps/web/src/components/chat/chat-decision-citation-feedback.tsx#3"
@@ -48356,7 +48786,7 @@
             "location": "apps/web/src/components/chat/spawn-subagents-card.tsx#3"
           },
           {
-            "location": "apps/web/src/components/chat/tool-approval-card.tsx#4"
+            "location": "apps/web/src/components/chat/tool-approval-card.tsx#5"
           },
           {
             "location": "apps/web/src/components/chat/tool-call-card.tsx#6"
@@ -48698,6 +49128,9 @@
             "location": "apps/web/src/components/workspaces/tasks/task-status-menu.tsx#2"
           },
           {
+            "location": "apps/web/src/components/workspaces/visibility-section.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/workspaces/workflow-query-feedback.tsx#1"
           },
           {
@@ -48800,7 +49233,7 @@
             "location": "apps/web/src/features/chat/components/suggested-followups.tsx#3"
           },
           {
-            "location": "apps/web/src/features/command-palette/components/upload-document-dialog.tsx#4"
+            "location": "apps/web/src/features/command-palette/components/upload-document-dialog.tsx#5"
           },
           {
             "location": "apps/web/src/features/desktop/desktop-action-gate.tsx#3"
@@ -48992,7 +49425,7 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/anonymization-deny-list-card.tsx#6"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#5"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/dictation-import-sheet.tsx#4"
@@ -49100,13 +49533,13 @@
             "location": "apps/web/src/routes/_protected.workspaces/-filters/column-filter-button.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/-hooks/use-matter-client-drop.tsx#3"
-          },
-          {
             "location": "apps/web/src/routes/auth/-accept-invitation.page.tsx#5"
           },
           {
             "location": "apps/web/src/routes/auth/-components/dev-quick-start-button.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/auth/-components/sso-sign-in-section.tsx#4"
           },
           {
             "location": "apps/web/src/routes/auth/-error.page.tsx#6"
@@ -49128,9 +49561,6 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/answer-edit-playground.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#10"
           },
           {
             "location": "apps/web/src/routes/dev/-components/outcome-screen-playground.tsx#3"
@@ -49307,7 +49737,7 @@
             "location": "packages/ui/src/components/document-identity-badge.tsx#1"
           },
           {
-            "location": "packages/ui/src/components/entity-actions.tsx#6"
+            "location": "packages/ui/src/components/entity-actions.tsx#8"
           },
           {
             "location": "packages/ui/src/components/fixtures/anchored-popup.fixture.tsx#4"
@@ -49493,6 +49923,10 @@
         {
           "name": "SrcFile",
           "value": "packages/redis-config/node_modules/better-result/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "packages/recording-wasm/node_modules/better-result/package.json"
         },
         {
           "name": "SrcFile",
@@ -49721,7 +50155,7 @@
             "location": "apps/api/src/lib/file-derivative-queue.ts#2"
           },
           {
-            "location": "apps/api/src/lib/flows/flow-run-worker.ts#1"
+            "location": "apps/api/src/lib/flows/flow-run-worker.ts#2"
           },
           {
             "location": "apps/api/src/lib/push/push-delivery-queue.ts#1"
@@ -50762,7 +51196,7 @@
             "location": "apps/api/src/db/auth-schema.ts#2"
           },
           {
-            "location": "apps/api/src/db/auth-schema.ts#12"
+            "location": "apps/api/src/db/auth-schema.ts#13"
           },
           {
             "location": "apps/api/src/db/backfill-runtime.ts#2"
@@ -51851,13 +52285,13 @@
             "location": "apps/api/src/handlers/data-exports/download.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/data-exports/export-source.ts#20"
-          },
-          {
-            "location": "apps/api/src/handlers/data-exports/export-source.ts#21"
-          },
-          {
             "location": "apps/api/src/handlers/data-exports/export-source.ts#22"
+          },
+          {
+            "location": "apps/api/src/handlers/data-exports/export-source.ts#23"
+          },
+          {
+            "location": "apps/api/src/handlers/data-exports/export-source.ts#24"
           },
           {
             "location": "apps/api/src/handlers/data-exports/get.ts#2"
@@ -53870,6 +54304,9 @@
             "location": "apps/api/src/lib/corpus-ingestion-checkpoint.ts#2"
           },
           {
+            "location": "apps/api/src/lib/data-export/stored-export-access.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/db/account-row.ts#1"
           },
           {
@@ -54012,6 +54449,15 @@
           },
           {
             "location": "apps/api/src/lib/db/sso-access.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/db/sso-management.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/db/sso-management.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/db/sso-provisioning.ts#2"
           },
           {
             "location": "apps/api/src/lib/db/timestamp-cas.ts#1"
@@ -54410,7 +54856,7 @@
             "location": "apps/api/src/lib/flows/flow-executor.ts#9"
           },
           {
-            "location": "apps/api/src/lib/flows/flow-run-worker.ts#2"
+            "location": "apps/api/src/lib/flows/flow-run-worker.ts#3"
           },
           {
             "location": "apps/api/src/lib/flows/maybe-start-upload-triggered-flows.ts#2"
@@ -54540,6 +54986,9 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-group-enrollment-store.ts#19"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-job-audit.ts#14"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-jurisdiction-serving-store.ts#12"
@@ -55628,6 +56077,12 @@
             "location": "apps/api/src/lib/workspaces/matter-access-proof.ts#3"
           },
           {
+            "location": "apps/api/src/lib/workspaces/matter-visibility.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/workspaces/matter-visibility.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/workspaces/visible-workspace-sql.ts#1"
           },
           {
@@ -55886,7 +56341,7 @@
             "location": "apps/api/src/db/agent-auth-schema.ts#9"
           },
           {
-            "location": "apps/api/src/db/auth-schema.ts#12"
+            "location": "apps/api/src/db/auth-schema.ts#13"
           },
           {
             "location": "apps/api/src/db/better-auth-oauth-resource-repair.ts#60"
@@ -56039,7 +56494,7 @@
             "location": "apps/api/src/handlers/chat/threads/reader-state.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/data-exports/export-source.ts#22"
+            "location": "apps/api/src/handlers/data-exports/export-source.ts#24"
           },
           {
             "location": "apps/api/src/handlers/data-exports/record-scopes.ts#4"
@@ -56148,6 +56603,9 @@
           },
           {
             "location": "apps/api/src/lib/db/operator-registrations/read.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/db/sso-management.ts#3"
           },
           {
             "location": "apps/api/src/lib/db/transition-sql.ts#3"
@@ -56468,6 +56926,12 @@
           },
           {
             "location": "apps/mobile/src/components/use-dictation.ts#23"
+          },
+          {
+            "location": "apps/mobile/src/app/keyboard/dictate.tsx#4"
+          },
+          {
+            "location": "apps/mobile/src/app/keyboard/setup.tsx#4"
           }
         ]
       },
@@ -56814,6 +57278,9 @@
           },
           {
             "location": "apps/mobile/src/app/dictation.tsx#12"
+          },
+          {
+            "location": "apps/mobile/src/components/keyboard-dictation-host.tsx#4"
           }
         ]
       },
@@ -56881,9 +57348,6 @@
         "occurrences": [
           {
             "location": "apps/mobile/src/components/chat-composer.tsx#4"
-          },
-          {
-            "location": "apps/mobile/src/components/composer-attach-menu.ios.tsx#9"
           },
           {
             "location": "apps/mobile/src/components/run-banner.tsx#4"
@@ -56955,6 +57419,12 @@
           }
         ],
         "occurrences": [
+          {
+            "location": "apps/mobile/src/app/keyboard/dictate.tsx#5"
+          },
+          {
+            "location": "apps/mobile/src/app/keyboard/setup.tsx#5"
+          },
           {
             "location": "apps/mobile/src/components/quick-dictation-sync.tsx#3"
           },
@@ -57150,6 +57620,12 @@
             "location": "apps/mobile/src/app/document/[workspaceId]/[entityId].tsx#4"
           },
           {
+            "location": "apps/mobile/src/app/keyboard/dictate.tsx#6"
+          },
+          {
+            "location": "apps/mobile/src/app/keyboard/setup.tsx#6"
+          },
+          {
             "location": "apps/mobile/src/app/law/[decisionId].tsx#3"
           },
           {
@@ -57214,6 +57690,9 @@
           },
           {
             "location": "apps/mobile/src/components/dictate-button.tsx#4"
+          },
+          {
+            "location": "apps/mobile/src/components/keyboard-setting-row.tsx#1"
           },
           {
             "location": "apps/mobile/src/components/matter-entities.tsx#4"
@@ -57654,6 +58133,9 @@
           },
           {
             "location": "apps/mobile/src/native/document-scanner.ts#2"
+          },
+          {
+            "location": "apps/mobile/src/native/keyboard-dictation.ts#1"
           },
           {
             "location": "apps/mobile/src/native/quick-dictation.ts#1"
@@ -61050,6 +61532,9 @@
             "location": "packages/ui/src/calendar/fixtures/day-calendar.fixture.tsx#2"
           },
           {
+            "location": "packages/ui/src/components/entity-actions.tsx#5"
+          },
+          {
             "location": "packages/ui/src/components/fixtures/anchored-popup.fixture.tsx#2"
           },
           {
@@ -61641,6 +62126,9 @@
             "location": "apps/mobile/src/components/use-document-editing.ts#6"
           },
           {
+            "location": "apps/mobile/src/components/use-keyboard-status.ts#3"
+          },
+          {
             "location": "apps/mobile/src/components/use-mark-chat-read.ts#4"
           },
           {
@@ -61654,6 +62142,9 @@
           },
           {
             "location": "apps/mobile/src/components/use-scan.ts#4"
+          },
+          {
+            "location": "apps/mobile/src/native/keyboard-dictation.ts#2"
           },
           {
             "location": "apps/mobile/src/native/share-inbox.ts#3"
@@ -61678,6 +62169,12 @@
           },
           {
             "location": "apps/mobile/src/app/document/[workspaceId]/[entityId].tsx#12"
+          },
+          {
+            "location": "apps/mobile/src/app/keyboard/dictate.tsx#7"
+          },
+          {
+            "location": "apps/mobile/src/app/keyboard/setup.tsx#7"
           },
           {
             "location": "apps/mobile/src/app/law/[decisionId].tsx#4"
@@ -61770,7 +62267,7 @@
             "location": "apps/mobile/src/components/chat-thread-view.tsx#4"
           },
           {
-            "location": "apps/mobile/src/components/composer-attach-menu.ios.tsx#10"
+            "location": "apps/mobile/src/components/composer-attach-menu.ios.tsx#9"
           },
           {
             "location": "apps/mobile/src/components/contact-picker.tsx#5"
@@ -61813,6 +62310,9 @@
           },
           {
             "location": "apps/mobile/src/components/kept-dictations.tsx#5"
+          },
+          {
+            "location": "apps/mobile/src/components/keyboard-setting-row.tsx#2"
           },
           {
             "location": "apps/mobile/src/components/loaded-chats.tsx#4"
@@ -62050,7 +62550,7 @@
             "location": "apps/desktop/src/shared/use-clipboard-shortcut.ts#1"
           },
           {
-            "location": "apps/desktop/src/shared/use-system-theme.ts#1"
+            "location": "apps/desktop/src/shared/use-dictation-availability.ts#1"
           },
           {
             "location": "apps/mobile/src/components/dom-theme.ts#1"
@@ -62075,6 +62575,9 @@
           },
           {
             "location": "apps/mobile/src/components/use-document-editing.ts#1"
+          },
+          {
+            "location": "apps/mobile/src/components/use-keyboard-status.ts#1"
           },
           {
             "location": "apps/mobile/src/components/use-mark-chat-read.ts#1"
@@ -62135,6 +62638,9 @@
           },
           {
             "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#2"
           },
           {
             "location": "apps/web/src/components/chat/answer-quote.logic.ts#1"
@@ -62411,6 +62917,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/table/workspace-table/internals-helpers.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/use-new-matter-visibility.ts#1"
           },
           {
             "location": "apps/web/src/features/avt/graph/use-scroll-viewport.ts#1"
@@ -62857,6 +63366,9 @@
             "location": "apps/desktop/src/mainview/App.tsx#7"
           },
           {
+            "location": "apps/desktop/src/mainview/AppearanceSetting.tsx#1"
+          },
+          {
             "location": "apps/desktop/src/mainview/ChatGptPasteCallback.tsx#1"
           },
           {
@@ -62980,6 +63492,9 @@
             "location": "apps/desktop/src/shared/ShortcutRecorder.tsx#2"
           },
           {
+            "location": "apps/desktop/src/shared/use-desktop-appearance.tsx#8"
+          },
+          {
             "location": "apps/desktop/src/transcribe/TranscribeApp.tsx#1"
           },
           {
@@ -63023,6 +63538,12 @@
           },
           {
             "location": "apps/mobile/src/app/document/[workspaceId]/[entityId].tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/app/keyboard/dictate.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/app/keyboard/setup.tsx#1"
           },
           {
             "location": "apps/mobile/src/app/law/[decisionId].tsx#1"
@@ -63173,6 +63694,9 @@
           },
           {
             "location": "apps/mobile/src/components/kept-dictations.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/keyboard-dictation-host.tsx#1"
           },
           {
             "location": "apps/mobile/src/components/load-failure.tsx#1"
@@ -63541,7 +64065,16 @@
             "location": "apps/web/src/components/chat/author-name-required-dialog.tsx#1"
           },
           {
+            "location": "apps/web/src/components/chat/browser-extension-preview.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/chat/chat-approval-context.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-composer-dictate-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-composer-dictate-button.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/chat-composer-dock.pending.tsx#1"
@@ -63599,6 +64132,9 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-prompt-improve-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-prose.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/chat-render-error-boundary.tsx#1"
@@ -63731,6 +64267,9 @@
           },
           {
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/tool-approval-card.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/tool-call-card.tsx#1"
@@ -64339,6 +64878,9 @@
             "location": "apps/web/src/components/public-inspector-rail.tsx#1"
           },
           {
+            "location": "apps/web/src/components/public-law-search.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/public-law-table/public-law-filter-popover.tsx#1"
           },
           {
@@ -64520,6 +65062,9 @@
           },
           {
             "location": "apps/web/src/components/theme-provider.tsx#7"
+          },
+          {
+            "location": "apps/web/src/components/timestamp.tsx#1"
           },
           {
             "location": "apps/web/src/components/tooltip.tsx#1"
@@ -64709,6 +65254,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/view-toolbar-filters.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/visibility-section.tsx#1"
           },
           {
             "location": "apps/web/src/components/workspaces/workflow-service-tier-prompt.tsx#1"
@@ -65596,6 +66144,12 @@
             "location": "apps/web/src/routes/_protected.settings/-organization.number-series.pending.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-organization.sso.page.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-organization.sso.pending.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-organization.time-policy.pending.tsx#1"
           },
           {
@@ -65657,6 +66211,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-settings-table.pending.tsx#1"
@@ -66109,9 +66666,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/-filters/team-filter-popover.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/-hooks/use-matter-client-drop.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/-matters.page.tsx#1"
           },
           {
@@ -66131,6 +66685,9 @@
           },
           {
             "location": "apps/web/src/routes/auth/-components/dev-quick-start-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/auth/-components/sso-sign-in-section.tsx#1"
           },
           {
             "location": "apps/web/src/routes/auth/-error.page.tsx#1"
@@ -66170,9 +66727,6 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/answer-edit-playground.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#1"
           },
           {
             "location": "apps/web/src/routes/dev/-components/button-label-playground.tsx#1"
@@ -66821,6 +67375,9 @@
           },
           {
             "location": "packages/ui/src/components/brand-icons.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/brand-icons.tsx#2"
           },
           {
             "location": "packages/ui/src/components/breadcrumb.tsx#3"
@@ -69737,7 +70294,7 @@
             "location": "apps/desktop/src/activity/MatterPicker.tsx#4"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#34"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#32"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardCardPreview.tsx#1"
@@ -69768,6 +70325,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/App.tsx#11"
+          },
+          {
+            "location": "apps/desktop/src/mainview/AppearanceSetting.tsx#5"
           },
           {
             "location": "apps/desktop/src/mainview/ChatGptCard.tsx#1"
@@ -69950,6 +70510,12 @@
             "location": "apps/mobile/src/app/document/[workspaceId]/[entityId].tsx#14"
           },
           {
+            "location": "apps/mobile/src/app/keyboard/dictate.tsx#8"
+          },
+          {
+            "location": "apps/mobile/src/app/keyboard/setup.tsx#8"
+          },
+          {
             "location": "apps/mobile/src/app/law/[decisionId].tsx#5"
           },
           {
@@ -70040,7 +70606,7 @@
             "location": "apps/mobile/src/components/chat-thread-view.tsx#5"
           },
           {
-            "location": "apps/mobile/src/components/composer-attach-menu.ios.tsx#11"
+            "location": "apps/mobile/src/components/composer-attach-menu.ios.tsx#10"
           },
           {
             "location": "apps/mobile/src/components/composer-attach-menu.tsx#1"
@@ -70089,6 +70655,12 @@
           },
           {
             "location": "apps/mobile/src/components/file-part-opener.tsx#3"
+          },
+          {
+            "location": "apps/mobile/src/components/keyboard-dictation-host.tsx#5"
+          },
+          {
+            "location": "apps/mobile/src/components/keyboard-setting-row.tsx#3"
           },
           {
             "location": "apps/mobile/src/components/load-failure.tsx#3"
@@ -70364,7 +70936,16 @@
             "location": "apps/web/src/components/chat/browser-extension-chip.tsx#2"
           },
           {
+            "location": "apps/web/src/components/chat/browser-extension-preview.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/chat/browser-sign-in-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/chat/chat-composer-action-button.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-composer-dictate-button.tsx#5"
           },
           {
             "location": "apps/web/src/components/chat/chat-composer-dock.tsx#5"
@@ -70373,7 +70954,7 @@
             "location": "apps/web/src/components/chat/chat-composer-queue-button.tsx#1"
           },
           {
-            "location": "apps/web/src/components/chat/chat-context-meter.tsx#3"
+            "location": "apps/web/src/components/chat/chat-context-meter.tsx#4"
           },
           {
             "location": "apps/web/src/components/chat/chat-decision-citation-feedback.tsx#4"
@@ -70505,7 +71086,7 @@
             "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#5"
           },
           {
-            "location": "apps/web/src/components/chat/tool-approval-card.tsx#5"
+            "location": "apps/web/src/components/chat/tool-approval-card.tsx#6"
           },
           {
             "location": "apps/web/src/components/chat/tool-call-card.tsx#7"
@@ -70808,9 +71389,6 @@
             "location": "apps/web/src/components/inspector/use-desktop-pdf-sign.tsx#5"
           },
           {
-            "location": "apps/web/src/components/inspector/use-rail-context-menu.tsx#1"
-          },
-          {
             "location": "apps/web/src/components/inspector/use-tab-context-menu.tsx#3"
           },
           {
@@ -70961,7 +71539,7 @@
             "location": "apps/web/src/components/public-inspector-rail.tsx#3"
           },
           {
-            "location": "apps/web/src/components/public-law-search.tsx#1"
+            "location": "apps/web/src/components/public-law-search.tsx#3"
           },
           {
             "location": "apps/web/src/components/public-law-table/public-law-filter-popover.tsx#4"
@@ -71186,6 +71764,9 @@
             "location": "apps/web/src/components/workspaces/matter-metadata-sheet.tsx#7"
           },
           {
+            "location": "apps/web/src/components/workspaces/matter-visibility-select.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/workspaces/members-section.tsx#5"
           },
           {
@@ -71277,6 +71858,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/view-toolbar-filters.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/visibility-section.tsx#5"
           },
           {
             "location": "apps/web/src/components/workspaces/workflow-query-feedback.tsx#2"
@@ -71555,7 +72139,7 @@
             "location": "apps/web/src/features/chat/source-chips.tsx#5"
           },
           {
-            "location": "apps/web/src/features/command-palette/components/upload-document-dialog.tsx#5"
+            "location": "apps/web/src/features/command-palette/components/upload-document-dialog.tsx#6"
           },
           {
             "location": "apps/web/src/features/correspondence/correspondence-attachments.tsx#2"
@@ -71999,6 +72583,9 @@
             "location": "apps/web/src/routes/_protected.settings/-organization.members.page.tsx#5"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-organization.sso.page.tsx#9"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-organization.usage.page.tsx#7"
           },
           {
@@ -72029,7 +72616,7 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/anonymization-deny-list-card.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#6"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/data-boxes-card.tsx#4"
@@ -72278,6 +72865,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/new-document-from-template-dialog.tsx#6"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/organizer-matter-fields.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/original-signature.tsx#1"
           },
           {
@@ -72404,13 +72994,16 @@
             "location": "apps/web/src/routes/_protected.workspaces/-filters/team-filter-popover.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/-hooks/use-matter-client-drop.tsx#4"
+            "location": "apps/web/src/routes/_protected.workspaces/-hooks/use-matter-client-drop.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/-matters.page.tsx#6"
           },
           {
             "location": "apps/web/src/routes/auth/-accept-invitation.page.tsx#6"
+          },
+          {
+            "location": "apps/web/src/routes/auth/-components/sso-sign-in-section.tsx#5"
           },
           {
             "location": "apps/web/src/routes/auth/-error.page.tsx#7"
@@ -73380,13 +73973,13 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/courtlistener/plan.ts#9"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/courtlistener/record.ts#11"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/courtlistener/record.ts#12"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-isir.ts#67"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns-sbirka.ts#44"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns-sbirka.ts#45"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-uohs.ts#7"
@@ -73395,7 +73988,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts#11"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts#12"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts#13"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa.ts#22"
@@ -73938,7 +74531,7 @@
             "location": "apps/api/src/handlers/data-exports/download.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/data-exports/export-source.ts#23"
+            "location": "apps/api/src/handlers/data-exports/export-source.ts#25"
           },
           {
             "location": "apps/api/src/handlers/data-exports/get.ts#3"
@@ -74146,6 +74739,9 @@
           },
           {
             "location": "apps/api/src/handlers/entities/pdf-signing-signature.ts#15"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/placements/matter-suggestion.ts#1"
           },
           {
             "location": "apps/api/src/handlers/entities/placements/suggest.ts#3"
@@ -74740,6 +75336,24 @@
           },
           {
             "location": "apps/api/src/handlers/organization-settings/sanctions-monitoring/update.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/sso/approve-pending-member.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/sso/delete-domain.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/sso/delete-provider.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/sso/reject-pending-member.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/sso/revoke-scim-token.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/sso/verify-domain.ts#2"
           },
           {
             "location": "apps/api/src/handlers/organization-settings/update-deepl-key.ts#2"
@@ -75576,6 +76190,9 @@
             "location": "apps/api/src/lib/auth/social-link-hint.ts#9"
           },
           {
+            "location": "apps/api/src/lib/auth/sso-discovery.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/auth/sso-sign-in.ts#19"
           },
           {
@@ -75796,6 +76413,9 @@
           },
           {
             "location": "apps/api/src/lib/data-export/problem-schema.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/data-export/stored-export-access.ts#3"
           },
           {
             "location": "apps/api/src/lib/data-sources/run.ts#2"
@@ -76065,6 +76685,9 @@
             "location": "apps/api/src/lib/legal-search/legal-alternatives.ts#13"
           },
           {
+            "location": "apps/api/src/lib/legal-search/legislation-amendment-effect.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/legal-search/legislation-amendments.ts#3"
           },
           {
@@ -76315,6 +76938,9 @@
           },
           {
             "location": "apps/api/src/lib/workflow/verdict-engine.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/workspaces/matter-visibility.ts#3"
           },
           {
             "location": "apps/api/src/lib/workspaces/vocabulary/candidates.ts#1"
@@ -76596,6 +77222,9 @@
             "location": "apps/extension/src/lib/tab-executor.ts#2"
           },
           {
+            "location": "apps/mobile/modules/quick-dictation/plugin.ts#11"
+          },
+          {
             "location": "apps/mobile/scripts/native-client.ts#16"
           },
           {
@@ -76692,7 +77321,7 @@
             "location": "apps/mobile/src/state/dictation-learned.ts#2"
           },
           {
-            "location": "apps/mobile/src/state/dictation-preferences.ts#1"
+            "location": "apps/mobile/src/state/dictation-preferences.ts#2"
           },
           {
             "location": "apps/mobile/src/state/dictation.ts#2"
@@ -76708,6 +77337,9 @@
           },
           {
             "location": "apps/mobile/src/state/entity-detail.ts#2"
+          },
+          {
+            "location": "apps/mobile/src/state/keyboard-dictation.ts#2"
           },
           {
             "location": "apps/mobile/src/state/matter-detail.ts#2"
@@ -76884,6 +77516,9 @@
             "location": "apps/web/src/features/knowledge/public/tools/contribute.logic.ts#7"
           },
           {
+            "location": "apps/web/src/features/sso/sso-api.ts#2"
+          },
+          {
             "location": "apps/web/src/features/statutes/queries/statutes.ts#2"
           },
           {
@@ -76965,7 +77600,7 @@
             "location": "apps/web/src/lib/organization/setup-pending.ts#1"
           },
           {
-            "location": "apps/web/src/lib/organization/utils.ts#2"
+            "location": "apps/web/src/lib/organization/utils.ts#1"
           },
           {
             "location": "apps/web/src/lib/pdf/parse-attachments.ts#1"
@@ -77220,6 +77855,9 @@
             "location": "packages/api-contract/src/browser-control.ts#2"
           },
           {
+            "location": "packages/api-contract/src/browser-site-grants.ts#1"
+          },
+          {
             "location": "packages/api-contract/src/cades.ts#1"
           },
           {
@@ -77467,6 +78105,9 @@
           },
           {
             "location": "packages/api-contract/src/spot.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/sso.ts#1"
           },
           {
             "location": "packages/api-contract/src/statute-version-changes.ts#9"
@@ -78349,19 +78990,19 @@
           "name": "Kevin Jahns <kevin.jahns@protonmail.com>"
         }
       ],
-      "bom-ref": "pkg:npm/y-prosemirror@1.3.7",
-      "description": "Prosemirror bindings for Yjs",
+      "bom-ref": "pkg:npm/y-protocols@1.0.7",
+      "description": "Yjs encoding protocols",
       "evidence": {
         "identity": [
           {
-            "concludedValue": "apps/api/node_modules/y-prosemirror/package.json",
+            "concludedValue": "apps/api/node_modules/y-protocols/package.json",
             "confidence": 0.7,
             "field": "purl",
             "methods": [
               {
                 "confidence": 0.7,
                 "technique": "manifest-analysis",
-                "value": "apps/api/node_modules/y-prosemirror/package.json"
+                "value": "apps/api/node_modules/y-protocols/package.json"
               }
             ]
           }
@@ -78369,17 +79010,26 @@
         "occurrences": [
           {
             "location": "apps/web/src/components/docx/use-folio-collaboration-room.ts#8"
+          },
+          {
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#10"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-folio-collaboration-room.ts#8"
+          },
+          {
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#10"
           }
         ]
       },
       "externalReferences": [
         {
           "type": "vcs",
-          "url": "https://github.com/yjs/y-prosemirror#readme"
+          "url": "https://github.com/yjs/y-protocols#readme"
         },
         {
           "type": "vcs",
-          "url": "git+https://github.com/yjs/y-prosemirror.git"
+          "url": "git+https://github.com/yjs/y-protocols.git"
         }
       ],
       "group": "",
@@ -78391,41 +79041,45 @@
           }
         }
       ],
-      "name": "y-prosemirror",
+      "name": "y-protocols",
       "properties": [
         {
           "name": "SrcFile",
-          "value": "packages/docx-authoring/node_modules/y-prosemirror/package.json"
+          "value": "packages/docx-authoring/node_modules/y-protocols/package.json"
         },
         {
           "name": "SrcFile",
-          "value": "node_modules/y-prosemirror/package.json"
+          "value": "node_modules/y-protocols/package.json"
         },
         {
           "name": "SrcFile",
-          "value": "apps/web/node_modules/y-prosemirror/package.json"
+          "value": "apps/web/node_modules/y-protocols/package.json"
         },
         {
           "name": "SrcFile",
-          "value": "apps/playground/node_modules/y-prosemirror/package.json"
+          "value": "apps/playground/node_modules/y-protocols/package.json"
         },
         {
           "name": "SrcFile",
-          "value": "apps/mobile/node_modules/y-prosemirror/package.json"
+          "value": "apps/mobile/node_modules/y-protocols/package.json"
         },
         {
           "name": "SrcFile",
-          "value": "apps/landing/node_modules/y-prosemirror/package.json"
+          "value": "apps/landing/node_modules/y-protocols/package.json"
         },
         {
           "name": "SrcFile",
-          "value": "apps/api/node_modules/y-prosemirror/package.json"
+          "value": "apps/collab/node_modules/y-protocols/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "apps/api/node_modules/y-protocols/package.json"
         }
       ],
-      "purl": "pkg:npm/y-prosemirror@1.3.7",
+      "purl": "pkg:npm/y-protocols@1.0.7",
       "scope": "required",
       "type": "library",
-      "version": "1.3.7"
+      "version": "1.0.7"
     },
     {
       "authors": [
@@ -78451,6 +79105,15 @@
           }
         ],
         "occurrences": [
+          {
+            "location": "apps/api/src/lib/files/folio-collab-room-materialization.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/files/folio-collab-snapshot-loader.ts#2"
+          },
+          {
+            "location": "apps/collab/src/room-authority.ts#3"
+          },
           {
             "location": "apps/collab/src/server.ts#13"
           },
@@ -78681,6 +79344,9 @@
           },
           {
             "location": "apps/web/src/features/avt/add-fact-progress-store.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/chat/browser-control/browser-sign-in-handoff.ts#1"
           },
           {
             "location": "apps/web/src/features/chat/legal-document-chat-threads.ts#17"
