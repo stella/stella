@@ -577,7 +577,7 @@
       "auditLogsResourceId": "Resursa ID",
       "auditLogsResourceIdentifier": "Resursa ID: {id}",
       "auditLogsResourceType": "Resursa veids",
-      "auditLogsResourceTypePlaceholder": "piem., workspace",
+      "auditLogsResourceTypePlaceholder": "piem., lieta",
       "auditLogsSentenceAccess": "{resource} atvērts.",
       "auditLogsSentenceActivity": "Reģistrēta {resource} darbība.",
       "auditLogsSentenceCancel": "{resource} atcelts.",

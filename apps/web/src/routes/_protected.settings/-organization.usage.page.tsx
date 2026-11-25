@@ -11,6 +11,7 @@ import { Button } from "@stll/ui/button";
 import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import Tooltip from "@/components/tooltip";
 import { createHostedUsageManagementSession } from "@/components/usage/usage-limit-modal";
 import { env } from "@/env";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -19,6 +20,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryAvailability } from "@/lib/organization/feature-access/availability";
 import { queryView } from "@/lib/query-view.logic";
+import { formatFullTimestamp } from "@/lib/relative-time";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
 import type { UsageEntitlement } from "@/lib/usage-queries";
 import { UsagePlansCard } from "@/routes/_protected.settings/organization/-components/organization/usage-plans-card";
@@ -135,24 +137,31 @@ function ActiveEntitlementCard({ data }: { data: UsageEntitlement }) {
       formattedUsage={format.number(usedPct / 100, { style: "percent" })}
       summary={
         <>
-          {data.entitlement.cancelAtPeriodEnd
-            ? t("settings.organization.usageEndsOnTemplate", {
+          {data.entitlement.cancelAtPeriodEnd ? (
+            <Tooltip
+              content={formatFullTimestamp(data.entitlement.currentPeriodEnd)}
+              render={<span />}
+            >
+              {t("settings.organization.usageEndsOnTemplate", {
                 date: formatShortDate(
                   data.entitlement.currentPeriodEnd,
                   format,
                 ),
-              })
-            : t(USAGE_STATUS_KEYS[data.entitlement.status])}{" "}
+              })}
+            </Tooltip>
+          ) : (
+            t(USAGE_STATUS_KEYS[data.entitlement.status])
+          )}{" "}
           ·{" "}
           {t("settings.organization.usageSeats", {
             count: data.entitlement.seats,
           })}{" "}
           ·{" "}
-          {formatPeriod(
-            data.entitlement.currentPeriodStart,
-            data.entitlement.currentPeriodEnd,
-            format,
-          )}
+          <PeriodRange
+            end={data.entitlement.currentPeriodEnd}
+            format={format}
+            start={data.entitlement.currentPeriodStart}
+          />
         </>
       }
       title={<BidiText>{data.policy.displayName}</BidiText>}
@@ -181,8 +190,9 @@ function ManageUsageButton() {
     <Button
       disabled={pending}
       disabledReason={t("common.preparing")}
+      loading={pending}
       onClick={() => mutation.mutate()}
-      variant="ghost"
+      variant="outline"
     >
       {t("settings.organization.usageManage")}
     </Button>
@@ -218,18 +228,32 @@ const formatShortDate = (iso: string, format: IntlFormatter): string => {
   return format.dateTime(date, SHORT_DATE_OPTIONS);
 };
 
-const formatPeriod = (
-  start: string,
-  end: string,
-  format: IntlFormatter,
-): string => {
+function PeriodRange({
+  start,
+  end,
+  format,
+}: {
+  start: string;
+  end: string;
+  format: IntlFormatter;
+}) {
   const s = new Date(start);
   const e = new Date(end);
   if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) {
-    return "";
+    return null;
   }
-  return `${format.dateTime(s, SHORT_DATE_OPTIONS)} - ${format.dateTime(e, SHORT_DATE_OPTIONS)}`;
-};
+  return (
+    <>
+      <Tooltip content={formatFullTimestamp(start)} render={<span />}>
+        {format.dateTime(s, SHORT_DATE_OPTIONS)}
+      </Tooltip>
+      {" - "}
+      <Tooltip content={formatFullTimestamp(end)} render={<span />}>
+        {format.dateTime(e, SHORT_DATE_OPTIONS)}
+      </Tooltip>
+    </>
+  );
+}
 
 const USAGE_STATUS_KEYS = {
   trialing: "settings.organization.usageStatusTrialing",

@@ -577,7 +577,7 @@
       "auditLogsResourceId": "ID prostriedku",
       "auditLogsResourceIdentifier": "ID prostriedku: {id}",
       "auditLogsResourceType": "Typ prostriedku",
-      "auditLogsResourceTypePlaceholder": "napr. workspace",
+      "auditLogsResourceTypePlaceholder": "napr. spis",
       "auditLogsSentenceAccess": "Otvorené: {resource}.",
       "auditLogsSentenceActivity": "Zaznamenaná aktivita pre {resource}.",
       "auditLogsSentenceCancel": "Zrušené: {resource}.",

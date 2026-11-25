@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { JurisdictionPicker } from "@/features/organization/components/jurisdiction-picker";
+import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapApiResponse } from "@/lib/errors/api";
@@ -24,6 +25,7 @@ import { useSettingsMutation } from "@/routes/_protected.settings/organization/-
 export const OrganizationJurisdictionsCard = () => {
   const t = useTranslations();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
+  const canEdit = usePermissions({ organizationSettings: ["update"] });
   const settingsQuery = useQuery(
     organizationSettingsOptions({
       organizationId: activeOrganizationId,
@@ -79,6 +81,8 @@ export const OrganizationJurisdictionsCard = () => {
       feedback={<QueryViewFeedback view={settingsView} />}
     >
       <JurisdictionPicker
+        disabled={!canEdit}
+        disabledReason={t("errors.api.forbidden")}
         onChange={(next) => {
           const generation = selectionGenerationRef.current + 1;
           selectionGenerationRef.current = generation;

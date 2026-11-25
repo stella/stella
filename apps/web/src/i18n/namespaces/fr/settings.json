@@ -577,7 +577,7 @@
       "auditLogsResourceId": "ID de ressource",
       "auditLogsResourceIdentifier": "ID de la ressource : {id}",
       "auditLogsResourceType": "Type de ressource",
-      "auditLogsResourceTypePlaceholder": "p. ex. workspace",
+      "auditLogsResourceTypePlaceholder": "p. ex. dossier",
       "auditLogsSentenceAccess": "{resource} ouvert.",
       "auditLogsSentenceActivity": "Activité enregistrée pour {resource}.",
       "auditLogsSentenceCancel": "{resource} annulé.",

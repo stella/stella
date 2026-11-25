@@ -20,11 +20,12 @@ import type {
 import { Badge } from "@stll/ui/badge";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import { Field, FieldLabel } from "@stll/ui/field";
 import { openFilePicker } from "@stll/ui/file-picker";
 import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
-import { Switch } from "@stll/ui/switch";
+import { SwitchField } from "@stll/ui/switch";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { TruncatedText } from "@stll/ui/truncated-text";
@@ -103,6 +104,9 @@ const AddOidcProviderForm = ({
 }) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  const [selectedPreset, setSelectedPreset] = useState<
+    (typeof IDP_PRESETS)[number]
+  >(IDP_PRESETS[0]);
   const [displayName, setDisplayName] = useState("");
   const [issuer, setIssuer] = useState("");
   const [discoveryEndpoint, setDiscoveryEndpoint] = useState("");
@@ -187,10 +191,8 @@ const AddOidcProviderForm = ({
             <Button
               key={preset.id}
               onClick={() => {
+                setSelectedPreset(preset);
                 setDisplayName(preset.label);
-                if (issuer.trim() === "") {
-                  setIssuer(preset.issuerPlaceholder);
-                }
               }}
               size="xs"
               type="button"
@@ -216,18 +218,24 @@ const AddOidcProviderForm = ({
           <div className="flex gap-2">
             <Input
               className="flex-1"
+              dir="ltr"
               onChange={(e) => {
                 setIssuer(e.target.value);
                 setDiscoveryProbe(null);
               }}
-              placeholder="https://your-org.okta.com/oauth2/default"
+              placeholder={selectedPreset.issuerPlaceholder}
               required
               type="url"
               value={issuer}
             />
             <Button
               disabled={testDiscoveryMutation.isPending || issuer.trim() === ""}
-              disabledReason={t("settings.organization.sso.issuerLabel")}
+              disabledReason={
+                testDiscoveryMutation.isPending
+                  ? t("common.loading")
+                  : t("errors.apiCodes.validationRequired")
+              }
+              loading={testDiscoveryMutation.isPending}
               onClick={() => testDiscoveryMutation.mutate()}
               type="button"
               variant="outline"
@@ -250,6 +258,7 @@ const AddOidcProviderForm = ({
             {t("settings.organization.sso.discoveryEndpointLabel")}
           </FieldLabel>
           <Input
+            dir="ltr"
             onChange={(e) => setDiscoveryEndpoint(e.target.value)}
             placeholder="https://.../.well-known/openid-configuration"
             type="url"
@@ -263,6 +272,7 @@ const AddOidcProviderForm = ({
               {t("settings.organization.sso.clientIdLabel")}
             </FieldLabel>
             <Input
+              dir="ltr"
               onChange={(e) => setClientId(e.target.value)}
               required
               value={clientId}
@@ -284,8 +294,9 @@ const AddOidcProviderForm = ({
         <Field>
           <FieldLabel>{t("settings.organization.sso.domainsLabel")}</FieldLabel>
           <Input
+            dir="ltr"
             onChange={(e) => setDomainsInput(e.target.value)}
-            placeholder="acme.com, acme.eu"
+            placeholder="firm.example, firm.eu"
             required
             value={domainsInput}
           />
@@ -304,6 +315,7 @@ const AddOidcProviderForm = ({
           <Button
             disabled={createProviderMutation.isPending}
             disabledReason={t("common.loading")}
+            loading={createProviderMutation.isPending}
             type="submit"
           >
             {t("common.save")}
@@ -509,6 +521,7 @@ const AddSamlProviderForm = ({
             {t("settings.organization.sso.samlEntityIdLabel")}
           </FieldLabel>
           <Input
+            dir="ltr"
             onChange={(e) => setIssuer(e.target.value)}
             placeholder="http://www.okta.com/exk..."
             required
@@ -520,6 +533,7 @@ const AddSamlProviderForm = ({
             {t("settings.organization.sso.samlEntryPointLabel")}
           </FieldLabel>
           <Input
+            dir="ltr"
             onChange={(e) => setEntryPoint(e.target.value)}
             placeholder="https://your-org.okta.com/app/.../sso/saml"
             required
@@ -532,6 +546,7 @@ const AddSamlProviderForm = ({
             {t("settings.organization.sso.samlCertLabel")}
           </FieldLabel>
           <Textarea
+            dir="ltr"
             onChange={(e) => setCert(e.target.value)}
             placeholder="-----BEGIN CERTIFICATE-----"
             required
@@ -542,8 +557,9 @@ const AddSamlProviderForm = ({
         <Field>
           <FieldLabel>{t("settings.organization.sso.domainsLabel")}</FieldLabel>
           <Input
+            dir="ltr"
             onChange={(e) => setDomainsInput(e.target.value)}
-            placeholder="acme.com, acme.eu"
+            placeholder="firm.example, firm.eu"
             required
             value={domainsInput}
           />
@@ -561,6 +577,7 @@ const AddSamlProviderForm = ({
           <Button
             disabled={createProviderMutation.isPending}
             disabledReason={t("common.loading")}
+            loading={createProviderMutation.isPending}
             type="submit"
           >
             {t("common.save")}
@@ -583,6 +600,10 @@ const OidcProvidersSection = ({
   const [addProtocol, setAddProtocol] = useState<"closed" | "oidc" | "saml">(
     "closed",
   );
+  const [pendingDelete, setPendingDelete] =
+    useState<OrganizationSsoProviderSummary | null>(null);
+  const pendingDeleteLabel =
+    pendingDelete?.displayName ?? pendingDelete?.providerId ?? "";
 
   const deleteProviderMutation = useMutation({
     mutationFn: resourceMutation({
@@ -593,6 +614,7 @@ const OidcProvidersSection = ({
         await removeOrgSsoProvider(providerId),
     }),
     onSuccess: async () => {
+      setPendingDelete(null);
       await onChanged();
       stellaToast.add({
         title: t("settings.organization.sso.providerDeleted"),
@@ -607,6 +629,12 @@ const OidcProvidersSection = ({
   const handleProviderCreated = async () => {
     setAddProtocol("closed");
     await onChanged();
+  };
+
+  const confirmDeleteProvider = async () => {
+    if (pendingDelete !== null) {
+      await deleteProviderMutation.mutateAsync(pendingDelete.providerId);
+    }
   };
 
   return (
@@ -682,10 +710,8 @@ const OidcProvidersSection = ({
                 </div>
                 <Button
                   disabled={deleteProviderMutation.isPending}
-                  disabledReason={t("common.loading")}
-                  onClick={() =>
-                    deleteProviderMutation.mutate(provider.providerId)
-                  }
+                  disabledReason={t("common.deleting")}
+                  onClick={() => setPendingDelete(provider)}
                   size="xs"
                   type="button"
                   variant="outline"
@@ -722,6 +748,24 @@ const OidcProvidersSection = ({
           ))}
         </div>
       )}
+      <DestructiveConfirmDialog
+        cancelLabel={t("common.cancel")}
+        confirmation={pendingDeleteLabel}
+        confirmLabel={t("common.delete")}
+        description={pendingDeleteLabel}
+        inputLabel={t("admin.deleteTypeToConfirm", {
+          name: pendingDeleteLabel,
+        })}
+        loading={deleteProviderMutation.isPending}
+        onConfirm={confirmDeleteProvider}
+        onOpenChange={(open) => {
+          if (!open && !deleteProviderMutation.isPending) {
+            setPendingDelete(null);
+          }
+        }}
+        open={pendingDelete !== null}
+        title={t("common.confirmAction")}
+      />
     </section>
   );
 };
@@ -736,6 +780,9 @@ const VerifiedDomainsSection = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const [newDomain, setNewDomain] = useState("");
+  const [pendingDelete, setPendingDelete] =
+    useState<OrganizationSsoDomainSummary | null>(null);
+  const pendingDeleteDomain = pendingDelete?.domain ?? "";
 
   const createDomainMutation = useMutation({
     mutationFn: resourceMutation({
@@ -788,6 +835,7 @@ const VerifiedDomainsSection = ({
         await removeOrgSsoDomain(domainId),
     }),
     onSuccess: async () => {
+      setPendingDelete(null);
       await onChanged();
       stellaToast.add({
         title: t("settings.organization.sso.domainDeleted"),
@@ -798,6 +846,12 @@ const VerifiedDomainsSection = ({
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
+
+  const confirmDeleteDomain = async () => {
+    if (pendingDelete !== null) {
+      await deleteDomainMutation.mutateAsync(pendingDelete.id);
+    }
+  };
 
   return (
     <section className="border-border bg-card space-y-4 rounded-xl border p-4">
@@ -820,14 +874,21 @@ const VerifiedDomainsSection = ({
         }}
       >
         <Input
+          aria-label={t("settings.organization.sso.domainsTitle")}
           className="flex-1"
+          dir="ltr"
           onChange={(e) => setNewDomain(e.target.value)}
-          placeholder="acme.com"
+          placeholder="firm.example"
           value={newDomain}
         />
         <Button
           disabled={createDomainMutation.isPending || newDomain.trim() === ""}
-          disabledReason={t("settings.organization.sso.addDomain")}
+          disabledReason={
+            createDomainMutation.isPending
+              ? t("common.loading")
+              : t("errors.apiCodes.validationRequired")
+          }
+          loading={createDomainMutation.isPending}
           type="submit"
           variant="outline"
         >
@@ -862,6 +923,10 @@ const VerifiedDomainsSection = ({
                     <Button
                       disabled={verifyDomainMutation.isPending}
                       disabledReason={t("common.loading")}
+                      loading={
+                        verifyDomainMutation.isPending &&
+                        verifyDomainMutation.variables === domain.id
+                      }
                       onClick={() => verifyDomainMutation.mutate(domain.id)}
                       size="xs"
                       type="button"
@@ -871,8 +936,8 @@ const VerifiedDomainsSection = ({
                   )}
                   <Button
                     disabled={deleteDomainMutation.isPending}
-                    disabledReason={t("common.loading")}
-                    onClick={() => deleteDomainMutation.mutate(domain.id)}
+                    disabledReason={t("common.deleting")}
+                    onClick={() => setPendingDelete(domain)}
                     size="xs"
                     type="button"
                     variant="outline"
@@ -897,6 +962,24 @@ const VerifiedDomainsSection = ({
           ))}
         </div>
       )}
+      <DestructiveConfirmDialog
+        cancelLabel={t("common.cancel")}
+        confirmation={pendingDeleteDomain}
+        confirmLabel={t("common.delete")}
+        description={pendingDeleteDomain}
+        inputLabel={t("admin.deleteTypeToConfirm", {
+          name: pendingDeleteDomain,
+        })}
+        loading={deleteDomainMutation.isPending}
+        onConfirm={confirmDeleteDomain}
+        onOpenChange={(open) => {
+          if (!open && !deleteDomainMutation.isPending) {
+            setPendingDelete(null);
+          }
+        }}
+        open={pendingDelete !== null}
+        title={t("common.confirmAction")}
+      />
     </section>
   );
 };
@@ -1362,28 +1445,34 @@ export const OrganizationSsoPage = () => {
       </div>
 
       <section className="border-border bg-card rounded-xl border p-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1">
-            <h2 className="text-foreground text-sm font-medium">
-              {t("settings.organization.sso.requireSsoTitle")}
-            </h2>
-            <p className="text-muted-foreground text-xs">
+        <SwitchField
+          checked={isRequired}
+          description={
+            <>
               {t("settings.organization.sso.requireSsoDescription")}
-            </p>
-          </div>
-          <Switch
-            checked={isRequired}
-            disabled={
-              policyMutation.isPending ||
-              (!isRequired && settings.providers.length === 0)
-            }
-            onCheckedChange={(checked) => {
-              policyMutation.mutate({
-                requirement: checked ? "required" : "optional",
-              });
-            }}
-          />
-        </div>
+              {!isRequired && settings.providers.length === 0 ? (
+                <span className="mt-1 block">
+                  {t("settings.organization.sso.noProviders")}
+                </span>
+              ) : null}
+            </>
+          }
+          disabled={
+            policyMutation.isPending ||
+            (!isRequired && settings.providers.length === 0)
+          }
+          disabledReason={
+            policyMutation.isPending
+              ? t("common.saving")
+              : t("settings.organization.sso.noProviders")
+          }
+          label={t("settings.organization.sso.requireSsoTitle")}
+          onCheckedChange={(checked) => {
+            policyMutation.mutate({
+              requirement: checked ? "required" : "optional",
+            });
+          }}
+        />
       </section>
 
       <OidcProvidersSection

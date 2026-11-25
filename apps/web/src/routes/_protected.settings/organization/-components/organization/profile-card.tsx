@@ -1,5 +1,3 @@
-import { useState } from "react";
-
 import { useForm, useSelector } from "@tanstack/react-form";
 import {
   useMutation,
@@ -11,8 +9,6 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { Button } from "@stll/ui/button";
-import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
-import type { DestructiveConfirmOutcome } from "@stll/ui/destructive-confirm-dialog";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { openFilePicker } from "@stll/ui/file-picker";
 import { Form } from "@stll/ui/form";
@@ -56,7 +52,6 @@ export const OrganizationProfileCard = () => {
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const { data } = useSuspenseQuery(organizationOptions(activeOrganizationId));
-  const [pendingName, setPendingName] = useState<string | null>(null);
   const canChange = usePermissions({ organization: ["update"] });
 
   // Renames and logo changes are one organization write, so both refresh
@@ -117,157 +112,130 @@ export const OrganizationProfileCard = () => {
         name: data.name,
       },
       submitValues: "schema-output",
-      onSubmit: ({ value }) => {
-        // Defer the mutation to the type-to-confirm dialog so renames
-        // can't fire from a stray click.
-        setPendingName(value.name);
+      onSubmit: async ({ value }) => {
+        if (!canChange) {
+          return;
+        }
+        const renamed = await Result.tryPromise(
+          async () =>
+            await updateMutation.mutateAsync({
+              organizationId: data.id,
+              fields: { name: value.name },
+            }),
+        );
+        if (Result.isOk(renamed)) {
+          form.reset({ name: value.name });
+        }
       },
     }),
   );
 
   const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
 
-  const performRename = async () => {
-    if (!pendingName) {
-      return undefined;
-    }
-    const renamed = await Result.tryPromise(
-      async () =>
-        await updateMutation.mutateAsync({
-          organizationId: data.id,
-          fields: { name: pendingName },
-        }),
-    );
-    if (Result.isError(renamed)) {
-      // The mutation already reported the failure; keep the confirm dialog
-      // open so the rename can be retried.
-      return "keep-open" satisfies DestructiveConfirmOutcome;
-    }
-
-    form.reset({ name: pendingName });
-    setPendingName(null);
-    return undefined;
-  };
-
   return (
-    <>
-      <OrganizationProfileCardFrame>
-        <Form
-          className="gap-4"
-          errors={formErrors}
-          onSubmit={(e) => {
-            e.preventDefault();
-            detached(form.handleSubmit(), "profile-card.submit");
-          }}
-        >
-          <OrganizationProfileLogoRow>
-            <UserIdentityAvatar
-              className={ORGANIZATION_LOGO_CLASS}
-              image={data.logo}
-              name={data.name}
-            />
-            {canChange ? (
-              <>
+    <OrganizationProfileCardFrame>
+      <Form
+        className="gap-4"
+        errors={formErrors}
+        onSubmit={(e) => {
+          e.preventDefault();
+          detached(form.handleSubmit(), "profile-card.submit");
+        }}
+      >
+        <OrganizationProfileLogoRow>
+          <UserIdentityAvatar
+            className={ORGANIZATION_LOGO_CLASS}
+            image={data.logo}
+            name={data.name}
+          />
+          {canChange ? (
+            <>
+              <Button
+                loading={updateMutation.isPending}
+                onClick={() => {
+                  openFilePicker({
+                    accept: ORGANIZATION_LOGO_ACCEPT,
+                    onPick: ([file]) => {
+                      detached(uploadLogo(file), "profile-card.upload-logo");
+                    },
+                  });
+                }}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                {t("settings.organization.uploadLogo")}
+              </Button>
+              {data.logo ? (
                 <Button
-                  loading={updateMutation.isPending}
+                  disabled={updateMutation.isPending}
+                  disabledReason={t("common.saving")}
                   onClick={() => {
-                    openFilePicker({
-                      accept: ORGANIZATION_LOGO_ACCEPT,
-                      onPick: ([file]) => {
-                        detached(uploadLogo(file), "profile-card.upload-logo");
-                      },
+                    updateMutation.mutate({
+                      organizationId: data.id,
+                      fields: { logo: null },
                     });
                   }}
                   size="sm"
                   type="button"
-                  variant="outline"
+                  variant="ghost"
                 >
-                  {t("settings.organization.uploadLogo")}
+                  {t("common.remove")}
                 </Button>
-                {data.logo ? (
-                  <Button
-                    disabled={updateMutation.isPending}
-                    disabledReason={t("common.saving")}
-                    onClick={() => {
-                      updateMutation.mutate({
-                        organizationId: data.id,
-                        fields: { logo: null },
-                      });
-                    }}
-                    size="sm"
-                    type="button"
-                    variant="ghost"
-                  >
-                    {t("common.remove")}
-                  </Button>
-                ) : null}
-              </>
-            ) : null}
-          </OrganizationProfileLogoRow>
-          <form.Field name="name">
-            {(field) => (
-              <Field name={field.name}>
-                <FieldLabel>{t("common.organizationName")}</FieldLabel>
-                <Input
-                  onBlur={field.handleBlur}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  placeholder={t("auth.organizationNamePlaceholder")}
-                  required
-                  value={field.state.value}
-                />
-                <FieldError />
-              </Field>
-            )}
-          </form.Field>
-          <form.Subscribe
-            selector={(s) => ({
-              isSubmitting: s.isSubmitting,
-              isDirty: s.isDirty,
-              canSubmit: s.canSubmit,
-            })}
-          >
-            {({ isSubmitting, isDirty, canSubmit }) => {
-              const resolveProfileSaveDisabledReason = () => {
-                if (isSubmitting) {
-                  return t("common.saving");
-                }
-                if (!isDirty) {
-                  return t("common.noChangesToSave");
-                }
-                return t("templates.validationErrors");
-              };
-              return (
-                <Button
-                  className="self-start"
-                  disabled={!isDirty || !canSubmit}
-                  disabledReason={resolveProfileSaveDisabledReason()}
-                  loading={isSubmitting}
-                  type="submit"
-                >
-                  {t("common.saveChanges")}
-                </Button>
-              );
-            }}
-          </form.Subscribe>
-        </Form>
-      </OrganizationProfileCardFrame>
-      <DestructiveConfirmDialog
-        cancelLabel={t("common.cancel")}
-        confirmation={pendingName ?? ""}
-        confirmLabel={t("common.rename")}
-        description={t("settings.organization.renameDescription")}
-        inputLabel={t("settings.organization.renameTypeToConfirm", {
-          name: pendingName ?? "",
-        })}
-        onConfirm={performRename}
-        onOpenChange={(open) => {
-          if (!open) {
-            setPendingName(null);
-          }
-        }}
-        open={pendingName !== null}
-        title={t("settings.organization.renameTitle")}
-      />
-    </>
+              ) : null}
+            </>
+          ) : null}
+        </OrganizationProfileLogoRow>
+        <form.Field name="name">
+          {(field) => (
+            <Field name={field.name}>
+              <FieldLabel>{t("common.organizationName")}</FieldLabel>
+              <Input
+                disabled={!canChange}
+                onBlur={field.handleBlur}
+                onChange={(e) => field.handleChange(e.target.value)}
+                placeholder={t("auth.organizationNamePlaceholder")}
+                required
+                value={field.state.value}
+              />
+              <FieldError />
+            </Field>
+          )}
+        </form.Field>
+        <form.Subscribe
+          selector={(s) => ({
+            isSubmitting: s.isSubmitting,
+            isDirty: s.isDirty,
+            canSubmit: s.canSubmit,
+          })}
+        >
+          {({ isSubmitting, isDirty, canSubmit }) => {
+            const resolveProfileSaveDisabledReason = () => {
+              if (!canChange) {
+                return t("errors.api.forbidden");
+              }
+              if (isSubmitting) {
+                return t("common.saving");
+              }
+              if (!isDirty) {
+                return t("common.noChangesToSave");
+              }
+              return t("templates.validationErrors");
+            };
+            return (
+              <Button
+                className="self-start"
+                disabled={!canChange || !isDirty || !canSubmit}
+                disabledReason={resolveProfileSaveDisabledReason()}
+                loading={isSubmitting}
+                type="submit"
+              >
+                {t("common.saveChanges")}
+              </Button>
+            );
+          }}
+        </form.Subscribe>
+      </Form>
+    </OrganizationProfileCardFrame>
   );
 };

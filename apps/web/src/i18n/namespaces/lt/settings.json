@@ -577,7 +577,7 @@
       "auditLogsResourceId": "Ištekliaus ID",
       "auditLogsResourceIdentifier": "Ištekliaus ID: {id}",
       "auditLogsResourceType": "Ištekliaus tipas",
-      "auditLogsResourceTypePlaceholder": "pvz., workspace",
+      "auditLogsResourceTypePlaceholder": "pvz., byla",
       "auditLogsSentenceAccess": "{resource} atidarytas.",
       "auditLogsSentenceActivity": "Įrašyta {resource} veikla.",
       "auditLogsSentenceCancel": "{resource} atšauktas.",

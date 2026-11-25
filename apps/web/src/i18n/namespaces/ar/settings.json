@@ -577,7 +577,7 @@
       "auditLogsResourceId": "معرف المورد",
       "auditLogsResourceIdentifier": "معرّف المورد: {id}",
       "auditLogsResourceType": "نوع المورد",
-      "auditLogsResourceTypePlaceholder": "مثال: workspace",
+      "auditLogsResourceTypePlaceholder": "مثال: ملف قانوني",
       "auditLogsSentenceAccess": "تم فتح {resource}.",
       "auditLogsSentenceActivity": "تم تسجيل نشاط لـ {resource}.",
       "auditLogsSentenceCancel": "تم إلغاء {resource}.",
