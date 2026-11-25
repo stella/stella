@@ -135,7 +135,7 @@ const found = (): BrowserControlResult => ({
 
 /** A question the member was asked, each kind with its own fields. */
 type AskedStep<Request = BrowserApprovalRequest> = Request extends unknown
-  ? Omit<Request, "reason" | "signal" | "site">
+  ? Omit<Request, "allowSite" | "allowedNow" | "reason" | "signal" | "site">
   : never;
 
 type Sent = {
@@ -184,6 +184,8 @@ const recorder = (
     approvals,
     siteGrants,
     approve: async ({
+      allowSite,
+      allowedNow: _allowedNow,
       reason,
       signal: _signal,
       site,
@@ -192,6 +194,11 @@ const recorder = (
       asked.push(request);
       offeredSites.push(site);
       reasons.push(reason);
+      // As the run's approvals answer it: always allowing the website adds
+      // it before the step goes on.
+      if (decision === APPROVAL_DECISION.approveSite) {
+        allowSite?.();
+      }
       return {
         decision,
         finish: (status: string) => {
@@ -1862,6 +1869,58 @@ describe("website approvals on the member's computer", () => {
       "click",
       "select",
     ]);
+  });
+
+  test("a step waiting on a website goes on once the run allows it, and one held back for a secret keeps waiting", async () => {
+    const session = createLocalBrowserSession();
+    const siteGrants = new Set<string>();
+    const browser = recorder([fieldPage("r-1", false)], {
+      approvals: "ask",
+      siteGrants,
+    });
+    const questions: BrowserApprovalRequest[] = [];
+    const answers: ((decision: "approve" | "deny") => void)[] = [];
+    const context = {
+      ...browser.context,
+      approve: async (request: BrowserApprovalRequest) => {
+        questions.push(request);
+        const { promise, resolve } = Promise.withResolvers<
+          "approve" | "deny"
+        >();
+        answers.push(resolve);
+        return {
+          decision: await promise,
+          finish: () => undefined,
+        };
+      },
+    };
+    await session.call("snapshot", {}, context);
+    const clicking = session.call("click", INPUTS.click, context);
+    const typing = session.call("type", INPUTS.type, context);
+    await Promise.resolve();
+    expect(questions.map(({ reason }) => reason)).toEqual([
+      "site_not_allowed",
+      "possible_secret",
+    ]);
+    expect(questions.map(({ allowedNow }) => allowedNow())).toEqual([
+      false,
+      false,
+    ]);
+    // The member always allows the website in chat while both wait.
+    siteGrants.add(SITE);
+    expect(questions.map(({ allowedNow }) => allowedNow())).toEqual([
+      true,
+      false,
+    ]);
+    // Gone again: the click would wait once more.
+    siteGrants.delete(SITE);
+    expect(questions[0]?.allowedNow()).toBe(false);
+    questions[0]?.allowSite?.();
+    expect([...siteGrants]).toEqual([SITE]);
+    for (const answer of answers) {
+      answer("deny");
+    }
+    await Promise.all([clicking, typing]);
   });
 
   test("on an allowed website, a click after Enter changed the page names the new read and runs without asking", async () => {

@@ -11,7 +11,7 @@ use std::{collections::BTreeMap, num::NonZeroU32, time::Duration};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-pub(crate) const PROTOCOL: u32 = 2;
+pub(crate) const PROTOCOL: u32 = 3;
 /// Largest frame either side sends or accepts, in UTF-8 bytes.
 pub(crate) const MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
 /// Sequenced messages one run may store; the API refuses more.
@@ -621,6 +621,38 @@ pub(crate) struct RunAnswer {
   pub(crate) answers: QuestionAnswers,
 }
 
+/// The member's website approvals as they stand now, for a run that is
+/// going: the whole set, the newest `revision` of which holds. The origins
+/// are relayed as the API sent them; the sidecar's browser gate reads them.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RunSiteGrants {
+  pub(crate) run_id: String,
+  pub(crate) revision: SiteGrantsRevision,
+  pub(crate) origins: Vec<String>,
+}
+
+/// The id one `run.site_grants` is sent under. Only a UUID names one.
+#[derive(
+  Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize,
+)]
+#[serde(try_from = "String", into = "String")]
+pub(crate) struct SiteGrantsRevision(uuid::Uuid);
+
+impl TryFrom<String> for SiteGrantsRevision {
+  type Error = uuid::Error;
+
+  fn try_from(id: String) -> Result<Self, Self::Error> {
+    uuid::Uuid::parse_str(&id).map(Self)
+  }
+}
+
+impl From<SiteGrantsRevision> for String {
+  fn from(id: SiteGrantsRevision) -> Self {
+    id.0.to_string()
+  }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RunTokenRefresh {
@@ -682,6 +714,7 @@ wire_union!(ServerMessage tagged "type" {
   RunInput(RunInput) => "run.input",
   RunApproval(RunApproval) => "run.approval",
   RunAnswer(RunAnswer) => "run.answer",
+  RunSiteGrants(RunSiteGrants) => "run.site_grants",
   RunInterrupt(RunRef) => "run.interrupt",
   RunCancel(RunRef) => "run.cancel",
   RunToken(RunTokenRefresh) => "run.token",

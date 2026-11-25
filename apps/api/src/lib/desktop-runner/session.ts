@@ -7,6 +7,7 @@ import {
   DESKTOP_RUNNER_FRAME_REJECTION,
   DESKTOP_RUNNER_PROTOCOL,
   DESKTOP_RUNNER_SERVER_MESSAGE,
+  DESKTOP_RUNNER_SITE_GRANTS_PROTOCOL,
   type DesktopRunnerClose,
   type DesktopRunnerDesktopMessage,
   type DesktopRunnerLimits,
@@ -183,6 +184,8 @@ type SessionPhase =
       socket: ApiServerWebSocket;
       /** Runs the desktop listed in `hello`; their `run.start` is not resent. */
       held: ReadonlySet<string>;
+      /** The protocol the desktop's `hello` named: what it may be sent. */
+      protocol: number;
     }
   | { type: "closed" };
 
@@ -469,7 +472,7 @@ const deliverPending = async (
   if (state.phase.type !== "ready") {
     return;
   }
-  const { held } = state.phase;
+  const { held, protocol } = state.phase;
   if (!state.backpressured) {
     await deliverRestores(state, resendSent);
   }
@@ -479,7 +482,7 @@ const deliverPending = async (
       return;
     }
     // db-await-in-loop: keyset page per iteration; the page is the batch
-    const page = await deliverPage(state, held);
+    const page = await deliverPage(state, held, protocol);
     if (page !== "full") {
       return;
     }
@@ -493,11 +496,14 @@ const deliverPending = async (
  * the check and nothing of it goes out. A `run.start` whose run ended since
  * the read is skipped; one recorded as delivered that never went out (the
  * socket closed or filled up) is released, so it keeps the pickup window.
+ * A command the desktop's protocol does not know is passed over: such a
+ * desktop keeps the website approvals its runs started with.
  * `full` when another page may follow.
  */
 const deliverPage = async (
   state: SessionState,
   held: ReadonlySet<string>,
+  protocol: number,
 ): Promise<"full" | "done"> => {
   const { db } = state.context;
   const pending = await readPendingCommands(db, {
@@ -518,9 +524,12 @@ const deliverPage = async (
     const resend =
       command.kind !== DESKTOP_RUNNER_SERVER_MESSAGE.runStart ||
       !held.has(command.runId);
+    const known =
+      command.kind !== DESKTOP_RUNNER_SERVER_MESSAGE.runSiteGrants ||
+      protocol >= DESKTOP_RUNNER_SITE_GRANTS_PROTOCOL;
     composed.push({
       command,
-      message: resend ? await outgoing(state, command) : null,
+      message: resend && known ? await outgoing(state, command) : null,
     });
   }
   const starts = composed.flatMap(({ command, message }) =>
@@ -771,6 +780,7 @@ const onHello = async (
     type: "ready",
     socket,
     held: new Set(claim.held.map(({ runId }) => runId)),
+    protocol: hello.protocol,
   };
   send(state, {
     type: DESKTOP_RUNNER_SERVER_MESSAGE.welcome,

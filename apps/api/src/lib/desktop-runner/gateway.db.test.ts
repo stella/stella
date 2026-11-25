@@ -52,12 +52,12 @@ import {
   DESKTOP_RUNNER_CLOSE,
   DESKTOP_RUNNER_DESKTOP_ID_HEADER,
   DESKTOP_RUNNER_FEATURE_ID,
-  DESKTOP_RUNNER_FOLDER_RESTORE_PROTOCOL,
   DESKTOP_RUNNER_LIMITS,
   DESKTOP_RUNNER_MAX_FRAME_BYTES,
   DESKTOP_RUNNER_OUTPUT_EVENT,
   DESKTOP_RUNNER_PATH,
   DESKTOP_RUNNER_PROTOCOL,
+  DESKTOP_RUNNER_SITE_GRANTS_PROTOCOL,
   type DesktopRunnerApprovalMode,
   desktopRunnerHarnessReportSchema,
   type DesktopRunnerLimits,
@@ -73,6 +73,7 @@ import { createTestState } from "@stll/test-state";
 import { user } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  chatBrowserSiteGrants,
   chatMessageRevisions,
   chatMessages,
   chatThreads,
@@ -707,6 +708,7 @@ const ofRun = (runId: string) => (message: DesktopRunnerServerMessage) => {
     case "run.input":
     case "run.approval":
     case "run.answer":
+    case "run.site_grants":
     case "run.interrupt":
     case "run.cancel":
     case "run.token":
@@ -7538,13 +7540,11 @@ describe("undoing the file changes made since a message", () => {
     return { turnId, runId };
   };
 
-  /** A computer on `protocol`, the current one unless a test names an older. */
-  const connected = async (
-    protocol: number = DESKTOP_RUNNER_PROTOCOL.current,
-  ) => {
+  /** A computer on the current protocol. */
+  const connected = async () => {
     const desktopId = Bun.randomUUIDv7();
     const desktop = await openDesktop(undoInstance, desktopId);
-    await desktop.hello([], protocol);
+    await desktop.hello([]);
     return { desktopId, desktop };
   };
 
@@ -8115,32 +8115,6 @@ describe("undoing the file changes made since a message", () => {
     await other.desktop.close();
   });
 
-  test("a desktop from before restores runs turns, is sent no restore, and its turns are not undone", async () => {
-    const { desktopId, desktop } = await connected(
-      DESKTOP_RUNNER_PROTOCOL.minimum,
-    );
-    expect(DESKTOP_RUNNER_PROTOCOL.minimum).toBeLessThan(
-      DESKTOP_RUNNER_FOLDER_RESTORE_PROTOCOL,
-    );
-    const threadId = await newThread();
-    const { turnId } = await finishedTurn(desktop, desktopId, { threadId });
-    expect(await request(threadId, turnId)).toEqual({
-      type: "refused",
-      reason: "desktop_update_required",
-    });
-    await undoInstance.gateway.sweep();
-    expect(
-      desktop.received.filter(({ type }) => type === "folder.restore"),
-    ).toEqual([]);
-    expect(
-      await db
-        .select({ id: desktopRunnerFolderRestores.id })
-        .from(desktopRunnerFolderRestores)
-        .where(eq(desktopRunnerFolderRestores.chatTurnId, turnId)),
-    ).toEqual([]);
-    await desktop.close();
-  });
-
   test("an undo restores the first checkpoint from the message on, needs one, and asks only while its computer is online", async () => {
     const { desktopId, desktop } = await connected();
     const threadId = await newThread();
@@ -8404,5 +8378,89 @@ describe("undoing the file changes made since a message", () => {
     await undoInstance.gateway.sweep();
     expect((await desktop.receive("folder.restore")).folderId).toBe(threadId);
     await desktop.close();
+  });
+});
+
+describe("the member's website approvals while a run goes on", () => {
+  const LIBRARY = "https://fixture-library.test";
+  const ARCHIVE = "https://fixture-archive.test";
+  let instance: Instance;
+
+  testState.beforeAll(async () => {
+    // The account already holds the runners the earlier tests paired.
+    instance = await startInstance("api-site-grants", sharedDoorbell, {
+      limits: { maxRunnersPerAccount: 1000 },
+    });
+  });
+
+  /** The member allows exactly `origins` from now on. */
+  const allowOnly = async (origins: readonly string[]) => {
+    await db
+      .delete(chatBrowserSiteGrants)
+      .where(
+        and(
+          eq(chatBrowserSiteGrants.organizationId, owner.organizationId),
+          eq(chatBrowserSiteGrants.userId, owner.userId),
+        ),
+      );
+    if (origins.length > 0) {
+      await db.insert(chatBrowserSiteGrants).values(
+        origins.map((origin) => ({
+          organizationId: owner.organizationId,
+          userId: owner.userId,
+          origin,
+        })),
+      );
+    }
+  };
+
+  const sentSets = (desktop: FakeDesktop, runId: string) =>
+    desktop.received.filter(
+      (message) =>
+        message.type === "run.site_grants" && message.runId === runId,
+    );
+
+  test("the computer holding the run is sent each newer set, and a new socket every set again, in order", async () => {
+    await allowOnly([LIBRARY, ARCHIVE]);
+    const { desktopId, runId, desktop } = await acceptedRun(instance);
+    (await control.pushSiteGrants({ owner })).unwrap();
+    const sent = await desktop.receive("run.site_grants", ofRun(runId));
+    expect(sent.origins).toEqual([ARCHIVE, LIBRARY]);
+
+    await allowOnly([ARCHIVE]);
+    (await control.pushSiteGrants({ owner })).unwrap();
+    const newer = await desktop.receive("run.site_grants", ofRun(runId));
+    expect(newer).toMatchObject({ runId, origins: [ARCHIVE] });
+    expect(newer.revision).not.toBe(sent.revision);
+    await desktop.close();
+
+    // The computer drops the sets it has seen and tells a revoke from the
+    // set before it, so it is sent each one again.
+    const back = await openDesktop(instance, desktopId);
+    await back.hello([{ runId, lastSeq: 0 }]);
+    // Commands go out in order: once the interrupt arrives, nothing older is
+    // still to come.
+    (await control.interruptRun({ owner, runId })).unwrap();
+    await back.receive("run.interrupt", ofRun(runId));
+    expect(sentSets(back, runId)).toEqual([sent, newer]);
+    await back.close();
+    await allowOnly([]);
+  });
+
+  test("a computer on the protocol before is never sent one, and its run's other commands still go out", async () => {
+    await allowOnly([LIBRARY]);
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(instance, desktopId);
+    await desktop.hello([], DESKTOP_RUNNER_SITE_GRANTS_PROTOCOL - 1);
+    const runId = await assignRun(desktopId);
+    await desktop.receive("run.start", ofRun(runId));
+    desktop.send({ type: "run.accepted", runId });
+    const queued = (await control.pushSiteGrants({ owner })).unwrap();
+    expect(queued.queued).toContain(runId);
+    (await control.interruptRun({ owner, runId })).unwrap();
+    await desktop.receive("run.interrupt", ofRun(runId));
+    expect(sentSets(desktop, runId)).toEqual([]);
+    await desktop.close();
+    await allowOnly([]);
   });
 });

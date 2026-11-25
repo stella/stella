@@ -375,6 +375,7 @@ export class Holder {
       case "run.input":
       case "run.approval":
       case "run.answer":
+      case "run.site_grants":
       case "run.interrupt":
       case "run.cancel":
       case "run.token":

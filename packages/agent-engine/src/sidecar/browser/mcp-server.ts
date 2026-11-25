@@ -81,7 +81,8 @@ type BrowserMcpRun = {
   approvals: DesktopRunnerApprovalMode;
   /**
    * The websites the member always allows browser steps on: those stored
-   * when the run started, and those the member allowed in this run since.
+   * when the run started, and those the member allowed in this run since,
+   * changed in place as the member's approvals in chat change.
    */
   siteGrants: Set<string>;
   /** Asks the run's member to allow one browser step. */

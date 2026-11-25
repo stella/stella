@@ -678,6 +678,18 @@ export type BrowserApprovalRequest = BrowserApprovalQuestion & {
   reason: BrowserStepAskReason;
   /** Aborts when the agent's call ends; the question is then withdrawn. */
   signal: AbortSignal;
+  /**
+   * Always allows `site` in the run from now on: what an answer that
+   * always allows the website does, before the step goes on. Null when
+   * `site` is.
+   */
+  allowSite: (() => void) | null;
+  /**
+   * Whether the gate now runs this step without asking, by the run's
+   * website approvals, the websites the chat has been on and the tab's page
+   * as they are now: an approval given since may answer the question.
+   */
+  allowedNow: () => boolean;
 };
 
 /** The member's answer, and how the approved step's outcome is reported. */
@@ -828,8 +840,10 @@ type LocalBrowserCallContext = {
   /** The run's approval mode: which steps wait for the member. */
   approvals: DesktopRunnerApprovalMode;
   /**
-   * The websites the member always allows steps on, by exact origin; an
-   * answer that always allows a website adds it for the rest of the run.
+   * The websites the member always allows steps on, by exact origin, as the
+   * run holds them now: an answer that always allows a website adds it, and
+   * the member's changes in chat reach it while the run goes on. Read at
+   * every step, never copied.
    */
   siteGrants: Set<string>;
   approve: ApproveAction;
@@ -931,39 +945,50 @@ type GatedStep =
   | { type: "runs"; ticket: ApprovalTicket | null }
   | { type: "answered"; result: LocalBrowserToolResult };
 
+/** What the chat's browser last reported for its tab, as the gate reads it. */
+type GateTab = {
+  page: BrowserReportedPage | null;
+  signIn: boolean;
+};
+
 /**
  * Runs `step` through the shared browser gate (`decideBrowserStep`), asking
  * the member when it says so. An answer that always allows the step's
- * website adds it to the run's approvals: the website the gate named, which
- * is the page the chat last read, as the browser reported it.
+ * website adds it to the run's approvals (`allowSite`): the website the gate
+ * named, which is the page the chat last read, as the browser reported it.
+ * While the question waits, `allowedNow` asks the gate again with the run's
+ * approvals, the visited websites and the tab as they are then.
  */
 const gateStep = async (
   step: BrowserControlCommand,
   {
     approvals,
     approve,
-    page,
-    signIn,
     signal,
     siteGrants,
+    tab,
     visited,
   }: Pick<
     LocalBrowserCallContext,
     "approvals" | "approve" | "signal" | "siteGrants"
   > & {
-    page: BrowserReportedPage | null;
-    signIn: boolean;
+    /** The tab as the browser reported it last, read at each call. */
+    tab: () => GateTab;
     visited: ReadonlySet<string>;
   },
 ): Promise<GatedStep> => {
-  const decision = decideBrowserStep({
-    command: step,
-    grantedOrigins: siteGrants,
-    level: approvals,
-    reportedPage: page,
-    signIn,
-    visitedOrigins: visited,
-  });
+  const decide = () => {
+    const { page, signIn } = tab();
+    return decideBrowserStep({
+      command: step,
+      grantedOrigins: siteGrants,
+      level: approvals,
+      reportedPage: page,
+      signIn,
+      visitedOrigins: visited,
+    });
+  };
+  const decision = decide();
   switch (decision.type) {
     case BROWSER_STEP_GATE.run:
       return { type: "runs", ticket: null };
@@ -972,20 +997,22 @@ const gateStep = async (
     case BROWSER_STEP_GATE.needsMember:
       return { type: "answered", result: signInPendingResult() };
     case BROWSER_STEP_GATE.ask: {
+      const { site } = decision;
       const ticket = await approve({
         ...approvalQuestion(step),
         reason: decision.reason,
         signal,
-        site: decision.site,
+        site,
+        allowSite:
+          site === null
+            ? null
+            : () => {
+                siteGrants.add(site);
+              },
+        allowedNow: () => decide().type === BROWSER_STEP_GATE.run,
       });
       if (ticket.decision === APPROVAL_DECISION.deny) {
         return { type: "answered", result: declinedResult() };
-      }
-      if (
-        ticket.decision === APPROVAL_DECISION.approveSite &&
-        decision.site !== null
-      ) {
-        siteGrants.add(decision.site);
       }
       return { type: "runs", ticket };
     }
@@ -1261,10 +1288,9 @@ export const createLocalBrowserSession = (visited = new Set<string>()) => {
       const gated = await gateStep(step, {
         approvals,
         approve,
-        page: reportedPage(seen),
-        signIn,
         signal,
         siteGrants,
+        tab: () => ({ page: reportedPage(seen), signIn }),
         visited,
       });
       if (gated.type === "answered") {

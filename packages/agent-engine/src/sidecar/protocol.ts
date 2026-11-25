@@ -68,7 +68,7 @@ import {
  * `protocol.fixtures.json` holds valid and rejected examples of every message;
  * the desktop's serde types round-trip the same file.
  */
-export const SIDECAR_PROTOCOL = 7;
+export const SIDECAR_PROTOCOL = 8;
 
 /** How a run's turn continues the chat's native session (`run.start`). */
 export const SIDECAR_RUN_SESSION = {
@@ -99,6 +99,7 @@ export const SIDECAR_HOST_MESSAGE = {
   runInput: "run.input",
   runApproval: "run.approval",
   runAnswer: "run.answer",
+  runSiteGrants: "run.site_grants",
   runInterrupt: "run.interrupt",
   runCancel: "run.cancel",
   runToken: "run.token",
@@ -455,6 +456,16 @@ export const sidecarHostMessageSchema = v.variant("type", [
     runId: runIdSchema,
     requestId: requestIdSchema,
     answers: desktopRunnerQuestionAnswersSchema,
+  }),
+  /**
+   * The member's website approvals as they stand now, relayed from the
+   * runner's `run.site_grants`: the whole set, the newest of which holds.
+   */
+  v.object({
+    type: v.literal(SIDECAR_HOST_MESSAGE.runSiteGrants),
+    runId: runIdSchema,
+    revision: v.pipe(v.string(), v.uuid()),
+    origins: browserSiteGrantOriginsSchema,
   }),
   v.object({
     type: v.literal(SIDECAR_HOST_MESSAGE.runInterrupt),
