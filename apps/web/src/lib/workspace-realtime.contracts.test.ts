@@ -1671,11 +1671,19 @@ test("a committed entity rename leaves another entity's registered detail reader
   const otherEntityId = "00000000-0000-4000-8000-0000000000e2";
   const renamed = entityOptions(WORKSPACE_ID, ENTITY_ID);
   const other = entityOptions(WORKSPACE_ID, otherEntityId);
-  for (const options of [renamed, other]) {
+  for (const [entityId, options] of [
+    [ENTITY_ID, renamed],
+    [otherEntityId, other],
+  ] as const) {
+    const queryKey = entitiesKeys.detail(WORKSPACE_ID, entityId);
+    expect(options.queryKey).toEqual(queryKey);
     expect(options.meta.resourceReads.resources).toContain(
       RESOURCE_TYPE.ENTITY,
     );
-    queryClient.getQueryCache().build(queryClient, options);
+    // The factory's own key and reader metadata, without its fetch.
+    queryClient
+      .getQueryCache()
+      .build(queryClient, { queryKey, meta: options.meta });
   }
   try {
     await resourceMutation({
