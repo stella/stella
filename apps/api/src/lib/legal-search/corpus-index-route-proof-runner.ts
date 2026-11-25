@@ -4,19 +4,29 @@
  * time (`advanceCorpusIndexRouteProof`), for as long as the run's budget
  * lasts.
  *
- * Which generations. The one the operator names, the family's serving
- * generation, and the one the family's latest flip demoted while it is still
- * building (the keep window): the flip reads the candidate's proofs, a flip
- * back reads the demoted one's, and both read the serving one's role from the
- * registry. Before a flip that is the candidate and the serving generation;
- * after it, the same two, roles swapped, so one run spans the flip.
+ * Which generations. By default, the one the operator names, the family's
+ * serving generation, and the one the family's latest flip demoted while it
+ * is still building (the keep window): the flip reads the candidate's proofs,
+ * a flip back reads the demoted one's, and both read the serving one's role
+ * from the registry. Before a flip that is the candidate and the serving
+ * generation; after it, the same two, roles swapped, so one run spans the
+ * flip. With `onlyRequested`, the named generation alone: the flip reads only
+ * the candidate's proofs, so a run preparing one spends no page on another.
  *
- * A pass is never idled. A proof starts the route's next pass at the instant
- * it is recorded (the store), and a proof's age counts from its pass's start,
- * so a route the runner stopped walking would prove, later, only what its
- * stale pass began on. The runner therefore keeps walking every route until
- * its budget ends, and a crash or a stop resumes from the cursor the store
- * holds.
+ * Which routes. A proof starts the route's next pass at the instant it is
+ * recorded (the store), and a proof's age counts from its pass's start. Run
+ * for its budget, the runner keeps walking every route, so each route's
+ * proof keeps being renewed. Run `untilCurrent`, it walks only the routes
+ * whose proof is not current (judged by the store's reading on the database
+ * clock, the predicate the flip reads), and gives a route proven current no
+ * page while another is not: the run ends once every route is current, so a
+ * page on a current route would only delay that. It reads the proofs again
+ * after every proof it records and at least every
+ * `CORPUS_INDEX_ROUTE_PROOF_REFRESH_MS`, so a proof revoked or expired while
+ * it runs is walked again. A pass a current route leaves idle either proves
+ * later or, too old to prove, is started over by the store
+ * (`pass_too_old_to_prove`). A crash or a stop resumes from the cursor the
+ * store holds.
  *
  * Never inside a flip. Every transaction of the runner joins the shared side
  * of the projection mutation fence first, with a short lock timeout; the
@@ -87,6 +97,11 @@ const RECHECK_MS = 5 * 60_000;
 const ROUTES_MAX = 64;
 /** How long a worker with no route due waits before looking again. */
 const IDLE_POLL_MS = 50;
+/**
+ * The longest an `untilCurrent` run trusts its last reading of which routes
+ * are current before it reads the proofs again.
+ */
+export const CORPUS_INDEX_ROUTE_PROOF_REFRESH_MS = 60_000;
 
 /** Why a generation joined the run. */
 type CorpusIndexProofRole = "requested" | "serving" | "kept";
@@ -164,12 +179,13 @@ type GenerationsRefusal = {
 
 /**
  * The generations a run proves: the requested one (building or serving),
- * the family's serving generation, and the generation the family's latest
- * flip demoted while it is still building.
+ * and unless `onlyRequested`, the family's serving generation and the
+ * generation the family's latest flip demoted while it is still building.
  */
 const readCorpusIndexProofGenerationsTx = async (
   tx: Transaction,
   { family, generation: requested }: Omit<CorpusIndexRoute, "indexId">,
+  onlyRequested: boolean,
 ): Promise<
   | { type: "resolved"; generations: CorpusIndexProofGeneration[] }
   | GenerationsRefusal
@@ -204,6 +220,12 @@ const readCorpusIndexProofGenerationsTx = async (
       type: "refused",
       generation: requested,
       status: requestedRow.status,
+    };
+  }
+  if (onlyRequested) {
+    return {
+      type: "resolved",
+      generations: [{ family, generation: requested, roles: ["requested"] }],
     };
   }
   const latestFlip = (
@@ -271,6 +293,8 @@ type SetAside =
 
 type CorpusIndexRouteProofRouteReport = {
   route: CorpusIndexRoute;
+  /** Whether the run's latest reading of the proofs found this one current. */
+  current: boolean;
   pages: number;
   proofs: number;
   repairs: number;
@@ -323,7 +347,15 @@ export type CorpusIndexRouteProofRunOptions = {
   target: Omit<CorpusIndexRoute, "indexId">;
   /** The run ends at this instant (`now()`), or after this many pages. */
   budget: { endsAt: number; pages: number };
-  /** Stop as soon as every route of every proven generation is current. */
+  /**
+   * Prove the target generation alone, not the serving one or the one the
+   * latest flip kept.
+   */
+  onlyRequested: boolean;
+  /**
+   * Stop as soon as every route of every proven generation is current, and
+   * walk no route whose proof is current while another's is not.
+   */
   untilCurrent: boolean;
   /** Routes walked at once; their transactions still run one at a time. */
   concurrency: number;
@@ -371,6 +403,10 @@ type Walk = {
   lockRefusedSince: number | null;
   next: number;
   busy: Set<RouteReport>;
+  /** When an `untilCurrent` run reads the proofs again (`now()`). */
+  refreshAt: number;
+  /** Readings of the proofs started, and the latest one applied. */
+  refreshes: { started: number; applied: number };
 };
 
 /** When a route not refused may be walked again (0: now). */
@@ -382,8 +418,12 @@ const dueAt = (report: RouteReport): number =>
       : report.setAside.until,
   );
 
+/** A route an `untilCurrent` run gives no page: its proof is current. */
+const heldCurrent = (walk: Walk, report: RouteReport): boolean =>
+  walk.options.untilCurrent && report.current;
+
 const walkable = (walk: Walk, report: RouteReport, at: number): boolean => {
-  if (report.setAside?.type === "refused") {
+  if (report.setAside?.type === "refused" || heldCurrent(walk, report)) {
     return false;
   }
   return !walk.busy.has(report) && dueAt(report) <= at;
@@ -407,7 +447,9 @@ const takeRoute = (
     }
   }
   const waits = reports.flatMap((report) =>
-    report.setAside?.type === "refused" || walk.busy.has(report)
+    report.setAside?.type === "refused" ||
+    heldCurrent(walk, report) ||
+    walk.busy.has(report)
       ? []
       : [dueAt(report) - at],
   );
@@ -565,16 +607,72 @@ const applyStep = async (
         settle(walk.options, report, step.advance) &&
         walk.options.untilCurrent
       ) {
-        const proofs = await walk.read(
-          async (tx) => await readProofsTx(tx, walk.generations),
-        );
-        walk.stop ??= untilCurrentStop(true, proofs);
+        await refreshProofs(walk);
       }
       return;
     default:
       step satisfies never;
       panic("Unhandled route proof step");
   }
+};
+
+/** Whether one reading of a generation's proofs found the route current. */
+const isCurrent = (
+  read: CorpusIndexGenerationRouteProofs | undefined,
+  indexId: string,
+): boolean => {
+  if (read === undefined) {
+    return false;
+  }
+  switch (read.type) {
+    case "all_current":
+      return true;
+    case "not_ready":
+      return read.routes.some(
+        (reading) =>
+          reading.indexId === indexId && reading.status.type === "current",
+      );
+    case "generation_absent":
+    case "open_route_set":
+      return false;
+    default:
+      read satisfies never;
+      return panic("Unhandled route proofs reading");
+  }
+};
+
+/** Mark each route current or not, as one reading of the proofs found it. */
+const markCurrent = (
+  reports: readonly RouteReport[],
+  proofs: ReadonlyMap<string, CorpusIndexGenerationRouteProofs>,
+): void => {
+  for (const report of reports) {
+    report.current = isCurrent(
+      proofs.get(report.route.generation),
+      report.route.indexId,
+    );
+  }
+};
+
+/**
+ * Read every proven generation's proofs again (an `untilCurrent` run): mark
+ * which routes are current, and stop once all are. A reading that started
+ * before one already applied is dropped, so a slow read never marks a route
+ * proven since then as not current.
+ */
+const refreshProofs = async (walk: Walk): Promise<void> => {
+  walk.refreshAt = walk.options.now() + CORPUS_INDEX_ROUTE_PROOF_REFRESH_MS;
+  walk.refreshes.started += 1;
+  const reading = walk.refreshes.started;
+  const proofs = await walk.read(
+    async (tx) => await readProofsTx(tx, walk.generations),
+  );
+  if (reading < walk.refreshes.applied) {
+    return;
+  }
+  walk.refreshes.applied = reading;
+  markCurrent(walk.reports, proofs);
+  walk.stop ??= untilCurrentStop(walk.options.untilCurrent, proofs);
 };
 
 /** One worker: take the next due route, walk one page, until the run stops. */
@@ -584,6 +682,11 @@ const work = async (walk: Walk): Promise<void> => {
     if (now() >= budget.endsAt || walk.pages >= budget.pages) {
       walk.stop = { type: "budget_spent" };
       return;
+    }
+    if (walk.options.untilCurrent && now() >= walk.refreshAt) {
+      // db-await-in-loop: one bounded read per refresh interval
+      await refreshProofs(walk);
+      continue;
     }
     const taken = takeRoute(walk);
     if (taken.type === "none") {
@@ -628,6 +731,7 @@ const routeReports = (
     }
     return read.routes.map(({ indexId }) => ({
       route: { ...target, indexId },
+      current: false,
       pages: 0,
       proofs: 0,
       repairs: 0,
@@ -638,9 +742,10 @@ const routeReports = (
   });
 
 /**
- * Walk the proofs until the budget ends (`CorpusIndexRouteProofRun`). Safe to
- * run beside another runner on the same routes: every record is a
- * compare-and-set on the pass it read, so the slower one is `superseded`.
+ * Walk the proofs until the budget ends, or with `untilCurrent` until every
+ * route is current (`CorpusIndexRouteProofRun`). Safe to run beside another
+ * runner on the same routes: every record is a compare-and-set on the pass it
+ * read, so the slower one is `superseded`.
  */
 export const runCorpusIndexRouteProofs = async (
   options: CorpusIndexRouteProofRunOptions,
@@ -657,7 +762,12 @@ export const runCorpusIndexRouteProofs = async (
   // Pages read and write under the fence; the run's own reports only read.
   const read = options.runInTransaction;
   const resolved = await read(
-    async (tx) => await readCorpusIndexProofGenerationsTx(tx, options.target),
+    async (tx) =>
+      await readCorpusIndexProofGenerationsTx(
+        tx,
+        options.target,
+        options.onlyRequested,
+      ),
   );
   if (resolved.type === "refused") {
     return resolved;
@@ -668,6 +778,7 @@ export const runCorpusIndexRouteProofs = async (
   if (reports.length > ROUTES_MAX) {
     return panic("More routes than a run can walk");
   }
+  markCurrent(reports, initial);
   const walk: Walk = {
     options,
     runInTransaction: fencedRunner(options.runInTransaction),
@@ -679,6 +790,8 @@ export const runCorpusIndexRouteProofs = async (
     lockRefusedSince: null,
     next: 0,
     busy: new Set(),
+    refreshAt: options.now() + CORPUS_INDEX_ROUTE_PROOF_REFRESH_MS,
+    refreshes: { started: 0, applied: 0 },
   };
   if (walk.stop === null && reports.length > 0) {
     await Promise.all(
