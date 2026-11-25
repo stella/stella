@@ -1259,6 +1259,11 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
     reason: "Direct service boundary for desktop registry requests.",
   },
   {
+    path: "apps/api/src/handlers/desktop-time-entries/calendar-events.ts",
+    reason:
+      "Authenticated desktop boundary for the member's delegated calendar read in the Activity day review.",
+  },
+  {
     path: "apps/api/src/handlers/entities/pdf-signing-certificate.ts",
     reason: "Issues request authority for the PDF certificate request.",
   },

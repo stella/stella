@@ -3,12 +3,19 @@ import * as v from "valibot";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import {
+  DESKTOP_CALENDAR_EVENTS_LIMIT,
+  DESKTOP_CALENDAR_TITLE_MAX_LENGTH,
+  type DesktopCalendarEvent,
+  type DesktopCalendarResponse,
+} from "@stll/api-contract/desktop-time-entries";
+import {
   MICROSOFT365_CALENDAR_ATTENDEE_CAP as CALENDAR_ATTENDEE_CAP,
   MICROSOFT365_CALENDAR_RANGE_DAYS as CALENDAR_RANGE_DAYS,
   MICROSOFT365_CALENDAR_RUNTIME_ONLY_CHECKS,
   MICROSOFT365_CALENDAR_TOTAL_CAP as CALENDAR_TOTAL_CAP,
   microsoft365CalendarRangeEntries,
 } from "@stll/api-contract/microsoft365";
+import { ownEntry } from "@stll/api-contract/own-key";
 import { Temporal } from "@stll/time";
 
 import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
@@ -292,25 +299,30 @@ const calendarContinuation = (next: URL): CalendarContinuation | undefined => {
   return undefined;
 };
 
-export const listCalendarEvents = async (
-  input: v.InferInput<typeof calendarEventsInputSchema>,
+type CalendarViewPage<TEvent> = {
+  events: readonly TEvent[];
+  next: string | undefined;
+};
+
+type CalendarViewRequest<TEvent> = {
+  range: { start: string; end: string; limit: number };
+  /** The Graph `$select` list: the only event fields Graph returns. */
+  select: string;
+  parsePage: (raw: unknown) => CalendarViewPage<TEvent> | null;
+};
+
+/** Reads `calendarView` pages until `limit` events or the last page. */
+const readCalendarView = async <TEvent>(
+  { range, select, parsePage }: CalendarViewRequest<TEvent>,
   options: CalendarClientOptions,
 ) =>
   await Result.gen(async function* () {
-    const validated = v.safeParse(calendarEventsInputSchema, input);
-    if (!validated.success) {
-      return Result.err(upstreamError("Invalid calendar range or limit"));
-    }
-    const range = validated.output;
     const url = new URL(`${GRAPH_BASE}/me/calendarView`);
     url.searchParams.set("startDateTime", range.start);
     url.searchParams.set("endDateTime", range.end);
-    url.searchParams.set(
-      "$select",
-      "id,subject,showAs,start,end,location,organizer,attendees,isCancelled,isOnlineMeeting,webLink",
-    );
+    url.searchParams.set("$select", select);
     url.searchParams.set("$orderby", "start/dateTime");
-    const events: ReturnType<typeof toCalendarEvent>[] = [];
+    const events: TEvent[] = [];
     const seen = new Set<string>();
     const maxPages = Math.ceil(CALENDAR_TOTAL_CAP / CALENDAR_PAGE_SIZE);
     for (let page = 0; page < maxPages; page += 1) {
@@ -325,21 +337,16 @@ export const listCalendarEvents = async (
           options,
         ),
       );
-      const parsed = v.safeParse(eventsSchema, raw);
-      if (!parsed.success) {
+      const parsed = parsePage(raw);
+      if (parsed === null) {
         return Result.err(upstreamError("Invalid calendar response"));
       }
-      for (const event of parsed.output.value.slice(
-        0,
-        range.limit - events.length,
-      )) {
-        events.push(toCalendarEvent(event));
-      }
-      const next = parsed.output["@odata.nextLink"];
+      events.push(...parsed.events.slice(0, range.limit - events.length));
+      const { next } = parsed;
       if (!next) {
         return Result.ok({
           events,
-          truncated: parsed.output.value.length > requestedPageSize,
+          truncated: parsed.events.length > requestedPageSize,
         });
       }
       if (events.length >= range.limit || page + 1 === maxPages) {
@@ -359,6 +366,173 @@ export const listCalendarEvents = async (
       url.searchParams.set(continuation.param, continuation.value);
     }
     return Result.ok({ events, truncated: true });
+  });
+
+export const listCalendarEvents = async (
+  input: v.InferInput<typeof calendarEventsInputSchema>,
+  options: CalendarClientOptions,
+) =>
+  await Result.gen(async function* () {
+    const validated = v.safeParse(calendarEventsInputSchema, input);
+    if (!validated.success) {
+      return Result.err(upstreamError("Invalid calendar range or limit"));
+    }
+    const read = yield* Result.await(
+      readCalendarView(
+        {
+          range: validated.output,
+          select:
+            "id,subject,showAs,start,end,location,organizer,attendees,isCancelled,isOnlineMeeting,webLink",
+          parsePage: (raw) => {
+            const parsed = v.safeParse(eventsSchema, raw);
+            return parsed.success
+              ? {
+                  events: parsed.output.value,
+                  next: parsed.output["@odata.nextLink"],
+                }
+              : null;
+          },
+        },
+        options,
+      ),
+    );
+    return Result.ok({
+      events: read.events.map(toCalendarEvent),
+      truncated: read.truncated,
+    });
+  });
+
+// The day review reads only what it shows: no attendees, organizer,
+// location, body or link.
+const DAY_REVIEW_SELECT =
+  "subject,start,end,isAllDay,isCancelled,sensitivity,responseStatus";
+const dayReviewEventSchema = v.object({
+  subject: v.optional(v.nullable(v.string()), ""),
+  start: graphDateTime,
+  end: graphDateTime,
+  isAllDay: v.optional(v.boolean(), false),
+  isCancelled: v.optional(v.boolean(), false),
+  // A missing marker reads as unknown, which keeps the event out.
+  sensitivity: v.optional(v.pipe(v.string(), v.maxLength(32)), "unknown"),
+  responseStatus: v.optional(
+    v.object({
+      response: v.optional(v.pipe(v.string(), v.maxLength(32)), "unknown"),
+    }),
+    { response: "unknown" },
+  ),
+});
+const dayReviewPageSchema = v.object({
+  value: v.pipe(v.array(dayReviewEventSchema), v.maxLength(CALENDAR_PAGE_SIZE)),
+  "@odata.nextLink": v.optional(v.string()),
+});
+type DayReviewGraphEvent = v.InferOutput<typeof dayReviewEventSchema>;
+
+/** Graph's own answers the day review keeps; `declined` and any value not
+ * listed keep the event out. */
+// oxlint-disable-next-line exhaustive-union-map/exhaustive-union-map -- keyed by Graph's open responseStatus vocabulary read off the wire
+const DAY_REVIEW_RESPONSES = {
+  organizer: "organizer",
+  accepted: "accepted",
+  tentativelyAccepted: "tentative",
+  none: "notAnswered",
+  notResponded: "notAnswered",
+} as const satisfies Record<string, DesktopCalendarResponse>;
+
+const graphInstant = ({
+  dateTime,
+  timeZone,
+}: v.InferOutput<typeof graphDateTime>) =>
+  Result.try(() =>
+    Temporal.PlainDateTime.from(dateTime).toZonedDateTime(timeZone).toInstant(),
+  );
+
+/** Whole code points within the contract's UTF-16 bound, so a cut never
+ * leaves half a surrogate pair. */
+const dayReviewTitle = (subject: string) => {
+  let title = "";
+  for (const point of subject.replaceAll(/\p{Cc}+/gu, " ").trim()) {
+    if (title.length + point.length > DESKTOP_CALENDAR_TITLE_MAX_LENGTH) {
+      break;
+    }
+    title += point;
+  }
+  return title;
+};
+
+/**
+ * The minimisation filter: an event the member marked anything but normal
+ * (private, personal, confidential), declined or that was cancelled is never
+ * returned, nor a timed event without duration. A kept event carries its
+ * title, its time (none when all day) and the member's own answer.
+ */
+export const dayReviewEvent = (
+  event: DayReviewGraphEvent,
+): DesktopCalendarEvent | null => {
+  const response = ownEntry(
+    DAY_REVIEW_RESPONSES,
+    event.responseStatus.response,
+  );
+  if (
+    event.isCancelled ||
+    event.sensitivity !== "normal" ||
+    response === undefined
+  ) {
+    return null;
+  }
+  const title = dayReviewTitle(event.subject ?? "");
+  if (event.isAllDay) {
+    return { timing: "allDay", title, response };
+  }
+  const start = graphInstant(event.start);
+  const end = graphInstant(event.end);
+  if (
+    Result.isError(start) ||
+    Result.isError(end) ||
+    Temporal.Instant.compare(start.value, end.value) >= 0
+  ) {
+    return null;
+  }
+  return {
+    timing: "timed",
+    title,
+    start: start.value.toString(),
+    end: end.value.toString(),
+    response,
+  };
+};
+
+/** The member's own events between two instants, minimised for the day
+ * review. */
+export const listDayReviewEvents = async (
+  range: { start: string; end: string },
+  options: CalendarClientOptions,
+) =>
+  await Result.gen(async function* () {
+    const read = yield* Result.await(
+      readCalendarView(
+        {
+          range: { ...range, limit: DESKTOP_CALENDAR_EVENTS_LIMIT },
+          select: DAY_REVIEW_SELECT,
+          parsePage: (raw) => {
+            const parsed = v.safeParse(dayReviewPageSchema, raw);
+            return parsed.success
+              ? {
+                  events: parsed.output.value,
+                  next: parsed.output["@odata.nextLink"],
+                }
+              : null;
+          },
+        },
+        options,
+      ),
+    );
+    return Result.ok({
+      events: read.events.flatMap((event) => {
+        const kept = dayReviewEvent(event);
+        return kept === null ? [] : [kept];
+      }),
+      truncated: read.truncated,
+    });
   });
 
 export const calendarFreeBusy = async (

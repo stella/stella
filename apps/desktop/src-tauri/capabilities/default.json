@@ -110,6 +110,7 @@
     "allow-activity-set-app-detail-capture",
     "allow-activity-open-accessibility-settings",
     "allow-activity-set-retention",
+    "allow-activity-set-calendar-source",
     "allow-activity-exclude-app",
     "allow-activity-remove-app-exclusion",
     "allow-activity-delete-day",

@@ -62,6 +62,7 @@ import {
 } from "./activity-types";
 import type {
   ActivityAppExclusion,
+  ActivityCalendarSource,
   ActivityDeletionStatus,
   ActivityRetention,
   ActivitySettingsSnapshot,
@@ -104,6 +105,7 @@ type ActivitySettingsCommand =
   | "activity_delete_day"
   | "activity_delete_other_account_history"
   | "activity_exclude_app"
+  | "activity_set_calendar_source"
   | "activity_set_detect_calls"
   | "activity_set_retention";
 
@@ -290,6 +292,7 @@ const DetailsAccessFooter = ({
 const RecordingSettings = ({ onCommand, settings }: SettingsSectionProps) => {
   const t = useTranslations("activity");
   const detectCallsIds = settingsRowIds("activity-detect-calls");
+  const calendarIds = settingsRowIds("activity-calendar-events");
   const retentionIds = settingsRowIds("activity-retention");
   const captureDetailsIds = settingsRowIds(CAPTURE_DETAILS_ROW_ID);
   return (
@@ -307,6 +310,24 @@ const RecordingSettings = ({ onCommand, settings }: SettingsSectionProps) => {
           checked={settings.detectCalls}
           onCheckedChange={(enabled) =>
             onCommand("activity_set_detect_calls", { enabled })
+          }
+        />
+      </SettingsRow>
+      <SettingsRow
+        description={t("calendarEventsDescription")}
+        id="activity-calendar-events"
+        interaction="label"
+        title={t("calendarEvents")}
+      >
+        <Checkbox
+          aria-describedby={calendarIds.description}
+          aria-labelledby={calendarIds.label}
+          id={calendarIds.control}
+          checked={settings.calendarSource !== "off"}
+          onCheckedChange={(enabled) =>
+            onCommand("activity_set_calendar_source", {
+              source: enabled ? "microsoft365" : "off",
+            } satisfies { source: ActivityCalendarSource })
           }
         />
       </SettingsRow>

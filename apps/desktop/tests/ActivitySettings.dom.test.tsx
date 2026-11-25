@@ -36,6 +36,7 @@ const SETTINGS = {
   otherAccountHistoryDays: 0,
   captureDetails: false,
   detectCalls: true,
+  calendarSource: "off",
   appNameOnlyApps: [],
   detailsAccess: "disabled",
   browserApps: [],

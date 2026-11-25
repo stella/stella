@@ -37,6 +37,8 @@ import {
 import { Separator } from "@stll/ui/separator";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
+import { callEventTitle } from "./activity-calendar-events";
+import type { CalendarEventBlock } from "./activity-calendar-events";
 import {
   activityBlocks,
   blockDetails,
@@ -69,6 +71,10 @@ import {
   unrecordedRanges,
 } from "./activity-unrecorded";
 import type { UnrecordedRange } from "./activity-unrecorded";
+import {
+  CalendarEventsNotice,
+  useDayCalendarEvents,
+} from "./ActivityCalendarEvents";
 import {
   BrowserTitlesNotice,
   OpenAccessibilitySettingsButton,
@@ -446,6 +452,7 @@ export const ActivityDayCalendar = ({
   const suggestions = matchedSuggestions(day.groups, leftOut);
   const outages = outageRanges(snapshot.outages);
   const unrecorded = unrecordedRanges(outages, snapshot.gaps, day.segments);
+  const calendar = useDayCalendarEvents(snapshot, day.segments);
   const editingDisabledReason = getEditingDisabledReason(submission, t);
   // While Activity cannot record, its history is read-only.
   const editable =
@@ -597,6 +604,8 @@ export const ActivityDayCalendar = ({
     onActivate: (suggestion) =>
       open({ id: suggestion.id, type: "suggestion" }, suggestion),
     titlesNoticeFor: titlesNotices.forApps,
+    calendarColumn: calendar.column,
+    calendarEvents: calendar.lane.timed,
   });
 
   const card =
@@ -675,6 +684,7 @@ export const ActivityDayCalendar = ({
         <CandidatesFailedAlert onRetry={refreshCandidates} />
       ) : null}
       <MatterLearningNotice learning={learning} day={day} />
+      <CalendarEventsNotice calendar={calendar} />
       <SubmissionFeedback
         submission={submission}
         errorMessage={errorMessage}
@@ -701,6 +711,7 @@ export const ActivityDayCalendar = ({
           instants: [
             ...day.segments.flatMap(({ startMs, endMs }) => [startMs, endMs]),
             ...unrecorded.flatMap(({ startMs, endMs }) => [startMs, endMs]),
+            ...calendar.instants,
             ...(snapshot.date === snapshot.today ? [nowMs] : []),
             // A range set on its card stays in view wherever it is moved.
             ...rangeEdges(openCard),
@@ -887,10 +898,16 @@ type CalendarColumnsOptions = {
   /** Why browsers among these apps recorded no titles, with the action that
    * records them; `null` when there is nothing to explain. */
   titlesNoticeFor: (identifiers: readonly string[]) => ReactElement | null;
+  /** The Calendar lane beside Activity; `null` while calendar events are
+   * off. */
+  calendarColumn: DayCalendarColumn | null;
+  /** The day's timed events, which name the recorded calls they overlap. */
+  calendarEvents: readonly CalendarEventBlock[];
 };
 
-/** The Activity column (recorded time) and the Time entries column (created
- * drafts and suggestions). */
+/** The Activity column (recorded time), the Calendar lane when calendar
+ * events are on, and the Time entries column (created drafts and
+ * suggestions). */
 function useCalendarColumns({
   phase,
   segments,
@@ -903,6 +920,8 @@ function useCalendarColumns({
   narrativeFor,
   onActivate,
   titlesNoticeFor,
+  calendarColumn,
+  calendarEvents,
 }: CalendarColumnsOptions): DayCalendarColumn[] {
   const t = useTranslations("activity");
   const format = useFormatter();
@@ -925,6 +944,7 @@ function useCalendarColumns({
     const placeholders = contiguousRuns(segments);
     return [
       { ...activityHeader, placeholders, type: "pending" },
+      ...(calendarColumn === null ? [] : [calendarColumn]),
       { ...entriesHeader, placeholders, type: "pending" },
     ];
   }
@@ -1042,8 +1062,13 @@ function useCalendarColumns({
         (unavailable ? t("matterUnavailable") : appName) ??
         block.title ??
         t("mixedActivity");
+      // A recorded call is the record of a meeting; the calendar event it
+      // overlaps only names it.
+      const eventTitle =
+        topicApp?.call === true ? callEventTitle(block, calendarEvents) : null;
       const detail =
-        block.matter === null && appName === null ? null : block.title;
+        eventTitle ??
+        (block.matter === null && appName === null ? null : block.title);
       const label = [topic, duration, detail]
         .filter((part) => part !== null)
         .join(" · ");
@@ -1148,6 +1173,7 @@ function useCalendarColumns({
       rangeSelection: { type: "disabled" },
       type: "blocks",
     },
+    ...(calendarColumn === null ? [] : [calendarColumn]),
     {
       ...entriesHeader,
       blocks: entries,
