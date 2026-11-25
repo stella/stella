@@ -62,3 +62,30 @@ const g = "[&_.ProseMirror]:overflow-hidden";
 const h = "[&_.ProseMirror:hover_pre]:max-h-64 [&_.ProseMirror:focus>pre]:overflow-x-auto";`),
   ).toEqual([]);
 });
+
+test("rejects a React Native field's hand-set maxHeight, inline or from its style sheet", async () => {
+  expect(
+    await lint(`const styles = StyleSheet.create({
+  field: { maxHeight: 120, paddingVertical: 8 },
+  plain: { paddingVertical: 8 },
+});
+const a = <TextInput multiline style={{ maxHeight: 120 }} />;
+const b = <Textarea style={[styles.field, { color: "red" }]} />;
+const c = <Input multiline className="max-h-30" />;
+const d = <TextInput multiline className="max-h-40" />;`),
+  ).toEqual([5, 6, 7, 8]);
+});
+
+test("accepts a maxHeight on a single-line field, on chrome and with no cap", async () => {
+  expect(
+    await lint(`const styles = StyleSheet.create({
+  list: { maxHeight: 320 },
+  plain: { paddingVertical: 8 },
+});
+const a = <TextInput style={{ maxHeight: 40 }} />;
+const b = <TextInput multiline={false} style={{ maxHeight: 40 }} />;
+const c = <ScrollView style={styles.list} />;
+const d = <Textarea style={styles.plain} />;
+const e = <View className="max-h-80"><Textarea appearance="composer" /></View>;`),
+  ).toEqual([]);
+});

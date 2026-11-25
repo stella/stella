@@ -8114,9 +8114,28 @@ const config = defineConfig({
       },
     },
     {
+      // The same rule over React Native markup, read by React Native's
+      // layout: a `View` is a column unless it says `flex-row`, so `flex`
+      // alone is not a row there. The native `ComposerFrame` lays a phone
+      // composer out.
+      files: [
+        "apps/mobile/src/**/*.tsx",
+        "packages/ui/src/**/*.native.tsx",
+        ".oxlint-plugins/__fixtures__/no-control-beside-textbox-native.fixture.tsx",
+      ],
+      excludeFiles: ["**/*.{test,spec}.tsx", "**/__tests__/**"],
+      rules: {
+        "no-control-beside-textbox/no-control-beside-textbox": [
+          "error",
+          { layout: "native" },
+        ],
+      },
+    },
+    {
       // A textbox's growth and scroll cap come from its primitive:
       // `ComposerFrame` caps a composer's text in its own scroll region and
-      // `Textarea` grows a field to `maxRows`. Tests assert on class strings
+      // `Textarea` grows a field to `maxRows`; on a phone the native
+      // `ComposerFrame` caps the composer. Tests assert on class strings
       // rather than rendering a textbox.
       files: [
         "apps/web/src/**/*.{ts,tsx}",
@@ -8127,6 +8146,7 @@ const config = defineConfig({
         "packages/workspace-ui/src/**/*.{ts,tsx}",
         "packages/markdown-editor/src/**/*.{ts,tsx}",
         "packages/mcp-apps/src/**/*.{ts,tsx}",
+        "apps/mobile/src/**/*.{ts,tsx}",
         ".oxlint-plugins/__fixtures__/no-adhoc-textbox-growth.fixture.tsx",
       ],
       excludeFiles: [

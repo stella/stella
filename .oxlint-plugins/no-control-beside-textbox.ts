@@ -13,23 +13,33 @@
 // control over it.
 //
 // Rejected, for a textbox (`textarea`, `Textarea`, `EditorContent`,
-// `PromptEditorContent`, an element with `contentEditable`, and the
-// `textboxComponents` option) beneath a JSX ancestor:
+// `PromptEditorContent`, an element with `contentEditable`, a React Native
+// `TextInput` or `Input` with `multiline`, and the `textboxComponents`
+// option) beneath a JSX ancestor:
 //   the ancestor is a row (`flex` or `inline-flex` without `flex-col`,
 //   `flex-row`, `grid-flow-col`, or `grid-cols-*` with two or more columns)
 //   and another of its children holds a control (`button`, a `*Button`, a
-//   `*Menu`, a menu/popover/dialog/select trigger, and the
-//   `controlComponents` option);
+//   `*Menu`, a menu/popover/dialog/select trigger, a React Native
+//   `Pressable` or `Touchable*`, and the `controlComponents` option);
 //   another of its children holds a control inside an element positioned
 //   `absolute`, `fixed`, or `sticky`.
+//
+// React Native markup (the `layout: "native"` option, set for the mobile app
+// and the design system's `*.native.tsx` renderers) lays out differently: a
+// `View` is a column unless it says `flex-row`, and `flex` only turns flex
+// layout on, so there a row is `flex-row`, `flex-row-reverse` or a
+// `horizontal` scroll view or list. A `View` that names no direction is read
+// like the web's block element around a textbox: it holds the textbox
+// without stacking anything beside it, and the walk goes on through it.
 //
 // The ancestors are read nearest first, up to the first column (`flex-col`,
 // a one-column `grid`, `space-y-*`): a column stacks the textbox with what it
 // holds, and what sits beside that column is the page's layout (a header's
 // actions beside its title and description), not the textbox's. The walk
-// also stops at a portaled popup (`*Popup`, `*Portal`, `DialogContent`),
-// whose content is laid out elsewhere, and a control inside a portaled popup
-// in a sibling subtree (a dialog's buttons) is not beside the textbox.
+// also stops at a portaled popup (`*Popup`, `*Portal`, `DialogContent`, a
+// React Native `Modal`), whose content is laid out elsewhere, and a control
+// inside a portaled popup in a sibling subtree (a dialog's buttons) is not
+// beside the textbox.
 //
 // Accepted:
 //   a column (`flex flex-col`, a one-column grid) holding the text over a
@@ -70,7 +80,20 @@ const DEFAULT_TEXTBOXES = new Set([
   "PromptEditorContent",
 ]);
 
-const DEFAULT_CONTROLS = new Set(["button", "Button", "Menu"]);
+// A React Native field is one line unless it is `multiline`.
+const MULTILINE_FIELDS = new Set(["TextInput", "Input"]);
+
+const DEFAULT_CONTROLS = new Set([
+  "button",
+  "Button",
+  "Menu",
+  // React Native's pressables.
+  "Pressable",
+  "TouchableHighlight",
+  "TouchableNativeFeedback",
+  "TouchableOpacity",
+  "TouchableWithoutFeedback",
+]);
 
 // A design-system trigger opens a popup on press: it is a control whatever
 // it renders. A select or combobox trigger is not here: it is a form field
@@ -80,7 +103,7 @@ const TRIGGER_SUFFIXES = ["MenuTrigger", "PopoverTrigger", "DialogTrigger"];
 // Content a portal renders elsewhere: whatever it holds is not laid out by
 // the markup around it.
 const PORTALED =
-  /(?:Popup|Portal|Positioner|(?:Dialog|Sheet|Popover|Drawer|Menu)Content)$/u;
+  /(?:Popup|Portal|Positioner|Modal|(?:Dialog|Sheet|Popover|Drawer|Menu)Content)$/u;
 
 const POSITIONED = new Set(["absolute", "fixed", "sticky"]);
 
@@ -100,9 +123,13 @@ const FUNCTION_TYPES = new Set([
   "FunctionExpression",
 ]);
 
+/** Whose layout rules the markup follows: the web's CSS or React Native's. */
+type Layout = "web" | "native";
+
 type RuleOptions = {
   textboxes: ReadonlySet<string>;
   controls: ReadonlySet<string>;
+  layout: Layout;
 };
 
 const stringList = (value: unknown): string[] =>
@@ -120,6 +147,7 @@ const readOptions = (configured: unknown): RuleOptions => {
   return {
     textboxes: new Set([...DEFAULT_TEXTBOXES, ...extraTextboxes]),
     controls: new Set([...DEFAULT_CONTROLS, ...extraControls]),
+    layout: "layout" in record && record.layout === "native" ? "native" : "web",
   };
 };
 
@@ -147,6 +175,18 @@ const attributeNamed = (element: AstNode, name: string): AstNode | null =>
       attribute.name.name === name,
   ) ?? null;
 
+// `prop={false}`: an attribute written only to say no.
+const isFalseAttribute = (attribute: AstNode): boolean => {
+  const { value } = attribute;
+  return (
+    isAstNode(value) &&
+    value.type === "JSXExpressionContainer" &&
+    isAstNode(value.expression) &&
+    value.expression.type === "Literal" &&
+    value.expression.value === false
+  );
+};
+
 // `contentEditable`, `contentEditable="true"`, `contentEditable={true}` make
 // an element a textbox; `false` (an inline chip inside an editor) does not.
 const isContentEditable = (element: AstNode): boolean => {
@@ -171,8 +211,22 @@ const isContentEditable = (element: AstNode): boolean => {
   return false;
 };
 
+// A boolean prop written as on: `prop`, `prop="..."`, `prop={...}` other
+// than `{false}`.
+const isOn = (element: AstNode, name: string): boolean => {
+  const attribute = attributeNamed(element, name);
+  return attribute !== null && !isFalseAttribute(attribute);
+};
+
 const isTextbox = (element: AstNode, options: RuleOptions): boolean => {
   const name = elementName(element);
+  if (
+    name !== null &&
+    MULTILINE_FIELDS.has(name) &&
+    isOn(element, "multiline")
+  ) {
+    return true;
+  }
   return (
     (name !== null && options.textboxes.has(name)) || isContentEditable(element)
   );
@@ -237,6 +291,13 @@ const gridColumnCount = (base: string): number | null => {
   return Number.isNaN(count) ? null : count;
 };
 
+// A React Native row: `flex-row` or its reverse, or a scroll view or list
+// laid out `horizontal`. Only unprefixed tokens count, as on the web.
+const isNativeRow = (element: AstNode, tokens: readonly string[]): boolean =>
+  tokens.some(
+    (token) => token === "flex-row" || token === "flex-row-reverse",
+  ) || isOn(element, "horizontal");
+
 const isRow = (tokens: readonly string[]): boolean => {
   const bases = tokens.map(classBaseName);
   if (bases.includes("flex-row") || bases.includes("grid-flow-col")) {
@@ -272,6 +333,25 @@ const isColumn = (tokens: readonly string[]): boolean =>
       token === "grid" ||
       token.startsWith("space-y-"),
   );
+
+// A React Native column: one that says so. A `View` that names no direction
+// stacks too, but around a textbox it is the web's block element: a cell
+// that holds the textbox, read through like one (see the header).
+const isNativeColumn = (tokens: readonly string[]): boolean =>
+  tokens.some((token) => token === "flex-col" || token === "flex-col-reverse");
+
+/** The ancestor's direction under the markup's layout rules. */
+const directionOf = (
+  element: AstNode,
+  tokens: readonly string[],
+  layout: Layout,
+): { row: boolean; column: boolean } => {
+  if (layout === "native") {
+    const row = isNativeRow(element, tokens);
+    return { row, column: !row && isNativeColumn(tokens) };
+  }
+  return { row: isRow(tokens), column: isColumn(tokens) };
+};
 
 const isPositionedOverText = (tokens: readonly string[]): boolean => {
   const bases = tokens.map(classBaseName);
@@ -358,6 +438,7 @@ export default eslintCompatPlugin({
             properties: {
               textboxComponents: { type: "array", items: { type: "string" } },
               controlComponents: { type: "array", items: { type: "string" } },
+              layout: { type: "string", enum: ["web", "native"] },
             },
             additionalProperties: false,
           },
@@ -393,7 +474,11 @@ export default eslintCompatPlugin({
                 ? ancestor.children.filter(isAstNode)
                 : [];
               const tokens = classNameTokens(ancestor, context);
-              const row = isRow(tokens);
+              const { row, column } = directionOf(
+                ancestor,
+                tokens,
+                options.layout,
+              );
               for (const child of children) {
                 if (contains(child, node)) {
                   continue;
@@ -406,7 +491,7 @@ export default eslintCompatPlugin({
               }
               // A column stacks the textbox with what it holds; what sits
               // beside that column is the page's layout, not the textbox's.
-              if (isColumn(tokens)) {
+              if (column) {
                 return;
               }
             }

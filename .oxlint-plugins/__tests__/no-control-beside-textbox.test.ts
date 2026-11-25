@@ -141,3 +141,77 @@ const b = <div className="flex"><Textarea /><Chip /></div>;`,
     ),
   ).toEqual([1, 2]);
 });
+
+const NATIVE = { layout: "native" };
+
+test("native: rejects the mobile composer row, text cell between its controls", async () => {
+  // The phone composer's shape: one `flex-row`, the (+) menu, the field in a
+  // cell that names no direction, and the round buttons after it.
+  expect(
+    await lint(
+      `const row = (
+  <View className="min-h-[54px] flex-row items-end gap-2 px-2 py-1.5">
+    {idle ? <ComposerAttachMenu /> : <RoundButton />}
+    <View className="min-w-0 flex-1 py-2.25">
+      {idle ? (
+        <Textarea unstyled value={draft} />
+      ) : (
+        <View className="flex-row items-center gap-2"><Text>Listening</Text></View>
+      )}
+    </View>
+    {busy ? <RoundButton /> : null}
+    <RoundButton />
+  </View>
+);`,
+      NATIVE,
+    ),
+  ).toEqual([6]);
+});
+
+test("native: a multi-line TextInput or Input beside a pressable in a row", async () => {
+  expect(
+    await lint(
+      `const a = <View className="flex-row"><TextInput multiline /><Pressable /></View>;
+const b = <View className="flex-row-reverse"><Input multiline /><TouchableOpacity /></View>;
+const c = <ScrollView horizontal><Textarea /><SendButton /></ScrollView>;
+const d = <View className="flex-row"><TextInput /><Pressable /></View>;
+const e = <View className="flex-row"><TextInput multiline={false} /><Pressable /></View>;
+const f = <ScrollView horizontal={false}><Textarea /><Button /></ScrollView>;`,
+      NATIVE,
+    ),
+  ).toEqual([1, 2, 3]);
+});
+
+test("native: a View is a column, so flex alone is not a row", async () => {
+  const source = `const a = <View className="flex gap-2"><Textarea /><Button /></View>;`;
+  expect(await lint(source, NATIVE)).toEqual([]);
+  // The same markup on the web is a row.
+  expect(await lint(source)).toEqual([1]);
+});
+
+test("native: accepts the text over a control row and stops at a column or a modal", async () => {
+  expect(
+    await lint(
+      `const stacked = (
+  <View className="pt-1.5">
+    <View className="px-3.5"><Textarea /></View>
+    <View className="flex-row justify-between"><ComposerAttachMenu /><RoundButton /></View>
+  </View>
+);
+const page = (
+  <View className="flex-row gap-4">
+    <View className="flex-1 flex-col gap-1"><Textarea /></View>
+    <Button />
+  </View>
+);
+const modal = (
+  <View className="flex-row">
+    <Modal><Textarea /></Modal>
+    <Button />
+  </View>
+);
+const framed = <ComposerFrame text={<Textarea appearance="composer" />} trailing={<RoundButton />} />;`,
+      NATIVE,
+    ),
+  ).toEqual([]);
+});

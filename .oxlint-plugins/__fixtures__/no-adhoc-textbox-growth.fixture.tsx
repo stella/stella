@@ -11,6 +11,14 @@ import type { ReactNode } from "react";
 declare const Textarea: (props: { className?: string }) => ReactNode;
 declare const PromptEditorContent: (props: { className?: string }) => ReactNode;
 declare const cn: (...classes: unknown[]) => string;
+declare const TextInput: (props: {
+  className?: string;
+  multiline?: boolean;
+  style?: unknown;
+}) => ReactNode;
+declare const StyleSheet: {
+  create: <T>(styles: T) => T;
+};
 
 // --- Flagged: field sizing by hand ---
 // oxlint-disable-next-line no-adhoc-textbox-growth/no-adhoc-textbox-growth
@@ -75,3 +83,20 @@ export const _o = { class: "max-h-48", attributes: { role: "textbox" } };
 export const _p = {
   attributes: { class: "min-h-10 text-sm wrap-anywhere" },
 };
+
+// --- Flagged: a React Native multi-line field capped by hand ---
+const nativeStyles = StyleSheet.create({
+  field: { maxHeight: 120 },
+  list: { maxHeight: 320 },
+});
+export const _q = () => (
+  // oxlint-disable-next-line no-adhoc-textbox-growth/no-adhoc-textbox-growth
+  <TextInput multiline style={nativeStyles.field} />
+);
+export const _r = () => (
+  // oxlint-disable-next-line no-adhoc-textbox-growth/no-adhoc-textbox-growth
+  <TextInput className="max-h-40" multiline />
+);
+// --- Accepted: a single-line field, and a cap on chrome around a field ---
+export const _s = () => <TextInput style={{ maxHeight: 40 }} />;
+export const _t = () => <div style={nativeStyles.list} />;
