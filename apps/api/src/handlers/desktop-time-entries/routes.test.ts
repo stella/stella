@@ -250,7 +250,9 @@ const exercise = async ({
     url = "http://localhost/v1/desktop/matter-candidates";
   }
   if (resolve) {
-    const query = new URLSearchParams(resolve.map((id) => ["id", id]));
+    const query = new URLSearchParams(
+      resolve.map((id): [string, string] => ["id", id]),
+    );
     url = `http://localhost/v1/desktop/matter-candidates/resolve?${query.toString()}`;
   }
   const response = await server.fetch(

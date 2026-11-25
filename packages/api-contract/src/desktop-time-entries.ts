@@ -68,7 +68,7 @@ export type DesktopMatterCandidatesResponse = v.InferOutput<
   typeof desktopMatterCandidatesResponseSchema
 >;
 
-const desktopMatterIdSchema = v.pipe(v.string(), v.uuid());
+const desktopMatterIdSchema = v.pipe(v.string(), v.maxLength(36), v.uuid());
 
 /** Whether a matter the day's records name is one the member can open. */
 export const DESKTOP_MATTER_ACCESS = ["accessible", "inaccessible"] as const;

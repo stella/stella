@@ -70,7 +70,7 @@ export const measureDesktopMatterResolve = async (fixture: ReadFixture) => {
       TO stella`);
     const request = new Request(
       `https://api.example.test/v1/desktop/matter-candidates/resolve?${new URLSearchParams(
-        asked.map((id) => ["id", id]),
+        asked.map((id): [string, string] => ["id", id]),
       ).toString()}`,
     );
     const desktop = await desktopScalingAccount({

@@ -344,7 +344,7 @@ describe("local matter day review", () => {
       title: windowTitle,
     });
     assertProperty(
-      "activity matching names only matters the same read can open",
+      "no suggestion ever names a matter outside the accessible set of the same read",
       fc.property(
         fc.array(standing, { minLength: pool.length, maxLength: pool.length }),
         fc.array(recorded, { maxLength: 8 }),
@@ -363,12 +363,17 @@ describe("local matter day review", () => {
           );
           const resolved = pool.flatMap(
             (matter, index): DesktopMatterResolution[] => {
-              switch (standings[index]) {
+              const matterStanding = standings.at(index) ?? "unanswered";
+              switch (matterStanding) {
                 case "resolved":
                   return [{ type: "accessible", matter }];
                 case "inaccessible":
                   return [{ type: "inaccessible", id: matter.id }];
+                case "shortlisted":
+                case "unanswered":
+                  return [];
                 default:
+                  matterStanding satisfies never;
                   return [];
               }
             },

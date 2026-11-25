@@ -28,6 +28,8 @@ import {
   fields,
   organizationSettings,
   properties,
+  timeEntries,
+  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { desktopDeviceProofReplays } from "@/api/db/schema/desktop-device-proof-replay";

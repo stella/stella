@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import {
   DESKTOP_MATTER_ACCESS,
@@ -58,7 +58,12 @@ export const createDesktopMatterResolveEndpoint = (
               and(
                 eq(workspaces.organizationId, account.organizationId),
                 eq(workspaces.status, WORKSPACE_STATUS.active),
-                inArray(workspaces.id, ids),
+                // Unbranded: the contract validated these as UUIDs, and the row
+                // scope, not the id, decides access.
+                sql`${workspaces.id} IN (${sql.join(
+                  ids.map((matterId) => sql`${matterId}`),
+                  sql`, `,
+                )})`,
               ),
             )
             .limit(ids.length),
