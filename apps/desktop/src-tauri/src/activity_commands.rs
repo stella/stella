@@ -72,8 +72,8 @@ pub fn activity_get_day(
   );
   drop(manager);
   snapshot.resolve_app_visuals();
-  if let Some((_, namespace)) = caller.account_binding() {
-    snapshot.add_capture(&app, namespace);
+  if caller.account_binding().is_some() {
+    snapshot.add_capture(&app);
   }
   Ok(snapshot)
 }

@@ -594,27 +594,8 @@ static PREVIEW_APPS: std::sync::LazyLock<Vec<PreviewApp>> =
   });
 
 impl ActivityDaySnapshot {
-  /// Adds what the plain capture files say about the day: its outages and,
-  /// while Activity cannot record for `namespace`, why.
-  pub(crate) fn add_capture<R: Runtime>(
-    &mut self,
-    app: &AppHandle<R>,
-    namespace: &str,
-  ) {
-    let date = parse_date(&self.date).ok();
-    self.outages = match date {
-      Some(date) => {
-        let (start, end) = local_day_span(date);
-        match crate::activity_capture::outages_between(namespace, start, end) {
-          Ok(outages) => ActivityDayOutages::Read { outages },
-          Err(_) => {
-            tracing::warn!("activity outages could not be read");
-            ActivityDayOutages::Unreadable
-          }
-        }
-      }
-      None => ActivityDayOutages::Unreadable,
-    };
+  /// Adds why Activity cannot record now, while it cannot.
+  pub(crate) fn add_capture<R: Runtime>(&mut self, app: &AppHandle<R>) {
     self.stopped_reason = match capture_binding(app) {
       Some(_) => None,
       None => crate::activity_capture::stopped().map(|stopped| stopped.reason),
@@ -825,6 +806,19 @@ pub(crate) fn capture_changed(app: &AppHandle) {
 
 fn store_root() -> Option<PathBuf> {
   dirs::data_dir().map(|dir| dir.join(APP_DATA_DIR_NAME).join(STORE_DIR_NAME))
+}
+
+/// The store of `namespace` under its existing key, for what Activity keeps
+/// while it cannot record; `None` without a key, which is never created here.
+pub(crate) fn keyed_store(namespace: &str) -> Option<ActivityStore> {
+  if local_store::debug_build_is_memory_only(DEBUG_PERSISTENCE_ENV) {
+    return None;
+  }
+  let root = store_root()?.join(namespace);
+  match keychain::get_local_data_key(LocalDataKey::ActivityTimeline(namespace)) {
+    Ok(LocalDataKeyLookup::Found(key)) => Some(ActivityStore::new(key, root)),
+    Ok(LocalDataKeyLookup::Missing) | Err(_) => None,
+  }
 }
 
 pub fn parse_date(raw: &str) -> Result<NaiveDate, String> {
@@ -1692,12 +1686,20 @@ impl ActivityManager {
       match self.open_gap.as_mut() {
         Some(gap) => gap.display = GapDisplay::Slept,
         None => {
-          self.open_gap = self.open.as_ref().map(|open| OpenGap {
-            start: self.gap_start(open.last_input.min(open.last_seen), &open.partition),
-            last_seen: open.last_seen,
-            display: GapDisplay::Slept,
-            partition: open.partition.clone(),
-          });
+          if let Some((since, last_seen, partition)) = self.open.as_ref().map(|open| {
+            (
+              open.last_input.min(open.last_seen),
+              open.last_seen,
+              open.partition.clone(),
+            )
+          }) {
+            self.open_gap = Some(OpenGap {
+              start: self.gap_start(since, &partition),
+              last_seen,
+              display: GapDisplay::Slept,
+              partition,
+            });
+          }
         }
       }
     } else if let Some(gap) = self.open_gap.take() {
@@ -1708,19 +1710,27 @@ impl ActivityManager {
   }
 
   /// Where a stretch without input seen at `idle_since` starts: never
-  /// before recorded time (a call records time without input) or its day.
+  /// before its day or what the day already holds, recorded time (a call
+  /// records time without input) or a kept gap, including what an earlier
+  /// run stored.
   fn gap_start(
-    &self,
+    &mut self,
     idle_since: DateTime<Utc>,
     partition: &DayPartition,
   ) -> DateTime<Utc> {
-    let recorded_until = self
-      .days
-      .get(&partition.date)
-      .and_then(|day| day.last())
-      .map_or(idle_since, |segment| segment.end);
     let day_start = local_day_span(partition.date).0;
-    idle_since.max(day_start).max(recorded_until)
+    let recorded_until = self
+      .day_mut(partition.date)
+      .and_then(|day| day.last())
+      .map(|segment| segment.end);
+    let gaps_until = self
+      .gaps_mut(partition.date)
+      .and_then(|gaps| gaps.last())
+      .map(|gap| gap.end);
+    [recorded_until, gaps_until]
+      .into_iter()
+      .flatten()
+      .fold(idle_since.max(day_start), Ord::max)
   }
 
   /// Closes a stretch without input at `end`, keeping it when its length
@@ -2723,6 +2733,7 @@ impl ActivityManager {
       Ok(gaps) => (gaps, false),
       Err(_) => (Vec::new(), true),
     };
+    let outages = self.day_outages(date);
     let bounds = self.history_bounds(date, today);
     let deletion_status = current_day_failure.unwrap_or(bounds.deletion_status);
     ActivityDaySnapshot {
@@ -2753,10 +2764,38 @@ impl ActivityManager {
       manual_assignments,
       pending_batch,
       drafted_entries,
-      outages: ActivityDayOutages::Read {
-        outages: Vec::new(),
-      },
+      outages,
       stopped_reason: None,
+    }
+  }
+
+  /// The outages that overlap `date`, from the account's store.
+  fn day_outages(&self, date: NaiveDate) -> ActivityDayOutages {
+    match &self.persistence {
+      ActivityPersistence::Encrypted(store) => match store.load_outages() {
+        Ok(outages) => {
+          let (start, end) = local_day_span(date);
+          ActivityDayOutages::Read {
+            outages: outages
+              .into_iter()
+              .filter(|outage| outage.start < end && outage.end > start)
+              .collect(),
+          }
+        }
+        Err(_) => {
+          tracing::warn!("activity outages could not be read");
+          ActivityDayOutages::Unreadable
+        }
+      },
+      ActivityPersistence::Initializing | ActivityPersistence::MemoryOnly => {
+        ActivityDayOutages::Read {
+          outages: Vec::new(),
+        }
+      }
+      ActivityPersistence::DeletionOnly(_)
+      | ActivityPersistence::KeyMissing(_)
+      | ActivityPersistence::Unreadable(_)
+      | ActivityPersistence::Incompatible(_) => ActivityDayOutages::Unreadable,
     }
   }
 
@@ -3707,7 +3746,7 @@ mod tests {
       if self.quiet >= QUIET_LIMIT {
         assert!(self.monitor.is_stopped(), "a quiet stop is not shown");
         assert!(
-          self.monitor.outage_covers(self.wall),
+          self.monitor.outage_covers(CAPTURE_NAMESPACE, self.wall),
           "a quiet stop is not recorded as an outage"
         );
       }
@@ -7366,6 +7405,105 @@ mod tests {
       }]
     );
     assert_eq!(store.load_day(date).unwrap().len(), 2);
+    std::fs::remove_dir_all(root).unwrap();
+  }
+
+  /// A recording manager on `store`, as a new process installs it.
+  fn restarted_on(store: &ActivityStore, now: DateTime<Utc>) -> ActivityManager {
+    let mut manager = ActivityManager::new();
+    manager.install(
+      ActivityPersistence::Encrypted(store.clone()),
+      ActivitySettings {
+        recording_status: ActivityRecordingStatus::Recording,
+        ..ActivitySettings::default()
+      },
+      now,
+    );
+    manager
+  }
+
+  #[test]
+  fn a_gap_after_a_restart_starts_after_the_call_an_earlier_run_recorded() {
+    let root =
+      std::env::temp_dir().join(format!("stella-gaps-{}", uuid::Uuid::new_v4()));
+    let store = ActivityStore::new([7; 32], root.clone());
+    let date = local_date(at(0));
+    let mut first = restarted_on(&store, at(0));
+    active_at(&mut first, 0);
+    for second in (5..=600).step_by(5) {
+      sample_gap_at(
+        &mut first,
+        at(second),
+        monotonic_at(second),
+        Duration::ZERO,
+        call("teams", None),
+      );
+    }
+    first.stop(at(600)).unwrap();
+    let call_end = store
+      .load_day(date)
+      .unwrap()
+      .iter()
+      .filter(|segment| segment.call)
+      .map(|segment| segment.end)
+      .max()
+      .unwrap();
+    assert_eq!(call_end, at(600));
+
+    // The app restarts while the computer stays idle; input last came
+    // before the call.
+    let mut restarted = restarted_on(&store, at(605));
+    idle_span(&mut restarted, (605, 1200), 0, |_| GapDisplay::StayedOn);
+    active_at(&mut restarted, 1205);
+    restarted.stop(at(1210)).unwrap();
+
+    assert_eq!(
+      store.load_gaps(date).unwrap(),
+      [ActivityGap {
+        start: call_end,
+        end: at(1205),
+        ended_by: GapEnd::Input,
+        display: GapDisplay::StayedOn,
+      }]
+    );
+    std::fs::remove_dir_all(root).unwrap();
+  }
+
+  #[test]
+  fn a_restart_never_records_inside_a_gap_an_earlier_run_kept() {
+    let root =
+      std::env::temp_dir().join(format!("stella-gaps-{}", uuid::Uuid::new_v4()));
+    let store = ActivityStore::new([7; 32], root.clone());
+    let date = local_date(at(0));
+    let mut first = restarted_on(&store, at(0));
+    for second in (0..=100).step_by(5) {
+      active_at(&mut first, second);
+    }
+    idle_span(&mut first, (105, 1200), 100, |_| GapDisplay::StayedOn);
+    first.stop(at(1200)).unwrap();
+    let kept = store.load_gaps(date).unwrap();
+    assert_eq!(
+      kept,
+      [ActivityGap {
+        start: at(100),
+        end: at(1200),
+        ended_by: GapEnd::Stop,
+        display: GapDisplay::StayedOn,
+      }]
+    );
+
+    // A new process whose clock was set back into the kept gap.
+    let mut restarted = restarted_on(&store, at(900));
+    for second in (900..=1000).step_by(5) {
+      active_at(&mut restarted, second);
+    }
+    restarted.stop(at(1000)).unwrap();
+    for segment in store.load_day(date).unwrap() {
+      assert!(
+        segment.end <= kept[0].start || segment.start >= kept[0].end,
+        "recorded time inside a kept gap"
+      );
+    }
     std::fs::remove_dir_all(root).unwrap();
   }
 

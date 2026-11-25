@@ -8,6 +8,9 @@
 //! - `settings.json.enc`
 //! - `matter-learning.json.enc`: rules and weights learned from the
 //!   member's own confirmations; deleted with the history it came from
+//! - `outages.json.enc`: the stretches the member wanted recorded and
+//!   Activity could not record; written while Activity cannot record, and
+//!   kept and deleted with the days they fall on
 //! - `days/YYYY-MM-DD.json.enc`
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -16,6 +19,7 @@ use std::{
   collections::BTreeMap,
   fs,
   path::{Path, PathBuf},
+  sync::{Mutex, PoisonError},
 };
 
 use crate::activity::{
@@ -23,6 +27,7 @@ use crate::activity::{
   ActivityManualAssignment, ActivityOtherHistoryRecovery, ActivityPendingBatch,
   ActivitySegment, ActivitySettings, format_date, parse_date,
 };
+use crate::activity_capture::CaptureOutage;
 use crate::activity_matter_learning::StoredMatterLearning;
 use crate::keychain::{self, LocalDataKey, LocalDataKeyLookup};
 use crate::local_store::{EncryptedJsonFile, EncryptedReadError, create_private_dir};
@@ -30,8 +35,15 @@ use crate::local_store::{EncryptedJsonFile, EncryptedReadError, create_private_d
 const LABEL: &str = "activity";
 const SETTINGS_FILE_NAME: &str = "settings.json.enc";
 const MATTER_LEARNING_FILE_NAME: &str = "matter-learning.json.enc";
+const OUTAGES_FILE_NAME: &str = "outages.json.enc";
 const DAYS_DIR_NAME: &str = "days";
 const DAY_FILE_SUFFIX: &str = ".json.enc";
+
+/// Outage lists are read, changed and written whole, by the sampler and by
+/// deletions alike: one at a time. The lock also counts, per store root, the
+/// deletions that removed outage time, so an outage held open in memory is
+/// never written back over one.
+static OUTAGE_WRITES: Mutex<BTreeMap<PathBuf, u64>> = Mutex::new(BTreeMap::new());
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -77,6 +89,7 @@ struct OtherAccountHistoryFiles {
 enum ActivityRecoveryFile {
   Settings,
   MatterLearning,
+  Outages,
   Day(NaiveDate),
 }
 
@@ -117,9 +130,14 @@ impl ActivityStore {
           continue;
         }
       };
-      for segment in day.segments {
-        latest =
-          Some(latest.map_or(segment.end, |end: DateTime<Utc>| end.max(segment.end)));
+      // Kept gaps bound it too: nothing is recorded inside one.
+      for end in day
+        .segments
+        .iter()
+        .map(|segment| segment.end)
+        .chain(day.gaps.iter().map(|gap| gap.end))
+      {
+        latest = Some(latest.map_or(end, |latest: DateTime<Utc>| latest.max(end)));
       }
     }
     match failure {
@@ -221,6 +239,100 @@ impl ActivityStore {
   ) -> Result<(), String> {
     self.ensure_dirs()?;
     self.matter_learning_file().persist(learning)
+  }
+
+  fn outages_file(&self) -> EncryptedJsonFile {
+    EncryptedJsonFile::new(self.key, self.root.join(OUTAGES_FILE_NAME), LABEL)
+      .with_associated_data("activity:outages")
+  }
+
+  #[cfg(test)]
+  pub(crate) fn outages_path(&self) -> PathBuf {
+    self.outages_file().path().to_path_buf()
+  }
+
+  pub fn load_outages(&self) -> Result<Vec<CaptureOutage>, String> {
+    Ok(self.outages_file().load()?.unwrap_or_default())
+  }
+
+  /// How many deletions have removed outage time from this store; read
+  /// before an outage is first written and passed to [`Self::update_outages`].
+  pub(crate) fn outage_deletions(&self) -> u64 {
+    OUTAGE_WRITES
+      .lock()
+      .unwrap_or_else(PoisonError::into_inner)
+      .get(&self.root)
+      .copied()
+      .unwrap_or_default()
+  }
+
+  /// Changes the outage list and writes it. Nothing is written, and the
+  /// result is `false`, when a deletion removed outage time since
+  /// `deletions` was read: what the caller holds may be in what it deleted.
+  /// A list that cannot be read is never replaced.
+  pub(crate) fn update_outages(
+    &self,
+    deletions: u64,
+    change: impl FnOnce(&mut Vec<CaptureOutage>),
+  ) -> Result<bool, String> {
+    let writes = OUTAGE_WRITES.lock().unwrap_or_else(PoisonError::into_inner);
+    if writes.get(&self.root).copied().unwrap_or_default() != deletions {
+      return Ok(false);
+    }
+    let mut outages = self.load_outages()?;
+    change(&mut outages);
+    self.ensure_dirs()?;
+    self.outages_file().persist(&outages)?;
+    drop(writes);
+    Ok(true)
+  }
+
+  /// Removes the outage time inside `[start, end)`, splitting an outage that
+  /// reaches past it.
+  fn erase_outages(
+    &self,
+    start: DateTime<Utc>,
+    end: DateTime<Utc>,
+  ) -> Result<(), EncryptedReadError> {
+    let mut writes = OUTAGE_WRITES.lock().unwrap_or_else(PoisonError::into_inner);
+    let Some(outages) = self.outages_file().load_checked::<Vec<CaptureOutage>>()?
+    else {
+      return Ok(());
+    };
+    let kept = outages
+      .iter()
+      .flat_map(|outage| {
+        let before = (outage.start < start).then_some(CaptureOutage {
+          end: outage.end.min(start),
+          ..*outage
+        });
+        let after =
+          (outage.end > end || outage.start >= end).then_some(CaptureOutage {
+            start: outage.start.max(end),
+            ..*outage
+          });
+        before.into_iter().chain(after)
+      })
+      .collect::<Vec<_>>();
+    // An open outage may hold time after everything written, inside `end`.
+    let reaches_open = outages.iter().all(|outage| outage.end < end);
+    if kept != outages {
+      if kept.is_empty() {
+        remove_file_if_present(self.outages_file().path())
+          .map_err(EncryptedReadError::Unavailable)?;
+      } else {
+        self
+          .outages_file()
+          .persist(&kept)
+          .map_err(EncryptedReadError::Unavailable)?;
+      }
+    }
+    if kept != outages || reaches_open {
+      let deletions = writes.entry(self.root.clone()).or_default();
+      *deletions = deletions.wrapping_add(1);
+    }
+    drop(writes);
+    Ok(())
   }
 
   fn day_file(&self, date: NaiveDate) -> EncryptedJsonFile {
@@ -498,6 +610,7 @@ impl ActivityStore {
     })
   }
 
+  /// Deletes the day and the outage time it spans.
   pub fn delete_day(&self, date: NaiveDate) -> Result<(), ActivityDeletionError> {
     if self
       .load_pending_checked(date)
@@ -506,6 +619,10 @@ impl ActivityStore {
     {
       return Err(ActivityDeletionError::PendingBatch);
     }
+    let (start, end) = crate::activity::local_day_span(date);
+    self
+      .erase_outages(start, end)
+      .map_err(ActivityDeletionError::from)?;
     remove_file_if_present(self.day_file(date).path())
       .map_err(ActivityDeletionError::Unavailable)
   }
@@ -570,14 +687,25 @@ impl ActivityStore {
   }
 
   /// Retention preserves unresolved batches; only settled days expire.
+  /// Outage time before `earliest` expires with them.
   pub fn delete_days_before(&self, earliest: NaiveDate) -> Result<usize, String> {
+    match self.erase_outages(
+      DateTime::<Utc>::MIN_UTC,
+      crate::activity::local_day_span(earliest).0,
+    ) {
+      Ok(()) => {}
+      Err(EncryptedReadError::Unreadable(_) | EncryptedReadError::Incompatible(_)) => {
+        tracing::warn!("activity retention preserved an unreadable outage file");
+      }
+      Err(EncryptedReadError::Unavailable(message)) => return Err(message),
+    }
     let mut deleted = 0;
     let mut unreadable_days = 0;
     for (path, date) in Self::day_entries_root(&self.root)? {
       match date {
         Some(date) if date < earliest => match self.load_pending_checked(date) {
           Ok(None) => {
-            self.delete_day(date).map_err(|error| error.to_string())?;
+            remove_file_if_present(self.day_file(date).path())?;
             deleted += 1;
           }
           Ok(Some(_)) => {}
@@ -726,7 +854,7 @@ impl ActivityStore {
       if path.extension().is_some_and(|extension| extension == "tmp") {
         continue;
       }
-      let account_root = path.parent().and_then(Path::parent).ok_or_else(|| {
+      let account_root = Self::account_root_of(path).ok_or_else(|| {
         ActivityDeletionError::Unavailable("activity history path is invalid".into())
       })?;
       let namespace = account_root
@@ -827,8 +955,39 @@ impl ActivityStore {
       }
     }
     for path in history.paths {
-      remove_file_if_present(&path).map_err(ActivityDeletionError::Unavailable)?;
+      if path
+        .file_name()
+        .is_some_and(|name| name == OUTAGES_FILE_NAME)
+      {
+        Self::remove_outages_file(&path).map_err(ActivityDeletionError::Unavailable)?;
+      } else {
+        remove_file_if_present(&path).map_err(ActivityDeletionError::Unavailable)?;
+      }
     }
+    Ok(())
+  }
+
+  /// The account root a history file belongs to: its own folder for the
+  /// files at the root, the days folder's parent for a day.
+  fn account_root_of(path: &Path) -> Option<&Path> {
+    let parent = path.parent()?;
+    if parent.file_name().is_some_and(|name| name == DAYS_DIR_NAME) {
+      parent.parent()
+    } else {
+      Some(parent)
+    }
+  }
+
+  /// Removes another account's outage file, so an outage still open for it
+  /// is not written back.
+  fn remove_outages_file(path: &Path) -> Result<(), String> {
+    let mut writes = OUTAGE_WRITES.lock().unwrap_or_else(PoisonError::into_inner);
+    remove_file_if_present(path)?;
+    if let Some(root) = path.parent() {
+      let deletions = writes.entry(root.to_path_buf()).or_default();
+      *deletions = deletions.wrapping_add(1);
+    }
+    drop(writes);
     Ok(())
   }
 
@@ -878,15 +1037,15 @@ impl ActivityStore {
       {
         continue;
       }
-      let learning = entry.path().join(MATTER_LEARNING_FILE_NAME);
-      match fs::symlink_metadata(&learning) {
-        Ok(metadata) if metadata.file_type().is_file() => history.paths.push(learning),
-        Ok(_) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => {
-          return Err(format!(
-            "activity matter learning could not be inspected: {error}"
-          ));
+      for name in [MATTER_LEARNING_FILE_NAME, OUTAGES_FILE_NAME] {
+        let path = entry.path().join(name);
+        match fs::symlink_metadata(&path) {
+          Ok(metadata) if metadata.file_type().is_file() => history.paths.push(path),
+          Ok(_) => {}
+          Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+          Err(error) => {
+            return Err(format!("activity history could not be inspected: {error}"));
+          }
         }
       }
       let days = entry.path().join(DAYS_DIR_NAME);
@@ -946,6 +1105,9 @@ impl ActivityStore {
     {
       return Err(ActivityDeletionError::PendingBatch);
     }
+    self
+      .erase_outages(DateTime::<Utc>::MIN_UTC, DateTime::<Utc>::MAX_UTC)
+      .map_err(ActivityDeletionError::from)?;
     remove_file_if_present(self.matter_learning_file().path())
       .map_err(ActivityDeletionError::Unavailable)?;
     match fs::remove_dir_all(self.days_dir()) {
@@ -1003,6 +1165,14 @@ impl ActivityStore {
       Err(error) => return Err(ActivityDeletionError::from(error)),
       Ok(_) => {}
     }
+    match store.outages_file().load_checked::<Vec<CaptureOutage>>() {
+      Err(EncryptedReadError::Unreadable(_)) => {
+        unreadable.push(ActivityRecoveryFile::Outages)
+      }
+      Err(EncryptedReadError::Incompatible(_)) => {}
+      Err(error) => return Err(ActivityDeletionError::from(error)),
+      Ok(_) => {}
+    }
     for date in store
       .day_dates()
       .map_err(ActivityDeletionError::Unavailable)?
@@ -1028,6 +1198,10 @@ impl ActivityStore {
         ActivityRecoveryFile::MatterLearning => {
           store.load_matter_learning_checked().map(|_| ())
         }
+        ActivityRecoveryFile::Outages => store
+          .outages_file()
+          .load_checked::<Vec<CaptureOutage>>()
+          .map(|_| ()),
         ActivityRecoveryFile::Day(date) => store
           .day_file(date)
           .load_checked::<ActivityDayFile>()
@@ -1046,6 +1220,7 @@ impl ActivityStore {
         ActivityRecoveryFile::MatterLearning => {
           store.matter_learning_file().path().to_path_buf()
         }
+        ActivityRecoveryFile::Outages => store.outages_file().path().to_path_buf(),
         ActivityRecoveryFile::Day(date) => store.day_file(date).path().to_path_buf(),
       };
       remove_file_if_present(&path).map_err(ActivityDeletionError::Unavailable)?;
@@ -1176,6 +1351,148 @@ mod tests {
     let day: ActivityDayFile =
       serde_json::from_value(serde_json::json!({"segments": []})).unwrap();
     assert!(day.gaps.is_empty());
+  }
+
+  #[test]
+  fn the_recording_boundary_includes_kept_gaps() {
+    let (store, root) = store();
+    let recorded = segment("word");
+    let gap = crate::activity::ActivityGap {
+      start: recorded.end,
+      end: recorded.end + chrono::Duration::minutes(20),
+      ended_by: crate::activity::GapEnd::Stop,
+      display: crate::activity::GapDisplay::StayedOn,
+    };
+    store.save_day(date(1), &[recorded]).unwrap();
+    store.save_gaps(date(1), &[gap]).unwrap();
+    assert_eq!(store.recorded_until(date(1)).unwrap(), Some(gap.end));
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  fn outage(start: DateTime<Utc>, minutes: i64) -> CaptureOutage {
+    CaptureOutage {
+      start,
+      end: start + chrono::Duration::minutes(minutes),
+      reason: crate::activity_capture::StopReason::ReconnectNeeded,
+    }
+  }
+
+  fn write_outages(store: &ActivityStore, outages: &[CaptureOutage]) {
+    assert!(
+      store
+        .update_outages(store.outage_deletions(), |list| {
+          list.extend_from_slice(outages);
+        })
+        .unwrap()
+    );
+  }
+
+  #[test]
+  fn outages_go_with_their_day_with_retention_and_with_all_history() {
+    let (store, root) = store();
+    let (day_start, day_end) = crate::activity::local_day_span(date(1));
+    let (later_start, _) = crate::activity::local_day_span(date(5));
+    let inside = outage(day_start + chrono::Duration::hours(9), 30);
+    let across_midnight = outage(day_end - chrono::Duration::minutes(30), 60);
+    let later = outage(later_start + chrono::Duration::hours(9), 10);
+    write_outages(&store, &[inside, across_midnight, later]);
+    let opened = store.outage_deletions();
+
+    store.delete_day(date(1)).unwrap();
+    assert_eq!(
+      store.load_outages().unwrap(),
+      [
+        CaptureOutage {
+          start: day_end,
+          ..across_midnight
+        },
+        later
+      ]
+    );
+    // What a writer opened before the deletion is not written back.
+    assert!(
+      !store
+        .update_outages(opened, |list| list.push(inside))
+        .unwrap()
+    );
+    assert_eq!(store.load_outages().unwrap().len(), 2);
+
+    // Retention takes outage time before the earliest kept day.
+    store.delete_days_before(date(3)).unwrap();
+    assert_eq!(store.load_outages().unwrap(), [later]);
+
+    store.delete_all_days().unwrap();
+    assert!(store.load_outages().unwrap().is_empty());
+    assert!(!store.outages_path().exists());
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn unreadable_recovery_discards_an_unreadable_outage_file() {
+    let (store, root) = store();
+    store.save_day(date(1), &[segment("app")]).unwrap();
+    write_outages(&store, &[outage(segment("app").start, 5)]);
+    fs::write(store.outages_path(), b"unreadable outages").unwrap();
+    assert_eq!(
+      store.delete_day(date(1)),
+      Err(ActivityDeletionError::Unreadable)
+    );
+    ActivityStore::remove_unreadable_with_lookup(
+      &root,
+      ActivityDeletionRecovery::DiscardUnreadable,
+      || Ok(LocalDataKeyLookup::Found([9; 32])),
+    )
+    .unwrap();
+    assert!(!store.outages_path().exists());
+    assert_eq!(store.load_day(date(1)).unwrap().len(), 1);
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn other_account_erasure_takes_its_learning_and_outages_and_only_its_own() {
+    let (_, root) = store();
+    let current = "a".repeat(64);
+    let inactive = "b".repeat(64);
+    let kept = ActivityStore::new([9; 32], root.join(&current));
+    kept.save_settings(&ActivitySettings::default()).unwrap();
+    kept.save_day(date(1), &[segment("app")]).unwrap();
+    write_outages(&kept, &[outage(segment("app").start, 5)]);
+    let other = ActivityStore::new([9; 32], root.join(&inactive));
+    other.save_settings(&ActivitySettings::default()).unwrap();
+    other.save_day(date(1), &[segment("app")]).unwrap();
+    other
+      .save_matter_learning(&StoredMatterLearning::fixture())
+      .unwrap();
+    write_outages(&other, &[outage(segment("app").start, 5)]);
+    let opened = other.outage_deletions();
+
+    ActivityStore::delete_other_account_history_with_key_lookup(
+      &root,
+      &current,
+      ActivityOtherHistoryRecovery::Preserve,
+      |namespace| {
+        // Only an account's own folder is ever looked up, never the folder
+        // that holds them all.
+        assert!(
+          ActivityStore::is_account_namespace(namespace),
+          "{namespace}"
+        );
+        Ok(LocalDataKeyLookup::Found([9; 32]))
+      },
+    )
+    .unwrap();
+    assert!(!other.outages_path().exists());
+    assert_eq!(other.load_matter_learning_checked().unwrap(), None);
+    assert!(other.load_day(date(1)).unwrap().is_empty());
+    assert!(
+      !other
+        .update_outages(opened, |list| list.push(outage(segment("app").start, 5)))
+        .unwrap()
+    );
+    assert_eq!(kept.load_day(date(1)).unwrap().len(), 1);
+    assert_eq!(kept.load_outages().unwrap().len(), 1);
+    assert!(kept.load_settings_checked().unwrap().is_some());
+    ActivityStore::remove(&root).unwrap();
   }
 
   #[test]
