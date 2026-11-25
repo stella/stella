@@ -9,6 +9,7 @@ import {
   czechDecimalContract,
   englishAgreement,
   germanContract,
+  heading,
   manifestOf,
   numbered,
   partsContract,
@@ -703,6 +704,19 @@ describe("ambiguity", () => {
           { targetBlockId: "p6", confidence: 0.45 },
         ],
       },
+    ]);
+  });
+
+  test("a typed line naming a numbered article is read as a reference to it", () => {
+    const manifest = manifestOf([
+      { ...heading("Definitions"), label: "1." },
+      numbered("1.1", "Clause."),
+      { ...heading("Data Protection"), label: "2." },
+      numbered("2.1", "The following survive termination:"),
+      "Clause 2 Data Protection",
+    ]);
+    expect(read(manifest, "Clause 2 Data")).toEqual([
+      { text: "Clause 2", scope: "internal", links: "2→2" },
     ]);
   });
 

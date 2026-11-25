@@ -375,6 +375,23 @@ describe("buildLabelIndex", () => {
     expect(index.entryByBlockId.get("p3")?.annexBlockId).toBeNull();
   });
 
+  test("a typed line that names an automatically numbered article refers to it", () => {
+    const manifest = manifestOf([
+      { ...heading("Definitions"), label: "1." },
+      numbered("1.1", "Clause."),
+      { ...heading("Data Protection"), label: "2." },
+      numbered("2.1", "The following survive termination:"),
+      "Clause 1 Definitions",
+      "Clause 2 Data Protection",
+    ]);
+    expect(keysOf(manifest)).toEqual([
+      "article 1",
+      "clause 1/1",
+      "article 2",
+      "clause 2/1",
+    ]);
+  });
+
   test("lines of a table of contents are left out", () => {
     const manifest = manifestOf([
       { text: "Článek I. Předmět", styleName: "TOC 1" },

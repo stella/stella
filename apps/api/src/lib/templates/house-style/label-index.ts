@@ -294,6 +294,8 @@ type Walk = {
   schemes: { body: Scheme; annexes: Scheme };
   /** Positions of annex lines that name an annex without opening it. */
   listedAnnexes: ReadonlySet<number>;
+  /** Ordinals of the articles the document's automatic numbering heads. */
+  numberedArticles: ReadonlySet<number>;
   article: LabelEntry | null;
   clauses: LabelEntry[];
   letter: LabelEntry | null;
@@ -383,6 +385,56 @@ const headsArticle = (scheme: Scheme, { block, raw }: LabelledRow): boolean =>
   !scheme.namedArticles &&
   (scheme.dotted || isHeadingStyled(block));
 
+/** Before the annexes are told apart, a named article anywhere must not hide
+ *  the bare numbers that head the main body's articles. */
+const numberedScheme = (labelled: readonly LabelledRow[]): Scheme => ({
+  namedArticles: false,
+  dotted: schemeOf(labelled).dotted,
+});
+
+/**
+ * The ordinals of articles headed beyond doubt: an automatic label on a
+ * paragraph with an outline level, which is what Word calls a heading.
+ */
+const numberedArticleOrdinals = (
+  labelled: readonly LabelledRow[],
+): Set<number> => {
+  const scheme = numberedScheme(labelled);
+  const ordinals = new Set<number>();
+  for (const row of labelled) {
+    if (row.raw.origin !== "auto" || row.block.outlineLevel === null) {
+      continue;
+    }
+    const named = isNamedArticle(row)
+      ? countedOrdinal(row.raw.shape.core)
+      : null;
+    const bare = headsArticle(scheme, row) ? row.raw.shape.path?.at(0) : null;
+    const ordinal = named ?? bare ?? null;
+    if (ordinal !== null) {
+      ordinals.add(ordinal);
+    }
+  }
+  return ordinals;
+};
+
+/**
+ * An article is headed once. Where the automatic numbering already heads
+ * it, a typed `Clause 6 Data Protection` (a line of a summary table, say)
+ * refers to that article.
+ */
+const isArticleMention = (
+  numberedArticles: ReadonlySet<number>,
+  row: LabelledRow,
+): boolean => {
+  const ordinal = countedOrdinal(row.raw.shape.core);
+  return (
+    row.raw.origin === "manual" &&
+    ordinal !== null &&
+    numberedArticles.has(ordinal) &&
+    isNamedArticle(row)
+  );
+};
+
 /**
  * The annex lines that only name an annex: the list of annexes, and any
  * line in front of the first article. Annexes follow the articles, so an
@@ -393,12 +445,7 @@ const listedAnnexPositions = (
   rows: readonly Row[],
   labelled: readonly LabelledRow[],
 ): Set<number> => {
-  // Before the annexes are told apart, a named article anywhere must not
-  // hide the bare numbers that head the main body's articles.
-  const numbered: Scheme = {
-    namedArticles: false,
-    dotted: schemeOf(labelled).dotted,
-  };
+  const numbered = numberedScheme(labelled);
   const firstArticle =
     labelled.find((row) => isNamedArticle(row) || headsArticle(numbered, row))
       ?.position ?? -1;
@@ -612,7 +659,9 @@ const classify = (walk: Walk, row: LabelledRow): LabelEntry | null => {
     return isAnnexRow(row) ? openAnnex(walk, row) : null;
   }
   if (isNamedArticle(row)) {
-    return openArticle(walk, row, countedOrdinal(shape.core));
+    return walk.annex === null && isArticleMention(walk.numberedArticles, row)
+      ? null
+      : openArticle(walk, row, countedOrdinal(shape.core));
   }
   if (shape.keyword !== null) {
     return null;
@@ -656,17 +705,26 @@ export const buildLabelIndex = ({
     family: families[position] ?? null,
   }));
   const labelled = rows.filter(isLabelled);
-  const listedAnnexes = listedAnnexPositions(rows, labelled);
+  const numberedArticles = numberedArticleOrdinals(labelled);
+  // Mentions say nothing about how the document numbers itself.
+  const structural = labelled.filter(
+    (row) => !isArticleMention(numberedArticles, row),
+  );
+  const listedAnnexes = listedAnnexPositions(rows, structural);
   const firstAnnex =
-    labelled.find((row) => isAnnexRow(row) && !listedAnnexes.has(row.position))
-      ?.position ?? Number.POSITIVE_INFINITY;
+    structural.find(
+      (row) => isAnnexRow(row) && !listedAnnexes.has(row.position),
+    )?.position ?? Number.POSITIVE_INFINITY;
   const walk: Walk = {
     rows,
     listedAnnexes,
+    numberedArticles,
     schemes: {
-      body: schemeOf(labelled.filter(({ position }) => position < firstAnnex)),
+      body: schemeOf(
+        structural.filter(({ position }) => position < firstAnnex),
+      ),
       annexes: schemeOf(
-        labelled.filter(({ position }) => position > firstAnnex),
+        structural.filter(({ position }) => position > firstAnnex),
       ),
     },
     article: null,
