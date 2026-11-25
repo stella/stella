@@ -138,7 +138,7 @@ test("the day read selects no attendee, organizer, location or body", async () =
     permit,
   });
   if (Result.isError(result)) {
-    return panic("Expected the day read to succeed");
+    panic("Expected the day read to succeed");
   }
   expect(result.value.events).toHaveLength(1);
   expect(result.value.truncated).toBe(false);
@@ -171,7 +171,7 @@ test("a day with more events than the limit reports itself truncated", async () 
     permit,
   });
   if (Result.isError(result)) {
-    return panic("Expected the day read to succeed");
+    panic("Expected the day read to succeed");
   }
   expect(result.value.events).toHaveLength(DESKTOP_CALENDAR_EVENTS_LIMIT);
   expect(result.value.truncated).toBe(true);

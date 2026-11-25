@@ -15,7 +15,6 @@ import {
   MICROSOFT365_CALENDAR_TOTAL_CAP as CALENDAR_TOTAL_CAP,
   microsoft365CalendarRangeEntries,
 } from "@stll/api-contract/microsoft365";
-import { ownEntry } from "@stll/api-contract/own-key";
 import { Temporal } from "@stll/time";
 
 import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
@@ -427,16 +426,30 @@ const dayReviewPageSchema = v.object({
 });
 type DayReviewGraphEvent = v.InferOutput<typeof dayReviewEventSchema>;
 
-/** Graph's own answers the day review keeps; `declined` and any value not
- * listed keep the event out. */
-// oxlint-disable-next-line exhaustive-union-map/exhaustive-union-map -- keyed by Graph's open responseStatus vocabulary read off the wire
-const DAY_REVIEW_RESPONSES = {
-  organizer: "organizer",
-  accepted: "accepted",
-  tentativelyAccepted: "tentative",
-  none: "notAnswered",
-  notResponded: "notAnswered",
-} as const satisfies Record<string, DesktopCalendarResponse>;
+/** The member's own answer from Graph's open `responseStatus.response`
+ * value; `declined` and any value not listed keep the event out. */
+const dayReviewResponse = (
+  response: string,
+): DesktopCalendarResponse | undefined => {
+  switch (response) {
+    case "organizer": {
+      return "organizer";
+    }
+    case "accepted": {
+      return "accepted";
+    }
+    case "tentativelyAccepted": {
+      return "tentative";
+    }
+    case "none":
+    case "notResponded": {
+      return "notAnswered";
+    }
+    default: {
+      return undefined;
+    }
+  }
+};
 
 const graphInstant = ({
   dateTime,
@@ -468,10 +481,7 @@ const dayReviewTitle = (subject: string) => {
 export const dayReviewEvent = (
   event: DayReviewGraphEvent,
 ): DesktopCalendarEvent | null => {
-  const response = ownEntry(
-    DAY_REVIEW_RESPONSES,
-    event.responseStatus.response,
-  );
+  const response = dayReviewResponse(event.responseStatus.response);
   if (
     event.isCancelled ||
     event.sensitivity !== "normal" ||

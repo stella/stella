@@ -38,7 +38,7 @@ const answered = (response: DesktopCalendarEventsResponse) =>
  * review, read on request and never stored. Only the minimised fields leave
  * the server; the desktop shows them as evidence and counts none of them.
  */
-export const createDesktopCalendarEventsEndpoint = (
+const createDesktopCalendarEventsEndpoint = (
   dependencies = CALENDAR_EVENTS_DEPENDENCIES,
 ) =>
   createSafeBoundedPublicHandler(

@@ -3,7 +3,7 @@ import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
-import { apiDateSchema } from "./api-date";
+import { API_STORABLE_INSTANT_CHECK, apiDateSchema } from "./api-date";
 import { TIME_ENTRY_ACTIVITY_GROUPS } from "./billing";
 
 export const desktopMatterSchema = v.strictObject({
@@ -220,6 +220,7 @@ const calendarInstantSchema = v.pipe(
   v.string(),
   v.maxLength(64),
   v.isoTimestamp(),
+  API_STORABLE_INSTANT_CHECK,
 );
 
 export const desktopCalendarEventSchema = v.variant("timing", [
