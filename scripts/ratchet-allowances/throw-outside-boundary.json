@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 1,
+  "reason": "refuseSecondCopy runs as createEntityFromBuffer's afterCreate inside the document's creating transaction; throwing is the only way that hook rolls a second copy of the same bytes back under the matter's creation lock."
+}
