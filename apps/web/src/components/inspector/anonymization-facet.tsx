@@ -226,9 +226,7 @@ export const AnonymizationFacet = ({
   const locale = useFormattingLocale();
   const analytics = useAnalytics();
   const formatLabel = (label: string): string =>
-    Object.hasOwn(LABEL_TRANSLATION_KEYS, label) && isLabelTranslationKey(label)
-      ? t(LABEL_TRANSLATION_KEYS[label])
-      : label;
+    isLabelTranslationKey(label) ? t(LABEL_TRANSLATION_KEYS[label]) : label;
   const termsQuery = useQuery(anonymizationTermsOptions(workspaceId));
   const termsQueryView = queryView(termsQuery);
   useQueryViewError(termsQueryView, "AnonymizationFacet:query");

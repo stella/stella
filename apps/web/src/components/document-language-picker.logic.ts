@@ -34,10 +34,9 @@ export const isDocumentTranslationTargetCode = (
 const languageForLocale = (
   locale: string,
 ): DocumentTranslationTargetLanguageCode | null => {
-  const mapped =
-    Object.hasOwn(LOCALE_TO_LANGUAGE, locale) && isMappedLocale(locale)
-      ? LOCALE_TO_LANGUAGE[locale]
-      : locale.toUpperCase();
+  const mapped = isMappedLocale(locale)
+    ? LOCALE_TO_LANGUAGE[locale]
+    : locale.toUpperCase();
   return isDocumentTranslationTargetCode(mapped) ? mapped : null;
 };
 

@@ -50,8 +50,6 @@ import { openMcpRead } from "@/api/mcp/write-tool-authority";
  * data is reachable a property of the code rather than of a conditional.
  */
 
-type LawCompatToolName = "fetch" | "search";
-
 const lawCompatSearchArgsSchema = nullAsAbsent(
   v.strictObject({
     query: v.pipe(
@@ -205,7 +203,10 @@ const handleLawCompatFetchTool: McpToolHandler<
 export const LAW_COMPAT_TOOL_HANDLERS = {
   fetch: handleLawCompatFetchTool,
   search: handleLawCompatSearchTool,
-} satisfies Record<LawCompatToolName, McpToolHandler>;
+} satisfies Record<
+  (typeof LAW_COMPAT_TOOL_DEFINITIONS)[number]["name"],
+  McpToolHandler
+>;
 
 export const LAW_COMPAT_TOOL_SET = defineMcpToolSet(
   LAW_COMPAT_TOOL_DEFINITIONS,

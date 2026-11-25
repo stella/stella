@@ -661,20 +661,14 @@ export const useTemplateStudioSlashMenu = ({
       capture: true,
       passive: true,
     });
-    const dismissOnContextPress = (event: PointerEvent) => {
-      if (event.button === 2 || (event.button === 0 && event.ctrlKey)) {
-        dismiss(event);
-      }
-    };
-    host?.addEventListener("pointerdown", dismissOnContextPress, {
+    host?.addEventListener("contextmenu", dismiss, {
       capture: true,
+      passive: true,
     });
     return () => {
       host?.removeEventListener("wheel", dismiss, { capture: true });
       host?.removeEventListener("touchmove", dismiss, { capture: true });
-      host?.removeEventListener("pointerdown", dismissOnContextPress, {
-        capture: true,
-      });
+      host?.removeEventListener("contextmenu", dismiss, { capture: true });
     };
   }, [slashShown, dismissSlash, overlayHostRef]);
 

@@ -1,0 +1,21 @@
+{
+  "id": "require-readonly-exported-collection",
+  "rules": [
+    "require-readonly-exported-collection/require-readonly-exported-collection"
+  ],
+  "type": "changed-lines",
+  "expiresAt": "2026-12-02T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "require-readonly-exported-collection/require-readonly-exported-collection",
+    "apps/web/src",
+    "apps/api/src"
+  ]
+}

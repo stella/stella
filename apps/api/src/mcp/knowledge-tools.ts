@@ -129,14 +129,6 @@ import {
 } from "@/api/mcp/valibot-tool-definition";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
-type KnowledgeToolName =
-  | "list_clauses"
-  | "save_clause"
-  | "delete_clause"
-  | "list_playbooks"
-  | "save_playbook"
-  | "run_playbook";
-
 // --- Text-field specs (plan 049, Option B) --------------------------------
 //
 // Every anonymize-mode field below is organization-scoped: clauses and
@@ -2469,7 +2461,10 @@ export const KNOWLEDGE_TOOL_HANDLERS = {
   run_playbook: handleRunPlaybookTool,
   save_clause: handleSaveClauseTool,
   save_playbook: handleSavePlaybookTool,
-} satisfies Record<KnowledgeToolName, McpToolHandler>;
+} satisfies Record<
+  (typeof KNOWLEDGE_TOOL_DEFINITIONS)[number]["name"],
+  McpToolHandler
+>;
 
 export const KNOWLEDGE_TOOL_SET = defineMcpToolSet(
   KNOWLEDGE_TOOL_DEFINITIONS,

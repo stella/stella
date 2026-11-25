@@ -38,14 +38,11 @@ import {
   ORGANIZATION_TIME_ZONE_SOURCE,
 } from "@/api/lib/organization-time-zone";
 
-/** The deployment features web callers read from organization settings. */
-type WebDeploymentFeature = "legalLists" | "invoiceLinks";
-
 /** The deployment availability contract shared by web callers and discovery. */
 export const WEB_DEPLOYMENT_FEATURES = {
   legalLists: "FEATURE_LEGAL_LISTS",
   invoiceLinks: "FEATURE_INVOICE_LINKS",
-} as const satisfies Record<WebDeploymentFeature, DeploymentFeatureFlag>;
+} as const satisfies Record<string, DeploymentFeatureFlag>;
 
 // The annotated return type makes a missing registry key a compile error.
 const readWebDeploymentFeatures = (): {

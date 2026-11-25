@@ -866,6 +866,12 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("exhaustive-union-map.fixture.ts", [
     "exhaustive-union-map/exhaustive-union-map",
   ]),
+  fixtureRuleOverride("no-identity-wrapper.fixture.ts", [
+    "no-identity-wrapper/no-identity-wrapper",
+  ]),
+  fixtureRuleOverride("require-readonly-exported-collection.fixture.ts", [
+    "require-readonly-exported-collection/require-readonly-exported-collection",
+  ]),
   fixtureRuleOverride("no-hand-rolled-execute-rows.fixture.ts", [
     "no-hand-rolled-execute-rows/no-hand-rolled-execute-rows",
   ]),
@@ -2389,6 +2395,8 @@ const config = defineConfig({
     "./.oxlint-plugins/no-unbounded-response-body.ts",
     "./.oxlint-plugins/no-computed-key-record-assignment.ts",
     "./.oxlint-plugins/exhaustive-union-map.ts",
+    "./.oxlint-plugins/no-identity-wrapper.ts",
+    "./.oxlint-plugins/require-readonly-exported-collection.ts",
     "./.oxlint-plugins/no-dynamic-key-in-operator.ts",
     "./.oxlint-plugins/no-truncated-timestamp-comparison.ts",
     "./.oxlint-plugins/no-chat-turn-time-order.ts",
@@ -7103,6 +7111,21 @@ const config = defineConfig({
       ],
       rules: {
         "exhaustive-union-map/exhaustive-union-map": "error",
+      },
+    },
+    {
+      // Pass-through identity wrappers and exported mutable Map/Set singletons
+      // belong out of product source.
+      files: ["apps/web/src/**/*.{ts,tsx}", "apps/api/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/tests/**",
+        "**/__tests__/**",
+      ],
+      rules: {
+        "no-identity-wrapper/no-identity-wrapper": "error",
+        "require-readonly-exported-collection/require-readonly-exported-collection":
+          "error",
       },
     },
     {
