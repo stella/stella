@@ -392,6 +392,25 @@ describe("buildLabelIndex", () => {
     ]);
   });
 
+  test("lines of the list of annexes may end like items of an enumeration", () => {
+    const manifest = manifestOf([
+      "Článek I.\nPřílohy",
+      numbered("1.", "Nedílnou součástí této smlouvy jsou:", 1),
+      "Příloha č. 1\tTechnická specifikace a popis výchozího stavu;",
+      "Příloha č. 2:\tCeník, který je pro dodavatele závazný po celou dobu trvání smlouvy.",
+      "Příloha č. 3 - Smlouvy uzavřené s poddodavateli",
+      numbered("2.", "Příloha č. 1 této smlouvy má přednost před nabídkou.", 1),
+    ]);
+    expect(keysOf(manifest)).toEqual([
+      "article I",
+      "clause I/1",
+      "listed annex 1",
+      "listed annex 2",
+      "listed annex 3",
+      "clause I/2",
+    ]);
+  });
+
   test("lines of a table of contents are left out", () => {
     const manifest = manifestOf([
       { text: "Článek I. Předmět", styleName: "TOC 1" },

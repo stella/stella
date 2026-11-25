@@ -113,6 +113,9 @@ type RawLabel = {
   manualLength: number;
   /** The block's text after the label. */
   remainder: string;
+  /** A tab, a colon, a dash or a line break sets the label off from what
+   *  follows, or nothing follows: the label is not the start of a sentence. */
+  separated: boolean;
 };
 
 const hasDesignator = (label: string): boolean => /[\p{L}\p{N}]/u.test(label);
@@ -126,7 +129,13 @@ const readAutoLabel = (block: DocxBlock, label: string): RawLabel | null => {
   if (shape === null || shape.length !== trimmed.length) {
     return null;
   }
-  return { origin: "auto", shape, manualLength: 0, remainder: block.text };
+  return {
+    origin: "auto",
+    shape,
+    manualLength: 0,
+    remainder: block.text,
+    separated: true,
+  };
 };
 
 /** A typed label is taken only when it is set off the way a label is; a
@@ -173,12 +182,14 @@ const readManualLabel = (block: DocxBlock): RawLabel | null => {
   if (!isTypedLabel(shape, after)) {
     return null;
   }
-  const blank = BLANK.exec(after)?.[0].length ?? 0;
+  const blank = BLANK.exec(after)?.[0] ?? "";
+  const remainder = after.slice(blank.length);
   return {
     origin: "manual",
     shape,
-    manualLength: lead + shape.length + blank,
-    remainder: after.slice(blank),
+    manualLength: lead + shape.length + blank.length,
+    remainder,
+    separated: blank.includes("\t") || /^(?:$|[\n:–—-])/u.test(remainder),
   };
 };
 
@@ -361,7 +372,9 @@ const isAnnexRow = (row: Row | undefined): row is LabelledRow =>
   row !== undefined &&
   isLabelled(row) &&
   row.raw.shape.keyword === "annex" &&
-  (row.raw.origin === "auto" || isHeadingRemainder(row.raw.remainder));
+  // A line of the list of annexes may run long and end in a semicolon; set
+  // off from its caption, it is still no sentence about the annex.
+  (row.raw.separated || isHeadingRemainder(row.raw.remainder));
 
 /** Lines of the list of annexes stand together or under a sentence that
  *  announces them; a heading stands alone. */
