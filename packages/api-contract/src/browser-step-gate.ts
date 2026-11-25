@@ -140,6 +140,46 @@ export type BrowserStepGateInput = {
   visitedOrigins: ReadonlySet<string>;
 };
 
+/**
+ * Why the gate asks the member about a step: every question carries one,
+ * so a card can always say why it asks, and whether always allowing the
+ * website would answer the next such step.
+ */
+export const BROWSER_STEP_ASK_REASON = {
+  /**
+   * The member does not always allow the website, and nothing else holds
+   * the step back: always allowing the website answers it. Every other
+   * reason holds a step back whatever the member allows, so no website
+   * approval may answer a question asked for it.
+   */
+  siteNotAllowed: "site_not_allowed",
+  /** The address names no website a website approval can hold. */
+  noSite: "no_site",
+  /**
+   * The step names a page the browser did not report as the tab's page:
+   * nothing was reported yet, the latest step did not settle on a page, or
+   * the step was written for an earlier read.
+   */
+  pageUnconfirmed: "page_unconfirmed",
+  /**
+   * The element sits in a frame embedded in the page, which may show
+   * another website than the one the page's address names.
+   */
+  embeddedFrame: "embedded_frame",
+  /**
+   * Typing into a field the browser reported no value for: the browser
+   * withholds the value of every field it treats as secret.
+   */
+  possibleSecret: "possible_secret",
+} as const;
+
+export type BrowserStepAskReason =
+  (typeof BROWSER_STEP_ASK_REASON)[keyof typeof BROWSER_STEP_ASK_REASON];
+
+export const BROWSER_STEP_ASK_REASONS = Object.values(
+  BROWSER_STEP_ASK_REASON,
+) satisfies readonly BrowserStepAskReason[];
+
 export type BrowserStepDecision =
   | { type: typeof BROWSER_STEP_GATE.run; by: "level" }
   /** A website approval for `origin` answered the step. */
@@ -149,11 +189,22 @@ export type BrowserStepDecision =
   /**
    * `site` is the website the question names, by exact origin: the page
    * the step was written for. It is the website an "always allow on this
-   * website" offer is for; null when it cannot hold an approval.
+   * website" offer is for; null when it cannot hold an approval. `reason`
+   * says why the member is asked.
    */
-  | { type: typeof BROWSER_STEP_GATE.ask; site: string | null }
+  | {
+      type: typeof BROWSER_STEP_GATE.ask;
+      site: string | null;
+      reason: BrowserStepAskReason;
+    }
   | { type: typeof BROWSER_STEP_GATE.refuse }
   | { type: typeof BROWSER_STEP_GATE.needsMember };
+
+/** A question about a step on `site`, for `reason`. */
+type BrowserStepAsk = Extract<
+  BrowserStepDecision,
+  { type: typeof BROWSER_STEP_GATE.ask }
+>;
 
 const RUNS_BY_LEVEL: BrowserStepDecision = {
   type: BROWSER_STEP_GATE.run,
@@ -164,29 +215,51 @@ const RUNS_BY_LEVEL: BrowserStepDecision = {
 const TOP_FRAME_ID = 0;
 
 /**
- * The website a website approval may answer `command` for: the origin of
- * the page the browser reported, and only when the command names that very
- * page (address and revision). The target must sit in the top frame: a read
- * merges every controllable frame, including another website's embedded
- * one, and names only the top frame's address. Typing into a field the
- * browser reported no value for may be typing a secret, so no approval
- * covers it.
+ * Whether a website approval answers `command`, a step the level asks
+ * about: only when the command names the very page the browser reported
+ * last (address and revision), and the member always allows that page's
+ * website. The target must sit in the top frame: a read merges every
+ * controllable frame, including another website's embedded one, and names
+ * only the top frame's address. Typing into a field the browser reported no
+ * value for may be typing a secret, so no approval covers it. Otherwise the
+ * question and why it is asked: what holds the step back whatever the
+ * member allows comes first, so `siteNotAllowed` means an approval for the
+ * website would answer the step.
  */
-const grantableOrigin = (
+const siteGrantDecision = (
   command: BrowserControlElementCommand,
   page: BrowserReportedPage | null,
-): string | null => {
+  grantedOrigins: ReadonlySet<string>,
+): BrowserStepDecision => {
+  const site = browserSiteGrantOrigin(command.page.url);
+  const ask = (reason: BrowserStepAskReason): BrowserStepAsk => ({
+    type: BROWSER_STEP_GATE.ask,
+    site,
+    reason,
+  });
+  if (site === null) {
+    return ask(BROWSER_STEP_ASK_REASON.noSite);
+  }
   if (
     page === null ||
     command.page.url !== page.url ||
-    command.page.revision !== page.revision ||
-    parseElementReference(command.target.ref)?.frameId !== TOP_FRAME_ID ||
-    (command.action === BROWSER_CONTROL_ACTION.fill &&
-      !page.valueRefs.has(command.target.ref))
+    command.page.revision !== page.revision
   ) {
-    return null;
+    return ask(BROWSER_STEP_ASK_REASON.pageUnconfirmed);
   }
-  return browserSiteGrantOrigin(page.url);
+  if (parseElementReference(command.target.ref)?.frameId !== TOP_FRAME_ID) {
+    return ask(BROWSER_STEP_ASK_REASON.embeddedFrame);
+  }
+  if (
+    command.action === BROWSER_CONTROL_ACTION.fill &&
+    !page.valueRefs.has(command.target.ref)
+  ) {
+    return ask(BROWSER_STEP_ASK_REASON.possibleSecret);
+  }
+  if (!grantedOrigins.has(site)) {
+    return ask(BROWSER_STEP_ASK_REASON.siteNotAllowed);
+  }
+  return { type: BROWSER_STEP_GATE.run, by: "site-grant", origin: site };
 };
 
 const elementStepDecision = (
@@ -203,15 +276,8 @@ const elementStepDecision = (
       return RUNS_BY_LEVEL;
     case BROWSER_STEP_GATE.refuse:
       return { type: BROWSER_STEP_GATE.refuse };
-    case BROWSER_STEP_GATE.ask: {
-      const origin = grantableOrigin(command, reportedPage);
-      return origin !== null && grantedOrigins.has(origin)
-        ? { type: BROWSER_STEP_GATE.run, by: "site-grant", origin }
-        : {
-            type: BROWSER_STEP_GATE.ask,
-            site: browserSiteGrantOrigin(command.page.url),
-          };
-    }
+    case BROWSER_STEP_GATE.ask:
+      return siteGrantDecision(command, reportedPage, grantedOrigins);
     default:
       gate satisfies never;
       return panic("Unhandled browser level gate");
@@ -245,9 +311,20 @@ const openStepDecision = ({
     case BROWSER_STEP_GATE.run:
       return RUNS_BY_LEVEL;
     case BROWSER_STEP_GATE.ask:
-      return origin !== null && grantedOrigins.has(origin)
+      if (origin === null) {
+        return {
+          type: BROWSER_STEP_GATE.ask,
+          site: null,
+          reason: BROWSER_STEP_ASK_REASON.noSite,
+        };
+      }
+      return grantedOrigins.has(origin)
         ? { type: BROWSER_STEP_GATE.run, by: "site-grant", origin }
-        : { type: BROWSER_STEP_GATE.ask, site: origin };
+        : {
+            type: BROWSER_STEP_GATE.ask,
+            site: origin,
+            reason: BROWSER_STEP_ASK_REASON.siteNotAllowed,
+          };
     default:
       gate satisfies never;
       return panic("Unhandled browser level gate");
@@ -268,7 +345,7 @@ const openStepDecision = ({
  * - Otherwise the level decides by the kind of step (`BROWSER_LEVEL_GATES`).
  *   A step the level would ask about runs without asking when the member
  *   always allows the website the browser reported the step acts on
- *   (`grantableOrigin`). A website approval never lifts Plan.
+ *   (`siteGrantDecision`). A website approval never lifts Plan.
  */
 export const decideBrowserStep = (
   input: BrowserStepGateInput,

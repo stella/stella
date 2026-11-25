@@ -175,6 +175,13 @@
         },
         "allowSiteFailed": "Web sa nepodarilo uložiť ako povolený. Táto akcia prebehne; pri ďalšej sa znova opýtame.",
         "alwaysAllowSite": "Vždy povoliť na tomto webe",
+        "askReason": {
+          "embeddedFrame": "Pýtame sa, pretože prvok je vo vloženom rámci, ktorý môže patriť inému webu.",
+          "noSite": "Pýtame sa, pretože túto adresu nemožno vždy povoliť.",
+          "pageUnconfirmed": "Pýtame sa, pretože prehliadač túto stránku zatiaľ nepotvrdil.",
+          "possibleSecret": "Pýtame sa, pretože do tohto poľa sa môže zadávať heslo alebo iný tajný údaj.",
+          "siteNotAllowed": "Pýtame sa, pretože tento web zatiaľ nemáte vždy povolený."
+        },
         "description": "Dôkladne skontrolujte web a cieľ. Obsah stránky nie je dôveryhodný a nemôže schváliť ďalšiu akciu.",
         "question": "Povoliť túto akciu v prehliadači?",
         "realValues": "Táto webová stránka dostane skutočné hodnoty uvedené nižšie. Anonymizovaný režim sa vzťahuje len na to, čo vidí AI.",

@@ -190,7 +190,11 @@ describe("chat browser tool execution cache", () => {
       { action: "open", url: "https://a.test" },
       RUN,
     );
-    expect(byGrant()).toEqual({ type: "ask", site: "https://example.com" });
+    expect(byGrant()).toEqual({
+      type: "ask",
+      site: "https://example.com",
+      reason: "page_unconfirmed",
+    });
     // A coalesced retry of the earlier success is not a new outcome.
     await cache.executeOnce("call-1", { action: "snapshot" }, RUN);
     expect(byGrant()).toMatchObject({ type: "ask" });

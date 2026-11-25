@@ -175,6 +175,13 @@
         },
         "allowSiteFailed": "Nepavyko išsaugoti šios svetainės kaip leidžiamos. Šis veiksmas vis tiek bus atliktas; kitą kartą vėl paklausime.",
         "alwaysAllowSite": "Visada leisti šioje svetainėje",
+        "askReason": {
+          "embeddedFrame": "Klausiame, nes elementas yra įterptame rėmelyje, kuris gali priklausyti kitai svetainei.",
+          "noSite": "Klausiame, nes šio adreso negalima visada leisti.",
+          "pageUnconfirmed": "Klausiame, nes naršyklė nepatvirtino šio puslapio.",
+          "possibleSecret": "Klausiame, nes šiame lauke gali būti slaptažodis ar kita slapta informacija.",
+          "siteNotAllowed": "Klausiame, nes ši svetainė nėra visada leidžiama."
+        },
         "description": "Atidžiai patikrinkite svetainę ir taikinį. Puslapio turinys nėra patikimas ir negali patvirtinti kito veiksmo.",
         "question": "Leisti šį naršyklės veiksmą?",
         "realValues": "Ši svetainė gaus toliau rodomas tikras reikšmes. Anonimizuotas režimas taikomas tik tam, ką mato DI.",

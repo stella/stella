@@ -10,6 +10,7 @@ import {
   type BrowserControlSnapshot,
   type BrowserObservedTab,
 } from "@stll/api-contract/browser-control";
+import type { BrowserStepAskReason } from "@stll/api-contract/browser-step-gate";
 import {
   CHAT_LOCAL_RUN_BROWSER_ACTIONS,
   CHAT_LOCAL_RUN_NEEDS_MEMBER,
@@ -134,7 +135,7 @@ const found = (): BrowserControlResult => ({
 
 /** A question the member was asked, each kind with its own fields. */
 type AskedStep<Request = BrowserApprovalRequest> = Request extends unknown
-  ? Omit<Request, "signal" | "site">
+  ? Omit<Request, "reason" | "signal" | "site">
   : never;
 
 type Sent = {
@@ -173,18 +174,22 @@ const recorder = (
   const asked: AskedStep[] = [];
   /** The website each question offered to always allow. */
   const offeredSites: (string | null)[] = [];
+  /** Why the gate asked each question. */
+  const reasons: BrowserStepAskReason[] = [];
   const finished: string[] = [];
   const context = {
     acts: true,
     approvals,
     siteGrants,
     approve: async ({
+      reason,
       signal: _signal,
       site,
       ...request
     }: BrowserApprovalRequest) => {
       asked.push(request);
       offeredSites.push(site);
+      reasons.push(reason);
       return {
         decision,
         finish: (status: string) => {
@@ -218,6 +223,7 @@ const recorder = (
     downloads,
     finished,
     offeredSites,
+    reasons,
     send: context.send,
     sent,
     shownAddresses,
@@ -1708,6 +1714,16 @@ describe("website approvals on the member's computer", () => {
         gate === "ask" ? [step] : [],
       );
       expect(browser.offeredSites).toEqual(gate === "ask" ? [SITE] : []);
+      // A field that may hold a secret asks whatever the run allows.
+      expect(browser.reasons).toEqual(
+        gate === "ask"
+          ? [
+              step === "type" && !valueReported
+                ? "possible_secret"
+                : "site_not_allowed",
+            ]
+          : [],
+      );
       expect(browser.sent).toHaveLength(gate === "refuse" ? 1 : 2);
       expect(result.isError).toBe(gate === "refuse");
     },
@@ -1724,12 +1740,31 @@ describe("website approvals on the member's computer", () => {
     await session.call("click", INPUTS.click, browser.context);
     await session.call("select", INPUTS.select, browser.context);
     expect(browser.asked.map(({ action }) => action)).toEqual(["click"]);
+    // The run did not allow the website: the one question chat answers by
+    // the member's stored approval, or offers to always allow it.
+    expect(browser.reasons).toEqual(["site_not_allowed"]);
     expect([...siteGrants]).toEqual([SITE]);
     expect(browser.sent.map(({ command }) => command.action)).toEqual([
       "snapshot",
       "click",
       "select",
     ]);
+  });
+
+  test("on an allowed website, a click after Enter changed the page names the new read and runs without asking", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder(
+      [formPage("r-1"), formPage("r-2"), formPage("r-3")],
+      { approvals: "ask", siteGrants: new Set([SITE]) },
+    );
+    await session.call("snapshot", {}, browser.context);
+    await session.call("press_key", INPUTS.press_key, browser.context);
+    await session.call("click", INPUTS.click, browser.context);
+    expect(browser.asked).toEqual([]);
+    expect(browser.sent.at(-1)?.command).toMatchObject({
+      action: "click",
+      page: { revision: "r-2", url: SEARCH_URL },
+    });
   });
 
   test("a website approval never lifts a sign-in hand-over", async () => {

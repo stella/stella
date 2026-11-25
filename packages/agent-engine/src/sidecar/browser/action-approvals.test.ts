@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 
+import { BROWSER_STEP_ASK_REASON } from "@stll/api-contract/browser-step-gate";
 import {
   CHAT_LOCAL_RUN_TOOL_NAMES,
   parseChatLocalRunToolCall,
@@ -17,6 +18,7 @@ const asking = (
 ): BrowserApprovalRequest => ({
   action: "click",
   name: "Send",
+  reason: site === null ? "no_site" : "site_not_allowed",
   role: "button",
   signal,
   site,
@@ -116,6 +118,7 @@ test("a key press and an option name the key and the option, and chat keeps the 
   const signal = new AbortController().signal;
   const element = {
     name: "Court",
+    reason: BROWSER_STEP_ASK_REASON.possibleSecret,
     role: "select",
     signal,
     site: null,
@@ -157,6 +160,7 @@ test("a key press and an option name the key and the option, and chat keeps the 
         url: "https://fixture-library.test/search",
         ...asked,
       },
+      why: BROWSER_STEP_ASK_REASON.possibleSecret,
     };
     expect(event.request.toolCall.input).toEqual(kept);
     // What the desktop sends is what chat keeps.
@@ -179,6 +183,7 @@ test("opening a page names its address, and chat keeps it as the step's address"
   const url = "https://fixture-library.test/search?q=notice";
   const decided = approvals.request({
     action: "open",
+    reason: "site_not_allowed",
     signal: new AbortController().signal,
     site: "https://fixture-library.test",
     url,
@@ -189,7 +194,11 @@ test("opening a page names its address, and chat keeps it as the step's address"
     throw new Error("Expected an approval request");
   }
   expect(event.request.reason).toBe(`Open ${url}`);
-  expect(event.request.toolCall.input).toEqual({ action: "open", url });
+  expect(event.request.toolCall.input).toEqual({
+    action: "open",
+    url,
+    why: "site_not_allowed",
+  });
   expect(
     parseChatLocalRunToolCall(
       CHAT_LOCAL_RUN_TOOL_NAMES.browser,
@@ -197,7 +206,7 @@ test("opening a page names its address, and chat keeps it as the step's address"
     ),
   ).toEqual({
     name: CHAT_LOCAL_RUN_TOOL_NAMES.browser,
-    input: { action: "open", url },
+    input: { action: "open", url, why: "site_not_allowed" },
   });
   // The website the answer may always allow is offered.
   expect(event.request.options.map(({ id }) => id)).toContain(

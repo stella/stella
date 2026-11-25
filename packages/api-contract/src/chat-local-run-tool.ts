@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { BROWSER_CONTROL_KEYS } from "./browser-control";
+import { BROWSER_STEP_ASK_REASONS } from "./browser-step-gate";
 import { CHAT_LOCAL_RUN_CALL_ID_MAX_LENGTH } from "./chat-local-run-step-output";
 
 /**
@@ -305,6 +306,16 @@ const browserAskedSchema = v.object({
   option: v.optional(shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.elementName)),
 });
 
+/**
+ * Why the member was asked to allow a browser step, as the shared gate
+ * said (`decideBrowserStep`). A question from a desktop that did not say
+ * keeps none.
+ */
+const browserAskedWhySchema = v.fallback(
+  v.optional(v.picklist(BROWSER_STEP_ASK_REASONS)),
+  undefined,
+);
+
 /** A browser step that stopped at a sign-in the member completes. */
 export const CHAT_LOCAL_RUN_NEEDS_MEMBER = "needs_member" as const;
 
@@ -349,11 +360,13 @@ export const chatLocalRunToolCallSchema = v.variant("name", [
       v.object({
         action: v.literal("open"),
         url: v.optional(shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.url)),
+        why: browserAskedWhySchema,
       }),
       v.object({
         action: v.picklist(BROWSER_ELEMENT_ACTIONS),
         // A question that does not parse leaves the step its kind.
         asked: v.fallback(v.optional(browserAskedSchema), undefined),
+        why: browserAskedWhySchema,
       }),
       v.object({ action: v.picklist(BROWSER_KIND_ACTIONS) }),
     ]),
