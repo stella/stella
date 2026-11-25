@@ -49,7 +49,7 @@ objc2-avf-audio = { version = "0.3", default-features = false, features = [
   "std",
 ] }
 objc2-core-foundation = { version = "0.3", default-features = false, features = ["CFBase", "CFDictionary", "CFMachPort", "CFNumber", "CFPreferences", "CFRunLoop", "CFString", "std"] }
-objc2-core-graphics = { version = "0.3", default-features = false, features = ["CGDirectDisplay", "CGDisplayConfiguration", "CGEvent", "CGEventSource", "CGEventTypes", "CGRemoteOperation", "CGSession", "objc2", "std"] }
+objc2-core-graphics = { version = "0.3", default-features = false, features = ["CGDirectDisplay", "CGDisplayConfiguration", "CGEvent", "CGEventSource", "CGEventTypes", "CGRemoteOperation", "CGSession", "libc", "objc2", "std"] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
   "NSBundle",
   "NSError",
