@@ -14,6 +14,7 @@ import fc from "fast-check";
 import * as v from "valibot";
 
 import { AI_FAILURE_CODES } from "@stll/api-contract/ai-errors";
+import { DESKTOP_RUNNER_REQUEST_EVENT } from "@stll/api-contract/chat-local-run-request";
 import {
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
@@ -910,5 +911,177 @@ describe("chunk stream invariants", () => {
         },
       ),
     );
+  });
+
+  test("every request a turn announces is closed once, before the turn's end, and none outlives it", async () => {
+    await assertProperty(
+      "every request a turn announces is closed once, before the turn's end, and none outlives it",
+      fc.asyncProperty(
+        fc.array(event, { maxLength: 25 }),
+        terminal,
+        fc.array(event, { maxLength: 3 }),
+        async (body, end, trailing) => {
+          const chunks = await localChunks(
+            end === null ? body : [...body, end, ...trailing],
+          );
+          // Open from its ask until its one end, which comes before the
+          // turn's own end.
+          const open = new Set<string>();
+          const terminalAt = chunks.length - 1;
+          for (const [index, chunk] of chunks.entries()) {
+            if (
+              chunk.type === EventType.RUN_FINISHED &&
+              chunk.outcome?.type === "interrupt"
+            ) {
+              for (const interrupt of chunk.outcome.interrupts) {
+                open.add(interrupt.id);
+              }
+            }
+            const report = requestReportOf(chunk);
+            if (report !== null) {
+              expect(index).toBeLessThan(terminalAt);
+              expect(open.has(report.requestId)).toBe(true);
+              open.delete(report.requestId);
+            }
+          }
+          expect([...open]).toEqual([]);
+        },
+      ),
+    );
+  });
+});
+
+/** The request end a chunk reports, if that is what it is. */
+const requestReportOf = (chunk: StreamChunk) =>
+  chunk.type === EventType.CUSTOM && chunk.name === DESKTOP_RUNNER_REQUEST_EVENT
+    ? v.parse(
+        v.looseObject({ requestId: v.string(), status: v.string() }),
+        chunk.value,
+      )
+    : null;
+
+describe("a request the run asks the member", () => {
+  const stepCall = {
+    id: "call-step",
+    name: "command_execution",
+    input: { command: "rm draft.md" },
+  } as const satisfies HarnessToolCall;
+  const asked: HarnessEvent = {
+    type: "approval.requested",
+    request: {
+      requestId: "request-1",
+      kind: "command",
+      toolCall: stepCall,
+      reason: null,
+      options: [
+        { id: "accept", decision: "approve" },
+        { id: "decline", decision: "deny" },
+      ],
+    },
+  };
+  const started: HarnessEvent = {
+    type: "session.started",
+    sessionId: harnessSessionId("native-requests"),
+    continuation: { type: "fresh" },
+  };
+  const reports = async (events: readonly HarnessEvent[]) =>
+    (await localChunks(events)).flatMap((chunk) => {
+      const report = requestReportOf(chunk);
+      return report === null ? [] : [report];
+    });
+
+  test("closes as its harness says: answered, stopped or withdrawn", async () => {
+    const closings = [
+      [undefined, { status: "resolved" }],
+      ["answered", { status: "resolved" }],
+      ["stopped", { status: "cancelled" }],
+      ["withdrawn", { status: "expired", expiry: "withdrawn" }],
+    ] as const;
+    for (const [closed, report] of closings) {
+      expect(
+        await reports([
+          started,
+          asked,
+          {
+            type: "interaction.resolved",
+            requestId: "request-1",
+            ...(closed === undefined ? {} : { closed }),
+          },
+          { type: "turn.completed", usage: null, boundary: null },
+        ]),
+      ).toEqual([{ requestId: "request-1", ...report }]);
+    }
+  });
+
+  test("still open at the turn's end, it closes by how the turn ended, and the run's work after it is kept", async () => {
+    const otherCall = {
+      id: "call-read",
+      name: "command_execution",
+      input: { command: "cat notes.md" },
+    } as const satisfies HarnessToolCall;
+    const ends = [
+      [
+        { type: "turn.completed", usage: null, boundary: null },
+        { status: "expired", expiry: "run_finished" },
+      ],
+      [{ type: "turn.interrupted" }, { status: "cancelled" }],
+      [
+        {
+          type: "turn.failed",
+          failure: {
+            type: "harness_exited",
+            message: "x",
+            exitCode: 1,
+            signal: null,
+          },
+        },
+        { status: "expired", expiry: "run_failed" },
+      ],
+    ] as const;
+    for (const [end, report] of ends) {
+      const chunks = await localChunks([
+        started,
+        asked,
+        // The harness goes on while the request waits.
+        { type: "tool.started", toolCall: otherCall },
+        {
+          type: "tool.completed",
+          toolCall: otherCall,
+          result: { content: "{}", status: "succeeded" },
+        },
+        { type: "text.completed", messageId: "m-1", text: "Final answer." },
+        end,
+        // Settled after the turn's end, as a browser step's question is.
+        { type: "interaction.resolved", requestId: "request-1" },
+      ]);
+      expect(
+        chunks.flatMap((chunk) => {
+          const closed = requestReportOf(chunk);
+          return closed === null ? [] : [closed];
+        }),
+      ).toEqual([{ requestId: "request-1", ...report }]);
+      const kept = fold(chunks).flatMap(({ parts }) => parts);
+      expect(kept).toContainEqual(
+        expect.objectContaining({ type: "text", content: "Final answer." }),
+      );
+      expect(kept).toContainEqual(
+        expect.objectContaining({
+          type: "tool-result",
+          toolCallId: otherCall.id,
+        }),
+      );
+    }
+  });
+
+  test("a request answered once is not closed again by the turn's end", async () => {
+    expect(
+      await reports([
+        started,
+        asked,
+        { type: "interaction.resolved", requestId: "request-1" },
+        { type: "interaction.resolved", requestId: "request-1" },
+        { type: "turn.completed", usage: null, boundary: null },
+      ]),
+    ).toEqual([{ requestId: "request-1", status: "resolved" }]);
   });
 });

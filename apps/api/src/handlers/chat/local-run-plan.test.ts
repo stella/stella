@@ -1,10 +1,10 @@
-import type { RunAgentResumeItem } from "@tanstack/ai";
 import { EventType } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { AI_FAILURE_CODES } from "@stll/api-contract/ai-errors";
+import { chatLocalRunRequestAnswerSchema } from "@stll/api-contract/chat-local-run-request";
 import {
   CHAT_CLOUD_RUN_TARGET,
   CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS,
@@ -20,7 +20,6 @@ import {
   DESKTOP_RUNNER_REASONING_EFFORTS,
 } from "@stll/api-contract/desktop-runner";
 
-import { approvalDecisionOf } from "@/api/handlers/chat/local-run-chunks";
 import {
   resolveChatLocalRun,
   type ResolveChatLocalRunOptions,
@@ -331,9 +330,9 @@ describe("a send for the member's computer, before anything is stored", () => {
     }
   });
 
-  test("a resumed turn answers its paused run wherever it is, without rereading the ceiling", async () => {
+  test("a resume of a turn on the member's computer is refused: its run's requests are answered beside the turn", async () => {
     let ceilingReads = 0;
-    const { resolved, picks } = await resolve({
+    const { resolved, picks, starts } = await resolve({
       resumesPausedRun: true,
       picked: { type: "no_computer" },
       runTarget: { ...LOCAL, approvals: "full_auto" },
@@ -342,8 +341,16 @@ describe("a send for the member's computer, before anything is stored", () => {
         return await Promise.resolve(Result.ok("ask"));
       },
     });
-    expect(resolved.isOk() && resolved.value?.harness).toBe("codex");
+    expect(refusalCodeOf(resolved)).toBe(
+      CHAT_LOCAL_RUN_REFUSAL.conflictingRunMode,
+    );
+    expect(
+      resolved.isErr() && HandlerError.is(resolved.error)
+        ? resolved.error.status
+        : null,
+    ).toBe(400);
     expect(picks).toEqual([]);
+    expect(starts).toEqual([]);
     expect(ceilingReads).toBe(0);
   });
 
@@ -391,7 +398,7 @@ describe("a send for the member's computer, before anything is stored", () => {
     ]);
   });
 
-  test("a resumed turn's run keeps the approvals it started with, without rereading them", async () => {
+  test("a refused resume reads no website approvals", async () => {
     let reads = 0;
     const { resolved } = await resolve({
       resumesPausedRun: true,
@@ -400,7 +407,9 @@ describe("a send for the member's computer, before anything is stored", () => {
         return await Promise.resolve(Result.ok([]));
       },
     });
-    expect(resolved.isOk()).toBe(true);
+    expect(refusalCodeOf(resolved)).toBe(
+      CHAT_LOCAL_RUN_REFUSAL.conflictingRunMode,
+    );
     expect(reads).toBe(0);
   });
 
@@ -577,48 +586,26 @@ describe("an accepted turn whose computer cannot take it", () => {
   });
 });
 
-describe("answering a paused run's approval", () => {
-  const answers = [
-    [{ interruptId: "r", status: "resolved", payload: true }, "approve"],
-    [{ interruptId: "r", status: "resolved", payload: false }, "deny"],
-    [
-      { interruptId: "r", status: "resolved", payload: { approved: true } },
-      "approve",
-    ],
-    [
-      {
-        interruptId: "r",
-        status: "resolved",
-        payload: { approved: true, scope: "session" },
-      },
-      "approve_for_session",
-    ],
-    [
-      {
-        interruptId: "r",
-        status: "resolved",
-        payload: { approved: false, scope: "session" },
-      },
-      "deny",
-    ],
-    [{ interruptId: "r", status: "resolved", payload: "yes" }, "deny"],
-    [{ interruptId: "r", status: "resolved" }, "deny"],
-    [{ interruptId: "r", status: "cancelled" }, "deny"],
-  ] as const satisfies readonly (readonly [
-    RunAgentResumeItem,
-    (typeof DESKTOP_RUNNER_APPROVAL_DECISIONS)[number],
-  ])[];
-
-  test("each chat answer maps to one runner decision, and anything unclear denies", () => {
-    for (const [item, decision] of answers) {
-      expect(approvalDecisionOf(item)).toBe(decision);
+describe("answering a run's approval beside its turn", () => {
+  test("each runner decision is an answer the member can send, and nothing else is", () => {
+    for (const decision of DESKTOP_RUNNER_APPROVAL_DECISIONS) {
+      expect(
+        v.parse(chatLocalRunRequestAnswerSchema, {
+          type: "approval",
+          decision,
+        }),
+      ).toEqual({ type: "approval", decision });
     }
-  });
-
-  test("every runner decision is reachable from a chat answer", () => {
-    expect(new Set(answers.map(([, decision]) => decision)).size).toBe(
-      DESKTOP_RUNNER_APPROVAL_DECISIONS.length,
-    );
+    for (const unclear of [
+      { type: "approval", decision: "yes" },
+      { type: "approval", decision: true },
+      { type: "approval" },
+      { approved: true },
+    ]) {
+      expect(
+        v.safeParse(chatLocalRunRequestAnswerSchema, unclear).success,
+      ).toBe(false);
+    }
   });
 });
 

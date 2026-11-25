@@ -60,6 +60,7 @@ import readChatToolGrantCoverage from "@/api/handlers/chat/tool-grants/coverage"
 import createChatToolGrant from "@/api/handlers/chat/tool-grants/create";
 import deleteChatToolGrant from "@/api/handlers/chat/tool-grants/delete";
 import listChatToolGrants from "@/api/handlers/chat/tool-grants/list";
+import answerTurnRequest from "@/api/handlers/chat/turns/answer-request";
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import steerTurn from "@/api/handlers/chat/turns/steer";
@@ -132,6 +133,9 @@ export const chatRoute = routes(
     "/threads/:threadId/turns/:turnId/join": { GET: joinChatTurn },
     "/threads/:threadId/turns/:turnId/cancel": { POST: cancelTurn },
     "/threads/:threadId/turns/:turnId/steer": { POST: steerTurn },
+    "/threads/:threadId/turns/:turnId/requests/:requestId/answer": {
+      POST: answerTurnRequest,
+    },
     "/threads/:threadId/messages/:messageId/local-files/undo": {
       GET: readLocalFilesUndo,
       POST: undoLocalFiles,

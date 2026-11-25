@@ -143,6 +143,13 @@ const WEB_LOCAL_RUN_KEYS = {
   sessionNotResumed: ["chat", "localRun", "sessionNotResumed"],
   steered: ["chat", "tool", "user_message"],
   ranOnModel: ["chat", "ranOnModel"],
+  request: {
+    cancelled: ["chat", "localRun", "request", "cancelled"],
+    runFailed: ["chat", "localRun", "request", "runFailed"],
+    runFinished: ["chat", "localRun", "request", "runFinished"],
+    runLost: ["chat", "localRun", "request", "runLost"],
+    withdrawn: ["chat", "localRun", "request", "withdrawn"],
+  },
   desktopSettingsSteps: ["chat", "localRun", "desktopSettingsSteps"],
   errorLimitResetsAt: ["chat", "localRun", "errorLimitResetsAt"],
   limitReminderNotify: ["chat", "localRun", "limitReminderNotify"],

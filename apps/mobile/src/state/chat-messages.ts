@@ -8,6 +8,11 @@ import {
 } from "@stll/api-contract/chat-context-notice";
 import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import {
+  chatLocalRunRequestsOf,
+  type LocalRunRequestUnanswered,
+  unansweredLocalRunRequest,
+} from "@stll/api-contract/chat-local-run-request";
+import {
   CHAT_RUN_TARGET_KIND,
   chatLocalRunReroutedModel,
   type ChatRunTarget,
@@ -142,6 +147,11 @@ export type ChatEntry = {
    */
   readonly ranOnModel?: string;
   /**
+   * Why steps the run on the person's computer asked about went on without
+   * their answer, once per reason; absent when none did.
+   */
+  readonly unansweredRequests?: readonly LocalRunRequestUnanswered[];
+  /**
    * A stored message of the person's: its parts as the thread stores them,
    * which an edit sends back. Absent on an answer and on a message still
    * being sent from here.
@@ -209,6 +219,21 @@ export type ChatMessagesPage = {
 type StoredMessage = v.InferOutput<typeof messageSchema>;
 
 /**
+ * Why requests a message's run asked went on without the person's answer,
+ * once per reason, as the web's notice says it. A request still pending
+ * says nothing: its run may still take the answer.
+ */
+const localRunRequestsUnanswered = (
+  metadata: unknown,
+): readonly LocalRunRequestUnanswered[] => [
+  ...new Set(
+    chatLocalRunRequestsOf(metadata).flatMap(
+      (request) => unansweredLocalRunRequest(request, true) ?? [],
+    ),
+  ),
+];
+
+/**
  * What a phone can show of one stored message. System messages and messages
  * with nothing to draw are left out; a failed answer always draws, as the
  * reason it failed.
@@ -234,6 +259,10 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
     message.role === "assistant"
       ? chatLocalRunReroutedModel(message.metadata)
       : null;
+  const unansweredRequests =
+    message.role === "assistant"
+      ? localRunRequestsUnanswered(message.metadata)
+      : [];
   if (
     text === "" &&
     blocks.length === 0 &&
@@ -258,6 +287,7 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
     ...(failure === undefined ? {} : { failure }),
     ...(limitResetsAt === undefined ? {} : { limitResetsAt }),
     ...(ranOnModel === null ? {} : { ranOnModel }),
+    ...(unansweredRequests.length === 0 ? {} : { unansweredRequests }),
     ...(message.role === "user" ? { parts: message.parts } : {}),
   };
 };

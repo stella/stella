@@ -273,6 +273,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/desktop-runner/doorbell.ts",
     "apps/api/src/lib/desktop-runner/feature-access.ts",
     "apps/api/src/lib/desktop-runner/gateway.ts",
+    "apps/api/src/lib/desktop-runner/request-answers.ts",
     "apps/api/src/lib/desktop-runner/runtime.ts",
     "apps/api/src/lib/desktop-runner/sealed-answers.ts",
     "apps/api/src/lib/desktop-runner/session.ts",

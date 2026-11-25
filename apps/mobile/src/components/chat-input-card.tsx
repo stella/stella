@@ -597,7 +597,7 @@ const ApprovalRow = ({
  * them, and a secret typed hidden. Submit continues the agent's turn with
  * the answers; Dismiss stops it.
  */
-const QuestionCard = ({
+export const QuestionCard = ({
   busy,
   onAnswer,
   pause,

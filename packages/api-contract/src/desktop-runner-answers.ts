@@ -1,5 +1,12 @@
 import * as v from "valibot";
 
+/** The answers an approval takes, on the runner protocol and in chat alike. */
+export const DESKTOP_RUNNER_APPROVAL_DECISIONS = [
+  "approve",
+  "approve_for_session",
+  "deny",
+] as const;
+
 /**
  * What one `run.answer` may carry. A run asks a blocking question as a chunk
  * whose `RUN_FINISHED` interrupt has `metadata.kind: "question"`; the answers

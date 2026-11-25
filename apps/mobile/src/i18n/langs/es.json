@@ -191,6 +191,13 @@
       },
       "patternInPath": "{pattern} en {path}",
       "ranOnModel": "Ejecutado con {model}",
+      "request": {
+        "cancelled": "Sin respuesta: esta respuesta se detuvo.",
+        "runFailed": "Sin respuesta: el agente se detuvo con un error antes de este paso.",
+        "runFinished": "No hace falta: el agente terminó sin este paso.",
+        "runLost": "Sin respuesta: tu ordenador dejó de procesar esta respuesta.",
+        "withdrawn": "Ya no hace falta: el agente siguió sin este paso."
+      },
       "sessionNotResumed": "El agente de programación de tu ordenador no pudo retomar donde lo había dejado, así que continuó a partir de los mensajes de este chat.",
       "status": {
         "failed": "Falló",

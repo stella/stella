@@ -191,6 +191,13 @@
       },
       "patternInPath": "{pattern} ({path})",
       "ranOnModel": "Izpildīts ar modeli {model}",
+      "request": {
+        "cancelled": "Nav atbildēts: šī atbilde tika apturēta.",
+        "runFailed": "Nav atbildēts: aģents apstājās ar kļūdu pirms šī soļa.",
+        "runFinished": "Nav vajadzīgs: aģents pabeidza bez šī soļa.",
+        "runLost": "Nav atbildēts: jūsu dators pārtrauca apstrādāt šo atbildi.",
+        "withdrawn": "Vairs nav vajadzīgs: aģents turpināja bez šī soļa."
+      },
       "sessionNotResumed": "Programmēšanas aģents jūsu datorā nevarēja atsākt no vietas, kur apstājās, tāpēc tas turpināja darbu, balstoties uz šīs tērzēšanas ziņām.",
       "status": {
         "failed": "Neizdevās",

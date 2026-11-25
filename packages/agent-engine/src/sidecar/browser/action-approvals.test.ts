@@ -226,9 +226,13 @@ test("the question is withdrawn when the agent's call ends", async () => {
   const decided = approvals.request(asking(call.signal));
   const asked = await stream.next();
   const requestId = requestIdOf(asked);
+  expect(approvals.asked(requestId)).toBe(true);
   call.abort();
   expect((await decided).decision).toBe(APPROVAL_DECISION.deny);
   expect(approvals.answer(requestId, "approve")).toBe(false);
+  // Still one of these questions: a late answer to it reaches no harness.
+  expect(approvals.asked(requestId)).toBe(true);
+  expect(approvals.asked("call-of-the-harness")).toBe(false);
   await stream.next();
   expect((await stream.next()).value).toMatchObject({
     type: "tool.completed",

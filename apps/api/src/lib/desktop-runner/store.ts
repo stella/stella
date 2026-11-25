@@ -22,6 +22,11 @@ import * as v from "valibot";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import {
+  DESKTOP_RUNNER_REQUEST_EVENT,
+  type DesktopRunnerRequestEvent,
+  desktopRunnerRequestEventSchema,
+} from "@stll/api-contract/chat-local-run-request";
+import {
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
   DESKTOP_RUNNER_HARNESS_STATE,
   DESKTOP_RUNNER_MAX_BACKGROUND_TASKS,
@@ -2588,6 +2593,7 @@ export type ChatRunForRequest = {
   readonly runId: string;
   readonly harness: AgentHarness;
   readonly state: DesktopRunnerRunState;
+  readonly outcome: (typeof runs.$inferSelect)["outcome"];
   /** Where the chat turn stopped reading the run. */
   readonly chatReadSeq: number;
   /** The stored message that asked: an approval request or a question's pause. */
@@ -2611,6 +2617,7 @@ export const readChatRunForRequest = async (
         runId: runs.runId,
         harness: runs.harness,
         state: runs.state,
+        outcome: runs.outcome,
         chatReadSeq: runs.chatReadSeq,
         askedBy: desktopRunnerEvents.type,
         request: desktopRunnerEvents.message,
@@ -2633,6 +2640,80 @@ export const readChatRunForRequest = async (
       )
       .limit(1)
   ).at(0) ?? null;
+
+/**
+ * How run `runId` reported request `requestId` closed
+ * (`DESKTOP_RUNNER_REQUEST_EVENT`), or `null` while it reported nothing:
+ * the request is open as far as the run said. The run is read only for its
+ * owner, as the request was.
+ */
+export const readRunRequestClosure = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  {
+    owner,
+    runId,
+    requestId,
+  }: { owner: RunOwner; runId: string; requestId: string },
+): Promise<DesktopRunnerRequestEvent | null> => {
+  const [closure] = await db
+    .select({ message: desktopRunnerEvents.message })
+    .from(desktopRunnerEvents)
+    .innerJoin(runs, eq(runs.runId, desktopRunnerEvents.runId))
+    .where(
+      and(
+        eq(desktopRunnerEvents.runId, runId),
+        eq(runs.userId, owner.userId),
+        eq(runs.organizationId, owner.organizationId),
+        eq(desktopRunnerEvents.type, DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent),
+        sql`${desktopRunnerEvents.message} -> 'chunk' ->> 'name' = ${DESKTOP_RUNNER_REQUEST_EVENT}`,
+        sql`${desktopRunnerEvents.message} -> 'chunk' -> 'value' ->> 'requestId' = ${requestId}`,
+      ),
+    )
+    .orderBy(asc(desktopRunnerEvents.seq))
+    .limit(1);
+  if (closure === undefined) {
+    return null;
+  }
+  const parsed = v.safeParse(
+    v.object({
+      chunk: v.object({ value: desktopRunnerRequestEventSchema }),
+    }),
+    closure.message,
+  );
+  return parsed.success ? parsed.output.chunk.value : null;
+};
+
+/**
+ * Whether an answer to request `requestId` of run `runId` is queued: an
+ * approval's decision or a question's answers, keyed by the request.
+ */
+export const readRunRequestAnswered = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  {
+    owner,
+    runId,
+    requestId,
+  }: { owner: RunOwner; runId: string; requestId: string },
+): Promise<boolean> => {
+  const [answer] = await db
+    .select({ id: desktopRunnerCommands.id })
+    .from(desktopRunnerCommands)
+    .innerJoin(runs, eq(runs.runId, desktopRunnerCommands.runId))
+    .where(
+      and(
+        eq(desktopRunnerCommands.runId, runId),
+        eq(runs.userId, owner.userId),
+        eq(runs.organizationId, owner.organizationId),
+        inArray(desktopRunnerCommands.kind, [
+          DESKTOP_RUNNER_SERVER_MESSAGE.runApproval,
+          DESKTOP_RUNNER_SERVER_MESSAGE.runAnswer,
+        ]),
+        eq(desktopRunnerCommands.commandKey, requestId),
+      ),
+    )
+    .limit(1);
+  return answer !== undefined;
+};
 
 export type ChatTurnRunOptions = { owner: RunOwner; chat: ChatRunBinding };
 

@@ -12,6 +12,7 @@ import {
 } from "@stll/api-contract/chat-local-run-step-content";
 import { desktopVersionSchema } from "@stll/api-contract/desktop-presence";
 import type {
+  DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_RUN_OUTCOMES,
   DesktopRunnerCheckpointEvent,
 } from "@stll/api-contract/desktop-runner";
@@ -296,6 +297,8 @@ const RUN_STOP = {
 
 type RunStop = (typeof RUN_STOP)[keyof typeof RUN_STOP];
 
+type ApprovalDecision = (typeof DESKTOP_RUNNER_APPROVAL_DECISIONS)[number];
+
 type HeldRun = {
   /** The run's folder, resolved: no restore touches it while the run is held. */
   readonly workspaceDir: string;
@@ -311,6 +314,11 @@ type HeldRun = {
    * approvals and blocking questions.
    */
   requests: Map<string, string>;
+  /**
+   * The runner request ids the member's answer was handed over for, with
+   * the decision an approval's answer gave (`null` for a question's).
+   */
+  answered: Map<string, ApprovalDecision | null>;
   /** The run's `outputs/` folder when it started; `null` until it opened. */
   outputs: OutputSnapshot | null;
   /** Cut by a stop, so sharing a stopped run's files ends at once. */
@@ -535,6 +543,32 @@ const runnerRequestIdOf = (
     }
   }
   return nativeId;
+};
+
+/**
+ * A closed request of `run` under its runner id, saying how it closed:
+ * answered when the member's answer reached it, stopped when the run's turn
+ * was stopped first, else withdrawn by the harness while the turn went on.
+ */
+const resolvedInteraction = (
+  run: Pick<HeldRun, "answered" | "requests" | "stop">,
+  event: Extract<HarnessEvent, { type: "interaction.resolved" }>,
+): HarnessEvent => {
+  const requestId = runnerRequestIdOf(run.requests, event.requestId);
+  const decision = run.answered.get(requestId);
+  if (decision === undefined) {
+    return {
+      ...event,
+      requestId,
+      closed: run.stop === RUN_STOP.none ? "withdrawn" : "stopped",
+    };
+  }
+  return {
+    ...event,
+    requestId,
+    closed: "answered",
+    ...(decision === null ? {} : { decision }),
+  };
 };
 
 /** The event stream for a run that ends before its harness starts. */
@@ -779,17 +813,24 @@ export class SidecarHost {
         this.withRun(message, (run) => {
           // A browser tool's question about one of its steps is answered here.
           const native = run.requests.get(message.requestId);
-          if (
-            native !== undefined &&
-            run.approvals.answer(native, message.decision)
-          ) {
+          if (native !== undefined && run.approvals.asked(native)) {
+            // A question withdrawn before its answer came keeps reading as
+            // withdrawn: the answer records nothing and reaches nothing.
+            run.approvals.answer(native, message.decision, () => {
+              run.answered.set(message.requestId, message.decision);
+            });
             return;
           }
-          this.respond(run, message.requestId, (requestId) => ({
-            type: "approval",
-            requestId,
-            decision: message.decision,
-          }));
+          this.respond(
+            run,
+            message.requestId,
+            (requestId) => ({
+              type: "approval",
+              requestId,
+              decision: message.decision,
+            }),
+            message.decision,
+          );
         });
         return;
       case "run.answer":
@@ -998,6 +1039,7 @@ export class SidecarHost {
       stop: this.stopping ? RUN_STOP.cancel : RUN_STOP.none,
       stopCopying: new AbortController(),
       requests: new Map(),
+      answered: new Map(),
       outputs: null,
       outputSharing: new AbortController(),
       checkpoint: null,
@@ -1234,6 +1276,7 @@ export class SidecarHost {
     run: HeldRun,
     requestId: string,
     response: (nativeId: string) => HarnessInteractionResponse,
+    decision: ApprovalDecision | null = null,
   ) {
     const native = run.requests.get(requestId);
     if (native === undefined || run.turn === null) {
@@ -1241,12 +1284,23 @@ export class SidecarHost {
       return;
     }
     const turn = run.turn;
+    // Marked before the harness hears it: the harness may close the
+    // request the moment it takes the answer. An earlier answer's mark
+    // stands; a repeat never rewrites the decision that reached it.
+    const marks = !run.answered.has(requestId);
+    if (marks) {
+      run.answered.set(requestId, decision);
+    }
     const answer = async () => {
       const answered = await turn.respond(response(native));
       if (Result.isError(answered)) {
         this.options.log(
           `the harness refused a response: ${answered.error.reason}`,
         );
+        // Refused: the request closes as the harness says, not answered.
+        if (marks) {
+          run.answered.delete(requestId);
+        }
       }
     };
     this.detached(answer(), "sidecar.respond");
@@ -1597,10 +1651,7 @@ export class SidecarHost {
             break;
           }
           case "interaction.resolved":
-            yield {
-              ...event,
-              requestId: runnerRequestIdOf(run.requests, event.requestId),
-            };
+            yield resolvedInteraction(run, event);
             break;
           case "turn.completed":
             outcome.value = "completed";

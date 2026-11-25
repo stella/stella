@@ -1,9 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
-import * as v from "valibot";
 
-import { localRunQuestionPauseOf } from "@stll/api-contract/chat-local-run-question";
-import { chatResumeSnapshotSchema } from "@stll/chat/resume-contract";
+import { pendingLocalRunQuestionOf } from "@stll/api-contract/chat-local-run-request";
 
 import {
   isChatTurnInFlight,
@@ -136,24 +134,15 @@ const seedSignalsEqual = (
 /**
  * What the stored thread still has open for the member, under the keys a
  * runtime's own wait reads as: the awaited parts of its latest answer, and
- * the question its parked turn's resume snapshot holds.
+ * the question its run still waits on (`pendingLocalRunQuestionOf`).
  */
 const storedMemberWaitKeys = (
   messages: readonly PersistedChatMessage[],
-): readonly string[] => {
-  const resume = v.safeParse(
-    chatResumeSnapshotSchema,
-    messages.at(-1)?.metadata?.resumeSnapshot,
-  );
-  const interrupts = resume.success
-    ? resume.output.pendingInterrupts
-    : undefined;
-  return openMemberWaitKeys({
-    localRunQuestion:
-      interrupts === undefined ? null : localRunQuestionPauseOf(interrupts),
+): readonly string[] =>
+  openMemberWaitKeys({
+    localRunQuestion: pendingLocalRunQuestionOf(messages.at(-1)?.metadata),
     messages,
   });
-};
 
 const CHAT_RUNTIME_RECONCILE_DISPOSITION = {
   idle: "idle",

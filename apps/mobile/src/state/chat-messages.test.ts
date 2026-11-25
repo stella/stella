@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY,
+  type ChatLocalRunRequest,
+} from "@stll/api-contract/chat-local-run-request";
+
 import type { Fetch } from "@/connection/http";
 import {
   createAccessTokenSource,
@@ -297,6 +302,60 @@ describe("what a thread shows of a stored message", () => {
     ).toBeUndefined();
     expect(answer({ localRunModel: { ran: "gpt-5.4" } })).toBeUndefined();
     expect(answer(undefined)).toBeUndefined();
+  });
+
+  test("says once per reason why steps the run asked about went on unanswered, and nothing for one answered or waiting", () => {
+    const pending = {
+      requestId: "00000000-0000-7000-8000-0000000000b1",
+      toolCallId: "local:run-1:item_cmd",
+      status: "pending",
+      ask: {
+        kind: "approval",
+        message: "Run the formatter over the draft",
+        reason: null,
+        toolName: "command_execution",
+        input: { command: "format draft.txt" },
+        approvalKind: null,
+        decisions: ["approve", "deny"],
+      },
+    } as const satisfies ChatLocalRunRequest;
+    const answer = (requests: readonly ChatLocalRunRequest[]) =>
+      toChatEntry({
+        id: "m7",
+        role: "assistant",
+        createdAt: "2026-10-20T10:00:00.000Z",
+        parts: [{ type: "text", content: "Done." }],
+        metadata: { [CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY]: requests },
+      })?.unansweredRequests;
+    const finished = (requestId: string) =>
+      ({
+        ...pending,
+        requestId,
+        status: "expired",
+        expiry: "run_finished",
+      }) as const satisfies ChatLocalRunRequest;
+    expect(
+      answer([
+        finished("00000000-0000-7000-8000-0000000000b2"),
+        finished("00000000-0000-7000-8000-0000000000b3"),
+        {
+          ...pending,
+          requestId: "00000000-0000-7000-8000-0000000000b4",
+          status: "cancelled",
+        },
+      ]),
+    ).toEqual(["runFinished", "cancelled"]);
+    expect(
+      answer([
+        pending,
+        {
+          ...pending,
+          requestId: "00000000-0000-7000-8000-0000000000b5",
+          status: "resolved",
+          decision: "approve",
+        },
+      ]),
+    ).toBeUndefined();
   });
 
   test("leaves out system messages and messages with nothing to draw", () => {

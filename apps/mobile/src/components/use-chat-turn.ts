@@ -5,6 +5,10 @@ import { randomUUID } from "expo-crypto";
 import { fetch as streamingFetch } from "expo/fetch";
 import { AppState } from "react-native";
 
+import type {
+  ChatLocalRunRequestAnswer,
+  ChatLocalRunRequestAnswerOutcome,
+} from "@stll/api-contract/chat-local-run-request";
 import {
   CHAT_LOCAL_RUN_STEER_SOURCE,
   type ChatLocalRunSteerRefusal,
@@ -41,6 +45,7 @@ import type {
 import { enqueueChatMessage, queuesInstead } from "@/state/chat-queue";
 import type { QueuedChatItem } from "@/state/chat-queue";
 import {
+  answerChatTurnRequest,
   applyChatEvent,
   cancelChatTurn,
   continueChatTurn,
@@ -325,6 +330,7 @@ export const useChatTurn = ({
   };
 
   const steers = useTurnSteer({ signedOut, thread, turn });
+  const answerRequest = requestAnswerOf({ signedOut, thread, turn });
 
   const declineAndSteer = declineAndSteerOf({
     answer,
@@ -371,6 +377,7 @@ export const useChatTurn = ({
 
   return {
     answer,
+    answerRequest,
     /** The server named the running turn. */
     accepted: turn.turnId !== undefined,
     busy: turn.busy,
@@ -635,6 +642,43 @@ function useTurnQueue({
     return true;
   };
   return { enqueue, queue };
+}
+
+/**
+ * Answers what the run of the turn answering now asked, beside the turn:
+ * the outcome, or `null` when no turn of this phone runs or the request
+ * failed (the card then lets the person answer again).
+ */
+function requestAnswerOf({
+  signedOut,
+  thread,
+  turn,
+}: {
+  signedOut: (error: ApiError) => boolean;
+  thread: { source: AccessTokenSource; threadId: string };
+  turn: ReturnType<typeof useLiveTurn>;
+}) {
+  return async (
+    requestId: string,
+    reply: ChatLocalRunRequestAnswer,
+  ): Promise<ChatLocalRunRequestAnswerOutcome | null> => {
+    const { turnId } = turn;
+    if (turnId === undefined) {
+      return null;
+    }
+    const answered = await answerChatTurnRequest({
+      ...thread,
+      answer: reply,
+      fetch,
+      requestId,
+      turnId,
+    });
+    if (Result.isError(answered)) {
+      signedOut(answered.error);
+      return null;
+    }
+    return answered.value;
+  };
 }
 
 /**
@@ -911,7 +955,6 @@ function turnStreams({
           turnId: known,
         });
         await settle(opened, read);
-        return;
       }
     }
   };

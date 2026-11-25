@@ -106,6 +106,7 @@ import {
   terminalizeUnsettledCreateDocumentDraft,
 } from "@/components/chat/create-document-draft.logic";
 import { openEntityInInspector } from "@/components/chat/entity-open";
+import { pendingLocalRunApprovalIds } from "@/components/chat/local-run-request.logic";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { buildEditedUserMessage } from "@/components/chat/user-message-edit.logic";
@@ -1150,7 +1151,16 @@ export const useChatSession = ({
             }
             return queued;
           }
-          if (state.type === "waiting_on_member") {
+          // A run on the member's computer that waits only on approvals
+          // beside its running turn takes the message now: what they ask is
+          // declined below, and the turn never pauses to resume.
+          const localApprovalIds = pendingLocalRunApprovalIds(
+            chat.getSnapshot().messages,
+          );
+          if (
+            state.type === "waiting_on_member" &&
+            localApprovalIds.length === 0
+          ) {
             // The shown approval is declined, explicitly, as the member's
             // own Deny would, so the turn goes on and is handed the message
             // once it runs again. A question is never dismissed for it:
@@ -1184,8 +1194,19 @@ export const useChatSession = ({
           const queued = await enqueueMessage(message, options);
           if (queued.kind === "sent") {
             const { item } = queued;
+            // A step the run waits on the member's approval for is declined,
+            // explicitly, as the member's own Deny would: the message goes
+            // to the run instead of that step.
+            // The decision goes first: the run hears it, then the message.
+            const declined = Promise.all(
+              localApprovalIds.map(
+                async (requestId) =>
+                  await resolveToolApproval({ id: requestId, approved: false }),
+              ),
+            );
             detached(
               (async () => {
+                await declined;
                 // The message as this send queued it, never the cached
                 // queue's read of it (`enqueueAndCacheChatMessage`).
                 const outcome = await steerQueuedMessage({
@@ -2484,12 +2505,11 @@ export const useChatSession = ({
         const outcome = await steerQueuedMessage(steered);
         switch (outcome.type) {
           case "steered":
-            return;
+          case "unsettled":
+            break;
           case "refused":
             notifySteerRefused(outcome.reason);
-            return;
-          case "unsettled":
-            return;
+            break;
           default:
             outcome satisfies never;
             panic("Unhandled steer outcome");

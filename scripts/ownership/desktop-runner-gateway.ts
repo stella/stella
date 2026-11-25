@@ -57,6 +57,11 @@ export default {
           "Queues a message for the open run of the member's running chat turn through the control.",
       },
       {
+        path: "apps/api/src/handlers/chat/turns/answer-request.ts",
+        reason:
+          "Hands the member's answer to what the open run of their running chat turn asked, through the control.",
+      },
+      {
         path: "apps/api/src/handlers/chat/local-folder-approval.ts",
         reason:
           "Records the member's OK for turns to work in a folder linked on one of their computers.",

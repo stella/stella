@@ -159,7 +159,7 @@ describe("a turn on the member's computer under the organization's ceiling", () 
     expect(await send("plan")).toBe("accepted");
   });
 
-  test("a lowered ceiling holds the next turn, while a paused run keeps the mode it started with", async () => {
+  test("a lowered ceiling holds the next turn, and a resume of a run on the computer is refused", async () => {
     await setCeiling("full_auto");
     expect(await send("full_auto")).toBe("accepted");
     await setCeiling("ask");
@@ -167,8 +167,10 @@ describe("a turn on the member's computer under the organization's ceiling", () 
       CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit,
     );
     expect(await send("auto")).toBe(CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit);
+    // A run on the computer is never resumed: its requests are answered
+    // beside its running turn.
     expect(await send("full_auto", { resumesPausedRun: true })).toBe(
-      "accepted",
+      CHAT_LOCAL_RUN_REFUSAL.conflictingRunMode,
     );
     // Raised again, the same mode runs on the next turn.
     await setCeiling("full_auto");

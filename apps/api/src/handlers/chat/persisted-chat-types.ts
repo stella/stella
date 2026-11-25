@@ -12,6 +12,7 @@ import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission
 import type { ChatTurnTiming } from "@stll/api-contract/chat";
 import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import type { ChatLocalFilesUndone } from "@stll/api-contract/chat-local-files-undo";
+import type { ChatLocalRunRequest } from "@stll/api-contract/chat-local-run-request";
 import type {
   ChatLocalRunContext,
   ChatLocalRunModel,
@@ -162,6 +163,10 @@ export type ChatMessageMetadata = {
    * they could not be shared. Incoming client metadata deliberately does not
    * accept this field. */
   localRunFilesNotShared?: string[] | undefined;
+  /** Server-owned: what the answer's local run asked the member, each in
+   * its latest state (`chat-local-run-request.ts`). Incoming client
+   * metadata deliberately does not accept this field. */
+  localRunRequests?: ChatLocalRunRequest[] | undefined;
   docxEditPreferences?:
     | {
         docxEditRepresentation?: "tracked-changes" | "direct" | undefined;

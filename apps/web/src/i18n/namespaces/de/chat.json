@@ -491,6 +491,13 @@
       "refusalReasoningEffortUnavailable": "Der Coding-Agent auf Ihrem Computer bietet diesen Denkaufwand für das Modell nicht an. Wählen Sie unter „Denkaufwand“ einen anderen.",
       "refusalTooLarge": "Diese Unterhaltung ist zu lang, um sie an Ihren Computer zu übergeben. Starten Sie einen neuen Chat, um sie dort auszuführen.",
       "refusalUnavailable": "Chats auf Ihrem Computer auszuführen ist für Ihr Konto nicht verfügbar.",
+      "request": {
+        "cancelled": "Nicht beantwortet: Diese Antwort wurde angehalten.",
+        "runFailed": "Nicht beantwortet: Der Agent wurde vor diesem Schritt mit einem Fehler beendet.",
+        "runFinished": "Nicht nötig: Der Agent ist ohne diesen Schritt fertig geworden.",
+        "runLost": "Nicht beantwortet: Ihr Computer hat die Bearbeitung dieser Antwort beendet.",
+        "withdrawn": "Nicht mehr nötig: Der Agent hat ohne diesen Schritt weitergearbeitet."
+      },
       "selectionStateLabel": "{selection} · {state}",
       "sessionNotResumed": "Der Coding-Agent auf Ihrem Computer konnte nicht dort weitermachen, wo er aufgehört hatte. Er hat daher anhand der Nachrichten in diesem Chat weitergearbeitet.",
       "stateLimitUntil": "Limit erreicht bis {time}",

@@ -341,7 +341,6 @@ export const FAILURE_TAGS = [
   "ListReplacementError",
   "ListVerificationAccessRevokedError",
   "LocalModuleLoadError",
-  "LocalRunAnswerRefused",
   "LocalRunOutputRefused",
   "LocalRunSteerUnknown",
   "LocalizedAppError",

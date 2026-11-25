@@ -191,6 +191,13 @@
       },
       "patternInPath": "{pattern} in {path}",
       "ranOnModel": "Ran on {model}",
+      "request": {
+        "cancelled": "Not answered: this turn was stopped.",
+        "runFailed": "Not answered: the agent stopped with an error before this step.",
+        "runFinished": "Not needed: the agent finished without this step.",
+        "runLost": "Not answered: your computer stopped running this turn.",
+        "withdrawn": "No longer needed: the agent went on without this step."
+      },
       "sessionNotResumed": "The coding agent on your computer could not pick up where it left off, so it continued from the messages in this chat.",
       "status": {
         "failed": "Failed",

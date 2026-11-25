@@ -536,6 +536,11 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "stream",
   },
+  // An answer is keyed by its request: a repeat replays its receipt.
+  "POST /v1/chat/threads/:threadId/turns/:turnId/requests/:requestId/answer": {
+    type: "non-replay",
+    reason: "stream",
+  },
   // A repeat answers the undo of the same checkpoint that is queued, sent or done.
   "POST /v1/chat/threads/:threadId/messages/:messageId/local-files/undo": {
     type: "non-replay",

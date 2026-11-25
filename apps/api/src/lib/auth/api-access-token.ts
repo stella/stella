@@ -434,6 +434,15 @@ export const API_OAUTH_ROUTES = {
     handler: "apps/api/src/handlers/chat/turns/steer.ts",
     uncataloged: "realtime_stream",
   },
+  // What the member's own computer asks them is answered only by the phone
+  // app's token: the Outlook add-in also holds the chat scope, and allowing
+  // a step on the member's computer is not part of what it does.
+  "POST /v1/chat/threads/:threadId/turns/:turnId/requests/:requestId/answer": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/turns/answer-request.ts",
+    uncataloged: "realtime_stream",
+    client: "mobile",
+  },
   // Editing a chat from one of the person's own messages: what the edit does
   // on their computer, and the undo of the file changes made there since,
   // which the edit may ask first. Both open only the caller's own message.

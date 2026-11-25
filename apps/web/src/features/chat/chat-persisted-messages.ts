@@ -1,11 +1,13 @@
 import type { ChatPersistedState, UIMessage } from "@tanstack/ai-client";
 
+import { chatLocalRunRequestsOf } from "@stll/api-contract/chat-local-run-request";
 import { chatLocalRunFilePartsOf } from "@stll/api-contract/chat-run-target";
 
 import type {
   ChatClientTools,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools-types";
+import { localRunApprovalDrawing } from "@/components/chat/local-run-request.logic";
 
 type ChatMessagesState = Pick<ChatPersistedState<ChatClientTools>, "messages">;
 
@@ -57,11 +59,49 @@ const withoutDroppedParts = (
   };
 };
 
+/**
+ * A step a run on the member's computer asked the member to approve rides
+ * the answer's metadata as a request (`localRunRequests`); its card is the
+ * approval drawn on the step's call (`localRunApprovalDrawing`), the same
+ * live, on a rejoin and after a reload. The client's own message keeps the
+ * call as the stream wrote it.
+ */
+const withLocalRunApprovals = (
+  message: UIMessage<ChatClientTools>,
+): UIMessage<ChatClientTools> => {
+  // Only an answer whose run asked something reads its parts again.
+  if (
+    message.role !== "assistant" ||
+    chatLocalRunRequestsOf(message.metadata).length === 0
+  ) {
+    return message;
+  }
+  const parts = message.parts.map((part) => {
+    if (part.type !== "tool-call") {
+      return part;
+    }
+    const drawing = localRunApprovalDrawing(part, message.metadata);
+    if (drawing === null) {
+      return part;
+    }
+    return {
+      ...part,
+      ...(drawing.state === null ? {} : { state: drawing.state }),
+      approval: drawing.approval,
+    };
+  });
+  return parts.some((part, index) => part !== message.parts[index])
+    ? { ...message, parts }
+    : message;
+};
+
 /** One client message as the page holds it, computed afresh. */
 export const toPersistedChatMessage = (
   message: UIMessage<ChatClientTools>,
 ): PersistedChatMessage =>
-  withLocalRunFileParts(withoutDroppedParts(message, isBlankText));
+  withLocalRunFileParts(
+    withoutDroppedParts(withLocalRunApprovals(message), isBlankText),
+  );
 
 /**
  * The client never changes a message or part object in place: it replaces
@@ -96,7 +136,7 @@ export const toPersistedChatMessages = (
       return known;
     }
     const persisted = withLocalRunFileParts(
-      withoutDroppedParts(message, isDroppedPart),
+      withoutDroppedParts(withLocalRunApprovals(message), isDroppedPart),
     );
     persistedByClientMessage.set(message, persisted);
     return persisted;

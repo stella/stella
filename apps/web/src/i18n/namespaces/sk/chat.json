@@ -491,6 +491,13 @@
       "refusalReasoningEffortUnavailable": "Programovací agent vo vašom počítači túto úroveň uvažovania pre daný model neponúka. Vyberte inú v ponuke Úroveň uvažovania.",
       "refusalTooLarge": "Táto konverzácia je príliš dlhá na odovzdanie do vášho počítača. Na spustenie tam začnite nový chat.",
       "refusalUnavailable": "Spúšťanie chatov vo vašom počítači nie je pre váš účet dostupné.",
+      "request": {
+        "cancelled": "Bez odpovede: táto odpoveď bola zastavená.",
+        "runFailed": "Bez odpovede: agent skončil s chybou skôr, než sa k tomuto kroku dostal.",
+        "runFinished": "Nie je potrebné: agent dokončil prácu bez tohto kroku.",
+        "runLost": "Bez odpovede: váš počítač prestal túto odpoveď spracúvať.",
+        "withdrawn": "Už nie je potrebné: agent pokračoval bez tohto kroku."
+      },
       "selectionStateLabel": "{selection} · {state}",
       "sessionNotResumed": "Programovací agent vo vašom počítači nemohol nadviazať tam, kde skončil, preto pokračoval podľa správ v tomto chate.",
       "stateLimitUntil": "Limit vyčerpaný do {time}",

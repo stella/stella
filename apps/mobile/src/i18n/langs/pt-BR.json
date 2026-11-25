@@ -191,6 +191,13 @@
       },
       "patternInPath": "{pattern} em {path}",
       "ranOnModel": "Executado com {model}",
+      "request": {
+        "cancelled": "Sem resposta: esta resposta foi interrompida.",
+        "runFailed": "Sem resposta: o agente parou com um erro antes desta etapa.",
+        "runFinished": "Não é necessário: o agente terminou sem esta etapa.",
+        "runLost": "Sem resposta: seu computador parou de processar esta resposta.",
+        "withdrawn": "Não é mais necessário: o agente continuou sem esta etapa."
+      },
       "sessionNotResumed": "O agente de programação do seu computador não conseguiu retomar de onde parou, então continuou a partir das mensagens deste chat.",
       "status": {
         "failed": "Falhou",

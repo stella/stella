@@ -5,12 +5,17 @@ import type * as v from "valibot";
 import { ASK_USER_TOOL_NAME } from "@stll/api-contract/chat";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "@stll/api-contract/chat-local-run-question";
+import {
+  CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY,
+  type ChatLocalRunRequest,
+} from "@stll/api-contract/chat-local-run-request";
 import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
 import type { UserInputChatToolName } from "@stll/api-contract/chat-tool-activity";
 import type { chatResumeSnapshotSchema } from "@stll/chat/resume-contract";
 
 import { openMemberWaitKeys } from "@/components/chat/chat-ui-tools";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import { createChatRuntime } from "@/features/chat/chat-runtime";
 import {
   __resetChatRequestStateForTests,
   acquireChatRuntime,
@@ -112,15 +117,18 @@ const approvalInterrupt = (toolName: string): Interrupt => ({
   },
 });
 
-/** The interrupt a run on the member's computer pauses on its question with. */
-const localRunQuestionInterrupt = (): Interrupt => ({
-  id: "00000000-0000-7000-8000-0000000000a1",
-  reason: "user_input",
-  message: "Which law governs the lease?",
+const LOCAL_RUN_REQUEST_ID = "00000000-0000-7000-8000-0000000000a1";
+
+/**
+ * The question a run on the member's computer asks beside its turn: a
+ * request the stream restates on the answer's metadata, never an interrupt.
+ */
+const localRunQuestionRequest = (): ChatLocalRunRequest => ({
+  requestId: LOCAL_RUN_REQUEST_ID,
   toolCallId: TOOL_CALL_ID,
-  metadata: {
+  status: "pending",
+  ask: {
     kind: "question",
-    toolName: CHAT_LOCAL_RUN_QUESTION_TOOL,
     questions: [
       {
         id: "law",
@@ -138,36 +146,50 @@ const localRunQuestionInterrupt = (): Interrupt => ({
   },
 });
 
-type MemberWait = { toolName: string; interrupt: Interrupt };
+/**
+ * What the turn waits on: a cloud turn's interrupt, which its stored answer
+ * keeps in its resume snapshot, or a local run's request, which its answer's
+ * metadata keeps, live and stored alike.
+ */
+type MemberWait = {
+  toolName: string;
+  wait:
+    | { type: "interrupt"; interrupt: Interrupt }
+    | { type: "local-run-request"; request: ChatLocalRunRequest };
+};
+
+const interruptWait = (toolName: string, interrupt: Interrupt): MemberWait => ({
+  toolName,
+  wait: { type: "interrupt", interrupt },
+});
 
 /**
  * A turn paused on each tool whose call waits on the member. Total over the
  * user-input tools, so a new one is kept across a thread read or fails here.
  */
 const USER_INPUT_WAITS = {
-  [ASK_USER_TOOL_NAME]: {
-    toolName: ASK_USER_TOOL_NAME,
-    interrupt: clientToolInterrupt(ASK_USER_TOOL_NAME),
-  },
-  [REQUEST_SECRET_TOOL_NAME]: {
-    toolName: REQUEST_SECRET_TOOL_NAME,
-    interrupt: clientToolInterrupt(REQUEST_SECRET_TOOL_NAME),
-  },
-  [CONNECT_CONNECTOR_TOOL_NAME]: {
-    toolName: CONNECT_CONNECTOR_TOOL_NAME,
-    interrupt: clientToolInterrupt(CONNECT_CONNECTOR_TOOL_NAME),
-  },
+  [ASK_USER_TOOL_NAME]: interruptWait(
+    ASK_USER_TOOL_NAME,
+    clientToolInterrupt(ASK_USER_TOOL_NAME),
+  ),
+  [REQUEST_SECRET_TOOL_NAME]: interruptWait(
+    REQUEST_SECRET_TOOL_NAME,
+    clientToolInterrupt(REQUEST_SECRET_TOOL_NAME),
+  ),
+  [CONNECT_CONNECTOR_TOOL_NAME]: interruptWait(
+    CONNECT_CONNECTOR_TOOL_NAME,
+    clientToolInterrupt(CONNECT_CONNECTOR_TOOL_NAME),
+  ),
   [CHAT_LOCAL_RUN_QUESTION_TOOL]: {
     toolName: CHAT_LOCAL_RUN_QUESTION_TOOL,
-    interrupt: localRunQuestionInterrupt(),
+    wait: { type: "local-run-request", request: localRunQuestionRequest() },
   },
 } as const satisfies Record<UserInputChatToolName, MemberWait>;
 
 const MEMBER_WAITS: (MemberWait & { kind: string })[] = [
   {
     kind: "an approval",
-    toolName: "web_search",
-    interrupt: approvalInterrupt("web_search"),
+    ...interruptWait("web_search", approvalInterrupt("web_search")),
   },
   ...Object.values(USER_INPUT_WAITS).map((wait) => ({
     kind: `a ${wait.toolName} card`,
@@ -175,8 +197,36 @@ const MEMBER_WAITS: (MemberWait & { kind: string })[] = [
   })),
 ];
 
-/** A run that calls the tool and pauses its turn on the member. */
-const pausedRun = ({ toolName, interrupt }: MemberWait) => [
+/** How the run's stream ends: a cloud turn paused on its interrupt; a local
+ *  run's request restated on the answer's metadata, still open. */
+const pauseEvents = (wait: MemberWait["wait"]) =>
+  wait.type === "interrupt"
+    ? [
+        {
+          type: "RUN_FINISHED",
+          threadId,
+          runId: RUN_ID,
+          finishReason: "tool_calls",
+          outcome: { type: "interrupt", interrupts: [wait.interrupt] },
+        },
+      ]
+    : [
+        {
+          type: "TEXT_MESSAGE_START",
+          messageId: assistantMessageId,
+          role: "assistant",
+          metadata: { [CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY]: [wait.request] },
+        },
+        {
+          type: "RUN_FINISHED",
+          threadId,
+          runId: RUN_ID,
+          finishReason: "tool_calls",
+        },
+      ];
+
+/** A run that calls the tool and waits on the member. */
+const pausedRun = ({ toolName, wait }: MemberWait) => [
   { type: "RUN_STARTED", threadId, runId: RUN_ID },
   {
     type: "TEXT_MESSAGE_START",
@@ -198,20 +248,15 @@ const pausedRun = ({ toolName, interrupt }: MemberWait) => [
     toolCallName: toolName,
     toolName,
   },
-  {
-    type: "RUN_FINISHED",
-    threadId,
-    runId: RUN_ID,
-    finishReason: "tool_calls",
-    outcome: { type: "interrupt", interrupts: [interrupt] },
-  },
+  ...pauseEvents(wait),
 ];
 
-/** The paused turn's messages as the server stores them: its pending
- *  interrupts in the answer's resume snapshot. */
+/** The paused turn's messages as the server stores them: a cloud turn's
+ *  pending interrupts in the answer's resume snapshot, a local run's request
+ *  on the answer's metadata as the stream restated it. */
 const storedPausedMessages = (
   messages: readonly PersistedChatMessage[],
-  interrupt: Interrupt,
+  { wait }: MemberWait,
 ): PersistedChatMessage[] =>
   messages.map((message, index) =>
     index === messages.length - 1
@@ -219,10 +264,14 @@ const storedPausedMessages = (
           ...message,
           metadata: {
             ...message.metadata,
-            resumeSnapshot: {
-              resumeState: { threadId, runId: RUN_ID },
-              pendingInterrupts: [interrupt],
-            },
+            ...(wait.type === "interrupt"
+              ? {
+                  resumeSnapshot: {
+                    resumeState: { threadId, runId: RUN_ID },
+                    pendingInterrupts: [wait.interrupt],
+                  },
+                }
+              : { [CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY]: [wait.request] }),
           },
         }
       : message,
@@ -281,7 +330,7 @@ describe.each(MEMBER_WAITS)("a runtime waiting on $kind", (wait) => {
     const waiting = runtime.getSnapshot();
     const stored = buildThreadData({
       lastActivityAt: "2026-07-08T10:00:00.000Z",
-      messages: storedPausedMessages(waiting.messages, wait.interrupt),
+      messages: storedPausedMessages(waiting.messages, wait),
       threadRevision: "revision-paused",
     });
 
@@ -322,12 +371,48 @@ describe.each(MEMBER_WAITS)("a runtime waiting on $kind", (wait) => {
   });
 });
 
-test("a turn paused on a local run's question reads as its call and its interrupt", async () => {
-  const wait = USER_INPUT_WAITS[CHAT_LOCAL_RUN_QUESTION_TOOL];
-  const { runtime } = await pauseOn(wait);
-  const { localRunQuestion, messages } = runtime.getSnapshot();
-  expect(openMemberWaitKeys({ localRunQuestion, messages })).toEqual([
-    `part:${TOOL_CALL_ID}`,
-    `interrupt:${wait.interrupt.id}`,
-  ]);
+describe("a local run's question", () => {
+  test("reads as its call and its request", async () => {
+    const { runtime } = await pauseOn(
+      USER_INPUT_WAITS[CHAT_LOCAL_RUN_QUESTION_TOOL],
+    );
+    const { localRunQuestion, messages } = runtime.getSnapshot();
+    expect(openMemberWaitKeys({ localRunQuestion, messages })).toEqual([
+      `part:${TOOL_CALL_ID}`,
+      `interrupt:${LOCAL_RUN_REQUEST_ID}`,
+    ]);
+  });
+
+  test("reads the same from the stored answer as from its stream", async () => {
+    const wait = USER_INPUT_WAITS[CHAT_LOCAL_RUN_QUESTION_TOOL];
+    const { runtime } = await pauseOn(wait);
+    const live = runtime.getSnapshot();
+    // The answer as a thread read returns it: its metadata as the stream
+    // restated it, and no resume snapshot behind it.
+    const stored = storedPausedMessages(live.messages, wait);
+    expect(stored.at(-1)?.metadata).not.toHaveProperty("resumeSnapshot");
+    const reloaded = createChatRuntime({
+      activeTurnId: null,
+      context: undefined,
+      initialMessages: stored,
+      key: threadRef,
+      onError: () => undefined,
+      onFinish: () => undefined,
+      reloadThread: () => undefined,
+    }).getSnapshot();
+
+    expect(live.localRunQuestion).not.toBeNull();
+    expect(reloaded.localRunQuestion).toEqual(live.localRunQuestion);
+    expect(
+      openMemberWaitKeys({
+        localRunQuestion: reloaded.localRunQuestion,
+        messages: reloaded.messages,
+      }),
+    ).toEqual(
+      openMemberWaitKeys({
+        localRunQuestion: live.localRunQuestion,
+        messages: live.messages,
+      }),
+    );
+  });
 });

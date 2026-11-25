@@ -491,6 +491,13 @@
       "refusalReasoningEffortUnavailable": "Agent programistyczny na Twoim komputerze nie oferuje tego poziomu rozumowania dla modelu. Wybierz inny w menu Poziom rozumowania.",
       "refusalTooLarge": "Ta rozmowa jest zbyt długa, by przekazać ją do Twojego komputera. Rozpocznij nowy czat, aby uruchomić go tam.",
       "refusalUnavailable": "Uruchamianie czatów na Twoim komputerze nie jest dostępne dla Twojego konta.",
+      "request": {
+        "cancelled": "Bez odpowiedzi: ta odpowiedź została zatrzymana.",
+        "runFailed": "Bez odpowiedzi: agent zakończył pracę z błędem przed tym krokiem.",
+        "runFinished": "Niepotrzebne: agent skończył bez tego kroku.",
+        "runLost": "Bez odpowiedzi: Twój komputer przestał przetwarzać tę odpowiedź.",
+        "withdrawn": "Już niepotrzebne: agent kontynuował bez tego kroku."
+      },
       "selectionStateLabel": "{selection} · {state}",
       "sessionNotResumed": "Agent programistyczny na Twoim komputerze nie mógł wznowić pracy tam, gdzie skończył, dlatego kontynuował na podstawie wiadomości z tego czatu.",
       "stateLimitUntil": "Limit wyczerpany do {time}",

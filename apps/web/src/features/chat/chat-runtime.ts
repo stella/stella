@@ -24,9 +24,13 @@ import { CHAT_COMMAND_MAX_RETRIES } from "@stll/api-contract/chat-command";
 import {
   isSameLocalRunQuestionPause,
   type LocalRunQuestionPause,
-  localRunQuestionPauseOf,
 } from "@stll/api-contract/chat-local-run-question";
-import { CHAT_LOCAL_RUN_INTERRUPT_REASONS } from "@stll/api-contract/chat-local-run-tool";
+import {
+  type ChatLocalRunRequestAnswer,
+  type ChatLocalRunRequestAnswerOutcome,
+  pendingLocalRunApprovalOf,
+  pendingLocalRunQuestionOf,
+} from "@stll/api-contract/chat-local-run-request";
 import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
   CHAT_LOCAL_RUN_STEER_EVENT,
@@ -202,7 +206,11 @@ export type ChatStopState =
 type ChatRuntimeSnapshot = {
   error: Error | undefined;
   isLoading: boolean;
-  /** The question a run on the member's computer paused the turn on. */
+  /**
+   * The blocking question the run on the member's computer waits on, beside
+   * its running turn: the latest answer's pending question request
+   * (`pendingLocalRunQuestionOf`), live and reloaded alike.
+   */
   localRunQuestion: LocalRunQuestionPause | null;
   reconnecting: boolean;
   messages: PersistedChatMessage[];
@@ -283,6 +291,14 @@ export type ChatActivitySession = {
  * step: its website); an approval stella's own models ask for has no run to
  * keep it, and is answered once.
  */
+/** The decision a run on the member's computer receives for `response`. */
+const localRunDecisionOf = (response: ToolApprovalResponse) => {
+  if (!response.approved) {
+    return "deny";
+  }
+  return response.scope === "session" ? "approve_for_session" : "approve";
+};
+
 export type ToolApprovalResponse = {
   approved: boolean;
   id: string;
@@ -312,8 +328,8 @@ export type ChatRuntime = ChatActivitySession & {
     options?: ChatSendMessageOptions,
   ) => Promise<void>;
   /**
-   * Answer the question a local run paused on, or, with `null`, dismiss it:
-   * the server then stops the run's turn. A pause is answered once.
+   * Answer the question a local run waits on, or, with `null`, dismiss it:
+   * the server then stops the run's turn. A question is answered once.
    */
   answerLocalRunQuestion: (
     interruptId: string,
@@ -654,7 +670,9 @@ export const createChatRuntime = ({
   let snapshot: ChatRuntimeSnapshot = {
     error: undefined,
     isLoading: false,
-    localRunQuestion: null,
+    localRunQuestion: pendingLocalRunQuestionOf(
+      initialMessages.at(-1)?.metadata,
+    ),
     reconnecting: activeTurnId !== null,
     messages: initialMessages,
     sessionGenerating: false,
@@ -1308,18 +1326,6 @@ export const createChatRuntime = ({
     },
     onInterruptStateChange: (state) => {
       observeInterruptSubmission(state);
-      // TanStack holds a local run's question as an interrupt it cannot
-      // resolve (it carries no resume binding): the server owns the pause,
-      // and the card answers it through `answerLocalRunQuestion`.
-      const localRunQuestion = localRunQuestionPauseOf(state.interrupts);
-      if (
-        !isSameLocalRunQuestionPause(
-          snapshot.localRunQuestion,
-          localRunQuestion,
-        )
-      ) {
-        setSnapshot({ localRunQuestion });
-      }
     },
     onCustomEvent: (name, value) => {
       if (name === CHAT_LOCAL_RUN_STEER_EVENT) {
@@ -1383,12 +1389,24 @@ export const createChatRuntime = ({
     },
     onMessagesChange: (messages) => {
       const persisted = toPersistedChatMessages(messages);
+      const shown =
+        replayFloor === undefined
+          ? persisted
+          : keepShownRejoinMessages(replayFloor, persisted);
+      // A local run's question waits beside its running turn; the answer's
+      // own metadata says which, as the stream restates it.
+      const localRunQuestion = pendingLocalRunQuestionOf(
+        shown.at(-1)?.metadata,
+      );
       snapshot = {
         ...snapshot,
-        messages:
-          replayFloor === undefined
-            ? persisted
-            : keepShownRejoinMessages(replayFloor, persisted),
+        messages: shown,
+        ...(isSameLocalRunQuestionPause(
+          snapshot.localRunQuestion,
+          localRunQuestion,
+        )
+          ? {}
+          : { localRunQuestion }),
       };
       observeTurnTimings(snapshot.messages, performance.now());
       sendTiming.messagesChanged(snapshot.messages);
@@ -1706,14 +1724,84 @@ export const createChatRuntime = ({
    */
   const approvalAnswers = new Map<string, Promise<void>>();
 
-  /** Local-run pauses already answered or dismissed, by interrupt id. */
-  const answeredLocalRunQuestions = new Set<string>();
+  /**
+   * Each answer to a request a local run asked, by request id: a request is
+   * answered once, and a second answer (a click racing another) joins the
+   * first. A failed request is not kept, so the member can answer again.
+   */
+  const localRunAnswers = new Map<
+    string,
+    Promise<ChatLocalRunRequestAnswerOutcome | null>
+  >();
 
   /**
-   * Resume the turn a local run paused on its question. TanStack exposes the
-   * pause as an unbound interrupt it cannot resolve, so the resume goes out as
-   * the AG-UI resume item the server reads: the answers as the reply payload,
-   * or a cancellation the server turns into a stop of the run's turn.
+   * Answer a request the run on the member's computer asked, beside its
+   * running turn (`answer-request.ts`). The turn's stream says once the run
+   * took it; the outcome says when it could not (resolved already, expired,
+   * refused). `null` when no turn of this page runs to take it, or the
+   * request failed.
+   */
+  const answerLocalRunRequest = async (
+    requestId: string,
+    answer: ChatLocalRunRequestAnswer,
+  ): Promise<ChatLocalRunRequestAnswerOutcome | null> => {
+    const answering = localRunAnswers.get(requestId);
+    if (answering !== undefined) {
+      return await answering;
+    }
+    const send = async (): Promise<ChatLocalRunRequestAnswerOutcome | null> => {
+      // A request still on its way has no turn the server runs yet.
+      await requestAnswered.promise;
+      const answeredTurn = turnId;
+      if (answeredTurn === null || isStoppedTurn()) {
+        return null;
+      }
+      const sent = await Result.tryPromise(
+        async (): Promise<Result<ChatLocalRunRequestAnswerOutcome, APIError>> =>
+          await invokeAppOnlyWrite("chat.turns.request.answer", async () => {
+            const { data, error } = await api.chat
+              .threads({ threadId: toSafeId<"chatThread">(key.threadId) })
+              .turns({ turnId: answeredTurn })
+              .requests({ requestId })
+              .answer.post({ answer });
+            return error
+              ? Result.err(toAPIError(error))
+              : Result.ok(data.outcome);
+          }),
+      );
+      // An answer to a turn the page has left is not this turn's error.
+      const failed = (cause: unknown) => {
+        if (turnId === answeredTurn) {
+          captureRuntimeError(cause);
+        } else {
+          getAnalytics().captureError(toError(cause), {
+            fingerprintKey: "chatRuntime:localRunAnswer",
+            scope: { type: "handler", handlerId: "chatRuntime:localRunAnswer" },
+          });
+        }
+        return null;
+      };
+      if (Result.isError(sent)) {
+        return failed(sent.error.cause);
+      }
+      if (Result.isError(sent.value)) {
+        return failed(sent.value.error);
+      }
+      return sent.value.value;
+    };
+    const answered = send();
+    localRunAnswers.set(requestId, answered);
+    const outcome = await answered;
+    // Not sent, or refused unsent: the member can answer again.
+    if (outcome === null || outcome.type === "refused") {
+      localRunAnswers.delete(requestId);
+    }
+    return outcome;
+  };
+
+  /**
+   * Answer the question a local run waits on beside its turn: the answers,
+   * or a dismissal the server turns into a stop of the run's turn.
    */
   const answerLocalRunQuestion = async (
     interruptId: string,
@@ -1722,40 +1810,12 @@ export const createChatRuntime = ({
     if (isStoppedTurn()) {
       return "not_sent";
     }
-    // Already on its way: the one answer stands.
-    if (answeredLocalRunQuestions.has(interruptId)) {
-      return "sent";
-    }
-    answeredLocalRunQuestions.add(interruptId);
-    if (!(await awaitRequestEnd())) {
-      answeredLocalRunQuestions.delete(interruptId);
-      return "not_sent";
-    }
-    const resumed = await Result.tryPromise(
-      async () =>
-        await client.resumeInterruptsUnsafe([
-          answers === null
-            ? { interruptId, status: "cancelled" }
-            : {
-                interruptId,
-                status: "resolved",
-                payload: {
-                  answers,
-                } satisfies ChatLocalRunQuestionReply,
-              },
-        ]),
+    const outcome = await answerLocalRunRequest(
+      interruptId,
+      answers === null ? { type: "dismiss" } : { type: "question", answers },
     );
-    if (Result.isError(resumed)) {
-      answeredLocalRunQuestions.delete(interruptId);
-      captureRuntimeError(resumed.error.cause);
-      return "not_sent";
-    }
-    // The client resolves false, not throws, when the request failed.
-    if (!resumed.value) {
-      answeredLocalRunQuestions.delete(interruptId);
-      return "not_sent";
-    }
-    return "sent";
+    // Refused unsent: the question stays open for another answer.
+    return outcome === null || outcome.type === "refused" ? "not_sent" : "sent";
   };
 
   /**
@@ -1844,6 +1904,32 @@ export const createChatRuntime = ({
     response: ToolApprovalResponse,
     options: ChatSendMessageOptions | undefined,
   ): Promise<Result<void, ChatRequestError>> => {
+    // A step a run on the member's computer asks about waits beside the
+    // running turn: its answer goes to the run at once, never after the
+    // request ends.
+    const localRequest = snapshot.messages
+      .flatMap((message) =>
+        message.parts.flatMap((part) =>
+          part.type === "tool-call"
+            ? [pendingLocalRunApprovalOf(message.metadata, part.id)]
+            : [],
+        ),
+      )
+      .find((request) => request?.requestId === response.id);
+    if (localRequest !== undefined && localRequest !== null) {
+      const outcome = await answerLocalRunRequest(localRequest.requestId, {
+        type: "approval",
+        decision: localRunDecisionOf(response),
+      });
+      return outcome === null || outcome.type === "refused"
+        ? Result.err(
+            new ChatRequestError({
+              kind: "preparation_failed",
+              message: "The answer did not reach the run on the computer",
+            }),
+          )
+        : Result.ok();
+    }
     if (!(await awaitRequestEnd())) {
       return Result.ok();
     }
@@ -1863,72 +1949,6 @@ export const createChatRuntime = ({
         await resolveNativeInterrupt(() => {
           interrupt.resolveInterrupt({ approved: response.approved });
         });
-        return Result.ok();
-      }
-
-      if (
-        interrupt?.kind === "unbound" &&
-        interrupt.reason === CHAT_LOCAL_RUN_INTERRUPT_REASONS.approval
-      ) {
-        // Desktop harness approvals carry the local-run protocol, not a
-        // TanStack tool binding. Resume the exact server-owned interrupt,
-        // just as for a local-run question; never use legacy tool approval.
-        const messages = client.getMessages();
-        const pending = messages.some((message) =>
-          message.parts.some(
-            (part) =>
-              part.type === "tool-call" &&
-              part.state === "approval-requested" &&
-              "approval" in part &&
-              part.approval.id === interrupt.interruptId &&
-              part.approval.approved === undefined,
-          ),
-        );
-        if (!pending) {
-          return Result.err(
-            new ChatRequestError({
-              kind: "preparation_failed",
-              message: "The local-run approval is no longer pending",
-            }),
-          );
-        }
-        // Unsafe resume submits the protocol reply but does not apply the
-        // SDK's bound-approval message transition. Keep the posted call and
-        // its native resolution consistent for the server's validation.
-        client.setMessagesManually(
-          messages.map((message) => ({
-            ...message,
-            parts: message.parts.map((part) =>
-              part.type === "tool-call" &&
-              "approval" in part &&
-              part.approval.id === interrupt.interruptId
-                ? {
-                    ...part,
-                    approval: { ...part.approval, approved: response.approved },
-                    state: "approval-responded" as const,
-                  }
-                : part,
-            ),
-          })),
-        );
-        const sent = await client.resumeInterruptsUnsafe([
-          {
-            interruptId: interrupt.interruptId,
-            status: "resolved",
-            payload:
-              response.approved && response.scope === "session"
-                ? { approved: true, scope: "session" }
-                : { approved: response.approved },
-          },
-        ]);
-        if (!sent) {
-          return Result.err(
-            new ChatRequestError({
-              kind: "preparation_failed",
-              message: "The local-run approval response was not sent",
-            }),
-          );
-        }
         return Result.ok();
       }
 

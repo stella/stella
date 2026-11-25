@@ -21,6 +21,7 @@ import {
   LimitResetChoice,
   LimitResetMessage,
 } from "@/components/chat-limit-reset";
+import { LocalRunRequestNotices } from "@/components/local-run-request-card";
 import { MarkdownView } from "@/components/markdown-view";
 import { ThreadMatter } from "@/components/thread-matter";
 import { APP_VARIANT } from "@/env";
@@ -115,6 +116,9 @@ export const ChatMessage = ({
           limitResetsAt={entry.limitResetsAt}
           onRetry={onRetry}
         />
+      )}
+      {entry.unansweredRequests === undefined ? null : (
+        <LocalRunRequestNotices reasons={entry.unansweredRequests} />
       )}
       {entry.ranOnModel === undefined ? null : (
         <RanOnModel model={entry.ranOnModel} />

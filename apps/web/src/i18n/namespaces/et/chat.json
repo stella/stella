@@ -491,6 +491,13 @@
       "refusalReasoningEffortUnavailable": "Teie arvutis töötav programmeerimisagent ei paku selle mudeli jaoks seda arutlustaset. Valige menüüs Arutlustase mõni teine.",
       "refusalTooLarge": "See vestlus on teie arvutile üleandmiseks liiga pikk. Alustage uut vestlust, et seda seal käitada.",
       "refusalUnavailable": "Vestluste käitamine teie arvutis pole teie konto jaoks saadaval.",
+      "request": {
+        "cancelled": "Vastamata: see vastus peatati.",
+        "runFailed": "Vastamata: agent lõpetas enne seda sammu veaga.",
+        "runFinished": "Pole vaja: agent lõpetas ilma selle sammuta.",
+        "runLost": "Vastamata: teie arvuti lõpetas selle vastuse töötlemise.",
+        "withdrawn": "Pole enam vaja: agent jätkas ilma selle sammuta."
+      },
       "selectionStateLabel": "{selection} · {state}",
       "sessionNotResumed": "Teie arvutis töötav programmeerimisagent ei saanud pooleli jäänud kohast edasi minna, seega jätkas ta selle vestluse sõnumite põhjal.",
       "stateLimitUntil": "Limiit täis kuni {time}",

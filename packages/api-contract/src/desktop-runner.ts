@@ -16,7 +16,10 @@ import {
   desktopProtocolSchema,
   desktopVersionSchema,
 } from "./desktop-presence";
-import { desktopRunnerQuestionAnswersSchema } from "./desktop-runner-answers";
+import {
+  DESKTOP_RUNNER_APPROVAL_DECISIONS,
+  desktopRunnerQuestionAnswersSchema,
+} from "./desktop-runner-answers";
 
 /**
  * Wire contract for the outbound WebSocket a desktop runner holds to the API.
@@ -392,11 +395,7 @@ export const DESKTOP_RUNNER_APPROVAL_KINDS = [
   "tool",
 ] as const;
 
-export const DESKTOP_RUNNER_APPROVAL_DECISIONS = [
-  "approve",
-  "approve_for_session",
-  "deny",
-] as const;
+export { DESKTOP_RUNNER_APPROVAL_DECISIONS };
 
 export const DESKTOP_RUNNER_RUN_OUTCOMES = [
   "completed",

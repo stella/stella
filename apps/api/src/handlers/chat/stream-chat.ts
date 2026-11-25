@@ -36,6 +36,10 @@ import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
 import { BROWSER_CONTROL_TOOL_NAME } from "@stll/api-contract/browser-control";
 import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import {
+  CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY,
+  chatLocalRunRequestsOf,
+} from "@stll/api-contract/chat-local-run-request";
+import {
   isApprovedClientCallAwaitingResult,
   memberWaitsOf,
 } from "@stll/api-contract/chat-member-wait";
@@ -2668,7 +2672,7 @@ type ProcessServerChatStreamProps = {
 };
 
 /** Whether `resume` dismisses everything it answers; see `dismissesAwaited`. */
-export const resumeDismissesAwaited = (
+const resumeDismissesAwaited = (
   resume: readonly RunAgentResumeItem[] | undefined,
 ): boolean =>
   resume !== undefined &&
@@ -4251,7 +4255,10 @@ const processTurnForPersistence = ({
       return convertedMessage === null
         ? null
         : attachRestorationMetadata({
-            message: attachLocalRunFilesNotShared(convertedMessage, streamed),
+            message: attachLocalRunRequests(
+              attachLocalRunFilesNotShared(convertedMessage, streamed),
+              streamed,
+            ),
             restorationPairs,
           });
     },
@@ -5749,6 +5756,27 @@ const attachLocalRunFilesNotShared = (
         },
       }
     : message;
+};
+
+/**
+ * The answer with what its local run asked the member, each in its latest
+ * state, as the stream restated it (`CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY`):
+ * a reloaded answer shows its requests as the live one did.
+ */
+const attachLocalRunRequests = (
+  message: ChatMessage,
+  streamed: UIMessage,
+): ChatMessage => {
+  const requests = chatLocalRunRequestsOf(streamed.metadata);
+  return requests.length === 0
+    ? message
+    : {
+        ...message,
+        metadata: {
+          ...message.metadata,
+          [CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY]: [...requests],
+        },
+      };
 };
 
 const attachRestorationMetadata = ({

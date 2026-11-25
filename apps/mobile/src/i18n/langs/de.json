@@ -191,6 +191,13 @@
       },
       "patternInPath": "{pattern} unter {path}",
       "ranOnModel": "Ausgeführt mit {model}",
+      "request": {
+        "cancelled": "Nicht beantwortet: Diese Antwort wurde angehalten.",
+        "runFailed": "Nicht beantwortet: Der Agent wurde vor diesem Schritt mit einem Fehler beendet.",
+        "runFinished": "Nicht nötig: Der Agent ist ohne diesen Schritt fertig geworden.",
+        "runLost": "Nicht beantwortet: Ihr Computer hat die Bearbeitung dieser Antwort beendet.",
+        "withdrawn": "Nicht mehr nötig: Der Agent hat ohne diesen Schritt weitergearbeitet."
+      },
       "sessionNotResumed": "Der Coding-Agent auf Ihrem Computer konnte nicht dort weitermachen, wo er aufgehört hatte. Er hat daher anhand der Nachrichten in diesem Chat weitergearbeitet.",
       "status": {
         "failed": "Fehlgeschlagen",

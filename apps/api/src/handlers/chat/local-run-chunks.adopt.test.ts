@@ -3,13 +3,20 @@ import type { StreamChunk } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 
 import { harnessSessionId } from "@stll/agent-engine";
+import {
+  CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY,
+  chatLocalRunRequestsOf,
+} from "@stll/api-contract/chat-local-run-request";
 import { CHAT_LOCAL_RUN_COMPUTER_EVENT } from "@stll/api-contract/chat-run-target";
 
+import { isRecord } from "@/api/lib/type-guards";
 import {
   adoptedSource,
   createComputer,
   harnessChunks,
+  isAsk,
   localSource,
+  REQUEST_ID,
 } from "@/api/tests/helpers/fake-local-computer";
 
 const toolCall = {
@@ -123,6 +130,22 @@ const isComputerStatus = (chunk: ReturnType<typeof timeless>) =>
 const answerOf = (chunks: ReturnType<typeof timeless>[]) =>
   chunks.filter((chunk) => !isComputerStatus(chunk));
 
+/** Whether a chunk restates what the run asked the member. */
+const isRequestsChunk = (chunk: ReturnType<typeof timeless>) =>
+  chunk.type === EventType.TEXT_MESSAGE_START &&
+  isRecord(chunk.metadata) &&
+  CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY in chunk.metadata;
+
+/** Each restatement of the run's requests a read yields, as their states. */
+const requestStatesOf = (chunks: ReturnType<typeof timeless>[]) =>
+  chunks
+    .filter(isRequestsChunk)
+    .map((chunk) =>
+      chatLocalRunRequestsOf(
+        "metadata" in chunk ? chunk.metadata : undefined,
+      ).map(({ status }) => status),
+    );
+
 describe("a local turn another task adopted", () => {
   test("reads on as the uninterrupted read would, from every cut", async () => {
     const chunks = await turnChunks();
@@ -162,5 +185,63 @@ describe("a local turn another task adopted", () => {
           chunk.toolCallId.endsWith(toolCall.id),
       ),
     ).toBe(true);
+  });
+
+  test("a read released while an approval waits hands the adopter the pending request, which it closes once the run reports it", async () => {
+    const chunks = await harnessChunks([
+      {
+        type: "session.started",
+        sessionId: harnessSessionId("session-adopted-ask"),
+        continuation: { type: "fresh" },
+      },
+      {
+        type: "approval.requested",
+        request: {
+          requestId: REQUEST_ID,
+          kind: "command",
+          toolCall,
+          reason: "Run the test suite",
+          options: [
+            { id: "accept", decision: "approve" },
+            { id: "decline", decision: "deny" },
+          ],
+        },
+      },
+      { type: "interaction.resolved", requestId: REQUEST_ID },
+      {
+        type: "tool.completed",
+        toolCall,
+        result: { content: "12 pass", status: "succeeded" },
+      },
+      { type: "text.completed", messageId: "answer", text: "All tests pass." },
+      { type: "turn.completed", usage: null, boundary: null },
+    ]);
+    const cut = chunks.findIndex(isAsk) + 1;
+    expect(cut).toBeGreaterThan(0);
+    const before = await readThrough(chunks, cut);
+    const { computer, read } = await adoptedRead(chunks, cut);
+
+    // The released read showed the request waiting on the member.
+    expect(requestStatesOf(before)).toEqual([["pending"]]);
+    // The adopter folded the request from the run's events: it does not
+    // open it again, and the run's report closes it.
+    expect(requestStatesOf(read)).toEqual([["resolved"]]);
+    const closed = read.findLast(isRequestsChunk);
+    expect(
+      closed !== undefined && "metadata" in closed
+        ? chatLocalRunRequestsOf(closed.metadata)
+        : [],
+    ).toMatchObject([
+      {
+        requestId: REQUEST_ID,
+        status: "resolved",
+        ask: { kind: "approval", decisions: ["approve", "deny"] },
+      },
+    ]);
+    // Together they read as one uninterrupted read.
+    expect([...answerOf(before), ...answerOf(read)]).toEqual(
+      answerOf(await uninterruptedRead(chunks)),
+    );
+    expect(computer.queued.interrupts).toBe(0);
   });
 });
