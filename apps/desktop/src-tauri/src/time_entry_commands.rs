@@ -11,8 +11,8 @@ use crate::{
   feature_gate::{DesktopFeature, FeatureGates},
   local_window::{ActivityAccountFeature, ActivityCaller, LocalCaller},
   time_entry_submit::{
-    self, CandidatesResponse, ConfirmedBatch, ConfirmedTimeEntry, CreatedEntry, Matter,
-    MatterResolution,
+    self, CandidatesResponse, ConfirmedBatch, ConfirmedTimeEntry, CreatedEntry,
+    DayEntriesResponse, Matter, MatterResolution,
   },
 };
 
@@ -145,6 +145,54 @@ pub async fn time_entry_candidates(
   require_account(&caller, &gates, &account)?;
   drop(account);
   Ok(candidates)
+}
+
+/// The member's own entries on a reviewed day, so a suggestion can say what
+/// another device or the web already recorded on its matter.
+#[tauri::command]
+pub async fn time_entry_day_entries(
+  caller: ActivityCaller,
+  gates: State<'_, FeatureGates>,
+  accounts: State<'_, AccountState>,
+  date: String,
+) -> Result<DayEntriesResponse, String> {
+  let day = activity::parse_date(&date)?;
+  let account = linked_account(&caller, &gates, &accounts).await?;
+  let entries =
+    time_entry_submit::day_entries(&account, &activity::format_date(day)).await?;
+  require_account(&caller, &gates, &account)?;
+  drop(account);
+  Ok(entries)
+}
+
+/// The web page that lists a matter's time, where the member reviews entries
+/// recorded elsewhere.
+fn matter_time_url(web_origin: &str, matter_id: &str) -> Result<String, String> {
+  let matter = uuid::Uuid::parse_str(matter_id)
+    .map_err(crate::logging::with_cause_logged(REFUSAL))?;
+  Ok(format!(
+    "{web_origin}/workspaces/{}/timesheets",
+    matter.hyphenated()
+  ))
+}
+
+#[tauri::command]
+pub async fn time_entry_open_matter_time(
+  caller: ActivityCaller,
+  app: AppHandle,
+  gates: State<'_, FeatureGates>,
+  accounts: State<'_, AccountState>,
+  matter_id: String,
+) -> Result<(), String> {
+  use tauri_plugin_opener::OpenerExt;
+
+  let account = linked_account(&caller, &gates, &accounts).await?;
+  let url = matter_time_url(&account.web_origin, &matter_id)?;
+  drop(account);
+  app
+    .opener()
+    .open_url(url, None::<&str>)
+    .map_err(crate::logging::with_cause_logged(REFUSAL))
 }
 
 #[tauri::command]
@@ -303,6 +351,27 @@ mod tests {
       entries: batch.entries.into_iter().take(100).collect(),
     };
     assert_eq!(validate_confirmation(&accepted, date), Ok(()));
+  }
+
+  #[test]
+  fn matter_time_links_open_only_a_matter_id_on_the_linked_web_origin() {
+    assert_eq!(
+      matter_time_url(
+        "https://example.test",
+        "00000000-0000-4000-8000-00000000000A"
+      ),
+      Ok("https://example.test/workspaces/00000000-0000-4000-8000-00000000000a/timesheets".into())
+    );
+    for refused in [
+      "../settings",
+      "00000000-0000-4000-8000-000000000001/../x",
+      "",
+    ] {
+      assert_eq!(
+        matter_time_url("https://example.test", refused),
+        Err(REFUSAL.to_string())
+      );
+    }
   }
 
   #[test]

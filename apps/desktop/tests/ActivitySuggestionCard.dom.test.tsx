@@ -50,13 +50,23 @@ const MATTER = {
   color: null,
 };
 const noop = () => undefined;
+/** No time on the card's matter from another computer or the web. */
+const NOTHING_ELSEWHERE = {
+  dayEntries: { type: "ready", entries: [] },
+  draftedEntries: [],
+  day: "today",
+  onReview: noop,
+  onRetry: noop,
+} satisfies CardProps["recordedElsewhere"];
 
 /** The card for a range the user dragged out on the grid, with the range
  * held where the calendar holds it. */
 const SelectedRangeCard = ({
   onAccept,
+  recordedElsewhere = NOTHING_ELSEWHERE,
 }: {
   onAccept: (durationMinutes: number) => void;
+  recordedElsewhere?: CardProps["recordedElsewhere"];
 }) => {
   const [range, setRange] = useState({
     startMs: wall("10:00"),
@@ -83,6 +93,7 @@ const SelectedRangeCard = ({
         written: 0,
       }}
       flags={[]}
+      recordedElsewhere={recordedElsewhere}
       onAccept={() => onAccept(suggestion.workedMinutes)}
       onAcceptProposal={noop}
       onAcceptStructure={noop}
@@ -197,6 +208,95 @@ describe("a selected range's card", () => {
   });
 });
 
+describe("time on the matter from another computer or the web", () => {
+  test("is named with a link to the entries, and the card can still be accepted", async () => {
+    const accepted: number[] = [];
+    const reviewed: string[] = [];
+    testing.render(
+      <DesktopIntlProvider language="en" messages={defaultMessages}>
+        <SelectedRangeCard
+          onAccept={(minutes) => {
+            accepted.push(minutes);
+          }}
+          recordedElsewhere={{
+            dayEntries: {
+              type: "ready",
+              entries: [
+                { id: "laptop", matterId: MATTER.id, durationMinutes: 60 },
+                { id: "web", matterId: MATTER.id, durationMinutes: 30 },
+                { id: "here", matterId: MATTER.id, durationMinutes: 45 },
+              ],
+            },
+            // This computer's own entry is not time from elsewhere.
+            draftedEntries: [
+              {
+                start: new Date(wall("09:00")).toISOString(),
+                end: new Date(wall("09:45")).toISOString(),
+                entryId: "here",
+              },
+            ],
+            day: "today",
+            onReview: (matterId) => {
+              reviewed.push(matterId);
+            },
+            onRetry: noop,
+          }}
+        />
+      </DesktopIntlProvider>,
+    );
+    await testing.act(nextMacrotask);
+    expect(
+      testing.screen.getByText(
+        "1 h 30 min already recorded on this matter today on another computer or the web.",
+      ),
+    ).toBeDefined();
+    await testing.act(async () => {
+      testing.fireEvent.click(
+        testing.screen.getByRole("button", {
+          name: messages.recordedElsewhereReview,
+        }),
+      );
+    });
+    expect(reviewed).toEqual([MATTER.id]);
+    await testing.act(async () => {
+      testing.fireEvent.click(
+        testing.screen.getByRole("button", {
+          name: new RegExp(messages.accept, "u"),
+        }),
+      );
+    });
+    expect(accepted).toEqual([30]);
+  });
+
+  test("a day that could not be read says so and offers to try again", async () => {
+    let retries = 0;
+    testing.render(
+      <DesktopIntlProvider language="en" messages={defaultMessages}>
+        <SelectedRangeCard
+          onAccept={noop}
+          recordedElsewhere={{
+            dayEntries: { type: "failed" },
+            draftedEntries: [],
+            day: "other",
+            onReview: noop,
+            onRetry: () => {
+              retries += 1;
+            },
+          }}
+        />
+      </DesktopIntlProvider>,
+    );
+    await testing.act(nextMacrotask);
+    const note = testing.screen.getByText(messages.recordedElsewhereUnknown);
+    await testing.act(async () => {
+      testing.fireEvent.click(
+        testing.within(note).getByRole("button", { name: messages.retry }),
+      );
+    });
+    expect(retries).toBe(1);
+  });
+});
+
 /** A card asking for consent, as the calendar shows it. */
 const ConsentCard = ({
   consent,
@@ -219,6 +319,7 @@ const ConsentCard = ({
       written: 0,
     }}
     flags={[]}
+    recordedElsewhere={NOTHING_ELSEWHERE}
     onAccept={noop}
     onAcceptProposal={noop}
     onAcceptStructure={noop}
@@ -410,6 +511,7 @@ const renderAssist = async (assist: CardProps["assist"]) => {
           written: 0,
         }}
         flags={[]}
+        recordedElsewhere={NOTHING_ELSEWHERE}
         onAccept={record("accept")}
         onAcceptProposal={record("acceptProposal")}
         onAcceptStructure={noop}

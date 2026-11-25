@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
 import type {
+  DesktopDayEntriesResponse,
   DesktopMatter,
   DesktopMatterCandidatesResponse,
   DesktopTimeEntryMatterCandidate,
@@ -666,6 +667,9 @@ const installNativeBoundary = async ({
             timeMinimumUnitMinutes: 6,
           } satisfies DesktopMatterCandidatesResponse;
         },
+        // Nothing on these matters from another computer or the web.
+        time_entry_day_entries: () =>
+          ({ entries: [] }) satisfies DesktopDayEntriesResponse,
         time_entry_submit_batch_confirmed: async (args) => {
           batchAttempts += 1;
           if (validation === "hold-first" && batchAttempts === 1) {

@@ -12,10 +12,12 @@ import { timedSegments, totalDurationMs } from "../src/activity/activity-logic";
 import {
   cleanSharedContext,
   matchDay,
+  recordedElsewhere,
   recordedMatterIds,
   unresolvedMatterIds,
   withoutAppSuffix,
 } from "../src/activity/day-review-logic";
+import type { DayEntriesRead } from "../src/activity/day-review-logic";
 import { EMPTY_MATTER_LEARNING } from "../src/activity/matter-learning";
 
 const ALPHA = {
@@ -676,5 +678,110 @@ describe("window title evidence", () => {
         details: [{ title: "Merge queue", durationMs: 10_000, matter: null }],
       },
     ]);
+  });
+});
+
+describe("time recorded elsewhere on a suggestion's matter", () => {
+  const drafted = (entryId: string) => ({
+    start: at(0),
+    end: at(60),
+    entryId,
+  });
+  const entry = (id: string, matterId: string, durationMinutes: number) => ({
+    id,
+    matterId,
+    durationMinutes,
+  });
+
+  test("counts the matter's entries this computer did not create", () => {
+    expect(
+      recordedElsewhere({
+        dayEntries: {
+          type: "ready",
+          entries: [
+            entry("mine", "a", 30),
+            entry("laptop", "a", 60),
+            entry("web", "a", 30),
+            entry("other-matter", "b", 45),
+          ],
+        },
+        draftedEntries: [drafted("mine")],
+        matterId: "a",
+      }),
+    ).toEqual({ type: "recorded", matterId: "a", minutes: 90 });
+  });
+
+  test("says nothing when only this computer recorded the matter, and warns of a day it could not read", () => {
+    const ready = {
+      type: "ready",
+      entries: [entry("mine", "a", 30)],
+    } satisfies DayEntriesRead;
+    expect(
+      recordedElsewhere({
+        dayEntries: ready,
+        draftedEntries: [drafted("mine")],
+        matterId: "a",
+      }),
+    ).toEqual({ type: "none" });
+    expect(
+      recordedElsewhere({
+        dayEntries: ready,
+        draftedEntries: [],
+        matterId: null,
+      }),
+    ).toEqual({ type: "none" });
+    expect(
+      recordedElsewhere({
+        dayEntries: { type: "loading" },
+        draftedEntries: [],
+        matterId: "a",
+      }),
+    ).toEqual({ type: "none" });
+    expect(
+      recordedElsewhere({
+        dayEntries: { type: "failed" },
+        draftedEntries: [],
+        matterId: "a",
+      }),
+    ).toEqual({ type: "unknown" });
+  });
+
+  test("this computer's own entries never add to the warning", () => {
+    assertProperty(
+      "this computer's own entries never add to the warning",
+      fc.property(
+        fc.uniqueArray(
+          fc.record({
+            id: fc.uuid(),
+            matterId: fc.constantFrom("a", "b"),
+            durationMinutes: fc.integer({ min: 0, max: 1440 }),
+            ownedHere: fc.boolean(),
+          }),
+          { maxLength: 20, selector: ({ id }) => id },
+        ),
+        (rows) => {
+          const status = recordedElsewhere({
+            dayEntries: {
+              type: "ready",
+              entries: rows.map(({ id, matterId, durationMinutes }) =>
+                entry(id, matterId, durationMinutes),
+              ),
+            },
+            draftedEntries: rows
+              .filter(({ ownedHere }) => ownedHere)
+              .map(({ id }) => drafted(id)),
+            matterId: "a",
+          });
+          const elsewhere = rows
+            .filter(({ matterId, ownedHere }) => matterId === "a" && !ownedHere)
+            .reduce((sum, { durationMinutes }) => sum + durationMinutes, 0);
+          expect(status).toEqual(
+            elsewhere > 0
+              ? { type: "recorded", matterId: "a", minutes: elsewhere }
+              : { type: "none" },
+          );
+        },
+      ),
+    );
   });
 });

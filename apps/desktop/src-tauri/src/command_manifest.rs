@@ -150,6 +150,8 @@ macro_rules! with_stella_commands {
       time_entry_commands::time_entry_search_matters => "time_entry_search_matters",
       time_entry_commands::time_entry_candidates => "time_entry_candidates",
       time_entry_commands::time_entry_resolve_matters => "time_entry_resolve_matters",
+      time_entry_commands::time_entry_day_entries => "time_entry_day_entries",
+      time_entry_commands::time_entry_open_matter_time => "time_entry_open_matter_time",
       time_entry_commands::time_entry_submit_batch_confirmed => "time_entry_submit_batch_confirmed",
       billing_draft_settings::billing_draft_get_settings => "billing_draft_get_settings",
       billing_draft_settings::billing_draft_grant_consent => "billing_draft_grant_consent",

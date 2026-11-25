@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import {
+  type DesktopDayEntriesResponse,
   type DesktopMatterResolution,
   type DesktopTimeEntryMatterCandidate,
   isDesktopMatterId,
@@ -928,4 +929,62 @@ const sliversByMatter = (segments: readonly MatchedSegment[]) => {
     ]);
   }
   return slivers;
+};
+
+/** The member's own entries on the reviewed day, as far as they were read. */
+export type DayEntriesRead =
+  | { type: "loading" }
+  | { entries: DesktopDayEntriesResponse["entries"]; type: "ready" }
+  | { type: "failed" };
+
+/** What a suggestion says about its matter's time recorded elsewhere. */
+export type RecordedElsewhere =
+  | { type: "none" }
+  | { matterId: string; minutes: number; type: "recorded" }
+  /** The day's entries could not be read, so a duplicate cannot be ruled
+   * out. */
+  | { type: "unknown" };
+
+type RecordedElsewhereOptions = {
+  dayEntries: DayEntriesRead;
+  /** The entries this computer created for the day. */
+  draftedEntries: MatchDayOptions["draftedEntries"];
+  /** The suggestion's matter, `null` before one is chosen. */
+  matterId: string | null;
+};
+
+/**
+ * The time already on a suggestion's matter for the reviewed day that this
+ * computer did not submit: from another computer or the web. An entry this
+ * computer created stays its own wherever it was edited later.
+ */
+export const recordedElsewhere = ({
+  dayEntries,
+  draftedEntries,
+  matterId,
+}: RecordedElsewhereOptions): RecordedElsewhere => {
+  if (matterId === null) {
+    return { type: "none" };
+  }
+  switch (dayEntries.type) {
+    case "loading":
+      return { type: "none" };
+    case "failed":
+      return { type: "unknown" };
+    case "ready": {
+      const ownEntryIds = new Set(draftedEntries.map(({ entryId }) => entryId));
+      let minutes = 0;
+      for (const entry of dayEntries.entries) {
+        if (entry.matterId === matterId && !ownEntryIds.has(entry.id)) {
+          minutes += entry.durationMinutes;
+        }
+      }
+      return minutes > 0
+        ? { type: "recorded", matterId, minutes }
+        : { type: "none" };
+    }
+    default:
+      dayEntries satisfies never;
+      return panic("Unknown day entries read");
+  }
 };
