@@ -80,6 +80,56 @@ const filingOf = (filed: BrowserDownloadFiled): BrowserDownloadFiling => {
 
 const refusalSchema = v.object({ message: v.string() });
 
+/**
+ * Posts one filing and reads stella's answer, under the caller's signal,
+ * which bounds the whole exchange.
+ */
+const postDownload = async ({
+  bearer,
+  body,
+  signal,
+  url,
+}: {
+  bearer: string;
+  body: FormData;
+  signal: AbortSignal;
+  url: URL;
+}): Promise<BrowserDownloadFiling> => {
+  const response = await Result.tryPromise(
+    async () =>
+      await fetch(url, {
+        method: "POST",
+        headers: { authorization: `Bearer ${bearer}` },
+        body,
+        // A redirect would move the token to another URL.
+        redirect: "error",
+        signal,
+      }),
+  );
+  if (Result.isError(response)) {
+    return notFiled("stella could not be reached.");
+  }
+  const answer = await Result.tryPromise(
+    async (): Promise<unknown> => await response.value.json(),
+  );
+  if (!response.value.ok) {
+    const refusal = Result.isOk(answer)
+      ? v.safeParse(refusalSchema, answer.value)
+      : null;
+    return notFiled(
+      refusal?.success === true
+        ? `stella did not file it: ${refusal.output.message.replace(/\.$/u, "")}.`
+        : `stella did not file it (${String(response.value.status)}).`,
+    );
+  }
+  const filed = Result.isOk(answer)
+    ? v.safeParse(browserDownloadFiledSchema, answer.value)
+    : null;
+  return filed?.success === true
+    ? filingOf(filed.output)
+    : notFiled("stella's answer named no document.");
+};
+
 type FilingTarget = {
   /** The stella API origin, from the desktop's own configuration. */
   apiOrigin: string;
@@ -131,40 +181,13 @@ export const browserDownloadFiler =
       body.set(BROWSER_DOWNLOAD_FORM_FIELD.pageUrl, origin.pageUrl);
     }
     body.set(BROWSER_DOWNLOAD_FORM_FIELD.downloadedAt, origin.downloadedAt);
-    const response = await Result.tryPromise(
-      async () =>
-        await fetch(new URL(localRunBrowserDownloadPath(runId), apiOrigin), {
-          method: "POST",
-          headers: { authorization: `Bearer ${bearer}` },
-          body,
-          // A redirect would move the token to another URL.
-          redirect: "error",
-          signal: AbortSignal.any([
-            stopped,
-            AbortSignal.timeout(FILING_TIMEOUT_MS),
-          ]),
-        }),
-    );
-    if (Result.isError(response)) {
-      return notFiled("stella could not be reached.");
-    }
-    const answer = await Result.tryPromise(
-      async (): Promise<unknown> => await response.value.json(),
-    );
-    if (!response.value.ok) {
-      const refusal = Result.isOk(answer)
-        ? v.safeParse(refusalSchema, answer.value)
-        : null;
-      return notFiled(
-        refusal?.success === true
-          ? `stella did not file it: ${refusal.output.message.replace(/\.$/u, "")}.`
-          : `stella did not file it (${String(response.value.status)}).`,
-      );
-    }
-    const filed = Result.isOk(answer)
-      ? v.safeParse(browserDownloadFiledSchema, answer.value)
-      : null;
-    return filed?.success === true
-      ? filingOf(filed.output)
-      : notFiled("stella's answer named no document.");
+    return await postDownload({
+      bearer,
+      body,
+      signal: AbortSignal.any([
+        stopped,
+        AbortSignal.timeout(FILING_TIMEOUT_MS),
+      ]),
+      url: new URL(localRunBrowserDownloadPath(runId), apiOrigin),
+    });
   };
