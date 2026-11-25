@@ -54,7 +54,10 @@
     "./combobox": "./src/components/combobox.tsx",
     "./command": "./src/components/command.tsx",
     "./composer": "./src/components/composer.tsx",
-    "./composer-frame": "./src/components/composer-frame.tsx",
+    "./composer-frame": {
+      "react-native": "./src/components/composer-frame.native.tsx",
+      "default": "./src/components/composer-frame.tsx"
+    },
     "./composer-tokens": "./src/components/composer-tokens.ts",
     "./control-face": "./src/components/control-face.tsx",
     "./context-menu": "./src/components/context-menu.tsx",

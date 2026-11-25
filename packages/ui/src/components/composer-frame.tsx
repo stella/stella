@@ -1,12 +1,19 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import type { ComponentProps, ReactNode } from "react";
 
 import { cn } from "../lib/utils";
+import type {
+  ComposerFrameContract,
+  ComposerLayout,
+  ComposerRing,
+} from "./composer-frame.shared";
+import { useComposerLayout } from "./composer-layout";
 import {
   COMPOSER_BOX_CLASS,
   COMPOSER_TEXT_CLASS,
+  COMPOSER_TEXT_REGION_MAX_HEIGHT_CLASS,
   DOC_FLOAT_SURFACE_CLASS,
 } from "./composer-tokens";
 import { ScrollArea } from "./scroll-area";
@@ -14,19 +21,6 @@ import { ScrollArea } from "./scroll-area";
 // The composer box, apart from the status-row pieces in ./composer.tsx: it
 // imports no menu or popup, so a route's loading view can draw the same box
 // the live composer renders through.
-
-/**
- * How the frame lays its text and controls out.
- *
- * `bar`: one 44px row: the leading controls, the text, the trailing
- * controls, all centred on the one text line.
- *
- * `stacked`: the text across the whole box on top, the controls in a row
- * beneath it, leading at the start and trailing at the end. Text and
- * controls never share a row, so no control stands beside (or over) a line
- * of text, however long the draft grows.
- */
-type ComposerLayout = "bar" | "stacked";
 
 /**
  * One grid for both layouts; only the cells' placement changes, so a switch
@@ -75,23 +69,10 @@ const COMPOSER_TRAILING_SEAT_CLASS = {
 const COMPOSER_CONTROL_GROUP_CLASS =
   "flex min-w-0 shrink-0 items-center gap-0.5";
 
-/**
- * The most the text region grows to before it scrolls: 16 lines of
- * `leading-5`. The controls and the attachments sit outside the region, so
- * they stay put while the text scrolls.
- */
-const COMPOSER_TEXT_REGION_MAX_HEIGHT_CLASS = "max-h-80";
-
 /** The large box's three-line height, on the editable element itself, so a
  *  click anywhere in it lands in the editor. */
 const COMPOSER_LARGE_TEXT_CLASS =
   "min-h-15 [&_[role=textbox]]:min-h-15 [&_textarea]:min-h-15";
-
-/** Above this many line heights, the text is on a second line. */
-const SECOND_LINE_THRESHOLD = 1.5;
-
-/** Which edge treatment the box wears. */
-type ComposerRing = "none" | "focus" | "anonymized" | "attention";
 
 const COMPOSER_RING_CLASS = {
   none: "",
@@ -113,42 +94,16 @@ const COMPOSER_SURFACE_CLASS = {
   document: cn("shadow-floating-ring", DOC_FLOAT_SURFACE_CLASS),
 } as const satisfies Record<ComposerSurface, string>;
 
-/**
- * Which composer a frame is.
- *
- * `compact`, the follow-up bar: empty or one line, it is a `bar`; the first
- * time its text needs a second line (a wrap or a line break) it is
- * `stacked`, and it stays stacked until the draft is empty again, so it
- * never flips back and forth at the wrap point while someone types. `empty`
- * is the draft's emptiness, the one thing the switch back reads.
- *
- * `large`, the hero box: always `stacked`, three lines tall while empty.
- */
-type ComposerStature =
-  { stature: "compact"; empty: boolean } | { stature: "large"; empty?: never };
-
 type ComposerFrameProps = Omit<
   ComponentProps<"div">,
   "children" | "className"
 > &
-  ComposerStature & {
-    /** The editable element: an editor, or a `Textarea` with the
-     *  `composer` appearance. It grows with its content; the frame caps it
-     *  and scrolls. */
-    text: ReactNode;
+  ComposerFrameContract & {
     /** Painted over the start of the text while given, one line tall; its
-     *  content cuts itself to the line. The surface decides when it shows. */
+     *  content cuts itself to the line. The surface decides when it shows.
+     *  A phone's text field draws its own placeholder, so the native frame
+     *  has no such slot. */
     placeholder?: ReactNode;
-    /** Draft attachments, above the text and outside its scroll region. */
-    attachments?: ReactNode;
-    /** Chrome anchored above the box (preset chips, a floating attachment
-     *  tray), positioned by the surface from the box's top edge outward. */
-    above?: ReactNode;
-    /** The controls at the start: the (+) menu, a scope control. */
-    leading?: ReactNode;
-    /** The controls at the end, the primary (send) control last. */
-    trailing?: ReactNode;
-    ring: ComposerRing;
     surface?: ComposerSurface | undefined;
   };
 
@@ -173,46 +128,33 @@ export const ComposerFrame = ({
   trailing,
   ...boxProps
 }: ComposerFrameProps) => {
-  const [secondLine, setSecondLine] = useState(false);
-  const draftEmpty = empty === true;
-  // The switch back happens when the draft becomes empty, not while it is: a
-  // draft of blank lines is empty yet several lines tall, and resetting on
-  // every render would flip it between the two layouts forever.
-  const [wasEmpty, setWasEmpty] = useState(draftEmpty);
-  if (wasEmpty !== draftEmpty) {
-    setWasEmpty(draftEmpty);
-    if (draftEmpty) {
-      setSecondLine(false);
-    }
-  }
-  const layout: ComposerLayout =
-    stature === "large" || secondLine ? "stacked" : "bar";
+  const { layout, measured } = useComposerLayout(stature, empty);
 
-  // The text's real height against one line of it: a wrap, a line break and
-  // a taller inline chip all count, where a character count would guess.
-  const measureText = useCallback((content: HTMLDivElement | null) => {
-    if (content === null) {
-      return undefined;
-    }
-    const observer = new ResizeObserver(() => {
-      // The ruler is one empty line in the text's own type, so its height is
-      // the line height in pixels at any font size, with nothing to parse.
-      const ruler = content.querySelector<HTMLElement>(
-        '[data-slot="composer-line-ruler"]',
-      );
-      const lineHeight = ruler?.offsetHeight ?? 0;
-      if (
-        lineHeight > 0 &&
-        content.clientHeight > lineHeight * SECOND_LINE_THRESHOLD
-      ) {
-        setSecondLine(true);
+  // The text's real height against one line of it (./composer-layout.ts).
+  const measureText = useCallback(
+    (content: HTMLDivElement | null) => {
+      if (content === null) {
+        return undefined;
       }
-    });
-    observer.observe(content);
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
+      const observer = new ResizeObserver(() => {
+        // The ruler is one empty line in the text's own type, so its height
+        // is the line height in pixels at any font size, with nothing to
+        // parse.
+        const ruler = content.querySelector<HTMLElement>(
+          '[data-slot="composer-line-ruler"]',
+        );
+        const lineHeight = ruler?.offsetHeight ?? 0;
+        if (lineHeight > 0) {
+          measured(content.clientHeight, lineHeight);
+        }
+      });
+      observer.observe(content);
+      return () => {
+        observer.disconnect();
+      };
+    },
+    [measured],
+  );
 
   return (
     <div

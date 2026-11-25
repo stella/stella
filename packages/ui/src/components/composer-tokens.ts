@@ -4,11 +4,11 @@
 
 /**
  * The tokens a composer's paint shares: the box, its text, its round
- * controls and the rows beside it. The box's layout (where the text sits,
- * where the controls sit, how it grows and scrolls) is not a token: it
- * belongs to `ComposerFrame` (./composer.tsx), and every web composer renders
- * through it, so no surface can lay text and controls out by hand. The
- * mobile app paints its native box from `COMPOSER_BOX_CLASS`.
+ * controls, its text region's cap and the rows beside it. The box's layout
+ * (where the text sits, where the controls sit, when it switches between
+ * the two) is not a token: it belongs to `ComposerFrame` (./composer-frame.tsx
+ * and its React Native twin ./composer-frame.native.tsx), and every composer
+ * renders through it, so no surface can lay text and controls out by hand.
  */
 
 /** Shared responsive size for the two round controls flanking a composer. */
@@ -32,8 +32,24 @@ export const COMPOSER_BOX_CLASS = "bg-background rounded-2xl border";
 export const DOC_FLOAT_SURFACE_CLASS =
   "[--doc-float-surface:var(--color-white)] dark:[--doc-float-surface:var(--popover)] bg-(--doc-float-surface)";
 
+/**
+ * The most a composer's text region grows to before it scrolls: 16 lines of
+ * the web's `leading-5`, 320 points on a phone. Both `ComposerFrame`
+ * renderers cap their text region with it; the controls and the attachments
+ * sit outside the region, so they stay put while the text scrolls.
+ */
+export const COMPOSER_TEXT_REGION_MAX_HEIGHT_CLASS = "max-h-80";
+
 /** Text stature of the editor and every placeholder painted over it. */
 export const COMPOSER_TEXT_CLASS = "text-sm leading-5";
+
+/**
+ * One line of a phone composer's text, in points: the line of the native
+ * field's `text-base`, which a thumb-sized composer uses where the web's
+ * reads `text-sm`. The native `Textarea` sets it and the native
+ * `ComposerFrame` measures the text against it.
+ */
+export const COMPOSER_NATIVE_LINE_HEIGHT = 24;
 
 /**
  * The round, foreground-filled primary control at the action row's end:
