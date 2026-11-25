@@ -57,6 +57,7 @@ import { DRAFT_FAILURE_RECOVERY } from "./billing-draft-logic";
 import type { CardDraft, DraftFailureKind } from "./billing-draft-logic";
 import type { DraftConsentStatus } from "./billing-draft-transport";
 import { DraftConsent } from "./DraftConsent";
+import { useMatchReasonLabel } from "./matter-rule-label";
 import { MatterPicker } from "./MatterPicker";
 import { useDurationLabel } from "./use-duration-label";
 
@@ -367,6 +368,9 @@ export const ActivitySuggestionCard = ({
           {edit.matter === null ? (
             <RangeMatterNote suggestion={suggestion} />
           ) : null}
+          {edit.matter !== null && edit.matter.id === suggestion.matter?.id ? (
+            <MatchReasonNote suggestion={suggestion} />
+          ) : null}
           {titlesNotice !== null && !hasWindowTitles(suggestion) ? (
             // The description falls back to app names without titles; say
             // why next to it, where the gap shows.
@@ -553,6 +557,21 @@ const RangeMatterNote = ({
   const note = RANGE_MATTER_NOTES[suggestion.matterBasis];
   return note === null ? null : (
     <p className="text-muted-foreground text-xs text-pretty">{t(note)}</p>
+  );
+};
+
+/** Why the review suggests the card's matter, while the card keeps it. */
+const MatchReasonNote = ({
+  suggestion,
+}: {
+  suggestion: ActivitySuggestion;
+}) => {
+  const reasonLabel = useMatchReasonLabel();
+  const label = reasonLabel(suggestion.reason);
+  return label === null ? null : (
+    <p className="text-muted-foreground text-xs text-pretty">
+      <bdi>{label}</bdi>
+    </p>
   );
 };
 

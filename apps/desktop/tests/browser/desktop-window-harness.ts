@@ -305,6 +305,11 @@ const openWindow = async (
       },
       is_activity_enabled: () => data.activity !== null,
       activity_get_settings: () => data.activity,
+      activity_get_matter_rules: () => ({
+        type: "stored",
+        revision: 0,
+        rules: [],
+      }),
       // Activity as setup reads it before recording starts: the defaults,
       // app names only. Written out here, as the handlers run in the page.
       activity_get_setup: () =>

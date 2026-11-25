@@ -7,6 +7,8 @@ mod activity_calls;
 mod activity_capture;
 mod activity_commands;
 mod activity_details;
+mod activity_matter_learning;
+mod activity_matter_rules;
 mod activity_settings;
 mod activity_setup;
 mod activity_store;
@@ -120,6 +122,7 @@ mod sse;
 #[cfg(test)]
 mod test_child_processes;
 mod time_entry_commands;
+mod time_entry_settings_commands;
 mod time_entry_submit;
 mod transcribe_history;
 mod transcribe_recording;

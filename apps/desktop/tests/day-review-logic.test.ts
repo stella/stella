@@ -15,6 +15,7 @@ import {
   unresolvedMatterIds,
   withoutAppSuffix,
 } from "../src/activity/day-review-logic";
+import { EMPTY_MATTER_LEARNING } from "../src/activity/matter-learning";
 
 const ALPHA = {
   id: "a",
@@ -48,6 +49,8 @@ const MATTER_IDS = [
   "00000000-0000-4000-8000-000000000002",
   "00000000-0000-4000-8000-000000000003",
 ] as const;
+/** The review runs a day after the fixtures; nothing here is learned. */
+const NOW_MS = Date.UTC(2026, 9, 10);
 const at = (seconds: number) =>
   new Date(Date.UTC(2026, 9, 9, 9, 0, seconds)).toISOString();
 const segment = (
@@ -71,6 +74,8 @@ const review = (
     segments: timedSegments(segments),
     candidates,
     resolved: [],
+    learning: EMPTY_MATTER_LEARNING,
+    nowMs: NOW_MS,
     captureDetails,
     manualAssignments: [],
     draftedEntries: [],
@@ -107,6 +112,8 @@ describe("local matter day review", () => {
         { type: "accessible", matter: outside },
         { type: "inaccessible", id: "lost" },
       ],
+      learning: EMPTY_MATTER_LEARNING,
+      nowMs: NOW_MS,
       captureDetails: true,
       manualAssignments: [],
       draftedEntries: [],
@@ -209,6 +216,8 @@ describe("local matter day review", () => {
         segments: timedSegments([segment(0, 30, "B-202")]),
         candidates: candidates.toReversed(),
         resolved: [],
+        learning: EMPTY_MATTER_LEARNING,
+        nowMs: NOW_MS,
         captureDetails: true,
         manualAssignments: [],
         draftedEntries: [],
@@ -242,6 +251,8 @@ describe("local matter day review", () => {
           segments: timedSegments([segment(0, 30, title)]),
           candidates: ordered,
           resolved: [],
+          learning: EMPTY_MATTER_LEARNING,
+          nowMs: NOW_MS,
           captureDetails: true,
           manualAssignments: [],
           draftedEntries: [],
@@ -254,6 +265,8 @@ describe("local matter day review", () => {
         ]),
         candidates: ordered,
         resolved: [],
+        learning: EMPTY_MATTER_LEARNING,
+        nowMs: NOW_MS,
         captureDetails: true,
         manualAssignments: [],
         draftedEntries: [],
@@ -269,6 +282,8 @@ describe("local matter day review", () => {
         segments: original,
         candidates,
         resolved: [],
+        learning: EMPTY_MATTER_LEARNING,
+        nowMs: NOW_MS,
         captureDetails: true,
         manualAssignments: [
           { start: at(boundary), end: at(60), matterId: "b" },
@@ -287,6 +302,8 @@ describe("local matter day review", () => {
       segments: timedSegments([segment(0, 60, "A-101", "a")]),
       candidates,
       resolved: [{ type: "inaccessible", id: "removed" }],
+      learning: EMPTY_MATTER_LEARNING,
+      nowMs: NOW_MS,
       captureDetails: true,
       manualAssignments: [
         { start: at(0), end: at(60), matterId: "b" },
@@ -394,6 +411,8 @@ describe("local matter day review", () => {
             ),
             candidates: shortlist,
             resolved,
+            learning: EMPTY_MATTER_LEARNING,
+            nowMs: NOW_MS,
             captureDetails,
             manualAssignments: assignments.map(
               ({ start, length, matterId }) => ({
@@ -515,6 +534,8 @@ describe("window title evidence", () => {
       ]),
       candidates,
       resolved: [],
+      learning: EMPTY_MATTER_LEARNING,
+      nowMs: NOW_MS,
       captureDetails: true,
       manualAssignments: [],
       draftedEntries: [],
