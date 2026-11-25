@@ -206,7 +206,7 @@ export const startFlowRun = async (
         }),
       );
     }
-    return await authorization.value.execute(
+    return await authorization.value.execute<StartFlowRunOutcome>(
       async () =>
         await Result.gen(async function* () {
           const runId = createSafeId<"flowRun">();
@@ -214,7 +214,9 @@ export const startFlowRun = async (
             triggerSource.type === "manual"
               ? triggerSource.userId
               : definition.createdByUserId;
-          const createAndEnqueue = async (signal?: AbortSignal) =>
+          const createAndEnqueue = async (
+            signal?: AbortSignal,
+          ): Promise<StartFlowRunOutcome> =>
             await Result.gen(async function* () {
               const rows = buildFlowRunRows({
                 runId,
