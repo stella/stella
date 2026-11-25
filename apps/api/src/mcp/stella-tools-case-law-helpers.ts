@@ -106,7 +106,7 @@ import { boundCaseLawSearchHeadnotes } from "./case-law-search-headnotes";
 import { searchNotesForCall } from "./search-notes";
 
 /** What the engine answers for a cursor it cannot decode. */
-export const INVALID_CURSOR_MESSAGE = "Invalid cursor";
+const INVALID_CURSOR_MESSAGE = "Invalid cursor";
 
 /** Read once at module load: tools/list is fixed for a running server. */
 export const SEARCH_CASE_LAW_TEXTS = searchCaseLawTexts(
@@ -164,20 +164,20 @@ export const mergeCaseLawSearchHits = (
           rank,
           queryIndex,
         });
-        continue;
-      }
-      // Queries are walked in index order, so this stays ascending.
-      seen.matchedQueries.push(queryIndex);
-      // A full match represents the decision over any partial one: its hit
-      // (excerpt) and rank stand, and ranks compare only within one class,
-      // so a promoted decision never sorts by its partial rank.
-      const group = caseLawHitGroup(hit.match, order);
-      const seenGroup = caseLawHitGroup(seen.match, order);
-      if (group < seenGroup || (group === seenGroup && rank < seen.rank)) {
-        seen.hit = hit;
-        seen.rank = rank;
-        seen.match = hit.match;
-        seen.queryIndex = queryIndex;
+      } else {
+        // Queries are walked in index order, so this stays ascending.
+        seen.matchedQueries.push(queryIndex);
+        // A full match represents the decision over any partial one: its hit
+        // (excerpt) and rank stand, and ranks compare only within one class,
+        // so a promoted decision never sorts by its partial rank.
+        const group = caseLawHitGroup(hit.match, order);
+        const seenGroup = caseLawHitGroup(seen.match, order);
+        if (group < seenGroup || (group === seenGroup && rank < seen.rank)) {
+          seen.hit = hit;
+          seen.rank = rank;
+          seen.match = hit.match;
+          seen.queryIndex = queryIndex;
+        }
       }
     }
   }
