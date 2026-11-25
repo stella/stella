@@ -356,9 +356,7 @@ export const WorkspaceBreadcrumb = ({
                       exact: true,
                       includeSearch: false,
                     }}
-                    activeProps={{
-                      className: "text-foreground font-semibold",
-                    }}
+                    activeProps={{ className: "text-foreground" }}
                     className="hover:text-foreground inline-flex max-w-80 min-w-0 items-center gap-1.5"
                     params={{
                       workspaceId,
@@ -437,10 +435,13 @@ export const WorkspaceBreadcrumb = ({
           onOpenContextMenu={() => startEditingName()}
           preserveNativeTargets={false}
         >
+          {/* Same weight as the crumb on every other matter route: the root
+              shows only until its default view redirect runs, so a bold name
+              here flashes on each click. */}
           <Link
             activeOptions={{ exact: true, includeSearch: false }}
-            activeProps={{ className: "text-foreground font-semibold" }}
-            className="hover:text-foreground max-w-80 min-w-0 font-semibold"
+            activeProps={{ className: "text-foreground" }}
+            className="hover:text-foreground max-w-80 min-w-0"
             dir="auto"
             onClick={() => {
               startEditingName();
