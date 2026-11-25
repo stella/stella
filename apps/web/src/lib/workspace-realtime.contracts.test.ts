@@ -1676,7 +1676,7 @@ test("a committed entity rename leaves another entity's registered detail reader
     [otherEntityId, other],
   ] as const) {
     const queryKey = entitiesKeys.detail(WORKSPACE_ID, entityId);
-    expect(options.queryKey).toEqual(queryKey);
+    expect<QueryKey>(options.queryKey).toEqual(queryKey);
     expect(options.meta.resourceReads.resources).toContain(
       RESOURCE_TYPE.ENTITY,
     );
