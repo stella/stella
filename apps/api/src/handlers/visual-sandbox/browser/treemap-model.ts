@@ -3,14 +3,14 @@ import { panic } from "better-result";
 import { isPlausibleLocale } from "@stll/agent-input/locale";
 import { courtTierLabelsForLanguage } from "@stll/api-contract/case-law-court-tier-locales";
 import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
+import { ownEntry } from "@stll/api-contract/own-key";
 
 export const createTreemapNumberFormatter = (language: string) =>
   new Intl.NumberFormat(isPlausibleLocale(language) ? language : undefined);
 
 export const localizedTierLabel = (language: string, category: string) => {
   const locale = courtTierLabelsForLanguage(language);
-  const entry = Object.entries(locale).find(([key]) => key === category);
-  return entry?.[1] ?? category;
+  return ownEntry(locale, category) ?? category;
 };
 
 export type VisualTreemapTree =

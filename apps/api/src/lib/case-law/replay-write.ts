@@ -4,6 +4,8 @@ import type { SQL, SQLWrapper } from "drizzle-orm";
 import { alias as tableAlias, PgDialect } from "drizzle-orm/pg-core";
 import type { PgColumn, PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
 
+import { ownEntry } from "@stll/api-contract/own-key";
+
 type ReplayWriteOptions = {
   modifiedAt?: { column: PgColumn; value: Date | SQL };
 };
@@ -24,8 +26,7 @@ const replayWritePlan = (
     if (value === undefined) {
       continue;
     }
-    const entry = Object.entries(columns).find(([name]) => name === key);
-    const column = entry?.[1];
+    const column = ownEntry(columns, key);
     if (column === undefined) {
       panic(`Replay cannot write unknown column ${key}`);
     }
@@ -108,8 +109,7 @@ const replayWriteAssignments = (
   const columns = getColumns(table);
   return sql.join(
     Object.entries(set).map(([key, value]) => {
-      const entry = Object.entries(columns).find(([name]) => name === key);
-      const column = entry?.[1];
+      const column = ownEntry(columns, key);
       if (column === undefined) {
         return panic(`Replay assignment has no column ${key}`);
       }

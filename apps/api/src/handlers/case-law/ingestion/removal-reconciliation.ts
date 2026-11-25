@@ -11,6 +11,7 @@ import {
 } from "drizzle-orm";
 import * as v from "valibot";
 
+import { ownEntry } from "@stll/api-contract/own-key";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
@@ -165,10 +166,7 @@ const readerForSource = (
   readRemovalControl(source.config?.[REMOVAL_RECONCILIATION_CONFIG_KEY]) ===
   "disabled"
     ? undefined
-    : (probe ??
-      Object.entries(REMOVAL_SOURCE_PROBES).find(
-        ([key]) => key === source.adapterKey,
-      )?.[1]);
+    : (probe ?? ownEntry(REMOVAL_SOURCE_PROBES, source.adapterKey));
 
 const expectedSource = (
   sourceId: SafeId<"caseLawSource">,
