@@ -682,6 +682,7 @@
         }
       },
       "builtInSection": "Compétences intégrées",
+      "contextEmpty": "Joignez des documents de référence, listes de contrôle ou modèles que l'assistant peut consulter.",
       "deleteFile": "Supprimer le fichier",
       "deleteFileConfirm": "Supprimer le fichier ? Cette action est irréversible.",
       "disableSkill": "Désactiver la compétence",
@@ -715,6 +716,26 @@
       "invocationManual": "Uniquement sur demande",
       "invocationManualHelp": "Utilisée uniquement lorsque vous l’appelez avec / ou l’ajoutez à votre message.",
       "license": "Licence : {license}",
+      "monitor": {
+        "activeUsers": "Utilisateurs actifs",
+        "avgDau": "DAU moyen",
+        "contextUsage": "Lectures du contexte et des consignes",
+        "emptyActivity": "Aucune utilisation enregistrée sur cette période pour le moment.",
+        "engagement": "Activité",
+        "heading": "Suivi",
+        "instructionsLabel": "Consignes (SKILL.md)",
+        "noContextFiles": "Aucun fichier de contexte n'est encore joint à cette compétence.",
+        "readErrors": "{count} erreurs de lecture",
+        "readsSplit": "{chatCount} conversation · {mcp} MCP",
+        "seriesRuns": "Exécutions",
+        "seriesUsers": "Utilisateurs",
+        "totalReads": "Lectures totales",
+        "totalRuns": "Exécutions totales",
+        "trendSummary": "{runs} exécutions par {users} utilisateurs actifs",
+        "useTrend": "Tendance d'utilisation",
+        "window90d": "90 derniers jours",
+        "windowLabel": "Période"
+      },
       "newFile": "Nouveau fichier",
       "newFileFilenamePlaceholder": "notes.md",
       "newFilePathPlaceholder": "dossier/notes.md",
@@ -752,6 +773,7 @@
           "name": "Résumer un document"
         }
       },
+      "tabMonitor": "Suivi",
       "uploadHelp": "Utilisez un fichier SKILL.md ou un dossier .zip/.skill contenant SKILL.md et des ressources facultatives en lecture seule.",
       "uploadPack": "Importer un .zip/.skill ou SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/chemin/vers/competence",

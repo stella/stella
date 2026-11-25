@@ -1092,6 +1092,8 @@
     "statusProposed": "In Prüfung",
     "statusRejected": "Abgelehnt",
     "submitForReview": "Zur Prüfung einreichen",
+    "suggestImprovements": "Verbesserungen vorschlagen",
+    "suggestingImprovements": "Vorschläge werden erstellt…",
     "summaryLabel": "Zusammenfassung",
     "summaryPlaceholder": "Was ändert sich?"
   },

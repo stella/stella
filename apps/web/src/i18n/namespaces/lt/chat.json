@@ -1092,6 +1092,8 @@
     "statusProposed": "Peržiūrimas",
     "statusRejected": "Atmestas",
     "submitForReview": "Pateikti peržiūrai",
+    "suggestImprovements": "Siūlyti patobulinimus",
+    "suggestingImprovements": "Siūloma…",
     "summaryLabel": "Santrauka",
     "summaryPlaceholder": "Kas keičiasi?"
   },

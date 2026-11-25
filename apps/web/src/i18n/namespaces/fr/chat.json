@@ -1092,6 +1092,8 @@
     "statusProposed": "En cours d'examen",
     "statusRejected": "Refusée",
     "submitForReview": "Soumettre pour examen",
+    "suggestImprovements": "Suggérer des améliorations",
+    "suggestingImprovements": "Suggestion en cours…",
     "summaryLabel": "Résumé",
     "summaryPlaceholder": "Qu'est-ce qui change ?"
   },

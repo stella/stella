@@ -682,6 +682,7 @@
         }
       },
       "builtInSection": "Habilidades integradas",
+      "contextEmpty": "Anexe documentos de referência, checklists ou modelos que o assistente possa consultar.",
       "deleteFile": "Excluir arquivo",
       "deleteFileConfirm": "Excluir arquivo? Isso não pode ser desfeito.",
       "disableSkill": "Desativar habilidade",
@@ -715,6 +716,26 @@
       "invocationManual": "Somente quando invocada",
       "invocationManualHelp": "Usada somente quando você a chama com / ou a adiciona à sua mensagem.",
       "license": "Licença: {license}",
+      "monitor": {
+        "activeUsers": "Usuários ativos",
+        "avgDau": "DAU médio",
+        "contextUsage": "Leituras de contexto e instruções",
+        "emptyActivity": "Nenhum uso registrado neste período ainda.",
+        "engagement": "Engajamento",
+        "heading": "Monitoramento",
+        "instructionsLabel": "Instruções (SKILL.md)",
+        "noContextFiles": "Nenhum arquivo de contexto anexado a esta habilidade ainda.",
+        "readErrors": "{count} erros de leitura",
+        "readsSplit": "{chatCount} no chat · {mcp} MCP",
+        "seriesRuns": "Execuções",
+        "seriesUsers": "Usuários",
+        "totalReads": "Total de leituras",
+        "totalRuns": "Total de execuções",
+        "trendSummary": "{runs} execuções por {users} usuários ativos",
+        "useTrend": "Tendência de uso",
+        "window90d": "Últimos 90 dias",
+        "windowLabel": "Período"
+      },
       "newFile": "Novo arquivo",
       "newFileFilenamePlaceholder": "notes.md",
       "newFilePathPlaceholder": "pasta/notes.md",
@@ -752,6 +773,7 @@
           "name": "Resumir um documento"
         }
       },
+      "tabMonitor": "Monitoramento",
       "uploadHelp": "Use um arquivo SKILL.md ou uma pasta .zip/.skill contendo SKILL.md e recursos opcionais somente leitura.",
       "uploadPack": "Enviar .zip/.skill ou SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/caminho/para/habilidade",

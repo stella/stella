@@ -682,6 +682,7 @@
         }
       },
       "builtInSection": "Sisseehitatud oskused",
+      "contextEmpty": "Lisage viitedokumendid, kontrollnimekirjad või mallid, mida assistent saab kasutada.",
       "deleteFile": "Kustuta fail",
       "deleteFileConfirm": "Kas kustutada fail? Seda ei saa tagasi võtta.",
       "disableSkill": "Keela oskus",
@@ -715,6 +716,26 @@
       "invocationManual": "Ainult käivitamisel",
       "invocationManualHelp": "Kasutatakse ainult siis, kui käivitate selle märgiga / või lisate selle oma sõnumisse.",
       "license": "Litsents: {license}",
+      "monitor": {
+        "activeUsers": "Aktiivsed kasutajad",
+        "avgDau": "Keskm. DAU",
+        "contextUsage": "Konteksti ja juhiste lugemised",
+        "emptyActivity": "Sellel perioodil pole veel kasutust salvestatud.",
+        "engagement": "Kaasatus",
+        "heading": "Jälgimine",
+        "instructionsLabel": "Juhised (SKILL.md)",
+        "noContextFiles": "Sellele oskusele pole veel kontekstifaile lisatud.",
+        "readErrors": "{count} lugemisviga",
+        "readsSplit": "{chatCount} vestlus · {mcp} MCP",
+        "seriesRuns": "Käivitused",
+        "seriesUsers": "Kasutajad",
+        "totalReads": "Lugemisi kokku",
+        "totalRuns": "Käivitusi kokku",
+        "trendSummary": "{runs} käivitust {users} aktiivse kasutaja poolt",
+        "useTrend": "Kasutustrend",
+        "window90d": "Viimased 90 päeva",
+        "windowLabel": "Kuupäevavahemik"
+      },
       "newFile": "Uus fail",
       "newFileFilenamePlaceholder": "notes.md",
       "newFilePathPlaceholder": "folder/notes.md",
@@ -752,6 +773,7 @@
           "name": "Tee dokumendist kokkuvõte"
         }
       },
+      "tabMonitor": "Jälgimine",
       "uploadHelp": "Kasuta SKILL.md-faili või .zip/.skill-kausta, mis sisaldab faili SKILL.md ja valikulisi kirjutuskaitstud ressursse.",
       "uploadPack": "Laadi üles .zip/.skill või SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/tee/oskuseni",

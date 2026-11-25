@@ -682,6 +682,7 @@
         }
       },
       "builtInSection": "Iebūvētās prasmes",
+      "contextEmpty": "Pievienojiet atsauces dokumentus, kontrolsarakstus vai veidnes, kuras asistents var izmantot.",
       "deleteFile": "Dzēst failu",
       "deleteFileConfirm": "Dzēst failu? Šo darbību nevar atsaukt.",
       "disableSkill": "Atspējot prasmi",
@@ -715,6 +716,26 @@
       "invocationManual": "Tikai pēc izsaukuma",
       "invocationManualHelp": "Tiek izmantota tikai tad, kad to izsaucat ar / vai pievienojat savai ziņai.",
       "license": "Licence: {license}",
+      "monitor": {
+        "activeUsers": "Aktīvie lietotāji",
+        "avgDau": "Vid. DAU",
+        "contextUsage": "Konteksta un instrukciju lasījumi",
+        "emptyActivity": "Šajā periodā lietojums vēl nav reģistrēts.",
+        "engagement": "Iesaiste",
+        "heading": "Uzraudzība",
+        "instructionsLabel": "Instrukcijas (SKILL.md)",
+        "noContextFiles": "Šai prasmei vēl nav pievienotu konteksta failu.",
+        "readErrors": "{count} lasīšanas kļūdas",
+        "readsSplit": "{chatCount} tērzēšana · {mcp} MCP",
+        "seriesRuns": "Palaišanas",
+        "seriesUsers": "Lietotāji",
+        "totalReads": "Kopā lasījumu",
+        "totalRuns": "Kopā palaišanu",
+        "trendSummary": "{runs} palaišanas no {users} aktīviem lietotājiem",
+        "useTrend": "Lietošanas tendence",
+        "window90d": "Pēdējās 90 dienas",
+        "windowLabel": "Datumu diapazons"
+      },
       "newFile": "Jauns fails",
       "newFileFilenamePlaceholder": "notes.md",
       "newFilePathPlaceholder": "folder/notes.md",
@@ -752,6 +773,7 @@
           "name": "Apkopot dokumentu"
         }
       },
+      "tabMonitor": "Uzraudzība",
       "uploadHelp": "Izmantojiet SKILL.md failu vai .zip/.skill mapi ar SKILL.md un izvēles tikai lasāmiem resursiem.",
       "uploadPack": "Augšupielādēt .zip/.skill vai SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cels/uz/prasmi",

@@ -15,8 +15,8 @@ import {
   FilePlusIcon,
   FileTextIcon,
   FolderPlusIcon,
-  NewChatIcon,
   PencilIcon,
+  PlayIcon,
   PlusIcon,
   PowerIcon,
   Trash2Icon,
@@ -33,6 +33,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@stll/ui/popover";
+import { ScrollArea } from "@stll/ui/scroll-area";
 import {
   Select,
   SelectItem,
@@ -55,15 +56,26 @@ import {
   buildSkillResourceTabId,
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
+import {
+  createSerializedSaver,
+  type SerializedSaveContext,
+} from "@/components/inspector/skill-history/serialized-save";
+import { SkillBodyWorkspace } from "@/components/inspector/skill-history/skill-body-workspace";
 import type { SkillEditAccess } from "@/components/inspector/skill-history/skill-history.logic";
 import { useSkillEditAccess } from "@/components/inspector/skill-history/use-skill-edit-access";
-import { useMountEffect } from "@/hooks/use-effect";
+import {
+  splitFrontmatter,
+  toEditorMarkdown,
+  toStoredMarkdown,
+} from "@/components/skill-body-markdown";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormattingLocale } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { isMarkdownFile, MARKDOWN_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { APIError, unwrapApiResponse } from "@/lib/errors/api";
+import { APIError, toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
@@ -80,12 +92,11 @@ import {
   skillMetadataDraft,
 } from "./skill-metadata-draft.logic";
 import type { SkillInvocation } from "./skill-metadata-draft.logic";
+import { SkillMonitorPanel } from "./skill-monitor-panel";
 import {
   FILENAME_PATTERN,
   reserveReferencesPath,
 } from "./skill-resource-path.logic";
-
-const SKILL_BODY_FILE_NAME = "SKILL.md";
 
 // Default name for a freshly created (still empty) folder. A path segment,
 // not user-facing copy: resource paths only allow lowercase ASCII, so a
@@ -108,8 +119,22 @@ type SkillResource = {
   content: string;
 };
 
-type SelectedFile =
-  { type: "body" } | { type: "resource"; resourceId: string; path: string };
+type SelectedFile = {
+  type: "resource";
+  resourceId: string;
+  path: string;
+} | null;
+
+type SkillEditorTab = "configure" | "monitor" | "settings";
+
+const isSkillEditorTab = (value: unknown): value is SkillEditorTab =>
+  value === "configure" || value === "monitor" || value === "settings";
+
+const resolveSkillEditorTab = (
+  activeTab: SkillEditorTab,
+  canViewMonitor: boolean,
+): SkillEditorTab =>
+  activeTab === "monitor" && !canViewMonitor ? "configure" : activeTab;
 
 type SkillEditorProps = {
   skillId: string;
@@ -165,8 +190,16 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     );
   };
 
-  // Highlights the row whose file is open in the inspector.
-  const [selected, setSelected] = useState<SelectedFile>({ type: "body" });
+  // Highlights the context file currently open in the inspector.
+  const [selected, setSelected] = useState<SelectedFile>(null);
+  const [activeTab, setActiveTab] = useState<SkillEditorTab>("configure");
+  const canViewMonitor = access !== "none";
+  const resolvedTab = resolveSkillEditorTab(activeTab, canViewMonitor);
+  const tabLabels: Record<SkillEditorTab, string> = {
+    configure: t("organization.aiConfig.configure"),
+    monitor: tSkills("tabMonitor"),
+    settings: tSkills("howItRuns"),
+  };
   const [name, setName] = useState(detail.data?.name ?? "");
   const [description, setDescription] = useState(
     detail.data?.description ?? "",
@@ -298,6 +331,60 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   const skillName = detail.data?.slug ?? "";
   const bodyContent = detail.data?.body ?? "";
 
+  // Inline Instructions (SKILL.md) autosave: preserves the frontmatter block
+  // owned by the metadata fields above and refreshes the detail cache.
+  const writeBodyMarkdown = useLatestCallback(
+    async (
+      _key: string,
+      { markdown, storedBase }: { markdown: string; storedBase: string },
+      {
+        hasPending,
+      }: SerializedSaveContext<{ markdown: string; storedBase: string }>,
+    ) => {
+      const stored = toStoredMarkdown(markdown, storedBase);
+      const response = await invokeCapability(
+        "skills.update",
+        async (request) =>
+          api.skills({ skillId: safeSkillId }).patch({ body: stored }, request),
+      );
+      if (response.error) {
+        if (hasPending()) {
+          return;
+        }
+        toastError(toAPIError(response.error), t("common.unexpectedError"));
+        return;
+      }
+      onChanged();
+    },
+  );
+  const [saveBodyMarkdown] = useState(() =>
+    createSerializedSaver(writeBodyMarkdown),
+  );
+  const persistBody = (editorMarkdown: string) => {
+    saveBodyMarkdown(skillId, {
+      markdown: editorMarkdown,
+      storedBase: bodyContent,
+    });
+  };
+  const adoptBody = (editorMarkdown: string) => {
+    const key = skillDetailOptions(
+      activeOrganizationId,
+      userId,
+      skillId,
+    ).queryKey;
+    queryClient.setQueryData(key, (current) =>
+      current
+        ? { ...current, body: toStoredMarkdown(editorMarkdown, current.body) }
+        : current,
+    );
+    onChanged();
+    detached(detail.refetch(), "skill-editor.adopt-body");
+  };
+  const restoreBody = (editorMarkdown: string) => {
+    persistBody(editorMarkdown);
+    adoptBody(editorMarkdown);
+  };
+
   const openResourceInInspector = (resource: {
     path: string;
     content: string;
@@ -322,30 +409,9 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     });
   };
 
-  // Clicking a file opens it in the right-side Inspector (the matters Files-view
-  // pattern). Markdown files render in the Folio WYSIWYG editor there; other text
-  // files use the raw editor — both handled inside the inspector panel.
-  const selectFile = (next: SelectedFile) => {
+  // Clicking a context file opens it in the right-side Inspector.
+  const selectFile = (next: NonNullable<SelectedFile>) => {
     setSelected(next);
-    if (next.type === "body") {
-      if (!detail.data) {
-        return;
-      }
-
-      openSkillResourceTab({
-        skillName,
-        skillDisplayName: detail.data.name,
-        skillId,
-        origin: detail.data.origin,
-        target: "body",
-        resourcePath: SKILL_BODY_FILE_NAME,
-        label: SKILL_BODY_FILE_NAME,
-        mimeType: MARKDOWN_MIME,
-        content: bodyContent,
-        focus: INSPECTOR_FOCUS_INTENT.claim,
-      });
-      return;
-    }
     const resource = resources.find((entry) => entry.id === next.resourceId);
     if (!resource) {
       return;
@@ -448,10 +514,10 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     onSuccess: (result) => {
       // If the deleted file was selected, jump back to SKILL.md.
       if (
-        selected.type === "resource" &&
+        selected?.type === "resource" &&
         selected.resourceId === result.resourceId
       ) {
-        setSelected({ type: "body" });
+        setSelected(null);
       }
       // Close the deleted file's inspector tab; left open, it would keep
       // saving to the now-missing path.
@@ -482,7 +548,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       setRenamingResourceId(null);
       setRenameValue("");
       // Follow the rename: if the renamed row was selected, refresh selection.
-      if (selected.type === "resource" && selected.resourceId === data.id) {
+      if (selected?.type === "resource" && selected.resourceId === data.id) {
         setSelected({
           type: "resource",
           resourceId: data.id,
@@ -653,41 +719,14 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col">
-      {detail.data && (
-        <SkillAutoOpenLifecycle
-          key={skillId}
-          onOpen={() => {
-            setSelected({ type: "body" });
-            openSkillResourceTab({
-              skillName: detail.data.slug,
-              skillDisplayName: detail.data.name,
-              skillId,
-              origin: detail.data.origin,
-              target: "body",
-              resourcePath: SKILL_BODY_FILE_NAME,
-              label: SKILL_BODY_FILE_NAME,
-              mimeType: MARKDOWN_MIME,
-              content: detail.data.body,
-              // Landing on the editor opens SKILL.md beside what the
-              // inspector already shows, never in its place.
-              focus: INSPECTOR_FOCUS_INTENT.ifIdle,
-            });
-          }}
-        />
-      )}
-      {/* Identity, status, and how the skill runs. The files below are the main
-          surface; editing happens in the inspector. */}
-      <div className="border-b p-4" data-slot="skill-editor-identity">
-        {/* Name + description read as a title/summary; the status controls sit
-            in the top-right corner, the identity stays a readable width. */}
-        <div className="flex items-start gap-4">
-          <div className="flex min-w-0 flex-1 flex-col gap-2">
-            {/* The name and summary are edited where they are read: the
-                fields take the heading's and the body's type from here. */}
-            <div className="text-foreground flex text-lg font-semibold">
+      {/* Ultra-clean header: title + description on the left, just view switcher + Preview on the right. */}
+      <div className="border-b px-6 py-4" data-slot="skill-editor-identity">
+        <div className="mx-auto flex w-full max-w-4xl items-start gap-4">
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <div className="text-foreground flex text-xl font-semibold tracking-tight">
               <Input
                 aria-label={t("common.name")}
-                className="-ms-1.5 max-w-3xl"
+                className="-ms-1.5 max-w-2xl"
                 dir={contentDir(name)}
                 onBlur={commitName}
                 onChange={(event) => setName(event.currentTarget.value)}
@@ -700,22 +739,52 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
             <div className="text-muted-foreground flex text-sm leading-relaxed">
               <Textarea
                 aria-label={t("common.description")}
-                className="-ms-1.5 max-w-3xl"
+                className="-ms-1.5 max-w-2xl"
                 dir={contentDir(description)}
                 onBlur={commitDescription}
                 onChange={(event) => setDescription(event.currentTarget.value)}
                 placeholder={t("common.description")}
                 readOnly={!canEditContent}
-                rows={2}
+                rows={1}
                 value={description}
                 inline
               />
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+
+          <div className="flex shrink-0 items-center gap-2 pt-0.5">
+            {detail.data && (
+              <Select
+                onValueChange={(value) => {
+                  if (isSkillEditorTab(value)) {
+                    setActiveTab(value);
+                  }
+                }}
+                value={resolvedTab}
+              >
+                <SelectTrigger
+                  aria-label={t("organization.aiConfig.configure")}
+                  className="h-8 w-fit min-w-28 sm:h-7"
+                >
+                  <SelectValue>{tabLabels[resolvedTab]}</SelectValue>
+                </SelectTrigger>
+                <SelectPopup>
+                  <SelectItem value="configure">
+                    {t("organization.aiConfig.configure")}
+                  </SelectItem>
+                  {canViewMonitor && (
+                    <SelectItem value="monitor">
+                      {tSkills("tabMonitor")}
+                    </SelectItem>
+                  )}
+                  <SelectItem value="settings">
+                    {tSkills("howItRuns")}
+                  </SelectItem>
+                </SelectPopup>
+              </Select>
+            )}
             {detail.data && (
               <Button
-                aria-label={t("chat.newChat")}
                 onClick={() =>
                   openChat({
                     activeSkill: skillEditorChatSkill({
@@ -727,55 +796,278 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                     focus: INSPECTOR_FOCUS_INTENT.claim,
                   })
                 }
-                size="icon-sm"
-                variant="ghost"
+                size="sm"
+                variant="outline"
               >
-                <NewChatIcon className="size-4" />
+                <PlayIcon className="size-3.5" />
+                {t("common.preview")}
               </Button>
             )}
-            <SkillExportMenu skillId={skillId} />
-            {detail.data && (
-              <span className="text-muted-foreground rounded-md border px-1.5 py-0.5 text-xs">
-                {detail.data.scope === "team"
+            {access !== "none" && !enabled && resolvedTab !== "settings" && (
+              <Button
+                disabled={patchMetadata.isPending}
+                disabledReason={t("common.saving")}
+                onClick={toggleEnabled}
+                size="sm"
+              >
+                <PowerIcon className="size-3.5" />
+                {tSkills("enableSkill")}
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {resolvedTab === "monitor" && <SkillMonitorPanel skillId={skillId} />}
+      {resolvedTab === "settings" && detail.data && (
+        <SkillSettingsPanel
+          access={access}
+          boundClientId={detail.data.boundClientId}
+          boundWorkspaceId={detail.data.boundWorkspaceId}
+          canEditContent={canEditContent}
+          command={command}
+          commandError={commandError}
+          enabled={enabled}
+          invocation={invocation}
+          onChangeCommand={setCommand}
+          onChangeInvocation={changeInvocation}
+          onCommitCommand={commitCommand}
+          onToggleEnabled={toggleEnabled}
+          saving={patchMetadata.isPending}
+          scope={detail.data.scope}
+          skillId={skillId}
+        />
+      )}
+      {resolvedTab === "configure" && (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-6 py-5">
+            <SkillInstructionsCard
+              bodyContent={bodyContent}
+              error={detail.error}
+              hasData={detail.data !== undefined}
+              isLoading={detail.isLoading}
+              onAdoptBody={adoptBody}
+              onPersistBody={persistBody}
+              onRestoreBody={restoreBody}
+              skillId={skillId}
+            />
+
+            {/* Context — supporting files in a clean card; + Add lives in the header. */}
+            <div className="overflow-hidden rounded-xl border">
+              <FileDropZone
+                exceptionScope={{
+                  type: "handler",
+                  handlerId: "knowledge.skill-files.drop",
+                }}
+                className="flex-none"
+                coverage="content"
+                enabled={canEditContent}
+                label={t("workspaces.dropToUploadFiles")}
+                onDrop={(files) => {
+                  handleUploadFiles(files);
+                }}
+              >
+                <div className="flex items-center gap-1.5 border-b px-3 py-2">
+                  <span
+                    className="text-foreground me-auto text-sm font-medium"
+                    data-slot="skill-editor-files"
+                  >
+                    {t("chat.composerMenu.context")}
+                  </span>
+                  {allFolderIds.size > 0 && (
+                    <FolderExpandToggle
+                      allExpanded={allFoldersExpanded}
+                      onToggle={toggleAllFolders}
+                      size="icon-sm"
+                    />
+                  )}
+                  {detail.data && canEditContent && (
+                    <RootAddMenu
+                      createPending={createResource.isPending}
+                      onCreateFile={onCreateFile}
+                      onCreateFolder={() => createPendingFolder(null)}
+                      onUploadFiles={(files) => {
+                        handleUploadFiles(files);
+                      }}
+                    />
+                  )}
+                </div>
+                <div className="p-2">
+                  {detail.data &&
+                    (fileNodes.length === 0 ? (
+                      <p className="text-muted-foreground px-2 py-3 text-xs">
+                        {tSkills("contextEmpty")}
+                      </p>
+                    ) : (
+                      <SkillFileTree
+                        access={access}
+                        collapsedFolders={collapsedFolders}
+                        createPending={createResource.isPending}
+                        deletePending={deleteResource.isPending}
+                        nodes={fileNodes}
+                        onCancelFolderRename={onCancelFolderRename}
+                        onCancelRename={() => {
+                          setRenamingResourceId(null);
+                          setRenameValue("");
+                        }}
+                        onCreateFile={onCreateFile}
+                        onCreateFolder={createPendingFolder}
+                        onDeleteFile={(entry) =>
+                          deleteResource.mutate({
+                            path: entry.path,
+                            resourceId: entry.id,
+                          })
+                        }
+                        onRemovePendingFolder={onRemovePendingFolder}
+                        onSelect={selectFile}
+                        onStartFolderRename={(path) => {
+                          setRenamingResourceId(null);
+                          setRenamingFolderPath(path);
+                          setRenameValue(path.split("/").at(-1) ?? path);
+                        }}
+                        onStartRename={(entry) => {
+                          setRenamingFolderPath(null);
+                          setRenamingResourceId(entry.id);
+                          setRenameValue(entry.path);
+                        }}
+                        onSubmitFolderRename={onConfirmFolderRename}
+                        onSubmitRename={onConfirmRename}
+                        onToggleCollapsed={toggleCollapsed}
+                        pendingFolders={emptyPendingFolders}
+                        renamePending={renameResource.isPending}
+                        renameValue={renameValue}
+                        renamingFolderPath={renamingFolderPath}
+                        renamingResourceId={renamingResourceId}
+                        resources={resources}
+                        selected={selected}
+                        setRenameValue={setRenameValue}
+                      />
+                    ))}
+                </div>
+              </FileDropZone>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+type SkillInstructionsCardProps = {
+  bodyContent: string;
+  error: Error | null;
+  hasData: boolean;
+  isLoading: boolean;
+  onAdoptBody: (editorMarkdown: string) => void;
+  onPersistBody: (editorMarkdown: string) => void;
+  onRestoreBody: (editorMarkdown: string) => void;
+  skillId: string;
+};
+
+function SkillInstructionsCard({
+  bodyContent,
+  error,
+  hasData,
+  isLoading,
+  onAdoptBody,
+  onPersistBody,
+  onRestoreBody,
+  skillId,
+}: SkillInstructionsCardProps) {
+  const t = useTranslations();
+  return (
+    <div data-slot="skill-editor-instructions">
+      {isLoading && <SkillFilesPending />}
+      {error && (
+        <p className="text-destructive text-sm">
+          {userErrorFromThrown(error, t("common.unexpectedError"))}
+        </p>
+      )}
+      {hasData && (
+        <div className="overflow-hidden rounded-xl border">
+          <SkillBodyWorkspace
+            frontmatterLength={splitFrontmatter(bodyContent).frontmatter.length}
+            key={skillId}
+            liveMarkdown={toEditorMarkdown(bodyContent)}
+            onAdoptBody={onAdoptBody}
+            onPersistBody={onPersistBody}
+            onRestoreBody={onRestoreBody}
+            skillId={skillId}
+            title={t("flows.steps.instructions")}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+type SkillSettingsPanelProps = {
+  access: SkillEditAccess;
+  boundClientId: string | null;
+  boundWorkspaceId: string | null;
+  canEditContent: boolean;
+  command: string;
+  commandError: string | null;
+  enabled: boolean;
+  invocation: SkillInvocation;
+  onChangeCommand: (value: string) => void;
+  onChangeInvocation: (next: SkillInvocation) => void;
+  onCommitCommand: () => void;
+  onToggleEnabled: () => void;
+  saving: boolean;
+  scope: "private" | "team";
+  skillId: string;
+};
+
+function SkillSettingsPanel({
+  access,
+  boundClientId,
+  boundWorkspaceId,
+  canEditContent,
+  command,
+  commandError,
+  enabled,
+  invocation,
+  onChangeCommand,
+  onChangeInvocation,
+  onCommitCommand,
+  onToggleEnabled,
+  saving,
+  scope,
+  skillId,
+}: SkillSettingsPanelProps) {
+  const t = useTranslations();
+  const tSkills = useTranslations("knowledge.agentSkills");
+  return (
+    <ScrollArea className="min-h-0 flex-1">
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-6 py-5">
+        <div className="rounded-xl border p-5">
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <p className="text-foreground text-sm font-medium">
+              {tSkills("howItRuns")}
+            </p>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground rounded-md border px-2 py-0.5 text-xs">
+                {scope === "team"
                   ? tSkills("scopeTeam")
                   : tSkills("scopePrivate")}
               </span>
-            )}
-            {/* One enable control. A disabled skill (a fresh draft lands
-                disabled) spells out the action; once enabled it shrinks to
-                the power toggle. */}
-            {access !== "none" &&
-              (enabled ? (
+              <SkillExportMenu skillId={skillId} />
+              {access !== "none" && (
                 <Button
-                  aria-label={tSkills("disableSkill")}
-                  disabled={patchMetadata.isPending}
+                  disabled={saving}
                   disabledReason={t("common.saving")}
-                  onClick={toggleEnabled}
-                  size="icon-sm"
-                  variant="secondary"
-                >
-                  <PowerIcon className="size-4" />
-                </Button>
-              ) : (
-                <Button
-                  disabled={patchMetadata.isPending}
-                  disabledReason={t("common.saving")}
-                  onClick={toggleEnabled}
+                  onClick={onToggleEnabled}
                   size="sm"
+                  variant={enabled ? "secondary" : "default"}
                 >
-                  <PowerIcon className="size-4" />
-                  {tSkills("enableSkill")}
+                  <PowerIcon className="size-3.5" />
+                  {enabled ? tSkills("disableSkill") : tSkills("enableSkill")}
                 </Button>
-              ))}
+              )}
+            </div>
           </div>
-        </div>
-        {/* How the skill runs: its optional slash command. Full-width divider;
-            fields stay a readable width. */}
-        <div className="mt-3 border-t pt-3">
-          <p className="text-muted-foreground mb-2.5 text-xs font-semibold tracking-wider uppercase">
-            {tSkills("howItRuns")}
-          </p>
-          <div className="grid max-w-3xl grid-cols-[9rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2.5">
+          <div className="grid max-w-2xl grid-cols-[10rem_minmax(0,1fr)] items-start gap-x-4 gap-y-4">
             <Label
               className="mt-1.5"
               htmlFor="edit-skill-command"
@@ -797,8 +1089,10 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                   )}
                   dir="ltr"
                   id="edit-skill-command"
-                  onBlur={commitCommand}
-                  onChange={(event) => setCommand(event.target.value)}
+                  onBlur={onCommitCommand}
+                  onChange={(event) =>
+                    onChangeCommand(event.currentTarget.value)
+                  }
                   placeholder={t("knowledge.skills.commandPlaceholder")}
                   readOnly={!canEditContent}
                   value={command}
@@ -813,118 +1107,20 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
               )}
             </div>
             <SkillInvocationField
-              locked={access === "none"}
-              onChange={changeInvocation}
-              saving={patchMetadata.isPending}
+              locked={!canEditContent}
+              onChange={onChangeInvocation}
+              saving={saving}
               value={invocation}
             />
-            {detail.data && (
-              <SkillAvailabilitySummary
-                boundClientId={detail.data.boundClientId}
-                boundWorkspaceId={detail.data.boundWorkspaceId}
-                scope={detail.data.scope}
-              />
-            )}
+            <SkillAvailabilitySummary
+              boundClientId={boundClientId}
+              boundWorkspaceId={boundWorkspaceId}
+              scope={scope}
+            />
           </div>
         </div>
       </div>
-      {/* Files — the skill's bundle, the main surface. Click a file to edit it
-          in the inspector. */}
-      <FileDropZone
-        exceptionScope={{
-          type: "handler",
-          handlerId: "knowledge.skill-files.drop",
-        }}
-        className="p-3"
-        coverage="content"
-        enabled={canEditContent}
-        label={t("workspaces.dropToUploadFiles")}
-        onDrop={(files) => {
-          handleUploadFiles(files);
-        }}
-      >
-        <div className="mb-2 flex items-center gap-1 px-1">
-          <p
-            className="text-muted-foreground me-auto text-xs font-semibold tracking-wider uppercase"
-            data-slot="skill-editor-files"
-          >
-            {t("common.files")}
-          </p>
-          {allFolderIds.size > 0 && (
-            <FolderExpandToggle
-              allExpanded={allFoldersExpanded}
-              onToggle={toggleAllFolders}
-              size="icon-sm"
-            />
-          )}
-        </div>
-        {detail.isLoading && <SkillFilesPending />}
-        {detail.error && (
-          <p className="text-destructive px-1 text-sm">
-            {userErrorFromThrown(detail.error, t("common.unexpectedError"))}
-          </p>
-        )}
-        {detail.data && (
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <SkillFileTree
-              access={access}
-              collapsedFolders={collapsedFolders}
-              createPending={createResource.isPending}
-              deletePending={deleteResource.isPending}
-              nodes={fileNodes}
-              onCancelFolderRename={onCancelFolderRename}
-              onCancelRename={() => {
-                setRenamingResourceId(null);
-                setRenameValue("");
-              }}
-              onCreateFile={onCreateFile}
-              onCreateFolder={createPendingFolder}
-              onDeleteFile={(entry) =>
-                deleteResource.mutate({
-                  path: entry.path,
-                  resourceId: entry.id,
-                })
-              }
-              onRemovePendingFolder={onRemovePendingFolder}
-              onSelect={selectFile}
-              onStartFolderRename={(path) => {
-                setRenamingResourceId(null);
-                setRenamingFolderPath(path);
-                setRenameValue(path.split("/").at(-1) ?? path);
-              }}
-              onStartRename={(entry) => {
-                setRenamingFolderPath(null);
-                setRenamingResourceId(entry.id);
-                setRenameValue(entry.path);
-              }}
-              onSubmitFolderRename={onConfirmFolderRename}
-              onSubmitRename={onConfirmRename}
-              onToggleCollapsed={toggleCollapsed}
-              pendingFolders={emptyPendingFolders}
-              renamePending={renameResource.isPending}
-              renameValue={renameValue}
-              renamingFolderPath={renamingFolderPath}
-              renamingResourceId={renamingResourceId}
-              resources={resources}
-              selected={selected}
-              setRenameValue={setRenameValue}
-            />
-          </div>
-        )}
-        {detail.data && canEditContent && (
-          <div className="mt-2 shrink-0 px-1">
-            <RootAddMenu
-              createPending={createResource.isPending}
-              onCreateFile={onCreateFile}
-              onCreateFolder={() => createPendingFolder(null)}
-              onUploadFiles={(files) => {
-                handleUploadFiles(files);
-              }}
-            />
-          </div>
-        )}
-      </FileDropZone>
-    </div>
+    </ScrollArea>
   );
 }
 
@@ -940,7 +1136,7 @@ type SkillFileTreeProps = {
   onCreateFolder: (parentPath: string | null) => void;
   onDeleteFile: (entry: TreeEntry) => void;
   onRemovePendingFolder: (folderPath: string) => void;
-  onSelect: (next: SelectedFile) => void;
+  onSelect: (next: NonNullable<SelectedFile>) => void;
   onStartFolderRename: (folderPath: string) => void;
   onStartRename: (entry: TreeEntry) => void;
   onSubmitFolderRename: (folderPath: string, nextName: string) => void;
@@ -955,10 +1151,6 @@ type SkillFileTreeProps = {
   selected: SelectedFile;
   setRenameValue: (value: string) => void;
 };
-
-// The SKILL.md body isn't a stored resource, so it gets a synthetic node id and
-// is pinned at the top of the tree.
-const BODY_NODE_ID = "__body__";
 
 /**
  * Whether the assistant may use the skill on its own or only when the user
@@ -1063,18 +1255,13 @@ function SkillFileTree({
     walk(nodes);
     return ids;
   })();
-  const selectedId =
-    selected.type === "body" ? BODY_NODE_ID : selected.resourceId;
+  const selectedId = selected?.resourceId ?? null;
 
   return (
     <FileTree
       expandedIds={expandedIds}
       nodes={nodes}
       onSelect={(node) => {
-        if (node.id === BODY_NODE_ID) {
-          onSelect({ type: "body" });
-          return;
-        }
         const resource = resourceById.get(node.id);
         if (resource) {
           onSelect({
@@ -1109,9 +1296,6 @@ function SkillFileTree({
             </>
           );
         }
-        if (node.id === BODY_NODE_ID) {
-          return null;
-        }
         const resource = resourceById.get(node.id);
         if (!resource) {
           return null;
@@ -1131,9 +1315,6 @@ function SkillFileTree({
         );
       }}
       renderIcon={(node) => {
-        if (node.id === BODY_NODE_ID) {
-          return <DocumentMark className="size-4 shrink-0" kind="markdown" />;
-        }
         if (node.kind === "file") {
           return fileIcon(node.name);
         }
@@ -1155,7 +1336,6 @@ function SkillFileTree({
         const resource = resourceById.get(node.id);
         if (
           node.kind === "file" &&
-          node.id !== BODY_NODE_ID &&
           renamingResourceId === node.id &&
           resource
         ) {
@@ -1496,13 +1676,6 @@ function RootAddMenu({
   );
 }
 
-const SkillAutoOpenLifecycle = ({ onOpen }: { onOpen: () => void }) => {
-  useMountEffect(() => {
-    onOpen();
-  });
-  return null;
-};
-
 const CODE_EXTENSIONS = {
   json: true,
   yml: true,
@@ -1597,10 +1770,7 @@ const buildSkillNodes = (
     }
   };
   sortNodes(root);
-  return [
-    { id: BODY_NODE_ID, name: SKILL_BODY_FILE_NAME, kind: "file" },
-    ...root,
-  ];
+  return root;
 };
 
 const toastError = (error: unknown, fallback: string) => {

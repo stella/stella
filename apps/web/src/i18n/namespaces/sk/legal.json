@@ -682,6 +682,7 @@
         }
       },
       "builtInSection": "Vstavané zručnosti",
+      "contextEmpty": "Pripojte referenčné dokumenty, kontrolné zoznamy alebo vzory, z ktorých môže asistent čerpať.",
       "deleteFile": "Vymazať súbor",
       "deleteFileConfirm": "Vymazať súbor? Túto akciu nie je možné vrátiť späť.",
       "disableSkill": "Vypnúť zručnosť",
@@ -715,6 +716,26 @@
       "invocationManual": "Iba na vyžiadanie",
       "invocationManualHelp": "Použije sa iba vtedy, keď ju spustíte cez / alebo ju pridáte do správy.",
       "license": "Licencia: {license}",
+      "monitor": {
+        "activeUsers": "Aktívni používatelia",
+        "avgDau": "Priem. DAU",
+        "contextUsage": "Čítania kontextu a inštrukcií",
+        "emptyActivity": "V tomto období zatiaľ nebolo zaznamenané žiadne použitie.",
+        "engagement": "Zapojenie",
+        "heading": "Sledovanie",
+        "instructionsLabel": "Inštrukcie (SKILL.md)",
+        "noContextFiles": "K tejto zručnosti zatiaľ nie sú pripojené žiadne kontextové súbory.",
+        "readErrors": "{count} chýb čítania",
+        "readsSplit": "{chatCount} v chate · {mcp} MCP",
+        "seriesRuns": "Spustenia",
+        "seriesUsers": "Používatelia",
+        "totalReads": "Celkom prečítaní",
+        "totalRuns": "Celkom spustení",
+        "trendSummary": "{runs} spustení od {users} aktívnych používateľov",
+        "useTrend": "Vývoj využitia",
+        "window90d": "Posledných 90 dní",
+        "windowLabel": "Časové obdobie"
+      },
       "newFile": "Nový súbor",
       "newFileFilenamePlaceholder": "notes.md",
       "newFilePathPlaceholder": "folder/notes.md",
@@ -752,6 +773,7 @@
           "name": "Zhrnúť dokument"
         }
       },
+      "tabMonitor": "Sledovanie",
       "uploadHelp": "Použite súbor SKILL.md alebo priečinok .zip/.skill obsahujúci SKILL.md a voliteľné zdroje iba na čítanie.",
       "uploadPack": "Nahrať .zip/.skill alebo SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cesta/k/zrucnosti",

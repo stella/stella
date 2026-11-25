@@ -140,8 +140,7 @@ const skillSurfaces = (skillId: string): readonly LoadingSurface[] => [
     busy: "[data-slot=file-tree-row-pending]",
     landmarks: {
       heading: "[data-slot=skill-editor-identity]",
-      runs: "[data-slot=skill-editor-identity] .grid",
-      files: "[data-slot=skill-editor-files]",
+      instructions: "[data-slot=skill-editor-instructions]",
     },
   },
 ];

@@ -1002,6 +1002,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "authorization-in-handler",
   },
+  "POST /v1/skills/:skillId/proposals/suggest-improvements": {
+    type: "non-replay",
+    reason: "authorization-in-handler",
+  },
   "POST /v1/skills/:skillId/resources": {
     type: "non-replay",
     reason: "authorization-in-handler",

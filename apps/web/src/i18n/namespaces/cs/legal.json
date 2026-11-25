@@ -682,6 +682,7 @@
         }
       },
       "builtInSection": "Vestavěné dovednosti",
+      "contextEmpty": "Připojte referenční dokumenty, kontrolní seznamy nebo vzory, ze kterých může asistent čerpat.",
       "deleteFile": "Smazat soubor",
       "deleteFileConfirm": "Smazat soubor? Tuto akci nelze vrátit zpět.",
       "disableSkill": "Vypnout dovednost",
@@ -715,6 +716,26 @@
       "invocationManual": "Jen na vyžádání",
       "invocationManualHelp": "Použije se jen tehdy, když ji spustíte přes / nebo ji přidáte do zprávy.",
       "license": "Licence: {license}",
+      "monitor": {
+        "activeUsers": "Aktivní uživatelé",
+        "avgDau": "Prům. DAU",
+        "contextUsage": "Čtení kontextu a instrukcí",
+        "emptyActivity": "V tomto období zatím nebylo zaznamenáno žádné použití.",
+        "engagement": "Zapojení",
+        "heading": "Sledování",
+        "instructionsLabel": "Instrukce (SKILL.md)",
+        "noContextFiles": "K této dovednosti zatím nejsou připojeny žádné kontextové soubory.",
+        "readErrors": "{count} chyb čtení",
+        "readsSplit": "{chatCount} v chatu · {mcp} MCP",
+        "seriesRuns": "Spuštění",
+        "seriesUsers": "Uživatelé",
+        "totalReads": "Celkem přečtení",
+        "totalRuns": "Celkem spuštění",
+        "trendSummary": "{runs} spuštění od {users} aktivních uživatelů",
+        "useTrend": "Vývoj využití",
+        "window90d": "Posledních 90 dní",
+        "windowLabel": "Časové období"
+      },
       "newFile": "Nový soubor",
       "newFileFilenamePlaceholder": "notes.md",
       "newFilePathPlaceholder": "folder/notes.md",
@@ -752,6 +773,7 @@
           "name": "Shrnout dokument"
         }
       },
+      "tabMonitor": "Sledování",
       "uploadHelp": "Použijte soubor SKILL.md nebo složku .zip/.skill obsahující SKILL.md a volitelné zdroje jen pro čtení.",
       "uploadPack": "Nahrát .zip/.skill nebo SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cesta/k/dovednosti",

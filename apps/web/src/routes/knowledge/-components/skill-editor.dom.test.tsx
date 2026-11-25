@@ -7,6 +7,21 @@ import messages from "@/i18n/langs/en.json";
 import type { WebApiRoutes } from "@/lib/api-contract";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
+Object.defineProperties(document, {
+  execCommand: { value: () => false, configurable: true, writable: true },
+  queryCommandEnabled: {
+    value: () => false,
+    configurable: true,
+    writable: true,
+  },
+  queryCommandSupported: {
+    value: () => false,
+    configurable: true,
+    writable: true,
+  },
+  queryCommandState: { value: () => false, configurable: true, writable: true },
+  queryCommandValue: { value: () => "", configurable: true, writable: true },
+});
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });
 const { stellaToast } = await import("@stll/ui/toast");
 const { act, cleanup, fireEvent, render, screen, waitFor } =
@@ -18,7 +33,9 @@ const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { roleOptions } = await import("@/lib/auth-queries");
-const { skillDetailOptions } = await import("@/lib/knowledge/queries");
+const { skillDetailOptions, skillProposalsOptions, skillRevisionsOptions } =
+  await import("@/lib/knowledge/queries");
+const { organizationOptions } = await import("@/lib/organization/queries");
 const { toSafeId } = await import("@/lib/safe-id");
 const { workspacesNavigationOptions } =
   await import("@/lib/workspaces/queries");
@@ -151,6 +168,24 @@ const mount = ({
     skillDetailOptions(user.activeOrganizationId, user.id, SKILL_ID).queryKey,
     current,
   );
+  client.setQueryData(
+    skillRevisionsOptions(user.activeOrganizationId, user.id, SKILL_ID)
+      .queryKey,
+    { items: [] },
+  );
+  client.setQueryData(
+    skillProposalsOptions(user.activeOrganizationId, user.id, SKILL_ID)
+      .queryKey,
+    { items: [] },
+  );
+  client.setQueryData(organizationOptions(user.activeOrganizationId).queryKey, {
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    id: user.activeOrganizationId,
+    invitations: [],
+    members: [],
+    name: "Harbrook Partners",
+    slug: "harbrook-partners",
+  });
   const patches: PatchRequest[] = [];
   const boundary = spyOn(globalThis, "fetch").mockImplementation(
     Object.assign(
@@ -202,6 +237,27 @@ const mount = ({
   return patches;
 };
 
+const openViewSelect = async () => {
+  const trigger = screen.getByRole("combobox", {
+    name: messages.organization.aiConfig.configure,
+  });
+  await act(async () => {
+    fireEvent.mouseDown(trigger, { button: 0 });
+  });
+};
+
+const openSettings = async () => {
+  await openViewSelect();
+  const option = await screen.findByRole("option", {
+    name: messages.knowledge.agentSkills.howItRuns,
+  });
+  await act(async () => {
+    fireEvent.pointerDown(option, { button: 0, pointerType: "mouse" });
+    fireEvent.pointerUp(option, { button: 0, pointerType: "mouse" });
+    fireEvent.click(option, { button: 0, detail: 1 });
+  });
+};
+
 const invocationControl = () =>
   screen.getByRole("combobox", {
     name: messages.common.whenToUse,
@@ -219,8 +275,9 @@ const choose = async (optionName: string) => {
   });
 };
 
-test("the invocation control shows the skill's current setting", () => {
+test("the invocation control shows the skill's current setting", async () => {
   mount();
+  await openSettings();
   expect(invocationControl().textContent).toContain(
     messages.knowledge.agentSkills.invocationAuto,
   );
@@ -232,6 +289,7 @@ test("the invocation control shows the skill's current setting", () => {
 
 test("choosing only when invoked saves the manual invocation", async () => {
   const patches = mount();
+  await openSettings();
   await choose(messages.knowledge.agentSkills.invocationManual);
   await waitFor(() => {
     expect(patches).toEqual([
@@ -256,6 +314,7 @@ test("a refused invocation change snaps back to the saved setting", async () => 
   const toast = spyOn(stellaToast, "add").mockReturnValue("failure");
   spies.push(toast);
   const patches = mount({ patchStatus: 500 });
+  await openSettings();
   await choose(messages.knowledge.agentSkills.invocationManual);
   await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
   expect(patches).toHaveLength(1);
@@ -266,14 +325,16 @@ test("a refused invocation change snaps back to the saved setting", async () => 
   });
 });
 
-test("the invocation control is disabled for someone who cannot edit the skill", () => {
+test("the invocation control is disabled for someone who cannot edit the skill", async () => {
   const patches = mount({ ownerUserId: "someone-else" });
+  await openSettings();
   expect(invocationControl().hasAttribute("disabled")).toBe(true);
   expect(patches).toEqual([]);
 });
 
-test("an unbound private skill reads as available only to its author", () => {
+test("an unbound private skill reads as available only to its author", async () => {
   mount();
+  await openSettings();
   expect(
     screen.getByText(messages.knowledge.agentSkills.availabilityLabel),
   ).toBeTruthy();
@@ -286,9 +347,48 @@ test("an unbound private skill reads as available only to its author", () => {
   ).toBeTruthy();
 });
 
-test("a skill bound to a matter names that matter", () => {
+test("a skill bound to a matter names that matter", async () => {
   mount({
     binding: { boundClientId: null, boundWorkspaceId: BOUND_MATTER_ID },
   });
+  await openSettings();
   expect(screen.getByText("Novák v. Horák")).toBeTruthy();
+});
+
+test("shows inline Instructions, Context section, Preview button, Suggest improvements, and Monitor option for the skill owner", async () => {
+  mount();
+  const instructions = document.querySelector(
+    '[data-slot="skill-editor-instructions"]',
+  );
+  expect(instructions).toBeTruthy();
+  expect(instructions?.textContent).toContain(
+    messages.flows.steps.instructions,
+  );
+  expect(screen.getByText(messages.chat.composerMenu.context)).toBeTruthy();
+  expect(
+    screen.getByRole("button", {
+      name: messages.common.preview,
+    }),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("button", {
+      name: messages.skillHistory.suggestImprovements,
+    }),
+  ).toBeTruthy();
+  await openViewSelect();
+  expect(
+    await screen.findByRole("option", {
+      name: messages.knowledge.agentSkills.tabMonitor,
+    }),
+  ).toBeTruthy();
+});
+
+test("hides the Monitor option for someone who cannot manage the skill", async () => {
+  mount({ ownerUserId: "someone-else" });
+  await openViewSelect();
+  expect(
+    screen.queryByRole("option", {
+      name: messages.knowledge.agentSkills.tabMonitor,
+    }),
+  ).toBeNull();
 });

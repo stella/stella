@@ -682,6 +682,7 @@
         }
       },
       "builtInSection": "Built-in skills",
+      "contextEmpty": "Attach reference documents, checklists, or templates the assistant can consult.",
       "deleteFile": "Delete file",
       "deleteFileConfirm": "Delete file? This cannot be undone.",
       "disableSkill": "Disable skill",
@@ -715,6 +716,26 @@
       "invocationManual": "Only when invoked",
       "invocationManualHelp": "Used only when you run it with / or add it to your message.",
       "license": "License: {license}",
+      "monitor": {
+        "activeUsers": "Active users",
+        "avgDau": "Avg. DAU",
+        "contextUsage": "Context & instructions reads",
+        "emptyActivity": "No usage recorded in this period yet.",
+        "engagement": "Engagement",
+        "heading": "Monitor",
+        "instructionsLabel": "Instructions (SKILL.md)",
+        "noContextFiles": "No context files attached to this skill yet.",
+        "readErrors": "{count} read errors",
+        "readsSplit": "{chatCount} chat · {mcp} MCP",
+        "seriesRuns": "Runs",
+        "seriesUsers": "Users",
+        "totalReads": "Total reads",
+        "totalRuns": "Total runs",
+        "trendSummary": "{runs} runs across {users} active users",
+        "useTrend": "Use trend",
+        "window90d": "Last 90 days",
+        "windowLabel": "Date range"
+      },
       "newFile": "New file",
       "newFileFilenamePlaceholder": "notes.md",
       "newFilePathPlaceholder": "folder/notes.md",
@@ -752,6 +773,7 @@
           "name": "Summarise a document"
         }
       },
+      "tabMonitor": "Monitor",
       "uploadHelp": "Use a SKILL.md file or a .zip/.skill folder containing SKILL.md and optional read-only resources.",
       "uploadPack": "Upload .zip/.skill or SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill",

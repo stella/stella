@@ -96,6 +96,17 @@ export const knowledgeKeys = {
       skillId,
       "detail",
     ],
+    monitor: (
+      organizationId: string,
+      userId: string,
+      skillId: string,
+      days: 7 | 30 | 90,
+    ) => [
+      ...knowledgeKeys.skills.user(organizationId, userId),
+      skillId,
+      "monitor",
+      days,
+    ],
     // Under `all` so every skill change refreshes it with the list.
     chatUnavailable: (
       organizationId: string,
@@ -912,6 +923,37 @@ export const skillDetailOptions = (
 // Revision history of a skill's instruction body, newest first and without
 // bodies. Bounded server-side (one row per body change), so a plain list is
 // enough.
+export const skillMonitorOptions = (
+  organizationId: string,
+  userId: string,
+  skillId: string,
+  days: 7 | 30 | 90,
+) =>
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: knowledgeKeys.skills.monitor(
+        organizationId,
+        userId,
+        skillId,
+        days,
+      ),
+      queryFn: async ({ signal }) => {
+        const response = await api
+          .skills({ skillId: toSafeId<"agentSkill">(skillId) })
+          .monitor.get({ query: { days: String(days) }, fetch: { signal } });
+        return unwrapApiResponse(response);
+      },
+      staleTime: STALE_TIME.ONE.MINUTE,
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.AGENT_SKILL,
+        RESOURCE_TYPE.AGENT_SKILL_RESOURCE,
+      ],
+      scope: { type: "organization", organizationId, userId },
+    },
+  );
+
 export const skillRevisionsOptions = (
   organizationId: string,
   userId: string,

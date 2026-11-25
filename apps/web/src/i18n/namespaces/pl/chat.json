@@ -1092,6 +1092,8 @@
     "statusProposed": "W recenzji",
     "statusRejected": "Odrzucona",
     "submitForReview": "Wyślij do recenzji",
+    "suggestImprovements": "Zaproponuj ulepszenia",
+    "suggestingImprovements": "Proponowanie…",
     "summaryLabel": "Podsumowanie",
     "summaryPlaceholder": "Co się zmienia?"
   },

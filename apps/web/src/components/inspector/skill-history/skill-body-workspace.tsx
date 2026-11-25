@@ -57,6 +57,7 @@ const NO_ROWS: readonly never[] = [];
 const NO_EDITOR_COMMENTS: readonly MarkdownEditorComment[] = [];
 
 type SkillBodyWorkspaceProps = {
+  title?: string | undefined;
   /**
    * Length of the frontmatter block the editor never shows. Comment offsets
    * are stored against the full stored body (what the server validates), so
@@ -83,6 +84,7 @@ type SkillBodyWorkspaceProps = {
  * it, which keeps the client's affordances in step with what the API allows.
  */
 export const SkillBodyWorkspace = ({
+  title,
   skillId,
   frontmatterLength,
   liveMarkdown,
@@ -238,6 +240,13 @@ export const SkillBodyWorkspace = ({
     }
   };
 
+  const suggestImprovements = async () => {
+    const proposalId = await actions.suggestImprovements();
+    if (proposalId !== null) {
+      setMode({ type: "proposal", proposalId });
+    }
+  };
+
   const closeProposal = (adoptedBody: string | null) => {
     if (adoptedBody !== null) {
       onAdoptBody(adoptedBody);
@@ -256,7 +265,7 @@ export const SkillBodyWorkspace = ({
       key={`live:${String(editorGeneration)}:${String(commenting)}`}
       markdown={liveMarkdown}
       onMarkdownChange={onPersistBody}
-      readOnly={!canManage || commenting}
+      readOnly={!canManage || !isProposable || commenting}
       {...(commenting
         ? { onAddComment: addComment, onDeleteComment: deleteComment }
         : {})}
@@ -280,6 +289,7 @@ export const SkillBodyWorkspace = ({
       <QueryViewFeedback view={proposalsView} />
       {commenting && <QueryViewFeedback view={commentsView} />}
       <SkillBodyToolbar
+        title={title}
         authorName={authorName}
         canManage={canManage}
         commenting={commenting}
@@ -299,6 +309,10 @@ export const SkillBodyWorkspace = ({
           detached(proposeChange(), "skill-history.propose");
         }}
         onRestore={restoreRevision}
+        onSuggestImprovements={() => {
+          detached(suggestImprovements(), "skill-history.suggest-improvements");
+        }}
+        suggestingImprovements={actions.suggestingImprovements}
         onToggleComments={() => {
           setMode({
             type: "live",

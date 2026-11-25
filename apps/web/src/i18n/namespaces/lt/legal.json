@@ -682,6 +682,7 @@
         }
       },
       "builtInSection": "Integruoti įgūdžiai",
+      "contextEmpty": "Pridėkite žinynus, kontrolinius sąrašus ar šablonus, kuriais asistentas galėtų remtis.",
       "deleteFile": "Ištrinti failą",
       "deleteFileConfirm": "Ištrinti failą? Šio veiksmo negalima atšaukti.",
       "disableSkill": "Išjungti įgūdį",
@@ -715,6 +716,26 @@
       "invocationManual": "Tik iškvietus",
       "invocationManualHelp": "Naudojamas tik tada, kai iškviečiate jį su / arba pridedate prie savo žinutės.",
       "license": "Licencija: {license}",
+      "monitor": {
+        "activeUsers": "Aktyvūs naudotojai",
+        "avgDau": "Vid. DAU",
+        "contextUsage": "Konteksto ir instrukcijų skaitymai",
+        "emptyActivity": "Šiuo laikotarpiu naudojimo dar neužfiksuota.",
+        "engagement": "Įsitraukimas",
+        "heading": "Stebėjimas",
+        "instructionsLabel": "Instrukcijos (SKILL.md)",
+        "noContextFiles": "Prie šio įgūdžio dar nepridėta jokių konteksto failų.",
+        "readErrors": "{count} skaitymo klaidų",
+        "readsSplit": "{chatCount} pokalbis · {mcp} MCP",
+        "seriesRuns": "Paleidimai",
+        "seriesUsers": "Naudotojai",
+        "totalReads": "Iš viso skaitymų",
+        "totalRuns": "Iš viso paleidimų",
+        "trendSummary": "{runs} paleidimų iš {users} aktyvių naudotojų",
+        "useTrend": "Naudojimo tendencija",
+        "window90d": "Pastarosios 90 dienų",
+        "windowLabel": "Laikotarpis"
+      },
       "newFile": "Naujas failas",
       "newFileFilenamePlaceholder": "notes.md",
       "newFilePathPlaceholder": "aplankas/notes.md",
@@ -752,6 +773,7 @@
           "name": "Apibendrinti dokumentą"
         }
       },
+      "tabMonitor": "Stebėjimas",
       "uploadHelp": "Naudokite SKILL.md failą arba .zip/.skill aplanką su SKILL.md ir pasirinktiniais tik skaitymui skirtais ištekliais.",
       "uploadPack": "Įkelti .zip/.skill arba SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/kelias/iki/igudzio",

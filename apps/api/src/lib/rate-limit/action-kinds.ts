@@ -67,6 +67,7 @@ export const ACTION_KINDS = {
   "skills.generate-draft": MODEL_ACTION,
   "skills.draft-from-chat": MODEL_ACTION,
   "skills.propose-from-comments": MODEL_ACTION,
+  "skills.suggest-improvements": MODEL_ACTION,
   "time-entries.polish-narrative": MODEL_ACTION,
   "entities.suggest-placements": MODEL_ACTION,
   "versions.summarize": MODEL_ACTION,

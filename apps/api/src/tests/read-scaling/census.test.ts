@@ -99,6 +99,7 @@ import { signaturePreviewScalingScenario } from "./signature-preview";
 import { signedDossierPreviewScalingScenario } from "./signed-dossier";
 import { similarDocumentsScalingScenarios } from "./similar-documents";
 import { skillExportScalingScenarios } from "./skill-export";
+import { skillMonitorScalingScenarios } from "./skill-monitor";
 import {
   softLawReadScalingScenario,
   softLawSearchScalingScenario,
@@ -126,6 +127,7 @@ const measuredApiScenarios = [
   savedSearchReadScalingScenario,
   ...dataExportReadScalingScenarios,
   ...skillExportScalingScenarios,
+  ...skillMonitorScalingScenarios,
   organizationCreateScalingScenario,
   matterVocabularyScalingScenario,
   verifyQuoteApiScalingScenario,

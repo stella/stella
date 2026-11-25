@@ -287,6 +287,13 @@ export const STRUCTURED_OUTPUT_ROLE_FIXTURES: readonly StructuredOutputRoleFixtu
         '{"markdown":"---\\nname: nda-review\\ndescription: Review a mutual NDA against the firm\'s standard positions.\\n---\\n\\n# NDA review\\n\\nCheck the term, the definition of confidential information, the carve-outs and the governing law.","summary":"Added governing law to the checklist as the comment asked."}',
     },
     {
+      file: "handlers/skills/proposals/suggest-improvements/create.ts",
+      outputSchema: "aiRevisionSchema",
+      schema: aiRevisionSchema,
+      answer:
+        '{"markdown":"---\\nname: nda-review\\ndescription: Review a mutual NDA against the firm\'s standard positions.\\n---\\n\\n# NDA review\\n\\nCheck the term, the definition of confidential information, the carve-outs and the governing law.","summary":"Clarified the review checklist and edge-case handling."}',
+    },
+    {
       file: "handlers/templates/prefill.ts",
       outputSchema: "prefillOutputSchema",
       schema: prefillOutputSchema,

@@ -119,6 +119,11 @@ type CommitFieldOptions = {
 };
 
 // The editor saves a metadata field on blur.
+const openSkillSettings = async (page: Page) => {
+  await page.getByRole("combobox", { name: "Configure" }).click();
+  await page.getByRole("option", { name: "How it runs" }).click();
+};
+
 const commitSkillField = async ({
   field,
   page,
@@ -167,6 +172,7 @@ test("a team skill is authored, used in chat, read by members, and removed", asy
     await expect(name).toBeEditable({
       timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
+    await openSkillSettings(page);
     await expect(page.getByText("Everyone in the team")).toBeVisible();
     await commitSkillField({
       field: name,
@@ -192,6 +198,7 @@ test("a team skill is authored, used in chat, read by members, and removed", asy
       timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
     await expect(description).toHaveValue(teamSkillDescription);
+    await openSkillSettings(page);
     await expect(disableSkill).toBeVisible();
 
     // 2. The owner picks the skill from the composer's slash menu. The sent
@@ -285,6 +292,7 @@ test("a team skill is authored, used in chat, read by members, and removed", asy
       await expect(
         memberPage.getByRole("textbox", { name: "Description", exact: true }),
       ).not.toBeEditable();
+      await openSkillSettings(memberPage);
       await expect(memberPage.getByText("Everyone in the team")).toBeVisible();
       await expect(
         memberPage.getByRole("button", { name: /^(Enable|Disable) skill$/u }),
@@ -326,6 +334,7 @@ test("a team skill is authored, used in chat, read by members, and removed", asy
       await expect(privateName).toBeEditable({
         timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
       });
+      await openSkillSettings(memberPage);
       // The visibility badge and the availability summary both say "Only me"
       // for a private, unbound skill; assert the summary itself.
       await expect(

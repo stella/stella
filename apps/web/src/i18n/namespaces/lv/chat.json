@@ -1092,6 +1092,8 @@
     "statusProposed": "Izskatīšanā",
     "statusRejected": "Noraidīts",
     "submitForReview": "Iesniegt izskatīšanai",
+    "suggestImprovements": "Ieteikt uzlabojumus",
+    "suggestingImprovements": "Iesaka…",
     "summaryLabel": "Kopsavilkums",
     "summaryPlaceholder": "Kas mainās?"
   },

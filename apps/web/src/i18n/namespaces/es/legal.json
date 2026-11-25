@@ -682,6 +682,7 @@
         }
       },
       "builtInSection": "Habilidades integradas",
+      "contextEmpty": "Adjunta documentos de referencia, listas de verificación o plantillas que el asistente pueda consultar.",
       "deleteFile": "Eliminar archivo",
       "deleteFileConfirm": "¿Eliminar el archivo? No se puede deshacer.",
       "disableSkill": "Desactivar habilidad",
@@ -715,6 +716,26 @@
       "invocationManual": "Solo cuando se invoque",
       "invocationManualHelp": "Solo se usa cuando la invocas con / o la añades a tu mensaje.",
       "license": "Licencia: {license}",
+      "monitor": {
+        "activeUsers": "Usuarios activos",
+        "avgDau": "DAU promedio",
+        "contextUsage": "Lecturas de contexto e instrucciones",
+        "emptyActivity": "Aún no se ha registrado uso en este período.",
+        "engagement": "Participación",
+        "heading": "Supervisión",
+        "instructionsLabel": "Instrucciones (SKILL.md)",
+        "noContextFiles": "Aún no hay archivos de contexto adjuntos a esta habilidad.",
+        "readErrors": "{count} errores de lectura",
+        "readsSplit": "{chatCount} en chat · {mcp} MCP",
+        "seriesRuns": "Ejecuciones",
+        "seriesUsers": "Usuarios",
+        "totalReads": "Lecturas totales",
+        "totalRuns": "Ejecuciones totales",
+        "trendSummary": "{runs} ejecuciones entre {users} usuarios activos",
+        "useTrend": "Tendencia de uso",
+        "window90d": "Últimos 90 días",
+        "windowLabel": "Rango de fechas"
+      },
       "newFile": "Nuevo archivo",
       "newFileFilenamePlaceholder": "notas.md",
       "newFilePathPlaceholder": "carpeta/notas.md",
@@ -752,6 +773,7 @@
           "name": "Resumir un documento"
         }
       },
+      "tabMonitor": "Supervisión",
       "uploadHelp": "Usa un archivo SKILL.md o una carpeta .zip/.skill que contenga SKILL.md y recursos opcionales de solo lectura.",
       "uploadPack": "Subir .zip/.skill o SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/ruta/a/la/habilidad",

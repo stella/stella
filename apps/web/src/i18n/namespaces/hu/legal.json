@@ -682,6 +682,7 @@
         }
       },
       "builtInSection": "Beépített készségek",
+      "contextEmpty": "Csatoljon hivatkozási dokumentumokat, ellenőrzőlistákat vagy sablonokat, amelyeket az asszisztens felhasználhat.",
       "deleteFile": "Fájl törlése",
       "deleteFileConfirm": "Törli a fájlt? Ez nem vonható vissza.",
       "disableSkill": "Készség kikapcsolása",
@@ -715,6 +716,26 @@
       "invocationManual": "Csak kérésre",
       "invocationManualHelp": "Csak akkor kerül használatra, ha a / jellel meghívja, vagy hozzáadja az üzenetéhez.",
       "license": "Licenc: {license}",
+      "monitor": {
+        "activeUsers": "Aktív felhasználók",
+        "avgDau": "Átl. napi aktív",
+        "contextUsage": "Kontextus- és utasításolvasások",
+        "emptyActivity": "Ebben az időszakban még nem történt rögzített használat.",
+        "engagement": "Aktivitás",
+        "heading": "Megfigyelés",
+        "instructionsLabel": "Utasítások (SKILL.md)",
+        "noContextFiles": "Ehhez a készséghez még nincs csatolt kontextusfájl.",
+        "readErrors": "{count} olvasási hiba",
+        "readsSplit": "{chatCount} csevegés · {mcp} MCP",
+        "seriesRuns": "Futtatások",
+        "seriesUsers": "Felhasználók",
+        "totalReads": "Összes olvasás",
+        "totalRuns": "Összes futtatás",
+        "trendSummary": "{runs} futtatás {users} aktív felhasználótól",
+        "useTrend": "Használati trend",
+        "window90d": "Elmúlt 90 nap",
+        "windowLabel": "Időszak"
+      },
       "newFile": "Új fájl",
       "newFileFilenamePlaceholder": "notes.md",
       "newFilePathPlaceholder": "folder/notes.md",
@@ -752,6 +773,7 @@
           "name": "Dokumentum összefoglalása"
         }
       },
+      "tabMonitor": "Megfigyelés",
       "uploadHelp": "Használjon SKILL.md fájlt vagy olyan .zip/.skill mappát, amely SKILL.md fájlt és opcionális csak olvasható erőforrásokat tartalmaz.",
       "uploadPack": ".zip/.skill vagy SKILL.md feltöltése",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/utvonal/keszseghez",

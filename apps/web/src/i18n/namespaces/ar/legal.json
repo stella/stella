@@ -682,6 +682,7 @@
         }
       },
       "builtInSection": "المهارات المُدمَجة",
+      "contextEmpty": "أرفق مستندات مرجعية أو قوائم تحقق أو قوالب يمكن للمساعد الرجوع إليها.",
       "deleteFile": "حذف الملف",
       "deleteFileConfirm": "حذف الملف؟ لا يمكن التراجع عن هذا الإجراء.",
       "disableSkill": "تعطيل المهارة",
@@ -715,6 +716,26 @@
       "invocationManual": "عند الاستدعاء فقط",
       "invocationManualHelp": "تُستخدم فقط عندما تستدعيها باستخدام / أو تضيفها إلى رسالتك.",
       "license": "الترخيص: {license}",
+      "monitor": {
+        "activeUsers": "المستخدمون النشطون",
+        "avgDau": "متوسط المستخدمين اليوميين",
+        "contextUsage": "قراءات السياق والتعليمات",
+        "emptyActivity": "لا يوجد استخدام مسجل في هذه الفترة بعد.",
+        "engagement": "التفاعل",
+        "heading": "المراقبة",
+        "instructionsLabel": "التعليمات (SKILL.md)",
+        "noContextFiles": "لا توجد ملفات سياق مرفقة بهذه المهارة بعد.",
+        "readErrors": "{count} أخطاء قراءة",
+        "readsSplit": "{chatCount} دردشة · {mcp} MCP",
+        "seriesRuns": "التشغيلات",
+        "seriesUsers": "المستخدمون",
+        "totalReads": "إجمالي القراءات",
+        "totalRuns": "إجمالي التشغيلات",
+        "trendSummary": "{runs} تشغيل عبر {users} مستخدم نشط",
+        "useTrend": "اتجاه الاستخدام",
+        "window90d": "آخر 90 يوماً",
+        "windowLabel": "النطاق الزمني"
+      },
       "newFile": "ملف جديد",
       "newFileFilenamePlaceholder": "notes.md",
       "newFilePathPlaceholder": "folder/notes.md",
@@ -752,6 +773,7 @@
           "name": "تلخيص مستند"
         }
       },
+      "tabMonitor": "المراقبة",
       "uploadHelp": "استخدم ملف SKILL.md أو مجلد .zip/.skill يتضمن SKILL.md وموارد اختيارية للقراءة فقط.",
       "uploadPack": "رفع ملف .zip/.skill أو SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill",

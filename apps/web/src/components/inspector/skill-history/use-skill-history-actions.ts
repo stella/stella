@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -125,6 +126,15 @@ export const useSkillHistoryActions = ({
     invalidateComments();
   };
 
+  const { suggestImprovements, suggestingImprovements } =
+    useSuggestSkillImprovements({
+      invalidateProposals,
+      report,
+      skill,
+      skillId,
+      submitIntent,
+    });
+
   /** Opens a draft branched from the current revision. Returns its id. */
   const createProposal = async (): Promise<string | null> => {
     const response = await submitIntent.run({
@@ -242,6 +252,8 @@ export const useSkillHistoryActions = ({
   return {
     addComment,
     createProposal,
+    suggestImprovements,
+    suggestingImprovements,
     deleteComment,
     deleteProposal,
     reviewProposal,
@@ -250,4 +262,49 @@ export const useSkillHistoryActions = ({
     setCommentResolved,
     setProposalStatus,
   };
+};
+
+const useSuggestSkillImprovements = ({
+  invalidateProposals,
+  report,
+  skill,
+  skillId,
+  submitIntent,
+}: {
+  invalidateProposals: () => void;
+  report: (error: Parameters<typeof toAPIError>[0]) => void;
+  skill: ReturnType<typeof api.skills>;
+  skillId: string;
+  submitIntent: ReturnType<typeof useIdempotentSubmit>;
+}) => {
+  const [suggestingImprovements, setSuggestingImprovements] = useState(false);
+  const suggestImprovements = async (
+    focus?: string,
+  ): Promise<string | null> => {
+    if (suggestingImprovements) {
+      return null;
+    }
+    setSuggestingImprovements(true);
+    const response = await submitIntent.run({
+      operation: `skills.suggest-improvements:${skillId}`,
+      body:
+        focus !== undefined && focus.trim().length > 0
+          ? { focus: focus.trim() }
+          : {},
+      send: async (payload) =>
+        invokeCapability(
+          "skills.proposals.suggest-improvements.create",
+          async (request) =>
+            skill.proposals["suggest-improvements"].post(payload, request),
+        ),
+    });
+    setSuggestingImprovements(false);
+    if (response.error) {
+      report(response.error);
+      return null;
+    }
+    invalidateProposals();
+    return response.data.id;
+  };
+  return { suggestImprovements, suggestingImprovements };
 };

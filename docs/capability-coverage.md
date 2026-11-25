@@ -605,12 +605,14 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `skills.get` | read | stella:skills | — | generic invoke → `stella capability skills get` |
 | `skills.import` | write | stella:skills | — | generic invoke → `stella capability skills import` |
 | `skills.list` | read | stella:skills | — | generic invoke → `stella capability skills list` |
+| `skills.monitor.get` | read | stella:skills | — | generic invoke → `stella capability skills monitor-get` |
 | `skills.proposals.create` | write | stella:skills | — | generic invoke → `stella capability skills proposals-create` |
 | `skills.proposals.delete` | write, destructive | stella:skills | — | generic invoke → `stella capability skills proposals-delete` |
 | `skills.proposals.from-comments.create` | write | stella:skills | — | generic invoke → `stella capability skills proposals-from-comments-create` |
 | `skills.proposals.get` | read | stella:skills | — | generic invoke → `stella capability skills proposals-get` |
 | `skills.proposals.list` | read | stella:skills | — | generic invoke → `stella capability skills proposals-list` |
 | `skills.proposals.review` | write | stella:skills | — | generic invoke → `stella capability skills proposals-review` |
+| `skills.proposals.suggest-improvements.create` | write | stella:skills | — | generic invoke → `stella capability skills proposals-suggest-improvements-create` |
 | `skills.proposals.update` | write | stella:skills | — | generic invoke → `stella capability skills proposals-update` |
 | `skills.resources.create` | write | stella:skills | — | generic invoke → `stella capability skills resources-create` |
 | `skills.resources.delete` | write, destructive | stella:skills | — | generic invoke → `stella capability skills resources-delete` |

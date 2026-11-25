@@ -682,6 +682,7 @@
         }
       },
       "builtInSection": "Integrierte Skills",
+      "contextEmpty": "Fügen Sie Referenzdokumente, Checklisten oder Vorlagen hinzu, auf die der Assistent zugreifen kann.",
       "deleteFile": "Datei löschen",
       "deleteFileConfirm": "Datei löschen? Dies kann nicht rückgängig gemacht werden.",
       "disableSkill": "Skill deaktivieren",
@@ -715,6 +716,26 @@
       "invocationManual": "Nur auf Abruf",
       "invocationManualHelp": "Wird nur verwendet, wenn Sie ihn mit / aufrufen oder Ihrer Nachricht hinzufügen.",
       "license": "Lizenz: {license}",
+      "monitor": {
+        "activeUsers": "Aktive Nutzer",
+        "avgDau": "Durchschn. DAU",
+        "contextUsage": "Kontext- & Anweisungsaufrufe",
+        "emptyActivity": "In diesem Zeitraum wurde noch keine Nutzung erfasst.",
+        "engagement": "Nutzung",
+        "heading": "Überwachung",
+        "instructionsLabel": "Anweisungen (SKILL.md)",
+        "noContextFiles": "Diesem Skill sind noch keine Kontextdateien angehängt.",
+        "readErrors": "{count} Lesefehler",
+        "readsSplit": "{chatCount} Chat · {mcp} MCP",
+        "seriesRuns": "Ausführungen",
+        "seriesUsers": "Nutzer",
+        "totalReads": "Aufrufe gesamt",
+        "totalRuns": "Ausführungen gesamt",
+        "trendSummary": "{runs} Ausführungen von {users} aktiven Nutzern",
+        "useTrend": "Nutzungsverlauf",
+        "window90d": "Letzte 90 Tage",
+        "windowLabel": "Zeitraum"
+      },
       "newFile": "Neue Datei",
       "newFileFilenamePlaceholder": "notes.md",
       "newFilePathPlaceholder": "ordner/notizen.md",
@@ -752,6 +773,7 @@
           "name": "Dokument zusammenfassen"
         }
       },
+      "tabMonitor": "Überwachung",
       "uploadHelp": "Verwenden Sie eine SKILL.md-Datei oder einen .zip/.skill-Ordner mit SKILL.md und optionalen schreibgeschützten Ressourcen.",
       "uploadPack": ".zip/.skill oder SKILL.md hochladen",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/pfad/zum/skill",
