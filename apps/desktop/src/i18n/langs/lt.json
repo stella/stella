@@ -1411,9 +1411,7 @@
     "waitingForFileSelection": "Pasirinkite įrašą arba užverkite failų parinkiklį."
   },
   "tray": {
-    "aboutStellaDesktop": "Apie stella desktop",
     "activeEdits": "{count, plural, one {{count} aktyvus redagavimas} few {{count} aktyvūs redagavimai} other {{count} aktyvių redagavimų}}",
-    "activeEditsSubmenu": "Aktyvūs redagavimai",
     "activity": "Veikla",
     "activityNow": "Dabar: {name}",
     "activityOff": "Veikla: Išjungta",
@@ -1431,7 +1429,6 @@
     "documentsSyncing": "{count, plural, one {{count} dokumentas sinchronizuojamas} few {{count} dokumentai sinchronizuojami} other {{count} dokumentų sinchronizuojama}}",
     "finishEditing": "Baigti redagavimą",
     "needsAttention": "Reikia dėmesio",
-    "noActiveEdits": "Nėra aktyvių redagavimų",
     "openActivity": "Atverti veiklą",
     "openFile": "Atidaryti failą",
     "quitStellaDesktop": "Išjungti stella desktop",
@@ -1447,10 +1444,6 @@
     "sessionSavingDraft": "Išsaugomas juodraštis",
     "settings": "Nustatymai",
     "showTranscription": "Rodyti transkripciją",
-    "support": "Palaikymas",
-    "supportCopyDiagnostics": "Kopijuoti diagnostiką",
-    "supportEmailSupport": "El. pašto palaikymas",
-    "supportRevealAppData": "Rodyti programos duomenis",
     "temporaryWorkingCopies": "Laikinos darbinės kopijos",
     "transcribeRecording": "Transkribuoti įrašą…",
     "transcriptionProgress": "Transkribuojama: {done} iš {total} min.",

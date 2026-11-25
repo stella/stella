@@ -1411,9 +1411,7 @@
     "waitingForFileSelection": "Vyberte nahrávku alebo zatvorte okno na výber súboru."
   },
   "tray": {
-    "aboutStellaDesktop": "O aplikácii stella desktop",
     "activeEdits": "{count, plural, one {1 aktívna úprava} few {{count} aktívne úpravy} other {{count} aktívnych úprav}}",
-    "activeEditsSubmenu": "Aktívne úpravy",
     "activity": "Aktivita",
     "activityNow": "Teraz: {name}",
     "activityOff": "Aktivita: Vypnuté",
@@ -1431,7 +1429,6 @@
     "documentsSyncing": "{count, plural, one {1 dokument sa synchronizuje} few {{count} dokumenty sa synchronizujú} other {{count} dokumentov sa synchronizuje}}",
     "finishEditing": "Dokončiť úpravy",
     "needsAttention": "Vyžaduje pozornosť",
-    "noActiveEdits": "Žiadne aktívne úpravy",
     "openActivity": "Otvoriť aktivitu",
     "openFile": "Otvoriť súbor",
     "quitStellaDesktop": "Ukončiť stella desktop",
@@ -1447,10 +1444,6 @@
     "sessionSavingDraft": "Ukladanie konceptu",
     "settings": "Nastavenia",
     "showTranscription": "Zobraziť prepis",
-    "support": "Podpora",
-    "supportCopyDiagnostics": "Kopírovať diagnostiku",
-    "supportEmailSupport": "E-mailová podpora",
-    "supportRevealAppData": "Zobraziť dáta aplikácie",
     "temporaryWorkingCopies": "Dočasné pracovné kópie",
     "transcribeRecording": "Prepísať nahrávku…",
     "transcriptionProgress": "Prebieha prepis: {done} z {total} min",

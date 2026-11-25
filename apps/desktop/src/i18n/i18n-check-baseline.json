@@ -63,7 +63,6 @@
     "onboarding.openSettings",
     "onboarding.tryAgain",
     "settings.account",
-    "settings.copyDiagnostics",
     "settings.disconnect",
     "settings.notConnected",
     "settings.pages.activity",
@@ -72,8 +71,6 @@
     "settings.permissionAllow",
     "settings.permissionMicrophone",
     "settings.permissionOpenSettings",
-    "settings.revealAppData",
-    "settings.support",
     "settings.title",
     "settings.tryAgain",
     "shortcut.action.copy",
@@ -98,10 +95,7 @@
     "tray.activity",
     "tray.dictation",
     "tray.openActivity",
-    "tray.settings",
-    "tray.support",
-    "tray.supportCopyDiagnostics",
-    "tray.supportRevealAppData"
+    "tray.settings"
   ],
   "identicalToSource": {
     "activity.captureModeBrowser": [
@@ -437,10 +431,6 @@
       "pl",
       "pt-BR",
       "sk"
-    ],
-    "tray.support": [
-      "de",
-      "fr"
     ]
   },
   "unusedKeys": []

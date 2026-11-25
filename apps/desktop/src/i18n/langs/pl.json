@@ -1411,9 +1411,7 @@
     "waitingForFileSelection": "Wybierz nagranie lub zamknij okno wyboru plików."
   },
   "tray": {
-    "aboutStellaDesktop": "O stella desktop",
     "activeEdits": "{count, plural, one {1 aktywna edycja} few {{count} aktywne edycje} many {{count} aktywnych edycji} other {{count} aktywnych edycji}}",
-    "activeEditsSubmenu": "Aktywne edycje",
     "activity": "Aktywność",
     "activityNow": "Teraz: {name}",
     "activityOff": "Aktywność: Wyłączona",
@@ -1431,7 +1429,6 @@
     "documentsSyncing": "{count, plural, one {1 dokument synchronizowany} few {{count} dokumenty synchronizowane} many {{count} dokumentów synchronizowanych} other {{count} dokumentów synchronizowanych}}",
     "finishEditing": "Zakończ edycję",
     "needsAttention": "Wymaga uwagi",
-    "noActiveEdits": "Brak aktywnych edycji",
     "openActivity": "Otwórz aktywność",
     "openFile": "Otwórz plik",
     "quitStellaDesktop": "Zamknij stella desktop",
@@ -1447,10 +1444,6 @@
     "sessionSavingDraft": "Zapisywanie wersji roboczej",
     "settings": "Ustawienia",
     "showTranscription": "Pokaż transkrypcję",
-    "support": "Wsparcie",
-    "supportCopyDiagnostics": "Kopiuj diagnostykę",
-    "supportEmailSupport": "Wsparcie e-mail",
-    "supportRevealAppData": "Pokaż dane aplikacji",
     "temporaryWorkingCopies": "Tymczasowe kopie robocze",
     "transcribeRecording": "Transkrybuj nagranie…",
     "transcriptionProgress": "Trwa transkrypcja: {done} z {total} min",

@@ -1411,9 +1411,7 @@
     "waitingForFileSelection": "Valige salvestis või sulgege failivalija."
   },
   "tray": {
-    "aboutStellaDesktop": "Teave stella desktop kohta",
     "activeEdits": "{count, plural, one {1 aktiivne muudatus} other {{count} aktiivset muudatust}}",
-    "activeEditsSubmenu": "Aktiivsed muudatused",
     "activity": "Tegevus",
     "activityNow": "Praegu: {name}",
     "activityOff": "Tegevus: Väljas",
@@ -1431,7 +1429,6 @@
     "documentsSyncing": "{count, plural, one {1 dokument sünkroniseerub} other {{count} dokumenti sünkroniseerub}}",
     "finishEditing": "Lõpeta muutmine",
     "needsAttention": "Vajab tähelepanu",
-    "noActiveEdits": "Aktiivseid muudatusi pole",
     "openActivity": "Ava tegevus",
     "openFile": "Ava fail",
     "quitStellaDesktop": "Sulge stella desktop",
@@ -1447,10 +1444,6 @@
     "sessionSavingDraft": "Mustandi salvestamine",
     "settings": "Seaded",
     "showTranscription": "Näita transkriptsiooni",
-    "support": "Tugi",
-    "supportCopyDiagnostics": "Kopeeri diagnostika",
-    "supportEmailSupport": "E-posti tugi",
-    "supportRevealAppData": "Kuva rakenduse andmed",
     "temporaryWorkingCopies": "Ajutised töökoopiad",
     "transcribeRecording": "Transkribeeri salvestis…",
     "transcriptionProgress": "Transkribeerimine käib: {done} / {total} min",

@@ -477,25 +477,6 @@ pub fn run() {
                   tracing::warn!(%error, "dictation language from the tray was not stored");
                 }
               }
-              tray::MenuAction::CheckForUpdates => {
-                // About runs the check and shows its answer in the window: a
-                // notification can be dropped by the system without an error.
-                show_settings(&handle, SettingsView::UpdateCheck);
-              }
-              tray::MenuAction::OpenEditRoot => {
-                manager.lock().await.open_edit_root().await;
-              }
-              tray::MenuAction::CopyDiagnostics => {
-                let mgr = manager.lock().await;
-                mgr.copy_diagnostics();
-              }
-              tray::MenuAction::EmailSupport => {
-                SessionManager::email_support();
-              }
-              tray::MenuAction::RevealSupportRoot => {
-                let mgr = manager.lock().await;
-                mgr.reveal_support_root();
-              }
               tray::MenuAction::OpenSessionFile(id) => {
                 let mut mgr = manager.lock().await;
                 mgr.open_session_file(&id);
@@ -733,8 +714,6 @@ pub(crate) enum SettingsView {
   Agents(AgentSettingsFocus),
   /// Dictation, focused on the microphone it records from.
   Microphone,
-  /// About, running "Check for updates" and showing its answer.
-  UpdateCheck,
 }
 
 impl SettingsView {
@@ -743,7 +722,6 @@ impl SettingsView {
       Self::Tab(tab) => tab,
       Self::Agents(_) => PreferencesTab::Agents,
       Self::Microphone => PreferencesTab::Dictation,
-      Self::UpdateCheck => PreferencesTab::About,
     }
   }
 
@@ -752,7 +730,6 @@ impl SettingsView {
       Self::Tab(_) => None,
       Self::Agents(focus) => Some(focus.id()),
       Self::Microphone => Some("microphone"),
-      Self::UpdateCheck => Some("update-check"),
     }
   }
 
@@ -863,8 +840,8 @@ mod preferences_tab_tests {
       "index.html#general"
     );
     assert_eq!(
-      SettingsView::UpdateCheck.page(),
-      "index.html#about/update-check"
+      SettingsView::Microphone.page(),
+      "index.html#dictation/microphone"
     );
   }
 

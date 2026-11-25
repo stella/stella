@@ -965,7 +965,7 @@ mod tests {
   #[test]
   fn test_t_returns_english_for_known_key() {
     ensure_init();
-    let result = t("tray.noActiveEdits");
-    assert_eq!(result, "No active edits");
+    let result = t("tray.quitStellaDesktop");
+    assert_eq!(result, "Quit stella desktop");
   }
 }
