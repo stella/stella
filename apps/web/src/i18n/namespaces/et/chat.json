@@ -474,6 +474,8 @@
       "permissionPlan": "Plaan",
       "permissionPlanDescription": "Kõigepealt loeb ja planeerib; küsib enne iga muudatust, kuni plaani kinnitad.",
       "permissionSandboxed": "Töötab liivakastis; küsib enne, kui teie arvutis midagi muudab.",
+      "permissionScaleHigh": "Iseseisev",
+      "permissionScaleLow": "Ettevaatlik",
       "permissionUnavailable": "Selles arvutis pole saadaval",
       "permissions": "Õigused",
       "refusalConflictingRunMode": "See päring soovib käivituda korraga pilveagendiga ja teie arvutis. Valige menüüs Käivita üks.",
@@ -702,6 +704,7 @@
     "richContentTitle": "Interaktiivne sisu",
     "richContentUnavailable": "Seda sisu ei saa turvaliselt kuvada.",
     "runOn": {
+      "agent": "Agent",
       "checkFailed": "Teie arvutit ei õnnestunud kontrollida",
       "chipLabel": "Töötab: {place}",
       "cloud": "Pilv",
@@ -728,6 +731,7 @@
       "stepsInstall": "stella desktop avaneb. Kui see ei avane, ava see oma arvutis ja vali jaotises Seaded › Üldine rea {harness} juures Installi.",
       "stepsSignInClaudeCode": "stella desktop avaneb sisselogimiseks. Kui see ei avane, ava see ja vali Seaded › Üldine › Logi sisse Claude’iga.",
       "stepsSignInCodex": "stella desktop avaneb sisselogimiseks. Kui see ei avane, ava see ja vali Seaded › Üldine › Jätka ChatGPT-ga.",
+      "where": "Töötab",
       "yourComputer": "Teie arvuti",
       "yourComputerDescription": "Kasutab teie arvutis Codexit või Claude Code'i teie enda tellimusega. See saab lugeda ja muuta selle vestluse kausta faile; õigused määravad, mida see tohib küsimata teha."
     },

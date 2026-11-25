@@ -228,18 +228,28 @@ const MenuRadioGroup = (props: MenuPrimitive.RadioGroup.Props) => (
   <MenuPrimitive.RadioGroup data-slot="menu-radio-group" {...props} />
 );
 
+/**
+ * A radio choice in a menu. `segment` lays the choices of a group out as one
+ * segmented control: the parent places them side by side, the chosen one is
+ * raised, and no check mark is drawn.
+ */
 const MenuRadioItem = ({
   className,
   children,
   indicator = "check",
+  appearance = "row",
   ...props
 }: MenuPrimitive.RadioItem.Props & {
   indicator?: "check" | "none";
+  appearance?: "row" | "segment";
 }) => (
   <MenuPrimitive.RadioItem
     className={cn(
-      "text-foreground data-highlighted:bg-accent data-highlighted:text-accent-foreground min-h-8 cursor-pointer items-center gap-2 rounded-sm py-1 text-base outline-none in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] data-disabled:pointer-events-none data-disabled:opacity-64 sm:min-h-7 sm:text-sm pointer-coarse:min-h-11 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
-      indicator === "check"
+      appearance === "segment"
+        ? "text-muted-foreground aria-checked:bg-background aria-checked:text-foreground justify-center aria-checked:shadow-xs"
+        : "text-foreground",
+      "data-highlighted:bg-accent data-highlighted:text-accent-foreground min-h-8 cursor-pointer items-center gap-2 rounded-sm py-1 text-base outline-none in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] data-disabled:pointer-events-none data-disabled:opacity-64 sm:min-h-7 sm:text-sm pointer-coarse:min-h-11 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
+      indicator === "check" && appearance === "row"
         ? "grid grid-cols-[1rem_minmax(0,1fr)] ps-2 pe-4"
         : "flex px-2",
       className,
@@ -247,7 +257,7 @@ const MenuRadioItem = ({
     data-slot="menu-radio-item"
     {...props}
   >
-    {indicator === "check" ? (
+    {indicator === "check" && appearance === "row" ? (
       <>
         <MenuPrimitive.RadioItemIndicator className="col-start-1">
           <svg

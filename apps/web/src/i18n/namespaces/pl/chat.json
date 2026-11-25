@@ -474,6 +474,8 @@
       "permissionPlan": "Planowanie",
       "permissionPlanDescription": "Najpierw czyta i planuje; pyta przed każdą zmianą, dopóki nie zatwierdzisz planu.",
       "permissionSandboxed": "Działa w piaskownicy; pyta, zanim zmieni coś na Twoim komputerze.",
+      "permissionScaleHigh": "Samodzielnie",
+      "permissionScaleLow": "Ostrożnie",
       "permissionUnavailable": "Niedostępne na tym komputerze",
       "permissions": "Uprawnienia",
       "refusalConflictingRunMode": "To żądanie ma działać jednocześnie z agentem w chmurze i na Twoim komputerze. Wybierz jedno w menu Uruchom na.",
@@ -702,6 +704,7 @@
     "richContentTitle": "Treść interaktywna",
     "richContentUnavailable": "Nie można bezpiecznie wyświetlić tej treści.",
     "runOn": {
+      "agent": "Agent",
       "checkFailed": "Nie udało się sprawdzić Twojego komputera",
       "chipLabel": "Gdzie działa: {place}",
       "cloud": "Chmura",
@@ -728,6 +731,7 @@
       "stepsInstall": "Otwieranie stella desktop. Jeśli aplikacja się nie otworzy, otwórz ją na swoim komputerze i w sekcji Ustawienia › Ogólne wybierz Zainstaluj przy agencie {harness}.",
       "stepsSignInClaudeCode": "Otwieranie stella desktop, aby się zalogować. Jeśli aplikacja się nie otworzy, otwórz ją i wybierz Ustawienia › Ogólne › Zaloguj się przez Claude.",
       "stepsSignInCodex": "Otwieranie stella desktop, aby się zalogować. Jeśli aplikacja się nie otworzy, otwórz ją i wybierz Ustawienia › Ogólne › Kontynuuj z ChatGPT.",
+      "where": "Gdzie działa",
       "yourComputer": "Twój komputer",
       "yourComputerDescription": "Korzysta z Codex lub Claude Code na Twoim komputerze w ramach Twojej własnej subskrypcji. Może odczytywać i zmieniać pliki w folderze tego czatu; uprawnienia określają, co może zrobić bez pytania."
     },

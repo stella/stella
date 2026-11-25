@@ -474,6 +474,8 @@
       "permissionPlan": "Plano",
       "permissionPlanDescription": "Primeiro lê e planeja; pergunta antes de cada alteração até você aprovar o plano.",
       "permissionSandboxed": "É executado em um ambiente isolado; pergunta antes de alterar seu computador.",
+      "permissionScaleHigh": "Autônomo",
+      "permissionScaleLow": "Cauteloso",
       "permissionUnavailable": "Indisponível neste computador",
       "permissions": "Permissões",
       "refusalConflictingRunMode": "Esta solicitação pede para rodar com o agente na nuvem e no seu computador ao mesmo tempo. Escolha um em Executar em.",
@@ -702,6 +704,7 @@
     "richContentTitle": "Conteúdo interativo",
     "richContentUnavailable": "Não é possível exibir este conteúdo com segurança.",
     "runOn": {
+      "agent": "Agente",
       "checkFailed": "Não foi possível verificar seu computador",
       "chipLabel": "Executa em: {place}",
       "cloud": "Nuvem",
@@ -728,6 +731,7 @@
       "stepsInstall": "Abrindo o stella desktop. Se ele não abrir, abra-o no seu computador e, em Configurações › Geral, escolha Instalar para o {harness}.",
       "stepsSignInClaudeCode": "Abrindo o stella desktop para entrar. Se ele não abrir, abra-o e escolha Configurações › Geral › Entrar com o Claude.",
       "stepsSignInCodex": "Abrindo o stella desktop para entrar. Se ele não abrir, abra-o e escolha Configurações › Geral › Continuar com o ChatGPT.",
+      "where": "Executa em",
       "yourComputer": "Seu computador",
       "yourComputerDescription": "Usa o Codex ou o Claude Code no seu computador com a sua própria assinatura. Pode ler e alterar arquivos na pasta deste chat; as permissões definem o que ele pode fazer sem perguntar."
     },
