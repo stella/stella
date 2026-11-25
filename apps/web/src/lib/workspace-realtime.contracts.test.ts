@@ -59,6 +59,7 @@ import {
   resourceQueryOptions,
 } from "@/lib/workspace-realtime";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
+import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
 import {
   entityViewKeys,
@@ -1660,6 +1661,37 @@ test("a committed entity rename marks its entity and every entity collection sta
     for (const queryKey of untouchedKeys) {
       expect(stale(queryKey)).toEqual({ queryKey, invalidated: false });
     }
+  } finally {
+    queryClient.clear();
+  }
+});
+
+test("a committed entity rename leaves another entity's registered detail reader fresh", async () => {
+  const queryClient = new QueryClient();
+  const otherEntityId = "00000000-0000-4000-8000-0000000000e2";
+  const renamed = entityOptions(WORKSPACE_ID, ENTITY_ID);
+  const other = entityOptions(WORKSPACE_ID, otherEntityId);
+  for (const options of [renamed, other]) {
+    expect(options.meta.resourceReads.resources).toContain(
+      RESOURCE_TYPE.ENTITY,
+    );
+    queryClient.getQueryCache().build(queryClient, options);
+  }
+  try {
+    await resourceMutation({
+      mutation: "renameEntity",
+      queryClient,
+      mutationFn: async (_variables: {
+        workspaceId: string;
+        entityId: string;
+      }) => undefined,
+    })({ workspaceId: WORKSPACE_ID, entityId: ENTITY_ID });
+    expect(queryClient.getQueryState(renamed.queryKey)?.isInvalidated).toBe(
+      true,
+    );
+    expect(queryClient.getQueryState(other.queryKey)?.isInvalidated).toBe(
+      false,
+    );
   } finally {
     queryClient.clear();
   }
