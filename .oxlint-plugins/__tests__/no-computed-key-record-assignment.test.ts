@@ -384,3 +384,15 @@ test("terminates on recursive predicates and rejects reassigned predicate bindin
     ]),
   ).toEqual([5, 6]);
 });
+
+test("rejects async and generator predicates as own-key guards", async () => {
+  expect(
+    await lint([
+      "const TABLE: Record<string, number> = { a: 1 };",
+      "const asyncCheck = async (k: string) => Object.hasOwn(TABLE, k);",
+      "function* genCheck(k: string) { return Object.hasOwn(TABLE, k); }",
+      "export const a = (key: string) => (asyncCheck(key) ? TABLE[key] : 0);",
+      "export const b = (key: string) => (genCheck(key) ? TABLE[key] : 0);",
+    ]),
+  ).toEqual([4, 5]);
+});

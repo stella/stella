@@ -376,7 +376,7 @@ type OwnKeyTestOptions = {
   test: unknown;
   table: unknown;
   key: unknown;
-  seen?: Set<Variable>;
+  seen?: Set<Variable> | undefined;
 };
 const ownKeyTest = (
   context: ScopeContext,
@@ -490,6 +490,8 @@ const localOwnKeyPredicate = (
   if (
     !fn ||
     !isFunction(fn) ||
+    fn.async === true ||
+    fn.generator === true ||
     !Array.isArray(fn.params) ||
     fn.params.length !== 1 ||
     !isIdentifierReference(fn.params.at(0))
