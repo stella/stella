@@ -150,8 +150,6 @@ requires (request it at `stella auth login --scopes`).
 | playbook | `stella playbook save` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | rate | `stella rate resolve` | read |  |
 | search | `stella search matters` | search | paginated |
-| site-notes | `stella site-notes read` | read |  |
-| site-notes | `stella site-notes save` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | task | `stella task delete` | matters_write | destructive (needs `--yes` off a TTY) |
 | task | `stella task list` | read | paginated |
 | task | `stella task save` | matters_write | destructive (needs `--yes` off a TTY) |
@@ -365,12 +363,6 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --activity-code
 - `stella search matters`
   - `--query` — Search query (string)
-- `stella site-notes read`
-  - `--url` — A page address on the website, as the browser reported it; only its origin is kept. (string)
-- `stella site-notes save`
-  - `--url` — A page address on the website, as the browser reported it; only its origin is kept. (string)
-  - via `--input` only: changes
-  - changes[]: type="add": kind:"works" | "failed" | "fixed", step:string, text:string; type="confirm": id:string; type="replace": id:string, kind:"works" | "failed" | "fixed", step:string, text:string; type="remove": id:string. Example: `--input '{"changes":[{"type":"add","kind":"works","step":"x","text":"x"}]}'`
 - `stella task delete`
   - `--task-id` — Task entity ID to delete (string)
 - `stella task list`
