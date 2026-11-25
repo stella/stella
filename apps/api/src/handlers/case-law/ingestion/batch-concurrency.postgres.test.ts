@@ -328,6 +328,15 @@ if (!databaseUrl || !enabled) {
         const decisions = stream(7103);
         const sourceId = createSafeId<"caseLawSource">();
         const fakeS3 = startFakeS3();
+        // What a fault leaves for the sweepers: the abandoned raw objects
+        // and the lost pack's upload intents. Asserted on their own below;
+        // every other table compares row for row.
+        const cleanupLedgers = [
+          "case_law_raw_sweeps",
+          "case_law_corpus_upload_intents",
+        ];
+        const compared = (tables: readonly string[]) =>
+          tables.filter((table) => !cleanupLedgers.includes(table));
         try {
           await withGatedTestClients(databaseUrl, async ({ openClient }) => {
             const reference = await withRun(
@@ -340,7 +349,10 @@ if (!databaseUrl || !enabled) {
                   concurrency: 1,
                   corpus: landing(),
                 });
-                return await canonicalCaseLawState(run.scopedDb, run.tables);
+                return await canonicalCaseLawState(
+                  run.scopedDb,
+                  compared(run.tables),
+                );
               },
             );
             const faulted = await withRun(
@@ -388,7 +400,24 @@ if (!databaseUrl || !enabled) {
                   corpus,
                 });
                 expect(passes).toBeGreaterThanOrEqual(1);
-                return await canonicalCaseLawState(run.scopedDb, run.tables);
+                const ledgers = await canonicalCaseLawState(
+                  run.scopedDb,
+                  cleanupLedgers,
+                );
+                // The refused raw writes are queued for the sweep, and the
+                // lost pack's intents wait for cleanup, none left active.
+                expect(ledgers["case_law_raw_sweeps"]?.length).toBeGreaterThan(
+                  0,
+                );
+                expect(
+                  (ledgers["case_law_corpus_upload_intents"] ?? []).every(
+                    (row) => row.includes('"status":"cleanup"'),
+                  ),
+                ).toBe(true);
+                return await canonicalCaseLawState(
+                  run.scopedDb,
+                  compared(run.tables),
+                );
               },
             );
             expect(faulted).toEqual(reference);

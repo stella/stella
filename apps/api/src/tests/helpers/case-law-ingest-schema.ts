@@ -138,8 +138,7 @@ export const objectStoreCorpus = (
 
 const isRejection = (
   record: IngestionResult | RejectedCaseLawIngestionRecord,
-): record is RejectedCaseLawIngestionRecord =>
-  "recordKey" in record && record.type === "rejected";
+): record is RejectedCaseLawIngestionRecord => "recordKey" in record;
 
 export type AppliedBatch = Awaited<ReturnType<typeof applyDecisionBatch>>;
 
@@ -200,6 +199,7 @@ export const applyIngestStream = async ({
  * payloads joined the pack, so only the member's own digest is compared.
  */
 const PACK_PLACE = /pack:[^"@]+@\d+\+\d+#/gu;
+const PACK_KEY = /[^"]*\/packs\/[^"]*\.stlpack/gu;
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gu;
 const TIMESTAMP = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/u;
 
@@ -214,8 +214,8 @@ export type CanonicalCaseLawState = Record<string, string[]>;
 /**
  * Every row of the run's tables, comparable across runs: a decision id reads
  * as the publisher identity of its row, any other generated id as `uuid`,
- * clock readings and serial counters are dropped, a payload's place in its
- * pack reads as its digest alone, and each table's rows are sorted. `exclude` names columns a comparison leaves out, with its reason
+ * clock readings and serial counters are dropped, a payload's pack and place
+ * in it read as its digest alone, and each table's rows are sorted. `exclude` names columns a comparison leaves out, with its reason
  * at the call site.
  */
 export const canonicalCaseLawState = async (
@@ -264,6 +264,7 @@ export const canonicalCaseLawState = async (
           );
           return JSON.stringify(kept)
             .replaceAll(PACK_PLACE, "pack:#")
+            .replaceAll(PACK_KEY, "pack")
             .replaceAll(UUID, (id) => tokens.get(id) ?? "uuid");
         })
         .toSorted();
