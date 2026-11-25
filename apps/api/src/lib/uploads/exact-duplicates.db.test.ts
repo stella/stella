@@ -32,6 +32,8 @@ const CURRENT = "a".repeat(64);
 const SUPERSEDED = "b".repeat(64);
 const OTHER_MATTER_ONLY = "c".repeat(64);
 const TASK_ATTACHMENT = "e".repeat(64);
+/** The matter's document whose current file is `CURRENT`. */
+const contractId = createSafeId<"entity">();
 
 type SeedDocumentOptions = {
   workspaceId: SafeId<"workspace">;
@@ -39,6 +41,7 @@ type SeedDocumentOptions = {
   name: string;
   docSequence: number | null;
   versionHashes: readonly string[];
+  entityId?: SafeId<"entity">;
 };
 
 /** An entity with one file version per hash; the last is the current one. */
@@ -48,8 +51,8 @@ const seedDocument = async ({
   name,
   docSequence,
   versionHashes,
+  entityId = createSafeId<"entity">(),
 }: SeedDocumentOptions): Promise<void> => {
-  const entityId = createSafeId<"entity">();
   const propertyId = propertyIds.get(workspaceId);
   if (propertyId === undefined) {
     throw new Error("Seed the matter's file property first");
@@ -148,6 +151,7 @@ beforeAll(async () => {
     });
   }
   await seedDocument({
+    entityId: contractId,
     workspaceId: matterId,
     name: "Contract.pdf",
     docSequence: 1,
@@ -181,7 +185,9 @@ test("a file with the bytes of a matter's current document is a duplicate", asyn
       workspaceId: matterId,
       sha256Hexes: [CURRENT, "d".repeat(64)],
     }),
-  ).toEqual([{ sha256Hex: CURRENT, entityName: "Contract.pdf" }]);
+  ).toEqual([
+    { sha256Hex: CURRENT, entityId: contractId, entityName: "Contract.pdf" },
+  ]);
 });
 
 test("a file only a task holds is not a duplicate document", async () => {

@@ -624,6 +624,11 @@
     },
     "metadata": {
       "aiExtractedHeading": "Išgauta DI",
+      "browserDownload": {
+        "downloaded": "Atsisiųsta",
+        "file": "Failo adresas",
+        "page": "Atsisiųsta iš"
+      },
       "documentProperties": {
         "empty": "Šiame faile nėra jo paties ypatybių",
         "heading": "Failo ypatybės",

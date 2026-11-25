@@ -624,6 +624,11 @@
     },
     "metadata": {
       "aiExtractedHeading": "مستخرج بالذكاء الاصطناعي",
+      "browserDownload": {
+        "downloaded": "تاريخ التنزيل",
+        "file": "عنوان الملف",
+        "page": "تم التنزيل من"
+      },
       "documentProperties": {
         "empty": "لا يحتوي هذا الملف على خصائص خاصة به",
         "heading": "خصائص الملف",

@@ -624,6 +624,11 @@
     },
     "metadata": {
       "aiExtractedHeading": "Extracted by AI",
+      "browserDownload": {
+        "downloaded": "Downloaded",
+        "file": "File address",
+        "page": "Downloaded from"
+      },
       "documentProperties": {
         "empty": "This file records no properties of its own",
         "heading": "File properties",

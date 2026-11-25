@@ -30,6 +30,8 @@ export type EntityVersion = {
   diffWordsAdded: number | null;
   diffWordsRemoved: number | null;
   sourceKind: EntityVersionSourceKind;
+  /** Where a file the member's browser downloaded for a chat came from. */
+  browserDownload: EntityVersionsResponseData["versions"][number]["browserDownload"];
   createdAt: string;
   author: { id: string; name: string; image: string | null } | null;
   file: {

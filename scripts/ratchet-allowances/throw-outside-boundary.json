@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 1,
+  "reason": "createEntityFromBuffer's oneCopyPerMatter check rolls a second copy of the same bytes back inside the creating transaction, under the matter's creation lock, and returns it as SameBytesFiledError beside the other in-transaction refusals that file already throws and converts."
+}

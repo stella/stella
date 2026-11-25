@@ -153,7 +153,7 @@ const isOptional = async (schema: v.GenericSchema): Promise<boolean> =>
 /**
  * Wire values offered for a required non-file field, in order. The field's
  * own schema decides which one it accepts, so a patterned id, a hash, a
- * wire-read number or boolean, or a plain string all get filled without this
+ * timestamp, a wire-read number or boolean, or a plain string all get filled without this
  * test restating their rules. The hash is computed, not pasted, so it is a
  * real digest rather than a literal that could drift out of the shape a
  * `sha256` field demands.
@@ -164,6 +164,7 @@ const STRING_FILLERS = [
   "1",
   "00000000-0000-4000-8000-000000000000",
   hashSha256Hex(PLAIN_VALUE),
+  "2026-01-01T00:00:00.000Z",
 ];
 
 /** The closed values a field shows clients (`const`, `enum`), as wire text. */

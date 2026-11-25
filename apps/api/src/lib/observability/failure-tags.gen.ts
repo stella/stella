@@ -473,6 +473,7 @@ export const FAILURE_TAGS = [
   "S3PresignError",
   "SSEBroadcastError",
   "SafeOutboundFetchError",
+  "SameBytesFiledError",
   "SanctionsDrainAttemptFailed",
   "SanctionsIndexLoadFailure",
   "SanctionsListParseError",
