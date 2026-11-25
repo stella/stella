@@ -661,12 +661,7 @@ pub(crate) enum PreferencesTab {
 
 impl PreferencesTab {
   #[cfg(test)]
-  const ALL: [Self; 4] = [
-    Self::General,
-    Self::Dictation,
-    Self::Agents,
-    Self::Activity,
-  ];
+  const ALL: [Self; 4] = [Self::General, Self::Dictation, Self::Agents, Self::Activity];
 
   const fn id(self) -> &'static str {
     match self {
