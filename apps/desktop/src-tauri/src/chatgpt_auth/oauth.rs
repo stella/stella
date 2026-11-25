@@ -460,7 +460,7 @@ fn callback_page(page: &CallbackPage, scheme: OutcomeScheme) -> String {
     },
     OutcomeMark {
       name: "button",
-      value: t("agentSubscriptions.continueWithChatGpt"),
+      value: t("agentSubscriptions.signIn"),
       kind: OutcomeMarkKind::ButtonLabel,
     },
   ];

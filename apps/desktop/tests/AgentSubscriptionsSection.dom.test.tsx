@@ -333,16 +333,16 @@ test("a settings link's agent card is brought into view, focused and marked once
   );
   const claudeCode = (
     await findByText(message(install.notInstalled, { name: "Claude Code" }))
-  ).closest<HTMLElement>("[data-agent-settings]");
-  expect(claudeCode?.dataset["agentSettings"]).toBe("claude-code");
+  ).closest<HTMLElement>("[data-settings-target]");
+  expect(claudeCode?.dataset["settingsTarget"]).toBe("agents-claude-code");
   await waitFor(() => {
     expect(document.activeElement).toBe(claudeCode);
   });
   expect(claudeCode?.dataset["highlighted"]).toBe("");
   const codex = (
     await findByText(message(install.notInstalled, { name: "Codex" }))
-  ).closest<HTMLElement>("[data-agent-settings]");
-  expect(codex?.dataset["agentSettings"]).toBe("codex");
+  ).closest<HTMLElement>("[data-settings-target]");
+  expect(codex?.dataset["settingsTarget"]).toBe("agents-codex");
   expect(codex?.dataset["highlighted"]).toBeUndefined();
   expect(shown).toEqual(["claude-code"]);
   // Nothing to sign in to before Claude Code is installed.
@@ -474,49 +474,206 @@ test.each([
   },
 );
 
-test("shows the Antigravity card with its installed version and refreshes on Check again", async () => {
-  let state: unknown = { state: "signed_out", version: "1.5.11" };
-  const { calls, getByRole, getByText } = renderSection({
+const antigravityMessages = defaultMessages.agentSubscriptions.antigravity;
+
+/** What the native side answers for the member's Antigravity CLI. */
+type AntigravityAnswer =
+  | { state: "not_installed" }
+  | { state: "too_old" | "signed_out" | "signed_in"; version: string }
+  | {
+      state: "unchecked";
+      version: string;
+      reason: "not_connected" | "check_failed";
+    };
+
+/**
+ * Renders the section with only the Antigravity CLI, answering each status
+ * read from `answers` in turn; a read can be held open until the test
+ * settles it, as a probe of the CLI takes a moment.
+ */
+const renderAntigravity = (first: AntigravityAnswer) => {
+  let next: () => Promise<unknown> = async () => first;
+  const view = renderSection({
     harnesses: () => [],
-    antigravity: () => state,
+    antigravity: async () => next(),
   });
+  /** The next read waits for the returned settle function. */
+  const holdNext = () => {
+    let settle: (answer: AntigravityAnswer | Error) => void = () => undefined;
+    const held = new Promise<unknown>((resolve, reject) => {
+      settle = (answer) => {
+        if (answer instanceof Error) {
+          reject(answer);
+        } else {
+          resolve(answer);
+        }
+      };
+    });
+    next = async () => held;
+    return (answer: AntigravityAnswer | Error) => {
+      settle(answer);
+    };
+  };
+  const checkAgain = () =>
+    view.getByRole("button", { name: antigravityMessages.checkAgain });
+  const statusLine = () =>
+    view
+      .getByText(antigravityMessages.title)
+      .closest("li")
+      ?.querySelector('[role="status"]')?.textContent ?? null;
+  return { ...view, holdNext, checkAgain, statusLine };
+};
 
+test.each([
+  [{ state: "signed_in", version: "1.5.17" }, "signedIn"],
+  [{ state: "signed_out", version: "1.5.17" }, "signedOut"],
+  [{ state: "too_old", version: "1.4.2" }, "tooOld"],
+  [{ state: "not_installed" }, "notInstalled"],
+  [
+    { state: "unchecked", version: "1.5.17", reason: "not_connected" },
+    "notConnected",
+  ],
+  [
+    { state: "unchecked", version: "1.5.17", reason: "check_failed" },
+    "checkFailed",
+  ],
+] satisfies [AntigravityAnswer, string][])(
+  "the Antigravity row says what the CLI answered: %o",
+  async (answer, key) => {
+    const { statusLine, queryByText } = renderAntigravity(answer);
+    const expected =
+      key === "signedIn"
+        ? defaultMessages.agentSubscriptions.signedIn
+        : antigravityMessages[key as keyof typeof antigravityMessages];
+    await waitFor(() => {
+      expect(statusLine()).toBe(expected);
+    });
+    const installed =
+      answer.state === "not_installed"
+        ? null
+        : message(install.ready, {
+            name: antigravityMessages.title,
+            version: answer.version,
+          });
+    if (installed !== null) {
+      expect(queryByText(installed)).not.toBeNull();
+    }
+  },
+);
+
+test("Check again shows the check running, then what the CLI answered", async () => {
+  const { checkAgain, holdNext, statusLine, calls } = renderAntigravity({
+    state: "signed_out",
+    version: "1.5.17",
+  });
   await waitFor(() => {
-    expect(
-      getByText(defaultMessages.agentSubscriptions.antigravity.title),
-    ).toBeTruthy();
-    expect(
-      getByText(defaultMessages.agentSubscriptions.antigravity.signedOut),
-    ).toBeTruthy();
-    expect(
-      getByText(
-        message(install.ready, {
-          name: defaultMessages.agentSubscriptions.antigravity.title,
-          version: "1.5.11",
-        }),
-      ),
-    ).toBeTruthy();
+    expect(statusLine()).toBe(antigravityMessages.signedOut);
   });
 
-  state = { state: "signed_in", version: "1.5.11" };
-  fireEvent.click(
-    getByRole("button", {
-      name: defaultMessages.agentSubscriptions.antigravity.checkAgain,
-    }),
+  // Still signed out: the answer says it was looked at.
+  let settle = holdNext();
+  fireEvent.click(checkAgain());
+  await waitFor(() => {
+    expect(statusLine()).toBe(antigravityMessages.checking);
+  });
+  expect(checkAgain().hasAttribute("disabled")).toBe(true);
+  settle({ state: "signed_out", version: "1.5.17" });
+  await waitFor(() => {
+    expect(statusLine()).toBe(antigravityMessages.stillSignedOut);
+  });
+  expect(checkAgain().hasAttribute("disabled")).toBe(false);
+
+  // Signed in from the CLI meanwhile.
+  settle = holdNext();
+  fireEvent.click(checkAgain());
+  await waitFor(() => {
+    expect(statusLine()).toBe(antigravityMessages.checking);
+  });
+  settle({ state: "signed_in", version: "1.5.17" });
+  await waitFor(() => {
+    expect(statusLine()).toBe(defaultMessages.agentSubscriptions.signedIn);
+  });
+
+  // A check the native side could not answer says so, keeping the version.
+  settle = holdNext();
+  fireEvent.click(checkAgain());
+  settle(new Error("refused"));
+  await waitFor(() => {
+    expect(statusLine()).toBe(antigravityMessages.checkFailed);
+  });
+
+  const refreshes = calls.filter(
+    ({ command, args }) =>
+      command === "antigravity_get_status" &&
+      typeof args === "object" &&
+      args !== null &&
+      Reflect.get(args, "refresh") === true,
   );
+  expect(refreshes).toHaveLength(3);
+});
 
-  await waitFor(() => {
-    expect(
-      getByText(defaultMessages.agentSubscriptions.antigravity.signedIn),
-    ).toBeTruthy();
+test("every subscription row says its sign-in the same way and keeps one text edge", async () => {
+  const email = "counsel.with.a.long.address@example-law-firm.test";
+  const { findByText, getByText } = renderSection({
+    harnesses: () =>
+      statuses(
+        { state: "ready", active: "0.164.0" },
+        { state: "ready", active: "2.1.309" },
+      ),
+    chatGpt: () => ({
+      state: "connected",
+      email,
+      plan: "plus",
+      sessionStored: true,
+      accounts: [],
+    }),
+    claudeCode: () => ({ state: "signed_in", email, plan: "pro" }),
+    antigravity: () => ({ state: "signed_in", version: "1.5.17" }),
   });
-  expect(
-    calls.some(
-      (c) =>
-        c.command === "antigravity_get_status" &&
-        typeof c.args === "object" &&
-        c.args !== null &&
-        Reflect.get(c.args, "refresh") === true,
-    ),
-  ).toBe(true);
+  const signedInAs = message(defaultMessages.agentSubscriptions.signedInAs, {
+    email,
+  });
+  const rows = await Promise.all(
+    [
+      defaultMessages.agentSubscriptions.chatGpt,
+      defaultMessages.agentSubscriptions.claudeCode.title,
+      antigravityMessages.title,
+    ].map(async (title) => (await findByText(title)).closest("li")),
+  );
+  for (const row of rows) {
+    // The mark sits in its own column, before the title.
+    expect(
+      row?.querySelector('[data-slot="list-item-media"] svg'),
+    ).not.toBeNull();
+    // The version line starts on the title's edge, past the mark.
+    expect(row?.lastElementChild?.className).toContain("ps-15");
+    expect(
+      row?.querySelector('[data-slot="settings-row-control"]')?.textContent,
+    ).not.toBe("");
+  }
+  // One line, cut short rather than wrapped when the email is long.
+  const lines = await waitFor(() => {
+    const found = [...document.querySelectorAll("span")].filter(
+      (span) => span.textContent === signedInAs && span.children.length === 0,
+    );
+    expect(found).toHaveLength(2);
+    return found;
+  });
+  for (const line of lines) {
+    expect(line.className).toContain("truncate");
+  }
+  // The same verbs on every row that can sign out.
+  const signOuts = [...document.querySelectorAll("button")].filter(
+    (button) =>
+      button.textContent === defaultMessages.agentSubscriptions.signOut,
+  );
+  expect(signOuts).toHaveLength(2);
+  expect(getByText(defaultMessages.agentSubscriptions.signedIn)).toBeTruthy();
+  for (const [name, version] of [
+    ["Codex", "0.164.0"],
+    ["Claude Code", "2.1.309"],
+    [antigravityMessages.title, "1.5.17"],
+  ] as const) {
+    expect(getByText(message(install.ready, { name, version }))).toBeTruthy();
+  }
 });

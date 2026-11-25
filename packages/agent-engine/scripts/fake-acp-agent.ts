@@ -66,6 +66,61 @@ const AGENT = {
   agentInfo: { name: "fake-acp", title: "Fake ACP", version: FAKE_ACP_VERSION },
 };
 
+/**
+ * What the Antigravity CLI 1.5.17 answers `initialize` with, as recorded
+ * from `agy acp`. It names no MCP transport, so stella reaches it over its
+ * stdio bridge, and says nothing about its sign-in: `session/new` does.
+ */
+export const AGY_CLI_VERSION = "1.5.17";
+const AGY_CLI_INITIALIZE = {
+  protocolVersion: 1,
+  agentCapabilities: {
+    loadSession: true,
+    load_session: true,
+    promptCapabilities: { image: true, audio: false, embeddedContext: true },
+    sessionCapabilities: {
+      resume: {},
+      close: {},
+      load: {},
+      list: {},
+      additionalDirectories: {},
+    },
+    session_capabilities: {
+      resume: {},
+      close: {},
+      load: {},
+      list: {},
+      additionalDirectories: {},
+    },
+    auth: { logout: {} },
+    _meta: { antigravity: { tier: true, systemPrompt: { append: true } } },
+  },
+  agentInfo: { name: "Antigravity ACP Server", version: AGY_CLI_VERSION },
+  authMethods: [
+    {
+      id: "oauth-personal",
+      name: "Log in with Google",
+      description: "Log in with your Google account",
+    },
+    {
+      id: "oauth-business",
+      name: "Log in with Gemini Enterprise",
+      description: "Log in with your Gemini Enterprise account",
+    },
+    {
+      id: "gemini-api-key",
+      name: "Gemini API key",
+      description: "Use an API key with Gemini Developer API",
+    },
+    {
+      id: "agent-platform",
+      name: "Gemini Enterprise Agent Platform",
+      description:
+        "Use Gemini Enterprise Agent Platform (formerly Vertex AI) with Application Default Credentials",
+    },
+  ],
+};
+
 const SESSION_STATE = {
   modes: {
     currentModeId: "default",
@@ -522,6 +577,22 @@ const FAKE_ACP_SCENARIOS = {
     {
       expect: "session/new",
       result: { sessionId: FAKE_ACP_SESSION, ...SESSION_STATE },
+    },
+  ],
+  // The Antigravity CLI (`agy acp`, 1.5.17) as it answers: signed in from
+  // the system keychain, or with no sign-in at all.
+  agy_signed_in: [
+    { expect: "initialize", result: AGY_CLI_INITIALIZE },
+    {
+      expect: "session/new",
+      result: { sessionId: FAKE_ACP_SESSION, ...SESSION_STATE },
+    },
+  ],
+  agy_signed_out: [
+    { expect: "initialize", result: AGY_CLI_INITIALIZE },
+    {
+      expect: "session/new",
+      error: { code: -32_000, message: "Authentication required" },
     },
   ],
   probe_sign_in_refused: [

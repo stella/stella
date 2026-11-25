@@ -320,9 +320,12 @@
   "agentSubscriptions": {
     "antigravity": {
       "checkAgain": "Comprobar de nuevo",
+      "checkFailed": "No se pudo comprobar el inicio de sesión. Vuelve a comprobarlo en un momento.",
+      "checking": "Comprobando el inicio de sesión…",
+      "notConnected": "El inicio de sesión se comprobará cuando este ordenador se conecte a stella.",
       "notInstalled": "Instala Antigravity 1.5 o posterior e inicia sesión desde ahí.",
-      "signedIn": "Sesión iniciada en Antigravity",
-      "signedOut": "Inicia sesión desde la CLI de Antigravity para usarlo en stella.",
+      "signedOut": "Sin sesión iniciada. Ejecuta agy en un terminal e inicia sesión allí.",
+      "stillSignedOut": "Sigues sin sesión iniciada. Ejecuta agy en un terminal, inicia sesión allí y vuelve a comprobarlo.",
       "title": "Antigravity",
       "tooOld": "Actualiza Antigravity a 1.5 o posterior e inicia sesión desde ahí."
     },
@@ -338,7 +341,6 @@
     "claudeCode": {
       "apiKey": "Claude Code tiene la sesión iniciada con una clave de API, que stella no usa. Cierra la sesión y vuelve a iniciarla con tu suscripción de Claude.",
       "checkAgain": "Comprobar de nuevo",
-      "description": "Usa tu suscripción de Claude para los agentes locales en stella. El uso se descuenta de tu plan de Claude, aparte de tu suscripción a stella.",
       "failure": {
         "notCompleted": "El inicio de sesión no se completó. Inténtalo de nuevo.",
         "timedOut": "El inicio de sesión tardó demasiado. Inténtalo de nuevo.",
@@ -346,19 +348,10 @@
       },
       "notInstalled": "Claude Code aún no está instalado en este ordenador.",
       "openSignInPage": "Abrir la página de inicio de sesión",
-      "signIn": "Iniciar sesión con Claude",
-      "signOut": "Cerrar sesión",
-      "signedIn": "Sesión iniciada en Claude",
-      "signedInAs": "Sesión iniciada en Claude · {email}",
       "title": "Claude Code",
       "unknown": "No se pudo comprobar el inicio de sesión de Claude Code. Vuelve a comprobarlo en un momento."
     },
-    "connected": "ChatGPT conectado",
-    "connectedAs": "ChatGPT conectado · {email}",
     "continueAs": "Continuar como {email}",
-    "continueWithChatGpt": "Continuar con ChatGPT",
-    "description": "Usa tu plan de ChatGPT para las solicitudes de IA en stella. El uso se descuenta de tu plan de ChatGPT, aparte de tu suscripción a stella.",
-    "disconnect": "Desconectar",
     "enterCallbackAddress": "Pegue la dirección completa de la pestaña del navegador donde inició sesión.",
     "failure": {
       "browserUnavailable": "No se pudo abrir el navegador. Inténtalo de nuevo.",
@@ -386,12 +379,13 @@
       },
       "install": "Instalar",
       "notInstalled": "{name} aún no está instalado en este ordenador.",
-      "ready": "{name} {version} está instalado.",
+      "ready": "{name} {version} instalado",
       "retry": "Reintentar",
       "verifying": "Comprobando {name} {version}"
     },
     "manageUsage": "Gestionar uso",
     "needsReconnect": "Tu conexión con ChatGPT ha caducado. Vuelve a iniciar sesión para seguir usando tu plan.",
+    "notSignedIn": "Sin sesión iniciada",
     "notice": {
       "actionFailed": "No ha funcionado. Inténtalo de nuevo.",
       "pasteRejected": "Esta dirección no corresponde al inicio de sesión actual. Copia la dirección completa de la pestaña del navegador que se abrió.",
@@ -399,6 +393,11 @@
     },
     "pasteDescription": "Si el navegador muestra una página de error después de iniciar sesión, copia su dirección y pégala aquí.",
     "pasteSubmit": "Terminar inicio de sesión",
+    "sectionDescription": "Usa tus propios planes de IA para los agentes locales de stella. El uso se descuenta de cada plan, aparte de tu suscripción a stella.",
+    "signIn": "Iniciar sesión",
+    "signOut": "Cerrar sesión",
+    "signedIn": "Sesión iniciada",
+    "signedInAs": "Sesión iniciada como {email}",
     "signingIn": "Termina de iniciar sesión en tu navegador.",
     "title": "Suscripciones de IA",
     "useDifferentAccount": "Usar otra cuenta"

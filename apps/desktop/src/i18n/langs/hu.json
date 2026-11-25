@@ -320,9 +320,12 @@
   "agentSubscriptions": {
     "antigravity": {
       "checkAgain": "Ellenőrzés újra",
+      "checkFailed": "Nem sikerült ellenőrizni a bejelentkezést. Néhány pillanat múlva ellenőrizze újra.",
+      "checking": "A bejelentkezés ellenőrzése…",
+      "notConnected": "A bejelentkezést akkor ellenőrizzük, amikor ez a számítógép csatlakozik a stella alkalmazáshoz.",
       "notInstalled": "Telepítse az Antigravity 1.5 vagy újabb verzióját, majd jelentkezzen be benne.",
-      "signedIn": "Bejelentkezve az Antigravity fiókba",
-      "signedOut": "Jelentkezzen be az Antigravity CLI-ben, hogy a stella alkalmazásban használhassa.",
+      "signedOut": "Nincs bejelentkezve. Indítsa el az agy parancsot egy terminálban, és jelentkezzen be ott.",
+      "stillSignedOut": "Még mindig nincs bejelentkezve. Indítsa el az agy parancsot egy terminálban, jelentkezzen be ott, majd ellenőrizze újra.",
       "title": "Antigravity",
       "tooOld": "Frissítse az Antigravity alkalmazást 1.5 vagy újabb verzióra, majd jelentkezzen be benne."
     },
@@ -338,7 +341,6 @@
     "claudeCode": {
       "apiKey": "A Claude Code API-kulccsal van bejelentkezve, amelyet a stella nem használ. Jelentkezzen ki, majd jelentkezzen be Claude-előfizetésével.",
       "checkAgain": "Újbóli ellenőrzés",
-      "description": "Használja Claude-előfizetését a stella helyi ügynökeihez. A használat a Claude-csomagját terheli, a stella-előfizetésétől külön.",
       "failure": {
         "notCompleted": "A bejelentkezés nem fejeződött be. Próbálja újra.",
         "timedOut": "A bejelentkezés túl sokáig tartott. Próbálja újra.",
@@ -346,19 +348,10 @@
       },
       "notInstalled": "A Claude Code még nincs telepítve ezen a számítógépen.",
       "openSignInPage": "Bejelentkezési oldal megnyitása",
-      "signIn": "Bejelentkezés Claude-dal",
-      "signOut": "Kijelentkezés",
-      "signedIn": "Bejelentkezve a Claude-ba",
-      "signedInAs": "Bejelentkezve a Claude-ba · {email}",
       "title": "Claude Code",
       "unknown": "Nem sikerült ellenőrizni a Claude Code-bejelentkezést. Néhány pillanat múlva ellenőrizze újra."
     },
-    "connected": "ChatGPT csatlakoztatva",
-    "connectedAs": "ChatGPT csatlakoztatva · {email}",
     "continueAs": "Folytatás ezzel: {email}",
-    "continueWithChatGpt": "Folytatás a ChatGPT-vel",
-    "description": "Használja ChatGPT-csomagját a stella MI-kéréseihez. A használat a ChatGPT-csomagját terheli, a stella-előfizetésétől külön.",
-    "disconnect": "Leválasztás",
     "enterCallbackAddress": "Illessze be a teljes címet a bejelentkezéshez megnyitott böngészőlapról.",
     "failure": {
       "browserUnavailable": "A böngészőt nem sikerült megnyitni. Próbálja újra.",
@@ -386,12 +379,13 @@
       },
       "install": "Telepítés",
       "notInstalled": "A {name} még nincs telepítve ezen a számítógépen.",
-      "ready": "A {name} {version} telepítve van.",
+      "ready": "{name} {version} telepítve",
       "retry": "Újrapróbálás",
       "verifying": "A {name} {version} ellenőrzése"
     },
     "manageUsage": "Használat kezelése",
     "needsReconnect": "A ChatGPT-kapcsolat lejárt. Jelentkezzen be újra, hogy tovább használhassa a csomagját.",
+    "notSignedIn": "Nincs bejelentkezve",
     "notice": {
       "actionFailed": "Ez nem sikerült. Próbálja újra.",
       "pasteRejected": "Ez a cím nem a jelenlegi bejelentkezéshez tartozik. Másolja ki a teljes címet a megnyílt böngészőlapról.",
@@ -399,6 +393,11 @@
     },
     "pasteDescription": "Ha a böngésző bejelentkezés után hibaoldalt mutat, másolja ki a címét, és illessze be ide.",
     "pasteSubmit": "Bejelentkezés befejezése",
+    "sectionDescription": "Használja saját AI-előfizetéseit a stella helyi ügynökeihez. A használat az adott előfizetésbe számít bele, a stella-előfizetéstől külön.",
+    "signIn": "Bejelentkezés",
+    "signOut": "Kijelentkezés",
+    "signedIn": "Bejelentkezve",
+    "signedInAs": "Bejelentkezve mint {email}",
     "signingIn": "Fejezze be a bejelentkezést a böngészőben.",
     "title": "AI-előfizetések",
     "useDifferentAccount": "Másik fiók használata"

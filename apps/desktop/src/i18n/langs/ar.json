@@ -320,9 +320,12 @@
   "agentSubscriptions": {
     "antigravity": {
       "checkAgain": "التحقق مرة أخرى",
+      "checkFailed": "تعذر التحقق من تسجيل الدخول. تحقق مرة أخرى بعد قليل.",
+      "checking": "جارٍ التحقق من تسجيل الدخول…",
+      "notConnected": "سيتم التحقق من تسجيل الدخول عند اتصال هذا الكمبيوتر بـ stella.",
       "notInstalled": "ثبّت Antigravity 1.5 أو أحدث، ثم سجّل الدخول منه.",
-      "signedIn": "تم تسجيل الدخول إلى Antigravity",
-      "signedOut": "سجّل الدخول من واجهة سطر أوامر Antigravity لاستخدامه في stella.",
+      "signedOut": "لم يتم تسجيل الدخول. شغّل agy في الطرفية وسجّل الدخول هناك.",
+      "stillSignedOut": "لم يتم تسجيل الدخول بعد. شغّل agy في الطرفية وسجّل الدخول هناك، ثم تحقق مرة أخرى.",
       "title": "Antigravity",
       "tooOld": "حدّث Antigravity إلى 1.5 أو أحدث، ثم سجّل الدخول منه."
     },
@@ -338,7 +341,6 @@
     "claudeCode": {
       "apiKey": "سُجِّل الدخول إلى Claude Code بمفتاح API لا تستخدمه stella. سجّل الخروج، ثم سجّل الدخول باستخدام اشتراكك في Claude.",
       "checkAgain": "تحقق مرة أخرى",
-      "description": "استخدم اشتراكك في Claude للوكلاء المحليين في stella. يُحتسب الاستخدام من خطة Claude، بشكل منفصل عن اشتراكك في stella.",
       "failure": {
         "notCompleted": "لم يكتمل تسجيل الدخول. حاول مرة أخرى.",
         "timedOut": "استغرق تسجيل الدخول وقتًا طويلًا. حاول مرة أخرى.",
@@ -346,19 +348,10 @@
       },
       "notInstalled": "لم يُثبَّت Claude Code على هذا الكمبيوتر بعد.",
       "openSignInPage": "فتح صفحة تسجيل الدخول",
-      "signIn": "تسجيل الدخول باستخدام Claude",
-      "signOut": "تسجيل الخروج",
-      "signedIn": "تم تسجيل الدخول إلى Claude",
-      "signedInAs": "تم تسجيل الدخول إلى Claude · {email}",
       "title": "Claude Code",
       "unknown": "تعذر التحقق من تسجيل الدخول إلى Claude Code. تحقق مرة أخرى بعد قليل."
     },
-    "connected": "تم ربط ChatGPT",
-    "connectedAs": "تم ربط ChatGPT · {email}",
     "continueAs": "المتابعة باسم {email}",
-    "continueWithChatGpt": "المتابعة باستخدام ChatGPT",
-    "description": "استخدم خطة ChatGPT الخاصة بك لطلبات الذكاء الاصطناعي في stella. يُحتسب الاستخدام من خطة ChatGPT، بشكل منفصل عن اشتراكك في stella.",
-    "disconnect": "قطع الاتصال",
     "enterCallbackAddress": "ألصق العنوان الكامل من علامة تبويب تسجيل الدخول في المتصفح.",
     "failure": {
       "browserUnavailable": "تعذّر فتح المتصفح. حاول مرة أخرى.",
@@ -386,12 +379,13 @@
       },
       "install": "تثبيت",
       "notInstalled": "لم يُثبَّت {name} على هذا الكمبيوتر بعد.",
-      "ready": "تم تثبيت {name} {version}.",
+      "ready": "تم تثبيت {name} {version}",
       "retry": "إعادة المحاولة",
       "verifying": "جارٍ التحقق من {name} {version}"
     },
     "manageUsage": "إدارة الاستخدام",
     "needsReconnect": "انتهت صلاحية اتصالك بـ ChatGPT. سجّل الدخول مرة أخرى لمواصلة استخدام خطتك.",
+    "notSignedIn": "لم يتم تسجيل الدخول",
     "notice": {
       "actionFailed": "لم ينجح ذلك. حاول مرة أخرى.",
       "pasteRejected": "هذا العنوان لا يخص عملية تسجيل الدخول الحالية. انسخ العنوان كاملًا من علامة تبويب المتصفح التي فُتحت.",
@@ -399,6 +393,11 @@
     },
     "pasteDescription": "إذا عرض المتصفح صفحة خطأ بعد تسجيل الدخول، فانسخ عنوانها والصقه هنا.",
     "pasteSubmit": "إكمال تسجيل الدخول",
+    "sectionDescription": "استخدم خطط الذكاء الاصطناعي الخاصة بك للوكلاء المحليين في stella. يُحتسب الاستخدام ضمن كل خطة، بشكل منفصل عن اشتراكك في stella.",
+    "signIn": "تسجيل الدخول",
+    "signOut": "تسجيل الخروج",
+    "signedIn": "تم تسجيل الدخول",
+    "signedInAs": "تم تسجيل الدخول باسم {email}",
     "signingIn": "أكمل تسجيل الدخول في المتصفح.",
     "title": "اشتراكات الذكاء الاصطناعي",
     "useDifferentAccount": "استخدام حساب آخر"

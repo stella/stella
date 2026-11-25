@@ -1424,6 +1424,20 @@ impl HarnessReports for SidecarHarnessHost {
 }
 
 impl SidecarHarnessHost {
+  /// The harness's report as the last probe left it; `None` before the
+  /// first probe answered.
+  pub(crate) fn report(&self, harness: Harness) -> Option<HarnessReport> {
+    self.shared.cached(harness).map(|cached| cached.report)
+  }
+
+  /// Probe the harness now and keep its report, as the regular probe does;
+  /// `None` while no supervisor runs (the runner has not connected yet).
+  pub(crate) async fn probe_now(&self, harness: Harness) -> Option<HarnessReport> {
+    let sidecar = self.shared.sidecar()?;
+    probe(&self.shared, &sidecar, harness).await;
+    self.report(harness)
+  }
+
   /// The member linked or unlinked a folder: look at the list again now.
   pub(crate) fn linked_folders_changed(&self) {
     self.shared.linked_folders_changed.notify_one();

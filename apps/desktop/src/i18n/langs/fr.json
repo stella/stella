@@ -320,9 +320,12 @@
   "agentSubscriptions": {
     "antigravity": {
       "checkAgain": "Vérifier à nouveau",
+      "checkFailed": "Impossible de vérifier la connexion. Vérifiez à nouveau dans un instant.",
+      "checking": "Vérification de la connexion…",
+      "notConnected": "La connexion sera vérifiée dès que cet ordinateur se connectera à stella.",
       "notInstalled": "Installez Antigravity 1.5 ou une version ultérieure, puis connectez-vous depuis celui-ci.",
-      "signedIn": "Connecté à Antigravity",
-      "signedOut": "Connectez-vous depuis la CLI Antigravity pour l’utiliser dans stella.",
+      "signedOut": "Non connecté. Lancez agy dans un terminal et connectez-vous-y.",
+      "stillSignedOut": "Toujours non connecté. Lancez agy dans un terminal, connectez-vous-y, puis vérifiez à nouveau.",
       "title": "Antigravity",
       "tooOld": "Mettez à jour Antigravity vers la version 1.5 ou ultérieure, puis connectez-vous depuis celui-ci."
     },
@@ -338,7 +341,6 @@
     "claudeCode": {
       "apiKey": "Claude Code est connecté avec une clé d’API, que stella n’utilise pas. Déconnectez-vous, puis reconnectez-vous avec votre abonnement Claude.",
       "checkAgain": "Vérifier à nouveau",
-      "description": "Utilisez votre abonnement Claude pour les agents locaux dans stella. L’utilisation est décomptée de votre forfait Claude, indépendamment de votre abonnement stella.",
       "failure": {
         "notCompleted": "La connexion n’a pas abouti. Réessayez.",
         "timedOut": "La connexion a pris trop de temps. Réessayez.",
@@ -346,19 +348,10 @@
       },
       "notInstalled": "Claude Code n’est pas encore installé sur cet ordinateur.",
       "openSignInPage": "Ouvrir la page de connexion",
-      "signIn": "Se connecter avec Claude",
-      "signOut": "Se déconnecter",
-      "signedIn": "Connecté à Claude",
-      "signedInAs": "Connecté à Claude · {email}",
       "title": "Claude Code",
       "unknown": "Impossible de vérifier la connexion à Claude Code. Vérifiez à nouveau dans un instant."
     },
-    "connected": "ChatGPT connecté",
-    "connectedAs": "ChatGPT connecté · {email}",
     "continueAs": "Continuer en tant que {email}",
-    "continueWithChatGpt": "Continuer avec ChatGPT",
-    "description": "Utilisez votre forfait ChatGPT pour les requêtes d’IA dans stella. L’utilisation est décomptée de votre forfait ChatGPT, indépendamment de votre abonnement stella.",
-    "disconnect": "Déconnecter",
     "enterCallbackAddress": "Collez l’adresse complète depuis l’onglet de connexion du navigateur.",
     "failure": {
       "browserUnavailable": "Votre navigateur n’a pas pu être ouvert. Réessayez.",
@@ -386,12 +379,13 @@
       },
       "install": "Installer",
       "notInstalled": "{name} n’est pas encore installé sur cet ordinateur.",
-      "ready": "{name} {version} est installé.",
+      "ready": "{name} {version} installé",
       "retry": "Réessayer",
       "verifying": "Vérification de {name} {version}"
     },
     "manageUsage": "Gérer l’utilisation",
     "needsReconnect": "Votre connexion à ChatGPT a expiré. Reconnectez-vous pour continuer à utiliser votre forfait.",
+    "notSignedIn": "Non connecté",
     "notice": {
       "actionFailed": "Cela n’a pas fonctionné. Réessayez.",
       "pasteRejected": "Cette adresse ne correspond pas à la connexion en cours. Copiez l’adresse complète de l’onglet du navigateur qui s’est ouvert.",
@@ -399,6 +393,11 @@
     },
     "pasteDescription": "Si le navigateur affiche une page d’erreur après la connexion, copiez son adresse et collez-la ici.",
     "pasteSubmit": "Terminer la connexion",
+    "sectionDescription": "Utilisez vos propres abonnements IA pour les agents locaux de stella. L’utilisation est décomptée de chaque abonnement, séparément de votre abonnement stella.",
+    "signIn": "Se connecter",
+    "signOut": "Se déconnecter",
+    "signedIn": "Connecté",
+    "signedInAs": "Connecté en tant que {email}",
     "signingIn": "Terminez la connexion dans votre navigateur.",
     "title": "Abonnements IA",
     "useDifferentAccount": "Utiliser un autre compte"

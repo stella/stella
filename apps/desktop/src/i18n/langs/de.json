@@ -320,9 +320,12 @@
   "agentSubscriptions": {
     "antigravity": {
       "checkAgain": "Erneut prüfen",
+      "checkFailed": "Die Anmeldung konnte nicht geprüft werden. Prüfen Sie es gleich noch einmal.",
+      "checking": "Anmeldung wird geprüft…",
+      "notConnected": "Die Anmeldung wird geprüft, sobald sich dieser Computer mit stella verbindet.",
       "notInstalled": "Installieren Sie Antigravity 1.5 oder neuer und melden Sie sich dort an.",
-      "signedIn": "Bei Antigravity angemeldet",
-      "signedOut": "Melden Sie sich in der Antigravity-CLI an, um es in stella zu verwenden.",
+      "signedOut": "Nicht angemeldet. Starten Sie agy in einem Terminal und melden Sie sich dort an.",
+      "stillSignedOut": "Weiterhin nicht angemeldet. Starten Sie agy in einem Terminal, melden Sie sich dort an und prüfen Sie dann erneut.",
       "title": "Antigravity",
       "tooOld": "Aktualisieren Sie Antigravity auf 1.5 oder neuer und melden Sie sich dort an."
     },
@@ -338,7 +341,6 @@
     "claudeCode": {
       "apiKey": "Claude Code ist mit einem API-Schlüssel angemeldet, den stella nicht verwendet. Melden Sie sich ab und danach mit Ihrem Claude-Abonnement wieder an.",
       "checkAgain": "Erneut prüfen",
-      "description": "Nutzen Sie Ihr Claude-Abonnement für lokale Agenten in stella. Die Nutzung wird auf Ihren Claude-Tarif angerechnet, getrennt von Ihrem stella-Abonnement.",
       "failure": {
         "notCompleted": "Die Anmeldung wurde nicht abgeschlossen. Versuchen Sie es erneut.",
         "timedOut": "Die Anmeldung hat zu lange gedauert. Versuchen Sie es erneut.",
@@ -346,19 +348,10 @@
       },
       "notInstalled": "Claude Code ist auf diesem Computer noch nicht installiert.",
       "openSignInPage": "Anmeldeseite öffnen",
-      "signIn": "Mit Claude anmelden",
-      "signOut": "Abmelden",
-      "signedIn": "Bei Claude angemeldet",
-      "signedInAs": "Bei Claude angemeldet · {email}",
       "title": "Claude Code",
       "unknown": "Die Anmeldung bei Claude Code konnte nicht geprüft werden. Prüfen Sie es gleich noch einmal."
     },
-    "connected": "ChatGPT verbunden",
-    "connectedAs": "ChatGPT verbunden · {email}",
     "continueAs": "Weiter als {email}",
-    "continueWithChatGpt": "Weiter mit ChatGPT",
-    "description": "Nutzen Sie Ihren ChatGPT-Tarif für KI-Anfragen in stella. Die Nutzung wird auf Ihren ChatGPT-Tarif angerechnet, getrennt von Ihrem stella-Abonnement.",
-    "disconnect": "Trennen",
     "enterCallbackAddress": "Fügen Sie die vollständige Adresse aus dem Anmelde-Tab im Browser ein.",
     "failure": {
       "browserUnavailable": "Ihr Browser konnte nicht geöffnet werden. Versuchen Sie es erneut.",
@@ -386,12 +379,13 @@
       },
       "install": "Installieren",
       "notInstalled": "{name} ist auf diesem Computer noch nicht installiert.",
-      "ready": "{name} {version} ist installiert.",
+      "ready": "{name} {version} installiert",
       "retry": "Erneut versuchen",
       "verifying": "{name} {version} wird geprüft"
     },
     "manageUsage": "Nutzung verwalten",
     "needsReconnect": "Ihre ChatGPT-Verbindung ist abgelaufen. Melden Sie sich erneut an, um Ihren Tarif weiter zu nutzen.",
+    "notSignedIn": "Nicht angemeldet",
     "notice": {
       "actionFailed": "Das hat nicht geklappt. Versuchen Sie es erneut.",
       "pasteRejected": "Diese Adresse gehört nicht zur aktuellen Anmeldung. Kopieren Sie die vollständige Adresse aus dem Browser-Tab, der sich geöffnet hat.",
@@ -399,6 +393,11 @@
     },
     "pasteDescription": "Wenn der Browser nach der Anmeldung eine Fehlerseite anzeigt, kopieren Sie deren Adresse und fügen Sie sie hier ein.",
     "pasteSubmit": "Anmeldung abschließen",
+    "sectionDescription": "Nutzen Sie Ihre eigenen KI-Tarife für lokale Agenten in stella. Die Nutzung wird auf den jeweiligen Tarif angerechnet, getrennt von Ihrem stella-Abonnement.",
+    "signIn": "Anmelden",
+    "signOut": "Abmelden",
+    "signedIn": "Angemeldet",
+    "signedInAs": "Angemeldet als {email}",
     "signingIn": "Schließen Sie die Anmeldung in Ihrem Browser ab.",
     "title": "KI-Abonnements",
     "useDifferentAccount": "Anderes Konto verwenden"

@@ -320,9 +320,12 @@
   "agentSubscriptions": {
     "antigravity": {
       "checkAgain": "Sprawdź ponownie",
+      "checkFailed": "Nie udało się sprawdzić logowania. Sprawdź ponownie za chwilę.",
+      "checking": "Sprawdzanie logowania…",
+      "notConnected": "Logowanie zostanie sprawdzone, gdy ten komputer połączy się z aplikacją stella.",
       "notInstalled": "Zainstaluj Antigravity 1.5 lub nowszą wersję, a następnie się w niej zaloguj.",
-      "signedIn": "Zalogowano do Antigravity",
-      "signedOut": "Zaloguj się w CLI Antigravity, aby używać go w aplikacji stella.",
+      "signedOut": "Nie zalogowano. Uruchom agy w terminalu i zaloguj się tam.",
+      "stillSignedOut": "Nadal nie zalogowano. Uruchom agy w terminalu, zaloguj się tam i sprawdź ponownie.",
       "title": "Antigravity",
       "tooOld": "Zaktualizuj Antigravity do wersji 1.5 lub nowszej, a następnie się w niej zaloguj."
     },
@@ -338,7 +341,6 @@
     "claudeCode": {
       "apiKey": "Claude Code jest zalogowany kluczem API, którego stella nie używa. Wyloguj się, a następnie zaloguj się swoją subskrypcją Claude.",
       "checkAgain": "Sprawdź ponownie",
-      "description": "Korzystaj ze swojej subskrypcji Claude w lokalnych agentach w aplikacji stella. Wykorzystanie jest liczone w ramach planu Claude, niezależnie od subskrypcji aplikacji stella.",
       "failure": {
         "notCompleted": "Logowanie nie zostało dokończone. Spróbuj ponownie.",
         "timedOut": "Logowanie trwało zbyt długo. Spróbuj ponownie.",
@@ -346,19 +348,10 @@
       },
       "notInstalled": "Claude Code nie jest jeszcze zainstalowany na tym komputerze.",
       "openSignInPage": "Otwórz stronę logowania",
-      "signIn": "Zaloguj się przez Claude",
-      "signOut": "Wyloguj się",
-      "signedIn": "Zalogowano do Claude",
-      "signedInAs": "Zalogowano do Claude · {email}",
       "title": "Claude Code",
       "unknown": "Nie udało się sprawdzić logowania do Claude Code. Sprawdź ponownie za chwilę."
     },
-    "connected": "ChatGPT połączony",
-    "connectedAs": "ChatGPT połączony · {email}",
     "continueAs": "Kontynuuj jako {email}",
-    "continueWithChatGpt": "Kontynuuj z ChatGPT",
-    "description": "Korzystaj ze swojego planu ChatGPT przy zapytaniach do AI w aplikacji stella. Wykorzystanie jest liczone w ramach planu ChatGPT, niezależnie od subskrypcji aplikacji stella.",
-    "disconnect": "Odłącz",
     "enterCallbackAddress": "Wklej pełny adres z karty logowania w przeglądarce.",
     "failure": {
       "browserUnavailable": "Nie udało się otworzyć przeglądarki. Spróbuj ponownie.",
@@ -386,12 +379,13 @@
       },
       "install": "Zainstaluj",
       "notInstalled": "{name} nie jest jeszcze zainstalowany na tym komputerze.",
-      "ready": "{name} {version} jest zainstalowany.",
+      "ready": "Zainstalowano {name} {version}",
       "retry": "Spróbuj ponownie",
       "verifying": "Sprawdzanie {name} {version}"
     },
     "manageUsage": "Zarządzaj wykorzystaniem",
     "needsReconnect": "Połączenie z ChatGPT wygasło. Zaloguj się ponownie, aby dalej korzystać z planu.",
+    "notSignedIn": "Nie zalogowano",
     "notice": {
       "actionFailed": "Nie udało się. Spróbuj ponownie.",
       "pasteRejected": "Ten adres nie pochodzi z bieżącego logowania. Skopiuj pełny adres z karty przeglądarki, która się otworzyła.",
@@ -399,6 +393,11 @@
     },
     "pasteDescription": "Jeśli po zalogowaniu przeglądarka pokaże stronę błędu, skopiuj jej adres i wklej go tutaj.",
     "pasteSubmit": "Dokończ logowanie",
+    "sectionDescription": "Używaj własnych planów AI dla lokalnych agentów w aplikacji stella. Wykorzystanie wlicza się do danego planu, niezależnie od subskrypcji stella.",
+    "signIn": "Zaloguj się",
+    "signOut": "Wyloguj się",
+    "signedIn": "Zalogowano",
+    "signedInAs": "Zalogowano jako {email}",
     "signingIn": "Dokończ logowanie w przeglądarce.",
     "title": "Subskrypcje AI",
     "useDifferentAccount": "Użyj innego konta"

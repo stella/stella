@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  AGY_CLI_VERSION,
   FAKE_ACP_MODEL,
   FAKE_ACP_OTHER_MODEL,
   FAKE_ACP_REPLAYED_TEXT,
@@ -27,6 +28,7 @@ import type { HarnessTurn, HarnessTurnInput } from "../adapter";
 import { type HarnessEvent, harnessSessionId } from "../events";
 import { HARNESS_TOOL_NAMES } from "../tool-parts";
 import { createAcpHarnessAdapter } from "./adapter";
+import { ANTIGRAVITY_CLI } from "./antigravity";
 import type { AcpAgentDefinition } from "./definition";
 import { isSessionBroken, markSessionBroken } from "./state-dir";
 
@@ -87,6 +89,7 @@ type Received = {
 const harnessFor = (
   scenario: FakeAcpScenario,
   definition: Partial<AcpAgentDefinition> = {},
+  { stdioMcpBridge = null }: { stdioMcpBridge?: readonly string[] | null } = {},
 ) => {
   const root = realpathSync(mkdtempSync(path.join(tmpdir(), "stella-acp-")));
   cleanups.push(() => {
@@ -122,6 +125,7 @@ const harnessFor = (
     },
     protocolLog: PROTOCOL_LOG_OFF,
     platform: process.platform,
+    stdioMcpBridge,
   });
   const lines = () =>
     readFileSync(logPath, "utf-8")
@@ -305,6 +309,62 @@ describe("ACP adapter over a stdio agent", () => {
     const probed = await harnessFor("probe_signed_out").adapter.probe();
     expect(Result.isOk(probed) && probed.value.auth).toEqual({
       type: "signed_out",
+    });
+  });
+
+  describe("the member's Antigravity CLI says itself whether it is signed in", () => {
+    /** The CLI's definition, minus what reaches outside the test. */
+    const agyCli = (scenario: "agy_signed_in" | "agy_signed_out") =>
+      harnessFor(
+        scenario,
+        { ...ANTIGRAVITY_CLI, minimumVersion: null, discardSession: null },
+        { stdioMcpBridge: [process.execPath] },
+      );
+
+    test("a CLI signed in where stella cannot see (the keychain) probes as signed in", async () => {
+      const harness = agyCli("agy_signed_in");
+      const probed = await harness.adapter.probe();
+      expect(Result.isOk(probed) && probed.value).toMatchObject({
+        version: AGY_CLI_VERSION,
+        auth: { type: "signed_in", method: "agent" },
+      });
+      // Asked of a signed-in CLI, `authenticate` would start a new sign-in.
+      expect(harness.received().map(({ method }) => method)).toEqual([
+        "initialize",
+        "session/new",
+      ]);
+    });
+
+    test("a CLI with no sign-in probes as signed out, and is asked again next time", async () => {
+      const harness = agyCli("agy_signed_out");
+      const first = await harness.adapter.probe();
+      const second = await harness.adapter.probe();
+      for (const probed of [first, second]) {
+        expect(Result.isOk(probed) && probed.value).toMatchObject({
+          version: AGY_CLI_VERSION,
+          auth: { type: "signed_out" },
+          models: [],
+        });
+      }
+      expect(harness.received().map(({ method }) => method)).toEqual([
+        "initialize",
+        "session/new",
+        "initialize",
+        "session/new",
+      ]);
+    });
+
+    test("a turn on a CLI with no sign-in ends needing a sign-in", async () => {
+      const harness = agyCli("agy_signed_out");
+      const started = await harness.adapter.startTurn(
+        turnInput(harness.workspaceDir),
+      );
+      expect(Result.isError(started) && started.error.reason).toBe(
+        "auth_required",
+      );
+      expect(
+        harness.received().some(({ method }) => method === "authenticate"),
+      ).toBe(false);
     });
   });
 

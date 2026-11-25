@@ -320,9 +320,12 @@
   "agentSubscriptions": {
     "antigravity": {
       "checkAgain": "Kontrolli uuesti",
+      "checkFailed": "Sisselogimist ei õnnestunud kontrollida. Kontrolli hetke pärast uuesti.",
+      "checking": "Sisselogimise kontrollimine…",
+      "notConnected": "Sisselogimist kontrollitakse, kui see arvuti loob ühenduse rakendusega stella.",
       "notInstalled": "Installi Antigravity 1.5 või uuem versioon ja logi selles sisse.",
-      "signedIn": "Sisse logitud Antigravitysse",
-      "signedOut": "Logi sisse Antigravity CLI-s, et seda rakenduses stella kasutada.",
+      "signedOut": "Pole sisse logitud. Käivita agy terminalis ja logi seal sisse.",
+      "stillSignedOut": "Ikka pole sisse logitud. Käivita agy terminalis, logi seal sisse ja kontrolli uuesti.",
       "title": "Antigravity",
       "tooOld": "Uuenda Antigravity versioonile 1.5 või uuemaks ja logi selles sisse."
     },
@@ -338,7 +341,6 @@
     "claudeCode": {
       "apiKey": "Claude Code on sisse logitud API-võtmega, mida stella ei kasuta. Logige välja ja seejärel oma Claude’i tellimusega uuesti sisse.",
       "checkAgain": "Kontrolli uuesti",
-      "description": "Kasutage stella kohalike agentide jaoks oma Claude’i tellimust. Kasutus arvestatakse teie Claude’i paketist, stella tellimusest eraldi.",
       "failure": {
         "notCompleted": "Sisselogimine jäi pooleli. Proovige uuesti.",
         "timedOut": "Sisselogimine võttis liiga kaua aega. Proovige uuesti.",
@@ -346,19 +348,10 @@
       },
       "notInstalled": "Claude Code ei ole sellesse arvutisse veel installitud.",
       "openSignInPage": "Ava sisselogimisleht",
-      "signIn": "Logi sisse Claude’iga",
-      "signOut": "Logi välja",
-      "signedIn": "Claude’i sisse logitud",
-      "signedInAs": "Claude’i sisse logitud · {email}",
       "title": "Claude Code",
       "unknown": "Claude Code'i sisselogimist ei õnnestunud kontrollida. Kontrolli hetke pärast uuesti."
     },
-    "connected": "ChatGPT on ühendatud",
-    "connectedAs": "ChatGPT on ühendatud · {email}",
     "continueAs": "Jätka kontoga {email}",
-    "continueWithChatGpt": "Jätka ChatGPT-ga",
-    "description": "Kasutage stella AI-päringuteks oma ChatGPT paketti. Kasutus arvestatakse teie ChatGPT paketist, stella tellimusest eraldi.",
-    "disconnect": "Katkesta ühendus",
     "enterCallbackAddress": "Kleepige täielik aadress brauseri sisselogimiskaardilt.",
     "failure": {
       "browserUnavailable": "Brauserit ei õnnestunud avada. Proovige uuesti.",
@@ -386,12 +379,13 @@
       },
       "install": "Installi",
       "notInstalled": "{name} ei ole sellesse arvutisse veel installitud.",
-      "ready": "{name} {version} on installitud.",
+      "ready": "{name} {version} installitud",
       "retry": "Proovi uuesti",
       "verifying": "{name} {version} kontrollimine"
     },
     "manageUsage": "Halda kasutust",
     "needsReconnect": "Teie ChatGPT ühendus on aegunud. Logige uuesti sisse, et oma paketti edasi kasutada.",
+    "notSignedIn": "Pole sisse logitud",
     "notice": {
       "actionFailed": "See ei õnnestunud. Proovige uuesti.",
       "pasteRejected": "See aadress ei kuulu praeguse sisselogimise juurde. Kopeerige kogu aadress avanenud brauseri vahekaardilt.",
@@ -399,6 +393,11 @@
     },
     "pasteDescription": "Kui brauser näitab pärast sisselogimist vealehte, kopeerige selle aadress ja kleepige see siia.",
     "pasteSubmit": "Lõpeta sisselogimine",
+    "sectionDescription": "Kasutage rakenduse stella kohalike agentide jaoks oma AI-pakette. Kasutus arvestatakse vastava paketi alla, eraldi teie stella tellimusest.",
+    "signIn": "Logi sisse",
+    "signOut": "Logi välja",
+    "signedIn": "Sisse logitud",
+    "signedInAs": "Sisse logitud kui {email}",
     "signingIn": "Lõpetage sisselogimine brauseris.",
     "title": "AI-tellimused",
     "useDifferentAccount": "Kasuta teist kontot"
