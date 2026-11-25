@@ -239,7 +239,7 @@ const mount = ({
 
 const openViewSelect = async () => {
   const trigger = screen.getByRole("combobox", {
-    name: messages.knowledge.agentSkills.tabConfigure,
+    name: messages.organization.aiConfig.configure,
   });
   await act(async () => {
     fireEvent.mouseDown(trigger, { button: 0 });
@@ -362,14 +362,12 @@ test("shows inline Instructions, Context section, Preview button, Suggest improv
   );
   expect(instructions).toBeTruthy();
   expect(instructions?.textContent).toContain(
-    messages.knowledge.agentSkills.instructionsSection,
+    messages.flows.steps.instructions,
   );
-  expect(
-    screen.getByText(messages.knowledge.agentSkills.contextSection),
-  ).toBeTruthy();
+  expect(screen.getByText(messages.chat.composerMenu.context)).toBeTruthy();
   expect(
     screen.getByRole("button", {
-      name: messages.knowledge.agentSkills.previewSkill,
+      name: messages.common.preview,
     }),
   ).toBeTruthy();
   expect(
