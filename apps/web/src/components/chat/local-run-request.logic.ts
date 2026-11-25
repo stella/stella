@@ -24,6 +24,19 @@ export const localRunRequestOfCall = (
   ) ?? null;
 
 /**
+ * The approvals the run of the latest answer still waits on, by request id:
+ * what a message sent over them declines.
+ */
+export const pendingLocalRunApprovalIds = (
+  messages: readonly { readonly metadata?: unknown }[],
+): readonly string[] =>
+  chatLocalRunRequestsOf(messages.at(-1)?.metadata).flatMap((request) =>
+    request.status === "pending" && request.ask.kind === "approval"
+      ? [request.requestId]
+      : [],
+  );
+
+/**
  * The step a run waits on the member's approval for, as its card asks it:
  * an approval under the request's id, which the answer names. The turn keeps
  * running meanwhile; the card is what waits. Only a request that can still

@@ -106,6 +106,7 @@ import {
   terminalizeUnsettledCreateDocumentDraft,
 } from "@/components/chat/create-document-draft.logic";
 import { openEntityInInspector } from "@/components/chat/entity-open";
+import { pendingLocalRunApprovalIds } from "@/components/chat/local-run-request.logic";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { buildEditedUserMessage } from "@/components/chat/user-message-edit.logic";
@@ -1184,6 +1185,17 @@ export const useChatSession = ({
           const queued = await enqueueMessage(message, options);
           if (queued.kind === "sent") {
             const { item } = queued;
+            // A step the run waits on the member's approval for is declined,
+            // explicitly, as the member's own Deny would: the message goes
+            // to the run instead of that step.
+            for (const requestId of pendingLocalRunApprovalIds(
+              chat.getSnapshot().messages,
+            )) {
+              detached(
+                resolveToolApproval({ id: requestId, approved: false }),
+                "use-chat-session.decline-local-for-steer",
+              );
+            }
             detached(
               (async () => {
                 // The message as this send queued it, never the cached
