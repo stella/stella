@@ -1411,9 +1411,7 @@
     "waitingForFileSelection": "Válasszon felvételt, vagy zárja be a fájlválasztót."
   },
   "tray": {
-    "aboutStellaDesktop": "A stella desktop névjegye",
     "activeEdits": "{count, plural, one {1 aktív szerkesztés} other {{count} aktív szerkesztés}}",
-    "activeEditsSubmenu": "Aktív szerkesztések",
     "activity": "Tevékenység",
     "activityNow": "Most: {name}",
     "activityOff": "Tevékenység: Kikapcsolva",
@@ -1431,7 +1429,6 @@
     "documentsSyncing": "{count, plural, one {1 dokumentum szinkronizálódik} other {{count} dokumentum szinkronizálódik}}",
     "finishEditing": "Szerkesztés befejezése",
     "needsAttention": "Figyelmet igényel",
-    "noActiveEdits": "Nincsenek aktív szerkesztések",
     "openActivity": "Tevékenység megnyitása",
     "openFile": "Fájl megnyitása",
     "quitStellaDesktop": "Kilépés a stella desktop-ból",
@@ -1447,10 +1444,6 @@
     "sessionSavingDraft": "Piszkozat mentése",
     "settings": "Beállítások",
     "showTranscription": "Átirat megjelenítése",
-    "support": "Támogatás",
-    "supportCopyDiagnostics": "Diagnosztika másolása",
-    "supportEmailSupport": "E-mail támogatás",
-    "supportRevealAppData": "Alkalmazásadatok megjelenítése",
     "temporaryWorkingCopies": "Ideiglenes munkamásolatok",
     "transcribeRecording": "Felvétel átírása…",
     "transcriptionProgress": "Átírás folyamatban: {done} / {total} perc",
