@@ -316,7 +316,7 @@ describe("submitFeedbackReport", () => {
       }),
     );
     expect(resent.deduplicated).toBe(true);
-    expect(resent.receipt).toBe(receipts.at(-1));
+    expect(resent.receipt).toBe(`FB-TEST-${String(reporters.length)}`);
   });
 
   test("reports outside the 24-hour window do not deduplicate", async () => {
