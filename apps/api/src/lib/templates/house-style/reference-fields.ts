@@ -97,26 +97,21 @@ const literalsOf = (levelText: string): string[] =>
 const hasWords = (levelText: string): boolean =>
   literalsOf(levelText).some((literal) => WORDS.test(literal));
 
-/** Punctuation a field keeps when it drops the words around it. Brackets
- *  are kept too, but they belong to the designator. */
-const KEPT_PUNCTUATION = /[.\-–—/:,;]/u;
+/** What a field keeps when it drops the words around it: punctuation and
+ *  brackets. */
+const KEPT_WITH_WORDS = /[.\-–—/:,;()[\]]/u;
 
 /**
  * Whether a field can show the bare number of a paragraph numbered by
- * `levelText`. `\t` drops the words of a level text and keeps its
- * punctuation: `Článek %1.` gives `II`, while `Příloha č. %1` gives `.2`,
+ * `levelText`. `\t` drops the words of a level text and keeps what stands
+ * between them: `Článek %1.` gives `II`, while `Příloha č. %1` gives `.2`,
  * the period of `č.` in front of the number. A level whose words carry
- * punctuation therefore cannot be cited by a numbered field.
+ * punctuation or a bracket therefore cannot be cited by a numbered field.
  */
 export const showsBareNumber = (levelText: string): boolean =>
   literalsOf(levelText).every(
-    (literal) => !WORDS.test(literal) || !KEPT_PUNCTUATION.test(literal),
+    (literal) => !WORDS.test(literal) || !KEPT_WITH_WORDS.test(literal),
   );
-
-/** What is left of a literal with words once the words are dropped: the
- *  brackets that enclose the counter, as in `Článek (%1)`. */
-const bracketsOf = (literal: string): string =>
-  Array.from(literal.matchAll(/[()[\]]/gu), ([bracket]) => bracket).join("");
 
 const renderLevelText = (
   levelText: string,
@@ -129,7 +124,9 @@ const renderLevelText = (
   let rendered = "";
   for (const part of levelText.split(PLACEHOLDER)) {
     if (!PLACEHOLDER.test(part)) {
-      rendered += withoutWords && WORDS.test(part) ? bracketsOf(part) : part;
+      // A literal with words is dropped whole: it holds nothing a field
+      // would keep, or the level is not cited at all.
+      rendered += withoutWords && WORDS.test(part) ? "" : part;
       continue;
     }
     // `%1` is level 0.

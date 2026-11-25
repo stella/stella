@@ -70,6 +70,7 @@ describe("selectReferenceField keeping the source's numbering", () => {
     ["Čl. 5", "Čl. %1", "5"],
     ["Příloha č. 2", "Příloha č. %1", "2"],
     ["Art. 3", "Art. %1", "3"],
+    ["Článek (3)", "Článek (%1)", "(3)"],
     ["Schedule No. 4", "Schedule No. %1", "4"],
   ] as const)(
     "refuses %s, whose words carry punctuation",
@@ -138,10 +139,19 @@ describe("selectReferenceField in the template's scheme", () => {
       instruction: numberWithoutWords,
       expectedText: "XI",
     });
-    expect(read("Článek (%1)", [11])).toMatchObject({
-      instruction: numberWithoutWords,
-      expectedText: "(XI)",
+  });
+
+  test("refuses a level whose words stand beside a bracket", () => {
+    const field = selectReferenceField({
+      designatorText: "(XI)",
+      levelText: "Článek (%1)",
+      numbering: {
+        mode: "houseScheme",
+        levels: [{ ilvl: 0, numFmt: "upperRoman", lvlText: "Článek (%1)" }],
+        counters: [11],
+      },
     });
+    expect(field.isErr() && field.error.reason).toBe("punctuated-words");
   });
 
   test("refuses a level whose words carry punctuation", () => {
