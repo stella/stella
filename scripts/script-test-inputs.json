@@ -484,6 +484,7 @@
     "scripts/type-cost-measurement.test.ts": ["**"],
     "scripts/typecheck-baseline.test.ts": ["**"],
     "scripts/typecheck-cache.test.ts": ["**"],
+    "scripts/typecheck-changed.test.ts": ["scripts/typecheck-changed.ts"],
     "scripts/typecheck-command-probe.test.ts": ["**"],
     "scripts/typescript-compiler-api-imports.test.ts": ["**"],
     "scripts/ui-playground-selection.test.ts": ["**"],

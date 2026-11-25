@@ -19,9 +19,10 @@
  *   + extraction enqueues.
  */
 import { panic, Result } from "better-result";
+import type { Err } from "better-result";
 import { and, eq, ne, or, sql } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db/safe-db-types";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import type {
   PendingUploadFinalizedResult,
   PendingUploadPurposeData,
@@ -307,13 +308,19 @@ export const checkEntityCreateTargetForInsert = async ({
  *
  * @yields safeDb errors out to the parent safe-handler.
  */
+type ValidateEntityCreateGenerator = AsyncGenerator<
+  Err<never, SafeDbError>,
+  Result<void, HandlerError<400>>,
+  unknown
+>;
+
 export const validateEntityCreateCapacity = async function* ({
   safeDb,
   workspaceId,
   propertyId,
   parentId,
   entityCount,
-}: ValidateEntityCreateCapacityProps) {
+}: ValidateEntityCreateCapacityProps): ValidateEntityCreateGenerator {
   if (!Number.isInteger(entityCount) || entityCount < 1) {
     return Result.err(
       new HandlerError({
@@ -406,7 +413,7 @@ export const validateEntityCreateCapacity = async function* ({
 
 export const validateEntityCreate = async function* (
   props: ValidateEntityCreateProps,
-) {
+): ValidateEntityCreateGenerator {
   return yield* validateEntityCreateCapacity({
     ...props,
     entityCount: 1,
