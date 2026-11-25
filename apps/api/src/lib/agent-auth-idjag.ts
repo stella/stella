@@ -19,7 +19,6 @@ import { createOrganizationForAccount, rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
 import {
   AgentTokenError,
-  consumeAuthorizationCode,
   createAgentOAuthClient,
   generateOpaqueToken,
   hashClaimToken,
@@ -514,14 +513,20 @@ export const loadIdJagExchangeContext = async (
     return Result.err(new AgentTokenError("invalid_grant"));
   }
 
-  // Consume the code one-shot before the exchange: of concurrent requests
-  // replaying the same service assertion, only one gets the code.
-  if (
-    !(await consumeAuthorizationCode(
-      registrationId,
-      registration.authorizationCode,
-    ))
-  ) {
+  // Consume the code one-shot before the exchange: clear it only while it
+  // still holds the value read above, so of concurrent requests replaying the
+  // same service assertion exactly one gets it.
+  const consumed = await rootDb
+    .update(agentRegistration)
+    .set({ authorizationCode: null })
+    .where(
+      and(
+        eq(agentRegistration.id, registrationId),
+        eq(agentRegistration.authorizationCode, registration.authorizationCode),
+      ),
+    )
+    .returning({ id: agentRegistration.id });
+  if (consumed.length === 0) {
     return Result.err(new AgentTokenError("invalid_grant"));
   }
 

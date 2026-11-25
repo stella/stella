@@ -132,6 +132,13 @@
     "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
   },
   {
+    "id": "apps/api/src/lib/agent-auth-idjag.ts::loadIdJagExchangeContext",
+    "writes": {
+      "update:agentRegistration": 1
+    },
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
     "id": "apps/api/src/lib/agent-auth-idjag.ts::writeDelegation",
     "writes": {
       "insert:agentDelegation": 1
@@ -154,6 +161,13 @@
     "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
   },
   {
+    "id": "apps/api/src/lib/agent-auth.ts::exchangeClaimedCode",
+    "writes": {
+      "update:agentRegistration": 1
+    },
+    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
+  },
+  {
     "id": "apps/api/src/lib/agent-auth.ts::mintInternalSessionCookieHeader",
     "writes": {
       "insert:session": 1
@@ -163,7 +177,7 @@
   {
     "id": "apps/api/src/lib/agent-auth.ts::pollClaimGrant",
     "writes": {
-      "update:agentRegistration": 1
+      "update:agentRegistration": 2
     },
     "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
   },
