@@ -237,6 +237,7 @@ export const CHAT_LOCAL_RUN_BROWSER_ACTIONS = [
   "select",
   "go_back",
   "switch_tab",
+  "wait_for_downloads",
 ] as const;
 
 export type ChatLocalRunBrowserAction =
@@ -265,6 +266,7 @@ const BROWSER_STEP_KEEPS = {
   select: "asked",
   go_back: "kind",
   switch_tab: "kind",
+  wait_for_downloads: "kind",
 } as const satisfies Record<
   ChatLocalRunBrowserAction,
   "address" | "asked" | "kind"

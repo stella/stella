@@ -177,6 +177,8 @@ const recorder = (
   /** Why the gate asked each question. */
   const reasons: BrowserStepAskReason[] = [];
   const finished: string[] = [];
+  /** How long each `wait_for_downloads` asked the inbox to wait. */
+  const waits: number[] = [];
   const context = {
     acts: true,
     approvals,
@@ -208,6 +210,15 @@ const recorder = (
           shownAddress === null ? null : (shownSaves.get(shownAddress) ?? null),
       };
     },
+    waitForDownloads: async (waitMs: number) => {
+      waits.push(waitMs);
+      return await Promise.resolve({
+        downloads: downloads.splice(0),
+        saving,
+        shownSaving: false,
+        shown: null,
+      });
+    },
     send: async (
       command: BrowserControlCommand,
       observedTab: BrowserObservedTab | null,
@@ -227,8 +238,13 @@ const recorder = (
     send: context.send,
     sent,
     shownAddresses,
+    waits,
   };
 };
+
+/** What a saved download in these results carries beyond its path. */
+const SAVED_SHA256 = "0".repeat(64);
+const ARRIVED_AT = "2026-11-25T09:30:00Z";
 
 const parsed = (result: { content: { text: string }[] }): unknown =>
   JSON.parse(result.content.at(0)?.text ?? "null");
@@ -294,12 +310,17 @@ describe("the local browser tools", () => {
       path: "Downloads/Decision 1.pdf",
       sourceUrl: "https://fixture-library.test/doc/1/file",
       status: "saved",
+      duplicate: false,
+      sha256: SAVED_SHA256,
+      pageUrl: null,
+      downloadedAt: ARRIVED_AT,
     };
     const refused: BrowserDownloadOutcome = {
       message: "The download is not a PDF; only PDFs are saved.",
       reason: "not_pdf",
       sourceUrl: "https://fixture-library.test/doc/1/other",
       status: "refused",
+      pageUrl: null,
     };
     const browser = recorder([page("r-1"), page("r-2"), page("r-3")]);
     await session.call("snapshot", {}, browser.context);
@@ -314,6 +335,81 @@ describe("the local browser tools", () => {
     expect(parsed(again)).not.toHaveProperty("downloads");
   });
 
+  test("wait_for_downloads waits for the chat's downloads without reaching the browser", async () => {
+    const session = createLocalBrowserSession();
+    const saved: BrowserDownloadOutcome = {
+      bytes: 2048,
+      path: "Downloads/Decision 1.pdf",
+      sourceUrl: "https://fixture-library.test/doc/1/file",
+      status: "saved",
+      duplicate: false,
+      sha256: SAVED_SHA256,
+      pageUrl: "https://fixture-library.test/doc/1",
+      downloadedAt: ARRIVED_AT,
+    };
+    const browser = recorder([], { downloads: [saved] });
+
+    const waited = await session.call(
+      "wait_for_downloads",
+      {},
+      browser.context,
+    );
+
+    expect(parsed(waited)).toEqual({
+      downloads: [saved],
+      message: "Every download of this chat has arrived.",
+      status: "settled",
+    });
+    expect(browser.waits).toEqual([30_000]);
+    expect(browser.sent).toEqual([]);
+  });
+
+  test("wait_for_downloads says which are still saving when its wait runs out", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([], { saving: 2 });
+
+    const waited = await session.call(
+      "wait_for_downloads",
+      { seconds: 5 },
+      browser.context,
+    );
+
+    expect(parsed(waited)).toEqual({
+      message:
+        "2 downloads are still saving: call wait_for_downloads again, or tell the member.",
+      savingDownloads: 2,
+      status: "still_saving",
+    });
+    expect(browser.waits).toEqual([5000]);
+  });
+
+  test("wait_for_downloads refuses a wait outside its bounds and waits for nothing", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([]);
+
+    for (const seconds of [0, 46, 1.5]) {
+      // await-in-loop: one call at a time, as the agent makes them.
+      const refused = await session.call(
+        "wait_for_downloads",
+        { seconds },
+        browser.context,
+      );
+      expect(refused.isError).toBe(true);
+      expect(parsed(refused)).toMatchObject({ code: "invalid-command" });
+    }
+    expect(browser.waits).toEqual([]);
+  });
+
+  test("the session knows the page the chat last read, for where a download came from", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([page("r-1")]);
+    expect(session.page()).toBeNull();
+
+    await session.call("snapshot", {}, browser.context);
+
+    expect(session.page()).toBe(SEARCH_URL);
+  });
+
   test("a find result carries the downloads that arrived meanwhile", async () => {
     const session = createLocalBrowserSession();
     const saved: BrowserDownloadOutcome = {
@@ -321,6 +417,10 @@ describe("the local browser tools", () => {
       path: "Downloads/decision.pdf",
       sourceUrl: "https://fixture-library.test/file",
       status: "saved",
+      duplicate: false,
+      sha256: SAVED_SHA256,
+      pageUrl: null,
+      downloadedAt: ARRIVED_AT,
     };
     const browser = recorder([found()], { downloads: [saved] });
     const result = await session.call(
@@ -341,6 +441,10 @@ describe("the local browser tools", () => {
       path: "Downloads/download.pdf",
       sourceUrl: "https://fixture-library.test/file",
       status: "saved",
+      duplicate: false,
+      sha256: SAVED_SHA256,
+      pageUrl: null,
+      downloadedAt: ARRIVED_AT,
     };
     const browser = recorder(
       [
@@ -635,6 +739,10 @@ describe("a tab showing a PDF", () => {
     path: "Downloads/Judgment 42.pdf",
     sourceUrl: PDF_ADDRESS,
     status: "saved",
+    duplicate: false,
+    sha256: SAVED_SHA256,
+    pageUrl: null,
+    downloadedAt: ARRIVED_AT,
   };
 
   test("an open that lands on a PDF says so, reads no text and gives the saved path", async () => {
@@ -644,6 +752,10 @@ describe("a tab showing a PDF", () => {
       path: "Downloads/annex.pdf",
       sourceUrl: "https://fixture-library.test/annex",
       status: "saved",
+      duplicate: false,
+      sha256: SAVED_SHA256,
+      pageUrl: null,
+      downloadedAt: ARRIVED_AT,
     };
     const browser = recorder([pdfPage("r-1"), pdfPage("r-2")], {
       downloads: [saved, other],
@@ -683,6 +795,7 @@ describe("a tab showing a PDF", () => {
       reason: "interrupted",
       sourceUrl: PDF_ADDRESS,
       status: "refused",
+      pageUrl: null,
     };
     const browser = recorder([pdfPage("r-1")], {
       downloads: [refused],
