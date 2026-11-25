@@ -5,7 +5,8 @@
  * incarnation it walked, projection writes during a pass never restart it,
  * drift found by a page is repaired and revokes the proof in the repair's
  * transaction, a page read across a revocation or by a second runner is never
- * recorded, and only declared, attested routes can be walked at all.
+ * recorded, an open pass too old to prove is started over while a young one
+ * is resumed, and only declared, attested routes can be walked at all.
  */
 import { panic, Result } from "better-result";
 import {
@@ -915,6 +916,99 @@ describe("route readiness proof", () => {
       })
       .where(eq(corpusIndexRouteProofs.indexId, ROUTE.indexId));
     expect((await statusOf()).type).toBe("expired");
+  });
+
+  test("an open pass too old to prove is started over without revoking, and the pass that follows proves the route fresh", async () => {
+    for (const index of [0, 1, 2, 3, 4]) {
+      // db-await-in-loop: a five-decision fixture
+      await seedApplied(index);
+    }
+    await advanceUntilProven();
+    // The next pass walked one page, then nothing picked it up for 25 hours.
+    expect((await advance()).type).toBe("advanced");
+    await db
+      .update(corpusIndexRouteProofs)
+      .set({
+        passStartedAt: sql`pass_started_at - INTERVAL '25 hours'`,
+        provenPassStartedAt: sql`proven_pass_started_at - INTERVAL '25 hours'`,
+      })
+      .where(eq(corpusIndexRouteProofs.indexId, ROUTE.indexId));
+    expect((await statusOf()).type).toBe("expired");
+
+    const restarts: Record<string, unknown>[] = [];
+    setLogSinkForTesting(({ message, attributes }) => {
+      if (message === "corpus_index.route_proof_pass_restarted") {
+        restarts.push({ ...attributes });
+      }
+    });
+    try {
+      // The page that picks the pass up walks the first page of a new pass,
+      // not the second page of the old one.
+      expect(stepName(await advance())).toBe("present:advanced");
+      expect(await passRow()).toMatchObject({
+        passNumber: 3,
+        passExpectation: "present",
+        passCursor: entityId(1),
+        passInspected: 2,
+      });
+      expect(restarts).toEqual([
+        expect.objectContaining({
+          index: ROUTE.indexId,
+          reason: "pass_too_old_to_prove",
+          passNumber: 3,
+          abandonedPassNumber: 2,
+          abandonedPassRows: 2,
+          abandonedPassAgeHours: 25,
+        }),
+      ]);
+      // A restart is not a revocation: the old proof still reads expired.
+      expect((await statusOf()).type).toBe("expired");
+
+      await advanceUntilProven();
+      // Resumed from here on: one restart, not one per page.
+      expect(restarts).toHaveLength(1);
+    } finally {
+      resetLogSinkForTesting();
+    }
+    expect(await statusOf()).toMatchObject({ type: "current", inspected: 5 });
+    expect(
+      await db
+        .select({
+          provenPassNumber: corpusIndexRouteProofs.provenPassNumber,
+          revokedAt: corpusIndexRouteProofs.revokedAt,
+        })
+        .from(corpusIndexRouteProofs)
+        .where(eq(corpusIndexRouteProofs.indexId, ROUTE.indexId)),
+    ).toEqual([{ provenPassNumber: 3, revokedAt: null }]);
+  });
+
+  test("a young open pass is resumed where it stopped, on the same pass", async () => {
+    for (const index of [0, 1, 2, 3, 4]) {
+      // db-await-in-loop: a five-decision fixture
+      await seedApplied(index);
+    }
+    const passId = async () =>
+      (
+        await db
+          .select({ passId: corpusIndexRouteProofs.passId })
+          .from(corpusIndexRouteProofs)
+          .where(eq(corpusIndexRouteProofs.indexId, ROUTE.indexId))
+      ).at(0)?.passId ?? panic("The route has no proof row");
+    expect((await advance()).type).toBe("advanced");
+    const started = await passId();
+    // Old, but still young enough for its end to prove the route.
+    await db
+      .update(corpusIndexRouteProofs)
+      .set({ passStartedAt: sql`pass_started_at - INTERVAL '23 hours'` })
+      .where(eq(corpusIndexRouteProofs.indexId, ROUTE.indexId));
+
+    expect(stepName(await advance())).toBe("present:advanced");
+    expect(await passRow()).toMatchObject({
+      passNumber: 1,
+      passCursor: entityId(3),
+      passInspected: 4,
+    });
+    expect(await passId()).toBe(started);
   });
 
   test("a revocation before the route's first pass is kept, so only a pass started after it proves the route", async () => {
