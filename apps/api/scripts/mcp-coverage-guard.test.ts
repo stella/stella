@@ -91,8 +91,10 @@ describe("toEndpointIdentifier", () => {
     expect(toEndpointIdentifier(abs, "/repo/")).toBe(expected);
   });
 
-  test("returns the absolute path unchanged when it is outside the root", () => {
-    expect(toEndpointIdentifier("/other/x.ts", "/repo")).toBe("/other/x.ts");
+  test("panics when the module is outside the root", () => {
+    expect(() => toEndpointIdentifier("/other/x.ts", "/repo")).toThrow(
+      "module is outside the repo root",
+    );
   });
 });
 
