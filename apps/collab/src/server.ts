@@ -714,6 +714,23 @@ export const createCollabServer = async (
     }
   };
 
+  const releaseTokenConnection = (tokenState: CollabRoomTokenState) => {
+    tokenState.activeConnections = Math.max(
+      0,
+      tokenState.activeConnections - 1,
+    );
+    if (tokenState.activeConnections > 0) {
+      return;
+    }
+    // A token state without joins renews nothing: stop its activity lease
+    // and its refresh so the room reads as idle.
+    clearRoomHeartbeat(tokenState);
+    clearRoomTokenRefresh(tokenState);
+    if (tokenStates.get(tokenState.token) === tokenState) {
+      tokenStates.delete(tokenState.token);
+    }
+  };
+
   const releaseRoomJoin = ({
     context,
     documentName,
@@ -723,20 +740,7 @@ export const createCollabServer = async (
       return;
     }
     context.join.released = true;
-    const { tokenState } = context;
-    tokenState.activeConnections = Math.max(
-      0,
-      tokenState.activeConnections - 1,
-    );
-    if (tokenState.activeConnections === 0) {
-      // A token state without joins renews nothing: stop its activity lease
-      // and its refresh so the room reads as idle.
-      clearRoomHeartbeat(tokenState);
-      clearRoomTokenRefresh(tokenState);
-      if (tokenStates.get(tokenState.token) === tokenState) {
-        tokenStates.delete(tokenState.token);
-      }
-    }
+    releaseTokenConnection(context.tokenState);
     tokenStatesBySocketId.delete(socketId);
     const managedConnection = managedConnectionsBySocketId.get(socketId);
     const connectionCount =
@@ -1213,6 +1217,25 @@ export const createCollabServer = async (
     return snapshotRevision;
   };
 
+  // A flush that has not started yet captures the document when it starts,
+  // so every request arriving before then shares it: a room holds at most one
+  // running and one waiting flush however many requests arrive.
+  const waitingFlushes = new WeakMap<HocuspocusDocument, Promise<number>>();
+
+  const flushRoomSnapshot = async (document: HocuspocusDocument) => {
+    const waiting = waitingFlushes.get(document);
+    if (waiting !== undefined) {
+      return await waiting;
+    }
+    const flush = (async () => {
+      await documentSnapshotStoreTails.get(document);
+      waitingFlushes.delete(document);
+      return await queueRoomSnapshotStore(document);
+    })();
+    waitingFlushes.set(document, flush);
+    return await flush;
+  };
+
   const hocuspocus = new CollabHocuspocus(releaseRoomJoin, {
     debounce: debounceMs,
     async beforeUnloadDocument({ document }) {
@@ -1271,22 +1294,17 @@ export const createCollabServer = async (
       }
 
       cancelRoomCleanup(documentName);
+      const tokenState = upsertRoomToken({
+        canEdit: authorized.canEdit,
+        generation: authorized.generation,
+        roomId: authorized.roomId,
+        roomName: authorized.roomName,
+        token,
+        tokenExpiresAt: authorized.tokenExpiresAt,
+      });
+      tokenState.activeConnections += 1;
       try {
-        const tokenState = upsertRoomToken({
-          canEdit: authorized.canEdit,
-          generation: authorized.generation,
-          roomId: authorized.roomId,
-          roomName: authorized.roomName,
-          token,
-          tokenExpiresAt: authorized.tokenExpiresAt,
-        });
-        tokenState.activeConnections += 1;
-        try {
-          await ensureRoomHeartbeat(tokenState);
-        } catch (error) {
-          tokenState.activeConnections -= 1;
-          throw error;
-        }
+        await ensureRoomHeartbeat(tokenState);
         connectionConfig.readOnly = !authorized.canEdit;
         const managedConnection = managedConnectionsByRequest.get(request);
         if (managedConnection === undefined) {
@@ -1308,7 +1326,9 @@ export const createCollabServer = async (
           userName: authorized.userName,
         };
       } catch (error) {
-        clearRoomTokens(documentName);
+        // Undo only this join: other participants keep their own token
+        // states, whose heartbeats close them if the room itself is gone.
+        releaseTokenConnection(tokenState);
         throw error;
       }
     },
@@ -1402,11 +1422,15 @@ export const createCollabServer = async (
       }
     },
     async onStateless({ connection, document, payload }) {
+      // Only a writer publishes, so only a writer may ask for a store.
+      if (connection.readOnly) {
+        return;
+      }
       const parsed = v.safeParse(flushRequestSchema, payload);
       if (!parsed.success) {
         return;
       }
-      const snapshotRevision = await queueRoomSnapshotStore(document);
+      const snapshotRevision = await flushRoomSnapshot(document);
       connection.sendStateless(
         JSON.stringify({
           requestId: parsed.output.requestId,
