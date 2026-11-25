@@ -3,7 +3,6 @@ import { describe, expect, test } from "bun:test";
 import { createStormLedger, type StormLedgerLimits } from "./storm-ledger";
 
 const LIMITS = {
-  cascadeLimit: 5,
   bucketCapacity: 20,
   refillPerStimulus: 20,
   tricklePerSecond: 5,
@@ -104,30 +103,16 @@ describe("the unstimulated budget", () => {
   });
 });
 
-describe("the cascade limit", () => {
-  test("more commits than the limit inside one task is a cascade, reported once", () => {
-    const ledger = createStormLedger(LIMITS);
-    ledger.onStimulus(0, "input");
-    for (let index = 0; index < 9; index += 1) {
-      ledger.onCommit(1, 7);
-    }
+test("the widest task is measured, never a violation", () => {
+  const ledger = createStormLedger(LIMITS);
+  ledger.onStimulus(0, "input");
+  for (let index = 0; index < 9; index += 1) {
+    ledger.onCommit(1, 7);
+  }
+  ledger.onCommit(2, 8);
 
-    expect(ledger.report().violations).toEqual([
-      { kind: "cascade", at: 1, commits: 6 },
-    ]);
-    expect(ledger.report().widestTask).toBe(9);
-  });
-
-  test("the same number of commits spread over tasks is no cascade", () => {
-    const ledger = createStormLedger(LIMITS);
-    ledger.onStimulus(0, "input");
-    for (let index = 0; index < 9; index += 1) {
-      ledger.onCommit(1, index);
-    }
-
-    expect(ledger.report().violations).toEqual([]);
-    expect(ledger.report().widestTask).toBe(1);
-  });
+  expect(ledger.report().widestTask).toBe(9);
+  expect(ledger.report().violations).toEqual([]);
 });
 
 test("the report counts stimuli by kind", () => {

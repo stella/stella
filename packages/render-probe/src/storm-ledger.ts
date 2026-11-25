@@ -7,16 +7,17 @@
 // something outside the app (an input event, a network response, a stream
 // chunk, a socket message) happen recently enough to explain these commits?
 //
-// Two invariants, both independent of how fast a test drives the page:
+// The invariant, independent of how fast a test drives the page: commits
+// spend tokens from a bucket that outside stimuli refill, plus a slow time
+// trickle for timers such as a ticking clock. A loop earns no refills and
+// drains the bucket whatever its rate; a test that clicks fast earns a
+// refill per click.
 //
-// - cascade: at most `cascadeLimit` commits inside one browser task. React
-//   itself throws only at fifty nested updates; a layout effect or ref
-//   callback that keeps setting state commits many times in one task long
-//   before that.
-// - unstimulated: commits spend tokens from a bucket that outside stimuli
-//   refill, plus a slow time trickle for timers such as a ticking clock. A
-//   loop earns no refills and drains the bucket whatever its rate; a test
-//   that clicks fast earns a refill per click.
+// The ledger also records the most commits one browser task made, as a
+// measurement only: what counts as one task is approximate (a commit-posted
+// message can land behind React's own scheduler tasks, more so on a loaded
+// runner), so it informs budgets rather than failing tests. An unbounded
+// cascade in one task already makes React throw at fifty nested updates.
 //
 // The third invariant, that an idle page stops committing, needs the test's
 // end and lives with the driver (see `quiescence` below).
@@ -28,8 +29,6 @@ export type StormStimulus =
   "input" | "network" | "stream" | "message" | "navigation";
 
 export type StormLedgerLimits = {
-  /** Most commits one browser task may make. */
-  cascadeLimit: number;
   /** Most unexplained commits the bucket holds. */
   bucketCapacity: number;
   /** Tokens one outside stimulus adds. */
@@ -43,41 +42,29 @@ export type StormLedgerLimits = {
  * reports. A menu takes about fifteen commits to open and nine to close, the
  * tooltip menu up to twenty-five by keyboard
  * (e2e/ui-playground/menu-commits.geometry.spec.ts); chat streaming commits
- * about twenty a second, each emit driven by a stream read. Opening a menu
- * with a tooltip on its trigger was measured at thirteen commits in one
- * task (the tooltip's positioning settling), which is cost the menu budgets
- * hold, not a loop: an unbounded cascade makes React itself throw at fifty
- * nested updates, and one spread over tasks drains the bucket.
+ * about twenty a second, each emit driven by a stream read.
  */
 export const DEFAULT_STORM_LIMITS = {
-  cascadeLimit: 25,
   bucketCapacity: 120,
   refillPerStimulus: 40,
   tricklePerSecond: 5,
 } as const satisfies StormLedgerLimits;
 
-export type StormViolation =
-  | {
-      kind: "cascade";
-      at: number;
-      /** Commits the offending task made. */
-      commits: number;
-    }
-  | {
-      kind: "unstimulated";
-      at: number;
-      /** Commits since the last outside stimulus. */
-      commitsSinceStimulus: number;
-      /** Milliseconds since the last outside stimulus. */
-      msSinceStimulus: number;
-      lastStimulus: StormStimulus | "none";
-    };
+export type StormViolation = {
+  kind: "unstimulated";
+  at: number;
+  /** Commits since the last outside stimulus. */
+  commitsSinceStimulus: number;
+  /** Milliseconds since the last outside stimulus. */
+  msSinceStimulus: number;
+  lastStimulus: StormStimulus | "none";
+};
 
 export type StormLedgerReport = {
   commits: number;
   stimuli: Record<StormStimulus, number>;
   violations: StormViolation[];
-  /** The most commits a single task made. */
+  /** The most commits a single browser task made, approximately. */
   widestTask: number;
   /**
    * The fewest tokens the bucket held, before any refill a violation made:
@@ -114,7 +101,6 @@ export const createStormLedger = (
 
   let currentTask: number | undefined;
   let commitsInTask = 0;
-  let cascadeReported = false;
 
   let lastStimulus: StormStimulus | "none" = "none";
   let lastStimulusAt: number | undefined;
@@ -149,13 +135,8 @@ export const createStormLedger = (
     } else {
       currentTask = task;
       commitsInTask = 1;
-      cascadeReported = false;
     }
     widestTask = Math.max(widestTask, commitsInTask);
-    if (commitsInTask > limits.cascadeLimit && !cascadeReported) {
-      cascadeReported = true;
-      found.push({ kind: "cascade", at: now, commits: commitsInTask });
-    }
 
     trickle(now);
     tokens -= 1;

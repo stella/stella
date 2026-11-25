@@ -60,12 +60,8 @@ export const stormWatchFailures = ({
 }: StormWatchRead): string[] => {
   const failures: string[] = [];
   for (const { violation, components } of report.reported) {
-    const what =
-      violation.kind === "cascade"
-        ? `${String(violation.commits)} commits inside one browser task`
-        : `${String(violation.commitsSinceStimulus)} commits in ${String(Math.round(violation.msSinceStimulus))} ms with no input, network or message to cause them (last outside cause: ${violation.lastStimulus})`;
     failures.push(
-      `render storm (${violation.kind}): ${what}\n${formatComponents(components)}`,
+      `render storm: ${String(violation.commitsSinceStimulus)} commits in ${String(Math.round(violation.msSinceStimulus))} ms with no input, network or message to cause them (last outside cause: ${violation.lastStimulus})\n${formatComponents(components)}`,
     );
   }
   if (quiescence.verdict === "storm") {
@@ -96,15 +92,13 @@ export const checkStormWatch = async (page: Page, testInfo: TestInfo) => {
     return;
   }
   const { report, quiescence } = read;
-  const kinds = report.violations.map(({ kind }) => kind);
   testInfo.annotations.push({
     type: STORM_WATCH_ANNOTATION,
     description: JSON.stringify({
       commits: report.commits,
       widestTask: report.widestTask,
       lowestTokens: report.lowestTokens,
-      cascade: kinds.filter((kind) => kind === "cascade").length,
-      unstimulated: kinds.filter((kind) => kind === "unstimulated").length,
+      unstimulated: report.violations.length,
       quiescence: quiescence.verdict,
       quietAfterMs: quiescence.waitedMs,
       stimuli: report.stimuli,

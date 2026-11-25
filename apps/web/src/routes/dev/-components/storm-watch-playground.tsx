@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { Button } from "@stll/ui/button";
 
@@ -13,52 +13,50 @@ import type { stormWatchBenches } from "../-visual-metadata";
 
 /** Re-renders itself on every animation frame, as a resize loop does. */
 const FrameLoop = () => {
-  const [running, setRunning] = useState(false);
   const [frames, setFrames] = useState(0);
   useExternalSyncEffect(() => {
-    if (!running) {
-      return;
-    }
     const frame = requestAnimationFrame(() => {
       setFrames((count) => count + 1);
     });
     return () => {
       cancelAnimationFrame(frame);
     };
-  }, [running, frames]);
-  return (
-    <Button onClick={() => setRunning(true)} variant="outline">
-      {running ? `Looping (${String(frames)})` : "Start the frame loop"}
-    </Button>
-  );
+  }, [frames]);
+  return <span>{`Looping (${String(frames)})`}</span>;
 };
 
 /** Re-renders itself every 120 ms: under any rate threshold, never quiet. */
 const SLOW_LOOP_MS = 120;
 const SlowLoop = () => {
-  const [running, setRunning] = useState(false);
   const [ticks, setTicks] = useState(0);
   useExternalSyncEffect(() => {
-    if (!running) {
-      return;
-    }
     const timer = setTimeout(() => {
       setTicks((count) => count + 1);
     }, SLOW_LOOP_MS);
     return () => {
       clearTimeout(timer);
     };
-  }, [running, ticks]);
-  return (
+  }, [ticks]);
+  return <span>{`Looping (${String(ticks)})`}</span>;
+};
+
+/** One click starts the loop; nothing outside the page feeds it after. */
+const StartOnClick = ({ label, loop }: { label: string; loop: ReactNode }) => {
+  const [running, setRunning] = useState(false);
+  return running ? (
+    loop
+  ) : (
     <Button onClick={() => setRunning(true)} variant="outline">
-      {running ? `Looping (${String(ticks)})` : "Start the slow loop"}
+      {label}
     </Button>
   );
 };
 
 const BENCH = {
-  "frame-loop": <FrameLoop />,
-  "slow-loop": <SlowLoop />,
+  "frame-loop": (
+    <StartOnClick label="Start the frame loop" loop={<FrameLoop />} />
+  ),
+  "slow-loop": <StartOnClick label="Start the slow loop" loop={<SlowLoop />} />,
 } as const satisfies Record<keyof typeof stormWatchBenches, unknown>;
 
 export const StormWatchPlayground = () => (
