@@ -44,7 +44,7 @@ use crate::runner_protocol::{
   ActiveRun, CloseCode, DESKTOP_ID_HEADER, DesktopMessage, HELLO_TIMEOUT,
   HarnessReport, HarnessStatus, Hello, LinkedFolderReport, LinkedFoldersStatus,
   MAX_FRAME_BYTES, PATH, PING_INTERVAL, POLICY_VIOLATION_CODE, PROTOCOL, RunRef,
-  RunRejected, ServerMessage, Welcome,
+  RunRejected, ServerMessage, SiteGrantsRevision, Welcome,
 };
 
 /// How long a connection waits for the first probes before its hello.
@@ -176,6 +176,8 @@ pub(crate) struct Runner {
   sent: HashMap<String, u32>,
   /// The expiry of the newest MCP token each run was handed.
   tokens: HashMap<String, chrono::DateTime<chrono::Utc>>,
+  /// The newest website approval set each run was handed.
+  site_grants: HashMap<String, SiteGrantsRevision>,
   backoff: Backoff,
   /// Changes when a harness report may have changed.
   report_changes: Option<watch::Receiver<u64>>,
@@ -212,6 +214,7 @@ impl Runner {
       live,
       sent: HashMap::new(),
       tokens: HashMap::new(),
+      site_grants: HashMap::new(),
       backoff,
     }
   }
@@ -346,6 +349,7 @@ impl Runner {
       }
     };
     self.tokens.clear();
+    self.site_grants.clear();
     self.journal.replace(namespace.to_owned(), journal);
   }
 
@@ -659,6 +663,7 @@ impl Runner {
           let _not_taken: Forwarded = self.host.cancel(&run_id);
         }
         self.tokens.remove(&run_id);
+        self.site_grants.remove(&run_id);
         self.forget(&run_id);
         continue;
       };
@@ -842,17 +847,26 @@ impl Runner {
           || self.host.answer(answer),
         )
       }
+      // Only a newer set goes on: the API replays every set of a run after a
+      // reconnect, and an older one must never follow a newer one. Nothing is
+      // journaled, so a set the host did not take goes on again then.
       ServerMessage::RunSiteGrants(grants) => {
+        if self.accepted(&grants.run_id).is_none() {
+          return Ok(());
+        }
+        if self
+          .site_grants
+          .get(&grants.run_id)
+          .is_some_and(|newest| *newest >= grants.revision)
+        {
+          return Ok(());
+        }
         let run_id = grants.run_id.clone();
         let revision = grants.revision;
-        self.forward_once(
-          &run_id,
-          |record| record.site_grants.contains(&revision),
-          |record| {
-            record.site_grants.insert(revision);
-          },
-          || self.host.site_grants(grants),
-        )
+        if self.host.site_grants(grants).is_ok() {
+          self.site_grants.insert(run_id, revision);
+        }
+        Ok(())
       }
       ServerMessage::RunInterrupt(RunRef { run_id }) => self.forward_once(
         &run_id,
@@ -900,6 +914,7 @@ impl Runner {
           .map_err(log_journal_error)?;
         if done == Some(true) {
           self.tokens.remove(&ack.run_id);
+          self.site_grants.remove(&ack.run_id);
         }
         Ok(())
       }

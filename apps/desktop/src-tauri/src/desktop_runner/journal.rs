@@ -40,7 +40,7 @@ use super::harness::{EmitError, RunOutput};
 use crate::local_store::{self, EncryptedJsonFile, EncryptedJsonLog, LogContents};
 use crate::runner_protocol::{
   DesktopMessage, MAX_MESSAGE_BYTES_PER_RUN, MAX_MESSAGES_PER_RUN, RejectReason,
-  RunApprovalRequest, RunBackground, RunEvent, RunFinished, SiteGrantsRevision,
+  RunApprovalRequest, RunBackground, RunEvent, RunFinished,
 };
 
 const RECORD_LABEL: &str = "desktop runner journal";
@@ -99,10 +99,6 @@ pub(crate) struct RunRecord {
   pub(crate) approvals: BTreeSet<String>,
   /// `run.answer` request ids already handed to the host; never the answers.
   pub(crate) answers: BTreeSet<String>,
-  /// `run.site_grants` revisions already handed to the host; never the
-  /// websites. The API replays every set of a run in order after a
-  /// reconnect, and only those not handed over yet go on.
-  pub(crate) site_grants: BTreeSet<SiteGrantsRevision>,
   pub(crate) interrupted: bool,
   pub(crate) cancelled: bool,
   /// The last position the API acknowledged.
@@ -124,7 +120,6 @@ impl RunRecord {
       inputs: BTreeSet::new(),
       approvals: BTreeSet::new(),
       answers: BTreeSet::new(),
-      site_grants: BTreeSet::new(),
       interrupted: false,
       cancelled: false,
       ack_seq: 0,
@@ -222,7 +217,6 @@ impl RunRecord {
       inputs: self.inputs.clone(),
       approvals: self.approvals.clone(),
       answers: self.answers.clone(),
-      site_grants: self.site_grants.clone(),
       interrupted: self.interrupted,
       cancelled: self.cancelled,
       ack_seq: self.ack_seq,
@@ -236,7 +230,6 @@ impl RunRecord {
     self.inputs = head.inputs;
     self.approvals = head.approvals;
     self.answers = head.answers;
-    self.site_grants = head.site_grants;
     self.interrupted = head.interrupted;
     self.cancelled = head.cancelled;
     self.ack_seq = head.ack_seq;
@@ -255,9 +248,6 @@ struct Head {
   /// Heads written before answers existed have none.
   #[serde(default)]
   answers: BTreeSet<String>,
-  /// Heads written before website approval updates existed have none.
-  #[serde(default)]
-  site_grants: BTreeSet<SiteGrantsRevision>,
   interrupted: bool,
   cancelled: bool,
   /// The acknowledged position when the head was written; the log may
@@ -274,7 +264,6 @@ impl Head {
       && self.inputs == other.inputs
       && self.approvals == other.approvals
       && self.answers == other.answers
-      && self.site_grants == other.site_grants
       && self.interrupted == other.interrupted
       && self.cancelled == other.cancelled
   }

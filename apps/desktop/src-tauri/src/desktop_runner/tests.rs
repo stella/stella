@@ -808,7 +808,8 @@ async fn duplicate_commands_reach_the_host_once_also_after_a_restart_and_only_a_
 }
 
 #[tokio::test]
-async fn each_website_approval_revision_reaches_the_host_once_also_after_a_restart() {
+async fn only_a_newer_website_approval_set_reaches_the_host_and_a_restart_hands_the_newest_again()
+ {
   let gateway = Gateway::bind().await;
   let host = Arc::new(RecordingHost::default());
   let setup = Setup::new(Arc::clone(&host) as Arc<dyn HarnessHost>);
@@ -877,8 +878,10 @@ async fn each_website_approval_revision_reaches_the_host_once_also_after_a_resta
   let mut connection = gateway.accept().await;
   connection.hello().await;
   connection.welcome(&[(RUN, 0)]).await;
-  // The API replays the run's newest set on a new socket; a newer one
-  // follows it.
+  // The API replays the run's sets on a new socket. Nothing is journaled,
+  // so the newest goes on again (the holder keeps the newer of two), and
+  // an older one never follows it.
+  connection.send(first).await;
   connection.send(newest).await;
   let later = grants(
     "0192f3a0-6b1c-7d2e-8f30-0000000000f4",
@@ -892,7 +895,65 @@ async fn each_website_approval_revision_reaches_the_host_once_also_after_a_resta
   connection.receive_type("run.accepted").await;
   assert_eq!(
     restarted_host.calls(),
-    ["site grants 0192f3a0-6b1c-7d2e-8f30-0000000000f4 https://fixture-archive.test"]
+    [
+      "site grants 0192f3a0-6b1c-7d2e-8f30-0000000000f1 https://fixture-library.test"
+        .to_owned(),
+      "site grants 0192f3a0-6b1c-7d2e-8f30-0000000000f2 ".to_owned(),
+      "site grants 0192f3a0-6b1c-7d2e-8f30-0000000000f4 https://fixture-archive.test"
+        .to_owned(),
+    ]
+  );
+  runner.stop().await;
+}
+
+#[tokio::test]
+async fn a_website_approval_set_the_host_refused_never_follows_a_newer_one_it_took() {
+  let gateway = Gateway::bind().await;
+  let host = Arc::new(RecordingHost::default());
+  let setup = Setup::new(Arc::clone(&host) as Arc<dyn HarnessHost>);
+  let runner = setup.start(&gateway);
+  let mut connection = gateway.accept().await;
+  connection.hello().await;
+  connection.welcome(&[]).await;
+  let grants = |revision: &str, origins: &[&str]| {
+    json!({
+      "type": "run.site_grants",
+      "runId": RUN,
+      "revision": revision,
+      "origins": origins,
+    })
+  };
+  let allowed = grants(
+    "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
+    &["https://fixture-library.test"],
+  );
+  let revoked = grants("0192f3a0-6b1c-7d2e-8f30-0000000000f2", &[]);
+  connection
+    .send(run_start(RUN, "2026-10-28T13:00:00.000Z"))
+    .await;
+  connection.receive_type("run.accepted").await;
+  // The holder is busy for the older set and back for the newer one.
+  host.refusing.store(true, Ordering::SeqCst);
+  connection.send(allowed.clone()).await;
+  connection
+    .send(run_start(RUN, "2026-10-28T13:00:00.000Z"))
+    .await;
+  connection.receive_type("run.accepted").await;
+  host.refusing.store(false, Ordering::SeqCst);
+  connection.send(revoked.clone()).await;
+  // The API replays both in order; the revoked website stays revoked.
+  connection.send(allowed).await;
+  connection.send(revoked).await;
+  connection
+    .send(run_start(RUN, "2026-10-28T13:00:00.000Z"))
+    .await;
+  connection.receive_type("run.accepted").await;
+  assert_eq!(
+    host.calls(),
+    [
+      format!("start {RUN}"),
+      "site grants 0192f3a0-6b1c-7d2e-8f30-0000000000f2 ".to_owned(),
+    ]
   );
   runner.stop().await;
 }

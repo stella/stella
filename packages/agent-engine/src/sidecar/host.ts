@@ -347,6 +347,11 @@ type HeldRun = {
    * `siteGrants`.
    */
   memberSiteGrants: ReadonlySet<string>;
+  /**
+   * The revision of the newest `run.site_grants` the run took; `null` while
+   * it has only those of `run.start`. Revisions are time-ordered UUIDs.
+   */
+  siteGrantsRevision: string | null;
   /** Cut by a stop, so the run's browser steps end with it, not with the turn. */
   readonly browserStop: AbortController;
   /**
@@ -577,8 +582,9 @@ const resolvedInteraction = (
   const requestId = runnerRequestIdOf(run.requests, event.requestId);
   // A browser question the run's approvals let go on before it was
   // relabelled is recorded under its own id.
-  const decision =
-    run.answered.get(requestId) ?? run.answered.get(event.requestId);
+  const decision = run.answered.has(requestId)
+    ? run.answered.get(requestId)
+    : run.answered.get(event.requestId);
   if (decision === undefined) {
     return {
       ...event,
@@ -618,10 +624,22 @@ const settleAllowedSteps = (
 const updateSiteGrants = (
   run: Pick<
     HeldRun,
-    "answered" | "approvals" | "memberSiteGrants" | "requests" | "siteGrants"
+    | "answered"
+    | "approvals"
+    | "memberSiteGrants"
+    | "requests"
+    | "siteGrants"
+    | "siteGrantsRevision"
   >,
-  origins: readonly string[],
+  { origins, revision }: { origins: readonly string[]; revision: string },
 ) => {
+  // A set sent again, or one older than the newest the run took, changes
+  // nothing: a website revoked since then stays revoked.
+  const ordered = revision.toLowerCase();
+  if (run.siteGrantsRevision !== null && ordered <= run.siteGrantsRevision) {
+    return;
+  }
+  run.siteGrantsRevision = ordered;
   const next = new Set(origins);
   for (const origin of run.memberSiteGrants) {
     if (!next.has(origin)) {
@@ -916,7 +934,7 @@ export class SidecarHost {
         return;
       case "run.site_grants":
         this.withRun(message, (run) => {
-          updateSiteGrants(run, message.origins);
+          updateSiteGrants(run, message);
         });
         return;
       case "run.interrupt":
@@ -1123,6 +1141,7 @@ export class SidecarHost {
       approvals: createActionApprovals(),
       siteGrants: new Set(message.policy.browserSiteGrants),
       memberSiteGrants: new Set(message.policy.browserSiteGrants),
+      siteGrantsRevision: null,
       browserStop: new AbortController(),
       live: null,
       launch: null,

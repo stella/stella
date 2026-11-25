@@ -1499,6 +1499,13 @@ describe("harness holder over its socket", () => {
       )
       .map(({ result }) => result);
     expect(replies).toEqual([{ answers: { law: { answers: ["Czech"] } } }]);
+    // The answered question closes as resolved, never as withdrawn.
+    const closures = chunksOf(client, runId).flatMap((chunk) =>
+      chunk["name"] === DESKTOP_RUNNER_REQUEST_EVENT
+        ? [v.parse(desktopRunnerRequestEventSchema, chunk["value"])]
+        : [],
+    );
+    expect(closures).toContainEqual({ requestId, status: "resolved" });
   });
 
   test("interrupt finishes as interrupted, cancel as cancelled", async () => {
@@ -2480,16 +2487,21 @@ describe("the member's website approvals while a run goes on", () => {
       );
     };
 
+    // Revisions are time-ordered, as the API mints them: each one newer.
+    let revisions = 0;
+    const revisionAt = (count: number) =>
+      `0192f3a0-6b1c-7d2e-8f30-${String(count).padStart(12, "0")}`;
+    const send = (revision: string, origins: string[]) => {
+      host.handle({ type: "run.site_grants", runId, revision, origins });
+    };
     const update = (origins: string[]) => {
-      host.handle({
-        type: "run.site_grants",
-        runId,
-        revision: crypto.randomUUID(),
-        origins,
-      });
+      revisions += 1;
+      const revision = revisionAt(revisions);
+      send(revision, origins);
+      return revision;
     };
 
-    return { ask, closes, finish, host, run, runId, update };
+    return { ask, closes, finish, host, run, runId, send, update };
   };
 
   test("a new approval reaches the browser tools' own set and lets the steps it answers go on", async () => {
@@ -2554,6 +2566,22 @@ describe("the member's website approvals while a run goes on", () => {
       decision: "approve",
     });
     expect((await elsewhere.ticket).decision).toBe(APPROVAL_DECISION.deny);
+  });
+
+  test("a set sent again, or older than the newest the run took, changes nothing", async () => {
+    const { finish, run, send, update } = await runWithBrowser([]);
+    const allowed = update([LIBRARY]);
+    const revoked = update([]);
+    expect([...run.siteGrants]).toEqual([]);
+    // Replayed in order after a reconnect, or delivered late: the revoked
+    // website stays revoked.
+    send(allowed, [LIBRARY]);
+    send(revoked, []);
+    send(allowed.toUpperCase(), [LIBRARY]);
+    expect([...run.siteGrants]).toEqual([]);
+    update([ARCHIVE]);
+    expect([...run.siteGrants]).toEqual([ARCHIVE]);
+    expect((await finish()).outcome).toBe("completed");
   });
 
   test("a revoke removes the member's approval, even one also given in the run, and keeps what only the run allowed", async () => {

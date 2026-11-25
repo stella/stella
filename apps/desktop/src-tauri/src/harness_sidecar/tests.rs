@@ -673,6 +673,78 @@ fn a_dropped_connection_resumes_after_the_last_delivered_message() {
 }
 
 #[test]
+fn a_reconnected_holder_is_handed_the_newest_website_approvals_again_and_never_an_older_set()
+ {
+  let fixture = Fixture::new();
+  let grants =
+    |revision: &str, origins: &[&str]| crate::runner_protocol::RunSiteGrants {
+      run_id: String::new(),
+      revision: crate::runner_protocol::SiteGrantsRevision::try_from(
+        revision.to_owned(),
+      )
+      .unwrap(),
+      origins: origins.iter().map(|origin| (*origin).to_owned()).collect(),
+    };
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    let start = run_start("wait");
+    let run_id = start.run_id.clone();
+    let mut outputs = sidecar.start_run(start).unwrap();
+    assert_eq!(next(&mut outputs).await, started(&run_id));
+    let newest = crate::runner_protocol::RunSiteGrants {
+      run_id: run_id.clone(),
+      ..grants("0192f3a0-6b1c-7d2e-8f30-0000000000f2", &[])
+    };
+    sidecar.site_grants(newest).unwrap();
+    // An older set arriving late goes nowhere.
+    sidecar
+      .site_grants(crate::runner_protocol::RunSiteGrants {
+        run_id: run_id.clone(),
+        ..grants(
+          "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
+          &["https://fixture-library.test"],
+        )
+      })
+      .unwrap();
+    until("the holder got the website approvals", || {
+      fixture
+        .received()
+        .iter()
+        .any(|message| message["type"] == "run.site_grants")
+    })
+    .await;
+    // The connection is replaced: the run goes on, and its holder is handed
+    // the newest set again, since a write may have been lost with it.
+    let _intruder = fixture.replace_holder_connection(VERSION);
+    until("the holder got the website approvals again", || {
+      fixture
+        .received()
+        .iter()
+        .filter(|message| message["type"] == "run.site_grants")
+        .count()
+        >= 2
+    })
+    .await;
+    sidecar.cancel(&run_id).unwrap();
+    assert_eq!(
+      finish(&mut outputs).await,
+      vec![ended(RunOutcome::Cancelled)]
+    );
+    sidecar.shutdown().await;
+  });
+  let sent: Vec<Value> = fixture
+    .received()
+    .into_iter()
+    .filter(|message| message["type"] == "run.site_grants")
+    .collect();
+  assert_eq!(sent.len(), 2);
+  assert!(sent.iter().all(|message| {
+    message["revision"] == "0192f3a0-6b1c-7d2e-8f30-0000000000f2"
+      && message["origins"] == json!([])
+  }));
+}
+
+#[test]
 fn a_restore_outlives_a_dropped_connection_and_is_asked_again_on_the_next() {
   let fixture = Fixture::new();
   with_children(async {
