@@ -2,7 +2,8 @@
 //!
 //! Every five seconds, while the user has opted in and the feature is
 //! enabled, the sampler reads the foreground app identifier/name and idle
-//! time. Window titles and documents require a separate, default-off opt-in.
+//! time. Window titles and documents require a separate, default-off opt-in,
+//! and managed policy can keep them off whatever the user chose.
 //! Consecutive samples of one app merge into a segment; five idle minutes end
 //! it, and idle time is never recorded. Excluded apps are recorded as nothing.
 //! While a known call app holds the microphone (`activity_calls`), the time
@@ -101,16 +102,20 @@ pub enum ActivityRecordingStatus {
   Paused,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// New settings record nothing (recording `Off`) and, once started, app
+/// names only: every field's default.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActivitySettings {
   pub recording_status: ActivityRecordingStatus,
   pub retention: ActivityRetention,
   #[serde(default)]
   pub excluded_apps: Vec<AppExclusion>,
-  /// A new timeline records window titles and documents until the user turns
-  /// them off. Settings saved before details existed carry no consent, so a
-  /// missing field reads as off.
+  /// The user's own choice to record window titles and documents, off until
+  /// they choose it. A saved choice is kept as saved; settings saved before
+  /// details existed carry no consent, so a missing field reads as off. Read
+  /// it through [`ActivitySettings::records_details`], which applies managed
+  /// policy.
   #[serde(default)]
   pub capture_details: bool,
   #[serde(default)]
@@ -124,18 +129,18 @@ pub struct ActivitySettings {
   pub extra: BTreeMap<String, serde_json::Value>,
 }
 
-impl Default for ActivitySettings {
-  fn default() -> Self {
-    Self {
-      recording_status: ActivityRecordingStatus::default(),
-      retention: ActivityRetention::default(),
-      excluded_apps: Vec::new(),
-      capture_details: true,
-      app_name_only_apps: Vec::new(),
-      browser_title_apps: Vec::new(),
-      ignore_calls: false,
-      extra: BTreeMap::new(),
-    }
+impl ActivitySettings {
+  /// Whether new activity records window titles and documents: the user's
+  /// choice, which managed policy can only turn off.
+  pub fn records_details(&self) -> bool {
+    self.records_details_under(crate::managed_policy::current())
+  }
+
+  fn records_details_under(
+    &self,
+    policy: &crate::managed_policy::ManagedPolicy,
+  ) -> bool {
+    self.capture_details && !policy.activity_details_disabled
   }
 }
 
@@ -235,6 +240,8 @@ define_activity_details_access! {
     allow(dead_code, reason = "only platforms without window details report it")
   )]
   Unavailable,
+  /// Managed policy keeps details off, whatever the user chose.
+  Managed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -626,7 +633,7 @@ struct DetailCaptureApp<'a> {
 }
 
 fn details_enabled(settings: &ActivitySettings, app: DetailCaptureApp<'_>) -> bool {
-  settings.capture_details
+  settings.records_details()
     && !is_excluded(&settings.app_name_only_apps, app.identifier)
     && (!crate::activity_details::is_browser(app.identifier, app.name)
       || is_excluded(&settings.browser_title_apps, app.identifier))
@@ -1086,7 +1093,7 @@ impl ActivityManager {
   }
 
   pub fn capture_details(&self) -> bool {
-    self.settings.capture_details
+    self.settings.records_details()
   }
 
   pub fn recording_status(&self) -> ActivityRecordingStatus {
@@ -2423,7 +2430,7 @@ impl ActivityManager {
       retention: self.settings.retention,
       excluded_apps: self.settings.excluded_apps.clone(),
       other_account_history_days,
-      capture_details: self.settings.capture_details,
+      capture_details: self.settings.records_details(),
       detect_calls: !self.settings.ignore_calls,
       app_name_only_apps: self.settings.app_name_only_apps.clone(),
       details_access,
@@ -2470,7 +2477,7 @@ impl ActivityManager {
       retention: self.settings.retention,
       excluded_apps: self.settings.excluded_apps.clone(),
       other_account_history_days,
-      capture_details: self.settings.capture_details,
+      capture_details: self.settings.records_details(),
       detect_calls: !self.settings.ignore_calls,
       app_name_only_apps: self.settings.app_name_only_apps.clone(),
       details_access,
@@ -2488,7 +2495,7 @@ impl ActivityManager {
   ) -> ActivitySetupSnapshot {
     ActivitySetupSnapshot {
       recording_status: self.settings.recording_status,
-      capture_details: self.settings.capture_details,
+      capture_details: self.settings.records_details(),
       detect_calls: !self.settings.ignore_calls,
       details_access,
     }
@@ -3188,6 +3195,7 @@ mod tests {
       ActivityPersistence::MemoryOnly,
       ActivitySettings {
         recording_status: ActivityRecordingStatus::Recording,
+        capture_details: true,
         ..ActivitySettings::default()
       },
       at(0),
@@ -3469,6 +3477,65 @@ mod tests {
         end: at(60).to_rfc3339(),
       }]],
     }
+  }
+
+  #[test]
+  fn new_settings_record_app_names_only() {
+    assert!(!ActivitySettings::default().capture_details);
+    let mut manager = ActivityManager::new();
+    manager.install(
+      ActivityPersistence::MemoryOnly,
+      ActivitySettings {
+        recording_status: ActivityRecordingStatus::Recording,
+        ..ActivitySettings::default()
+      },
+      at(0),
+    );
+    manager.observe(at(0), active_details("word"));
+    manager.observe(at(5), active_details("word"));
+    manager.stop(at(5)).unwrap();
+    let recorded: Vec<_> = manager.days.values().flatten().collect();
+    assert_eq!(recorded.len(), 1);
+    assert_eq!(recorded[0].window_title, None);
+    assert_eq!(recorded[0].document, None);
+  }
+
+  // The default changed after users saved their choice; a saved choice is
+  // read as saved, in either direction.
+  #[test]
+  fn a_saved_details_choice_is_kept() {
+    let saved = |capture: Option<bool>| {
+      let mut value = serde_json::to_value(ActivitySettings::default()).unwrap();
+      let fields = value.as_object_mut().unwrap();
+      match capture {
+        Some(capture) => fields.insert("captureDetails".into(), capture.into()),
+        None => fields.remove("captureDetails"),
+      };
+      serde_json::from_value::<ActivitySettings>(value)
+        .unwrap()
+        .capture_details
+    };
+    assert!(saved(Some(true)));
+    assert!(!saved(Some(false)));
+    assert!(!saved(None));
+  }
+
+  #[test]
+  fn managed_policy_keeps_details_off_without_changing_the_choice() {
+    let chosen = ActivitySettings {
+      capture_details: true,
+      ..ActivitySettings::default()
+    };
+    let open = crate::managed_policy::ManagedPolicy::default();
+    let managed = crate::managed_policy::ManagedPolicy {
+      activity_details_disabled: true,
+      ..crate::managed_policy::ManagedPolicy::default()
+    };
+    assert!(chosen.records_details_under(&open));
+    assert!(!chosen.records_details_under(&managed));
+    assert!(!ActivitySettings::default().records_details_under(&open));
+    assert!(!ActivitySettings::default().records_details_under(&managed));
+    assert!(chosen.capture_details);
   }
 
   #[test]

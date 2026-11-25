@@ -50,6 +50,7 @@
     "batchFailed": "Nie udało się utworzyć wersji roboczych. Spróbuj ponownie.",
     "billingDraftsForgetPreference": "Zapomnij preferencję",
     "billingDraftsGranted": "stella AI proponuje opisy Twoich wpisów czasu na podstawie szczegółów, które pokazuje każdy wpis.",
+    "billingDraftsManaged": "Twoja organizacja wyłączyła na tym komputerze propozycje stella AI.",
     "billingDraftsPreference": "Twoja preferencja dla propozycji",
     "billingDraftsRevoked": "stella AI nie proponuje opisów, dopóki na to nie zezwolisz.",
     "billingDraftsTitle": "Propozycje stella AI",
@@ -99,6 +100,7 @@
     "deleteOtherAccountHistory": "Usuń historię innych kont",
     "deleteOtherAccountHistoryConfirmation": "Usunąć historię innych kont z {days, plural, one {# dnia} few {# dni} many {# dni} other {# dnia}} na tym urządzeniu? Nie można tego cofnąć.",
     "deletionOnly": "Nie można otworzyć zapisanej aktywności, ponieważ w pęku kluczy brakuje jej klucza. Aby zacząć od nowa, możesz usunąć zapisaną aktywność i dane odzyskiwania oczekujących wersji roboczych.",
+    "detailsManaged": "Twoja organizacja wyłączyła na tym komputerze rejestrowanie tytułów okien i dokumentów. Nazwy aplikacji są nadal rejestrowane.",
     "detailsUnavailable": "Szczegóły są niedostępne na tym urządzeniu. Nazwy aplikacji są nadal rejestrowane.",
     "detectCalls": "Rejestruj rozmowy",
     "detectCallsDescription": "Gdy Teams, Zoom lub przeglądarka używa mikrofonu, ten czas jest liczony jako rozmowa, nawet jeśli tylko słuchasz lub pracujesz w innej aplikacji. Dźwięk nigdy nie jest nagrywany.",
@@ -116,6 +118,7 @@
       },
       "aiDraftProvider": "dostawcy AI, z którego korzysta kancelaria, albo dostawcy stella AI",
       "control": "Nic nie jest zapisywane, dopóki nie klikniesz Rozpocznij zapis. W każdej chwili możesz wstrzymać zapis, wykluczyć aplikacje lub usunąć dowolny dzień.",
+      "detailsStay": "Tytuły okien i nazwy dokumentów zostają na tym komputerze, chyba że poprosisz o propozycję stella AI",
       "never": {
         "audio": "Dźwięk z mikrofonu",
         "keystrokes": "Naciśnięcia klawiszy ani wpisywany tekst",
@@ -128,7 +131,7 @@
         "app": "Która aplikacja jest na pierwszym planie, co kilka sekund",
         "browserTitles": "Tytuły kart przeglądarki, tylko w przeglądarkach, na które zezwolisz",
         "calls": "Czas rozmów, chyba że to wyłączysz",
-        "details": "Tytuły okien i na Macu pełna ścieżka każdego otwartego dokumentu, łącznie z folderami, chyba że je wyłączysz"
+        "details": "Tytuły okien i na Macu pełna ścieżka każdego otwartego dokumentu, łącznie z folderami, tylko jeśli je wybierzesz"
       },
       "recordedTitle": "Co jest zapisywane",
       "sent": {
@@ -983,9 +986,13 @@
         "title": "Rozmowy"
       },
       "details": {
-        "appNamesOnly": "Rejestrowane są tylko nazwy aplikacji.",
-        "body": "Pomagają odróżnić sprawy podczas przeglądania dnia.",
+        "body": "Wybierz, co rejestruje Aktywność. Tytuły okien i nazwy dokumentów pomagają odróżnić sprawy podczas przeglądania dnia.",
         "browsers": "Przeglądarki rejestrują tytuły kart dopiero wtedy, gdy na to zezwolisz. Aktywność pyta o każdą przeglądarkę, gdy zobaczy ją po raz pierwszy.",
+        "choices": {
+          "appNamesOnly": "Rejestruj tylko nazwy aplikacji",
+          "withDetails": "Rejestruj też tytuły okien i nazwy dokumentów"
+        },
+        "choose": "Wybierz jedną opcję, aby kontynuować.",
         "title": "Tytuły okien i dokumenty"
       },
       "screens": {

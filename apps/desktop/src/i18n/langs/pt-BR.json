@@ -50,6 +50,7 @@
     "batchFailed": "Não foi possível criar os rascunhos. Tente novamente.",
     "billingDraftsForgetPreference": "Esquecer preferência",
     "billingDraftsGranted": "stella IA redige as descrições dos seus lançamentos de horas a partir dos detalhes que cada lançamento mostra.",
+    "billingDraftsManaged": "Sua organização desativou os rascunhos da stella IA neste computador.",
     "billingDraftsPreference": "Sua preferência de redação",
     "billingDraftsRevoked": "stella IA não redige descrições até que você permita.",
     "billingDraftsTitle": "Sugestões de stella IA",
@@ -99,6 +100,7 @@
     "deleteOtherAccountHistory": "Excluir histórico de outras contas",
     "deleteOtherAccountHistoryConfirmation": "Excluir o histórico de outras contas de {days, plural, one {# dia} other {# dias}} neste dispositivo? Esta ação não pode ser desfeita.",
     "deletionOnly": "A atividade salva não pode ser aberta porque a chave dela não está no chaveiro. Você pode apagar a atividade salva e os dados de recuperação de rascunhos pendentes para começar de novo.",
+    "detailsManaged": "Sua organização desativou títulos de janelas e documentos neste computador. Os nomes dos apps continuam sendo registrados.",
     "detailsUnavailable": "Os detalhes não estão disponíveis neste dispositivo. Os nomes dos aplicativos continuam sendo registrados.",
     "detectCalls": "Registrar chamadas",
     "detectCallsDescription": "Enquanto o Teams, o Zoom ou um navegador usa seu microfone, esse tempo conta como a chamada, mesmo que você só esteja ouvindo ou trabalhando em outro app. O áudio nunca é gravado.",
@@ -116,6 +118,7 @@
       },
       "aiDraftProvider": "o provedor de IA que o escritório usa, ou o da stella IA",
       "control": "Nada é registrado até você clicar em Começar a registrar. Pause, exclua apps ou apague qualquer dia quando quiser.",
+      "detailsStay": "Títulos de janelas e nomes de documentos ficam neste computador, a menos que você peça um rascunho da stella IA",
       "never": {
         "audio": "Som do microfone",
         "keystrokes": "Teclas digitadas ou texto",
@@ -128,7 +131,7 @@
         "app": "Qual app está em primeiro plano, a cada poucos segundos",
         "browserTitles": "Títulos das abas do navegador, só nos navegadores que você permitir",
         "calls": "Tempo em chamadas, a menos que você desative",
-        "details": "Títulos de janelas e, no Mac, o caminho completo de cada documento aberto, com as pastas, a menos que você os desative"
+        "details": "Títulos de janelas e, no Mac, o caminho completo de cada documento aberto, com as pastas, só se você escolher"
       },
       "recordedTitle": "O que é registrado",
       "sent": {
@@ -983,9 +986,13 @@
         "title": "Chamadas"
       },
       "details": {
-        "appNamesOnly": "Só os nomes dos apps são registrados.",
-        "body": "Eles ajudam você a distinguir os casos ao revisar o dia.",
+        "body": "Escolha o que a Atividade registra. Títulos de janelas e nomes de documentos ajudam você a distinguir os casos ao revisar o dia.",
         "browsers": "Os navegadores só registram títulos das abas depois que você permitir. A Atividade pergunta sobre cada navegador na primeira vez que o vê.",
+        "choices": {
+          "appNamesOnly": "Registrar só os nomes dos apps",
+          "withDetails": "Registrar também títulos de janelas e nomes de documentos"
+        },
+        "choose": "Escolha uma opção para continuar.",
         "title": "Títulos de janelas e documentos"
       },
       "screens": {

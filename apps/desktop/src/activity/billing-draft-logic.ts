@@ -13,7 +13,6 @@ import type {
   DesktopBillingDraftRequest,
   DesktopBillingDraftResponse,
   DesktopBillingDraftReview,
-  DesktopBillingDraftSettingsResponse,
 } from "@stll/api-contract/desktop-billing-drafts";
 import type {
   DesktopTimeEntryBatch,
@@ -544,17 +543,21 @@ export const structureItems = ({
   }));
 };
 
+/** Who decides drafting on this computer (`DraftPolicy` in
+ * billing_draft_settings.rs): the account's settings, or managed policy,
+ * which turned it off and reports the mode as off. */
+export const DRAFT_POLICIES = ["account", "managedOff"] as const;
+export type DraftPolicy = (typeof DRAFT_POLICIES)[number];
+
 const scopedSettingsSchema = v.strictObject({
   scopeKey: v.pipe(v.string(), v.minLength(1)),
   settings: desktopBillingDraftSettingsResponseSchema,
+  policy: v.picklist(DRAFT_POLICIES),
 });
 
-/** A settings answer from the native boundary: the server's settings and the
- * account they belong to. */
-export type ScopedDraftSettings = {
-  scopeKey: string;
-  settings: DesktopBillingDraftSettingsResponse;
-};
+/** A settings answer from the native boundary: the server's settings, the
+ * account they belong to, and who decides drafting on this computer. */
+export type ScopedDraftSettings = v.InferOutput<typeof scopedSettingsSchema>;
 
 export const scopedDraftSettingsFrom = (
   value: unknown,

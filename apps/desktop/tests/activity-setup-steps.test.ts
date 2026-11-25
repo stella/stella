@@ -8,7 +8,10 @@ import type { DraftConsentStatus } from "../src/activity/billing-draft-transport
 import {
   ACTIVITY_SETUP_SCREENS,
   activitySetupScreens,
+  DETAILS_CHOICE_CAPTURES,
+  DETAILS_CHOICES,
   detailsScreenPermissions,
+  shownDetailsChoice,
 } from "../src/onboarding/activity-setup-steps";
 import type { ActivitySetupScreen } from "../src/onboarding/activity-setup-steps";
 import { moveFrom, shownScreen } from "../src/onboarding/setup-screens";
@@ -24,6 +27,7 @@ const ready = (
 ): BillingDraftSettings => ({
   consent: "revoked",
   mode: "plain",
+  policy: "account",
   preference: null,
   type: "ready",
   ...settings,
@@ -49,13 +53,12 @@ describe("the screens of the Activity step", () => {
     }
   });
 
-  test("leave out details where this computer cannot read them", () => {
-    expect(
-      activitySetupScreens({
-        aiDrafts: "notOffered",
-        detailsAccess: "unavailable",
-      }),
-    ).toEqual(["recording", "calls"]);
+  test("leave out details where this computer cannot read them or policy keeps them off", () => {
+    for (const detailsAccess of ["unavailable", "managed"] as const) {
+      expect(
+        activitySetupScreens({ aiDrafts: "notOffered", detailsAccess }),
+      ).toEqual(["recording", "calls"]);
+    }
     for (const detailsAccess of [
       "disabled",
       "ready",
@@ -96,6 +99,22 @@ describe("the AI drafts screen", () => {
   test("is not offered before or without the account's settings", () => {
     for (const type of ["loading", "unavailable", "failed"] as const) {
       expect(aiDraftsChoice({ type })).toBe("notOffered");
+    }
+  });
+});
+
+describe("the details screen's answer", () => {
+  test("shows neither answer as chosen until the user picks one, whatever is stored", () => {
+    for (const captureDetails of [true, false]) {
+      expect(shownDetailsChoice("unanswered", captureDetails)).toBe("none");
+    }
+  });
+
+  test("once picked, shows the stored choice", () => {
+    for (const choice of DETAILS_CHOICES) {
+      expect(
+        shownDetailsChoice("answered", DETAILS_CHOICE_CAPTURES[choice]),
+      ).toBe(choice);
     }
   });
 });

@@ -310,6 +310,7 @@ describe("the stella AI consent on a card", () => {
       grantRefusals: 1,
     };
     const scoped = () => ({
+      policy: "account",
       scopeKey: SCOPE_KEY,
       settings: {
         consent: server.consent,

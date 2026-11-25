@@ -3,6 +3,7 @@ import { panic } from "better-result";
 
 import type { DesktopBillingDraftSettingsResponse } from "@stll/api-contract/desktop-billing-drafts";
 
+import type { DraftPolicy } from "../src/activity/billing-draft-logic";
 import type { OnboardingSnapshot } from "../src/onboarding/onboarding-types";
 import type { ActivitySetupSnapshot } from "../src/onboarding/use-activity-setup";
 import type { PermissionsSnapshot } from "../src/shared/permissions";
@@ -14,9 +15,10 @@ import type { PermissionsSnapshot } from "../src/shared/permissions";
  * sends.
  */
 
+/** The native defaults: recording off, app names only. */
 export const ACTIVITY_OFF = {
-  captureDetails: true,
-  detailsAccess: "accessibilityRequired",
+  captureDetails: false,
+  detailsAccess: "disabled",
   detectCalls: true,
   recordingStatus: "off",
 } as const satisfies ActivitySetupSnapshot;
@@ -61,6 +63,9 @@ export type NativeSide = {
   /** While set, reading the activity state fails. */
   activityUnreadable: boolean;
   drafts: DesktopBillingDraftSettingsResponse;
+  /** Who decides drafting on this computer; managed policy reports the
+   *  mode as off and refuses every grant, as the native side does. */
+  draftPolicy: DraftPolicy;
   /** How many grants the server still refuses before it accepts one. */
   grantRefusals: number;
   /** How many withdrawals the server still refuses before it accepts one. */
@@ -75,6 +80,7 @@ export const nativeSide = (
   activity: ACTIVITY_OFF,
   activityUnreadable: false,
   calls: [],
+  draftPolicy: "account",
   drafts: DRAFTS_OFFERED,
   grantRefusals: 0,
   onboarding: ACTIVITY_STEP,
@@ -114,9 +120,13 @@ const changedActivity = (
   }
 };
 
-const scoped = (settings: DesktopBillingDraftSettingsResponse) => ({
+const scoped = (native: NativeSide) => ({
+  policy: native.draftPolicy,
   scopeKey: SCOPE_KEY,
-  settings,
+  settings:
+    native.draftPolicy === "managedOff"
+      ? { ...native.drafts, effectiveMode: "off" }
+      : native.drafts,
 });
 
 export const installNativeSide = (native: NativeSide) => {
@@ -140,21 +150,24 @@ export const installNativeSide = (native: NativeSide) => {
           native.activity = changedActivity(native.activity, command, args);
           return null;
         case "billing_draft_get_settings":
-          return scoped(native.drafts);
+          return scoped(native);
         case "billing_draft_grant_consent":
+          if (native.draftPolicy === "managedOff") {
+            panic("stella AI drafts are turned off by managed policy");
+          }
           if (native.grantRefusals > 0) {
             native.grantRefusals -= 1;
             panic("draft time entry is unavailable");
           }
           native.drafts = { ...native.drafts, consent: "granted" };
-          return scoped(native.drafts);
+          return scoped(native);
         case "billing_draft_withdraw_consent":
           if (native.withdrawRefusals > 0) {
             native.withdrawRefusals -= 1;
             panic("draft time entry is unavailable");
           }
           native.drafts = { ...native.drafts, consent: "revoked" };
-          return scoped(native.drafts);
+          return scoped(native);
         default:
           return null;
       }

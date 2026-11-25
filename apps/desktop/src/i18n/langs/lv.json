@@ -50,6 +50,7 @@
     "batchFailed": "Neizdevās izveidot melnrakstus. Mēģiniet vēlreiz.",
     "billingDraftsForgetPreference": "Aizmirst preferenci",
     "billingDraftsGranted": "stella AI sagatavo jūsu laika ierakstu aprakstus no detaļām, ko rāda katrs ieraksts.",
+    "billingDraftsManaged": "Jūsu organizācija šajā datorā ir izslēgusi stella AI melnrakstus.",
     "billingDraftsPreference": "Jūsu melnrakstu preference",
     "billingDraftsRevoked": "stella AI nesagatavo aprakstus, kamēr to neatļaujat.",
     "billingDraftsTitle": "stella AI melnraksti",
@@ -99,6 +100,7 @@
     "deleteOtherAccountHistory": "Dzēst citu kontu vēsturi",
     "deleteOtherAccountHistoryConfirmation": "Vai dzēst citu kontu vēsturi par {days, plural, zero {# dienām} one {# dienu} other {# dienām}} šajā ierīcē? Šo darbību nevar atsaukt.",
     "deletionOnly": "Saglabāto darbību nevar atvērt, jo atslēgu saišķī trūkst tās atslēgas. Lai sāktu no jauna, varat dzēst saglabāto darbību un gaidošo melnrakstu atkopšanas datus.",
+    "detailsManaged": "Jūsu organizācija šajā datorā ir izslēgusi logu virsrakstu un dokumentu ierakstīšanu. Lietotņu nosaukumi joprojām tiek ierakstīti.",
     "detailsUnavailable": "Detaļas šajā ierīcē nav pieejamas. Lietotņu nosaukumi joprojām tiek ierakstīti.",
     "detectCalls": "Reģistrēt zvanus",
     "detectCallsDescription": "Kamēr Teams, Zoom vai pārlūks izmanto mikrofonu, šis laiks tiek skaitīts kā zvans, pat ja jūs tikai klausāties vai strādājat citā lietotnē. Skaņa netiek ierakstīta.",
@@ -116,6 +118,7 @@
       },
       "aiDraftProvider": "jūsu biroja izmantotajam AI pakalpojumu sniedzējam vai stella AI pakalpojumu sniedzējam",
       "control": "Nekas netiek ierakstīts, kamēr nenospiežat Sākt ierakstīšanu. Jebkurā laikā varat pauzēt, izslēgt lietotnes vai dzēst jebkuru dienu.",
+      "detailsStay": "Logu virsraksti un dokumentu nosaukumi paliek šajā datorā, ja vien nepieprasāt stella AI melnrakstu",
       "never": {
         "audio": "Skaņa no mikrofona",
         "keystrokes": "Taustiņu nospiešana vai ievadītais teksts",
@@ -128,7 +131,7 @@
         "app": "Kura lietotne ir priekšplānā, ik pēc dažām sekundēm",
         "browserTitles": "Pārlūkprogrammas cilņu nosaukumi, tikai jūsu atļautajās pārlūkprogrammās",
         "calls": "Zvanos pavadītais laiks, ja vien to neizslēdzat",
-        "details": "Logu virsraksti un Mac datorā katra atvērtā dokumenta pilns ceļš ar mapēm, ja vien tos neizslēdzat"
+        "details": "Logu virsraksti un Mac datorā katra atvērtā dokumenta pilns ceļš ar mapēm, tikai ja tos izvēlaties"
       },
       "recordedTitle": "Kas tiek ierakstīts",
       "sent": {
@@ -983,9 +986,13 @@
         "title": "Zvani"
       },
       "details": {
-        "appNamesOnly": "Tiek ierakstīti tikai lietotņu nosaukumi.",
-        "body": "Tie palīdz atšķirt lietas, kad pārskatāt dienu.",
+        "body": "Izvēlieties, ko Aktivitāte ieraksta. Logu virsraksti un dokumentu nosaukumi palīdz atšķirt lietas, kad pārskatāt dienu.",
         "browsers": "Pārlūkprogrammas ieraksta cilņu nosaukumus tikai pēc jūsu atļaujas. Aktivitāte jautā par katru pārlūkprogrammu, kad to redz pirmo reizi.",
+        "choices": {
+          "appNamesOnly": "Ierakstīt tikai lietotņu nosaukumus",
+          "withDetails": "Ierakstīt arī logu virsrakstus un dokumentu nosaukumus"
+        },
+        "choose": "Lai turpinātu, izvēlieties vienu iespēju.",
         "title": "Logu virsraksti un dokumenti"
       },
       "screens": {

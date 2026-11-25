@@ -50,6 +50,7 @@
     "batchFailed": "A piszkozatokat nem sikerült létrehozni. Próbálja újra.",
     "billingDraftsForgetPreference": "Preferencia törlése",
     "billingDraftsGranted": "A stella AI az időbejegyzései leírását az egyes bejegyzésekben látható részletek alapján javasolja.",
+    "billingDraftsManaged": "A szervezete ezen a számítógépen kikapcsolta a stella AI-javaslatokat.",
     "billingDraftsPreference": "Az Ön javaslati preferenciája",
     "billingDraftsRevoked": "A stella AI addig nem javasol leírást, amíg nem engedélyezi.",
     "billingDraftsTitle": "stella AI javaslatok",
@@ -99,6 +100,7 @@
     "deleteOtherAccountHistory": "Más fiókok előzményeinek törlése",
     "deleteOtherAccountHistoryConfirmation": "{days, plural, one {Törli más fiókok # napnyi előzményét ezen az eszközön? Ez nem vonható vissza.} other {Törli más fiókok # napnyi előzményét ezen az eszközön? Ez nem vonható vissza.}}",
     "deletionOnly": "A mentett tevékenység nem nyitható meg, mert a kulcsa hiányzik a kulcskarikáról. Az újrakezdéshez törölheti a mentett tevékenységet és a függőben lévő piszkozatok helyreállítási adatait.",
+    "detailsManaged": "A szervezete ezen a számítógépen kikapcsolta az ablakcímek és a dokumentumok rögzítését. Az alkalmazások neve továbbra is rögzül.",
     "detailsUnavailable": "A részletek ezen az eszközön nem érhetők el. Az alkalmazásnevek továbbra is rögzülnek.",
     "detectCalls": "Hívások rögzítése",
     "detectCallsDescription": "Amíg a Teams, a Zoom vagy egy böngésző használja a mikrofont, ez az idő hívásnak számít, akkor is, ha csak hallgat, vagy egy másik alkalmazásban dolgozik. Hangot soha nem rögzítünk.",
@@ -116,6 +118,7 @@
       },
       "aiDraftProvider": "az irodája által használt AI-szolgáltatóhoz vagy a stella AI szolgáltatójához",
       "control": "Semmi sem kerül rögzítésre, amíg nem kattint a Rögzítés indítása gombra. Bármikor szüneteltethet, kizárhat alkalmazásokat vagy törölhet bármely napot.",
+      "detailsStay": "Az ablakcímek és a dokumentumnevek ezen a számítógépen maradnak, hacsak nem kér stella AI-javaslatot",
       "never": {
         "audio": "A mikrofon hangját",
         "keystrokes": "Billentyűleütéseket vagy begépelt szöveget",
@@ -128,7 +131,7 @@
         "app": "Melyik alkalmazás van előtérben, néhány másodpercenként",
         "browserTitles": "Böngészőlapok címeit, csak az Ön által engedélyezett böngészőkben",
         "calls": "A hívásokkal töltött időt, hacsak ki nem kapcsolja",
-        "details": "Ablakcímeket és Macen minden megnyitott dokumentum teljes elérési útját, a mappákkal együtt, hacsak ki nem kapcsolja"
+        "details": "Ablakcímeket és Macen minden megnyitott dokumentum teljes elérési útját, a mappákkal együtt, csak ha ezt választja"
       },
       "recordedTitle": "Mit rögzít",
       "sent": {
@@ -983,9 +986,13 @@
         "title": "Hívások"
       },
       "details": {
-        "appNamesOnly": "Csak az alkalmazások neve kerül rögzítésre.",
-        "body": "Segítenek megkülönböztetni az ügyeket, amikor átnézi a napot.",
+        "body": "Válassza ki, mit rögzítsen a Tevékenység. Az ablakcímek és a dokumentumnevek segítenek megkülönböztetni az ügyeket, amikor átnézi a napot.",
         "browsers": "A böngészők csak az Ön engedélyével rögzítik a lapcímeket. A Tevékenység minden böngészőnél rákérdez, amikor először látja.",
+        "choices": {
+          "appNamesOnly": "Csak az alkalmazások nevének rögzítése",
+          "withDetails": "Az ablakcímek és a dokumentumnevek rögzítése is"
+        },
+        "choose": "A folytatáshoz válasszon egy lehetőséget.",
         "title": "Ablakcímek és dokumentumok"
       },
       "screens": {

@@ -50,6 +50,7 @@
     "batchFailed": "Impossible de créer les brouillons. Réessayez.",
     "billingDraftsForgetPreference": "Oublier la préférence",
     "billingDraftsGranted": "stella AI rédige les descriptions de vos entrées de temps à partir des détails affichés pour chaque entrée.",
+    "billingDraftsManaged": "Votre organisation a désactivé les brouillons de stella AI sur cet ordinateur.",
     "billingDraftsPreference": "Votre préférence de rédaction",
     "billingDraftsRevoked": "stella AI ne rédige aucune description tant que vous ne l’avez pas autorisé.",
     "billingDraftsTitle": "Propositions de stella AI",
@@ -99,6 +100,7 @@
     "deleteOtherAccountHistory": "Supprimer l’historique d’autres comptes",
     "deleteOtherAccountHistoryConfirmation": "Supprimer l’historique d’autres comptes pour {days, plural, one {# jour} other {# jours}} sur cet appareil ? Cette action est irréversible.",
     "deletionOnly": "L'activité enregistrée ne peut pas être ouverte, car sa clé est absente du trousseau. Vous pouvez effacer l'activité enregistrée et les données de récupération des brouillons en attente pour recommencer.",
+    "detailsManaged": "Votre organisation a désactivé les titres de fenêtres et les documents sur cet ordinateur. Les noms des applications sont toujours enregistrés.",
     "detailsUnavailable": "Les détails ne sont pas disponibles sur cet appareil. Les noms des applications restent enregistrés.",
     "detectCalls": "Enregistrer les appels",
     "detectCallsDescription": "Lorsque Teams, Zoom ou un navigateur utilise votre micro, ce temps compte comme l’appel, même si vous ne faites qu’écouter ou travaillez dans une autre app. Aucun son n’est enregistré.",
@@ -116,6 +118,7 @@
       },
       "aiDraftProvider": "le fournisseur d’IA de votre cabinet, ou celui de stella AI",
       "control": "Rien n'est enregistré tant que vous n'avez pas cliqué sur Commencer l'enregistrement. Mettez en pause, excluez des apps ou supprimez une journée quand vous le souhaitez.",
+      "detailsStay": "Les titres de fenêtres et les noms de documents restent sur cet ordinateur, sauf si vous demandez un brouillon à stella AI",
       "never": {
         "audio": "Le son du micro",
         "keystrokes": "Frappes au clavier ou texte saisi",
@@ -128,7 +131,7 @@
         "app": "L'app au premier plan, toutes les quelques secondes",
         "browserTitles": "Titres des onglets du navigateur, seulement dans les navigateurs que vous autorisez",
         "calls": "Temps passé en appel, sauf si vous le désactivez",
-        "details": "Titres de fenêtres et, sur Mac, le chemin complet de chaque document ouvert, dossiers compris, sauf si vous les désactivez"
+        "details": "Titres de fenêtres et, sur Mac, le chemin complet de chaque document ouvert, dossiers compris, seulement si vous les choisissez"
       },
       "recordedTitle": "Ce qui est enregistré",
       "sent": {
@@ -983,9 +986,13 @@
         "title": "Appels"
       },
       "details": {
-        "appNamesOnly": "Seuls les noms des applications sont enregistrés.",
-        "body": "Ils vous aident à distinguer vos dossiers lorsque vous passez la journée en revue.",
+        "body": "Choisissez ce que l’activité enregistre. Les titres de fenêtres et les noms de documents vous aident à distinguer vos dossiers lorsque vous passez la journée en revue.",
         "browsers": "Les navigateurs n’enregistrent les titres des onglets qu’une fois que vous l’autorisez. Activité vous pose la question pour chaque navigateur la première fois qu’elle le voit.",
+        "choices": {
+          "appNamesOnly": "Enregistrer uniquement les noms des applications",
+          "withDetails": "Enregistrer aussi les titres de fenêtres et les noms de documents"
+        },
+        "choose": "Choisissez une option pour continuer.",
         "title": "Titres de fenêtres et documents"
       },
       "screens": {

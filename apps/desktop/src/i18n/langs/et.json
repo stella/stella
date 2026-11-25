@@ -50,6 +50,7 @@
     "batchFailed": "Mustandeid ei õnnestunud luua. Proovi uuesti.",
     "billingDraftsForgetPreference": "Unusta eelistus",
     "billingDraftsGranted": "stella AI koostab teie ajakannete selgitused iga kande üksikasjade põhjal.",
+    "billingDraftsManaged": "Teie organisatsioon on selles arvutis stella AI mustandid välja lülitanud.",
     "billingDraftsPreference": "Teie kavandite eelistus",
     "billingDraftsRevoked": "stella AI ei koosta selgitusi enne, kui olete selle lubanud.",
     "billingDraftsTitle": "stella AI kavandid",
@@ -99,6 +100,7 @@
     "deleteOtherAccountHistory": "Kustuta teiste kontode ajalugu",
     "deleteOtherAccountHistoryConfirmation": "Kas kustutada selles seadmes teiste kontode {days, plural, one {# päeva} other {# päeva}} ajalugu? Seda ei saa tagasi võtta.",
     "deletionOnly": "Salvestatud tegevust ei saa avada, sest selle võti puudub võtmehoidjast. Uuesti alustamiseks saate kustutada salvestatud tegevuse ja pooleliolevate mustandite taastamisandmed.",
+    "detailsManaged": "Teie organisatsioon on selles arvutis akende pealkirjade ja dokumentide salvestamise välja lülitanud. Rakenduste nimesid salvestatakse edasi.",
     "detailsUnavailable": "Üksikasjad pole selles seadmes saadaval. Rakenduste nimed salvestatakse endiselt.",
     "detectCalls": "Salvesta kõned",
     "detectCallsDescription": "Kui Teams, Zoom või brauser kasutab mikrofoni, loetakse see aeg kõneks, isegi kui ainult kuulate või töötate teises rakenduses. Heli ei salvestata kunagi.",
@@ -116,6 +118,7 @@
       },
       "aiDraftProvider": "teie büroo kasutatavale AI-teenuse pakkujale või stella AI pakkujale",
       "control": "Midagi ei salvestata enne, kui vajutate nuppu Alusta salvestamist. Peatage, välistage rakendusi või kustutage mis tahes päev, millal soovite.",
+      "detailsStay": "Akende pealkirjad ja dokumentide nimed jäävad sellesse arvutisse, kui te just stella AI mustandit ei küsi",
       "never": {
         "audio": "Mikrofoni heli",
         "keystrokes": "Klahvivajutused või sisestatud tekst",
@@ -128,7 +131,7 @@
         "app": "Milline rakendus on esiplaanil, iga paari sekundi järel",
         "browserTitles": "Brauseri vahekaartide pealkirjad, ainult teie lubatud brauserites",
         "calls": "Kõnedes veedetud aeg, kui te seda välja ei lülita",
-        "details": "Akende pealkirjad ja Macis iga avatud dokumendi täielik tee koos kaustadega, kui te neid välja ei lülita"
+        "details": "Akende pealkirjad ja Macis iga avatud dokumendi täielik tee koos kaustadega, ainult kui te need valite"
       },
       "recordedTitle": "Mida salvestatakse",
       "sent": {
@@ -983,9 +986,13 @@
         "title": "Kõned"
       },
       "details": {
-        "appNamesOnly": "Salvestatakse ainult rakenduste nimed.",
-        "body": "Need aitavad päeva üle vaadates toimikuid eristada.",
+        "body": "Valige, mida Tegevused salvestavad. Akende pealkirjad ja dokumentide nimed aitavad päeva üle vaadates toimikuid eristada.",
         "browsers": "Brauserid salvestavad vahekaartide pealkirju alles siis, kui te seda lubate. Tegevused küsivad iga brauseri kohta, kui seda esimest korda näevad.",
+        "choices": {
+          "appNamesOnly": "Salvesta ainult rakenduste nimed",
+          "withDetails": "Salvesta ka akende pealkirjad ja dokumentide nimed"
+        },
+        "choose": "Jätkamiseks valige üks variant.",
         "title": "Akende pealkirjad ja dokumendid"
       },
       "screens": {

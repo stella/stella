@@ -46,8 +46,10 @@ const sharedTitleGate = ({
     return { type: "detailsOff" };
   }
   switch (detailsAccess) {
-    // Access reads as disabled only while details are off.
+    // Access reads as disabled only while details are off; managed policy
+    // keeps them off.
     case "disabled":
+    case "managed":
       return { type: "detailsOff" };
     case "accessibilityRequired":
       return { type: "accessibilityRequired" };
