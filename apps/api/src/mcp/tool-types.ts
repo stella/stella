@@ -9,7 +9,7 @@ import type {
   SearchPaginationOutcome,
 } from "@stll/api-contract/search";
 
-import type { AccountAccess } from "@/api/lib/api-handlers";
+import type { AccountAccess } from "@/api/lib/auth/account-access";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
 import type { WindowedReadSurface } from "@/api/lib/files/windowed-read-surface";

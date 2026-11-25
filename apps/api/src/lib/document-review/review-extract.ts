@@ -9,7 +9,10 @@ import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
-import type { ReviewWithheldSource } from "@/api/lib/document-review/contract";
+import type {
+  DocxFolioCitation,
+  ReviewWithheldSource,
+} from "@/api/lib/document-review/contract";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import type { DocumentTooLargeError } from "@/api/lib/errors/tagged-errors";
 import { createDefaultTool } from "@/api/lib/properties/create-schema";
@@ -42,13 +45,7 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 // source field id so callers can resolve the cited document before rendering a
 // source link.
 
-// A folio block citation's navigable payload. This shape remains compatible
-// with the persisted review finding contract; `ReviewDocxFolioCitation` adds
-// the source ownership needed by non-persisting extraction callers.
-export type DocxFolioCitation = {
-  blockId: string;
-  text: string;
-};
+export type { DocxFolioCitation };
 
 type ReviewDocxFolioCitation = DocxFolioCitation & {
   kind: "docx-folio";

@@ -15,7 +15,7 @@ import {
   FOLIO_COLLAB_SNAPSHOT_MAX_BYTES,
 } from "@/api/lib/folio-collab-room-contract";
 import type { FolioCollabSavedSnapshotCut } from "@/api/lib/folio-collab-room-contract";
-import type { SkippedSkillFile } from "@/api/lib/skills/skill-package";
+import type { SkippedSkillFile } from "@/api/lib/skills/skipped-skill-file";
 
 import { session as authSession } from "../auth-schema";
 import {

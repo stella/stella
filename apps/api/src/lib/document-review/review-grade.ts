@@ -9,11 +9,7 @@ import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
-import type {
-  ReferenceConsensus,
-  ReferenceImpact,
-  ReviewPerspective,
-} from "@/api/lib/document-review/contract";
+import type { ReviewPerspective } from "@/api/lib/document-review/contract";
 import {
   gradeReferencePositions,
   REFERENCE_GRADE_BATCH_SIZE,
@@ -25,17 +21,17 @@ import type {
 } from "@/api/lib/document-review/reference-grade";
 import type { PinnedReferencePassage } from "@/api/lib/document-review/reference-passages";
 import { LANGUAGE_DELTA } from "@/api/lib/document-review/review-delta";
-import type { ReviewDelta } from "@/api/lib/document-review/review-delta";
 import type {
   AskOutcome,
   DocxFolioCitation,
 } from "@/api/lib/document-review/review-extract";
+import type {
+  ReviewFinding,
+  ReviewFix,
+} from "@/api/lib/document-review/review-finding-types";
 import { resolveReviewTargetLanguage } from "@/api/lib/document-review/target-language";
 import type { ReviewTargetLanguage } from "@/api/lib/document-review/target-language";
-import {
-  buildGroundedReviewFix,
-  type GroundedReviewFix,
-} from "@/api/lib/grounded-review-fix";
+import { buildGroundedReviewFix } from "@/api/lib/grounded-review-fix";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type {
@@ -56,58 +52,13 @@ import {
   gradeTierMatches,
   TIER_MATCH_BATCH_SIZE,
 } from "@/api/lib/workflow/verdict-engine";
-import type { ExtractedAskValue } from "@/api/lib/workflow/verdict-engine";
-import type { VerdictTier } from "@/api/lib/workflow/verdict-tiers";
-
 // Ephemeral grading for one document: every enabled position produces exactly
 // one finding, whether its standard is an authored tier ladder or the passages
 // of a reference document. Grading dispatches on `standard.source`; everything
 // downstream — the row, the fix, the export — sees one finding shape.
+import type { VerdictTier } from "@/api/lib/workflow/verdict-tiers";
 
-/** A one-click redline, derived from the finding's delta, in the folio
- *  editor's AI-edit op vocabulary. */
-export type ReviewFix = GroundedReviewFix;
-
-export type ReviewFinding = {
-  positionId: string;
-  issue: string;
-  severity: PositionSeverity;
-  /** Where the standard this was graded against came from. Kept on the
-   *  finding so a reader knows what the judgment rests on without re-reading
-   *  the run's pinned position list. */
-  standardSource: PositionStandardSource;
-  // null for extract-only positions (a value column with no verdict).
-  verdict: VerdictTier | null;
-  /** What differs, typed. The fix is derived from this, never free-formed. */
-  delta: ReviewDelta;
-  extracted: ExtractedAskValue | null;
-  rationale: string | null;
-  // The resolved tier reference a tier-match verdict cited (which fallback
-  // matched, or which red line was violated). Absent for deterministic or
-  // unmatched verdicts.
-  matchedRef?: VerdictMatchedRef;
-  /** How consistently the standard's own passages agreed. Reference standards
-   *  only: an authored ladder is one voice by construction. */
-  consensus?: ReferenceConsensus;
-  /** Which way the difference cuts for the side the run was judged for. */
-  impact?: ReferenceImpact;
-  /** The comparison in prose, or the statement that there was not enough to
-   *  compare. Reference standards only; a tier match explains itself through
-   *  `rationale` and `matchedRef`. */
-  explanation?:
-    { type: "comparison"; text: string } | { type: "insufficient-evidence" };
-  /** One instruction for the drafter, or `null` when nothing should change. */
-  recommendation?: string | null;
-  citations: DocxFolioCitation[];
-  /** The standard's own passages, grouped by the document they came from.
-   *  Ids only: the words live in their source matter's rows and reach a
-   *  reader through that matter's row security, never through the finding. */
-  referenceCitations?: {
-    fileFieldId: SafeId<"field">;
-    passages: { id: string; blockId: string }[];
-  }[];
-  fix: ReviewFix | null;
-};
+export type { ReviewFinding, ReviewFix };
 
 type AiGradingDeps = {
   abortSignal: AbortSignal;

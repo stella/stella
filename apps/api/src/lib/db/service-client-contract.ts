@@ -1,4 +1,4 @@
-import type { AdmittedMcpSession } from "@/api/lib/auth/oauth-grant-admission";
+import type { AdmittedMcpSession } from "@/api/mcp/session";
 
 /** Shared by the schema, persistence and the token boundary; loads no auth runtime. */
 export const SERVICE_CLIENT_BUDGET_CEILINGS = {
