@@ -3,6 +3,7 @@ import type { Page } from "@playwright/test";
 
 import type {
   DesktopMatter,
+  DesktopMatterCandidatesResponse,
   DesktopTimeEntryMatterCandidate,
 } from "@stll/api-contract/desktop-time-entries";
 import { setFixedBrowserTime } from "@stll/ui/browser-clock";
@@ -632,30 +633,38 @@ const installNativeBoundary = async ({
             });
             await held.promise;
           }
-          return [
-            {
-              id: "matter-1",
-              name: "Example matter",
-              color: "--option-emerald",
-            },
-            { id: "matter-2", name: "Second matter", color: "--option-violet" },
-            { id: "matter-3", name: "Third matter", color: null },
-            { id: "matter-4", name: "Fourth matter", color: null },
-          ].map(
-            ({ id, name, color }, index) =>
-              ({
-                id,
-                name,
-                reference: `M-00${String(index + 1)}`,
-                color,
-                clientName: "Example client",
-                signals: {
-                  lastWorkedAt: "2026-10-06",
-                  newlyAssignedAt: null,
-                  upcomingDeadline: null,
-                },
-              }) satisfies DesktopTimeEntryMatterCandidate,
-          );
+          return {
+            matters: [
+              {
+                id: "matter-1",
+                name: "Example matter",
+                color: "--option-emerald",
+              },
+              {
+                id: "matter-2",
+                name: "Second matter",
+                color: "--option-violet",
+              },
+              { id: "matter-3", name: "Third matter", color: null },
+              { id: "matter-4", name: "Fourth matter", color: null },
+            ].map(
+              ({ id, name, color }, index) =>
+                ({
+                  id,
+                  name,
+                  reference: `M-00${String(index + 1)}`,
+                  color,
+                  clientName: "Example client",
+                  signals: {
+                    lastWorkedAt: "2026-10-06",
+                    newlyAssignedAt: null,
+                    upcomingDeadline: null,
+                  },
+                }) satisfies DesktopTimeEntryMatterCandidate,
+            ),
+            // Tenths of an hour, as many firms bill.
+            timeMinimumUnitMinutes: 6,
+          } satisfies DesktopMatterCandidatesResponse;
         },
         time_entry_submit_batch_confirmed: async (args) => {
           batchAttempts += 1;
@@ -947,7 +956,7 @@ test("only Accept sends the edited billing fields and the suggestion becomes a d
         .replace("\\{matter\\}", "Example matter")
         .replace("\\{range\\}", ".+")
         .replace("\\{duration\\}", "30 min")
-        .replace("\\{hours\\}", "0\\.5")}$`,
+        .replace("\\{total\\}", "30 min")}$`,
       "u",
     ),
   );

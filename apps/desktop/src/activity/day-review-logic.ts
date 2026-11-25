@@ -11,7 +11,8 @@ import {
   type AppTotal,
   appTotals,
   documentName,
-  roundedTenthsOfHour,
+  MINUTE_MS,
+  recordedMinutes,
   type TimedSegment,
   totalDurationMs,
 } from "./activity-logic";
@@ -92,8 +93,27 @@ export type DayReviewGroup = {
   segments: MatchedSegment[];
   ranges: ActivityRange[];
   durationMs: number;
-  roundedTenths: number;
+  /** The whole minutes the entry claims. A matter's suggestion rounds its
+   * recorded time together with the day's other suggestions, so together
+   * they never claim more than was recorded. */
+  workedMinutes: number;
+  /** Time no matter claimed that sits between two of this matter's own
+   * stretches, each run under {@link BRIEF_MS}: offered on the suggestion,
+   * never counted in it unasked. */
+  slivers: MatchedSegment[];
 };
+
+/** A matter recorded for less than this in a day is a brief touch: listed,
+ * not suggested. A run of unclaimed time this short between two stretches
+ * of one matter is a sliver that matter's suggestion offers. */
+export const BRIEF_MS = 2 * MINUTE_MS;
+
+/** What a brief touch claims once the member adds it: the least an entry
+ * can hold, unless an entry already holds part of the matter's time. */
+const BRIEF_TOUCH_MINUTES = 1;
+
+/** Idle gaps up to this long keep one suggestion's time in one stretch. */
+export const SUGGESTION_RUN_GAP_MS = 5 * MINUTE_MS;
 
 type MatchDayOptions = {
   segments: readonly TimedSegment[];
@@ -569,7 +589,9 @@ export const unresolvedMatterIds = ({
 };
 
 /** Splitting at every review boundary prevents assignments or receipts from
- * claiming time beyond the exact range the user selected. */
+ * claiming time beyond the exact range the user selected. A matter recorded
+ * under {@link BRIEF_MS} is listed among the brief touches instead of the
+ * groups. */
 export const matchDay = ({
   segments,
   candidates,
@@ -661,7 +683,7 @@ export const matchDay = ({
       grouped.set(id, [segment]);
     }
   }
-  const groups: DayReviewGroup[] = [];
+  const groups: Omit<DayReviewGroup, "workedMinutes" | "slivers">[] = [];
   for (const [id, group] of grouped) {
     const first = group.at(0);
     if (!first) {
@@ -678,23 +700,232 @@ export const matchDay = ({
       evidence,
       apps: appTotals(group),
       segments: group,
-      ranges: group.map(({ startMs, endMs }) => ({
-        start: Temporal.Instant.fromEpochMilliseconds(startMs).toString(),
-        end: Temporal.Instant.fromEpochMilliseconds(endMs).toString(),
-      })),
+      ranges: segmentRanges(group),
       durationMs,
-      roundedTenths: roundedTenthsOfHour(durationMs),
     });
   }
+  // A member's own assignment is never a brief touch, however short.
+  const briefTouches = groups.filter(
+    (group) =>
+      group.matter !== null &&
+      group.durationMs < BRIEF_MS &&
+      group.confidence !== "manual",
+  );
+  const suggested = groups.filter(
+    (group) => group.matter !== null && !briefTouches.includes(group),
+  );
+  const days = dayTimes(matchedSegments);
+  const workedMinutes = dayMinutes(days);
+  const slivers = sliversByMatter(matchedSegments);
+  const offeredSlivers = (id: string) => {
+    const offered = slivers.get(id) ?? [];
+    return offered.length > 0 && keepsOtherShares(days, id, offered)
+      ? offered
+      : [];
+  };
+  const unmatched = groups
+    .filter((group) => group.matter === null)
+    .map((group) => ({
+      ...group,
+      workedMinutes: Math.floor(group.durationMs / MINUTE_MS),
+      slivers: [],
+    }));
   return {
     /** Every matter this read can open, by id. */
     openMatters: access.open,
     segments: matchedSegments,
-    groups: [...groups].sort(
+    groups: [
+      ...suggested.map((group) => ({
+        ...group,
+        workedMinutes: workedMinutes(group),
+        slivers: offeredSlivers(group.id),
+      })),
+      ...unmatched,
+    ].sort(
       (left, right) =>
         Number(left.matter === null) - Number(right.matter === null) ||
         right.durationMs - left.durationMs ||
         left.id.localeCompare(right.id),
     ),
+    /** Matters recorded too briefly to suggest, longest first. A matter
+     * part of whose time an entry already holds adds its rest rounded down,
+     * and is no brief touch when that is no whole minute. */
+    briefTouches: briefTouches
+      .map((group) => ({
+        ...group,
+        workedMinutes:
+          (days.get(group.id)?.draftedMs ?? 0) > 0
+            ? Math.floor(group.durationMs / MINUTE_MS)
+            : BRIEF_TOUCH_MINUTES,
+        slivers: [],
+      }))
+      .filter(({ workedMinutes: minutes }) => minutes > 0)
+      .sort(
+        (left, right) =>
+          right.durationMs - left.durationMs || left.id.localeCompare(right.id),
+      ),
   };
+};
+
+/** A matter's time over the whole day: all of it, the part entries already
+ * hold, and whether the member assigned any of it. */
+type DayTime = { durationMs: number; draftedMs: number; assigned: boolean };
+
+const dayTimes = (segments: readonly MatchedSegment[]) => {
+  const days = new Map<string, DayTime>();
+  for (const segment of segments) {
+    if (segment.matter === null) {
+      continue;
+    }
+    const day = days.get(segment.matter.id) ?? {
+      durationMs: 0,
+      draftedMs: 0,
+      assigned: false,
+    };
+    const durationMs = segment.endMs - segment.startMs;
+    days.set(segment.matter.id, {
+      durationMs: day.durationMs + durationMs,
+      draftedMs: day.draftedMs + (segment.drafted ? durationMs : 0),
+      assigned: day.assigned || segment.confidence === "manual",
+    });
+  }
+  return days;
+};
+
+/** Each pooled matter's share of the day's whole minutes, by largest
+ * remainder; the same rule as the brief touches decides who is pooled. */
+const poolShares = (days: ReadonlyMap<string, DayTime>) => {
+  const pooled = [...days].filter(
+    ([, { durationMs, assigned }]) => durationMs >= BRIEF_MS || assigned,
+  );
+  const minutes = recordedMinutes(
+    pooled.map(([, { durationMs }]) => durationMs),
+  );
+  return new Map(pooled.map(([id], index) => [id, minutes[index] ?? 0]));
+};
+
+/**
+ * The minutes each matter's suggestion claims. The day's matters share its
+ * whole minutes by largest remainder over their whole-day time, drafted or
+ * not, so creating one suggestion's entry never changes what the others
+ * claim, and together they never claim more than was recorded. A matter part
+ * of whose time an entry already holds claims its rest rounded down.
+ */
+const dayMinutes = (days: ReadonlyMap<string, DayTime>) => {
+  const shared = poolShares(days);
+  return ({ id, durationMs }: Pick<DayReviewGroup, "id" | "durationMs">) => {
+    const day = days.get(id);
+    const own = shared.get(id);
+    return day === undefined || own === undefined || day.draftedMs > 0
+      ? Math.floor(durationMs / MINUTE_MS)
+      : own;
+  };
+};
+
+/**
+ * Whether taking a matter's slivers in leaves every other matter's share as
+ * it is. An entry keeps the minutes it was created with, so a share that
+ * moved to the sliver's matter afterwards would be claimed twice; slivers
+ * that would move one are not offered.
+ */
+const keepsOtherShares = (
+  days: ReadonlyMap<string, DayTime>,
+  matterId: string,
+  slivers: readonly MatchedSegment[],
+) => {
+  const day = days.get(matterId);
+  if (day === undefined) {
+    return false;
+  }
+  const before = poolShares(days);
+  const after = poolShares(
+    new Map(days).set(matterId, {
+      ...day,
+      durationMs: day.durationMs + totalDurationMs(slivers),
+      assigned: true,
+    }),
+  );
+  return [...before].every(
+    ([id, minutes]) => id === matterId || after.get(id) === minutes,
+  );
+};
+
+/** The exact ranges an entry made of these segments covers. */
+export const segmentRanges = (
+  segments: readonly MatchedSegment[],
+): ActivityRange[] =>
+  segments.map(({ startMs, endMs }) => ({
+    start: Temporal.Instant.fromEpochMilliseconds(startMs).toString(),
+    end: Temporal.Instant.fromEpochMilliseconds(endMs).toString(),
+  }));
+
+/** Where a segment's time stands for slivers: a matter's; recorded with no
+ * matter at all; or taken, because an entry already holds it or it was
+ * recorded with a matter the review did not offer, which is that matter's
+ * and never another's. */
+type SliverRole =
+  { matterId: string; type: "matter" } | { type: "free" } | { type: "taken" };
+
+const sliverRole = (segment: MatchedSegment | undefined): SliverRole => {
+  if (segment === undefined || segment.drafted) {
+    return { type: "taken" };
+  }
+  if (segment.matter !== null) {
+    return { matterId: segment.matter.id, type: "matter" };
+  }
+  return segment.matterId === null ? { type: "free" } : { type: "taken" };
+};
+
+/**
+ * Each matter's slivers: a run of time recorded with no matter, under
+ * {@link BRIEF_MS} in all, whose neighbours on both sides are that one
+ * matter's own time no more than {@link SUGGESTION_RUN_GAP_MS} away. Time
+ * recorded on another matter, or already in an entry, never is one: offering
+ * it would count one instant twice.
+ */
+const sliversByMatter = (segments: readonly MatchedSegment[]) => {
+  const ordered = [...segments].sort(
+    (left, right) => left.startMs - right.startMs,
+  );
+  const slivers = new Map<string, MatchedSegment[]>();
+  for (let start = 0; start < ordered.length;) {
+    let end = start;
+    while (
+      end < ordered.length &&
+      sliverRole(ordered.at(end)).type === "free"
+    ) {
+      end++;
+    }
+    if (end === start) {
+      start++;
+      continue;
+    }
+    const run = ordered.slice(start, end);
+    const before = start > 0 ? ordered.at(start - 1) : undefined;
+    const after = ordered.at(end);
+    start = end;
+    const beforeRole = sliverRole(before);
+    const afterRole = sliverRole(after);
+    const first = run.at(0);
+    const last = run.at(-1);
+    if (
+      beforeRole.type !== "matter" ||
+      afterRole.type !== "matter" ||
+      beforeRole.matterId !== afterRole.matterId ||
+      before === undefined ||
+      after === undefined ||
+      first === undefined ||
+      last === undefined ||
+      totalDurationMs(run) >= BRIEF_MS ||
+      first.startMs - before.endMs > SUGGESTION_RUN_GAP_MS ||
+      after.startMs - last.endMs > SUGGESTION_RUN_GAP_MS
+    ) {
+      continue;
+    }
+    slivers.set(beforeRole.matterId, [
+      ...(slivers.get(beforeRole.matterId) ?? []),
+      ...run,
+    ]);
+  }
+  return slivers;
 };

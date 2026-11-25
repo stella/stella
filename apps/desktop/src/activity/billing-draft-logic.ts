@@ -56,7 +56,7 @@ const boundedNames = (names: readonly string[]) =>
   );
 
 type CardDraftEntryOptions = {
-  suggestion: Pick<DayReviewGroup, "apps" | "segments" | "roundedTenths">;
+  suggestion: Pick<DayReviewGroup, "apps" | "segments" | "workedMinutes">;
   matterId: string;
   date: string;
   timezone: string;
@@ -81,7 +81,7 @@ export const cardDraftEntry = ({
     date,
     timezone,
     durationMinutes: Math.min(
-      Math.max(suggestion.roundedTenths * 6, 1),
+      Math.max(suggestion.workedMinutes, 1),
       DESKTOP_BILLING_DRAFT_LIMITS.durationMinutes,
     ),
     appNames: boundedNames(suggestion.apps.map(({ name }) => name)),

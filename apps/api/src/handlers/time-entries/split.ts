@@ -2,17 +2,15 @@ import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { roundToBillingIncrement } from "@stll/api-contract/billing";
+
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { timeEntryRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { apportionSplitDurations } from "@/api/handlers/time-entries/split-durations";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
-import {
-  getTimePolicyViolation,
-  readTimePolicy,
-  roundToBillingIncrement,
-} from "@/api/lib/billing-time";
+import { getTimePolicyViolation, readTimePolicy } from "@/api/lib/billing-time";
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import { createSafeId } from "@/api/lib/branded-types";

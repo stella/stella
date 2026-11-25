@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import { roundToBillingIncrement } from "@stll/api-contract/billing";
 
 import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import { timeEntries, timeTimers, workspaces } from "@/api/db/schema";
@@ -16,7 +17,6 @@ import {
 import {
   DEFAULT_TIME_POLICY,
   getTimePeriodLockError,
-  roundToBillingIncrement,
 } from "@/api/lib/billing-time";
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import {

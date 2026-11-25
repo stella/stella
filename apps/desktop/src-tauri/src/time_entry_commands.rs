@@ -11,7 +11,7 @@ use crate::{
   feature_gate::{DesktopFeature, FeatureGates},
   local_window::{ActivityAccountFeature, ActivityCaller, LocalCaller},
   time_entry_submit::{
-    self, ConfirmedBatch, ConfirmedTimeEntry, CreatedEntry, Matter, MatterCandidate,
+    self, CandidatesResponse, ConfirmedBatch, ConfirmedTimeEntry, CreatedEntry, Matter,
     MatterResolution,
   },
 };
@@ -139,7 +139,7 @@ pub async fn time_entry_candidates(
   caller: ActivityCaller,
   gates: State<'_, FeatureGates>,
   accounts: State<'_, AccountState>,
-) -> Result<Vec<MatterCandidate>, String> {
+) -> Result<CandidatesResponse, String> {
   let account = linked_account(&caller, &gates, &accounts).await?;
   let candidates = time_entry_submit::candidates(&account).await?;
   require_account(&caller, &gates, &account)?;

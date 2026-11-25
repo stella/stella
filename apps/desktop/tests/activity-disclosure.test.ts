@@ -282,7 +282,7 @@ describe("the activity disclosure", () => {
             matterId: MATTER_ID,
             suggestion: {
               apps: [{ durationMs: 1, identifier: "app", name: "App" }],
-              roundedTenths: 5,
+              workedMinutes: 30,
               segments: [segmentWith(separator + parts.join(separator))],
             },
             timezone: "Europe/Prague",

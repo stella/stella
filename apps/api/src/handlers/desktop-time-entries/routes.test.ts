@@ -375,6 +375,7 @@ test("candidate endpoint preserves bounded caller-scoped matching signals and fe
         },
       },
     ],
+    timeMinimumUnitMinutes: DEFAULT_TIME_POLICY.timeMinimumUnitMinutes,
   });
   expect(result.inserted).toEqual([]);
   for (const hidden of ["activity-timeline", "time-billing"] as const) {

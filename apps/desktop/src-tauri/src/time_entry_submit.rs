@@ -108,9 +108,13 @@ pub struct MatterCandidate {
   signals: CandidateSignals,
 }
 
-#[derive(Deserialize)]
-struct CandidatesResponse {
+/// The likely matters for a day's review and the organization's minimum
+/// billing unit, which the review previews billed time with.
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CandidatesResponse {
   matters: Vec<MatterCandidate>,
+  time_minimum_unit_minutes: u32,
 }
 
 /// Whether a matter the day's records name is one the member can open; an
@@ -226,7 +230,7 @@ fn is_bounded_candidate(candidate: &MatterCandidate) -> bool {
 
 pub async fn candidates(
   account: &AccountRequest,
-) -> Result<Vec<MatterCandidate>, String> {
+) -> Result<CandidatesResponse, String> {
   let body = response_body(crate::http_client::device_proof_request(
     client()?.get(format!(
       "{}/v1/desktop/matter-candidates",
@@ -239,12 +243,15 @@ pub async fn candidates(
   .await?;
   let result: CandidatesResponse =
     serde_json::from_slice(&body).map_err(json_cause_logged(FAILURE))?;
-  if result.matters.len() > MATTER_LIST_LIMIT
+  // The organization setting's bounds: a whole divisor of an hour.
+  if !(1..=60).contains(&result.time_minimum_unit_minutes)
+    || 60 % result.time_minimum_unit_minutes != 0
+    || result.matters.len() > MATTER_LIST_LIMIT
     || !result.matters.iter().all(is_bounded_candidate)
   {
     return Err(FAILURE.to_string());
   }
-  Ok(result.matters)
+  Ok(result)
 }
 
 /// The contract's bound on matters per shortlist or resolve request.
@@ -512,7 +519,7 @@ mod tests {
           }
           "/v1/desktop/matter-candidates" => {
             assert_eq!(uri.query(), None);
-            serde_json::json!({"matters": []})
+            serde_json::json!({"matters": [], "timeMinimumUnitMinutes": 6})
           }
           "/v1/desktop/matter-candidates/resolve" => {
             assert_eq!(uri.query(), Some(&*format!("id={RESOLVED_ID}")));
@@ -528,7 +535,9 @@ mod tests {
       axum::serve(listener, router).await.unwrap();
     });
     assert!(search_matters(&account, "A/101").await.unwrap().is_empty());
-    assert!(candidates(&account).await.unwrap().is_empty());
+    let review = candidates(&account).await.unwrap();
+    assert!(review.matters.is_empty());
+    assert_eq!(review.time_minimum_unit_minutes, 6);
     let resolved = resolve_matters(&account, &[RESOLVED_ID.to_ascii_uppercase()])
       .await
       .unwrap();

@@ -65,7 +65,7 @@ const suggestion = {
     }),
     segment({ windowTitle: "Re: break clause" }),
   ],
-  roundedTenths: 5,
+  workedMinutes: 30,
 };
 
 const entry = (captureDetails: boolean) =>
