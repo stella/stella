@@ -8,6 +8,7 @@ import {
   ContextNotice,
   LocalRunNotices,
 } from "@/components/chat/context-notice";
+import { shownLocalRunNotices } from "@/components/chat/local-run-notices.logic";
 import messages from "@/i18n/langs/en.json";
 
 const render = (metadata: ChatMessageMetadata | undefined) =>
@@ -56,6 +57,9 @@ const renderNotices = (
 
 const { notices } = messages.chat.localRun;
 
+const EMPTY_REGION =
+  '<span aria-live="polite" class="sr-only" role="status"></span>';
+
 describe("what an answer's local run said about itself", () => {
   test("reads each notice as one quiet line in one polite live region", () => {
     const markup = renderNotices({
@@ -69,7 +73,9 @@ describe("what an answer's local run said about itself", () => {
     expect(markup.match(/role="status"/gu)).toHaveLength(1);
     expect(markup).toContain('aria-live="polite"');
     expect(markup.match(/<p /gu)).toHaveLength(3);
-    expect(markup).toContain(notices.configWarning);
+    // Read once, by the live region; the visible lines are not read again.
+    expect(markup.split(notices.configWarning)).toHaveLength(3);
+    expect(markup).toContain('<div aria-hidden="true">');
     expect(markup).toContain(notices.browserUnavailable);
     expect(markup).toContain("is trying again (attempt 2 of 5).");
   });
@@ -102,7 +108,7 @@ describe("what an answer's local run said about itself", () => {
         { kind: "retrying", status: "ended", attempt: 1, maxAttempts: 5 },
       ],
     });
-    expect(markup).toBe('<div aria-live="polite" role="status"></div>');
+    expect(markup).toBe(EMPTY_REGION);
   });
 
   test("a retry still under way when the turn stopped running reads as ended", () => {
@@ -118,9 +124,36 @@ describe("what an answer's local run said about itself", () => {
     expect(stopped).toContain(notices.configWarning);
   });
 
-  test("stays away from an answer whose run said nothing", () => {
-    expect(renderNotices(undefined)).toBe("");
-    expect(renderNotices({})).toBe("");
-    expect(renderNotices({ localRunNotices: [] })).toBe("");
+  test("an answer whose run said nothing holds only the empty region, so its first notice is announced", () => {
+    expect(renderNotices(undefined)).toBe(EMPTY_REGION);
+    expect(renderNotices({})).toBe(EMPTY_REGION);
+    expect(renderNotices({ localRunNotices: [] })).toBe(EMPTY_REGION);
+  });
+});
+
+describe("whether an earlier answer draws its run's notices", () => {
+  test("goes by the notices it shows, not by the metadata it carries", () => {
+    expect(shownLocalRunNotices({ localRunNotices: [] }, false)).toEqual([]);
+    expect(
+      shownLocalRunNotices(
+        {
+          localRunNotices: [
+            {
+              kind: "retrying",
+              status: "retrying",
+              attempt: 1,
+              maxAttempts: 5,
+            },
+          ],
+        },
+        false,
+      ),
+    ).toEqual([]);
+    expect(
+      shownLocalRunNotices(
+        { localRunNotices: [{ kind: "config_warning" }] },
+        false,
+      ),
+    ).toEqual([{ kind: "config_warning" }]);
   });
 });

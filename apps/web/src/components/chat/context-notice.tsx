@@ -5,12 +5,10 @@ import {
   type ChatLocalRunNotice,
   type ChatLocalRunNoticeCapability,
   chatLocalRunNoticeKey,
-  chatLocalRunNoticesOf,
-  endedChatLocalRunNotices,
-  isChatLocalRunNoticeShown,
 } from "@stll/api-contract/chat-local-run-notice";
 
 import type { ChatMessageMetadata } from "@/components/chat/chat-ui-tools-types";
+import { shownLocalRunNotices } from "@/components/chat/local-run-notices.logic";
 import type { TranslationKey } from "@/i18n/types";
 
 type AnswerContextNotice = NonNullable<ChatMessageMetadata["contextNotice"]>;
@@ -114,8 +112,11 @@ const useNoticeText = () => {
  * one that ended with its turn reads as nothing), so the answer reads the
  * same live and after reload. Once the turn is no longer running, a retry
  * the stream left under way (a stop cut it off) reads as ended, as the
- * stored answer has it. One polite live region announces a change without
- * interrupting.
+ * stored answer has it.
+ *
+ * The polite live region is mounted with the answer, empty, so the first
+ * notice is announced as a change; it lays out nothing, and the visible
+ * lines beside it are not read a second time.
  */
 export const LocalRunNotices = ({
   isTurnActive,
@@ -125,29 +126,31 @@ export const LocalRunNotices = ({
   metadata: ChatMessageMetadata | undefined;
 }) => {
   const text = useNoticeText();
-  const reported = chatLocalRunNoticesOf(metadata);
-  if (reported.length === 0) {
-    return null;
-  }
-  const notices = isTurnActive
-    ? reported
-    : (endedChatLocalRunNotices(reported) ?? reported);
-  const lines = notices.filter(isChatLocalRunNoticeShown).flatMap((notice) => {
-    const shown = text(notice);
-    return shown === null
-      ? []
-      : [{ key: chatLocalRunNoticeKey(notice), text: shown }];
-  });
+  const lines = shownLocalRunNotices(metadata, isTurnActive).flatMap(
+    (notice) => {
+      const shown = text(notice);
+      return shown === null
+        ? []
+        : [{ key: chatLocalRunNoticeKey(notice), text: shown }];
+    },
+  );
   return (
-    <div aria-live="polite" role="status">
-      {lines.map((line) => (
-        <p
-          className="text-muted-foreground max-w-xl py-1 text-xs"
-          key={line.key}
-        >
-          {line.text}
-        </p>
-      ))}
-    </div>
+    <>
+      <span aria-live="polite" className="sr-only" role="status">
+        {lines.map((line) => line.text).join(" ")}
+      </span>
+      {lines.length === 0 ? null : (
+        <div aria-hidden="true">
+          {lines.map((line) => (
+            <p
+              className="text-muted-foreground max-w-xl py-1 text-xs"
+              key={line.key}
+            >
+              {line.text}
+            </p>
+          ))}
+        </div>
+      )}
+    </>
   );
 };

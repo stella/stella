@@ -173,7 +173,13 @@ describe("what a local run says about itself", () => {
       );
       const restated = restatementsOf(read);
       // A read that adopts after the last notice restates nothing; one that
-      // adopts before it ends on the same list as the whole read.
+      // adopts before it ends on the same list as the whole read, and one
+      // that adopts before any event restates every notice itself.
+      if (cut === 0) {
+        expect(restated).toEqual(
+          restatementsOf(await uninterruptedRead(chunks)),
+        );
+      }
       if (restated.length > 0) {
         expect(restated.at(-1)).toEqual(FINAL);
       }
