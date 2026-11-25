@@ -1,4 +1,8 @@
-import type { ComponentType, LazyExoticComponent } from "react";
+import type {
+  ComponentProps,
+  ComponentType,
+  LazyExoticComponent,
+} from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
@@ -1216,31 +1220,35 @@ const declareLawCases = async (fixture: FixtureRuntime) => {
     const memberChromeHold: { until: Promise<undefined> | null } = {
       until: null,
     };
-    const holdLazyChrome = async <Name extends string, Props extends object>(
-      specifier: string,
-      load: () => Promise<Record<Name, ComponentType<Props>>>,
-      name: Name,
-    ) => {
-      const module = await load();
-      const Real = module[name];
-      const Held = (props: Props) => {
-        if (memberChromeHold.until !== null) {
-          use(memberChromeHold.until);
-        }
-        return <Real {...props} />;
-      };
-      await mock.module(specifier, () => ({ ...module, [name]: Held }));
+    const useMemberChromeHold = () => {
+      if (memberChromeHold.until !== null) {
+        use(memberChromeHold.until);
+      }
     };
-    await holdLazyChrome(
-      "@/components/search-dialog",
-      async () => await import("@/components/search-dialog"),
-      "SearchDialog",
+    const searchDialog = await import("@/components/search-dialog");
+    const RealSearchDialog = searchDialog.SearchDialog;
+    const HeldSearchDialog = (
+      props: ComponentProps<typeof RealSearchDialog>,
+    ) => {
+      useMemberChromeHold();
+      return <RealSearchDialog {...props} />;
+    };
+    await mock.module("@/components/search-dialog", () => ({
+      ...searchDialog,
+      SearchDialog: HeldSearchDialog,
+    }));
+    const sessionInspector = await import(
+      "@/components/public-session-inspector"
     );
-    await holdLazyChrome(
-      "@/components/public-session-inspector",
-      async () => await import("@/components/public-session-inspector"),
-      "PublicSessionInspector",
-    );
+    const RealSessionInspector = sessionInspector.PublicSessionInspector;
+    const HeldSessionInspector = () => {
+      useMemberChromeHold();
+      return <RealSessionInspector />;
+    };
+    await mock.module("@/components/public-session-inspector", () => ({
+      ...sessionInspector,
+      PublicSessionInspector: HeldSessionInspector,
+    }));
     const viewType = "test-route-shell-provider-probe";
     const InspectorMemberProbe = () => {
       const member = useAuthenticatedUser();
