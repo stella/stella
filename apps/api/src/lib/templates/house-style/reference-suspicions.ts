@@ -11,7 +11,7 @@ import type { DocxBlockManifest } from "@/api/lib/templates/house-style/folio-co
 import type { LabelIndex } from "@/api/lib/templates/house-style/label-index";
 import type { DetectedReference } from "@/api/lib/templates/house-style/reference-detector";
 
-type ReferenceSuspicion = {
+export type ReferenceSuspicion = {
   referenceId: string;
   designatorIndex: number;
   /** The article the text cites. */

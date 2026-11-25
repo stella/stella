@@ -13,35 +13,13 @@ import {
   manifestOf,
   numbered,
 } from "@/api/lib/templates/house-style/manifest.test-helpers";
-import { proposeTemplateRoles } from "@/api/lib/templates/house-style/role-proposer";
-import type {
-  HouseStyleRole,
-  TemplateRoleMap,
-} from "@/api/lib/templates/house-style/role-proposer";
-
-/** One multi-level list numbers articles, clauses, letters and points, the
- *  way a contract template binds them to its styles. */
-const LIST = 18;
-const ROLE_MAP = {
-  title: { styleId: "Title", numbering: null },
-  party: { styleId: "Party", numbering: null },
-  articleHeading: { styleId: "Article", numbering: { numId: LIST, ilvl: 0 } },
-  clause1: { styleId: "Clause1", numbering: { numId: LIST, ilvl: 1 } },
-  clause2: { styleId: "Clause2", numbering: { numId: LIST, ilvl: 2 } },
-  clause3: null,
-  letter: { styleId: "Letter", numbering: { numId: LIST, ilvl: 3 } },
-  roman: { styleId: "Roman", numbering: { numId: LIST, ilvl: 4 } },
-  continuation: { styleId: "Continuation", numbering: null },
-  signature: { styleId: "Signature", numbering: null },
-  annexList: { styleId: "AnnexList", numbering: null },
-  annexHeading: { styleId: "AnnexHeading", numbering: null },
-  body: { styleId: "Body", numbering: null },
-} as const satisfies TemplateRoleMap;
+import { proposeBlockRoles } from "@/api/lib/templates/house-style/role-proposer";
+import type { HouseStyleRole } from "@/api/lib/templates/house-style/role-proposer";
 
 const rolesOf = (
   manifest: DocxBlockManifest,
 ): Record<string, HouseStyleRole> => {
-  const { proposals } = proposeTemplateRoles({ manifest, roleMap: ROLE_MAP });
+  const proposals = proposeBlockRoles({ manifest });
   const textById = new Map(manifest.blocks.map(({ id, text }) => [id, text]));
   return Object.fromEntries(
     proposals.map(({ blockId, role }) => [
@@ -51,7 +29,7 @@ const rolesOf = (
   );
 };
 
-describe("proposeTemplateRoles", () => {
+describe("proposeBlockRoles", () => {
   test("reads the parts of a Czech contract", () => {
     const manifest = czechContract("Viz čl. II této smlouvy.");
     expect(rolesOf(manifest)).toMatchObject({
@@ -59,7 +37,7 @@ describe("proposeTemplateRoles", () => {
       "Dodavatel: Horák Stavby s.r.": "party",
       "(dále jen „dodavatel“)": "party",
       a: "party",
-      "uzavírají tuto smlouvu:": "body",
+      "uzavírají tuto smlouvu:": "recital",
       "Článek I.": "articleHeading",
       "Úvodní ustanovení": "articleHeading",
       "Článek II. Předmět plnění": "articleHeading",
@@ -76,55 +54,9 @@ describe("proposeTemplateRoles", () => {
     });
   });
 
-  test("plan items carry the template's style and list level", () => {
-    const manifest = czechContract("Viz čl. II této smlouvy.");
-    const { body, omit } = proposeTemplateRoles({
-      manifest,
-      roleMap: ROLE_MAP,
-    });
-    const itemOf = (start: string) =>
-      body.find(({ blockId }) => blockId === blockIdOf(manifest, start));
-    expect(omit).toEqual([]);
-    expect(itemOf("SMLOUVA")).toEqual({
-      kind: "source",
-      blockId: "p0",
-      hash: "h0",
-      styleId: "Title",
-      numbering: null,
-    });
-    // The typed label goes; the list prints it. The split title is merged.
-    expect(itemOf("Článek I.")).toMatchObject({
-      styleId: "Article",
-      numbering: { numId: LIST, ilvl: 0 },
-      stripLabel: "Článek I.",
-      mergeNext: "lineBreak",
-    });
-    expect(itemOf("Úvodní ustanovení")).toBeUndefined();
-    expect(itemOf("Článek II.")).toMatchObject({
-      numbering: { numId: LIST, ilvl: 0 },
-      stripLabel: "Článek II.",
-    });
-    expect(itemOf("Článek II.")).not.toHaveProperty("mergeNext");
-    expect(itemOf("První ujednání, oddíl II.")).toMatchObject({
-      styleId: "Clause1",
-      numbering: { numId: LIST, ilvl: 1 },
-    });
-    expect(itemOf("První ujednání, oddíl II.")).not.toHaveProperty(
-      "stripLabel",
-    );
-    expect(itemOf("první případ;")).toMatchObject({
-      styleId: "Letter",
-      numbering: { numId: LIST, ilvl: 3 },
-    });
-    expect(itemOf("první podbod,")).toMatchObject({
-      styleId: "Roman",
-      numbering: { numId: LIST, ilvl: 4 },
-    });
-  });
-
   test("the proposal of a merged title points at its heading", () => {
     const manifest = czechContract("Text.");
-    const { proposals } = proposeTemplateRoles({ manifest, roleMap: ROLE_MAP });
+    const proposals = proposeBlockRoles({ manifest });
     expect(
       proposals.find(
         ({ blockId }) => blockId === blockIdOf(manifest, "Úvodní ustanovení"),
@@ -135,126 +67,9 @@ describe("proposeTemplateRoles", () => {
     });
   });
 
-  test("a list restarts wherever the template would count past the source", () => {
-    const manifest = manifestOf([
-      "SMLOUVA",
-      "Článek I.\nPrvní",
-      numbered("1.", "Odstavec:", 1),
-      numbered("a)", "případ;", 2),
-      numbered("b)", "případ.", 2),
-      "Pokračování odstavce, po němž výčet začíná znovu:",
-      numbered("a)", "případ;", 3),
-      numbered("2.", "Odstavec.", 1),
-      "Článek III.\nTřetí, druhý článek chybí",
-      numbered("1.", "Odstavec.", 4),
-      numbered("5.", "Odstavec s přeskočeným číslem.", 4),
-      numbered("6.", "Odstavec.", 4),
-    ]);
-    const { body } = proposeTemplateRoles({ manifest, roleMap: ROLE_MAP });
-    expect(body.map(({ numbering }) => numbering)).toEqual([
-      null,
-      { numId: LIST, ilvl: 0 },
-      { numId: LIST, ilvl: 1 },
-      { numId: LIST, ilvl: 3 },
-      { numId: LIST, ilvl: 3 },
-      null,
-      { numId: LIST, ilvl: 3, restartFrom: 1 },
-      { numId: LIST, ilvl: 1 },
-      { numId: LIST, ilvl: 0, restartFrom: 3 },
-      { numId: LIST, ilvl: 1 },
-      { numId: LIST, ilvl: 1, restartFrom: 5 },
-      { numId: LIST, ilvl: 1 },
-    ]);
-  });
-
-  test("empty paragraphs and the source's table of contents are omitted", () => {
-    const manifest = manifestOf([
-      "SMLOUVA",
-      { text: "Článek I. Předmět\t2", styleName: "toc 1" },
-      "",
-      " \t",
-      "Článek I.\nPředmět",
-      numbered("1.", "Text.", 1),
-    ]);
-    const { body, omit } = proposeTemplateRoles({
-      manifest,
-      roleMap: ROLE_MAP,
-    });
-    expect(omit).toEqual([
-      { blockId: "p1", reason: "sourceToc" },
-      { blockId: "p2", reason: "empty" },
-      { blockId: "p3", reason: "empty" },
-    ]);
-    expect(body.map(({ blockId }) => blockId)).toEqual(["p0", "p4", "p5"]);
-  });
-
-  test("a table is placed whole and its cells are not placed again", () => {
-    const manifest = manifestOf(["SMLOUVA", "buňka vlevo", "buňka vpravo"]);
-    const blocks = manifest.blocks.flatMap((block): DocxBlock[] =>
-      block.id === "p1"
-        ? [
-            {
-              ...block,
-              id: "t0",
-              kind: "table",
-              text: "buňka vlevo\nbuňka vpravo",
-              hash: "ht",
-              cells: [
-                { row: 0, col: 0, blockIds: ["p1"] },
-                { row: 0, col: 1, blockIds: ["p2"] },
-              ],
-            },
-            block,
-          ]
-        : [block],
-    );
-    const { body, proposals } = proposeTemplateRoles({
-      manifest: { blocks },
-      roleMap: ROLE_MAP,
-    });
-    expect(body).toEqual([
-      {
-        kind: "source",
-        blockId: "p0",
-        hash: "h0",
-        styleId: "Title",
-        numbering: null,
-      },
-      { kind: "source", blockId: "t0", hash: "ht" },
-    ]);
-    expect(proposals.map(({ blockId }) => blockId)).toEqual(["p0"]);
-  });
-
-  test("a role the template lacks falls back to body and is reported", () => {
-    const manifest = manifestOf([
-      { text: "Services", label: "1.", styleName: "heading 1" },
-      numbered("1.1", "Clause."),
-      numbered("1.1.1", "Sub-clause."),
-      numbered("1.1.1.1", "Sub-sub-clause."),
-    ]);
-    const { body, proposals, unmappedRoles } = proposeTemplateRoles({
-      manifest,
-      roleMap: ROLE_MAP,
-    });
-    expect(proposals.map(({ role }) => role)).toEqual([
-      "articleHeading",
-      "clause1",
-      "clause2",
-      "clause3",
-    ]);
-    expect(unmappedRoles).toEqual(["clause3"]);
-    expect(body.at(-1)).toEqual({
-      kind: "source",
-      blockId: "p3",
-      hash: "h3",
-      styleId: "Body",
-      numbering: null,
-    });
-  });
-
   test("confidence follows the evidence", () => {
     const manifest = czechContract("Text.");
-    const { proposals } = proposeTemplateRoles({ manifest, roleMap: ROLE_MAP });
+    const proposals = proposeBlockRoles({ manifest });
     const confidenceOf = (start: string) =>
       proposals.find(({ blockId }) => blockId === blockIdOf(manifest, start))
         ?.confidence;
@@ -271,7 +86,7 @@ describe("proposeTemplateRoles", () => {
     expect(rolesOf(englishAgreement("Text."))).toMatchObject({
       "SERVICES AGREEMENT": "title",
       "Brightwell Hosting Limited, ": "party",
-      "(A) The Supplier provides ho": "body",
+      "(A) The Supplier provides ho": "recital",
       Definitions: "articleHeading",
       "Wording 1.1:": "clause1",
       "first limb;": "letter",
@@ -298,10 +113,7 @@ describe("proposeTemplateRoles", () => {
       ...cells.blocks,
       ...memo.blocks.map((block) => ({ ...block, id: `m${block.id}` })),
     ];
-    const { proposals } = proposeTemplateRoles({
-      manifest: { blocks },
-      roleMap: ROLE_MAP,
-    });
+    const proposals = proposeBlockRoles({ manifest: { blocks } });
     expect(proposals.map(({ blockId, role }) => [blockId, role])).toEqual([
       ["mp0", "title"],
       ["mp1", "body"],
@@ -322,5 +134,97 @@ describe("proposeTemplateRoles", () => {
       "Návrh jsme posoudili a shrnu": "body",
       "S pozdravem": "body",
     });
+  });
+
+  test("blank paragraphs, contents lines and plain table cells get no reading", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      { text: "Článek I. Předmět\t2", styleName: "toc 1" },
+      "",
+      " \t",
+      "Článek I.\nPředmět",
+      numbered("1.", "Text.", 1),
+    ]);
+    expect(
+      proposeBlockRoles({ manifest }).map(({ blockId }) => blockId),
+    ).toEqual(["p0", "p4", "p5"]);
+    const cells = inColumns(2, ["položka", "cena"]);
+    expect(proposeBlockRoles({ manifest: cells })).toEqual([]);
+  });
+
+  test("a paragraph that holds only a picture is read, a bulleted one is a bullet", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPředmět",
+      numbered("1.", "Text:", 1),
+      numbered("•", "první odrážka", 2),
+      { text: "" },
+    ]);
+    const picture = manifest.blocks.at(-1);
+    if (picture !== undefined) {
+      picture.inlineObjects = 1;
+    }
+    expect(
+      proposeBlockRoles({ manifest }).map(({ blockId, role }) => [
+        blockId,
+        role,
+      ]),
+    ).toEqual([
+      ["p0", "title"],
+      ["p1", "articleHeading"],
+      ["p2", "clause1"],
+      ["p3", "bullet"],
+      ["p4", "continuation"],
+    ]);
+  });
+
+  test("the cells of a table of parties or of signatures are party and signature lines", () => {
+    const contract = manifestOf([
+      "SMLOUVA O DÍLO",
+      "Článek I.\nPředmět",
+      numbered("1.", "Text.", 1),
+    ]);
+    const parties = inColumns(2, [
+      "Horák Stavby s.r.o., se sídlem Dlouhá 1, Praha",
+      "Tiskárna Vltavín a.s., se sídlem Krátká 2, Brno",
+    ]);
+    const signatures = inColumns(2, ["V Praze dne ……………", "Za objednatele"]);
+    const rename = (
+      { blocks }: DocxBlockManifest,
+      prefix: string,
+    ): DocxBlock[] =>
+      blocks.map((block) => ({
+        ...block,
+        id: `${prefix}${block.id}`,
+        ...(block.cells === undefined
+          ? {}
+          : {
+              cells: block.cells.map((cell) => ({
+                ...cell,
+                blockIds: cell.blockIds.map((id) => `${prefix}${id}`),
+              })),
+            }),
+      }));
+    const [title, ...provisions] = contract.blocks;
+    const blocks = [
+      ...(title === undefined ? [] : [title]),
+      ...rename(parties, "a"),
+      ...provisions,
+      ...rename(signatures, "z"),
+    ];
+    expect(
+      proposeBlockRoles({ manifest: { blocks } }).map(({ blockId, role }) => [
+        blockId,
+        role,
+      ]),
+    ).toEqual([
+      ["p0", "title"],
+      ["ap0", "party"],
+      ["ap1", "party"],
+      ["p1", "articleHeading"],
+      ["p2", "clause1"],
+      ["zp0", "signature"],
+      ["zp1", "signature"],
+    ]);
   });
 });

@@ -6,6 +6,8 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 /** One main-story block. Offsets used across this directory are UTF-16 code
  *  units into `text`, the unit the plan's reference spans are written in. */
 export type DocxBlock = {
@@ -27,6 +29,9 @@ export type DocxBlock = {
   sectionIndex: number;
   /** Short hash of text and label; a plan pins a block with it. */
   hash: string;
+  /** Pictures, drawings and embedded objects anchored in the block; a block
+   *  that holds one is not empty even without text. */
+  inlineObjects?: number;
   cells?: { row: number; col: number; blockIds: string[] }[];
 };
 
@@ -47,21 +52,83 @@ export type TemplateNumberingLevel = {
   lvlText: string;
 };
 
+export type TemplateListLevel = TemplateNumberingLevel & {
+  start: number;
+  /** The paragraph style the level names as its own. */
+  pStyle: string | null;
+};
+
+export type TemplateStyle = {
+  styleId: string;
+  name: string | null;
+  type: "paragraph" | "character" | "numbering" | "table";
+  basedOn: string | null;
+  /** The list the style binds its paragraphs to, inheritance resolved. */
+  numPr: { numId: number; ilvl: number } | null;
+  outlineLvl: number | null;
+  isDefault: boolean;
+};
+
+export type TemplateField = {
+  /** Package path of the part holding the field. */
+  part: string;
+  /** The field name in upper case: `TOC`, `REF`, `FILLIN`, `DATE`. */
+  kind: string;
+  /** Main story only: the top-level block the field starts in. */
+  blockId?: string;
+  /** Main story only: the top-level block the field ends in. A plan keeps
+   *  every block from `blockId` to this one, or none of them. */
+  endBlockId?: string;
+};
+
+/** What the engine reads off a template: its blocks in the manifest's flat
+ *  shape, and the styles, lists and fields a profile is inferred from. */
+export type TemplateInspection = {
+  sha256: string;
+  blocks: DocxBlock[];
+  styles: TemplateStyle[];
+  numbering: {
+    abstractNums: { abstractNumId: number; levels: TemplateListLevel[] }[];
+    nums: { numId: number; abstractNumId: number }[];
+  };
+  fields: TemplateField[];
+};
+
+/** The list a placed paragraph joins. A number names a list of the
+ *  template. Items that share a `group` are counted in one instance of that
+ *  list, which the first of them starts; `restartFrom` is the number the
+ *  instance begins the item's level with. */
+export type TemplatePlanNumbering = {
+  numId: number;
+  ilvl: number;
+  restartFrom?: number;
+  group?: string;
+};
+
+type TemplatePlanMerge = "lineBreak" | "space" | "none";
+
+export type TemplatePlanNestedParagraph = {
+  blockId: string;
+  styleId?: string;
+  numbering?: TemplatePlanNumbering | null;
+  stripLabel?: string;
+};
+
 export type TemplatePlanSourceItem = {
   kind: "source";
   blockId: string;
   hash: string;
   styleId?: string;
   /** `null` takes the paragraph out of any list. */
-  numbering?: {
-    numId: number | "new";
-    ilvl: number;
-    restartFrom?: number;
-  } | null;
+  numbering?: TemplatePlanNumbering | null;
   /** Literal manual label at the start of the block's text, removed. */
   stripLabel?: string;
-  /** Joins the next source block into this paragraph (split headings). */
-  mergeNext?: "lineBreak" | "space";
+  /** Joins the next plan item, a bare source paragraph, into this one. */
+  mergeNext?: TemplatePlanMerge;
+  /** Table only: the paragraph style of its cells. */
+  cellStyleId?: string;
+  /** Table only: placement of single paragraphs inside it. */
+  nested?: TemplatePlanNestedParagraph[];
 };
 
 type TemplatePlanItem =
@@ -72,7 +139,7 @@ type TemplatePlanItem =
 type TemplatePlanOmitReason =
   "empty" | "sourceToc" | "pageArtifact" | "duplicateLabel";
 
-type TemplatePlanReference = {
+export type TemplatePlanReference = {
   blockId: string;
   start: number;
   end: number;
@@ -82,29 +149,175 @@ type TemplatePlanReference = {
   expectedText: string;
 };
 
+export type TemplatePlanHighlight = {
+  blockId: string;
+  start: number;
+  end: number;
+  color: string;
+};
+
+export type TemplatePlanNumberingPatch = {
+  abstractNumId: number;
+  ilvl: number;
+  numFmt?: string;
+  lvlText?: string;
+  /** What follows the label. */
+  suff?: "tab" | "space" | "nothing";
+};
+
 export type TemplatePlan = {
   version: 1;
   sourceSha256: string;
   templateSha256: string;
   body: TemplatePlanItem[];
   omit: { blockId: string; reason: TemplatePlanOmitReason }[];
-  numberingPatches?: {
-    abstractNumId: number;
-    ilvl: number;
-    numFmt?: string;
-    lvlText?: string;
-    start?: number;
-    suff?: "tab" | "space" | "nothing";
-  }[];
+  numberingPatches?: TemplatePlanNumberingPatch[];
   references?: TemplatePlanReference[];
-  highlights?: {
-    blockId: string;
-    start: number;
-    end: number;
-    color: string;
-    note?: string;
-  }[];
+  highlights?: TemplatePlanHighlight[];
   fields?: { freezeKinds?: string[]; updateOnOpen?: boolean };
+};
+
+/** The part of the engine's report the plan is repaired and the formatting
+ *  note is written from. */
+export type TemplatePlanReport = {
+  ok: boolean;
+  blocks: {
+    blockId: string;
+    disposition: "placed" | "merged" | "slot" | "nested" | "omitted";
+    /** The label the source showed: automatic, else the stripped one. */
+    sourceLabel: string | null;
+    /** The automatic label the output paragraph renders. */
+    outputLabel: string | null;
+  }[];
+  references: {
+    results: {
+      blockId: string;
+      targetBlockId: string;
+      expectedText: string;
+      /** What the target's rendered label gives for the field; null when
+       *  it is not derived. */
+      predictedText: string | null;
+    }[];
+  };
+  footnotes: { source: number; output: number };
+  endnotes: { source: number; output: number };
+  leftovers: {
+    fields: { part: string; kind: string; count: number }[];
+    frozenFields: { part: string; kind: string; count: number }[];
+    filler: { part: string; count: number }[];
+  };
+  dropped: {
+    comments: number;
+    sourceFields: { kind: string; count: number }[];
+    internalHyperlinks: number;
+    sectionBreaks: number;
+  };
+};
+
+/** Why the engine refused; the codes a plan can be repaired after. Any
+ *  other refusal is `other`. */
+export type TemplateEngineRefusal =
+  | "strip-label-mismatch"
+  | "merge-invalid"
+  | "reference-span-invalid"
+  | "reference-target-unplaced"
+  | "highlight-span-invalid"
+  | "tracked-changes"
+  | "unsupported-content"
+  | "other";
+
+export class TemplateEngineError extends TaggedError("TemplateEngineError")<{
+  message: string;
+  refusal: TemplateEngineRefusal;
+  /** The source block the refusal names. */
+  blockId?: string;
+}> {
+  static {
+    declareFingerprintFields(this, ["refusal"]);
+  }
+}
+
+type TemplateEngineApplyArgs = {
+  source: Uint8Array;
+  template: Uint8Array;
+  plan: TemplatePlan;
+  /** Template placeholder strings the report counts in the output. */
+  fillerStrings: readonly string[];
+};
+
+/** Page geometry of one document as the layout engine paginates it. */
+type TemplateLayoutSignals = { pages: number };
+
+/** The DOCX engine behind this directory. Injected, so the rules here do
+ *  not depend on the package release that carries it. */
+export type TemplatePlanEngine = {
+  analyze: (
+    docx: Uint8Array,
+  ) => Promise<Result<DocxBlockManifest, TemplateEngineError>>;
+  inspect: (
+    docx: Uint8Array,
+  ) => Promise<Result<TemplateInspection, TemplateEngineError>>;
+  apply: (
+    args: TemplateEngineApplyArgs,
+  ) => Promise<
+    Result<
+      { docx: Uint8Array; report: TemplatePlanReport },
+      TemplateEngineError
+    >
+  >;
+  /** The highlight colours the document's own text carries, so a mark the
+   *  plan adds can be told from a blank the author highlighted. */
+  highlightColors: (
+    docx: Uint8Array,
+  ) => Promise<Result<string[], TemplateEngineError>>;
+  /** Absent where no layout backend is installed. */
+  layout?: (
+    docx: Uint8Array,
+  ) => Promise<Result<TemplateLayoutSignals, TemplateEngineError>>;
+};
+
+const MANUAL_LABEL_MAX = 40;
+const MANUAL_LABEL_WORDS_MAX = 3;
+const MANUAL_LABEL_WORD = /^(?:\p{L}[\p{L}\p{M}]*\.?|§{1,2}|№|#)$/u;
+const MANUAL_LABEL_DESIGNATOR =
+  /^[([]?(?<core>\d+(?:[.\-\u2013]\d+)*[a-z]?|\p{L}+)[)\]]?[.:)]*$/u;
+const MANUAL_LABEL_BULLET = /^[-\u2013\u2014\u2022\u00B7\u25AA\u25E6*]$/u;
+const MANUAL_LABEL_ROMAN =
+  /^(?=.)M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})$/iu;
+const MANUAL_LABEL_END = /^[ \t\u00A0\n]$/u;
+
+/**
+ * Whether the engine will strip `label` from the start of `text`: up to
+ * three words and one designator (a number, a roman numeral or a letter with
+ * its punctuation) or a single bullet, ending where a word would. The engine
+ * refuses any other strip, so a label that fails here stays in the text.
+ */
+export const isStrippableLabel = (label: string, text: string): boolean => {
+  if (label === "" || label.length > MANUAL_LABEL_MAX) {
+    return false;
+  }
+  const lead = /^[ \t\u00A0]*/u.exec(text)?.[0].length ?? 0;
+  const end = lead + label.length;
+  if (
+    !text.startsWith(label, lead) ||
+    !(end === text.length || MANUAL_LABEL_END.test(text.charAt(end)))
+  ) {
+    return false;
+  }
+  if (MANUAL_LABEL_BULLET.test(label)) {
+    return true;
+  }
+  const tokens = label.split(/[ \u00A0]/u);
+  const core = MANUAL_LABEL_DESIGNATOR.exec(tokens.at(-1) ?? "")?.groups?.[
+    "core"
+  ];
+  const words = tokens.slice(0, -1);
+  return (
+    core !== undefined &&
+    words.length <= MANUAL_LABEL_WORDS_MAX &&
+    words.every((word) => MANUAL_LABEL_WORD.test(word)) &&
+    (/^\d/u.test(core) || core.length === 1 || MANUAL_LABEL_ROMAN.test(core))
+  );
 };
 
 const blockNumberingSchema = v.strictObject({
@@ -125,6 +338,9 @@ const blockSchema = v.strictObject({
   outlineLevel: v.nullable(v.pipe(v.number(), v.integer())),
   sectionIndex: v.pipe(v.number(), v.integer(), v.minValue(0)),
   hash: v.string(),
+  inlineObjects: v.exactOptional(
+    v.pipe(v.number(), v.integer(), v.minValue(0)),
+  ),
   cells: v.exactOptional(
     v.array(
       v.strictObject({
