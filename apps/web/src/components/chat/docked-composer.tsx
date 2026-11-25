@@ -1,19 +1,16 @@
 /**
- * The docked composer's geometry and its box, split from the rich chat host so
- * a surface can inherit the exact stack without pulling the editor bundle in
- * with it — the same reason `composer-geometry.ts` sits outside the host.
+ * The docked composer's geometry and its pending bar, split from the rich chat
+ * host so a surface can inherit the exact stack without pulling the editor
+ * bundle in with it — the same reason `composer-geometry.ts` sits outside the
+ * host. The bar itself is a `ComposerFrame` on the document surface.
  */
 
-import type { ComponentProps, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
-import {
-  COMPOSER_BOX_CLASS,
-  COMPOSER_COMPACT_ROW_CLASS,
-  COMPOSER_COMPACT_TEXT_CELL_CLASS,
-  COMPOSER_TEXT_CLASS,
-} from "@stll/ui/composer";
+import { COMPOSER_TEXT_CLASS } from "@stll/ui/composer";
+import { ComposerFrame } from "@stll/ui/composer-frame";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
 import { publishDocumentPanelInset } from "@stll/ui/panel-inset";
 import { TruncatedText } from "@stll/ui/truncated-text";
@@ -25,7 +22,6 @@ import {
   DOCKED_COMPOSER_WIDTH_CLASS,
 } from "@/components/ai-suggestions/composer-geometry";
 import {
-  ComposerControlSlot,
   ComposerPlusFace,
   ComposerSendFace,
 } from "@/components/chat/composer-row.pending";
@@ -38,8 +34,8 @@ import {
 /**
  * Styled placeholder label rendered in the prompt bar when the editor
  * is empty. Shared between the live `PromptBar` (via `emptyPlaceholder`)
- * and the loading `PromptBarPlaceholder` shell so both surfaces are
- * pixel-identical and can never drift.
+ * and the loading `PromptBarPending` so both surfaces are pixel-identical
+ * and can never drift.
  */
 export const PromptBarPlaceholderContent = ({
   children,
@@ -57,55 +53,6 @@ export const PromptBarPlaceholderContent = ({
   </TruncatedText>
 );
 
-type PromptBarShellProps = {
-  children: ReactNode;
-} & Omit<ComponentProps<"div">, "children">;
-
-/**
- * Background for chrome floating over the document page (prompt bar,
- * suggestion stepper, preset chips). In light mode the rendered page
- * reads as white paper in every accent palette, while `--popover`
- * follows the palette (Flexoki `#fffcf0`, Nord `#eceff4`) — solid but
- * visibly hue-tinted against the document. Anchor these surfaces to
- * the document instead: white in light; in dark the page follows the
- * theme, so the popover token stays correct. (`--doc-canvas` itself
- * is scoped to `.folio-root` and does not reach these elements.)
- */
-export const DOC_FLOAT_SURFACE_CLASS =
-  "[--doc-float-surface:var(--color-white)] dark:[--doc-float-surface:var(--popover)] bg-(--doc-float-surface)";
-
-/**
- * The bar box itself — the shared composer box (same radius, border, focus
- * ring and compact row stature as the main chat bar), plus the shadow and
- * doc-anchored surface a bar floating over a document needs — with no
- * positioning or sizing of its own. `DockedComposer` owns where the bar sits
- * and how wide it is; this shell just paints the box and fills the width it
- * is given (`w-full`). Both the live `PromptBar` and the loading
- * `PromptBarPlaceholder` render through it so they can never drift apart.
- *
- * The surface is solid on purpose: the separate pane veil softens document
- * content around the stack while the controls themselves remain crisp.
- */
-export const PromptBarShell = ({
-  children,
-  className,
-  ...rest
-}: PromptBarShellProps) => (
-  <div
-    {...rest}
-    className={cn(
-      COMPOSER_BOX_CLASS,
-      "group/bar relative flex w-full",
-      COMPOSER_COMPACT_ROW_CLASS,
-      "shadow-floating-ring",
-      DOC_FLOAT_SURFACE_CLASS,
-      className,
-    )}
-  >
-    {children}
-  </div>
-);
-
 /**
  * Complete prompt row rendered while the live editor hydrates. Known controls
  * keep their place in their unavailable faces, drawn from the chat bar's own
@@ -113,22 +60,19 @@ export const PromptBarShell = ({
  * uses too; only data-owned content belongs in a skeleton.
  */
 export const PromptBarPending = ({ children }: { children: ReactNode }) => (
-  <PromptBarShell aria-hidden>
-    <ComposerControlSlot>
-      <ComposerPlusFace />
-    </ComposerControlSlot>
-    <div
-      className={cn(
-        COMPOSER_COMPACT_TEXT_CELL_CLASS,
-        "flex flex-1 items-center px-1.5",
-      )}
-    >
+  <ComposerFrame
+    aria-hidden
+    empty
+    leading={<ComposerPlusFace />}
+    placeholder={
       <PromptBarPlaceholderContent>{children}</PromptBarPlaceholderContent>
-    </div>
-    <ComposerControlSlot>
-      <ComposerSendFace />
-    </ComposerControlSlot>
-  </PromptBarShell>
+    }
+    ring="none"
+    stature="compact"
+    surface="document"
+    text={null}
+    trailing={<ComposerSendFace />}
+  />
 );
 
 /**
@@ -157,7 +101,16 @@ export const DockedComposerPending = ({
         />
       ) : (
         <DockedComposer
-          bar={<PromptBarShell aria-hidden>{null}</PromptBarShell>}
+          bar={
+            <ComposerFrame
+              aria-hidden
+              empty
+              ring="none"
+              stature="compact"
+              surface="document"
+              text={null}
+            />
+          }
         />
       )}
     </>
@@ -172,7 +125,7 @@ type DockedComposerProps = {
    * appears above the bar.
    */
   chips?: ReactNode;
-  /** The prompt bar itself (a `PromptBarShell`). */
+  /** The prompt bar itself (a `ComposerFrame` on the document surface). */
   bar: ReactNode;
   /**
    * Status row beneath the bar (matter picker, context meter, send-mode

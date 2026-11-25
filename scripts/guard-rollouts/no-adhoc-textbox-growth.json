@@ -1,0 +1,14 @@
+{
+  "id": "no-adhoc-textbox-growth",
+  "rules": ["no-adhoc-textbox-growth/no-adhoc-textbox-growth"],
+  "type": "full",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "apps",
+    "packages"
+  ]
+}

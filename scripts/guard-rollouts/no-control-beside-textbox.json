@@ -1,0 +1,14 @@
+{
+  "id": "no-control-beside-textbox",
+  "rules": ["no-control-beside-textbox/no-control-beside-textbox"],
+  "type": "full",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "apps",
+    "packages"
+  ]
+}

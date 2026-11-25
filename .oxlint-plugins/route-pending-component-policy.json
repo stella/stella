@@ -4,6 +4,7 @@
     "react",
     "@stll/ui/bidi-text",
     "@stll/ui/calendar-primitives",
+    "@stll/ui/composer-frame",
     "@stll/ui/composer-tokens",
     "@stll/ui/control-face",
     "@stll/ui/details-grid",

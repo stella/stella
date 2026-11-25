@@ -8,6 +8,7 @@
  */
 
 import { composerReferenceStates } from "../../src/routes/dev/-visual-metadata";
+import { findControlsOverText } from "../helpers/control-over-text";
 import {
   expect,
   stableBoundingBox,
@@ -61,8 +62,60 @@ for (const state of composerReferenceStates) {
     await expect(chip).not.toHaveAttribute("title");
     await expect(chip).toHaveAccessibleName(label ?? "");
     await expect(chip).not.toHaveRole("button");
+    // However the draft lays the composer out, no control covers its text.
+    expect(await findControlsOverText(section)).toEqual([]);
   });
 }
+
+// A draft taller than the text region scrolls inside it, the text across the
+// box over the control row: the controls never sit beside or over a line.
+test("the long draft scrolls above the composer's control row", async ({
+  page,
+}) => {
+  await page.goto("/dev?visual=chat-composer-reference", {
+    waitUntil: "domcontentloaded",
+  });
+  const section = page.locator(
+    '[data-playground-section="chat-composer-reference:compact-draft"]',
+  );
+  const frame = section.locator('[data-slot="composer-frame"]');
+  await expect(frame).toHaveAttribute("data-composer-layout", "stacked");
+  await waitForStableGeometry(page, section);
+
+  const geometry = await frame.evaluate((box) => {
+    const rect = (selector: string) => {
+      const element = box.querySelector(selector);
+      if (element === null) {
+        throw new Error(`The composer has no ${selector}.`);
+      }
+      const { top, bottom, left, right } = element.getBoundingClientRect();
+      return { top, bottom, left, right };
+    };
+    const viewport = box.querySelector('[data-slot="scroll-area-viewport"]');
+    const { left, right } = box.getBoundingClientRect();
+    return {
+      box: { left, right },
+      region: rect('[data-slot="composer-text-region"]'),
+      trailing: rect('[data-slot="composer-trailing"]'),
+      leading: rect('[data-slot="composer-leading"]'),
+      overflows:
+        viewport !== null && viewport.scrollHeight > viewport.clientHeight,
+    };
+  });
+  expect(Math.round(geometry.region.bottom - geometry.region.top)).toBe(320);
+  expect(geometry.overflows).toBe(true);
+  expect(geometry.trailing.top).toBeGreaterThanOrEqual(
+    geometry.region.bottom - EPSILON_PX,
+  );
+  expect(geometry.leading.top).toBeGreaterThanOrEqual(
+    geometry.region.bottom - EPSILON_PX,
+  );
+  // The region spans the box, so its scrollbar sits at the box's edge.
+  expect(geometry.region.right - geometry.region.left).toBeGreaterThan(
+    geometry.box.right - geometry.box.left - 20,
+  );
+  expect(await findControlsOverText(section)).toEqual([]);
+});
 
 // A chip clamped to the line still leaves room for the space and caret after
 // it, so typing continues beside the chip rather than on a line of its own.

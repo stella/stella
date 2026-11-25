@@ -4,12 +4,7 @@ import { createContext, use } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import { cn } from "../lib/utils";
-import {
-  COMPOSER_BOX_CLASS,
-  COMPOSER_LARGE_ACTION_ROW_CLASS,
-  COMPOSER_LARGE_EDITOR_CLASS,
-  COMPOSER_LARGE_TEXT_WELL_CLASS,
-} from "./composer-tokens";
+import { ComposerFrame } from "./composer-frame";
 import { ScrollArea } from "./scroll-area";
 import { Skeleton } from "./skeleton";
 
@@ -238,27 +233,29 @@ const BOX_TRAILING_CONTROLS_CLASS = {
 
 /**
  * The hero's box before it mounts (the chat composer, the law entry box),
- * from the composer tokens both are built on: the bordered box, the
- * three-line text well, the action row with its round ends, and the status
- * row's line beneath.
+ * drawn by the frame both render through: the bordered box, the three-line
+ * text, the action row with its round ends, and the status row's line
+ * beneath.
  */
 export const LandingBoxPending = ({ box }: { box: LandingBox }) => (
   <div aria-hidden="true" className="flex w-full flex-col">
-    <div className={COMPOSER_BOX_CLASS}>
-      <div className={COMPOSER_LARGE_TEXT_WELL_CLASS}>
-        <div className={cn(COMPOSER_LARGE_EDITOR_CLASS, "py-0.5")}>
+    <ComposerFrame
+      leading={<Skeleton className="size-7 rounded-full" />}
+      ring="none"
+      stature="large"
+      text={
+        <div className="py-0.5">
           <Skeleton className="h-4 w-1/2" />
         </div>
-      </div>
-      <div className={COMPOSER_LARGE_ACTION_ROW_CLASS}>
-        <Skeleton className="me-auto size-7 rounded-full" />
+      }
+      trailing={
         <span
           className={cn("flex items-center", BOX_TRAILING_CONTROLS_CLASS[box])}
         >
           <Skeleton className="size-7 rounded-full" />
         </span>
-      </div>
-    </div>
+      }
+    />
     <div className="mt-1.5 flex h-6 items-center justify-between gap-2 px-1">
       <Skeleton className="h-4 w-32" />
       <Skeleton className="h-4 w-24" />
