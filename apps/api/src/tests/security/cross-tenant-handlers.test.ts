@@ -86,6 +86,7 @@ import { env } from "@/api/env";
 import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
 import { createLookupResearchAnswers } from "@/api/handlers/case-law/research/answers-lookup";
+import fileChatThreadBrowserDownload from "@/api/handlers/chat/browser-downloads/chat-thread";
 import createBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/create";
 import deleteBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/delete";
 import listBrowserSiteGrants from "@/api/handlers/chat/browser-site-grants/list";
@@ -783,6 +784,13 @@ const chatSendRequest = (threadId: SafeId<"chatThread">, messageId: string) => {
     pinServerValidatedWorkspaceId: () => false,
   };
 };
+
+/** A downloaded file's form whose bytes are not a PDF's, so nothing is stored. */
+const browserDownloadProbe = () => ({
+  downloadedAt: "2026-11-25T09:30:00.000Z",
+  file: new File([new TextEncoder().encode("<html>probe</html>")], "probe.pdf"),
+  sourceUrl: "https://fixture-library.test/doc/1/file",
+});
 
 /** The owner's view of a chat thread, read past RLS after a handler ran. */
 const readChatThreadRow = async (threadId: SafeId<"chatThread">) =>
@@ -2977,6 +2985,24 @@ const isolationCases: IsolationCase[] = [
     },
     expectPositive: (result) =>
       expect(result).toEqual({ pinState: "unpinned" }),
+  },
+  {
+    // The chat row names where a download is filed: another firm's chat is
+    // never found, so nothing is read from the file. The owner's own chat
+    // is found, and its file then reaches the PDF check.
+    name: "chat thread browser download",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(fileChatThreadBrowserDownload, workspaceA, {
+        body: browserDownloadProbe(),
+        params: { threadId: chatThreadB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(fileChatThreadBrowserDownload, sameUserWorkspaceB, {
+        body: browserDownloadProbe(),
+        params: { threadId: chatThreadB },
+      }),
+    expectDenied: (result) => expect(getStatusCode(result)).toBe(404),
+    expectPositive: (result) => expect(getStatusCode(result)).toBe(422),
   },
   {
     // An upsert: a thread id the caller cannot see must neither be updated

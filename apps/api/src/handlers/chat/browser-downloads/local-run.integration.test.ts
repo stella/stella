@@ -133,11 +133,17 @@ const post = async (
     bytes = pdf,
     name = "Decision 1.pdf",
     pageUrl = ORIGIN.pageUrl,
-  }: { bytes?: Uint8Array; name?: string; pageUrl?: string | null } = {},
+    sourceUrl = ORIGIN.sourceUrl,
+  }: {
+    bytes?: Uint8Array;
+    name?: string;
+    pageUrl?: string | null;
+    sourceUrl?: string;
+  } = {},
 ) => {
   const body = new FormData();
   body.set("file", new File([new Uint8Array(bytes)], name));
-  body.set("sourceUrl", ORIGIN.sourceUrl);
+  body.set("sourceUrl", sourceUrl);
   if (pageUrl !== null) {
     body.set("pageUrl", pageUrl);
   }
@@ -302,6 +308,37 @@ describe("a run filing a download its chat's tab made", () => {
     expect(named).toMatchObject({
       entityId: made?.type === "document" ? made.entityId : "",
     });
+  });
+
+  test("a signed address is kept without its credentials, query or fragment", async () => {
+    const runId = await insertRun(ids.chatThreadWorkspaceA1);
+    const bytes = await largeScannedPdf({ minBytes: 2048, text: "Signed 3" });
+
+    const filed = await filedOf(
+      await post(runId, tokenFor(runId, [ids.wsA1]), {
+        bytes,
+        pageUrl: "https://fixture-library.test/doc/3?session=s1#top",
+        sourceUrl:
+          "https://member:secret@files.fixture-library.test/doc/3.pdf?X-Signature=abc",
+      }),
+    );
+
+    if (filed.type !== "document") {
+      throw new Error("Expected a document");
+    }
+    const versions = await testDb
+      .select({ source: entityVersions.source })
+      .from(entityVersions)
+      .where(eq(entityVersions.entityId, toSafeId<"entity">(filed.entityId)));
+    expect(versions).toMatchObject([
+      {
+        source: {
+          kind: "browser-download",
+          pageUrl: "https://fixture-library.test/doc/3",
+          sourceUrl: "https://files.fixture-library.test/doc/3.pdf",
+        },
+      },
+    ]);
   });
 
   test("a chat in no matter keeps the file with the chat", async () => {

@@ -5,8 +5,12 @@ import {
   browserDocumentAddress,
   type BrowserDownload,
 } from "@stll/api-contract/browser-control";
+import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
 
-import type { FileBrowserDownload } from "../browser-download-filing";
+import {
+  type FileBrowserDownload,
+  keepLocalInPlan,
+} from "../browser-download-filing";
 import type { BrowserBridgeDownload } from "./bridge";
 import {
   type BrowserDownloadOutcome,
@@ -51,6 +55,9 @@ const MAX_HELD_DOWNLOADS = 16;
 /** Started downloads one chat keeps track of; older ones go first. */
 const MAX_STARTED_DOWNLOADS = 16;
 
+/** Plan-started deliveries remembered until they settle; older ones go first. */
+const MAX_PLAN_DELIVERIES = 64;
+
 /** Outcomes each run remembers by address; older ones go first. */
 const MAX_KNOWN_ADDRESSES = 64;
 
@@ -62,6 +69,8 @@ type InboxRun = {
   runId: string;
   threadId: string;
   workspaceDir: string;
+  /** In Plan, the run files nothing: neither its downloads nor later ones of the same steps. */
+  approvals?: DesktopRunnerApprovalMode | undefined;
   fileDownload?: FileBrowserDownload | undefined;
 };
 
@@ -76,6 +85,11 @@ type InboxRun = {
 type HeldDownload = {
   shownDocument: string | null;
   provenance: DownloadProvenance;
+  /**
+   * A Plan run's step started it: it is saved but never filed, whichever
+   * run takes it.
+   */
+  keepLocal: boolean;
 } & (
   | {
       type: "saving";
@@ -92,13 +106,15 @@ type SavingDownload = Extract<HeldDownload, { type: "saving" }>;
 /** A held download whose save into `runId`'s folder runs as `saving`. */
 const savingEntry = (
   {
+    keepLocal,
     provenance,
     shownDocument,
-  }: Pick<HeldDownload, "provenance" | "shownDocument">,
+  }: Pick<HeldDownload, "keepLocal" | "provenance" | "shownDocument">,
   runId: string,
   saving: Promise<BrowserDownloadOutcome>,
 ): SavingDownload => {
   const entry: SavingDownload = {
+    keepLocal,
     outcome: saving,
     provenance,
     runId,
@@ -233,24 +249,25 @@ const emptyChat = (): ChatDownloads => ({ held: [], started: new Map() });
 const holdSettled = (
   report: Extract<BrowserBridgeDownload, { type: "settled" }>,
   run: InboxRun | null,
-  provenance: DownloadProvenance,
+  { keepLocal, provenance }: Pick<HeldDownload, "keepLocal" | "provenance">,
   save: (
     download: BrowserDownload,
     run: InboxRun,
-    provenance: DownloadProvenance,
+    held: Pick<HeldDownload, "keepLocal" | "provenance">,
   ) => Promise<BrowserDownloadOutcome>,
 ): HeldDownload =>
   run === null
     ? {
         download: report.download,
+        keepLocal,
         provenance,
         shownDocument: report.shownDocument,
         type: "waiting",
       }
     : savingEntry(
-        { provenance, shownDocument: report.shownDocument },
+        { keepLocal, provenance, shownDocument: report.shownDocument },
         run.runId,
-        save(report.download, run, provenance),
+        save(report.download, run, { keepLocal, provenance }),
       );
 
 /**
@@ -346,12 +363,14 @@ const showsAny = (
 const saveAndFile = async ({
   download,
   home,
+  keepLocal,
   provenance,
   receiveDownload,
   run,
 }: {
   download: BrowserDownload;
   home: string;
+  keepLocal: boolean;
   provenance: DownloadProvenance;
   receiveDownload: typeof receiveBrowserDownload;
   run: InboxRun;
@@ -363,15 +382,33 @@ const saveAndFile = async ({
   if (outcome.status !== "saved" || run.fileDownload === undefined) {
     return outcome;
   }
-  const filed = await run.fileDownload({
+  // The policy of the run whose step started it, not of the run that saves it.
+  const file = keepLocal ? keepLocalInPlan : run.fileDownload;
+  const filed = await file({
     origin: {
       downloadedAt: outcome.downloadedAt,
       pageUrl: outcome.pageUrl,
       sourceUrl: outcome.sourceUrl,
     },
     path: outcome.path,
+    sha256: outcome.sha256,
   });
   return { ...outcome, filed };
+};
+
+/**
+ * The deliveries a Plan run's step started, each until it settles: not
+ * tied to the run, so its end does not drop them.
+ */
+const createPlanDeliveries = () => {
+  let started = new Set<string>();
+  return {
+    start: (deliveryId: string): void => {
+      started = new Set([...started, deliveryId].slice(-MAX_PLAN_DELIVERIES));
+    },
+    /** Whether a Plan run's step started it; it is forgotten either way. */
+    settle: (deliveryId: string): boolean => started.delete(deliveryId),
+  };
 };
 
 /** The newest `limit` entries of a map, in insertion order. */
@@ -390,6 +427,7 @@ export const createDownloadInbox = ({
   const known = new Map<string, Map<string, BrowserDownloadOutcome>>();
   /** Called whenever a chat's report arrives. */
   const listeners = new Set<() => void>();
+  const planDeliveries = createPlanDeliveries();
   let announced = 0;
 
   const chatOf = (threadId: string): ChatDownloads => {
@@ -405,8 +443,8 @@ export const createDownloadInbox = ({
   const receive = async (
     download: BrowserDownload,
     run: InboxRun,
-    provenance: DownloadProvenance,
-  ) => await saveAndFile({ download, home, provenance, receiveDownload, run });
+    held: Pick<HeldDownload, "keepLocal" | "provenance">,
+  ) => await saveAndFile({ ...held, download, home, receiveDownload, run });
 
   const nowIso = () =>
     Temporal.Instant.fromEpochMilliseconds(clock.now()).toString();
@@ -475,6 +513,9 @@ export const createDownloadInbox = ({
       switch (report.type) {
         case "started": {
           announced += 1;
+          if (runOf(report.controllerId)?.approvals === "plan") {
+            planDeliveries.start(report.deliveryId);
+          }
           chat.started.set(report.deliveryId, {
             at: clock.now(),
             pageUrl: reportedPage(report, pageOf),
@@ -501,8 +542,12 @@ export const createDownloadInbox = ({
             report,
             runOf(report.controllerId),
             {
-              at: nowIso(),
-              pageUrl: sameOriginPage(page, report.download.sourceUrl),
+              // Kept past the end of its run: `forgetRun` leaves it.
+              keepLocal: planDeliveries.settle(report.deliveryId),
+              provenance: {
+                at: nowIso(),
+                pageUrl: sameOriginPage(page, report.download.sourceUrl),
+              },
             },
             receive,
           );
@@ -551,11 +596,7 @@ export const createDownloadInbox = ({
       const saving = savingFor(chat, run.runId);
       const held = taken.map((entry) =>
         entry.type === "waiting"
-          ? savingEntry(
-              entry,
-              run.runId,
-              receive(entry.download, run, entry.provenance),
-            )
+          ? savingEntry(entry, run.runId, receive(entry.download, run, entry))
           : entry,
       );
       // The saves get what is left of this result's bound, and no more; one

@@ -11,6 +11,7 @@ import {
 import type { ReceivedDownload } from "./downloads";
 
 const PDF_ADDRESS = "https://fixture-library.test/decisions/42/file";
+const ANNEX_ADDRESS = "https://fixture-library.test/decisions/42/annex";
 const RUN = {
   runId: "run-1",
   threadId: "thread-1",
@@ -679,8 +680,79 @@ describe("filing a saved download with stella", () => {
           sourceUrl: PDF_ADDRESS,
         },
         path: "Downloads/Judgment 42.pdf",
+        sha256: "a".repeat(64),
       },
     ]);
+  });
+
+  test("a download a Plan run's step started is never filed, even when a later run saves it", async () => {
+    const filings: unknown[] = [];
+    const fileDownload = async (download: unknown) => {
+      filings.push(download);
+      return await Promise.resolve({
+        documentId: "doc-1",
+        duplicate: false,
+        matterId: "matter-1",
+        name: "Judgment 42.pdf",
+        status: "document" as const,
+      });
+    };
+    const planRun = { ...RUN, approvals: "plan" as const, fileDownload };
+    const autoRun = {
+      ...RUN,
+      approvals: "auto" as const,
+      fileDownload,
+      runId: "run-2",
+    };
+    const held: { run: typeof planRun | typeof autoRun } = { run: planRun };
+    const inbox = createDownloadInbox({
+      clock: manualClock().clock,
+      home: "/unused-home",
+      pageOf: () => null,
+      receive: async (download) =>
+        await Promise.resolve({
+          bytes: 10,
+          duplicate: false,
+          path: "Downloads/Judgment 42.pdf",
+          sha256: "a".repeat(64),
+          sourceUrl: download.sourceUrl,
+          status: "saved" as const,
+        }),
+      runOf: () => held.run,
+    });
+    inbox.arrive(started("d-plan"));
+    // The Plan run ends while Chrome is still saving; a later run is held
+    // when the download settles.
+    inbox.forgetRun(planRun.runId);
+    held.run = autoRun;
+    inbox.arrive({
+      ...settled("d-plan"),
+      download: { ...stopped(PDF_ADDRESS), suggestedName: "saved" },
+    });
+    inbox.arrive(started("d-auto"));
+    inbox.arrive({
+      ...settled("d-auto"),
+      download: { ...stopped(ANNEX_ADDRESS), suggestedName: "saved" },
+    });
+
+    const taken = await inbox.take(autoRun, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: inbox.mark(),
+    });
+
+    expect(taken.downloads).toMatchObject([
+      {
+        filed: {
+          message:
+            "In Plan mode stella files nothing into the matter. The file is in your working folder only.",
+          status: "not_filed",
+        },
+        sourceUrl: PDF_ADDRESS,
+      },
+      { filed: { status: "document" }, sourceUrl: ANNEX_ADDRESS },
+    ]);
+    expect(filings).toMatchObject([{ origin: { sourceUrl: ANNEX_ADDRESS } }]);
   });
 });
 

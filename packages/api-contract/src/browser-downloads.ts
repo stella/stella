@@ -20,10 +20,27 @@ export const BROWSER_DOWNLOAD_FILE_MAX_BYTES = Math.min(
 /** An address a download is known by, as stored. */
 export const BROWSER_DOWNLOAD_URL_MAX_CHARS = BROWSER_CONTROL_LIMITS.urlChars;
 
+/**
+ * An address as stella keeps it: a web address without its credentials,
+ * query or fragment (a signed download link carries its key there, and a
+ * matter's readers must not receive it), any other address only by its
+ * scheme (a `data:` address is the file itself).
+ */
+export const storedBrowserDownloadAddress = (address: string): string => {
+  const url = new URL(address);
+  return url.protocol === "https:" || url.protocol === "http:"
+    ? `${url.origin}${url.pathname}`
+    : url.protocol;
+};
+
 const addressSchema = v.pipe(
   v.string(),
   v.minLength(1),
   v.maxLength(BROWSER_DOWNLOAD_URL_MAX_CHARS),
+  // A scheme first: a client reads this field as an address, not free text.
+  v.regex(/^[a-z][a-z\d+.-]*:/iu, "Expected an address"),
+  v.check((address) => URL.canParse(address), "Expected an address"),
+  v.transform(storedBrowserDownloadAddress),
 );
 
 /**
@@ -67,26 +84,8 @@ export const BROWSER_DOWNLOAD_FORM_FIELD = {
 export const localRunBrowserDownloadPath = (runId: string) =>
   `${STELLA_API_VERSION_PREFIX}/chat/local-runs/${encodeURIComponent(runId)}/browser-downloads` as const;
 
-/**
- * Where a filed download is: a document of the chat's matter, `duplicate`
- * when the matter already held the same bytes and that document is named
- * instead of a new one; or a file kept with a chat in no matter.
- */
-export const browserDownloadFiledSchema = v.variant("type", [
-  v.strictObject({
-    type: v.literal("document"),
-    workspaceId: v.pipe(v.string(), v.uuid()),
-    entityId: v.pipe(v.string(), v.uuid()),
-    name: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
-    duplicate: v.boolean(),
-  }),
-  v.strictObject({
-    type: v.literal("chat_file"),
-    fileId: v.pipe(v.string(), v.uuid()),
-    name: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
-  }),
-]);
-
-export type BrowserDownloadFiled = v.InferOutput<
-  typeof browserDownloadFiledSchema
->;
+/** Where a filed download is; a browser result names it too, so it lives beside the results. */
+export {
+  type BrowserDownloadFiled,
+  browserDownloadFiledSchema,
+} from "./browser-control";

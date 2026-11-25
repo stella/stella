@@ -3,13 +3,17 @@ import { panic, Result } from "better-result";
 import {
   BROWSER_CONTROL_LIMITS,
   BROWSER_DOWNLOAD_STOP_REASON,
+  BROWSER_WEB_DOWNLOAD_STOP_REASON,
   browserDocumentAddress,
   type BrowserDownload,
   browserDownloadStagedPath,
   type BrowserDownloadStopReason,
+  type BrowserWebDownloadStopReason,
 } from "@stll/api-contract/browser-control";
+import { BROWSER_DOWNLOAD_FILE_MAX_BYTES } from "@stll/api-contract/browser-downloads";
 
 import { CONTROL_TRANSPORT, readControlHolder } from "./control-holder";
+import { readBrowserController } from "./controller";
 import {
   DESKTOP_LINK_STATE,
   desktopChatId,
@@ -34,9 +38,21 @@ import {
   readContainedTabs,
   type TabOwners,
 } from "./tab-containment";
+import {
+  announceWebDelivery,
+  captureWebDelivery,
+  sendToStellaTab,
+  stopWebDelivery,
+  type WebDelivery,
+  type WebDownloadSend,
+} from "./web-download-capture";
+import {
+  readWebDownloadTarget,
+  type WebDownloadTarget,
+} from "./web-download-target";
 
 type DownloadAction =
-  "allow" | "cancel" | "deliver" | "keep-and-flag" | "refuse";
+  "allow" | "cancel" | "capture" | "deliver" | "keep-and-flag" | "refuse";
 
 /** Why a desktop chat does not take a download its tab started. */
 type DesktopStopReason = Exclude<
@@ -48,16 +64,33 @@ type DesktopStopReason = Exclude<
 export type DesktopDownloadVerdict =
   { type: "deliver" } | { type: "stop"; reason: DesktopStopReason };
 
+/** Whether the web connection's chat takes a download its tab started. */
+type WebDownloadVerdict =
+  | { type: "capture" }
+  | {
+      type: "stop";
+      reason: Exclude<
+        BrowserWebDownloadStopReason,
+        | typeof BROWSER_WEB_DOWNLOAD_STOP_REASON.interrupted
+        | typeof BROWSER_WEB_DOWNLOAD_STOP_REASON.redirected
+      >;
+    };
+
 /**
- * Who takes a download from chat's tabs. Nobody under the web connection, or
- * while stella desktop is not connected: such a download is stopped, as
- * always. A desktop chat takes a PDF (`deliver`): Chrome saves it into the
- * staging folder and stella desktop checks the file and moves it into the
- * chat's folder. Anything else is stopped and the chat is told why.
+ * Who takes a download from chat's tabs. Nobody while stella desktop holds
+ * the browser but is not connected, or while the web connection has run
+ * no command: such a download is stopped, as always. A desktop chat takes
+ * a PDF (`deliver`): Chrome saves it into the staging folder and stella
+ * desktop checks the file and moves it into the chat's folder. The web
+ * connection's chat takes a PDF too (`capture`): Chrome's download is
+ * stopped and the extension fetches the file once more for the stella tab
+ * whose command ran last, which files it with its chat. Anything else is
+ * stopped and the chat is told why.
  */
 export type DownloadReceiver =
   | { type: "none" }
-  | { type: "desktop"; chatId: string; verdict: DesktopDownloadVerdict };
+  | { type: "desktop"; chatId: string; verdict: DesktopDownloadVerdict }
+  | { type: "web"; delivery: WebDelivery; verdict: WebDownloadVerdict };
 
 export const NO_DOWNLOAD_RECEIVER: DownloadReceiver = { type: "none" };
 
@@ -67,6 +100,8 @@ const containedAction = (receiver: DownloadReceiver): DownloadAction => {
       return "cancel";
     case "desktop":
       return receiver.verdict.type === "deliver" ? "deliver" : "refuse";
+    case "web":
+      return receiver.verdict.type === "capture" ? "capture" : "refuse";
     default:
       receiver satisfies never;
       return panic("Unhandled download receiver");
@@ -170,6 +205,45 @@ export const desktopDownloadVerdict = (
 };
 
 /**
+ * Whether the web connection's chat takes a download its tab started: a
+ * PDF by its type or name, no larger than what is filed, from an address
+ * the offscreen reader may fetch again (public HTTPS: never the page's own
+ * `blob:` or `data:` address), within the same running cap as a desktop
+ * chat's. The reader checks the bytes it fetched start as a PDF's.
+ */
+const webDownloadVerdict = (
+  download: DownloadFacts,
+  { fromPageSite, running }: { fromPageSite: boolean; running: number },
+): WebDownloadVerdict => {
+  if (!saysPdf(download)) {
+    return { reason: BROWSER_WEB_DOWNLOAD_STOP_REASON.notPdf, type: "stop" };
+  }
+  const address = download.finalUrl === "" ? download.url : download.finalUrl;
+  if (
+    address.length > BROWSER_CONTROL_LIMITS.urlChars ||
+    parseControllableUrl(address) === null
+  ) {
+    return {
+      reason: BROWSER_WEB_DOWNLOAD_STOP_REASON.notRefetchable,
+      type: "stop",
+    };
+  }
+  // Fetched again with the member's sign-in only on the page's own site: a
+  // page cannot have a file of another site the member is signed in to
+  // fetched and filed.
+  if (!fromPageSite) {
+    return { reason: BROWSER_WEB_DOWNLOAD_STOP_REASON.otherSite, type: "stop" };
+  }
+  if (download.totalBytes > BROWSER_DOWNLOAD_FILE_MAX_BYTES) {
+    return { reason: BROWSER_WEB_DOWNLOAD_STOP_REASON.tooLarge, type: "stop" };
+  }
+  if (running >= MAX_RUNNING_DELIVERIES) {
+    return { reason: BROWSER_WEB_DOWNLOAD_STOP_REASON.tooMany, type: "stop" };
+  }
+  return { type: "capture" };
+};
+
+/**
  * Tells stella desktop about a download a chat takes: when Chrome starts
  * saving it, and once it settles. Each delivery has one id throughout; a
  * download stopped before it started is reported settled only.
@@ -239,8 +313,15 @@ const deliveries = new Map<number, Delivery>();
  */
 const startingShownSaves = new Map<string, Delivery>();
 
+/**
+ * Downloads the web connection's chat takes, by download id, from their
+ * judgement until their hand-over ends: reserved in the step that counts
+ * the running ones, as a desktop chat's are.
+ */
+const webCaptures = new Set<number>();
+
 const runningDeliveries = (): number =>
-  deliveries.size + startingShownSaves.size;
+  deliveries.size + startingShownSaves.size + webCaptures.size;
 
 const sourceUrlOf = (download: DownloadFacts): string =>
   (download.finalUrl === "" ? download.url : download.finalUrl).slice(
@@ -314,14 +395,148 @@ const readTakingDesktopChat = async (): Promise<string | null> => {
   }
 };
 
+/**
+ * The page chat's controlled tab is on, as its document address, when the
+ * file came from that page's own site; null otherwise. Chrome does not say
+ * which tab started a download, so only a file from the same site is
+ * trusted to come from that page: one from a separate file host, another
+ * site's page in another of chat's tabs, or a `data:` address has none.
+ */
+const sameSitePage = async (sourceUrl: string): Promise<string | null> => {
+  const { controlledTabId } = await readContainedTabs();
+  if (controlledTabId === null) {
+    return null;
+  }
+  const tab = await chrome.tabs.get(controlledTabId).catch(() => null);
+  const page = tab?.url ?? "";
+  if (!URL.canParse(page) || !URL.canParse(sourceUrl)) {
+    return null;
+  }
+  const origin = new URL(page).origin;
+  const address = browserDocumentAddress(page);
+  return origin !== "null" &&
+    origin === new URL(sourceUrl).origin &&
+    address.length <= BROWSER_CONTROL_LIMITS.urlChars
+    ? address
+    : null;
+};
+
+/**
+ * The verdict for the web connection's chat, and the slot it takes when it
+ * captures, in one synchronous step, as a desktop chat's.
+ */
+const reserveWebCapture = (
+  download: DownloadFacts & { id: number },
+  fromPageSite: boolean,
+): WebDownloadVerdict => {
+  const verdict = webDownloadVerdict(download, {
+    fromPageSite,
+    running: runningDeliveries(),
+  });
+  if (verdict.type === "capture") {
+    webCaptures.add(download.id);
+  }
+  return verdict;
+};
+
+/**
+ * What held when Chrome reported a download: the web connection paired then
+ * (null when none), and the time, on the trace clock. The download goes to
+ * the command in force then, never to one admitted while it was traced.
+ */
+type DownloadReport = { pairing: string | null; reportedAt: number };
+
+/** The web connection's chat as a download's receiver; none before its first command. */
+const readWebReceiver = async (
+  download: DownloadFacts & { id: number },
+  { pairing, reportedAt }: DownloadReport,
+): Promise<DownloadReceiver> => {
+  const target: WebDownloadTarget | null =
+    pairing === null ? null : await readWebDownloadTarget(pairing, reportedAt);
+  if (target === null) {
+    return NO_DOWNLOAD_RECEIVER;
+  }
+  const sourceUrl = sourceUrlOf(download);
+  const pageUrl = await sameSitePage(sourceUrl).catch(() => null);
+  return {
+    delivery: {
+      deliveryId: crypto.randomUUID(),
+      pageUrl,
+      sourceUrl,
+      suggestedName: suggestedDownloadName(download),
+      target,
+    },
+    type: "web",
+    verdict: reserveWebCapture(download, pageUrl !== null),
+  };
+};
+
 /** Who takes a download traced to chat's tabs, judged now. */
 const readDownloadReceiver = async (
   download: DownloadFacts & { id: number },
+  report: DownloadReport,
 ): Promise<DownloadReceiver> => {
+  const holder = await readControlHolder();
+  if (holder.transport === CONTROL_TRANSPORT.web) {
+    return await readWebReceiver(download, report);
+  }
   const chatId = await readTakingDesktopChat();
   return chatId === null
     ? NO_DOWNLOAD_RECEIVER
     : { chatId, type: "desktop", verdict: reserveDelivery(download, chatId) };
+};
+
+/** Hands a captured download to the stella tab; the worker sets Chrome's own send. */
+let webDownloadSend: WebDownloadSend = sendToStellaTab;
+
+/** Where a captured download goes; a test passes its own. */
+export const setWebDownloadSend = (send: WebDownloadSend): void => {
+  webDownloadSend = send;
+};
+
+/**
+ * Announces a download the web connection's chat takes, then fetches and
+ * hands it on in the background; its slot is freed once that ends. A
+ * stella tab that is gone hears nothing more and frees the slot at once.
+ */
+const startWebCapture = async (
+  downloadId: number,
+  delivery: WebDelivery,
+): Promise<void> => {
+  const release = () => {
+    webCaptures.delete(downloadId);
+  };
+  const announced = await announceWebDelivery(delivery, webDownloadSend).catch(
+    () => false,
+  );
+  if (!announced) {
+    release();
+    return;
+  }
+  handOverInBackground(delivery)
+    .finally(release)
+    .catch(() => undefined);
+};
+
+/** Fetches and hands on an announced download; any failure ends it as interrupted. */
+const handOverInBackground = async (delivery: WebDelivery): Promise<void> => {
+  const handedOver = await Result.tryPromise(
+    async () =>
+      await captureWebDelivery(delivery, shownPdfReader, webDownloadSend),
+  );
+  if (Result.isError(handedOver)) {
+    await stopWebDelivery(
+      delivery,
+      BROWSER_WEB_DOWNLOAD_STOP_REASON.interrupted,
+      webDownloadSend,
+    ).catch(() => undefined);
+  }
+};
+
+/** Stops Chrome's own copy of a download the extension hands on itself; no notice. */
+const stopChromeCopy = async (downloadId: number): Promise<void> => {
+  stopped.add(downloadId);
+  await chrome.downloads.cancel(downloadId).catch(() => undefined);
 };
 
 /** Reports a delivery stopped before Chrome saved anything. */
@@ -354,6 +569,7 @@ const NO_READ: ShownPdfRead = {
 let shownPdfReader: ShownPdfReader = {
   read: async () => await Promise.resolve(NO_READ),
   release: async () => await Promise.resolve(),
+  slice: async () => await Promise.resolve(null),
 };
 
 /** Set once by the worker: the offscreen document's reader. */
@@ -684,13 +900,21 @@ const runJudgement = async (
   if (scope.contained.length === 0) {
     return;
   }
+  // The web connection paired when Chrome reported the download: one paired
+  // while it was traced never takes it.
+  const reportedAt = clock.now();
+  const pairing = await readBrowserController().then(
+    (controller) => controller?.controllerId ?? null,
+    () => null,
+  );
   const owner = await traceDownload(download, scope, clock);
   const receiver =
     owner === "contained"
-      ? await readDownloadReceiver(download)
+      ? await readDownloadReceiver(download, { pairing, reportedAt })
       : NO_DOWNLOAD_RECEIVER;
   const release = () => {
     dropDelivery(download.id);
+    webCaptures.delete(download.id);
   };
   const current = await chrome.downloads.search({ id: download.id }).then(
     ([item]) => item,
@@ -704,8 +928,9 @@ const runJudgement = async (
     current?.state ?? download.state,
     receiver,
   );
-  // Only a download that is delivered keeps the slot its verdict reserved.
-  if (action !== "deliver") {
+  // Only a download that is delivered or captured keeps the slot its
+  // verdict reserved.
+  if (action !== "deliver" && action !== "capture") {
     release();
   }
   switch (action) {
@@ -713,6 +938,15 @@ const runJudgement = async (
       return;
     case "keep-and-flag":
       await keepFinishedDownload(download.id);
+      return;
+    case "capture":
+      if (receiver.type === "web") {
+        await stopChromeCopy(download.id);
+        await startWebCapture(download.id, receiver.delivery);
+        return;
+      }
+      release();
+      await cancelDownload(download.id);
       return;
     case "deliver": {
       const delivery = deliveries.get(download.id);
@@ -733,6 +967,12 @@ const runJudgement = async (
           },
           receiver.verdict.reason,
         );
+      }
+      if (receiver.type === "web" && receiver.verdict.type === "stop") {
+        const { delivery, verdict } = receiver;
+        if (await announceWebDelivery(delivery, webDownloadSend)) {
+          await stopWebDelivery(delivery, verdict.reason, webDownloadSend);
+        }
       }
       await cancelDownload(download.id);
       return;

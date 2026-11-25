@@ -169,9 +169,15 @@ opened into a new tab) that goes straight to a blocked address stays blocked;
 open that address from a new tab instead.
 
 Downloads are blocked: attachment responses and responses Chrome would save
-instead of display are blocked in the network, and downloads a controlled page
-or any of its frames starts from script (`blob:` or `data:` URLs) are
-cancelled. Chrome does not say which tab started a download, so while a tab is
+instead of display are blocked in the network, unless they say they are a
+PDF, and downloads a controlled page or any of its frames starts from script
+(`blob:` or `data:` URLs) are cancelled. A PDF chat's tabs download goes to
+the chat, never to the user's disk: a stella desktop chat has Chrome save it
+into its staging folder, and under the web connection Chrome's download is
+cancelled, the offscreen document fetches the PDF's public HTTPS address once
+more (no redirect followed, the bytes checked to start as a PDF's), and the
+bytes go in pieces to the stella tab whose command ran last, which files them
+with its chat. A download nobody takes is cancelled as before. Chrome does not say which tab started a download, so while a tab is
 controlled every download is traced by origin to the frames open at that
 moment:
 

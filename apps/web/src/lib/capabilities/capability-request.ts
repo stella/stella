@@ -56,6 +56,7 @@ export type AppOnlyWriteId =
   | "chat.queue.hold.set"
   | "chat.queue.move"
   | "chat.queue.send-now"
+  | "chat.threads.browser-downloads.create"
   | "chat.threads.limit-reminder.cancel"
   | "chat.threads.limit-reminder.set"
   | "chat.threads.model.update"

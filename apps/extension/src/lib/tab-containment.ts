@@ -98,10 +98,12 @@ const PDF_RESPONSE_HEADERS: chrome.declarativeNetRequest.HeaderInfo[] = [
 ];
 
 /**
- * The responses that may become a download in chat's tabs. Under the web
- * connection none may. A desktop chat's tab may download a PDF: the
- * download check stops anything else, and stella desktop checks the saved
- * file's bytes before it moves it into the chat's folder.
+ * The responses that may become a download in chat's tabs: one that says
+ * it is a PDF, whoever holds the browser. The download check stops anything
+ * else. A desktop chat's PDF is saved, and stella desktop checks the saved
+ * file's bytes before it moves it into the chat's folder; under the web
+ * connection Chrome's download is stopped and the extension fetches the
+ * file once more for the chat page, which files it with the chat.
  */
 const downloadExemptions = (
   transport: ControlTransport,
@@ -111,7 +113,6 @@ const downloadExemptions = (
 > => {
   switch (transport) {
     case CONTROL_TRANSPORT.web:
-      return {};
     case CONTROL_TRANSPORT.desktop:
       return { excludedResponseHeaders: PDF_RESPONSE_HEADERS };
     default:

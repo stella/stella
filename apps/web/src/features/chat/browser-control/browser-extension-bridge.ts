@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-import { TaggedError } from "better-result";
+import { panic, TaggedError } from "better-result";
 
 import {
   BROWSER_CONTROL_ERROR_CODE,
@@ -28,6 +28,7 @@ import {
   observeBrowserResult,
   resetBrowserApproval,
 } from "./browser-approval-state";
+import { browserDownloadInbox } from "./browser-download-filing";
 import { latestBrowserExtensionAnnouncement } from "./browser-extension-announcement";
 import type { BrowserCommandRun } from "./browser-tool-execution";
 
@@ -224,6 +225,26 @@ const handleExtensionMessage = (data: unknown): void => {
   }
 
   const runtime = getBridgeRuntime();
+  switch (response.type) {
+    case "download-started":
+    case "download-chunk":
+    case "download-end":
+      // Only the paired connection's downloads, and only for a chat turn
+      // this tab ran a command for (`browser-download-inbox`).
+      if (
+        runtime.controllerId !== null &&
+        response.controllerId === runtime.controllerId
+      ) {
+        browserDownloadInbox.receive(response);
+      }
+      return;
+    case "pong":
+    case "command-result":
+      break;
+    default:
+      response satisfies never;
+      return panic("Unhandled browser extension response");
+  }
   if (response.type === "pong") {
     markAnnounced(runtime);
     runtime.extensionProtocolVersion = null;
