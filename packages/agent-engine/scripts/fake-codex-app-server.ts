@@ -1200,6 +1200,16 @@ export const FAKE_SCENARIOS = {
     ...startTurn(),
     completed(),
   ],
+  resume_active_writer: [
+    ...handshake(),
+    {
+      expect: "thread/resume",
+      error: {
+        code: -32_600,
+        message: `thread ${FAKE_RESUMED_THREAD_ID} already has an active writer`,
+      },
+    },
+  ],
   resume_ok: [
     ...handshake(),
     {

@@ -41,9 +41,11 @@ import {
 import type { AppServerClient, AppServerHandlers } from "./app-server-client";
 import {
   classifyTurnFailure,
+  isAuthFailure,
   isCapacityFailure,
   isPlanUsageLimit,
   mergeRateLimits,
+  readableCodexMessage,
 } from "./errors";
 import {
   codexItemHandling,
@@ -528,8 +530,17 @@ export class CodexTurnSession {
         if (parsed === null || parsed.turnId !== this.turnId) {
           return;
         }
+        // A refused credential does not heal by retrying: Codex would replay
+        // its reconnect schedule, then fail the same way.
+        if (parsed.willRetry && !isAuthFailure(parsed.error)) {
+          this.emit({
+            type: "retrying",
+            message: readableCodexMessage(parsed.error.message),
+          });
+          return;
+        }
         if (parsed.willRetry) {
-          this.emit({ type: "retrying", message: parsed.error.message });
+          this.failWith(parsed.error);
           return;
         }
         this.lastError = parsed.error;
