@@ -33,9 +33,8 @@ import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-ad
  * `MAX_DOCUMENTED_CHAT_READS` and the ceiling in
  * `skill-documented-reads.test.ts`.
  */
-export const EAGER_CHAT_READ_TOOLS = new Set<RegistryReadToolName>([
-  "list_matters",
-]);
+export const EAGER_CHAT_READ_TOOLS: ReadonlySet<RegistryReadToolName> =
+  new Set<RegistryReadToolName>(["list_matters"]);
 
 /** The map is total over the read-tool union (`satisfies Record<...>`), so its keys are exactly the read tool names. */
 const isRegistryReadToolName = (name: string): name is RegistryReadToolName =>

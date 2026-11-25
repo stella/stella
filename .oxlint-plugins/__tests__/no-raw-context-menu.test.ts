@@ -56,3 +56,15 @@ test("the owners may listen; any other file may not", async () => {
   expect(uiOwner).toEqual([]);
   expect(caller).toEqual([1]);
 });
+
+test("allows passive contextmenu dismiss listeners that cannot preventDefault", async () => {
+  expect(
+    await lintSingleRule(
+      RULE,
+      `declare const host: HTMLElement;
+const dismiss = () => undefined;
+host.addEventListener("contextmenu", dismiss, { capture: true, passive: true });`,
+      { sourcePath: "apps/web/src/components/row.tsx" },
+    ),
+  ).toEqual([]);
+});

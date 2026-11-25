@@ -180,14 +180,14 @@ export const stampKeyAdjustment = ({
   key: string;
   shiftKey: boolean;
 }): { deltaPt: Vector; mode: StampAdjustMode } | null => {
-  if (Object.hasOwn(KEY_DIRECTIONS, key) && isArrowKey(key)) {
-    const direction = KEY_DIRECTIONS[key];
-    return {
-      deltaPt: { x: direction.x * KEY_STEP_PT, y: direction.y * KEY_STEP_PT },
-      mode: shiftKey ? "resize" : "move",
-    };
+  if (!isArrowKey(key)) {
+    return null;
   }
-  return null;
+  const direction = KEY_DIRECTIONS[key];
+  return {
+    deltaPt: { x: direction.x * KEY_STEP_PT, y: direction.y * KEY_STEP_PT },
+    mode: shiftKey ? "resize" : "move",
+  };
 };
 
 const clampFraction = (value: number) => clamp(value, 0, 1);

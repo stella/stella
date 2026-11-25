@@ -61,6 +61,34 @@ const CONTEXT_MENU_EVENT = "contextmenu";
 
 const LISTENER_METHODS: ReadonlySet<string> = new Set(["addEventListener"]);
 
+/** Whether the 3rd argument to `addEventListener` sets `{ passive: true }`. */
+const isPassiveListener = (optionsArg: unknown): boolean => {
+  if (!isAstNode(optionsArg) || optionsArg.type !== "ObjectExpression") {
+    return false;
+  }
+  const properties: unknown = optionsArg.properties;
+  if (!Array.isArray(properties)) {
+    return false;
+  }
+  return properties.some((prop) => {
+    if (
+      !isAstNode(prop) ||
+      prop.type !== "Property" ||
+      prop.computed === true
+    ) {
+      return false;
+    }
+    const name = getPropertyName(prop.key);
+    const val: unknown = prop.value;
+    return (
+      name === "passive" &&
+      isAstNode(val) &&
+      val.type === "Literal" &&
+      val.value === true
+    );
+  });
+};
+
 /** The static name a member expression reads, or null. */
 const memberName = (node: unknown): string | null => {
   if (!isAstNode(node) || node.type !== "MemberExpression") {
@@ -125,7 +153,8 @@ export default eslintCompatPlugin({
             if (
               method !== null &&
               LISTENER_METHODS.has(method) &&
-              staticStringValue(node.arguments.at(0)) === CONTEXT_MENU_EVENT
+              staticStringValue(node.arguments.at(0)) === CONTEXT_MENU_EVENT &&
+              !isPassiveListener(node.arguments.at(2))
             ) {
               context.report({
                 node,

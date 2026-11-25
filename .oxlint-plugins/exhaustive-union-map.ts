@@ -285,6 +285,93 @@ const isExportedDeclaration = (declarator: ESTree.VariableDeclarator) => {
   );
 };
 
+/** If `node` is a non-empty union of string literals, returns its literal set. */
+const stringLiteralUnionKeys = (node: unknown): ReadonlySet<string> | null => {
+  if (!isAstNode(node)) {
+    return null;
+  }
+  const members: unknown[] =
+    node.type === "TSUnionType" && Array.isArray(node.types)
+      ? node.types
+      : [node];
+  if (members.length === 0) {
+    return null;
+  }
+  const out = new Set<string>();
+  for (const member of members) {
+    if (
+      !isAstNode(member) ||
+      member.type !== "TSLiteralType" ||
+      !isAstNode(member.literal) ||
+      member.literal.type !== "Literal" ||
+      typeof member.literal.value !== "string"
+    ) {
+      return null;
+    }
+    out.add(member.literal.value);
+  }
+  return out;
+};
+
+/** If `type` is `Record<KeyIdent, V>` (optionally inside `Readonly<>`), returns `KeyIdent`. */
+const satisfiesRecordKeyRef = (
+  type: unknown,
+): ESTree.IdentifierReference | null => {
+  if (!isAstNode(type)) {
+    return null;
+  }
+  const name = typeReferenceName(type);
+  const args = typeArguments(type);
+  if (name !== null && RECORD_WRAPPERS.has(name) && args.length === 1) {
+    return satisfiesRecordKeyRef(args.at(0));
+  }
+  const key = args.at(0);
+  if (
+    name === "Record" &&
+    args.length === 2 &&
+    isAstNode(key) &&
+    key.type === "TSTypeReference" &&
+    isIdentifierReference(key.typeName)
+  ) {
+    return key.typeName;
+  }
+  return null;
+};
+
+/** If `declarator` is `const MAP = { ... } [as const] satisfies Record<KeyIdent, V>`, returns its key ref + static keys. */
+const satisfiesKeyRefLiteral = (
+  declarator: ESTree.VariableDeclarator,
+): {
+  readonly keyRef: ESTree.IdentifierReference;
+  readonly mapName: string;
+  readonly keys: readonly string[];
+} | null => {
+  const id: unknown = declarator.id;
+  if (!isIdentifierReference(id)) {
+    return null;
+  }
+  let keyRef: ESTree.IdentifierReference | null = null;
+  let value: unknown = declarator.init;
+  while (
+    isAstNode(value) &&
+    (value.type === "TSAsExpression" || value.type === "TSSatisfiesExpression")
+  ) {
+    if (value.type === "TSSatisfiesExpression") {
+      keyRef ??= satisfiesRecordKeyRef(value.typeAnnotation);
+    }
+    value = value.expression;
+  }
+  if (
+    keyRef === null ||
+    !isAstNode(value) ||
+    value.type !== "ObjectExpression"
+  ) {
+    return null;
+  }
+  const keys = staticKeys(value);
+  return keys === null ? null : { keyRef, mapName: id.name, keys };
+};
+
 export default eslintCompatPlugin({
   meta: { name: "exhaustive-union-map" },
   rules: {
@@ -294,6 +381,8 @@ export default eslintCompatPlugin({
         messages: {
           stringKeyedMap:
             "`{{name}}` maps a fixed set of keys but is typed Record<string, …>, so a member added to the union it covers compiles without an entry here. Key it by that union: `satisfies Record<Union, …>`.",
+          singleUseKeyUnion:
+            "`{{typeName}}` duplicates the keys of `{{mapName}}` in a single-use local union. Use `as const satisfies Record<string, …>` and derive `type … = keyof typeof {{mapName}}` instead.",
         },
       },
       createOnce(context) {
@@ -304,11 +393,47 @@ export default eslintCompatPlugin({
           readonly viaAnnotation: boolean;
           readonly variables: readonly Variable[];
         }[] = [];
+        const localStringUnions = new Map<
+          string,
+          {
+            readonly node: ESTree.TSTypeAliasDeclaration;
+            readonly keys: ReadonlySet<string>;
+          }
+        >();
+        const typeRefCounts = new Map<string, number>();
+        const satisfiesKeyMaps: {
+          readonly typeName: string;
+          readonly mapName: string;
+          readonly keys: readonly string[];
+        }[] = [];
 
         return {
           Program() {
             keyofTargets.clear();
             candidates.length = 0;
+            localStringUnions.clear();
+            typeRefCounts.clear();
+            satisfiesKeyMaps.length = 0;
+          },
+          TSTypeAliasDeclaration(node) {
+            const parent: unknown = node.parent;
+            if (isAstNode(parent) && parent.type === "ExportNamedDeclaration") {
+              return;
+            }
+            const id: unknown = node.id;
+            if (!isIdentifierReference(id)) {
+              return;
+            }
+            const keys = stringLiteralUnionKeys(node.typeAnnotation);
+            if (keys !== null) {
+              localStringUnions.set(id.name, { node, keys });
+            }
+          },
+          TSTypeReference(node) {
+            if (isIdentifierReference(node.typeName)) {
+              const name = node.typeName.name;
+              typeRefCounts.set(name, (typeRefCounts.get(name) ?? 0) + 1);
+            }
           },
           TSTypeOperator(node) {
             const target = keyofTypeofTarget(node);
@@ -323,6 +448,14 @@ export default eslintCompatPlugin({
             const declaration: unknown = node.parent;
             if (!isAstNode(declaration) || declaration.kind !== "const") {
               return;
+            }
+            const keyRefMatch = satisfiesKeyRefLiteral(node);
+            if (keyRefMatch !== null) {
+              satisfiesKeyMaps.push({
+                typeName: keyRefMatch.keyRef.name,
+                mapName: keyRefMatch.mapName,
+                keys: keyRefMatch.keys,
+              });
             }
             const match = typedLiteral(node);
             const keys = match === null ? null : staticKeys(match.literal);
@@ -388,6 +521,22 @@ export default eslintCompatPlugin({
                 node,
                 messageId: "stringKeyedMap",
                 data: { name },
+              });
+            }
+            for (const { typeName, mapName, keys } of satisfiesKeyMaps) {
+              const union = localStringUnions.get(typeName);
+              if (
+                union === undefined ||
+                typeRefCounts.get(typeName) !== 1 ||
+                union.keys.size !== keys.length ||
+                !keys.every((k) => union.keys.has(k))
+              ) {
+                continue;
+              }
+              context.report({
+                node: union.node,
+                messageId: "singleUseKeyUnion",
+                data: { typeName, mapName },
               });
             }
           },

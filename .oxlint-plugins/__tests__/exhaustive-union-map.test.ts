@@ -139,3 +139,12 @@ test("resolves keyof typeof exemptions by scope binding, not identifier name", a
     ]),
   ).toEqual([2]);
 });
+
+test("rejects a single-use local key union that only duplicates a satisfies map's own keys", async () => {
+  expect(
+    await lint([
+      "type ActionKey = 'a' | 'b';",
+      "export const ACTIONS = { a: 1, b: 2 } as const satisfies Record<ActionKey, number>;",
+    ]),
+  ).toEqual([1]);
+});
