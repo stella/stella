@@ -51,6 +51,7 @@ const assertAccountRequestOwners = (sources: readonly NativeSource[]) => {
   const expected = [
     "account.rs",
     "billing_draft_submit.rs",
+    "calendar_read.rs",
     "deep_link.rs",
     "dictation_cleanup.rs",
     "dictation_cloud.rs",
@@ -83,6 +84,7 @@ describe("native desktop account request ownership", () => {
     for (const filename of [
       "account.rs",
       "billing_draft_submit.rs",
+      "calendar_read.rs",
       "deep_link.rs",
       "feature_access.rs",
       "handoff.rs",

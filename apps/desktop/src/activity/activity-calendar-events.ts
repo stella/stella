@@ -65,7 +65,7 @@ export const calendarDayRange = (
  * whatever was in front, and that time counts once. */
 const recordedRanges = (segments: readonly TimedSegment[]) => {
   const merged: DayCalendarRange[] = [];
-  for (const { startMs, endMs } of segments.toSorted(
+  for (const { startMs, endMs } of [...segments].sort(
     (left, right) => left.startMs - right.startMs,
   )) {
     const last = merged.at(-1);
