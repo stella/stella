@@ -12,6 +12,7 @@ import {
 } from "@stll/api-contract/chat-local-run-step-content";
 import { desktopVersionSchema } from "@stll/api-contract/desktop-presence";
 import type {
+  DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_RUN_OUTCOMES,
   DesktopRunnerCheckpointEvent,
 } from "@stll/api-contract/desktop-runner";
@@ -54,7 +55,6 @@ import {
   harnessBoundary,
   type HarnessEvent,
   type HarnessFailure,
-  type HarnessInteractionClosed,
   harnessSessionId,
 } from "../harness/events";
 import { readSkillFolderNetworkHosts } from "../harness/skill-network-hosts";
@@ -297,6 +297,8 @@ const RUN_STOP = {
 
 type RunStop = (typeof RUN_STOP)[keyof typeof RUN_STOP];
 
+type ApprovalDecision = (typeof DESKTOP_RUNNER_APPROVAL_DECISIONS)[number];
+
 type HeldRun = {
   /** The run's folder, resolved: no restore touches it while the run is held. */
   readonly workspaceDir: string;
@@ -312,8 +314,11 @@ type HeldRun = {
    * approvals and blocking questions.
    */
   requests: Map<string, string>;
-  /** The runner request ids the member's answer was handed over for. */
-  answered: Set<string>;
+  /**
+   * The runner request ids the member's answer was handed over for, with
+   * the decision an approval's answer gave (`null` for a question's).
+   */
+  answered: Map<string, ApprovalDecision | null>;
   /** The run's `outputs/` folder when it started; `null` until it opened. */
   outputs: OutputSnapshot | null;
   /** Cut by a stop, so sharing a stopped run's files ends at once. */
@@ -550,12 +555,19 @@ const resolvedInteraction = (
   event: Extract<HarnessEvent, { type: "interaction.resolved" }>,
 ): HarnessEvent => {
   const requestId = runnerRequestIdOf(run.requests, event.requestId);
-  const unanswered: HarnessInteractionClosed =
-    run.stop === RUN_STOP.none ? "withdrawn" : "stopped";
+  const decision = run.answered.get(requestId);
+  if (decision === undefined) {
+    return {
+      ...event,
+      requestId,
+      closed: run.stop === RUN_STOP.none ? "withdrawn" : "stopped",
+    };
+  }
   return {
     ...event,
     requestId,
-    closed: run.answered.has(requestId) ? "answered" : unanswered,
+    closed: "answered",
+    ...(decision === null ? {} : { decision }),
   };
 };
 
@@ -804,16 +816,21 @@ export class SidecarHost {
           if (
             native !== undefined &&
             run.approvals.answer(native, message.decision, () => {
-              run.answered.add(message.requestId);
+              run.answered.set(message.requestId, message.decision);
             })
           ) {
             return;
           }
-          this.respond(run, message.requestId, (requestId) => ({
-            type: "approval",
-            requestId,
-            decision: message.decision,
-          }));
+          this.respond(
+            run,
+            message.requestId,
+            (requestId) => ({
+              type: "approval",
+              requestId,
+              decision: message.decision,
+            }),
+            message.decision,
+          );
         });
         return;
       case "run.answer":
@@ -1022,7 +1039,7 @@ export class SidecarHost {
       stop: this.stopping ? RUN_STOP.cancel : RUN_STOP.none,
       stopCopying: new AbortController(),
       requests: new Map(),
-      answered: new Set(),
+      answered: new Map(),
       outputs: null,
       outputSharing: new AbortController(),
       checkpoint: null,
@@ -1259,6 +1276,7 @@ export class SidecarHost {
     run: HeldRun,
     requestId: string,
     response: (nativeId: string) => HarnessInteractionResponse,
+    decision: ApprovalDecision | null = null,
   ) {
     const native = run.requests.get(requestId);
     if (native === undefined || run.turn === null) {
@@ -1268,7 +1286,7 @@ export class SidecarHost {
     const turn = run.turn;
     // Marked before the harness hears it: the harness may close the
     // request the moment it takes the answer.
-    run.answered.add(requestId);
+    run.answered.set(requestId, decision);
     const answer = async () => {
       const answered = await turn.respond(response(native));
       if (Result.isError(answered)) {

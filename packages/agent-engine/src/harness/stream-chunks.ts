@@ -262,7 +262,9 @@ class ChunkMapper {
       case "interaction.resolved":
         this.closeRequest(
           event.requestId,
-          REQUEST_CLOSED[event.closed ?? "answered"],
+          event.decision === undefined
+            ? REQUEST_CLOSED[event.closed ?? "answered"]
+            : { status: "resolved", decision: event.decision },
         );
         break;
       case "retrying":

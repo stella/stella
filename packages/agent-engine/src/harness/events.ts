@@ -282,6 +282,8 @@ export type HarnessEvent =
       type: "interaction.resolved";
       requestId: string;
       closed?: HarnessInteractionClosed;
+      /** The decision an answered approval gave, where the sidecar knows it. */
+      decision?: DesktopRunnerApprovalDecision;
     }
   /** A transient provider error the harness is retrying on its own. */
   | { type: "retrying"; message: string }

@@ -91,9 +91,18 @@ const requestFields = {
   ask: chatLocalRunRequestAskSchema,
 };
 
+/** The decision the member's answer to an approval gave, once the run took it. */
+const resolvedDecision = {
+  decision: v.optional(v.picklist(DESKTOP_RUNNER_APPROVAL_DECISIONS)),
+};
+
 export const chatLocalRunRequestSchema = v.variant("status", [
   v.object({ ...requestFields, status: v.literal("pending") }),
-  v.object({ ...requestFields, status: v.literal("resolved") }),
+  v.object({
+    ...requestFields,
+    status: v.literal("resolved"),
+    ...resolvedDecision,
+  }),
   v.object({
     ...requestFields,
     status: v.literal("expired"),
@@ -206,7 +215,11 @@ export type ChatLocalRunRequestAnswerOutcome = v.InferOutput<
 export const DESKTOP_RUNNER_REQUEST_EVENT = "stella.local-run.request";
 
 export const desktopRunnerRequestEventSchema = v.variant("status", [
-  v.object({ requestId: requestIdSchema, status: v.literal("resolved") }),
+  v.object({
+    requestId: requestIdSchema,
+    status: v.literal("resolved"),
+    ...resolvedDecision,
+  }),
   v.object({
     requestId: requestIdSchema,
     status: v.literal("expired"),

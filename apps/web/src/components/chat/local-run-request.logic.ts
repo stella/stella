@@ -62,6 +62,53 @@ export const awaitedLocalRunApproval = (
   return isApprovalPart(asked) ? asked : null;
 };
 
+/** How a step's card draws the approval its run asked about it. */
+type LocalRunApprovalDrawing = {
+  state: "approval-requested" | "approval-responded" | null;
+  approval: { id: string; needsApproval: true; approved?: boolean };
+};
+
+/**
+ * The approval a step's card draws for what its run asked about it: asking
+ * while the request waits in an answer still streaming (a settled answer
+ * names its `turnOutcome`, and its run asks nothing any more), and the
+ * member's decision once the run took it. `state` is the call's new state,
+ * or `null` to keep its own (a result already came). `null` for a call no
+ * approval names, or one the run went on without.
+ */
+export const localRunApprovalDrawing = (
+  part: { readonly id: string; readonly state: string },
+  metadata: unknown,
+): LocalRunApprovalDrawing | null => {
+  const request = localRunRequestOfCall(metadata, part.id);
+  if (request === null || request.ask.kind !== "approval") {
+    return null;
+  }
+  const settled =
+    typeof metadata === "object" &&
+    metadata !== null &&
+    Reflect.get(metadata, "turnOutcome") !== undefined;
+  if (request.status === "pending") {
+    return settled
+      ? null
+      : {
+          state: "approval-requested",
+          approval: { id: request.requestId, needsApproval: true },
+        };
+  }
+  if (request.status !== "resolved" || request.decision === undefined) {
+    return null;
+  }
+  return {
+    state: part.state === "input-complete" ? "approval-responded" : null,
+    approval: {
+      id: request.requestId,
+      needsApproval: true,
+      approved: request.decision !== "deny",
+    },
+  };
+};
+
 /**
  * Why a request closed without the member's answer reaching its run, as the
  * card says it, neutrally: the run's output stands as it is. A pending
