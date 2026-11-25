@@ -1706,10 +1706,7 @@ export const FilesystemRow = ({
 
   return (
     <>
-      <ContextMenuSurface
-        onOpenContextMenu={handleContextMenu}
-        preserveNativeTargets={false}
-      >
+      <ContextMenuSurface onOpenContextMenu={handleContextMenu}>
         <div className="group/row relative h-full" data-entity-row ref={rowRef}>
           <div
             className={gridCls}

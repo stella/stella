@@ -464,7 +464,6 @@ export const DraggableRow = ({
       <ContextMenuSurface
         key={row.id}
         onOpenContextMenu={handleContextMenu}
-        preserveNativeTargets={false}
         render={
           <WorkspaceGridRow
             aria-rowindex={index + 2}
@@ -562,7 +561,6 @@ const FolderTableRow = ({
     <ContextMenuSurface
       key={row.id}
       onOpenContextMenu={onRowContextMenu}
-      preserveNativeTargets={false}
       render={
         <WorkspaceGridRow
           aria-rowindex={index + 2}
@@ -689,7 +687,6 @@ const DataRowCells = ({
         disabled={cellTarget.type === "native"}
         key={cell.id}
         onOpenContextMenu={(details) => onCellContextMenu(details, cell.column)}
-        preserveNativeTargets={false}
         render={
           <Cell
             aria-colindex={cellIndex + 1}

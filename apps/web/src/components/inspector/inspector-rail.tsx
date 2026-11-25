@@ -423,10 +423,7 @@ const VerticalTabCell = ({
 
   return (
     <>
-      <ContextMenuSurface
-        onOpenContextMenu={contextMenu.openFromSurface}
-        preserveNativeTargets={false}
-      >
+      <ContextMenuSurface onOpenContextMenu={contextMenu.openFromSurface}>
         <InspectorEntityTab
           active={active}
           className={cn(

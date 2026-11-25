@@ -224,10 +224,7 @@ export const VersionRow = ({
   }
   if (onOpenContextMenu !== undefined) {
     headerElement = (
-      <ContextMenuSurface
-        onOpenContextMenu={onOpenContextMenu}
-        preserveNativeTargets={false}
-      >
+      <ContextMenuSurface onOpenContextMenu={onOpenContextMenu}>
         {headerElement}
       </ContextMenuSurface>
     );

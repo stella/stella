@@ -159,7 +159,6 @@ export const InspectorTabHeader = ({
               <ContextMenuSurface
                 disabled={onLabelContextMenu === undefined}
                 onOpenContextMenu={(details) => onLabelContextMenu?.(details)}
-                preserveNativeTargets={false}
               >
                 <TruncatedText
                   aria-label={label}
