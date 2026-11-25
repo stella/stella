@@ -12,6 +12,10 @@
  * to gate and never defers.
  */
 
+import {
+  setDedicatedLockTimeout,
+  setDedicatedStatementTimeout,
+} from "./dedicated-connection-timeouts";
 import type {
   CodeOwnedOnlineStep,
   OnlineMigrationConnection,
@@ -20,8 +24,8 @@ import type {
 } from "./online-migration-connection";
 
 const REPAIR_NAME = "deleted-account-delivery-failures";
-const LOCK_TIMEOUT = "10s";
-const STATEMENT_TIMEOUT = "2min";
+const LOCK_TIMEOUT_MS = 10_000;
+const STATEMENT_TIMEOUT_MS = 120_000;
 
 const ERASED_ROW_WITH_DELIVERY_FAILURE = `deleted_at IS NOT NULL
   AND (email_undeliverable_address IS NOT NULL
@@ -58,9 +62,10 @@ const repair = async (connection: OnlineMigrationConnection): Promise<void> => {
   // A failure is rolled back so the session stays usable for the lock
   // release, then rethrown to fail the migrate task.
   try {
-    await connection.execute(`SET LOCAL lock_timeout = '${LOCK_TIMEOUT}'`);
-    await connection.execute(
-      `SET LOCAL statement_timeout = '${STATEMENT_TIMEOUT}'`,
+    await setDedicatedLockTimeout(connection.execute, LOCK_TIMEOUT_MS);
+    await setDedicatedStatementTimeout(
+      connection.execute,
+      STATEMENT_TIMEOUT_MS,
     );
     await connection.execute(CLEAR_SQL);
     await connection.execute("COMMIT");
