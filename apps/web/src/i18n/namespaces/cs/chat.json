@@ -339,6 +339,9 @@
     "credentialSendDescription": "Odešlete ji pouze tehdy, pokud chcete tuto hodnotu sdílet v konverzaci.",
     "credentialSendTitle": "Tato zpráva může obsahovat přístupový údaj",
     "deleteThread": "Smazat konverzaci",
+    "desktopUpdate": {
+      "browserSiteApprovals": "stella desktop ve vašem počítači se ptá na každém webu, i na těch, které máte vždy povolené. Po aktualizaci se ptát přestane."
+    },
     "diagramUnavailable": "Diagram se nepodařilo vykreslit. Níže je jeho zdrojový kód.",
     "dictate": "Diktovat",
     "dictationDenied": "Diktování potřebuje mikrofon. Povolte ho pro tento web v prohlížeči.",

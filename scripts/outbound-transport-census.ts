@@ -1341,6 +1341,11 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
     reason: "Issues request authority for the connector probe route.",
   },
   {
+    path: "apps/api/src/handlers/desktop-presence/report.ts",
+    reason:
+      "Desktop presence boundary reading the newest release from the desktop updater's public feed on the downloads CDN.",
+  },
+  {
     path: "apps/api/src/handlers/mobile-updates/read.ts",
     reason:
       "Public direct boundary relaying the mobile app's signed updates from the downloads CDN.",

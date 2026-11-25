@@ -54,6 +54,7 @@ const READINESS: ChatLocalRunReadiness = {
   runners: [
     {
       desktopId: "desktop-1",
+      appVersion: "0.9.91",
       connected: true,
       lastSeenAt: "2026-11-03T10:00:00.000Z",
       linkedFolders: [],

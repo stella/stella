@@ -46,6 +46,7 @@ const runner = (
   linkedFolders: ChatLocalRunnerReadiness["linkedFolders"] = [],
 ): ChatLocalRunnerReadiness => ({
   desktopId: Bun.randomUUIDv7(),
+  appVersion: "0.9.91",
   connected,
   lastSeenAt: "2026-11-03T10:00:00.000Z",
   harnesses,

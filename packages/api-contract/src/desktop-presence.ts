@@ -26,6 +26,20 @@ export type DesktopPresenceReport = v.InferOutput<
   typeof desktopPresenceReportSchema
 >;
 
+/**
+ * The answer to a presence report. `latestVersion` is the newest desktop
+ * release the API read from the desktop's own updater feed, or null when it
+ * could not: a desktop older than it runs its normal, signature-verified
+ * update check at once instead of at its next scheduled one.
+ */
+export const desktopPresenceReportResponseSchema = v.strictObject({
+  reported: v.boolean(),
+  latestVersion: v.nullable(desktopVersionSchema),
+});
+export type DesktopPresenceReportResponse = v.InferOutput<
+  typeof desktopPresenceReportResponseSchema
+>;
+
 const desktopSchema = v.strictObject({
   version: desktopVersionSchema,
   protocol: desktopProtocolSchema,

@@ -72,6 +72,7 @@ test("authenticated reports converge on one row and use the server clock", async
   const { testDb, ids } = fixture;
   const device = await createDesktopDeviceSigner();
   const endpoint = createDesktopPresenceReportEndpoint({
+    latestRelease: async () => ({ type: "present", value: "0.9.91" }),
     authorizeAccount: async (request) =>
       Result.ok({
         featureAccessSnapshot: buildFeatureAccessSnapshot({
@@ -115,7 +116,10 @@ test("authenticated reports converge on one row and use the server clock", async
       }),
     );
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ reported: true });
+    expect(await response.json()).toEqual({
+      reported: true,
+      latestVersion: "0.9.91",
+    });
   }
   const rows = await testDb
     .select()

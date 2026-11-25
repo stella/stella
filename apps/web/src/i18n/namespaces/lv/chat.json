@@ -339,6 +339,9 @@
     "credentialSendDescription": "Sūtiet tikai tad, ja vēlaties šo vērtību kopīgot sarunā.",
     "credentialSendTitle": "Šajā ziņojumā var būt piekļuves informācija",
     "deleteThread": "Dzēst sarunu",
+    "desktopUpdate": {
+      "browserSiteApprovals": "stella desktop jūsu datorā jautā katrā vietnē, arī tajās, kuras vienmēr atļaujat, līdz to atjaunināsiet."
+    },
     "diagramUnavailable": "Šo diagrammu neizdevās attēlot. Tās pirmkods ir redzams zemāk.",
     "dictate": "Diktēt",
     "dictationDenied": "Diktēšanai vajag mikrofonu. Atļaujiet to šai vietnei savā pārlūkprogrammā.",

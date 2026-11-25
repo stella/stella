@@ -210,6 +210,14 @@ struct Report<'a> {
   protocol: u32,
 }
 
+/// The server's answer to a report: the newest release it read from the
+/// updater's own feed, if it could.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReportAnswer {
+  latest_version: Option<String>,
+}
+
 fn request(
   client: &DesktopHttpClient,
   account: &crate::account::AccountRequest,
@@ -266,7 +274,16 @@ async fn report(handle: &AppHandle) {
   };
   let result = request.send().await;
   match result {
-    Ok(response) if response.status().is_success() => {}
+    Ok(response) if response.status().is_success() => {
+      match response.json::<ReportAnswer>().await {
+        Ok(answer) => {
+          if let Some(latest) = answer.latest_version {
+            crate::updater::release_announced(handle, &latest);
+          }
+        }
+        Err(_) => tracing::warn!("desktop presence answer unreadable"),
+      }
+    }
     Ok(response) => {
       tracing::warn!(status = %response.status(), "desktop presence report refused")
     }
@@ -281,6 +298,19 @@ async fn report(handle: &AppHandle) {
 )]
 mod tests {
   use super::*;
+
+  #[test]
+  fn the_report_answer_names_the_newest_release_or_none() {
+    let answer: ReportAnswer = serde_json::from_str(include_str!(
+      "../../../../packages/api-contract/src/desktop-presence-answer.fixture.json"
+    ))
+    .expect("the committed answer fixture parses");
+    assert_eq!(answer.latest_version.as_deref(), Some("0.9.91"));
+    let unknown: ReportAnswer =
+      serde_json::from_str(r#"{"reported":true,"latestVersion":null}"#)
+        .expect("an answer without a release parses");
+    assert_eq!(unknown.latest_version, None);
+  }
 
   #[test]
   fn attempts_are_paced_across_sleep_clock_reversal_and_failure() {

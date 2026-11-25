@@ -339,6 +339,9 @@
     "credentialSendDescription": "Siųskite tik jei norite bendrinti šią reikšmę pokalbyje.",
     "credentialSendTitle": "Šiame pranešime gali būti prisijungimo duomenų",
     "deleteThread": "Ištrinti pokalbį",
+    "desktopUpdate": {
+      "browserSiteApprovals": "Jūsų kompiuteryje esanti stella desktop klausia kiekvienoje svetainėje, net tose, kurias visada leidžiate, kol jos neatnaujinsite."
+    },
     "diagramUnavailable": "Šios diagramos nepavyko atvaizduoti. Jos šaltinio kodas pateiktas žemiau.",
     "dictate": "Diktuoti",
     "dictationDenied": "Diktavimui reikia mikrofono. Leiskite jį šiai svetainei savo naršyklėje.",

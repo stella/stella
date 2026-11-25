@@ -24,6 +24,7 @@ import {
   localRunProposedPlan,
   localRunToolView,
 } from "@stll/api-contract/chat-local-run-steps";
+import { CHAT_LOCAL_RUN_TOOL_NAMES } from "@stll/api-contract/chat-local-run-tool";
 import {
   requiresPerCallChatApproval,
   USE_CONNECTOR_SECRET_TOOL_NAME,
@@ -116,6 +117,7 @@ import {
   getBrowserApprovalDetails,
 } from "@/features/chat/browser-control/browser-approval-summary";
 import { useBrowserSiteGrants } from "@/features/chat/browser-control/browser-site-grants";
+import { DesktopFeatureUpdateNotice } from "@/features/chat/desktop-feature-update";
 import { useMountEffect } from "@/hooks/use-effect";
 import { revealTranscriptElement } from "@/hooks/use-stick-to-bottom";
 import type { TranslationKey } from "@/i18n/types";
@@ -646,6 +648,25 @@ const BrowserAskReasonLine = ({
 };
 
 /**
+ * Under a browser step on the member's computer: a desktop from before
+ * website approvals asks about every step, even on a website the member
+ * always allows, so the card offers its update.
+ */
+const LocalBrowserUpdateNotice = ({
+  activeOrganizationId,
+  toolName,
+}: {
+  activeOrganizationId: string;
+  toolName: string;
+}) =>
+  toolName === CHAT_LOCAL_RUN_TOOL_NAMES.browser ? (
+    <DesktopFeatureUpdateNotice
+      activeOrganizationId={activeOrganizationId}
+      feature="browserSiteApprovals"
+    />
+  ) : null;
+
+/**
  * Allows this call and stores a website approval for `site`. The call is
  * allowed either way; a failed save only means the next call asks again.
  */
@@ -992,7 +1013,13 @@ export const ToolApprovalCard = ({
         </div>
       )}
       {approvalId && asksForDecision && !isBlocked && (
-        <BrowserAskReasonLine reason={browserApproval.reason} />
+        <>
+          <BrowserAskReasonLine reason={browserApproval.reason} />
+          <LocalBrowserUpdateNotice
+            activeOrganizationId={activeOrganizationId}
+            toolName={name}
+          />
+        </>
       )}
       {approvalId && asksForDecision && !isBlocked && (
         <div className="border-border/50 flex flex-wrap items-center gap-2 border-t px-3 py-2">

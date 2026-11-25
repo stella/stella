@@ -3,9 +3,11 @@ import { expect, test } from "bun:test";
 import * as v from "valibot";
 
 import {
+  desktopPresenceReportResponseSchema,
   desktopPresenceReportSchema,
   desktopPresenceSchema,
 } from "./desktop-presence";
+import answerFixture from "./desktop-presence-answer.fixture.json";
 import fixture from "./desktop-presence-request.fixture.json";
 
 test("observation timestamps have an explicit text bound", () => {
@@ -78,5 +80,23 @@ test("each known observation carries its version, protocol and last server obser
   }
   expect(
     v.safeParse(desktopPresenceSchema, { type: "none", desktop }).success,
+  ).toBe(false);
+});
+
+test("the report answer the desktop reads parses, with or without a release", () => {
+  expect(v.parse(desktopPresenceReportResponseSchema, answerFixture)).toEqual(
+    answerFixture,
+  );
+  expect(
+    v.safeParse(desktopPresenceReportResponseSchema, {
+      reported: true,
+      latestVersion: null,
+    }).success,
+  ).toBe(true);
+  expect(
+    v.safeParse(desktopPresenceReportResponseSchema, {
+      reported: true,
+      latestVersion: "latest",
+    }).success,
   ).toBe(false);
 });

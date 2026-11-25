@@ -2501,6 +2501,8 @@ type MemberRunnersOptions = { owner: RunOwner; limit: number };
 
 export type MemberRunner = {
   readonly desktopId: string;
+  /** The stella desktop release its last hello named. */
+  readonly appVersion: string;
   readonly connected: boolean;
   readonly lastSeenAt: Date;
   readonly harnesses: readonly DesktopRunnerHarnessReport[];
@@ -2521,6 +2523,7 @@ export const readMemberRunners = async (
   const rows = await db
     .select({
       desktopId: runner.desktopId,
+      appVersion: runner.appVersion,
       connection: runner.connection,
       lastSeenAt: runner.lastSeenAt,
       harnesses: runner.harnesses,
@@ -2552,6 +2555,7 @@ export const readMemberRunners = async (
   }
   return [...byInstallation.values()].map((row) => ({
     desktopId: row.desktopId,
+    appVersion: row.appVersion,
     connected: row.connection === "connected",
     lastSeenAt: row.lastSeenAt,
     harnesses: storedHarnessReports(row.harnesses),
