@@ -68,6 +68,7 @@ export const _l =
 // --- Accepted: a cap on something inside the editor, not the editor ---
 export const _m = "[&_.ProseMirror_pre]:max-h-64 [&_.ProseMirror_pre]:overflow-x-auto";
 // --- Accepted: caps on chrome that is not a textbox ---
+// expect-clean: no-adhoc-textbox-growth/no-adhoc-textbox-growth
 export const _n = () => <div className="max-h-80 overflow-hidden" />;
 export const _o = { class: "max-h-48", attributes: { role: "textbox" } };
 // --- Accepted: an editor's own classes that do not cap it ---

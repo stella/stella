@@ -91,6 +91,7 @@ export const _g = () => (
 );
 
 // --- Accepted: the text over a control row ---
+// expect-clean: no-control-beside-textbox/no-control-beside-textbox
 export const _h = () => (
   <div className="flex flex-col">
     <Textarea rows={3} />
