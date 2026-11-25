@@ -1151,7 +1151,16 @@ export const useChatSession = ({
             }
             return queued;
           }
-          if (state.type === "waiting_on_member") {
+          // A run on the member's computer that waits only on approvals
+          // beside its running turn takes the message now: what they ask is
+          // declined below, and the turn never pauses to resume.
+          const localApprovalIds = pendingLocalRunApprovalIds(
+            chat.getSnapshot().messages,
+          );
+          if (
+            state.type === "waiting_on_member" &&
+            localApprovalIds.length === 0
+          ) {
             // The shown approval is declined, explicitly, as the member's
             // own Deny would, so the turn goes on and is handed the message
             // once it runs again. A question is never dismissed for it:
@@ -1188,16 +1197,16 @@ export const useChatSession = ({
             // A step the run waits on the member's approval for is declined,
             // explicitly, as the member's own Deny would: the message goes
             // to the run instead of that step.
-            for (const requestId of pendingLocalRunApprovalIds(
-              chat.getSnapshot().messages,
-            )) {
-              detached(
-                resolveToolApproval({ id: requestId, approved: false }),
-                "use-chat-session.decline-local-for-steer",
-              );
-            }
+            // The decision goes first: the run hears it, then the message.
+            const declined = Promise.all(
+              localApprovalIds.map(
+                async (requestId) =>
+                  await resolveToolApproval({ id: requestId, approved: false }),
+              ),
+            );
             detached(
               (async () => {
+                await declined;
                 // The message as this send queued it, never the cached
                 // queue's read of it (`enqueueAndCacheChatMessage`).
                 const outcome = await steerQueuedMessage({
