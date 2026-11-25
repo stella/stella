@@ -339,6 +339,9 @@
     "credentialSendDescription": "أرسلها فقط إذا كنت تريد مشاركة هذه القيمة في المحادثة.",
     "credentialSendTitle": "قد تحتوي هذه الرسالة على بيانات اعتماد",
     "deleteThread": "حذف المحادثة",
+    "desktopUpdate": {
+      "browserSiteApprovals": "يطلب stella desktop على حاسوبك الإذن على كل موقع، حتى المواقع التي تسمح بها دائمًا، إلى أن يُحدَّث."
+    },
     "diagramUnavailable": "تعذّر عرض هذا المخطط. تظهر شيفرته المصدرية أدناه.",
     "dictate": "إملاء",
     "dictationDenied": "يحتاج الإملاء إلى الميكروفون. اسمح به لهذا الموقع في متصفحك.",

@@ -339,6 +339,9 @@
     "credentialSendDescription": "Senden Sie sie nur, wenn Sie diesen Wert in der Unterhaltung teilen möchten.",
     "credentialSendTitle": "Diese Nachricht könnte Zugangsdaten enthalten",
     "deleteThread": "Konversation löschen",
+    "desktopUpdate": {
+      "browserSiteApprovals": "stella desktop auf Ihrem Computer fragt auf jeder Website nach, auch auf denen, die Sie immer erlauben, bis es aktualisiert ist."
+    },
     "diagramUnavailable": "Dieses Diagramm konnte nicht dargestellt werden. Der Quelltext steht unten.",
     "dictate": "Diktieren",
     "dictationDenied": "Zum Diktieren braucht stella das Mikrofon. Erlauben Sie es für diese Website in Ihrem Browser.",

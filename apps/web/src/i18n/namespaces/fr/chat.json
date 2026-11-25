@@ -339,6 +339,9 @@
     "credentialSendDescription": "Envoyez-le uniquement si vous souhaitez partager cette valeur dans la conversation.",
     "credentialSendTitle": "Ce message peut contenir un identifiant",
     "deleteThread": "Supprimer la conversation",
+    "desktopUpdate": {
+      "browserSiteApprovals": "stella desktop sur votre ordinateur demande sur chaque site, même ceux que vous autorisez toujours, tant qu'il n'est pas mis à jour."
+    },
     "diagramUnavailable": "Impossible d’afficher ce diagramme. Son code source figure ci-dessous.",
     "dictate": "Dicter",
     "dictationDenied": "La dictée a besoin du micro. Autorisez-le pour ce site dans votre navigateur.",

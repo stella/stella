@@ -66,6 +66,7 @@ const createLocalRunnersEndpoint = (dependencies?: LocalRunnersDependencies) =>
       status: "enabled",
       runners: runners.value.map((runner) => ({
         desktopId: runner.desktopId,
+        appVersion: runner.appVersion,
         connected: runner.connected,
         lastSeenAt: runner.lastSeenAt.toISOString(),
         harnesses: runner.harnesses.flatMap(

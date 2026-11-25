@@ -7,6 +7,11 @@
 //   isn't blocked by network I/O).
 // - While the app keeps running, repeat that background check so
 //   long-lived desktop sessions still pick up new releases.
+// - A linked desktop hears of a newer release sooner: each presence report
+//   answers with the newest release the server read from this same feed,
+//   and a newer one is checked for at once (`release_announced`). The
+//   six-hour schedule stays for a desktop with no linked account, or a
+//   server that cannot read the feed.
 // - Settings → About checks without installing, shows what it found,
 //   and installs through that same check when the user asks. The tray's
 //   "Check for updates" opens About and runs that check there.
@@ -299,6 +304,77 @@ pub async fn check_for_handoff(
     });
   }
   outcome
+}
+
+/// The connected server read a newer release from the updater's feed (see
+/// `presence`): check now rather than at the next scheduled check. The check
+/// is the normal one, against the feed the updater trusts, and verifies the
+/// package itself; the server's word only moves it earlier. Each version is
+/// checked for once unless that check failed, so a report every few minutes
+/// asks the feed nothing new.
+pub fn release_announced(handle: &AppHandle, version: &str) {
+  if cfg!(debug_assertions) {
+    return;
+  }
+  let current = handle.package_info().version.to_string();
+  if !release_is_newer(version, &current) || !ANNOUNCED.claim(version) {
+    return;
+  }
+  let handle = handle.clone();
+  let version = version.to_owned();
+  async_runtime::spawn(async move {
+    if let CheckOutcome::Failed(error) = run_check(&handle).await {
+      tracing::warn!(%error, "announced release check failed");
+      ANNOUNCED.release(&version);
+    }
+  });
+}
+
+/// The releases a check already ran for after the server named them.
+struct Announced(std::sync::Mutex<Option<String>>);
+
+impl Announced {
+  const fn new() -> Self {
+    Self(std::sync::Mutex::new(None))
+  }
+
+  /// Whether `version` still needs its check; it is taken if so.
+  fn claim(&self, version: &str) -> bool {
+    let mut checked = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+    if checked.as_deref() == Some(version) {
+      return false;
+    }
+    *checked = Some(version.to_owned());
+    true
+  }
+
+  /// The check for `version` failed: the next announcement checks again.
+  fn release(&self, version: &str) {
+    let mut checked = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+    if checked.as_deref() == Some(version) {
+      *checked = None;
+    }
+  }
+}
+
+static ANNOUNCED: Announced = Announced::new();
+
+/// Whether release `candidate` comes after release `current`. Only plain
+/// `X.Y.Z` releases compare; a pre-release or anything else never does.
+fn release_is_newer(candidate: &str, current: &str) -> bool {
+  fn parts(version: &str) -> Option<(u64, u64, u64)> {
+    let mut parts = version.split('.');
+    let parsed = (
+      parts.next()?.parse().ok()?,
+      parts.next()?.parse().ok()?,
+      parts.next()?.parse().ok()?,
+    );
+    parts.next().is_none().then_some(parsed)
+  }
+  match (parts(candidate), parts(current)) {
+    (Some(candidate), Some(current)) => candidate > current,
+    _ => false,
+  }
 }
 
 /// Checks and, once nothing blocks a relaunch, installs: a found update
@@ -1506,6 +1582,34 @@ mod tests {
       clearance::ask(&host).await,
       Err(RelaunchBlocker::EditSessions)
     ));
+  }
+
+  #[test]
+  fn only_a_later_plain_release_counts_as_newer() {
+    assert!(release_is_newer("0.9.92", "0.9.91"));
+    assert!(release_is_newer("0.10.0", "0.9.91"));
+    assert!(release_is_newer("1.0.0", "0.99.99"));
+    assert!(!release_is_newer("0.9.91", "0.9.91"));
+    assert!(!release_is_newer("0.9.90", "0.9.91"));
+    // A checkout build, a pre-release or anything unreadable never compares.
+    assert!(!release_is_newer("0.9.92-rc.1", "0.9.91"));
+    assert!(!release_is_newer("0.9.92", "0.9.91-rc.1"));
+    assert!(!release_is_newer("0.9", "0.8.0"));
+    assert!(!release_is_newer("0.9.92.1", "0.9.91"));
+  }
+
+  #[test]
+  fn an_announced_release_is_checked_for_once_unless_that_check_failed() {
+    let announced = Announced::new();
+    assert!(announced.claim("0.9.92"));
+    assert!(!announced.claim("0.9.92"));
+    // A newer one is checked for at once.
+    assert!(announced.claim("0.9.93"));
+    // A failed check for an older one does not release the newer claim.
+    announced.release("0.9.92");
+    assert!(!announced.claim("0.9.93"));
+    announced.release("0.9.93");
+    assert!(announced.claim("0.9.93"));
   }
 
   #[tokio::test]

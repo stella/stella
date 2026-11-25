@@ -289,6 +289,11 @@ export type ChatLocalLinkedFolderReadiness = DesktopRunnerLinkedFolder & {
 /** One of the member's computers that has held a runner socket. */
 export type ChatLocalRunnerReadiness = {
   desktopId: string;
+  /**
+   * The stella desktop release the computer last named. A feature that needs
+   * a newer one (`DESKTOP_FEATURE_MINIMUM_VERSIONS`) offers an update there.
+   */
+  appVersion: string;
   /** Whether its runner socket is open and was seen recently. */
   connected: boolean;
   lastSeenAt: string;

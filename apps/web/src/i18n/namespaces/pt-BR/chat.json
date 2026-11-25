@@ -339,6 +339,9 @@
     "credentialSendDescription": "Envie somente se quiser compartilhar este valor na conversa.",
     "credentialSendTitle": "Esta mensagem pode conter uma credencial",
     "deleteThread": "Excluir conversa",
+    "desktopUpdate": {
+      "browserSiteApprovals": "O stella desktop no seu computador pergunta em todo site, inclusive nos que você sempre permite, até ser atualizado."
+    },
     "diagramUnavailable": "Não foi possível exibir este diagrama. O código-fonte está abaixo.",
     "dictate": "Ditar",
     "dictationDenied": "O ditado precisa do microfone. Permita para este site no seu navegador.",

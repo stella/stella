@@ -339,6 +339,9 @@
     "credentialSendDescription": "Wyślij ją tylko wtedy, gdy chcesz udostępnić tę wartość w rozmowie.",
     "credentialSendTitle": "Ta wiadomość może zawierać dane dostępowe",
     "deleteThread": "Usuń rozmowę",
+    "desktopUpdate": {
+      "browserSiteApprovals": "stella desktop na Twoim komputerze pyta na każdej stronie, także na tych, na które zawsze zezwalasz, dopóki go nie zaktualizujesz."
+    },
     "diagramUnavailable": "Nie udało się wyświetlić tego diagramu. Poniżej znajduje się jego kod źródłowy.",
     "dictate": "Dyktuj",
     "dictationDenied": "Dyktowanie wymaga mikrofonu. Zezwól na nie dla tej witryny w przeglądarce.",

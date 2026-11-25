@@ -1,4 +1,8 @@
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
+import {
+  DESKTOP_WORKSPACE_VERSION,
+  releaseVersionIsBelow,
+} from "@stll/api-contract/desktop-presence";
 import cliPackage from "@stll/cli/package.json" with { type: "json" };
 import mcpKitPackage from "@stll/mcp-kit/package.json" with { type: "json" };
 
@@ -20,12 +24,6 @@ type ClientSupport = {
   readonly latest: string;
   readonly update: UpdatePath;
 };
-
-// Release builds stamp the release tag over this version; local builds report
-// the committed value from apps/desktop/src-tauri/Cargo.toml, which
-// local-client-support.test.ts binds this to. No release carries it, so it
-// names a build made from a checkout.
-const DESKTOP_WORKSPACE_VERSION = "0.0.1";
 
 /**
  * Where a desktop continues an edit session it already holds: status, events,
@@ -74,30 +72,6 @@ type ClientTooOldError = {
   readonly update: UpdatePath;
 };
 
-const VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)$/u;
-
-const versionParts = (version: string): readonly number[] | undefined => {
-  const match = VERSION_PATTERN.exec(version);
-  return match
-    ? [Number(match[1]), Number(match[2]), Number(match[3])]
-    : undefined;
-};
-
-const isBelow = (version: string, minimum: string): boolean => {
-  const current = versionParts(version);
-  const floor = versionParts(minimum);
-  if (!current || !floor) {
-    return false;
-  }
-  for (const [index, part] of current.entries()) {
-    const difference = part - (floor[index] ?? 0);
-    if (difference !== 0) {
-      return difference < 0;
-    }
-  }
-  return false;
-};
-
 const isClientKind = (value: string): value is LocalClientKind =>
   LOCAL_CLIENT_KINDS.some((kind) => kind === value);
 
@@ -120,7 +94,7 @@ export const clientTooOldError = (
     return undefined;
   }
   const support = LOCAL_CLIENT_SUPPORT[kind];
-  if (!isBelow(currentVersion, support.minimum)) {
+  if (!releaseVersionIsBelow(currentVersion, support.minimum)) {
     return undefined;
   }
   if (kind === "desktop" && isDesktopFloorExempt(request, currentVersion)) {

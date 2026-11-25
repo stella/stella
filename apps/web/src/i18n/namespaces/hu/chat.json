@@ -339,6 +339,9 @@
     "credentialSendDescription": "Csak akkor küldd el, ha meg szeretnéd osztani ezt az értéket a beszélgetésben.",
     "credentialSendTitle": "Ez az üzenet hitelesítő adatot tartalmazhat",
     "deleteThread": "Beszélgetés törlése",
+    "desktopUpdate": {
+      "browserSiteApprovals": "A számítógépén lévő stella desktop minden webhelyen rákérdez, azokon is, amelyeket mindig engedélyez, amíg nem frissíti."
+    },
     "diagramUnavailable": "Ezt a diagramot nem sikerült megjeleníteni. A forráskódja alább látható.",
     "dictate": "Diktálás",
     "dictationDenied": "A diktáláshoz mikrofon kell. Engedélyezze ehhez a webhelyhez a böngészőjében.",
