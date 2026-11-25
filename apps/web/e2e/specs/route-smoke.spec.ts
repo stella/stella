@@ -28,6 +28,7 @@ import { apiDelete, apiGet, apiPut, E2E_API_ORIGIN } from "../helpers/api";
 import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
 import { findChromeDividerProblems } from "../helpers/chrome-divider";
 import { installContentSecurityPolicyCollector } from "../helpers/content-security-policy";
+import { findControlsOverText } from "../helpers/control-over-text";
 import {
   CORRESPONDENCE_SMOKE_SUBJECT,
   createTestCorrespondence,
@@ -1078,6 +1079,10 @@ const measureRouteTarget = async ({
     expect(
       await findEscapedText(page),
       `${route.template} must keep every text inside its box`,
+    ).toEqual([]);
+    expect(
+      await findControlsOverText(page),
+      `${route.template} must keep every control off a textbox's text: a composer renders through ComposerFrame, its controls in a row below the text`,
     ).toEqual([]);
     browserErrors.assertEmpty(`unexpected browser errors on ${route.template}`);
     // Capture at the settled route boundary; awaiting the document's CSP

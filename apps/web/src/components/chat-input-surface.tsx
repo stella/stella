@@ -6,17 +6,8 @@ import type { ReactNode } from "react";
 import { useTranslations } from "use-intl";
 
 import { CHAT_MEMBER_SEND_ACTION } from "@stll/api-contract/chat-send-intent";
-import {
-  COMPOSER_BOX_ANONYMIZED_CLASS,
-  COMPOSER_BOX_CLASS,
-  COMPOSER_BOX_FOCUS_CLASS,
-  COMPOSER_COMPACT_ROW_CLASS,
-  COMPOSER_COMPACT_TEXT_CELL_CLASS,
-  COMPOSER_LARGE_ACTION_ROW_CLASS,
-  COMPOSER_LARGE_TEXT_WELL_CLASS,
-  COMPOSER_LEADING_GROUP_CLASS,
-  ComposerPlaceholder,
-} from "@stll/ui/composer";
+import { ComposerFrame } from "@stll/ui/composer-frame";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useChatComposerWiring } from "@/components/chat-editor-provider";
@@ -34,15 +25,7 @@ import {
   type ComposerContextMenuProps,
   ComposerPlusMenu,
 } from "@/components/chat/composer-plus-menu";
-import {
-  COMPOSER_COMPACT_GRID_CLASS,
-  COMPOSER_COMPACT_LEADING_SEAT_CLASS,
-  COMPOSER_COMPACT_TEXT_SEAT_CLASS,
-  COMPOSER_COMPACT_TRAILING_SEAT_CLASS,
-  COMPOSER_IMPROVE_SEAT_CLASS,
-  COMPOSER_TRAILING_GROUP_CLASS,
-  ComposerControlSlot,
-} from "@/components/chat/composer-row.pending";
+import { COMPOSER_IMPROVE_SEAT_CLASS } from "@/components/chat/composer-row.pending";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { ReferenceRenderScope } from "@/components/references/reference-chip";
 import { RenderStormRegion } from "@/components/render-storm-canary";
@@ -67,10 +50,10 @@ type ChatInputSurfaceProps = {
    * nested chat composers leave this off so tours cannot target duplicates. */
   guideAnchorsEnabled?: boolean;
   /**
-   * Editor stature. `compact` (default) is the one-line follow-up bar: an
-   * empty composer collapses to a single placeholder line. `large` is the
-   * standalone new-chat hero box, holding ~3 text lines of min-height.
-   * Both variants keep the (+) at the start of the bottom action row.
+   * Editor stature (`ComposerFrame`'s). `compact` (default) is the follow-up
+   * bar: one line beside its controls, then text over a control row once the
+   * draft needs a second line. `large` is the standalone new-chat hero box,
+   * text over a control row from the start, ~3 text lines tall while empty.
    */
   variant?: "compact" | "large";
   onSubmit: ChatSend;
@@ -307,56 +290,85 @@ export const ChatInputSurface = ({
       aiSendBlockReason,
       t,
     });
-  // Compact rows seat every control in the shared slot so it centres on the
-  // text line; the large variant lays its controls out in a plain action row.
-  const ControlGroup = variant === "compact" ? ComposerControlSlot : "div";
+  // Default focus border (gray) only when not in anonymized mode: the gray
+  // border on top of the blue ring read as a double ring on click.
+  let ring: "anonymized" | "focus" | "none" = "none";
+  if (anonymized) {
+    ring = "anonymized";
+  } else if (!inputDisabled) {
+    ring = "focus";
+  }
+  const stature =
+    variant === "compact"
+      ? ({ stature: "compact", empty: isEmpty } as const)
+      : ({ stature: "large" } as const);
 
   return (
     // Outer wrapper carries caller positioning (`className`) and the slim
-    // status row; the inner box keeps the border and the drag/paste/focus
+    // status row; the frame keeps the border and the drag/paste/focus
     // handlers so the row sits outside the border but still inside scope.
     <RenderStormRegion name="chat-composer">
       <div className={cn("flex flex-col", className)}>
-        <div
+        <ComposerFrame
           {...guideAnchor(GUIDE_ANCHORS.chatComposer, guideAnchorsEnabled)}
-          className={cn(
-            COMPOSER_BOX_CLASS,
-            // Default focus border (gray) only when not in anonymized
-            // mode — otherwise the gray border landed on top of the
-            // blue ring and read as a double-ring on click.
-            !inputDisabled && !anonymized && COMPOSER_BOX_FOCUS_CLASS,
-            anonymized && COMPOSER_BOX_ANONYMIZED_CLASS,
-          )}
+          {...stature}
+          attachments={
+            <ChatDraftAttachmentChips
+              files={attachments}
+              onRemove={removeFile}
+              onExpand={expandPastedText}
+            />
+          }
+          leading={
+            <ComposerPlusMenu
+              guideAnchorsEnabled={guideAnchorsEnabled}
+              context={
+                context
+                  ? {
+                      activeOrganizationId: context.activeOrganizationId,
+                      editor,
+                      threadRef: context.threadRef,
+                    }
+                  : undefined
+              }
+              disabled={inputDisabled}
+              mcp={
+                mcpOrganizationId
+                  ? { activeOrganizationId: mcpOrganizationId }
+                  : undefined
+              }
+              models={models}
+              onNewThread={onNewThread}
+              onOpenFilePicker={openFilePicker}
+              skills={
+                skillsOrganizationId
+                  ? {
+                      activeOrganizationId: skillsOrganizationId,
+                      chat: skillChat,
+                      editor,
+                      reservedCommands,
+                    }
+                  : undefined
+              }
+            />
+          }
           onBlurCapture={handleBlur}
           onDragOver={inputDisabled ? undefined : handleDragOver}
           onDrop={inputDisabled ? undefined : handleDrop}
           onFocusCapture={handleFocus}
           onPaste={inputDisabled ? undefined : handlePaste}
+          placeholder={
+            isBlank ? (
+              <TruncatedText aria-hidden="true" hint={false}>
+                {placeholder}
+              </TruncatedText>
+            ) : undefined
+          }
           ref={rootRef}
-        >
-          <ChatDraftAttachmentChips
-            files={attachments}
-            onRemove={removeFile}
-            onExpand={expandPastedText}
-          />
-          <div
-            className={cn(
-              variant === "compact" && [
-                COMPOSER_COMPACT_GRID_CLASS,
-                COMPOSER_COMPACT_ROW_CLASS,
-              ],
-            )}
-          >
+          ring={ring}
+          text={
             <div
-              className={cn(
-                "chat-editor overflow-hidden",
-                variant === "compact"
-                  ? [
-                      COMPOSER_COMPACT_TEXT_SEAT_CLASS,
-                      COMPOSER_COMPACT_TEXT_CELL_CLASS,
-                    ]
-                  : ["relative min-w-0", COMPOSER_LARGE_TEXT_WELL_CLASS],
-              )}
+              className="chat-editor"
               onKeyDown={keepKeyPressLocal}
               role="presentation"
             >
@@ -368,124 +380,58 @@ export const ChatInputSurface = ({
                 }
               >
                 <PromptEditorContent
-                  // Compact: default to a single text line and grow with
-                  // content (drop the provider's `min-h-10`), matching the
-                  // inspector and file-chat bars. Large: hold ~3 text lines
-                  // (`text-sm` at `leading-5` = 20px per line) so the hero box
-                  // keeps its stature while empty.
-                  className={cn(
-                    variant === "large"
-                      ? "[&_.ProseMirror]:min-h-15"
-                      : "[&_.ProseMirror]:min-h-0",
-                    inputDisabled && "pointer-events-none",
-                  )}
+                  className={cn(inputDisabled && "pointer-events-none")}
                   editor={editor}
                 />
               </ReferenceRenderScope>
-              {isBlank && (
-                <ComposerPlaceholder stature={variant}>
-                  {placeholder}
-                </ComposerPlaceholder>
-              )}
             </div>
-            <div
-              className={cn(
-                variant === "compact"
-                  ? "contents"
-                  : COMPOSER_LARGE_ACTION_ROW_CLASS,
-              )}
-            >
-              <ControlGroup
-                className={cn(
-                  COMPOSER_LEADING_GROUP_CLASS,
-                  variant === "compact"
-                    ? COMPOSER_COMPACT_LEADING_SEAT_CLASS
-                    : "me-auto",
-                )}
-              >
-                <ComposerPlusMenu
-                  guideAnchorsEnabled={guideAnchorsEnabled}
-                  context={
-                    context
-                      ? {
-                          activeOrganizationId: context.activeOrganizationId,
-                          editor,
-                          threadRef: context.threadRef,
-                        }
-                      : undefined
-                  }
-                  disabled={inputDisabled}
-                  mcp={
-                    mcpOrganizationId
-                      ? { activeOrganizationId: mcpOrganizationId }
-                      : undefined
-                  }
-                  models={models}
-                  onNewThread={onNewThread}
-                  onOpenFilePicker={openFilePicker}
-                  skills={
-                    skillsOrganizationId
-                      ? {
-                          activeOrganizationId: skillsOrganizationId,
-                          chat: skillChat,
-                          editor,
-                          reservedCommands,
-                        }
-                      : undefined
-                  }
+          }
+          trailing={
+            <>
+              <span className={COMPOSER_IMPROVE_SEAT_CLASS}>
+                <ChatPromptImproveButton
+                  anonymized={anonymized}
+                  controller={controller}
+                  disabled={inputDisabled || isBlank}
+                  disabledReason={improvePromptDisabledReason}
                 />
-              </ControlGroup>
-              <ControlGroup
-                className={cn(
-                  COMPOSER_TRAILING_GROUP_CLASS,
-                  variant === "compact" && COMPOSER_COMPACT_TRAILING_SEAT_CLASS,
-                )}
-              >
-                <span className={COMPOSER_IMPROVE_SEAT_CLASS}>
-                  <ChatPromptImproveButton
-                    anonymized={anonymized}
-                    controller={controller}
-                    disabled={inputDisabled || isBlank}
-                    disabledReason={improvePromptDisabledReason}
-                  />
-                </span>
-                {/* The single primary affordance morphs in place: the button
+              </span>
+              {/* The single primary affordance morphs in place: the button
                   itself resolves send vs. stop from the state it is fed, so
                   this surface cannot render a second, parallel control. */}
-                <ChatComposerQueueButton
+              <ChatComposerQueueButton
+                canSend={canSend}
+                offered={queueOffered}
+                sendDisabledReason={sendDisabledReason}
+                submitDraft={submitDraft}
+              />
+              <ChatComposerDictateButton
+                key={dictationThreadKey(context)}
+                blank={isBlank}
+                context={context}
+                controller={controller}
+                disabled={inputDisabled}
+                guideAnchorsEnabled={guideAnchorsEnabled}
+                isGenerating={isGenerating}
+              >
+                <ChatComposerActionButton
                   canSend={canSend}
-                  offered={queueOffered}
-                  sendDisabledReason={sendDisabledReason}
-                  submitDraft={submitDraft}
-                />
-                <ChatComposerDictateButton
-                  key={dictationThreadKey(context)}
-                  blank={isBlank}
-                  context={context}
-                  controller={controller}
-                  disabled={inputDisabled}
+                  disabledReason={sendDisabledReason}
                   guideAnchorsEnabled={guideAnchorsEnabled}
                   isGenerating={isGenerating}
-                >
-                  <ChatComposerActionButton
-                    canSend={canSend}
-                    disabledReason={sendDisabledReason}
-                    guideAnchorsEnabled={guideAnchorsEnabled}
-                    isGenerating={isGenerating}
-                    onSend={() => {
-                      detached(
-                        submitDraft(CHAT_MEMBER_SEND_ACTION.send),
-                        "chat-input-surface.submit-draft",
-                      );
-                    }}
-                    onStop={onStop}
-                    stopping={stopping}
-                  />
-                </ChatComposerDictateButton>
-              </ControlGroup>
-            </div>
-          </div>
-        </div>
+                  onSend={() => {
+                    detached(
+                      submitDraft(CHAT_MEMBER_SEND_ACTION.send),
+                      "chat-input-surface.submit-draft",
+                    );
+                  }}
+                  onStop={onStop}
+                  stopping={stopping}
+                />
+              </ChatComposerDictateButton>
+            </>
+          }
+        />
         {dock}
       </div>
     </RenderStormRegion>

@@ -687,8 +687,7 @@ const UserMessageEditForm = ({
       "aria-multiline": "true",
       "aria-label": t("chat.editMessageInput"),
       dir: "auto",
-      class:
-        "field-sizing-content min-h-10 text-sm wrap-anywhere focus-visible:outline-none",
+      class: "min-h-10 text-sm wrap-anywhere focus-visible:outline-none",
     },
   }));
   const editor = useEditor({

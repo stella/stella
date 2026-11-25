@@ -6479,62 +6479,12 @@
       "file": "./src/components/composer.d.ts",
       "exports": [
         {
-          "name": "COMPOSER_BOX_ANONYMIZED_CLASS",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "COMPOSER_BOX_CLASS",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "COMPOSER_BOX_FOCUS_CLASS",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "COMPOSER_COMPACT_ROW_CLASS",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "COMPOSER_COMPACT_TEXT_CELL_CLASS",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
           "name": "COMPOSER_CONTROL_BUTTON_SIZE",
           "kind": "variable",
           "space": "value"
         },
         {
-          "name": "COMPOSER_LARGE_ACTION_ROW_CLASS",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "COMPOSER_LARGE_EDITOR_CLASS",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "COMPOSER_LARGE_TEXT_WELL_CLASS",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "COMPOSER_LEADING_GROUP_CLASS",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
           "name": "COMPOSER_PICKER_TRIGGER_CLASS",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "COMPOSER_PLACEHOLDER_CLASS",
           "kind": "variable",
           "space": "value"
         },
@@ -6569,12 +6519,18 @@
           "space": "type"
         },
         {
-          "name": "ComposerPlaceholder",
+          "name": "ComposerStatusRow",
           "kind": "variable",
           "space": "value"
-        },
+        }
+      ]
+    },
+    "./composer-frame": {
+      "type": "module",
+      "file": "./src/components/composer-frame.d.ts",
+      "exports": [
         {
-          "name": "ComposerStatusRow",
+          "name": "ComposerFrame",
           "kind": "variable",
           "space": "value"
         }
@@ -6585,27 +6541,7 @@
       "file": "./src/components/composer-tokens.d.ts",
       "exports": [
         {
-          "name": "COMPOSER_BOX_ANONYMIZED_CLASS",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
           "name": "COMPOSER_BOX_CLASS",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "COMPOSER_BOX_FOCUS_CLASS",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "COMPOSER_COMPACT_ROW_CLASS",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "COMPOSER_COMPACT_TEXT_CELL_CLASS",
           "kind": "variable",
           "space": "value"
         },
@@ -6615,32 +6551,7 @@
           "space": "value"
         },
         {
-          "name": "COMPOSER_LARGE_ACTION_ROW_CLASS",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "COMPOSER_LARGE_EDITOR_CLASS",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "COMPOSER_LARGE_TEXT_WELL_CLASS",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "COMPOSER_LEADING_GROUP_CLASS",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
           "name": "COMPOSER_PICKER_TRIGGER_CLASS",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "COMPOSER_PLACEHOLDER_CLASS",
           "kind": "variable",
           "space": "value"
         },
@@ -6661,6 +6572,11 @@
         },
         {
           "name": "COMPOSER_TEXT_CLASS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "DOC_FLOAT_SURFACE_CLASS",
           "kind": "variable",
           "space": "value"
         }
@@ -13481,8 +13397,9 @@
     "./src/components/color-picker.d.ts": "import type * as React from \"react\";\ntype ColorPreset = {\n    color?: string;\n    label: string;\n    value: string;\n};\ntype ColorPickerProps = {\n    align?: \"center\" | \"end\" | \"start\";\n    className?: string;\n    columns?: number;\n    defaultExpanded?: boolean;\n    moreLabel: string;\n    nativeButton?: boolean;\n    onClear?: () => void;\n    onSelect?: (value: string) => void;\n    presets?: ColorPreset[];\n    side?: \"bottom\" | \"left\" | \"right\" | \"top\";\n    trigger: React.ReactElement;\n    value?: string | undefined;\n};\ntype ColorPickerContentBaseProps = {\n    moreLabel: string;\n    onSelect?: ((value: string) => void) | undefined;\n    presets: ColorPreset[];\n    value?: string | undefined;\n};\ntype ColorPickerContentProps = ColorPickerContentBaseProps & ({\n    columns: number;\n    defaultExpanded: boolean;\n    onClear?: (() => void) | undefined;\n    presentation?: \"popover\";\n} | {\n    columns?: never;\n    defaultExpanded?: never;\n    onClear?: never;\n    presentation: \"inline\";\n});\ndeclare const DEFAULT_PRESETS: ColorPreset[];\ndeclare const ColorPickerContent: ({ value, onSelect, onClear, presets, columns, defaultExpanded, moreLabel, presentation, }: ColorPickerContentProps) => React.JSX.Element;\ndeclare const ColorPicker: ({ value, onSelect, onClear, presets, columns, defaultExpanded, moreLabel, nativeButton, trigger, side, align, className, }: ColorPickerProps) => React.JSX.Element;\nexport { ColorPicker, ColorPickerContent, DEFAULT_PRESETS, type ColorPickerContentProps, type ColorPickerProps, type ColorPreset, };\n",
     "./src/components/combobox.d.ts": "import * as React from \"react\";\nimport { Combobox as ComboboxPrimitive } from \"@base-ui/react/combobox\";\nimport type { ControlSize } from \"../lib/control-size\";\ndeclare const Combobox: <Value, Multiple extends boolean | undefined = false>(props: ComboboxPrimitive.Root.Props<Value, Multiple>) => React.JSX.Element;\ndeclare const ComboboxChipsInput: ({ className, size, ...props }: Omit<ComboboxPrimitive.Input.Props, \"size\"> & {\n    ref?: React.Ref<HTMLInputElement>;\n    size?: ControlSize | number;\n}) => React.JSX.Element;\ndeclare const ComboboxInput: ({ className, showTrigger, showClear, startAddon, size, ...props }: Omit<ComboboxPrimitive.Input.Props, \"size\"> & {\n    ref?: React.Ref<HTMLInputElement>;\n    showClear?: boolean;\n    showTrigger?: boolean;\n    size?: ControlSize | number;\n    startAddon?: React.ReactNode;\n}) => React.JSX.Element;\ndeclare const ComboboxTrigger: ({ className, variant, ...props }: ComboboxPrimitive.Trigger.Props & {\n    variant?: \"field\" | \"plain\";\n}) => React.JSX.Element;\ndeclare const ComboboxPopup: ({ className, children, side, sideOffset, alignOffset, align, ...props }: ComboboxPrimitive.Popup.Props & {\n    align?: ComboboxPrimitive.Positioner.Props[\"align\"];\n    alignOffset?: ComboboxPrimitive.Positioner.Props[\"alignOffset\"];\n    side?: ComboboxPrimitive.Positioner.Props[\"side\"];\n    sideOffset?: ComboboxPrimitive.Positioner.Props[\"sideOffset\"];\n}) => React.JSX.Element;\ndeclare const ComboboxItem: ({ className, children, ...props }: ComboboxPrimitive.Item.Props) => React.JSX.Element;\ndeclare const ComboboxSeparator: ({ className, ...props }: ComboboxPrimitive.Separator.Props) => React.JSX.Element;\ndeclare const ComboboxGroup: ({ className, ...props }: ComboboxPrimitive.Group.Props) => React.JSX.Element;\ndeclare const ComboboxGroupLabel: ({ className, ...props }: ComboboxPrimitive.GroupLabel.Props) => React.JSX.Element;\ndeclare const ComboboxEmpty: ({ className, ...props }: ComboboxPrimitive.Empty.Props) => React.JSX.Element;\ndeclare const ComboboxRow: ({ className, ...props }: ComboboxPrimitive.Row.Props) => React.JSX.Element;\ndeclare const ComboboxValue: ({ ...props }: ComboboxPrimitive.Value.Props) => React.JSX.Element;\ndeclare const ComboboxList: ({ className, ...props }: ComboboxPrimitive.List.Props) => React.JSX.Element;\ndeclare const ComboboxClear: ({ className, ...props }: ComboboxPrimitive.Clear.Props) => React.JSX.Element;\ndeclare const ComboboxStatus: ({ className, ...props }: ComboboxPrimitive.Status.Props) => React.JSX.Element;\ndeclare const ComboboxCollection: (props: ComboboxPrimitive.Collection.Props) => React.JSX.Element;\ndeclare const ComboboxChips: ({ className, children, startAddon, ...props }: ComboboxPrimitive.Chips.Props & {\n    startAddon?: React.ReactNode;\n}) => React.JSX.Element;\ndeclare const ComboboxChip: ({ children, ...props }: ComboboxPrimitive.Chip.Props) => React.JSX.Element;\nexport { Combobox, ComboboxChipsInput, ComboboxInput, ComboboxTrigger, ComboboxPopup, ComboboxItem, ComboboxSeparator, ComboboxGroup, ComboboxGroupLabel, ComboboxEmpty, ComboboxValue, ComboboxList, ComboboxClear, ComboboxStatus, ComboboxRow, ComboboxCollection, ComboboxChips, ComboboxChip, };\n",
     "./src/components/command.d.ts": "import type * as React from \"react\";\nimport { Autocomplete as AutocompletePrimitive } from \"@base-ui/react/autocomplete\";\nimport { Dialog as DialogPrimitive } from \"@base-ui/react/dialog\";\nimport { type VariantProps } from \"class-variance-authority\";\nimport type { ControlSize } from \"../lib/control-size\";\nimport { DialogPopup } from \"./dialog\";\ntype CommandProps<ItemValue> = Omit<AutocompletePrimitive.Root.Props<ItemValue>, \"items\"> & {\n    items?: readonly ItemValue[] | undefined;\n};\ndeclare const Command: <ItemValue>({ autoHighlight, keepHighlight, open, ...props }: CommandProps<ItemValue>) => React.JSX.Element;\ndeclare const CommandDialog: <Payload>(props: DialogPrimitive.Root.Props<Payload>) => React.JSX.Element;\ndeclare const CommandDialogTrigger: (props: DialogPrimitive.Trigger.Props) => React.JSX.Element;\ndeclare const CommandDialogPopup: ({ className, showCloseButton, ...props }: React.ComponentProps<typeof DialogPopup>) => React.JSX.Element;\ntype CommandInputProps = Omit<AutocompletePrimitive.Input.Props, \"size\"> & {\n    ref?: React.Ref<HTMLInputElement>;\n    size?: ControlSize | number;\n    wrapperClassName?: string;\n};\ndeclare const CommandInput: ({ className, size, wrapperClassName, dir, onChange, ...props }: CommandInputProps) => React.JSX.Element;\ndeclare const CommandPanel: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const CommandEmpty: ({ className, ...props }: AutocompletePrimitive.Empty.Props) => React.JSX.Element;\ndeclare const CommandList: ({ className, ...props }: AutocompletePrimitive.List.Props & {\n    ref?: React.Ref<HTMLDivElement>;\n}) => React.JSX.Element;\ndeclare const CommandGroup: ({ className, ...props }: AutocompletePrimitive.Group.Props) => React.JSX.Element;\ndeclare const CommandGroupLabel: ({ className, ...props }: AutocompletePrimitive.GroupLabel.Props) => React.JSX.Element;\ndeclare const CommandCollection: (props: AutocompletePrimitive.Collection.Props) => React.JSX.Element;\ndeclare const commandItemVariants: (props?: ({\n    size?: \"default\" | \"row\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\ndeclare const CommandItem: ({ className, size, ...props }: AutocompletePrimitive.Item.Props & {\n    ref?: React.Ref<HTMLDivElement>;\n    size?: VariantProps<typeof commandItemVariants>[\"size\"];\n}) => React.JSX.Element;\ndeclare const CommandSeparator: ({ className, ...props }: AutocompletePrimitive.Separator.Props) => React.JSX.Element;\ndeclare const CommandShortcut: ({ className, ...props }: React.ComponentProps<\"span\">) => React.JSX.Element;\ndeclare const CommandFooter: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport { Command, CommandCollection, CommandDialog, CommandDialogPopup, CommandDialogTrigger, CommandEmpty, CommandFooter, CommandGroup, CommandGroupLabel, CommandInput, CommandItem, CommandList, CommandPanel, CommandSeparator, CommandShortcut, };\n",
-    "./src/components/composer-tokens.d.ts": "export declare const COMPOSER_CONTROL_BUTTON_SIZE: \"icon-sm\";\nexport declare const COMPOSER_BOX_CLASS = \"bg-background rounded-2xl border\";\nexport declare const COMPOSER_BOX_FOCUS_CLASS = \"focus-within:border-ring\";\nexport declare const COMPOSER_BOX_ANONYMIZED_CLASS = \"ring-info/40 border-info/40 focus-within:border-info/60 shadow-[0_0_0_4px_rgb(from_var(--color-info)_r_g_b_/_0.08)] ring-1\";\nexport declare const COMPOSER_COMPACT_ROW_CLASS = \"min-h-11 items-end gap-1 px-1.5 py-px\";\nexport declare const COMPOSER_COMPACT_TEXT_CELL_CLASS = \"relative min-w-0 py-[11px]\";\nexport declare const COMPOSER_TEXT_CLASS = \"text-sm leading-5\";\nexport declare const COMPOSER_LARGE_TEXT_WELL_CLASS = \"ps-3 pe-3 pt-2 pb-1\";\nexport declare const COMPOSER_LARGE_EDITOR_CLASS = \"min-h-15\";\nexport declare const COMPOSER_PLACEHOLDER_CLASS = \"text-foreground-placeholder pointer-events-none absolute text-sm\";\nexport declare const COMPOSER_LARGE_ACTION_ROW_CLASS = \"flex items-center justify-end gap-0.5 px-1.5 pb-1.5\";\nexport declare const COMPOSER_LEADING_GROUP_CLASS = \"flex min-w-0 items-center gap-0.5\";\nexport declare const COMPOSER_SEND_BUTTON_CLASS = \"bg-foreground text-background hover:bg-foreground/90 size-7 shrink-0 rounded-full\";\nexport declare const COMPOSER_PICKER_TRIGGER_CLASS = \"text-muted-foreground hover:text-foreground hover:bg-accent inline-flex min-w-0 shrink items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs\";\nexport declare const COMPOSER_STATUS_ROW_CENTERED_CLASS = \"text-muted-foreground @container mt-1.5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-1 text-xs\";\nexport declare const COMPOSER_STATUS_ROW_CLASS = \"text-muted-foreground mt-1.5 flex items-center justify-between gap-2 px-1 text-xs\";\n",
-    "./src/components/composer.d.ts": "import type { ReactNode } from \"react\";\nexport { COMPOSER_CONTROL_BUTTON_SIZE, COMPOSER_BOX_CLASS, COMPOSER_BOX_FOCUS_CLASS, COMPOSER_BOX_ANONYMIZED_CLASS, COMPOSER_COMPACT_ROW_CLASS, COMPOSER_COMPACT_TEXT_CELL_CLASS, COMPOSER_TEXT_CLASS, COMPOSER_LARGE_TEXT_WELL_CLASS, COMPOSER_LARGE_EDITOR_CLASS, COMPOSER_PLACEHOLDER_CLASS, COMPOSER_LARGE_ACTION_ROW_CLASS, COMPOSER_LEADING_GROUP_CLASS, COMPOSER_SEND_BUTTON_CLASS, COMPOSER_PICKER_TRIGGER_CLASS, COMPOSER_STATUS_ROW_CENTERED_CLASS, COMPOSER_STATUS_ROW_CLASS, } from \"./composer-tokens\";\ndeclare const COMPOSER_PLACEHOLDER_POSITION_CLASS: {\n    readonly compact: \"start-0 end-0 top-1/2 -translate-y-1/2\";\n    readonly large: \"start-3 end-3 top-2\";\n};\nexport declare const ComposerPlaceholder: ({ children, stature, }: {\n    children: ReactNode;\n    stature: keyof typeof COMPOSER_PLACEHOLDER_POSITION_CLASS;\n}) => import(\"react\").JSX.Element;\ntype ComposerStatusRowProps = {\n    center?: ReactNode | undefined;\n    className?: string | undefined;\n    end?: ReactNode | undefined;\n    start?: ReactNode | undefined;\n};\nexport declare const ComposerStatusRow: ({ start, end, center, className, }: ComposerStatusRowProps) => import(\"react\").JSX.Element | null;\nexport type ComposerPickerOption<Value extends string> = {\n    label: string;\n    value: Value;\n};\ntype ComposerPickerProps<Value extends string> = {\n    ariaLabel: string;\n    icon: ReactNode;\n    onChange: (value: Value) => void;\n    options: readonly ComposerPickerOption<Value>[];\n    value: Value;\n};\nexport declare const ComposerPicker: <Value extends string>({ ariaLabel, icon, onChange, options, value, }: ComposerPickerProps<Value>) => import(\"react\").JSX.Element;\n",
+    "./src/components/composer-frame.d.ts": "import type { ComponentProps, ReactNode } from \"react\";\ntype ComposerRing = \"anonymized\" | \"attention\" | \"focus\" | \"none\";\ntype ComposerSurface = \"document\" | \"page\";\ntype ComposerStature = {\n    empty: boolean;\n    stature: \"compact\";\n} | {\n    empty?: never;\n    stature: \"large\";\n};\ntype ComposerFrameProps = Omit<ComponentProps<\"div\">, \"children\" | \"className\"> & ComposerStature & {\n    above?: ReactNode;\n    attachments?: ReactNode;\n    leading?: ReactNode;\n    placeholder?: ReactNode;\n    ring: ComposerRing;\n    surface?: ComposerSurface | undefined;\n    text: ReactNode;\n    trailing?: ReactNode;\n};\nexport declare const ComposerFrame: ({ above, attachments, empty, leading, placeholder, ring, stature, surface, text, trailing, ...boxProps }: ComposerFrameProps) => import(\"react\").JSX.Element;\nexport {};\n",
+    "./src/components/composer-tokens.d.ts": "export declare const COMPOSER_CONTROL_BUTTON_SIZE: \"icon-sm\";\nexport declare const COMPOSER_BOX_CLASS = \"bg-background rounded-2xl border\";\nexport declare const DOC_FLOAT_SURFACE_CLASS = \"[--doc-float-surface:var(--color-white)] dark:[--doc-float-surface:var(--popover)] bg-(--doc-float-surface)\";\nexport declare const COMPOSER_TEXT_CLASS = \"text-sm leading-5\";\nexport declare const COMPOSER_SEND_BUTTON_CLASS = \"bg-foreground text-background hover:bg-foreground/90 size-7 shrink-0 rounded-full\";\nexport declare const COMPOSER_PICKER_TRIGGER_CLASS = \"text-muted-foreground hover:text-foreground hover:bg-accent inline-flex min-w-0 shrink items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs\";\nexport declare const COMPOSER_STATUS_ROW_CENTERED_CLASS = \"text-muted-foreground @container mt-1.5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-1 text-xs\";\nexport declare const COMPOSER_STATUS_ROW_CLASS = \"text-muted-foreground mt-1.5 flex items-center justify-between gap-2 px-1 text-xs\";\n",
+    "./src/components/composer.d.ts": "import type { ReactNode } from \"react\";\nexport { COMPOSER_CONTROL_BUTTON_SIZE, COMPOSER_TEXT_CLASS, COMPOSER_SEND_BUTTON_CLASS, COMPOSER_PICKER_TRIGGER_CLASS, COMPOSER_STATUS_ROW_CENTERED_CLASS, COMPOSER_STATUS_ROW_CLASS, } from \"./composer-tokens\";\ntype ComposerStatusRowProps = {\n    center?: ReactNode | undefined;\n    className?: string | undefined;\n    end?: ReactNode | undefined;\n    start?: ReactNode | undefined;\n};\nexport declare const ComposerStatusRow: ({ start, end, center, className, }: ComposerStatusRowProps) => import(\"react\").JSX.Element | null;\nexport type ComposerPickerOption<Value extends string> = {\n    label: string;\n    value: Value;\n};\ntype ComposerPickerProps<Value extends string> = {\n    ariaLabel: string;\n    icon: ReactNode;\n    onChange: (value: Value) => void;\n    options: readonly ComposerPickerOption<Value>[];\n    value: Value;\n};\nexport declare const ComposerPicker: <Value extends string>({ ariaLabel, icon, onChange, options, value, }: ComposerPickerProps<Value>) => import(\"react\").JSX.Element;\n",
     "./src/components/context-menu.d.ts": "import type { ReactNode } from \"react\";\nexport type ContextMenuAction = {\n    checked?: boolean;\n    closeOnClick?: boolean;\n    disabled?: boolean;\n    icon?: ReactNode;\n    label: string;\n    onClick?: () => void;\n    separatorBefore?: boolean;\n    submenu?: readonly ContextMenuAction[];\n    variant?: \"default\" | \"destructive\";\n};\nexport type ContextMenuProps = {\n    actions: readonly ContextMenuAction[];\n    children: ReactNode;\n};\nexport declare const ContextMenu: ({ actions, children, }: ContextMenuProps) => ReactNode;\nexport declare const ContextMenuActionItems: ({ actions, }: {\n    actions: readonly ContextMenuAction[];\n}) => import(\"react\").JSX.Element;\n",
     "./src/components/control-face.d.ts": "import type { ComponentType, ReactNode } from \"react\";\nimport type { ControlSize } from \"../lib/control-size\";\nimport { BUTTON_LAYOUT_CLASS_NAMES, type ButtonFaceSize } from \"./button-classes\";\nimport type { ButtonTokenVariant } from \"./button.shared\";\nimport { type SwitchSize } from \"./toggle-classes\";\nimport type { SegmentedIconToggleSize } from \"./toggle-group-classes\";\ntype ButtonFaceProps = {\n    children?: ReactNode;\n    className?: string | undefined;\n    layout?: keyof typeof BUTTON_LAYOUT_CLASS_NAMES;\n    size: ButtonFaceSize;\n    variant: ButtonTokenVariant;\n};\nexport declare const buttonFaceClassName: ({ size, variant, }: {\n    size: ButtonFaceSize;\n    variant: ButtonTokenVariant;\n}) => string;\nexport declare const ButtonFace: ({ children, className, layout, size, variant, }: ButtonFaceProps) => import(\"react\").JSX.Element;\nexport declare const FaceLabelPending: ({ className, }: {\n    className?: string | undefined;\n}) => import(\"react\").JSX.Element;\ntype InputFaceProps = {\n    children?: ReactNode;\n    className?: string | undefined;\n    fieldClassName?: string | undefined;\n    icon?: ReactNode;\n    size?: ControlSize;\n};\nexport declare const InputFace: ({ children, className, fieldClassName, icon, size, }: InputFaceProps) => import(\"react\").JSX.Element;\ntype SelectTriggerFaceProps = {\n    children?: ReactNode;\n    className?: string | undefined;\n    size?: ControlSize;\n};\nexport declare const SelectTriggerFace: ({ children, className, size, }: SelectTriggerFaceProps) => import(\"react\").JSX.Element;\ntype SegmentedIconToggleFaceProps<T extends string> = {\n    options: readonly {\n        icon: ComponentType<{\n            className?: string;\n        }>;\n        value: T;\n    }[];\n    size?: SegmentedIconToggleSize;\n    value?: T | undefined;\n};\nexport declare const SegmentedIconToggleFace: <T extends string>({ options, size, value, }: SegmentedIconToggleFaceProps<T>) => import(\"react\").JSX.Element;\nexport declare const FieldTriggerFace: ({ children, className, }: {\n    children?: ReactNode;\n    className?: string | undefined;\n}) => import(\"react\").JSX.Element;\nexport declare const CheckboxFace: ({ className, }: {\n    className?: string | undefined;\n}) => import(\"react\").JSX.Element;\nexport declare const SwitchFace: ({ className, size, }: {\n    className?: string | undefined;\n    size?: SwitchSize | undefined;\n}) => import(\"react\").JSX.Element;\nexport declare const LabelFace: ({ children, className, }: {\n    children: ReactNode;\n    className?: string | undefined;\n}) => import(\"react\").JSX.Element;\ntype FieldFaceLayout = \"inline\" | \"stack\";\ntype FieldFaceDensity = \"default\" | \"snug\";\nexport declare const FieldFace: ({ children, className, density, layout, }: {\n    children: ReactNode;\n    className?: string | undefined;\n    density?: FieldFaceDensity | undefined;\n    layout?: FieldFaceLayout | undefined;\n}) => import(\"react\").JSX.Element;\nexport declare const FieldDescriptionFace: ({ children, className, }: {\n    children: ReactNode;\n    className?: string | undefined;\n}) => import(\"react\").JSX.Element;\nexport declare const TabsFace: ({ activeIndex, tabs, }: {\n    activeIndex?: number | undefined;\n    tabs: readonly {\n        key: string;\n        label: ReactNode;\n    }[];\n}) => import(\"react\").JSX.Element;\nexport type SplitButtonSize = \"md\" | \"sm\";\nexport declare const SPLIT_BUTTON_ROOT_CLASS = \"group/split hover:border-border focus-within:border-border has-[[data-popup-open]]:border-border inline-flex shrink-0 items-center rounded-lg border border-transparent p-0.5\";\nexport declare const SPLIT_BUTTON_PRIMARY_CLASS: {\n    readonly md: \"active:bg-accent/80 rounded-md [&_svg]:mx-0 [&_svg]:size-3.5 [&_svg:not([class*='size-'])]:size-3.5 sm:[&_svg:not([class*='size-'])]:size-3.5 h-8 ps-2 pe-0.5 sm:h-8 pointer-coarse:min-h-11 pointer-coarse:min-w-11\";\n    readonly sm: \"active:bg-accent/80 rounded-md [&_svg]:mx-0 [&_svg]:size-3.5 [&_svg:not([class*='size-'])]:size-3.5 sm:[&_svg:not([class*='size-'])]:size-3.5 h-7 ps-1.5 pe-0.5 sm:h-7 pointer-coarse:min-h-11 pointer-coarse:min-w-11\";\n};\nexport declare const SPLIT_BUTTON_TRIGGER_CLASS: {\n    readonly md: \"group-hover/split:bg-muted group-focus-within/split:bg-muted hover:bg-accent active:bg-accent/80 data-popup-open:bg-accent rounded-md [&_svg]:mx-0 h-8 w-4 px-0 sm:h-8 pointer-coarse:min-h-11 pointer-coarse:min-w-11\";\n    readonly sm: \"group-hover/split:bg-muted group-focus-within/split:bg-muted hover:bg-accent active:bg-accent/80 data-popup-open:bg-accent rounded-md [&_svg]:mx-0 h-7 w-3.5 px-0 sm:h-7 pointer-coarse:min-h-11 pointer-coarse:min-w-11\";\n};\nexport declare const SplitButtonChevron: () => import(\"react\").JSX.Element;\nexport declare const SplitButtonFace: ({ children, size, }: {\n    children: ReactNode;\n    size?: SplitButtonSize;\n}) => import(\"react\").JSX.Element;\nexport {};\n",
     "./src/components/copy-button.d.ts": "import type { ComponentProps } from \"react\";\nimport { CopyToClipboardIcon } from \"../icons\";\nimport { Button } from \"./button\";\nexport declare const COPIED_RESET_MS = 1500;\ntype CopyButtonProps = Omit<ComponentProps<typeof Button>, \"children\" | \"onClick\"> & {\n    copiedLabel: string;\n    iconClassName?: string;\n    iconOnly?: boolean;\n    label: string;\n    labelClassName?: string;\n    onCopy: () => Promise<boolean>;\n};\nexport declare const useCopyConfirmation: (onCopy: () => Promise<boolean>) => {\n    copied: boolean;\n    copy: () => Promise<void>;\n};\nexport declare const CopyButton: ({ onCopy, label, copiedLabel, iconOnly, iconClassName, labelClassName, className, ...buttonProps }: CopyButtonProps) => import(\"react\").JSX.Element;\nexport declare const useCopiedFeedback: () => {\n    confirm: () => void;\n    copied: boolean;\n    reset: () => void;\n};\ntype CopyFeedbackProps = {\n    copied: boolean;\n    copiedLabel: string;\n    icon?: typeof CopyToClipboardIcon | undefined;\n    iconClassName?: string | undefined;\n    iconOnly?: boolean | undefined;\n    label: string;\n    labelClassName?: string | undefined;\n};\nexport declare const CopyFeedback: ({ icon: Icon, labelClassName, copied, copiedLabel, iconOnly, iconClassName, label, }: CopyFeedbackProps) => import(\"react\").JSX.Element;\nexport {};\n",

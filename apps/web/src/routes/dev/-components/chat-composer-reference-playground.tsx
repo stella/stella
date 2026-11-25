@@ -25,33 +25,42 @@ const LONG_LABEL =
 const SHORT_LABEL = "Plná moc.docx";
 // An unbreakable run, as a pasted link or file path arrives.
 const LONG_TOKEN = `https://example.test/spis/${"0123456789".repeat(8)}`;
+const DRAFT_POINTS = Array.from(
+  { length: 24 },
+  (_, index) =>
+    `${index + 1}. Check the counterparty's revised indemnity cap against the signed term sheet.`,
+);
 
 // A mention without a matter id reads nothing from the API, so the bench
 // renders offline; the chip draws from the node's own attributes.
+const mentionParagraph = (
+  id: string,
+  label: string,
+  trailing = " ",
+): JSONContent => ({
+  type: "paragraph",
+  content: [
+    {
+      type: "mention",
+      attrs: {
+        id,
+        label,
+        category: "entity",
+        kind: "document",
+        mimeType: DOCX_MIME,
+      },
+    },
+    { type: "text", text: trailing },
+  ],
+});
+
 const mentionDoc = (
   id: string,
   label: string,
   trailing = " ",
 ): JSONContent => ({
   type: "doc",
-  content: [
-    {
-      type: "paragraph",
-      content: [
-        {
-          type: "mention",
-          attrs: {
-            id,
-            label,
-            category: "entity",
-            kind: "document",
-            mimeType: DOCX_MIME,
-          },
-        },
-        { type: "text", text: trailing },
-      ],
-    },
-  ],
+  content: [mentionParagraph(id, label, trailing)],
 });
 
 const DOCS = {
@@ -89,6 +98,21 @@ const DOCS = {
     LONG_LABEL,
     ` ${LONG_TOKEN}`,
   ),
+  // A draft far taller than the composer's text region, so it scrolls there.
+  "compact-draft": {
+    type: "doc",
+    content: [
+      mentionParagraph(
+        "00000000-0000-4000-8000-000000000705",
+        SHORT_LABEL,
+        " covers these points:",
+      ),
+      ...DRAFT_POINTS.map((point) => ({
+        type: "paragraph",
+        content: [{ type: "text", text: point }],
+      })),
+    ],
+  },
 } as const satisfies Record<
   keyof typeof composerReferenceVariants | "pasted-reference-hints",
   JSONContent

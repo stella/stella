@@ -722,6 +722,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("field-parts-inside-field.fixture.tsx", [
     "field-parts-inside-field/field-parts-inside-field",
   ]),
+  fixtureRuleOverride("composer-attachments-in-frame.fixture.tsx", [
+    "composer-attachments-in-frame/composer-attachments-in-frame",
+  ]),
   fixtureRuleOverride("no-dom-node-poll-assertion.fixture.tsx", [
     "no-dom-node-poll-assertion/no-dom-node-poll-assertion",
   ]),
@@ -2420,6 +2423,9 @@ const config = defineConfig({
     "./.oxlint-plugins/no-centered-scroll-column.ts",
     "./.oxlint-plugins/inspector-header-title.ts",
     "./.oxlint-plugins/no-raw-overflow-scroll.ts",
+    "./.oxlint-plugins/no-control-beside-textbox.ts",
+    "./.oxlint-plugins/composer-attachments-in-frame.ts",
+    "./.oxlint-plugins/no-adhoc-textbox-growth.ts",
     "./.oxlint-plugins/radius-scale.ts",
     "./.oxlint-plugins/no-raw-context-menu.ts",
     "./.oxlint-plugins/no-hover-only-reveal.ts",
@@ -8090,6 +8096,65 @@ const config = defineConfig({
       ],
       rules: {
         "no-raw-overflow-scroll/no-raw-overflow-scroll": "error",
+      },
+    },
+    {
+      // A multi-line textbox never shares a row with its controls, nor sits
+      // under a control positioned over it: `ComposerFrame` lays a composer
+      // out, the text over a control row once it needs a second line.
+      files: [
+        "apps/web/src/**/*.tsx",
+        "apps/desktop/src/**/*.tsx",
+        "apps/outlook/src/**/*.tsx",
+        "packages/ui/src/**/*.tsx",
+        "packages/workspace-ui/src/**/*.tsx",
+        "packages/markdown-editor/src/**/*.tsx",
+        "packages/mcp-apps/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-control-beside-textbox.fixture.tsx",
+      ],
+      excludeFiles: ["**/*.{test,spec}.tsx", "**/__tests__/**"],
+      rules: {
+        "no-control-beside-textbox/no-control-beside-textbox": "error",
+      },
+    },
+    {
+      // A composer's draft attachments sit in `ComposerFrame`'s `attachments`
+      // slot: inside the box, above the text, outside its scroll region, the
+      // same on every composer. Tests mount the chips bare to drive them.
+      files: [
+        "apps/web/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/composer-attachments-in-frame.fixture.tsx",
+      ],
+      excludeFiles: ["**/*.{test,spec}.tsx", "**/__tests__/**"],
+      rules: {
+        "composer-attachments-in-frame/composer-attachments-in-frame": "error",
+      },
+    },
+    {
+      // A textbox's growth and scroll cap come from its primitive:
+      // `ComposerFrame` caps a composer's text in its own scroll region and
+      // `Textarea` grows a field to `maxRows`. Tests assert on class strings
+      // rather than rendering a textbox.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "apps/desktop/src/**/*.{ts,tsx}",
+        "apps/outlook/src/**/*.{ts,tsx}",
+        "apps/extension/src/**/*.{ts,tsx}",
+        "packages/ui/src/**/*.{ts,tsx}",
+        "packages/workspace-ui/src/**/*.{ts,tsx}",
+        "packages/markdown-editor/src/**/*.{ts,tsx}",
+        "packages/mcp-apps/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-adhoc-textbox-growth.fixture.tsx",
+      ],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        // The owner: `fieldSizing` and `maxRows` are its props, and it sets
+        // the field-sizing and the row cap they name.
+        "packages/ui/src/components/textarea.tsx",
+      ],
+      rules: {
+        "no-adhoc-textbox-growth/no-adhoc-textbox-growth": "error",
       },
     },
     {
