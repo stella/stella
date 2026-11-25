@@ -131,7 +131,7 @@ const reading = (
 const isAmbiguousNumeral = ({ shape }: LabelEntry): boolean =>
   shape.numeral === "lowerAmbiguous" || shape.numeral === "upperAmbiguous";
 
-const readEntry = (entry: LabelEntry): Reading => {
+const readEntry = (entry: LabelEntry, zones: Zones): Reading => {
   const labelled =
     entry.origin === "auto" ? CONFIDENCE.autoLabel : CONFIDENCE.typedLabel;
   switch (entry.level) {
@@ -178,10 +178,18 @@ const readEntry = (entry: LabelEntry): Reading => {
             confidence: CONFIDENCE.weakAlternative,
           });
     case "recital":
-      return reading("recital", CONFIDENCE.recital, {
-        role: "body",
-        confidence: CONFIDENCE.alternative,
-      });
+      // Recitals stand in front of the operative part. A capital letter
+      // that labels a paragraph inside an article heads a subsection or an
+      // item of a list there.
+      return entry.position > zones.firstProvision
+        ? reading("letter", CONFIDENCE.recital, {
+            role: "continuation",
+            confidence: CONFIDENCE.alternative,
+          })
+        : reading("recital", CONFIDENCE.recital, {
+            role: "body",
+            confidence: CONFIDENCE.alternative,
+          });
     default: {
       entry.level satisfies never;
       return panic("Unhandled level");
@@ -445,7 +453,7 @@ export const proposeBlockRoles = ({
         (entry.origin === "auto" || index.columnByBlockId.has(block.id))
       ) {
         proposals.push({
-          ...readEntry(entry),
+          ...readEntry(entry, zones),
           blockId: block.id,
           mergedIntoBlockId: null,
         });
@@ -462,7 +470,7 @@ export const proposeBlockRoles = ({
     const owner = titleOwner.get(block.id);
     if (owner !== undefined) {
       proposals.push({
-        ...readEntry(owner),
+        ...readEntry(owner, zones),
         blockId: block.id,
         mergedIntoBlockId: owner.blockId,
       });
@@ -472,7 +480,7 @@ export const proposeBlockRoles = ({
     proposals.push({
       ...(entry === undefined
         ? readUnlabelled(block, position, zones, index)
-        : readEntry(entry)),
+        : readEntry(entry, zones)),
       blockId: block.id,
       mergedIntoBlockId: null,
     });

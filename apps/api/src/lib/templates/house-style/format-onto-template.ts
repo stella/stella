@@ -67,8 +67,6 @@ type FormattingOutcome = {
   fillerLeft: number;
   droppedComments: number;
   droppedSectionBreaks: number;
-  /** Placed paragraphs whose label still differs from the source's. */
-  labelsChanged: number;
   pages: PageCounts;
 };
 
@@ -139,9 +137,11 @@ const numberedBlockIds = ({ body }: TemplatePlan): Set<string> => {
     if (typeof item.numbering === "object" && item.numbering !== null) {
       ids.add(item.blockId);
     }
-    for (const nested of item.nested ?? []) {
-      if (typeof nested.numbering === "object" && nested.numbering !== null) {
-        ids.add(nested.blockId);
+    if (item.nested !== undefined) {
+      for (const nested of item.nested) {
+        if (typeof nested.numbering === "object" && nested.numbering !== null) {
+          ids.add(nested.blockId);
+        }
       }
     }
   }
@@ -239,14 +239,15 @@ export const formatOntoTemplate = async ({
   };
 
   let attempts = 0;
-  let last:
+  /** The apply whose report asked for no further repair. */
+  let settled:
     | {
         built: ReturnType<typeof buildTemplatePlan>;
         docx: Uint8Array;
         report: TemplatePlanReport;
       }
     | undefined;
-  while (attempts < ATTEMPTS_MAX) {
+  while (settled === undefined && attempts < ATTEMPTS_MAX) {
     attempts += 1;
     const built = buildTemplatePlan({
       manifest,
@@ -268,19 +269,18 @@ export const formatOntoTemplate = async ({
       fillerStrings: profile.fillerStrings,
     });
     if (applied.isErr()) {
-      const { refusal, blockId } = applied.error;
-      const kind = exclusionFor(refusal);
+      const { reason, blockId } = applied.error;
+      const kind = exclusionFor(reason);
       if (
         kind === null ||
         blockId === undefined ||
-        !exclude(kind, blockId, refusal)
+        !exclude(kind, blockId, reason)
       ) {
         return Result.err(applied.error);
       }
       continue;
     }
     const { docx, report } = applied.value;
-    last = { built, docx, report };
     let repaired = false;
     // The house scheme renumbers on purpose.
     for (const blockId of mode === "keepSource"
@@ -296,19 +296,21 @@ export const formatOntoTemplate = async ({
       }
     }
     if (!repaired) {
-      break;
+      settled = { built, docx, report };
     }
   }
-  if (last === undefined) {
+  // An output whose report still asks for a repair prints a number or a
+  // field text the source does not: it is not returned.
+  if (settled === undefined) {
     return Result.err(
       new TemplateEngineError({
-        message: "The engine refused every repaired plan",
-        refusal: "other",
+        message: "The plan did not settle within the applies allowed",
+        reason: "other",
       }),
     );
   }
 
-  const { built, docx, report } = last;
+  const { built, docx, report } = settled;
   let pages: PageCounts = { status: "notMeasured" };
   if (engine.layout !== undefined) {
     const [before, after] = await Promise.all([
@@ -338,8 +340,6 @@ export const formatOntoTemplate = async ({
       fillerLeft: sum(report.leftovers.filler),
       droppedComments: report.dropped.comments,
       droppedSectionBreaks: report.dropped.sectionBreaks,
-      labelsChanged:
-        mode === "keepSource" ? changedLabels(built.plan, report).length : 0,
       pages,
     },
   });

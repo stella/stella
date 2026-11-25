@@ -76,8 +76,11 @@ describe("buildTemplatePlan, keeping the source's numbering", () => {
       ilvl: 0,
       numFmt: "upperRoman",
       lvlText: "Článek %1.",
-      // The document breaks its headings after the number.
+      // The document breaks its headings after the number: a space follows
+      // the number, and the centred heading's level loses the indent that
+      // would move its second line off the number's centre.
       suff: "space",
+      indent: { left: 0, hanging: 0 },
     });
     // Paragraphs are numbered within their article: no article number.
     expect(plan.numberingPatches).toContainEqual({
@@ -160,19 +163,45 @@ describe("buildTemplatePlan, keeping the source's numbering", () => {
     expect(note.counts.referencesLinked).toBe(plan.references?.length ?? 0);
   });
 
-  test("annex headings keep their typed designator on a spare level", () => {
+  test("an annex heading whose words carry punctuation stays typed text", () => {
+    // A field would show `.2` for `Příloha č. 2`: the period of `č.` stays.
     const heading = itemOf(plan, manifest, "Příloha č. 2\nCeník");
-    expect(heading).toMatchObject({
+    expect(heading).toMatchObject({ styleId: "Annex", numbering: null });
+    expect(heading).not.toHaveProperty("stripLabel");
+    expect(
+      plan.numberingPatches?.some(({ lvlText }) =>
+        lvlText?.includes("Příloha"),
+      ),
+    ).toBe(false);
+    expect(note.items.filter(({ kind }) => kind.startsWith("label"))).toEqual(
+      [],
+    );
+  });
+});
+
+describe("buildTemplatePlan, annexes a field can cite", () => {
+  const manifest = englishAgreement("See Clause 2.3(a) and Annex 2.");
+  const { plan } = build(manifest);
+
+  test("an annex heading in plain words takes a spare level and is linked", () => {
+    expect(itemOf(plan, manifest, "Annex 2\nCharges Table")).toMatchObject({
       styleId: "Annex",
-      stripLabel: "Příloha č. 2",
+      stripLabel: "Annex 2",
       numbering: { numId: OUTLINE_LIST, ilvl: 5 },
     });
     expect(plan.numberingPatches).toContainEqual({
       abstractNumId: 4,
       ilvl: 5,
       numFmt: "decimal",
-      lvlText: "Příloha č. %6",
+      lvlText: "Annex %6",
     });
+    expect(plan.references).toContainEqual(
+      expect.objectContaining({
+        targetBlockId: blockIdOf(manifest, "Annex 2\nCharges Table"),
+        expectedText: "2",
+        instruction: String.raw`\n \t \h`,
+      }),
+    );
   });
 });
 
@@ -210,6 +239,27 @@ describe("buildTemplatePlan, list instances", () => {
     ]);
   });
 
+  test("one heading with a break is enough to take the centred level's indent away", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I. První",
+      numbered("1.", "Odstavec.", 1),
+      "Článek II. Druhý",
+      numbered("1.", "Odstavec.", 2),
+      "Článek III.\nTřetí, jako jediný zalomený",
+      numbered("1.", "Odstavec.", 3),
+    ]);
+    const { plan } = build(manifest);
+    // Most headings run on one line: the tab after the number stays.
+    expect(plan.numberingPatches).toContainEqual({
+      abstractNumId: 4,
+      ilvl: 0,
+      numFmt: "upperRoman",
+      lvlText: "Článek %1.",
+      indent: { left: 0, hanging: 0 },
+    });
+  });
+
   test("a second format of one level and a bullet take spare levels", () => {
     const manifest = manifestOf([
       "SMLOUVA",
@@ -231,8 +281,14 @@ describe("buildTemplatePlan, list instances", () => {
     });
     expect(plan.numberingPatches).toEqual(
       expect.arrayContaining([
-        // The spare level already prints brackets; only its format moves.
-        { abstractNumId: 4, ilvl: 5, numFmt: "lowerLetter" },
+        // The spare level already prints brackets; its format moves, and
+        // it takes the indent of the letter level it stands in for.
+        {
+          abstractNumId: 4,
+          ilvl: 5,
+          numFmt: "lowerLetter",
+          indent: { left: 2268, hanging: 567 },
+        },
         { abstractNumId: 4, ilvl: 6, numFmt: "bullet", lvlText: "•" },
       ]),
     );
@@ -349,8 +405,16 @@ describe("buildTemplatePlan, what is left unlinked", () => {
 describe("buildTemplatePlan, the house scheme", () => {
   test("numbers by the template's levels and lets fields show the new numbers", () => {
     const manifest = czechContract("Viz čl. II odst. 2 této smlouvy.");
-    const { plan } = build(manifest, "houseScheme");
-    expect(plan.numberingPatches).toBeUndefined();
+    const { plan, note } = build(manifest, "houseScheme");
+    // The template's formats stay; only the broken headings are settled.
+    expect(plan.numberingPatches).toEqual([
+      {
+        abstractNumId: 4,
+        ilvl: 0,
+        suff: "space",
+        indent: { left: 0, hanging: 0 },
+      },
+    ]);
     expect(itemOf(plan, manifest, "Článek II.")).toMatchObject({
       numbering: { numId: OUTLINE_LIST, ilvl: 0 },
       stripLabel: "Článek II.",
@@ -361,10 +425,18 @@ describe("buildTemplatePlan, the house scheme", () => {
         .filter(({ blockId }) => blockId === citing)
         .map(({ expectedText, instruction }) => [expectedText, instruction]),
     ).toEqual([
-      // `Art. 2` without its word, and `2.2.` without its closing period.
-      ["2", String.raw`\n \t \h`],
+      // `2.2.` without its closing period.
       ["2.2", String.raw`\n \h`],
     ]);
+    // The article level prints `Art. 2`: a field would show `.2`, so the
+    // reference to the article stays text.
+    expect(note.items).toContainEqual(
+      expect.objectContaining({
+        kind: "referenceUnlinked",
+        blockId: citing,
+        reason: "punctuatedLevelWords",
+      }),
+    );
   });
 });
 

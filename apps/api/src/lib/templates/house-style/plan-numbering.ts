@@ -13,6 +13,7 @@ import { panic } from "better-result";
 import { parseRomanNumeral } from "@stll/api-contract/magyar-kozlony-designation";
 
 import {
+  digitsValue,
   formatNumeral,
   letterOrdinal,
 } from "@/api/lib/templates/house-style/designators";
@@ -149,9 +150,12 @@ const clauseParents = (
   entry: LabelEntry,
   { article, clauses }: OutlineLevels,
 ): string[] | null => {
-  const path = entry.shape.path ?? [];
+  const { path } = entry.shape;
   const depth = entry.clausePath.length;
   const above = clauses.slice(0, depth - 1);
+  if (path === null) {
+    return null;
+  }
   const withArticle =
     path.length === depth + 1 && path.at(0) === entry.articleOrdinal;
   if (
@@ -206,7 +210,7 @@ const renderLabel = (
 ): string | null => {
   let failed = false;
   const rendered = lvlText.replaceAll(/%(\d)/gu, (_match, digit: string) => {
-    const ilvl = Number(digit) - 1;
+    const ilvl = (digitsValue(digit) ?? 0) - 1;
     const numFmt = levels.find((level) => level.ilvl === ilvl)?.numFmt;
     const numeral = formatNumeral(counters[ilvl] ?? 1, numFmt ?? "decimal");
     if (numeral === null) {
@@ -262,7 +266,10 @@ const assignSpareLevels = (
   candidates: readonly Placement[],
   chosen: Map<string, LabelPattern>,
   spareLevels: readonly ProfileListLevel[],
-): void => {
+): Map<string, ProfileListLevel> => {
+  /** The role level whose paragraphs a spare level takes over, by spare
+   *  level: they keep that level's indent. */
+  const standsFor = new Map<string, ProfileListLevel>();
   const displaced = new Map<string, Placement[]>();
   for (const placement of candidates) {
     const { level, pattern } = placement;
@@ -274,18 +281,25 @@ const assignSpareLevels = (
     if (wanted !== undefined && formatKey(pattern) === formatKey(wanted)) {
       continue;
     }
-    const group = displaced.get(formatKey(pattern)) ?? [];
-    group.push(placement);
-    displaced.set(formatKey(pattern), group);
+    const group = displaced.get(formatKey(pattern));
+    if (group === undefined) {
+      displaced.set(formatKey(pattern), [placement]);
+    } else {
+      group.push(placement);
+    }
   }
   const spare = [...spareLevels];
   for (const group of [...displaced.values()].toSorted(
     (left, right) => right.length - left.length,
   )) {
     const level = spare.shift();
-    const pattern = group.at(0)?.pattern ?? null;
+    const first = group.at(0);
+    const pattern = first?.pattern ?? null;
     if (level !== undefined && pattern !== null) {
       chosen.set(levelKey(level), pattern);
+    }
+    if (level !== undefined && first !== undefined && first.level !== null) {
+      standsFor.set(levelKey(level), first.level);
     }
     for (const placement of group) {
       if (level === undefined) {
@@ -298,6 +312,7 @@ const assignSpareLevels = (
       }
     }
   }
+  return standsFor;
 };
 
 type Instance = {
@@ -335,7 +350,9 @@ const countLists = ({
     if (!numbered || level === null) {
       continue;
     }
-    const levels = levelsByList.get(level.abstractNumId) ?? [];
+    const levels =
+      levelsByList.get(level.abstractNumId) ??
+      panic("A numbered paragraph's list has no levels");
     const current = currentByList.get(level.abstractNumId) ?? {
       group: null,
       counters: [],
@@ -412,9 +429,10 @@ export const numberPlacements = ({
     mode === "keepSource"
       ? voteLevelPatterns(candidates)
       : new Map<string, LabelPattern>();
-  if (mode === "keepSource") {
-    assignSpareLevels(candidates, chosen, spareLevels);
-  }
+  const standsFor =
+    mode === "keepSource"
+      ? assignSpareLevels(candidates, chosen, spareLevels)
+      : new Map<string, ProfileListLevel>();
   const usedLevels = new Map<string, ProfileListLevel>();
   for (const placement of candidates) {
     // The house scheme numbers the roles' own levels only.
@@ -430,9 +448,13 @@ export const numberPlacements = ({
     const pattern = chosen.get(key);
     const { numFmt, lvlText } =
       pattern === undefined ? level : formatAt(pattern, level.ilvl);
-    const levels = levelsByList.get(level.abstractNumId) ?? [];
-    levels.push({ ilvl: level.ilvl, start: level.start, numFmt, lvlText });
-    levelsByList.set(level.abstractNumId, levels);
+    const format = { ilvl: level.ilvl, start: level.start, numFmt, lvlText };
+    const levels = levelsByList.get(level.abstractNumId);
+    if (levels === undefined) {
+      levelsByList.set(level.abstractNumId, [format]);
+    } else {
+      levels.push(format);
+    }
   }
 
   // Taking a paragraph out changes the count of those after it.
@@ -453,10 +475,25 @@ export const numberPlacements = ({
         placement.level !== null &&
         levelKey(placement.level) === key,
     );
+    // A spare level lies deeper than the level it stands in for and would
+    // indent its paragraphs further; it takes that level's indent.
+    const origin = standsFor.get(key)?.indent;
+    const indent =
+      origin === undefined ||
+      (origin.left === level.indent.left &&
+        origin.hanging === level.indent.hanging)
+        ? null
+        : {
+            ...(origin.left === null ? {} : { left: origin.left }),
+            ...(origin.hanging === null ? {} : { hanging: origin.hanging }),
+          };
+    const stated = indent !== null && Object.keys(indent).length > 0;
     if (
       used &&
       format !== undefined &&
-      (format.numFmt !== level.numFmt || format.lvlText !== level.lvlText)
+      (format.numFmt !== level.numFmt ||
+        format.lvlText !== level.lvlText ||
+        stated)
     ) {
       patches.push({
         abstractNumId: level.abstractNumId,
@@ -465,6 +502,7 @@ export const numberPlacements = ({
         ...(format.lvlText === level.lvlText
           ? {}
           : { lvlText: format.lvlText }),
+        ...(stated ? { indent } : {}),
       });
     }
   }

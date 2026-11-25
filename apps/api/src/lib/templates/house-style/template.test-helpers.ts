@@ -17,6 +17,9 @@ const PARTY_LIST = 20;
 
 type StyleSpec = [styleId: string, name: string, numPr?: [number, number]];
 
+/** Styles the invented template centres. */
+const CENTRED: ReadonlySet<string> = new Set(["Title", "Article"]);
+
 const style = ([styleId, name, numPr]: StyleSpec): TemplateStyle => ({
   styleId,
   name,
@@ -24,6 +27,7 @@ const style = ([styleId, name, numPr]: StyleSpec): TemplateStyle => ({
   basedOn: styleId === "Normal" ? null : "Normal",
   numPr: numPr === undefined ? null : { numId: numPr[0], ilvl: numPr[1] },
   outlineLvl: null,
+  alignment: CENTRED.has(styleId) ? "center" : null,
   isDefault: styleId === "Normal",
 });
 
@@ -44,12 +48,26 @@ const STYLES: StyleSpec[] = [
   ["TOC1", "toc 1"],
 ];
 
+const LEVEL_STEP = 567;
+
 const level = (
   ilvl: number,
   numFmt: string,
   lvlText: string,
   pStyle: string | null = null,
-): TemplateListLevel => ({ ilvl, numFmt, lvlText, start: 1, pStyle });
+): TemplateListLevel => ({
+  ilvl,
+  numFmt,
+  lvlText,
+  start: 1,
+  pStyle,
+  // Each level hangs its number in front of the text, one step deeper.
+  indent: {
+    left: (ilvl + 1) * LEVEL_STEP,
+    hanging: LEVEL_STEP,
+    firstLine: null,
+  },
+});
 
 type BlockSpec = {
   id: string;

@@ -61,7 +61,10 @@ type ReferenceFieldErrorReason =
   | "unreadable-label"
   /** The level text names a level or a number format that cannot be
    *  rendered. */
-  | "unrenderable-level";
+  | "unrenderable-level"
+  /** The words of the level text carry punctuation, which the field would
+   *  show in front of the number. */
+  | "punctuated-words";
 
 class ReferenceFieldError extends TaggedError("ReferenceFieldError")<{
   message: string;
@@ -93,6 +96,22 @@ const literalsOf = (levelText: string): string[] =>
 
 const hasWords = (levelText: string): boolean =>
   literalsOf(levelText).some((literal) => WORDS.test(literal));
+
+/** Punctuation a field keeps when it drops the words around it. Brackets
+ *  are kept too, but they belong to the designator. */
+const KEPT_PUNCTUATION = /[.\-–—/:,;]/u;
+
+/**
+ * Whether a field can show the bare number of a paragraph numbered by
+ * `levelText`. `\t` drops the words of a level text and keeps its
+ * punctuation: `Článek %1.` gives `II`, while `Příloha č. %1` gives `.2`,
+ * the period of `č.` in front of the number. A level whose words carry
+ * punctuation therefore cannot be cited by a numbered field.
+ */
+export const showsBareNumber = (levelText: string): boolean =>
+  literalsOf(levelText).every(
+    (literal) => !WORDS.test(literal) || !KEPT_PUNCTUATION.test(literal),
+  );
 
 /** What is left of a literal with words once the words are dropped: the
  *  brackets that enclose the counter, as in `Článek (%1)`. */
@@ -153,16 +172,28 @@ export const selectReferenceField = ({
           "The reference does not print the designator of its target",
         );
       }
+      const withoutWords = hasWords(levelText) || shape.keyword !== null;
+      if (withoutWords && !showsBareNumber(levelText)) {
+        return fail(
+          "punctuated-words",
+          "The field would show punctuation of the level's words",
+        );
+      }
       return Result.ok({
-        instruction:
-          hasWords(levelText) || shape.keyword !== null
-            ? REFERENCE_FIELD_SWITCHES.numberWithoutWords
-            : REFERENCE_FIELD_SWITCHES.number,
+        instruction: withoutWords
+          ? REFERENCE_FIELD_SWITCHES.numberWithoutWords
+          : REFERENCE_FIELD_SWITCHES.number,
         expectedText,
         text: "kept",
       });
     }
     case "houseScheme": {
+      if (!showsBareNumber(levelText)) {
+        return fail(
+          "punctuated-words",
+          "The field would show punctuation of the level's words",
+        );
+      }
       const expectedText = renderLevelText(levelText, numbering);
       if (expectedText === null || expectedText === "") {
         return fail(

@@ -11,6 +11,7 @@ import * as v from "valibot";
 import type {
   DocxBlock,
   TemplateInspection,
+  TemplateLevelIndent,
   TemplateStyle,
 } from "@/api/lib/templates/house-style/folio-contract";
 import { HOUSE_STYLE_ROLES } from "@/api/lib/templates/house-style/role-proposer";
@@ -28,10 +29,14 @@ export type ProfileListLevel = {
   numFmt: string;
   lvlText: string;
   start: number;
+  /** The indent the level gives its paragraphs. */
+  indent: TemplateLevelIndent;
 };
 
 export type ProfileRoleTarget = {
   styleId: string;
+  /** The paragraph alignment the style states; null when it states none. */
+  alignment: string | null;
   /** Null for a role the template does not number. */
   numbering: ProfileListLevel | null;
   confidence: number;
@@ -125,7 +130,9 @@ const GENERIC_FILLER = [
 ] as const;
 /** Literal text of a level beyond counters and their delimiters. */
 const LEVEL_WORDS = /[^\s\d.()[\]\-–—/:,;%]/u;
-const CAPTION_MAX = 60;
+/** A line that heads a table of contents and says nothing else. */
+const CONTENTS_CAPTION =
+  /^(?:obsah|contents|table of contents|inhalt|inhaltsverzeichnis)[ \u00A0]*:?$/iu;
 /** What a doubt about the template takes off the profile's confidence. */
 const UNCERTAIN_SHARE = 0.5;
 
@@ -151,6 +158,7 @@ const target = (
   ...evidence: RoleEvidence[]
 ): ProfileRoleTarget => ({
   styleId: style.styleId,
+  alignment: style.alignment,
   numbering: level,
   confidence,
   evidence,
@@ -204,6 +212,7 @@ const collectStyleFacts = ({
       numFmt: level.numFmt,
       lvlText: level.lvlText,
       start: level.start,
+      indent: level.indent,
     };
   };
   const samplesByStyle = Map.groupBy(
@@ -214,11 +223,15 @@ const collectStyleFacts = ({
   );
   return styles
     .filter(({ type }) => type === "paragraph")
-    .map((style) => ({
-      style,
-      level: levelOf(style),
-      samples: samplesByStyle.get(style.styleId) ?? [],
-    }));
+    .map((style) => {
+      const samples = samplesByStyle.get(style.styleId);
+      return {
+        style,
+        level: levelOf(style),
+        // A style the sample text does not use has no samples.
+        samples: samples === undefined ? [] : samples,
+      };
+    });
 };
 
 /** The list most numbered styles are bound to: the template's outline. */
@@ -481,7 +494,10 @@ const readStructure = (blocks: readonly DocxBlock[]): Structure => {
       continue;
     }
     const inside = block.cells.flatMap(({ blockIds }) =>
-      blockIds.flatMap((id) => byId.get(id) ?? []),
+      blockIds.flatMap((id) => {
+        const inner = byId.get(id);
+        return inner === undefined ? [] : [inner];
+      }),
     );
     nestedOf.set(block.id, inside);
     for (const { id } of inside) {
@@ -522,12 +538,12 @@ const inferRegions = ({
     );
     if (from !== -1 && to >= from && !showsEntries) {
       const caption = topLevel[from - 1];
-      // The caption above the field belongs to it.
+      // The caption above the field belongs to it. A short line that does
+      // not name the contents is sample text of something else.
       if (
         caption !== undefined &&
         caption.kind === "paragraph" &&
-        caption.text.trim() !== "" &&
-        caption.text.trim().length <= CAPTION_MAX
+        CONTENTS_CAPTION.test(caption.text.trim())
       ) {
         contents.push(caption.id);
       }
@@ -543,8 +559,14 @@ const inferRegions = ({
   );
   const partyStyle = roles.party?.styleId;
   const signatureStyle = roles.signature?.styleId;
-  const insideOf = (block: DocxBlock): DocxBlock[] =>
-    block.kind === "table" ? (nestedOf.get(block.id) ?? []) : [block];
+  const insideOf = (block: DocxBlock): DocxBlock[] => {
+    if (block.kind !== "table") {
+      return [block];
+    }
+    const inside = nestedOf.get(block.id);
+    // A table without cells holds nothing.
+    return inside === undefined ? [] : inside;
+  };
   // The sample body starts at the first numbered sample paragraph, alone
   // or in a table, or at the table of contents; what stands before it is
   // front matter.
@@ -668,8 +690,10 @@ export const inferTemplateProfile = (
   const facts = collectStyleFacts(inspection);
   const structure = readStructure(inspection.blocks);
   const roles = inferRoles(facts, structure.topLevel);
-  const samplesOf = (role: ProfileRoleTarget | null): DocxBlock[] =>
-    facts.find(({ style }) => style.styleId === role?.styleId)?.samples ?? [];
+  const samplesOf = (role: ProfileRoleTarget | null): DocxBlock[] => {
+    const fact = facts.find(({ style }) => style.styleId === role?.styleId);
+    return fact === undefined ? [] : fact.samples;
+  };
 
   const paragraphs = inspection.blocks.filter(
     ({ kind }) => kind === "paragraph",
@@ -715,22 +739,22 @@ export const inferTemplateProfile = (
     ),
   );
   const deepest = Math.max(-1, ...boundLevels);
+  const outlineList = inspection.numbering.abstractNums.find(
+    ({ abstractNumId }) => abstractNumId === outlineLevel?.abstractNumId,
+  );
   const spareLevels: ProfileListLevel[] =
-    outlineLevel === null
+    outlineLevel === null || outlineList === undefined
       ? []
-      : (
-          inspection.numbering.abstractNums.find(
-            ({ abstractNumId }) => abstractNumId === outlineLevel.abstractNumId,
-          )?.levels ?? []
-        )
+      : outlineList.levels
           .filter(({ ilvl, pStyle }) => ilvl > deepest && pStyle === null)
-          .map(({ ilvl, numFmt, lvlText, start }) => ({
+          .map(({ ilvl, numFmt, lvlText, start, indent }) => ({
             numId: outlineLevel.numId,
             ilvl,
             abstractNumId: outlineLevel.abstractNumId,
             numFmt,
             lvlText,
             start,
+            indent,
           }));
 
   const kinds = [...new Set(inspection.fields.map(({ kind }) => kind))];
@@ -859,10 +883,9 @@ export const validateTemplateProfile = (
   const { topLevel } = readStructure(inspection.blocks);
   const order = topLevel.map(({ id }) => id);
   const { keepBefore, contents, filler } = profile.regions;
-  const slotIds = [
-    ...(profile.slots.party?.blockIds ?? []),
-    ...(profile.slots.signature?.blockIds ?? []),
-  ];
+  const slotIds = [profile.slots.party, profile.slots.signature].flatMap(
+    (slot) => (slot === null ? [] : slot.blockIds),
+  );
   for (const blockId of [...keepBefore, ...contents, ...filler, ...slotIds]) {
     if (!order.includes(blockId)) {
       issues.push({ severity: "error", code: "unknownBlock", blockId });
@@ -894,9 +917,21 @@ const LEVELS_MAX = 9;
 const BLOCKS_MAX = 20_000;
 const FILLER_STRINGS_MAX = 1000;
 const FIELD_KINDS_MAX = 100;
+/** The widest page WordprocessingML allows, in twentieths of a point. */
+const INDENT_MAX = 31_680;
 
 const textSchema = v.pipe(v.string(), v.maxLength(TEXT_MAX));
 const idSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(TEXT_MAX));
+
+/** An indent in twentieths of a point; a negative one reaches into the margin. */
+const twipsSchema = v.nullable(
+  v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(-INDENT_MAX),
+    v.maxValue(INDENT_MAX),
+  ),
+);
 
 const listLevelSchema = v.strictObject({
   numId: v.pipe(v.number(), v.integer(), v.minValue(1)),
@@ -910,6 +945,11 @@ const listLevelSchema = v.strictObject({
   numFmt: textSchema,
   lvlText: textSchema,
   start: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  indent: v.strictObject({
+    left: twipsSchema,
+    hanging: twipsSchema,
+    firstLine: twipsSchema,
+  }),
 });
 
 const confidenceSchema = v.pipe(v.number(), v.minValue(0), v.maxValue(1));
@@ -917,6 +957,7 @@ const confidenceSchema = v.pipe(v.number(), v.minValue(0), v.maxValue(1));
 const roleTargetSchema = v.nullable(
   v.strictObject({
     styleId: idSchema,
+    alignment: v.nullable(textSchema),
     numbering: v.nullable(listLevelSchema),
     confidence: confidenceSchema,
     evidence: v.pipe(

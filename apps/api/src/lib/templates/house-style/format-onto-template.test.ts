@@ -103,7 +103,7 @@ const fakeEngine = (
           ? Result.err(
               new TemplateEngineError({
                 message: "refused",
-                refusal: answer.refuse,
+                reason: answer.refuse,
                 ...(answer.blockId === undefined
                   ? {}
                   : { blockId: answer.blockId }),
@@ -148,7 +148,7 @@ describe("formatOntoTemplate", () => {
     const engine = fakeEngine(manifest, [], { source: 4, output: 5 });
     const formatted = (await format(engine)).unwrap();
     expect(formatted.docx).toBe(OUTPUT);
-    expect(formatted.plan).toBe(engine.plans.at(0));
+    expect(engine.plans.at(0)).toBe(formatted.plan);
     expect(formatted.outcome).toEqual({
       attempts: 1,
       repairs: [],
@@ -159,7 +159,6 @@ describe("formatOntoTemplate", () => {
       fillerLeft: 0,
       droppedComments: 2,
       droppedSectionBreaks: 1,
-      labelsChanged: 0,
       pages: { status: "measured", source: 4, output: 5 },
     });
     // The unresolved reference is marked in a colour the source does not use.
@@ -220,7 +219,23 @@ describe("formatOntoTemplate", () => {
           targetBlockId === clause || targetBlockId === article,
       ),
     ).toEqual([]);
-    expect(formatted.outcome.labelsChanged).toBe(0);
+  });
+
+  test("returns no document when the plan does not settle within the applies allowed", async () => {
+    // Every apply shows another paragraph renumbered.
+    const clauses = manifest.blocks
+      .filter(({ label }) => label === "1.")
+      .map(({ id }) => id);
+    const engine = fakeEngine(
+      manifest,
+      clauses.slice(0, 8).map((clause) => ({ labelDiffers: [clause] })),
+    );
+    const result = await format(engine);
+    expect(engine.plans).toHaveLength(8);
+    expect(result.isErr() && result.error).toMatchObject({
+      _tag: "TemplateEngineError",
+      reason: "other",
+    });
   });
 
   test("returns a refusal that no change to the plan answers", async () => {
@@ -229,7 +244,7 @@ describe("formatOntoTemplate", () => {
     );
     expect(tracked.isErr() && tracked.error).toMatchObject({
       _tag: "TemplateEngineError",
-      refusal: "tracked-changes",
+      reason: "tracked-changes",
     });
     // The same refusal twice: the repair did not help.
     const stuck = fakeEngine(manifest, [

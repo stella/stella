@@ -136,6 +136,32 @@ describe("proposeBlockRoles", () => {
     });
   });
 
+  test("a capital letter labels a recital only in front of the operative part", () => {
+    const manifest = manifestOf([
+      "SMLOUVA O DÍLO",
+      numbered("A.", "Objednatel provozuje síť prodejen.", 1),
+      numbered("B.", "Zhotovitel dodává pokladní systémy.", 1),
+      "Článek I.\nVýklad pojmů",
+      numbered("A.", "Základní pojmy", 2),
+      numbered("1.", "Dílem se rozumí pokladní systém.", 3),
+      numbered("B.", "Technické pojmy", 2),
+    ]);
+    expect(
+      proposeBlockRoles({ manifest }).map(({ blockId, role }) => [
+        blockId,
+        role,
+      ]),
+    ).toEqual([
+      ["p0", "title"],
+      ["p1", "recital"],
+      ["p2", "recital"],
+      ["p3", "articleHeading"],
+      ["p4", "letter"],
+      ["p5", "clause1"],
+      ["p6", "letter"],
+    ]);
+  });
+
   test("blank paragraphs, contents lines and plain table cells get no reading", () => {
     const manifest = manifestOf([
       "SMLOUVA",

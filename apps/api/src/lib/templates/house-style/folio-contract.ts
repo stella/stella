@@ -52,10 +52,18 @@ export type TemplateNumberingLevel = {
   lvlText: string;
 };
 
+/** A paragraph indent in twentieths of a point; null where unstated. */
+export type TemplateLevelIndent = {
+  left: number | null;
+  hanging: number | null;
+  firstLine: number | null;
+};
+
 export type TemplateListLevel = TemplateNumberingLevel & {
   start: number;
   /** The paragraph style the level names as its own. */
   pStyle: string | null;
+  indent: TemplateLevelIndent;
 };
 
 export type TemplateStyle = {
@@ -66,6 +74,9 @@ export type TemplateStyle = {
   /** The list the style binds its paragraphs to, inheritance resolved. */
   numPr: { numId: number; ilvl: number } | null;
   outlineLvl: number | null;
+  /** The paragraph alignment the style states (`w:jc`), inheritance
+   *  resolved; null when none is stated. */
+  alignment: string | null;
   isDefault: boolean;
 };
 
@@ -163,6 +174,9 @@ export type TemplatePlanNumberingPatch = {
   lvlText?: string;
   /** What follows the label. */
   suff?: "tab" | "space" | "nothing";
+  /** The level's paragraph indent, in twentieths of a point; a value left
+   *  out keeps what the level states. */
+  indent?: { left?: number; hanging?: number };
 };
 
 export type TemplatePlan = {
@@ -228,12 +242,12 @@ export type TemplateEngineRefusal =
 
 export class TemplateEngineError extends TaggedError("TemplateEngineError")<{
   message: string;
-  refusal: TemplateEngineRefusal;
+  reason: TemplateEngineRefusal;
   /** The source block the refusal names. */
   blockId?: string;
 }> {
   static {
-    declareFingerprintFields(this, ["refusal"]);
+    declareFingerprintFields(this, ["reason"]);
   }
 }
 

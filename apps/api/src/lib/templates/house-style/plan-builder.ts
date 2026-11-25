@@ -44,7 +44,10 @@ import type {
   Placement,
 } from "@/api/lib/templates/house-style/plan-numbering";
 import type { DetectedReference } from "@/api/lib/templates/house-style/reference-detector";
-import { selectReferenceField } from "@/api/lib/templates/house-style/reference-fields";
+import {
+  selectReferenceField,
+  showsBareNumber,
+} from "@/api/lib/templates/house-style/reference-fields";
 import type { ReferenceSuspicion } from "@/api/lib/templates/house-style/reference-suspicions";
 import {
   HOUSE_STYLE_ROLES,
@@ -87,6 +90,10 @@ type UnlinkedReason =
   | "targetNotNumbered"
   /** The field would show another text than the source prints. */
   | "designatorMismatch"
+  /** The target's level prints words with punctuation (`Čl. 3`,
+   *  `Příloha č. 2`); a field drops the words and keeps the punctuation,
+   *  so it would show `.2`. */
+  | "punctuatedLevelWords"
   /** The reference stands in the paragraph it names. */
   | "sameParagraph"
   /** The span cannot carry a field: it lies in a stripped label or in a
@@ -228,10 +235,16 @@ const insideOf = (
   table: DocxBlock,
   blockById: ReadonlyMap<string, DocxBlock>,
 ): DocxBlock[] =>
-  (table.cells ?? [])
-    .flatMap(({ blockIds }) => blockIds)
-    .flatMap((id) => blockById.get(id) ?? [])
-    .flatMap((inner) => [inner, ...insideOf(inner, blockById)]);
+  table.cells === undefined
+    ? []
+    : table.cells
+        .flatMap(({ blockIds }) => blockIds)
+        .flatMap((id) => {
+          const inner = blockById.get(id);
+          return inner === undefined
+            ? []
+            : [inner, ...insideOf(inner, blockById)];
+        });
 
 const styleTarget = (
   { profile, stylelessRoles }: Context,
@@ -315,6 +328,18 @@ const placementOf = (
     placement.pattern === null
       ? null
       : ordinalOf(entry, placement.pattern.numFmt);
+  // A typed label of a role the template numbers no level for (an annex
+  // heading) would take a spare level only to be cited by fields. Where a
+  // field could not show its bare number, the label stays typed text.
+  if (
+    ownLevel === null &&
+    entry.origin === "manual" &&
+    placement.pattern !== null &&
+    !showsBareNumber(placement.pattern.lvlText)
+  ) {
+    placement.keptReason = "noListLevel";
+    return placement;
+  }
   placement.numbered = true;
   return placement;
 };
@@ -438,30 +463,55 @@ const breaksHeadings = ({ placements, titleOf }: Placed): boolean => {
 };
 
 /**
- * Where headings break after the number, the title starts its own line, and
- * a tab after the number would push that line off the heading's alignment;
- * a space still parts the number from a title on the same line.
+ * Settles the heading level for headings that break after the number.
+ *
+ * Where the document writes its headings so, a tab after the number would
+ * push the title's line off the heading's alignment; a space still parts the
+ * number from a title on the same line.
+ *
+ * A centred heading is centred between its indents. The left and hanging
+ * indent of its level, made for a number that stands in the margin, move
+ * every line after a break off the first line's centre, so the level gets
+ * none as soon as one of its headings holds a break.
  */
-const spaceAfterHeadingLabel = (
+const settleBrokenHeadings = (
   { profile }: Context,
+  { placements, titleOf }: Placed,
   patches: TemplatePlanNumberingPatch[],
+  breaks: boolean,
 ): void => {
-  const level = profile.roles.articleHeading?.numbering ?? null;
-  if (level === null) {
+  const heading = profile.roles.articleHeading;
+  const level = heading?.numbering ?? null;
+  if (heading === null || level === null) {
+    return;
+  }
+  const onLevel = placements.filter(
+    (placement) => placement.numbered && placement.level === level,
+  );
+  const { left, hanging } = level.indent;
+  const offCentre =
+    heading.alignment === "center" &&
+    ((left !== null && left !== 0) || (hanging !== null && hanging !== 0)) &&
+    onLevel.some(
+      ({ block }) =>
+        block.text.includes("\n") || (breaks && titleOf.has(block.id)),
+    );
+  if (onLevel.length === 0 || (!breaks && !offCentre)) {
     return;
   }
   const patch = patches.find(
     ({ abstractNumId, ilvl }) =>
       abstractNumId === level.abstractNumId && ilvl === level.ilvl,
   );
+  const settled: TemplatePlanNumberingPatch = {
+    ...(patch ?? { abstractNumId: level.abstractNumId, ilvl: level.ilvl }),
+    ...(breaks ? { suff: "space" } : {}),
+    ...(offCentre ? { indent: { left: 0, hanging: 0 } } : {}),
+  };
   if (patch === undefined) {
-    patches.push({
-      abstractNumId: level.abstractNumId,
-      ilvl: level.ilvl,
-      suff: "space",
-    });
+    patches.push(settled);
   } else {
-    patch.suff = "space";
+    patches.splice(patches.indexOf(patch), 1, settled);
   }
 };
 
@@ -614,19 +664,21 @@ type MarkOptions = {
 
 type Designator = DetectedReference["designators"][number];
 
-/** The field that stands for a designator citing `target`; null when it
- *  would not show what the reference prints. */
+type Field = Pick<TemplatePlanReference, "instruction" | "expectedText">;
+
+/** The field that stands for a designator citing `target`, or why none
+ *  shows exactly what the reference prints. */
 const fieldOf = (
   { mode }: Context,
   levelsByList: ReadonlyMap<number, ListLevelFormat[]>,
   designatorText: string,
   { level, sourceLabel, counters }: Placement,
-): Pick<TemplatePlanReference, "instruction" | "expectedText"> | null => {
+): Field | UnlinkedReason => {
   const levels =
     level === null ? undefined : levelsByList.get(level.abstractNumId);
   const own = levels?.find(({ ilvl }) => ilvl === level?.ilvl);
   if (levels === undefined || own === undefined || sourceLabel === null) {
-    return null;
+    return "targetNotNumbered";
   }
   // Under the house scheme the field shows the template's number, which
   // may differ from the designator the sentence was written with.
@@ -638,12 +690,15 @@ const fieldOf = (
         ? { mode, sourceLabel }
         : { mode, levels, counters },
   });
-  return field.isOk()
-    ? {
-        instruction: field.value.instruction,
-        expectedText: field.value.expectedText,
-      }
-    : null;
+  if (field.isOk()) {
+    return {
+      instruction: field.value.instruction,
+      expectedText: field.value.expectedText,
+    };
+  }
+  return field.error.reason === "punctuated-words"
+    ? "punctuatedLevelWords"
+    : "designatorMismatch";
 };
 
 /** The block a designator cites, or why it names none. */
@@ -701,17 +756,20 @@ const markReferences = ({
       : 0;
   };
   const claim = (blockId: string, start: number, end: number): boolean => {
-    const taken = takenSpans.get(blockId) ?? [];
+    const taken = takenSpans.get(blockId);
     if (
       !isPlaced(blockId) ||
       exclusions.marks.has(blockId) ||
       start < strippedLength(blockId) ||
-      taken.some((span) => start < span.end && end > span.start)
+      taken?.some((span) => start < span.end && end > span.start) === true
     ) {
       return false;
     }
-    taken.push({ start, end });
-    takenSpans.set(blockId, taken);
+    if (taken === undefined) {
+      takenSpans.set(blockId, [{ start, end }]);
+    } else {
+      taken.push({ start, end });
+    }
     return true;
   };
   // "No such provision" is only as sure as the reading of the document's
@@ -769,10 +827,12 @@ const markReferences = ({
       return "sameParagraph";
     }
     const text = blockById.get(reference.blockId)?.text.slice(start, end);
-    const field =
-      text === undefined ? null : fieldOf(context, levelsByList, text, target);
-    if (field === null) {
-      return "designatorMismatch";
+    if (text === undefined) {
+      return "notPlaceable";
+    }
+    const field = fieldOf(context, levelsByList, text, target);
+    if (typeof field === "string") {
+      return field;
     }
     return claim(reference.blockId, start, end)
       ? { blockId: reference.blockId, start, end, targetBlockId, ...field }
@@ -875,8 +935,8 @@ export const buildTemplatePlan = ({
   const { blocks } = manifest;
   const tableOf = new Map<string, string>();
   for (const block of blocks) {
-    for (const cell of block.cells ?? []) {
-      for (const id of cell.blockIds) {
+    if (block.cells !== undefined) {
+      for (const id of block.cells.flatMap(({ blockIds }) => blockIds)) {
         tableOf.set(id, block.id);
       }
     }
@@ -909,10 +969,7 @@ export const buildTemplatePlan = ({
     spareLevels: profile.spareLevels,
   });
   const breaks = breaksHeadings(placed);
-  // The house scheme leaves the template's lists as they are.
-  if (mode === "keepSource" && breaks) {
-    spaceAfterHeadingLabel(context, patches);
-  }
+  settleBrokenHeadings(context, placed, patches, breaks);
   const { body, placedCount, contentsKept } = buildBody(
     context,
     placed,

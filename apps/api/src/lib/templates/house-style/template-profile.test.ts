@@ -68,6 +68,19 @@ describe("inferTemplateProfile", () => {
     // The caption goes with the field, and the field is kept whole.
     expect(empty.regions.contents).toEqual(["p4", "p5", "p6", "p7"]);
     expect(empty.regions.filler).not.toContain("p5");
+
+    // A short line above the field that does not name the contents is
+    // sample text of something else and is not kept with it.
+    const uncaptioned = contractTemplate({ contents: "empty" });
+    const above = uncaptioned.blocks.find(({ id }) => id === "p4");
+    if (above !== undefined) {
+      above.text = "[company name]";
+    }
+    expect(inferTemplateProfile(uncaptioned).regions.contents).toEqual([
+      "p5",
+      "p6",
+      "p7",
+    ]);
   });
 
   test("a table in front of the sample is kept; sample parties and signatures are slots", () => {
