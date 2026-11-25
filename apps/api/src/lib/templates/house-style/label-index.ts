@@ -722,61 +722,55 @@ const classify = (walk: Walk, row: LabelledRow): LabelEntry | null => {
   return openItem(walk, row, row.family);
 };
 
-/** Columns must share this many article numbers to count as parallel. */
-const PARALLEL_ARTICLES_MIN = 2;
+/** Two columns of a table must repeat this many labels to count as parallel. */
+const PARALLEL_LABELS_MIN = 2;
 
 /**
  * The column of every table-cell block when the document runs in parallel
- * columns: a contract in two languages side by side, each column with its
- * own headings for the same articles. Each column is then read as a text
- * of its own. Empty when no two columns head the same articles, so price
- * tables and signature tables stay part of the one main story.
+ * columns: a contract in two languages side by side, where the cells of a
+ * row carry the same provisions under the same labels. Each column is then
+ * read as a text of its own. Empty when no table repeats its labels across
+ * columns, so price tables and signature tables stay part of the one main
+ * story.
  */
 const parallelColumns = (
   blocks: readonly DocxBlock[],
   structural: readonly LabelledRow[],
 ): Map<string, number> => {
   const columnByBlockId = new Map<string, number>();
-  for (const { cells } of blocks) {
+  const tableByBlockId = new Map<string, string>();
+  for (const { id, cells } of blocks) {
     if (cells === undefined) {
       continue;
     }
     for (const { col, blockIds } of cells) {
       for (const blockId of blockIds) {
         columnByBlockId.set(blockId, col);
+        tableByBlockId.set(blockId, id);
       }
     }
   }
-  const scheme = numberedScheme(structural);
-  const ordinalsByColumn = new Map<number, Set<number>>();
-  for (const row of structural) {
-    const column = columnByBlockId.get(row.block.id);
-    const named = isNamedArticle(row)
-      ? countedOrdinal(row.raw.shape.core)
-      : null;
-    const bare = headsArticle(scheme, row) ? row.raw.shape.path?.at(0) : null;
-    const ordinal = named ?? bare ?? null;
-    if (column === undefined || ordinal === null) {
+  // Per table and label, the columns that carry it.
+  const columnsByLabel = new Map<string, Set<number>>();
+  for (const { block, raw } of structural) {
+    const column = columnByBlockId.get(block.id);
+    const table = tableByBlockId.get(block.id);
+    if (column === undefined || table === undefined) {
       continue;
     }
-    const ordinals = ordinalsByColumn.get(column);
-    if (ordinals === undefined) {
-      ordinalsByColumn.set(column, new Set([ordinal]));
+    const { open, core, close } = raw.shape;
+    const label = `${table}\u0000${open}${core.toLowerCase()}${close}`;
+    const columns = columnsByLabel.get(label);
+    if (columns === undefined) {
+      columnsByLabel.set(label, new Set([column]));
     } else {
-      ordinals.add(ordinal);
+      columns.add(column);
     }
   }
-  const columns = [...ordinalsByColumn.values()];
-  const parallel = columns.some((ordinals, position) =>
-    columns
-      .slice(position + 1)
-      .some(
-        (others) =>
-          [...ordinals].filter((ordinal) => others.has(ordinal)).length >=
-          PARALLEL_ARTICLES_MIN,
-      ),
-  );
-  return parallel ? columnByBlockId : new Map();
+  const repeated = [...columnsByLabel.values()].filter(
+    (columns) => columns.size > 1,
+  ).length;
+  return repeated >= PARALLEL_LABELS_MIN ? columnByBlockId : new Map();
 };
 
 /** Reads every paragraph's label and nests the entries. */
@@ -817,17 +811,19 @@ export const buildLabelIndex = ({
     if (open !== undefined) {
       return open;
     }
+    // A column starts under whatever heading spans the columns above it.
+    const spanning = walks.get(null);
     const opened: Walk = {
       rows,
       listedAnnexes,
       numberedArticles,
       schemes,
-      article: null,
+      article: spanning?.article ?? null,
       clauses: [],
       letter: null,
       roman: null,
-      annex: null,
-      sawArticle: false,
+      annex: spanning?.annex ?? null,
+      sawArticle: spanning?.sawArticle ?? false,
       usesSectionSign: false,
       column,
     };
@@ -847,6 +843,22 @@ export const buildLabelIndex = ({
     const entry = isLabelled(row) ? classify(walk, row) : null;
     if (entry !== null) {
       entries.push(entry);
+    }
+    // A heading outside the columns (`§ 3` over a row of two languages)
+    // heads every column.
+    const spans =
+      walk.column === null &&
+      entry !== null &&
+      (entry.level === "article" || (entry.level === "annex" && !entry.listed));
+    if (spans) {
+      for (const column of walks.values()) {
+        if (column !== walk) {
+          column.article = walk.article;
+          column.annex = walk.annex;
+          column.sawArticle = true;
+          closeProvisions(column);
+        }
+      }
     }
     contextByBlockId.set(block.id, {
       articleBlockId: walk.article?.blockId ?? null,

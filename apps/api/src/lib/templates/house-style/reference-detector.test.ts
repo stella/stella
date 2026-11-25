@@ -733,6 +733,40 @@ describe("parallel columns", () => {
     expect(targets("See paragraph")).toEqual(["p7"]);
   });
 
+  test("a heading that spans the columns heads the provisions of each", () => {
+    const body = inColumns(2, [
+      numbered("1.", "Každý partner plní své povinnosti.", 1),
+      numbered("1.", "Jede Partnerin erfüllt ihre Pflichten.", 2),
+      numbered("2.", "Vedle povinností dle odst. 1 vede partner evidenci.", 1),
+      numbered("2.", "Neben den Pflichten nach Abs. 1 führt sie Buch.", 2),
+    ]);
+    const [table, ...cells] = body.blocks;
+    const spanning = manifestOf(["§ 3\nPovinnosti / Verpflichtungen"]).blocks;
+    const manifest = {
+      ...body,
+      blocks: [
+        ...spanning.map((block) => ({ ...block, id: "h0" })),
+        ...(table === undefined ? [] : [table]),
+        ...cells,
+      ],
+    };
+    const index = buildLabelIndex(manifest);
+    expect(index.entryByBlockId.get("p3")).toMatchObject({
+      level: "clause",
+      articleBlockId: "h0",
+      column: 1,
+    });
+    const targetsOf = (blockId: string) =>
+      detectReferences(manifest, index)
+        .references.filter((reference) => reference.blockId === blockId)
+        .flatMap(({ designators }) => designators)
+        .map(({ resolution }) =>
+          resolution.status === "resolved" ? resolution.targetBlockId : null,
+        );
+    expect(targetsOf("p2")).toEqual(["p0"]);
+    expect(targetsOf("p3")).toEqual(["p1"]);
+  });
+
   test("a table that does not repeat the articles stays in the main story", () => {
     const manifest = inColumns(2, [
       "Článek I.\nCeny",
