@@ -36,6 +36,7 @@ const geometry = async (page: Page) =>
       return { top, bottom, left, right };
     };
     const viewport = box.querySelector('[data-slot="scroll-area-viewport"]');
+    const scrollbar = box.querySelector('[data-slot="scroll-area-scrollbar"]');
     return {
       box: rect(box),
       region: rect(box.querySelector('[data-slot="composer-text-region"]')),
@@ -44,7 +45,8 @@ const geometry = async (page: Page) =>
       clientHeight: viewport?.clientHeight ?? 0,
       leading: rect(box.querySelector('[data-slot="composer-leading"]')),
       trailing: rect(box.querySelector('[data-slot="composer-trailing"]')),
-      thumb: rect(box.querySelector('[data-slot="scroll-area-scrollbar"]')),
+      // The scroll area mounts its scrollbar only while the text overflows.
+      thumb: scrollbar === null ? null : rect(scrollbar),
     };
   });
 
@@ -52,7 +54,8 @@ test("stays one 44px bar while the draft fits one line", async ({ page }) => {
   await openFixture(page);
   await expect(frame(page)).toHaveAttribute("data-composer-layout", "bar");
   const { box } = await geometry(page);
-  expect(Math.round(box.bottom - box.top)).toBe(44);
+  // A 44px row inside the box's 1px border.
+  expect(Math.round(box.bottom - box.top) - 2).toBe(44);
   await message(page).fill(ONE_LINE);
   await expect(frame(page)).toHaveAttribute("data-composer-layout", "bar");
 });
@@ -113,16 +116,20 @@ for (const dir of ["ltr", "rtl"] as const) {
     expect(Math.round(long.region.bottom - long.region.top)).toBe(320);
     expect(long.scrollHeight).toBeGreaterThan(long.clientHeight);
     // Its inline-end edge is the box's, inside the 1px border.
+    const { thumb } = long;
+    if (thumb === null) {
+      throw new Error("A long draft shows no scrollbar.");
+    }
     if (dir === "ltr") {
       expect(Math.abs(long.box.right - 1 - long.region.right)).toBeLessThan(
         EPSILON_PX,
       );
-      expect(long.box.right - long.thumb.right).toBeLessThan(6);
+      expect(long.box.right - thumb.right).toBeLessThan(6);
     } else {
       expect(Math.abs(long.region.left - (long.box.left + 1))).toBeLessThan(
         EPSILON_PX,
       );
-      expect(long.thumb.left - long.box.left).toBeLessThan(6);
+      expect(thumb.left - long.box.left).toBeLessThan(6);
     }
     // Nothing that holds a control overlaps the region.
     expect(long.trailing.top).toBeGreaterThanOrEqual(
