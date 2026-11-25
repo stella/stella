@@ -51,7 +51,6 @@ import type {
   ModelTask,
   ReasoningEffort,
   ResolvedReasoningEffort,
-  TanStackAIProvider,
 } from "@stll/ai-catalog";
 import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 import type { ModelDefaultCandidate } from "@stll/ai-catalog/model-defaults-ledger";
@@ -111,6 +110,10 @@ import {
   createManagedOpenRouterText,
   createStellaOpenRouterText,
 } from "@/api/lib/stella-openrouter-text-adapter";
+import type {
+  ResolvedTanStackTextModelInfo,
+  TanStackTextProvider,
+} from "@/api/lib/tanstack-ai-model-info";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   MANAGED_MODEL_TIER,
@@ -149,7 +152,7 @@ export type { AIProvider, BYOKProvider, ModelTask };
 
 type TanStackTextAdapterFactory = (modelId: string) => AnyTextAdapter;
 
-export type TanStackTextProvider = TanStackAIProvider;
+export type { ResolvedTanStackTextModelInfo, TanStackTextProvider };
 
 const INSTANCE_PROVIDER_PREFERENCE = [
   "openrouter",
@@ -264,11 +267,6 @@ export type ResolvedTanStackTextModel = {
     TProvider in TanStackTextProvider
   ]: ResolvedTanStackTextModelForProvider<TProvider>;
 }[TanStackTextProvider];
-
-export type ResolvedTanStackTextModelInfo = Pick<
-  ResolvedTanStackTextModel,
-  "keySource" | "modelId" | "provider" | "region"
-> & { availability: "available" | "unavailable" };
 
 /**
  * The model identity as a run records it: provider and model in one string, so

@@ -31,12 +31,10 @@ import {
   getMcpResourceScopes,
   MCP_MODES,
 } from "@/api/mcp/resource-policy-contract";
-import type { McpSession } from "@/api/mcp/session";
 
 export type { McpSession } from "@/api/mcp/session";
 
-/** Which kind of credential opened a session, for telemetry and reporting. */
-export type McpCredentialType = NonNullable<McpSession["credential"]>["type"];
+export type { McpCredentialType } from "@/api/mcp/session";
 
 export type VerifyBearerToken = ReturnType<
   ReturnType<typeof oauthProviderResourceClient<undefined>>["getActions"]

@@ -8,7 +8,7 @@ import type {
 import type { TemplatePackAuthor } from "@stll/template-packs/schema";
 
 import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives";
-import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
+import type { AiFieldError } from "@/api/lib/docx/ai-field-error-types";
 import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 
 import {

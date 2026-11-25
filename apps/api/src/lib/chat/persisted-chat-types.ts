@@ -7,6 +7,7 @@ import type {
   ReasoningProvenance,
   TanStackAIProvider,
 } from "@stll/ai-catalog";
+import type { AIErrorKind } from "@stll/api-contract";
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
 import type { ChatTurnTiming } from "@stll/api-contract/chat";
 import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
@@ -24,7 +25,6 @@ import type {
   ChatTurnInterruptionReason,
 } from "@/api/handlers/chat/chat-turn-state";
 import type { ChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
-import type { AIErrorKind } from "@/api/lib/ai-error";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { GeneratedDocumentActiveDraftContext } from "@/api/lib/chat/active-draft-context";
 import type {
