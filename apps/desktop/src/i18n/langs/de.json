@@ -928,6 +928,11 @@
     "unusable": "Nicht nutzbar"
   },
   "notification": {
+    "activityStoppedNotAvailableBody": "Aktivität ist für dieses Konto nicht mehr verfügbar. Bisherige Aufzeichnungen bleiben auf diesem Computer.",
+    "activityStoppedPolicyBody": "Ihre Organisation hat Aktivität auf diesem Computer deaktiviert. Bisherige Aufzeichnungen bleiben auf diesem Computer.",
+    "activityStoppedReconnectBody": "Verbinden Sie Ihr stella-Konto erneut, damit die Aufzeichnung weiterläuft.",
+    "activityStoppedSignedOutBody": "Melden Sie sich erneut bei Ihrem stella-Konto an, damit die Aufzeichnung weiterläuft.",
+    "activityStoppedTitle": "Aktivität zeichnet nicht mehr auf",
     "checkpointDelayedBody": "{fileName}: Änderungen bleiben lokal und werden automatisch erneut versucht",
     "checkpointDelayedTitle": "Entwurfssynchronisierung verzögert",
     "diagnosticsCopiedBody": "Fügen Sie sie bei Bedarf in Ihre Supportanfrage ein.",
@@ -1419,6 +1424,10 @@
     "activityPaused": "Aktivität: Pausiert · heute {hours} h",
     "activityRecording": "Aktivität: Aufzeichnung · heute {hours} h",
     "activityResume": "Aufzeichnung fortsetzen",
+    "activityStoppedNotAvailable": "Aktivität: Gestoppt · Für dieses Konto nicht verfügbar",
+    "activityStoppedPolicy": "Aktivität: Gestoppt · Von Ihrer Organisation deaktiviert",
+    "activityStoppedReconnect": "Aktivität: Gestoppt · Erneute Verbindung nötig",
+    "activityStoppedSignedOut": "Aktivität: Gestoppt · Abgemeldet",
     "checkForUpdates": "Nach Aktualisierungen suchen",
     "dictation": "Diktieren",
     "dictationFix": "Letztes Diktat korrigieren…",

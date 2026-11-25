@@ -928,6 +928,11 @@
     "unusable": "Não pode ser usada"
   },
   "notification": {
+    "activityStoppedNotAvailableBody": "A Atividade não está mais disponível para esta conta. O que foi registrado continua neste computador.",
+    "activityStoppedPolicyBody": "Sua organização desativou a Atividade neste computador. O que foi registrado continua neste computador.",
+    "activityStoppedReconnectBody": "Reconecte sua conta stella para continuar registrando.",
+    "activityStoppedSignedOutBody": "Entre novamente na sua conta stella para continuar registrando.",
+    "activityStoppedTitle": "A Atividade parou de registrar",
     "checkpointDelayedBody": "{fileName}: as alterações permanecem locais e serão reenviadas automaticamente",
     "checkpointDelayedTitle": "Sincronização do rascunho atrasada",
     "diagnosticsCopiedBody": "Cole no seu pedido de suporte quando precisar.",
@@ -1419,6 +1424,10 @@
     "activityPaused": "Atividade: Pausada · {hours} h hoje",
     "activityRecording": "Atividade: Registrando · {hours} h hoje",
     "activityResume": "Retomar registro",
+    "activityStoppedNotAvailable": "Atividade: Parada · Indisponível para esta conta",
+    "activityStoppedPolicy": "Atividade: Parada · Desativada pela sua organização",
+    "activityStoppedReconnect": "Atividade: Parada · É preciso reconectar",
+    "activityStoppedSignedOut": "Atividade: Parada · Sessão encerrada",
     "checkForUpdates": "Verificar atualizações",
     "dictation": "Ditado",
     "dictationFix": "Corrigir o último ditado…",

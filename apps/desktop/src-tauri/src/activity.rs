@@ -542,6 +542,24 @@ pub struct TrayActivitySnapshot {
   pub now: Option<String>,
 }
 
+/// The tray's Activity entry.
+pub enum TrayActivity {
+  /// The feature is on; the day's projection once the store is loaded.
+  Live(Option<TrayActivitySnapshot>),
+  /// It cannot record for a member who turned it on.
+  Stopped(crate::activity_capture::ActivityStopped),
+}
+
+impl TrayActivity {
+  /// The entry without the day's projection.
+  pub fn without_projection(self) -> Self {
+    match self {
+      Self::Live(_) => Self::Live(None),
+      Self::Stopped(stopped) => Self::Stopped(stopped),
+    }
+  }
+}
+
 struct DetailCaptureApp<'a> {
   identifier: &'a str,
   name: &'a str,
@@ -984,6 +1002,25 @@ impl ActivityManager {
 
   pub fn recording_status(&self) -> ActivityRecordingStatus {
     self.settings.recording_status
+  }
+
+  /// The loaded account and its member's recording choice. A store that
+  /// could not be read holds default settings, not the member's choice.
+  pub(crate) fn loaded_choice(&self) -> Option<crate::activity_capture::LoadedChoice> {
+    let persisted = match self.persistence {
+      ActivityPersistence::Encrypted(_) => true,
+      ActivityPersistence::MemoryOnly => false,
+      ActivityPersistence::Initializing
+      | ActivityPersistence::DeletionOnly(_)
+      | ActivityPersistence::KeyMissing(_)
+      | ActivityPersistence::Unreadable(_)
+      | ActivityPersistence::Incompatible(_) => return None,
+    };
+    Some(crate::activity_capture::LoadedChoice {
+      namespace: self.namespace.clone()?,
+      intent: self.settings.recording_status,
+      persisted,
+    })
   }
 
   pub fn set_detect_calls(
@@ -2618,7 +2655,15 @@ pub(crate) fn refresh_tray(app: &AppHandle) {
   });
 }
 
-pub fn tray_snapshot(app: &AppHandle) -> Option<TrayActivitySnapshot> {
+/// The tray's Activity entry; `None` when there is nothing to show.
+pub fn tray_activity(app: &AppHandle) -> Option<TrayActivity> {
+  if is_enabled(app) {
+    return Some(TrayActivity::Live(tray_snapshot(app)));
+  }
+  crate::activity_capture::stopped().map(TrayActivity::Stopped)
+}
+
+fn tray_snapshot(app: &AppHandle) -> Option<TrayActivitySnapshot> {
   if !is_enabled(app) {
     return None;
   }
@@ -2670,7 +2715,9 @@ pub fn set_recording_from_tray(
     return Err("activity account is unavailable".to_string());
   }
   manager.set_recording_from_tray(status, Utc::now())?;
+  let loaded = manager.loaded_choice();
   drop(manager);
+  crate::activity_capture::record_loaded_choice(loaded);
   emit_changed(app);
   Ok(())
 }
@@ -3001,9 +3048,13 @@ pub fn start(app: AppHandle, state: ActivityAppState) {
     .spawn(move || {
       let mut last_tray_refresh = Instant::now();
       let mut calls = CallDetector::default();
+      let mut capture = crate::activity_capture::CaptureMonitor::new(
+        crate::activity_capture::CaptureRecords::in_app_data(),
+      );
       loop {
         std::thread::sleep(SAMPLE_INTERVAL);
         sample(&app, &state, &mut calls);
+        capture.tick(&app, &state);
         if last_tray_refresh.elapsed() >= TRAY_REFRESH_INTERVAL {
           refresh_tray(&app);
           last_tray_refresh = Instant::now();

@@ -315,9 +315,7 @@ mod tests {
       gates
         .install(
           generation,
-          Some(namespace.clone()),
-          Some(chrono::Utc::now() + chrono::Duration::hours(1)),
-          features,
+          crate::feature_gate::answered(&namespace, features),
         )
         .unwrap();
       assert_eq!(require_account(&caller, &gates, &account).is_ok(), enabled);
@@ -331,9 +329,10 @@ mod tests {
     gates
       .install(
         gates.generation().unwrap(),
-        Some(namespace),
-        Some(chrono::Utc::now() + chrono::Duration::hours(1)),
-        HashSet::from([DesktopFeature::ActivityTimeline]),
+        crate::feature_gate::answered(
+          &namespace,
+          HashSet::from([DesktopFeature::ActivityTimeline]),
+        ),
       )
       .unwrap();
     assert!(require_account(&caller, &gates, &account).is_err());

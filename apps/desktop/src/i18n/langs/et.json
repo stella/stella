@@ -928,6 +928,11 @@
     "unusable": "Pole kasutatav"
   },
   "notification": {
+    "activityStoppedNotAvailableBody": "Tegevus pole selle konto jaoks enam saadaval. Salvestatu jääb sellesse arvutisse.",
+    "activityStoppedPolicyBody": "Teie organisatsioon lülitas Tegevuse selles arvutis välja. Salvestatu jääb sellesse arvutisse.",
+    "activityStoppedReconnectBody": "Salvestamise jätkamiseks ühendage uuesti oma stella konto.",
+    "activityStoppedSignedOutBody": "Salvestamise jätkamiseks logige uuesti oma stella kontole sisse.",
+    "activityStoppedTitle": "Tegevus lõpetas salvestamise",
     "checkpointDelayedBody": "{fileName}: muudatused jäävad kohalikuks ja proovitakse automaatselt uuesti",
     "checkpointDelayedTitle": "Mustandi sünkroonimine viibib",
     "diagnosticsCopiedBody": "Kleepige see vajadusel oma tugipäringule.",
@@ -1419,6 +1424,10 @@
     "activityPaused": "Tegevus: Peatatud · täna {hours} h",
     "activityRecording": "Tegevus: Salvestamine · täna {hours} h",
     "activityResume": "Jätka salvestamist",
+    "activityStoppedNotAvailable": "Tegevus: Seiskunud · Selle konto jaoks pole saadaval",
+    "activityStoppedPolicy": "Tegevus: Seiskunud · Teie organisatsioon lülitas välja",
+    "activityStoppedReconnect": "Tegevus: Seiskunud · Vaja uuesti ühendada",
+    "activityStoppedSignedOut": "Tegevus: Seiskunud · Välja logitud",
     "checkForUpdates": "Kontrolli värskendusi",
     "dictation": "Dikteerimine",
     "dictationFix": "Paranda viimane dikteerimine…",

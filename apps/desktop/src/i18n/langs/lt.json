@@ -928,6 +928,11 @@
     "unusable": "Negalima naudoti"
   },
   "notification": {
+    "activityStoppedNotAvailableBody": "Veikla šiai paskyrai nebepasiekiama. Tai, kas įrašyta, lieka šiame kompiuteryje.",
+    "activityStoppedPolicyBody": "Jūsų organizacija išjungė Veiklą šiame kompiuteryje. Tai, kas įrašyta, lieka šiame kompiuteryje.",
+    "activityStoppedReconnectBody": "Iš naujo prisijunkite prie savo stella paskyros, kad įrašymas tęstųsi.",
+    "activityStoppedSignedOutBody": "Vėl prisijunkite prie savo stella paskyros, kad įrašymas tęstųsi.",
+    "activityStoppedTitle": "Veikla nustojo įrašyti",
     "checkpointDelayedBody": "{fileName}: pakeitimai lieka vietiniai ir bus automatiškai bandomi iš naujo",
     "checkpointDelayedTitle": "Juodraščio sinchronizavimas vėluoja",
     "diagnosticsCopiedBody": "Įklijuokite ją į savo palaikymo užklausą, kai reikės.",
@@ -1419,6 +1424,10 @@
     "activityPaused": "Veikla: Pristabdyta · šiandien {hours} val.",
     "activityRecording": "Veikla: Įrašoma · šiandien {hours} val.",
     "activityResume": "Tęsti įrašymą",
+    "activityStoppedNotAvailable": "Veikla: Sustabdyta · Šiai paskyrai nepasiekiama",
+    "activityStoppedPolicy": "Veikla: Sustabdyta · Išjungė jūsų organizacija",
+    "activityStoppedReconnect": "Veikla: Sustabdyta · Reikia prisijungti iš naujo",
+    "activityStoppedSignedOut": "Veikla: Sustabdyta · Atsijungta",
     "checkForUpdates": "Tikrinti naujinimus",
     "dictation": "Diktavimas",
     "dictationFix": "Taisyti paskutinį diktavimą…",

@@ -1,11 +1,14 @@
-//! Which server-gated desktop features exist right now.
+//! Which server-gated desktop features exist right now, and why one is off.
 //!
-//! The decision lives in memory only and starts closed: a feature is on only
-//! after the server said `enabled` for the linked account in this process.
-//! This module holds no network code; `feature_access` fetches decisions and
-//! writes them here, and features read them without reaching the network.
+//! The decision lives in memory only and starts undecided: a feature is on
+//! only after the server said `enabled` for the linked account in this
+//! process. This module holds no network code; `feature_access` reads
+//! decisions and writes them here, and features read them without reaching
+//! the network.
 
 use std::{collections::HashSet, num::NonZeroUsize, sync::RwLock};
+
+use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DesktopFeature {
@@ -44,6 +47,44 @@ impl DesktopFeature {
   }
 }
 
+/// What one read learned about the linked account.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AccountDecision {
+  /// No account is linked.
+  SignedOut,
+  /// The saved link cannot be used until the member links again: this
+  /// computer's device proof is gone, or the server refused the credential.
+  /// The namespace is known when the saved account could be read.
+  ReconnectNeeded { namespace: Option<String> },
+  /// The server answered for this account. A feature it did not enable,
+  /// including every feature after an explicit refusal, is not available.
+  Answered {
+    namespace: String,
+    expires_at: DateTime<Utc>,
+    enabled: HashSet<DesktopFeature>,
+  },
+}
+
+/// Why a feature is off.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OffReason {
+  /// Nothing has been read for the current account yet.
+  Undecided,
+  /// Managed policy turned it off, whatever the server decides.
+  BlockedByPolicy,
+  /// No account is linked, or its credential expired.
+  SignedOut,
+  ReconnectNeeded,
+  /// The server did not enable it for this account.
+  NotAvailable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FeatureAccess {
+  Enabled,
+  Off(OffReason),
+}
+
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 enum AccountPhase {
   #[default]
@@ -54,14 +95,63 @@ enum AccountPhase {
 }
 
 #[derive(Default)]
+enum Decision {
+  #[default]
+  Undecided,
+  Read(AccountDecision),
+}
+
+#[derive(Default)]
 struct GateState {
   phase: AccountPhase,
   generation: u64,
-  namespace: Option<String>,
-  expires_at: Option<chrono::DateTime<chrono::Utc>>,
-  enabled: HashSet<DesktopFeature>,
+  decision: Decision,
+  /// The features last reported as on. A decision lapses with its credential
+  /// without being installed, so changes are reported against what was
+  /// applied, not against the old decision read now.
+  applied: HashSet<DesktopFeature>,
   /// Off by managed policy, whatever the server decides.
   blocked: HashSet<DesktopFeature>,
+}
+
+impl GateState {
+  fn access(&self, feature: DesktopFeature, now: DateTime<Utc>) -> FeatureAccess {
+    if self.blocked.contains(&feature) {
+      return FeatureAccess::Off(OffReason::BlockedByPolicy);
+    }
+    match &self.decision {
+      Decision::Undecided => FeatureAccess::Off(OffReason::Undecided),
+      Decision::Read(AccountDecision::SignedOut) => {
+        FeatureAccess::Off(OffReason::SignedOut)
+      }
+      Decision::Read(AccountDecision::ReconnectNeeded { .. }) => {
+        FeatureAccess::Off(OffReason::ReconnectNeeded)
+      }
+      Decision::Read(AccountDecision::Answered {
+        expires_at,
+        enabled,
+        ..
+      }) => {
+        if *expires_at <= now {
+          FeatureAccess::Off(OffReason::SignedOut)
+        } else if enabled.contains(&feature) {
+          FeatureAccess::Enabled
+        } else {
+          FeatureAccess::Off(OffReason::NotAvailable)
+        }
+      }
+    }
+  }
+
+  fn namespace(&self) -> Option<&String> {
+    match &self.decision {
+      Decision::Undecided | Decision::Read(AccountDecision::SignedOut) => None,
+      Decision::Read(AccountDecision::ReconnectNeeded { namespace }) => {
+        namespace.as_ref()
+      }
+      Decision::Read(AccountDecision::Answered { namespace, .. }) => Some(namespace),
+    }
+  }
 }
 
 #[derive(Default)]
@@ -75,14 +165,27 @@ impl FeatureGates {
     }))
   }
 
+  /// Whether the feature is on and, when it is off, why.
+  pub fn access_at(
+    &self,
+    feature: DesktopFeature,
+    now: DateTime<Utc>,
+  ) -> FeatureAccess {
+    self
+      .0
+      .read()
+      .map_or(FeatureAccess::Off(OffReason::Undecided), |state| {
+        state.access(feature, now)
+      })
+  }
+
+  pub fn access(&self, feature: DesktopFeature) -> FeatureAccess {
+    self.access_at(feature, Utc::now())
+  }
+
   /// Off whenever the decision cannot be read or its account expired.
   pub fn is_enabled(&self, feature: DesktopFeature) -> bool {
-    self.0.read().is_ok_and(|state| {
-      state
-        .expires_at
-        .is_some_and(|expires| expires > chrono::Utc::now())
-        && state.enabled.contains(&feature)
-    })
+    self.access(feature) == FeatureAccess::Enabled
   }
 
   pub fn generation(&self) -> Option<u64> {
@@ -91,14 +194,16 @@ impl FeatureGates {
 
   pub fn account_binding(&self, feature: DesktopFeature) -> Option<(u64, String)> {
     let state = self.0.read().ok()?;
-    if !state.enabled.contains(&feature)
-      || state
-        .expires_at
-        .is_none_or(|expires| expires <= chrono::Utc::now())
-    {
+    if state.access(feature, Utc::now()) != FeatureAccess::Enabled {
       return None;
     }
-    Some((state.generation, state.namespace.clone()?))
+    Some((state.generation, state.namespace()?.clone()))
+  }
+
+  /// The account the last decision was read for, whether or not it enables
+  /// anything. It names a local data namespace and grants no access.
+  pub fn namespace(&self) -> Option<String> {
+    self.0.read().ok()?.namespace().cloned()
   }
 
   /// Closing access and superseding in-flight requests is one atomic change.
@@ -112,9 +217,8 @@ impl FeatureGates {
       };
       state.phase = AccountPhase::Changing { pending };
       state.generation = state.generation.wrapping_add(1);
-      state.namespace = None;
-      state.expires_at = None;
-      state.enabled.clear();
+      state.decision = Decision::Undecided;
+      state.applied.clear();
     }
   }
 
@@ -132,36 +236,30 @@ impl FeatureGates {
     }
   }
 
-  /// A response can be installed only in the generation that requested it.
+  /// A decision can be installed only in the generation that requested it.
+  /// Returns the features that turned on or off.
   pub fn install(
     &self,
     generation: u64,
-    namespace: Option<String>,
-    expires_at: Option<chrono::DateTime<chrono::Utc>>,
-    enabled: HashSet<DesktopFeature>,
+    decision: AccountDecision,
   ) -> Option<Vec<DesktopFeature>> {
     let mut state = self.0.write().ok()?;
     if generation != state.generation || state.phase != AccountPhase::Ready {
       return None;
     }
-    let enabled = if namespace.is_some()
-      && expires_at.is_some_and(|expires| expires > chrono::Utc::now())
-    {
-      enabled
-        .into_iter()
-        .filter(|feature| !state.blocked.contains(feature))
-        .collect()
-    } else {
-      HashSet::new()
-    };
+    let now = Utc::now();
+    state.decision = Decision::Read(decision);
+    let enabled = DesktopFeature::ALL
+      .iter()
+      .copied()
+      .filter(|feature| state.access(*feature, now) == FeatureAccess::Enabled)
+      .collect::<HashSet<_>>();
     let changed = DesktopFeature::ALL
       .iter()
       .copied()
-      .filter(|feature| state.enabled.contains(feature) != enabled.contains(feature))
+      .filter(|feature| state.applied.contains(feature) != enabled.contains(feature))
       .collect();
-    state.namespace = namespace;
-    state.expires_at = expires_at;
-    state.enabled = enabled;
+    state.applied = enabled;
     drop(state);
     Some(changed)
   }
@@ -169,13 +267,20 @@ impl FeatureGates {
   #[cfg(test)]
   fn replace(&self, enabled: HashSet<DesktopFeature>) -> Vec<DesktopFeature> {
     self
-      .install(
-        self.generation().unwrap(),
-        Some("fixture".into()),
-        Some(chrono::Utc::now() + chrono::Duration::hours(1)),
-        enabled,
-      )
+      .install(self.generation().unwrap(), answered("fixture", enabled))
       .unwrap()
+  }
+}
+
+#[cfg(test)]
+pub(crate) fn answered(
+  namespace: &str,
+  enabled: HashSet<DesktopFeature>,
+) -> AccountDecision {
+  AccountDecision::Answered {
+    namespace: namespace.into(),
+    expires_at: Utc::now() + chrono::Duration::hours(1),
+    enabled,
   }
 }
 
@@ -191,17 +296,12 @@ mod tests {
         gates.invalidate();
       }
       let generation = gates.generation().unwrap();
-      let expiry = Some(chrono::Utc::now() + chrono::Duration::hours(1));
+      let activity = || HashSet::from([DesktopFeature::ActivityTimeline]);
       for _ in 1..pending {
         gates.finish_account_change();
         assert!(
           gates
-            .install(
-              generation,
-              Some("current".into()),
-              expiry,
-              HashSet::from([DesktopFeature::ActivityTimeline])
-            )
+            .install(generation, answered("current", activity()))
             .is_none()
         );
         assert!(!gates.is_enabled(DesktopFeature::ActivityTimeline));
@@ -214,23 +314,13 @@ mod tests {
       gates.finish_account_change();
       assert!(
         gates
-          .install(
-            generation,
-            Some("current".into()),
-            expiry,
-            HashSet::from([DesktopFeature::ActivityTimeline])
-          )
+          .install(generation, answered("current", activity()))
           .is_some()
       );
       assert!(gates.is_enabled(DesktopFeature::ActivityTimeline));
       assert!(
         gates
-          .install(
-            generation - 1,
-            Some("stale".into()),
-            expiry,
-            HashSet::from([DesktopFeature::ActivityTimeline])
-          )
+          .install(generation - 1, answered("stale", activity()))
           .is_none()
       );
     }
@@ -240,6 +330,10 @@ mod tests {
   fn features_start_closed_and_report_only_changes() {
     let gates = FeatureGates::default();
     assert!(!gates.is_enabled(DesktopFeature::ActivityTimeline));
+    assert_eq!(
+      gates.access(DesktopFeature::ActivityTimeline),
+      FeatureAccess::Off(OffReason::Undecided)
+    );
 
     let on = HashSet::from([DesktopFeature::ActivityTimeline]);
     assert_eq!(
@@ -256,15 +350,132 @@ mod tests {
   }
 
   #[test]
+  fn every_decision_names_why_a_feature_is_off() {
+    let now = Utc::now();
+    let cases = [
+      (AccountDecision::SignedOut, OffReason::SignedOut, None),
+      (
+        AccountDecision::ReconnectNeeded { namespace: None },
+        OffReason::ReconnectNeeded,
+        None,
+      ),
+      (
+        AccountDecision::ReconnectNeeded {
+          namespace: Some("a".into()),
+        },
+        OffReason::ReconnectNeeded,
+        Some("a"),
+      ),
+      (
+        answered("a", HashSet::from([DesktopFeature::LocalAgents])),
+        OffReason::NotAvailable,
+        Some("a"),
+      ),
+      (
+        AccountDecision::Answered {
+          namespace: "a".into(),
+          expires_at: now - chrono::Duration::seconds(1),
+          enabled: HashSet::from([DesktopFeature::ActivityTimeline]),
+        },
+        OffReason::SignedOut,
+        Some("a"),
+      ),
+    ];
+    for (decision, reason, namespace) in cases {
+      let gates = FeatureGates::default();
+      gates
+        .install(gates.generation().unwrap(), decision.clone())
+        .unwrap();
+      assert_eq!(
+        gates.access_at(DesktopFeature::ActivityTimeline, now),
+        FeatureAccess::Off(reason),
+        "{decision:?}"
+      );
+      assert_eq!(gates.namespace().as_deref(), namespace, "{decision:?}");
+      assert!(
+        gates
+          .account_binding(DesktopFeature::ActivityTimeline)
+          .is_none()
+      );
+    }
+  }
+
+  #[test]
+  fn an_answer_stops_enabling_a_feature_once_its_credential_expires() {
+    let gates = FeatureGates::default();
+    let expires_at = Utc::now() + chrono::Duration::hours(1);
+    gates
+      .install(
+        gates.generation().unwrap(),
+        AccountDecision::Answered {
+          namespace: "a".into(),
+          expires_at,
+          enabled: HashSet::from([DesktopFeature::ActivityTimeline]),
+        },
+      )
+      .unwrap();
+    assert_eq!(
+      gates.access_at(
+        DesktopFeature::ActivityTimeline,
+        expires_at - chrono::Duration::seconds(1)
+      ),
+      FeatureAccess::Enabled
+    );
+    assert_eq!(
+      gates.access_at(DesktopFeature::ActivityTimeline, expires_at),
+      FeatureAccess::Off(OffReason::SignedOut)
+    );
+  }
+
+  #[test]
+  fn a_decision_that_lapsed_with_its_credential_still_reports_turning_off() {
+    let gates = FeatureGates::default();
+    let generation = gates.generation().unwrap();
+    gates
+      .install(
+        generation,
+        answered("a", HashSet::from([DesktopFeature::ActivityTimeline])),
+      )
+      .unwrap();
+    // The credential expires between two reads.
+    gates.0.write().unwrap().decision = Decision::Read(AccountDecision::Answered {
+      namespace: "a".into(),
+      expires_at: Utc::now() - chrono::Duration::seconds(1),
+      enabled: HashSet::from([DesktopFeature::ActivityTimeline]),
+    });
+    assert!(!gates.is_enabled(DesktopFeature::ActivityTimeline));
+    assert_eq!(
+      gates
+        .install(generation, AccountDecision::SignedOut)
+        .unwrap(),
+      [DesktopFeature::ActivityTimeline]
+    );
+    assert!(
+      gates
+        .install(generation, AccountDecision::SignedOut)
+        .unwrap()
+        .is_empty()
+    );
+  }
+
+  #[test]
   fn a_blocked_feature_stays_off_when_the_server_enables_it() {
     let gates =
       FeatureGates::blocking(HashSet::from([DesktopFeature::ActivityTimeline]));
+    assert_eq!(
+      gates.access(DesktopFeature::ActivityTimeline),
+      FeatureAccess::Off(OffReason::BlockedByPolicy)
+    );
     let changed = gates.replace(HashSet::from([
       DesktopFeature::ActivityTimeline,
       DesktopFeature::LocalAgents,
     ]));
     assert_eq!(changed, [DesktopFeature::LocalAgents]);
     assert!(!gates.is_enabled(DesktopFeature::ActivityTimeline));
+    assert_eq!(
+      gates.access(DesktopFeature::ActivityTimeline),
+      FeatureAccess::Off(OffReason::BlockedByPolicy)
+    );
     assert!(
       gates
         .account_binding(DesktopFeature::ActivityTimeline)
@@ -282,25 +493,15 @@ mod tests {
     ] {
       let gates = std::sync::Arc::new(FeatureGates::default());
       let generation_a = gates.generation().unwrap();
-      let expiry = Some(chrono::Utc::now() + chrono::Duration::hours(1));
+      let activity = || HashSet::from([DesktopFeature::ActivityTimeline]);
       gates
-        .install(
-          generation_a,
-          Some("a".into()),
-          expiry,
-          HashSet::from([DesktopFeature::ActivityTimeline]),
-        )
+        .install(generation_a, answered("a", activity()))
         .unwrap();
       let (complete, delayed) = tokio::sync::oneshot::channel();
       let stale_gates = std::sync::Arc::clone(&gates);
       let stale = tokio::spawn(async move {
         delayed.await.unwrap();
-        stale_gates.install(
-          generation_a,
-          Some("a".into()),
-          expiry,
-          HashSet::from([DesktopFeature::ActivityTimeline]),
-        )
+        stale_gates.install(generation_a, answered("a", activity()))
       });
       gates.invalidate();
       assert!(!gates.is_enabled(DesktopFeature::ActivityTimeline));
@@ -309,27 +510,18 @@ mod tests {
           .account_binding(DesktopFeature::ActivityTimeline)
           .is_none()
       );
+      assert_eq!(gates.namespace(), None);
       // Even a fast B response is rejected until A's readable state is gone.
       assert!(
         gates
-          .install(
-            gates.generation().unwrap(),
-            Some("b".into()),
-            expiry,
-            HashSet::from([DesktopFeature::ActivityTimeline])
-          )
+          .install(gates.generation().unwrap(), answered("b", activity()))
           .is_none()
       );
       assert!(!gates.is_enabled(DesktopFeature::ActivityTimeline));
       gates.finish_account_change();
       if let Some(decision) = replacement.as_ref() {
         gates
-          .install(
-            gates.generation().unwrap(),
-            Some("b".into()),
-            expiry,
-            decision.clone(),
-          )
+          .install(gates.generation().unwrap(), answered("b", decision.clone()))
           .unwrap();
       }
       complete.send(()).unwrap();

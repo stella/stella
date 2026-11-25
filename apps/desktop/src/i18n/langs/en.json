@@ -928,6 +928,11 @@
     "unusable": "Not usable"
   },
   "notification": {
+    "activityStoppedNotAvailableBody": "Activity is no longer available for this account. What was recorded stays on this computer.",
+    "activityStoppedPolicyBody": "Your organization turned off Activity on this computer. What was recorded stays on this computer.",
+    "activityStoppedReconnectBody": "Reconnect to your stella account to keep recording.",
+    "activityStoppedSignedOutBody": "Sign in to your stella account again to keep recording.",
+    "activityStoppedTitle": "Activity stopped recording",
     "checkpointDelayedBody": "{fileName}: Changes stay local and will retry automatically",
     "checkpointDelayedTitle": "Draft sync delayed",
     "diagnosticsCopiedBody": "Paste it into your support request when needed.",
@@ -1419,6 +1424,10 @@
     "activityPaused": "Activity: Paused · {hours} h today",
     "activityRecording": "Activity: Recording · {hours} h today",
     "activityResume": "Resume recording",
+    "activityStoppedNotAvailable": "Activity: Stopped · Not available for this account",
+    "activityStoppedPolicy": "Activity: Stopped · Turned off by your organization",
+    "activityStoppedReconnect": "Activity: Stopped · Reconnect needed",
+    "activityStoppedSignedOut": "Activity: Stopped · Signed out",
     "checkForUpdates": "Check for updates",
     "dictation": "Dictation",
     "dictationFix": "Fix last dictation…",

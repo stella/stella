@@ -7,7 +7,8 @@ use tauri::{
 };
 
 use crate::PreferencesTab;
-use crate::activity::{ActivityRecordingStatus, TrayActivitySnapshot};
+use crate::activity::{ActivityRecordingStatus, TrayActivity, TrayActivitySnapshot};
+use crate::activity_capture::ActivityStopped;
 use crate::dictation::TrayDictation;
 use crate::dictation_hold_key::KeyNames;
 use crate::dictation_language::{self, Choice};
@@ -39,6 +40,8 @@ const PAUSE_ACTIVITY_ACTION: &str = "activity-pause";
 const RESUME_ACTIVITY_ACTION: &str = "activity-resume";
 const ACTIVITY_STATUS_ITEM: &str = "activity-status";
 const ACTIVITY_NOW_ITEM: &str = "activity-now";
+/// Opens the account settings, like the top-level reconnect item.
+const ACTIVITY_RECONNECT_ACTION: &str = "activity-reconnect";
 const MILLIS_PER_TENTH_HOUR: u64 = 360_000;
 
 /// One tray image and the recording badge drawn over it.
@@ -469,7 +472,7 @@ fn refresh_on_main_thread(
   main_thread: &TrayMainThread,
 ) {
   let binding = activity_binding(app);
-  let activity = crate::activity::tray_snapshot(app);
+  let activity = crate::activity::tray_activity(app);
   let menu =
     build_tray_menu_with_activity(app, snapshot, activity.as_ref(), main_thread);
   let Some(tray) = app.tray_by_id("main") else {
@@ -481,15 +484,19 @@ fn refresh_on_main_thread(
   let menu = if current {
     menu
   } else {
-    build_tray_menu_with_activity(app, snapshot, None, main_thread)
+    let activity =
+      crate::activity::tray_activity(app).map(TrayActivity::without_projection);
+    build_tray_menu_with_activity(app, snapshot, activity.as_ref(), main_thread)
   };
   if let Ok(menu) = menu {
     best_effort(tray.set_menu(Some(menu)), "tray menu was not updated");
   }
   let recording = current
-    && activity
-      .as_ref()
-      .is_some_and(|activity| activity.status == ActivityRecordingStatus::Recording);
+    && matches!(
+      &activity,
+      Some(TrayActivity::Live(Some(snapshot)))
+        if snapshot.status == ActivityRecordingStatus::Recording
+    );
   if let Ok(icon) = recording_icon(recording) {
     best_effort(set_tray_icon(&tray, icon), "tray icon was not updated");
   }
@@ -504,7 +511,7 @@ fn activity_binding(app: &AppHandle) -> Option<(u64, String)> {
 fn build_tray_menu_with_activity(
   app: &AppHandle,
   snapshot: &AppSnapshot,
-  activity: Option<&TrayActivitySnapshot>,
+  activity: Option<&TrayActivity>,
   _main_thread: &TrayMainThread,
 ) -> tauri::Result<Menu<Wry>> {
   let mut builder = MenuBuilder::new(app);
@@ -553,8 +560,7 @@ fn build_tray_menu_with_activity(
         .build(app)?,
     );
   }
-  let activity_enabled = crate::activity::is_enabled(app);
-  if activity_enabled {
+  if let Some(activity) = activity {
     builder = builder.item(&build_activity_menu(app, activity)?);
   }
   let dictation = dictation_menu(
@@ -565,7 +571,7 @@ fn build_tray_menu_with_activity(
   if let Some(dictation) = &dictation {
     builder = builder.item(&build_dictation_menu(app, dictation)?);
   }
-  if clipboard_enabled || activity_enabled || dictation.is_some() {
+  if clipboard_enabled || activity.is_some() || dictation.is_some() {
     builder = builder.separator();
   }
 
@@ -703,12 +709,43 @@ fn build_dictation_language_menu(
   menu.build()
 }
 
+/// What a stopped Activity entry offers: the reason, and a way back to the
+/// account when linking again lets it record.
+fn stopped_activity_items(
+  stopped: ActivityStopped,
+) -> (&'static str, Option<(&'static str, &'static str)>) {
+  (
+    stopped.reason.tray_key(),
+    stopped
+      .reason
+      .reconnect_helps()
+      .then_some((ACTIVITY_RECONNECT_ACTION, "tray.reconnectAccount")),
+  )
+}
+
 fn build_activity_menu(
   app: &AppHandle,
-  activity: Option<&TrayActivitySnapshot>,
+  activity: &TrayActivity,
 ) -> tauri::Result<Submenu<Wry>> {
   let mut menu = SubmenuBuilder::new(app, t("tray.activity"));
-  if let Some(activity) = activity {
+  let snapshot = match activity {
+    TrayActivity::Live(snapshot) => snapshot.as_ref(),
+    TrayActivity::Stopped(stopped) => {
+      let (status, action) = stopped_activity_items(*stopped);
+      menu = menu.item(
+        &MenuItemBuilder::with_id(ACTIVITY_STATUS_ITEM, t(status))
+          .enabled(false)
+          .build(app)?,
+      );
+      if let Some((action, label)) = action {
+        menu = menu
+          .separator()
+          .item(&MenuItemBuilder::with_id(action, t(label)).build(app)?);
+      }
+      return menu.build();
+    }
+  };
+  if let Some(activity) = snapshot {
     menu = menu.item(
       &MenuItemBuilder::with_id(ACTIVITY_STATUS_ITEM, activity_status_label(activity))
         .enabled(false)
@@ -750,7 +787,10 @@ pub fn handle_menu_action(action: &str) -> MenuAction {
   if action == QUIT_ACTION {
     return MenuAction::Quit;
   }
-  if action == OPEN_PREFERENCES_ACTION || action == RECONNECT_ACCOUNT_ACTION {
+  if action == OPEN_PREFERENCES_ACTION
+    || action == RECONNECT_ACCOUNT_ACTION
+    || action == ACTIVITY_RECONNECT_ACTION
+  {
     return MenuAction::OpenPreferences(PreferencesTab::General);
   }
   if action == OPEN_CLIPBOARD_ACTION {
@@ -912,10 +952,33 @@ mod tests {
 
   #[test]
   fn reconnect_opens_the_account_settings() {
-    assert!(matches!(
-      handle_menu_action(RECONNECT_ACCOUNT_ACTION),
-      MenuAction::OpenPreferences(PreferencesTab::General)
-    ));
+    for action in [RECONNECT_ACCOUNT_ACTION, ACTIVITY_RECONNECT_ACTION] {
+      assert!(matches!(
+        handle_menu_action(action),
+        MenuAction::OpenPreferences(PreferencesTab::General)
+      ));
+    }
+  }
+
+  #[test]
+  fn a_stopped_activity_names_its_reason_and_offers_reconnecting_where_it_helps() {
+    use crate::activity_capture::StopReason;
+    init_i18n();
+    for reason in StopReason::ALL {
+      let (status, action) = stopped_activity_items(ActivityStopped {
+        reason: *reason,
+        intent: ActivityRecordingStatus::Recording,
+      });
+      assert_eq!(status, reason.tray_key());
+      assert_ne!(t(status), status, "{reason:?} has English text");
+      let expected = match reason {
+        StopReason::ReconnectNeeded | StopReason::SignedOut => {
+          Some((ACTIVITY_RECONNECT_ACTION, "tray.reconnectAccount"))
+        }
+        StopReason::NotAvailable | StopReason::BlockedByPolicy => None,
+      };
+      assert_eq!(action, expected, "{reason:?}");
+    }
   }
 
   #[test]

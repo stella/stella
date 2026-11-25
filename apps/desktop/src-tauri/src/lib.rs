@@ -4,6 +4,7 @@ mod account_avatar;
 mod account_switch;
 mod activity;
 mod activity_calls;
+mod activity_capture;
 mod activity_commands;
 mod activity_details;
 mod activity_settings;

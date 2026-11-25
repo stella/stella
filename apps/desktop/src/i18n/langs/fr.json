@@ -928,6 +928,11 @@
     "unusable": "Inutilisable"
   },
   "notification": {
+    "activityStoppedNotAvailableBody": "Activité n’est plus disponible pour ce compte. Les enregistrements effectués restent sur cet ordinateur.",
+    "activityStoppedPolicyBody": "Votre organisation a désactivé Activité sur cet ordinateur. Les enregistrements effectués restent sur cet ordinateur.",
+    "activityStoppedReconnectBody": "Reconnectez-vous à votre compte stella pour continuer l’enregistrement.",
+    "activityStoppedSignedOutBody": "Connectez-vous de nouveau à votre compte stella pour continuer l’enregistrement.",
+    "activityStoppedTitle": "Activité a cessé d’enregistrer",
     "checkpointDelayedBody": "{fileName} : les modifications restent locales et seront réessayées automatiquement",
     "checkpointDelayedTitle": "Synchronisation du brouillon retardée",
     "diagnosticsCopiedBody": "Collez-les dans votre demande de support si nécessaire.",
@@ -1419,6 +1424,10 @@
     "activityPaused": "Activité : En pause · {hours} h aujourd’hui",
     "activityRecording": "Activité : Enregistrement · {hours} h aujourd’hui",
     "activityResume": "Reprendre l’enregistrement",
+    "activityStoppedNotAvailable": "Activité : Arrêtée · Non disponible pour ce compte",
+    "activityStoppedPolicy": "Activité : Arrêtée · Désactivée par votre organisation",
+    "activityStoppedReconnect": "Activité : Arrêtée · Reconnexion nécessaire",
+    "activityStoppedSignedOut": "Activité : Arrêtée · Compte déconnecté",
     "checkForUpdates": "Vérifier les mises à jour",
     "dictation": "Dictée",
     "dictationFix": "Corriger la dernière dictée…",
