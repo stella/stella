@@ -4,7 +4,12 @@ import { inArray } from "drizzle-orm";
 import type { DesktopCalendarEvent } from "@stll/api-contract/desktop-time-entries";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import { organizationSettings, sharepointConnections } from "@/api/db/schema";
+import {
+  ORGANIZATION_ACCESS_STATE,
+  organizationAccessStates,
+  organizationSettings,
+  sharepointConnections,
+} from "@/api/db/schema";
 import { createMembershipScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import calendarEvents, {
   createDesktopCalendarEventsEndpoint,
@@ -83,6 +88,12 @@ export const seedDesktopCalendarEventsScaling = async (
     })),
     { organizationId, microsoft365CalendarReadEnabled: true },
   ]);
+  // Member capacity needs the organization's access state before a second
+  // member joins, as tests that add colleagues do.
+  await db.insert(organizationAccessStates).values({
+    organizationId,
+    state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+  });
   await db.insert(user).values(
     [...colleagueIds, userId].map((id) => ({
       id,
