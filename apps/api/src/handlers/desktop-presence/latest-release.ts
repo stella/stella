@@ -13,7 +13,10 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { desktopVersionSchema } from "@stll/api-contract/desktop-presence";
+import {
+  DESKTOP_UPDATE_FEED_URL,
+  desktopVersionSchema,
+} from "@stll/api-contract/desktop-presence";
 import { Temporal } from "@stll/time";
 
 import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
@@ -28,11 +31,6 @@ import type {
   SafeOutboundFetchError,
   SafeOutboundFetchResponse,
 } from "@/api/lib/safe-outbound-fetch";
-
-import { MOBILE_UPDATES_CDN_ORIGIN } from "../mobile-updates/relay";
-
-/** The feed `apps/desktop/src-tauri/tauri.conf.json` points the updater at. */
-export const DESKTOP_RELEASE_FEED_URL = `${MOBILE_UPDATES_CDN_ORIGIN}/desktop/prod/latest.json`;
 
 const FEED_TIMEOUT_MS = 5000;
 /** The feed lists a version, notes and a few signed package links. */
@@ -56,7 +54,7 @@ export const feedFetch =
       maxBytes: FEED_MAX_BYTES,
       permit,
       timeout: { type: "headers", ms: FEED_TIMEOUT_MS },
-      url: DESKTOP_RELEASE_FEED_URL,
+      url: DESKTOP_UPDATE_FEED_URL,
     });
 
 /** The version the feed names; anything else is why it could not be read. */

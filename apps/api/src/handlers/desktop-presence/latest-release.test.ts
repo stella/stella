@@ -1,12 +1,7 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
-import desktopConfig from "../../../../desktop/src-tauri/tauri.conf.json" with { type: "json" };
-import {
-  createLatestDesktopRelease,
-  DESKTOP_RELEASE_FEED_URL,
-  type FeedFetch,
-} from "./latest-release";
+import { createLatestDesktopRelease, type FeedFetch } from "./latest-release";
 
 const present = (value: string) => ({ type: "present", value });
 
@@ -26,12 +21,6 @@ const scriptedFeed = (bodies: readonly (string | null)[]) => {
   };
   return { fetchFeed, reads: () => reads };
 };
-
-test("the API reads the feed the desktop updater reads", () => {
-  expect(desktopConfig.plugins.updater.endpoints).toEqual([
-    DESKTOP_RELEASE_FEED_URL,
-  ]);
-});
 
 test("a feed version answers every report until it is stale, read once", async () => {
   let now = 0;

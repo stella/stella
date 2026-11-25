@@ -2,8 +2,16 @@ import * as v from "valibot";
 
 import { API_STORABLE_INSTANT_CHECK } from "./api-date";
 import policy from "./desktop-presence-policy.json";
+import updateFeed from "./desktop-update-feed.json";
 
 export const DESKTOP_PRESENCE_POLICY = policy;
+
+/**
+ * The public feed the desktop updater reads (`plugins.updater.endpoints` in
+ * apps/desktop/src-tauri/tauri.conf.json, which a desktop test binds to this
+ * file). The API reads the newest release from the same feed.
+ */
+export const DESKTOP_UPDATE_FEED_URL = updateFeed.url;
 
 export const desktopVersionSchema = v.pipe(
   v.string(),

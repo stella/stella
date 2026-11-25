@@ -1585,6 +1585,20 @@ mod tests {
   }
 
   #[test]
+  fn the_updater_reads_the_feed_the_server_reads_releases_from() {
+    let config: serde_json::Value =
+      serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri config");
+    let feed: serde_json::Value = serde_json::from_str(include_str!(
+      "../../../../packages/api-contract/src/desktop-update-feed.json"
+    ))
+    .expect("update feed contract");
+    assert_eq!(
+      config.pointer("/plugins/updater/endpoints"),
+      Some(&serde_json::json!([feed["url"]]))
+    );
+  }
+
+  #[test]
   fn only_a_later_plain_release_counts_as_newer() {
     assert!(release_is_newer("0.9.92", "0.9.91"));
     assert!(release_is_newer("0.10.0", "0.9.91"));
