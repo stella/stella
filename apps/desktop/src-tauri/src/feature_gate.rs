@@ -56,6 +56,13 @@ pub enum AccountDecision {
   /// computer's device proof is gone, or the server refused the credential.
   /// The namespace is known when the saved account could be read.
   ReconnectNeeded { namespace: Option<String> },
+  /// The saved account was read but the server was not reached since it was
+  /// linked or the app started. Nothing is enabled; a feature that may act
+  /// on a remembered grant (Activity's local recording) decides for itself.
+  Unconfirmed {
+    namespace: String,
+    expires_at: DateTime<Utc>,
+  },
   /// The server answered for this account. A feature it did not enable,
   /// including every feature after an explicit refusal, is not available.
   Answered {
@@ -127,6 +134,13 @@ impl GateState {
       Decision::Read(AccountDecision::ReconnectNeeded { .. }) => {
         FeatureAccess::Off(OffReason::ReconnectNeeded)
       }
+      Decision::Read(AccountDecision::Unconfirmed { expires_at, .. }) => {
+        if *expires_at <= now {
+          FeatureAccess::Off(OffReason::SignedOut)
+        } else {
+          FeatureAccess::Off(OffReason::Undecided)
+        }
+      }
       Decision::Read(AccountDecision::Answered {
         expires_at,
         enabled,
@@ -149,7 +163,23 @@ impl GateState {
       Decision::Read(AccountDecision::ReconnectNeeded { namespace }) => {
         namespace.as_ref()
       }
-      Decision::Read(AccountDecision::Answered { namespace, .. }) => Some(namespace),
+      Decision::Read(
+        AccountDecision::Answered { namespace, .. }
+        | AccountDecision::Unconfirmed { namespace, .. },
+      ) => Some(namespace),
+    }
+  }
+
+  fn credential_expiry(&self) -> Option<DateTime<Utc>> {
+    match &self.decision {
+      Decision::Undecided
+      | Decision::Read(
+        AccountDecision::SignedOut | AccountDecision::ReconnectNeeded { .. },
+      ) => None,
+      Decision::Read(
+        AccountDecision::Answered { expires_at, .. }
+        | AccountDecision::Unconfirmed { expires_at, .. },
+      ) => Some(*expires_at),
     }
   }
 }
@@ -206,6 +236,22 @@ impl FeatureGates {
     self.0.read().ok()?.namespace().cloned()
   }
 
+  /// The current generation and the account the last decision was read for,
+  /// while no account change is under way. It names local data only and
+  /// grants no server access.
+  pub fn local_binding(&self) -> Option<(u64, String)> {
+    let state = self.0.read().ok()?;
+    if state.phase != AccountPhase::Ready {
+      return None;
+    }
+    Some((state.generation, state.namespace()?.clone()))
+  }
+
+  /// When the credential the last decision was read with expires.
+  pub fn credential_expiry(&self) -> Option<DateTime<Utc>> {
+    self.0.read().ok()?.credential_expiry()
+  }
+
   /// Closing access and superseding in-flight requests is one atomic change.
   pub fn invalidate(&self) {
     if let Ok(mut state) = self.0.write() {
@@ -237,7 +283,9 @@ impl FeatureGates {
   }
 
   /// A decision can be installed only in the generation that requested it.
-  /// Returns the features that turned on or off.
+  /// An unconfirmed account never replaces an answer: the last decision
+  /// stands while the server cannot be reached. Returns the features that
+  /// turned on or off.
   pub fn install(
     &self,
     generation: u64,
@@ -246,6 +294,18 @@ impl FeatureGates {
     let mut state = self.0.write().ok()?;
     if generation != state.generation || state.phase != AccountPhase::Ready {
       return None;
+    }
+    if matches!(decision, AccountDecision::Unconfirmed { .. })
+      && matches!(
+        state.decision,
+        Decision::Read(
+          AccountDecision::SignedOut
+            | AccountDecision::ReconnectNeeded { .. }
+            | AccountDecision::Answered { .. }
+        )
+      )
+    {
+      return Some(Vec::new());
     }
     let now = Utc::now();
     state.decision = Decision::Read(decision);
@@ -398,6 +458,58 @@ mod tests {
           .is_none()
       );
     }
+  }
+
+  #[test]
+  fn an_unconfirmed_account_names_its_data_but_never_replaces_an_answer() {
+    let gates = FeatureGates::default();
+    let expires_at = Utc::now() + chrono::Duration::hours(1);
+    let unconfirmed = || AccountDecision::Unconfirmed {
+      namespace: "a".into(),
+      expires_at,
+    };
+    gates
+      .install(gates.generation().unwrap(), unconfirmed())
+      .unwrap();
+    assert_eq!(
+      gates.access(DesktopFeature::ActivityTimeline),
+      FeatureAccess::Off(OffReason::Undecided)
+    );
+    assert_eq!(gates.local_binding(), Some((0, "a".into())));
+    assert_eq!(gates.credential_expiry(), Some(expires_at));
+    assert!(
+      gates
+        .account_binding(DesktopFeature::ActivityTimeline)
+        .is_none()
+    );
+    assert_eq!(
+      gates.access_at(DesktopFeature::ActivityTimeline, expires_at),
+      FeatureAccess::Off(OffReason::SignedOut)
+    );
+    for answer in [
+      answered("a", HashSet::from([DesktopFeature::ActivityTimeline])),
+      answered("a", HashSet::new()),
+      AccountDecision::ReconnectNeeded {
+        namespace: Some("a".into()),
+      },
+    ] {
+      let gates = FeatureGates::default();
+      gates
+        .install(gates.generation().unwrap(), answer.clone())
+        .unwrap();
+      let before = gates.access(DesktopFeature::ActivityTimeline);
+      assert_eq!(
+        gates.install(gates.generation().unwrap(), unconfirmed()),
+        Some(Vec::new())
+      );
+      assert_eq!(
+        gates.access(DesktopFeature::ActivityTimeline),
+        before,
+        "{answer:?}"
+      );
+    }
+    gates.invalidate();
+    assert_eq!(gates.local_binding(), None);
   }
 
   #[test]

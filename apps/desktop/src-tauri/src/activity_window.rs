@@ -1,5 +1,6 @@
-//! The activity window: a regular app window that exists only while the
-//! feature is enabled.
+//! The activity window: a regular app window that exists only while an
+//! account's activity history is readable (read-only while Activity cannot
+//! record).
 
 use tauri::{AppHandle, LogicalSize, Manager, webview::PageLoadEvent};
 
@@ -10,8 +11,8 @@ const ACTIVITY_WINDOW_WIDTH: f64 = 760.0;
 const ACTIVITY_WINDOW_HEIGHT: f64 = 640.0;
 
 pub fn show(app: &AppHandle) {
-  if !crate::activity::is_enabled(app) {
-    tracing::info!("activity window refused: the feature is not enabled");
+  if crate::activity::history_binding(app).is_none() {
+    tracing::info!("activity window refused: no activity history is readable");
     return;
   }
   crate::activity::initialize(app);

@@ -29,5 +29,12 @@
     7,
     30,
     90
-  ]
+  ],
+  "stopReasons": {
+    "reconnectNeeded": true,
+    "notAvailable": true,
+    "blockedByPolicy": true,
+    "signedOut": true,
+    "notConfirmed": true
+  }
 }

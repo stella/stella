@@ -117,7 +117,10 @@ impl LocalWindowFeature for ClipboardSettingsWindows {
 
 pub type ClipboardSettingsCaller = LocalCaller<ClipboardSettingsWindows>;
 
-/// The activity window: the only reader of the day timeline.
+/// The activity window: the only reader of the day timeline. It reads while
+/// the account's history is readable; changes need Activity to be able to
+/// record ([`LocalCaller::require_writable`]), and server actions check the
+/// live decision themselves.
 pub struct ActivityWindows;
 
 impl LocalWindowFeature for ActivityWindows {
@@ -126,13 +129,11 @@ impl LocalWindowFeature for ActivityWindows {
   const REFUSAL: &'static str = "activity timeline is not available here";
 
   fn is_available<R: Runtime>(app: &AppHandle<R>) -> bool {
-    crate::activity::is_enabled(app)
+    crate::activity::history_binding(app).is_some()
   }
 
   fn account_binding<R: Runtime>(app: &AppHandle<R>) -> Option<(u64, String)> {
-    app
-      .try_state::<crate::feature_gate::FeatureGates>()?
-      .account_binding(crate::feature_gate::DesktopFeature::ActivityTimeline)
+    crate::activity::history_binding(app)
   }
 }
 
@@ -201,7 +202,25 @@ impl<F: ActivityAccountFeature> LocalCaller<F> {
     }
     Err(F::REFUSAL.into())
   }
+
+  /// Refuses a change while Activity cannot record for the caller's
+  /// account: its history is then read-only.
+  pub(crate) fn require_writable<R: Runtime>(
+    &self,
+    app: &AppHandle<R>,
+  ) -> Result<(), String> {
+    self.require_current(app)?;
+    if self.account_binding.is_some()
+      && self.account_binding == crate::activity::capture_binding(app)
+    {
+      return Ok(());
+    }
+    Err(ACTIVITY_READ_ONLY.into())
+  }
 }
+
+pub(crate) const ACTIVITY_READ_ONLY: &str =
+  "activity history is read-only while it cannot record";
 
 pub type ActivityCaller = LocalCaller<ActivityWindows>;
 
