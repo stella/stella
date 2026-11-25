@@ -278,6 +278,7 @@
       "Configure flaky-test quarantine",
       "Download planned API test durations",
       "Install dependencies",
+      "Install pinned harness CLIs",
       "Prepare environment",
       "Repeat changed tests",
       "Runner resources",
