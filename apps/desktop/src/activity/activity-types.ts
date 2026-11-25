@@ -73,14 +73,12 @@ export type ActivityDeletionStatus =
 /** Why Activity cannot record. */
 export type ActivityStopReason = keyof typeof activityContract.stopReasons;
 
-export const isActivityStopReason = (
-  value: unknown,
-): value is ActivityStopReason =>
+const isActivityStopReason = (value: unknown): value is ActivityStopReason =>
   typeof value === "string" &&
   Object.hasOwn(activityContract.stopReasons, value);
 
 /** A stretch the member wanted recorded and Activity could not record. */
-export type ActivityOutage = {
+type ActivityOutage = {
   /** RFC 3339 instants. */
   start: string;
   end: string;

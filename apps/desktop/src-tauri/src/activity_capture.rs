@@ -479,6 +479,24 @@ pub(crate) fn stopped_binding_in(
   }
 }
 
+/// Writes the loaded account's choice right after the member changed it, so
+/// quitting before the next check cannot leave an older choice recorded.
+pub(crate) fn record_loaded_choice(loaded: Option<LoadedChoice>) {
+  let Some(loaded) = loaded.filter(|loaded| loaded.persisted) else {
+    return;
+  };
+  let Some(records) = CaptureRecords::in_app_data() else {
+    return;
+  };
+  if records
+    .update(&loaded.namespace, |record| record.intent = loaded.intent)
+    .is_err()
+  {
+    // The cause is logged where the write failed.
+    tracing::warn!("activity recording choice was not recorded");
+  }
+}
+
 static PUBLISHED: Mutex<Option<Published>> = Mutex::new(None);
 
 fn published() -> Option<Published> {
@@ -547,6 +565,11 @@ pub(crate) struct CaptureMonitor {
   /// When the current wait for a first answer began (monotonic, wall).
   pending_since: Option<(Duration, DateTime<Utc>)>,
   outages: Option<(String, Vec<CaptureOutage>)>,
+  /// The namespaces whose record or outage file could not be read at the
+  /// last try. Neither is cached; both are read again, and the failure is
+  /// logged once while it lasts.
+  unreadable_record: Option<String>,
+  unreadable_outages: Option<String>,
   open: Option<OpenOutage>,
   episode: Episode,
   view: CaptureView,
@@ -561,6 +584,8 @@ impl CaptureMonitor {
       record: None,
       pending_since: None,
       outages: None,
+      unreadable_record: None,
+      unreadable_outages: None,
       open: None,
       episode: Episode::Clear,
       view: CaptureView::Hidden,
@@ -608,17 +633,24 @@ impl CaptureMonitor {
       .map(|records| records.load(&binding.1))
     {
       Some(Ok(record)) => record,
+      // Not cached: a record that could not be read is not a missing one.
       Some(Err(_)) => {
-        tracing::warn!("activity capture record could not be read");
-        None
+        if self.unreadable_record.as_ref() != Some(&binding.1) {
+          tracing::warn!("activity capture record could not be read");
+          self.unreadable_record = Some(binding.1.clone());
+        }
+        return None;
       }
       None => None,
     };
+    self.unreadable_record = None;
     self.record = Some((binding.clone(), record.clone()));
     record
   }
 
-  fn outage_list(&mut self, namespace: &str) -> &mut Vec<CaptureOutage> {
+  /// The namespace's outages; `None` while their file cannot be read, so it
+  /// is never replaced by a list that lost them.
+  fn outage_list(&mut self, namespace: &str) -> Option<&mut Vec<CaptureOutage>> {
     if self
       .outages
       .as_ref()
@@ -631,18 +663,18 @@ impl CaptureMonitor {
       {
         Some(Ok(outages)) => outages,
         Some(Err(_)) => {
-          tracing::warn!("activity outages could not be read");
-          Vec::new()
+          if self.unreadable_outages.as_deref() != Some(namespace) {
+            tracing::warn!("activity outages could not be read");
+            self.unreadable_outages = Some(namespace.to_string());
+          }
+          return None;
         }
         None => Vec::new(),
       };
+      self.unreadable_outages = None;
       self.outages = Some((namespace.to_string(), outages));
     }
-    &mut self
-      .outages
-      .as_mut()
-      .expect("the outage list was just loaded")
-      .1
+    self.outages.as_mut().map(|(_, list)| list)
   }
 
   /// Writes the open outage into its namespace's list.
@@ -650,7 +682,9 @@ impl CaptureMonitor {
     let Some(open) = self.open.clone() else {
       return;
     };
-    let list = self.outage_list(&open.namespace);
+    let Some(list) = self.outage_list(&open.namespace) else {
+      return;
+    };
     match list.iter().position(|outage| {
       outage.start == open.outage.start && outage.reason == open.outage.reason
     }) {
@@ -1239,6 +1273,52 @@ mod tests {
       .collect::<Vec<_>>();
     assert_eq!(spans, [5, 0, 0]);
     assert!(monitor.open.is_none());
+  }
+
+  #[test]
+  fn a_file_that_could_not_be_read_is_read_again_and_never_replaced() {
+    let records = records();
+    let dir = records.dir.clone();
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(records.path(NAMESPACE, RECORD_SUFFIX).unwrap(), "partial").unwrap();
+    std::fs::write(records.path(NAMESPACE, OUTAGES_SUFFIX).unwrap(), "partial")
+      .unwrap();
+    let mut monitor = CaptureMonitor::new(Some(records));
+    let refused = |seconds| CheckInput {
+      loaded: Some(loaded(ActivityRecordingStatus::Recording)),
+      ..input(off(OffReason::ReconnectNeeded), seconds)
+    };
+    // The open store still names the choice.
+    monitor.check(&refused(0));
+    assert!(monitor.is_stopped());
+    // The unreadable outage file is left as it is.
+    assert_eq!(
+      std::fs::read_to_string(
+        CaptureRecords::at(dir.clone())
+          .path(NAMESPACE, OUTAGES_SUFFIX)
+          .unwrap()
+      )
+      .unwrap(),
+      "partial"
+    );
+    std::fs::write(
+      CaptureRecords::at(dir.clone())
+        .path(NAMESPACE, OUTAGES_SUFFIX)
+        .unwrap(),
+      "[]",
+    )
+    .unwrap();
+    for seconds in (5..=60).step_by(5) {
+      monitor.check(&refused(seconds));
+    }
+    assert_eq!(
+      CaptureRecords::at(dir.clone())
+        .load_outages(NAMESPACE)
+        .unwrap()
+        .len(),
+      1
+    );
+    std::fs::remove_dir_all(dir).unwrap();
   }
 
   #[test]
