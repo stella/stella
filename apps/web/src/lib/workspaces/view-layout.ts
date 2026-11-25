@@ -71,6 +71,46 @@ export const correspondenceViewId = (
   )?.id ?? null;
 
 /**
+ * The table view a cited review cell opens in: the one on screen when it
+ * shows the cell's column, else the first that does, else any table. Null
+ * when the matter has no table view.
+ */
+export const cellCitationViewId = (
+  views: readonly {
+    id: string;
+    layout: { type: string; hiddenProperties: readonly string[] };
+  }[],
+  propertyId: string,
+  currentViewId: string | undefined,
+): string | null => {
+  const tables = views.filter((view) => view.layout.type === "table");
+  const showing = tables.filter(
+    (view) => !view.layout.hiddenProperties.includes(propertyId),
+  );
+  return (
+    (
+      showing.find((view) => view.id === currentViewId) ??
+      showing.at(0) ??
+      tables.at(0)
+    )?.id ?? null
+  );
+};
+
+/** Whether the view a citation opened in hides the cited column, as every
+ * table does when `cellCitationViewId` falls back to any table. */
+export const cellCitationColumnHidden = (
+  views: readonly {
+    id: string;
+    layout: { hiddenProperties: readonly string[] };
+  }[],
+  viewId: string,
+  propertyId: string,
+): boolean =>
+  views
+    .find((view) => view.id === viewId)
+    ?.layout.hiddenProperties.includes(propertyId) === true;
+
+/**
  * Apply a partial change to a view layout.
  *
  * The generic preserves the union discriminant: a bare

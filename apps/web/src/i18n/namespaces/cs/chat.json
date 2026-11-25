@@ -254,6 +254,8 @@
     },
     "cancelQueuedMessage": "Zrušit zařazenou zprávu",
     "caseLawGreeting": "Zeptejte se na toto rozhodnutí; plný text je k dispozici.",
+    "cellCitationColumnHidden": "Všechny tabulky tento sloupec skrývají. Zobrazte ho, abyste buňku viděli.",
+    "cellCitationUnavailable": "Tato buňka už není k dispozici.",
     "chatAbout": "Vložit do AI chatu",
     "choosePromptImprovementStrategy": "Možnosti vylepšení zadání",
     "commandsSection": "Příkazy",

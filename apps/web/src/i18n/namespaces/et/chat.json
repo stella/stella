@@ -254,6 +254,8 @@
     },
     "cancelQueuedMessage": "Tühista järjekorras sõnum",
     "caseLawGreeting": "Esita küsimusi selle otsuse kohta; täistekst on siin saadaval.",
+    "cellCitationColumnHidden": "Kõik tabelid peidavad selle veeru. Lahtri nägemiseks kuvage veerg.",
+    "cellCitationUnavailable": "See lahter pole enam saadaval.",
     "chatAbout": "Lisa AI vestlusesse",
     "choosePromptImprovementStrategy": "Viiba täiustamise valikud",
     "commandsSection": "Käsud",

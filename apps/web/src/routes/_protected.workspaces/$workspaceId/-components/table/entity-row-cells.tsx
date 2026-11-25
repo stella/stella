@@ -184,6 +184,8 @@ const isActiveRow = ({
 export type DraggableRowProps = TableRowRenderInput & {
   workspaceId: string;
   activeEntityId: string | null;
+  /** The extracted field whose evidence the active tab shows, if any. */
+  activeJustificationFieldId: string | null;
   activePropertyId: string | null;
   activeTaskId: string | null;
   editingEntityId: string | null;
@@ -201,6 +203,7 @@ export const DraggableRow = ({
   table,
   workspaceId,
   activeEntityId,
+  activeJustificationFieldId,
   activePropertyId,
   activeTaskId,
   contentMode,
@@ -246,7 +249,11 @@ export const DraggableRow = ({
   const name = getEntityName(entity);
   const file = getFirstFile(entity);
   const activeCellPropertyId =
-    entity.entityId === activeEntityId ? activePropertyId : null;
+    entity.entityId === activeEntityId
+      ? (Object.values(entity.fields).find(
+          (field) => field?.id === activeJustificationFieldId,
+        )?.propertyId ?? activePropertyId)
+      : null;
   const activeRow = isActiveRow({
     activeCellPropertyId,
     activeEntityId,

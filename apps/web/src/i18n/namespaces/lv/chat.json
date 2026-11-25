@@ -254,6 +254,8 @@
     },
     "cancelQueuedMessage": "Atcelt rindā gaidošo ziņojumu",
     "caseLawGreeting": "Uzdodiet jautājumus par šo lēmumu; pilns teksts ir pieejams šeit.",
+    "cellCitationColumnHidden": "Visās tabulās šī kolonna ir paslēpta. Parādiet to, lai redzētu šūnu.",
+    "cellCitationUnavailable": "Šī šūna vairs nav pieejama.",
     "chatAbout": "Ievietot AI tērzēšanā",
     "choosePromptImprovementStrategy": "Uzvednes uzlabošanas iespējas",
     "commandsSection": "Komandas",
