@@ -8,6 +8,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import path from "node:path";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
+const CHILD_MAX_BUFFER = 16 * 1024 * 1024;
 
 export type PrGuard = {
   readonly id: string;
@@ -25,7 +26,7 @@ const matchesAny = (
 const isOxlintFile = (file: string): boolean =>
   file.startsWith(".oxlint-plugins/") ||
   file.startsWith("scripts/guard-rollouts/") ||
-  /(?:^|\/)oxlint(?:\.[^/]+)*\.config\.(?:ts|js|json)$/u.test(file);
+  /(?:^|\/)oxlint(?:\.[^./]+)*\.config\.(?:ts|js|json)$/u.test(file);
 
 const isUiApiFile = (file: string): boolean =>
   file.startsWith("packages/ui/src/") ||
@@ -49,7 +50,7 @@ const isDesignBaselineScope = (file: string): boolean =>
   file === "scripts/design-lint-baseline.json";
 
 const isScriptTestFile = (file: string): boolean =>
-  /^scripts\/.*\.test\.ts$/u.test(file) ||
+  (file.startsWith("scripts/") && file.endsWith(".test.ts")) ||
   file === "scripts/script-test-inputs.json";
 
 /** Select the fast local repo guards relevant to `changedFiles`. */
@@ -148,20 +149,22 @@ const readChangedFiles = (baseRef: string): readonly string[] => {
   const mergeBase = execFileSync("git", ["merge-base", baseRef, "HEAD"], {
     cwd: REPO_ROOT,
     encoding: "utf-8",
+    maxBuffer: CHILD_MAX_BUFFER,
   }).trim();
   const committed = execFileSync(
     "git",
     ["diff", "--name-only", `${mergeBase}...HEAD`],
-    { cwd: REPO_ROOT, encoding: "utf-8" },
+    { cwd: REPO_ROOT, encoding: "utf-8", maxBuffer: CHILD_MAX_BUFFER },
   );
   const working = execFileSync("git", ["diff", "--name-only", "HEAD"], {
     cwd: REPO_ROOT,
     encoding: "utf-8",
+    maxBuffer: CHILD_MAX_BUFFER,
   });
   const untracked = execFileSync(
     "git",
     ["ls-files", "--others", "--exclude-standard"],
-    { cwd: REPO_ROOT, encoding: "utf-8" },
+    { cwd: REPO_ROOT, encoding: "utf-8", maxBuffer: CHILD_MAX_BUFFER },
   );
   return [
     ...new Set(
@@ -218,6 +221,7 @@ if (import.meta.main) {
       cwd: REPO_ROOT,
       env: guard.env ? { ...process.env, ...guard.env } : process.env,
       stdio: "inherit",
+      maxBuffer: CHILD_MAX_BUFFER,
     });
     const elapsed = ((performance.now() - start) / 1000).toFixed(1);
     if (result.status !== 0) {
