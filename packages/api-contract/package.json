@@ -62,6 +62,7 @@
     "./capability-request": "./src/capability-request.ts",
     "./browser-storage": "./src/browser-storage.ts",
     "./browser-control": "./src/browser-control.ts",
+    "./browser-downloads": "./src/browser-downloads.ts",
     "./browser-site-grants": "./src/browser-site-grants.ts",
     "./browser-step-gate": "./src/browser-step-gate.ts",
     "./citation-check": "./src/citation-check.ts",

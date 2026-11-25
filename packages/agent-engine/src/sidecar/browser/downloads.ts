@@ -21,6 +21,7 @@ import {
 import { isPathInside } from "@stll/portable-path";
 import { createSha256 } from "@stll/sha256/node";
 
+import type { BrowserDownloadFiling } from "../browser-download-filing";
 import {
   createWorkspaceFolder,
   NO_FOLLOW_READ_FLAGS,
@@ -129,6 +130,11 @@ export type BrowserDownloadOutcome =
   | (Extract<ReceivedDownload, { status: "saved" }> & {
       pageUrl: string | null;
       downloadedAt: string;
+      /**
+       * Where stella filed it: the chat's matter, or the chat; absent where
+       * the run files nothing.
+       */
+      filed?: BrowserDownloadFiling;
     })
   | (Extract<ReceivedDownload, { status: "refused" }> & {
       pageUrl: string | null;

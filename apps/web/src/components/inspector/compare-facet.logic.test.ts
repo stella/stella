@@ -30,6 +30,7 @@ const version = ({
   diffWordsAdded: null,
   diffWordsRemoved: null,
   sourceKind,
+  browserDownload: null,
   createdAt: "2026-09-09T12:00:00.000Z",
   author: null,
   file: {

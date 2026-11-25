@@ -62,6 +62,7 @@ import { harnessEventsToChunks } from "../harness/stream-chunks";
 import { harnessTranscriptSchema } from "../harness/transcript-handoff";
 import type { ProtocolLog } from "../protocol-log";
 import { copyAttachments } from "./attachments";
+import { browserDownloadFiler } from "./browser-download-filing";
 import {
   type ActionApprovals,
   createActionApprovals,
@@ -1419,7 +1420,7 @@ export class SidecarHost {
     // it, or ends it.
     const taken = run.live;
     run.live = null;
-    const browser = this.browserFor(message, run, taken, config.apiOrigin);
+    const browser = this.browserFor(message, run, taken, config);
     const started = await adapter.value.startTurn({
       runId: message.runId,
       threadId: message.threadId,
@@ -1455,22 +1456,33 @@ export class SidecarHost {
     message: SidecarRunStart,
     run: HeldRun,
     taken: LiveFolder | null,
-    /** The account the run started for: its browser stays that account's. */
-    accountOrigin: string,
+    /**
+     * The account the run started for: its browser stays that account's,
+     * and what it downloads is filed with that account's stella.
+     */
+    { apiOrigin, proxy }: Pick<Config, "apiOrigin" | "proxy">,
   ) {
     const browser = this.options.browser;
     if (browser === null) {
       return null;
     }
+    const { runId } = message;
     const browserRun = {
-      accountOrigin,
-      runId: message.runId,
+      accountOrigin: apiOrigin,
+      runId,
       threadId: message.threadId,
       approvals: message.policy.approvals,
       siteGrants: new Set(message.policy.browserSiteGrants),
       approve: run.approvals.request,
       stopped: run.browserStop.signal,
       workspaceDir: message.workspaceDir,
+      fileDownload: browserDownloadFiler({
+        apiOrigin,
+        runId,
+        stopped: run.browserStop.signal,
+        token: () => proxy.tokenOf(runId),
+        workspaceDir: message.workspaceDir,
+      }),
     };
     if (taken === null) {
       return browser.register(browserRun);

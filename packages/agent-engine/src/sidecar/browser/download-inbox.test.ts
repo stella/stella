@@ -611,6 +611,79 @@ describe("where a download came from", () => {
   });
 });
 
+describe("filing a saved download with stella", () => {
+  test("a saved one is filed with where it came from, and a refused one is not", async () => {
+    const filings: unknown[] = [];
+    const run = {
+      ...RUN,
+      fileDownload: async (download: unknown) => {
+        filings.push(download);
+        return await Promise.resolve({
+          documentId: "doc-1",
+          duplicate: false,
+          matterId: "matter-1",
+          name: "Judgment 42.pdf",
+          status: "document" as const,
+        });
+      },
+    };
+    const time = manualClock();
+    time.state.time = Date.UTC(2026, 10, 25, 9, 30);
+    const inbox = createDownloadInbox({
+      clock: time.clock,
+      home: "/unused-home",
+      pageOf: () => "https://fixture-library.test/decisions/42",
+      receive: async (download) =>
+        download.suggestedName === "saved"
+          ? {
+              bytes: 10,
+              duplicate: false,
+              path: "Downloads/Judgment 42.pdf",
+              sha256: "a".repeat(64),
+              sourceUrl: download.sourceUrl,
+              status: "saved" as const,
+            }
+          : {
+              message: "Chrome could not finish the download.",
+              reason: "interrupted" as const,
+              sourceUrl: download.sourceUrl,
+              status: "refused" as const,
+            },
+      runOf: () => run,
+    });
+    inbox.arrive({
+      ...settled("d-1"),
+      download: { ...stopped(PDF_ADDRESS), suggestedName: "saved" },
+    });
+    inbox.arrive(settled("d-2"));
+
+    const taken = await inbox.take(run, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: inbox.mark(),
+    });
+
+    expect(taken.downloads).toMatchObject([
+      {
+        filed: { documentId: "doc-1", status: "document" },
+        status: "saved",
+      },
+      { status: "refused" },
+    ]);
+    expect(taken.downloads.at(1)).not.toHaveProperty("filed");
+    expect(filings).toEqual([
+      {
+        origin: {
+          downloadedAt: "2026-11-25T09:30:00Z",
+          pageUrl: "https://fixture-library.test/decisions/42",
+          sourceUrl: PDF_ADDRESS,
+        },
+        path: "Downloads/Judgment 42.pdf",
+      },
+    ]);
+  });
+});
+
 describe("a result's bound covers the save as well", () => {
   /** An inbox whose saves finish only when the test says so. */
   const slowInbox = (time: ReturnType<typeof manualClock>) => {

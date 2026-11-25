@@ -6,6 +6,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 
 export type ExactDuplicate = {
   sha256Hex: string;
+  entityId: SafeId<"entity">;
   entityName: string;
 };
 
@@ -34,6 +35,7 @@ export const findExactDuplicates = async ({
   return await tx
     .selectDistinctOn([fileSha256Hex], {
       sha256Hex: fileSha256Hex,
+      entityId: entities.id,
       entityName: entities.name,
     })
     .from(fields)

@@ -1,3 +1,4 @@
+import fileLocalRunBrowserDownload from "@/api/handlers/chat/browser-downloads/local-run";
 import { routes } from "@/api/http/route";
 
 import storeAwaitedStepContent from "./awaited-step-content";
@@ -11,6 +12,7 @@ import upload from "./upload";
 export const chatRunOutputsRoute = routes(
   {
     "/:runId/outputs": { POST: upload },
+    "/:runId/browser-downloads": { POST: fileLocalRunBrowserDownload },
     "/:runId/steps/:stepKey/content": { PUT: storeStepContent },
   },
   { prefix: "/chat/local-runs" },

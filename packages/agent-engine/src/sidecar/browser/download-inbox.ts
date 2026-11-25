@@ -6,6 +6,7 @@ import {
   type BrowserDownload,
 } from "@stll/api-contract/browser-control";
 
+import type { FileBrowserDownload } from "../browser-download-filing";
 import type { BrowserBridgeDownload } from "./bridge";
 import {
   type BrowserDownloadOutcome,
@@ -53,8 +54,16 @@ const MAX_STARTED_DOWNLOADS = 16;
 /** Outcomes each run remembers by address; older ones go first. */
 const MAX_KNOWN_ADDRESSES = 64;
 
-/** The run a result is taken for: whose folder downloads land in. */
-type InboxRun = { runId: string; threadId: string; workspaceDir: string };
+/**
+ * The run a result is taken for: whose folder downloads land in, and who
+ * files each saved one with stella (none where the run files nothing).
+ */
+type InboxRun = {
+  runId: string;
+  threadId: string;
+  workspaceDir: string;
+  fileDownload?: FileBrowserDownload | undefined;
+};
 
 /**
  * A settled download until a result hands it out; see `shownDocument` on
@@ -329,6 +338,42 @@ const showsAny = (
       browserDocumentAddress(shownDocument) === address,
   );
 
+/**
+ * Saves one settled download into `run`'s folder, then files a saved one
+ * with stella when the run files downloads: a result that waits for the
+ * save waits for the filing too, within its bound.
+ */
+const saveAndFile = async ({
+  download,
+  home,
+  provenance,
+  receiveDownload,
+  run,
+}: {
+  download: BrowserDownload;
+  home: string;
+  provenance: DownloadProvenance;
+  receiveDownload: typeof receiveBrowserDownload;
+  run: InboxRun;
+}): Promise<BrowserDownloadOutcome> => {
+  const outcome = withProvenance(
+    await receiveDownload(download, { home, workspaceDir: run.workspaceDir }),
+    provenance,
+  );
+  if (outcome.status !== "saved" || run.fileDownload === undefined) {
+    return outcome;
+  }
+  const filed = await run.fileDownload({
+    origin: {
+      downloadedAt: outcome.downloadedAt,
+      pageUrl: outcome.pageUrl,
+      sourceUrl: outcome.sourceUrl,
+    },
+    path: outcome.path,
+  });
+  return { ...outcome, filed };
+};
+
 /** The newest `limit` entries of a map, in insertion order. */
 const newest = <K, V>(map: Map<K, V>, limit: number): Map<K, V> =>
   new Map([...map].slice(-limit));
@@ -361,14 +406,7 @@ export const createDownloadInbox = ({
     download: BrowserDownload,
     run: InboxRun,
     provenance: DownloadProvenance,
-  ): Promise<BrowserDownloadOutcome> =>
-    withProvenance(
-      await receiveDownload(download, {
-        home,
-        workspaceDir: run.workspaceDir,
-      }),
-      provenance,
-    );
+  ) => await saveAndFile({ download, home, provenance, receiveDownload, run });
 
   const nowIso = () =>
     Temporal.Instant.fromEpochMilliseconds(clock.now()).toString();

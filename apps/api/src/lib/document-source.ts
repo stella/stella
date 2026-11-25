@@ -16,6 +16,10 @@
  *     Microsoft Graph drive item the user had permission to read. The
  *     payload pins the exact item, its ETag and the content digest at copy
  *     time so a later re-import can detect drift without a sync loop.
+ *   - "browser-download": the member's browser downloaded the file for a
+ *     chat, and it was filed into the chat's matter. The payload keeps where
+ *     it came from (the file's address, the page it came from when known,
+ *     when it arrived) and the digest of the bytes as downloaded.
  *   - "import": the file was brought in from another system. The payload
  *     keeps what that system recorded and stella cannot recreate: its id
  *     for the file, the original creation and modification times, and the
@@ -27,6 +31,7 @@
 import * as v from "valibot";
 
 import { apiDateTimeSchema } from "@stll/api-contract/api-date";
+import { browserDownloadOriginSchema } from "@stll/api-contract/browser-downloads";
 
 import {
   EXTERNAL_ID_MAX_LENGTH,
@@ -75,6 +80,16 @@ export const documentSourceSchema = v.variant("kind", [
     eTag: v.string(),
     webUrl: v.pipe(v.string(), v.url()),
     /** SHA-256 of the bytes as copied, so a re-import detects a real change. */
+    contentHash: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
+  }),
+  v.strictObject({
+    kind: v.literal("browser-download"),
+    /** The address the member's browser fetched the file from. */
+    sourceUrl: browserDownloadOriginSchema.entries.sourceUrl,
+    /** The page it came from; null when not known or on another site. */
+    pageUrl: browserDownloadOriginSchema.entries.pageUrl,
+    downloadedAt: apiDateTimeSchema,
+    /** SHA-256 of the bytes as downloaded. */
     contentHash: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
   }),
   v.strictObject({

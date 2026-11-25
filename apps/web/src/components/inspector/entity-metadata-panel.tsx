@@ -17,6 +17,7 @@ import {
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CheckIcon, SparklesIcon as Sparkles } from "@stll/ui/icons";
@@ -568,6 +569,9 @@ const EntityMetadataContent = ({
                 : `${versionLabel} · ${formatRelativeTime(updatedAtIso)}`
             }
           />
+          {currentVersion?.browserDownload ? (
+            <BrowserDownloadRows origin={currentVersion.browserDownload} />
+          ) : null}
         </div>
 
         {fileFieldId !== null && (
@@ -673,6 +677,61 @@ const ReadOnlyRow = ({ label, value, title, trailing }: ReadOnlyRowProps) => {
         {trailing}
       </div>
     </div>
+  );
+};
+
+/**
+ * An address a document came from, opened outside stella. Only a web
+ * address is a link; anything else is shown as text.
+ */
+const OriginLink = ({ href }: { href: string }) => {
+  const isWebAddress =
+    /^https?:\/\//iu.test(href) && sanitizeHref(href) !== undefined;
+  return isWebAddress ? (
+    <a
+      className="break-all underline-offset-2 hover:underline"
+      href={sanitizeHref(href)}
+      rel="noopener noreferrer"
+      target="_blank"
+    >
+      <BidiText>{href}</BidiText>
+    </a>
+  ) : (
+    <BidiText className="break-all">{href}</BidiText>
+  );
+};
+
+/**
+ * Where a document the member's browser downloaded for a chat came from:
+ * the page (a dash when it is not known), the file's own address, and when
+ * it arrived.
+ */
+const BrowserDownloadRows = ({
+  origin,
+}: {
+  origin: { sourceUrl: string; pageUrl: string | null; downloadedAt: string };
+}) => {
+  const t = useTranslations();
+  // Shown by the row's tooltip, as the version row's timestamp is.
+  const arrivedAt = formatFullTimestamp(origin.downloadedAt);
+  return (
+    <>
+      <ReadOnlyRow
+        label={t("inspector.metadata.browserDownload.page")}
+        value={
+          origin.pageUrl === null ? null : <OriginLink href={origin.pageUrl} />
+        }
+      />
+      <ReadOnlyRow
+        label={t("inspector.metadata.browserDownload.file")}
+        value={<OriginLink href={origin.sourceUrl} />}
+      />
+      <ReadOnlyRow
+        label={t("inspector.metadata.browserDownload.downloaded")}
+        title={arrivedAt}
+        value={formatRelativeTime(origin.downloadedAt)}
+      />
+    </>
   );
 };
 

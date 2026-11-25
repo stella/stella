@@ -624,6 +624,11 @@
     },
     "metadata": {
       "aiExtractedHeading": "Tehisintellekti eraldatud",
+      "browserDownload": {
+        "downloaded": "Alla laaditud",
+        "file": "Faili aadress",
+        "page": "Alla laaditud lehelt"
+      },
       "documentProperties": {
         "empty": "See fail ei sisalda oma atribuute",
         "heading": "Faili atribuudid",

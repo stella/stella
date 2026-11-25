@@ -624,6 +624,11 @@
     },
     "metadata": {
       "aiExtractedHeading": "Vyťažené AI",
+      "browserDownload": {
+        "downloaded": "Stiahnuté",
+        "file": "Adresa súboru",
+        "page": "Stiahnuté z"
+      },
       "documentProperties": {
         "empty": "Tento súbor neobsahuje žiadne vlastné vlastnosti",
         "heading": "Vlastnosti súboru",

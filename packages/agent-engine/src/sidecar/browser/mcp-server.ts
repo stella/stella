@@ -10,6 +10,7 @@ import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runne
 
 import { LOCAL_BROWSER_MCP_SERVER_NAME } from "../../harness/tool-parts";
 import type { StellaSandboxMcpBinding } from "../../sandbox";
+import type { FileBrowserDownload } from "../browser-download-filing";
 import type { BrowserBridge } from "./bridge";
 import { createDownloadInbox, type TakenDownloads } from "./download-inbox";
 import type { HostRouter } from "./host-router";
@@ -89,6 +90,8 @@ type BrowserMcpRun = {
   stopped: AbortSignal;
   /** The run's folder: a PDF its chat's tab downloads is saved there. */
   workspaceDir: string;
+  /** Files each saved download with stella; absent where the run files nothing. */
+  fileDownload?: FileBrowserDownload | undefined;
 };
 
 /** What a run's browser steps are held to: its level and approvals, and who answers. */

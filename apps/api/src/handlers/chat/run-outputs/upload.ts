@@ -38,22 +38,31 @@ const BEARER = /^Bearer (\S+)$/u;
 
 const runIdSchema = v.pipe(v.string(), v.uuid());
 
-export type RunOutputCaller = {
+/** Who a run's request is: its member, their organization and its thread. */
+type RunIdentity = {
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   threadId: SafeId<"chatThread">;
-  safeDb: SafeDb;
-  recordAuditEvent: AuditRecorder;
 };
 
-export type RunCallerDependencies = {
+/** The member's context a run's request is served in. */
+export type ResolveRunContext<Context> = (
+  session: Parameters<typeof resolveMcpSessionContext>[0],
+  options: { request: Request },
+) => Promise<Context>;
+
+type RunWriteContext = { safeDb: SafeDb; recordAuditEvent: AuditRecorder };
+
+export type RunOutputCaller = RunIdentity & RunWriteContext;
+
+type RunCallerBase = {
   /** The bearer verifier; the provider's own in production. */
   verifyToken?: VerifyBearerToken;
-  resolveContext?: (
-    session: Parameters<typeof resolveMcpSessionContext>[0],
-    options: { request: Request },
-  ) => Promise<Pick<RunOutputCaller, "safeDb" | "recordAuditEvent">>;
   readRunThread?: typeof readOpenLocalRunThread;
+};
+
+export type RunCallerDependencies = RunCallerBase & {
+  resolveContext?: ResolveRunContext<RunWriteContext>;
 };
 
 type RunOutputDependencies = RunCallerDependencies & {
@@ -82,14 +91,17 @@ const unreadable = (message: string, cause: unknown) =>
  * The caller is the run: its agent token names this run, the member who owns it
  * and their organization, the run row confirms all three, and the row, never the
  * request, names the thread. Live membership is the MCP server's own check, so
- * a token outlives neither a member's access nor the run.
+ * a token outlives neither a member's access nor the run. The member's context
+ * comes from `resolveContext`, so a route takes only what it uses.
  */
-export const verifyRunCaller =
-  ({
+export const verifyRunCallerWith =
+  <Context extends RunWriteContext>({
     verifyToken,
-    resolveContext = resolveMcpSessionContext,
+    resolveContext,
     readRunThread = readOpenLocalRunThread,
-  }: RunCallerDependencies): VerifyCaller<RunOutputCaller> =>
+  }: RunCallerBase & {
+    resolveContext: ResolveRunContext<Context>;
+  }): VerifyCaller<Context & RunIdentity> =>
   async ({ request, params }) => {
     const bearer = BEARER.exec(request.headers.get("authorization") ?? "")?.[1];
     if (bearer === undefined) {
@@ -155,13 +167,19 @@ export const verifyRunCaller =
       return refused(404, "This run takes no files");
     }
     return Result.ok({
+      ...context.value,
       userId,
       organizationId,
       threadId: thread.value,
-      safeDb: context.value.safeDb,
-      recordAuditEvent: context.value.recordAuditEvent,
     });
   };
+
+/** `verifyRunCallerWith` for a route that writes to the run's chat only. */
+export const verifyRunCaller = ({
+  resolveContext = resolveMcpSessionContext,
+  ...dependencies
+}: RunCallerDependencies): VerifyCaller<RunOutputCaller> =>
+  verifyRunCallerWith<RunWriteContext>({ ...dependencies, resolveContext });
 
 /** Stores one file a local run handed back, for the member to open from chat. */
 export const createUploadRunOutput = (
