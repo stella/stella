@@ -690,7 +690,7 @@ export const createChatRefRegistry = (
         const [entityRef = "", propertyRef = ""] = ref.split(":");
         const entity = entityState.refToTarget.get(entityRef);
         const propertyId = propertyState.refToTarget.get(propertyRef);
-        if (!entity || !propertyId) {
+        if (!entity || !propertyId || !entityState.shown.has(entityRef)) {
           reportUnknownAssistantRef("cell-citation", ref);
           return CHAT_UNRESOLVED_REF_HREF;
         }

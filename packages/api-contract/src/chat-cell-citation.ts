@@ -23,8 +23,8 @@ export type ChatCellCitationTarget = {
 export type ChatCellCitationHref =
   `${typeof CHAT_CELL_CITATION_HREF_PREFIX}${string}`;
 
-/** A candidate href inside Markdown: it runs to the link's `)` or a space. */
-const HREF_IN_TEXT_REGEX = /#stella-cell=[^\s)]*/gu;
+/** A candidate href inside Markdown: it runs to the link's `)`, `>` or a space. */
+const HREF_IN_TEXT_REGEX = /#stella-cell=[^\s)>]*/gu;
 
 export const toChatCellCitationHref = ({
   entityId,

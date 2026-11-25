@@ -418,6 +418,29 @@ test("handled model-authored refs become inert text without an exception", () =>
   expect(analytics.exceptions()).toEqual([]);
 });
 
+test("a cell citation needs its document's ref to have been shown", () => {
+  const registry = createChatRefRegistry();
+  registry.toSourceCitationHref({
+    type: "pdf-bates",
+    bates: "NW-000042",
+    entityId: entityTarget(0).entityId,
+    entityVersionId: brandPersistedEntityVersionId(
+      "01a0df7d-c93a-7105-99f9-c66cf1b14d10",
+    ),
+    fieldId: brandPersistedFieldId("01a0df7d-c93a-7105-99f9-c66cf1b14d11"),
+    pageNumber: 3,
+    workspaceId: entityTarget(0).workspaceId,
+  });
+  const propertyRef = registry.toPropertyRef(
+    brandPersistedPropertyId("01a0df7d-c93a-7105-99f9-c66cf1b14d30"),
+  );
+  expect(
+    registry.resolveAssistantTextRefs(
+      `[Cap](#stella-cell-ref=ent_1:${propertyRef})`,
+    ),
+  ).toBe("[Cap](#stella-unresolved-ref)");
+});
+
 test("a cell citation resolves to its canonical link and back", () => {
   const registry = createChatRefRegistry();
   const target = entityTarget(0);

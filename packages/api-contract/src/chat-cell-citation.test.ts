@@ -43,4 +43,11 @@ describe("chat cell citation links", () => {
       `[Halvorsen MSA · Cap](#ok) and [bad](${CHAT_CELL_CITATION_HREF_PREFIX}x)`,
     );
   });
+
+  test("replaces a link in an angle-bracket destination", () => {
+    const href = toChatCellCitationHref(TARGET);
+    expect(replaceChatCellCitationHrefs(`[Cap](<${href}>)`, () => "#ok")).toBe(
+      "[Cap](<#ok>)",
+    );
+  });
 });
