@@ -5,10 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { panic } from "better-result";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
 
-import {
-  DESKTOP_ACTIVITY_REVIEW_LIMIT,
-  DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH,
-} from "@stll/api-contract/desktop-time-entries";
+import { DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH } from "@stll/api-contract/desktop-time-entries";
 import type {
   DesktopMatter,
   DesktopMatterResolution,
@@ -96,9 +93,21 @@ import {
   EVIDENCE_DETAIL_LIMIT,
   matchDay,
   recordedMatterIds,
+  segmentEvidence,
   unresolvedMatterIds,
 } from "./day-review-logic";
 import type { MatchedSegment } from "./day-review-logic";
+import {
+  acceptProposal,
+  declineProposal,
+  EMPTY_MATTER_LEARNING,
+  forgetMatters,
+  learn,
+  ruleProposals,
+  suggestedMatterIds,
+} from "./matter-learning";
+import { useMatterLearning } from "./matter-learning-store";
+import { resolveMatters } from "./matter-resolve";
 import { SuggestionPieceLabel } from "./SuggestionPieceLabel";
 import { explainedBrowsers, missingTitlesReason } from "./title-capture-logic";
 import type { ExplainedBrowser } from "./title-capture-logic";
@@ -411,7 +420,7 @@ export const ActivityDayCalendar = ({
   const t = useTranslations("activity");
   const format = useFormatter();
   const locale = useLocale();
-  const { candidates, refreshCandidates } = useMatterCandidates(snapshot);
+  const nowMs = Temporal.Now.instant().epochMilliseconds;
   const [localDrafts, setLocalDrafts] = useState<DraftedEntries>([]);
   const { submission, submitBatch, errorMessage } = useBatchSubmission({
     date: snapshot.date,
@@ -425,17 +434,9 @@ export const ActivityDayCalendar = ({
   const titlesNotices = useTitlesNotices(snapshot, onCaptureCommand);
 
   const timeZone = Temporal.Now.timeZoneId();
-  const nowMs = Temporal.Now.instant().epochMilliseconds;
-  const matters = candidates.type === "ready" ? candidates.matters : [];
   const draftedEntries = [...snapshot.draftedEntries, ...localDrafts];
-  const day = matchDay({
-    segments: timedSegments(snapshot.segments),
-    candidates: matters,
-    resolved: candidates.type === "ready" ? candidates.resolved : [],
-    captureDetails: snapshot.captureDetails,
-    manualAssignments: snapshot.manualAssignments,
-    draftedEntries,
-  });
+  const { day, matters, learningStore, candidates, refreshCandidates } =
+    useDayMatters({ snapshot, draftedEntries, nowMs });
   const suggestions = matchedSuggestions(day.groups, leftOut);
   const outages = outageRanges(snapshot.outages);
   const editingDisabledReason = getEditingDisabledReason(submission, t);
@@ -518,7 +519,7 @@ export const ActivityDayCalendar = ({
           },
         ],
       },
-      () => openNext(suggestion),
+      afterSaved(suggestion, edit.matter.id),
     );
   };
   /** An accepted split or move creates its entries in one confirmed batch,
@@ -551,9 +552,21 @@ export const ActivityDayCalendar = ({
           timezoneId: timeZone,
         }),
       },
-      () => openNext(suggestion),
+      afterSaved(suggestion, edit.matter.id),
     );
   };
+  /** A saved entry teaches this computer its evidence, then the next card
+   * opens. */
+  const afterSaved =
+    (suggestion: ActivitySuggestion, matterId: string) => () => {
+      learnFromConfirmation({
+        learningStore,
+        captureDetails: snapshot.captureDetails,
+        suggestion,
+        matterId,
+      });
+      openNext(suggestion);
+    };
   const reject = (suggestion: ActivitySuggestion) => {
     if (suggestion.type === "matched") {
       setLeftOut((current) => new Set([...current, suggestion.id]));
@@ -661,6 +674,10 @@ export const ActivityDayCalendar = ({
       {candidates.type === "failed" && snapshot.stoppedReason === null ? (
         <CandidatesFailedAlert onRetry={refreshCandidates} />
       ) : null}
+      <MatterLearningNotice
+        learningStore={learningStore}
+        openMatters={day.openMatters}
+      />
       <SubmissionFeedback
         submission={submission}
         errorMessage={errorMessage}
@@ -1774,26 +1791,187 @@ function useBatchSubmission({
   return { submission, submitBatch, errorMessage };
 }
 
-/** Resolves matter ids in requests the contract bounds. */
-const resolveMatters = async (ids: readonly string[]) => {
-  const requests: Promise<DesktopMatterResolution[]>[] = [];
-  for (
-    let start = 0;
-    start < ids.length;
-    start += DESKTOP_ACTIVITY_REVIEW_LIMIT
-  ) {
-    requests.push(
-      invoke<DesktopMatterResolution[]>("time_entry_resolve_matters", {
-        ids: ids.slice(start, start + DESKTOP_ACTIVITY_REVIEW_LIMIT),
-      }),
+type LearningStore = ReturnType<typeof useMatterLearning>;
+
+type DayMattersOptions = {
+  snapshot: ActivityDaySnapshot;
+  draftedEntries: DraftedEntries;
+  nowMs: number;
+};
+/** The day matched: against the shortlist plus each id a record, rule or
+ * learned weight names, resolved under the member's access before anything
+ * is suggested. */
+function useDayMatters({ snapshot, draftedEntries, nowMs }: DayMattersOptions) {
+  const timed = timedSegments(snapshot.segments);
+  const learningStore = useMatterLearning();
+  const learning =
+    learningStore.state.type === "ready"
+      ? learningStore.state.value
+      : EMPTY_MATTER_LEARNING;
+  const { candidates, refreshCandidates } = useMatterCandidates([
+    ...recordedMatterIds(snapshot),
+    ...suggestedMatterIds({
+      evidence: timed.map((segment) =>
+        segmentEvidence(segment, snapshot.captureDetails),
+      ),
+      learning,
+      nowMs,
+    }),
+  ]);
+  useForgetInaccessible({ candidates, learningStore });
+  const matters = candidates.type === "ready" ? candidates.matters : [];
+  const day = matchDay({
+    segments: timed,
+    candidates: matters,
+    resolved: candidates.type === "ready" ? candidates.resolved : [],
+    captureDetails: snapshot.captureDetails,
+    manualAssignments: snapshot.manualAssignments,
+    draftedEntries,
+    learning,
+    nowMs,
+  });
+  return { day, matters, learningStore, candidates, refreshCandidates };
+}
+
+type LearnFromConfirmationOptions = {
+  learningStore: LearningStore;
+  captureDetails: boolean;
+  suggestion: ActivitySuggestion;
+  matterId: string;
+};
+/** What a confirmed entry's time showed now counts toward the matter the
+ * member confirmed, and against the one suggested if they differ. */
+const learnFromConfirmation = ({
+  learningStore,
+  captureDetails,
+  suggestion,
+  matterId,
+}: LearnFromConfirmationOptions) =>
+  learningStore.update((current) =>
+    learn(current, {
+      evidence: suggestion.segments.map((segment) =>
+        segmentEvidence(segment, captureDetails),
+      ),
+      matterId,
+      suggestedMatterId: suggestion.matter?.id ?? null,
+      nowMs: Temporal.Now.instant().epochMilliseconds,
+    }),
+  );
+
+/** Forgets learned weights for matters a read answered the member can no
+ * longer open. Rules stay until the member removes them. */
+function useForgetInaccessible({
+  candidates,
+  learningStore,
+}: {
+  candidates: CandidateState;
+  learningStore: LearningStore;
+}) {
+  const { state, update } = learningStore;
+  const known =
+    state.type === "ready"
+      ? new Set([
+          ...state.value.learned.map(({ matterId }) => matterId),
+          ...state.value.tallies.map(({ matterId }) => matterId),
+        ])
+      : new Set<string>();
+  const forgotten =
+    candidates.type === "ready"
+      ? candidates.resolved
+          .flatMap((resolution) =>
+            resolution.type === "inaccessible" && known.has(resolution.id)
+              ? [resolution.id]
+              : [],
+          )
+          .sort()
+          .join(" ")
+      : "";
+  useEffect(() => {
+    if (forgotten === "") {
+      return;
+    }
+    update((current) => forgetMatters(current, new Set(forgotten.split(" "))));
+  }, [forgotten, update]);
+}
+
+/** The next rule to propose, and why learning is not working, if it is not. */
+const MatterLearningNotice = ({
+  learningStore: { state, saveFailed, update, retry },
+  openMatters,
+}: {
+  learningStore: LearningStore;
+  openMatters: ReadonlyMap<string, DesktopTimeEntryMatterCandidate>;
+}) => {
+  const t = useTranslations("activity");
+  const tOnboarding = useTranslations("onboarding");
+  if (state.type === "failed") {
+    return (
+      <div
+        role="alert"
+        className="text-destructive flex items-center gap-2 text-sm"
+      >
+        {t("matterLearningFailed")}
+        <Button size="sm" variant="ghost" onClick={retry}>
+          {t("retry")}
+        </Button>
+      </div>
     );
   }
-  return (await Promise.all(requests)).flat();
+  if (saveFailed) {
+    return (
+      <p role="alert" className="text-destructive text-sm">
+        {t("matterLearningSaveFailed")}
+      </p>
+    );
+  }
+  if (state.type !== "ready") {
+    return null;
+  }
+  const proposal = ruleProposals(state.value).find(({ matterId }) =>
+    openMatters.has(matterId),
+  );
+  const matter =
+    proposal === undefined ? undefined : openMatters.get(proposal.matterId);
+  if (proposal === undefined || matter === undefined) {
+    return null;
+  }
+  return (
+    <div
+      role="status"
+      className="bg-muted flex flex-wrap items-center gap-2 rounded-md px-3 py-2 text-sm"
+    >
+      <span className="min-w-0 flex-1 text-pretty">
+        {t(
+          proposal.field === "documentPath"
+            ? "ruleProposalDocument"
+            : "ruleProposalTitle",
+          { value: proposal.value, matter: matter.name },
+        )}
+      </span>
+      <Button
+        size="sm"
+        onClick={() =>
+          update((current) =>
+            acceptProposal(current, proposal, crypto.randomUUID()),
+          )
+        }
+      >
+        {t("ruleProposalAccept")}
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => update((current) => declineProposal(current, proposal))}
+      >
+        {tOnboarding("notNow")}
+      </Button>
+    </div>
+  );
 };
 
-/** The shortlist, plus every matter the day's records name outside it,
- * resolved by id under the member's own access as the day names it. */
-function useMatterCandidates(snapshot: ActivityDaySnapshot) {
+/** The shortlist, plus every matter id the day names outside it, resolved
+ * under the member's own access as the day names it. */
+function useMatterCandidates(recordedIds: readonly string[]) {
   const [candidates, setCandidates] = useState<CandidateState>({
     type: "loading",
   });
@@ -1824,7 +2002,7 @@ function useMatterCandidates(snapshot: ActivityDaySnapshot) {
   const unresolved =
     candidates.type === "ready"
       ? unresolvedMatterIds({
-          ids: recordedMatterIds(snapshot),
+          ids: recordedIds,
           candidates: candidates.matters,
           resolved: candidates.resolved,
         }).join(" ")

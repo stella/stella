@@ -1,10 +1,13 @@
-//! Encrypted activity storage: one file per local day plus the settings.
+//! Encrypted activity storage: one file per local day plus the settings and
+//! the member's matter learning.
 //!
 //! Each day is its own envelope, bound to its date through the associated
 //! data, so a flush rewrites one small file and retention deletes whole
 //! files. Layout under the store root:
 //!
 //! - `settings.json.enc`
+//! - `matter-learning.json.enc`: rules and weights learned from the
+//!   member's own confirmations; deleted with the history it came from
 //! - `days/YYYY-MM-DD.json.enc`
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -21,10 +24,12 @@ use crate::activity::{
   ActivitySegment, ActivitySettings, format_date, parse_date,
 };
 use crate::keychain::{self, LocalDataKey, LocalDataKeyLookup};
+use crate::matter_learning::StoredMatterLearning;
 use crate::local_store::{EncryptedJsonFile, EncryptedReadError, create_private_dir};
 
 const LABEL: &str = "activity";
 const SETTINGS_FILE_NAME: &str = "settings.json.enc";
+const MATTER_LEARNING_FILE_NAME: &str = "matter-learning.json.enc";
 const DAYS_DIR_NAME: &str = "days";
 const DAY_FILE_SUFFIX: &str = ".json.enc";
 
@@ -68,6 +73,7 @@ struct OtherAccountHistoryFiles {
 #[derive(Clone, Copy)]
 enum ActivityRecoveryFile {
   Settings,
+  MatterLearning,
   Day(NaiveDate),
 }
 
@@ -193,6 +199,22 @@ impl ActivityStore {
   fn settings_file(&self) -> EncryptedJsonFile {
     EncryptedJsonFile::new(self.key, self.root.join(SETTINGS_FILE_NAME), LABEL)
       .with_associated_data("activity:settings")
+  }
+
+  fn matter_learning_file(&self) -> EncryptedJsonFile {
+    EncryptedJsonFile::new(self.key, self.root.join(MATTER_LEARNING_FILE_NAME), LABEL)
+      .with_associated_data("activity:matter-learning")
+  }
+
+  pub fn load_matter_learning_checked(
+    &self,
+  ) -> Result<Option<StoredMatterLearning>, EncryptedReadError> {
+    self.matter_learning_file().load_checked()
+  }
+
+  pub fn save_matter_learning(&self, learning: &StoredMatterLearning) -> Result<(), String> {
+    self.ensure_dirs()?;
+    self.matter_learning_file().persist(learning)
   }
 
   fn day_file(&self, date: NaiveDate) -> EncryptedJsonFile {
@@ -831,6 +853,15 @@ impl ActivityStore {
       {
         continue;
       }
+      let learning = entry.path().join(MATTER_LEARNING_FILE_NAME);
+      match fs::symlink_metadata(&learning) {
+        Ok(metadata) if metadata.file_type().is_file() => history.paths.push(learning),
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+          return Err(format!("activity matter learning could not be inspected: {error}"));
+        }
+      }
       let days = entry.path().join(DAYS_DIR_NAME);
       let days_type = match fs::symlink_metadata(&days) {
         Ok(metadata) => metadata.file_type(),
@@ -888,6 +919,8 @@ impl ActivityStore {
     {
       return Err(ActivityDeletionError::PendingBatch);
     }
+    remove_file_if_present(self.matter_learning_file().path())
+      .map_err(ActivityDeletionError::Unavailable)?;
     match fs::remove_dir_all(self.days_dir()) {
       Ok(()) => Ok(()),
       Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -935,6 +968,14 @@ impl ActivityStore {
       Err(error) => return Err(ActivityDeletionError::from(error)),
       Ok(_) => {}
     }
+    match store.load_matter_learning_checked() {
+      Err(EncryptedReadError::Unreadable(_)) => {
+        unreadable.push(ActivityRecoveryFile::MatterLearning)
+      }
+      Err(EncryptedReadError::Incompatible(_)) => {}
+      Err(error) => return Err(ActivityDeletionError::from(error)),
+      Ok(_) => {}
+    }
     for date in store
       .day_dates()
       .map_err(ActivityDeletionError::Unavailable)?
@@ -957,6 +998,9 @@ impl ActivityStore {
     for file in unreadable {
       let result = match file {
         ActivityRecoveryFile::Settings => store.load_settings_checked().map(|_| ()),
+        ActivityRecoveryFile::MatterLearning => {
+          store.load_matter_learning_checked().map(|_| ())
+        }
         ActivityRecoveryFile::Day(date) => store
           .day_file(date)
           .load_checked::<ActivityDayFile>()
@@ -972,6 +1016,9 @@ impl ActivityStore {
       }
       let path = match file {
         ActivityRecoveryFile::Settings => store.settings_file().path().to_path_buf(),
+        ActivityRecoveryFile::MatterLearning => {
+          store.matter_learning_file().path().to_path_buf()
+        }
         ActivityRecoveryFile::Day(date) => store.day_file(date).path().to_path_buf(),
       };
       remove_file_if_present(&path).map_err(ActivityDeletionError::Unavailable)?;
@@ -1081,6 +1128,17 @@ mod tests {
         end: recorded.end.to_rfc3339(),
       }]],
     }
+  }
+
+  #[test]
+  fn matter_learning_round_trips_and_goes_with_all_history() {
+    let (store, root) = store();
+    let learning = StoredMatterLearning::fixture();
+    store.save_matter_learning(&learning).unwrap();
+    assert_eq!(store.load_matter_learning_checked().unwrap(), Some(learning));
+    store.delete_all_days().unwrap();
+    assert_eq!(store.load_matter_learning_checked().unwrap(), None);
+    ActivityStore::remove(&root).unwrap();
   }
 
   #[test]

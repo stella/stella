@@ -5,7 +5,6 @@ import {
   type DesktopTimeEntryMatterCandidate,
   isDesktopMatterId,
 } from "@stll/api-contract/desktop-time-entries";
-import { normalizeUnicode } from "@stll/text-normalize";
 import { Temporal } from "@stll/time";
 
 import {
@@ -17,9 +16,42 @@ import {
   totalDurationMs,
 } from "./activity-logic";
 import type { ActivityManualAssignment } from "./activity-types";
+import {
+  evidenceTokens,
+  learnedMatter,
+  matchingRule,
+  matchTokens,
+  type MatterLearning,
+  type MatterRule,
+  type SegmentEvidence,
+} from "./matter-learning";
 
 type ActivityRange = { start: string; end: string };
-export type MatchConfidence = "strong" | "likely" | "manual" | "unmatched";
+/** How a segment came to its matter, strongest first. */
+export const MATCH_CONFIDENCES = [
+  "manual",
+  "strong",
+  "rule",
+  "likely",
+  "unmatched",
+] as const;
+export type MatchConfidence = (typeof MATCH_CONFIDENCES)[number];
+/** Signals that only break a tie between matters the evidence names
+ * equally; none assigns a matter alone. In order of precedence. */
+const TIE_BREAK_SIGNALS = [
+  "lastWorkedAt",
+  "upcomingDeadline",
+  "newlyAssignedAt",
+] as const;
+/** Why a segment has its matter, in one line. */
+export type MatchReason =
+  | { type: "assigned" }
+  | { type: "session" }
+  | { type: "rule"; rule: MatterRule }
+  | { type: "reference"; reference: string }
+  | { type: "name"; token: string }
+  | { type: "learned"; token: string }
+  | { type: "none" };
 /**
  * What the day's own records (a stella document session, a manual
  * assignment) say about a segment's matter, as the member's own access
@@ -31,6 +63,7 @@ type RecordedMatter = "none" | "open" | "unresolved" | "unavailable";
 export type MatchedSegment = TimedSegment & {
   matter: DesktopTimeEntryMatterCandidate | null;
   confidence: MatchConfidence;
+  reason: MatchReason;
   recordedMatter: RecordedMatter;
   evidence: string[];
   drafted: boolean;
@@ -52,6 +85,8 @@ export type DayReviewGroup = {
   id: string;
   matter: DesktopTimeEntryMatterCandidate | null;
   confidence: MatchConfidence;
+  /** The reason of the group's strongest match that holds the most time. */
+  reason: MatchReason;
   evidence: AppEvidence[];
   apps: AppTotal[];
   segments: MatchedSegment[];
@@ -69,12 +104,10 @@ type MatchDayOptions = {
   captureDetails: boolean;
   manualAssignments: readonly ActivityManualAssignment[];
   draftedEntries: readonly (ActivityRange & { entryId: string })[];
+  /** The member's rules and this computer's learned weights. */
+  learning: MatterLearning;
+  nowMs: number;
 };
-
-const tokens = (text: string) =>
-  normalizeUnicode(text, "NFKC")
-    .toLowerCase()
-    .match(/[\p{L}\p{N}]+/gu) ?? [];
 const hasPhrase = (haystack: readonly string[], phrase: readonly string[]) =>
   phrase.length > 0 &&
   haystack.some((_, index) =>
@@ -95,7 +128,7 @@ const distinctiveTokenIndex = (
   };
   for (const field of ["name", "clientName"] as const) {
     for (const candidate of candidates) {
-      for (const token of new Set(tokens(candidate[field] ?? ""))) {
+      for (const token of new Set(matchTokens(candidate[field] ?? ""))) {
         if (Array.from(graphemes.segment(token)).length < 3) {
           continue;
         }
@@ -111,6 +144,26 @@ const distinctiveTokenIndex = (
   return index;
 };
 
+/** The one matter among `tied` a server signal singles out, in signal
+ * order; `null` when none does. */
+const tieBreak = (tied: readonly DesktopTimeEntryMatterCandidate[]) => {
+  let pool = tied;
+  for (const signal of TIE_BREAK_SIGNALS) {
+    const signalled = pool.filter(({ signals }) => signals[signal] !== null);
+    if (signalled.length === 1) {
+      return signalled.at(0) ?? null;
+    }
+    if (signalled.length > 1) {
+      pool = signalled;
+    }
+  }
+  return null;
+};
+
+type LikelyMatch = {
+  matter: DesktopTimeEntryMatterCandidate;
+  reason: Extract<MatchReason, { type: "reference" | "name" }>;
+};
 type LikelyMatterOptions = {
   candidates: readonly DesktopTimeEntryMatterCandidate[];
   evidence: readonly string[];
@@ -120,18 +173,23 @@ const likelyMatter = ({
   candidates,
   evidence,
   distinctiveTokens,
-}: LikelyMatterOptions) => {
-  const details = evidence.map(tokens);
+}: LikelyMatterOptions): LikelyMatch | null => {
+  const details = evidence.map(matchTokens);
   const references = candidates.filter(
     ({ reference }) =>
       reference !== null &&
       reference.length > 0 &&
-      details.some((detail) => hasPhrase(detail, tokens(reference))),
+      details.some((detail) => hasPhrase(detail, matchTokens(reference))),
   );
   if (references.length > 0) {
-    return references.length === 1 ? (references.at(0) ?? null) : null;
+    const matter =
+      (references.length === 1 ? references.at(0) : tieBreak(references)) ??
+      null;
+    return matter?.reference
+      ? { matter, reason: { type: "reference", reference: matter.reference } }
+      : null;
   }
-  const hits = new Set<string>();
+  const hits = new Map<string, string>();
   for (const field of ["name", "clientName"] as const) {
     for (const token of new Set(details.flat())) {
       const owners = distinctiveTokens[field].get(token);
@@ -139,14 +197,18 @@ const likelyMatter = ({
         continue;
       }
       for (const id of owners) {
-        hits.add(id);
+        if (!hits.has(id)) {
+          hits.set(id, token);
+        }
       }
     }
   }
-  if (hits.size !== 1) {
-    return null;
-  }
-  return candidates.find(({ id }) => hits.has(id)) ?? null;
+  const hit = candidates.filter(({ id }) => hits.has(id));
+  const matter = (hit.length === 1 ? hit.at(0) : tieBreak(hit)) ?? null;
+  const token = matter === null ? undefined : hits.get(matter.id);
+  return matter !== null && token !== undefined
+    ? { matter, reason: { type: "name", token } }
+    : null;
 };
 
 type MatchSegmentOptions = {
@@ -157,7 +219,20 @@ type MatchSegmentOptions = {
   assignment: ActivityManualAssignment | undefined;
   drafted: boolean;
   distinctiveTokens: ReturnType<typeof distinctiveTokenIndex>;
+  learning: MatterLearning;
+  nowMs: number;
 };
+
+/** What rules and learning may read of a segment: titles and paths only
+ * with the member's consent to record details. */
+export const segmentEvidence = (
+  segment: TimedSegment,
+  captureDetails: boolean,
+): SegmentEvidence => ({
+  app: segment.appName,
+  title: captureDetails ? segment.windowTitle : null,
+  documentPath: captureDetails ? segment.document : null,
+});
 const matchSegment = ({
   segment,
   candidates,
@@ -166,6 +241,8 @@ const matchSegment = ({
   assignment,
   drafted,
   distinctiveTokens,
+  learning,
+  nowMs,
 }: MatchSegmentOptions): MatchedSegment => {
   const evidence = captureDetails
     ? [
@@ -187,6 +264,7 @@ const matchSegment = ({
         ...segment,
         matter,
         confidence: "unmatched",
+        reason: { type: "none" },
         recordedMatter: access.unavailable.has(recordedId)
           ? "unavailable"
           : "unresolved",
@@ -198,18 +276,54 @@ const matchSegment = ({
       ...segment,
       matter,
       confidence: assignment ? "manual" : "strong",
+      reason: assignment ? { type: "assigned" } : { type: "session" },
       recordedMatter: "open",
       evidence,
       drafted,
     };
   }
+  const isOpen = (matterId: string) => access.open.has(matterId);
+  const seen = segmentEvidence(segment, captureDetails);
+  const rule = matchingRule(learning.rules, seen, isOpen);
+  const ruleMatter = rule === null ? undefined : access.open.get(rule.matterId);
+  if (rule !== null && ruleMatter !== undefined) {
+    return {
+      ...segment,
+      matter: ruleMatter,
+      confidence: "rule",
+      reason: { type: "rule", rule },
+      recordedMatter: "none",
+      evidence,
+      drafted,
+    };
+  }
   if (captureDetails) {
-    const matter = likelyMatter({ candidates, evidence, distinctiveTokens });
-    if (matter) {
+    const likely = likelyMatter({ candidates, evidence, distinctiveTokens });
+    if (likely) {
       return {
         ...segment,
-        matter,
+        matter: likely.matter,
         confidence: "likely",
+        reason: likely.reason,
+        recordedMatter: "none",
+        evidence,
+        drafted,
+      };
+    }
+    const learned = learnedMatter({
+      tokens: evidenceTokens([seen]),
+      learned: learning.learned,
+      isOpen,
+      nowMs,
+    });
+    const learnedOpen =
+      learned === null ? undefined : access.open.get(learned.matterId);
+    if (learned !== null && learnedOpen !== undefined) {
+      return {
+        ...segment,
+        matter: learnedOpen,
+        confidence: "likely",
+        reason: { type: "learned", token: learned.token },
         recordedMatter: "none",
         evidence,
         drafted,
@@ -220,25 +334,30 @@ const matchSegment = ({
     ...segment,
     matter: null,
     confidence: "unmatched",
+    reason: { type: "none" },
     recordedMatter: "none",
     evidence,
     drafted,
   };
 };
-const groupConfidence = (
+/** The group's strongest confidence, and the reason of that confidence's
+ * segment holding the most time. */
+const groupMatch = (
   segments: readonly MatchedSegment[],
-): MatchConfidence => {
-  for (const confidence of [
-    "manual",
-    "strong",
-    "likely",
-    "unmatched",
-  ] as const) {
-    if (segments.some((segment) => segment.confidence === confidence)) {
-      return confidence;
+): { confidence: MatchConfidence; reason: MatchReason } => {
+  for (const confidence of MATCH_CONFIDENCES) {
+    const [longest] = segments
+      .filter((segment) => segment.confidence === confidence)
+      .sort(
+        (left, right) =>
+          right.endMs - right.startMs - (left.endMs - left.startMs) ||
+          left.startMs - right.startMs,
+      );
+    if (longest !== undefined) {
+      return { confidence, reason: longest.reason };
     }
   }
-  return "unmatched";
+  return { confidence: "unmatched", reason: { type: "none" } };
 };
 
 // `host: name` from terminals and remote sessions; `page · site` and
@@ -458,6 +577,8 @@ export const matchDay = ({
   captureDetails,
   manualAssignments,
   draftedEntries,
+  learning,
+  nowMs,
 }: MatchDayOptions) => {
   const access = matterAccess(candidates, resolved);
   const orderedCandidates = [...access.open.values()].sort((left, right) =>
@@ -518,6 +639,8 @@ export const matchDay = ({
           candidates: orderedCandidates,
           access,
           distinctiveTokens,
+          learning,
+          nowMs,
           captureDetails,
           assignment,
           drafted: drafted.some((range) => containsRange(range, segment)),
@@ -546,11 +669,12 @@ export const matchDay = ({
     }
     const durationMs = totalDurationMs(group);
     const evidence = appEvidence(group);
-    const confidence = groupConfidence(group);
+    const { confidence, reason } = groupMatch(group);
     groups.push({
       id,
       matter: first.matter,
       confidence,
+      reason,
       evidence,
       apps: appTotals(group),
       segments: group,
@@ -563,6 +687,8 @@ export const matchDay = ({
     });
   }
   return {
+    /** Every matter this read can open, by id. */
+    openMatters: access.open,
     segments: matchedSegments,
     groups: [...groups].sort(
       (left, right) =>

@@ -29,9 +29,11 @@ import {
 import { timedSegments } from "../src/activity/activity-logic";
 import type { ActivitySegment } from "../src/activity/activity-types";
 import { matchDay } from "../src/activity/day-review-logic";
+import { EMPTY_MATTER_LEARNING } from "../src/activity/matter-learning";
 
 const MINUTE = 60_000;
 const DAY_START = Date.UTC(2026, 9, 9, 8, 0);
+const NOW_MS = Date.UTC(2026, 9, 10);
 const at = (minute: number) =>
   new Date(DAY_START + minute * MINUTE).toISOString();
 const ms = (minute: number) => DAY_START + minute * MINUTE;
@@ -95,6 +97,8 @@ const day = (
     segments: timedSegments(segments),
     candidates: [LEASE, SERVICES],
     resolved: [],
+    learning: EMPTY_MATTER_LEARNING,
+    nowMs: NOW_MS,
     captureDetails: true,
     manualAssignments: [],
     draftedEntries,

@@ -80,6 +80,7 @@ import {
 } from "./capture-modes";
 import type { CaptureMode, CaptureModeCommand } from "./capture-modes";
 import { DraftConsent } from "./DraftConsent";
+import { MatterRulesSettings } from "./MatterRulesSettings";
 
 type ActivitySettingsView =
   | { type: "loading" }
@@ -1095,6 +1096,7 @@ export const ActivitySettingsPane = () => {
         onExclude={(app) => setDialog({ app, type: "excludeApp" })}
         settings={settings}
       />
+      <MatterRulesSettings />
       <HistoryDeletion
         deletionDisabled={deletionDisabled}
         onDeleteAll={() =>

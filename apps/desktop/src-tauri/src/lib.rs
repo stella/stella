@@ -103,6 +103,7 @@ mod local_window;
 mod logging;
 mod managed_policy;
 mod marker_file;
+mod matter_learning;
 mod onboarding;
 mod outcome_page;
 mod pdf_signing;

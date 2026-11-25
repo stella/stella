@@ -1035,6 +1035,20 @@ impl ActivityManager {
     Err("activity account is unavailable".into())
   }
 
+  /// The encrypted store, when history persists there. Matter learning
+  /// exists only in it: nothing is learned without it.
+  pub(crate) fn encrypted_store(&self) -> Option<&ActivityStore> {
+    match &self.persistence {
+      ActivityPersistence::Encrypted(store) => Some(store),
+      ActivityPersistence::Initializing
+      | ActivityPersistence::MemoryOnly
+      | ActivityPersistence::DeletionOnly(_)
+      | ActivityPersistence::KeyMissing(_)
+      | ActivityPersistence::Unreadable(_)
+      | ActivityPersistence::Incompatible(_) => None,
+    }
+  }
+
   fn require_writable(&self) -> Result<(), String> {
     match self.persistence {
       ActivityPersistence::Encrypted(_) | ActivityPersistence::MemoryOnly => Ok(()),

@@ -731,6 +731,7 @@ export const manualSuggestion = ({
   return {
     apps: appTotals(clipped),
     confidence: "manual",
+    reason: { type: "none" },
     durationMs,
     // The card and the selection show the range as the user set it.
     endMs: Math.max(range.startMs, range.endMs),
