@@ -15,7 +15,6 @@ import { useCallback, useRef, useState } from "react";
  *   - render `ChatThreadMessages` for the transcript
  *   - render the shared `PromptBar` for the composer
  */
-import type { MouseEvent } from "react";
 
 import {
   useQuery,
@@ -33,6 +32,7 @@ import {
   CHAT_SEND_INTENT,
 } from "@stll/api-contract/chat-send-intent";
 import { Button } from "@stll/ui/button";
+import type { ContextMenuSurfaceOpenEvent } from "@stll/ui/entity-actions";
 import { Maximize2Icon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -151,7 +151,7 @@ import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 type ChatTabPanelProps = {
   tab: ChatTab;
   onClose: () => void;
-  onLabelContextMenu: (event: MouseEvent<HTMLElement>) => void;
+  onLabelContextMenu: (details: ContextMenuSurfaceOpenEvent) => void;
 };
 
 const chatTabThreadRef = (tab: ChatTab): ChatThreadRef =>
@@ -1022,7 +1022,7 @@ const noop = () => {
 type ChatTabPanelChromeProps = {
   tab: ChatTab;
   onClose: () => void;
-  onLabelContextMenu: (event: MouseEvent<HTMLElement>) => void;
+  onLabelContextMenu: (details: ContextMenuSurfaceOpenEvent) => void;
   onStartRename: () => void;
   rename: {
     active: boolean;

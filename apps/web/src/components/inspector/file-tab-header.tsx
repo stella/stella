@@ -1,13 +1,9 @@
-import type {
-  ComponentProps,
-  Dispatch,
-  MouseEvent,
-  SetStateAction,
-} from "react";
+import type { ComponentProps, Dispatch, SetStateAction } from "react";
 
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import type { ContextMenuSurfaceOpenEvent } from "@stll/ui/entity-actions";
 import { Maximize2Icon, Minimize2Icon, PrinterIcon } from "@stll/ui/icons";
 
 import { fileExtensionSuffix } from "@/components/file-extension-suffix";
@@ -49,7 +45,7 @@ type GetFileTabHeaderPropsOptions = {
   editValue: string;
   handleCloseTab: (tabId: string) => void;
   matterOrigin: MatterOrigin | null;
-  ribbonLabelContextMenuOpenAt: (event: MouseEvent<HTMLElement>) => void;
+  ribbonLabelContextMenuOpenAt: (details: ContextMenuSurfaceOpenEvent) => void;
   setEditingTabId: Dispatch<SetStateAction<string | null>>;
   setEditValue: Dispatch<SetStateAction<string>>;
   startRename: (tab: FileTab) => void;
