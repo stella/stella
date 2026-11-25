@@ -10,7 +10,10 @@ use tauri::{AppHandle, State};
 use crate::{
   activity::{self, ActivityAppState},
   activity_commands::lock_error,
-  local_window::{ActivityAccountFeature, ActivityCaller, ActivitySettingsCaller, LocalCaller},
+  activity_store::ActivityStore,
+  local_window::{
+    ActivityAccountFeature, ActivityCaller, ActivitySettingsCaller, LocalCaller,
+  },
 };
 
 // The bounds `MATTER_LEARNING_LIMITS` in `matter-learning.ts` states.
@@ -167,7 +170,10 @@ impl MatterLearning {
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum MatterLearningRead {
-  Stored { revision: u64, learning: MatterLearning },
+  Stored {
+    revision: u64,
+    learning: MatterLearning,
+  },
   Unavailable,
 }
 
@@ -176,7 +182,10 @@ pub enum MatterLearningRead {
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum MatterRulesRead {
-  Stored { revision: u64, rules: Vec<MatterRule> },
+  Stored {
+    revision: u64,
+    rules: Vec<MatterRule>,
+  },
   Unavailable,
 }
 
@@ -195,35 +204,38 @@ fn read<F: ActivityAccountFeature>(
   state: &ActivityAppState,
   caller: &LocalCaller<F>,
 ) -> Result<Option<StoredMatterLearning>, String> {
-  let manager = state.lock().map_err(lock_error)?;
-  caller.require_current(app)?;
-  manager.require_caller(caller)?;
-  let Some(store) = manager.encrypted_store() else {
+  // Saves replace the file whole, so a read needs no lock once it has the
+  // store.
+  let store = {
+    let manager = state.lock().map_err(lock_error)?;
+    caller.require_current(app)?;
+    manager.require_caller(caller)?;
+    manager.encrypted_store().cloned()
+  };
+  let Some(store) = store else {
     return Ok(None);
   };
-  let stored = store
-    .load_matter_learning_checked()
-    .map_err(crate::logging::with_cause_logged("matter learning is unavailable"))?;
+  let stored =
+    store
+      .load_matter_learning_checked()
+      .map_err(crate::logging::with_cause_logged(
+        "matter learning is unavailable",
+      ))?;
   Ok(Some(stored.unwrap_or_default()))
 }
 
 /// Applies `change` to the stored learning if it is still at `revision`.
-fn save<F: ActivityAccountFeature>(
-  app: &AppHandle,
-  state: &ActivityAppState,
-  caller: &LocalCaller<F>,
+/// The caller holds the activity lock, so no other save interleaves.
+fn save_locked(
+  store: &ActivityStore,
   revision: u64,
   change: impl FnOnce(&mut MatterLearning),
 ) -> Result<MatterLearningSave, String> {
-  let manager = state.lock().map_err(lock_error)?;
-  caller.require_current(app)?;
-  manager.require_caller(caller)?;
-  let Some(store) = manager.encrypted_store() else {
-    return Ok(MatterLearningSave::Unavailable);
-  };
   let mut stored = store
     .load_matter_learning_checked()
-    .map_err(crate::logging::with_cause_logged("matter learning is unavailable"))?
+    .map_err(crate::logging::with_cause_logged(
+      "matter learning is unavailable",
+    ))?
     .unwrap_or_default();
   if stored.revision != revision {
     return Ok(MatterLearningSave::Conflict);
@@ -232,11 +244,31 @@ fn save<F: ActivityAccountFeature>(
   stored.learning.validate()?;
   stored.revision += 1;
   store.save_matter_learning(&stored)?;
-  drop(manager);
-  activity::emit_changed(app);
   Ok(MatterLearningSave::Saved {
     revision: stored.revision,
   })
+}
+
+fn save<F: ActivityAccountFeature>(
+  app: &AppHandle,
+  state: &ActivityAppState,
+  caller: &LocalCaller<F>,
+  revision: u64,
+  change: impl FnOnce(&mut MatterLearning),
+) -> Result<MatterLearningSave, String> {
+  let outcome = {
+    let manager = state.lock().map_err(lock_error)?;
+    caller.require_current(app)?;
+    manager.require_caller(caller)?;
+    match manager.encrypted_store() {
+      Some(store) => save_locked(store, revision, change)?,
+      None => MatterLearningSave::Unavailable,
+    }
+  };
+  if matches!(outcome, MatterLearningSave::Saved { .. }) {
+    activity::emit_changed(app);
+  }
+  Ok(outcome)
 }
 
 #[tauri::command]
@@ -291,7 +323,9 @@ pub fn activity_save_matter_rules(
   rules: Vec<MatterRule>,
 ) -> Result<MatterLearningSave, String> {
   validate_rules(&rules)?;
-  save(&app, &state, &caller, revision, |stored| stored.rules = rules)
+  save(&app, &state, &caller, revision, |stored| {
+    stored.rules = rules;
+  })
 }
 
 #[cfg(test)]

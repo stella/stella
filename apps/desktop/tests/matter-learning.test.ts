@@ -83,7 +83,7 @@ const segment = ({
 describe("learned weights", () => {
   test("decay never raises a weight and halves it every half-life", () => {
     assertProperty(
-      "matter learning decay is monotone and halves per half-life",
+      "decay never raises a weight and halves it every half-life",
       fc.property(
         fc.double({ min: 0, max: 1e6, noNaN: true }),
         fc.integer({ min: 0, max: 10 * 365 }),
@@ -113,7 +113,7 @@ describe("learned weights", () => {
     const matterIds = ["a", "b", "c"];
     const token = fc.constantFrom("novak", "lease", "riverside", "draft");
     assertProperty(
-      "matter learning correction never increases the wrong pair",
+      "a correction never raises the wrong pair and always credits the right one",
       fc.property(
         fc.array(
           fc.record({
@@ -337,7 +337,7 @@ describe("member rules", () => {
       .array(word, { minLength: 1, maxLength: 3 })
       .map((words) => words.join(" "));
     assertProperty(
-      "matter rules and learning name only matters the read can open",
+      "rules and learning only ever resolve to matters the same read can open",
       fc.property(
         fc.array(
           fc.record({
@@ -370,12 +370,16 @@ describe("member rules", () => {
           );
           const resolved = pool.flatMap(
             (candidate, index): DesktopMatterResolution[] => {
-              switch (standings[index]) {
+              const standing = standings.at(index) ?? "shortlisted";
+              switch (standing) {
                 case "resolved":
                   return [{ type: "accessible", matter: candidate }];
                 case "inaccessible":
                   return [{ type: "inaccessible", id: candidate.id }];
+                case "shortlisted":
+                  return [];
                 default:
+                  standing satisfies never;
                   return [];
               }
             },

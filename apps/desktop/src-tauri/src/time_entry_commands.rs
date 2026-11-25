@@ -9,7 +9,9 @@ use crate::{
     BatchReservationError,
   },
   feature_gate::{DesktopFeature, FeatureGates},
-  local_window::{ActivityAccountFeature, ActivityCaller, ActivitySettingsCaller, LocalCaller},
+  local_window::{
+    ActivityAccountFeature, ActivityCaller, ActivitySettingsCaller, LocalCaller,
+  },
   time_entry_submit::{
     self, ConfirmedBatch, ConfirmedTimeEntry, CreatedEntry, Matter, MatterCandidate,
     MatterResolution,

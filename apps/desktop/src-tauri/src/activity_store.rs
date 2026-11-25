@@ -24,8 +24,8 @@ use crate::activity::{
   ActivitySegment, ActivitySettings, format_date, parse_date,
 };
 use crate::keychain::{self, LocalDataKey, LocalDataKeyLookup};
-use crate::matter_learning::StoredMatterLearning;
 use crate::local_store::{EncryptedJsonFile, EncryptedReadError, create_private_dir};
+use crate::matter_learning::StoredMatterLearning;
 
 const LABEL: &str = "activity";
 const SETTINGS_FILE_NAME: &str = "settings.json.enc";
@@ -212,7 +212,10 @@ impl ActivityStore {
     self.matter_learning_file().load_checked()
   }
 
-  pub fn save_matter_learning(&self, learning: &StoredMatterLearning) -> Result<(), String> {
+  pub fn save_matter_learning(
+    &self,
+    learning: &StoredMatterLearning,
+  ) -> Result<(), String> {
     self.ensure_dirs()?;
     self.matter_learning_file().persist(learning)
   }
@@ -859,7 +862,9 @@ impl ActivityStore {
         Ok(_) => {}
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => {
-          return Err(format!("activity matter learning could not be inspected: {error}"));
+          return Err(format!(
+            "activity matter learning could not be inspected: {error}"
+          ));
         }
       }
       let days = entry.path().join(DAYS_DIR_NAME);
@@ -1135,7 +1140,10 @@ mod tests {
     let (store, root) = store();
     let learning = StoredMatterLearning::fixture();
     store.save_matter_learning(&learning).unwrap();
-    assert_eq!(store.load_matter_learning_checked().unwrap(), Some(learning));
+    assert_eq!(
+      store.load_matter_learning_checked().unwrap(),
+      Some(learning)
+    );
     store.delete_all_days().unwrap();
     assert_eq!(store.load_matter_learning_checked().unwrap(), None);
     ActivityStore::remove(&root).unwrap();

@@ -31,21 +31,20 @@ const useRuleMatterNames = (rules: readonly MatterRule[]) => {
   useEffect(() => {
     let current = true;
     const asked = request.slice(request.indexOf(":") + 1);
-    if (asked === "") {
-      return;
+    if (asked !== "") {
+      resolveMatters(asked.split(" "))
+        .then((resolved) => {
+          if (current) {
+            setNames({ type: "ready", resolved });
+          }
+          return undefined;
+        })
+        .catch(() => {
+          if (current) {
+            setNames({ type: "failed" });
+          }
+        });
     }
-    resolveMatters(asked.split(" "))
-      .then((resolved) => {
-        if (current) {
-          setNames({ type: "ready", resolved });
-        }
-        return undefined;
-      })
-      .catch(() => {
-        if (current) {
-          setNames({ type: "failed" });
-        }
-      });
     return () => {
       current = false;
     };
@@ -97,10 +96,10 @@ const RuleRow = ({
           onChange={(event) => setValue(event.target.value)}
           value={value}
         />
-        <Button size="sm" type="submit" variant="outline">
+        <Button type="submit" variant="outline">
           {tClipboard("save")}
         </Button>
-        <Button onClick={onDelete} size="sm" type="button" variant="ghost">
+        <Button onClick={onDelete} type="button" variant="ghost">
           <Trash2Icon aria-hidden="true" />
           {t("matterRuleDelete")}
         </Button>
@@ -149,7 +148,7 @@ export const MatterRulesSettings = () => {
           className="text-destructive flex items-center gap-2 text-sm"
         >
           {t("matterLearningFailed")}
-          <Button onClick={retry} size="sm" variant="ghost">
+          <Button onClick={retry} variant="ghost">
             {t("retry")}
           </Button>
         </div>
@@ -160,7 +159,7 @@ export const MatterRulesSettings = () => {
           className="text-destructive flex items-center gap-2 text-sm"
         >
           {t("matterNamesFailed")}
-          <Button onClick={retryNames} size="sm" variant="ghost">
+          <Button onClick={retryNames} variant="ghost">
             {t("retry")}
           </Button>
         </div>

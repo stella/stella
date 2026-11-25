@@ -15,7 +15,7 @@ export const MATTER_RULE_OPS = ["contains", "startsWith"] as const;
 export type MatterRuleOp = (typeof MATTER_RULE_OPS)[number];
 
 /** Bounds shared with the native store, which refuses anything larger. */
-export const MATTER_LEARNING_LIMITS = {
+const MATTER_LEARNING_LIMITS = {
   rules: 200,
   learned: 5000,
   tallies: 500,
@@ -72,7 +72,7 @@ const LEARNED_MIN_SCORE = 1.5;
 /** …and this many times the next matter's. */
 const LEARNED_MIN_LEAD = 2;
 /** Confirmations of one piece of evidence before a rule is proposed. */
-export const RULE_PROPOSAL_CONFIRMATIONS = 2;
+const RULE_PROPOSAL_CONFIRMATIONS = 2;
 const MIN_TOKEN_GRAPHEMES = 3;
 
 /** What one stretch of activity showed: the evidence rules and learning
@@ -113,7 +113,7 @@ const fieldValue = (evidence: SegmentEvidence, field: MatterRuleField) => {
 const ruleValue = ({ field, value }: Pick<MatterRule, "field" | "value">) =>
   field === "documentPath" ? normalizedPath(value) : normalized(value);
 
-export const ruleMatches = (
+const ruleMatches = (
   rule: Pick<MatterRule, "field" | "op" | "value">,
   evidence: SegmentEvidence,
 ) => {

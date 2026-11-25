@@ -28,7 +28,7 @@ import {
 
 type ActivityRange = { start: string; end: string };
 /** How a segment came to its matter, strongest first. */
-export const MATCH_CONFIDENCES = [
+const MATCH_CONFIDENCES = [
   "manual",
   "strong",
   "rule",
