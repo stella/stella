@@ -370,7 +370,8 @@
   },
   "no-raw-context-menu/no-raw-context-menu": {
     "apps/desktop/src/clipboard/ClipboardApp.tsx": 1,
-    "apps/web/src/components/inspector/anonymization-context-menu.tsx": 2
+    "apps/web/src/components/inspector/anonymization-context-menu.tsx": 2,
+    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx": 3
   },
   "no-imported-class-constant/no-imported-class-constant": {},
   "require-bounded-request-schema/require-bounded-request-schema": {},

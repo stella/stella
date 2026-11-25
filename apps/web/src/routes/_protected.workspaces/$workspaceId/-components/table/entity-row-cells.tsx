@@ -12,10 +12,6 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import {
-  ContextMenuSurface,
-  type ContextMenuSurfaceOpenEvent,
-} from "@stll/ui/entity-actions";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
@@ -284,30 +280,32 @@ export const DraggableRow = ({
   };
 
   const openContextMenu = (
-    { anchor }: ContextMenuSurfaceOpenEvent,
+    e: React.MouseEvent,
     propertyId: PropertyId | null,
   ) => {
+    e.preventDefault();
+    e.stopPropagation();
     setBulkEntities(getBulkSelectedEntities());
     setContextPropertyId(propertyId);
-    setContextAnchor(anchor);
+    setContextAnchor({
+      getBoundingClientRect: () => new DOMRect(e.clientX, e.clientY, 0, 0),
+    });
     // Defer to the next frame so the trailing pointerup from the
     // right-click doesn't immediately count as an outside-click and
     // dismiss the menu that the contextmenu just opened.
     requestAnimationFrame(() => setContextOpen(true));
   };
 
-  const handleContextMenu = (details: ContextMenuSurfaceOpenEvent) =>
-    openContextMenu(details, null);
+  const handleContextMenu = (e: React.MouseEvent) => openContextMenu(e, null);
 
-  const handleCellContextMenu = (
-    details: ContextMenuSurfaceOpenEvent,
-    column: TableColumn,
-  ) => {
+  const handleCellContextMenu = (e: React.MouseEvent, column: TableColumn) => {
     const target = getCellContextMenuTarget(column);
     if (target.type === "native") {
+      // Keep the browser's menu, and keep the row from opening its own.
+      e.stopPropagation();
       return;
     }
-    openContextMenu(details, target.propertyId);
+    openContextMenu(e, target.propertyId);
   };
 
   const handleRowClick = (e: React.MouseEvent) => {
@@ -461,28 +459,24 @@ export const DraggableRow = ({
 
   return (
     <>
-      <ContextMenuSurface
+      <WorkspaceGridRow
+        aria-rowindex={index + 2}
+        aria-selected={selected}
+        className={cn(
+          "transition-opacity duration-150",
+          contentMode === "tight" && TOOLBAR_ROW_HEIGHT,
+          isTask && "cursor-pointer",
+          isFocusedExpansionRow && "z-20",
+          isMutedByExpandedCell && "opacity-[0.92] hover:opacity-100",
+        )}
+        data-active={activeRow || undefined}
+        data-drop-target={isDropTarget || undefined}
+        data-index={index}
+        data-state={selected ? "selected" : undefined}
         key={row.id}
-        onOpenContextMenu={handleContextMenu}
-        render={
-          <WorkspaceGridRow
-            aria-rowindex={index + 2}
-            aria-selected={selected}
-            className={cn(
-              "transition-opacity duration-150",
-              contentMode === "tight" && TOOLBAR_ROW_HEIGHT,
-              isTask && "cursor-pointer",
-              isFocusedExpansionRow && "z-20",
-              isMutedByExpandedCell && "opacity-[0.92] hover:opacity-100",
-            )}
-            data-active={activeRow || undefined}
-            data-drop-target={isDropTarget || undefined}
-            data-index={index}
-            data-state={selected ? "selected" : undefined}
-            onClick={containedEventHandler(handleRowClick)}
-            ref={setRowRef}
-          />
-        }
+        onClick={containedEventHandler(handleRowClick)}
+        onContextMenu={containedEventHandler(handleContextMenu)}
+        ref={setRowRef}
       >
         <DataRowCells
           expandedCellId={expandedCellId}
@@ -506,7 +500,7 @@ export const DraggableRow = ({
           renderColumns={renderColumns}
           selected={selected}
         />
-      </ContextMenuSurface>
+      </WorkspaceGridRow>
       {pendingDrop && <VersionOrNewFileDialog {...pendingDrop} />}
     </>
   );
@@ -519,7 +513,7 @@ type FolderTableRowProps = {
   entity: TableTreeNode;
   index: number;
   isMutedByExpandedCell: boolean;
-  onRowContextMenu: (details: ContextMenuSurfaceOpenEvent) => void;
+  onRowContextMenu: (event: React.MouseEvent) => void;
   onRename: (entityId: string, newName: string) => void;
   onStartEditing: (entityId: string) => void;
   onStopEditing: () => void;
@@ -558,24 +552,20 @@ const FolderTableRow = ({
   }
 
   return (
-    <ContextMenuSurface
+    <WorkspaceGridRow
+      aria-rowindex={index + 2}
+      aria-selected={selected}
+      className={cn(
+        "transition-opacity duration-150",
+        TOOLBAR_ROW_HEIGHT,
+        isMutedByExpandedCell && "opacity-[0.92] hover:opacity-100",
+      )}
+      data-active={entity.entityId === activeEntityId || undefined}
+      data-index={index}
+      data-state={selected ? "selected" : undefined}
       key={row.id}
-      onOpenContextMenu={onRowContextMenu}
-      render={
-        <WorkspaceGridRow
-          aria-rowindex={index + 2}
-          aria-selected={selected}
-          className={cn(
-            "transition-opacity duration-150",
-            TOOLBAR_ROW_HEIGHT,
-            isMutedByExpandedCell && "opacity-[0.92] hover:opacity-100",
-          )}
-          data-active={entity.entityId === activeEntityId || undefined}
-          data-index={index}
-          data-state={selected ? "selected" : undefined}
-          ref={ref}
-        />
-      }
+      onContextMenu={containedEventHandler(onRowContextMenu)}
+      ref={ref}
     >
       <WorkspaceGridCell
         aria-colindex={1}
@@ -634,7 +624,7 @@ const FolderTableRow = ({
         renderColumns={renderColumns}
         selected={selected}
       />
-    </ContextMenuSurface>
+    </WorkspaceGridRow>
   );
 };
 
@@ -647,10 +637,7 @@ type DataRowCellsProps = {
     columnId: string,
     canExpandCell: boolean,
   ) => void;
-  onCellContextMenu: (
-    details: ContextMenuSurfaceOpenEvent,
-    column: TableColumn,
-  ) => void;
+  onCellContextMenu: (event: React.MouseEvent, column: TableColumn) => void;
   selectCellContent: React.ReactNode;
   rowActions: React.ReactNode;
   selected: boolean;
@@ -680,44 +667,38 @@ const DataRowCells = ({
       cell.column.columnDef.meta?.contextMenu === "cell"
         ? ReviewableTableCell
         : WorkspaceGridCell;
-    const cellTarget = getCellContextMenuTarget(cell.column);
 
     return (
-      <ContextMenuSurface
-        disabled={cellTarget.type === "native"}
+      <Cell
+        aria-colindex={cellIndex + 1}
+        className={cn(
+          "relative",
+          canExpandCell && "cursor-pointer",
+          isSelectCell && "min-w-12 shrink-0",
+          isPinnedBoundaryColumn(cell.column) && "border-e-0",
+          cell.column.columnDef.meta?.muted && "text-muted-foreground",
+          contentMode === "fit-content" &&
+            "whitespace-normal! [&_.line-clamp-2]:line-clamp-none [&_.truncate]:min-w-0 [&_.truncate]:overflow-visible [&_.truncate]:wrap-break-word [&_.truncate]:whitespace-normal",
+          hasExpandedCell &&
+            !isExpandedCell &&
+            !isSelectCell &&
+            "opacity-90 transition-opacity duration-150",
+          isExpandedCell &&
+            "z-30 overflow-visible! whitespace-normal! [&_.line-clamp-2]:line-clamp-none [&_.truncate]:min-w-0 [&_.truncate]:overflow-visible [&_.truncate]:wrap-break-word [&_.truncate]:whitespace-normal",
+          cell.column.getIsResizing() &&
+            "after:bg-info after:pointer-events-none after:absolute after:end-0 after:top-0 after:bottom-0 after:z-50 after:w-px",
+        )}
+        data-expanded-cell={isExpandedCell || undefined}
+        data-state={selected ? "selected" : undefined}
         key={cell.id}
-        onOpenContextMenu={(details) => onCellContextMenu(details, cell.column)}
-        render={
-          <Cell
-            aria-colindex={cellIndex + 1}
-            className={cn(
-              "relative",
-              canExpandCell && "cursor-pointer",
-              isSelectCell && "min-w-12 shrink-0",
-              isPinnedBoundaryColumn(cell.column) && "border-e-0",
-              cell.column.columnDef.meta?.muted && "text-muted-foreground",
-              contentMode === "fit-content" &&
-                "whitespace-normal! [&_.line-clamp-2]:line-clamp-none [&_.truncate]:min-w-0 [&_.truncate]:overflow-visible [&_.truncate]:wrap-break-word [&_.truncate]:whitespace-normal",
-              hasExpandedCell &&
-                !isExpandedCell &&
-                !isSelectCell &&
-                "opacity-90 transition-opacity duration-150",
-              isExpandedCell &&
-                "z-30 overflow-visible! whitespace-normal! [&_.line-clamp-2]:line-clamp-none [&_.truncate]:min-w-0 [&_.truncate]:overflow-visible [&_.truncate]:wrap-break-word [&_.truncate]:whitespace-normal",
-              cell.column.getIsResizing() &&
-                "after:bg-info after:pointer-events-none after:absolute after:end-0 after:top-0 after:bottom-0 after:z-50 after:w-px",
-            )}
-            data-expanded-cell={isExpandedCell || undefined}
-            data-state={selected ? "selected" : undefined}
-            onClick={(event) =>
-              onCellClick(event, cell.column.id, canExpandCell)
-            }
-            style={{
-              gridColumn: cellIndex + 1,
-              ...getGridPinningStyles(cell.column),
-            }}
-          />
-        }
+        onClick={(event) => onCellClick(event, cell.column.id, canExpandCell)}
+        onContextMenu={containedEventHandler((event) =>
+          onCellContextMenu(event, cell.column),
+        )}
+        style={{
+          gridColumn: cellIndex + 1,
+          ...getGridPinningStyles(cell.column),
+        }}
       >
         <PinnedBoundary column={cell.column} />
         {isSelectCell ? (
@@ -730,7 +711,7 @@ const DataRowCells = ({
             {flexRender(cell.column.columnDef.cell, cell.getContext())}
           </EntityCellContent>
         )}
-      </ContextMenuSurface>
+      </Cell>
     );
   });
 };
