@@ -439,13 +439,20 @@ const reserveWebCapture = (
   return verdict;
 };
 
+/**
+ * What held when Chrome reported a download: the web connection paired then
+ * (null when none), and the time, on the trace clock. The download goes to
+ * the command in force then, never to one admitted while it was traced.
+ */
+type DownloadReport = { pairing: string | null; reportedAt: number };
+
 /** The web connection's chat as a download's receiver; none before its first command. */
 const readWebReceiver = async (
   download: DownloadFacts & { id: number },
-  pairing: string | null,
+  { pairing, reportedAt }: DownloadReport,
 ): Promise<DownloadReceiver> => {
   const target: WebDownloadTarget | null =
-    pairing === null ? null : await readWebDownloadTarget(pairing);
+    pairing === null ? null : await readWebDownloadTarget(pairing, reportedAt);
   if (target === null) {
     return NO_DOWNLOAD_RECEIVER;
   }
@@ -467,11 +474,11 @@ const readWebReceiver = async (
 /** Who takes a download traced to chat's tabs, judged now. */
 const readDownloadReceiver = async (
   download: DownloadFacts & { id: number },
-  pairing: string | null,
+  report: DownloadReport,
 ): Promise<DownloadReceiver> => {
   const holder = await readControlHolder();
   if (holder.transport === CONTROL_TRANSPORT.web) {
-    return await readWebReceiver(download, pairing);
+    return await readWebReceiver(download, report);
   }
   const chatId = await readTakingDesktopChat();
   return chatId === null
@@ -895,6 +902,7 @@ const runJudgement = async (
   }
   // The web connection paired when Chrome reported the download: one paired
   // while it was traced never takes it.
+  const reportedAt = clock.now();
   const pairing = await readBrowserController().then(
     (controller) => controller?.controllerId ?? null,
     () => null,
@@ -902,7 +910,7 @@ const runJudgement = async (
   const owner = await traceDownload(download, scope, clock);
   const receiver =
     owner === "contained"
-      ? await readDownloadReceiver(download, pairing)
+      ? await readDownloadReceiver(download, { pairing, reportedAt })
       : NO_DOWNLOAD_RECEIVER;
   const release = () => {
     dropDelivery(download.id);

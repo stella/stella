@@ -585,6 +585,61 @@ describe("a chat's browser downloads, filed from the chat page", () => {
     expect(api.calls).toEqual([]);
   });
 
+  test("a start repeated for a delivery still arriving never replaces it, however many others came between", async () => {
+    const bytes = pdf(BROWSER_CONTROL_LIMITS.downloadChunkBytes + 512);
+    const id = deliveryId();
+    let receive: (message: BrowserExtensionDownloadMessage) => void = () =>
+      undefined;
+    const { api, clock, inbox, step } = chat(async () => {
+      const [started, first, second, end] = messagesFor(id, bytes);
+      if (started === undefined || first === undefined) {
+        return await Promise.resolve(success);
+      }
+      receive(started);
+      receive(first);
+      // The inbox fills up, and refused starts push this delivery's id out
+      // of the ones it has seen.
+      const others = Array.from({ length: 7 }, () =>
+        messagesFor(deliveryId(), pdf(16)),
+      );
+      for (const [other] of others) {
+        if (other !== undefined) {
+          receive(other);
+        }
+      }
+      for (let index = 0; index < 300; index += 1) {
+        const [refused] = messagesFor(deliveryId(), pdf(16));
+        if (refused !== undefined) {
+          receive(refused);
+        }
+      }
+      // One of the others ends unfiled at once, so there is room again.
+      const otherEnd = others.at(0)?.at(-1);
+      if (otherEnd !== undefined) {
+        receive(otherEnd);
+      }
+      receive(started);
+      for (const message of [second, end]) {
+        if (message !== undefined) {
+          receive(message);
+        }
+      }
+      return await Promise.resolve(success);
+    });
+    receive = inbox.receive;
+
+    const stepping = step();
+    await clock.waiting();
+    clock.advance(BROWSER_DOWNLOAD_SETTLE_WAIT_MS);
+    await stepping;
+
+    expect(
+      api.calls.some(({ bytes: filed }) =>
+        Buffer.from(filed).equals(Buffer.from(bytes)),
+      ),
+    ).toBe(true);
+  });
+
   test("a download beyond the inbox's capacity is reported once and never taken", async () => {
     let receive: (message: BrowserExtensionDownloadMessage) => void = () =>
       undefined;

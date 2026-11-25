@@ -255,6 +255,8 @@ const start = (state: InboxState, message: StartedMessage): void => {
   if (
     turn === undefined ||
     state.seen.has(message.deliveryId) ||
+    // `seen` is bounded and may have let it go while it still arrives.
+    state.arriving.has(message.deliveryId) ||
     !inStep(state, turn.threadId)
   ) {
     return;

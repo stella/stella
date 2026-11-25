@@ -101,7 +101,9 @@ const install = ({
     browserRecentNavigations: [
       { at: NOW - 1000, tabId: navigatedTab, url: FILE_URL },
     ],
-    ...(target === null ? {} : { browserWebDownloadTarget: target }),
+    ...(target === null
+      ? {}
+      : { browserWebDownloadTarget: [{ ...target, admittedAt: 0 }] }),
     ...(holder === "desktop"
       ? {
           browserControlOwner: "desktop:thread-7",
@@ -317,6 +319,44 @@ describe("a download from chat's tab under the web connection", () => {
     expect(reader.releases).toHaveLength(1);
   });
 
+  test("a download goes to the command in force when Chrome reported it, not to one admitted later", async () => {
+    const { end, items, sent, session } = install();
+    await loadDownloadScope();
+    const download = fileDownload();
+    items.set(download.id, download);
+    // Another chat's command was admitted after Chrome reported this download.
+    session["browserWebDownloadTarget"] = [
+      { ...TARGET, admittedAt: NOW - 60_000 },
+      {
+        ...TARGET,
+        admittedAt: NOW + 1,
+        tabId: 12,
+        turnId: "turn-8",
+      },
+    ];
+
+    expect(await judged(download)).toBeUndefined();
+    await end;
+
+    expect(sent.map(({ target }) => target)).toEqual(sent.map(() => TARGET));
+    expect(parsed(sent).at(0)).toMatchObject({
+      turnId: "turn-7",
+      type: "download-started",
+    });
+  });
+
+  test("a download reported before every remembered command goes to none of them", async () => {
+    const { items, reader, sent, session } = install();
+    await loadDownloadScope();
+    const download = fileDownload();
+    items.set(download.id, download);
+    session["browserWebDownloadTarget"] = [{ ...TARGET, admittedAt: NOW + 1 }];
+
+    expect(await judged(download)).toBeUndefined();
+    expect(reader.reads).toEqual([]);
+    expect(sent).toEqual([]);
+  });
+
   test("a file from another site than the page is never fetched with the member's sign-in there", async () => {
     // The page on one site starts a download from another site the member
     // may be signed in to: nothing is fetched, and the chat hears why.
@@ -353,10 +393,9 @@ describe("a download from chat's tab under the web connection", () => {
       controllerId: "controller-2",
       origin: "https://stella.test",
     };
-    session["browserWebDownloadTarget"] = {
-      ...TARGET,
-      controllerId: "controller-2",
-    };
+    session["browserWebDownloadTarget"] = [
+      { ...TARGET, admittedAt: 0, controllerId: "controller-2" },
+    ];
 
     expect(await judging).toBeUndefined();
     expect(reader.reads).toEqual([]);
