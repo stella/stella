@@ -1,5 +1,5 @@
 ---
-"@stll/cli": minor
+"@stll/cli": patch
 ---
 
-Add `stella site-notes read` and `stella site-notes save` to read and keep the research notes an agent keeps about how a research website works.
+The registry snapshot records the agent's research website note tools, which the command line leaves out.

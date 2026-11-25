@@ -242,13 +242,16 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       command: ["annotation", "delete"],
       scope: "knowledge_write",
     },
+    // An agent's notes about the websites it browses for the member; a
+    // command line browses nothing, so the CLI leaves them out.
     read_site_notes: {
       command: ["site-notes", "read"],
+      excluded: true,
       scope: "read",
-      itemsKey: "notes",
     },
     save_site_notes: {
       command: ["site-notes", "save"],
+      excluded: true,
       scope: "knowledge_write",
     },
 
