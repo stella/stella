@@ -1,5 +1,0 @@
-{
-  "metric": "throw-outside-boundary",
-  "delta": 2,
-  "reason": "TanStack AI reports a chat tool failure by the error its server function throws; the website note tools build a Result and rethrow only its error, as the remember tool does."
-}

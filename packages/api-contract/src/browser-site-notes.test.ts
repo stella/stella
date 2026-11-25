@@ -76,7 +76,7 @@ describe("site note content", () => {
 
   test("refuses any text that carries an e-mail address, wherever it sits", () => {
     assertProperty(
-      "an e-mail address anywhere in a note is refused",
+      "refuses any text that carries an e-mail address, wherever it sits",
       fc.property(
         fc.string({ maxLength: 60 }),
         fc.emailAddress(),
@@ -92,7 +92,7 @@ describe("site note content", () => {
 
   test("refuses any address that carries a query string", () => {
     assertProperty(
-      "a web address with a query parameter is refused",
+      "refuses any address that carries a query string",
       fc.property(
         fc.webUrl({ withQueryParameters: true }),
         fc.stringMatching(/^[a-z]{1,8}$/u),

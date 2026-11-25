@@ -16,6 +16,7 @@ import {
 
 import type { SafeDb } from "@/api/db/safe-db-types";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import {
   READ_SITE_NOTES_DESCRIPTION,
@@ -119,12 +120,7 @@ export const createBrowserSiteNotesTools = (
     outputSchema: toTanStackToolSchema(browserSiteNotesSchema),
   }).server(async ({ url }) => {
     const read = await readNotes(props, url);
-    // TanStack AI reports a tool failure by the error its server function
-    // throws.
-    if (Result.isError(read)) {
-      throw read.error;
-    }
-    return read.value;
+    return Result.isError(read) ? raiseChatToolError(read.error) : read.value;
   }),
   [SAVE_SITE_NOTES_TOOL_NAME]: toolDefinition({
     name: SAVE_SITE_NOTES_TOOL_NAME,
@@ -133,11 +129,8 @@ export const createBrowserSiteNotesTools = (
     outputSchema: toTanStackToolSchema(saveBrowserSiteNotesOutputSchema),
   }).server(async (input) => {
     const saved = await saveNotes(props, input);
-    // TanStack AI reports a tool failure by the error its server function
-    // throws.
-    if (Result.isError(saved)) {
-      throw saved.error;
-    }
-    return saved.value;
+    return Result.isError(saved)
+      ? raiseChatToolError(saved.error)
+      : saved.value;
   }),
 });

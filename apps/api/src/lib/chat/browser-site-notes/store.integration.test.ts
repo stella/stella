@@ -217,10 +217,7 @@ describe("browser site notes (database)", () => {
 
   test("a confirmed note moves its time; adding it again confirms it instead of keeping it twice", async () => {
     await save([add("dates", "The date filter takes DD.MM.YYYY.")]);
-    const [kept] = await read();
-    if (kept === undefined) {
-      return panic("Expected the note to be kept");
-    }
+    const kept = (await read()).at(0) ?? panic("Expected the note to be kept");
     await ageNote(kept.id, 60);
     const [aged] = await read();
     await save([{ type: "confirm", id: kept.id }]);
@@ -241,10 +238,7 @@ describe("browser site notes (database)", () => {
 
   test("a note that no longer works is replaced in the same run", async () => {
     await save([add("export", "Export sits in the toolbar.")]);
-    const [stale] = await read();
-    if (stale === undefined) {
-      return panic("Expected the note to be kept");
-    }
+    const stale = (await read()).at(0) ?? panic("Expected the note to be kept");
     // The run follows the note, the site has changed: it replaces the note
     // with what works now, and removes one that no longer applies at all.
     await save([add("court filter", "Pick the court from the list.")]);
@@ -299,11 +293,8 @@ describe("browser site notes (database)", () => {
     for (const [index, note] of kept.entries()) {
       await ageNote(note.id, 1000 - index);
     }
-    const oldest = kept.at(0);
-    const secondOldest = kept.at(1);
-    if (oldest === undefined || secondOldest === undefined) {
-      return panic("Expected a full website");
-    }
+    const oldest = kept.at(0) ?? panic("Expected a full website");
+    const secondOldest = kept.at(1) ?? panic("Expected a full website");
     const saved = await save([
       { type: "confirm", id: oldest.id },
       add("new step", "How the new step works."),
@@ -335,7 +326,7 @@ describe("browser site notes (database)", () => {
 
   test("notes stay with their member and organization", async () => {
     await assertProperty(
-      "a member reads only the notes they keep in the active organization",
+      "notes stay with their member and organization",
       fc.asyncProperty(
         fc.array(
           fc.record({
@@ -368,14 +359,13 @@ describe("browser site notes (database)", () => {
               const notes = await read(owner, `https://${site}.example.com`);
               expect(new Set(notes.map(({ step }) => step))).toEqual(expected);
             }
-            const origins = await listNotedBrowserOrigins({
-              owner,
-              safeDb: safeDbOf(owner),
-            });
-            if (Result.isError(origins)) {
-              return panic("Listing noted websites failed");
-            }
-            expect(origins.value).toEqual(
+            const origins = (
+              await listNotedBrowserOrigins({
+                owner,
+                safeDb: safeDbOf(owner),
+              })
+            ).unwrap();
+            expect(origins).toEqual(
               ["alpha", "beta"]
                 .filter((site) =>
                   writes.some(
@@ -444,10 +434,7 @@ describe("browser site notes in Settings", () => {
     ]);
     expect(await list(ids.userA2)).toEqual([]);
 
-    const first = sites[1]?.notes[0];
-    if (first === undefined) {
-      return panic("Expected a note to remove");
-    }
+    const first = sites[1]?.notes[0] ?? panic("Expected a note to remove");
     const removed = await deleteBrowserSiteNoteHandler.handler(
       createTestHandlerContext<
         Parameters<typeof deleteBrowserSiteNoteHandler.handler>[0]
@@ -482,10 +469,7 @@ describe("browser site notes in Settings", () => {
 
   test("a colleague cannot remove the member's note", async () => {
     await save([add("search", "Use the form.")]);
-    const [note] = await read();
-    if (note === undefined) {
-      return panic("Expected a note");
-    }
+    const note = (await read()).at(0) ?? panic("Expected a note");
     const removed = await deleteBrowserSiteNoteHandler.handler(
       createTestHandlerContext<
         Parameters<typeof deleteBrowserSiteNoteHandler.handler>[0]
