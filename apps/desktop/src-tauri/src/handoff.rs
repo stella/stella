@@ -210,10 +210,11 @@ trait RecoveryHost: Sync {
 
 struct DesktopRecovery<'a> {
   app: &'a AppHandle,
+  handoff: &'a crate::updater::HandoffReservation<'static>,
 }
 impl RecoveryHost for DesktopRecovery<'_> {
   async fn check_update(&self) -> crate::updater::CheckOutcome {
-    crate::updater::check_for_handoff(self.app).await
+    crate::updater::check_for_handoff(self.app, self.handoff).await
   }
   async fn confirm(&self, failure: &Failure) -> Result<bool, String> {
     crate::deep_link::show_connection_confirmation(
@@ -409,6 +410,9 @@ async fn redeem_with<T: serde::de::DeserializeOwned>(
 
 pub(crate) struct RedeemOptions<'a> {
   pub app: &'a AppHandle,
+  /// Held by the caller until the handoff's document is open or the handoff
+  /// stopped; no other update relaunches the app meanwhile.
+  pub handoff: &'a crate::updater::HandoffReservation<'static>,
   pub target: Target,
   pub api_base_url: &'a str,
   pub token: &'a str,
@@ -419,11 +423,12 @@ pub(crate) async fn redeem<T: serde::de::DeserializeOwned>(
 ) -> Result<(T, crate::account::LinkedAccount), Stop> {
   let RedeemOptions {
     app,
+    handoff,
     target,
     api_base_url,
     token,
   } = options;
-  if crate::updater::check_on_handoff(app).await {
+  if crate::updater::check_on_handoff(app, handoff).await {
     return Err(Stop::Presented(
       "Desktop update installed; reopen the document after relaunch.".into(),
     ));
@@ -442,7 +447,7 @@ pub(crate) async fn redeem<T: serde::de::DeserializeOwned>(
       api_base_url,
       token,
     },
-    &DesktopRecovery { app },
+    &DesktopRecovery { app, handoff },
   )
   .await
 }

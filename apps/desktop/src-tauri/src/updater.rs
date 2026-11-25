@@ -19,7 +19,9 @@
 //   swap; `relaunch` owns the hand-over to the new binary.
 // - A handoff never waits: it checks only when the updater is idle, and an
 //   update it finds while something blocks a relaunch is left to a check
-//   that waits.
+//   that waits. A handoff under way blocks every other relaunch from its
+//   update check until it ends: once redeemed, its token is spent, so a
+//   relaunch before its document opens would lose the document.
 // - When an administrator set `DisableUpdates`, nothing checks: the
 //   organization deploys new versions itself.
 //
@@ -31,7 +33,7 @@
 use std::future::Future;
 use std::sync::OnceLock;
 use std::sync::PoisonError;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
@@ -59,6 +61,7 @@ const PROGRESS_EVENT_INTERVAL: Duration = Duration::from_millis(250);
 pub const UPDATER_STATE_EVENT: &str = "updater-state";
 static LAST_CHECK: AtomicU64 = AtomicU64::new(0);
 static UPDATER: UpdaterBoard = UpdaterBoard::new();
+static HANDOFFS: Handoffs = Handoffs::new();
 
 const BACKGROUND_CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 /// How often a downloaded update asks again whether the app may relaunch.
@@ -90,7 +93,7 @@ enum WhenBlocked {
 pub fn schedule_startup_check(handle: AppHandle) {
   if crate::managed_policy::current().updates_disabled {
     tracing::info!("in-app updates are turned off by managed policy");
-    UPDATER.set(&TauriHost(&handle), UpdaterState::Managed);
+    UPDATER.set(&TauriHost::new(&handle), UpdaterState::Managed);
     return;
   }
   if let Some(path) = last_check_path() {
@@ -180,12 +183,52 @@ fn record_check(now: u64) {
   }
 }
 
+/// The document handoffs under way on this computer.
+pub(crate) struct Handoffs(AtomicUsize);
+
+impl Handoffs {
+  const fn new() -> Self {
+    Self(AtomicUsize::new(0))
+  }
+
+  fn reserve(&self) -> HandoffReservation<'_> {
+    self.0.fetch_add(1, Ordering::SeqCst);
+    HandoffReservation { handoffs: self }
+  }
+
+  fn in_flight(&self) -> usize {
+    self.0.load(Ordering::SeqCst)
+  }
+}
+
+/// A document handoff under way: while one is held, no update relaunches the
+/// app except through that handoff's own check. Dropping it, however the
+/// handoff ends (opened, failed, or a panic unwinding), releases it.
+pub(crate) struct HandoffReservation<'a> {
+  handoffs: &'a Handoffs,
+}
+
+impl Drop for HandoffReservation<'_> {
+  fn drop(&mut self) {
+    self.handoffs.0.fetch_sub(1, Ordering::SeqCst);
+  }
+}
+
+/// Reserves a handoff from its update check until it ends; hold it until the
+/// handoff's document is open, or the handoff stopped.
+pub(crate) fn reserve_handoff() -> HandoffReservation<'static> {
+  HANDOFFS.reserve()
+}
+
 /// Returns true when callers must stop because the app is relaunching.
-pub async fn check_on_handoff(handle: &AppHandle) -> bool {
+pub async fn check_on_handoff(
+  handle: &AppHandle,
+  handoff: &HandoffReservation<'static>,
+) -> bool {
   if cfg!(debug_assertions) {
     return false;
   }
-  match check_for_handoff(handle).await {
+  match check_for_handoff(handle, handoff).await {
     CheckOutcome::Installed { .. } => true,
     CheckOutcome::Failed(error) => {
       tracing::warn!(%error, "handoff updater check failed");
@@ -199,10 +242,14 @@ pub async fn check_on_handoff(handle: &AppHandle) -> bool {
 }
 
 /// A check for a handoff, which must not wait: it runs only while the
-/// updater is idle, installs at once when nothing blocks a relaunch, and
-/// hands an update it cannot install yet to a check that waits for it.
-pub async fn check_for_handoff(handle: &AppHandle) -> CheckOutcome {
-  let host = TauriHost(handle);
+/// updater is idle, installs at once when nothing but the handoff itself
+/// blocks a relaunch, and hands an update it cannot install yet to a check
+/// that waits for it, and so for this handoff to end.
+pub async fn check_for_handoff(
+  handle: &AppHandle,
+  _handoff: &HandoffReservation<'static>,
+) -> CheckOutcome {
+  let host = TauriHost::for_handoff(handle);
   if crate::managed_policy::current().updates_disabled {
     UPDATER.set(&host, UpdaterState::Managed);
     return CheckOutcome::Disabled;
@@ -212,7 +259,7 @@ pub async fn check_for_handoff(handle: &AppHandle) -> CheckOutcome {
     let handle = handle.clone();
     async_runtime::spawn(async move {
       UPDATER
-        .check_unless_busy(&TauriHost(&handle), WhenBlocked::Wait)
+        .check_unless_busy(&TauriHost::new(&handle), WhenBlocked::Wait)
         .await;
     });
   }
@@ -223,7 +270,7 @@ pub async fn check_for_handoff(handle: &AppHandle) -> CheckOutcome {
 /// downloads at once and waits for the last blocker to clear. A check or
 /// install already running finishes first; this one then runs.
 pub async fn run_check(handle: &AppHandle) -> CheckOutcome {
-  let host = TauriHost(handle);
+  let host = TauriHost::new(handle);
   if crate::managed_policy::current().updates_disabled {
     UPDATER.set(&host, UpdaterState::Managed);
     return CheckOutcome::Disabled;
@@ -235,7 +282,7 @@ pub async fn run_check(handle: &AppHandle) -> CheckOutcome {
 /// another check or install runs, whoever started it, the answer is what that
 /// one is doing.
 pub async fn check_from_settings(handle: &AppHandle) -> UpdaterSnapshot {
-  let host = TauriHost(handle);
+  let host = TauriHost::new(handle);
   if crate::managed_policy::current().updates_disabled {
     UPDATER.set(&host, UpdaterState::Managed);
     return UPDATER.snapshot();
@@ -248,7 +295,7 @@ pub async fn check_from_settings(handle: &AppHandle) -> UpdaterSnapshot {
 /// and installs once the last blocker clears. While another check or install
 /// runs, the answer is what that one is doing.
 pub async fn install_from_settings(handle: &AppHandle) -> UpdaterSnapshot {
-  let host = TauriHost(handle);
+  let host = TauriHost::new(handle);
   if crate::managed_policy::current().updates_disabled {
     UPDATER.set(&host, UpdaterState::Managed);
     return UPDATER.snapshot();
@@ -263,22 +310,39 @@ pub async fn install_from_settings(handle: &AppHandle) -> UpdaterSnapshot {
 
 /// Why the app may not relaunch into an update now, if anything blocks it.
 /// The one owner of that answer: every install asks it right before it
-/// installs, through `clearance::ask`.
-async fn relaunch_blocker(handle: &AppHandle) -> Option<RelaunchBlocker> {
+/// installs, through `clearance::ask`. `own_handoff` is set only for the
+/// check a handoff runs for itself, which its own reservation never blocks.
+async fn relaunch_blocker(
+  handle: &AppHandle,
+  own_handoff: bool,
+) -> Option<RelaunchBlocker> {
   use tauri::Manager;
-  if let Some(sessions) = handle.try_state::<crate::commands::AppState>() {
-    let editing = sessions.lock().await.has_active_edit_sessions();
-    if editing {
-      return Some(RelaunchBlocker::EditSessions);
-    }
-  }
-  if handle
+  let editing = match handle.try_state::<crate::commands::AppState>() {
+    Some(sessions) => sessions.lock().await.has_active_edit_sessions(),
+    None => false,
+  };
+  let agent_runs = handle
     .try_state::<crate::desktop_runner::DesktopRunnerControl>()
-    .is_some_and(|runner| runner.has_running_run())
-  {
-    return Some(RelaunchBlocker::AgentRuns);
+    .is_some_and(|runner| runner.has_running_run());
+  relaunch_blocker_from(editing, &HANDOFFS, own_handoff, agent_runs)
+}
+
+/// What blocks a relaunch, from what the app reports: a document open for
+/// editing, or one on its way there through a handoff other than the
+/// asking one, then an agent run.
+fn relaunch_blocker_from(
+  edit_sessions: bool,
+  handoffs: &Handoffs,
+  own_handoff: bool,
+  agent_runs: bool,
+) -> Option<RelaunchBlocker> {
+  if edit_sessions || handoffs.in_flight() > usize::from(own_handoff) {
+    Some(RelaunchBlocker::EditSessions)
+  } else if agent_runs {
+    Some(RelaunchBlocker::AgentRuns)
+  } else {
+    None
   }
-  None
 }
 
 mod clearance {
@@ -359,7 +423,7 @@ pub enum UpdaterState {
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "snake_case")]
 pub enum RelaunchBlocker {
-  // A document is open for desktop editing.
+  // A document is open for desktop editing, or a handoff is opening one.
   EditSessions,
   // A local agent run on this computer has not finished.
   AgentRuns,
@@ -433,14 +497,35 @@ trait UpdaterHost: Sync {
   fn announce(&self, snapshot: &UpdaterSnapshot);
 }
 
-struct TauriHost<'a>(&'a AppHandle);
+struct TauriHost<'a> {
+  handle: &'a AppHandle,
+  /// Whether this host checks for a handoff, whose own reservation then
+  /// does not block it.
+  own_handoff: bool,
+}
+
+impl<'a> TauriHost<'a> {
+  fn new(handle: &'a AppHandle) -> Self {
+    Self {
+      handle,
+      own_handoff: false,
+    }
+  }
+
+  fn for_handoff(handle: &'a AppHandle) -> Self {
+    Self {
+      handle,
+      own_handoff: true,
+    }
+  }
+}
 
 impl UpdaterHost for TauriHost<'_> {
   type Update = tauri_plugin_updater::Update;
   type Package = VerifiedUpdatePackage;
 
   async fn find(&self) -> Result<Option<Self::Update>, String> {
-    build_updater(self.0)?
+    build_updater(self.handle)?
       .check()
       .await
       .map_err(|err| err.to_string())
@@ -459,7 +544,7 @@ impl UpdaterHost for TauriHost<'_> {
   }
 
   fn relaunch_blocker(&self) -> impl Future<Output = Option<RelaunchBlocker>> + Send {
-    relaunch_blocker(self.0)
+    relaunch_blocker(self.handle, self.own_handoff)
   }
 
   async fn blockers_may_have_changed(&self) {
@@ -478,7 +563,7 @@ impl UpdaterHost for TauriHost<'_> {
   fn relaunch(&self, clearance: &RelaunchClearance) -> Result<(), String> {
     // On Windows the plugin has already handed off to the installer and
     // exited; this only runs where the bundle was swapped in place.
-    relaunch::after_update(self.0, clearance)
+    relaunch::after_update(self.handle, clearance)
   }
 
   fn record_check(&self) {
@@ -487,11 +572,11 @@ impl UpdaterHost for TauriHost<'_> {
 
   fn resume_after_failed_update(&self) {
     #[cfg(windows)]
-    crate::desktop_crash::resume_after_failed_update(self.0);
+    crate::desktop_crash::resume_after_failed_update(self.handle);
   }
 
   fn notify(&self, title: &str, body: &str) {
-    notify(self.0, title, body);
+    notify(self.handle, title, body);
   }
 
   fn announce(&self, snapshot: &UpdaterSnapshot) {
@@ -892,14 +977,16 @@ fn notify(handle: &AppHandle, title: &str, body: &str) {
 mod tests {
   use super::*;
   use std::collections::VecDeque;
-  use std::sync::atomic::AtomicUsize;
 
   /// A release feed, installer and relaunch blockers a test scripts. With
   /// `hold_download`, the download stops after its first chunk until the test
   /// calls `release`, so the test can look at the updater while an install is
   /// under way. `blockers` answers each relaunch check in turn and repeats
-  /// its last answer; a wait for blockers to change signals `waiting` and
-  /// returns once the test signals `recheck`.
+  /// its last answer, as what the app reports: open edit sessions or agent
+  /// runs. Handoffs are real reservations on `handoffs`, composed with those
+  /// answers by `relaunch_blocker_from`, as the app does; `own_handoff` makes
+  /// the host check for a handoff. A wait for blockers to change signals
+  /// `waiting` and returns once the test signals `recheck`.
   struct FakeHost {
     found: Result<Option<&'static str>, String>,
     chunks: &'static [u64],
@@ -915,6 +1002,8 @@ mod tests {
     finds: AtomicUsize,
     downloads: AtomicUsize,
     blocker_checks: AtomicUsize,
+    handoffs: Handoffs,
+    own_handoff: bool,
     installs: AtomicUsize,
     relaunches: AtomicUsize,
     notices: std::sync::Mutex<Vec<String>>,
@@ -938,6 +1027,8 @@ mod tests {
         finds: AtomicUsize::new(0),
         downloads: AtomicUsize::new(0),
         blocker_checks: AtomicUsize::new(0),
+        handoffs: Handoffs::new(),
+        own_handoff: false,
         installs: AtomicUsize::new(0),
         relaunches: AtomicUsize::new(0),
         notices: std::sync::Mutex::new(Vec::new()),
@@ -996,7 +1087,7 @@ mod tests {
 
     fn relaunch_blocker(&self) -> impl Future<Output = Option<RelaunchBlocker>> + Send {
       self.blocker_checks.fetch_add(1, Ordering::SeqCst);
-      let answer = {
+      let reported = {
         let mut blockers = self.blockers.lock().unwrap();
         if blockers.len() > 1 {
           blockers.pop_front().flatten()
@@ -1004,7 +1095,12 @@ mod tests {
           blockers.front().copied().flatten()
         }
       };
-      std::future::ready(answer)
+      std::future::ready(relaunch_blocker_from(
+        reported == Some(RelaunchBlocker::EditSessions),
+        &self.handoffs,
+        self.own_handoff,
+        reported == Some(RelaunchBlocker::AgentRuns),
+      ))
     }
 
     async fn blockers_may_have_changed(&self) {
@@ -1189,6 +1285,110 @@ mod tests {
 
     assert!(matches!(outcome, CheckOutcome::Failed(error) if error == "offline"));
     assert_eq!(FakeHost::count(&host.blocker_checks), 0);
+    assert_eq!(FakeHost::count(&host.relaunches), 0);
+  }
+
+  #[tokio::test]
+  async fn a_handoff_under_way_holds_a_ready_update_until_its_document_opens() {
+    let board = UpdaterBoard::new();
+    // The app reports no edit session while the handoff downloads its
+    // document, one once it registered, and none once it was closed.
+    let host = FakeHost::offering("0.9.90").blocked_by(&[
+      None,
+      None,
+      Some(RelaunchBlocker::EditSessions),
+      None,
+    ]);
+    let handoff = host.handoffs.reserve();
+
+    let update = board.run_check(&host, WhenBlocked::Wait);
+    let member = async {
+      // Downloaded while the handoff runs: held, nothing relaunched.
+      host.waiting.notified().await;
+      assert_eq!(
+        board.snapshot().state,
+        deferred(RelaunchBlocker::EditSessions)
+      );
+      assert_eq!(FakeHost::count(&host.installs), 0);
+      host.recheck.notify_one();
+      host.waiting.notified().await;
+      assert_eq!(FakeHost::count(&host.relaunches), 0);
+      // The document opened: its edit session holds the update from here.
+      drop(handoff);
+      host.recheck.notify_one();
+      host.waiting.notified().await;
+      assert_eq!(FakeHost::count(&host.relaunches), 0);
+      // The document was closed.
+      host.recheck.notify_one();
+    };
+    let (outcome, ()) = tokio::time::timeout(Duration::from_secs(5), async {
+      tokio::join!(update, member)
+    })
+    .await
+    .expect("the install goes ahead once the document was closed");
+
+    assert!(matches!(outcome, CheckOutcome::Installed { .. }));
+    assert_eq!(FakeHost::count(&host.relaunches), 1);
+  }
+
+  #[tokio::test]
+  async fn a_failed_handoff_releases_the_update_it_held() {
+    let board = UpdaterBoard::new();
+    let host = FakeHost::offering("0.9.90");
+    let handoff = host.handoffs.reserve();
+
+    let update = board.run_check(&host, WhenBlocked::Wait);
+    let member = async {
+      host.waiting.notified().await;
+      assert_eq!(FakeHost::count(&host.relaunches), 0);
+      // The handoff fails by unwinding, the way a panic in it would.
+      let failed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+        let _handoff = handoff;
+        panic!("the handoff failed");
+      }));
+      assert!(failed.is_err());
+      assert_eq!(host.handoffs.in_flight(), 0);
+      host.recheck.notify_one();
+    };
+    let (outcome, ()) = tokio::time::timeout(Duration::from_secs(5), async {
+      tokio::join!(update, member)
+    })
+    .await
+    .expect("the install goes ahead once the handoff ended");
+
+    assert!(matches!(outcome, CheckOutcome::Installed { .. }));
+    assert_eq!(FakeHost::count(&host.relaunches), 1);
+  }
+
+  #[tokio::test]
+  async fn a_handoff_check_is_held_only_by_other_handoffs() {
+    // Its own reservation does not hold the handoff's own check.
+    let host = FakeHost {
+      own_handoff: true,
+      ..FakeHost::offering("0.9.90")
+    };
+    let own = host.handoffs.reserve();
+    let outcome = UpdaterBoard::new()
+      .run_check(&host, WhenBlocked::Defer)
+      .await;
+    assert!(matches!(outcome, CheckOutcome::Installed { .. }));
+    drop(own);
+
+    // A second handoff under way holds it, without a download.
+    let host = FakeHost {
+      own_handoff: true,
+      ..FakeHost::offering("0.9.90")
+    };
+    let _own = host.handoffs.reserve();
+    let _other = host.handoffs.reserve();
+    let board = UpdaterBoard::new();
+    let outcome = board.run_check(&host, WhenBlocked::Defer).await;
+    assert!(matches!(outcome, CheckOutcome::Deferred { .. }));
+    assert_eq!(
+      board.snapshot().state,
+      deferred(RelaunchBlocker::EditSessions)
+    );
+    assert_eq!(FakeHost::count(&host.downloads), 0);
     assert_eq!(FakeHost::count(&host.relaunches), 0);
   }
 
