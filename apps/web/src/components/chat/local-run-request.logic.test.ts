@@ -9,14 +9,11 @@ import {
   type ChatLocalRunRequestStatus,
 } from "@stll/api-contract/chat-local-run-request";
 
-import type { ChatPart } from "@/components/chat/chat-ui-tools-types";
 import {
   awaitedLocalRunApproval,
   localRunRequestOfCall,
   unansweredLocalRunRequest,
 } from "@/components/chat/local-run-request.logic";
-
-type ToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
 
 const CALL_ID = "local:run-1:item_cmd";
 const REQUEST_ID = "00000000-0000-7000-8000-0000000000a1";
@@ -57,7 +54,7 @@ const commandCall = {
   arguments: '{"command":"format draft.txt"}',
   input: { command: "format draft.txt" },
   state: "input-complete",
-} as const satisfies ToolCallPart;
+} as const;
 
 const pending = (
   ask: ChatLocalRunRequest["ask"] = approvalAsk,

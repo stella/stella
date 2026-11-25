@@ -5,9 +5,8 @@ import {
   chatLocalRunRequestsOf,
 } from "@stll/api-contract/chat-local-run-request";
 
-import type { ChatPart } from "@/components/chat/chat-ui-tools-types";
-
-type ToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
+import { isApprovalPart } from "@/components/chat/chat-ui-tools";
+import type { ApprovalToolPart } from "@/components/chat/chat-ui-tools-types";
 
 /**
  * The request a run on the member's computer asked about call `toolCallId`,
@@ -42,21 +41,26 @@ export const pendingLocalRunApprovalIds = (
  * running meanwhile; the card is what waits. Only a request that can still
  * be answered (pending, in a turn that runs) is asked.
  */
-export const awaitedLocalRunApproval = (
-  part: ToolCallPart,
+export const awaitedLocalRunApproval = <TPart extends { readonly id: string }>(
+  part: TPart,
   request: ChatLocalRunRequest | null,
   turnRuns: boolean,
-): ToolCallPart | null =>
-  request !== null &&
-  turnRuns &&
-  request.status === "pending" &&
-  request.ask.kind === "approval"
-    ? {
-        ...part,
-        state: "approval-requested",
-        approval: { id: request.requestId, needsApproval: true },
-      }
-    : null;
+): ApprovalToolPart | null => {
+  if (
+    request === null ||
+    !turnRuns ||
+    request.status !== "pending" ||
+    request.ask.kind !== "approval"
+  ) {
+    return null;
+  }
+  const asked = {
+    ...part,
+    state: "approval-requested",
+    approval: { id: request.requestId, needsApproval: true },
+  };
+  return isApprovalPart(asked) ? asked : null;
+};
 
 /**
  * Why a request closed without the member's answer reaching its run, as the

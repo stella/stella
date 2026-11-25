@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { ComponentProps, ReactNode, RefObject } from "react";
+import type { ComponentProps, ReactElement, ReactNode, RefObject } from "react";
 
 import { panic } from "better-result";
 import type { PluggableList } from "unified";
@@ -2658,7 +2658,7 @@ const stepFindsContext = ({
  * says neutrally when the run went on without it (`localRunRequestOfCall`).
  */
 const renderToolCallPart = (
-  part: Extract<ChatPart, { type: "tool-call" }>,
+  part: Extract<ChatUIPart, { type: "tool-call" }>,
   {
     action,
     activeFileName,
@@ -2680,7 +2680,7 @@ const renderToolCallPart = (
     isTurnActive: boolean;
     stepRefTargets: ReturnType<typeof stepFindsContext>["stepRefTargets"];
   },
-): ReactNode => {
+): ReactElement => {
   const approvalCard = (asked: ApprovalToolPart, awaiting: boolean) => (
     <ToolApprovalCard
       action={action}
@@ -2707,7 +2707,7 @@ const renderToolCallPart = (
   );
   const request = localRunRequestOfCall(message.metadata, part.id);
   const awaited = awaitedLocalRunApproval(part, request, isGenerating);
-  if (awaited !== null && isApprovalPart(awaited)) {
+  if (awaited !== null) {
     return approvalCard(awaited, true);
   }
   const unanswered = unansweredLocalRunRequest(request, isGenerating);

@@ -667,6 +667,8 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/chat/threads/:threadId/messages/:messageId/local-files/undo":
     "crud",
   "POST /v1/chat/threads/:threadId/turns/:turnId/steer": "crud",
+  "POST /v1/chat/threads/:threadId/turns/:turnId/requests/:requestId/answer":
+    "crud",
   "POST /v1/chat/tool-grants": "crud",
   "POST /v1/chat/browser-site-grants": "crud",
   "POST /v1/chat/workspaces/:workspaceId/file-thread": "crud",

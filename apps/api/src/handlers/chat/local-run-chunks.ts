@@ -1033,7 +1033,7 @@ const createRunRequests = (rewrite: RewriteContext) => {
     /** Close one request as its run reported; chunks only when it was open. */
     close: (requestId: string, closed: RequestClosed): PublicStreamChunk[] => {
       const request = requests.get(requestId);
-      if (request === undefined || request.status !== "pending") {
+      if (request?.status !== "pending") {
         return [];
       }
       requests.set(requestId, { ...request, ...closed });

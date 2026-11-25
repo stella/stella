@@ -347,7 +347,10 @@ const questionRequest = (
 ): ChatLocalRunRequest => ({
   requestId: INTERRUPT_ID,
   toolCallId: QUESTION_CALL_ID,
-  ask: { kind: "question", questions: [governingLaw] },
+  ask: {
+    kind: "question",
+    questions: [{ ...governingLaw, options: [...governingLaw.options] }],
+  },
   status,
 });
 

@@ -2674,13 +2674,13 @@ export const readRunRequestClosure = async (
   if (closure === undefined) {
     return null;
   }
-  const message: unknown = closure.message;
-  const value =
-    typeof message === "object" && message !== null
-      ? Reflect.get(Reflect.get(message, "chunk") ?? {}, "value")
-      : undefined;
-  const parsed = v.safeParse(desktopRunnerRequestEventSchema, value);
-  return parsed.success ? parsed.output : null;
+  const parsed = v.safeParse(
+    v.object({
+      chunk: v.object({ value: desktopRunnerRequestEventSchema }),
+    }),
+    closure.message,
+  );
+  return parsed.success ? parsed.output.chunk.value : null;
 };
 
 export type ChatTurnRunOptions = { owner: RunOwner; chat: ChatRunBinding };

@@ -5855,7 +5855,7 @@ describe("chat turns on a computer", () => {
         .filter(isRequestsChunk)
         .map((chunk) =>
           chatLocalRunRequestsOf(
-            isRecord(chunk) ? chunk["metadata"] : undefined,
+            isRecord(chunk) ? chunk.metadata : undefined,
           ).map(({ status }) => status),
         ),
     ).toEqual([["pending"], ["resolved"]]);
@@ -7072,7 +7072,7 @@ describe("chat turns on a computer", () => {
     // The run holds as many commands as one run may, so the approval is
     // never queued.
     const full: Parameters<typeof answerRunRequest>[0] = {
-      ...control,
+      ...answerControl,
       answerApproval: async () =>
         await Promise.resolve(Result.ok({ type: "command_limit" } as const)),
     };

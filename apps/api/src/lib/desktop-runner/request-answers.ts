@@ -12,6 +12,7 @@ import {
   desktopRunnerDesktopMessageSchema,
 } from "@stll/api-contract/desktop-runner";
 
+import type { SafeDbError } from "@/api/db/safe-db-types";
 import {
   questionPauseOf,
   questionReplyOf,
@@ -54,7 +55,7 @@ type AnswerControl = Pick<
   stopTurn: (run: {
     owner: RunOwner;
     runId: string;
-  }) => Promise<Result<unknown, DatabaseError | DesktopRunnerControlError>>;
+  }) => Promise<Result<unknown, SafeDbError | DesktopRunnerControlError>>;
 };
 
 type ChatRunOutcome = ChatRunForRequest["outcome"];
@@ -153,7 +154,9 @@ export type AnswerRunRequestOptions = {
 export const answerRunRequest = async (
   control: AnswerControl,
   { owner, chat, requestId, answer }: AnswerRunRequestOptions,
-): Promise<Result<ChatLocalRunRequestAnswerOutcome | null, DatabaseError>> => {
+): Promise<
+  Result<ChatLocalRunRequestAnswerOutcome | null, DatabaseError | SafeDbError>
+> => {
   const found = await control.readChatRunForRequest({ owner, chat, requestId });
   if (found.isErr()) {
     return Result.err(found.error);
@@ -222,9 +225,9 @@ export const answerRunRequest = async (
   }
   if (queued.isErr()) {
     // The request's bounds are the command's, so only the store can fail.
-    return queued.error._tag === "DatabaseError"
-      ? Result.err(queued.error)
-      : panic("An answer the request schema admits broke the command contract");
+    return queued.error._tag === "DesktopRunnerCommandInvalid"
+      ? panic("An answer the request schema admits broke the command contract")
+      : Result.err(queued.error);
   }
   return Result.ok(queuedOutcome(queued.value, run));
 };

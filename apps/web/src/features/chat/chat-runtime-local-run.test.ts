@@ -717,7 +717,7 @@ describe("a question the run asks beside its turn", () => {
       try {
         const delivery = runtime.answerLocalRunQuestion(
           QUESTION_REQUEST_ID,
-          given,
+          given === null ? null : { law: [...given.law] },
         );
         await server.answerPosted();
         server.replyToAnswer(outcome({ type: "answered" }));
