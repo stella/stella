@@ -2,7 +2,13 @@ import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import { timeEntries, workspaceMembers, workspaces } from "@/api/db/schema";
+import {
+  ORGANIZATION_ACCESS_STATE,
+  organizationAccessStates,
+  timeEntries,
+  workspaceMembers,
+  workspaces,
+} from "@/api/db/schema";
 import { createMembershipScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import readDesktopDayEntries, {
   createDesktopDayEntriesEndpoint,
@@ -53,6 +59,12 @@ export const seedDesktopDayEntriesScaling = async (
     name: "Desktop day entries fixture",
     slug: organizationId,
     createdAt,
+  });
+  // Member capacity needs the organization's access state before a second
+  // member joins, as the colleague in the handler test does.
+  await db.insert(organizationAccessStates).values({
+    organizationId,
+    state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
   });
   await db.insert(user).values({
     id: userId,

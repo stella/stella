@@ -1160,8 +1160,6 @@ const StructureProposal = ({
   );
 };
 
-/** The user's own earlier entries the draft followed, so its wording can be
- * checked against them. */
 /** Says the card's matter already has time that day from another computer
  * or the web, so the same minutes are not billed twice. */
 const RecordedElsewhereNote = ({
@@ -1218,6 +1216,8 @@ const RecordedElsewhereNote = ({
   }
 };
 
+/** The user's own earlier entries the draft followed, so its wording can be
+ * checked against them. */
 const EarlierEntries = ({
   entries,
 }: {
