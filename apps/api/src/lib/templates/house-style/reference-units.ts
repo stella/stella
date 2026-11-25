@@ -194,71 +194,119 @@ const lacksRank = (context: ChainContext, rank: number): boolean => {
   return context.clausePath === null;
 };
 
+const emptyContext = (): ChainContext => ({
+  annex: null,
+  article: null,
+  clausePath: null,
+  items: [],
+});
+
+type Build = {
+  units: Unit[];
+  /** Coordinated parts of the chain: `odst. 1 čl. II` and `odst. 2 čl. III`
+   *  in `odst. 1 čl. II a odst. 2 čl. III`. Runs parallel to `units`. */
+  groups: number[];
+  group: number;
+  context: ChainContext;
+  /** The group whose trailing article the context carries, if any. */
+  articleFromGroup: number | null;
+};
+
+/** Reads a segment that names the wider provision after the narrower ones
+ *  and hands it back to them. `carried`: the units of this group hold the
+ *  article of the group before, which this segment replaces. */
+const ascend = (build: Build, segment: Segment, carried: boolean): void => {
+  const wider = emptyContext();
+  const narrower = build.units.length;
+  for (const token of segment.tokens) {
+    build.units.push(applyToken(wider, segment.level, token));
+    build.groups.push(build.group);
+  }
+  for (const [position, unit] of build.units.slice(0, narrower).entries()) {
+    unit.annex ??= wider.annex;
+    if (unit.kind === "article" || unit.kind === "annex") {
+      continue;
+    }
+    const replaces = carried && build.groups[position] === build.group;
+    if (wider.article !== null && (unit.article === null || replaces)) {
+      unit.article = wider.article;
+      unit.relativePath = null;
+    }
+    if (unit.kind === "item" && unit.clausePath === null) {
+      unit.clausePath = wider.clausePath;
+    }
+  }
+  const { context } = build;
+  context.annex ??= wider.annex;
+  context.article = carried
+    ? wider.article
+    : (context.article ?? wider.article);
+  context.clausePath ??= wider.clausePath;
+  if (wider.article !== null) {
+    build.articleFromGroup = build.group;
+  }
+};
+
+/** Reads a segment that narrows the path so far or opens a sibling path. */
+const descend = (build: Build, segment: Segment, nests: boolean): void => {
+  const rank = segmentRank(segment);
+  if (!nests) {
+    trimContext(build.context, rank);
+  }
+  for (const token of segment.tokens) {
+    if (!token.attached && token.join !== null) {
+      trimContext(build.context, rank);
+    }
+    build.units.push(applyToken(build.context, segment.level, token));
+    build.groups.push(build.group);
+  }
+};
+
 /** Turns the segments into units, carrying the wider provision down a
  *  descending chain (`čl. XI odst. 2 písm. d)`) and back over an ascending
  *  one (`odst. 2 čl. XI`, `paragraph (b) of Clause 5`). */
 export const buildUnits = (segments: readonly Segment[]): Unit[] => {
-  const units: Unit[] = [];
-  const context: ChainContext = {
-    annex: null,
-    article: null,
-    clausePath: null,
-    items: [],
+  const build: Build = {
+    units: [],
+    groups: [],
+    group: 0,
+    context: emptyContext(),
+    articleFromGroup: null,
   };
   let previousRank = -1;
+  /** The last segment named the wider provision, which ends its group. */
+  let closed = false;
   for (const segment of segments) {
     const rank = segmentRank(segment);
+    // An article carried over from the group before is replaced when this
+    // group names its own after its paragraphs.
+    const carried =
+      rank === RANK.article &&
+      build.articleFromGroup !== null &&
+      build.articleFromGroup < build.group;
     // The wider provision follows only when the chain has not named it yet:
     // in `čl. 5 odst. 2, čl. 6 odst. 3` the second article opens a new path.
     const ascending =
       segment.join === "of" ||
       (segment.join === "adjacent" &&
         rank < previousRank &&
-        lacksRank(context, rank));
+        (lacksRank(build.context, rank) || carried));
     if (ascending) {
-      const wider: ChainContext = {
-        annex: null,
-        article: null,
-        clausePath: null,
-        items: [],
-      };
-      for (const token of segment.tokens) {
-        units.push(applyToken(wider, segment.level, token));
+      ascend(build, segment, carried);
+    } else {
+      if (closed || segment.join === "list" || segment.join === "range") {
+        build.group += 1;
       }
-      const own = units.length - segment.tokens.length;
-      for (const unit of units.slice(0, own)) {
-        unit.annex ??= wider.annex;
-        if (unit.kind !== "article" && unit.kind !== "annex") {
-          if (unit.article === null && wider.article !== null) {
-            unit.article = wider.article;
-            unit.relativePath = null;
-          }
-          if (unit.kind === "item" && unit.clausePath === null) {
-            unit.clausePath = wider.clausePath;
-          }
-        }
-      }
-      context.annex ??= wider.annex;
-      context.article ??= wider.article;
-      context.clausePath ??= wider.clausePath;
-      previousRank = rank;
-      continue;
+      // An item set straight after an item sits inside it: `písm. d) bod
+      // (ii)`. Articles and clauses side by side are siblings.
+      const nests =
+        segment.join === "adjacent" &&
+        (rank > previousRank ||
+          (rank === previousRank && rank === RANK.letter));
+      descend(build, segment, nests);
     }
-    // An item set straight after an item sits inside it: `písm. d) bod
-    // (ii)`. Articles and clauses side by side are siblings.
-    const nests =
-      segment.join === "adjacent" &&
-      (rank > previousRank || (rank === previousRank && rank === RANK.letter));
-    if (!nests) {
-      trimContext(context, rank);
-    }
-    for (const token of segment.tokens) {
-      if (!token.attached && token.join !== null) {
-        trimContext(context, rank);
-      }
-      units.push(applyToken(context, segment.level, token));
-    }
+    closed = ascending;
     previousRank = rank;
   }
-  return units;
+  return build.units;
 };

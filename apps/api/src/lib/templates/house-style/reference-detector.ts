@@ -224,31 +224,50 @@ type ResolveOptions = {
   explicit: number;
   /** Confidence of a path read from the citing block's place. */
   relative: number;
+  /** The chain says `tohoto článku`: only the citing article is meant. */
+  ownArticle: boolean;
 };
 
 const resolveClause = (
-  { lookup, context, explicit, relative }: ResolveOptions,
+  { lookup, context, explicit, relative, ownArticle }: ResolveOptions,
   unit: Unit,
   path: readonly number[],
 ): Candidates => {
   const { relativePath } = unit;
-  const absolute = (): Candidates => ({
-    entries: clausesOfArticle(lookup, unit.article?.ordinal ?? null, path),
-    confidence: explicit,
-  });
+  const absolute = clausesOfArticle(
+    lookup,
+    unit.article?.ordinal ?? null,
+    path,
+  );
   if (unit.article !== null && relativePath === null) {
-    return absolute();
+    return { entries: absolute, confidence: explicit };
   }
-  if (relativePath !== null) {
-    return firstFound(absolute, () => ({
-      entries: clausesInContext(lookup, context, relativePath),
-      confidence: CONFIDENCE.fallback,
-    }));
+  if (relativePath === null) {
+    return {
+      entries: clausesInContext(lookup, context, path),
+      confidence: relative,
+    };
   }
-  return {
-    entries: clausesInContext(lookup, context, path),
-    confidence: relative,
-  };
+  // `odst. 2.1` reads two ways: paragraph 1 of article 2, or sub-paragraph
+  // 2.1 of the citing article.
+  const inContext = clausesInContext(lookup, context, relativePath);
+  if (ownArticle) {
+    return firstFound(
+      () => ({ entries: inContext, confidence: relative }),
+      () => ({
+        entries: absolute.filter(
+          (entry) => entry.articleBlockId === context.articleBlockId,
+        ),
+        confidence: relative,
+      }),
+    );
+  }
+  if (absolute.length === 0) {
+    return { entries: inContext, confidence: CONFIDENCE.fallback };
+  }
+  // Both exist: offered, not chosen.
+  const others = inContext.filter((entry) => !absolute.includes(entry));
+  return { entries: [...absolute, ...others], confidence: explicit };
 };
 
 const resolveItem = (options: ResolveOptions, unit: Unit): Candidates => {
@@ -486,6 +505,7 @@ const toReference = (
       tail.relative === null
         ? CONFIDENCE.relativeImplicit
         : CONFIDENCE.relativeDeictic,
+    ownArticle: tail.relative === "article",
   };
   let resolved: Resolved[] = buildUnits(chain.segments).map((unit) => ({
     unit,

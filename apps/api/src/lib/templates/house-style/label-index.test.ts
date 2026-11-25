@@ -163,7 +163,7 @@ describe("buildLabelIndex", () => {
       "clause 6/3",
       "annex 1",
       // The annex's own numbering; never a target for the agreement's text.
-      "article 1",
+      "clause -/1",
       "annex 2",
     ]);
   });
@@ -279,6 +279,41 @@ describe("buildLabelIndex", () => {
     ).toEqual([
       ["clause", null],
       ["clause", null],
+    ]);
+  });
+
+  test("an annex numbers on its own and does not change how the body is read", () => {
+    const decimalBody = manifestOf([
+      { ...heading("Services"), label: "1." },
+      numbered("1.1", "Clause."),
+      "Signed by the parties.",
+      "Annex 1",
+      "Article I.\nScope",
+      numbered("1.", "Annex paragraph.", 2),
+    ]);
+    expect(keysOf(decimalBody)).toEqual([
+      "article 1",
+      "clause 1/1",
+      "annex 1",
+      "article I",
+      "clause I/1",
+    ]);
+    const namedBody = manifestOf([
+      "Článek I.\nPředmět",
+      numbered("1.", "Odstavec.", 1),
+      numbered("2.", "Odstavec.", 1),
+      "V Praze dne ……",
+      "Příloha č. 1",
+      numbered("1.", "Bod přílohy.", 2),
+      numbered("1.1", "Podbod přílohy.", 2),
+    ]);
+    expect(keysOf(namedBody)).toEqual([
+      "article I",
+      "clause I/1",
+      "clause I/2",
+      "annex 1",
+      "article 1",
+      "clause 1/1",
     ]);
   });
 

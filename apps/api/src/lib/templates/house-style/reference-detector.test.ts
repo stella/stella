@@ -251,6 +251,59 @@ describe("Czech internal references", () => {
     ]);
   });
 
+  test("each coordinated part takes the article named after it", () => {
+    expectCases(czechContract, [
+      [
+        "Podle odst. 1 čl. II a odst. 2 čl. III této smlouvy.",
+        [
+          "odst. 1 čl. II a odst. 2 čl. III",
+          "internal",
+          "1→II/1 II→II 2→III/2 III→III",
+        ],
+      ],
+      [
+        "Podle odst. 1 čl. II a odst. 2 této smlouvy.",
+        ["odst. 1 čl. II a odst. 2", "internal", "1→II/1 II→II 2→II/2"],
+      ],
+      [
+        "Podle odst. 1 čl. II, odst. 2 čl. III a odst. 3 čl. IV této smlouvy.",
+        [
+          "odst. 1 čl. II, odst. 2 čl. III a odst. 3 čl. IV",
+          "internal",
+          "1→II/1 II→II 2→III/2 III→III 3→IV/3 IV→IV",
+        ],
+      ],
+    ]);
+  });
+
+  test("a dotted paragraph number reads two ways until the text says which", () => {
+    const build = (citing: string) =>
+      manifestOf([
+        "Článek I.\nPrvní",
+        numbered("1.", "Text.", 1),
+        "Článek II.\nDruhý",
+        numbered("1.", "Text.", 2),
+        numbered("2.", "Text.", 2),
+        "Článek III.\nTřetí",
+        numbered("1.", "Text.", 3),
+        numbered("2.", "Odstavec:", 3),
+        numbered("2.1", "Pododstavec.", 3),
+        numbered("3.", citing, 3),
+      ]);
+    expectCases(build, [
+      [
+        "Podle odst. 2.1 tohoto článku.",
+        ["odst. 2.1", "internal", "2.1→III/2.1"],
+      ],
+      ["Podle odst. 2.1.", ["odst. 2.1", "internal", "2.1→?"]],
+      ["Podle odst. 1.1.", ["odst. 1.1", "internal", "1.1→I/1"]],
+      [
+        "Podle čl. II odst. 1 této smlouvy.",
+        ["čl. II odst. 1", "internal", "II→II 1→II/1"],
+      ],
+    ]);
+  });
+
   test("the wider provision may follow the narrower one", () => {
     expectCases(czechContract, [
       [
@@ -308,6 +361,10 @@ describe("Czech internal references", () => {
       [
         "Podle Přílohy č. 1 bodu 2 této smlouvy.",
         ["Přílohy č. 1 bodu 2", "internal", "1→annex 1 2→!withinAnnex"],
+      ],
+      [
+        "Podle čl. V. Přílohy č. 1 této smlouvy.",
+        ["čl. V. Přílohy č. 1", "internal", "V→!withinAnnex 1→annex 1"],
       ],
     ]);
   });
@@ -491,6 +548,11 @@ describe("English references", () => {
 
   test("a sentence that ends after the designator does not lend its opening", () => {
     expectCases(englishAgreement, [
+      [
+        "See Article 1. Article 2 of the Companies Act applies.",
+        ["Article 1", "internal", "1→1"],
+        ["Article 2", "external", "2→-"],
+      ],
       [
         "As set out in Clause 4.1. The Supplier shall comply.",
         ["Clause 4.1", "internal", "4.1→4/1"],

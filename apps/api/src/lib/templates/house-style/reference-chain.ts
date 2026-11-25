@@ -243,15 +243,34 @@ const skipFillers = (text: string, position: number): number => {
   }
 };
 
-const readNextSegment = (text: string, position: number): Segment | null => {
+/** Heads that name the same kind of provision in different words. */
+const tierOf = (level: HeadLevel): HeadLevel => {
+  if (level === "section") {
+    return "article";
+  }
+  return level === "point" ? "clause" : level;
+};
+
+const readNextSegment = (
+  text: string,
+  position: number,
+  previous: HeadLevel,
+): Segment | null => {
   const cursor = skipFillers(text, position);
-  const adjacent = matchAt(ADJACENT_AT, text, cursor);
-  const adjacentSegment = readSegmentAt(
-    text,
-    cursor + (adjacent?.[0].length ?? 0),
-  );
+  const gap = matchAt(ADJACENT_AT, text, cursor)?.[0] ?? "";
+  const next = cursor + gap.length;
+  const adjacentSegment = readSegmentAt(text, next);
   if (adjacentSegment !== null) {
-    return { ...adjacentSegment, join: "adjacent" };
+    // `See Article 1. Article 2 of the Act applies.`: a period, a blank and
+    // a capitalised head of the same kind open the next sentence's own
+    // reference. A narrower or a wider provision continues the chain
+    // (`čl. XI. odst. 1`, `čl. V. Přílohy č. 1`).
+    const newSentence =
+      gap.startsWith(".") &&
+      gap.length > 1 &&
+      /^[\p{Lu}§]$/u.test(text.charAt(next)) &&
+      tierOf(adjacentSegment.level) === tierOf(previous);
+    return newSentence ? null : { ...adjacentSegment, join: "adjacent" };
   }
   const connector = matchAt(CONNECTOR_AT, text, cursor);
   if (connector) {
@@ -389,7 +408,7 @@ const readChain = (
   const segments: Segment[] = [{ ...first, join: "first" }];
   let end = first.end;
   for (;;) {
-    const next = readNextSegment(text, end);
+    const next = readNextSegment(text, end, segments.at(-1)?.level ?? level);
     if (next === null) {
       break;
     }

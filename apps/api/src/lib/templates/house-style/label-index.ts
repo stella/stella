@@ -290,7 +290,8 @@ type Scheme = {
 
 type Walk = {
   rows: readonly Row[];
-  scheme: Scheme;
+  /** The main body and the annexes number on their own. */
+  schemes: { body: Scheme; annexes: Scheme };
   article: LabelEntry | null;
   clauses: LabelEntry[];
   letter: LabelEntry | null;
@@ -540,11 +541,12 @@ const openNumbered = (
   if (first === undefined) {
     return null;
   }
+  const scheme = walk.annex === null ? walk.schemes.body : walk.schemes.annexes;
   if (rest.length === 0) {
     const headsArticle =
       shape.close === "" &&
-      !walk.scheme.namedArticles &&
-      (walk.scheme.dotted || isHeadingStyled(row.block));
+      !scheme.namedArticles &&
+      (scheme.dotted || isHeadingStyled(row.block));
     return headsArticle
       ? openArticle(walk, row, first)
       : openClause(walk, row, { path: [first], articleOrdinal: null });
@@ -554,7 +556,7 @@ const openNumbered = (
   const outer = walk.clauses.at(0);
   const relative =
     walk.article !== null &&
-    walk.scheme.namedArticles &&
+    scheme.namedArticles &&
     outer?.shape.path?.length === 1 &&
     outer.clausePath.at(0) === first;
   return relative
@@ -612,11 +614,21 @@ export const buildLabelIndex = ({
     family: families[position] ?? null,
   }));
   const labelled = rows.filter(isLabelled);
+  const firstAnnex =
+    labelled.find(
+      (row) => isAnnexRow(row) && !isListedAnnex(rows, row.position),
+    )?.position ?? Number.POSITIVE_INFINITY;
+  const schemeOf = (scope: readonly LabelledRow[]): Scheme => ({
+    namedArticles: scope.some(isNamedArticle),
+    dotted: scope.some(({ raw }) => (raw.shape.path?.length ?? 0) > 1),
+  });
   const walk: Walk = {
     rows,
-    scheme: {
-      namedArticles: labelled.some(isNamedArticle),
-      dotted: labelled.some(({ raw }) => (raw.shape.path?.length ?? 0) > 1),
+    schemes: {
+      body: schemeOf(labelled.filter(({ position }) => position < firstAnnex)),
+      annexes: schemeOf(
+        labelled.filter(({ position }) => position > firstAnnex),
+      ),
     },
     article: null,
     clauses: [],
