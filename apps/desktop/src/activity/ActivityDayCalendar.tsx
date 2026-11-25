@@ -435,7 +435,7 @@ export const ActivityDayCalendar = ({
 
   const timeZone = Temporal.Now.timeZoneId();
   const draftedEntries = [...snapshot.draftedEntries, ...localDrafts];
-  const { day, matters, learningStore, candidates, refreshCandidates } =
+  const { day, matters, candidates, refreshCandidates, ...learning } =
     useDayMatters({ snapshot, draftedEntries, nowMs });
   const suggestions = matchedSuggestions(day.groups, leftOut);
   const outages = outageRanges(snapshot.outages);
@@ -555,16 +555,9 @@ export const ActivityDayCalendar = ({
       afterSaved(suggestion),
     );
   };
-  /** Saved entries teach this computer their evidence, then the next card
-   * opens. */
   const afterSaved =
     (suggestion: ActivitySuggestion) => (items: readonly BatchItem[]) => {
-      learnFromConfirmation({
-        learningStore,
-        captureDetails: snapshot.captureDetails,
-        suggestion,
-        items,
-      });
+      learning.learnFrom(suggestion, items);
       openNext(suggestion);
     };
   const reject = (suggestion: ActivitySuggestion) => {
@@ -674,10 +667,7 @@ export const ActivityDayCalendar = ({
       {candidates.type === "failed" && snapshot.stoppedReason === null ? (
         <CandidatesFailedAlert onRetry={refreshCandidates} />
       ) : null}
-      <MatterLearningNotice
-        learningStore={learningStore}
-        openMatters={day.openMatters}
-      />
+      <MatterLearningNotice learning={learning} day={day} />
       <SubmissionFeedback
         submission={submission}
         errorMessage={errorMessage}
@@ -1833,7 +1823,25 @@ function useDayMatters({ snapshot, draftedEntries, nowMs }: DayMattersOptions) {
     learning,
     nowMs,
   });
-  return { day, matters, learningStore, candidates, refreshCandidates };
+  // Saved entries teach this computer their evidence (`learnFromConfirmation`).
+  const learnFrom = (
+    suggestion: ActivitySuggestion,
+    items: readonly BatchItem[],
+  ) =>
+    learnFromConfirmation({
+      learningStore,
+      captureDetails: snapshot.captureDetails,
+      suggestion,
+      items,
+    });
+  return {
+    day,
+    matters,
+    candidates,
+    refreshCandidates,
+    learningStore,
+    learnFrom,
+  };
 }
 
 type LearnFromConfirmationOptions = {
@@ -1913,11 +1921,13 @@ function useForgetInaccessible({
 
 /** The next rule to propose, and why learning is not working, if it is not. */
 const MatterLearningNotice = ({
-  learningStore: { state, saveFailed, update, retry },
-  openMatters,
+  learning: {
+    learningStore: { state, saveFailed, update, retry },
+  },
+  day: { openMatters },
 }: {
-  learningStore: LearningStore;
-  openMatters: ReadonlyMap<string, DesktopTimeEntryMatterCandidate>;
+  learning: { learningStore: LearningStore };
+  day: { openMatters: ReadonlyMap<string, DesktopTimeEntryMatterCandidate> };
 }) => {
   const t = useTranslations("activity");
   const tOnboarding = useTranslations("onboarding");
