@@ -38,9 +38,9 @@ describe("chat cell citation links", () => {
 
   test("replaces only well-formed links in text", () => {
     const href = toChatCellCitationHref(TARGET);
-    const text = `[Acme MSA · Cap](${href}) and [bad](${CHAT_CELL_CITATION_HREF_PREFIX}x)`;
+    const text = `[Halvorsen MSA · Cap](${href}) and [bad](${CHAT_CELL_CITATION_HREF_PREFIX}x)`;
     expect(replaceChatCellCitationHrefs(text, () => "#ok")).toBe(
-      `[Acme MSA · Cap](#ok) and [bad](${CHAT_CELL_CITATION_HREF_PREFIX}x)`,
+      `[Halvorsen MSA · Cap](#ok) and [bad](${CHAT_CELL_CITATION_HREF_PREFIX}x)`,
     );
   });
 });

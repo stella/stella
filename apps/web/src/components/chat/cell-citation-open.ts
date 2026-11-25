@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { RegisteredRouter, useNavigate } from "@tanstack/react-router";
+import { Result } from "better-result";
 
 import type { ChatCellCitationTarget } from "@stll/api-contract";
 
@@ -32,53 +33,59 @@ export const openCellCitation = async ({
   target: { entityId, propertyId, workspaceId },
 }: OpenCellCitationOptions): Promise<void> => {
   const t = getTranslator();
-  try {
-    const [views, entity, justifications] = await Promise.all([
-      ensureRouteQueryData(queryClient, viewsOptions(workspaceId)),
-      ensureRouteQueryData(queryClient, entityOptions(workspaceId, entityId)),
-      ensureRouteQueryData(
-        queryClient,
-        justificationsOptions({ workspaceId, entityIds: [entityId] }),
-      ),
-    ]);
-    const fields = cellCitationFields({
-      fields: entity.fields,
-      justifications,
-      propertyId,
-    });
-    const viewId = cellCitationViewId(
-      views,
-      propertyId,
-      getCurrentWorkspaceView(router.state.matches)?.viewId,
-    );
-    if (fields === null || viewId === null) {
-      notifyUserProblem(t("chat.cellCitationUnavailable"));
-      return;
-    }
-    await navigate({
-      to: "/workspaces/$workspaceId/$viewId",
-      params: { workspaceId, viewId },
-    });
-    const { cell, file } = fields;
-    if (file?.content.type !== "file") {
-      return;
-    }
-    useInspectorTabsStore.getState().openFile({
-      id: file.id,
-      entityId,
-      label: file.content.fileName,
-      fileName: file.content.fileName,
-      mimeType: file.content.mimeType,
-      pdfFileId: file.content.pdfFileId,
-      justificationFieldId: cell.id,
-      propertyId: file.propertyId,
-      workspaceId,
-    });
-  } catch (error) {
-    if (APIError.is(error) && error.status === 404) {
-      notifyUserProblem(t("chat.cellCitationUnavailable"));
-      return;
-    }
-    notifyUserError(error, t("errors.actionFailed"));
+  const opened = await Result.tryPromise({
+    try: async () => {
+      const [views, entity, justifications] = await Promise.all([
+        ensureRouteQueryData(queryClient, viewsOptions(workspaceId)),
+        ensureRouteQueryData(queryClient, entityOptions(workspaceId, entityId)),
+        ensureRouteQueryData(
+          queryClient,
+          justificationsOptions({ workspaceId, entityIds: [entityId] }),
+        ),
+      ]);
+      const fields = cellCitationFields({
+        fields: entity.fields,
+        justifications,
+        propertyId,
+      });
+      const viewId = cellCitationViewId(
+        views,
+        propertyId,
+        getCurrentWorkspaceView(router.state.matches)?.viewId,
+      );
+      if (fields === null || viewId === null) {
+        notifyUserProblem(t("chat.cellCitationUnavailable"));
+        return;
+      }
+      await navigate({
+        to: "/workspaces/$workspaceId/$viewId",
+        params: { workspaceId, viewId },
+      });
+      const { cell, file } = fields;
+      if (file?.content.type !== "file") {
+        return;
+      }
+      useInspectorTabsStore.getState().openFile({
+        id: file.id,
+        entityId,
+        label: file.content.fileName,
+        fileName: file.content.fileName,
+        mimeType: file.content.mimeType,
+        pdfFileId: file.content.pdfFileId,
+        justificationFieldId: cell.id,
+        propertyId: file.propertyId,
+        workspaceId,
+      });
+    },
+    catch: (cause) => cause,
+  });
+  if (opened.isOk()) {
+    return;
   }
+  const error = opened.error;
+  if (APIError.is(error) && error.status === 404) {
+    notifyUserProblem(t("chat.cellCitationUnavailable"));
+    return;
+  }
+  notifyUserError(error, t("errors.actionFailed"));
 };
