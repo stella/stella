@@ -10,9 +10,9 @@
  * against decisions that arrive after them. Every 41st record repeats the
  * previous record's docket and primary reporter citation (a second decision
  * reported under one citation: its case number, slug and docket key
- * collide, and citations to it are ambiguous), and every 97th repeats an
- * earlier record's cluster with revised text (a second observation of one
- * publisher identity).
+ * collide, and citations to it are ambiguous), and from the second batch
+ * on every 97th repeats the cluster of the record 200 places earlier with
+ * revised text (a later observation of one publisher identity).
  */
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
@@ -144,7 +144,7 @@ export const courtListenerFixtureRecords = ({
     const template =
       templates[index % templates.length] ??
       panic("The recorded clusters are empty");
-    const revisionOf = index % 97 === 96 ? index - 3 : null;
+    const revisionOf = index % 97 === 96 && index >= 200 ? index - 200 : null;
     const docketOf = revisionOf ?? (index % 41 === 40 ? index - 1 : index);
     const identity = revisionOf ?? index;
     const clusterId = String(namespace * 100_000 + identity);
@@ -208,7 +208,8 @@ export const courtListenerFixtureRecords = ({
           ...citation,
           id: String(namespace * 1_000_000 + identity * 10 + part + 1),
           cluster_id: clusterId,
-          volume: String(namespace + 1),
+          volume: String(namespace + part + 1),
+          page: String(1000 + docketOf),
         })),
       ],
       judgeRelations,

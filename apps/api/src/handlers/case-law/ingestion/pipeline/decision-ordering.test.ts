@@ -161,14 +161,14 @@ describe("decisionOrderingKeys", () => {
   });
 
   test("the measured stream keys its repeated dockets and revisions together", () => {
-    const stream = courtListenerIngestFixture({ count: 100, namespace: 7003 });
+    const stream = courtListenerIngestFixture({ count: 300, namespace: 7003 });
     const contract = sourceContractForAdapter("us-courtlistener");
     const keys = stream.map((decision) =>
       decisionOrderingKeys({ type: "decision", decision }, sourceId, contract),
     );
-    // Record 40 repeats record 39's docket; record 96 revises record 93.
+    // Record 40 repeats record 39's citation; record 290 revises record 90.
     expect(share(keys[40] ?? [], keys[39] ?? [])).toBe(true);
-    expect(share(keys[96] ?? [], keys[93] ?? [])).toBe(true);
+    expect(share(keys[290] ?? [], keys[90] ?? [])).toBe(true);
     expect(share(keys[10] ?? [], keys[11] ?? [])).toBe(false);
   });
 });

@@ -86,7 +86,7 @@ describe("streamKeyedInOrder", () => {
     "items sharing a key never overlap and run in input order",
     async () => {
       await assertProperty(
-        "keyed items never overlap",
+        "items sharing a key never overlap and run in input order",
         fc.asyncProperty(
           fc.array(itemArbitrary, { maxLength: 24 }),
           fc.integer({ min: 1, max: 6 }),
@@ -128,7 +128,7 @@ describe("streamKeyedInOrder", () => {
     "a consumer that stops leaves an unstarted suffix and nothing running",
     async () => {
       await assertProperty(
-        "stopping leaves a started prefix",
+        "a consumer that stops leaves an unstarted suffix and nothing running",
         fc.asyncProperty(
           fc.array(itemArbitrary, { minLength: 1, maxLength: 24 }),
           fc.integer({ min: 1, max: 6 }),

@@ -9,7 +9,6 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
 import { tryResolveCitationBatch } from "@/api/handlers/case-law/citation-resolution";
 import type { RejectedCaseLawIngestionRecord } from "@/api/handlers/case-law/ingestion/pipeline/batch-types";
-import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { CorpusPackError } from "@/api/lib/legal-search/corpus-pack";
@@ -23,6 +22,7 @@ import {
   cloneCaseLawSchema,
   dropCaseLawSchema,
   insertCourtListenerSource,
+  objectStoreCorpus,
   schemaScopedDb,
 } from "@/api/tests/helpers/case-law-ingest-schema";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -72,13 +72,7 @@ if (!databaseUrl || !enabled) {
     }
   };
 
-  const landing = (): CaseLawCorpusDependencies => ({
-    mode: "canonical",
-    transfer: {
-      layout: "packs",
-      putPacks: async () => await Promise.resolve(Result.ok(undefined)),
-    },
-  });
+  const landing = () => objectStoreCorpus();
 
   const rejection = (n: number): RejectedCaseLawIngestionRecord => ({
     type: "rejected",
@@ -248,14 +242,13 @@ if (!databaseUrl || !enabled) {
                   stderr: "inherit",
                 });
                 const written = async () =>
-                  await run.scopedDb(async (tx) =>
-                    Number(
+                  await run.scopedDb(
+                    async (tx) =>
                       (
                         await tx
                           .select({ count: sql<number>`count(*)::int` })
                           .from(caseLawDecisions)
                       ).at(0)?.count ?? 0,
-                    ),
                   );
                 // Killed in the second batch, with decisions in flight.
                 const rows = await waitFor(
@@ -268,6 +261,7 @@ if (!databaseUrl || !enabled) {
                   {
                     description: "the killed run to reach its second batch",
                     intervalMs: 5,
+                    // timeout: the child first maps the stream and writes a whole batch.
                     timeoutMs: 5 * 60_000,
                   },
                 );
@@ -338,24 +332,14 @@ if (!databaseUrl || !enabled) {
                   times: 5,
                 });
                 let packs = 0;
-                const corpus: CaseLawCorpusDependencies = {
-                  mode: "canonical",
-                  transfer: {
-                    layout: "packs",
-                    putPacks: async () => {
-                      packs++;
-                      return await Promise.resolve(
-                        packs === 2
-                          ? Result.err(
-                              new CorpusPackError({
-                                message: "bucket unreachable",
-                              }),
-                            )
-                          : Result.ok(undefined),
-                      );
-                    },
-                  },
-                };
+                const corpus = objectStoreCorpus(async (write) => {
+                  packs++;
+                  return packs === 2
+                    ? Result.err(
+                        new CorpusPackError({ message: "bucket unreachable" }),
+                      )
+                    : await write();
+                });
                 const first = await applyIngestStream({
                   scopedDb: run.scopedDb,
                   sourceId,

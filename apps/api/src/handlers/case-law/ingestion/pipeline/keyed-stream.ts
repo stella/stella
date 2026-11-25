@@ -113,6 +113,10 @@ export const streamKeyedInOrder = async function* <Item, Value>({
     }
   } finally {
     closed = true;
-    await Promise.allSettled(started.map(({ settled }) => settled));
+    await Promise.allSettled(
+      started.map(async ({ settled }) => {
+        await settled;
+      }),
+    );
   }
 };

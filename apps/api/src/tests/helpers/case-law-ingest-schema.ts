@@ -24,6 +24,7 @@ import { createSourceContractResolver } from "@/api/handlers/case-law/ingestion/
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { putCorpusPacks } from "@/api/lib/legal-search/corpus-pack-writer";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { IMPORT_SOURCE_KEYS } from "@/api/lib/legal-search/parser-registry.gen";
 import { isRecord } from "@/api/lib/type-guards";
@@ -115,6 +116,30 @@ type ApplyStreamOptions = {
   beforeBatch?: () => void;
 };
 
+/**
+ * Packs written to the object store `lib/s3.ts` points at (the in-process
+ * store in these runs), as the deployment writes them, so a later
+ * observation reads the stored payload back. `put` wraps the write, for a
+ * caller that counts or fails it.
+ */
+export const objectStoreCorpus = (
+  put: (
+    write: () => ReturnType<typeof putCorpusPacks>,
+  ) => ReturnType<typeof putCorpusPacks> = async (write) => await write(),
+): CaseLawCorpusDependencies => ({
+  mode: "canonical",
+  transfer: {
+    layout: "packs",
+    putPacks: async (options) =>
+      await put(async () => await putCorpusPacks(options)),
+  },
+});
+
+const isRejection = (
+  record: IngestionResult | RejectedCaseLawIngestionRecord,
+): record is RejectedCaseLawIngestionRecord =>
+  "recordKey" in record && record.type === "rejected";
+
 export type AppliedBatch = Awaited<ReturnType<typeof applyDecisionBatch>>;
 
 /**
@@ -136,9 +161,7 @@ export const applyIngestStream = async ({
   const applied: AppliedBatch[] = [];
   let order = firstOrder;
   const records = decisions.map((record): CaseLawIngestionBatchRecord =>
-    "type" in record && record.type === "rejected"
-      ? record
-      : { type: "decision", decision: record },
+    isRejection(record) ? record : { type: "decision", decision: record },
   );
   for (const part of chunk(records, batchSize)) {
     const batch = prepareCaseLawIngestionBatch({ records: part });

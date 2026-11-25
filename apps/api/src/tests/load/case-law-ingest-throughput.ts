@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { parseArgs } from "node:util";
 
@@ -14,6 +13,7 @@ import {
   cloneCaseLawSchema,
   dropCaseLawSchema,
   insertCourtListenerSource,
+  objectStoreCorpus,
   useCaseLawSchema,
 } from "@/api/tests/helpers/case-law-ingest-schema";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -125,19 +125,11 @@ const measure = async (concurrency: number) => {
         sourceId,
         decisions,
         concurrency,
-        corpus: {
-          mode: "canonical",
-          transfer: {
-            layout: "packs",
-            putPacks: async () => {
-              if (s3DelayMs > 0) {
-                await Bun.sleep(s3DelayMs);
-              }
-              phase = "settlement";
-              return Result.ok(undefined);
-            },
-          },
-        },
+        corpus: objectStoreCorpus(async (write) => {
+          const written = await write();
+          phase = "settlement";
+          return written;
+        }),
         beforeBatch: () => {
           phase = "decision";
         },
@@ -173,8 +165,13 @@ const measure = async (concurrency: number) => {
         pool,
         decisions: count,
         inserted: sum(applied.map(({ inserted }) => inserted)),
-        halts: applied.flatMap(({ halt }) =>
-          halt === null ? [] : [halt.type],
+        stops: applied.flatMap(({ halt: stop }) =>
+          stop === null ? [] : [JSON.stringify(stop)],
+        ),
+        unsettled: applied.flatMap(({ settlements }) =>
+          settlements.flatMap((outcome, index) =>
+            outcome.type === "unsettled" ? [`${index}:${outcome.reason}`] : [],
+          ),
         ),
         s3DelayMs,
         wallSeconds: round(wall / 1000),

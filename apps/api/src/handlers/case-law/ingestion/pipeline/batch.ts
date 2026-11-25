@@ -27,6 +27,7 @@ import {
   type IngestionFailureRow,
   writeIngestionFailureRowsTx,
 } from "@/api/handlers/case-law/ingestion/pipeline/failure-evidence-persistence";
+import { createGraphTurns } from "@/api/handlers/case-law/ingestion/pipeline/graph-turns";
 import { streamKeyedInOrder } from "@/api/handlers/case-law/ingestion/pipeline/keyed-stream";
 import {
   PROCESS_DECISION_RETRY_REASON,
@@ -554,7 +555,9 @@ type ApplyDecisionBatchOptions = {
 /**
  * Most decisions of one batch written at once. A decision spends most of its
  * time on object storage and on transactions outside the citation graph
- * lock; the graph transaction itself still runs one at a time.
+ * lock; the graph transactions still run one at a time, and the batch's
+ * decisions take their turn for it in the process (`createGraphTurns`)
+ * rather than on a pooled connection.
  */
 export const DECISION_BATCH_CONCURRENCY = 16;
 
@@ -684,6 +687,7 @@ export const applyDecisionBatch = async (
     resolveSourceContract,
     concurrency,
   );
+  const graphTurn = createGraphTurns();
   // Started records not yet folded may each still insert a row, so the
   // insert limit counts them until their answer is in.
   let started = 0;
@@ -718,6 +722,7 @@ export const applyDecisionBatch = async (
               corpus,
               corpusBatch: corpusBatchFor(index),
               polarityRules,
+              graphTurn,
               ...(signal === undefined ? {} : { signal }),
             },
             resolveSourceContract,

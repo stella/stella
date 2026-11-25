@@ -3,6 +3,7 @@ import type {
   CaseLawCorpusDependencies,
   CaseLawJudgeDependencies,
 } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
+import type { GraphTurn } from "@/api/handlers/case-law/ingestion/pipeline/graph-turns";
 import type { AttachToHeldDecisionOptions } from "@/api/handlers/case-law/ingestion/pipeline/held-decision-attachment";
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { SourceRetention } from "@/api/handlers/case-law/ingestion/retention/retention-sources";
@@ -183,6 +184,12 @@ export type ProcessDecisionAttemptOptions = {
    * one cache so the whole cycle reads them once per language.
    */
   polarityRules?: RuleCache | undefined;
+  /**
+   * Admits the decision's row write, the citation graph transaction. A batch
+   * writing decisions concurrently passes one, so they take the graph lock
+   * in turn; a decision written on its own omits it.
+   */
+  graphTurn?: GraphTurn | undefined;
 };
 
 export type ProcessDecisionOptions = Omit<
