@@ -1580,8 +1580,8 @@ const GuidanceNote = ({
         maxLength={GUIDANCE_MAX_LENGTH}
         onBlur={onBlur}
         onChange={(e) => onChange(e.target.value)}
+        maxRows={8}
         placeholder={placeholder}
-        style={{ maxHeight: "12rem" }}
         value={value}
       />
       <span

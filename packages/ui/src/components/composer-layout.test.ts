@@ -107,7 +107,7 @@ const apply = (
     ? withDraftEmptiness(state, event.empty)
     : withTextHeight(state, event.lines * LINE, LINE);
 
-test("stacked holds until the draft becomes empty, and only a second line stacks", () => {
+test("a compact frame switches only on a second line or an emptied draft", () => {
   assertProperty(
     "a compact frame switches only on a second line or an emptied draft",
     fc.property(fc.boolean(), fc.array(frameEvent), (startEmpty, events) => {
