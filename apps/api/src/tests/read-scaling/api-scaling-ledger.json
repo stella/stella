@@ -257,10 +257,6 @@
       "reason": "Requires a desktop-edit-sessions fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
     {
-      "id": "GET /v1/desktop/calendar-events",
-      "reason": "Requires a desktop fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
-    },
-    {
       "id": "GET /v1/desktop/feature-access",
       "reason": "Requires a desktop fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
