@@ -51,7 +51,7 @@ export const CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS = 24;
  *   age, so the proof its end would write is expired the instant it is
  *   written; walking on would cost a whole pass and prove nothing.
  */
-export const CORPUS_INDEX_ROUTE_PASS_RESTART_REASONS = [
+const CORPUS_INDEX_ROUTE_PASS_RESTART_REASONS = [
   "pass_too_old_to_prove",
 ] as const;
 export type CorpusIndexRoutePassRestartReason =

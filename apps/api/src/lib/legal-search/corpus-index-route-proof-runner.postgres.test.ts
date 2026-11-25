@@ -452,7 +452,7 @@ if (!databaseUrl || !runPostgresTests) {
           ],
         };
         await withInterleaving({
-          databaseUrl: databaseUrl ?? panic("DATABASE_URL is required"),
+          databaseUrl,
           a: runner,
           b: runner,
           reset: async () => {
@@ -496,7 +496,7 @@ if (!databaseUrl || !runPostgresTests) {
         await runnerOf(db)(startPolPage);
         const started: StartedPass[] = [];
         await withInterleaving({
-          databaseUrl: databaseUrl ?? panic("DATABASE_URL is required"),
+          databaseUrl,
           a: {
             steps: [
               {
