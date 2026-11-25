@@ -269,7 +269,9 @@ impl CaptureMonitor {
         self.written = Some(choice);
       }
       // The cause is logged where the write failed.
-      Err(_) => tracing::warn!("activity recording choice was not recorded"),
+      Err(_) => {
+        tracing::warn!("activity recording choice was not recorded");
+      }
     }
   }
 
