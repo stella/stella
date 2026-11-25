@@ -223,7 +223,7 @@ type StoredMessage = v.InferOutput<typeof messageSchema>;
  * once per reason, as the web's notice says it. A request still pending
  * says nothing: its run may still take the answer.
  */
-export const localRunRequestsUnanswered = (
+const localRunRequestsUnanswered = (
   metadata: unknown,
 ): readonly LocalRunRequestUnanswered[] => [
   ...new Set(
