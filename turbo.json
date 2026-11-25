@@ -2071,6 +2071,8 @@
         "$TURBO_ROOT$/packages/api-contract/src/desktop-feature-access.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-presence-policy.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-presence-request.fixture.json",
+        "$TURBO_ROOT$/packages/api-contract/src/desktop-presence-answer.fixture.json",
+        "$TURBO_ROOT$/packages/api-contract/src/desktop-update-feed.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-runner.fixtures.json",
         "$TURBO_ROOT$/packages/api-contract/src/chat-local-run-step-content.fixtures.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-edit-file-types.ts",

@@ -261,6 +261,7 @@
     "./statute-anchor-schemes": "./src/statute-anchor-schemes.ts",
     "./statute-query-intent": "./src/statute-query-intent.ts",
     "./desktop-presence": "./src/desktop-presence.ts",
+    "./desktop-release": "./src/desktop-release.ts",
     "./mcp-app-failure": "./src/mcp-app-failure.ts",
     "./desktop-runner": "./src/desktop-runner.ts",
     "./chat-local-files-undo": "./src/chat-local-files-undo.ts",

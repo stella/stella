@@ -117,7 +117,7 @@ import {
   getBrowserApprovalDetails,
 } from "@/features/chat/browser-control/browser-approval-summary";
 import { useBrowserSiteGrants } from "@/features/chat/browser-control/browser-site-grants";
-import { DesktopFeatureUpdateNotice } from "@/features/desktop/desktop-feature-update";
+import { DesktopFeatureUpdateNotice } from "@/features/chat/desktop-feature-update";
 import { useMountEffect } from "@/hooks/use-effect";
 import { revealTranscriptElement } from "@/hooks/use-stick-to-bottom";
 import type { TranslationKey } from "@/i18n/types";

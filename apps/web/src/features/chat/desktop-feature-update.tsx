@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import type { DesktopFeature } from "@stll/api-contract/desktop-presence";
+import type { DesktopFeature } from "@stll/api-contract/desktop-release";
 import { Button } from "@stll/ui/button";
 
 import { localRunnersOptions } from "@/features/chat/queries";

@@ -2,7 +2,7 @@ import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 import {
   DESKTOP_WORKSPACE_VERSION,
   releaseVersionIsBelow,
-} from "@stll/api-contract/desktop-presence";
+} from "@stll/api-contract/desktop-release";
 import cliPackage from "@stll/cli/package.json" with { type: "json" };
 import mcpKitPackage from "@stll/mcp-kit/package.json" with { type: "json" };
 

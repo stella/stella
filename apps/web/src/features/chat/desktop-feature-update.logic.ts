@@ -4,7 +4,7 @@ import {
   DESKTOP_WORKSPACE_VERSION,
   type DesktopFeature,
   releaseVersionIsBelow,
-} from "@stll/api-contract/desktop-presence";
+} from "@stll/api-contract/desktop-release";
 
 import type { TranslationKey } from "@/i18n/types";
 

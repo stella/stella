@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import { readPresent } from "@/api/lib/errors/read-outcome";
+import type { SafeOutboundFetchResponse } from "@/api/lib/safe-outbound-fetch";
 
 import { createLatestDesktopRelease, type FeedFetch } from "./latest-release";
 
@@ -13,13 +14,13 @@ const scriptedFeed = (bodies: readonly (string | null)[]) => {
   const fetchFeed: FeedFetch = async () => {
     const body = bodies[Math.min(reads, bodies.length - 1)] ?? null;
     reads += 1;
-    await Promise.resolve();
-    return Result.ok({
+    const response: SafeOutboundFetchResponse = {
       ok: body !== null,
       status: body === null ? 503 : 200,
       headers: new Headers(),
-      body: new TextEncoder().encode(body ?? ""),
-    } as never);
+      body: await new Response(body ?? "").arrayBuffer(),
+    };
+    return Result.ok(response);
   };
   return { fetchFeed, reads: () => reads };
 };

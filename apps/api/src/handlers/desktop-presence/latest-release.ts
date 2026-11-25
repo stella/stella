@@ -13,10 +13,8 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import {
-  DESKTOP_UPDATE_FEED_URL,
-  desktopVersionSchema,
-} from "@stll/api-contract/desktop-presence";
+import { desktopVersionSchema } from "@stll/api-contract/desktop-presence";
+import { DESKTOP_UPDATE_FEED_URL } from "@stll/api-contract/desktop-release";
 import { Temporal } from "@stll/time";
 
 import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
@@ -72,9 +70,16 @@ const readFeedVersion = async (
       ? readUnavailable({ kind: "status", status: response.status })
       : outcome;
   }
+  // The feed is UTF-8 JSON; bytes that are not are no version.
+  const text = Result.try(() =>
+    new TextDecoder("utf-8", { fatal: true }).decode(response.body),
+  );
+  if (Result.isError(text)) {
+    return readUnavailable({ kind: "empty-body", status: response.status });
+  }
   const parsed = v.safeParse(
     v.pipe(v.string(), v.parseJson(), feedSchema),
-    new TextDecoder().decode(response.body),
+    text.value,
   );
   return parsed.success
     ? readPresent(parsed.output.version)
