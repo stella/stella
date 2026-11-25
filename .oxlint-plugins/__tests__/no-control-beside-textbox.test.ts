@@ -88,6 +88,42 @@ const presets = (
   ).toEqual([]);
 });
 
+test("reads a row class written as a template literal", async () => {
+  expect(
+    await lint(`const a = <div className={\`flex\`}><Textarea /><Button /></div>;
+const b = <div className={cn(\`\${gap} flex items-end\`)}><Textarea /><SendButton /></div>;
+const c = <div className={\`flex flex-col\`}><Textarea /><Button /></div>;`),
+  ).toEqual([1, 2]);
+});
+
+test("a control inside a portaled popup beside the text is laid out elsewhere", async () => {
+  expect(
+    await lint(`const dialog = (
+  <div className="flex">
+    <Textarea />
+    <Dialog>
+      <DialogPopup><Button /></DialogPopup>
+    </Dialog>
+  </div>
+);
+const menu = (
+  <div className="flex">
+    <Textarea />
+    <div><MenuPortal><MenuPositioner><Button /></MenuPositioner></MenuPortal></div>
+  </div>
+);
+const nested = (
+  <div className="flex">
+    <Textarea />
+    <div>
+      <DialogPopup><Button /></DialogPopup>
+      <span><Button /></span>
+    </div>
+  </div>
+);`),
+  ).toEqual([17]);
+});
+
 test("a select beside a textarea is a field beside a field", async () => {
   expect(
     await lint(

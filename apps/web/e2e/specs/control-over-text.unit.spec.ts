@@ -64,6 +64,38 @@ test("accepts controls in a row below the text, and beside one line", async ({
   expect(await findControlsOverText(page)).toEqual([]);
 });
 
+test("skips a control under a transparent ancestor", async ({ page }) => {
+  // The button's own opacity is 1; only its wrapper is transparent, so
+  // nothing is painted over the text.
+  await page.setContent(
+    `${STYLE}<div class="box" style="position: relative">
+      <div contenteditable="true">${DRAFT}</div>
+      <div style="opacity: 0">
+        <button class="send" aria-label="Send" style="position: absolute; right: 4px; top: 0">↑</button>
+      </div>
+    </div>`,
+  );
+
+  expect(await findControlsOverText(page)).toEqual([]);
+});
+
+test("skips a control its clipping ancestor hides entirely", async ({
+  page,
+}) => {
+  // The button's own box sits over the text, but a zero-height clipping
+  // wrapper shows none of it; the textbox itself is not clipped.
+  await page.setContent(
+    `${STYLE}<div class="box" style="position: relative">
+      <div contenteditable="true">${DRAFT}</div>
+      <div style="position: absolute; right: 4px; top: 0; width: 28px; height: 0; overflow: hidden">
+        <button class="send" aria-label="Send">↑</button>
+      </div>
+    </div>`,
+  );
+
+  expect(await findControlsOverText(page)).toEqual([]);
+});
+
 test("reads only the text a scroll region lets show", async ({ page }) => {
   // The text runs on under the control row, but the region clips it there:
   // what is painted never meets the buttons.
