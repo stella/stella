@@ -7,12 +7,22 @@ class RenderProbeBundleError extends TaggedError("RenderProbeBundleError")<{
   cause: unknown;
 }> {}
 
+// Bundles one of the scripts e2e helpers inject into a page before the app
+// loads: the render probe (default) or the storm watch.
+const ENTRIES = {
+  "render-probe": "../e2e/helpers/render-probe-browser.ts",
+  "storm-watch": "../e2e/helpers/storm-watch-browser.ts",
+} as const;
+const isEntry = (name: string): name is keyof typeof ENTRIES =>
+  Object.hasOwn(ENTRIES, name);
+const requested = process.argv[2] ?? "render-probe";
+if (!isEntry(requested)) {
+  panic(`Unknown injected script "${requested}"`);
+}
+const entry = ENTRIES[requested];
+
 const result = await build({
-  entrypoints: [
-    fileURLToPath(
-      new URL("../e2e/helpers/render-probe-browser.ts", import.meta.url),
-    ),
-  ],
+  entrypoints: [fileURLToPath(new URL(entry, import.meta.url))],
   target: "browser",
   format: "iife",
   minify: false,

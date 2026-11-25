@@ -150,6 +150,13 @@ const visualLoaders = {
       return { default: MenuCommitsPlayground };
     },
   },
+  "storm-watch": {
+    load: async () => {
+      const { StormWatchPlayground } =
+        await import("./-components/storm-watch-playground");
+      return { default: StormWatchPlayground };
+    },
+  },
   "chat-composer-reference": {
     load: async () => {
       const { ChatComposerReferencePlayground } =

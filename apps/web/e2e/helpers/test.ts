@@ -1,6 +1,8 @@
 import { expect, test as base } from "@playwright/test";
 import type { ConsoleMessage, Page } from "@playwright/test";
 
+import { checkStormWatch, installStormWatch } from "./storm-watch";
+
 export type BrowserErrorCollector = {
   entries: () => string[];
   assertEmpty: (label: string) => void;
@@ -38,6 +40,8 @@ type ToleratedBrowserError = {
 
 type BrowserErrorFixtures = {
   browserErrors: BrowserErrorCollector;
+  /** Every test's pages must not storm, and must go quiet at its end. */
+  stormWatch: undefined;
 };
 
 // Transport-layer connection drops the browser reports as console errors.
@@ -187,6 +191,18 @@ export const createBrowserErrorCollector = (
 };
 
 export const test = base.extend<BrowserErrorFixtures>({
+  // The watch must be in the context before its first page loads the app.
+  context: async ({ context }, runFixture) => {
+    await installStormWatch(context);
+    await runFixture(context);
+  },
+  stormWatch: [
+    async ({ page }, runFixture, testInfo) => {
+      await runFixture(undefined);
+      await checkStormWatch(page, testInfo);
+    },
+    { auto: true },
+  ],
   browserErrors: [
     async ({ page }, runFixture) => {
       const browserErrors = createBrowserErrorCollector();
