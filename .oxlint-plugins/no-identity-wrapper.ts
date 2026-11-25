@@ -91,7 +91,7 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         const checkBinding = (
-          node: ESTree.VariableDeclarator | ESTree.FunctionDeclaration,
+          node: ESTree.VariableDeclarator | ESTree.Function,
           name: string,
         ) => {
           const variables = context.sourceCode.getDeclaredVariables(node);
