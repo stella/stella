@@ -160,7 +160,7 @@ const getSkillMonitor = createSafeRootHandler(
             },
           );
 
-          const isTruncated = logsPage.hasMore;
+          const isTruncated = logsPage.nextCursor !== null;
           const boundedLogs = logsPage.items;
           const userIds = [...new Set(boundedLogs.map((row) => row.userId))];
           const profiles =
