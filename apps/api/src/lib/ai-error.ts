@@ -94,6 +94,8 @@ const RUNTIME_KIND_BY_CODE: ReadonlyMap<string, AIErrorKind> = new Map([
   [AI_FAILURE_CODES.local_runner_needs_login, "local_runner_needs_login"],
   [AI_FAILURE_CODES.local_runner_limit_reached, "local_runner_limit_reached"],
   [AI_FAILURE_CODES.local_runner_unavailable, "local_runner_unavailable"],
+  [AI_FAILURE_CODES.local_runner_lost, "local_runner_lost"],
+  [AI_FAILURE_CODES.local_runner_failed, "local_runner_failed"],
   [AI_FAILURE_CODES.local_runner_turn_too_large, "local_runner_turn_too_large"],
   [AI_FAILURE_CODES.turn_too_large, "turn_too_large"],
   [AI_FAILURE_CODES.local_runner_not_reached, "local_runner_not_reached"],
@@ -650,6 +652,8 @@ const AI_FAILURE_CAN_CLEAR_ON_RETRY = {
   local_runner_needs_login: false,
   local_runner_limit_reached: false,
   local_runner_unavailable: true,
+  local_runner_lost: true,
+  local_runner_failed: true,
   local_runner_turn_too_large: false,
   turn_too_large: false,
   local_runner_not_reached: true,
@@ -846,6 +850,8 @@ const aiKindHandlerError = (
     case "local_runner_needs_login":
     case "local_runner_limit_reached":
     case "local_runner_unavailable":
+    case "local_runner_lost":
+    case "local_runner_failed":
     case "local_runner_turn_too_large":
     case "turn_too_large":
     case "local_runner_not_reached":

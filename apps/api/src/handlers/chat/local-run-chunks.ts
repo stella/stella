@@ -271,6 +271,8 @@ type LocalRunFailure =
   | typeof AI_FAILURE_CODES.local_runner_needs_login
   | typeof AI_FAILURE_CODES.local_runner_limit_reached
   | typeof AI_FAILURE_CODES.local_runner_unavailable
+  | typeof AI_FAILURE_CODES.local_runner_lost
+  | typeof AI_FAILURE_CODES.local_runner_failed
   | typeof AI_FAILURE_CODES.local_runner_turn_too_large
   | typeof AI_FAILURE_CODES.local_runner_not_reached
   | typeof AI_FAILURE_CODES.local_runner_relinked
@@ -290,6 +292,10 @@ const FAILURE_MESSAGE = {
     "The harness on the computer reached its usage limit.",
   [AI_FAILURE_CODES.local_runner_unavailable]:
     "The computer stopped running the turn.",
+  [AI_FAILURE_CODES.local_runner_lost]:
+    "The computer took the turn and then stopped answering, so the turn ended.",
+  [AI_FAILURE_CODES.local_runner_failed]:
+    "The harness on the computer ended the turn without saying why.",
   [AI_FAILURE_CODES.local_runner_turn_too_large]:
     "The conversation is too long to hand to the computer.",
   [AI_FAILURE_CODES.local_runner_not_reached]:
@@ -1097,7 +1103,7 @@ const failedRunDetails = (
     };
   }
   return harnessError === null
-    ? failureOf(AI_FAILURE_CODES.local_runner_unavailable)
+    ? failureOf(AI_FAILURE_CODES.local_runner_failed)
     : { code: harnessError.code, message: harnessError.message };
 };
 
@@ -1138,7 +1144,8 @@ export const LOCAL_RUN_OUTPUTS_INSTRUCTIONS = `Files meant for the member go in 
 /**
  * Why a lost run ended the turn: its computer was linked again under a new
  * key, which can never continue it; it never reached a computer (or the
- * relink ended it before one accepted it); or its computer never came back.
+ * relink ended it before one accepted it); or its computer took it and
+ * never came back (`local_runner_lost`).
  */
 const lostRunFailure = (run: DesktopRunnerRunView): LocalRunFailure => {
   switch (run.lostReason) {
@@ -1149,7 +1156,7 @@ const lostRunFailure = (run: DesktopRunnerRunView): LocalRunFailure => {
     case null:
       return run.deliveredAt === null
         ? AI_FAILURE_CODES.local_runner_not_reached
-        : AI_FAILURE_CODES.local_runner_unavailable;
+        : AI_FAILURE_CODES.local_runner_lost;
     default:
       run.lostReason satisfies never;
       return panic("Unknown lost reason");
@@ -1805,7 +1812,7 @@ const foldAdoptedRead = async ({
       }
       if (chunk.type === EventType.RUN_ERROR) {
         read.harnessError = {
-          code: chunk.code ?? AI_FAILURE_CODES.local_runner_unavailable,
+          code: chunk.code ?? AI_FAILURE_CODES.local_runner_failed,
           message: chunk.message,
           limit: limitOfRunError(chunk),
         };
@@ -2265,7 +2272,7 @@ async function* readRunChunks({
             }
             if (chunk.type === EventType.RUN_ERROR) {
               harnessError = {
-                code: chunk.code ?? AI_FAILURE_CODES.local_runner_unavailable,
+                code: chunk.code ?? AI_FAILURE_CODES.local_runner_failed,
                 message: chunk.message,
                 limit: limitOfRunError(chunk),
               };

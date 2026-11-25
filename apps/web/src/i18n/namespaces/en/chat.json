@@ -445,9 +445,11 @@
     "localRun": {
       "backgroundTasks": "{count, plural, one {# background task running} other {# background tasks running}}",
       "desktopSettingsSteps": "In stella desktop on your computer, open Settings › General › AI subscriptions.",
+      "errorFailed": "The agent on your computer ended this turn without saying why. Try again.",
       "errorFolderUnavailable": "The folder linked to this chat is not available on your computer. Check it in stella desktop, then send this again.",
       "errorLimitReached": "The coding agent on your computer reached its usage limit. Try again once the limit resets.",
       "errorLimitResetsAt": "The coding agent on your computer reached its usage limit. You can try again after {time}.",
+      "errorLost": "Your computer took this turn and then stopped answering. Make sure stella desktop is open and connected, then try again.",
       "errorNeedsLogin": "The coding agent on your computer needs you to sign in again. Sign in through stella desktop, then try again.",
       "errorNotReached": "Your computer did not pick up this turn. Make sure stella desktop is open and connected, then try again.",
       "errorRelinked": "stella desktop was linked again on your computer, so this turn stopped. Send it again.",

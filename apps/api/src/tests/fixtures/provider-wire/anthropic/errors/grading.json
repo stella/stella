@@ -352,6 +352,30 @@
       }
     },
     {
+      "name": "local_runner_lost",
+      "origin": "local-runner",
+      "evidence": {
+        "code": "ai_local_runner_lost"
+      },
+      "expected": {
+        "kind": "local_runner_lost",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "local_runner_failed",
+      "origin": "local-runner",
+      "evidence": {
+        "code": "ai_local_runner_failed"
+      },
+      "expected": {
+        "kind": "local_runner_failed",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
       "name": "local_runner_not_reached",
       "origin": "local-runner",
       "evidence": {

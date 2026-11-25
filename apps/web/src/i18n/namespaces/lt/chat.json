@@ -445,9 +445,11 @@
     "localRun": {
       "backgroundTasks": "{count, plural, one {Fone vykdoma # užduotis} few {Fone vykdomos # užduotys} many {Fone vykdoma # užduoties} other {Fone vykdoma # užduočių}}",
       "desktopSettingsSteps": "Savo kompiuteryje programoje stella desktop atidarykite skiltį Nustatymai › Bendra › DI prenumeratos.",
+      "errorFailed": "Jūsų kompiuterio agentas užbaigė šį atsakymą nenurodęs priežasties. Bandykite dar kartą.",
       "errorFolderUnavailable": "Su šiuo pokalbiu susietas aplankas jūsų kompiuteryje nepasiekiamas. Patikrinkite jį stella desktop, tada išsiųskite tai dar kartą.",
       "errorLimitReached": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandykite dar kartą, kai limitas atsinaujins.",
       "errorLimitResetsAt": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandyti dar kartą galėsite po {time}.",
+      "errorLost": "Jūsų kompiuteris perėmė šį atsakymą, o paskui nustojo reaguoti. Įsitikinkite, kad stella desktop atidarytas ir prijungtas, ir bandykite dar kartą.",
       "errorNeedsLogin": "Programavimo agentas jūsų kompiuteryje prašo prisijungti iš naujo. Prisijunkite per stella desktop ir bandykite dar kartą.",
       "errorNotReached": "Jūsų kompiuteris neperėmė šio atsakymo. Įsitikinkite, kad stella desktop atidarytas ir prijungtas, ir bandykite dar kartą.",
       "errorRelinked": "stella desktop jūsų kompiuteryje buvo susietas iš naujo, todėl šis atsakymas sustojo. Išsiųskite jį dar kartą.",

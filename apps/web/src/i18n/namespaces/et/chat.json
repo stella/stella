@@ -445,9 +445,11 @@
     "localRun": {
       "backgroundTasks": "{count, plural, one {Taustal käib # ülesanne} other {Taustal käib # ülesannet}}",
       "desktopSettingsSteps": "Ava oma arvutis stella desktopis Seaded › Üldine › AI-tellimused.",
+      "errorFailed": "Teie arvutis töötav agent lõpetas selle vastuse põhjust nimetamata. Proovige uuesti.",
       "errorFolderUnavailable": "Selle vestlusega seotud kaust pole teie arvutis saadaval. Kontrollige seda stella desktopis ja saatke see siis uuesti.",
       "errorLimitReached": "Teie arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Proovige uuesti, kui limiit lähtestub.",
       "errorLimitResetsAt": "Teie arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Uuesti saate proovida alates {time}.",
+      "errorLost": "Teie arvuti võttis selle vastuse vastu ja lõpetas siis reageerimise. Veenduge, et stella desktop on avatud ja ühendatud, ning proovige uuesti.",
       "errorNeedsLogin": "Teie arvutis töötav programmeerimisagent vajab uuesti sisselogimist. Logige sisse stella desktopi kaudu ja proovige uuesti.",
       "errorNotReached": "Teie arvuti ei võtnud seda vastust vastu. Veenduge, et stella desktop on avatud ja ühendatud, ning proovige uuesti.",
       "errorRelinked": "stella desktop seoti teie arvutis uuesti, seega see vastus peatus. Saatke see uuesti.",

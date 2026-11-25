@@ -217,13 +217,15 @@ export const createComputer = () => {
         summary: "Run the test suite",
       }));
     },
-    finish: () => {
+    finish: (
+      ending: NonNullable<DesktopRunnerRunView["outcome"]> = "completed",
+    ) => {
       state = "finished";
-      outcome = "completed";
+      outcome = ending;
       store((seq) => ({
         type: DESKTOP_RUNNER_DESKTOP_MESSAGE.runFinished,
         seq,
-        outcome: "completed",
+        outcome: ending,
         harnessSessionId: null,
       }));
     },

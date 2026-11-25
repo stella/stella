@@ -445,9 +445,11 @@
     "localRun": {
       "backgroundTasks": "{count, plural, one {Na pozadí běží # úloha} few {Na pozadí běží # úlohy} many {Na pozadí běží # úlohy} other {Na pozadí běží # úloh}}",
       "desktopSettingsSteps": "Ve stella desktop ve svém počítači otevřete Nastavení › Obecné › Předplatné AI.",
+      "errorFailed": "Agent ve vašem počítači tuto odpověď ukončil bez udání důvodu. Zkuste to znovu.",
       "errorFolderUnavailable": "Složka propojená s tímto chatem není ve vašem počítači dostupná. Zkontrolujte ji ve stella desktop a pak to odešlete znovu.",
       "errorLimitReached": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Zkuste to znovu, až se limit obnoví.",
       "errorLimitResetsAt": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Znovu to můžete zkusit po {time}.",
+      "errorLost": "Váš počítač tuto odpověď převzal a pak přestal reagovat. Ověřte, že je stella desktop spuštěný a připojený, a zkuste to znovu.",
       "errorNeedsLogin": "Programovací agent ve vašem počítači vyžaduje nové přihlášení. Přihlaste se přes stella desktop a zkuste to znovu.",
       "errorNotReached": "Váš počítač tuto odpověď nepřevzal. Ověřte, že je stella desktop spuštěný a připojený, a zkuste to znovu.",
       "errorRelinked": "stella desktop byl ve vašem počítači znovu propojen, takže se tato odpověď zastavila. Odešlete ji znovu.",
