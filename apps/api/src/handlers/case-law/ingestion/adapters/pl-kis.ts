@@ -7,6 +7,7 @@
 // parser-output-unchanged: Fetched PDF bodies are retained independently of parsing; document parsing and eligibility are unchanged.
 import { panic, Result } from "better-result";
 
+import { ownEntry } from "@stll/api-contract/own-key";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
@@ -578,9 +579,7 @@ type PlKisStatus =
   (typeof PL_KIS_STATUSES)[keyof typeof PL_KIS_STATUSES] | "unknown";
 
 const statusOf = (id: string | undefined): PlKisStatus => {
-  const entry = Object.entries(PL_KIS_STATUSES).find(
-    ([key]) => key === id,
-  )?.[1];
+  const entry = ownEntry(PL_KIS_STATUSES, id);
   return entry ?? "unknown";
 };
 

@@ -1,3 +1,4 @@
+import { ownEntry } from "@stll/api-contract/own-key";
 import { escapeRegExp, normalizeUnicode } from "@stll/text-normalize";
 
 import {
@@ -76,9 +77,7 @@ export const classifyCitedPart = ({
   citationText,
   language,
 }: CitedPartArgs): CitedPart => {
-  const rules = Object.entries(CITED_PART_RULES).find(
-    ([key]) => key === language,
-  )?.[1];
+  const rules = ownEntry(CITED_PART_RULES, language);
   if (rules === undefined || citationText.length === 0) {
     return CITED_PART.NOT_STATED;
   }

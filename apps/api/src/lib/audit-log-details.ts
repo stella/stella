@@ -3,6 +3,7 @@ import { and, inArray, notInArray, or, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
 import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
+import { ownEntry } from "@stll/api-contract/own-key";
 
 import { auditActivityActionSql, auditLogs } from "@/api/db/schema";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log.constants";
@@ -520,9 +521,11 @@ export const projectAuditReadChanges = ({
     return panic("Audit resource requires a detail policy");
   }
   const resourcePolicy = AUDIT_DETAIL_POLICY[resourceType];
-  const operationPolicy = Object.entries(resourcePolicy.operations).find(
-    ([operation]) => operation === metadata?.["operation"],
-  )?.[1];
+  const operationName = metadata?.["operation"];
+  const operationPolicy =
+    typeof operationName === "string"
+      ? ownEntry(resourcePolicy.operations, operationName)
+      : undefined;
   const enabled = isAuditPolicyEnabled({
     policy: operationPolicy ?? resourcePolicy.default,
     featureAccessSnapshot,

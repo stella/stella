@@ -18,25 +18,30 @@ const PROPERTY_FIELDS = new Set([
   "contentstatus",
 ]);
 const PROPERTY_ATTRIBUTES = new Set(["href", "name", "title"]);
-const OFFICE_IDENTITY_ATTRIBUTE_POLICIES = {
-  author: { type: "replace", replacement: "Author" },
-  initials: { type: "replace", replacement: "A" },
-  userid: { type: "remove" },
-  providerid: { type: "remove" },
-  displayname: { type: "replace", replacement: "Author" },
-  email: { type: "remove" },
-  emailaddress: { type: "remove" },
-  name: { type: "replace", replacement: "Author" },
-} as const;
+type OfficeIdentityAttributePolicy =
+  | { readonly type: "replace"; readonly replacement: string }
+  | { readonly type: "remove" };
+
+const OFFICE_IDENTITY_ATTRIBUTE_POLICIES: ReadonlyMap<
+  string,
+  OfficeIdentityAttributePolicy
+> = new Map([
+  ["author", { type: "replace", replacement: "Author" }],
+  ["initials", { type: "replace", replacement: "A" }],
+  ["userid", { type: "remove" }],
+  ["providerid", { type: "remove" }],
+  ["displayname", { type: "replace", replacement: "Author" }],
+  ["email", { type: "remove" }],
+  ["emailaddress", { type: "remove" }],
+  ["name", { type: "replace", replacement: "Author" }],
+]);
 const IDENTITY_ATTRIBUTES = new Set(
-  Object.keys(OFFICE_IDENTITY_ATTRIBUTE_POLICIES).filter(
+  [...OFFICE_IDENTITY_ATTRIBUTE_POLICIES.keys()].filter(
     (name) => name !== "name",
   ),
 );
 export const officeIdentityAttributePolicy = (name: string) =>
-  Object.entries(OFFICE_IDENTITY_ATTRIBUTE_POLICIES).find(
-    ([key]) => key === name.toLowerCase(),
-  )?.[1];
+  OFFICE_IDENTITY_ATTRIBUTE_POLICIES.get(name.toLowerCase());
 
 export const isOfficeCollaborationPart = (part: string): boolean =>
   /^(?:content\.xml|(?:word|xl|ppt)\/.*\.xml)$/iu.test(part);

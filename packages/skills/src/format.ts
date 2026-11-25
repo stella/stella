@@ -77,7 +77,7 @@ export const SKILL_PACKAGE_RESOURCE_PATH_PATTERN =
  * the ones stella's own skills and AI-drafted files use, and a backticked
  * path into one of them is checked even before the folder exists.
  */
-export const SKILL_RESOURCE_FOLDERS = new Set([
+export const SKILL_RESOURCE_FOLDERS: ReadonlySet<string> = new Set([
   "assets",
   "references",
   "scripts",
