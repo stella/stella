@@ -73,7 +73,7 @@ type BrowserDownloadSource = Extract<
 >;
 
 /** The chat a download is filed for, as the caller verified it. */
-export type BrowserDownloadChat = {
+type BrowserDownloadChat = {
   threadId: SafeId<"chatThread">;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
