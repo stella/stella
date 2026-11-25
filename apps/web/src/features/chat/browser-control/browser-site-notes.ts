@@ -1,11 +1,14 @@
 import { queryOptions } from "@tanstack/react-query";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
+
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { api } from "@/lib/api";
 import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import { STALE_TIME } from "@/lib/consts";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 type BrowserSiteNotesKey = {
   activeOrganizationId: string;
@@ -21,16 +24,26 @@ export const browserSiteNotesOptions = ({
   activeOrganizationId,
   userId,
 }: BrowserSiteNotesKey) =>
-  queryOptions({
-    queryKey: chatKeys.browserSiteNotes(activeOrganizationId, userId),
-    queryFn: async ({ signal }) => {
-      const response = await api.chat["browser-site-notes"].get({
-        fetch: { signal },
-      });
-      return unwrapApiResponse(response);
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: chatKeys.browserSiteNotes(activeOrganizationId, userId),
+      queryFn: async ({ signal }) => {
+        const response = await api.chat["browser-site-notes"].get({
+          fetch: { signal },
+        });
+        return unwrapApiResponse(response);
+      },
+      staleTime: STALE_TIME.FIVE.MINUTES,
+    }),
+    {
+      resources: [RESOURCE_TYPE.USER],
+      scope: {
+        type: "organization",
+        organizationId: activeOrganizationId,
+        userId,
+      },
     },
-    staleTime: STALE_TIME.FIVE.MINUTES,
-  });
+  );
 
 type BrowserSiteNotesResponse = Awaited<
   ReturnType<NonNullable<ReturnType<typeof browserSiteNotesOptions>["queryFn"]>>

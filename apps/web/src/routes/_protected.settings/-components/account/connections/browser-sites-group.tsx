@@ -45,6 +45,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
+import { resourceMutation } from "@/lib/workspace-realtime";
 
 /**
  * One website chat's browser works on for the member: its standing approval,
@@ -127,7 +128,7 @@ export const BrowserSitesGroup = ({
       </ListGroupHeader>
       <List>
         {sites.map((site) => (
-          <BrowserSiteRows key={site.origin} site={site} />
+          <BrowserSiteRow key={site.origin} site={site} />
         ))}
       </List>
     </ListGroup>
@@ -149,42 +150,44 @@ const NOTE_KIND_TONES = {
   "success" | "warning" | "neutral"
 >;
 
-const useRefreshBrowserSites = () => {
-  const queryClient = useQueryClient();
-  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
-  return async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: chatKeys.browserSiteGrants(activeOrganizationId, userId),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: chatKeys.browserSiteNotes(activeOrganizationId, userId),
-      }),
-    ]);
-  };
-};
-
-const BrowserSiteRows = ({ site }: { site: BrowserSite }) => {
+const BrowserSiteRow = ({ site }: { site: BrowserSite }) => {
   const t = useTranslations();
   const format = useFormatter();
-  const refresh = useRefreshBrowserSites();
+  const queryClient = useQueryClient();
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const [notesOpen, setNotesOpen] = useState(false);
   const host = browserSiteGrantHost(site.origin);
   const remove = useMutation({
-    mutationFn: async (what: "approval" | "notes" | "both") => {
-      if (what !== "notes" && site.grant !== null) {
-        await deleteBrowserSiteGrant(site.grant.id);
-      }
-      if (what !== "approval") {
-        await deleteBrowserSiteNotesForSite(site.origin);
-      }
+    mutationFn: async (grantId: string) =>
+      await deleteBrowserSiteGrant(grantId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: chatKeys.browserSiteGrants(activeOrganizationId, userId),
+      });
     },
-    onSettled: refresh,
     onError: (error) => {
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
+  const removeNotes = useMutation({
+    mutationFn: resourceMutation({
+      mutation: "removeBrowserSiteNotesForSite",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async (origin: string) =>
+        await deleteBrowserSiteNotesForSite(origin),
+    }),
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
+    },
+  });
+  const removeApproval = () => {
+    if (site.grant !== null) {
+      remove.mutate(site.grant.id);
+    }
+  };
   const hasNotes = site.notes.length > 0;
+  const pending = remove.isPending || removeNotes.isPending;
 
   return (
     <>
@@ -227,33 +230,26 @@ const BrowserSiteRows = ({ site }: { site: BrowserSite }) => {
                   site: host,
                 })}
                 render={
-                  <Button
-                    loading={remove.isPending}
-                    size="xs"
-                    variant="outline"
-                  />
+                  <Button loading={pending} size="xs" variant="outline" />
                 }
               >
                 {t("common.remove")}
               </MenuTrigger>
               <MenuPopup>
-                <MenuItem
-                  onClick={() => {
-                    remove.mutate("approval");
-                  }}
-                >
+                <MenuItem onClick={removeApproval}>
                   {t("settings.connections.browserSiteRemoveApproval")}
                 </MenuItem>
                 <MenuItem
                   onClick={() => {
-                    remove.mutate("notes");
+                    removeNotes.mutate(site.origin);
                   }}
                 >
                   {t("settings.connections.browserSiteDeleteNotes")}
                 </MenuItem>
                 <MenuItem
                   onClick={() => {
-                    remove.mutate("both");
+                    removeApproval();
+                    removeNotes.mutate(site.origin);
                   }}
                 >
                   {t("settings.connections.browserSiteRemoveApprovalAndNotes")}
@@ -268,9 +264,13 @@ const BrowserSiteRows = ({ site }: { site: BrowserSite }) => {
                   : "settings.connections.browserSiteRemove",
                 { site: host },
               )}
-              loading={remove.isPending}
+              loading={pending}
               onClick={() => {
-                remove.mutate(site.grant === null ? "notes" : "approval");
+                if (site.grant === null) {
+                  removeNotes.mutate(site.origin);
+                } else {
+                  removeApproval();
+                }
               }}
               size="xs"
               variant="outline"
@@ -299,10 +299,14 @@ const BrowserSiteNoteRow = ({
   note: BrowserSiteNote;
 }) => {
   const t = useTranslations();
-  const refresh = useRefreshBrowserSites();
+  const queryClient = useQueryClient();
   const remove = useMutation({
-    mutationFn: async () => await deleteBrowserSiteNote(note.id),
-    onSettled: refresh,
+    mutationFn: resourceMutation({
+      mutation: "removeBrowserSiteNote",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async (noteId: string) => await deleteBrowserSiteNote(noteId),
+    }),
     onError: (error) => {
       notifyUserError(error, t("errors.actionFailed"));
     },
@@ -331,7 +335,7 @@ const BrowserSiteNoteRow = ({
           })}
           loading={remove.isPending}
           onClick={() => {
-            remove.mutate();
+            remove.mutate(note.id);
           }}
           size="icon-xs"
           variant="ghost"

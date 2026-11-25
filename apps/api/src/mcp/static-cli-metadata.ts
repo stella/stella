@@ -246,6 +246,8 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       command: ["site-notes", "list"],
       scope: "read",
       itemsKey: "notes",
+      // One website keeps at most 30 notes: one bounded page.
+      paginationless: true,
     },
     save_site_notes: {
       command: ["site-notes", "save"],
