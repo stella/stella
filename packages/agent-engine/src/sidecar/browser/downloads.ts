@@ -119,8 +119,8 @@ export type ReceivedDownload =
 /**
  * Where a download came from beyond its own address, as the chat saw it:
  * the page the chat's tab was on when it started (the PDF itself for a
- * shown PDF's save), null when the chat had read no page; and when it
- * settled, as an ISO 8601 instant.
+ * shown PDF's save), null when the chat had read no page then or the file
+ * came from another site; and when it settled, as an ISO 8601 instant.
  */
 export type DownloadProvenance = { pageUrl: string | null; at: string };
 

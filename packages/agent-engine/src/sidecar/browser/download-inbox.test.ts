@@ -506,6 +506,44 @@ describe("where a download came from", () => {
     ]);
   });
 
+  test("one started before the chat read any page keeps no page, whatever the chat reads before it settles", async () => {
+    const page: { current: string | null } = { current: null };
+    const inbox = inboxWith(manualClock().clock, () => page.current);
+    inbox.arrive(started("d-1"));
+    page.current = DECISION_PAGE;
+    inbox.arrive(settled("d-1"));
+
+    const taken = await inbox.take(RUN, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: inbox.mark(),
+    });
+    expect(taken.downloads).toMatchObject([{ pageUrl: null }]);
+  });
+
+  test("a file from another site than the page the chat read has no page", async () => {
+    const inbox = inboxWith(manualClock().clock, () => DECISION_PAGE);
+    for (const [deliveryId, sourceUrl] of [
+      ["d-1", "https://other-site.test/file.pdf"],
+      ["d-2", "blob:https://other-site.test/1c9e0f1e"],
+      ["d-3", "data:application/pdf;base64,JVBERi0="],
+    ] as const) {
+      inbox.arrive(started(deliveryId));
+      inbox.arrive(settled(deliveryId, sourceUrl));
+    }
+
+    const taken = await inbox.take(RUN, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: inbox.mark(),
+    });
+    expect(taken.downloads.map(({ pageUrl }) => pageUrl)).toEqual([
+      null,
+      null,
+      null,
+    ]);
+  });
+
   test("one stopped before it started comes from the page the chat is on at its report", async () => {
     const inbox = inboxWith(manualClock().clock, () => SEARCH_PAGE);
     inbox.arrive(settled("d-1"));

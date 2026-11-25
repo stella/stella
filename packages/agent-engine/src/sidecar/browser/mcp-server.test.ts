@@ -765,8 +765,8 @@ describe("a chat's downloads, end to end on this computer", () => {
     ).toBe(PDF);
   });
 
-  // timeout: the step's own result waits DOWNLOAD_SETTLE_WAIT_MS (3 s) on
-  // the system clock before it counts the download as still saving.
+  // timeout: the step's own result waits DOWNLOAD_SETTLE_WAIT_MS (3 s) and a
+  // one-second wait_for_downloads runs out, both on the system clock.
   test(
     "a download that finishes after its step returned is handed over by wait_for_downloads",
     async () => {
@@ -782,6 +782,16 @@ describe("a chat's downloads, end to end on this computer", () => {
       const step = await pc.call("snapshot", {});
       expect(step.value).toMatchObject({ savingDownloads: 1 });
       expect(step.value).not.toHaveProperty("downloads");
+
+      // A wait while Chrome is still saving it says so when it runs out.
+      expect(
+        (await pc.call("wait_for_downloads", { seconds: 1 })).value,
+      ).toEqual({
+        message:
+          "1 download is still saving: call wait_for_downloads again, or tell the member.",
+        savingDownloads: 1,
+        status: "still_saving",
+      });
 
       const waiting = pc.call("wait_for_downloads", { seconds: 20 });
       // Chrome finishes it once the step has returned.

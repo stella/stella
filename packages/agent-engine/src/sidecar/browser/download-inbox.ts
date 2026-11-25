@@ -202,6 +202,27 @@ const reportedPage = (
     : browserDocumentAddress(shownDocument);
 
 /**
+ * `page` when the file was fetched from the same origin, else null. The
+ * extension reports a download by chat, not by tab, so the page the chat
+ * read is only trusted as the file's page when the file came from that
+ * page's own site; a file from anywhere else (a page on another site in
+ * another tab, a separate file host, a `data:` address, another site's
+ * `blob:`) has no page.
+ */
+const sameOriginPage = (
+  page: string | null,
+  sourceUrl: string,
+): string | null => {
+  if (page === null || !URL.canParse(page) || !URL.canParse(sourceUrl)) {
+    return null;
+  }
+  const origin = new URL(page).origin;
+  return origin !== "null" && origin === new URL(sourceUrl).origin
+    ? page
+    : null;
+};
+
+/**
  * Waits while `saving` holds: it is checked again on every report
  * (`listeners`), and the wait ends after `waitMs` or with `signal` anyway.
  */
@@ -366,12 +387,16 @@ export const createDownloadInbox = ({
           chat.started.delete(report.deliveryId);
           // One stopped before it started was never announced: it comes
           // from the page the chat is on now.
+          const page =
+            announcement === undefined
+              ? reportedPage(report, pageOf)
+              : announcement.pageUrl;
           const held = holdSettled(
             report,
             runOf(report.controllerId),
             {
               at: nowIso(),
-              pageUrl: announcement?.pageUrl ?? reportedPage(report, pageOf),
+              pageUrl: sameOriginPage(page, report.download.sourceUrl),
             },
             receive,
           );
