@@ -292,6 +292,8 @@ type Walk = {
   rows: readonly Row[];
   /** The main body and the annexes number on their own. */
   schemes: { body: Scheme; annexes: Scheme };
+  /** Positions of annex lines that name an annex without opening it. */
+  listedAnnexes: ReadonlySet<number>;
   article: LabelEntry | null;
   clauses: LabelEntry[];
   letter: LabelEntry | null;
@@ -361,10 +363,55 @@ const isAnnexRow = (row: Row | undefined): row is LabelledRow =>
 
 /** Lines of the list of annexes stand together or under a sentence that
  *  announces them; a heading stands alone. */
-const isListedAnnex = (rows: readonly Row[], position: number): boolean =>
+const isAnnexListLine = (rows: readonly Row[], position: number): boolean =>
   isAnnexRow(rows[position - 1]) ||
   isAnnexRow(rows[position + 1]) ||
   ANNEX_LIST_INTRO.test(previousText(rows, position));
+
+const schemeOf = (scope: readonly LabelledRow[]): Scheme => ({
+  namedArticles: scope.some(isNamedArticle),
+  dotted: scope.some(({ raw }) => (raw.shape.path?.length ?? 0) > 1),
+});
+
+/** Whether a bare number heads an article under the scheme: `5.` where the
+ *  clauses are `5.1`, or a numbered heading where nothing else names
+ *  articles. */
+const headsArticle = (scheme: Scheme, { block, raw }: LabelledRow): boolean =>
+  raw.shape.keyword === null &&
+  raw.shape.path?.length === 1 &&
+  raw.shape.close === "" &&
+  !scheme.namedArticles &&
+  (scheme.dotted || isHeadingStyled(block));
+
+/**
+ * The annex lines that only name an annex: the list of annexes, and any
+ * line in front of the first article. Annexes follow the articles, so an
+ * annex named on a cover page or in a guidance note is not the annex, and
+ * a document that is itself an annex numbers its own main body.
+ */
+const listedAnnexPositions = (
+  rows: readonly Row[],
+  labelled: readonly LabelledRow[],
+): Set<number> => {
+  // Before the annexes are told apart, a named article anywhere must not
+  // hide the bare numbers that head the main body's articles.
+  const numbered: Scheme = {
+    namedArticles: false,
+    dotted: schemeOf(labelled).dotted,
+  };
+  const firstArticle =
+    labelled.find((row) => isNamedArticle(row) || headsArticle(numbered, row))
+      ?.position ?? -1;
+  return new Set(
+    labelled
+      .filter(
+        (row) =>
+          isAnnexRow(row) &&
+          (row.position < firstArticle || isAnnexListLine(rows, row.position)),
+      )
+      .map(({ position }) => position),
+  );
+};
 
 type EntryBase = Pick<
   LabelEntry,
@@ -509,7 +556,7 @@ const openItem = (
 };
 
 const openAnnex = (walk: Walk, row: LabelledRow): LabelEntry => {
-  const listed = isListedAnnex(walk.rows, row.position);
+  const listed = walk.listedAnnexes.has(row.position);
   const entry: LabelEntry = {
     ...baseEntry(walk, row),
     ...headingTitle(walk.rows, row),
@@ -536,18 +583,13 @@ const openNumbered = (
   row: LabelledRow,
   path: readonly number[],
 ): LabelEntry | null => {
-  const { shape } = row.raw;
   const [first, ...rest] = path;
   if (first === undefined) {
     return null;
   }
   const scheme = walk.annex === null ? walk.schemes.body : walk.schemes.annexes;
   if (rest.length === 0) {
-    const headsArticle =
-      shape.close === "" &&
-      !scheme.namedArticles &&
-      (scheme.dotted || isHeadingStyled(row.block));
-    return headsArticle
+    return headsArticle(scheme, row)
       ? openArticle(walk, row, first)
       : openClause(walk, row, { path: [first], articleOrdinal: null });
   }
@@ -614,16 +656,13 @@ export const buildLabelIndex = ({
     family: families[position] ?? null,
   }));
   const labelled = rows.filter(isLabelled);
+  const listedAnnexes = listedAnnexPositions(rows, labelled);
   const firstAnnex =
-    labelled.find(
-      (row) => isAnnexRow(row) && !isListedAnnex(rows, row.position),
-    )?.position ?? Number.POSITIVE_INFINITY;
-  const schemeOf = (scope: readonly LabelledRow[]): Scheme => ({
-    namedArticles: scope.some(isNamedArticle),
-    dotted: scope.some(({ raw }) => (raw.shape.path?.length ?? 0) > 1),
-  });
+    labelled.find((row) => isAnnexRow(row) && !listedAnnexes.has(row.position))
+      ?.position ?? Number.POSITIVE_INFINITY;
   const walk: Walk = {
     rows,
+    listedAnnexes,
     schemes: {
       body: schemeOf(labelled.filter(({ position }) => position < firstAnnex)),
       annexes: schemeOf(

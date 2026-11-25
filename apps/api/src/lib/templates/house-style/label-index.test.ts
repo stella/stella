@@ -332,6 +332,49 @@ describe("buildLabelIndex", () => {
     ]);
   });
 
+  test("an annex named in front of the first article is not the annex", () => {
+    const manifest = manifestOf([
+      "GUIDANCE",
+      "Appendix 1",
+      "Complete the timetable before signature.",
+      { ...heading("Services"), label: "1." },
+      numbered("1.1", "Clause."),
+      "Signed by the parties.",
+      "Appendix 1: Timetable",
+      "The milestones are set out below.",
+    ]);
+    const index = buildLabelIndex(manifest);
+    expect(
+      index.entries
+        .filter(({ level }) => level === "annex")
+        .map(({ blockId, listed }) => ({ blockId, listed })),
+    ).toEqual([
+      { blockId: "p1", listed: true },
+      { blockId: "p6", listed: false },
+    ]);
+    // The agreement's own clauses stay in the main body.
+    expect(index.entryByBlockId.get("p4")).toMatchObject({
+      level: "clause",
+      annexBlockId: null,
+    });
+  });
+
+  test("a document that is itself an annex numbers its own main body", () => {
+    const manifest = manifestOf([
+      "Příloha č. 5",
+      "Podmínky zpracování osobních údajů",
+      "Článek I.\nPředmět",
+      numbered("1.", "Odstavec.", 1),
+    ]);
+    const index = buildLabelIndex(manifest);
+    expect(keysOf(manifest)).toEqual([
+      "listed annex 5",
+      "article I",
+      "clause I/1",
+    ]);
+    expect(index.entryByBlockId.get("p3")?.annexBlockId).toBeNull();
+  });
+
   test("lines of a table of contents are left out", () => {
     const manifest = manifestOf([
       { text: "Článek I. Předmět", styleName: "TOC 1" },
