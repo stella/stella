@@ -2672,7 +2672,7 @@ type ProcessServerChatStreamProps = {
 };
 
 /** Whether `resume` dismisses everything it answers; see `dismissesAwaited`. */
-export const resumeDismissesAwaited = (
+const resumeDismissesAwaited = (
   resume: readonly RunAgentResumeItem[] | undefined,
 ): boolean =>
   resume !== undefined &&

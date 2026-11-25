@@ -18,6 +18,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { answerRunRequest } from "@/api/lib/desktop-runner/request-answers";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -54,10 +55,11 @@ const answered = (outcome: ChatLocalRunRequestAnswerOutcome) =>
 /**
  * What a request of a settled turn reads as: its run ended with the turn,
  * so nothing reaches it any more, and the answer is told how it ended.
- * `null` while the turn is live: its run says.
+ * `null` while the turn is live: its run says. An accepted turn has no run
+ * yet, which asked nothing.
  */
 const SETTLED_TURN_OUTCOME = {
-  accepted: null,
+  accepted: "no_run",
   running: null,
   "awaiting-user": null,
   "handed-over": null,
@@ -67,7 +69,7 @@ const SETTLED_TURN_OUTCOME = {
   interrupted: { type: "expired", expiry: "run_lost" },
 } as const satisfies Record<
   ChatTurnStatus,
-  ChatLocalRunRequestAnswerOutcome | null
+  ChatLocalRunRequestAnswerOutcome | "no_run" | null
 >;
 
 const notFound = (message: string) =>
@@ -89,6 +91,9 @@ const answerChatTurnRequest = createSafeRootHandler(
       return notFound("Chat turn not found");
     }
     const settled = SETTLED_TURN_OUTCOME[turn.status];
+    if (settled === "no_run") {
+      return notFound("Chat turn request not found");
+    }
     if (settled !== null) {
       return answered(settled);
     }
@@ -131,5 +136,11 @@ const answerChatTurnRequest = createSafeRootHandler(
       : answered(outcome);
   },
 );
+
+declareAggregateMutation(answerChatTurnRequest, {
+  type: "independent",
+  reason:
+    "Queues one answer to the caller's own run in the desktop runner store, which takes the caller's runner capacity lock inside its own transaction, as the runner's other writes do; a dismissal stops the turn through the turn stop, which locks the thread itself.",
+});
 
 export default answerChatTurnRequest;

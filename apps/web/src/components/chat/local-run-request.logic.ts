@@ -81,7 +81,7 @@ export const localRunApprovalDrawing = (
   metadata: unknown,
 ): LocalRunApprovalDrawing | null => {
   const request = localRunRequestOfCall(metadata, part.id);
-  if (request === null || request.ask.kind !== "approval") {
+  if (request?.ask.kind !== "approval") {
     return null;
   }
   const settled =

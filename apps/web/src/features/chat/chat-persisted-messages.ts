@@ -1,5 +1,6 @@
 import type { ChatPersistedState, UIMessage } from "@tanstack/ai-client";
 
+import { chatLocalRunRequestsOf } from "@stll/api-contract/chat-local-run-request";
 import { chatLocalRunFilePartsOf } from "@stll/api-contract/chat-run-target";
 
 import type {
@@ -68,10 +69,13 @@ const withoutDroppedParts = (
 const withLocalRunApprovals = (
   message: UIMessage<ChatClientTools>,
 ): UIMessage<ChatClientTools> => {
-  if (message.role !== "assistant") {
+  // Only an answer whose run asked something reads its parts again.
+  if (
+    message.role !== "assistant" ||
+    chatLocalRunRequestsOf(message.metadata).length === 0
+  ) {
     return message;
   }
-  let drawn = false;
   const parts = message.parts.map((part) => {
     if (part.type !== "tool-call") {
       return part;
@@ -80,14 +84,15 @@ const withLocalRunApprovals = (
     if (drawing === null) {
       return part;
     }
-    drawn = true;
     return {
       ...part,
       ...(drawing.state === null ? {} : { state: drawing.state }),
       approval: drawing.approval,
     };
   });
-  return drawn ? { ...message, parts } : message;
+  return parts.some((part, index) => part !== message.parts[index])
+    ? { ...message, parts }
+    : message;
 };
 
 /** One client message as the page holds it, computed afresh. */
