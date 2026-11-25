@@ -415,6 +415,7 @@ describe("buildLabelIndex", () => {
       numbered("2.1", "The following survive termination:"),
       "Clause 1 Definitions",
       "Clause 2 Data Protection",
+      "Clause 2.1 Survival",
     ]);
     expect(keysOf(manifest)).toEqual([
       "article 1",
@@ -441,6 +442,52 @@ describe("buildLabelIndex", () => {
       "listed annex 3",
       "clause I/2",
     ]);
+  });
+
+  test("a numbered list that repeats the headings heads nothing", () => {
+    const manifest = manifestOf([
+      numbered("1", "Definitions", 9),
+      numbered("2", "Data Protection", 9),
+      numbered("3", "Term", 9),
+      { ...heading("Definitions"), label: "1." },
+      numbered("1.1", "Clause."),
+      { ...heading("Data Protection"), label: "2." },
+      numbered("2.1", "Clause."),
+      { ...heading("Term"), label: "3." },
+      numbered("3.1", "Clause."),
+    ]);
+    expect(keysOf(manifest)).toEqual([
+      "article 1",
+      "clause 1/1",
+      "article 2",
+      "clause 2/1",
+      "article 3",
+      "clause 3/1",
+    ]);
+    // Short articles of one paragraph each are no list of headings.
+    const short = manifestOf([
+      numbered("1.", "The parties keep the terms confidential."),
+      numbered("2.", "The term is two years."),
+      numbered("3.", "English law governs."),
+      numbered("3.1", "The courts of England have jurisdiction."),
+    ]);
+    expect(keysOf(short)).toEqual([
+      "article 1",
+      "article 2",
+      "article 3",
+      "clause 3/1",
+    ]);
+  });
+
+  test("a keyword over a dotted number heads a clause of its article", () => {
+    const manifest = manifestOf([
+      "Article 5 Fees",
+      "Article 5.1 Fixed fee",
+      "The fee is fixed.",
+      "Article 5.2 Expenses",
+      "Expenses are reimbursed.",
+    ]);
+    expect(keysOf(manifest)).toEqual(["article 5", "clause 5/1", "clause 5/2"]);
   });
 
   test("lines of a table of contents are left out", () => {

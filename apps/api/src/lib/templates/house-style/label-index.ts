@@ -330,6 +330,8 @@ type Walk = {
   listedAnnexes: ReadonlySet<number>;
   /** Ordinals of the articles the document's automatic numbering heads. */
   numberedArticles: ReadonlySet<number>;
+  /** Positions of numbered list items that only list the headings. */
+  listedHeadings: ReadonlySet<number>;
   article: LabelEntry | null;
   clauses: LabelEntry[];
   letter: LabelEntry | null;
@@ -455,6 +457,55 @@ const numberedArticleOrdinals = (
   return ordinals;
 };
 
+/** A list of headings runs at least this long without text between. */
+const HEADING_LIST_MIN = 3;
+
+/**
+ * The lines of a numbered list of headings: a contents list typed as an
+ * automatic list. An article has text under it and is headed once, so a
+ * run of bare numbers with nothing between them, whose numbers head
+ * articles again further on, lists those articles.
+ */
+const listedHeadingPositions = (
+  labelled: readonly LabelledRow[],
+): Set<number> => {
+  const scheme = numberedScheme(labelled);
+  const heads = labelled.filter(
+    (row) => row.raw.origin === "auto" && headsArticle(scheme, row),
+  );
+  const listed = new Set<number>();
+  let run: LabelledRow[] = [];
+  const close = () => {
+    const last = run.at(-1);
+    if (last !== undefined && run.length >= HEADING_LIST_MIN) {
+      const later = new Set(
+        heads
+          .filter(({ position }) => position > last.position)
+          .map(({ raw }) => raw.shape.path?.at(0)),
+      );
+      for (const row of run) {
+        if (later.has(row.raw.shape.path?.at(0))) {
+          listed.add(row.position);
+        }
+      }
+    }
+    run = [];
+  };
+  for (const row of heads) {
+    const previous = run.at(-1);
+    const continues =
+      previous !== undefined &&
+      previous.position + 1 === row.position &&
+      previous.block.numbering?.numId === row.block.numbering?.numId;
+    if (!continues) {
+      close();
+    }
+    run.push(row);
+  }
+  close();
+  return listed;
+};
+
 /**
  * An article is headed once. Where the automatic numbering already heads
  * it, a typed `Clause 6 Data Protection` (a line of a summary table, say)
@@ -464,7 +515,9 @@ const isArticleMention = (
   numberedArticles: ReadonlySet<number>,
   row: LabelledRow,
 ): boolean => {
-  const ordinal = countedOrdinal(row.raw.shape.core);
+  // `Clause 4.20 Updating Contact Details` names a clause of article 4.
+  const { core, path } = row.raw.shape;
+  const ordinal = countedOrdinal(core) ?? path?.at(0) ?? null;
   return (
     row.raw.origin === "manual" &&
     ordinal !== null &&
@@ -676,9 +729,12 @@ const openNumbered = (
   }
   const scheme = walk.annex === null ? walk.schemes.body : walk.schemes.annexes;
   if (rest.length === 0) {
-    return headsArticle(scheme, row)
-      ? openArticle(walk, row, first)
-      : openClause(walk, row, { path: [first], articleOrdinal: null });
+    if (!headsArticle(scheme, row)) {
+      return openClause(walk, row, { path: [first], articleOrdinal: null });
+    }
+    return walk.listedHeadings.has(row.position)
+      ? null
+      : openArticle(walk, row, first);
   }
   // Under a named article whose clauses are labelled `1.`, `2.`, the label
   // `1.1` is the first sub-clause of clause 1, not a clause of article 1.
@@ -699,8 +755,13 @@ const classify = (walk: Walk, row: LabelledRow): LabelEntry | null => {
     return isAnnexRow(row) ? openAnnex(walk, row) : null;
   }
   if (isNamedArticle(row)) {
-    return walk.annex === null && isArticleMention(walk.numberedArticles, row)
-      ? null
+    if (walk.annex === null && isArticleMention(walk.numberedArticles, row)) {
+      return null;
+    }
+    // A keyword over a dotted number (`Article 5.1 Fees`) heads a clause of
+    // its article, not an article of its own.
+    return shape.path !== null && shape.path.length > 1
+      ? openNumbered(walk, row, shape.path)
       : openArticle(walk, row, countedOrdinal(shape.core));
   }
   if (shape.keyword !== null) {
@@ -797,6 +858,7 @@ export const buildLabelIndex = ({
   }));
   const labelled = rows.filter(isLabelled);
   const numberedArticles = numberedArticleOrdinals(labelled);
+  const listedHeadings = listedHeadingPositions(labelled);
   // Mentions say nothing about how the document numbers itself.
   const structural = labelled.filter(
     (row) => !isArticleMention(numberedArticles, row),
@@ -827,6 +889,7 @@ export const buildLabelIndex = ({
       rows,
       listedAnnexes,
       numberedArticles,
+      listedHeadings,
       schemes,
       article: spanning?.article ?? null,
       clauses: [],
