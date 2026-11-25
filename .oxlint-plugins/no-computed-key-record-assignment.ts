@@ -372,16 +372,21 @@ const sameBinding = (
   );
 };
 
-type OwnKeyTestOptions = { test: unknown; table: unknown; key: unknown };
+type OwnKeyTestOptions = {
+  test: unknown;
+  table: unknown;
+  key: unknown;
+  seen?: Set<Variable> | undefined;
+};
 const ownKeyTest = (
   context: ScopeContext,
-  { test, table, key }: OwnKeyTestOptions,
+  { test, table, key, seen }: OwnKeyTestOptions,
 ): boolean => {
   const node = unwrapExpression(test);
   if (node?.type === "LogicalExpression" && node.operator === "&&") {
     return (
-      ownKeyTest(context, { test: node.left, table, key }) ||
-      ownKeyTest(context, { test: node.right, table, key })
+      ownKeyTest(context, { test: node.left, table, key, seen }) ||
+      ownKeyTest(context, { test: node.right, table, key, seen })
     );
   }
   if (node?.type !== "CallExpression" || !Array.isArray(node.arguments)) {
@@ -411,10 +416,118 @@ const ownKeyTest = (
       )
     );
   });
-  return (
+  if (
     Boolean(objectHasOwn || helper) &&
     sameBinding(context, { left: node.arguments.at(0), right: table }) &&
     sameBinding(context, { left: node.arguments.at(1), right: key })
+  ) {
+    return true;
+  }
+  return (
+    variable !== null &&
+    node.arguments.length === 1 &&
+    localOwnKeyPredicate(context, {
+      variable,
+      arg: node.arguments.at(0),
+      table,
+      key,
+      seen,
+    })
+  );
+};
+
+const singleReturnExpression = (body: unknown): unknown => {
+  if (!isAstNode(body)) {
+    return null;
+  }
+  if (body.type !== "BlockStatement") {
+    return body;
+  }
+  if (!Array.isArray(body.body) || body.body.length !== 1) {
+    return null;
+  }
+  const stmt = body.body.at(0);
+  return isAstNode(stmt) && stmt.type === "ReturnStatement"
+    ? stmt.argument
+    : null;
+};
+
+/** Recognizes an immutable local 1-parameter `Object.hasOwn(TABLE, param)` type predicate. */
+const localOwnKeyPredicate = (
+  context: ScopeContext,
+  {
+    variable,
+    arg,
+    table,
+    key,
+    seen,
+  }: {
+    variable: Variable;
+    arg: unknown;
+    table: unknown;
+    key: unknown;
+    seen?: Set<Variable> | undefined;
+  },
+): boolean => {
+  if (seen?.has(variable) || variable.defs.length !== 1) {
+    return false;
+  }
+  const def = variable.defs.at(0)?.node;
+  const defId = isAstNode(def) ? def.id : null;
+  if (
+    variable.references.some(
+      (reference) => reference.isWrite() && reference.identifier !== defId,
+    )
+  ) {
+    return false;
+  }
+  const fn =
+    isAstNode(def) && def.type === "VariableDeclarator"
+      ? unwrapExpression(def.init)
+      : isAstNode(def) && def.type === "FunctionDeclaration"
+        ? def
+        : null;
+  if (
+    !fn ||
+    !isFunction(fn) ||
+    fn.async === true ||
+    fn.generator === true ||
+    !Array.isArray(fn.params) ||
+    fn.params.length !== 1 ||
+    !isIdentifierReference(fn.params.at(0))
+  ) {
+    return false;
+  }
+  const body = singleReturnExpression(fn.body);
+  if (body === null || !sameBinding(context, { left: arg, right: key })) {
+    return false;
+  }
+  const nextSeen = new Set(seen);
+  nextSeen.add(variable);
+  return ownKeyTest(context, {
+    test: body,
+    table,
+    key: fn.params.at(0),
+    seen: nextSeen,
+  });
+};
+
+/** Whether `test` being false guarantees `ownKeyTest(table, key)` (supports `!x` and `!x || y`). */
+const negatedOwnKeyTest = (
+  context: ScopeContext,
+  { test, table, key }: { test: unknown; table: unknown; key: unknown },
+): boolean => {
+  const node = unwrapExpression(test);
+  if (node?.type === "LogicalExpression" && node.operator === "||") {
+    return (
+      negatedOwnKeyTest(context, { test: node.left, table, key }) ||
+      negatedOwnKeyTest(context, { test: node.right, table, key })
+    );
+  }
+  return (
+    node?.type === "UnaryExpression" &&
+    node.operator === "!" &&
+    ownKeyTest(context, { test: node.argument, table, key })
   );
 };
 
@@ -512,10 +625,8 @@ const guardedRead = (context: ScopeContext, value: unknown): boolean => {
           continue;
         }
         if (
-          statement.test.type === "UnaryExpression" &&
-          statement.test.operator === "!" &&
-          ownKeyTest(context, {
-            test: statement.test.argument,
+          negatedOwnKeyTest(context, {
+            test: statement.test,
             table: read.object,
             key: read.property,
           }) &&
