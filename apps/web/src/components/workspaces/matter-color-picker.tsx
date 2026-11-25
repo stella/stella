@@ -10,6 +10,7 @@ import {
   ColorPickerContent,
   DEFAULT_PRESETS,
 } from "@stll/ui/color-picker";
+import { ContextMenuSurface } from "@stll/ui/entity-actions";
 import {
   getMatterPickerColor,
   resolveMatterColor,
@@ -176,22 +177,29 @@ const WritableMatterColorContextPicker = ({
   return (
     <>
       {trigger.trigger === "contextmenu" ? (
-        <span className={triggerClassName} onContextMenu={openPicker}>
-          {content}
-        </span>
+        <ContextMenuSurface
+          onOpenContextMenu={() => setOpen(true)}
+          preserveNativeTargets={false}
+        >
+          <span className={triggerClassName}>{content}</span>
+        </ContextMenuSurface>
       ) : (
-        <Button
-          aria-label={trigger.label}
-          className={cn(
-            "relative flex shrink-0 items-center justify-center",
-            className,
-          )}
-          onClick={openPicker}
-          onContextMenu={openPicker}
-          variant="plain"
+        <ContextMenuSurface
+          onOpenContextMenu={() => setOpen(true)}
+          render={
+            <Button
+              aria-label={trigger.label}
+              className={cn(
+                "relative flex shrink-0 items-center justify-center",
+                className,
+              )}
+              onClick={openPicker}
+              variant="plain"
+            />
+          }
         >
           {content}
-        </Button>
+        </ContextMenuSurface>
       )}
       <Popover onOpenChange={setOpen} open={open}>
         <PopoverPopup

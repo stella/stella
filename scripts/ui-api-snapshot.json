@@ -1160,7 +1160,11 @@
       "DocumentMark",
       "isDocumentMarkKind"
     ],
-    "./entity-actions": ["EntityActions", "EntityActionsButton"],
+    "./entity-actions": [
+      "ContextMenuSurface",
+      "EntityActions",
+      "EntityActionsButton"
+    ],
     "./field": [
       "Field",
       "FieldControl",

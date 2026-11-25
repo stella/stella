@@ -9,6 +9,7 @@ import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ContextMenuSurface } from "@stll/ui/entity-actions";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { getInitials } from "@stll/ui/initials";
 import { getMatterColor } from "@stll/ui/matter-colors";
@@ -285,29 +286,34 @@ const MattersTableRow = ({
   };
 
   return (
-    <TableRow
-      className={cn(
-        "hover:bg-accent/30 cursor-pointer outline-none",
-        "focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-inset",
-        focusIndex === globalIndex && "bg-accent/50",
-      )}
-      onClick={(event) => {
-        if (isInlineEditEvent(event.target)) {
-          return;
-        }
-        openMatter();
-      }}
-      onContextMenu={ctx.onContextMenu}
-      onKeyDown={(event) => {
-        if (isInlineEditEvent(event.target)) {
-          return;
-        }
-        if (!isEditing && (event.key === "Enter" || event.key === " ")) {
-          event.preventDefault();
-          openMatter();
-        }
-      }}
-      tabIndex={0}
+    <ContextMenuSurface
+      onOpenContextMenu={ctx.onOpenContextMenu}
+      preserveNativeTargets={false}
+      render={
+        <TableRow
+          className={cn(
+            "hover:bg-accent/30 cursor-pointer outline-none",
+            "focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-inset",
+            focusIndex === globalIndex && "bg-accent/50",
+          )}
+          onClick={(event) => {
+            if (isInlineEditEvent(event.target)) {
+              return;
+            }
+            openMatter();
+          }}
+          onKeyDown={(event) => {
+            if (isInlineEditEvent(event.target)) {
+              return;
+            }
+            if (!isEditing && (event.key === "Enter" || event.key === " ")) {
+              event.preventDefault();
+              openMatter();
+            }
+          }}
+          tabIndex={0}
+        />
+      }
     >
       {columns.map((col, i) => (
         <TableCell key={col.id}>
@@ -342,7 +348,7 @@ const MattersTableRow = ({
           )}
         </TableCell>
       ))}
-    </TableRow>
+    </ContextMenuSurface>
   );
 };
 
