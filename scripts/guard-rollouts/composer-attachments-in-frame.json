@@ -1,0 +1,18 @@
+{
+  "id": "composer-attachments-in-frame",
+  "rules": ["composer-attachments-in-frame/composer-attachments-in-frame"],
+  "type": "changed-lines",
+  "expiresAt": "2026-12-01T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "composer-attachments-in-frame/composer-attachments-in-frame",
+    "apps/web"
+  ]
+}
