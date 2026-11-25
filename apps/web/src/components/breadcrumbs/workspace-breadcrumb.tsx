@@ -11,6 +11,7 @@ import { resolveReferenceEdit } from "@stll/api-contract/matter-reference-edit";
 import { BidiText, stripDirectionalControls } from "@stll/ui/bidi-text";
 import { BreadcrumbItem, BreadcrumbSeparator } from "@stll/ui/breadcrumb";
 import { Button } from "@stll/ui/button";
+import { ContextMenuSurface } from "@stll/ui/entity-actions";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { TruncatedText } from "@stll/ui/truncated-text";
@@ -346,23 +347,25 @@ export const WorkspaceBreadcrumb = ({
                     matter={{ id: workspaceId, color: workspace.color }}
                   />
                 </MatterColorContextPicker>
-                <Link
-                  activeOptions={{
-                    exact: true,
-                    includeSearch: false,
-                  }}
-                  activeProps={{
-                    className: "text-foreground font-semibold",
-                  }}
-                  className="hover:text-foreground inline-flex max-w-80 min-w-0 items-center gap-1.5"
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    startEditingName();
-                  }}
-                  params={{
-                    workspaceId,
-                  }}
-                  to="/workspaces/$workspaceId"
+                <ContextMenuSurface
+                  onOpenContextMenu={() => startEditingName()}
+                  preserveNativeTargets={false}
+                  render={
+                    <Link
+                      activeOptions={{
+                        exact: true,
+                        includeSearch: false,
+                      }}
+                      activeProps={{
+                        className: "text-foreground font-semibold",
+                      }}
+                      className="hover:text-foreground inline-flex max-w-80 min-w-0 items-center gap-1.5"
+                      params={{
+                        workspaceId,
+                      }}
+                      to="/workspaces/$workspaceId"
+                    />
+                  }
                 >
                   <TruncatedText
                     className="whitespace-pre"
@@ -371,18 +374,19 @@ export const WorkspaceBreadcrumb = ({
                     {displayName}
                   </TruncatedText>
                   {showMatterNumber && workspace.reference && !isEditingRef ? (
-                    <span
-                      className="text-foreground-muted shrink-0 text-sm whitespace-pre"
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        refRename.startEditing(workspace.reference);
-                      }}
+                    <ContextMenuSurface
+                      onOpenContextMenu={() =>
+                        refRename.startEditing(workspace.reference)
+                      }
+                      preserveNativeTargets={false}
+                      render={
+                        <span className="text-foreground-muted shrink-0 text-sm whitespace-pre" />
+                      }
                     >
                       {workspace.reference}
-                    </span>
+                    </ContextMenuSurface>
                   ) : null}
-                </Link>
+                </ContextMenuSurface>
                 {isEditingRef ? null : (
                   <MatterSwitcher matter={workspace} revealOnHover />
                 )}
@@ -429,20 +433,22 @@ export const WorkspaceBreadcrumb = ({
       {clientSegment}
       <BreadcrumbItem className="shrink-0">
         {colorPicker}
-        <Link
-          activeOptions={{ exact: true, includeSearch: false }}
-          activeProps={{ className: "text-foreground font-semibold" }}
-          className="hover:text-foreground max-w-80 min-w-0 font-semibold"
-          dir="auto"
-          onClick={() => {
-            startEditingName();
-          }}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            startEditingName();
-          }}
-          params={{ workspaceId }}
-          to="/workspaces/$workspaceId"
+        <ContextMenuSurface
+          onOpenContextMenu={() => startEditingName()}
+          preserveNativeTargets={false}
+          render={
+            <Link
+              activeOptions={{ exact: true, includeSearch: false }}
+              activeProps={{ className: "text-foreground font-semibold" }}
+              className="hover:text-foreground max-w-80 min-w-0 font-semibold"
+              dir="auto"
+              onClick={() => {
+                startEditingName();
+              }}
+              params={{ workspaceId }}
+              to="/workspaces/$workspaceId"
+            />
+          }
         >
           <TruncatedText
             className="whitespace-pre"
@@ -450,7 +456,7 @@ export const WorkspaceBreadcrumb = ({
           >
             {displayName}
           </TruncatedText>
-        </Link>
+        </ContextMenuSurface>
         {referenceSegment}
         {isEditingRef ? null : <MatterSwitcher matter={workspace} />}
         {referenceHint}

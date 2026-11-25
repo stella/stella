@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useState } from "react";
-import type { MouseEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useMatch } from "@tanstack/react-router";
@@ -7,6 +7,10 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import {
+  ContextMenuSurface,
+  type ContextMenuSurfaceOpenEvent,
+} from "@stll/ui/entity-actions";
 import { CogIcon, PanelRightIcon, PinIcon, PinOffIcon } from "@stll/ui/icons";
 import {
   InspectorDock,
@@ -402,16 +406,18 @@ function ProtectedContent() {
   const [chatMenuOpener, setChatMenuOpener] = useState<HTMLElement | null>(
     null,
   );
-  const handleIconRowContextMenu = (e: MouseEvent) => {
-    e.preventDefault();
-    const x = e.clientX;
-    const y = e.clientY;
+  const handleIconRowContextMenu = ({
+    anchor,
+    returnFocus,
+    event,
+  }: ContextMenuSurfaceOpenEvent) => {
     setChatMenuOpener(
-      e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
+      returnFocus ??
+        (event.currentTarget instanceof HTMLElement
+          ? event.currentTarget
+          : null),
     );
-    setChatMenuAnchor({
-      getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
-    });
+    setChatMenuAnchor(anchor);
     setChatMenuOpen(true);
   };
   const handleOpenNewChatFromMenu = () => {
@@ -434,9 +440,9 @@ function ProtectedContent() {
   const workspace =
     workspaceView.type === "items" ? workspaceView.items : undefined;
   const chromeActions = (
-    <div
-      className="ms-auto flex shrink-0 items-center gap-0.5"
-      onContextMenu={handleIconRowContextMenu}
+    <ContextMenuSurface
+      onOpenContextMenu={handleIconRowContextMenu}
+      render={<div className="ms-auto flex shrink-0 items-center gap-0.5" />}
     >
       {workspaceId && showMatterActions && (
         <>
@@ -474,7 +480,7 @@ function ProtectedContent() {
       )}
       <GlobalTimer />
       {inboxPreviewEnabled && <NotificationBell />}
-    </div>
+    </ContextMenuSurface>
   );
 
   return (

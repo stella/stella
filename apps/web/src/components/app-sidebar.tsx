@@ -35,8 +35,12 @@ import {
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { EntityActions } from "@stll/ui/entity-actions";
-import type { EntityAction } from "@stll/ui/entity-actions";
+import {
+  ContextMenuSurface,
+  type ContextMenuSurfaceOpenEvent,
+  type EntityAction,
+  EntityActions,
+} from "@stll/ui/entity-actions";
 import {
   ChevronRightIcon,
   CircleHelpIcon,
@@ -58,7 +62,6 @@ import { MatterIcon } from "@stll/ui/matter-icon";
 import { Menu, MenuPopup, MenuSeparator, MenuTrigger } from "@stll/ui/menu";
 import { Skeleton } from "@stll/ui/skeleton";
 import { TruncatedText } from "@stll/ui/truncated-text";
-import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
 import { appSidebarSurfaceProps } from "@/components/app-sidebar-surface";
@@ -77,7 +80,6 @@ import {
   selectRecentWorkspaces,
 } from "@/components/app-sidebar.logic";
 import { openEntityInInspector } from "@/components/chat/entity-open";
-import { contextMenuBelongsTo } from "@/components/context-menu-target";
 import {
   withDragAnnouncementData,
   withDropAnnouncementData,
@@ -1382,19 +1384,15 @@ export const MatterItem = ({
 
   const [matterReturnFocus, setMatterReturnFocus] =
     useState<HTMLElement | null>(null);
-  const handleMatterContextMenu = (e: React.MouseEvent) => {
-    if (!contextMenuBelongsTo(e, { id: ws.id, kind: "matter" })) {
-      return;
-    }
-    const control = e.currentTarget.querySelector("button,a[href]");
+  const handleMatterContextMenu = ({
+    anchor,
+    returnFocus,
+    event,
+  }: ContextMenuSurfaceOpenEvent) => {
+    const control =
+      returnFocus ?? event.currentTarget.querySelector("button,a[href]");
     setMatterReturnFocus(control instanceof HTMLElement ? control : null);
-    e.preventDefault();
-    e.stopPropagation();
-    const x = e.clientX;
-    const y = e.clientY;
-    setCtxAnchor({
-      getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
-    });
+    setCtxAnchor(anchor);
     setMenuOpen(true);
   };
 
@@ -1423,18 +1421,22 @@ export const MatterItem = ({
 
   return (
     <>
-      <SidebarMenuItem
-        data-context-menu-target={ws.id}
-        data-entity-id={ws.id}
-        data-entity-kind="matter"
-        className={cn(
-          isDropTarget &&
-            "before:bg-primary before:pointer-events-none before:absolute before:inset-x-2 before:top-0 before:h-0.5 before:rounded-full",
-          isEntityDropTarget &&
-            "bg-primary/8 ring-primary rounded-md ring-2 ring-inset",
-        )}
-        onContextMenu={containedEventHandler(handleMatterContextMenu)}
-        ref={dropRef}
+      <ContextMenuSurface
+        onOpenContextMenu={handleMatterContextMenu}
+        render={
+          <SidebarMenuItem
+            data-context-menu-target={ws.id}
+            data-entity-id={ws.id}
+            data-entity-kind="matter"
+            className={cn(
+              isDropTarget &&
+                "before:bg-primary before:pointer-events-none before:absolute before:inset-x-2 before:top-0 before:h-0.5 before:rounded-full",
+              isEntityDropTarget &&
+                "bg-primary/8 ring-primary rounded-md ring-2 ring-inset",
+            )}
+            ref={dropRef}
+          />
+        }
       >
         {hasExpandableContent ? (
           <Tooltip
@@ -1662,7 +1664,7 @@ export const MatterItem = ({
             />
           </div>
         ) : null}
-      </SidebarMenuItem>
+      </ContextMenuSurface>
 
       {dialogs}
     </>

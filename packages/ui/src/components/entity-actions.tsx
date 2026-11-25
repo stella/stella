@@ -66,7 +66,31 @@ export type EntityActionsProps = {
   render?: useRender.RenderProp;
 };
 
-type CursorAnchor = { getBoundingClientRect: () => DOMRect };
+export type CursorAnchor = { getBoundingClientRect: () => DOMRect };
+
+export type ContextMenuSurfaceOpenEvent = {
+  /** Virtual anchor at pointer coordinates (or focused control for keyboard). */
+  anchor: CursorAnchor;
+  /** The focusable control inside the surface to return focus to on close. */
+  returnFocus: HTMLElement | null;
+  /** The triggering mouse or keyboard event. */
+  event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>;
+};
+
+export type ContextMenuSurfaceProps = {
+  children?: ReactNode;
+  /** When true, right-click is still claimed so parents do not open, but the
+   *  native browser menu stays. */
+  disabled?: boolean;
+  /** Called when a non-native right-click or context-menu key activates this
+   *  surface. */
+  onOpenContextMenu: (details: ContextMenuSurfaceOpenEvent) => void;
+  /** Keep native browser context menu on Shift+click, editable text, links, and
+   *  selected text. Defaults to true. */
+  preserveNativeTargets?: boolean;
+  /** Optional host element to attach the listener to directly. */
+  render?: useRender.RenderProp;
+};
 
 const isContextMenuKey = (event: KeyboardEvent<HTMLElement>): boolean =>
   event.key === "ContextMenu" || (event.shiftKey && event.key === "F10");
@@ -125,31 +149,30 @@ const EntityActionItems = ({
  * An object's actions: the right-click menu over `children`, and the list
  * an `EntityActionsButton` inside them opens.
  */
-export const EntityActions = ({
-  actions,
+/**
+ * Sanctioned right-click and context-menu-key surface for objects whose popup
+ * is custom (rich menus, popovers, or inline rename triggers). Shares the same
+ * event-claiming, native-menu preservation, keyboard support, and focus-return
+ * contract as `EntityActions`.
+ */
+export const ContextMenuSurface = ({
   children,
-  heading,
-  label,
+  disabled = false,
+  onOpenContextMenu,
+  preserveNativeTargets = true,
   render,
-}: EntityActionsProps) => {
-  const [open, setOpen] = useState(false);
-  const [hasOpened, setHasOpened] = useState(false);
-  const [anchor, setAnchor] = useState<CursorAnchor | null>(null);
-  const returnFocus = useRef<HTMLElement | null>(null);
-  const context: EntityActionsContextValue = { actions, heading, label };
-  const hasActions = actions.length > 0;
-
-  const openAt = (
+}: ContextMenuSurfaceProps) => {
+  const activate = (
     event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>,
     anchorRect: CursorAnchor,
   ) => {
     event.preventDefault();
-    // A hand-written handler further up must not open a second menu either.
     event.stopPropagation();
-    returnFocus.current = focusReturnTarget(event.currentTarget, event.target);
-    setHasOpened(true);
-    setAnchor(anchorRect);
-    setOpen(true);
+    onOpenContextMenu({
+      anchor: anchorRect,
+      returnFocus: focusReturnTarget(event.currentTarget, event.target),
+      event,
+    });
   };
 
   const handleContextMenu = (event: MouseEvent<HTMLElement>) => {
@@ -163,12 +186,14 @@ export const EntityActions = ({
     ) {
       return;
     }
-    // Claimed: with no actions, or on a native target, the native menu stays.
-    if (!hasActions || nativeContextMenuReason(event) !== null) {
+    if (
+      disabled ||
+      (preserveNativeTargets && nativeContextMenuReason(event) !== null)
+    ) {
       return;
     }
     const { clientX: x, clientY: y } = event;
-    openAt(event, {
+    activate(event, {
       getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
     });
   };
@@ -185,18 +210,19 @@ export const EntityActions = ({
       return;
     }
     if (
-      !hasActions ||
-      nativeContextMenuReason({ shiftKey: false, target }) !== null
+      disabled ||
+      (preserveNativeTargets &&
+        nativeContextMenuReason({ shiftKey: false, target }) !== null)
     ) {
       return;
     }
     // The keyboard has no pointer position: open beside the focused control.
-    openAt(event, {
+    activate(event, {
       getBoundingClientRect: () => target.getBoundingClientRect(),
     });
   };
 
-  const target = useRender({
+  return useRender({
     defaultTagName: "div",
     render,
     props: {
@@ -212,6 +238,36 @@ export const EntityActions = ({
       children,
     },
   });
+};
+
+export const EntityActions = ({
+  actions,
+  children,
+  heading,
+  label,
+  render,
+}: EntityActionsProps) => {
+  const [open, setOpen] = useState(false);
+  const [hasOpened, setHasOpened] = useState(false);
+  const [anchor, setAnchor] = useState<CursorAnchor | null>(null);
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const context: EntityActionsContextValue = { actions, heading, label };
+  const hasActions = actions.length > 0;
+
+  const target = (
+    <ContextMenuSurface
+      disabled={!hasActions}
+      onOpenContextMenu={({ anchor: nextAnchor, returnFocus: nextFocus }) => {
+        returnFocus.current = nextFocus;
+        setHasOpened(true);
+        setAnchor(nextAnchor);
+        setOpen(true);
+      }}
+      render={render}
+    >
+      {children}
+    </ContextMenuSurface>
+  );
 
   const contextMenu =
     hasActions && hasOpened ? (
