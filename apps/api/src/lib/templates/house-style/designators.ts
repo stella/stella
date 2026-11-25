@@ -54,11 +54,13 @@ const KEYWORDS = [
 ] as const satisfies readonly (readonly [LabelKeyword, RegExp])[];
 
 const DESIGNATOR =
-  /^(\(?)((?:\d{1,3}|[IVXLCDM]{1,7}(?=\.\d))(?:\.\d{1,3}){0,4}|[IVXLCDM]{1,7}|[a-z]{1,5}|[A-Z])(\)?)(\.?)(?![\p{L}\p{N}])/u;
+  /^(\(?)((?:\d{1,3}|[IVXLCDM]{1,7}(?=\.\d))(?:\.\d{1,3}){0,4}|[IVXLCDM]{1,7}|[a-z]{1,5}|[A-Z]{1,3})(\)?)(\.?)(?![\p{L}\p{N}]|\.\d)/u;
 
 const AMBIGUOUS_LOWER = new Set(["i", "v", "x", "l", "c", "d", "m"]);
 
 const LETTERS_IN_ALPHABET = 26;
+/** `aaa` is item 53; no list of letters runs longer. */
+const REPEATED_LETTER_MAX = 3;
 const LOWER_A = 97;
 
 /** A letter designator's ordinal the way Word counts: `a` is 1, `z` is 26,
@@ -159,8 +161,9 @@ const classifyNumeral = (
   if (roman !== null) {
     return isUpper ? "upperRoman" : "lowerRoman";
   }
-  if (!isUpper && core.length === 2 && letterOrdinal(core) !== null) {
-    return "lowerLetter";
+  // Past `z` the letter repeats: `aa`, `BB`.
+  if (core.length <= REPEATED_LETTER_MAX && letterOrdinal(core) !== null) {
+    return isUpper ? "upperLetter" : "lowerLetter";
   }
   return null;
 };

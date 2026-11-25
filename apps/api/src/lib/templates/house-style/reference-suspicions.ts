@@ -49,6 +49,8 @@ const stemsOf = (text: string): Set<string> =>
       .map((word) => word.slice(0, STEM_LENGTH)),
   );
 
+const SENTENCE_STOPS = [". ", "! ", "? ", ";"] as const;
+
 /** The sentence around `[start, end)`, without the references in it. */
 const sentenceAround = (
   text: string,
@@ -57,8 +59,9 @@ const sentenceAround = (
 ): string => {
   const before = text.slice(0, start);
   const after = text.slice(end);
-  const from = Math.max(before.lastIndexOf(". "), before.lastIndexOf(";")) + 1;
-  const stops = [after.indexOf(". "), after.indexOf(";")].filter(
+  const from =
+    Math.max(...SENTENCE_STOPS.map((stop) => before.lastIndexOf(stop))) + 1;
+  const stops = SENTENCE_STOPS.map((stop) => after.indexOf(stop)).filter(
     (stop) => stop >= 0,
   );
   const to = end + (stops.length > 0 ? Math.min(...stops) : after.length);

@@ -267,6 +267,38 @@ describe("buildLabelIndex", () => {
     ).toEqual(["letter I/1/i", "roman I/2/i", "roman I/2/v"]);
   });
 
+  test("a typed list after a new clause does not continue the list before it", () => {
+    const manifest = manifestOf([
+      "Článek I.\nVýčet",
+      numbered("1.", "Případy:", 1),
+      "g) sedmý;",
+      "h) osmý.",
+      numbered("2.", "Podbody:", 1),
+      "i) první;",
+      "ii) druhý.",
+    ]);
+    expect(keysOf(manifest).slice(-3)).toEqual([
+      "clause I/2",
+      "roman I/2/i",
+      "roman I/2/ii",
+    ]);
+  });
+
+  test("roman headings keep counting across the numbered clauses between them", () => {
+    const manifest = manifestOf([
+      "IX. Sankce",
+      numbered("1.", "Text.", 1),
+      "X. Závěr",
+      numbered("1.", "Text.", 2),
+    ]);
+    expect(keysOf(manifest)).toEqual([
+      "article IX",
+      "clause IX/1",
+      "article X",
+      "clause X/1",
+    ]);
+  });
+
   test("annexes: the list of annexes and the headings behind the signatures", () => {
     const manifest = czechContract("Text.");
     const index = buildLabelIndex(manifest);

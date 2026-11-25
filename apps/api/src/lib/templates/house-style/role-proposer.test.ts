@@ -9,6 +9,7 @@ import {
   czechContract,
   czechDecimalContract,
   englishAgreement,
+  inColumns,
   manifestOf,
   numbered,
 } from "@/api/lib/templates/house-style/manifest.test-helpers";
@@ -55,7 +56,7 @@ describe("proposeTemplateRoles", () => {
     const manifest = czechContract("Viz čl. II této smlouvy.");
     expect(rolesOf(manifest)).toMatchObject({
       "SMLOUVA O DODÁVCE": "title",
-      "Dodavatel: Vzorová dodavatel": "party",
+      "Dodavatel: Horák Stavby s.r.": "party",
       "(dále jen „dodavatel“)": "party",
       a: "party",
       "uzavírají tuto smlouvu:": "body",
@@ -269,7 +270,7 @@ describe("proposeTemplateRoles", () => {
   test("English and decimal Czech contracts", () => {
     expect(rolesOf(englishAgreement("Text."))).toMatchObject({
       "SERVICES AGREEMENT": "title",
-      "Example Supplier Limited, a ": "party",
+      "Brightwell Hosting Limited, ": "party",
       "(A) The Supplier provides ho": "body",
       Definitions: "articleHeading",
       "Wording 1.1:": "clause1",
@@ -284,6 +285,28 @@ describe("proposeTemplateRoles", () => {
       "Nadpis 1": "articleHeading",
       "Znění 1.1.": "clause1",
     });
+  });
+
+  test("a table cell is not taken for the title, and a memo has no signature zone", () => {
+    const cells = inColumns(1, ["CONFIDENTIAL"]);
+    const memo = manifestOf([
+      "MEMORANDUM",
+      "Subject: signature validity",
+      "Findings follow.",
+    ]);
+    const blocks = [
+      ...cells.blocks,
+      ...memo.blocks.map((block) => ({ ...block, id: `m${block.id}` })),
+    ];
+    const { proposals } = proposeTemplateRoles({
+      manifest: { blocks },
+      roleMap: ROLE_MAP,
+    });
+    expect(proposals.map(({ blockId, role }) => [blockId, role])).toEqual([
+      ["mp0", "title"],
+      ["mp1", "body"],
+      ["mp2", "body"],
+    ]);
   });
 
   test("a letter or a memo has a title and body text", () => {

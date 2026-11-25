@@ -48,6 +48,7 @@ describe("findTopicSuspicions", () => {
     "Dodavatel postupuje dle čl. II této smlouvy.",
     "Práce dle čl. XIII této smlouvy.",
     "Cenu a platební podmínky upravuje čl. IV této smlouvy; vyšší moc čl. XIII této smlouvy.",
+    "Kdo dbá na bezpečnost práce a ochranu zdraví? Dodavatel postupuje dle čl. XIII této smlouvy.",
   ])("no suspicion: %s", (citing) => {
     expect(suspicionsOf(citing).suspicions).toEqual([]);
   });

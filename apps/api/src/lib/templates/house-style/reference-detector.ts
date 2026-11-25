@@ -531,7 +531,10 @@ const toReference = (
   let { end } = chain;
   // `čl. 5 a 10 dnů`: a number after a conjunction that names no provision
   // was never part of the chain.
-  if (!external) {
+  // A chain that says whose provision it cites keeps every designator: a
+  // number its document lacks is then a citation to report, not a count.
+  const citesOwn = pointsHome || evidence.includes("ownNoun");
+  if (!external && !citesOwn) {
     while (resolved.length > 1) {
       const last = resolved.at(-1);
       const before = resolved.at(-2);

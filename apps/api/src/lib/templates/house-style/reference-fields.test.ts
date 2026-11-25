@@ -120,6 +120,10 @@ describe("selectReferenceField in the template's scheme", () => {
       instruction: numberWithoutWords,
       expectedText: "XI",
     });
+    expect(read("Článek (%1)", [11])).toMatchObject({
+      instruction: numberWithoutWords,
+      expectedText: "(XI)",
+    });
   });
 
   test("refuses a level it cannot render", () => {

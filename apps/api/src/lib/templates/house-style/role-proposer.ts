@@ -247,9 +247,15 @@ const isProvision = ({ level, annexBlockId }: LabelEntry): boolean =>
     level === "roman");
 
 const findZones = (
-  blocks: readonly DocxBlock[],
+  all: readonly DocxBlock[],
   { entries }: LabelIndex,
+  nested: ReadonlySet<string>,
 ): Zones => {
+  // Cell paragraphs are placed with their table and take no zone; a blank
+  // stand-in keeps every other block at its position.
+  const blocks = all.map((block): DocxBlock =>
+    nested.has(block.id) ? { ...block, kind: "table", text: "" } : block,
+  );
   const provisions = entries.filter(isProvision);
   const firstProvision = provisions.at(0)?.position ?? Number.POSITIVE_INFINITY;
   const lastProvision = provisions.at(-1)?.position ?? -1;
@@ -290,12 +296,14 @@ const findZones = (
     title,
     firstParty,
     preamble,
-    signature: firstPosition(
-      blocks,
-      lastProvision + 1,
-      firstAnnexHeading,
-      (block) => SIGNATURE_MARKER.test(block.text),
-    ),
+    // Without numbered provisions there is no body for a signature block
+    // to follow: a letter or a memo has a title and body text.
+    signature:
+      lastProvision < 0
+        ? Number.POSITIVE_INFINITY
+        : firstPosition(blocks, lastProvision + 1, firstAnnexHeading, (block) =>
+            SIGNATURE_MARKER.test(block.text),
+          ),
     firstAnnexHeading,
   };
 };
@@ -433,7 +441,7 @@ export const proposeTemplateRoles = ({
         : block.cells.flatMap((cell) => cell.blockIds),
     ),
   );
-  const zones = findZones(blocks, index);
+  const zones = findZones(blocks, index, nested);
   const titleOwner = new Map(
     index.entries.flatMap((entry) =>
       entry.titleBlockId === null ? [] : [[entry.titleBlockId, entry] as const],

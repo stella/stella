@@ -188,10 +188,10 @@ const CZECH_TITLES = [
 export const czechContract = (citing: string): DocxBlockManifest => {
   const specs: BlockSpec[] = [
     "SMLOUVA O DODÁVCE",
-    "Dodavatel: Vzorová dodavatelská s.r.o., se sídlem Dlouhá 1, Praha, IČO: 00000001",
+    "Dodavatel: Horák Stavby s.r.o., se sídlem Dlouhá 1, Praha, IČO: 00000001",
     "(dále jen „dodavatel“)",
     "a",
-    "Objednatel: Vzorový odběratel a.s., se sídlem Krátká 2, Brno, IČO: 00000002",
+    "Objednatel: Tiskárna Vltavín a.s., se sídlem Krátká 2, Brno, IČO: 00000002",
     "(dále jen „objednatel“)",
     "uzavírají tuto smlouvu:",
   ];
@@ -270,8 +270,8 @@ export const czechDecimalContract = (citing: string): DocxBlockManifest => {
 export const englishAgreement = (citing: string): DocxBlockManifest => {
   const specs: BlockSpec[] = [
     "SERVICES AGREEMENT",
-    "Example Supplier Limited, a company with its registered office at 1 Long Street (the “Supplier”)",
-    "Example Customer plc, a company with its registered office at 2 Short Street (the “Customer”)",
+    "Brightwell Hosting Limited, a company with its registered office at 1 Long Street (the “Supplier”)",
+    "Harrowgate Mills plc, a company with its registered office at 2 Short Street (the “Customer”)",
     "(A) The Supplier provides hosting services.",
     "(B) The Customer wishes to receive them.",
   ];
@@ -344,8 +344,8 @@ export const partsContract = (citing: string): DocxBlockManifest =>
 export const germanContract = (citing: string): DocxBlockManifest => {
   const specs: BlockSpec[] = [
     "DIENSTLEISTUNGSVERTRAG",
-    "zwischen der Muster Lieferant GmbH mit Sitz in Musterstadt (nachfolgend „Auftragnehmer“)",
-    "und der Muster Kunde AG mit Sitz in Beispielstadt (nachfolgend „Auftraggeber“)",
+    "zwischen der Lindner Logistik GmbH mit Sitz in Kassel (nachfolgend „Auftragnehmer“)",
+    "und der Brandt Maschinenbau AG mit Sitz in Erfurt (nachfolgend „Auftraggeber“)",
   ];
   const titles = [
     "Vertragsgegenstand",

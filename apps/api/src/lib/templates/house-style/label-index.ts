@@ -281,6 +281,16 @@ const resolveFamilies = (
     const { numeral, open, close } = raw.shape;
     const known = familyOf(numeral);
     if (known === null && !isAmbiguous(numeral)) {
+      // A numbered clause ends the typed lists of items before it: `i)`
+      // after it opens a new list, whatever letter the last one stopped at.
+      // Roman headings (`IX.`, `X.`) run on across the clauses between.
+      if (open === "" && close === "") {
+        for (const key of [...previousByList.keys()]) {
+          if (key.startsWith("typed:lower:")) {
+            previousByList.delete(key);
+          }
+        }
+      }
       return null;
     }
     const numbering = blocks[position]?.numbering ?? null;

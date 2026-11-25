@@ -380,6 +380,10 @@ describe("Czech internal references", () => {
         ["čl. II odst. 9", "internal", "II→II 9→!missingTarget"],
       ],
       ["Dle čl. XX.", ["čl. XX", "unknown", "XX→!missingTarget"]],
+      [
+        "Dle čl. II odst. 1 a 9 této smlouvy.",
+        ["čl. II odst. 1 a 9", "internal", "II→II 1→II/1 9→!missingTarget"],
+      ],
       ["Viz Přílohu F.", ["Přílohu F", "unknown", "F→!missingTarget"]],
     ]);
   });

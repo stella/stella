@@ -18,6 +18,8 @@ describe("parseLabelShape", () => {
     ["a)", null, "lowerLetter", "a", "a)"],
     ["(b)", null, "lowerLetter", "b", "(b)"],
     ["aa)", null, "lowerLetter", "aa", "aa)"],
+    ["aaa)", null, "lowerLetter", "aaa", "aaa)"],
+    ["AA)", null, "upperLetter", "AA", "AA)"],
     ["(ii)", null, "lowerRoman", "ii", "(ii)"],
     ["xiv.", null, "lowerRoman", "xiv", "xiv"],
     ["i)", null, "lowerAmbiguous", "i", "i)"],
@@ -67,6 +69,9 @@ describe("parseLabelShape", () => {
       length: 9,
     });
     expect(parseLabelShape("Vyšší moc")).toBeNull();
+    // Six components are more than a label carries; five are not cut out.
+    expect(parseLabelShape("1.2.3.4.5.6 Heading")).toBeNull();
+    expect(parseLabelShape("AB) text")).toBeNull();
   });
 });
 

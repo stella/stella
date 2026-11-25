@@ -94,6 +94,11 @@ const literalsOf = (levelText: string): string[] =>
 const hasWords = (levelText: string): boolean =>
   literalsOf(levelText).some((literal) => WORDS.test(literal));
 
+/** What is left of a literal with words once the words are dropped: the
+ *  brackets that enclose the counter, as in `Článek (%1)`. */
+const bracketsOf = (literal: string): string =>
+  Array.from(literal.matchAll(/[()[\]]/gu), ([bracket]) => bracket).join("");
+
 const renderLevelText = (
   levelText: string,
   {
@@ -105,7 +110,7 @@ const renderLevelText = (
   let rendered = "";
   for (const part of levelText.split(PLACEHOLDER)) {
     if (!PLACEHOLDER.test(part)) {
-      rendered += withoutWords && WORDS.test(part) ? "" : part;
+      rendered += withoutWords && WORDS.test(part) ? bracketsOf(part) : part;
       continue;
     }
     // `%1` is level 0.
