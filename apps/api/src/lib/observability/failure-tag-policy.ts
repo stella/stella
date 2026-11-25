@@ -486,6 +486,7 @@ export const TAGGED_FAILURE_REASON = {
   S3PresignError: "tagged_failure",
   SSEBroadcastError: "tagged_failure",
   SafeOutboundFetchError: "tagged_failure",
+  SameBytesFiledError: "conflict",
   SanctionsDrainAttemptFailed: "tagged_failure",
   SanctionsIndexLoadFailure: "tagged_failure",
   SanctionsListParseError: "tagged_failure",
