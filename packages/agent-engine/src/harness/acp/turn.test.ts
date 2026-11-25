@@ -582,6 +582,34 @@ describe("AcpTurnSession permission requests", () => {
     expect(answered).toBeGreaterThan(cancel);
   });
 
+  test.each([
+    ["listed first", ["reject_always", "reject_once"]],
+    ["listed last", ["reject_once", "reject_always"]],
+  ] as const)(
+    "Deny answers with the one-time refusal when the prompt also offers a lasting one, %s",
+    async (_order, refusals) => {
+      const { ask, asked, end, turn, wire } = askingSession();
+      ask(6, [
+        { optionId: "yes", kind: "allow_once" },
+        ...refusals.map((kind) => ({ optionId: kind, kind })),
+      ]);
+      const { requestId, options } = await asked();
+      expect(options.map(({ decision }) => decision)).toEqual([
+        "approve",
+        "deny",
+      ]);
+      await turn.respond({ type: "approval", requestId, decision: "deny" });
+      expect(wire).toContainEqual({
+        kind: "respond",
+        body: {
+          id: 6,
+          result: { outcome: { outcome: "selected", optionId: "reject_once" } },
+        },
+      });
+      await end();
+    },
+  );
+
   test("a prompt that refuses only with 'reject always' still offers Deny", async () => {
     const { ask, asked, end } = askingSession();
     ask(5, [

@@ -73,9 +73,22 @@ const DECISION_OF_OPTION: Readonly<Record<string, ApprovalDecision>> = {
   allow_always: "approve_for_session",
   reject_once: "deny",
   // Chat denies once; a prompt that offers only "reject always" to refuse
-  // still has its Deny.
+  // still has its Deny (`OPTION_PREFERENCE` keeps "reject once" first).
   reject_always: "deny",
 };
+
+/**
+ * Which option a decision takes when the prompt offers several for it, in
+ * whatever order the agent listed them: a one-time refusal before a lasting
+ * one, so Deny never answers with a refusal that outlives the step.
+ */
+const OPTION_PREFERENCE: Readonly<Record<string, number>> = {
+  reject_once: 0,
+  reject_always: 1,
+};
+
+const preferenceOf = (kind: string) =>
+  Object.hasOwn(OPTION_PREFERENCE, kind) ? (OPTION_PREFERENCE[kind] ?? 0) : 0;
 
 /**
  * `file` with every link resolved: the real path of its nearest existing
@@ -836,7 +849,10 @@ export class AcpTurnSession {
       return;
     }
     const options: HarnessApprovalOption[] = [];
-    for (const option of request.options) {
+    const preferred = request.options.toSorted(
+      (left, right) => preferenceOf(left.kind) - preferenceOf(right.kind),
+    );
+    for (const option of preferred) {
       const decision = DECISION_OF_OPTION[option.kind];
       if (
         decision !== undefined &&
