@@ -154,29 +154,22 @@ export const ChoiceCard = ({
   title: string;
   value: string;
 }) => (
-  <div className="bg-card has-checked:border-primary rounded-xl border">
-    <Label
-      className="items-start gap-3 rounded-xl p-3 hover:bg-transparent"
-      variant="choice"
-    >
-      <input
-        checked={checked}
-        className="accent-primary mt-0.5 size-4 shrink-0"
-        name={name}
-        onChange={onChoose}
-        type="radio"
-        value={value}
-      />
-      <span className="min-w-0">
-        <span className="text-foreground block text-sm font-medium">
-          {title}
-        </span>
-        <span className="text-muted-foreground mt-0.5 block text-sm leading-relaxed text-pretty">
-          {description}
-        </span>
+  <Label variant="choice-card">
+    <input
+      checked={checked}
+      className="accent-primary mt-0.5 size-4 shrink-0"
+      name={name}
+      onChange={onChoose}
+      type="radio"
+      value={value}
+    />
+    <span className="min-w-0">
+      <span className="text-foreground block text-sm font-medium">{title}</span>
+      <span className="text-muted-foreground mt-0.5 block text-sm leading-relaxed text-pretty">
+        {description}
       </span>
-    </Label>
-  </div>
+    </span>
+  </Label>
 );
 
 /** What a screen sends and keeps, one plain line each. */
