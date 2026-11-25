@@ -5,7 +5,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { isRecord } from "@/api/lib/type-guards";
 import type { AdvertisedSchemas } from "@/api/mcp/advertised-schema";
-import type { McpToolInputSchema } from "@/api/mcp/tool-types";
+import type { McpToolInputSchema } from "@/api/mcp/constants";
 
 const LIST_PLACEMENT_FIELDS = [
   "listId",

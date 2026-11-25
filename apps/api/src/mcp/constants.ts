@@ -45,6 +45,21 @@ export {
 export { MCP_DOCUMENTS_RESOURCE_SCOPES, MCP_LAW_RESOURCE_SCOPES, MCP_MODES };
 export type { McpMode };
 
+export type McpReadClass = "tenant" | "public" | "both";
+
+export type McpTransport = "legacy" | "modern" | "unknown";
+
+/**
+ * Every MCP tool accepts one named-argument object, never a scalar root. Wire
+ * projections rebuild and validate the enumerable JSON recursively, so only
+ * JSON fields enter the protocol payload.
+ */
+export type McpToolInputSchema = {
+  type: "object";
+  properties?: Record<string, unknown>;
+  [key: string]: unknown;
+};
+
 export const MCP_ALL_RESOURCE_SCOPES = [
   ...MCP_ADVANCED_RESOURCE_SCOPES,
   ...MCP_ANONYMIZED_RESOURCE_SCOPES,
@@ -200,6 +215,8 @@ export const MCP_EXPOSE_HEADERS = [
   // logs the same way REST callers do.
   REQUEST_ID_HEADER,
 ] as const;
+
+export type ToolScope = (typeof MCP_ALL_RESOURCE_SCOPES)[number];
 
 export { getMcpResourceModeConfig, getMcpResourceScopes };
 

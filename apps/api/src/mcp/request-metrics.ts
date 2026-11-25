@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import { currentQueryCount } from "@/api/lib/db-query-counter";
 import { emitMcpRequestMetric } from "@/api/lib/observability/request-metrics";
-import type { McpMode } from "@/api/mcp/constants";
+import type { McpMode, McpTransport } from "@/api/mcp/constants";
 import { classifyMcpMetricToolName } from "@/api/mcp/metric-tool-name";
 import { mcpToolLatencyBudgetMs } from "@/api/mcp/tool-latency-budgets";
 
@@ -35,14 +35,14 @@ type McpRequestMetricState = {
   startedQueries: number;
   method: McpMetricMethod;
   mode: McpMode;
-  path: "legacy" | "modern" | "unknown";
+  path: McpTransport;
   toolName?: string;
   phases: Record<McpMetricPhase, number>;
   activePhase: McpMetricPhase | undefined;
   overlap: boolean;
 };
 
-export type McpTransport = McpRequestMetricState["path"];
+export type { McpTransport };
 
 const phaseStore = new AsyncLocalStorage<McpRequestMetricState>();
 

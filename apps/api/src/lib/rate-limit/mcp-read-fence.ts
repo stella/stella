@@ -16,7 +16,7 @@ import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { MCP_READ_MAX_ENTRIES } from "@/api/lib/rate-limit/mcp-read-fence-policy";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
 import { coordinationKey } from "@/api/lib/redis-keys";
-import type { McpReadClass } from "@/api/mcp/tool-types";
+import type { McpReadClass } from "@/api/mcp/constants";
 
 export type McpReadFencePolicy = {
   windowMs: number;
