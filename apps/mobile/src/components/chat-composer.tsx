@@ -320,7 +320,9 @@ export const ChatComposer = ({
           )
         }
         Box={glass ? GlassBox : undefined}
-        empty={message === ""}
+        // The raw draft, not the trimmed message: blank lines are still lines
+        // the text must not squeeze between the controls.
+        empty={draft === ""}
         leading={
           dictation.phase === "idle" ? (
             <ComposerAttachMenu
