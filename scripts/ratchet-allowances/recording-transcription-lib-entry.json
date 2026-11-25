@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "recording-transcription owns the transcription run queue, its reader worker and transitions, like document-translation."
+}

@@ -131,6 +131,11 @@ export default {
           "Queue transport: worker owns its dedicated blocking connection.",
       },
       {
+        path: "apps/api/src/lib/recording-transcription/run-queue.ts",
+        reason:
+          "Queue transport: worker owns its dedicated blocking connection.",
+      },
+      {
         path: "apps/api/src/lib/flows/flow-run-worker.ts",
         reason:
           "Queue transport: worker owns its dedicated blocking connection.",

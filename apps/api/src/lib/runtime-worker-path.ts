@@ -17,6 +17,7 @@ export const RUNTIME_WORKER_FILES = {
   ocrLocal: "ocr-local-worker.js",
   ocrSearchablePdf: "ocr-searchable-pdf-worker.js",
   pdf: "pdf-worker.js",
+  recordingReader: "recording-reader-worker.js",
   sanctionsMatcher: "sanctions-matcher-worker.js",
 } as const;
 
@@ -31,6 +32,7 @@ export const RUNTIME_WORKER_SIDECAR_FILES = [
   "pdfium.wasm",
   "pptx_parser_bg.wasm",
   "pst_reader_bg.wasm",
+  "recording_bg.wasm",
   "xlsx_parser_bg.wasm",
 ] as const;
 
