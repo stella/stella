@@ -33,10 +33,15 @@ const useRuleMatterNames = (rules: readonly MatterRule[]) => {
     let current = true;
     const asked = request.slice(request.indexOf(":") + 1);
     if (asked !== "") {
-      resolveMatters(asked.split(" "), (chunk) =>
-        invoke<DesktopMatterResolution[]>("time_entry_resolve_rule_matters", {
-          ids: chunk,
-        }),
+      resolveMatters(
+        asked.split(" "),
+        async (chunk) =>
+          await invoke<DesktopMatterResolution[]>(
+            "time_entry_resolve_rule_matters",
+            {
+              ids: chunk,
+            },
+          ),
       )
         .then((resolved) => {
           if (current) {

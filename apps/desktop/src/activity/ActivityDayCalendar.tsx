@@ -2029,8 +2029,12 @@ function useMatterCandidates(recordedIds: readonly string[]) {
       return;
     }
     const request = candidateRequest.current;
-    resolveMatters(unresolved.split(" "), (ids) =>
-      invoke<DesktopMatterResolution[]>("time_entry_resolve_matters", { ids }),
+    resolveMatters(
+      unresolved.split(" "),
+      async (ids) =>
+        await invoke<DesktopMatterResolution[]>("time_entry_resolve_matters", {
+          ids,
+        }),
     )
       .then((resolved) => {
         if (request === candidateRequest.current) {
