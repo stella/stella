@@ -264,7 +264,7 @@ class ChunkMapper {
           event.requestId,
           REQUEST_CLOSED[event.closed ?? "answered"],
         );
-        return;
+        break;
       case "retrying":
         // The harness continues on its own; its next output opens a new
         // segment. A transient retry leaves nothing to persist.

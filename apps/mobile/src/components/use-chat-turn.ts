@@ -955,7 +955,6 @@ function turnStreams({
           turnId: known,
         });
         await settle(opened, read);
-        return;
       }
     }
   };

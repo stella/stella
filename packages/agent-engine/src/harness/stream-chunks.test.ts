@@ -915,7 +915,7 @@ describe("chunk stream invariants", () => {
 
   test("every request a turn announces is closed once, before the turn's end, and none outlives it", async () => {
     await assertProperty(
-      "every request a turn announces is closed once, before the turn's end",
+      "every request a turn announces is closed once, before the turn's end, and none outlives it",
       fc.asyncProperty(
         fc.array(event, { maxLength: 25 }),
         terminal,

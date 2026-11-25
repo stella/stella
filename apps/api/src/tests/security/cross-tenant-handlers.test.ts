@@ -3160,8 +3160,8 @@ const isolationCases: IsolationCase[] = [
     },
   },
   {
-    // B's turn has no run on a computer, so its own answer finds no
-    // request; A's never finds the turn at all.
+    // B's turn is settled, so its own answer is told the request ended
+    // with it; A's never finds the turn at all.
     name: "chat turn request answer",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(answerChatTurnRequest, workspaceA, {
@@ -3183,13 +3183,11 @@ const isolationCases: IsolationCase[] = [
       }),
     expectDenied: (result) => {
       expect(getStatusCode(result)).toBe(404);
-      expect(recordField(result, "message")).toBe("Chat turn not found");
     },
     expectPositive: (result) => {
-      expect(getStatusCode(result)).toBe(404);
-      expect(recordField(result, "message")).toBe(
-        "Chat turn request not found",
-      );
+      expect(recordField(result, "outcome")).toMatchObject({
+        type: expect.stringMatching(/^(expired|cancelled)$/u),
+      });
     },
   },
   {

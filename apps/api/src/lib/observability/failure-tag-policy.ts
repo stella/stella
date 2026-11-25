@@ -357,7 +357,6 @@ export const TAGGED_FAILURE_REASON = {
   ListReplacementError: "tagged_failure",
   ListVerificationAccessRevokedError: "tagged_failure",
   LocalModuleLoadError: "tagged_failure",
-  LocalRunAnswerRefused: "request_invalid",
   LocalRunOutputRefused: "request_invalid",
   LocalRunSteerUnknown: "request_invalid",
   LocalizedAppError: "tagged_failure",

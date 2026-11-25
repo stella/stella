@@ -140,7 +140,7 @@ const askedQuestions = (run: ChatRunForRequest) => {
   return pause?.type === "question" ? pause.questions : null;
 };
 
-export type AnswerRunRequestOptions = {
+type AnswerRunRequestOptions = {
   owner: RunOwner;
   chat: ChatRunBinding;
   requestId: string;

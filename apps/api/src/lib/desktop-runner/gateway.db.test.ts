@@ -3088,17 +3088,17 @@ describe("chat turns on a computer", () => {
    * The control an answer goes through. The run's turn stops as a cut of
    * its read stops it: the computer is told to stop the run's turn.
    */
-  const answerControl: Parameters<typeof answerRunRequest>[0] = {
+  const answerControl = (): Parameters<typeof answerRunRequest>[0] => ({
     ...control,
     stopTurn: async (run) => await control.interruptRun(run),
-  };
+  });
 
   const answerRequest = async (
     chatThreadId: SafeId<"chatThread">,
     chatTurnId: SafeId<"chatTurn">,
     requestId: string,
     answer: ChatLocalRunRequestAnswer,
-    by: Parameters<typeof answerRunRequest>[0] = answerControl,
+    by: Parameters<typeof answerRunRequest>[0] = answerControl(),
   ) =>
     (
       await answerRunRequest(by, {
@@ -7072,7 +7072,7 @@ describe("chat turns on a computer", () => {
     // The run holds as many commands as one run may, so the approval is
     // never queued.
     const full: Parameters<typeof answerRunRequest>[0] = {
-      ...answerControl,
+      ...answerControl(),
       answerApproval: async () =>
         await Promise.resolve(Result.ok({ type: "command_limit" } as const)),
     };

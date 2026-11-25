@@ -2496,12 +2496,11 @@ export const useChatSession = ({
         const outcome = await steerQueuedMessage(steered);
         switch (outcome.type) {
           case "steered":
-            return;
+          case "unsettled":
+            break;
           case "refused":
             notifySteerRefused(outcome.reason);
-            return;
-          case "unsettled":
-            return;
+            break;
           default:
             outcome satisfies never;
             panic("Unhandled steer outcome");

@@ -148,7 +148,7 @@ const installRunningTurn = () => {
     answers,
     others,
     /** Settles once the page has posted an answer since the last reply. */
-    answerPosted: () => answerPosted.promise,
+    answerPosted: async () => await answerPosted.promise,
     /** The server's reply to the latest answer the page posted. */
     replyToAnswer: (response: Response) => {
       const reply =

@@ -16,8 +16,8 @@ import { detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
+import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { answerRunRequest } from "@/api/lib/desktop-runner/request-answers";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -51,6 +51,25 @@ const config = {
 const answered = (outcome: ChatLocalRunRequestAnswerOutcome) =>
   Result.ok({ outcome });
 
+/**
+ * What a request of a settled turn reads as: its run ended with the turn,
+ * so nothing reaches it any more, and the answer is told how it ended.
+ * `null` while the turn is live: its run says.
+ */
+const SETTLED_TURN_OUTCOME = {
+  accepted: null,
+  running: null,
+  "awaiting-user": null,
+  "handed-over": null,
+  completed: { type: "expired", expiry: "run_finished" },
+  failed: { type: "expired", expiry: "run_failed" },
+  cancelled: { type: "cancelled" },
+  interrupted: { type: "expired", expiry: "run_lost" },
+} as const satisfies Record<
+  ChatTurnStatus,
+  ChatLocalRunRequestAnswerOutcome | null
+>;
+
 const notFound = (message: string) =>
   Result.err(new HandlerError({ status: 404, code: "not_found", message }));
 
@@ -68,6 +87,10 @@ const answerChatTurnRequest = createSafeRootHandler(
     );
     if (turn === null) {
       return notFound("Chat turn not found");
+    }
+    const settled = SETTLED_TURN_OUTCOME[turn.status];
+    if (settled !== null) {
+      return answered(settled);
     }
     // The member's stop, as the turn's Stop records it: the turn's owner
     // settles it stopped, and the cut stops the run on the computer.
@@ -108,12 +131,5 @@ const answerChatTurnRequest = createSafeRootHandler(
       : answered(outcome);
   },
 );
-
-// The answer is a runner command, serialized by the runner store; neither
-// the turn nor the thread is written.
-declareAggregateMutation(answerChatTurnRequest, {
-  type: "aggregate",
-  aggregates: ["chatThread"],
-});
 
 export default answerChatTurnRequest;

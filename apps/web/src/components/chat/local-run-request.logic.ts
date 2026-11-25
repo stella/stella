@@ -41,8 +41,8 @@ export const pendingLocalRunApprovalIds = (
  * running meanwhile; the card is what waits. Only a request that can still
  * be answered (pending, in a turn that runs) is asked.
  */
-export const awaitedLocalRunApproval = <TPart extends { readonly id: string }>(
-  part: TPart,
+export const awaitedLocalRunApproval = (
+  part: { readonly id: string },
   request: ChatLocalRunRequest | null,
   turnRuns: boolean,
 ): ApprovalToolPart | null => {
