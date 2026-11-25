@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { crc32, deflateSync } from "node:zlib";
+import type WorldAtlasCountries from "world-atlas/countries-50m.json";
 
 import type { CountryCode } from "@stll/country-codes";
 
@@ -455,19 +456,7 @@ export const getBaseMap = async (): Promise<BaseMap> => {
   return await baseMapPromise;
 };
 
-export type WorldAtlasTopology = {
-  transform: { scale: number[]; translate: number[] };
-  arcs: number[][][];
-  objects: {
-    countries: {
-      geometries: {
-        id?: string;
-        arcs: unknown;
-        properties: { name: string };
-      }[];
-    };
-  };
-};
+type WorldAtlasTopology = typeof WorldAtlasCountries;
 
 /**
  * Decodes the TopoJSON countries collection: arcs are delta-encoded quantized
