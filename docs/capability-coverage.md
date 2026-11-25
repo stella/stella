@@ -850,7 +850,7 @@ mechanics, and similar), not gaps in coverage.
 | organization_export | 2 |
 | provider_secret | 49 |
 | public_indexing | 13 |
-| realtime_stream | 10 |
+| realtime_stream | 11 |
 | search_ui | 23 |
 | session_token_exchange | 23 |
 | ui_navigation_state | 14 |
