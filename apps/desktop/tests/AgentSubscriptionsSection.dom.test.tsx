@@ -525,26 +525,25 @@ const renderAntigravity = (first: AntigravityAnswer) => {
 };
 
 test.each([
-  [{ state: "signed_in", version: "1.5.17" }, "signedIn"],
-  [{ state: "signed_out", version: "1.5.17" }, "signedOut"],
-  [{ state: "too_old", version: "1.4.2" }, "tooOld"],
-  [{ state: "not_installed" }, "notInstalled"],
+  [
+    { state: "signed_in", version: "1.5.17" },
+    defaultMessages.agentSubscriptions.signedIn,
+  ],
+  [{ state: "signed_out", version: "1.5.17" }, antigravityMessages.signedOut],
+  [{ state: "too_old", version: "1.4.2" }, antigravityMessages.tooOld],
+  [{ state: "not_installed" }, antigravityMessages.notInstalled],
   [
     { state: "unchecked", version: "1.5.17", reason: "not_connected" },
-    "notConnected",
+    antigravityMessages.notConnected,
   ],
   [
     { state: "unchecked", version: "1.5.17", reason: "check_failed" },
-    "checkFailed",
+    antigravityMessages.checkFailed,
   ],
 ] satisfies [AntigravityAnswer, string][])(
   "the Antigravity row says what the CLI answered: %o",
-  async (answer, key) => {
+  async (answer, expected) => {
     const { statusLine, queryByText } = renderAntigravity(answer);
-    const expected =
-      key === "signedIn"
-        ? defaultMessages.agentSubscriptions.signedIn
-        : antigravityMessages[key as keyof typeof antigravityMessages];
     await waitFor(() => {
       expect(statusLine()).toBe(expected);
     });

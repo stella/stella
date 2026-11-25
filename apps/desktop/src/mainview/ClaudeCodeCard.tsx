@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { ClaudeLogoIcon } from "@stll/ui/brand-icons";
@@ -81,8 +82,15 @@ const ClaudeCodeStatusLine = ({ status }: { status: ClaudeCodeStatus }) => {
       return <SignedInLine email={status.email} />;
     case "failed":
       return t(FAILURE_MESSAGES[status.reason]);
-    default:
+    case "not_installed":
+    case "signed_out":
+    case "signing_in":
+    case "api_key":
+    case "unknown":
       return t(STATE_MESSAGES[status.state]);
+    default:
+      status satisfies never;
+      return panic("Unknown Claude Code state");
   }
 };
 
