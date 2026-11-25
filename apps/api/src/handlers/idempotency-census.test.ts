@@ -55,6 +55,14 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "DELETE /v1/chat/browser-site-notes/:noteId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/chat/browser-site-notes/sites": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   // Setting a limit reminder again is a no-op and cancelling one removes
   // whatever is set, so a repeat answers the current state.
   "DELETE /v1/chat/threads/:threadId/limit-reminder": {

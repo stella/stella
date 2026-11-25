@@ -65,6 +65,8 @@ export const STELLA_MCP_TOOL_NAMES = [
   "create_reader_annotation",
   "update_reader_annotation",
   "delete_reader_annotation",
+  "read_site_notes",
+  "save_site_notes",
   "list_time_entries",
   "save_time_entry",
   "delete_time_entry",

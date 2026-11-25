@@ -119,6 +119,13 @@ export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   // stays on per-call approval in the UI grant policy; only page reads may
   // run unasked, after the user opts in for the tab session.
   "use-browser": CHAT_TOOL_POLICY_KIND.external,
+  // The member's own notes about how a website works, beside the browser
+  // tool. The API refuses to keep anything else in them (personal data,
+  // credentials, one search's address), the member reviews and removes them
+  // in Settings, and they never approve a browser step, so reading and
+  // keeping them current runs without asking.
+  read_site_notes: CHAT_TOOL_POLICY_KIND.internal,
+  save_site_notes: CHAT_TOOL_POLICY_KIND.internal,
   web_search: CHAT_TOOL_POLICY_KIND.external,
   // Delegation runs without asking: a subagent executes only tools that need
   // no approval, and every approval-gated call it makes becomes a

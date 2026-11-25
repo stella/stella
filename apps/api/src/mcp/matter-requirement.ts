@@ -100,6 +100,7 @@ export const WRITE_TOOL_SCOPES = {
   // Each catalog capability enforces its own workspace access.
   [MCP_CAPABILITY_EXECUTORS.write]: organization,
   submit_feedback: organization,
+  save_site_notes: organization,
   mint_web_handoff: organization,
 } as const satisfies Record<McpWriteToolName, WriteToolScope>;
 

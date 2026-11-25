@@ -115,6 +115,8 @@ export const ACCOUNT_EXPORT_REGISTRY = {
   },
   // A message the member wrote and queued: their content before it is sent.
   chat_queued_messages: { type: "exported" },
+  // The member's own notes about how websites work.
+  chat_browser_site_notes: { type: "exported" },
   chat_threads: { type: "exported" },
   chat_tool_grants: {
     type: "exempt",

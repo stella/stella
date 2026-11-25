@@ -337,6 +337,12 @@ export const chatKeys = {
     userId,
     "browser-site-grants",
   ],
+  browserSiteNotes: (activeOrganizationId: string, userId: string) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "browser-site-notes",
+  ],
   modelOptions: (activeOrganizationId: string) => [
     ...chatKeys.all,
     activeOrganizationId,

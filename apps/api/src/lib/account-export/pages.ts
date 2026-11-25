@@ -14,6 +14,7 @@ import {
   agentSkills,
   aiMemories,
   billingDraftUserSettings,
+  chatBrowserSiteNotes,
   chatMessageRevisions,
   chatMessages,
   chatQueuedMessages,
@@ -277,6 +278,30 @@ const readAiMemoriesPage = async ({
       .orderBy(asc(aiMemories.id))
       .limit(ACCOUNT_EXPORT_PAGE_SIZE);
     return projectRows(rows, projections.ai_memories);
+  });
+
+const readBrowserSiteNotesPage = async ({
+  projections,
+  narrowScopedDb,
+  organizationId,
+  userId,
+  cursor,
+}: OrganizationPageQueryOptions) =>
+  await narrowScopedDb(async (tx) => {
+    const rows = await tx
+      .select()
+      .from(chatBrowserSiteNotes)
+      .where(
+        and(
+          eq(chatBrowserSiteNotes.organizationId, organizationId),
+          eq(chatBrowserSiteNotes.userId, userId),
+          stillMember(organizationId, userId),
+          after(chatBrowserSiteNotes.id, cursor),
+        ),
+      )
+      .orderBy(asc(chatBrowserSiteNotes.id))
+      .limit(ACCOUNT_EXPORT_PAGE_SIZE);
+    return projectRows(rows, projections.chat_browser_site_notes);
   });
 
 const readAgentSkillsPage = async ({
@@ -670,6 +695,8 @@ const readOrganizationPage = async ({
       return await readChatQueuedMessagesPage(options);
     case "ai_memories":
       return await readAiMemoriesPage(options);
+    case "chat_browser_site_notes":
+      return await readBrowserSiteNotesPage(options);
     case "agent_skills":
       return await readAgentSkillsPage(options);
     case "agent_skill_revisions":

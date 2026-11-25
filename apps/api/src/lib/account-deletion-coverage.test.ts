@@ -155,6 +155,7 @@ const ACCOUNT_DELETION_KNOWN_GAPS: readonly KnownGap[] = [
       ["dictation_vocabulary_terms", "created_by", "set null"],
       ["cell_metadata", "updated_by", "set null"],
       ["chat_browser_site_grants", "user_id", "cascade"],
+      ["chat_browser_site_notes", "user_id", "cascade"],
       ["chat_command_receipts", "user_id", "cascade"],
       ["chat_limit_reminders", "user_id", "cascade"],
       ["chat_message_revisions", "created_by", "set null"],

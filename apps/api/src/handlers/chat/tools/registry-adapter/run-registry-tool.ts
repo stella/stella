@@ -35,6 +35,7 @@ import { LEGISLATION_TOOL_HANDLERS } from "@/api/mcp/legislation-tools";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
 import { READER_ANNOTATION_TOOL_HANDLERS } from "@/api/mcp/reader-annotation-tools";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
+import { SITE_NOTES_TOOL_HANDLERS } from "@/api/mcp/site-notes-tools";
 import { SOFT_LAW_TOOL_HANDLERS } from "@/api/mcp/soft-law-tools";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
@@ -137,6 +138,9 @@ export const REGISTRY_READ_TOOL_HANDLERS = {
     DECISION_READER_TOOL_SET.handlers.preview_cited_provision,
   list_case_law_courts:
     CASE_LAW_COURT_CATALOG_TOOL_SET.handlers.list_case_law_courts,
+  // Non-projectable: chat reads website notes through its own tool beside
+  // the browser tool. Wired only to keep this map exhaustive.
+  read_site_notes: SITE_NOTES_TOOL_HANDLERS.read_site_notes,
 } satisfies Record<RegistryReadToolName, McpToolHandler>;
 
 type ProjectableRegistryReadToolName = ChatProjectableToolName<

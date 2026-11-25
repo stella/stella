@@ -77,6 +77,8 @@ export const AUDIT_RESOURCE_PROJECTIONS = {
     "settings.organization.auditResourceKinds.chat_tool_grant",
   [AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT]:
     "settings.organization.auditResourceKinds.chat_browser_site_grant",
+  [AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_NOTE]:
+    "settings.organization.auditResourceKinds.chat_browser_site_note",
   [AUDIT_RESOURCE_TYPE.CHAT_LOCAL_FOLDER_APPROVAL]:
     "settings.organization.auditResourceKinds.chat_local_folder_approval",
   [AUDIT_RESOURCE_TYPE.CLAUSE]:

@@ -236,6 +236,11 @@ const AUDIT_RESOURCE_RESOLVERS = {
     type: "unresolvable",
     reason: "No canonical user-facing name source",
   },
+  // The website it is about travels in the entry's metadata (`browserOrigin`).
+  [AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_NOTE]: {
+    type: "unresolvable",
+    reason: "No canonical user-facing name source",
+  },
   [AUDIT_RESOURCE_TYPE.CHAT_LOCAL_FOLDER_APPROVAL]: {
     type: "unresolvable",
     reason: "The folder's name stays on the member's computer",

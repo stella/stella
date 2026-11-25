@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { browserSiteGrantsOptions } from "@/features/chat/browser-control/browser-site-grants";
+import { browserSiteNotesOptions } from "@/features/chat/browser-control/browser-site-notes";
 import { prefetchSharepointAccess } from "@/features/sharepoint/sharepoint-queries";
 import {
   mcpConnectionsOptions,
@@ -54,6 +55,13 @@ export const Route = createFileRoute(
       ensureRouteQueryData(
         context.queryClient,
         browserSiteGrantsOptions({
+          activeOrganizationId: organizationId,
+          userId: context.user.id,
+        }),
+      ),
+      ensureRouteQueryData(
+        context.queryClient,
+        browserSiteNotesOptions({
           activeOrganizationId: organizationId,
           userId: context.user.id,
         }),

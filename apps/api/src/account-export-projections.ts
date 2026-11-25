@@ -19,6 +19,7 @@ import { toUserDefaultAccountExport } from "@/api/handlers/templates/lookup-form
 import { toPersonalUserFileResponse } from "@/api/handlers/user-files/personal-data-response";
 import { toPersonalViewTemplateResponse } from "@/api/handlers/view-templates/personal-data-response";
 import type { AccountExportProjections } from "@/api/lib/account-export/projections";
+import { toBrowserSiteNoteAccountExport } from "@/api/lib/chat/browser-site-notes/store";
 import {
   projectAccountMembership,
   projectAccountProfile,
@@ -48,6 +49,7 @@ export const ACCOUNT_EXPORT_PROJECTIONS = {
   chat_message_revisions: toPersonalChatMessageRevisionResponse,
   chat_queued_messages: toPersonalQueuedChatMessageResponse,
   ai_memories: toMemoryResponse,
+  chat_browser_site_notes: toBrowserSiteNoteAccountExport,
   agent_skills: toAgentSkillResponse,
   agent_skill_revisions: toAgentSkillRevisionResponse,
   saved_searches: toSavedSearchResponse,

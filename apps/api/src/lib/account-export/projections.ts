@@ -4,6 +4,7 @@ import type {
   agentSkills,
   aiMemories,
   billingDraftUserSettings,
+  chatBrowserSiteNotes,
   chatMessageRevisions,
   chatMessages,
   chatQueuedMessages,
@@ -54,6 +55,9 @@ type AccountExportProjectionSignatures = {
     row: typeof chatQueuedMessages.$inferSelect,
   ) => unknown;
   ai_memories: (row: typeof aiMemories.$inferSelect) => unknown;
+  chat_browser_site_notes: (
+    row: typeof chatBrowserSiteNotes.$inferSelect,
+  ) => unknown;
   agent_skills: (
     row: typeof agentSkills.$inferSelect,
     resources: (typeof agentSkillResources.$inferSelect)[],

@@ -14,6 +14,7 @@ import { savedSearchKeys } from "@/components/saved-searches.logic";
 import { claimCommentKeys } from "@/features/avt/claim-comments-query";
 import { readerAnswersOptions } from "@/features/case-law/components/case-viewer/reader-answers-query";
 import { browserSiteGrantsOptions } from "@/features/chat/browser-control/browser-site-grants";
+import { browserSiteNotesOptions } from "@/features/chat/browser-control/browser-site-notes";
 import { chatLimitReminderOptions } from "@/features/chat/chat-limit-reminder";
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { chatToolGrantsOptions } from "@/features/chat/chat-tool-grants";
@@ -447,6 +448,17 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     files: ["features/chat/browser-control/browser-site-grants.ts"],
     keys: () => [
       browserSiteGrantsOptions({
+        activeOrganizationId: ORG,
+        userId: USER,
+      }).queryKey,
+    ],
+  },
+  "chat/browser-site-notes/list.ts": {
+    kind: "keyed",
+    calls: ['api.chat["browser-site-notes"].get'],
+    files: ["features/chat/browser-control/browser-site-notes.ts"],
+    keys: () => [
+      browserSiteNotesOptions({
         activeOrganizationId: ORG,
         userId: USER,
       }).queryKey,
