@@ -131,6 +131,13 @@ const RULES_BINDING: StoreBinding<MatterRule[]> = {
     await invoke("activity_save_matter_rules", { revision, rules }),
 };
 
+const SAVE_OUTCOMES = {
+  saved: "saved",
+  conflict: "conflict",
+  failed: "failed",
+  notLoaded: "notLoaded",
+} as const;
+
 /** One store section, kept current with every window's saves. */
 function useStoredSection<T>(binding: StoreBinding<T>) {
   const [state, setState] = useState<StoredState<T>>({ type: "loading" });
@@ -174,7 +181,7 @@ function useStoredSection<T>(binding: StoreBinding<T>) {
   const save = useCallback(
     async (current: StoredState<T>, change: (value: T) => T) => {
       if (current.type !== "ready") {
-        return "done";
+        return SAVE_OUTCOMES.notLoaded;
       }
       const saved = await binding
         .write(current.revision, change(current.value))
@@ -187,30 +194,48 @@ function useStoredSection<T>(binding: StoreBinding<T>) {
           );
           return null;
         });
-      setSaveFailed(saved === null);
-      if (saved?.type === "conflict") {
-        return "conflict";
+      if (saved === null) {
+        return SAVE_OUTCOMES.failed;
+      }
+      if (saved.type === "conflict") {
+        return SAVE_OUTCOMES.conflict;
       }
       await reload();
-      return "done";
+      return SAVE_OUTCOMES.saved;
     },
     [binding, reload],
   );
+  // This window's changes apply one at a time, each to the read the one
+  // before it left, so they never conflict with each other.
+  const pending = useRef<Promise<void>>(Promise.resolve());
   /** Applies `change` to the latest value. When another window saved first
    * it reads again and applies the same change once more; a second conflict
-   * leaves the change for the member's next action. */
+   * drops the change and says so. */
   const update = useCallback(
     (change: (value: T) => T) => {
-      save(latest.current, change)
-        .then(async (outcome) =>
-          outcome === "conflict" ? await save(await reload(), change) : outcome,
-        )
+      pending.current = pending.current
+        .then(async () => {
+          const first = await save(latest.current, change);
+          const outcome =
+            first === SAVE_OUTCOMES.conflict
+              ? await save(await reload(), change)
+              : first;
+          if (outcome === SAVE_OUTCOMES.conflict) {
+            report(binding.window, DESKTOP_TELEMETRY_OPERATIONS.activityUpdate);
+          }
+          setSaveFailed(
+            outcome === SAVE_OUTCOMES.conflict ||
+              outcome === SAVE_OUTCOMES.failed,
+          );
+          return undefined;
+        })
         .catch((error: unknown) => {
           report(
             binding.window,
             DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
             error,
           );
+          setSaveFailed(true);
         });
     },
     [binding.window, reload, save],

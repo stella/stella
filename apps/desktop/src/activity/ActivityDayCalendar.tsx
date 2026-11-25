@@ -519,7 +519,7 @@ export const ActivityDayCalendar = ({
           },
         ],
       },
-      afterSaved(suggestion, edit.matter.id),
+      afterSaved(suggestion),
     );
   };
   /** An accepted split or move creates its entries in one confirmed batch,
@@ -552,18 +552,18 @@ export const ActivityDayCalendar = ({
           timezoneId: timeZone,
         }),
       },
-      afterSaved(suggestion, edit.matter.id),
+      afterSaved(suggestion),
     );
   };
-  /** A saved entry teaches this computer its evidence, then the next card
+  /** Saved entries teach this computer their evidence, then the next card
    * opens. */
   const afterSaved =
-    (suggestion: ActivitySuggestion, matterId: string) => () => {
+    (suggestion: ActivitySuggestion) => (items: readonly BatchItem[]) => {
       learnFromConfirmation({
         learningStore,
         captureDetails: snapshot.captureDetails,
         suggestion,
-        matterId,
+        items,
       });
       openNext(suggestion);
     };
@@ -1724,7 +1724,10 @@ function useBatchSubmission({
   const [errorMessage, setError] = useState<string | null>(null);
   const sending = useRef(false);
 
-  const submitBatch = (pending: PendingBatch, onSaved: () => void) => {
+  const submitBatch = (
+    pending: PendingBatch,
+    onSaved: (items: readonly BatchItem[]) => void,
+  ) => {
     if (sending.current) {
       return;
     }
@@ -1764,7 +1767,7 @@ function useBatchSubmission({
           return undefined;
         }
         updateSubmission({ type: "saved", count: entries.length });
-        onSaved();
+        onSaved(pending.items);
         return undefined;
       })
       .catch((error: unknown) => {
@@ -1837,16 +1840,29 @@ type LearnFromConfirmationOptions = {
   learningStore: LearningStore;
   captureDetails: boolean;
   suggestion: ActivitySuggestion;
-  matterId: string;
+  /** The entries saved for the suggestion. */
+  items: readonly BatchItem[];
 };
-/** What a confirmed entry's time showed now counts toward the matter the
- * member confirmed, and against the one suggested if they differ. */
+/**
+ * What the suggestion's time showed counts toward the matter its saved
+ * entries were filed under, and against the suggested matter if that
+ * differs: a split or a full move teaches the matter that holds all of it.
+ * A partial move teaches nothing, because a move divides time by duration,
+ * not by which window or document moved, so no piece of evidence is known
+ * to belong to either matter.
+ */
 const learnFromConfirmation = ({
   learningStore,
   captureDetails,
   suggestion,
-  matterId,
-}: LearnFromConfirmationOptions) =>
+  items,
+}: LearnFromConfirmationOptions) => {
+  const [matterId, ...others] = new Set(
+    items.map(({ entry }) => entry.matterId),
+  );
+  if (matterId === undefined || others.length > 0) {
+    return;
+  }
   learningStore.update((current) =>
     learn(current, {
       evidence: suggestion.segments.map((segment) =>
@@ -1857,6 +1873,7 @@ const learnFromConfirmation = ({
       nowMs: Temporal.Now.instant().epochMilliseconds,
     }),
   );
+};
 
 /** Forgets learned weights for matters a read answered the member can no
  * longer open. Rules stay until the member removes them. */
