@@ -20,8 +20,10 @@ import {
   legislationV2NeedsPassages,
 } from "@/api/lib/legal-search/corpus-index-projection-builder";
 import {
+  CORPUS_PROJECTION_REPAIR_BATCH_SIZE,
   type CorpusIndexProjectionSubject,
   CorpusIndexProjectionSubjectMissingError,
+  reconcileCorpusProjectionDesiredStatesTx,
   reconcileCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
@@ -291,13 +293,27 @@ export type CorpusProjectionMaterialRejectionCounts = {
    * are also counted in `retryScheduled` or `blocked`.
    */
   mismatchHeld: number;
+  /** Canonical mismatches whose desired state was re-derived and written. */
+  rederived: number;
+};
+
+/** What re-deriving a page's mismatched leases did, per lease. */
+type CorpusProjectionMismatchRederivationCounts = {
+  /** Re-derived from the canonical row, and the desired state moved. */
+  reconciled: number;
+  /** Re-derived to the desired state it already holds. */
+  unchanged: number;
+  /** Held to keep a served copy; the desired state stays. */
+  held: number;
+  /** The canonical row is gone; the desired state stays. */
+  missing: number;
 };
 
 /** Re-derive mismatched leases' desired states from their canonical rows. */
 export type CorpusProjectionMismatchRederivation = (
   runInTransaction: ProjectionTransactionRunner,
   leases: readonly CorpusProjectionIntentLease[],
-) => Promise<void>;
+) => Promise<CorpusProjectionMismatchRederivationCounts>;
 
 const subjectOfLease = ({
   family,
@@ -317,46 +333,170 @@ const subjectOfLease = ({
   }
 };
 
+/** Entity ids are canonical lowercase UUIDs: text order is the lock order. */
+const compareEntityIds = (left: string, right: string): number => {
+  if (left === right) {
+    return 0;
+  }
+  return left < right ? -1 : 1;
+};
+
+type MismatchRederivationOutcome =
+  "reconciled" | "unchanged" | "held" | "missing";
+
+const reconciledOutcome = ({
+  changed,
+}: {
+  changed: boolean;
+}): MismatchRederivationOutcome => (changed ? "reconciled" : "unchanged");
+
+/**
+ * One family's mismatched leases re-derived as repairs: one subject per
+ * entity, whatever generations leased it, sorted by entity id, in bounded
+ * repair transactions of `CORPUS_PROJECTION_REPAIR_BATCH_SIZE` subjects.
+ * Outcomes are keyed by `family:entityId`; a subject at risk is returned
+ * for its own repair instead.
+ */
+const rederiveFamilyMismatches = async (
+  runInTransaction: ProjectionTransactionRunner,
+  family: CorpusIndexProjectionSubject["family"],
+  leases: readonly CorpusProjectionIntentLease[],
+): Promise<{
+  outcomes: Map<string, MismatchRederivationOutcome>;
+  atRisk: CorpusIndexProjectionSubject[];
+}> => {
+  const subjects = [
+    ...new Map(
+      leases.flatMap((lease) =>
+        lease.family === family
+          ? [[lease.entityId, subjectOfLease(lease)] as const]
+          : [],
+      ),
+    ).entries(),
+  ]
+    .toSorted(([left], [right]) => compareEntityIds(left, right))
+    .map(([, subject]) => subject);
+  const outcomes = new Map<string, MismatchRederivationOutcome>();
+  const atRisk: CorpusIndexProjectionSubject[] = [];
+  for (const batch of chunkItems(
+    subjects,
+    CORPUS_PROJECTION_REPAIR_BATCH_SIZE,
+  )) {
+    const batchOutcomes = await runInTransaction(
+      async (tx) => await reconcileCorpusProjectionDesiredStatesTx(tx, batch),
+    );
+    for (const subject of batch) {
+      const outcome =
+        batchOutcomes.get(subject.entityId) ??
+        panic(`Repair batch has no outcome for ${subject.entityId}`);
+      switch (outcome.type) {
+        case "reconciled":
+          outcomes.set(
+            `${family}:${subject.entityId}`,
+            reconciledOutcome(outcome.outcome),
+          );
+          break;
+        case "missing":
+          outcomes.set(`${family}:${subject.entityId}`, "missing");
+          break;
+        case "at_risk":
+          atRisk.push(subject);
+          break;
+        default:
+          outcome satisfies never;
+          return panic(`Unhandled repair outcome for ${subject.entityId}`);
+      }
+    }
+  }
+  return { outcomes, atRisk };
+};
+
+/**
+ * The repair of one subject in its own transaction
+ * (`reconcileCorpusProjectionDesiredStateTx`): a subject whose named copy is
+ * at risk restores it or is held alone.
+ */
+const rederiveSubjectAlone = async (
+  runInTransaction: ProjectionTransactionRunner,
+  subject: CorpusIndexProjectionSubject,
+): Promise<MismatchRederivationOutcome> => {
+  const reconciled = await Result.tryPromise({
+    try: async () =>
+      await runInTransaction(
+        async (tx) =>
+          await reconcileCorpusProjectionDesiredStateTx(tx, subject),
+      ),
+    catch: (cause) =>
+      cause instanceof Error ? cause : new UnhandledException({ cause }),
+  });
+  if (reconciled.isOk()) {
+    return reconciled.value.isOk()
+      ? reconciledOutcome(reconciled.value.value)
+      : "held";
+  }
+  if (reconciled.error instanceof CorpusIndexProjectionSubjectMissingError) {
+    return "missing";
+  }
+  return await Promise.reject(reconciled.error);
+};
+
 /**
  * Re-derive the desired state of each mismatched entity from its canonical
- * row, one subject per transaction in the canonical writers' lock order, as
- * a repair does. A subject whose canonical row is gone, or whose repair is
- * held to keep a served copy, keeps its desired state; the classification
- * that follows then schedules it a retry.
+ * row, as a repair does: a batch of subjects per transaction, sorted by
+ * entity id and locked in the canonical writers' order
+ * (`reconcileCorpusProjectionDesiredStatesTx`). A subject whose write would
+ * take a named copy away from readers then gets its own repair, one
+ * transaction each, which restores the copy or holds the subject
+ * (`reconcileCorpusProjectionDesiredStateTx`). A subject whose canonical row
+ * is gone, or whose repair is held, keeps its desired state without holding
+ * back the rest of its batch; the classification that follows then
+ * schedules it a retry.
  */
 export const rederiveMismatchedCorpusProjectionDesiredStates: CorpusProjectionMismatchRederivation =
   async (runInTransaction, leases) => {
-    await mapSequentially(
+    const caseLaw = await rederiveFamilyMismatches(
+      runInTransaction,
+      "case_law",
       leases,
-      async (lease): Promise<"reconciled" | "held" | "missing"> => {
-        const subject = subjectOfLease(lease);
-        const reconciled = await Result.tryPromise({
-          try: async () =>
-            await runInTransaction(
-              async (tx) =>
-                await reconcileCorpusProjectionDesiredStateTx(tx, subject),
-            ),
-          catch: (cause) =>
-            cause instanceof Error ? cause : new UnhandledException({ cause }),
-        });
-        if (reconciled.isOk()) {
-          if (reconciled.value.isOk()) {
-            return "reconciled";
-          }
-          logger.warn("corpus_projection.mismatch_repair_held", {
-            entity: lease.entityId,
-            generation: lease.generation,
-          });
-          return "held";
-        }
-        if (
-          reconciled.error instanceof CorpusIndexProjectionSubjectMissingError
-        ) {
-          return "missing";
-        }
-        return await Promise.reject(reconciled.error);
-      },
     );
+    const legislation = await rederiveFamilyMismatches(
+      runInTransaction,
+      "legislation",
+      leases,
+    );
+    const alone = await mapSequentially(
+      [...caseLaw.atRisk, ...legislation.atRisk],
+      async (subject) =>
+        [
+          `${subject.family}:${subject.entityId}`,
+          await rederiveSubjectAlone(runInTransaction, subject),
+        ] as const,
+    );
+    const outcomes = new Map([
+      ...caseLaw.outcomes,
+      ...legislation.outcomes,
+      ...alone,
+    ]);
+    const perLease = leases.map((lease) => {
+      const outcome =
+        outcomes.get(`${lease.family}:${lease.entityId}`) ??
+        panic(`Repair batch has no outcome for ${lease.entityId}`);
+      if (outcome === "held") {
+        logger.warn("corpus_projection.mismatch_repair_held", {
+          entity: lease.entityId,
+          generation: lease.generation,
+        });
+      }
+      return outcome;
+    });
+    const countOf = (type: (typeof perLease)[number]) =>
+      perLease.filter((outcome) => outcome === type).length;
+    return {
+      reconciled: countOf("reconciled"),
+      unchanged: countOf("unchanged"),
+      held: countOf("held"),
+      missing: countOf("missing"),
+    };
   };
 
 type SettleRejectedCorpusProjectionMaterialsOptions = {
@@ -409,7 +549,7 @@ export const settleRejectedCorpusProjectionMaterials = async ({
     errorMessage: "projection material is no longer current",
     testNow,
   });
-  await rederive(
+  const rederived = await rederive(
     runInTransaction,
     mismatched.map(({ lease }) => lease),
   );
@@ -455,6 +595,7 @@ export const settleRejectedCorpusProjectionMaterials = async ({
     retryScheduled: mismatches.retryScheduled + retries.retryScheduled,
     blocked: mismatches.blocked + retries.blocked,
     mismatchHeld: mismatches.retryScheduled + mismatches.blocked,
+    rederived: rederived.reconciled,
   };
 };
 

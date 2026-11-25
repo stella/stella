@@ -398,6 +398,11 @@ export type CorpusProjectionOfflineBuildProgress = {
      * move, each held for a retry.
      */
     consecutivePages: number;
+    /**
+     * Mismatches whose desired state was re-derived from the canonical row
+     * and written; they widen the page as built blocks would not.
+     */
+    rederived: number;
   };
   /**
    * The most built blocks held at once for a later shard of their class: at
@@ -678,7 +683,12 @@ const emptyProgress = (
   cursor,
   walk: { passes: 1, lastPassReserved: 0, lastPassStarted: 0 },
   reserved: 0,
-  canonicalInputMismatch: { revisions: 0, pages: 0, consecutivePages: 0 },
+  canonicalInputMismatch: {
+    revisions: 0,
+    pages: 0,
+    consecutivePages: 0,
+    rederived: 0,
+  },
   waitingPeak: 0,
   notStarted: {
     cancelled: 0,
@@ -760,6 +770,14 @@ type PendingProof = {
 
 /** Stop an unproductive scan before traversing an arbitrarily large route. */
 export const CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT = 8;
+
+/**
+ * A run reports its progress at least every this many reservation pages, or
+ * this often, even while no shard delivers: a stretch of pages that only
+ * re-derives mismatches still shows movement.
+ */
+const CORPUS_PROJECTION_OFFLINE_PROGRESS_REPORT_PAGES = 16;
+export const CORPUS_PROJECTION_OFFLINE_PROGRESS_REPORT_MS = 60_000;
 
 type Stop = Exclude<CorpusProjectionOfflineBuildOutcome["status"], "drained">;
 
@@ -899,6 +917,12 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
   #builtBytes = 0;
   #builtBlocks = 0;
   /**
+   * Pages reserved since the last report, and when the last report's
+   * interval began: the run's start, then each page that reported.
+   */
+  #pagesSinceReport = 0;
+  #pageReportAtMs: number | null = null;
+  /**
    * Kill deadlines of deliveries handed to the caller and not yet resolved.
    * A run that fails keeps its lock until the latest of them has passed.
    */
@@ -978,7 +1002,27 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
 
   #report(): void {
     this.#progress.awaitingProof = this.#pending.size;
+    this.#pagesSinceReport = 0;
     this.#options.onProgress?.(this.#progress);
+  }
+
+  /**
+   * Report after a reservation page once enough pages or time passed since
+   * the last report, whether or not the page built anything.
+   */
+  async #reportPage(): Promise<void> {
+    this.#pagesSinceReport += 1;
+    const nowMs = await this.#nowMs();
+    const intervalStartMs =
+      this.#pageReportAtMs ?? panic("A page reported before its run started");
+    if (
+      this.#pagesSinceReport >=
+        CORPUS_PROJECTION_OFFLINE_PROGRESS_REPORT_PAGES ||
+      nowMs - intervalStartMs >= CORPUS_PROJECTION_OFFLINE_PROGRESS_REPORT_MS
+    ) {
+      this.#pageReportAtMs = nowMs;
+      this.#report();
+    }
   }
 
   async #admit<Value>(
@@ -990,6 +1034,8 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
 
   async run(): Promise<CorpusProjectionOfflineBuildOutcome["status"]> {
     let returned = false;
+    // The first report interval starts with the run, not with its first page.
+    this.#pageReportAtMs = await this.#nowMs();
     try {
       const status = await this.#runPasses();
       returned = true;
@@ -1611,6 +1657,7 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
           this.#builtBlocks === 0
             ? null
             : Math.ceil(this.#builtBytes / this.#builtBlocks),
+        rederivedRevisions: this.#progress.canonicalInputMismatch.rederived,
       });
       // db-await-in-loop: a page walk: one reservation page of a bounded size per pass
       const built = await this.#reserveAndBuildPage(limit);
@@ -1706,6 +1753,7 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
     ).length;
     const diagnostic = this.#progress.canonicalInputMismatch;
     diagnostic.revisions += mismatches;
+    diagnostic.rederived += rejected.rederived;
     if (mismatches > 0) {
       diagnostic.pages += 1;
     }
@@ -1820,6 +1868,7 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
       counter: "handedBack",
       message: "offline projection page held more than one shard of bytes",
     });
+    await this.#reportPage();
     return blocks;
   }
 
