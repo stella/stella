@@ -1,29 +1,19 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import type { FileBrowserDownloadDependencies } from "@/api/handlers/chat/browser-downloads/file-download";
 import {
-  BROWSER_DOWNLOAD_FILE_MAX_BYTES,
-  BROWSER_DOWNLOAD_REFUSAL_CODE,
-  browserDownloadOriginSchema,
-} from "@stll/api-contract/browser-downloads";
-import { MULTIPART_ENVELOPE_MAX_BYTES } from "@stll/api-contract/limits";
-
-import { chatThreads } from "@/api/db/schema";
-import {
-  fileBrowserDownload,
-  type FileBrowserDownloadDependencies,
-} from "@/api/handlers/chat/browser-downloads/file-download";
+  BROWSER_DOWNLOAD_REQUEST_MAX_BYTES,
+  browserDownloadBodySchema,
+  fileForOwnChat,
+} from "@/api/handlers/chat/browser-downloads/own-chat";
 import type { readOpenLocalRunThread } from "@/api/handlers/chat/local-run-plan";
 import {
   type ResolveRunContext,
   verifyRunCallerWith,
 } from "@/api/handlers/chat/run-outputs/upload";
 import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
-import { fileSchema } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import type { VerifyBearerToken } from "@/api/mcp/auth";
 import { resolveMcpSessionContext } from "@/api/mcp/context";
 import { mcpMemberAuthority } from "@/api/mcp/effective-authority";
@@ -71,88 +61,40 @@ export const createFileLocalRunBrowserDownload = (
       },
       mcp: { type: "internal", reason: "upload_mechanics" },
       params: v.object({ runId: runIdSchema }),
-      body: v.strictObject({
-        file: v.pipe(
-          fileSchema({ maxBytes: BROWSER_DOWNLOAD_FILE_MAX_BYTES }),
-          v.minSize(1),
-        ),
-        sourceUrl: browserDownloadOriginSchema.entries.sourceUrl,
-        pageUrl: v.optional(
-          v.nonNullable(browserDownloadOriginSchema.entries.pageUrl),
-        ),
-        downloadedAt: browserDownloadOriginSchema.entries.downloadedAt,
-      }),
-      requestBodyMaxBytes:
-        BROWSER_DOWNLOAD_FILE_MAX_BYTES + MULTIPART_ENVELOPE_MAX_BYTES,
+      body: browserDownloadBodySchema,
+      requestBodyMaxBytes: BROWSER_DOWNLOAD_REQUEST_MAX_BYTES,
     },
     verifyRunCallerWith<BrowserDownloadRunContext>({
       ...dependencies,
       resolveContext: dependencies.resolveContext ?? resolveMcpSessionContext,
     }),
     async function* ({ body, caller }) {
-      const { organizationId, threadId, userId } = caller;
-      const thread = yield* Result.await(
-        caller.safeDb(
-          async (tx) =>
-            await tx
-              .select({ workspaceId: chatThreads.workspaceId })
-              .from(chatThreads)
-              .where(
-                and(
-                  eq(chatThreads.id, threadId),
-                  eq(chatThreads.userId, userId),
-                  eq(chatThreads.organizationId, organizationId),
-                ),
-              )
-              .limit(1)
-              .then((rows) => rows.at(0) ?? null),
-        ),
-      );
-      if (thread === null) {
-        return Result.err(
-          new HandlerError({
-            status: 404,
-            code: BROWSER_DOWNLOAD_REFUSAL_CODE.noChat,
-            message: "This run takes no files",
-          }),
-        );
-      }
-      const matterId = thread.workspaceId;
       const filed = yield* Result.await(
-        fileBrowserDownload({
+        fileForOwnChat({
+          body,
           chat: {
-            threadId,
-            organizationId,
-            userId,
+            threadId: caller.threadId,
+            organizationId: caller.organizationId,
+            userId: caller.userId,
             memberRole: mcpMemberAuthority(caller),
-            matter:
-              matterId === null
-                ? null
-                : {
-                    id: matterId,
-                    // The token's matters and the member's own: a matter
-                    // outside either is not reachable from this run.
-                    workspace:
-                      caller.pinServerValidatedWorkspaceId?.(matterId) === true
-                        ? (caller.accessibleWorkspaces.find(
-                            (workspace) => workspace.id === matterId,
-                          ) ?? null)
-                        : null,
-                  },
             safeDb: caller.safeDb,
             scopedDb: caller.scopedDb,
             recordAuditEvent: caller.recordAuditEvent,
           },
-          bytes: new Uint8Array(await body.file.arrayBuffer()),
-          fileName: sanitizeFilename(body.file.name),
-          origin: {
-            sourceUrl: body.sourceUrl,
-            pageUrl: body.pageUrl ?? null,
-            downloadedAt: body.downloadedAt,
-          },
           ...(dependencies.filing === undefined
             ? {}
             : { dependencies: dependencies.filing }),
+          noChatMessage: "This run takes no files",
+          // The token's matters and the member's own: a matter outside
+          // either is not reachable from this run.
+          reachMatter: async (matterId) =>
+            await Promise.resolve(
+              caller.pinServerValidatedWorkspaceId?.(matterId) === true
+                ? (caller.accessibleWorkspaces.find(
+                    (workspace) => workspace.id === matterId,
+                  ) ?? null)
+                : null,
+            ),
         }),
       );
       return Result.ok(filed);

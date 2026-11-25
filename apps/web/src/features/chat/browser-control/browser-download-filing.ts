@@ -28,7 +28,7 @@ const chatThread = (threadId: string) =>
  * Only the member's own browser hands such a file over, so the write has
  * no automation capability.
  */
-export const fileBrowserDownloadWithChat: FileBrowserDownload = async ({
+const fileBrowserDownloadWithChat: FileBrowserDownload = async ({
   downloadedAt,
   file,
   pageUrl,

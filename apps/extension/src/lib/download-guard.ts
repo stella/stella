@@ -64,7 +64,7 @@ export type DesktopDownloadVerdict =
   { type: "deliver" } | { type: "stop"; reason: DesktopStopReason };
 
 /** Whether the web connection's chat takes a download its tab started. */
-export type WebDownloadVerdict =
+type WebDownloadVerdict =
   | { type: "capture" }
   | {
       type: "stop";
@@ -210,7 +210,7 @@ export const desktopDownloadVerdict = (
  * `blob:` or `data:` address), within the same running cap as a desktop
  * chat's. The reader checks the bytes it fetched start as a PDF's.
  */
-export const webDownloadVerdict = (
+const webDownloadVerdict = (
   download: DownloadFacts,
   running: number,
 ): WebDownloadVerdict => {

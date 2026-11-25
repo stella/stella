@@ -51,16 +51,14 @@ export const sendToStellaTab: WebDownloadSend = async (target, message) => {
   );
 };
 
-const PDF_MAGIC = "%PDF-";
+const PDF_MAGIC = new TextEncoder().encode("%PDF-");
 
 const startsAsPdf = (firstPiece: string): boolean => {
   const bytes = decodeDownloadChunk(firstPiece);
   return (
     bytes !== null &&
     bytes.length >= PDF_MAGIC.length &&
-    [...PDF_MAGIC].every(
-      (character, index) => bytes[index] === character.codePointAt(0),
-    )
+    PDF_MAGIC.every((byte, index) => bytes[index] === byte)
   );
 };
 

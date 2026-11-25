@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 export const BROWSER_CONTROL_PROTOCOL_VERSION = 9 as const;
@@ -1129,12 +1129,11 @@ export const encodeDownloadChunk = (bytes: Uint8Array): string => {
 
 /** A download piece's bytes; null when `data` is not base64. */
 export const decodeDownloadChunk = (data: string): Uint8Array | null => {
-  let binary: string;
-  try {
-    binary = atob(data);
-  } catch {
+  const decoded = Result.try(() => atob(data));
+  if (Result.isError(decoded)) {
     return null;
   }
+  const binary = decoded.value;
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) {
     bytes[index] = binary.codePointAt(index) ?? 0;

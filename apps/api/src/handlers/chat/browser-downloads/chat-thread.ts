@@ -1,26 +1,17 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import type { FileBrowserDownloadDependencies } from "@/api/handlers/chat/browser-downloads/file-download";
 import {
-  BROWSER_DOWNLOAD_FILE_MAX_BYTES,
-  BROWSER_DOWNLOAD_REFUSAL_CODE,
-  browserDownloadOriginSchema,
-} from "@stll/api-contract/browser-downloads";
-import { MULTIPART_ENVELOPE_MAX_BYTES } from "@stll/api-contract/limits";
-
-import { chatThreads } from "@/api/db/schema";
-import {
-  fileBrowserDownload,
-  type FileBrowserDownloadDependencies,
-} from "@/api/handlers/chat/browser-downloads/file-download";
+  BROWSER_DOWNLOAD_REQUEST_MAX_BYTES,
+  browserDownloadBodySchema,
+  fileForOwnChat,
+} from "@/api/handlers/chat/browser-downloads/own-chat";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { fileSchema, resourceIdSchema } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 const config = {
   contract: "patch",
@@ -37,19 +28,8 @@ const config = {
     "The document write owner announces a new document to its matter; a file kept with a chat is listed by the chat itself.",
   ),
   params: v.object({ threadId: resourceIdSchema("chatThread") }),
-  body: v.strictObject({
-    file: v.pipe(
-      fileSchema({ maxBytes: BROWSER_DOWNLOAD_FILE_MAX_BYTES }),
-      v.minSize(1),
-    ),
-    sourceUrl: browserDownloadOriginSchema.entries.sourceUrl,
-    pageUrl: v.optional(
-      v.nonNullable(browserDownloadOriginSchema.entries.pageUrl),
-    ),
-    downloadedAt: browserDownloadOriginSchema.entries.downloadedAt,
-  }),
-  requestBodyMaxBytes:
-    BROWSER_DOWNLOAD_FILE_MAX_BYTES + MULTIPART_ENVELOPE_MAX_BYTES,
+  body: browserDownloadBodySchema,
+  requestBodyMaxBytes: BROWSER_DOWNLOAD_REQUEST_MAX_BYTES,
 } satisfies HandlerConfig;
 
 export type ChatThreadBrowserDownloadDependencies = {
@@ -80,63 +60,23 @@ export const createFileChatThreadBrowserDownload = (
       session,
       user,
     }) {
-      const organizationId = session.activeOrganizationId;
-      const userId = user.id;
-      const thread = yield* Result.await(
-        safeDb(
-          async (tx) =>
-            await tx
-              .select({ workspaceId: chatThreads.workspaceId })
-              .from(chatThreads)
-              .where(
-                and(
-                  eq(chatThreads.id, threadId),
-                  eq(chatThreads.userId, userId),
-                  eq(chatThreads.organizationId, organizationId),
-                ),
-              )
-              .limit(1)
-              .then((rows) => rows.at(0) ?? null),
-        ),
-      );
-      if (thread === null) {
-        return Result.err(
-          new HandlerError({
-            status: 404,
-            code: BROWSER_DOWNLOAD_REFUSAL_CODE.noChat,
-            message: "This chat takes no files",
-          }),
-        );
-      }
-      const matterId = thread.workspaceId;
       const filed = yield* Result.await(
-        fileBrowserDownload({
+        fileForOwnChat({
+          body,
           chat: {
             threadId,
-            organizationId,
-            userId,
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
             memberRole,
-            matter:
-              matterId === null
-                ? null
-                : {
-                    id: matterId,
-                    workspace: await getWorkspaceAccess(matterId),
-                  },
             safeDb,
             scopedDb,
             recordAuditEvent,
           },
-          bytes: new Uint8Array(await body.file.arrayBuffer()),
-          fileName: sanitizeFilename(body.file.name),
-          origin: {
-            sourceUrl: body.sourceUrl,
-            pageUrl: body.pageUrl ?? null,
-            downloadedAt: body.downloadedAt,
-          },
           ...(dependencies.filing === undefined
             ? {}
             : { dependencies: dependencies.filing }),
+          noChatMessage: "This chat takes no files",
+          reachMatter: getWorkspaceAccess,
         }),
       );
       return Result.ok(filed);

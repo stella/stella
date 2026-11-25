@@ -150,12 +150,13 @@ const report = (
   threadId: string,
   download: BrowserResultDownload,
 ): void => {
-  state.unreported.set(
-    threadId,
-    [...(state.unreported.get(threadId) ?? []), download].slice(
-      -MAX_UNREPORTED,
-    ),
-  );
+  const waiting = state.unreported.get(threadId);
+  if (waiting === undefined) {
+    state.unreported.set(threadId, [download]);
+    return;
+  }
+  waiting.push(download);
+  waiting.splice(0, Math.max(0, waiting.length - MAX_UNREPORTED));
 };
 
 const notFiled = (
@@ -382,13 +383,13 @@ const settle = async (
 
 /** The downloads a chat's next result reports, oldest first, at most a result's worth. */
 const take = (state: InboxState, threadId: string): BrowserResultDownload[] => {
-  const waiting = state.unreported.get(threadId) ?? [];
-  const taken = waiting.slice(0, BROWSER_CONTROL_LIMITS.resultDownloads);
-  const rest = waiting.slice(taken.length);
-  if (rest.length === 0) {
+  const waiting = state.unreported.get(threadId);
+  if (waiting === undefined) {
+    return [];
+  }
+  const taken = waiting.splice(0, BROWSER_CONTROL_LIMITS.resultDownloads);
+  if (waiting.length === 0) {
     state.unreported.delete(threadId);
-  } else {
-    state.unreported.set(threadId, rest);
   }
   return taken;
 };
@@ -474,7 +475,3 @@ export const createBrowserDownloadInbox = ({
     },
   };
 };
-
-export type BrowserDownloadInbox = ReturnType<
-  typeof createBrowserDownloadInbox
->;
