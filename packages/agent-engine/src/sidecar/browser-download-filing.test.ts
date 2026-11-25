@@ -13,6 +13,7 @@ import {
   BROWSER_DOWNLOAD_FILE_MAX_BYTES,
   localRunBrowserDownloadPath,
 } from "@stll/api-contract/browser-downloads";
+import { sha256Hex } from "@stll/sha256/node";
 
 import {
   browserDownloadFiler,
@@ -20,6 +21,8 @@ import {
 } from "./browser-download-filing";
 
 const PDF = "%PDF-1.7\nfixture\n%%EOF\n";
+/** The SHA-256 the saved copy was recorded with. */
+const SAVED_SHA256 = sha256Hex(PDF);
 const RUN_ID = "0193a0f4-6b7c-7d8e-9f00-112233445566";
 const ORIGIN = {
   downloadedAt: "2026-11-25T09:30:00.000Z",
@@ -112,6 +115,7 @@ describe("filing a saved download with stella", () => {
     const filed = await file({
       origin: ORIGIN,
       path: "Downloads/Decision 1.pdf",
+      sha256: SAVED_SHA256,
     });
 
     expect(filed).toEqual({
@@ -151,6 +155,7 @@ describe("filing a saved download with stella", () => {
     const filed = await file({
       origin: { ...ORIGIN, pageUrl: null },
       path: "Downloads/Decision 1.pdf",
+      sha256: SAVED_SHA256,
     });
 
     expect(filed).toMatchObject({ duplicate: true, status: "document" });
@@ -175,7 +180,11 @@ describe("filing a saved download with stella", () => {
     });
 
     expect(
-      await file({ origin: ORIGIN, path: "Downloads/Decision 1.pdf" }),
+      await file({
+        origin: ORIGIN,
+        path: "Downloads/Decision 1.pdf",
+        sha256: SAVED_SHA256,
+      }),
     ).toEqual({
       fileId: "0193a0f4-6b7c-7d8e-9f00-ffeeddccbbaa",
       name: "Decision 1.pdf",
@@ -200,7 +209,11 @@ describe("filing a saved download with stella", () => {
     });
 
     expect(
-      await file({ origin: ORIGIN, path: "Downloads/Decision 1.pdf" }),
+      await file({
+        origin: ORIGIN,
+        path: "Downloads/Decision 1.pdf",
+        sha256: SAVED_SHA256,
+      }),
     ).toEqual({
       message:
         "stella did not file it: Matter not found or not accessible. The file is in your working folder only.",
@@ -219,7 +232,11 @@ describe("filing a saved download with stella", () => {
       workspaceDir,
     });
     expect(
-      await withoutToken({ origin: ORIGIN, path: "Downloads/Decision 1.pdf" }),
+      await withoutToken({
+        origin: ORIGIN,
+        path: "Downloads/Decision 1.pdf",
+        sha256: SAVED_SHA256,
+      }),
     ).toMatchObject({ status: "not_filed" });
 
     // Sparse: no disk is used for the size.
@@ -235,7 +252,11 @@ describe("filing a saved download with stella", () => {
       workspaceDir,
     });
     expect(
-      await file({ origin: ORIGIN, path: "Downloads/Decision 1.pdf" }),
+      await file({
+        origin: ORIGIN,
+        path: "Downloads/Decision 1.pdf",
+        sha256: SAVED_SHA256,
+      }),
     ).toMatchObject({
       message: expect.stringContaining("the most stella files"),
       status: "not_filed",
@@ -248,6 +269,7 @@ describe("filing a saved download with stella", () => {
       await keepLocalInPlan({
         origin: ORIGIN,
         path: "Downloads/Decision 1.pdf",
+        sha256: SAVED_SHA256,
       }),
     ).toEqual({
       message:
@@ -256,7 +278,7 @@ describe("filing a saved download with stella", () => {
     });
   });
 
-  test("an API that cannot be reached leaves the file local", async () => {
+  test("an answer that never arrives leaves the filing unconfirmed, not denied", async () => {
     const file = browserDownloadFiler({
       apiOrigin: "http://127.0.0.1:9",
       runId: RUN_ID,
@@ -266,11 +288,59 @@ describe("filing a saved download with stella", () => {
     });
 
     expect(
-      await file({ origin: ORIGIN, path: "Downloads/Decision 1.pdf" }),
+      await file({
+        origin: ORIGIN,
+        path: "Downloads/Decision 1.pdf",
+        sha256: SAVED_SHA256,
+      }),
     ).toEqual({
       message:
-        "stella could not be reached. The file is in your working folder only.",
+        "stella's answer did not arrive. The file is in your working folder; stella may have filed it too.",
+      status: "unconfirmed",
+    });
+  });
+
+  test("a success answer that cannot be read is unconfirmed too", async () => {
+    const api = fakeApi({ body: { type: "something-else" }, status: 200 });
+    const file = browserDownloadFiler({
+      apiOrigin: api.origin,
+      runId: RUN_ID,
+      stopped: NOT_STOPPED,
+      token: () => "run-token",
+      workspaceDir: runFolder(),
+    });
+
+    expect(
+      await file({
+        origin: ORIGIN,
+        path: "Downloads/Decision 1.pdf",
+        sha256: SAVED_SHA256,
+      }),
+    ).toMatchObject({ status: "unconfirmed" });
+  });
+
+  test("a saved copy changed after it was saved is not filed, and nothing is sent", async () => {
+    const api = fakeApi({ body: DOCUMENT, status: 200 });
+    const file = browserDownloadFiler({
+      apiOrigin: api.origin,
+      runId: RUN_ID,
+      stopped: NOT_STOPPED,
+      token: () => "run-token",
+      // Something else wrote other bytes at the saved path.
+      workspaceDir: runFolder("%PDF-1.7\nanother document\n%%EOF\n"),
+    });
+
+    expect(
+      await file({
+        origin: ORIGIN,
+        path: "Downloads/Decision 1.pdf",
+        sha256: SAVED_SHA256,
+      }),
+    ).toEqual({
+      message:
+        "The saved copy changed after it was saved, so it was not filed. The file is in your working folder only.",
       status: "not_filed",
     });
+    expect(api.received).toEqual([]);
   });
 });

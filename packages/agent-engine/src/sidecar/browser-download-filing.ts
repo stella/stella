@@ -9,6 +9,7 @@ import {
   type BrowserDownloadOrigin,
   localRunBrowserDownloadPath,
 } from "@stll/api-contract/browser-downloads";
+import { sha256Hex } from "@stll/sha256/node";
 
 import { readWorkspaceFile } from "./workspace-file";
 
@@ -26,6 +27,14 @@ const FILING_TIMEOUT_MS = 120_000;
 
 const LIMIT_MIB = BROWSER_DOWNLOAD_FILE_MAX_BYTES / (1024 * 1024);
 
+/** The statuses a filing ends in, as the agent reads them under `filed`. */
+export const BROWSER_DOWNLOAD_FILING_STATUSES = [
+  "document",
+  "chat_file",
+  "not_filed",
+  "unconfirmed",
+] as const;
+
 /** What became of filing one download, as the agent reads it. */
 export type BrowserDownloadFiling =
   | {
@@ -37,18 +46,31 @@ export type BrowserDownloadFiling =
       duplicate: boolean;
     }
   | { status: "chat_file"; fileId: string; name: string }
-  | { status: "not_filed"; message: string };
+  /** stella refused it, or it was never sent: only the local copy exists. */
+  | { status: "not_filed"; message: string }
+  /**
+   * Sent, but stella's answer never arrived or could not be read: the local
+   * copy stays, and stella may have filed it as well.
+   */
+  | { status: "unconfirmed"; message: string };
 
 /** Files one saved download; see the module's comment. */
 export type FileBrowserDownload = (download: {
   /** `/`-separated, relative to the run's folder. */
   path: string;
+  /** SHA-256 of the bytes saved there; other bytes at the path are not filed. */
+  sha256: string;
   origin: BrowserDownloadOrigin;
 }) => Promise<BrowserDownloadFiling>;
 
 const notFiled = (message: string): BrowserDownloadFiling => ({
   message: `${message} The file is in your working folder only.`,
   status: "not_filed",
+});
+
+const unconfirmed = (message: string): BrowserDownloadFiling => ({
+  message: `${message} The file is in your working folder; stella may have filed it too.`,
+  status: "unconfirmed",
 });
 
 /**
@@ -106,8 +128,9 @@ const postDownload = async ({
         signal,
       }),
   );
+  // The request may have reached stella before the connection failed.
   if (Result.isError(response)) {
-    return notFiled("stella could not be reached.");
+    return unconfirmed("stella's answer did not arrive.");
   }
   const answer = await Result.tryPromise(
     async (): Promise<unknown> => await response.value.json(),
@@ -127,7 +150,7 @@ const postDownload = async ({
     : null;
   return filed?.success === true
     ? filingOf(filed.output)
-    : notFiled("stella's answer named no document.");
+    : unconfirmed("stella's answer could not be read.");
 };
 
 type FilingTarget = {
@@ -151,7 +174,7 @@ export const browserDownloadFiler =
     token,
     workspaceDir,
   }: FilingTarget): FileBrowserDownload =>
-  async ({ origin, path }) => {
+  async ({ origin, path, sha256 }) => {
     const bearer = token();
     if (bearer === null) {
       return notFiled("The run can no longer reach stella.");
@@ -166,6 +189,13 @@ export const browserDownloadFiler =
         read.reason === "too_large"
           ? `It is larger than ${String(LIMIT_MIB)} MiB, the most stella files.`
           : "The saved copy could not be read.",
+      );
+    }
+    // The run's agent can write in its folder: only the bytes that were
+    // saved, and whose provenance the outcome reports, are filed.
+    if (sha256Hex(read.bytes) !== sha256) {
+      return notFiled(
+        "The saved copy changed after it was saved, so it was not filed.",
       );
     }
     const body = new FormData();

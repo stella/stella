@@ -25,6 +25,7 @@ import {
   BROWSER_DOWNLOAD_REFUSAL_CODE,
   type BrowserDownloadFiled,
   type BrowserDownloadOrigin,
+  storedBrowserDownloadAddress,
 } from "@stll/api-contract/browser-downloads";
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -292,8 +293,12 @@ export const fileBrowserDownload = async ({
     );
     const source: BrowserDownloadSource = {
       kind: "browser-download",
-      sourceUrl: origin.sourceUrl,
-      pageUrl: origin.pageUrl,
+      // Kept without credentials, whoever parsed the origin.
+      sourceUrl: storedBrowserDownloadAddress(origin.sourceUrl),
+      pageUrl:
+        origin.pageUrl === null
+          ? null
+          : storedBrowserDownloadAddress(origin.pageUrl),
       downloadedAt: origin.downloadedAt,
       contentHash,
     };

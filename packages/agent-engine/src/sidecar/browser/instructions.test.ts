@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { LOCAL_BROWSER_MCP_SERVER_NAME } from "../../harness/tool-parts";
+import { BROWSER_DOWNLOAD_FILING_STATUSES } from "../browser-download-filing";
 import { BROWSER_DOWNLOADS_FOLDER } from "./downloads";
 import { withLocalBrowserInstructions } from "./instructions";
 import { localBrowserToolList } from "./tools";
@@ -20,10 +21,16 @@ const browserBlock = (hasBrowser: boolean, readOnlyHost = false) => {
   return instructions.slice(CHAT.length + 2);
 };
 
+// A filing status names what stella did with a download, not a tool.
+const FILING_STATUSES: ReadonlySet<string> = new Set(
+  BROWSER_DOWNLOAD_FILING_STATUSES,
+);
+
 /** Words that read as a tool or server name: `press_key`, `stella_browser`. */
 const namedTools = (text: string) =>
   (text.match(/\b[a-z]+(?:_[a-z]+)+\b/gu) ?? []).filter(
-    (name) => name !== LOCAL_BROWSER_MCP_SERVER_NAME,
+    (name) =>
+      name !== LOCAL_BROWSER_MCP_SERVER_NAME && !FILING_STATUSES.has(name),
   );
 
 describe("what a run on the member's computer is told about the browser", () => {
@@ -41,6 +48,7 @@ describe("what a run on the member's computer is told about the browser", () => 
       "ask the member to sign in in the browser window that shows it, then call snapshot",
       `${BROWSER_DOWNLOADS_FOLDER}/ in your working folder`,
       "call wait_for_downloads",
+      "Name a matter document only when the status is document",
     ]) {
       expect(block).toContain(said);
     }
