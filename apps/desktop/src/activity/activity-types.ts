@@ -39,6 +39,8 @@ export const ACTIVITY_DETAILS_ACCESS = [
   "ready",
   "accessibilityRequired",
   "unavailable",
+  // Managed policy keeps details off, whatever the user chose.
+  "managed",
 ] as const;
 export type ActivityDetailsAccess = (typeof ACTIVITY_DETAILS_ACCESS)[number];
 
@@ -69,6 +71,24 @@ export type ActivityManualAssignment = {
 
 export type ActivityDeletionStatus =
   keyof typeof activityContract.deletionStatuses;
+
+/** Why Activity cannot record. */
+export type ActivityStopReason = keyof typeof activityContract.stopReasons;
+
+const isActivityStopReason = (value: unknown): value is ActivityStopReason =>
+  typeof value === "string" &&
+  Object.hasOwn(activityContract.stopReasons, value);
+
+/** A stretch the member wanted recorded and Activity could not record. */
+type ActivityOutage = {
+  /** RFC 3339 instants. */
+  start: string;
+  end: string;
+  reason: ActivityStopReason;
+};
+
+export type ActivityDayOutages =
+  { status: "read"; outages: ActivityOutage[] } | { status: "unreadable" };
 
 /** The detail-capture choices both activity views show. */
 export type ActivityCaptureSettings = {
@@ -128,6 +148,9 @@ export type ActivityDaySnapshot = {
   sourceAppVisuals: ClipboardSourceAppVisual[];
   today: string;
   unreadable: boolean;
+  outages: ActivityDayOutages;
+  /** Set while Activity cannot record; the history is then read-only. */
+  stoppedReason: ActivityStopReason | null;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -342,20 +365,46 @@ const isSettingsState = (value: Record<string, unknown>) => {
   );
 };
 
+const isOutage = (value: unknown): value is ActivityOutage => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const { reason } = value;
+  return isRange(value) && isActivityStopReason(reason);
+};
+
+const isDayOutages = (value: unknown): value is ActivityDayOutages => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const { status, outages } = value;
+  switch (status) {
+    case "read":
+      return Array.isArray(outages) && outages.every(isOutage);
+    case "unreadable":
+      return true;
+    default:
+      return false;
+  }
+};
+
 export const isActivityDaySnapshot = (
   value: unknown,
 ): value is ActivityDaySnapshot => {
   if (!isRecord(value)) {
     return false;
   }
-  const { unreadable, recordingStatus, segments } = value;
+  const { unreadable, recordingStatus, segments, outages, stoppedReason } =
+    value;
   return (
     isSettingsState(value) &&
     typeof unreadable === "boolean" &&
     isReviewState(value) &&
     isOneOf(ACTIVITY_RECORDING_STATUSES, recordingStatus) &&
     Array.isArray(segments) &&
-    segments.every(isSegment)
+    segments.every(isSegment) &&
+    isDayOutages(outages) &&
+    (stoppedReason === null || isActivityStopReason(stoppedReason))
   );
 };
 

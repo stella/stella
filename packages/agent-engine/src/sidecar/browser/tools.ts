@@ -24,6 +24,7 @@ import { browserSiteGrantOrigin } from "@stll/api-contract/browser-site-grants";
 import {
   BROWSER_STEP_GATE,
   type BrowserReportedPage,
+  type BrowserStepAskReason,
   decideBrowserStep,
 } from "@stll/api-contract/browser-step-gate";
 import {
@@ -637,6 +638,11 @@ export type BrowserApprovalRequest = BrowserApprovalQuestion & {
    * when that page cannot hold an approval.
    */
   site: string | null;
+  /**
+   * Why the shared gate asks: chat says so on the card, and offers to
+   * always allow `site` only when the run does not allow it yet.
+   */
+  reason: BrowserStepAskReason;
   /** Aborts when the agent's call ends; the question is then withdrawn. */
   signal: AbortSignal;
 };
@@ -930,6 +936,7 @@ const gateStep = async (
     case BROWSER_STEP_GATE.ask: {
       const ticket = await approve({
         ...approvalQuestion(step),
+        reason: decision.reason,
         signal,
         site: decision.site,
       });

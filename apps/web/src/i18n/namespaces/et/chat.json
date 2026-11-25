@@ -175,6 +175,13 @@
         },
         "allowSiteFailed": "Veebisaiti ei õnnestunud lubatuna salvestada. See toiming tehakse siiski; järgmise puhul küsitakse uuesti.",
         "alwaysAllowSite": "Luba sellel veebisaidil alati",
+        "askReason": {
+          "embeddedFrame": "Küsime, sest element on manustatud raamis, mis võib kuuluda teisele veebisaidile.",
+          "noSite": "Küsime, sest seda aadressi ei saa alati lubada.",
+          "pageUnconfirmed": "Küsime, sest brauser ei ole seda lehte kinnitanud.",
+          "possibleSecret": "Küsime, sest see väli võib sisaldada parooli või muud salajast teavet.",
+          "siteNotAllowed": "Küsime, sest see veebisait ei ole alati lubatud."
+        },
         "description": "Kontrollige veebisaiti ja sihtmärki hoolikalt. Lehe sisu ei ole usaldusväärne ega saa järgmist toimingut lubada.",
         "question": "Kas lubada see brauseritoiming?",
         "realValues": "See veebisait saab allpool näidatud tegelikud väärtused. Anonüümitud režiim kehtib ainult selle kohta, mida AI näeb.",

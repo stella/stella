@@ -50,6 +50,7 @@
     "batchFailed": "Impossible de créer les brouillons. Réessayez.",
     "billingDraftsForgetPreference": "Oublier la préférence",
     "billingDraftsGranted": "stella AI rédige les descriptions de vos entrées de temps à partir des détails affichés pour chaque entrée.",
+    "billingDraftsManaged": "Votre organisation a désactivé les brouillons de stella AI sur cet ordinateur.",
     "billingDraftsPreference": "Votre préférence de rédaction",
     "billingDraftsRevoked": "stella AI ne rédige aucune description tant que vous ne l’avez pas autorisé.",
     "billingDraftsTitle": "Propositions de stella AI",
@@ -99,6 +100,7 @@
     "deleteOtherAccountHistory": "Supprimer l’historique d’autres comptes",
     "deleteOtherAccountHistoryConfirmation": "Supprimer l’historique d’autres comptes pour {days, plural, one {# jour} other {# jours}} sur cet appareil ? Cette action est irréversible.",
     "deletionOnly": "L'activité enregistrée ne peut pas être ouverte, car sa clé est absente du trousseau. Vous pouvez effacer l'activité enregistrée et les données de récupération des brouillons en attente pour recommencer.",
+    "detailsManaged": "Votre organisation a désactivé les titres de fenêtres et les documents sur cet ordinateur. Les noms des applications sont toujours enregistrés.",
     "detailsUnavailable": "Les détails ne sont pas disponibles sur cet appareil. Les noms des applications restent enregistrés.",
     "detectCalls": "Enregistrer les appels",
     "detectCallsDescription": "Lorsque Teams, Zoom ou un navigateur utilise votre micro, ce temps compte comme l’appel, même si vous ne faites qu’écouter ou travaillez dans une autre app. Aucun son n’est enregistré.",
@@ -116,6 +118,7 @@
       },
       "aiDraftProvider": "le fournisseur d’IA de votre cabinet, ou celui de stella AI",
       "control": "Rien n'est enregistré tant que vous n'avez pas cliqué sur Commencer l'enregistrement. Mettez en pause, excluez des apps ou supprimez une journée quand vous le souhaitez.",
+      "detailsStay": "Les titres de fenêtres et les noms de documents restent sur cet ordinateur, sauf si vous demandez un brouillon à stella AI",
       "never": {
         "audio": "Le son du micro",
         "keystrokes": "Frappes au clavier ou texte saisi",
@@ -128,7 +131,7 @@
         "app": "L'app au premier plan, toutes les quelques secondes",
         "browserTitles": "Titres des onglets du navigateur, seulement dans les navigateurs que vous autorisez",
         "calls": "Temps passé en appel, sauf si vous le désactivez",
-        "details": "Titres de fenêtres et, sur Mac, le chemin complet de chaque document ouvert, dossiers compris, sauf si vous les désactivez"
+        "details": "Titres de fenêtres et, sur Mac, le chemin complet de chaque document ouvert, dossiers compris, seulement si vous les choisissez"
       },
       "recordedTitle": "Ce qui est enregistré",
       "sent": {
@@ -149,6 +152,7 @@
     "earlierTimeStaysUntitled": "Le temps antérieur reste sans titres.",
     "earliestDayReached": "Vous consultez le premier jour disponible.",
     "empty": "Rien n'a été enregistré ce jour-là.",
+    "emptyStopped": "Rien n’a été enregistré. Activité était arrêtée : {reason}",
     "emptyToday": "Rien n’a encore été enregistré aujourd’hui. Votre travail s’affiche ici au fur et à mesure.",
     "emptyTodayPaused": "L’enregistrement est en pause. Choisissez Reprendre pour enregistrer votre travail d’aujourd’hui.",
     "encrypted": "Chiffré sur cet appareil",
@@ -187,6 +191,7 @@
     "noMatters": "Aucun dossier trouvé. Essayez une autre recherche.",
     "openAccessibilitySettings": "Ouvrir les réglages d’accessibilité",
     "otherAccountHistory": "L’historique d’autres comptes reste enregistré sur cet appareil pour {days, plural, one {# jour} other {# jours}}.",
+    "outagesUnreadable": "Impossible d’afficher les périodes où Activité n’a pas pu enregistrer.",
     "pause": "Mettre en pause",
     "paused": "En pause",
     "pendingActivityProtected": "Terminez la création de brouillons en attente avant de supprimer une activité.",
@@ -213,6 +218,14 @@
     "searchingMatters": "Recherche de dossiers…",
     "selectRange": "Sélectionner une plage",
     "settings": "Réglages",
+    "stopReason": {
+      "blockedByPolicy": "Désactivée par votre organisation",
+      "notAvailable": "Non disponible pour ce compte",
+      "notConfirmed": "stella pas encore joignable",
+      "reconnectNeeded": "Reconnexion nécessaire",
+      "signedOut": "Compte déconnecté"
+    },
+    "stoppedNotice": "Activité ne peut pas enregistrer : {reason}. Les enregistrements effectués restent consultables ici. Les modifications sont désactivées jusqu’à la reprise de l’enregistrement.",
     "suggestionPieceLabel": "Saisie suggérée : {matter}, {range}, {duration}, {hours} h au total",
     "suggestionPieces": "{count, plural, one {# plage} other {# plages}} · {hours} h",
     "suggestionRange": "{range} · {hours} h",
@@ -225,6 +238,8 @@
     "unreadableEraseAction": "Effacer l'activité illisible",
     "unreadableEraseConfirmation": "Les activités enregistrées illisibles et les données de récupération de leurs brouillons en attente seront effacées. Des brouillons créés peuvent déjà exister. Cette action est irréversible.",
     "unreadableEraseNotice": "Certaines activités enregistrées ne peuvent pas être lues. Vous pouvez effacer les activités enregistrées illisibles et les données de récupération de leurs brouillons.",
+    "unrecorded": "Non enregistré : {reason}",
+    "unrecordedLabel": "Non enregistré : {reason}, {range}",
     "unrecoverableOtherHistoryConfirmation": "L'historique enregistré des autres comptes sera supprimé, y compris les données de récupération des brouillons en attente dont les clés sont absentes ou les fichiers illisibles. Des brouillons créés peuvent déjà exister. Cette action est irréversible.",
     "welcomeLearnMore": "En savoir plus",
     "welcomePreviewMatter": "Renouvellement du bail Riverside",
@@ -929,6 +944,7 @@
   },
   "notification": {
     "activityStoppedNotAvailableBody": "Activité n’est plus disponible pour ce compte. Les enregistrements effectués restent sur cet ordinateur.",
+    "activityStoppedNotConfirmedBody": "stella n’a pas pu être joint depuis le démarrage de l’application. Activité reprendra l’enregistrement dès que possible.",
     "activityStoppedPolicyBody": "Votre organisation a désactivé Activité sur cet ordinateur. Les enregistrements effectués restent sur cet ordinateur.",
     "activityStoppedReconnectBody": "Reconnectez-vous à votre compte stella pour continuer l’enregistrement.",
     "activityStoppedSignedOutBody": "Connectez-vous de nouveau à votre compte stella pour continuer l’enregistrement.",
@@ -970,9 +986,13 @@
         "title": "Appels"
       },
       "details": {
-        "appNamesOnly": "Seuls les noms des applications sont enregistrés.",
-        "body": "Ils vous aident à distinguer vos dossiers lorsque vous passez la journée en revue.",
+        "body": "Choisissez ce que l’activité enregistre. Les titres de fenêtres et les noms de documents vous aident à distinguer vos dossiers lorsque vous passez la journée en revue.",
         "browsers": "Les navigateurs n’enregistrent les titres des onglets qu’une fois que vous l’autorisez. Activité vous pose la question pour chaque navigateur la première fois qu’elle le voit.",
+        "choices": {
+          "appNamesOnly": "Enregistrer uniquement les noms des applications",
+          "withDetails": "Enregistrer aussi les titres de fenêtres et les noms de documents"
+        },
+        "choose": "Choisissez une option pour continuer.",
         "title": "Titres de fenêtres et documents"
       },
       "screens": {
@@ -1425,6 +1445,7 @@
     "activityRecording": "Activité : Enregistrement · {hours} h aujourd’hui",
     "activityResume": "Reprendre l’enregistrement",
     "activityStoppedNotAvailable": "Activité : Arrêtée · Non disponible pour ce compte",
+    "activityStoppedNotConfirmed": "Activité : Arrêtée · stella pas encore joignable",
     "activityStoppedPolicy": "Activité : Arrêtée · Désactivée par votre organisation",
     "activityStoppedReconnect": "Activité : Arrêtée · Reconnexion nécessaire",
     "activityStoppedSignedOut": "Activité : Arrêtée · Compte déconnecté",

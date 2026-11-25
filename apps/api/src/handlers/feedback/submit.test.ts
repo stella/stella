@@ -279,6 +279,46 @@ describe("submitFeedbackReport", () => {
     expect(rows).toHaveLength(2);
   });
 
+  test("the same text from another account, firm or the intake is its own report", async () => {
+    const { rows, store } = createStore();
+    let issued = 0;
+    const deps = baseDeps({
+      store,
+      newReceipt: () => `FB-TEST-${String((issued += 1))}`,
+    });
+    const reporters: FeedbackReporter[] = [
+      MCP_REPORTER,
+      { ...MCP_REPORTER, via: "web" },
+      { ...MCP_REPORTER, userId: toSafeId<"user">("user_2") },
+      {
+        ...MCP_REPORTER,
+        organizationId: toSafeId<"organization">("org_2"),
+      },
+      { via: "intake" },
+    ];
+
+    const receipts: string[] = [];
+    for (const reporter of reporters) {
+      const response = unwrap(
+        await submitFeedbackReport({ input: REPORT, reporter, deps }),
+      );
+      expect(response.deduplicated).toBe(false);
+      receipts.push(response.receipt);
+    }
+
+    expect(rows).toHaveLength(reporters.length);
+    expect(new Set(receipts).size).toBe(reporters.length);
+    const resent = unwrap(
+      await submitFeedbackReport({
+        input: REPORT,
+        reporter: { via: "intake" },
+        deps,
+      }),
+    );
+    expect(resent.deduplicated).toBe(true);
+    expect(resent.receipt).toBe(`FB-TEST-${String(reporters.length)}`);
+  });
+
   test("reports outside the 24-hour window do not deduplicate", async () => {
     const { rows, store } = createStore();
     const deps = baseDeps({ store });

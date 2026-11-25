@@ -722,6 +722,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("field-parts-inside-field.fixture.tsx", [
     "field-parts-inside-field/field-parts-inside-field",
   ]),
+  fixtureRuleOverride("composer-attachments-in-frame.fixture.tsx", [
+    "composer-attachments-in-frame/composer-attachments-in-frame",
+  ]),
   fixtureRuleOverride("no-dom-node-poll-assertion.fixture.tsx", [
     "no-dom-node-poll-assertion/no-dom-node-poll-assertion",
   ]),
@@ -2421,6 +2424,7 @@ const config = defineConfig({
     "./.oxlint-plugins/inspector-header-title.ts",
     "./.oxlint-plugins/no-raw-overflow-scroll.ts",
     "./.oxlint-plugins/no-control-beside-textbox.ts",
+    "./.oxlint-plugins/composer-attachments-in-frame.ts",
     "./.oxlint-plugins/no-adhoc-textbox-growth.ts",
     "./.oxlint-plugins/radius-scale.ts",
     "./.oxlint-plugins/no-raw-context-menu.ts",
@@ -8111,6 +8115,19 @@ const config = defineConfig({
       excludeFiles: ["**/*.{test,spec}.tsx", "**/__tests__/**"],
       rules: {
         "no-control-beside-textbox/no-control-beside-textbox": "error",
+      },
+    },
+    {
+      // A composer's draft attachments sit in `ComposerFrame`'s `attachments`
+      // slot: inside the box, above the text, outside its scroll region, the
+      // same on every composer. Tests mount the chips bare to drive them.
+      files: [
+        "apps/web/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/composer-attachments-in-frame.fixture.tsx",
+      ],
+      excludeFiles: ["**/*.{test,spec}.tsx", "**/__tests__/**"],
+      rules: {
+        "composer-attachments-in-frame/composer-attachments-in-frame": "error",
       },
     },
     {

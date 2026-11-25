@@ -175,6 +175,13 @@
         },
         "allowSiteFailed": "Šo vietni neizdevās saglabāt kā atļautu. Šī darbība tik un tā tiks izpildīta; nākamajā reizē jautāsim vēlreiz.",
         "alwaysAllowSite": "Vienmēr atļaut šajā vietnē",
+        "askReason": {
+          "embeddedFrame": "Jautājam, jo elements ir iegultā rāmī, kas var piederēt citai vietnei.",
+          "noSite": "Jautājam, jo šo adresi nevar vienmēr atļaut.",
+          "pageUnconfirmed": "Jautājam, jo pārlūks nav apstiprinājis šo lapu.",
+          "possibleSecret": "Jautājam, jo šajā laukā var būt parole vai cita slepena informācija.",
+          "siteNotAllowed": "Jautājam, jo šī vietne nav vienmēr atļauta."
+        },
         "description": "Rūpīgi pārbaudiet vietni un mērķi. Lapas saturs nav uzticams un nevar apstiprināt citu darbību.",
         "question": "Atļaut šo pārlūka darbību?",
         "realValues": "Šī vietne saņems tālāk redzamās īstās vērtības. Anonimizētais režīms attiecas tikai uz to, ko redz AI.",

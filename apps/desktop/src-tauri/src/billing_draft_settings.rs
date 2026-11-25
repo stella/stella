@@ -1,6 +1,9 @@
 //! Consent to AI drafts and the remembered drafting instruction, read and
 //! changed from the activity window, Settings or setup. Nothing here reaches
-//! recorded activity.
+//! recorded activity. Where managed policy turns drafts off, every answer
+//! says drafting is off on this computer and no consent can be granted;
+//! withdrawing stays possible.
+use serde::Serialize;
 use tauri::State;
 
 use crate::{
@@ -8,11 +11,27 @@ use crate::{
   billing_draft_submit,
   feature_gate::FeatureGates,
   local_window::ActivitySetupCaller,
+  managed_policy::{self, ManagedPolicy},
   time_entry_commands::{linked_account, require_account},
   types::DesktopAccountIdentity,
 };
 
 const SETTINGS_UNAVAILABLE: &str = "draft time entry is unavailable";
+const DRAFTS_MANAGED_OFF: &str = "stella AI drafts are turned off by managed policy";
+
+/// The server settings' field and value (`desktopBillingDraftSettingsResponseSchema`)
+/// that say drafting is off.
+const EFFECTIVE_MODE: &str = "effectiveMode";
+const MODE_OFF: &str = "off";
+
+/// Who decides drafting on this computer: the account's own settings, or
+/// managed policy, which turned it off.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum DraftPolicy {
+  Account,
+  ManagedOff,
+}
 
 /// The account a settings answer belongs to, as the window keys its consent
 /// state: `["<organization id>","<user id>"]`.
@@ -22,12 +41,33 @@ fn settings_scope(identity: &DesktopAccountIdentity) -> String {
 
 /// A settings answer with the account it belongs to; the server's answer
 /// names no account, so the window could not tell an answer for the account
-/// it asked about from one for an account switched in meanwhile.
+/// it asked about from one for an account switched in meanwhile. Under
+/// managed policy the answer's mode is off, as it is on this computer.
 fn scoped(
   identity: &DesktopAccountIdentity,
   settings: serde_json::Value,
-) -> serde_json::Value {
-  serde_json::json!({ "scopeKey": settings_scope(identity), "settings": settings })
+  policy: &ManagedPolicy,
+) -> Result<serde_json::Value, String> {
+  let (settings, policy) = under_policy(settings, policy)?;
+  Ok(serde_json::json!({
+    "scopeKey": settings_scope(identity),
+    "settings": settings,
+    "policy": policy,
+  }))
+}
+
+fn under_policy(
+  mut settings: serde_json::Value,
+  policy: &ManagedPolicy,
+) -> Result<(serde_json::Value, DraftPolicy), String> {
+  if !policy.activity_ai_drafts_disabled {
+    return Ok((settings, DraftPolicy::Account));
+  }
+  let Some(fields) = settings.as_object_mut() else {
+    return Err(SETTINGS_UNAVAILABLE.to_string());
+  };
+  fields.insert(EFFECTIVE_MODE.to_string(), MODE_OFF.into());
+  Ok((settings, DraftPolicy::ManagedOff))
 }
 
 // AccountRequest holds the account-switch lease through the subsequent HTTP write.
@@ -52,7 +92,7 @@ pub async fn billing_draft_get_settings(
   let account = linked_account(&caller, &gates, &accounts).await?;
   let settings = billing_draft_submit::settings(&account).await?;
   require_account(&caller, &gates, &account)?;
-  let answer = scoped(&account.identity, settings);
+  let answer = scoped(&account.identity, settings, managed_policy::current())?;
   drop(account);
   Ok(answer)
 }
@@ -70,7 +110,7 @@ pub async fn billing_draft_withdraw_consent(
   require_settings_scope(&account.identity, &scope_key)?;
   let settings = billing_draft_submit::withdraw_consent(&account).await?;
   require_account(&caller, &gates, &account)?;
-  let answer = scoped(&account.identity, settings);
+  let answer = scoped(&account.identity, settings, managed_policy::current())?;
   drop(account);
   Ok(answer)
 }
@@ -83,12 +123,15 @@ pub async fn billing_draft_grant_consent(
   scope_key: String,
   revision: Option<String>,
 ) -> Result<serde_json::Value, String> {
+  if managed_policy::current().activity_ai_drafts_disabled {
+    return Err(DRAFTS_MANAGED_OFF.to_string());
+  }
   let account = linked_account(&caller, &gates, &accounts).await?;
   require_settings_scope(&account.identity, &scope_key)?;
   let settings =
     billing_draft_submit::grant_consent(&account, revision.as_deref()).await?;
   require_account(&caller, &gates, &account)?;
-  let answer = scoped(&account.identity, settings);
+  let answer = scoped(&account.identity, settings, managed_policy::current())?;
   drop(account);
   Ok(answer)
 }
@@ -112,15 +155,47 @@ pub async fn billing_draft_set_preference(
   )
   .await?;
   require_account(&caller, &gates, &account)?;
-  let answer = scoped(&account.identity, settings);
+  let answer = scoped(&account.identity, settings, managed_policy::current())?;
   drop(account);
   Ok(answer)
 }
 
 #[cfg(test)]
 mod tests {
-  use super::{require_settings_scope, settings_scope};
-  use crate::types::DesktopAccountIdentity;
+  use super::{DraftPolicy, require_settings_scope, settings_scope, under_policy};
+  use crate::{managed_policy::ManagedPolicy, types::DesktopAccountIdentity};
+
+  fn server_settings() -> serde_json::Value {
+    serde_json::json!({
+      "revision": "revision-1",
+      "effectiveMode": "guided",
+      "consent": "granted",
+      "preference": null,
+    })
+  }
+
+  #[test]
+  fn without_the_drafts_policy_the_account_decides() {
+    assert_eq!(
+      under_policy(server_settings(), &ManagedPolicy::default()).unwrap(),
+      (server_settings(), DraftPolicy::Account)
+    );
+  }
+
+  // Consent stays as the server holds it, so it can still be withdrawn.
+  #[test]
+  fn the_drafts_policy_turns_drafting_off_and_keeps_consent() {
+    let policy = ManagedPolicy {
+      activity_ai_drafts_disabled: true,
+      ..ManagedPolicy::default()
+    };
+    let (settings, decided_by) = under_policy(server_settings(), &policy).unwrap();
+    assert_eq!(decided_by, DraftPolicy::ManagedOff);
+    assert_eq!(settings["effectiveMode"], "off");
+    assert_eq!(settings["consent"], "granted");
+    assert_eq!(settings["revision"], "revision-1");
+    assert!(under_policy(serde_json::Value::Null, &policy).is_err());
+  }
 
   #[test]
   fn settings_writes_require_the_initiating_organization_and_user() {

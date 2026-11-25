@@ -16,6 +16,7 @@ import {
   realSkillFile,
 } from "../skill-folders";
 import type { AppServerClient } from "./app-server-client";
+import { readableCodexMessage } from "./errors";
 import { SkillsListResponseSchema, ThreadResponseSchema } from "./protocol";
 
 /**
@@ -24,7 +25,8 @@ import { SkillsListResponseSchema, ThreadResponseSchema } from "./protocol";
  * read metadata only (stella holds the transcript) and unarchive an archived
  * session first. When the session cannot be reopened, a new thread starts
  * and the outcome says why, so the turn falls back to the portable
- * transcript visibly.
+ * transcript visibly; a session another Codex process holds open fails the
+ * turn instead.
  */
 
 const SANDBOX_MODE = {
@@ -102,6 +104,12 @@ const SYSTEM_SKILL_SCOPE = "system";
 
 const ARCHIVED = /\barchived\b|\bunarchive\b/iu;
 const SESSION_MISSING = /no rollout found|not found/iu;
+/**
+ * Another Codex process (the Codex app, the command line, an editor) holds
+ * the thread open and with it the only right to write it, until it unloads
+ * the thread.
+ */
+const ACTIVE_WRITER = /\bthread \S+ already has an active writer\b/u;
 
 const skillsRefused = (message: string) =>
   new HarnessStartError({ reason: "start_rejected", message });
@@ -284,7 +292,7 @@ const startThread = async (
       new HarnessStartError({
         reason: "start_rejected",
         message: Result.isError(started)
-          ? started.error.message
+          ? readableCodexMessage(started.error.message)
           : "The harness answered thread/start with an unexpected shape.",
       }),
     );
@@ -306,7 +314,8 @@ type Reopening = {
  * Reopen a stored thread: resume it, or fork it into a new one. Both load
  * the thread from its rollout with this turn's settings, never the stored
  * ones, and an archived thread is unarchived first. A refusal starts a new
- * thread and says why, so the turn falls back to the transcript visibly.
+ * thread and says why, so the turn falls back to the transcript visibly,
+ * except for a thread another Codex process holds open.
  */
 const reopenThread = async (
   client: AppServerClient,
@@ -349,12 +358,23 @@ const reopenThread = async (
       }),
     );
   }
+  // The session is intact, only open elsewhere: a new thread would leave it
+  // behind for a copy.
+  if (ACTIVE_WRITER.test(reopened.error.message)) {
+    return Result.err(
+      new HarnessStartError({
+        reason: "start_rejected",
+        message:
+          "This Codex session is open in another Codex window (the Codex app, the command line or an editor). Close it there, then send the message again.",
+      }),
+    );
+  }
   return startThread(client, params, {
     type: "resume_unavailable",
     reason: SESSION_MISSING.test(reopened.error.message)
       ? "session_not_found"
       : "resume_rejected",
-    message: reopened.error.message,
+    message: readableCodexMessage(reopened.error.message),
   });
 };
 

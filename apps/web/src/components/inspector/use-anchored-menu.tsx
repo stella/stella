@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent, ReactNode, RefObject } from "react";
 
+import type { ContextMenuSurfaceOpenEvent } from "@stll/ui/entity-actions";
 import { Menu, MenuAnchor, MenuPopup } from "@stll/ui/menu";
 
 import { contextMenuBelongsTo } from "@/components/context-menu-target";
@@ -55,6 +56,18 @@ export const useAnchoredMenu = ({
     setOpen(true);
   };
 
+  const openFromSurface = ({
+    anchor: nextAnchor,
+    returnFocus: nextFocus,
+    event,
+  }: ContextMenuSurfaceOpenEvent) => {
+    returnFocus.current =
+      nextFocus ??
+      (event.currentTarget instanceof HTMLElement ? event.currentTarget : null);
+    setAnchor(nextAnchor);
+    setOpen(true);
+  };
+
   const close = () => {
     setOpen(false);
     setAnchor(null);
@@ -86,5 +99,5 @@ export const useAnchoredMenu = ({
     </Menu>
   );
 
-  return { open, openAt, onKeyDown, close, element };
+  return { open, openAt, openFromSurface, onKeyDown, close, element };
 };

@@ -1376,6 +1376,32 @@ export const FAKE_SCENARIOS = {
       },
     },
   ],
+  /** Stella's server is added; every other one fails to start. */
+  browser_unreachable: [
+    initialize(),
+    {
+      expect: "mcp_set_servers",
+      respond: (request) => {
+        const names = Object.keys(
+          typeof request["servers"] === "object" && request["servers"] !== null
+            ? request["servers"]
+            : {},
+        );
+        return {
+          added: names,
+          removed: [],
+          errors: Object.fromEntries(
+            names
+              .filter((name) => name !== FAKE_STELLA_SERVER)
+              .map((name) => [name, "ECONNREFUSED"]),
+          ),
+        };
+      },
+    },
+    { expectUser: true },
+    { emit: { type: "system", subtype: "init", session_id: "from-cli" } },
+    result(),
+  ],
   malformed: [...freshTurn(), { raw: "{this is not json" }, { sleep: 5000 }],
   /** Alive but silent: `initialize` is never answered. */
   unresponsive: [{ sleep: 60_000 }],

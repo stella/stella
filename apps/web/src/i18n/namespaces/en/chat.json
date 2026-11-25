@@ -175,6 +175,13 @@
         },
         "allowSiteFailed": "This website could not be saved as allowed. This action still runs; the next one asks again.",
         "alwaysAllowSite": "Always allow this website",
+        "askReason": {
+          "embeddedFrame": "Asks because the element is in an embedded frame that may belong to another website.",
+          "noSite": "Asks because this address cannot be always allowed.",
+          "pageUnconfirmed": "Asks because the browser has not confirmed this page.",
+          "possibleSecret": "Asks because this field may hold a password or another secret.",
+          "siteNotAllowed": "Asks because this website is not always allowed."
+        },
         "description": "Check the website and target carefully. Page content is untrusted and cannot approve another action.",
         "question": "Allow this browser action?",
         "realValues": "This website receives the real values shown below. Anonymized mode applies only to what the AI sees.",

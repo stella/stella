@@ -50,6 +50,7 @@
     "batchFailed": "Mustandeid ei õnnestunud luua. Proovi uuesti.",
     "billingDraftsForgetPreference": "Unusta eelistus",
     "billingDraftsGranted": "stella AI koostab teie ajakannete selgitused iga kande üksikasjade põhjal.",
+    "billingDraftsManaged": "Teie organisatsioon on selles arvutis stella AI mustandid välja lülitanud.",
     "billingDraftsPreference": "Teie kavandite eelistus",
     "billingDraftsRevoked": "stella AI ei koosta selgitusi enne, kui olete selle lubanud.",
     "billingDraftsTitle": "stella AI kavandid",
@@ -99,6 +100,7 @@
     "deleteOtherAccountHistory": "Kustuta teiste kontode ajalugu",
     "deleteOtherAccountHistoryConfirmation": "Kas kustutada selles seadmes teiste kontode {days, plural, one {# päeva} other {# päeva}} ajalugu? Seda ei saa tagasi võtta.",
     "deletionOnly": "Salvestatud tegevust ei saa avada, sest selle võti puudub võtmehoidjast. Uuesti alustamiseks saate kustutada salvestatud tegevuse ja pooleliolevate mustandite taastamisandmed.",
+    "detailsManaged": "Teie organisatsioon on selles arvutis akende pealkirjade ja dokumentide salvestamise välja lülitanud. Rakenduste nimesid salvestatakse edasi.",
     "detailsUnavailable": "Üksikasjad pole selles seadmes saadaval. Rakenduste nimed salvestatakse endiselt.",
     "detectCalls": "Salvesta kõned",
     "detectCallsDescription": "Kui Teams, Zoom või brauser kasutab mikrofoni, loetakse see aeg kõneks, isegi kui ainult kuulate või töötate teises rakenduses. Heli ei salvestata kunagi.",
@@ -116,6 +118,7 @@
       },
       "aiDraftProvider": "teie büroo kasutatavale AI-teenuse pakkujale või stella AI pakkujale",
       "control": "Midagi ei salvestata enne, kui vajutate nuppu Alusta salvestamist. Peatage, välistage rakendusi või kustutage mis tahes päev, millal soovite.",
+      "detailsStay": "Akende pealkirjad ja dokumentide nimed jäävad sellesse arvutisse, kui te just stella AI mustandit ei küsi",
       "never": {
         "audio": "Mikrofoni heli",
         "keystrokes": "Klahvivajutused või sisestatud tekst",
@@ -128,7 +131,7 @@
         "app": "Milline rakendus on esiplaanil, iga paari sekundi järel",
         "browserTitles": "Brauseri vahekaartide pealkirjad, ainult teie lubatud brauserites",
         "calls": "Kõnedes veedetud aeg, kui te seda välja ei lülita",
-        "details": "Akende pealkirjad ja Macis iga avatud dokumendi täielik tee koos kaustadega, kui te neid välja ei lülita"
+        "details": "Akende pealkirjad ja Macis iga avatud dokumendi täielik tee koos kaustadega, ainult kui te need valite"
       },
       "recordedTitle": "Mida salvestatakse",
       "sent": {
@@ -149,6 +152,7 @@
     "earlierTimeStaysUntitled": "Varasem aeg jääb pealkirjadeta.",
     "earliestDayReached": "Vaatate varaseimat saadaolevat päeva.",
     "empty": "Sel päeval ei salvestatud midagi.",
+    "emptyStopped": "Midagi ei salvestatud. Tegevus oli seiskunud: {reason}",
     "emptyToday": "Täna pole veel midagi salvestatud. Teie töö ilmub siia jooksvalt.",
     "emptyTodayPaused": "Salvestamine on peatatud. Tänase töö salvestamiseks valige Jätka.",
     "encrypted": "Krüpteeritud selles seadmes",
@@ -187,6 +191,7 @@
     "noMatters": "Toimikuid ei leitud. Proovige teist otsingut.",
     "openAccessibilitySettings": "Ava ligipääsetavuse seaded",
     "otherAccountHistory": "Selles seadmes on alles teiste kontode {days, plural, one {# päeva} other {# päeva}} ajalugu.",
+    "outagesUnreadable": "Aegu, mil Tegevus ei saanud salvestada, ei saa kuvada.",
     "pause": "Peata",
     "paused": "Peatatud",
     "pendingActivityProtected": "Enne tegevuse kustutamist viige pooleliolev mustandite loomine lõpule.",
@@ -213,6 +218,14 @@
     "searchingMatters": "Toimikute otsimine…",
     "selectRange": "Vali ajavahemik",
     "settings": "Seaded",
+    "stopReason": {
+      "blockedByPolicy": "Teie organisatsioon lülitas välja",
+      "notAvailable": "Selle konto jaoks pole saadaval",
+      "notConfirmed": "Rakendusega stella pole veel ühendust",
+      "reconnectNeeded": "Vaja uuesti ühendada",
+      "signedOut": "Välja logitud"
+    },
+    "stoppedNotice": "Tegevus ei saa salvestada: {reason}. Salvestatu jääb siin loetavaks; muudatused on välja lülitatud, kuni salvestamine jätkub.",
     "suggestionPieceLabel": "Soovitatud kanne: {matter}, {range}, {duration}, kokku {hours} h",
     "suggestionPieces": "{count, plural, one {# lõik} other {# lõiku}} · {hours} h",
     "suggestionRange": "{range} · {hours} h",
@@ -225,6 +238,8 @@
     "unreadableEraseAction": "Kustuta loetamatu tegevus",
     "unreadableEraseConfirmation": "Loetamatu salvestatud tegevus ja selle pooleliolevate mustandite taastamisandmed kustutatakse. Loodud mustandid võivad juba olemas olla. Seda ei saa tagasi võtta.",
     "unreadableEraseNotice": "Mõnda salvestatud tegevust ei saa lugeda. Saate kustutada loetamatu salvestatud tegevuse ja selle mustandite taastamisandmed.",
+    "unrecorded": "Salvestamata: {reason}",
+    "unrecordedLabel": "Salvestamata: {reason}, {range}",
     "unrecoverableOtherHistoryConfirmation": "Teiste kontode salvestatud ajalugu kustutatakse, sealhulgas puuduvate võtmete või loetamatute failidega pooleliolevate mustandite taastamisandmed. Loodud mustandid võivad juba olemas olla. Seda ei saa tagasi võtta.",
     "welcomeLearnMore": "Lisateave",
     "welcomePreviewMatter": "Riverside’i üürilepingu pikendamine",
@@ -929,6 +944,7 @@
   },
   "notification": {
     "activityStoppedNotAvailableBody": "Tegevus pole selle konto jaoks enam saadaval. Salvestatu jääb sellesse arvutisse.",
+    "activityStoppedNotConfirmedBody": "Rakenduse käivitamisest saati pole rakendusega stella ühendust saadud. Tegevus jätkab salvestamist, kui ühendus tekib.",
     "activityStoppedPolicyBody": "Teie organisatsioon lülitas Tegevuse selles arvutis välja. Salvestatu jääb sellesse arvutisse.",
     "activityStoppedReconnectBody": "Salvestamise jätkamiseks ühendage uuesti oma stella konto.",
     "activityStoppedSignedOutBody": "Salvestamise jätkamiseks logige uuesti oma stella kontole sisse.",
@@ -970,9 +986,13 @@
         "title": "Kõned"
       },
       "details": {
-        "appNamesOnly": "Salvestatakse ainult rakenduste nimed.",
-        "body": "Need aitavad päeva üle vaadates toimikuid eristada.",
+        "body": "Valige, mida Tegevused salvestavad. Akende pealkirjad ja dokumentide nimed aitavad päeva üle vaadates toimikuid eristada.",
         "browsers": "Brauserid salvestavad vahekaartide pealkirju alles siis, kui te seda lubate. Tegevused küsivad iga brauseri kohta, kui seda esimest korda näevad.",
+        "choices": {
+          "appNamesOnly": "Salvesta ainult rakenduste nimed",
+          "withDetails": "Salvesta ka akende pealkirjad ja dokumentide nimed"
+        },
+        "choose": "Jätkamiseks valige üks variant.",
         "title": "Akende pealkirjad ja dokumendid"
       },
       "screens": {
@@ -1425,6 +1445,7 @@
     "activityRecording": "Tegevus: Salvestamine · täna {hours} h",
     "activityResume": "Jätka salvestamist",
     "activityStoppedNotAvailable": "Tegevus: Seiskunud · Selle konto jaoks pole saadaval",
+    "activityStoppedNotConfirmed": "Tegevus: Seiskunud · Rakendusega stella pole veel ühendust",
     "activityStoppedPolicy": "Tegevus: Seiskunud · Teie organisatsioon lülitas välja",
     "activityStoppedReconnect": "Tegevus: Seiskunud · Vaja uuesti ühendada",
     "activityStoppedSignedOut": "Tegevus: Seiskunud · Välja logitud",

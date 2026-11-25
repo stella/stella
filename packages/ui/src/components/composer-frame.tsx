@@ -141,8 +141,9 @@ type ComposerFrameProps = Omit<
     placeholder?: ReactNode;
     /** Draft attachments, above the text and outside its scroll region. */
     attachments?: ReactNode;
-    /** Chrome anchored above the box (preset chips, a floating attachment
-     *  tray), positioned by the surface from the box's top edge outward. */
+    /** Chrome anchored above the box (preset chips), positioned by the
+     *  surface from the box's top edge outward. Draft attachments go in
+     *  `attachments`, never here. */
     above?: ReactNode;
     /** The controls at the start: the (+) menu, a scope control. */
     leading?: ReactNode;
@@ -227,7 +228,9 @@ export const ComposerFrame = ({
       data-composer-layout={layout}
     >
       {above}
-      {attachments}
+      {attachments !== undefined && (
+        <div data-slot="composer-attachments">{attachments}</div>
+      )}
       <div className={COMPOSER_GRID_CLASS[layout]}>
         <div className={COMPOSER_TEXT_CELL_CLASS[layout]}>
           <ScrollArea

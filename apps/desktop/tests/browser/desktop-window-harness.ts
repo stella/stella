@@ -306,12 +306,11 @@ const openWindow = async (
       is_activity_enabled: () => data.activity !== null,
       activity_get_settings: () => data.activity,
       // Activity as setup reads it before recording starts: the defaults,
-      // with window titles waiting for Accessibility. Written out here, as
-      // the handlers run in the page.
+      // app names only. Written out here, as the handlers run in the page.
       activity_get_setup: () =>
         ({
-          captureDetails: true,
-          detailsAccess: "accessibilityRequired",
+          captureDetails: false,
+          detailsAccess: "disabled",
           detectCalls: true,
           recordingStatus: "off",
         }) satisfies ActivitySetupSnapshot,
@@ -319,6 +318,7 @@ const openWindow = async (
       keep_awake_get_settings: () => ({ enabled: true, onBattery: false }),
       // Consent given, so Settings lays out its stella AI drafting rows too.
       billing_draft_get_settings: () => ({
+        policy: "account",
         scopeKey: '["org_fixture","user_fixture"]',
         settings: {
           revision: "revision-1",

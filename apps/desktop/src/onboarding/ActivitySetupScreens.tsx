@@ -1,8 +1,12 @@
+import { useId } from "react";
+
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 
+import type { ActivityRecordedFact } from "../activity/activity-disclosure";
+import { useStoredFact } from "../activity/ActivityDisclosure";
 import type { BillingDraftSettingsControl } from "../activity/billing-draft-settings";
 import type { DraftConsentStatus } from "../activity/billing-draft-transport";
 import {
@@ -12,9 +16,19 @@ import {
 import { PermissionsSection } from "../mainview/PermissionsSection";
 import type { Permission } from "../shared/permissions";
 import { DESKTOP_TELEMETRY_WINDOWS } from "../telemetry/desktop-telemetry";
-import type { ActivitySetupScreen } from "./activity-setup-steps";
+import {
+  DETAILS_CHOICE_CAPTURES,
+  DETAILS_CHOICES,
+  shownDetailsChoice,
+} from "./activity-setup-steps";
+import type {
+  ActivitySetupScreen,
+  DetailsAnswer,
+  DetailsChoice,
+} from "./activity-setup-steps";
 import { ActivityExplainer } from "./ActivityExplainer";
 import {
+  ChoiceCard,
   Facts,
   ScreenContent,
   ScreenHeader,
@@ -31,7 +45,10 @@ type ScreenProps = {
 };
 
 type ActivitySetupScreenBodyProps = ScreenProps & {
+  /** Whether the details screen was answered during this setup. */
+  detailsAnswer: DetailsAnswer;
   drafts: BillingDraftSettingsControl;
+  onDetailsAnswer: () => void;
   /** The permissions the details screen asks for. */
   permissions: readonly Permission[];
   /** The line under the first screen's title. */
@@ -43,7 +60,9 @@ type ActivitySetupScreenBodyProps = ScreenProps & {
  *  and its choice, in the words Settings → Activity uses. */
 export const ActivitySetupScreenBody = ({
   controls,
+  detailsAnswer,
   drafts,
+  onDetailsAnswer,
   permissions,
   recordingBody,
   screen,
@@ -55,7 +74,9 @@ export const ActivitySetupScreenBody = ({
     case "details":
       return (
         <DetailsScreen
+          answer={detailsAnswer}
           controls={controls}
+          onAnswer={onDetailsAnswer}
           permissions={permissions}
           snapshot={snapshot}
         />
@@ -83,27 +104,63 @@ const RecordingScreen = ({ body }: { body: string }) => {
   );
 };
 
-/** 2. Window titles and documents, with the Accessibility access a Mac
- *  needs to read them. */
+/** What each details answer records, in the disclosure's own words. */
+const DETAILS_CHOICE_FACTS = {
+  appNamesOnly: "app",
+  withDetails: "details",
+} as const satisfies Record<DetailsChoice, ActivityRecordedFact>;
+
+type DetailsScreenProps = ScreenProps & {
+  answer: DetailsAnswer;
+  onAnswer: () => void;
+  permissions: readonly Permission[];
+};
+
+/** 2. App names only, or window titles and documents too: neither is
+ *  chosen until the user picks one. With details, the Accessibility access
+ *  a Mac needs to read them. */
 const DetailsScreen = ({
+  answer,
   controls,
+  onAnswer,
   permissions,
   snapshot,
-}: ScreenProps & { permissions: readonly Permission[] }) => {
+}: DetailsScreenProps) => {
   const t = useTranslations("onboarding.activitySetup.details");
-  const activityT = useTranslations("activity");
+  const disclosureT = useTranslations("activity.disclosure");
+  const stored = useStoredFact();
+  const name = useId();
+  const shown = shownDetailsChoice(answer, snapshot.captureDetails);
+  const choose = async (choice: DetailsChoice) => {
+    if (await controls.setCaptureDetails(DETAILS_CHOICE_CAPTURES[choice])) {
+      onAnswer();
+    }
+  };
   return (
     <>
       <ScreenHeader body={t("body")} title={t("title")} />
       <ScreenContent>
-        <SwitchCard
-          checked={snapshot.captureDetails}
-          description={activityT("captureDetailsDescription")}
-          onChange={(enabled) => {
-            void controls.setCaptureDetails(enabled);
-          }}
-          title={activityT("captureDetails")}
-        />
+        <div
+          aria-label={t("title")}
+          className="flex flex-col gap-3"
+          role="radiogroup"
+        >
+          {DETAILS_CHOICES.map((choice) => (
+            <ChoiceCard
+              checked={shown === choice}
+              description={disclosureT(
+                `recorded.${DETAILS_CHOICE_FACTS[choice]}`,
+              )}
+              key={choice}
+              name={name}
+              onChoose={() => {
+                void choose(choice);
+              }}
+              title={t(`choices.${choice}`)}
+              value={choice}
+            />
+          ))}
+        </div>
         {permissions.length === 0 ? null : (
           <div className="bg-card overflow-hidden rounded-xl border">
             <PermissionsSection
@@ -113,9 +170,11 @@ const DetailsScreen = ({
           </div>
         )}
         <Facts
-          facts={
-            snapshot.captureDetails ? [t("browsers")] : [t("appNamesOnly")]
-          }
+          facts={[
+            stored,
+            disclosureT("detailsStay"),
+            ...(shown === "withDetails" ? [t("browsers")] : []),
+          ]}
         />
       </ScreenContent>
     </>

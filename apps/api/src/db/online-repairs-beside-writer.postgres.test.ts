@@ -633,6 +633,19 @@ const SEEDS = {
     },
     writerLock: { id: ID, table: "entities" },
   },
+  "deleted-account-delivery-failures": {
+    kind: "row-work",
+    ...repairedWhen(
+      "deleted-account-delivery-failures",
+      `SELECT email_undeliverable_address IS NULL AND email_undeliverable_reason IS NULL AND email_undeliverable_at IS NULL AS repaired FROM "user" WHERE id = $1`,
+    ),
+    seed: async (client) => {
+      await client.unsafe(
+        `INSERT INTO "user" (id, name, email, deleted_at, email_undeliverable_address, email_undeliverable_reason, email_undeliverable_at) VALUES ('erased', 'Deleted account', 'deleted-erased@example.invalid', now(), 'person@example.invalid', 'suppressed', now())`,
+      );
+    },
+    writerLock: { id: "erased", table: "user" },
+  },
   "better-auth-oauth-resources": {
     kind: "row-work",
     assertPending: async (client, id) => {

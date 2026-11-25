@@ -91,6 +91,15 @@ describe("toEndpointIdentifier", () => {
     expect(toEndpointIdentifier(abs, "/repo/")).toBe(expected);
   });
 
+  test("uses forward slashes for backslash-separated paths", () => {
+    expect(
+      toEndpointIdentifier(
+        String.raw`D:\repo\apps\api\src\handlers\contacts\get.ts`,
+        String.raw`D:\repo`,
+      ),
+    ).toBe("apps/api/src/handlers/contacts/get.ts");
+  });
+
   test("panics when the module is outside the root", () => {
     expect(() => toEndpointIdentifier("/other/x.ts", "/repo")).toThrow(
       "module is outside the repo root",

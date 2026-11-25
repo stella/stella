@@ -50,6 +50,7 @@
     "batchFailed": "Entwürfe konnten nicht erstellt werden. Versuchen Sie es erneut.",
     "billingDraftsForgetPreference": "Vorgabe vergessen",
     "billingDraftsGranted": "stella KI entwirft die Beschreibungen Ihrer Zeiteinträge aus den Details, die jeder Eintrag zeigt.",
+    "billingDraftsManaged": "Ihre Organisation hat Entwürfe von stella KI auf diesem Computer deaktiviert.",
     "billingDraftsPreference": "Ihre Vorgabe für Entwürfe",
     "billingDraftsRevoked": "stella KI entwirft keine Beschreibungen, bis Sie es erlauben.",
     "billingDraftsTitle": "Entwürfe mit stella KI",
@@ -99,6 +100,7 @@
     "deleteOtherAccountHistory": "Verlauf anderer Konten löschen",
     "deleteOtherAccountHistoryConfirmation": "Den Verlauf anderer Konten für {days, plural, one {# Tag} other {# Tage}} auf diesem Gerät löschen? Das kann nicht rückgängig gemacht werden.",
     "deletionOnly": "Die gespeicherte Aktivität kann nicht geöffnet werden, weil ihr Schlüssel im Schlüsselbund fehlt. Sie können die gespeicherte Aktivität und die Wiederherstellungsdaten ausstehender Entwürfe löschen, um neu zu beginnen.",
+    "detailsManaged": "Ihre Organisation hat Fenstertitel und Dokumente auf diesem Computer deaktiviert. App-Namen werden weiter aufgezeichnet.",
     "detailsUnavailable": "Details sind auf diesem Gerät nicht verfügbar. App-Namen werden weiterhin erfasst.",
     "detectCalls": "Anrufe erfassen",
     "detectCallsDescription": "Solange Teams, Zoom oder ein Browser Ihr Mikrofon verwendet, zählt diese Zeit als Anruf, auch wenn Sie nur zuhören oder in einer anderen App arbeiten. Ton wird nie aufgezeichnet.",
@@ -116,6 +118,7 @@
       },
       "aiDraftProvider": "den KI-Anbieter Ihrer Kanzlei oder den von stella KI",
       "control": "Nichts wird aufgezeichnet, bevor Sie auf Aufzeichnung starten klicken. Pausieren, Apps ausschließen oder Tage löschen können Sie jederzeit.",
+      "detailsStay": "Fenstertitel und Dokumentnamen bleiben auf diesem Computer, solange Sie keinen Entwurf von stella KI anfordern",
       "never": {
         "audio": "Ton vom Mikrofon",
         "keystrokes": "Tastenanschläge oder getippter Text",
@@ -128,7 +131,7 @@
         "app": "Welche App im Vordergrund ist, alle paar Sekunden",
         "browserTitles": "Browser-Tab-Titel, nur in Browsern, die Sie zulassen",
         "calls": "Zeit in Anrufen, solange Sie es nicht abschalten",
-        "details": "Fenstertitel und auf dem Mac der vollständige Pfad jedes geöffneten Dokuments samt Ordnern, solange Sie sie nicht abschalten"
+        "details": "Fenstertitel und auf dem Mac der vollständige Pfad jedes geöffneten Dokuments samt Ordnern, nur wenn Sie das wählen"
       },
       "recordedTitle": "Was aufgezeichnet wird",
       "sent": {
@@ -149,6 +152,7 @@
     "earlierTimeStaysUntitled": "Frühere Zeit bleibt ohne Titel.",
     "earliestDayReached": "Sie sehen den frühesten verfügbaren Tag.",
     "empty": "An diesem Tag wurde nichts aufgezeichnet.",
+    "emptyStopped": "Nichts aufgezeichnet. Aktivität war gestoppt: {reason}",
     "emptyToday": "Heute wurde noch nichts aufgezeichnet. Ihre Arbeit erscheint hier laufend.",
     "emptyTodayPaused": "Die Aufzeichnung ist pausiert. Wählen Sie „Fortsetzen“, um Ihre heutige Arbeit aufzuzeichnen.",
     "encrypted": "Auf diesem Gerät verschlüsselt",
@@ -187,6 +191,7 @@
     "noMatters": "Keine Akten gefunden. Versuchen Sie eine andere Suche.",
     "openAccessibilitySettings": "Einstellungen für Bedienungshilfen öffnen",
     "otherAccountHistory": "Auf diesem Gerät bleibt der Verlauf anderer Konten für {days, plural, one {# Tag} other {# Tage}} gespeichert.",
+    "outagesUnreadable": "Die Zeiten, in denen Aktivität nicht aufzeichnen konnte, lassen sich nicht anzeigen.",
     "pause": "Pausieren",
     "paused": "Pausiert",
     "pendingActivityProtected": "Schließen Sie die ausstehende Entwurfserstellung ab, bevor Sie Aktivitäten löschen.",
@@ -213,6 +218,14 @@
     "searchingMatters": "Akten werden gesucht…",
     "selectRange": "Zeitraum auswählen",
     "settings": "Einstellungen",
+    "stopReason": {
+      "blockedByPolicy": "Von Ihrer Organisation deaktiviert",
+      "notAvailable": "Für dieses Konto nicht verfügbar",
+      "notConfirmed": "stella noch nicht erreicht",
+      "reconnectNeeded": "Erneute Verbindung nötig",
+      "signedOut": "Abgemeldet"
+    },
+    "stoppedNotice": "Aktivität kann nicht aufzeichnen: {reason}. Bisherige Aufzeichnungen bleiben hier lesbar; Änderungen sind aus, bis wieder aufgezeichnet wird.",
     "suggestionPieceLabel": "Vorgeschlagener Eintrag: {matter}, {range}, {duration}, insgesamt {hours} Std.",
     "suggestionPieces": "{count, plural, one {# Abschnitt} other {# Abschnitte}} · {hours} Std.",
     "suggestionRange": "{range} · {hours} Std.",
@@ -225,6 +238,8 @@
     "unreadableEraseAction": "Unlesbare Aktivität löschen",
     "unreadableEraseConfirmation": "Unlesbare gespeicherte Aktivitäten und die Wiederherstellungsdaten ihrer ausstehenden Entwürfe werden gelöscht. Erstellte Entwürfe können bereits vorhanden sein. Dies kann nicht rückgängig gemacht werden.",
     "unreadableEraseNotice": "Einige gespeicherte Aktivitäten können nicht gelesen werden. Sie können unlesbare gespeicherte Aktivitäten und ihre Entwurfswiederherstellungsdaten löschen.",
+    "unrecorded": "Nicht aufgezeichnet: {reason}",
+    "unrecordedLabel": "Nicht aufgezeichnet: {reason}, {range}",
     "unrecoverableOtherHistoryConfirmation": "Die gespeicherte Historie anderer Konten wird gelöscht, einschließlich der Wiederherstellungsdaten ausstehender Entwürfe mit fehlenden Schlüsseln oder unlesbaren Dateien. Erstellte Entwürfe können bereits vorhanden sein. Dies kann nicht rückgängig gemacht werden.",
     "welcomeLearnMore": "Mehr erfahren",
     "welcomePreviewMatter": "Verlängerung des Mietvertrags Riverside",
@@ -929,6 +944,7 @@
   },
   "notification": {
     "activityStoppedNotAvailableBody": "Aktivität ist für dieses Konto nicht mehr verfügbar. Bisherige Aufzeichnungen bleiben auf diesem Computer.",
+    "activityStoppedNotConfirmedBody": "Seit dem Start konnte stella nicht erreicht werden. Aktivität zeichnet wieder auf, sobald das gelingt.",
     "activityStoppedPolicyBody": "Ihre Organisation hat Aktivität auf diesem Computer deaktiviert. Bisherige Aufzeichnungen bleiben auf diesem Computer.",
     "activityStoppedReconnectBody": "Verbinden Sie Ihr stella-Konto erneut, damit die Aufzeichnung weiterläuft.",
     "activityStoppedSignedOutBody": "Melden Sie sich erneut bei Ihrem stella-Konto an, damit die Aufzeichnung weiterläuft.",
@@ -970,9 +986,13 @@
         "title": "Anrufe"
       },
       "details": {
-        "appNamesOnly": "Nur App-Namen werden aufgezeichnet.",
-        "body": "Damit unterscheiden Sie Ihre Akten leichter, wenn Sie den Tag durchgehen.",
+        "body": "Wählen Sie, was Aktivität aufzeichnet. Mit Fenstertiteln und Dokumentnamen unterscheiden Sie Ihre Akten leichter, wenn Sie den Tag durchgehen.",
         "browsers": "Browser zeichnen Tab-Titel erst auf, wenn Sie es erlauben. Aktivität fragt nach jedem Browser, sobald sie ihn zum ersten Mal sieht.",
+        "choices": {
+          "appNamesOnly": "Nur App-Namen aufzeichnen",
+          "withDetails": "Auch Fenstertitel und Dokumentnamen aufzeichnen"
+        },
+        "choose": "Wählen Sie eine Option, um fortzufahren.",
         "title": "Fenstertitel und Dokumente"
       },
       "screens": {
@@ -1425,6 +1445,7 @@
     "activityRecording": "Aktivität: Aufzeichnung · heute {hours} h",
     "activityResume": "Aufzeichnung fortsetzen",
     "activityStoppedNotAvailable": "Aktivität: Gestoppt · Für dieses Konto nicht verfügbar",
+    "activityStoppedNotConfirmed": "Aktivität: Gestoppt · stella noch nicht erreicht",
     "activityStoppedPolicy": "Aktivität: Gestoppt · Von Ihrer Organisation deaktiviert",
     "activityStoppedReconnect": "Aktivität: Gestoppt · Erneute Verbindung nötig",
     "activityStoppedSignedOut": "Aktivität: Gestoppt · Abgemeldet",

@@ -176,8 +176,12 @@ async fn fetch(
 /// What one read tells about the account's features.
 enum Outcome {
   Decided(AccountDecision),
-  /// Nothing could be read; the last decision stands.
-  Unknown,
+  /// Nothing could be read; the last decision stands. The account is named
+  /// when it was read but the server was not reached, so a gate that has no
+  /// answer yet knows whose data is local.
+  Unknown {
+    unconfirmed: Option<AccountDecision>,
+  },
 }
 
 /// The decision a failed read leaves, and what it says about the saved link.
@@ -245,7 +249,7 @@ async fn current_decision(app: &AppHandle) -> Outcome {
     // account is still linked, so nothing is decided until it can be read.
     Err(error) => {
       tracing::warn!(error = %error, "feature access deferred: account is unreadable now");
-      return Outcome::Unknown;
+      return Outcome::Unknown { unconfirmed: None };
     }
   };
   let namespace = request.local_data_namespace();
@@ -272,10 +276,19 @@ async fn current_decision(app: &AppHandle) -> Outcome {
       },
       LinkObservation::ServerAccepted,
     ),
-    Err(failure) => match decision_for_failure(failure, namespace, expires_at) {
-      Some(decided) => decided,
-      None => return Outcome::Unknown,
-    },
+    Err(failure) => {
+      match decision_for_failure(failure, namespace.clone(), expires_at) {
+        Some(decided) => decided,
+        None => {
+          return Outcome::Unknown {
+            unconfirmed: Some(AccountDecision::Unconfirmed {
+              namespace,
+              expires_at,
+            }),
+          };
+        }
+      }
+    }
   };
   account::observe_link(app, observation);
   Outcome::Decided(decision)
@@ -309,9 +322,17 @@ pub fn refresh_now() {
 pub type FeatureChangeHandler =
   Arc<dyn Fn(&AppHandle, DesktopFeature, bool) + Send + Sync>;
 
-/// Runs the refresh loop. `on_change` is called with every feature whose
-/// state changed, after the new decision is visible through [`FeatureGates`].
-pub fn start(app: AppHandle, on_change: FeatureChangeHandler) {
+/// Called with the gates after every installed decision.
+pub type DecisionHandler = Arc<dyn Fn(&AppHandle, &FeatureGates) + Send + Sync>;
+
+/// Runs the refresh loop. `on_decision` is called after every installed
+/// decision and `on_change` with every feature whose state changed, both
+/// after the new decision is visible through [`FeatureGates`].
+pub fn start(
+  app: AppHandle,
+  on_decision: DecisionHandler,
+  on_change: FeatureChangeHandler,
+) {
   tauri::async_runtime::spawn(async move {
     let mut interval = tokio::time::interval(REFRESH_INTERVAL);
     let mut wakes = crate::presence::subscribe_wakes();
@@ -343,19 +364,25 @@ pub fn start(app: AppHandle, on_change: FeatureChangeHandler) {
           retry = None;
           decision
         }
-        Outcome::Unknown => {
+        Outcome::Unknown { unconfirmed } => {
           let wait = next_retry(retry);
           tracing::info!(
             retry_in_seconds = wait.as_secs(),
             "feature access read again soon"
           );
           retry = Some(wait);
-          continue;
+          let Some(unconfirmed) = unconfirmed else {
+            continue;
+          };
+          unconfirmed
         }
       };
       let Some(changed) = gates.install(generation, decision) else {
         continue;
       };
+      // Before any toggle is applied, so a decision is kept before the
+      // process can end.
+      on_decision(&app, gates.inner());
       for feature in changed {
         on_change(&app, feature, gates.is_enabled(feature));
       }

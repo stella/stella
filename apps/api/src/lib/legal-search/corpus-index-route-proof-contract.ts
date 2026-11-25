@@ -43,5 +43,19 @@ export type CorpusIndexRouteProofRevokeReason =
  */
 export const CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS = 24;
 
+/**
+ * Why a route's open pass was started over from its beginning without
+ * revoking the route's proof:
+ *
+ * - `pass_too_old_to_prove`: the pass started longer ago than the maximum
+ *   age, so the proof its end would write is expired the instant it is
+ *   written; walking on would cost a whole pass and prove nothing.
+ */
+const CORPUS_INDEX_ROUTE_PASS_RESTART_REASONS = [
+  "pass_too_old_to_prove",
+] as const;
+export type CorpusIndexRoutePassRestartReason =
+  (typeof CORPUS_INDEX_ROUTE_PASS_RESTART_REASONS)[number];
+
 /** The engine's identity of one incarnation of an index id, as stored. */
 export const CORPUS_INDEX_INCARNATION_MAX_LENGTH = 160;

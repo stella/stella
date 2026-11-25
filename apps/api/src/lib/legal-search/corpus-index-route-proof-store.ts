@@ -20,6 +20,15 @@
  * only removes an obligation. Key order plays no part. A writer that adds
  * rows to these sets without such an observation must revoke the route here.
  *
+ * Why a pass too old to prove does restart. A proof counts only while its
+ * pass STARTED within `CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS`, so an open
+ * pass that started longer ago can only end in a proof that is already
+ * expired. The page that picks such a pass up starts it over from the
+ * beginning instead of resuming it (`pass_too_old_to_prove`), judged on the
+ * database clock by the same predicate the reader's freshness uses. The
+ * restart is not a revocation: the route's last proof, older still, keeps
+ * reading `expired`, and what a proof certifies is unchanged.
+ *
  * Who may walk a route. Only a route the generation's manifest declares, and
  * only while its group is attested (a group the generation was created with
  * is attested by the manifest itself): every pass transaction re-reads that,
@@ -32,7 +41,9 @@
  *
  * Every write is a compare-and-set on the row's own pass identity (number,
  * id, phase, cursor, incarnation), so two runners walking one route never
- * both advance it, and a revocation that lands while a page is read wins.
+ * both advance it, two runners picking up one pass too old to prove restart
+ * it once, and a revocation that lands while a page is read, or while a pass
+ * is restarted, wins.
  */
 import { panic, Result } from "better-result";
 import { and, eq, type SQL, sql } from "drizzle-orm";
@@ -64,6 +75,7 @@ import {
   CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS,
   CORPUS_INDEX_ROUTE_PROOF_REVOKE_REASONS,
   type CorpusIndexRouteCensusExpectation,
+  type CorpusIndexRoutePassRestartReason,
   type CorpusIndexRouteProofRevokeReason,
 } from "@/api/lib/legal-search/corpus-index-route-proof-contract";
 import { isRecord } from "@/api/lib/type-guards";
@@ -105,6 +117,18 @@ const enrollments = corpusIndexGroupEnrollments;
 
 const epochMicros = (instant: SQL): SQL =>
   sql`(extract(epoch FROM ${instant}) * 1000000)::bigint`;
+
+/**
+ * Whether a pass that started at `startedAt` is young enough for its proof to
+ * count, on the database clock: the one rule behind both the reader's
+ * freshness and the restart of a pass too old to prove.
+ */
+const startedWithinMaxAge = (
+  startedAt: SQL,
+  maxAgeHours: number = CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS,
+): SQL =>
+  sql`${startedAt} >= clock_timestamp()
+    - make_interval(secs => ${Math.round(maxAgeHours * 3600)})`;
 
 const isRoute = ({ family, generation, indexId }: CorpusIndexRoute): SQL =>
   sql`${proofs.family} = ${family}
@@ -459,19 +483,78 @@ const admitRouteTx = async (
     : { type: "refused", refusal: attested };
 };
 
+/** An open pass given up for a new one, and why. */
+export type CorpusIndexRoutePassRestart = {
+  reason: CorpusIndexRoutePassRestartReason;
+  /** The pass given up: its number, rows walked, and age on the database clock. */
+  abandoned: { number: number; inspected: number; elapsedMs: number };
+};
+
 /** What starting a census page found. */
 export type CorpusIndexRouteCensusStart =
-  | { type: "pass"; pass: CorpusIndexRouteCensusPass }
+  | {
+      type: "pass";
+      pass: CorpusIndexRouteCensusPass;
+      /** The open pass this page started over instead of resuming. */
+      restarted: CorpusIndexRoutePassRestart | null;
+    }
   | { type: "refused"; refusal: CorpusIndexRouteRefusal }
   /** The engine holds no index under the route's id. */
   | { type: "index_missing" };
+
+/**
+ * Start the route's open pass over from its beginning, on the incarnation the
+ * page read, without touching its proof. A compare-and-set on the pass's
+ * number and id, with the age re-judged at the write: null when another
+ * runner or a revocation moved the pass first, which then stands.
+ */
+const restartPassTooOldToProveTx = async (
+  tx: Transaction,
+  route: CorpusIndexRoute,
+  pass: CorpusIndexRouteCensusPass,
+  incarnation: string,
+): Promise<CorpusIndexRoutePassRestart | null> => {
+  const restarted = await writeRouteProofTx(
+    tx,
+    sql`
+    UPDATE ${proofs}
+    SET pass_number = ${proofs.passNumber} + 1,
+      pass_id = gen_random_uuid(),
+      pass_started_at = clock_reading.at,
+      pass_through = ${presentThrough(route)},
+      pass_expectation = 'present',
+      pass_cursor = NULL,
+      pass_inspected = 0,
+      pass_index_incarnation = ${incarnation},
+      updated_at = clock_reading.at
+    FROM (SELECT clock_timestamp() AS at) AS clock_reading
+    WHERE ${isRoute(route)}
+      AND ${proofs.passNumber} = ${pass.number}
+      AND ${proofs.passId} = ${pass.id}::uuid
+      AND NOT ${startedWithinMaxAge(sql`${proofs.passStartedAt}`)}
+    RETURNING ${proofs.indexId}
+  `,
+  );
+  return restarted.length === 1
+    ? {
+        reason: "pass_too_old_to_prove",
+        abandoned: {
+          number: pass.number,
+          inspected: pass.inspected,
+          elapsedMs: pass.elapsedMs,
+        },
+      }
+    : null;
+};
 
 /**
  * Start a census page of an admitted route: the route's pass, begun at the
  * database clock if the route has none, bound to the engine incarnation read
  * just before. A pass that already read another incarnation walked an index
  * that is no longer there: the proof is revoked and a new pass starts on this
- * one. A replay converges on the row the first call wrote.
+ * one. A pass that started too long ago to prove the route is started over
+ * (`pass_too_old_to_prove`). A replay converges on the row the first call
+ * wrote.
  */
 export const startCorpusIndexRouteCensusPageTx = async (
   tx: Transaction,
@@ -521,15 +604,23 @@ export const startCorpusIndexRouteCensusPageTx = async (
     ON CONFLICT ON CONSTRAINT corpus_index_route_proofs_pkey DO NOTHING
   `,
   );
-  const read = async () =>
-    passOf(
+  const read = async () => {
+    const row =
       executedRows(
         await tx.execute(sql`
-          SELECT ${passColumns} FROM ${proofs} WHERE ${isRoute(route)}
+          SELECT ${passColumns},
+            NOT ${startedWithinMaxAge(sql`${proofs.passStartedAt}`)}
+              AS too_old_to_prove
+          FROM ${proofs}
+          WHERE ${isRoute(route)}
         `),
-      ).at(0) ?? panic(`Route proof row was lost: ${route.indexId}`),
-    );
-  const found = await read();
+      ).at(0) ?? panic(`Route proof row was lost: ${route.indexId}`);
+    return {
+      pass: passOf(row),
+      tooOldToProve: isRecord(row) && row["too_old_to_prove"] === true,
+    };
+  };
+  const { pass: found, tooOldToProve } = await read();
   const replaced =
     found.incarnation !== null && found.incarnation !== observed.incarnation;
   if (replaced) {
@@ -537,11 +628,24 @@ export const startCorpusIndexRouteCensusPageTx = async (
       incarnation: observed.incarnation,
     });
   }
+  // A revocation above already started a new pass. Otherwise a pass too old
+  // to prove starts over; if another writer moved it first, its pass stands.
+  const restarted =
+    !replaced && tooOldToProve
+      ? await restartPassTooOldToProveTx(tx, route, found, observed.incarnation)
+      : null;
+  const resumed =
+    !replaced && tooOldToProve && restarted === null
+      ? (await read()).pass
+      : found;
   // A phase not yet begun takes its bound now, when its first page is read:
   // a pass created on an empty route still walks what was applied before it
   // read anything. The pass's first engine read binds its incarnation.
   const pass =
-    replaced || found.cursor === null || found.incarnation === null
+    replaced ||
+    restarted !== null ||
+    resumed.cursor === null ||
+    resumed.incarnation === null
       ? passOf(
           (
             await writeRouteProofTx(
@@ -565,8 +669,8 @@ export const startCorpusIndexRouteCensusPageTx = async (
             )
           ).at(0) ?? panic(`Route proof row was lost: ${route.indexId}`),
         )
-      : found;
-  return { type: "pass", pass };
+      : resumed;
+  return { type: "pass", pass, restarted };
 };
 
 /** What one clean census page did to the route's pass. */
@@ -810,8 +914,7 @@ export const readCorpusIndexRouteProofsTx = async (
         ${proofs.revokedAt} IS NOT NULL
           AND ${proofs.provenPassNumber} < ${proofs.revokedPassNumber}
           AS revoked,
-        ${proofs.provenPassStartedAt} >= clock_timestamp()
-          - make_interval(secs => ${Math.round(maxAgeHours * 3600)})
+        ${startedWithinMaxAge(sql`${proofs.provenPassStartedAt}`, maxAgeHours)}
           AS fresh,
         -- A proving pass older than its group's attestation walked an index
         -- the attestation does not vouch for (never so while every new

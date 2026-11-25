@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "Retiring scheduler jobs moved from ensureDefaultSchedulerJobs into retireSchedulerJobs so a test can pass it a retired task; the move drops that write's row from the audit-on-mutation ledger, so unaudited scheduler writes stay at one. It changes scheduler system state with no member actor and logs each retired job."
+}

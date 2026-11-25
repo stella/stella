@@ -57,6 +57,7 @@ import {
   AskUserQuestionInputSchema,
   AssistantMessageSchema,
   CanUseToolRequestSchema,
+  CLAUDE_AUTONOMOUS_ORIGINS,
   CLAUDE_CONTROL_REQUESTS,
   CLAUDE_DROPPED_COMMAND_STATES,
   CLAUDE_STEER_PRIORITY,
@@ -240,6 +241,35 @@ type ClaudeMessageUsage = NonNullable<ClaudeResultMessage["usage"]>;
 /** The main thread's last model request: the model and what it held. */
 type LastRequest = { model: string | null; contextTokens: number };
 
+/** The ids of the tool calls an assistant message makes. */
+const toolUseIdsOf = (
+  message: v.InferOutput<typeof AssistantMessageSchema>,
+): string[] =>
+  message.message.content.flatMap((block) =>
+    block.type === "tool_use" && typeof block["id"] === "string"
+      ? [block["id"]]
+      : [],
+  );
+
+/**
+ * Whether the CLI started the work `result` ends on its own, a background
+ * task's notification among others, with none of the turn's `written`
+ * messages in it: that result is not the turn's end.
+ */
+const isAutonomousResult = (
+  result: ClaudeResultMessage,
+  written: ReadonlySet<string>,
+): boolean => {
+  const kind = result.origin?.kind;
+  if (kind === undefined || !CLAUDE_AUTONOMOUS_ORIGINS.has(kind)) {
+    return false;
+  }
+  const answered =
+    result.user_message_uuids ??
+    (result.user_message_uuid === undefined ? [] : [result.user_message_uuid]);
+  return !answered.some((uuid) => written.has(uuid));
+};
+
 /** Anthropic reports cache reads and writes apart from `input_tokens`. */
 const inputTokensOf = (usage: ClaudeMessageUsage) =>
   usage.input_tokens +
@@ -414,6 +444,13 @@ export class ClaudeCodeTurnSession {
   private sessionId: HarnessSessionId | null = null;
   /** Steering messages written and not echoed yet: uuid to input id. */
   private readonly steering = new Map<string, string>();
+  /** Every message the turn wrote to the CLI, its prompt and steers, by uuid. */
+  private readonly written = new Set<string>();
+  /**
+   * The calls of each assistant message by its transcript entry, for the
+   * CLI to take back by that entry.
+   */
+  private readonly callsOfEntry = new Map<string, readonly string[]>();
   /**
    * A completed result that arrived while the CLI still held a steer: the
    * usage so far, kept until the CLI reads the steer (the turn answers it)
@@ -524,6 +561,11 @@ export class ClaudeCodeTurnSession {
     return this.lifecycle.client;
   }
 
+  /** The turn's prompt went to the CLI as the message `uuid`. */
+  promptWritten(uuid: string) {
+    this.written.add(uuid);
+  }
+
   /** The session is open: announce it and release held messages. */
   begin(options: {
     sessionId: HarnessSessionId;
@@ -587,6 +629,7 @@ export class ClaudeCodeTurnSession {
     }
     const uuid = crypto.randomUUID();
     this.steering.set(uuid, inputId);
+    this.written.add(uuid);
     client.send({
       type: "user",
       message: { role: "user", content: text },
@@ -721,7 +764,11 @@ export class ClaudeCodeTurnSession {
           raw,
           "model fallback",
         );
-        if (fallback !== null && fallback.scope !== "local") {
+        if (fallback === null) {
+          return;
+        }
+        this.retract(fallback.retracted_message_uuids ?? [], []);
+        if (fallback.scope !== "local") {
           this.emit({ type: "model.rerouted", model: fallback.fallback_model });
         }
         return;
@@ -834,6 +881,7 @@ export class ClaudeCodeTurnSession {
         contextTokens: inputTokensOf(usage) + usage.output_tokens,
       };
     }
+    this.retractedBy(parsed);
     const messageId = parsed.message.id;
     for (const raw of parsed.message.content) {
       if (!isClaudeContentBlockType(raw.type)) {
@@ -873,6 +921,49 @@ export class ClaudeCodeTurnSession {
         default:
           block satisfies never;
           panic("Unhandled Claude content block");
+      }
+    }
+  }
+
+  /**
+   * Close the calls of the earlier responses `message` replaces, and keep
+   * its own calls by its transcript entry for a later retry to replace.
+   */
+  private retractedBy(message: v.InferOutput<typeof AssistantMessageSchema>) {
+    const own = toolUseIdsOf(message);
+    this.retract(message.supersedes ?? [], own);
+    if (message.uuid !== undefined && own.length > 0) {
+      this.callsOfEntry.set(message.uuid, own);
+    }
+  }
+
+  /**
+   * The CLI took back the responses at `entries`, after a refusal or to
+   * retry a response it could not read, and stopped their calls without a
+   * result: those never get one, so they end here as stopped, not failed.
+   * A call the replacing message makes itself (`own`) goes on.
+   */
+  private retract(entries: readonly string[], own: readonly string[]) {
+    for (const entry of entries) {
+      const calls = this.callsOfEntry.get(entry) ?? [];
+      this.callsOfEntry.delete(entry);
+      for (const id of calls) {
+        const held = this.toolUses.get(id);
+        if (
+          own.includes(id) ||
+          held === undefined ||
+          // A plan call opens with its approval, which settles it.
+          held.use.name === EXIT_PLAN_MODE_TOOL
+        ) {
+          continue;
+        }
+        this.toolUses.delete(id);
+        this.conversations.delete(id);
+        this.emit({
+          type: "tool.completed",
+          toolCall: held.toolCall,
+          result: { content: "", status: "cancelled" },
+        });
       }
     }
   }
@@ -917,6 +1008,7 @@ export class ClaudeCodeTurnSession {
         if (parsed === null) {
           return;
         }
+        this.retractedBy(parsed);
         for (const block of parsed.message.content) {
           if (block.type === "text") {
             // A text block that does not have its shape is left out of the
@@ -1129,6 +1221,11 @@ export class ClaudeCodeTurnSession {
 
   private result(parsed: ClaudeResultMessage | null) {
     if (parsed === null) {
+      return;
+    }
+    // A cycle the CLI ran on its own between the turn's steps, such as the
+    // answer to a background task's notification: the turn goes on.
+    if (isAutonomousResult(parsed, this.written)) {
       return;
     }
     this.stopHolding();

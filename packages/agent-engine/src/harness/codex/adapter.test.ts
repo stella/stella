@@ -1094,6 +1094,27 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(prompt).toContain("Search both.");
   });
 
+  test("a session another Codex process holds open fails the turn instead of starting a new thread", async () => {
+    const harness = harnessFor("resume_active_writer");
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir, {
+        continuation: {
+          type: "resume",
+          sessionId: harnessSessionId(FAKE_RESUMED_THREAD_ID),
+        },
+      }),
+    );
+    expect(Result.isError(started) && started.error.reason).toBe(
+      "start_rejected",
+    );
+    expect(Result.isError(started) && started.error.message).toContain(
+      "open in another Codex window",
+    );
+    expect(
+      harness.received().some(({ method }) => method === "thread/start"),
+    ).toBe(false);
+  });
+
   test("the turn's images open turn/start as data URLs; a PDF stays the path the text names", async () => {
     const { events, received } = await run("tool_calls", {
       overrides: {

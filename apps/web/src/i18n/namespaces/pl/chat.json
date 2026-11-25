@@ -175,6 +175,13 @@
         },
         "allowSiteFailed": "Nie udało się zapisać tej strony jako dozwolonej. Ta akcja zostanie wykonana; przy następnej zapytamy ponownie.",
         "alwaysAllowSite": "Zawsze zezwalaj na tej stronie",
+        "askReason": {
+          "embeddedFrame": "Pytamy, bo element jest w osadzonej ramce, która może należeć do innej strony.",
+          "noSite": "Pytamy, bo tego adresu nie można zawsze zezwolić.",
+          "pageUnconfirmed": "Pytamy, bo przeglądarka nie potwierdziła tej strony.",
+          "possibleSecret": "Pytamy, bo to pole może zawierać hasło lub inną tajną informację.",
+          "siteNotAllowed": "Pytamy, bo ta strona nie jest zawsze dozwolona."
+        },
         "description": "Dokładnie sprawdź witrynę i cel. Zawartość strony jest niezaufana i nie może zatwierdzić kolejnego działania.",
         "question": "Zezwolić na to działanie w przeglądarce?",
         "realValues": "Ta witryna otrzyma prawdziwe wartości pokazane poniżej. Tryb anonimizacji dotyczy tylko tego, co widzi AI.",

@@ -50,6 +50,7 @@
     "batchFailed": "Não foi possível criar os rascunhos. Tente novamente.",
     "billingDraftsForgetPreference": "Esquecer preferência",
     "billingDraftsGranted": "stella IA redige as descrições dos seus lançamentos de horas a partir dos detalhes que cada lançamento mostra.",
+    "billingDraftsManaged": "Sua organização desativou os rascunhos da stella IA neste computador.",
     "billingDraftsPreference": "Sua preferência de redação",
     "billingDraftsRevoked": "stella IA não redige descrições até que você permita.",
     "billingDraftsTitle": "Sugestões de stella IA",
@@ -99,6 +100,7 @@
     "deleteOtherAccountHistory": "Excluir histórico de outras contas",
     "deleteOtherAccountHistoryConfirmation": "Excluir o histórico de outras contas de {days, plural, one {# dia} other {# dias}} neste dispositivo? Esta ação não pode ser desfeita.",
     "deletionOnly": "A atividade salva não pode ser aberta porque a chave dela não está no chaveiro. Você pode apagar a atividade salva e os dados de recuperação de rascunhos pendentes para começar de novo.",
+    "detailsManaged": "Sua organização desativou títulos de janelas e documentos neste computador. Os nomes dos apps continuam sendo registrados.",
     "detailsUnavailable": "Os detalhes não estão disponíveis neste dispositivo. Os nomes dos aplicativos continuam sendo registrados.",
     "detectCalls": "Registrar chamadas",
     "detectCallsDescription": "Enquanto o Teams, o Zoom ou um navegador usa seu microfone, esse tempo conta como a chamada, mesmo que você só esteja ouvindo ou trabalhando em outro app. O áudio nunca é gravado.",
@@ -116,6 +118,7 @@
       },
       "aiDraftProvider": "o provedor de IA que o escritório usa, ou o da stella IA",
       "control": "Nada é registrado até você clicar em Começar a registrar. Pause, exclua apps ou apague qualquer dia quando quiser.",
+      "detailsStay": "Títulos de janelas e nomes de documentos ficam neste computador, a menos que você peça um rascunho da stella IA",
       "never": {
         "audio": "Som do microfone",
         "keystrokes": "Teclas digitadas ou texto",
@@ -128,7 +131,7 @@
         "app": "Qual app está em primeiro plano, a cada poucos segundos",
         "browserTitles": "Títulos das abas do navegador, só nos navegadores que você permitir",
         "calls": "Tempo em chamadas, a menos que você desative",
-        "details": "Títulos de janelas e, no Mac, o caminho completo de cada documento aberto, com as pastas, a menos que você os desative"
+        "details": "Títulos de janelas e, no Mac, o caminho completo de cada documento aberto, com as pastas, só se você escolher"
       },
       "recordedTitle": "O que é registrado",
       "sent": {
@@ -149,6 +152,7 @@
     "earlierTimeStaysUntitled": "O tempo anterior continua sem títulos.",
     "earliestDayReached": "Você está visualizando o dia mais antigo disponível.",
     "empty": "Nada foi registrado neste dia.",
+    "emptyStopped": "Nada foi registrado. A Atividade estava parada: {reason}",
     "emptyToday": "Nada foi registrado hoje ainda. Seu trabalho aparece aqui conforme você avança.",
     "emptyTodayPaused": "O registro está pausado. Escolha Retomar para registrar seu trabalho de hoje.",
     "encrypted": "Criptografado neste dispositivo",
@@ -187,6 +191,7 @@
     "noMatters": "Nenhum caso encontrado. Tente outra busca.",
     "openAccessibilitySettings": "Abrir ajustes de Acessibilidade",
     "otherAccountHistory": "O histórico de outras contas de {days, plural, one {# dia} other {# dias}} permanece neste dispositivo.",
+    "outagesUnreadable": "Não é possível mostrar os períodos em que a Atividade não pôde registrar.",
     "pause": "Pausar",
     "paused": "Pausado",
     "pendingActivityProtected": "Conclua a criação de rascunhos pendente antes de excluir atividades.",
@@ -213,6 +218,14 @@
     "searchingMatters": "Buscando casos…",
     "selectRange": "Selecionar um intervalo",
     "settings": "Configurações",
+    "stopReason": {
+      "blockedByPolicy": "Desativada pela sua organização",
+      "notAvailable": "Indisponível para esta conta",
+      "notConfirmed": "A stella ainda não foi alcançada",
+      "reconnectNeeded": "É preciso reconectar",
+      "signedOut": "Sessão encerrada"
+    },
+    "stoppedNotice": "A Atividade não pode registrar: {reason}. O que foi registrado continua disponível aqui para consulta; as alterações ficam desativadas até que o registro seja retomado.",
     "suggestionPieceLabel": "Lançamento sugerido: {matter}, {range}, {duration}, {hours} h no total",
     "suggestionPieces": "{count, plural, one {# trecho} other {# trechos}} · {hours} h",
     "suggestionRange": "{range} · {hours} h",
@@ -225,6 +238,8 @@
     "unreadableEraseAction": "Apagar atividade ilegível",
     "unreadableEraseConfirmation": "A atividade salva ilegível e os dados de recuperação dos rascunhos pendentes dela serão apagados. Os rascunhos criados podem já existir. Esta ação não pode ser desfeita.",
     "unreadableEraseNotice": "Não é possível ler parte da atividade salva. Você pode apagar a atividade salva ilegível e os dados de recuperação dos rascunhos dela.",
+    "unrecorded": "Não registrado: {reason}",
+    "unrecordedLabel": "Não registrado: {reason}, {range}",
     "unrecoverableOtherHistoryConfirmation": "O histórico salvo de outras contas será excluído, incluindo dados de recuperação de rascunhos pendentes com chaves ausentes ou arquivos ilegíveis. Os rascunhos criados podem já existir. Esta ação não pode ser desfeita.",
     "welcomeLearnMore": "Saiba mais",
     "welcomePreviewMatter": "Renovação do contrato de locação Riverside",
@@ -929,6 +944,7 @@
   },
   "notification": {
     "activityStoppedNotAvailableBody": "A Atividade não está mais disponível para esta conta. O que foi registrado continua neste computador.",
+    "activityStoppedNotConfirmedBody": "Não foi possível acessar a stella desde que o app foi aberto. A Atividade volta a registrar assim que possível.",
     "activityStoppedPolicyBody": "Sua organização desativou a Atividade neste computador. O que foi registrado continua neste computador.",
     "activityStoppedReconnectBody": "Reconecte sua conta stella para continuar registrando.",
     "activityStoppedSignedOutBody": "Entre novamente na sua conta stella para continuar registrando.",
@@ -970,9 +986,13 @@
         "title": "Chamadas"
       },
       "details": {
-        "appNamesOnly": "Só os nomes dos apps são registrados.",
-        "body": "Eles ajudam você a distinguir os casos ao revisar o dia.",
+        "body": "Escolha o que a Atividade registra. Títulos de janelas e nomes de documentos ajudam você a distinguir os casos ao revisar o dia.",
         "browsers": "Os navegadores só registram títulos das abas depois que você permitir. A Atividade pergunta sobre cada navegador na primeira vez que o vê.",
+        "choices": {
+          "appNamesOnly": "Registrar só os nomes dos apps",
+          "withDetails": "Registrar também títulos de janelas e nomes de documentos"
+        },
+        "choose": "Escolha uma opção para continuar.",
         "title": "Títulos de janelas e documentos"
       },
       "screens": {
@@ -1425,6 +1445,7 @@
     "activityRecording": "Atividade: Registrando · {hours} h hoje",
     "activityResume": "Retomar registro",
     "activityStoppedNotAvailable": "Atividade: Parada · Indisponível para esta conta",
+    "activityStoppedNotConfirmed": "Atividade: Parada · A stella ainda não foi alcançada",
     "activityStoppedPolicy": "Atividade: Parada · Desativada pela sua organização",
     "activityStoppedReconnect": "Atividade: Parada · É preciso reconectar",
     "activityStoppedSignedOut": "Atividade: Parada · Sessão encerrada",
