@@ -11,23 +11,16 @@ import {
 
 import type { ReplayRunReport } from "@/api/handlers/case-law/ingestion/replay";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 
 import { replayHealthConfig } from "./replay-enrolment";
 import {
+  type BackgroundReplaySource,
   classifyReplayFailure,
   type ReplayFailure,
   replayFailure,
 } from "./replay-failure";
 
-export type BackgroundReplaySource = {
-  id: SafeId<"caseLawSource">;
-  adapterKey: AdapterKey;
-  currentParserVersion: number;
-  dailyBudget: number;
-  mode: "enrolled" | "dry-run";
-  rowsBehind: number;
-};
+export type { BackgroundReplaySource };
 
 export type BackgroundReplayBatch = {
   id: string;

@@ -329,6 +329,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/signals/proofs/signal-visible-to.ts",
     "apps/api/src/lib/skills/install.ts",
     "apps/api/src/lib/skills/skill-package.ts",
+    "apps/api/src/lib/skills/skipped-skill-file.ts",
     "apps/api/src/lib/data-export/queue.ts",
     "apps/api/src/lib/data-export/version-scope.ts",
     "apps/api/src/lib/s3/multipart-sink.ts",

@@ -143,8 +143,8 @@ import type { materializePlaybookRun } from "@/api/lib/workflow/materialize-play
 import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-workspace-ids";
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { McpCredentialType, McpSession } from "@/api/mcp/auth";
+import type { LoadCapabilityEndpoint } from "@/api/mcp/capability-endpoint-types";
 import type { consumeInvokeCapabilityRateLimit } from "@/api/mcp/capability-rate-limit";
-import type { loadCapabilityEndpoint } from "@/api/mcp/capability-tools";
 import type { CompatCorpusContinuation } from "@/api/mcp/compat-corpus";
 import { McpOrganizationAccessError } from "@/api/mcp/errors";
 import type { McpFeatureAccessBindings } from "@/api/mcp/feature-access";
@@ -184,7 +184,7 @@ export type McpRequestContext = {
   /** Explicit seams used by focused MCP tests; production contexts leave these unset. */
   featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   testDependencies?: {
-    loadCapabilityEndpoint?: typeof loadCapabilityEndpoint;
+    loadCapabilityEndpoint?: LoadCapabilityEndpoint;
     readWithdrawnCopies?: typeof readWithdrawnCopyProjection | undefined;
     admitPublicRead?: typeof withMcpPublicReadAdmission;
     featureAccessSnapshot?: FeatureAccessSnapshot | undefined;

@@ -102,6 +102,8 @@ image on arm64 only), while browser and e2e suites, service-backed suites, the
 other release architectures, and the mobile, Windows, and desktop Rust checks
 run only in the merge queue.
 `--all` checks every package instead of only those affected vs `origin/main`.
+For fast local pre-push loops on narrow edits, `bun run check:pr-guards` runs
+the path-scoped policy, snapshot, and rollout guards.
 
 The scoped test run is filtered by `scripts/test-scope.ts`, not `--affected`: a
 suite that reads files outside its own package declares them as

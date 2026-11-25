@@ -1,3 +1,4 @@
+import type { BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError } from "better-auth/api";
 import { panic, Result } from "better-result";
@@ -24,7 +25,6 @@ import type { TransactionOf } from "@/api/db/scoped";
 import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-connection-settings";
 import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { envBase } from "@/api/env-base";
-import type { getAuth } from "@/api/lib/auth";
 import { AUTH_DATABASE_ADAPTER_OPTIONS } from "@/api/lib/auth-adapter-options";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -543,7 +543,7 @@ type ChangeOrganizationSlugOptions = {
   memberRole: AuthorizedMemberRole;
   slug: string;
   recordAuditEvent: AuditRecorder;
-  auth: ReturnType<typeof getAuth>;
+  auth: OrganizationSlugUpdateAuth;
 };
 
 class OrganizationSlugUpdateError extends HandlerError<500> {
@@ -934,4 +934,17 @@ export const readOrgSsoSeatLimit = async (
     .where(eq(organizationSsoPolicy.organizationId, provisioningDomainId))
     .limit(1);
   return policy?.seatLimit ?? null;
+};
+
+type OrganizationSlugUpdateAuth = {
+  readonly $context: Promise<Record<string, unknown>>;
+  readonly options: BetterAuthOptions;
+  readonly organizationUpdateEndpoint: (input: {
+    readonly headers: Headers;
+    readonly context: Record<string, unknown>;
+    readonly body: {
+      readonly organizationId: string;
+      readonly data: { readonly slug: string };
+    };
+  }) => Promise<unknown>;
 };
