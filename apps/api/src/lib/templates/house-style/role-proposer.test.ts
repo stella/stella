@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type {
   DocxBlock,
   DocxBlockManifest,
-} from "@/api/lib/house-style/folio-contract";
+} from "@/api/lib/templates/house-style/folio-contract";
 import {
   blockIdOf,
   czechContract,
@@ -11,12 +11,12 @@ import {
   englishAgreement,
   manifestOf,
   numbered,
-} from "@/api/lib/house-style/manifest.test-helpers";
-import { proposeTemplateRoles } from "@/api/lib/house-style/role-proposer";
+} from "@/api/lib/templates/house-style/manifest.test-helpers";
+import { proposeTemplateRoles } from "@/api/lib/templates/house-style/role-proposer";
 import type {
   HouseStyleRole,
   TemplateRoleMap,
-} from "@/api/lib/house-style/role-proposer";
+} from "@/api/lib/templates/house-style/role-proposer";
 
 /** One multi-level list numbers articles, clauses, letters and points, the
  *  way a contract template binds them to its styles. */

@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseDocxBlockManifest } from "@/api/lib/house-style/folio-contract";
+import { parseDocxBlockManifest } from "@/api/lib/templates/house-style/folio-contract";
 import {
   czechContract,
   manifestOf,
-} from "@/api/lib/house-style/manifest.test-helpers";
+} from "@/api/lib/templates/house-style/manifest.test-helpers";
 
 describe("parseDocxBlockManifest", () => {
   test("accepts a manifest as the engine reports it", () => {

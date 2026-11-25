@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildLabelIndex } from "@/api/lib/house-style/label-index";
+import { buildLabelIndex } from "@/api/lib/templates/house-style/label-index";
 import {
   blockIdOf,
   czechContract,
-} from "@/api/lib/house-style/manifest.test-helpers";
-import { detectReferences } from "@/api/lib/house-style/reference-detector";
-import { findTopicSuspicions } from "@/api/lib/house-style/reference-suspicions";
+} from "@/api/lib/templates/house-style/manifest.test-helpers";
+import { detectReferences } from "@/api/lib/templates/house-style/reference-detector";
+import { findTopicSuspicions } from "@/api/lib/templates/house-style/reference-suspicions";
 
 const suspicionsOf = (citing: string) => {
   const manifest = czechContract(citing);

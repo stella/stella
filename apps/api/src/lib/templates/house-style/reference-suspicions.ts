@@ -7,9 +7,9 @@
 
 import { stripDiacritics } from "@stll/text-normalize";
 
-import type { DocxBlockManifest } from "@/api/lib/house-style/folio-contract";
-import type { LabelIndex } from "@/api/lib/house-style/label-index";
-import type { DetectedReference } from "@/api/lib/house-style/reference-detector";
+import type { DocxBlockManifest } from "@/api/lib/templates/house-style/folio-contract";
+import type { LabelIndex } from "@/api/lib/templates/house-style/label-index";
+import type { DetectedReference } from "@/api/lib/templates/house-style/reference-detector";
 
 type ReferenceSuspicion = {
   referenceId: string;
@@ -39,10 +39,11 @@ const SUSPICION_CONFIDENCE_MAX = 50;
  *  letters of the folded word. */
 const stemsOf = (text: string): Set<string> =>
   new Set(
-    (
+    Array.from(
       stripDiacritics(text)
         .toLowerCase()
-        .match(/\p{L}+/gu) ?? []
+        .matchAll(/\p{L}+/gu),
+      ([word]) => word,
     )
       .filter((word) => word.length >= WORD_MIN)
       .map((word) => word.slice(0, STEM_LENGTH)),
@@ -122,23 +123,18 @@ export const findTopicSuspicions = ({
 
   const suspicions: ReferenceSuspicion[] = [];
   for (const reference of references) {
-    if (reference.scope !== "internal") {
-      continue;
-    }
     const text = textByBlockId.get(reference.blockId);
-    if (text === undefined) {
+    const inBlock = referencesByBlockId.get(reference.blockId);
+    if (
+      reference.scope !== "internal" ||
+      text === undefined ||
+      inBlock === undefined
+    ) {
       continue;
     }
-    const context = stemsOf(
-      sentenceAround(
-        text,
-        reference,
-        referencesByBlockId.get(reference.blockId) ?? [],
-      ),
-    );
-    const shared = (blockId: string): number =>
-      (distinctive.get(blockId) ?? []).filter((stem) => context.has(stem))
-        .length;
+    const context = stemsOf(sentenceAround(text, reference, inBlock));
+    const shared = (stems: readonly string[]): number =>
+      stems.filter((stem) => context.has(stem)).length;
     for (const [
       designatorIndex,
       designator,
@@ -148,12 +144,14 @@ export const findTopicSuspicions = ({
         continue;
       }
       const cited = resolution.targetBlockId;
-      if (!distinctive.has(cited) || shared(cited) > 0) {
+      const citedStems = distinctive.get(cited);
+      // An untitled article gives nothing to compare with.
+      if (citedStems === undefined || shared(citedStems) > 0) {
         continue;
       }
       let best: { blockId: string; count: number } | null = null;
       for (const [blockId, stems] of distinctive) {
-        const count = shared(blockId);
+        const count = shared(stems);
         if (
           blockId !== cited &&
           count >= SHARED_MIN &&

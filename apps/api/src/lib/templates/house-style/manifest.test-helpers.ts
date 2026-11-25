@@ -6,8 +6,8 @@ import { panic } from "better-result";
 import type {
   DocxBlock,
   DocxBlockManifest,
-} from "@/api/lib/house-style/folio-contract";
-import type { LabelIndex } from "@/api/lib/house-style/label-index";
+} from "@/api/lib/templates/house-style/folio-contract";
+import type { LabelIndex } from "@/api/lib/templates/house-style/label-index";
 
 type BlockDetail = {
   text: string;

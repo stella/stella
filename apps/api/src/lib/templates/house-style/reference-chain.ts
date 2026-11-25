@@ -30,8 +30,8 @@ import {
   RELATIVE_DEICTIC_AT,
   SELF_ADVERB_AT,
   TAIL_START_AT,
-} from "@/api/lib/house-style/reference-grammar";
-import type { HeadLevel } from "@/api/lib/house-style/reference-grammar";
+} from "@/api/lib/templates/house-style/reference-grammar";
+import type { HeadLevel } from "@/api/lib/templates/house-style/reference-grammar";
 
 type TokenFamily = "decimal" | "upperRoman" | "bracketed" | "number" | "letter";
 

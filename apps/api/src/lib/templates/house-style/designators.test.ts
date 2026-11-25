@@ -6,7 +6,7 @@ import {
   labelFieldText,
   letterOrdinal,
   parseLabelShape,
-} from "@/api/lib/house-style/designators";
+} from "@/api/lib/templates/house-style/designators";
 
 describe("parseLabelShape", () => {
   test.each([

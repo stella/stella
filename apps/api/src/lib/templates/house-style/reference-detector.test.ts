@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import type { DocxBlockManifest } from "@/api/lib/house-style/folio-contract";
-import { buildLabelIndex } from "@/api/lib/house-style/label-index";
+import type { DocxBlockManifest } from "@/api/lib/templates/house-style/folio-contract";
+import { buildLabelIndex } from "@/api/lib/templates/house-style/label-index";
 import {
   blockIdOf,
   czechContract,
@@ -12,9 +12,9 @@ import {
   manifestOf,
   numbered,
   provisionKey,
-} from "@/api/lib/house-style/manifest.test-helpers";
-import { detectReferences } from "@/api/lib/house-style/reference-detector";
-import type { DetectedReference } from "@/api/lib/house-style/reference-detector";
+} from "@/api/lib/templates/house-style/manifest.test-helpers";
+import { detectReferences } from "@/api/lib/templates/house-style/reference-detector";
+import type { DetectedReference } from "@/api/lib/templates/house-style/reference-detector";
 
 type Read = {
   /** The chain's text. */

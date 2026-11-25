@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import type { DocxBlockManifest } from "@/api/lib/house-style/folio-contract";
-import { buildLabelIndex } from "@/api/lib/house-style/label-index";
+import type { DocxBlockManifest } from "@/api/lib/templates/house-style/folio-contract";
+import { buildLabelIndex } from "@/api/lib/templates/house-style/label-index";
 import {
   blockIdOf,
   czechContract,
@@ -11,7 +11,7 @@ import {
   manifestOf,
   numbered,
   provisionKey,
-} from "@/api/lib/house-style/manifest.test-helpers";
+} from "@/api/lib/templates/house-style/manifest.test-helpers";
 
 /** Every indexed block as `<level> <key>`, in document order. */
 const keysOf = (manifest: DocxBlockManifest): string[] => {

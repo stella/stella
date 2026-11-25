@@ -6,8 +6,15 @@ import { panic } from "better-result";
 
 import { parseRomanNumeral } from "@stll/api-contract/magyar-kozlony-designation";
 
-import type { Segment, Token } from "@/api/lib/house-style/reference-chain";
-import type { HeadLevel } from "@/api/lib/house-style/reference-grammar";
+import {
+  decimalPath,
+  digitsValue,
+} from "@/api/lib/templates/house-style/designators";
+import type {
+  Segment,
+  Token,
+} from "@/api/lib/templates/house-style/reference-chain";
+import type { HeadLevel } from "@/api/lib/templates/house-style/reference-grammar";
 
 type UnitKind = "annex" | "article" | "clause" | "item" | "recital";
 
@@ -49,13 +56,20 @@ type ChainContext = {
   items: string[];
 };
 
-const decimalPath = (core: string): number[] | null =>
-  /^\d+(?:\.\d+)*$/u.test(core) ? core.split(".").map(Number) : null;
-
 export const tokenOrdinal = (token: Token): number | null =>
   token.family === "upperRoman"
     ? parseRomanNumeral(token.core)
     : (decimalPath(token.core)?.at(0) ?? null);
+
+/** A clause designator's path: `5.2` as written, `(2)` and `II` as one
+ *  number. */
+const clausePathOf = (token: Token): number[] | null => {
+  if (token.family === "decimal") {
+    return decimalPath(token.core);
+  }
+  const ordinal = tokenOrdinal(token);
+  return ordinal === null ? null : [ordinal];
+};
 
 /** Applies one designator to the chain's context and returns the unit it
  *  names. */
@@ -79,7 +93,9 @@ const applyToken = (
   });
   if (token.attached || level === "letter") {
     if (token.family === "number") {
-      context.clausePath = [...(context.clausePath ?? []), Number(token.core)];
+      const number = digitsValue(token.core);
+      const outer = context.clausePath === null ? [] : context.clausePath;
+      context.clausePath = number === null ? [] : [...outer, number];
       context.items = [];
       return snapshot("clause");
     }
@@ -115,11 +131,9 @@ const applyToken = (
         return snapshot("item");
       }
       context.items = [];
-      const path =
-        token.family === "decimal"
-          ? decimalPath(token.core)
-          : [tokenOrdinal(token) ?? Number(token.core)];
-      if (path === null || path.some((part) => !Number.isFinite(part))) {
+      const path = clausePathOf(token);
+      // `odst. 5a`: no clause is numbered so.
+      if (path === null) {
         context.clausePath = [];
         return snapshot("clause");
       }

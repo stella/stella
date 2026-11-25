@@ -3,6 +3,7 @@
 // typed at the start of a paragraph, and the numbering formats a template
 // level renders with.
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import {
   parseRomanNumeral,
   romanNumeral,
@@ -64,8 +65,13 @@ const LOWER_A = 97;
 export const letterOrdinal = (token: string): number | null => {
   const lower = token.toLowerCase();
   const first = lower.codePointAt(0);
+  const letter = lower.charAt(0);
   // One letter, repeated: `a`, `bb`, never `ab`.
-  if (first === undefined || !/^([a-z])\1*$/u.test(lower)) {
+  if (
+    first === undefined ||
+    !/^[a-z]$/u.test(letter) ||
+    lower !== letter.repeat(lower.length)
+  ) {
     return null;
   }
   return (lower.length - 1) * LETTERS_IN_ALPHABET + (first - LOWER_A) + 1;
@@ -98,6 +104,26 @@ export const formatNumeral = (value: number, numFmt: string): string | null => {
     default:
       return null;
   }
+};
+
+/** A run of decimal digits as a number; null for anything else. */
+export const digitsValue = (digits: string): number | null => {
+  const parsed = parseIntegerToken(digits, { sign: "unsigned" });
+  return parsed.isOk() ? parsed.value : null;
+};
+
+/** The components of a dotted number: `5.1.2` is `[5, 1, 2]`. Null when a
+ *  component is not a plain number (`5a`). */
+export const decimalPath = (core: string): number[] | null => {
+  const path: number[] = [];
+  for (const part of core.split(".")) {
+    const value = digitsValue(part);
+    if (value === null) {
+      return null;
+    }
+    path.push(value);
+  }
+  return path;
 };
 
 const classifyNumeral = (
@@ -161,18 +187,14 @@ export const parseLabelShape = (text: string): LabelShape | null => {
     close,
     period: period !== "",
     numeral,
-    path: numeral === "decimal" ? core.split(".").map(Number) : null,
+    path: numeral === "decimal" ? decimalPath(core) : null,
     length: offset + whole.length,
   };
 };
 
 /** A roman or decimal designator's ordinal: `XI` and `11` are both 11. */
-export const countedOrdinal = (core: string): number | null => {
-  if (/^\d{1,4}$/u.test(core)) {
-    return Number(core);
-  }
-  return parseRomanNumeral(core);
-};
+export const countedOrdinal = (core: string): number | null =>
+  digitsValue(core) ?? parseRomanNumeral(core);
 
 /** What a numbered cross-reference field shows for a label: the designator
  *  with its brackets, without keyword and without the closing period. */

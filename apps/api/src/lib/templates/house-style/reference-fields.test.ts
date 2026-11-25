@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import type { TemplateNumberingLevel } from "@/api/lib/house-style/folio-contract";
+import type { TemplateNumberingLevel } from "@/api/lib/templates/house-style/folio-contract";
 import {
   REFERENCE_FIELD_SWITCHES,
   selectReferenceField,
-} from "@/api/lib/house-style/reference-fields";
+} from "@/api/lib/templates/house-style/reference-fields";
 
 const { number, numberWithoutWords } = REFERENCE_FIELD_SWITCHES;
 

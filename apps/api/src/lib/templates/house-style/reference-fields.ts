@@ -12,11 +12,12 @@ import { panic, Result, TaggedError } from "better-result";
 import { declareFingerprintFields } from "@stll/errors";
 
 import {
+  digitsValue,
   formatNumeral,
   labelFieldText,
   parseLabelShape,
-} from "@/api/lib/house-style/designators";
-import type { TemplateNumberingLevel } from "@/api/lib/house-style/folio-contract";
+} from "@/api/lib/templates/house-style/designators";
+import type { TemplateNumberingLevel } from "@/api/lib/templates/house-style/folio-contract";
 
 export const REFERENCE_FIELD_SWITCHES = {
   number: String.raw`\n \h`,
@@ -77,7 +78,15 @@ const fail = (reason: ReferenceFieldErrorReason, message: string) =>
 const PLACEHOLDER = /(%\d)/u;
 /** Anything a level text carries besides counters and their delimiters. */
 const WORDS = /[^\s\d.()[\]\-–—/:,;]/u;
-const CLOSING_PERIODS = /[.\s]+$/u;
+
+/** Drops the periods and blanks a rendered label ends with. */
+const withoutClosingPeriods = (rendered: string): string => {
+  let end = rendered.length;
+  while (end > 0 && /[.\s]/u.test(rendered.charAt(end - 1))) {
+    end -= 1;
+  }
+  return rendered.slice(0, end);
+};
 
 const literalsOf = (levelText: string): string[] =>
   levelText.split(PLACEHOLDER).filter((part) => !PLACEHOLDER.test(part));
@@ -99,7 +108,8 @@ const renderLevelText = (
       rendered += withoutWords && WORDS.test(part) ? "" : part;
       continue;
     }
-    const ilvl = Number(part.slice(1)) - 1;
+    // `%1` is level 0.
+    const ilvl = (digitsValue(part.slice(1)) ?? 0) - 1;
     const counter = counters[ilvl];
     const numFmt = levels.find((level) => level.ilvl === ilvl)?.numFmt;
     const numeral =
@@ -111,7 +121,7 @@ const renderLevelText = (
     }
     rendered += numeral;
   }
-  return rendered.trim().replace(CLOSING_PERIODS, "");
+  return withoutClosingPeriods(rendered.trimStart());
 };
 
 /**

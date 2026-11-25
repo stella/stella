@@ -8,15 +8,15 @@ import { panic } from "better-result";
 import {
   countedOrdinal,
   parseLabelShape,
-} from "@/api/lib/house-style/designators";
+} from "@/api/lib/templates/house-style/designators";
 import type {
   DesignatorNumeral,
   LabelShape,
-} from "@/api/lib/house-style/designators";
+} from "@/api/lib/templates/house-style/designators";
 import type {
   DocxBlock,
   DocxBlockManifest,
-} from "@/api/lib/house-style/folio-contract";
+} from "@/api/lib/templates/house-style/folio-contract";
 
 export type LabelLevel =
   "article" | "clause" | "letter" | "roman" | "annex" | "recital";

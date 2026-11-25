@@ -7,15 +7,18 @@ import { panic } from "better-result";
 
 import { parseRomanNumeral } from "@stll/api-contract/magyar-kozlony-designation";
 
-import { letterOrdinal } from "@/api/lib/house-style/designators";
+import { letterOrdinal } from "@/api/lib/templates/house-style/designators";
 import type {
   DocxBlock,
   DocxBlockManifest,
   TemplatePlan,
   TemplatePlanSourceItem,
-} from "@/api/lib/house-style/folio-contract";
-import { buildLabelIndex } from "@/api/lib/house-style/label-index";
-import type { LabelEntry, LabelIndex } from "@/api/lib/house-style/label-index";
+} from "@/api/lib/templates/house-style/folio-contract";
+import { buildLabelIndex } from "@/api/lib/templates/house-style/label-index";
+import type {
+  LabelEntry,
+  LabelIndex,
+} from "@/api/lib/templates/house-style/label-index";
 
 export type HouseStyleRole =
   | "title"
@@ -425,7 +428,9 @@ export const proposeTemplateRoles = ({
 }: ProposeOptions): RolePlanProposal => {
   const nested = new Set(
     blocks.flatMap((block) =>
-      (block.cells ?? []).flatMap((cell) => cell.blockIds),
+      block.cells === undefined
+        ? []
+        : block.cells.flatMap((cell) => cell.blockIds),
     ),
   );
   const zones = findZones(blocks, index);
@@ -468,8 +473,8 @@ export const proposeTemplateRoles = ({
     const list = own?.numbering ?? null;
     if (list !== null && entry !== null) {
       const { numId, ilvl } = list;
-      const counters = countersByList.get(numId) ?? [];
-      const expected = (counters[ilvl] ?? 0) + 1;
+      const counters = countersByList.get(numId);
+      const expected = (counters?.[ilvl] ?? 0) + 1;
       const ordinal = sourceOrdinal(entry) ?? expected;
       item.numbering =
         ordinal === expected
@@ -478,7 +483,7 @@ export const proposeTemplateRoles = ({
       // Placing an item resets every deeper level of its list.
       const next = Array.from(
         { length: ilvl },
-        (_, level) => counters[level] ?? 0,
+        (_, level) => counters?.[level] ?? 0,
       );
       next.push(ordinal);
       countersByList.set(numId, next);

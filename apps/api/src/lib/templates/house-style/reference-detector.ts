@@ -14,24 +14,24 @@ import { parseRomanNumeral } from "@stll/api-contract/magyar-kozlony-designation
 import type {
   DocxBlock,
   DocxBlockManifest,
-} from "@/api/lib/house-style/folio-contract";
-import { buildLabelIndex } from "@/api/lib/house-style/label-index";
+} from "@/api/lib/templates/house-style/folio-contract";
+import { buildLabelIndex } from "@/api/lib/templates/house-style/label-index";
 import type {
   BlockContext,
   LabelEntry,
   LabelIndex,
   LabelLevel,
-} from "@/api/lib/house-style/label-index";
-import { readChains } from "@/api/lib/house-style/reference-chain";
+} from "@/api/lib/templates/house-style/label-index";
+import { readChains } from "@/api/lib/templates/house-style/reference-chain";
 import type {
   Chain,
   TailEvidence,
-} from "@/api/lib/house-style/reference-chain";
+} from "@/api/lib/templates/house-style/reference-chain";
 import {
   buildUnits,
   tokenOrdinal,
-} from "@/api/lib/house-style/reference-units";
-import type { Unit } from "@/api/lib/house-style/reference-units";
+} from "@/api/lib/templates/house-style/reference-units";
+import type { Unit } from "@/api/lib/templates/house-style/reference-units";
 
 /** Why a chain was read as internal or external. Codes, never text: the
  *  model step that adjudicates the unknown ones is given no document text. */
@@ -164,13 +164,17 @@ const itemsUnder = (
   core: string,
   preferLetter: boolean,
 ): LabelEntry[] => {
-  const found = parents.flatMap((parent) =>
-    (childrenByParent.get(parent.blockId) ?? []).filter(
-      (child) =>
-        (child.level === "letter" || child.level === "roman") &&
-        child.core === core,
-    ),
-  );
+  const found = parents.flatMap((parent) => {
+    // A provision without items has no entry in the map.
+    const children = childrenByParent.get(parent.blockId);
+    return children === undefined
+      ? []
+      : children.filter(
+          (child) =>
+            (child.level === "letter" || child.level === "roman") &&
+            child.core === core,
+        );
+  });
   const letters = found.filter((entry) => entry.level === "letter");
   return preferLetter && letters.length > 0 ? letters : found;
 };
@@ -616,10 +620,14 @@ export const detectReferences = (
 ): ReferenceDetection => {
   const childrenByParent = new Map<string, LabelEntry[]>();
   for (const entry of index.entries) {
-    if (entry.parentBlockId !== null) {
-      const siblings = childrenByParent.get(entry.parentBlockId) ?? [];
+    if (entry.parentBlockId === null) {
+      continue;
+    }
+    const siblings = childrenByParent.get(entry.parentBlockId);
+    if (siblings === undefined) {
+      childrenByParent.set(entry.parentBlockId, [entry]);
+    } else {
       siblings.push(entry);
-      childrenByParent.set(entry.parentBlockId, siblings);
     }
   }
   const lookup: Lookup = { index, childrenByParent };
