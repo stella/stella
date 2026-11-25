@@ -402,6 +402,51 @@ describe("buildTemplatePlan, what is left unlinked", () => {
   });
 });
 
+describe("buildTemplatePlan, split headings", () => {
+  test("a heading takes one title; a second one is a heading line of its own", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.",
+      "Předmět smlouvy",
+      "a účel plnění",
+      numbered("1.", "Odstavec.", 1),
+    ]);
+    const reading = (
+      blockId: string,
+      role: "title" | "articleHeading" | "clause1",
+      mergedIntoBlockId: string | null = null,
+    ) => ({
+      blockId,
+      role,
+      confidence: 0.9,
+      alternatives: [],
+      mergedIntoBlockId,
+    });
+    const { plan } = build(manifest, "keepSource", {
+      roles: [
+        reading("p0", "title"),
+        reading("p1", "articleHeading"),
+        reading("p2", "articleHeading", "p1"),
+        reading("p3", "articleHeading", "p1"),
+        reading("p4", "clause1"),
+      ],
+    });
+    expect(
+      sourceItems(plan).map(({ blockId, mergeNext, styleId }) => [
+        blockId,
+        mergeNext ?? null,
+        styleId ?? null,
+      ]),
+    ).toEqual([
+      ["p0", null, "Title"],
+      ["p1", "none", "Article"],
+      ["p2", null, null],
+      ["p3", null, "Article"],
+      ["p4", null, "Clause1"],
+    ]);
+  });
+});
+
 describe("buildTemplatePlan, the house scheme", () => {
   test("numbers by the template's levels and lets fields show the new numbers", () => {
     const manifest = czechContract("Viz čl. II odst. 2 této smlouvy.");

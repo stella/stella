@@ -74,6 +74,8 @@ export type OutlineLevels = {
   clauses: (ProfileListLevel | null)[];
 };
 
+const LEVEL_PLACEHOLDER = /(%\d)/u;
+
 /** Stands for the paragraph's own counter in a label pattern, until the
  *  level it is counted on is known. */
 const OWN_COUNTER = "\u0001";
@@ -208,18 +210,21 @@ const renderLabel = (
   counters: readonly number[],
   levels: readonly ListLevelFormat[],
 ): string | null => {
-  let failed = false;
-  const rendered = lvlText.replaceAll(/%(\d)/gu, (_match, digit: string) => {
-    const ilvl = (digitsValue(digit) ?? 0) - 1;
+  let rendered = "";
+  for (const part of lvlText.split(LEVEL_PLACEHOLDER)) {
+    if (!LEVEL_PLACEHOLDER.test(part)) {
+      rendered += part;
+      continue;
+    }
+    const ilvl = (digitsValue(part.slice(1)) ?? 0) - 1;
     const numFmt = levels.find((level) => level.ilvl === ilvl)?.numFmt;
     const numeral = formatNumeral(counters[ilvl] ?? 1, numFmt ?? "decimal");
     if (numeral === null) {
-      failed = true;
-      return "";
+      return null;
     }
-    return numeral;
-  });
-  return failed ? null : rendered;
+    rendered += numeral;
+  }
+  return rendered;
 };
 
 const keepLabel = (placement: Placement, reason: LabelKeptReason): void => {
@@ -318,6 +323,9 @@ const assignSpareLevels = (
 type Instance = {
   group: string | null;
   counters: (number | undefined)[];
+  /** The levels a paragraph of this run has counted; a level above the
+   *  first paragraph of a list only shows its start. */
+  counted: ReadonlySet<number>;
   /** The start this instance gives a level in place of the list's. */
   starts: Map<number, number>;
 };
@@ -353,26 +361,37 @@ const countLists = ({
     const levels =
       levelsByList.get(level.abstractNumId) ??
       panic("A numbered paragraph's list has no levels");
-    const current = currentByList.get(level.abstractNumId) ?? {
+    const current: Instance = currentByList.get(level.abstractNumId) ?? {
       group: null,
       counters: [],
-      starts: new Map<number, number>(),
+      counted: new Set(),
+      starts: new Map(),
     };
     const own = current.counters[level.ilvl];
     const expected =
       own === undefined
         ? (current.starts.get(level.ilvl) ?? level.start)
         : own + 1;
+    // The house scheme counts on from the last paragraph of the level. A
+    // level that so far only showed its start under a deeper paragraph has
+    // no such paragraph: its first one takes the start.
+    const following = current.counted.has(level.ilvl) ? expected : level.start;
     const ordinal =
-      mode === "keepSource" ? (placement.ordinal ?? expected) : expected;
-    let instance = current;
+      mode === "keepSource" ? (placement.ordinal ?? expected) : following;
+    const counted = new Set(
+      [...current.counted].filter((ilvl) => ilvl < level.ilvl),
+    ).add(level.ilvl);
+    const instance: Instance =
+      ordinal === expected
+        ? { ...current, counted }
+        : {
+            group: `list${String(level.abstractNumId)}-${String(opened + 1)}`,
+            counters: [],
+            counted,
+            starts: new Map([[level.ilvl, ordinal]]),
+          };
     if (ordinal !== expected) {
       opened += 1;
-      instance = {
-        group: `list${String(level.abstractNumId)}-${String(opened)}`,
-        counters: [],
-        starts: new Map([[level.ilvl, ordinal]]),
-      };
     }
     // Counting a level clears the levels below it; a level above it that
     // was never counted shows its start.
@@ -488,12 +507,14 @@ export const numberPlacements = ({
             ...(origin.hanging === null ? {} : { hanging: origin.hanging }),
           };
     const stated = indent !== null && Object.keys(indent).length > 0;
+    // A level whose own paragraphs all kept their typed label is patched
+    // too: the levels below it print its counter in the format counted
+    // with here.
     if (
-      used &&
       format !== undefined &&
       (format.numFmt !== level.numFmt ||
         format.lvlText !== level.lvlText ||
-        stated)
+        (used && stated))
     ) {
       patches.push({
         abstractNumId: level.abstractNumId,

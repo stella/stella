@@ -143,8 +143,9 @@ export const acceptDecisions = (
  * candidate targets takes the first only when it clearly leads; scopes and
  * roles stay as the rules read them.
  */
-export const resolveAmbiguitiesByRule: AmbiguityResolver = (items) =>
-  Promise.resolve(
+export const resolveAmbiguitiesByRule: AmbiguityResolver = async (items) =>
+  // Nothing to wait for; the type is the model step's.
+  await Promise.resolve(
     items.map((item): AmbiguityDecision => {
       if (item.kind !== "referenceTarget") {
         return { id: item.id, choice: null };

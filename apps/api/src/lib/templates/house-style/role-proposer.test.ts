@@ -204,6 +204,43 @@ describe("proposeBlockRoles", () => {
     ]);
   });
 
+  test("a cell of an ordinary table does not open the signatures", () => {
+    const contract = manifestOf([
+      "SMLOUVA O DÍLO",
+      "Článek I.\nPředmět",
+      numbered("1.", "Text.", 1),
+    ]);
+    const inventory = inColumns(2, ["Name: pressure valve", "12 ks"]);
+    const after = manifestOf(["Dodávka proběhne do konce měsíce."]);
+    const blocks = [
+      ...contract.blocks,
+      ...inventory.blocks.map((block) => ({
+        ...block,
+        id: `i${block.id}`,
+        ...(block.cells === undefined
+          ? {}
+          : {
+              cells: block.cells.map((cell) => ({
+                ...cell,
+                blockIds: cell.blockIds.map((id) => `i${id}`),
+              })),
+            }),
+      })),
+      ...after.blocks.map((block) => ({ ...block, id: `z${block.id}` })),
+    ];
+    expect(
+      proposeBlockRoles({ manifest: { blocks } }).map(({ blockId, role }) => [
+        blockId,
+        role,
+      ]),
+    ).toEqual([
+      ["p0", "title"],
+      ["p1", "articleHeading"],
+      ["p2", "clause1"],
+      ["zp0", "continuation"],
+    ]);
+  });
+
   test("the cells of a table of parties or of signatures are party and signature lines", () => {
     const contract = manifestOf([
       "SMLOUVA O DÍLO",

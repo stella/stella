@@ -399,7 +399,12 @@ const placeParagraphs = (context: Context): Placed => {
       continue;
     }
     const head = proposalById.get(block.id)?.mergedIntoBlockId ?? null;
-    if (head !== null && lastPlaced === head && !exclusions.merges.has(head)) {
+    if (
+      head !== null &&
+      lastPlaced === head &&
+      !placed.titleOf.has(head) &&
+      !exclusions.merges.has(head)
+    ) {
       placed.mergedInto.set(block.id, head);
       placed.titleOf.set(head, block);
       continue;

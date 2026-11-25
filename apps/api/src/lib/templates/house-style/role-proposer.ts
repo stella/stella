@@ -93,6 +93,13 @@ const SIGNATURE_MARKER = new RegExp(
   String.raw`^\s*(?:ve?[ \u00A0].{0,40}[ \u00A0]dne${NOT_LETTER}|(?:in|at)[ \u00A0].{0,40}[ ,]on${NOT_LETTER}|(?:ort|datum|date|place|místo)[^\n]{0,20}[:.…_]{2,}|(?:za|for and on behalf of|on behalf of|für|im namen)[ \u00A0])|_{4,}|\.{6,}|…{3,}|podpis|signature|unterschrift|signed by|name:|title:|jméno:|funkce:`,
   "iu",
 );
+/** What only a signature block holds: a place-and-date line, a line to sign
+ *  on, the word itself. A cell of an ordinary table may read `Name:`; it
+ *  takes one of these for a table to open the signatures. */
+const SIGNING_MARKER = new RegExp(
+  String.raw`^\s*(?:ve?[ \u00A0].{0,40}[ \u00A0]dne${NOT_LETTER}|(?:in|at)[ \u00A0].{0,40}[ ,]on${NOT_LETTER})|_{4,}|\.{6,}|…{3,}|podpis|signature|unterschrift|signed by`,
+  "iu",
+);
 const CLAUSE_DEPTH_ROLES = [
   "clause1",
   "clause2",
@@ -295,7 +302,9 @@ const findZones = (
       lastProvision < 0
         ? Number.POSITIVE_INFINITY
         : firstPosition(all, lastProvision + 1, firstAnnexHeading, (block) =>
-            SIGNATURE_MARKER.test(block.text),
+            (nested.has(block.id) ? SIGNING_MARKER : SIGNATURE_MARKER).test(
+              block.text,
+            ),
           ),
     firstAnnexHeading,
   };

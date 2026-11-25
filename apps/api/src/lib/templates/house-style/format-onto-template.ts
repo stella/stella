@@ -215,7 +215,12 @@ export const formatOntoTemplate = async ({
   const { references } = detectReferences(manifest, index);
   const suspicions = findTopicSuspicions({ manifest, index, references });
   const open = collectAmbiguities({ references, roles });
-  const decisions = acceptDecisions(open, await resolveAmbiguities(open));
+  // The resolver works on a copy: an answer is checked against the options
+  // that were offered, not against what the resolver left in its items.
+  const decisions = acceptDecisions(
+    open,
+    await resolveAmbiguities(structuredClone(open)),
+  );
 
   const exclusions: Exclusions = {
     numbering: new Set(),

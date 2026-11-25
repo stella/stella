@@ -167,15 +167,39 @@ describe("validateTemplateProfile", () => {
     ]);
   });
 
-  test("a contents field kept in part is an error", () => {
+  test("a field over several blocks kept in part is an error, in whichever region", () => {
     const empty = contractTemplate({ contents: "empty" });
     const kept = inferTemplateProfile(empty);
-    const split = {
+    const inContents = {
       ...kept,
       regions: { ...kept.regions, contents: ["p5", "p6"] },
     };
-    expect(validateTemplateProfile(split, empty)).toEqual([
-      { severity: "error", code: "contentsFieldSplit", blockId: "p5" },
-    ]);
+    const inFront = {
+      ...kept,
+      regions: { ...kept.regions, contents: [], keepBefore: ["p5"] },
+    };
+    for (const split of [inContents, inFront]) {
+      expect(validateTemplateProfile(split, empty)).toEqual([
+        { severity: "error", code: "fieldKeptInPart", blockId: "p5" },
+      ]);
+    }
+  });
+
+  test("two styles on one level of the outline do not shift the clause depths", () => {
+    const template = contractTemplate();
+    template.styles.push({
+      styleId: "Clause1Tight",
+      name: "Clause 1.1 tight",
+      type: "paragraph",
+      basedOn: "Normal",
+      numPr: { numId: 18, ilvl: 1 },
+      outlineLvl: null,
+      alignment: null,
+      isDefault: false,
+    });
+    const { roles } = inferTemplateProfile(template);
+    expect(roles.clause1).toMatchObject({ styleId: "Clause1" });
+    expect(roles.clause2?.numbering).toMatchObject({ ilvl: 2 });
+    expect(roles.clause3).toBeNull();
   });
 });

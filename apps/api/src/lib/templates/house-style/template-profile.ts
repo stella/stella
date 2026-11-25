@@ -145,11 +145,13 @@ const CONFIDENCE = {
   fallback: 0.3,
 } as const;
 
+const NO_BLOCKS: readonly DocxBlock[] = [];
+
 type StyleFacts = {
   style: TemplateStyle;
   level: ProfileListLevel | null;
   /** Sample paragraphs written in the style, in document order. */
-  samples: DocxBlock[];
+  samples: readonly DocxBlock[];
 };
 
 const target = (
@@ -223,15 +225,12 @@ const collectStyleFacts = ({
   );
   return styles
     .filter(({ type }) => type === "paragraph")
-    .map((style) => {
-      const samples = samplesByStyle.get(style.styleId);
-      return {
-        style,
-        level: levelOf(style),
-        // A style the sample text does not use has no samples.
-        samples: samples === undefined ? [] : samples,
-      };
-    });
+    .map((style) => ({
+      style,
+      level: levelOf(style),
+      // A style the sample text does not use has no samples.
+      samples: samplesByStyle.get(style.styleId) ?? NO_BLOCKS,
+    }));
 };
 
 /** The list most numbered styles are bound to: the template's outline. */
@@ -252,8 +251,11 @@ const mainListOf = (facts: readonly StyleFacts[]): StyleFacts[] => {
       bestScore = score;
     }
   }
+  // By level; within a level the style the sample text uses comes first.
   return best.toSorted(
-    (left, right) => (left.level?.ilvl ?? 0) - (right.level?.ilvl ?? 0),
+    (left, right) =>
+      (left.level?.ilvl ?? 0) - (right.level?.ilvl ?? 0) ||
+      right.samples.length - left.samples.length,
   );
 };
 
@@ -277,7 +279,12 @@ const readOutline = (outline: readonly StyleFacts[]): OutlineRoles => {
       roles.letter ??= target(fact, CONFIDENCE.nameAndLevel, "listLevel");
     } else if (isRomanFormat(numFmt) && !top) {
       roles.roman ??= target(fact, CONFIDENCE.nameAndLevel, "listLevel");
-    } else if (numFmt === "decimal" || top) {
+    } else if (
+      (numFmt === "decimal" || top) &&
+      // Two styles on one level are one level of the outline: the first,
+      // which is the one the sample text uses, stands for it.
+      !counted.some(({ level }) => level?.ilvl === fact.level?.ilvl)
+    ) {
       counted.push(fact);
     }
   }
@@ -541,8 +548,7 @@ const inferRegions = ({
       // The caption above the field belongs to it. A short line that does
       // not name the contents is sample text of something else.
       if (
-        caption !== undefined &&
-        caption.kind === "paragraph" &&
+        caption?.kind === "paragraph" &&
         CONTENTS_CAPTION.test(caption.text.trim())
       ) {
         contents.push(caption.id);
@@ -554,18 +560,17 @@ const inferRegions = ({
 
   const numberedStyles = new Set(
     Object.values(roles).flatMap((role) =>
-      role === null || role.numbering === null ? [] : [role.styleId],
+      role?.numbering ? [role.styleId] : [],
     ),
   );
   const partyStyle = roles.party?.styleId;
   const signatureStyle = roles.signature?.styleId;
-  const insideOf = (block: DocxBlock): DocxBlock[] => {
+  const insideOf = (block: DocxBlock): readonly DocxBlock[] => {
     if (block.kind !== "table") {
       return [block];
     }
-    const inside = nestedOf.get(block.id);
     // A table without cells holds nothing.
-    return inside === undefined ? [] : inside;
+    return nestedOf.get(block.id) ?? NO_BLOCKS;
   };
   // The sample body starts at the first numbered sample paragraph, alone
   // or in a table, or at the table of contents; what stands before it is
@@ -690,17 +695,16 @@ export const inferTemplateProfile = (
   const facts = collectStyleFacts(inspection);
   const structure = readStructure(inspection.blocks);
   const roles = inferRoles(facts, structure.topLevel);
-  const samplesOf = (role: ProfileRoleTarget | null): DocxBlock[] => {
-    const fact = facts.find(({ style }) => style.styleId === role?.styleId);
-    return fact === undefined ? [] : fact.samples;
-  };
+  const samplesOf = (role: ProfileRoleTarget | null): readonly DocxBlock[] =>
+    facts.find(({ style }) => style.styleId === role?.styleId)?.samples ??
+    NO_BLOCKS;
 
   const paragraphs = inspection.blocks.filter(
     ({ kind }) => kind === "paragraph",
   );
   const numberedStyles = new Set(
     Object.values(roles).flatMap((role) =>
-      role === null || role.numbering === null ? [] : [role.styleId],
+      role?.numbering ? [role.styleId] : [],
     ),
   );
   const numberedSamples = paragraphs.some(
@@ -801,7 +805,7 @@ type ProfileIssueCode =
   | "listLevelChanged"
   | "sharedListLevel"
   | "unknownBlock"
-  | "contentsFieldSplit";
+  | "fieldKeptInPart";
 
 export type TemplateProfileIssue = {
   severity: "error" | "warning";
@@ -891,7 +895,8 @@ export const validateTemplateProfile = (
       issues.push({ severity: "error", code: "unknownBlock", blockId });
     }
   }
-  const kept = new Set(contents);
+  // Every region that keeps template blocks, not the contents alone.
+  const kept = new Set([...keepBefore, ...contents]);
   for (const { blockId, endBlockId } of inspection.fields) {
     if (blockId === undefined || endBlockId === undefined) {
       continue;
@@ -903,7 +908,7 @@ export const validateTemplateProfile = (
     // A field over several blocks is kept whole and in order, or not at all.
     const keptOfSpan = span.filter((id) => kept.has(id));
     if (keptOfSpan.length > 0 && keptOfSpan.length < span.length) {
-      issues.push({ severity: "error", code: "contentsFieldSplit", blockId });
+      issues.push({ severity: "error", code: "fieldKeptInPart", blockId });
     }
   }
   return issues;

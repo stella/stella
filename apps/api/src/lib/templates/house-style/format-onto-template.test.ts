@@ -92,13 +92,13 @@ const fakeEngine = (
   };
   return {
     plans,
-    analyze: () => Promise.resolve(Result.ok(manifest)),
-    inspect: () => Promise.resolve(Result.ok(contractTemplate())),
-    highlightColors: () => Promise.resolve(Result.ok(["cyan"])),
-    apply: ({ plan }) => {
+    analyze: async () => await Promise.resolve(Result.ok(manifest)),
+    inspect: async () => await Promise.resolve(Result.ok(contractTemplate())),
+    highlightColors: async () => await Promise.resolve(Result.ok(["cyan"])),
+    apply: async ({ plan }) => {
       const answer = script[plans.length] ?? {};
       plans.push(plan);
-      return Promise.resolve(
+      return await Promise.resolve(
         "refuse" in answer
           ? Result.err(
               new TemplateEngineError({
@@ -115,8 +115,8 @@ const fakeEngine = (
     ...(pages === undefined
       ? {}
       : {
-          layout: (docx: Uint8Array) =>
-            Promise.resolve(
+          layout: async (docx: Uint8Array) =>
+            await Promise.resolve(
               Result.ok({
                 pages: docx === SOURCE ? pages.source : pages.output,
               }),
@@ -125,8 +125,8 @@ const fakeEngine = (
   };
 };
 
-const format = (engine: TemplatePlanEngine) =>
-  formatOntoTemplate({
+const format = async (engine: TemplatePlanEngine) =>
+  await formatOntoTemplate({
     engine,
     source: SOURCE,
     template: TEMPLATE,
