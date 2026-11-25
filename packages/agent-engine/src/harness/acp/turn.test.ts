@@ -446,3 +446,180 @@ describe("AcpTurnSession background work, stderr classification, and late update
     expect(clock.now - 1000).toBe(250);
   });
 });
+
+describe("AcpTurnSession permission requests", () => {
+  const SESSION = "sess-ask";
+
+  /** A session at Ask, with the client's answers and notifications in one log. */
+  const askingSession = () => {
+    const wire: {
+      kind: "notify" | "respond";
+      method?: string;
+      body: unknown;
+    }[] = [];
+    const prompt = Promise.withResolvers<AcpAnswer>();
+    const { client } = createFakeClient();
+    const recording: AcpClient = {
+      ...client,
+      request: async () => await prompt.promise,
+      notify: (method, params) => {
+        wire.push({ kind: "notify", method, body: params });
+      },
+      respond: (id, result) => {
+        wire.push({ kind: "respond", body: { id, result } });
+      },
+    };
+    const session = new AcpTurnSession({
+      gracePeriodMs: 200,
+      detached: (p) => {
+        void p;
+      },
+      displayName: "Antigravity",
+      mcpNames: { stella: "stella", others: [] },
+      policy: { approvals: "ask", network: "open", fs: "workspace" },
+      workspaceDir: "/tmp/chat",
+      unreadablePaths: [],
+      onPromptError: () => undefined,
+      toolOutlivesPrompt: antigravityCommandOutlivesPrompt,
+      backgroundSettleMs: 5000,
+    });
+    session.attach(recording);
+    session.begin(SESSION, { type: "fresh" });
+    const turn = session.turn();
+    const events: HarnessEvent[] = [];
+    let arrived = Promise.withResolvers<undefined>();
+    const collected = (async () => {
+      for await (const event of turn.events) {
+        events.push(event);
+        arrived.resolve(undefined);
+        arrived = Promise.withResolvers<undefined>();
+      }
+    })();
+    /** The approval the turn asked, once its event reached the reader. */
+    const asked = async () => {
+      for (;;) {
+        const found = events.find(
+          (event) => event.type === "approval.requested",
+        );
+        if (found?.type === "approval.requested") {
+          return found.request;
+        }
+        await arrived.promise;
+      }
+    };
+    session.prompted(prompt.promise);
+    const ask = (
+      id: number,
+      options: readonly { optionId: string; kind: string }[],
+    ) => {
+      session.handlers.request(id, "session/request_permission", {
+        sessionId: SESSION,
+        toolCall: {
+          toolCallId: `call-${String(id)}`,
+          title: "rm -rf build",
+          kind: "execute",
+        },
+        options,
+      });
+    };
+    const end = async () => {
+      prompt.resolve(Result.ok({ stopReason: "end_turn" }));
+      await collected;
+    };
+    return { ask, asked, end, events, session, turn, wire, collected };
+  };
+
+  const ONCE = [
+    { optionId: "yes", kind: "allow_once" },
+    { optionId: "no", kind: "reject_once" },
+  ];
+
+  test("a request the agent withdraws closes its question while the turn goes on, and an answer then reaches nothing", async () => {
+    const { ask, asked, end, events, session, turn, wire } = askingSession();
+    ask(7, ONCE);
+    const { requestId } = await asked();
+    session.handlers.notification(ACP_AGENT_NOTIFICATIONS.cancelRequest, {
+      requestId: 7,
+    });
+    await Promise.resolve();
+    expect(wire).toContainEqual({
+      kind: "respond",
+      body: { id: 7, result: { outcome: { outcome: "cancelled" } } },
+    });
+    const late = await turn.respond({
+      type: "approval",
+      requestId,
+      decision: "approve",
+    });
+    expect(Result.isError(late)).toBe(true);
+    // A withdrawal of a request it never sent changes nothing.
+    session.handlers.notification(ACP_AGENT_NOTIFICATIONS.cancelRequest, {
+      requestId: 99,
+    });
+    await end();
+    expect(events).toContainEqual({ type: "interaction.resolved", requestId });
+    expect(events.at(-1)?.type).toBe("turn.completed");
+  });
+
+  test("a stop sends the cancel first, then answers every pending request cancelled", async () => {
+    const { ask, turn, wire, collected } = askingSession();
+    ask(3, ONCE);
+    await turn.interrupt();
+    await collected;
+    const cancel = wire.findIndex(
+      (entry) => entry.kind === "notify" && entry.method === "session/cancel",
+    );
+    const answered = wire.findIndex(
+      (entry) =>
+        entry.kind === "respond" &&
+        JSON.stringify(entry.body) ===
+          JSON.stringify({
+            id: 3,
+            result: { outcome: { outcome: "cancelled" } },
+          }),
+    );
+    expect(cancel).toBeGreaterThanOrEqual(0);
+    expect(answered).toBeGreaterThan(cancel);
+  });
+
+  test.each([
+    ["listed first", ["reject_always", "reject_once"]],
+    ["listed last", ["reject_once", "reject_always"]],
+  ] as const)(
+    "Deny answers with the one-time refusal when the prompt also offers a lasting one, %s",
+    async (_order, refusals) => {
+      const { ask, asked, end, turn, wire } = askingSession();
+      ask(6, [
+        { optionId: "yes", kind: "allow_once" },
+        ...refusals.map((kind) => ({ optionId: kind, kind })),
+      ]);
+      const { requestId, options } = await asked();
+      expect(options.map(({ decision }) => decision)).toEqual([
+        "approve",
+        "deny",
+      ]);
+      await turn.respond({ type: "approval", requestId, decision: "deny" });
+      expect(wire).toContainEqual({
+        kind: "respond",
+        body: {
+          id: 6,
+          result: { outcome: { outcome: "selected", optionId: "reject_once" } },
+        },
+      });
+      await end();
+    },
+  );
+
+  test("a prompt that refuses only with 'reject always' still offers Deny", async () => {
+    const { ask, asked, end } = askingSession();
+    ask(5, [
+      { optionId: "yes", kind: "allow_once" },
+      { optionId: "never", kind: "reject_always" },
+    ]);
+    expect((await asked()).options.map(({ decision }) => decision)).toEqual([
+      "approve",
+      "deny",
+    ]);
+    await end();
+  });
+});

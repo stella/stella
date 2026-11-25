@@ -68,6 +68,7 @@ import {
   type HarnessEvent,
   harnessSessionId,
 } from "../events";
+import { MEMBER_WAIT_CALL_TIMEOUT_SECONDS } from "../member-wait";
 import { packageCacheEnvironment } from "../package-cache";
 import { harnessEventsToChunks } from "../stream-chunks";
 import { createCodexHarnessAdapter } from "./adapter";
@@ -330,6 +331,37 @@ describe("Codex adapter over a stdio app-server", () => {
         context: { usedTokens: 150, windowTokens: FAKE_CONTEXT_WINDOW },
       },
       boundary: harnessBoundary("turn-1"),
+    });
+  });
+
+  test("registers the browser steps that may wait on the member as plain calls only, outside code mode, and the rest where scripts reach them", async () => {
+    const browser = {
+      serverName: "stella_browser",
+      url: "http://127.0.0.1:9/browser/run-1",
+      token: "browser-token",
+    };
+    const { received } = await run("tool_calls", { overrides: { browser } });
+    const threadStart = received().find(
+      ({ method }) => method === "thread/start",
+    );
+    const server = {
+      url: browser.url,
+      http_headers: { Authorization: `Bearer ${browser.token}` },
+      default_tools_approval_mode: "approve",
+      tool_timeout_sec: MEMBER_WAIT_CALL_TIMEOUT_SECONDS,
+    };
+    expect(threadStart?.params).toMatchObject({
+      config: {
+        "mcp_servers.stella_browser": {
+          ...server,
+          disabled_tools: ["open", "click", "type", "press_key", "select"],
+        },
+        "mcp_servers.stella_browser_direct": {
+          ...server,
+          enabled_tools: ["open", "click", "type", "press_key", "select"],
+          omit_tools_from: ["code_mode", "deferred"],
+        },
+      },
     });
   });
 

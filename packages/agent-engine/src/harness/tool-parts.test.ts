@@ -7,7 +7,10 @@ import { STELLA_MCP_TOOL_NAMES } from "@stll/api-contract/mcp-tool-names";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  directOnlyServerName,
   HARNESS_TOOL_NAMES,
+  LOCAL_BROWSER_MCP_SERVER_NAME,
+  mcpToolCall,
   mcpToolCallName,
   nativeToolCall,
   shownToolInput,
@@ -96,6 +99,30 @@ describe("MCP tool call names", () => {
         stellaServer: "stella_run",
       }),
     ).toBe("mcp__stella__search_case_law");
+  });
+});
+
+describe("browser steps", () => {
+  test("a step reads alike from either registration of the browser tools", () => {
+    for (const server of [
+      LOCAL_BROWSER_MCP_SERVER_NAME,
+      directOnlyServerName(LOCAL_BROWSER_MCP_SERVER_NAME),
+    ]) {
+      expect(
+        mcpToolCall({
+          id: "call-1",
+          input: { url: "https://fixture-library.test/", ref: "E1" },
+          server,
+          stellaServer: STELLA,
+          tool: "open",
+        }),
+      ).toEqual(
+        nativeToolCall("call-1", {
+          name: HARNESS_TOOL_NAMES.browser,
+          input: { action: "open", url: "https://fixture-library.test/" },
+        }),
+      );
+    }
   });
 });
 

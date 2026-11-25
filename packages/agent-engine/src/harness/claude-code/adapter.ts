@@ -41,6 +41,7 @@ import {
   harnessSessionId,
   sessionHoldsHistory,
 } from "../events";
+import { MEMBER_WAIT_CALL_TIMEOUT_MS } from "../member-wait";
 import { packageCacheEnvironment } from "../package-cache";
 import { sandboxReads } from "../sandbox-reads";
 import { redactingSkillPaths } from "../skill-redaction";
@@ -896,16 +897,25 @@ const openSession = async (
     );
   }
   // Only stella's servers are registered; the run's secrets travel over
-  // stdio, never on the command line or in a file.
+  // stdio, never on the command line or in a file. A browser step the
+  // member must allow waits inside its call, so the browser server's calls
+  // are bounded by the member's wait, never by the harness's default.
   const servers = [
-    input.mcp,
-    ...(input.browser === null ? [] : [input.browser]),
+    { ...input.mcp, timeout: null },
+    ...(input.browser === null
+      ? []
+      : [{ ...input.browser, timeout: MEMBER_WAIT_CALL_TIMEOUT_MS }]),
   ];
   const registered = await client.request("mcp_set_servers", {
     servers: Object.fromEntries(
-      servers.map(({ serverName, token, url }) => [
+      servers.map(({ serverName, token, url, timeout }) => [
         serverName,
-        { type: "http", url, headers: { Authorization: `Bearer ${token}` } },
+        {
+          type: "http",
+          url,
+          headers: { Authorization: `Bearer ${token}` },
+          ...(timeout === null ? {} : { timeout }),
+        },
       ]),
     ),
   });
