@@ -61,7 +61,8 @@ type InboxRun = { runId: string; threadId: string; workspaceDir: string };
  * the bridge's report. One saved while a run was held belongs to that
  * run: its path is relative to that run's folder, so only that run's
  * results hand it out. One that arrived between runs waits for the next
- * run to take it, which saves it into its own folder.
+ * run to take it, which saves it into its own folder. A save still running
+ * when a result's bound runs out stays held for a later result.
  */
 type HeldDownload = {
   shownDocument: string | null;
@@ -70,10 +71,67 @@ type HeldDownload = {
   | {
       type: "saving";
       outcome: Promise<BrowserDownloadOutcome>;
+      /** The save's outcome once it settled; null while it runs. */
+      settled: BrowserDownloadOutcome | null;
       runId: string;
     }
   | { type: "waiting"; download: BrowserDownload }
 );
+
+type SavingDownload = Extract<HeldDownload, { type: "saving" }>;
+
+/** A held download whose save into `runId`'s folder runs as `saving`. */
+const savingEntry = (
+  {
+    provenance,
+    shownDocument,
+  }: Pick<HeldDownload, "provenance" | "shownDocument">,
+  runId: string,
+  saving: Promise<BrowserDownloadOutcome>,
+): SavingDownload => {
+  const entry: SavingDownload = {
+    outcome: saving,
+    provenance,
+    runId,
+    settled: null,
+    shownDocument,
+    type: "saving",
+  };
+  entry.outcome = saving.then((outcome) => {
+    entry.settled = outcome;
+    return outcome;
+  });
+  return entry;
+};
+
+/**
+ * Waits until every one of the saves settled, `ms` ran out or `signal`
+ * ended, whichever comes first.
+ */
+const settledWithin = async (
+  saves: readonly SavingDownload[],
+  { clock, ms, signal }: { clock: InboxClock; ms: number; signal: AbortSignal },
+): Promise<void> => {
+  if (saves.length === 0 || signal.aborted) {
+    return;
+  }
+  const { promise: ended, resolve: end } = Promise.withResolvers<undefined>();
+  const onEnd = () => {
+    end(undefined);
+  };
+  const cancel = clock.schedule(onEnd, ms);
+  const onAbort = onEnd;
+  signal.addEventListener("abort", onAbort, { once: true });
+  try {
+    await Promise.race([
+      Promise.all(saves.map(async ({ outcome }) => await outcome)),
+      ended,
+    ]);
+  } finally {
+    cancel();
+    signal.removeEventListener("abort", onAbort);
+  }
+};
 
 /** Whether `run`'s result may hand out `entry`. */
 const heldFor = (entry: HeldDownload, runId: string): boolean =>
@@ -180,13 +238,11 @@ const holdSettled = (
         shownDocument: report.shownDocument,
         type: "waiting",
       }
-    : {
-        outcome: save(report.download, run, provenance),
-        provenance,
-        runId: run.runId,
-        shownDocument: report.shownDocument,
-        type: "saving",
-      };
+    : savingEntry(
+        { provenance, shownDocument: report.shownDocument },
+        run.runId,
+        save(report.download, run, provenance),
+      );
 
 /**
  * The page a reported download comes from (`DownloadProvenance`): a shown
@@ -260,6 +316,18 @@ const waitWhile = async (
     signal.addEventListener("abort", done, { once: true });
   });
 };
+
+/** Whether one of `entries` saves the document at `address`. */
+const showsAny = (
+  address: string | null,
+  entries: readonly { shownDocument: string | null }[],
+): boolean =>
+  address !== null &&
+  entries.some(
+    ({ shownDocument }) =>
+      shownDocument !== null &&
+      browserDocumentAddress(shownDocument) === address,
+  );
 
 /** The newest `limit` entries of a map, in insertion order. */
 const newest = <K, V>(map: Map<K, V>, limit: number): Map<K, V> =>
@@ -426,9 +494,12 @@ export const createDownloadInbox = ({
         waitMs = DOWNLOAD_SETTLE_WAIT_MS,
       }: TakeOptions,
     ): Promise<TakenDownloads> => {
+      const begun = clock.now();
       await settle(run, since, signal, waitMs);
       const chat = chatOf(run.threadId);
-      const held = chat.held.filter((entry) => heldFor(entry, run.runId));
+      // Off the list at once, so no other result hands them out too; one
+      // that waited for a run starts saving into this run's folder now.
+      const taken = chat.held.filter((entry) => heldFor(entry, run.runId));
       chat.held = chat.held.filter((entry) => !heldFor(entry, run.runId));
       const expired = clock.now() - STARTED_DOWNLOAD_TTL_MS;
       chat.started = new Map(
@@ -440,32 +511,33 @@ export const createDownloadInbox = ({
       const shownDocument =
         shownAddress === null ? null : browserDocumentAddress(shownAddress);
       const saving = savingFor(chat, run.runId);
-      const shownSaving =
-        shownDocument !== null &&
-        saving.some((started) => started.shownDocument === shownDocument);
-      const settled = await Promise.all(
-        held.map(async (entry) => {
-          switch (entry.type) {
-            case "saving":
-              return {
-                outcome: await entry.outcome,
-                shownDocument: entry.shownDocument,
-              };
-            case "waiting":
-              return {
-                outcome: await receive(entry.download, run, entry.provenance),
-                shownDocument: entry.shownDocument,
-              };
-            default:
-              entry satisfies never;
-              return panic("Unhandled held download");
-          }
-        }),
+      const held = taken.map((entry) =>
+        entry.type === "waiting"
+          ? savingEntry(
+              entry,
+              run.runId,
+              receive(entry.download, run, entry.provenance),
+            )
+          : entry,
+      );
+      // The saves get what is left of this result's bound, and no more; one
+      // still running is held again for a later result.
+      await settledWithin(held, {
+        clock,
+        ms: Math.max(0, waitMs - (clock.now() - begun)),
+        signal,
+      });
+      const unsaved = held.filter((entry) => entry.settled === null);
+      chat.held = [...unsaved, ...chat.held].slice(-MAX_HELD_DOWNLOADS);
+      const shownSaving = showsAny(shownDocument, [...saving, ...unsaved]);
+      const settled = held.flatMap(
+        ({ settled: outcome, shownDocument: shown }) =>
+          outcome === null ? [] : [{ outcome, shownDocument: shown }],
       );
       remember(run.runId, settled);
       return {
         downloads: settled.map(({ outcome }) => outcome),
-        saving: saving.length,
+        saving: saving.length + unsaved.length,
         shownSaving,
         shown:
           shownDocument === null
