@@ -1992,6 +1992,21 @@ export const insertAssignedRun = async (
     };
   });
 
+/**
+ * The one write that queues commands a caller checked: a repeat of a key
+ * is skipped. The ids of the rows written.
+ */
+const insertCommandRows = async (
+  tx: Pick<Transaction, "insert">,
+  rows: (typeof desktopRunnerCommands.$inferInsert)[],
+) =>
+  // audit: skip - runner socket bookkeeping; the run's caller audits the work
+  await tx
+    .insert(desktopRunnerCommands)
+    .values(rows)
+    .onConflictDoNothing()
+    .returning({ id: desktopRunnerCommands.id });
+
 type InsertCommandOptions = {
   owner: RunOwner;
   runId: string;
@@ -2113,17 +2128,14 @@ export const insertRunCommand = async (
         return { type: "not_requested" };
       }
     }
-    // audit: skip - runner socket bookkeeping; the run's caller audits the work
-    const inserted = await tx
-      .insert(desktopRunnerCommands)
-      .values({
+    const inserted = await insertCommandRows(tx, [
+      {
         runId,
         kind: options.kind,
         commandKey: options.commandKey,
         payload: options.payload,
-      })
-      .onConflictDoNothing()
-      .returning({ id: desktopRunnerCommands.id });
+      },
+    ]);
     if (inserted.length === 0) {
       return { type: "duplicate" };
     }
@@ -2264,8 +2276,8 @@ export const queueRunSiteGrants = async (
     );
     const roomyIds = new Set(roomy.map(({ runId }) => runId));
     if (roomy.length > 0) {
-      // audit: skip - runner socket bookkeeping; the approval change is audited where it is made
-      await tx.insert(desktopRunnerCommands).values(
+      await insertCommandRows(
+        tx,
         roomy.map(({ runId }) => ({
           runId,
           kind: "run.site_grants" as const,
