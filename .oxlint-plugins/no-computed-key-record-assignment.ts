@@ -372,16 +372,21 @@ const sameBinding = (
   );
 };
 
-type OwnKeyTestOptions = { test: unknown; table: unknown; key: unknown };
+type OwnKeyTestOptions = {
+  test: unknown;
+  table: unknown;
+  key: unknown;
+  seen?: Set<Variable>;
+};
 const ownKeyTest = (
   context: ScopeContext,
-  { test, table, key }: OwnKeyTestOptions,
+  { test, table, key, seen }: OwnKeyTestOptions,
 ): boolean => {
   const node = unwrapExpression(test);
   if (node?.type === "LogicalExpression" && node.operator === "&&") {
     return (
-      ownKeyTest(context, { test: node.left, table, key }) ||
-      ownKeyTest(context, { test: node.right, table, key })
+      ownKeyTest(context, { test: node.left, table, key, seen }) ||
+      ownKeyTest(context, { test: node.right, table, key, seen })
     );
   }
   if (node?.type !== "CallExpression" || !Array.isArray(node.arguments)) {
@@ -426,6 +431,7 @@ const ownKeyTest = (
       arg: node.arguments.at(0),
       table,
       key,
+      seen,
     })
   );
 };
@@ -446,7 +452,7 @@ const singleReturnExpression = (body: unknown): unknown => {
     : null;
 };
 
-/** Recognizes a local 1-parameter `Object.hasOwn(TABLE, param)` type predicate. */
+/** Recognizes an immutable local 1-parameter `Object.hasOwn(TABLE, param)` type predicate. */
 const localOwnKeyPredicate = (
   context: ScopeContext,
   {
@@ -454,9 +460,27 @@ const localOwnKeyPredicate = (
     arg,
     table,
     key,
-  }: { variable: Variable; arg: unknown; table: unknown; key: unknown },
+    seen,
+  }: {
+    variable: Variable;
+    arg: unknown;
+    table: unknown;
+    key: unknown;
+    seen?: Set<Variable> | undefined;
+  },
 ): boolean => {
+  if (seen?.has(variable) || variable.defs.length !== 1) {
+    return false;
+  }
   const def = variable.defs.at(0)?.node;
+  const defId = isAstNode(def) ? def.id : null;
+  if (
+    variable.references.some(
+      (reference) => reference.isWrite() && reference.identifier !== defId,
+    )
+  ) {
+    return false;
+  }
   const fn =
     isAstNode(def) && def.type === "VariableDeclarator"
       ? unwrapExpression(def.init)
@@ -473,11 +497,17 @@ const localOwnKeyPredicate = (
     return false;
   }
   const body = singleReturnExpression(fn.body);
-  return (
-    body !== null &&
-    sameBinding(context, { left: arg, right: key }) &&
-    ownKeyTest(context, { test: body, table, key: fn.params.at(0) })
-  );
+  if (body === null || !sameBinding(context, { left: arg, right: key })) {
+    return false;
+  }
+  const nextSeen = new Set(seen);
+  nextSeen.add(variable);
+  return ownKeyTest(context, {
+    test: body,
+    table,
+    key: fn.params.at(0),
+    seen: nextSeen,
+  });
 };
 
 /** Whether `test` being false guarantees `ownKeyTest(table, key)` (supports `!x` and `!x || y`). */

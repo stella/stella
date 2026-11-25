@@ -371,3 +371,16 @@ test("allows reads guarded by a local Object.hasOwn type predicate or compound |
     ]),
   ).toEqual([]);
 });
+
+test("terminates on recursive predicates and rejects reassigned predicate bindings", async () => {
+  expect(
+    await lint([
+      "const TABLE: Record<string, number> = { a: 1 };",
+      "const loop = (k: string): boolean => loop(k);",
+      "let check = (k: string): boolean => Object.hasOwn(TABLE, k);",
+      "check = () => true;",
+      "export const a = (key: string) => (loop(key) ? TABLE[key] : 0);",
+      "export const b = (key: string) => (check(key) ? TABLE[key] : 0);",
+    ]),
+  ).toEqual([5, 6]);
+});
