@@ -60,6 +60,8 @@ const SNAPSHOT = {
   ],
   today: "2026-10-07",
   unreadable: false,
+  outages: { status: "read", outages: [] },
+  stoppedReason: null,
 } satisfies ActivityDaySnapshot;
 
 const PENDING_BATCH = {

@@ -69,7 +69,7 @@ pub fn activity_set_capture_details(
 ) -> Result<(), String> {
   let should_prompt = {
     let mut manager = state.lock().map_err(lock_error)?;
-    caller.require_current(&app)?;
+    caller.require_writable(&app)?;
     manager.require_caller(&caller)?;
     manager.set_capture_details(enabled, Utc::now())?
   };

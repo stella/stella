@@ -68,6 +68,8 @@ describe("activity contract", () => {
       segments: [segment("word", 0, 5)],
       today: "2026-03-10",
       unreadable: false,
+      outages: { status: "read", outages: [] },
+      stoppedReason: null,
     };
     expect(isActivityDaySnapshot(snapshot)).toBe(true);
     expect(isActivityDaySnapshot({ ...snapshot, latestDate: undefined })).toBe(
@@ -176,6 +178,38 @@ describe("activity contract", () => {
     expect(
       isActivityDaySnapshot({ ...snapshot, segments: [{ appName: "x" }] }),
     ).toBe(false);
+    for (const reason of Object.keys(contract.stopReasons)) {
+      expect(
+        isActivityDaySnapshot({
+          ...snapshot,
+          stoppedReason: reason,
+          outages: {
+            status: "read",
+            outages: [{ start: at(0), end: at(5), reason }],
+          },
+        }),
+      ).toBe(true);
+    }
+    expect(
+      isActivityDaySnapshot({
+        ...snapshot,
+        outages: { status: "unreadable" },
+      }),
+    ).toBe(true);
+    for (const invalid of [
+      { stoppedReason: "unknown" },
+      { stoppedReason: undefined },
+      { outages: [] },
+      { outages: { status: "read" } },
+      {
+        outages: {
+          status: "read",
+          outages: [{ start: at(0), end: at(5), reason: "__proto__" }],
+        },
+      },
+    ]) {
+      expect(isActivityDaySnapshot({ ...snapshot, ...invalid })).toBe(false);
+    }
   });
 
   test("a settings snapshot is validated before use", () => {

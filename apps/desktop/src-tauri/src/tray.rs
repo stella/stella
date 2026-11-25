@@ -7,7 +7,9 @@ use tauri::{
 };
 
 use crate::PreferencesTab;
-use crate::activity::{ActivityRecordingStatus, TrayActivity, TrayActivitySnapshot};
+use crate::activity::{
+  ActivityRecordingStatus, StoppedHistory, TrayActivity, TrayActivitySnapshot,
+};
 use crate::activity_capture::ActivityStopped;
 use crate::dictation::TrayDictation;
 use crate::dictation_hold_key::KeyNames;
@@ -730,17 +732,27 @@ fn build_activity_menu(
   let mut menu = SubmenuBuilder::new(app, t("tray.activity"));
   let snapshot = match activity {
     TrayActivity::Live(snapshot) => snapshot.as_ref(),
-    TrayActivity::Stopped(stopped) => {
+    TrayActivity::Stopped(stopped, history) => {
       let (status, action) = stopped_activity_items(*stopped);
-      menu = menu.item(
-        &MenuItemBuilder::with_id(ACTIVITY_STATUS_ITEM, t(status))
-          .enabled(false)
-          .build(app)?,
-      );
+      menu = menu
+        .item(
+          &MenuItemBuilder::with_id(ACTIVITY_STATUS_ITEM, t(status))
+            .enabled(false)
+            .build(app)?,
+        )
+        .separator();
       if let Some((action, label)) = action {
-        menu = menu
-          .separator()
-          .item(&MenuItemBuilder::with_id(action, t(label)).build(app)?);
+        menu = menu.item(&MenuItemBuilder::with_id(action, t(label)).build(app)?);
+      }
+      // What was recorded stays readable while Activity cannot record.
+      match history {
+        StoppedHistory::Readable => {
+          menu = menu.item(
+            &MenuItemBuilder::with_id(OPEN_ACTIVITY_ACTION, t("tray.openActivity"))
+              .build(app)?,
+          );
+        }
+        StoppedHistory::Unavailable => {}
       }
       return menu.build();
     }
@@ -975,7 +987,9 @@ mod tests {
         StopReason::ReconnectNeeded | StopReason::SignedOut => {
           Some((ACTIVITY_RECONNECT_ACTION, "tray.reconnectAccount"))
         }
-        StopReason::NotAvailable | StopReason::BlockedByPolicy => None,
+        StopReason::NotAvailable
+        | StopReason::BlockedByPolicy
+        | StopReason::NotConfirmed => None,
       };
       assert_eq!(action, expected, "{reason:?}");
     }

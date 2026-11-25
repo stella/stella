@@ -93,7 +93,9 @@ export type DayCalendarBlock =
       tooltip?: Extract<DayCalendarBlockTooltip, { type: "text" }>;
     })
   | (DayCalendarBlockFields & { kind: "mixed" })
-  | (DayCalendarBlockFields & { kind: "segment" });
+  | (DayCalendarBlockFields & { kind: "segment" })
+  /** Time that should have been recorded and was not: drawn hatched. */
+  | (DayCalendarBlockFields & { kind: "unrecorded" });
 
 export type DayCalendarRangeSelection =
   { label: string; type: "enabled" } | { type: "disabled" };
@@ -644,6 +646,8 @@ const BLOCK_KIND_CLASSES = {
   entry: "font-medium",
   mixed: "text-muted-foreground",
   segment: "",
+  unrecorded:
+    "text-muted-foreground border border-dashed border-current/30 bg-[repeating-linear-gradient(135deg,transparent_0_6px,color-mix(in_oklab,currentColor_12%,transparent)_6px_12px)]",
 } as const satisfies Record<DayCalendarBlock["kind"], string>;
 
 const ENTRY_STATE_CLASSES = {

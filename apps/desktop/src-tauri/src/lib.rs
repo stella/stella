@@ -354,6 +354,7 @@ pub fn run() {
         let manager = Arc::clone(&manager);
         feature_access::start(
           handle.clone(),
+          Arc::new(activity_capture::decision_installed),
           Arc::new(move |app, feature, enabled| match feature {
             feature_gate::DesktopFeature::ActivityTimeline => {
               activity::apply_feature_gate(app, enabled);
