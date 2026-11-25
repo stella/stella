@@ -169,7 +169,7 @@ const ACTIVE_TURN_MISMATCH = /expected active turn id (\S+) but found (\S+)/u;
  * The turn to ask again to interrupt after Codex refused `turnId` with
  * `message`, or `null` when the refusal is not one asking again can fix.
  */
-const interruptRetryTarget = (
+export const interruptRetryTarget = (
   message: string,
   turnId: string,
 ): string | null => {

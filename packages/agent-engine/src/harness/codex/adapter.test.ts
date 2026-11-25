@@ -79,7 +79,12 @@ import {
   CODEX_SERVER_REQUESTS,
   InitializeResponseSchema,
 } from "./protocol";
-import { CODEX_APPROVAL_OPTIONS, type CodexCapacityRetry } from "./turn";
+import {
+  CODEX_APPROVAL_OPTIONS,
+  type CodexCapacityRetry,
+  CodexTurnSession,
+  interruptRetryTarget,
+} from "./turn";
 
 const FAKE_SERVER = path.join(
   import.meta.dir,
@@ -2486,10 +2491,12 @@ describe("Codex background terminals after a turn", () => {
 
 /**
  * Checks against a real `codex` CLI when one is installed. Nothing here
- * signs in or sends a prompt: the handshake is `initialize` only, and the
- * protocol schema comes from `codex app-server generate-json-schema`, which
- * runs offline. Without a CLI the suite is skipped; the fake-server suites
- * above always run.
+ * signs in or reaches a model provider: the handshake is `initialize` only,
+ * the protocol schema comes from `codex app-server generate-json-schema`,
+ * which runs offline, and a turn runs against a model provider on
+ * 127.0.0.1 that never answers, with every other host behind a proxy that
+ * refuses. Without a CLI the suite is skipped; the fake-server suites above
+ * always run.
  */
 
 const codex = Bun.which("codex");
@@ -2700,6 +2707,278 @@ describe.skipIf(codex === null)("the installed codex CLI", () => {
     for (const { id } of CODEX_APPROVAL_OPTIONS) {
       expect(commandDecisions).toContain(id);
       expect(fileDecisions).toContain(id);
+    }
+  });
+
+  test("an interrupt sent as the turn starts stops it through turn/interrupt, in the words the retries read", async () => {
+    // The model provider: a local server that holds every request open, so
+    // the turn stays in progress until it is interrupted.
+    const provider = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch: () =>
+        new Response(new ReadableStream({ start: () => undefined }), {
+          headers: { "content-type": "text/event-stream" },
+        }),
+    });
+    const codexHome = path.join(root, "interrupt-home");
+    const workspaceDir = path.join(root, "interrupt-workspace");
+    mkdirSync(codexHome);
+    mkdirSync(workspaceDir);
+    writeFileSync(
+      path.join(codexHome, "config.toml"),
+      [
+        'model = "stella-stub"',
+        'model_provider = "stub"',
+        "[model_providers.stub]",
+        'name = "stub"',
+        `base_url = "http://127.0.0.1:${String(provider.port)}/v1"`,
+        'wire_api = "responses"',
+        "requires_openai_auth = false",
+      ].join("\n"),
+    );
+    const session = new CodexTurnSession({
+      gracePeriodMs: 5000,
+      detached: () => undefined,
+      stellaServer: "stella",
+      capacityRetry: {
+        maxAttempts: 0,
+        baseDelayMs: 0,
+        maxDelayMs: 0,
+        sleep: async () => {
+          await Promise.resolve();
+        },
+      },
+      background: {
+        keep: async () => await Promise.resolve(null),
+        stopBackground: async () => {
+          await Promise.resolve();
+        },
+      },
+    });
+    /** How each native turn ended, as `turn/completed` reported it. */
+    const completions: unknown[] = [];
+    const started = startAppServer({
+      launch: { executable: codex ?? "", args: ["app-server"] },
+      protocolLog: PROTOCOL_LOG_OFF,
+      detached: createDetached((error) => {
+        backgroundErrors.push(error);
+      }),
+      deadlines: { requestMs: 30_000, terminateMs: 5000 },
+      cwd: workspaceDir,
+      env: {
+        PATH: process.env["PATH"] ?? "",
+        HOME: process.env["HOME"] ?? "",
+        CODEX_HOME: codexHome,
+        // Any host but the local provider is refused.
+        HTTPS_PROXY: "http://127.0.0.1:9",
+        HTTP_PROXY: "http://127.0.0.1:9",
+        NO_PROXY: "127.0.0.1,localhost",
+      },
+      handlers: {
+        ...session.handlers,
+        notification: (method, params) => {
+          if (method === "turn/completed") {
+            completions.push(params);
+          }
+          session.handlers.notification(method, params);
+        },
+      },
+    });
+    const server = Result.isOk(started)
+      ? started.value
+      : panic("the app-server did not start");
+    /** Every answer to `turn/interrupt`, in order. */
+    const interrupts: { ok: boolean; message: string | null }[] = [];
+    const client = {
+      ...server,
+      request: async (
+        ...args: Parameters<typeof server.request>
+      ): ReturnType<typeof server.request> => {
+        const answer = await server.request(...args);
+        if (args[0] === "turn/interrupt") {
+          interrupts.push({
+            ok: Result.isOk(answer),
+            message: Result.isError(answer) ? answer.error.message : null,
+          });
+        }
+        return answer;
+      },
+    };
+    try {
+      expect(
+        Result.isOk(
+          await client.request("initialize", {
+            clientInfo: { name: "stella", title: "stella", version: "0.0.0" },
+            capabilities: { experimentalApi: true, requestAttestation: false },
+          }),
+        ),
+      ).toBe(true);
+      client.notify("initialized");
+      const thread = await client.request("thread/start", {
+        cwd: workspaceDir,
+        approvalPolicy: "never",
+        sandbox: "read-only",
+      });
+      const threadId = v.parse(
+        v.object({ thread: v.object({ id: v.string() }) }),
+        Result.isOk(thread) ? thread.value : panic("thread/start failed"),
+      ).thread.id;
+
+      // With no turn at all, Codex says so in the words the retry reads.
+      const noTurn = await server.request("turn/interrupt", {
+        threadId,
+        turnId: "turn-none",
+      });
+      const noTurnMessage = Result.isError(noTurn)
+        ? noTurn.error.message
+        : panic("an interrupt without a turn was accepted");
+      expect(interruptRetryTarget(noTurnMessage, "turn-none")).toBe(
+        "turn-none",
+      );
+
+      const turnStarted = await client.request("turn/start", {
+        threadId,
+        input: [{ type: "text", text: "Find the leases.", text_elements: [] }],
+      });
+      const turnId = v.parse(
+        v.object({ turn: v.object({ id: v.string() }) }),
+        Result.isOk(turnStarted)
+          ? turnStarted.value
+          : panic("turn/start failed"),
+      ).turn.id;
+      session.attach(client);
+      // Interrupted at once, as for a turn Codex answers with a start time,
+      // before Codex reports the turn started.
+      session.begin({
+        threadId,
+        turnId,
+        startedAt: 1,
+        continuation: { type: "fresh" },
+      });
+      const turn = session.turn();
+      await turn.interrupt();
+      const events: HarnessEvent[] = [];
+      for await (const event of turn.events) {
+        events.push(event);
+      }
+      expect(events.at(-1)).toEqual({ type: "turn.interrupted" });
+      // Codex took the interrupt and ended the turn itself: the stop came
+      // through the protocol, not by ending the process.
+      expect(interrupts.at(-1)).toEqual({ ok: true, message: null });
+      expect(
+        interrupts
+          .slice(0, -1)
+          .every(
+            ({ message }) =>
+              message !== null &&
+              interruptRetryTarget(message, turnId) === turnId,
+          ),
+      ).toBe(true);
+      expect(completions).toContainEqual(
+        expect.objectContaining({
+          turn: expect.objectContaining({ id: turnId, status: "interrupted" }),
+        }),
+      );
+    } finally {
+      await server.kill();
+      await provider.stop(true);
+    }
+  });
+
+  test("an interrupt naming another turn than the running one names the running one", async () => {
+    const provider = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch: () =>
+        new Response(new ReadableStream({ start: () => undefined }), {
+          headers: { "content-type": "text/event-stream" },
+        }),
+    });
+    const codexHome = path.join(root, "mismatch-home");
+    const workspaceDir = path.join(root, "mismatch-workspace");
+    mkdirSync(codexHome);
+    mkdirSync(workspaceDir);
+    writeFileSync(
+      path.join(codexHome, "config.toml"),
+      [
+        'model = "stella-stub"',
+        'model_provider = "stub"',
+        "[model_providers.stub]",
+        'name = "stub"',
+        `base_url = "http://127.0.0.1:${String(provider.port)}/v1"`,
+        'wire_api = "responses"',
+        "requires_openai_auth = false",
+      ].join("\n"),
+    );
+    const turnStartedSignal = Promise.withResolvers<undefined>();
+    const started = startAppServer({
+      launch: { executable: codex ?? "", args: ["app-server"] },
+      protocolLog: PROTOCOL_LOG_OFF,
+      detached: createDetached((error) => {
+        backgroundErrors.push(error);
+      }),
+      deadlines: { requestMs: 30_000, terminateMs: 5000 },
+      cwd: workspaceDir,
+      env: {
+        PATH: process.env["PATH"] ?? "",
+        HOME: process.env["HOME"] ?? "",
+        CODEX_HOME: codexHome,
+        HTTPS_PROXY: "http://127.0.0.1:9",
+        HTTP_PROXY: "http://127.0.0.1:9",
+        NO_PROXY: "127.0.0.1,localhost",
+      },
+      handlers: {
+        notification: (method) => {
+          if (method === "turn/started") {
+            turnStartedSignal.resolve(undefined);
+          }
+        },
+        request: () => undefined,
+        violation: () => undefined,
+        exit: () => undefined,
+      },
+    });
+    const client = Result.isOk(started)
+      ? started.value
+      : panic("the app-server did not start");
+    try {
+      await client.request("initialize", {
+        clientInfo: { name: "stella", title: "stella", version: "0.0.0" },
+        capabilities: { experimentalApi: true, requestAttestation: false },
+      });
+      client.notify("initialized");
+      const thread = await client.request("thread/start", {
+        cwd: workspaceDir,
+        approvalPolicy: "never",
+        sandbox: "read-only",
+      });
+      const threadId = v.parse(
+        v.object({ thread: v.object({ id: v.string() }) }),
+        Result.isOk(thread) ? thread.value : panic("thread/start failed"),
+      ).thread.id;
+      const turnStarted = await client.request("turn/start", {
+        threadId,
+        input: [{ type: "text", text: "Find the leases.", text_elements: [] }],
+      });
+      const turnId = v.parse(
+        v.object({ turn: v.object({ id: v.string() }) }),
+        Result.isOk(turnStarted)
+          ? turnStarted.value
+          : panic("turn/start failed"),
+      ).turn.id;
+      await turnStartedSignal.promise;
+      const other = await client.request("turn/interrupt", {
+        threadId,
+        turnId: "turn-other",
+      });
+      const message = Result.isError(other)
+        ? other.error.message
+        : panic("an interrupt of another turn was accepted");
+      expect(interruptRetryTarget(message, "turn-other")).toBe(turnId);
+    } finally {
+      await client.kill();
+      await provider.stop(true);
     }
   });
 });
