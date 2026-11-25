@@ -474,7 +474,7 @@ describe("why a step on an element asks", () => {
 
   test("a website approval answers a step only on the very page, frame and field the browser reported", () => {
     assertProperty(
-      "a website approval answers an element step only on the reported page, top frame and field",
+      "a website approval answers a step only on the very page, frame and field the browser reported",
       fc.property(step, reported, granted, (command, report, grants) => {
         if (!("target" in command)) {
           return;
@@ -502,7 +502,7 @@ describe("why a step on an element asks", () => {
 
   test("always allowing the website changes the answer exactly when the question said the website is not allowed", () => {
     assertProperty(
-      "always allowing the asked website changes the answer only for a website not allowed",
+      "always allowing the website changes the answer exactly when the question said the website is not allowed",
       fc.property(step, reported, granted, (command, report, grants) => {
         const decision = decide(command, report, grants);
         if (decision.type !== BROWSER_STEP_GATE.ask || decision.site === null) {
