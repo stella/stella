@@ -30,7 +30,7 @@ export const outageRanges = (outages: ActivityDayOutages): OutageRange[] => {
           reason,
           startMs: Temporal.Instant.from(start).epochMilliseconds,
         }))
-        .toSorted((a, b) => b.endMs - b.startMs - (a.endMs - a.startMs));
+        .sort((a, b) => b.endMs - b.startMs - (a.endMs - a.startMs));
     case "unreadable":
       return [];
     default:

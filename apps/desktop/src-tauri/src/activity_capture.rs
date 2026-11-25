@@ -842,7 +842,6 @@ impl CaptureMonitor {
         .ok()
         .and_then(|manager| manager.loaded_choice()),
     };
-    drop(gates);
     let effects = self.check(&input);
     *PUBLISHED
       .lock()

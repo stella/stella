@@ -466,10 +466,12 @@ pub enum ActivityDayOutages {
 
 /// The instants a local day spans, `[start, end)`.
 pub(crate) fn local_day_span(date: NaiveDate) -> (DateTime<Utc>, DateTime<Utc>) {
-  let start = local_midnight(date);
+  let start = day_start(&Local, date);
   let end = date
     .checked_add_days(Days::new(1))
-    .map_or(start + chrono::Duration::days(1), local_midnight);
+    .map_or(start + chrono::Duration::days(1), |next| {
+      day_start(&Local, next)
+    });
   (start, end)
 }
 
