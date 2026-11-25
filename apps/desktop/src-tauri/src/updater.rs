@@ -582,7 +582,7 @@ impl UpdaterHost for TauriHost<'_> {
   fn announce(&self, snapshot: &UpdaterSnapshot) {
     crate::logging::best_effort(
       self
-        .0
+        .handle
         .emit_to(crate::SETTINGS_WINDOW_LABEL, UPDATER_STATE_EVENT, snapshot),
       "updater state change was not announced",
     );
