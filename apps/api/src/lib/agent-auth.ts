@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 
 import {
   sha256Base64Url as hashSha256Base64Url,
@@ -694,8 +694,35 @@ type PendingPollRow = {
   clientSecretSink: string;
   authorizationCode: string | null;
   expiresAt: Date;
-  lastPolledAt: Date | null;
-  pollIntervalSeconds: number;
+};
+
+/**
+ * Record a poll when the registration's interval has elapsed since the last
+ * one. The interval is checked in the update itself, on the database clock,
+ * so of concurrent polls with the same claim token exactly one is admitted.
+ */
+export const admitClaimPoll = async (
+  registrationId: string,
+): Promise<boolean> => {
+  // audit: skip - claim-poll rate bookkeeping; the agent-auth lifecycle owns its security events.
+  const polled = await rootDb
+    .update(agentRegistration)
+    .set({ lastPolledAt: sql`now()` })
+    .where(
+      and(
+        eq(agentRegistration.id, registrationId),
+        or(
+          isNull(agentRegistration.lastPolledAt),
+          lte(
+            agentRegistration.lastPolledAt,
+            // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both sides are database timestamps (written and compared with now()), never round-tripped through a JS Date
+            sql`now() - make_interval(secs => ${agentRegistration.pollIntervalSeconds})`,
+          ),
+        ),
+      ),
+    )
+    .returning({ id: agentRegistration.id });
+  return polled.length > 0;
 };
 
 /**
@@ -717,8 +744,6 @@ export const pollClaimGrant = async (
       clientSecretSink: agentRegistration.clientSecretSink,
       authorizationCode: agentRegistration.authorizationCode,
       expiresAt: agentRegistration.expiresAt,
-      lastPolledAt: agentRegistration.lastPolledAt,
-      pollIntervalSeconds: agentRegistration.pollIntervalSeconds,
     })
     .from(agentRegistration)
     .where(eq(agentRegistration.claimTokenHash, tokenHash))
@@ -743,18 +768,9 @@ export const pollClaimGrant = async (
     return Result.err(new AgentTokenError("expired_token"));
   }
 
-  if (
-    registration.lastPolledAt &&
-    now.getTime() - registration.lastPolledAt.getTime() <
-      registration.pollIntervalSeconds * 1000
-  ) {
+  if (!(await admitClaimPoll(registration.id))) {
     return Result.err(new AgentTokenError("slow_down"));
   }
-
-  await rootDb
-    .update(agentRegistration)
-    .set({ lastPolledAt: now })
-    .where(eq(agentRegistration.id, registration.id));
 
   if (registration.status === "pending" || !registration.authorizationCode) {
     return Result.err(new AgentTokenError("authorization_pending"));
@@ -773,8 +789,6 @@ const narrowPollRow = (
         clientSecretSink: string;
         authorizationCode: string | null;
         expiresAt: Date;
-        lastPolledAt: Date | null;
-        pollIntervalSeconds: number;
       }
     | undefined,
 ): PendingPollRow | undefined => {
@@ -809,6 +823,28 @@ export const readRegistrationClientCredential = async (
   );
 
 /**
+ * Clear a registration's one-shot authorization code if it still holds the
+ * value the caller read. Only one of several concurrent callers sees `true`.
+ */
+export const consumeAuthorizationCode = async (
+  registrationId: string,
+  code: string,
+): Promise<boolean> => {
+  // audit: skip - one-shot code consumption inside the agent-auth token exchange, which owns its security events.
+  const cleared = await rootDb
+    .update(agentRegistration)
+    .set({ authorizationCode: null })
+    .where(
+      and(
+        eq(agentRegistration.id, registrationId),
+        eq(agentRegistration.authorizationCode, code),
+      ),
+    )
+    .returning({ id: agentRegistration.id });
+  return cleared.length > 0;
+};
+
+/**
  * Exchange the stored authorization code for a JWT bound to the MCP
  * resource (so it verifies via apps/api/src/mcp/auth.ts) and consume the
  * code one-shot: the registration row is cleared of the code regardless
@@ -822,10 +858,10 @@ const exchangeClaimedCode = async (
     return Result.err(new AgentTokenError("invalid_grant"));
   }
 
-  await rootDb
-    .update(agentRegistration)
-    .set({ authorizationCode: null })
-    .where(eq(agentRegistration.id, registration.id));
+  const consumed = await consumeAuthorizationCode(registration.id, code);
+  if (!consumed) {
+    return Result.err(new AgentTokenError("invalid_grant"));
+  }
 
   const resource = getMcpResourceUrl(
     getResourceModeForType(toRegistrationType(registration.registrationType)),

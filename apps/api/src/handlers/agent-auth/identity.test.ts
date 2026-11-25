@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { createTestState } from "@stll/test-state";
@@ -23,6 +23,7 @@ import {
   agentAuthConfirmRoute,
   agentAuthRoute,
 } from "@/api/handlers/agent-auth/routes";
+import { admitClaimPoll, consumeAuthorizationCode } from "@/api/lib/agent-auth";
 import {
   getMcpResourceUrl,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
@@ -358,6 +359,35 @@ describe("agent-auth service_auth flow", () => {
     });
     expect(throttledRes.status).toBe(400);
     expect((await readJson(throttledRes))["error"]).toBe("slow_down");
+  });
+
+  test("a poll slot and an authorization code each go to exactly one caller", async () => {
+    const regRes = await postIdentity({
+      type: "service_auth",
+      login_hint: unclaimedHint(),
+    });
+    const registrationId = String((await readJson(regRes))["registration_id"]);
+
+    // A second poll right away stands for a concurrent one that read the row
+    // before the first wrote: the update itself refuses it.
+    expect(await admitClaimPoll(registrationId)).toBe(true);
+    expect(await admitClaimPoll(registrationId)).toBe(false);
+    await rootDb
+      .update(agentRegistration)
+      .set({
+        lastPolledAt: sql`now() - make_interval(secs => ${agentRegistration.pollIntervalSeconds})`,
+      })
+      .where(eq(agentRegistration.id, registrationId));
+    expect(await admitClaimPoll(registrationId)).toBe(true);
+
+    const code = `code-${Bun.randomUUIDv7()}`;
+    await rootDb
+      .update(agentRegistration)
+      .set({ authorizationCode: code })
+      .where(eq(agentRegistration.id, registrationId));
+    expect(await consumeAuthorizationCode(registrationId, code)).toBe(true);
+    // A caller that read the code before the first cleared it gets nothing.
+    expect(await consumeAuthorizationCode(registrationId, code)).toBe(false);
   });
 
   test("confirm binds the human + org and the poll mints a matching JWT", async () => {

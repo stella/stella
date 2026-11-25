@@ -1,13 +1,7 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import {
-  exportJWK,
-  generateKeyPair,
-  importJWK,
-  jwtVerify,
-  SignJWT,
-} from "jose";
-import type { JWK } from "jose";
+import { jwtVerify, SignJWT } from "jose";
+import { hkdfSync } from "node:crypto";
 
 import { Temporal } from "@stll/time";
 
@@ -22,8 +16,10 @@ import { prepareAgentClientCredential } from "@/api/agent-auth/credentials";
 import { IdJagValidationError, validateIdJag } from "@/api/agent-auth/id-jag";
 import { agentDelegation, agentRegistration } from "@/api/db/agent-auth-schema";
 import { createOrganizationForAccount, rootDb } from "@/api/db/root";
+import { env } from "@/api/env";
 import {
   AgentTokenError,
+  consumeAuthorizationCode,
   createAgentOAuthClient,
   generateOpaqueToken,
   hashClaimToken,
@@ -46,36 +42,27 @@ import {
 import { newOrganizationEvaluation } from "@/api/lib/usage/organization-access-state";
 
 /**
- * Service-issued ES256 signing key for the intermediate
- * `oauth-id-jag+jwt` (Stella's own assertion). Generated once per process
- * and held in memory: the assertion's TTL is minutes, so a key that lives
- * for the process lifetime is sufficient and avoids decrypting
- * better-auth's at-rest-encrypted JWKS private keys (which would couple to
- * its internal key store).
- *
- * DEVIATION from the plan: the intermediate assertion is signed with this
- * dedicated AS-controlled key rather than the better-auth `jwks` row. It
- * is still asymmetric, `typ`-checked, and verifiable only by us.
+ * The intermediate `oauth-id-jag+jwt` is Stella's own assertion: only this
+ * service signs and verifies it. Its HS256 key is derived from the auth
+ * secret under a dedicated label, so every API task and every deploy accepts
+ * an assertion another task issued, while the key stays separate from every
+ * other use of that secret.
  */
-type ServiceSigningKey = {
-  privateKey: CryptoKey;
-  publicJwk: JWK;
-  kid: string;
-};
+const SERVICE_ASSERTION_ALG = "HS256";
+const SERVICE_ASSERTION_KEY_INFO =
+  "stella/agent-auth/id-jag-service-assertion/v1";
+const SERVICE_ASSERTION_KEY_BYTES = 32;
 
-let serviceSigningKeyPromise: Promise<ServiceSigningKey> | undefined;
-
-const getServiceSigningKey = async (): Promise<ServiceSigningKey> => {
-  serviceSigningKeyPromise ??= (async () => {
-    const { privateKey, publicKey } = await generateKeyPair("ES256", {
-      extractable: true,
-    });
-    const publicJwk = await exportJWK(publicKey);
-    const kid = Bun.randomUUIDv7();
-    return { privateKey, publicJwk: { ...publicJwk, kid }, kid };
-  })();
-  return await serviceSigningKeyPromise;
-};
+const serviceAssertionKey = (): Uint8Array =>
+  new Uint8Array(
+    hkdfSync(
+      "sha256",
+      env.BETTER_AUTH_SECRET,
+      new Uint8Array(0),
+      SERVICE_ASSERTION_KEY_INFO,
+      SERVICE_ASSERTION_KEY_BYTES,
+    ),
+  );
 
 /**
  * The spec-shaped result of a clean (matched or auto-provisioned) ID-JAG
@@ -232,20 +219,18 @@ const writeDelegation = async ({
 const signServiceAssertion = async (
   registrationId: string,
 ): Promise<string> => {
-  const key = await getServiceSigningKey();
   const issuer = getAuthIssuerUrl();
   return await new SignJWT({})
     .setProtectedHeader({
-      alg: "ES256",
+      alg: SERVICE_ASSERTION_ALG,
       typ: AGENT_AUTH_ID_JAG_JWT_TYP,
-      kid: key.kid,
     })
     .setIssuer(issuer)
     .setAudience(issuer)
     .setSubject(registrationId)
     .setIssuedAt()
     .setExpirationTime(`${AGENT_AUTH_ASSERTION_TTL_SECONDS}s`)
-    .sign(key.privateKey);
+    .sign(serviceAssertionKey());
 };
 
 /**
@@ -256,15 +241,13 @@ const signServiceAssertion = async (
 export const verifyServiceAssertion = async (
   assertion: string,
 ): Promise<Result<string, AgentTokenError>> => {
-  const key = await getServiceSigningKey();
-  const publicKey = await importJWK(key.publicJwk, "ES256");
   const issuer = getAuthIssuerUrl();
   const verified = await Result.tryPromise(
     async () =>
-      await jwtVerify(assertion, publicKey, {
+      await jwtVerify(assertion, serviceAssertionKey(), {
         issuer,
         audience: issuer,
-        algorithms: ["ES256"],
+        algorithms: [SERVICE_ASSERTION_ALG],
         typ: AGENT_AUTH_ID_JAG_JWT_TYP,
         requiredClaims: ["sub", "exp"],
       }),
@@ -531,12 +514,16 @@ export const loadIdJagExchangeContext = async (
     return Result.err(new AgentTokenError("invalid_grant"));
   }
 
-  // Consume the code one-shot: clear it before the exchange so a replayed
-  // service assertion cannot mint a second token.
-  await rootDb
-    .update(agentRegistration)
-    .set({ authorizationCode: null })
-    .where(eq(agentRegistration.id, registrationId));
+  // Consume the code one-shot before the exchange: of concurrent requests
+  // replaying the same service assertion, only one gets the code.
+  if (
+    !(await consumeAuthorizationCode(
+      registrationId,
+      registration.authorizationCode,
+    ))
+  ) {
+    return Result.err(new AgentTokenError("invalid_grant"));
+  }
 
   const credential = await readRegistrationClientCredential({
     id: registrationId,

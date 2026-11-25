@@ -779,6 +779,33 @@ describe("agent-auth ID-JAG full exchange", () => {
     expect(replayRes.status).toBe(400);
   });
 
+  test("the service assertion key comes from the configured auth secret", async () => {
+    enableFeature();
+    await trustIssuer();
+    const idRes = await postIdentity(
+      identityAssertionBody(
+        await mintIdJag({
+          email: `idjag-secret-${Bun.randomUUIDv7()}@external.test`,
+          sub: `sub-secret-${Bun.randomUUIDv7()}`,
+        }),
+      ),
+    );
+    expect(idRes.status).toBe(200);
+    const serviceAssertion = String(
+      (await readJson(idRes))["identity_assertion"],
+    );
+
+    // A task configured with another secret refuses it; one with the same
+    // secret accepts it, whichever process signed it.
+    testState.setConfig("BETTER_AUTH_SECRET", "y".repeat(32));
+    const refused = await postToken({
+      grant_type: AGENT_AUTH_JWT_BEARER_GRANT_TYPE,
+      assertion: serviceAssertion,
+    });
+    expect(refused.status).toBe(400);
+    expect((await readJson(refused))["error"]).toBe("invalid_grant");
+  });
+
   test("a returning delegation routes straight through without a step-up", async () => {
     enableFeature();
     await trustIssuer();
