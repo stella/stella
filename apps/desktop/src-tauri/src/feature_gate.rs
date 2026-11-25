@@ -106,6 +106,10 @@ struct GateState {
   phase: AccountPhase,
   generation: u64,
   decision: Decision,
+  /// The features last reported as on. A decision lapses with its credential
+  /// without being installed, so changes are reported against what was
+  /// applied, not against the old decision read now.
+  applied: HashSet<DesktopFeature>,
   /// Off by managed policy, whatever the server decides.
   blocked: HashSet<DesktopFeature>,
 }
@@ -214,6 +218,7 @@ impl FeatureGates {
       state.phase = AccountPhase::Changing { pending };
       state.generation = state.generation.wrapping_add(1);
       state.decision = Decision::Undecided;
+      state.applied.clear();
     }
   }
 
@@ -243,20 +248,18 @@ impl FeatureGates {
       return None;
     }
     let now = Utc::now();
-    let was_enabled = DesktopFeature::ALL
-      .iter()
-      .map(|feature| state.access(*feature, now) == FeatureAccess::Enabled)
-      .collect::<Vec<_>>();
     state.decision = Decision::Read(decision);
+    let enabled = DesktopFeature::ALL
+      .iter()
+      .copied()
+      .filter(|feature| state.access(*feature, now) == FeatureAccess::Enabled)
+      .collect::<HashSet<_>>();
     let changed = DesktopFeature::ALL
       .iter()
       .copied()
-      .zip(was_enabled)
-      .filter(|(feature, was_enabled)| {
-        (state.access(*feature, now) == FeatureAccess::Enabled) != *was_enabled
-      })
-      .map(|(feature, _)| feature)
+      .filter(|feature| state.applied.contains(feature) != enabled.contains(feature))
       .collect();
+    state.applied = enabled;
     drop(state);
     Some(changed)
   }
@@ -421,6 +424,37 @@ mod tests {
     assert_eq!(
       gates.access_at(DesktopFeature::ActivityTimeline, expires_at),
       FeatureAccess::Off(OffReason::SignedOut)
+    );
+  }
+
+  #[test]
+  fn a_decision_that_lapsed_with_its_credential_still_reports_turning_off() {
+    let gates = FeatureGates::default();
+    let generation = gates.generation().unwrap();
+    gates
+      .install(
+        generation,
+        answered("a", HashSet::from([DesktopFeature::ActivityTimeline])),
+      )
+      .unwrap();
+    // The credential expires between two reads.
+    gates.0.write().unwrap().decision = Decision::Read(AccountDecision::Answered {
+      namespace: "a".into(),
+      expires_at: Utc::now() - chrono::Duration::seconds(1),
+      enabled: HashSet::from([DesktopFeature::ActivityTimeline]),
+    });
+    assert!(!gates.is_enabled(DesktopFeature::ActivityTimeline));
+    assert_eq!(
+      gates
+        .install(generation, AccountDecision::SignedOut)
+        .unwrap(),
+      [DesktopFeature::ActivityTimeline]
+    );
+    assert!(
+      gates
+        .install(generation, AccountDecision::SignedOut)
+        .unwrap()
+        .is_empty()
     );
   }
 

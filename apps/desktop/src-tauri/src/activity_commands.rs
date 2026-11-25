@@ -33,7 +33,9 @@ pub(crate) fn update<F: ActivityAccountFeature, E: From<String>>(
   caller.require_current(app).map_err(E::from)?;
   manager.require_caller(caller).map_err(E::from)?;
   change(&mut manager)?;
+  let loaded = manager.loaded_choice();
   drop(manager);
+  crate::activity_capture::record_loaded_choice(loaded);
   activity::emit_changed(app);
   Ok(())
 }

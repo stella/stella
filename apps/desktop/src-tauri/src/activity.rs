@@ -2715,7 +2715,9 @@ pub fn set_recording_from_tray(
     return Err("activity account is unavailable".to_string());
   }
   manager.set_recording_from_tray(status, Utc::now())?;
+  let loaded = manager.loaded_choice();
   drop(manager);
+  crate::activity_capture::record_loaded_choice(loaded);
   emit_changed(app);
   Ok(())
 }

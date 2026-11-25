@@ -235,6 +235,9 @@ pub(crate) struct CaptureMonitor {
   written: Option<(String, ActivityRecordingStatus)>,
   /// The choice read from the record of an account whose store is closed.
   read: Option<(String, Option<ActivityRecordingStatus>)>,
+  /// The namespace whose record could not be read at the last check; it is
+  /// read again at the next one.
+  unreadable: Option<String>,
   episode: Episode,
   view: CaptureView,
 }
@@ -245,6 +248,7 @@ impl CaptureMonitor {
       records,
       written: None,
       read: None,
+      unreadable: None,
       episode: Episode::Clear,
       view: CaptureView::Hidden,
     }
@@ -283,12 +287,17 @@ impl CaptureMonitor {
     }
     let intent = match self.records.as_ref().map(|records| records.load(namespace)) {
       Some(Ok(record)) => record.map(|record| record.intent),
+      // Not cached: a record that could not be read is not a missing choice.
       Some(Err(_)) => {
-        tracing::warn!("activity recording choice could not be read");
-        None
+        if self.unreadable.as_deref() != Some(namespace) {
+          tracing::warn!("activity recording choice could not be read");
+          self.unreadable = Some(namespace.to_string());
+        }
+        return None;
       }
       None => None,
     };
+    self.unreadable = None;
     self.read = Some((namespace.to_string(), intent));
     intent
   }
@@ -343,6 +352,24 @@ impl CaptureMonitor {
     if let Some(reason) = notify {
       notify_stopped(app, reason);
     }
+  }
+}
+
+/// Writes the loaded account's choice right after the member changed it, so
+/// quitting before the next check cannot leave an older choice recorded.
+pub(crate) fn record_loaded_choice(loaded: Option<LoadedChoice>) {
+  let Some(loaded) = loaded.filter(|loaded| loaded.persisted) else {
+    return;
+  };
+  let Some(records) = CaptureRecords::in_app_data() else {
+    return;
+  };
+  let record = CaptureRecord {
+    intent: loaded.intent,
+  };
+  if records.save(&loaded.namespace, &record).is_err() {
+    // The cause is logged where the write failed.
+    tracing::warn!("activity recording choice was not recorded");
   }
 }
 
@@ -500,6 +527,35 @@ mod tests {
       })
     );
     assert_eq!(restarted.check(input()), (false, None));
+    std::fs::remove_dir_all(dir).unwrap();
+  }
+
+  #[test]
+  fn a_record_that_could_not_be_read_is_read_again_at_the_next_check() {
+    let records = records();
+    let dir = records.dir.clone();
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(records.path(NAMESPACE).unwrap(), "partial").unwrap();
+    let mut monitor = CaptureMonitor::new(Some(records));
+    let refused = || CheckInput {
+      access: off(OffReason::ReconnectNeeded),
+      decided_namespace: Some(NAMESPACE.into()),
+      loaded: None,
+    };
+    assert_eq!(monitor.check(refused()), (false, None));
+    assert_eq!(monitor.view, CaptureView::Hidden);
+    CaptureRecords::at(dir.clone())
+      .save(
+        NAMESPACE,
+        &CaptureRecord {
+          intent: ActivityRecordingStatus::Recording,
+        },
+      )
+      .unwrap();
+    assert_eq!(
+      monitor.check(refused()),
+      (true, Some(StopReason::ReconnectNeeded))
+    );
     std::fs::remove_dir_all(dir).unwrap();
   }
 
