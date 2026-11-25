@@ -44,17 +44,21 @@ export const rememberWebDownloadTarget = async (
 
 /**
  * Where a download goes now: the last command's stella tab, while the
- * connection that sent it is still the paired one; null otherwise, and the
- * download is stopped as before.
+ * connection that sent it is still the paired one and is `pairing`, the
+ * connection paired when Chrome reported the download; null otherwise, and
+ * the download is stopped as before.
  */
-export const readWebDownloadTarget =
-  async (): Promise<WebDownloadTarget | null> => {
-    const [stored, controller] = await Promise.all([
-      chrome.storage.session.get(BROWSER_WEB_DOWNLOAD_TARGET_STORAGE_KEY),
-      readBrowserController(),
-    ]);
-    const target = parseTarget(stored[BROWSER_WEB_DOWNLOAD_TARGET_STORAGE_KEY]);
-    return target !== null && controller?.controllerId === target.controllerId
-      ? target
-      : null;
-  };
+export const readWebDownloadTarget = async (
+  pairing: string,
+): Promise<WebDownloadTarget | null> => {
+  const [stored, controller] = await Promise.all([
+    chrome.storage.session.get(BROWSER_WEB_DOWNLOAD_TARGET_STORAGE_KEY),
+    readBrowserController(),
+  ]);
+  const target = parseTarget(stored[BROWSER_WEB_DOWNLOAD_TARGET_STORAGE_KEY]);
+  return target !== null &&
+    target.controllerId === pairing &&
+    controller?.controllerId === pairing
+    ? target
+    : null;
+};

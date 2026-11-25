@@ -1014,7 +1014,19 @@ export const BROWSER_WEB_DOWNLOAD_STOP_REASON = {
    * not return a PDF.
    */
   notRefetchable: "not-refetchable",
+  /**
+   * The file came from another site than the page chat's tab is on, so it
+   * is not fetched again with the member's sign-in there.
+   */
+  otherSite: "other-site",
 } as const;
+
+/**
+ * How long fetching a download once more may take, from its start until
+ * its bytes are kept, before the extension gives up on it; a stella tab
+ * waits as long for its first piece.
+ */
+export const BROWSER_DOWNLOAD_REFETCH_MS = 10 * 60_000;
 
 type WebDownloadStopReasons = typeof BROWSER_WEB_DOWNLOAD_STOP_REASON;
 

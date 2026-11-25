@@ -14,9 +14,13 @@ import {
 } from "@/api/handlers/chat/run-outputs/upload";
 import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { VerifyBearerToken } from "@/api/mcp/auth";
 import { resolveMcpSessionContext } from "@/api/mcp/context";
-import { mcpMemberAuthority } from "@/api/mcp/effective-authority";
+import {
+  hasEffectiveAuthority,
+  mcpMemberAuthority,
+} from "@/api/mcp/effective-authority";
 
 const runIdSchema = v.pipe(v.string(), v.uuid());
 
@@ -69,6 +73,17 @@ export const createFileLocalRunBrowserDownload = (
       resolveContext: dependencies.resolveContext ?? resolveMcpSessionContext,
     }),
     async function* ({ body, caller }) {
+      // As the member route asks: a role that cannot change its chats files
+      // nothing into one, whatever matter the chat is in.
+      if (!hasEffectiveAuthority(caller, { chat: ["update"] })) {
+        return Result.err(
+          new HandlerError({
+            status: 403,
+            code: "forbidden",
+            message: "This run may not add files to its chat",
+          }),
+        );
+      }
       const filed = yield* Result.await(
         fileForOwnChat({
           body,

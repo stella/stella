@@ -9,6 +9,7 @@ import {
   browserDownloadOriginSchema,
 } from "@stll/api-contract/browser-downloads";
 import { MULTIPART_ENVELOPE_MAX_BYTES } from "@stll/api-contract/limits";
+import { Temporal } from "@stll/time";
 
 import type { SafeDbError } from "@/api/db/safe-db-types";
 import { chatThreads } from "@/api/db/schema";
@@ -37,7 +38,8 @@ export const browserDownloadBodySchema = v.strictObject({
   pageUrl: v.optional(
     v.nonNullable(browserDownloadOriginSchema.entries.pageUrl),
   ),
-  downloadedAt: browserDownloadOriginSchema.entries.downloadedAt,
+  /** When the browser had the file; the filing time when the caller sends none. */
+  downloadedAt: v.optional(browserDownloadOriginSchema.entries.downloadedAt),
 });
 
 /** The largest request either route reads: one file and its form. */
@@ -115,7 +117,9 @@ export const fileForOwnChat = async ({
       origin: {
         sourceUrl: body.sourceUrl,
         pageUrl: body.pageUrl ?? null,
-        downloadedAt: body.downloadedAt,
+        downloadedAt:
+          body.downloadedAt ??
+          Temporal.Now.instant().toString({ smallestUnit: "millisecond" }),
       },
       ...(dependencies === undefined ? {} : { dependencies }),
     });

@@ -106,6 +106,8 @@ const MAX_SIGN_IN_RETRIES = 3;
  */
 type OpenBrowserStep = () => {
   close: (result: BrowserControlResult) => Promise<BrowserControlResult>;
+  /** Ends a step that closes with no result (its command threw). */
+  end: () => void;
 };
 
 export const createBrowserToolExecutionCache = (
@@ -165,6 +167,7 @@ export const createBrowserToolExecutionCache = (
       succeeded = result.status !== "error";
       return step === undefined ? result : await step.close(result);
     } finally {
+      step?.end();
       finish(succeeded);
     }
   };

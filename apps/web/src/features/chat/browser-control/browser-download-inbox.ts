@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 
 import {
   BROWSER_CONTROL_LIMITS,
+  BROWSER_DOWNLOAD_REFETCH_MS,
   BROWSER_WEB_DOWNLOAD_STOP_REASON,
   type BrowserControlResult,
   type BrowserExtensionDownloadMessage,
@@ -56,6 +57,13 @@ export const BROWSER_DOWNLOAD_SETTLE_WAIT_MS = 3000;
 /** A download whose next piece takes longer than this is dropped. */
 export const BROWSER_DOWNLOAD_IDLE_MS = 60_000;
 
+/**
+ * How long the first piece may take: the extension fetches the whole file
+ * before it sends any, within its own deadline for that fetch.
+ */
+export const BROWSER_DOWNLOAD_FIRST_PIECE_MS =
+  BROWSER_DOWNLOAD_REFETCH_MS + BROWSER_DOWNLOAD_IDLE_MS;
+
 /** Downloads taken at once; the extension runs fewer. */
 const MAX_ARRIVING = 8;
 
@@ -78,6 +86,8 @@ const STOPPED_MESSAGES = {
     "The download did not finish, so it was not filed.",
   [BROWSER_WEB_DOWNLOAD_STOP_REASON.redirected]:
     "Fetching the file again led to another address, which is never followed, so it was not filed.",
+  [BROWSER_WEB_DOWNLOAD_STOP_REASON.otherSite]:
+    "The file came from another website than the page, so it was not fetched with the user's sign-in there and was not filed. Open the file's own page in the tab to file it from there.",
   [BROWSER_WEB_DOWNLOAD_STOP_REASON.notRefetchable]:
     "The file could not be fetched again from its address (the page made it itself, or the site answered with something other than the PDF), so it was not filed. If the PDF opens in the tab, tell the user its address.",
 } satisfies Record<BrowserWebDownloadStopReason, string>;
@@ -137,6 +147,14 @@ type InboxState = {
   /** Called whenever a delivery ends or a report lands. */
   listeners: Set<() => void>;
   sequence: number;
+  /**
+   * Each chat's open browser steps, and when its last one closed: a
+   * download is taken only while a step of its chat runs or has just
+   * ended, so one that starts later is never filed for whichever chat ran
+   * the last command.
+   */
+  openSteps: Map<string, number>;
+  closedAt: Map<string, number>;
 };
 
 const notify = (state: InboxState): void => {
@@ -190,10 +208,26 @@ const drop = (state: InboxState, deliveryId: string, message: string): void => {
 };
 
 /** Drops a delivery whose next piece does not come in time. */
-const awaitPiece = (state: InboxState, deliveryId: string): (() => void) =>
+const awaitPiece = (
+  state: InboxState,
+  deliveryId: string,
+  ms: number,
+): (() => void) =>
   state.timer(() => {
     drop(state, deliveryId, INCOMPLETE_MESSAGE);
-  }, BROWSER_DOWNLOAD_IDLE_MS);
+  }, ms);
+
+/** Whether a step of `threadId` runs now, or ended within the settle wait. */
+const inStep = (state: InboxState, threadId: string): boolean => {
+  if ((state.openSteps.get(threadId) ?? 0) > 0) {
+    return true;
+  }
+  const closedAt = state.closedAt.get(threadId);
+  return (
+    closedAt !== undefined &&
+    state.now().getTime() - closedAt <= BROWSER_DOWNLOAD_SETTLE_WAIT_MS
+  );
+};
 
 const rememberSeen = (state: InboxState, deliveryId: string): void => {
   state.seen.add(deliveryId);
@@ -205,12 +239,23 @@ const rememberSeen = (state: InboxState, deliveryId: string): void => {
   }
 };
 
+/** Why a recognised download is not taken; null when it is. */
+const refusalOf = (state: InboxState, turn: Turn): string | null => {
+  if (turn.filesNothing) {
+    return PLAN_MESSAGE;
+  }
+  if (state.arriving.size >= MAX_ARRIVING) {
+    return STOPPED_MESSAGES[BROWSER_WEB_DOWNLOAD_STOP_REASON.tooMany];
+  }
+  return null;
+};
+
 const start = (state: InboxState, message: StartedMessage): void => {
   const turn = state.turns.get(message.turnId);
   if (
     turn === undefined ||
     state.seen.has(message.deliveryId) ||
-    state.arriving.size >= MAX_ARRIVING
+    !inStep(state, turn.threadId)
   ) {
     return;
   }
@@ -220,9 +265,11 @@ const start = (state: InboxState, message: StartedMessage): void => {
     name: message.suggestedName,
     sourceUrl: message.sourceUrl,
   };
-  if (turn.filesNothing) {
-    // Its pieces are never taken: the chat only hears it was not filed.
-    report(state, threadId, notFiled(download, PLAN_MESSAGE));
+  // Neither is taken: its pieces are ignored, and the chat only hears it
+  // was not filed.
+  const refusal = refusalOf(state, turn);
+  if (refusal !== null) {
+    report(state, threadId, notFiled(download, refusal));
     notify(state);
     return;
   }
@@ -230,7 +277,11 @@ const start = (state: InboxState, message: StartedMessage): void => {
   state.arriving.set(message.deliveryId, {
     ...download,
     bytes: 0,
-    cancelIdle: awaitPiece(state, message.deliveryId),
+    cancelIdle: awaitPiece(
+      state,
+      message.deliveryId,
+      BROWSER_DOWNLOAD_FIRST_PIECE_MS,
+    ),
     downloadedAt: state.now().toISOString(),
     filing: false,
     pageUrl: message.pageUrl,
@@ -261,7 +312,11 @@ const takePiece = (state: InboxState, message: ChunkMessage): void => {
   delivery.pieces.push(bytes);
   delivery.bytes += bytes.byteLength;
   delivery.cancelIdle();
-  delivery.cancelIdle = awaitPiece(state, message.deliveryId);
+  delivery.cancelIdle = awaitPiece(
+    state,
+    message.deliveryId,
+    BROWSER_DOWNLOAD_IDLE_MS,
+  );
 };
 
 /** The whole file of a delivery, its pieces released. */
@@ -415,7 +470,9 @@ export const createBrowserDownloadInbox = ({
   const state: InboxState = {
     arriving: new Map(),
     file,
+    closedAt: new Map(),
     listeners: new Set(),
+    openSteps: new Map(),
     now,
     seen: new Set(),
     sequence: 0,
@@ -449,10 +506,28 @@ export const createBrowserDownloadInbox = ({
      */
     openStep(threadId: string) {
       const since = state.sequence;
+      state.openSteps.set(threadId, (state.openSteps.get(threadId) ?? 0) + 1);
+      let ended = false;
+      /** Ends the step once, however it ends: closed with a result, or not. */
+      const endStep = () => {
+        if (ended) {
+          return;
+        }
+        ended = true;
+        const open = (state.openSteps.get(threadId) ?? 1) - 1;
+        if (open > 0) {
+          state.openSteps.set(threadId, open);
+        } else {
+          state.openSteps.delete(threadId);
+        }
+        state.closedAt.set(threadId, state.now().getTime());
+      };
       return {
+        end: endStep,
         close: async (
           result: BrowserControlResult,
         ): Promise<BrowserControlResult> => {
+          endStep();
           await settle(state, threadId, since);
           return withDownloads(result, take(state, threadId));
         },

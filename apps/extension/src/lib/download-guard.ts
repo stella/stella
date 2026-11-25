@@ -13,6 +13,7 @@ import {
 import { BROWSER_DOWNLOAD_FILE_MAX_BYTES } from "@stll/api-contract/browser-downloads";
 
 import { CONTROL_TRANSPORT, readControlHolder } from "./control-holder";
+import { readBrowserController } from "./controller";
 import {
   DESKTOP_LINK_STATE,
   desktopChatId,
@@ -212,7 +213,7 @@ export const desktopDownloadVerdict = (
  */
 const webDownloadVerdict = (
   download: DownloadFacts,
-  running: number,
+  { fromPageSite, running }: { fromPageSite: boolean; running: number },
 ): WebDownloadVerdict => {
   if (!saysPdf(download)) {
     return { reason: BROWSER_WEB_DOWNLOAD_STOP_REASON.notPdf, type: "stop" };
@@ -226,6 +227,12 @@ const webDownloadVerdict = (
       reason: BROWSER_WEB_DOWNLOAD_STOP_REASON.notRefetchable,
       type: "stop",
     };
+  }
+  // Fetched again with the member's sign-in only on the page's own site: a
+  // page cannot have a file of another site the member is signed in to
+  // fetched and filed.
+  if (!fromPageSite) {
+    return { reason: BROWSER_WEB_DOWNLOAD_STOP_REASON.otherSite, type: "stop" };
   }
   if (download.totalBytes > BROWSER_DOWNLOAD_FILE_MAX_BYTES) {
     return { reason: BROWSER_WEB_DOWNLOAD_STOP_REASON.tooLarge, type: "stop" };
@@ -420,8 +427,12 @@ const sameSitePage = async (sourceUrl: string): Promise<string | null> => {
  */
 const reserveWebCapture = (
   download: DownloadFacts & { id: number },
+  fromPageSite: boolean,
 ): WebDownloadVerdict => {
-  const verdict = webDownloadVerdict(download, runningDeliveries());
+  const verdict = webDownloadVerdict(download, {
+    fromPageSite,
+    running: runningDeliveries(),
+  });
   if (verdict.type === "capture") {
     webCaptures.add(download.id);
   }
@@ -431,8 +442,10 @@ const reserveWebCapture = (
 /** The web connection's chat as a download's receiver; none before its first command. */
 const readWebReceiver = async (
   download: DownloadFacts & { id: number },
+  pairing: string | null,
 ): Promise<DownloadReceiver> => {
-  const target: WebDownloadTarget | null = await readWebDownloadTarget();
+  const target: WebDownloadTarget | null =
+    pairing === null ? null : await readWebDownloadTarget(pairing);
   if (target === null) {
     return NO_DOWNLOAD_RECEIVER;
   }
@@ -447,17 +460,18 @@ const readWebReceiver = async (
       target,
     },
     type: "web",
-    verdict: reserveWebCapture(download),
+    verdict: reserveWebCapture(download, pageUrl !== null),
   };
 };
 
 /** Who takes a download traced to chat's tabs, judged now. */
 const readDownloadReceiver = async (
   download: DownloadFacts & { id: number },
+  pairing: string | null,
 ): Promise<DownloadReceiver> => {
   const holder = await readControlHolder();
   if (holder.transport === CONTROL_TRANSPORT.web) {
-    return await readWebReceiver(download);
+    return await readWebReceiver(download, pairing);
   }
   const chatId = await readTakingDesktopChat();
   return chatId === null
@@ -879,10 +893,16 @@ const runJudgement = async (
   if (scope.contained.length === 0) {
     return;
   }
+  // The web connection paired when Chrome reported the download: one paired
+  // while it was traced never takes it.
+  const pairing = await readBrowserController().then(
+    (controller) => controller?.controllerId ?? null,
+    () => null,
+  );
   const owner = await traceDownload(download, scope, clock);
   const receiver =
     owner === "contained"
-      ? await readDownloadReceiver(download)
+      ? await readDownloadReceiver(download, pairing)
       : NO_DOWNLOAD_RECEIVER;
   const release = () => {
     dropDelivery(download.id);

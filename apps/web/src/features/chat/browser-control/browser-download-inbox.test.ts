@@ -18,6 +18,7 @@ import { BROWSER_DOWNLOAD_FILE_MAX_BYTES } from "@stll/api-contract/browser-down
 import { createUuid } from "@/lib/uuid";
 
 import {
+  BROWSER_DOWNLOAD_FIRST_PIECE_MS,
   BROWSER_DOWNLOAD_IDLE_MS,
   BROWSER_DOWNLOAD_SETTLE_WAIT_MS,
   createBrowserDownloadInbox,
@@ -104,7 +105,9 @@ const fakeTimer = () => {
     await settleWait.promise;
     settleWait = Promise.withResolvers<undefined>();
   };
-  return { advance, timer, waiting };
+  /** The moment the clock shows, from the start of the test. */
+  const date = () => new Date(Date.parse("2026-11-25T09:30:00.000Z") + now);
+  return { advance, date, timer, waiting };
 };
 
 type Filed = Parameters<FileBrowserDownload>[0];
@@ -235,7 +238,7 @@ const chat = (
   const clock = fakeTimer();
   const inbox = createBrowserDownloadInbox({
     file: api.file,
-    now: () => new Date("2026-11-25T09:30:00.000Z"),
+    now: clock.date,
     timer: clock.timer,
   });
   const cache = createBrowserToolExecutionCache(
@@ -482,11 +485,16 @@ describe("a chat's browser downloads, filed from the chat page", () => {
     await clock.waiting();
     clock.advance(BROWSER_DOWNLOAD_SETTLE_WAIT_MS);
     const first = downloadsOf(await stepping);
+    // The first piece waits as long as the extension may take to fetch the
+    // file: a pause between later pieces would have ended it by now.
     clock.advance(BROWSER_DOWNLOAD_IDLE_MS);
+    const waiting = downloadsOf(await step());
+    clock.advance(BROWSER_DOWNLOAD_FIRST_PIECE_MS);
     const second = downloadsOf(await step());
 
     expect(api.calls).toEqual([]);
     expect(first).toMatchObject([{ outcome: "not-filed" }]);
+    expect(waiting).toBeUndefined();
     expect(second).toMatchObject([{ outcome: "not-filed" }]);
   });
 
@@ -538,19 +546,74 @@ describe("a chat's browser downloads, filed from the chat page", () => {
   test("a result lists at most a result's worth of downloads; the rest wait for the next", async () => {
     let receive: (message: BrowserExtensionDownloadMessage) => void = () =>
       undefined;
-    const { inbox, step } = chat(async () => await Promise.resolve(success));
-    receive = inbox.receive;
-    inbox.rememberTurn(TURN, { filesNothing: false, threadId: THREAD });
     const count = BROWSER_CONTROL_LIMITS.resultDownloads + 2;
-    for (let index = 0; index < count; index += 1) {
-      for (const message of stoppedFor(deliveryId(), "not-refetchable")) {
-        receive(message);
+    let first = true;
+    const { inbox, step } = chat(async () => {
+      if (first) {
+        first = false;
+        for (let index = 0; index < count; index += 1) {
+          for (const message of stoppedFor(deliveryId(), "not-refetchable")) {
+            receive(message);
+          }
+        }
       }
-    }
+      return await Promise.resolve(success);
+    });
+    receive = inbox.receive;
 
     expect(downloadsOf(await step())).toHaveLength(
       BROWSER_CONTROL_LIMITS.resultDownloads,
     );
     expect(downloadsOf(await step())).toHaveLength(2);
+  });
+  test("a download that starts long after its chat's step ended is never filed, for that chat or another", async () => {
+    let receive: (message: BrowserExtensionDownloadMessage) => void = () =>
+      undefined;
+    const { api, clock, inbox, step } = chat(
+      async () => await Promise.resolve(success),
+    );
+    receive = inbox.receive;
+    await step();
+
+    // A page's export lands well after the step: whose it is cannot be told.
+    clock.advance(BROWSER_DOWNLOAD_SETTLE_WAIT_MS + 1);
+    for (const message of messagesFor(deliveryId(), pdf(2048))) {
+      receive(message);
+    }
+
+    expect(downloadsOf(await step())).toBeUndefined();
+    expect(api.calls).toEqual([]);
+  });
+
+  test("a download beyond the inbox's capacity is reported once and never taken", async () => {
+    let receive: (message: BrowserExtensionDownloadMessage) => void = () =>
+      undefined;
+    const ids = Array.from({ length: 9 }, () => deliveryId());
+    let first = true;
+    const { api, clock, inbox, step } = chat(async () => {
+      if (first) {
+        first = false;
+        // Eight start and wait for their pieces; the ninth finds no room.
+        for (const id of ids) {
+          const [started] = messagesFor(id, pdf(16));
+          if (started !== undefined) {
+            receive(started);
+            receive(started);
+          }
+        }
+      }
+      return await Promise.resolve(success);
+    });
+    receive = inbox.receive;
+
+    const stepping = step();
+    await clock.waiting();
+    clock.advance(BROWSER_DOWNLOAD_SETTLE_WAIT_MS);
+    const downloads = downloadsOf(await stepping);
+
+    expect(api.calls).toEqual([]);
+    expect(downloads).toMatchObject([
+      { message: expect.stringContaining("Too many"), outcome: "not-filed" },
+    ]);
   });
 });

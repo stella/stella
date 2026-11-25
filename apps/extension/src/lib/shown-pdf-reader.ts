@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import {
   BROWSER_CONTROL_LIMITS,
+  BROWSER_DOWNLOAD_REFETCH_MS,
   BROWSER_DOWNLOAD_STOP_REASON,
   encodeDownloadChunk,
 } from "@stll/api-contract/browser-control";
@@ -184,7 +185,7 @@ const SHOWN_PDF_IDLE_TIMEOUT_MS = 30_000;
  * waiting and frees the save's slot, whatever the document still does:
  * long enough for the size limit to arrive over a slow connection.
  */
-const READER_ANSWER_TIMEOUT_MS = 10 * 60_000;
+const READER_ANSWER_TIMEOUT_MS = BROWSER_DOWNLOAD_REFETCH_MS;
 
 type ReadOptions = {
   /** The offscreen document's `fetch`. */

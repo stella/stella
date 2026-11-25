@@ -215,6 +215,8 @@ const install = ({
     /** Settles once the reader freed what it kept, the hand-over's last step. */
     released: released.promise,
     sent,
+    /** The session store, for a test that changes it mid-judgement. */
+    session,
   };
 };
 
@@ -315,21 +317,50 @@ describe("a download from chat's tab under the web connection", () => {
     expect(reader.releases).toHaveLength(1);
   });
 
-  test("a file from another site than the page names no page", async () => {
-    const { end, items, sent } = install({
+  test("a file from another site than the page is never fetched with the member's sign-in there", async () => {
+    // The page on one site starts a download from another site the member
+    // may be signed in to: nothing is fetched, and the chat hears why.
+    const { end, events, items, reader, sent } = install({
       pageUrl: "https://portal.example.com/case/9",
     });
     await loadDownloadScope();
     const download = fileDownload();
     items.set(download.id, download);
 
-    await judged(download);
+    expect(await judged(download)).toBeUndefined();
     await end;
 
-    expect(parsed(sent).at(0)).toMatchObject({
-      pageUrl: null,
-      type: "download-started",
-    });
+    expect(reader.reads).toEqual([]);
+    expect(events).toContain(`cancel:${String(download.id)}`);
+    expect(parsed(sent)).toMatchObject([
+      { pageUrl: null, type: "download-started" },
+      {
+        end: { outcome: "stopped", reason: "other-site" },
+        type: "download-end",
+      },
+    ]);
+  });
+
+  test("a pairing that changes while a download is traced never takes it", async () => {
+    const { items, reader, sent, session } = install();
+    await loadDownloadScope();
+    const download = fileDownload();
+    items.set(download.id, download);
+    // Paired anew between Chrome's report and the trace's end: the new
+    // pairing's last command names the target.
+    const judging = judged(download);
+    session["browserController"] = {
+      controllerId: "controller-2",
+      origin: "https://stella.test",
+    };
+    session["browserWebDownloadTarget"] = {
+      ...TARGET,
+      controllerId: "controller-2",
+    };
+
+    expect(await judging).toBeUndefined();
+    expect(reader.reads).toEqual([]);
+    expect(sent).toEqual([]);
   });
 
   test("a page's own blob: address cannot be fetched again: the chat hears why", async () => {
