@@ -171,7 +171,6 @@ export const browserSiteNoteContentRefusal = (
 
 const stepSchema = v.pipe(
   v.string(),
-  v.trim(),
   v.minLength(1),
   v.maxLength(BROWSER_SITE_NOTE_STEP_CHARS),
   v.description(
@@ -181,7 +180,6 @@ const stepSchema = v.pipe(
 
 const textSchema = v.pipe(
   v.string(),
-  v.trim(),
   v.minLength(1),
   v.maxLength(BROWSER_SITE_NOTE_TEXT_CHARS),
   v.description(
