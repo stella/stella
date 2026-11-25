@@ -79,13 +79,11 @@ const STOPPED_OPEN_TOOL_CALL_STATE = {
  * result: that call ran, or runs again on the next turn. What the stored
  * message keeps is `findUnsettledStoredToolCalls`.
  */
-
 const OPEN_CALL_ALLOWED = {
   none: () => false,
   "client-answerable": isClientAnswerableToolCall,
-  stopped: (part: SettlementToolCall) =>
-    STOPPED_OPEN_TOOL_CALL_STATE[part.state],
-} as const;
+  stopped: (part) => STOPPED_OPEN_TOOL_CALL_STATE[part.state],
+} as const satisfies Record<string, (part: SettlementToolCall) => boolean>;
 
 type OpenCallPolicy = keyof typeof OPEN_CALL_ALLOWED;
 

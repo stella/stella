@@ -7,7 +7,6 @@
  * cannot be added without deciding where its worker runs, and a host cannot
  * start without it.
  */
-
 export const BULLMQ_QUEUE_HOSTS = {
   "account-deletion-cleanup": "api",
   "account-exports": "api",
@@ -30,7 +29,7 @@ export const BULLMQ_QUEUE_HOSTS = {
   "uploaded-mail-correspondence": "api",
   workflow: "api",
   "workflow-flex": "api",
-} as const;
+} as const satisfies Record<string, BullMqWorkerHost>;
 
 export type BullMqWorkerHost =
   "api" | "document-processing-worker" | "file-derivative-worker";

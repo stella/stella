@@ -82,7 +82,7 @@ export const TREE_PARENT_GUARDS = {
     lock: { kind: "organization-catalog" },
     constraint: "template_categories_parent_acyclic",
   },
-} as const;
+} as const satisfies Record<string, TreeParentGuard>;
 
 export type TreeName = keyof typeof TREE_PARENT_GUARDS;
 

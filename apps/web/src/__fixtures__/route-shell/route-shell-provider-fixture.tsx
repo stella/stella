@@ -933,7 +933,7 @@ const declareCensus = (fixture: FixtureRuntime) => {
       ).toEqual(uiLeaves.map(({ id }) => id).toSorted(compareRouteIds));
       expect(selectedLeaves.length).toBeGreaterThan(0);
       expect(
-        Object.keys(publicRouteExceptions).filter(
+        [...publicRouteExceptions.keys()].filter(
           (id) =>
             !uiLeaves.some(
               (route) =>
@@ -980,7 +980,7 @@ const declareLeafCases = (fixture: FixtureRuntime) => {
     const protectedLeaf = ancestors(route).some(
       ({ id }) => id === "/_protected",
     );
-    const exception = publicRouteExceptions[route.id];
+    const exception = publicRouteExceptions.get(route.id);
     if (exception !== undefined) {
       if (protectedLeaf || exception.trim().length === 0) {
         panic(`Invalid public route exception: ${route.id}`);
@@ -994,7 +994,7 @@ const declareLeafCases = (fixture: FixtureRuntime) => {
       ? [FIXTURE_AUDIENCE.member]
       : Object.values(FIXTURE_AUDIENCE)) {
       const caseId = `${route.id}:${caseAudience}`;
-      const caseException = publicRouteExceptions[caseId];
+      const caseException = publicRouteExceptions.get(caseId);
       if (caseException !== undefined) {
         if (protectedLeaf || caseException.trim().length === 0) {
           panic(`Invalid public route exception: ${caseId}`);
@@ -1616,7 +1616,7 @@ export const declareRouteShellProviderFixture = async (
     expect([...exercised].toSorted()).toEqual(expectedCases.toSorted());
     if (suite === "leaf-shells") {
       expect([...usedExceptions].toSorted()).toEqual(
-        Object.keys(publicRouteExceptions)
+        [...publicRouteExceptions.keys()]
           .filter((id) =>
             selectedLeaves.some(
               (route) =>

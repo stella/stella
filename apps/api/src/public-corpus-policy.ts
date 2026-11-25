@@ -49,7 +49,7 @@ export const PUBLIC_CORPUS_ROUTE_POLICY = {
   "POST /case/decisions/quotes/verify": "search",
   "GET /case/sitemap/shards": "sitemap",
   "GET /case/sitemap/decisions/shard": "sitemap",
-} as const;
+} as const satisfies Record<string, PublicCorpusClass>;
 
 const ROUTE_POLICY: ReadonlyMap<string, PublicCorpusClass> = new Map(
   Object.entries(PUBLIC_CORPUS_ROUTE_POLICY),

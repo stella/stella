@@ -25,13 +25,7 @@ const resourceParam = (resourceType: ResourceType) =>
 const notAResource = (reason: string) =>
   ({ type: "not-a-resource", reason }) as const;
 
-const defineRouteParamDispositions = <
-  const T extends Record<string, RouteParamDisposition>,
->(
-  entries: T,
-): T => entries;
-
-export const ROUTE_PARAM_DISPOSITIONS = defineRouteParamDispositions({
+export const ROUTE_PARAM_DISPOSITIONS = {
   workspaceId: resourceParam(RESOURCE_TYPE.WORKSPACE),
   viewId: resourceParam(RESOURCE_TYPE.WORKSPACE_VIEW),
   threadId: resourceParam(RESOURCE_TYPE.CHAT_THREAD),
@@ -59,7 +53,7 @@ export const ROUTE_PARAM_DISPOSITIONS = defineRouteParamDispositions({
   code: notAResource("a verification code"),
   tableId: notAResource("a case-law research table"),
   guidanceId: notAResource("a public regulator guidance document"),
-});
+} as const satisfies Record<string, RouteParamDisposition>;
 
 // Routes whose search parameters say which resource has focus. `Extract`
 // against the generated route ids turns a renamed route into a type error.

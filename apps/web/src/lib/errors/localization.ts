@@ -4,19 +4,6 @@ import type { ActionAdmissionCode } from "@stll/api-contract/action-admission";
 import { getTranslator } from "@/i18n/translator";
 import type { TranslationKey } from "@/i18n/types";
 
-type StatusErrorKind =
-  | "badRequest"
-  | "conflict"
-  | "forbidden"
-  | "notFound"
-  | "payloadTooLarge"
-  | "rateLimited"
-  | "server"
-  | "serviceUnavailable"
-  | "unauthorized"
-  | "unknown"
-  | "validation";
-
 export const STATUS_ERROR_KEYS = {
   badRequest: "errors.api.badRequest",
   conflict: "errors.api.conflict",
@@ -29,7 +16,7 @@ export const STATUS_ERROR_KEYS = {
   unauthorized: "errors.api.unauthorized",
   unknown: "errors.api.unknown",
   validation: "errors.api.validation",
-} as const satisfies Record<StatusErrorKind, TranslationKey>;
+} as const satisfies Record<string, TranslationKey>;
 
 export type StatusErrorKey =
   (typeof STATUS_ERROR_KEYS)[keyof typeof STATUS_ERROR_KEYS];

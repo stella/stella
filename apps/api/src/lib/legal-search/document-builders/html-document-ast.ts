@@ -25,6 +25,7 @@ import type {
   DocumentAst,
   DocumentAstMetadata,
   DocumentAstSource,
+  HeadingLevel,
   Inline,
   ParagraphBlock,
   ParagraphListDepth,
@@ -68,7 +69,7 @@ const HEADING_LEVELS = {
   h4: 4,
   h5: 5,
   h6: 6,
-} as const;
+} as const satisfies Record<string, HeadingLevel>;
 
 /** Elements whose content is one paragraph unless they hold blocks. */
 const PARAGRAPH_TAGS = new Set([
