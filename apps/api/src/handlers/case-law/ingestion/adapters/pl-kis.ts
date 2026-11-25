@@ -580,7 +580,7 @@ type PlKisStatus =
 
 const statusOf = (id: string | undefined): PlKisStatus => {
   // parser-output-unchanged: O(1) ownEntry lookup matches Object.entries.find identically
-  const entry = ownEntry(PL_KIS_STATUSES, id);
+  const entry = id !== undefined ? ownEntry(PL_KIS_STATUSES, id) : undefined;
   return entry ?? "unknown";
 };
 
