@@ -236,7 +236,7 @@ describe("mcp-stdio-bridge", () => {
       output: () => undefined,
       fetchImpl,
     });
-    input.write('{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{}}');
+    input.write('{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}');
     input.write('{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{}}');
     input.write(
       '{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":2}}',
@@ -247,7 +247,107 @@ describe("mcp-stdio-bridge", () => {
     const result = await running;
     expect(Result.isOk(result)).toBe(true);
     expect(posted).toEqual([
-      '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{}}',
+      '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}',
+    ]);
+  });
+
+  test("a tool call waiting on the member holds back neither the agent's next request nor is cut by the bound other requests get", async () => {
+    const memberAnswered = Promise.withResolvers<undefined>();
+    const posted: string[] = [];
+    const fetchImpl = async (
+      _input: string | URL | Request,
+      init?: RequestInit,
+    ) => {
+      const body = typeof init?.body === "string" ? init.body : "";
+      posted.push(body);
+      if (body.includes('"method":"ping"')) {
+        // The next request runs past its own bound while the call waits;
+        // the member answers once that bound fired.
+        return await new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            memberAnswered.resolve(undefined);
+            reject(new Error("aborted"));
+          });
+        });
+      }
+      await memberAnswered.promise;
+      if (init?.signal?.aborted === true) {
+        throw new Error("aborted");
+      }
+      return new Response(
+        JSON.stringify({ jsonrpc: "2.0", id: 1, result: { step: 1 } }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    };
+    const lines: string[] = [];
+    const result = await runMcpStdioBridge({
+      url: "http://127.0.0.1:4321/mcp/abc",
+      token: "tok",
+      input: chunksOf(
+        [
+          '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{}}',
+          '{"jsonrpc":"2.0","id":2,"method":"ping"}',
+          "",
+        ].join("\n"),
+      ),
+      output: (line) => {
+        lines.push(line);
+      },
+      fetchImpl,
+      timeouts: { requestMs: 1, toolCallMs: 60_000 },
+    });
+    expect(Result.isOk(result)).toBe(true);
+    // Sent in the agent's order; the call answered once the member did.
+    expect(posted.map((body): unknown => JSON.parse(body))).toMatchObject([
+      { id: 1 },
+      { id: 2 },
+    ]);
+    expect(lines.map((line): unknown => JSON.parse(line))).toEqual([
+      {
+        jsonrpc: "2.0",
+        id: 2,
+        error: {
+          code: -32_603,
+          message: "Could not reach stella's MCP proxy.",
+        },
+      },
+      { jsonrpc: "2.0", id: 1, result: { step: 1 } },
+    ]);
+  });
+
+  test("a tool call past its own bound is answered with an error, as any request is", async () => {
+    const fetchImpl = async (
+      _input: string | URL | Request,
+      init?: RequestInit,
+    ) =>
+      await new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          reject(new Error("aborted"));
+        });
+      });
+    const lines: string[] = [];
+    const result = await runMcpStdioBridge({
+      url: "http://127.0.0.1:4321/mcp/abc",
+      token: "tok",
+      input: chunksOf(
+        '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{}}\n',
+      ),
+      output: (line) => {
+        lines.push(line);
+      },
+      fetchImpl,
+      timeouts: { requestMs: 5000, toolCallMs: 10 },
+    });
+    expect(Result.isOk(result)).toBe(true);
+    expect(lines.map((line): unknown => JSON.parse(line))).toEqual([
+      {
+        jsonrpc: "2.0",
+        id: 1,
+        error: {
+          code: -32_603,
+          message: "Could not reach stella's MCP proxy.",
+        },
+      },
     ]);
   });
 });

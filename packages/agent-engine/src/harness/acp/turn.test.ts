@@ -446,3 +446,149 @@ describe("AcpTurnSession background work, stderr classification, and late update
     expect(clock.now - 1000).toBe(250);
   });
 });
+
+describe("AcpTurnSession permission requests", () => {
+  const SESSION = "sess-ask";
+
+  /** A session at Ask, with the client's answers and notifications in one log. */
+  const askingSession = () => {
+    const wire: {
+      kind: "notify" | "respond";
+      method?: string;
+      body: unknown;
+    }[] = [];
+    const prompt = Promise.withResolvers<AcpAnswer>();
+    const { client } = createFakeClient();
+    const recording: AcpClient = {
+      ...client,
+      request: async () => await prompt.promise,
+      notify: (method, params) => {
+        wire.push({ kind: "notify", method, body: params });
+      },
+      respond: (id, result) => {
+        wire.push({ kind: "respond", body: { id, result } });
+      },
+    };
+    const session = new AcpTurnSession({
+      gracePeriodMs: 200,
+      detached: (p) => {
+        void p;
+      },
+      displayName: "Antigravity",
+      mcpNames: { stella: "stella", others: [] },
+      policy: { approvals: "ask", network: "open", fs: "workspace" },
+      workspaceDir: "/tmp/chat",
+      unreadablePaths: [],
+      onPromptError: () => undefined,
+      toolOutlivesPrompt: antigravityCommandOutlivesPrompt,
+      backgroundSettleMs: 5000,
+    });
+    session.attach(recording);
+    session.begin(SESSION, { type: "fresh" });
+    const turn = session.turn();
+    const events: HarnessEvent[] = [];
+    const collected = (async () => {
+      for await (const event of turn.events) {
+        events.push(event);
+      }
+    })();
+    session.prompted(prompt.promise);
+    const ask = (
+      id: number,
+      options: readonly { optionId: string; kind: string }[],
+    ) => {
+      session.handlers.request(id, "session/request_permission", {
+        sessionId: SESSION,
+        toolCall: {
+          toolCallId: `call-${String(id)}`,
+          title: "rm -rf build",
+          kind: "execute",
+        },
+        options,
+      });
+    };
+    const end = async () => {
+      prompt.resolve(Result.ok({ stopReason: "end_turn" }));
+      await collected;
+    };
+    return { ask, end, events, session, turn, wire, collected };
+  };
+
+  const ONCE = [
+    { optionId: "yes", kind: "allow_once" },
+    { optionId: "no", kind: "reject_once" },
+  ];
+
+  const requestIdOf = (events: readonly HarnessEvent[]) => {
+    const asked = events.find((event) => event.type === "approval.requested");
+    return asked?.type === "approval.requested"
+      ? asked.request.requestId
+      : null;
+  };
+
+  test("a request the agent withdraws closes its question while the turn goes on, and an answer then reaches nothing", async () => {
+    const { ask, end, events, session, turn, wire } = askingSession();
+    ask(7, ONCE);
+    const requestId = requestIdOf(events);
+    expect(requestId).not.toBeNull();
+    session.handlers.notification(ACP_AGENT_NOTIFICATIONS.cancelRequest, {
+      requestId: 7,
+    });
+    expect(events).toContainEqual({
+      type: "interaction.resolved",
+      requestId: requestId ?? "",
+    });
+    expect(wire).toContainEqual({
+      kind: "respond",
+      body: { id: 7, result: { outcome: { outcome: "cancelled" } } },
+    });
+    const late = turn.respond({
+      type: "approval",
+      requestId: requestId ?? "",
+      decision: "approve",
+    });
+    expect(Result.isError(late)).toBe(true);
+    // A withdrawal of a request it never sent changes nothing.
+    session.handlers.notification(ACP_AGENT_NOTIFICATIONS.cancelRequest, {
+      requestId: 99,
+    });
+    await end();
+    expect(events.at(-1)?.type).toBe("turn.completed");
+  });
+
+  test("a stop sends the cancel first, then answers every pending request cancelled", async () => {
+    const { ask, turn, wire, collected } = askingSession();
+    ask(3, ONCE);
+    await turn.interrupt();
+    await collected;
+    const cancel = wire.findIndex(
+      (entry) => entry.kind === "notify" && entry.method === "session/cancel",
+    );
+    const answered = wire.findIndex(
+      (entry) =>
+        entry.kind === "respond" &&
+        JSON.stringify(entry.body) ===
+          JSON.stringify({
+            id: 3,
+            result: { outcome: { outcome: "cancelled" } },
+          }),
+    );
+    expect(cancel).toBeGreaterThanOrEqual(0);
+    expect(answered).toBeGreaterThan(cancel);
+  });
+
+  test("a prompt that refuses only with 'reject always' still offers Deny", async () => {
+    const { ask, end, events } = askingSession();
+    ask(5, [
+      { optionId: "yes", kind: "allow_once" },
+      { optionId: "never", kind: "reject_always" },
+    ]);
+    const asked = events.find((event) => event.type === "approval.requested");
+    expect(
+      asked?.type === "approval.requested"
+        ? asked.request.options.map(({ decision }) => decision)
+        : [],
+    ).toEqual(["approve", "deny"]);
+    await end();
+  });
+});
