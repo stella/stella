@@ -94,8 +94,13 @@ const applyToken = (
   if (token.attached || level === "letter") {
     if (token.family === "number") {
       const number = digitsValue(token.core);
-      const outer = context.clausePath === null ? [] : context.clausePath;
-      context.clausePath = number === null ? [] : [...outer, number];
+      if (number === null) {
+        context.clausePath = [];
+      } else if (context.clausePath === null) {
+        context.clausePath = [number];
+      } else {
+        context.clausePath = [...context.clausePath, number];
+      }
       context.items = [];
       return snapshot("clause");
     }
