@@ -14,7 +14,15 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { ESTree } from "@oxlint/plugins";
 
-import { isAstNode, isIdentifierReference, unwrapExpression } from "./utils.ts";
+import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
+import {
+  filenameForContext,
+  isAstNode,
+  isIdentifierReference,
+  unwrapExpression,
+} from "./utils.ts";
+
+const RULE_NAME = "require-readonly-exported-collection";
 
 const COLLECTION_TO_READONLY: ReadonlyMap<string, string> = new Map([
   ["Map", "ReadonlyMap"],
@@ -134,6 +142,17 @@ export default eslintCompatPlugin({
               return;
             }
             if (hasReadonlyCollectionAnnotation(node, readonlyName)) {
+              return;
+            }
+            // First-week rollout: only lines this change touched
+            // (scripts/guard-rollouts/require-readonly-exported-collection.json).
+            if (
+              !guardEnforcesLine({
+                guard: RULE_NAME,
+                file: filenameForContext(context),
+                line: context.sourceCode.getLocFromIndex(node.range[0]).line,
+              })
+            ) {
               return;
             }
             const id: unknown = node.id;

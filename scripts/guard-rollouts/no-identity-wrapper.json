@@ -1,0 +1,19 @@
+{
+  "id": "no-identity-wrapper",
+  "rules": ["no-identity-wrapper/no-identity-wrapper"],
+  "type": "changed-lines",
+  "expiresAt": "2026-12-02T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-identity-wrapper/no-identity-wrapper",
+    "apps/web/src",
+    "apps/api/src"
+  ]
+}

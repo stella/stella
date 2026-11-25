@@ -17,12 +17,16 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { ESTree } from "@oxlint/plugins";
 
+import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 import {
+  filenameForContext,
   isAstNode,
   isIdentifier,
   isIdentifierReference,
   unwrapExpression,
 } from "./utils.ts";
+
+const RULE_NAME = "no-identity-wrapper";
 
 const singleReturnedExpression = (body: unknown): unknown => {
   if (!isAstNode(body)) {
@@ -97,6 +101,17 @@ export default eslintCompatPlugin({
             ),
           );
           if (!calledDirectly) {
+            return;
+          }
+          // First-week rollout: only lines this change touched
+          // (scripts/guard-rollouts/no-identity-wrapper.json).
+          if (
+            !guardEnforcesLine({
+              guard: RULE_NAME,
+              file: filenameForContext(context),
+              line: context.sourceCode.getLocFromIndex(node.range[0]).line,
+            })
+          ) {
             return;
           }
           context.report({
