@@ -408,8 +408,8 @@ export type RegisteredSchedulerTaskName = keyof ReturnType<
 >;
 
 /**
- * Every task name this build can execute, as data: job registration retires
- * persisted rows whose task no build code answers for anymore.
+ * Every task name this build can execute, as data. Removing one moves its name
+ * to `RETIRED_SCHEDULER_TASK_NAMES`, which job registration retires.
  */
 export const REGISTERED_SCHEDULER_TASK_NAMES: ReadonlySet<string> = new Set(
   Object.keys(schedulerTasks(noopTask, noopTask, noopTask)),
