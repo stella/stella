@@ -1104,6 +1104,10 @@
     },
     "@stll/agent-engine#test": {
       "dependsOn": ["transit"],
+      // The real CLIs CI installed (scripts/ci-harness-clis.ts): their suites
+      // run only where one is installed, so a pass without one never replays
+      // where one is.
+      "env": ["STELLA_REAL_HARNESS_CLIS"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.github/workflows/agent-sandbox-canary.yml",
@@ -1111,6 +1115,7 @@
         // The compatibility test binds the policy to the pinned releases.
         "$TURBO_ROOT$/apps/desktop/package.json",
         "$TURBO_ROOT$/apps/desktop/src-tauri/harness/releases.gen.json",
+        "$TURBO_ROOT$/apps/desktop/src-tauri/harness/pins.json",
         // The sidecar build test reads the desktop release's rebuild paths.
         "$TURBO_ROOT$/scripts/detect-desktop-release-changes.sh"
       ]

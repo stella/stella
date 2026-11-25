@@ -2496,10 +2496,33 @@ describe("Codex background terminals after a turn", () => {
  * which runs offline, and a turn runs against a model provider on
  * 127.0.0.1 that never answers, with every other host behind a proxy that
  * refuses. Without a CLI the suite is skipped; the fake-server suites above
- * always run.
+ * always run. CI installs the pinned CLI (`scripts/ci-harness-clis.ts`) and
+ * says so in `STELLA_REAL_HARNESS_CLIS`, which makes the suite required.
  */
 
 const codex = Bun.which("codex");
+
+const PINS_PATH = path.join(
+  import.meta.dir,
+  "../../../../../apps/desktop/src-tauri/harness/pins.json",
+);
+const installedForTests = process.env["STELLA_REAL_HARNESS_CLIS"] ?? "";
+
+describe.skipIf(!installedForTests.includes("codex@"))(
+  "the codex CLI CI installed",
+  () => {
+    test("is on PATH at the pinned version, so the installed-CLI suite runs", async () => {
+      const pins = v.parse(
+        v.looseObject({ codex: v.string() }),
+        await Bun.file(PINS_PATH).json(),
+      );
+      expect(installedForTests).toContain(`codex@${pins.codex}`);
+      expect(codex).not.toBeNull();
+      const version = Bun.spawnSync([codex ?? "", "--version"]);
+      expect(version.stdout.toString().trim()).toBe(`codex-cli ${pins.codex}`);
+    });
+  },
+);
 
 /** Client methods the adapter calls. */
 const CLIENT_METHODS = [
