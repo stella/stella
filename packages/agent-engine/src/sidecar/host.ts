@@ -62,7 +62,10 @@ import { harnessEventsToChunks } from "../harness/stream-chunks";
 import { harnessTranscriptSchema } from "../harness/transcript-handoff";
 import type { ProtocolLog } from "../protocol-log";
 import { copyAttachments } from "./attachments";
-import { browserDownloadFiler } from "./browser-download-filing";
+import {
+  browserDownloadFiler,
+  keepLocalInPlan,
+} from "./browser-download-filing";
 import {
   type ActionApprovals,
   createActionApprovals,
@@ -1476,13 +1479,17 @@ export class SidecarHost {
       approve: run.approvals.request,
       stopped: run.browserStop.signal,
       workspaceDir: message.workspaceDir,
-      fileDownload: browserDownloadFiler({
-        apiOrigin,
-        runId,
-        stopped: run.browserStop.signal,
-        token: () => proxy.tokenOf(runId),
-        workspaceDir: message.workspaceDir,
-      }),
+      // Plan changes nothing outside the run's folder: no download is filed.
+      fileDownload:
+        message.policy.approvals === "plan"
+          ? keepLocalInPlan
+          : browserDownloadFiler({
+              apiOrigin,
+              runId,
+              stopped: run.browserStop.signal,
+              token: () => proxy.tokenOf(runId),
+              workspaceDir: message.workspaceDir,
+            }),
     };
     if (taken === null) {
       return browser.register(browserRun);

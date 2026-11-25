@@ -13,8 +13,13 @@
  * Only PDFs are filed, read by their bytes. They go through the same scan,
  * encryption detection and document write owners as any upload, so OCR,
  * search, permissions and audit treat them as uploaded files.
+ *
+ * Two filings of the same bytes at once still make one document: a
+ * matter's documents are created one at a time (its creation lock), and a
+ * filing that finds the same bytes filed inside that lock rolls its own
+ * document back and names the other.
  */
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import {
   BROWSER_DOWNLOAD_REFUSAL_CODE,
@@ -88,6 +93,13 @@ export type FileBrowserDownloadDependencies = {
   createEntityFromBuffer?: typeof createEntityFromBuffer;
   uploads?: UploadUserFileDependencies;
 };
+
+/** The same bytes were filed into the matter while this filing ran. */
+class FiledMeanwhileError extends TaggedError("FiledMeanwhileError")<{
+  message: string;
+  entityId: SafeId<"entity">;
+  name: string;
+}> {}
 
 const isPdf = (bytes: Uint8Array): boolean =>
   bytes.byteLength >= PDF_MAGIC.length &&
@@ -291,20 +303,55 @@ export const fileBrowserDownload = async ({
     };
     const create =
       dependencies.createEntityFromBuffer ?? createEntityFromBuffer;
-    const created = await create({
-      authority: CALLER_AUTHORIZED,
-      scopedDb: chat.scopedDb,
-      organizationId: chat.organizationId,
-      workspaceId: matter.id,
-      userId: chat.userId,
-      recordAuditEvent: inMatter(chat.recordAuditEvent, matter.id),
-      buffer: scanned.bytes,
-      fileName,
-      mimeType: PDF_MIME_TYPE,
-      encryption,
-      scanWarnings: scanned.scanWarnings ?? undefined,
-      source,
-    });
+    const attempt = await Result.tryPromise(
+      async () =>
+        await create({
+          authority: CALLER_AUTHORIZED,
+          scopedDb: chat.scopedDb,
+          organizationId: chat.organizationId,
+          workspaceId: matter.id,
+          userId: chat.userId,
+          recordAuditEvent: inMatter(chat.recordAuditEvent, matter.id),
+          buffer: scanned.bytes,
+          fileName,
+          mimeType: PDF_MIME_TYPE,
+          encryption,
+          scanWarnings: scanned.scanWarnings ?? undefined,
+          source,
+          // Runs under the matter's creation lock, so a filing of the same
+          // bytes that committed first is seen here and this one rolls back.
+          afterCreate: async (tx, document) => {
+            const meanwhile = await findExactDuplicates({
+              tx,
+              workspaceId: matter.id,
+              sha256Hexes: [contentHash],
+              exceptEntityId: document.entityId,
+            });
+            const first = meanwhile.at(0);
+            if (first !== undefined) {
+              throw new FiledMeanwhileError({
+                message: "The same file was filed into the matter meanwhile",
+                entityId: first.entityId,
+                name: first.entityName,
+              });
+            }
+          },
+        }),
+    );
+    if (Result.isError(attempt)) {
+      const { cause } = attempt.error;
+      if (FiledMeanwhileError.is(cause)) {
+        return Result.ok({
+          type: "document" as const,
+          workspaceId: matter.id,
+          entityId: cause.entityId,
+          name: cause.name,
+          duplicate: true,
+        });
+      }
+      throw cause;
+    }
+    const created = attempt.value;
     if (Result.isError(created)) {
       return Result.err(storeFailure(created.error));
     }

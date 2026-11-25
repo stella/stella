@@ -14,7 +14,10 @@ import {
   localRunBrowserDownloadPath,
 } from "@stll/api-contract/browser-downloads";
 
-import { browserDownloadFiler } from "./browser-download-filing";
+import {
+  browserDownloadFiler,
+  keepLocalInPlan,
+} from "./browser-download-filing";
 
 const PDF = "%PDF-1.7\nfixture\n%%EOF\n";
 const RUN_ID = "0193a0f4-6b7c-7d8e-9f00-112233445566";
@@ -238,6 +241,19 @@ describe("filing a saved download with stella", () => {
       status: "not_filed",
     });
     expect(api.received).toEqual([]);
+  });
+
+  test("a run in Plan mode files nothing and says so", async () => {
+    expect(
+      await keepLocalInPlan({
+        origin: ORIGIN,
+        path: "Downloads/Decision 1.pdf",
+      }),
+    ).toEqual({
+      message:
+        "In Plan mode stella files nothing into the matter. The file is in your working folder only.",
+      status: "not_filed",
+    });
   });
 
   test("an API that cannot be reached leaves the file local", async () => {

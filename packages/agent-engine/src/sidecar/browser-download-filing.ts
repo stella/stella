@@ -51,6 +51,15 @@ const notFiled = (message: string): BrowserDownloadFiling => ({
   status: "not_filed",
 });
 
+/**
+ * The filer of a run in Plan mode, which changes nothing outside its own
+ * folder: a download stays there and nothing is filed with stella.
+ */
+export const keepLocalInPlan: FileBrowserDownload = async () =>
+  await Promise.resolve(
+    notFiled("In Plan mode stella files nothing into the matter."),
+  );
+
 const filingOf = (filed: BrowserDownloadFiled): BrowserDownloadFiling => {
   switch (filed.type) {
     case "document":

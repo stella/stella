@@ -275,6 +275,35 @@ describe("a run filing a download its chat's tab made", () => {
     expect(await documentsIn(ids.wsA1)).toBe(before + 1);
   });
 
+  test("the same new file filed twice at once makes one document, and both name it", async () => {
+    const bytes = await largeScannedPdf({ minBytes: 4096, text: "Annex 7" });
+    const first = await insertRun(ids.chatThreadWorkspaceA1);
+    const second = await insertRun(ids.chatThreadWorkspaceA1);
+    const before = await documentsIn(ids.wsA1);
+
+    const filed = await Promise.all(
+      [first, second].map(
+        async (runId) =>
+          await filedOf(
+            await post(runId, tokenFor(runId, [ids.wsA1]), { bytes }),
+          ),
+      ),
+    );
+
+    expect(await documentsIn(ids.wsA1)).toBe(before + 1);
+    // One filing made the document; the other names it.
+    const [made, named] = filed.toSorted((a, b) =>
+      a.type === "document" && b.type === "document"
+        ? Number(a.duplicate) - Number(b.duplicate)
+        : 0,
+    );
+    expect(made).toMatchObject({ duplicate: false, type: "document" });
+    expect(named).toMatchObject({ duplicate: true, type: "document" });
+    expect(named).toMatchObject({
+      entityId: made?.type === "document" ? made.entityId : "",
+    });
+  });
+
   test("a chat in no matter keeps the file with the chat", async () => {
     const runId = await insertRun(ids.chatThreadGlobalA1);
     const before = await documentsIn(ids.wsA1);
