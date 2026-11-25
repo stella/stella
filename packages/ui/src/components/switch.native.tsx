@@ -13,7 +13,8 @@ type SwitchProps = Omit<
 
 /**
  * The web's `Switch` (./switch.tsx) on a phone: the platform's own switch, in
- * the web's colours (the primary fill when on, the input fill when off).
+ * the web's colours (the green track when on, the grey one when off, a
+ * white thumb on both).
  * Controlled through `checked`, or holding its own state from
  * `defaultChecked`.
  */
@@ -31,14 +32,14 @@ export const Switch = ({
       {...props}
       accessibilityState={{ checked: value, disabled }}
       disabled={disabled}
-      ios_backgroundColorClassName="accent-input"
+      ios_backgroundColorClassName="accent-switch-track"
       onValueChange={(next) => {
         setOwn(next);
         onCheckedChange?.(next);
       }}
-      thumbColorClassName="accent-background"
-      trackColorOffClassName="accent-input"
-      trackColorOnClassName="accent-primary"
+      thumbColorClassName="accent-switch-thumb"
+      trackColorOffClassName="accent-switch-track"
+      trackColorOnClassName="accent-switch-track-checked"
       value={value}
     />
   );

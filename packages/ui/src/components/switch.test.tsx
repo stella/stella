@@ -22,6 +22,25 @@ describe("Switch", () => {
     expect(markup).not.toContain("h-5 w-9");
   });
 
+  test("draws on as the green track and off as the grey one, under a white thumb", () => {
+    const on = renderToStaticMarkup(
+      <Switch aria-label="Sync" defaultChecked />,
+    );
+    const off = renderToStaticMarkup(<Switch aria-label="Sync" />);
+
+    for (const markup of [on, off]) {
+      expect(markup).toContain("data-checked:bg-switch-track-checked");
+      expect(markup).toContain("data-unchecked:bg-switch-track");
+      expect(markup).toContain("bg-switch-thumb");
+      // The primary fill is near white in the dark scheme, where it read
+      // as off.
+      expect(markup).not.toContain("bg-primary");
+      expect(markup).not.toContain("bg-background");
+    }
+    expect(on).toContain("data-checked");
+    expect(off).toContain("data-unchecked");
+  });
+
   test("keeps the switch mounted when disabled with a disabledReason", () => {
     const markup = renderToStaticMarkup(
       <Switch
