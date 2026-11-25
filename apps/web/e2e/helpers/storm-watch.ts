@@ -10,6 +10,7 @@ import {
   STORM_WATCH_BINDING,
   STORM_WATCH_GLOBAL,
   type StormWatchComponent,
+  type StormWatchQuiescence,
   type StormWatchRead,
   type StormWatchViolationReport,
 } from "./storm-watch-contract";
@@ -87,19 +88,26 @@ const violationFailure = ({
 }: StormWatchViolationReport) =>
   `render storm: ${String(violation.commitsSinceStimulus)} commits in ${String(Math.round(violation.msSinceStimulus))} ms with no input, network or message to cause them (last outside cause: ${violation.lastStimulus})\n${formatComponents(components)}`;
 
+const quiescenceFailures = ({
+  verdict,
+  commitsWhileWaiting,
+  waitedMs,
+  components,
+}: StormWatchQuiescence): string[] =>
+  verdict === "storm"
+    ? [
+        `the page never went ${String(DEFAULT_QUIESCENCE_LIMITS.quietMs)} ms without a commit after the test (${String(commitsWhileWaiting)} commits in ${String(waitedMs)} ms, nothing arriving)\n${formatComponents(components)}`,
+      ]
+    : [];
+
 /** What makes this read a failure, as lines a test failure can show. */
 export const stormWatchFailures = ({
   report,
   quiescence,
-}: StormWatchRead): string[] => {
-  const failures = report.reported.map(violationFailure);
-  if (quiescence.verdict === "storm") {
-    failures.push(
-      `the page never went ${String(DEFAULT_QUIESCENCE_LIMITS.quietMs)} ms without a commit after the test (${String(quiescence.commitsWhileWaiting)} commits in ${String(quiescence.waitedMs)} ms, nothing arriving)\n${formatComponents(quiescence.components)}`,
-    );
-  }
-  return failures;
-};
+}: StormWatchRead): string[] => [
+  ...report.reported.map(violationFailure),
+  ...quiescenceFailures(quiescence),
+];
 
 type PageCheck = {
   annotation: Record<string, unknown>;
@@ -107,40 +115,52 @@ type PageCheck = {
   evidence: unknown;
 };
 
+// The page's reports: every one it forwarded, from each document it has
+// shown, and any of the current document's own that did not arrive. The
+// binding delivers copies, so they are matched by content.
+const unstimulatedReports = (
+  forwarded: readonly StormWatchViolationReport[],
+  current: readonly StormWatchViolationReport[],
+) => {
+  const seen = new Set(forwarded.map((report) => JSON.stringify(report)));
+  return [
+    ...forwarded,
+    ...current.filter((report) => !seen.has(JSON.stringify(report))),
+  ];
+};
+
 // An open page is read whole and must go quiet; a closed one only has the
-// reports it forwarded while it lived.
+// reports it forwarded while it lived. Forwarded reports are read after the
+// wait, so one that arrives during it still counts.
 const checkPage = async (
   page: Page,
-  forwarded: readonly StormWatchViolationReport[],
+  readForwarded: () => readonly StormWatchViolationReport[],
 ): Promise<PageCheck | null> => {
-  if (page.isClosed()) {
-    return forwarded.length === 0
-      ? null
-      : {
-          annotation: { closed: true, unstimulated: forwarded.length },
-          failures: forwarded.map(violationFailure),
-          evidence: forwarded,
-        };
+  let read: StormWatchRead | null = null;
+  const closed = page.isClosed();
+  if (!closed) {
+    try {
+      read = await page.evaluate(readStormWatch, {
+        global: STORM_WATCH_GLOBAL,
+        ...DEFAULT_QUIESCENCE_LIMITS,
+      });
+    } catch {
+      // The page navigated away or closed while the watch waited: its
+      // forwarded reports are all there is.
+    }
   }
-  let read: StormWatchRead | null;
-  try {
-    read = await page.evaluate(readStormWatch, {
-      global: STORM_WATCH_GLOBAL,
-      ...DEFAULT_QUIESCENCE_LIMITS,
-    });
-  } catch {
-    // The page navigated away or closed while the watch waited: its forwarded
-    // reports are all there is, and the test's own result stands.
-    return forwarded.length === 0
-      ? null
-      : {
-          annotation: { unstimulated: forwarded.length },
-          failures: forwarded.map(violationFailure),
-          evidence: forwarded,
-        };
-  }
+  const unstimulated = unstimulatedReports(
+    readForwarded(),
+    read?.report.reported ?? [],
+  );
   if (read === null) {
-    return null;
+    return unstimulated.length === 0
+      ? null
+      : {
+          annotation: { closed, unstimulated: unstimulated.length },
+          failures: unstimulated.map(violationFailure),
+          evidence: unstimulated,
+        };
   }
   const { report, quiescence } = read;
   return {
@@ -148,13 +168,16 @@ const checkPage = async (
       commits: report.commits,
       widestTask: report.widestTask,
       lowestTokens: report.lowestTokens,
-      unstimulated: report.violations.length,
+      unstimulated: Math.max(report.violations.length, unstimulated.length),
       quiescence: quiescence.verdict,
       quietAfterMs: quiescence.waitedMs,
       stimuli: report.stimuli,
     },
-    failures: stormWatchFailures(read),
-    evidence: read,
+    failures: [
+      ...unstimulated.map(violationFailure),
+      ...quiescenceFailures(quiescence),
+    ],
+    evidence: { ...read, forwarded: unstimulated },
   };
 };
 
@@ -177,7 +200,7 @@ export const stormWatchChecks = async (
   const pages = [...new Set([page, ...context.pages(), ...forwarded.keys()])];
   const checks: StormWatchPageCheck[] = [];
   for (const [index, checked] of pages.entries()) {
-    const result = await checkPage(checked, forwarded.get(checked) ?? []);
+    const result = await checkPage(checked, () => forwarded.get(checked) ?? []);
     if (result !== null) {
       checks.push({ page: index, ...result });
     }

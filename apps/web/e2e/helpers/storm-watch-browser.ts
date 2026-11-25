@@ -232,13 +232,24 @@ try {
   // A browser without resource timing leaves network commits to the trickle.
 }
 
-// Streams: each chunk a reader takes, whether read directly or iterated.
+// Streams: each chunk a reader takes, whether read directly or iterated, and
+// the end of the stream once. Reading an ended stream again returns the same
+// `done` result without anything arriving, so it is not credited again.
 // The originals are read and called through Reflect, so the patches hold
 // whatever this browser's typings say about them.
-const markRead = async (pending: unknown): Promise<unknown> => {
-  const result: unknown = await Promise.resolve(pending);
-  stimulus("stream");
-  return result;
+const isDone = (result: unknown) =>
+  typeof result === "object" &&
+  result !== null &&
+  "done" in result &&
+  result.done === true;
+const ended = new WeakSet<object>();
+const creditRead = (source: object, result: unknown) => {
+  if (!isDone(result)) {
+    stimulus("stream");
+  } else if (!ended.has(source)) {
+    ended.add(source);
+    stimulus("stream");
+  }
 };
 const isAsyncIterator = (value: unknown): value is AsyncIterator<unknown> =>
   typeof value === "object" &&
@@ -254,7 +265,11 @@ if (typeof read === "function") {
     ReadableStreamDefaultReader.prototype,
     "read",
     async function readWithStimulus(this: ReadableStreamDefaultReader) {
-      return await markRead(Reflect.apply(read, this, []));
+      const result: unknown = await Promise.resolve(
+        Reflect.apply(read, this, []),
+      );
+      creditRead(this, result);
+      return result;
     },
   );
 }
@@ -274,7 +289,7 @@ if (typeof streamIterator === "function") {
       const advance = iterator.next.bind(iterator);
       iterator.next = async (...nextArgs) => {
         const step = await advance(...nextArgs);
-        stimulus("stream");
+        creditRead(iterator, step);
         return step;
       };
       return iterator;
@@ -303,7 +318,15 @@ const observeMessages = (target: EventTarget, type: string) => {
   }
   types.add(type);
   if (typeof listen === "function") {
-    Reflect.apply(listen, target, [type, () => stimulus("message")]);
+    // A message the app dispatches itself is untrusted, and can be a loop.
+    Reflect.apply(listen, target, [
+      type,
+      (event: Event) => {
+        if (event.isTrusted) {
+          stimulus("message");
+        }
+      },
+    ]);
   }
 };
 if (typeof listen === "function") {
