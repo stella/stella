@@ -837,7 +837,7 @@ mechanics, and similar), not gaps in coverage.
 | assistant_chat | 28 |
 | auth_plumbing | 52 |
 | billing_ui | 1 |
-| chat_thread_ui | 31 |
+| chat_thread_ui | 34 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 27 |
