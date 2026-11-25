@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 8.4.1
+
+### Patch Changes
+
+- [#9448](https://github.com/stella/stella/pull/9448) [`f729183`](https://github.com/stella/stella/commit/f72918383c6f86f702435f2394d7486d9f60a6ac) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add skill monitor and suggest-improvements capability endpoints to CLI reference.
+
 ## 8.4.0
 
 ### Minor Changes
