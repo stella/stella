@@ -14,6 +14,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { LIMITS } from "@/api/lib/limits";
 import type {
   UnbackedProjectionKeys,
@@ -113,45 +114,54 @@ const getSkillMonitor = createSafeRootHandler(
     const [resourceRows, auditRows, profileRows, truncated] =
       yield* Result.await(
         safeDb(async (tx) => {
-          const resources = await tx
-            .select(MONITOR_RESOURCE_SELECTION)
-            .from(agentSkillResources)
-            .where(
-              and(
-                eq(agentSkillResources.skillId, skill.id),
-                eq(
-                  agentSkillResources.organizationId,
-                  session.activeOrganizationId,
+          const resourcesPage = await readCursorPage(
+            tx
+              .select(MONITOR_RESOURCE_SELECTION)
+              .from(agentSkillResources)
+              .where(
+                and(
+                  eq(agentSkillResources.skillId, skill.id),
+                  eq(
+                    agentSkillResources.organizationId,
+                    session.activeOrganizationId,
+                  ),
                 ),
-              ),
-            )
-            .orderBy(asc(agentSkillResources.path))
-            .limit(LIMITS.agentSkillResourcesPerSkill);
+              )
+              .orderBy(asc(agentSkillResources.path)),
+            {
+              limit: LIMITS.agentSkillResourcesPerSkill,
+              cursorForItem: (row) => row.path,
+            },
+          );
+          const resources = resourcesPage.items;
 
-          const logs = await tx
-            .select({
-              createdAt: auditLogs.createdAt,
-              metadata: auditLogs.metadata,
-              runId: auditLogs.runId,
-              userId: auditLogs.userId,
-            })
-            .from(auditLogs)
-            .where(
-              and(
-                eq(auditLogs.organizationId, session.activeOrganizationId),
-                eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.AGENT_SKILL),
-                eq(auditLogs.resourceId, skill.id),
-                eq(auditLogs.action, AUDIT_ACTION.ACCESS),
-                sql`${auditLogs.createdAt} >= now() - make_interval(days => ${windowDays})`,
-              ),
-            )
-            .orderBy(desc(auditLogs.createdAt))
-            .limit(MONITOR_AUDIT_ROW_LIMIT + 1);
+          const logsPage = await readCursorPage(
+            tx
+              .select({
+                createdAt: auditLogs.createdAt,
+                metadata: auditLogs.metadata,
+                runId: auditLogs.runId,
+                userId: auditLogs.userId,
+              })
+              .from(auditLogs)
+              .where(
+                and(
+                  eq(auditLogs.organizationId, session.activeOrganizationId),
+                  eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.AGENT_SKILL),
+                  eq(auditLogs.resourceId, skill.id),
+                  eq(auditLogs.action, AUDIT_ACTION.ACCESS),
+                  sql`${auditLogs.createdAt} >= now() - make_interval(days => ${windowDays})`,
+                ),
+              )
+              .orderBy(desc(auditLogs.createdAt)),
+            {
+              limit: MONITOR_AUDIT_ROW_LIMIT,
+              cursorForItem: (row) => row.createdAt.toISOString(),
+            },
+          );
 
-          const isTruncated = logs.length > MONITOR_AUDIT_ROW_LIMIT;
-          const boundedLogs = isTruncated
-            ? logs.slice(0, MONITOR_AUDIT_ROW_LIMIT)
-            : logs;
+          const isTruncated = logsPage.hasMore;
+          const boundedLogs = logsPage.items;
           const userIds = [...new Set(boundedLogs.map((row) => row.userId))];
           const profiles =
             userIds.length === 0

@@ -33,6 +33,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@stll/ui/popover";
+import { ScrollArea } from "@stll/ui/scroll-area";
 import {
   Select,
   SelectItem,
@@ -1038,7 +1039,7 @@ function SkillSettingsPanel({
   const t = useTranslations();
   const tSkills = useTranslations("knowledge.agentSkills");
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
+    <ScrollArea className="min-h-0 flex-1">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-6 py-5">
         <div className="rounded-xl border p-5">
           <div className="mb-4 flex items-center justify-between gap-2">
@@ -1119,7 +1120,7 @@ function SkillSettingsPanel({
           </div>
         </div>
       </div>
-    </div>
+    </ScrollArea>
   );
 }
 
