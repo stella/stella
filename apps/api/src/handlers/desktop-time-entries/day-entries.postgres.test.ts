@@ -10,6 +10,7 @@ import { member, user } from "@/api/db/auth-schema";
 import { timeEntries, workspaceMembers } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { HttpStatusResponse } from "@/api/http/status";
+import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { authorizedMemberRole } from "@/api/lib/permission-authorization";
@@ -47,17 +48,14 @@ const entryRow = (
     timezoneId: string;
     createdAt: Date;
     durationMinutes: number;
-    internal?: true;
   },
 ) => {
   const id = createSafeId<"timeEntry">();
   return {
     id,
     organizationId: fixture.organizationId,
-    workspaceId: row.internal ? null : fixture.workspaceId,
-    activityGroup: row.internal
-      ? TIME_ENTRY_ACTIVITY_GROUP.INTERNAL
-      : TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
+    workspaceId: fixture.workspaceId,
+    activityGroup: TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
     userId: row.userId ?? fixture.userId,
     dateWorked: row.dateWorked,
     timezoneId: row.timezoneId,
@@ -128,13 +126,22 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               createdAt: new Date("2020-01-15T10:00:00Z"),
               durationMinutes: 90,
             });
-            const internal = entryRow(fixture, {
+            // Internal time has no matter and is never priced.
+            const internal = {
+              id: createSafeId<"timeEntry">(),
+              organizationId: fixture.organizationId,
+              workspaceId: null,
+              activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+              userId: fixture.userId,
               dateWorked: DAY_ENTRIES_DATE,
               timezoneId: "Europe/Prague",
-              createdAt: new Date("2020-01-15T10:00:00Z"),
               durationMinutes: 30,
-              internal: true,
-            });
+              billedMinutes: 0,
+              rateAtEntry: cents(0),
+              currency: UNPRICED_TIME_ENTRY_CURRENCY,
+              billable: false,
+              narrative: "Internal training",
+            };
             await db
               .insert(timeEntries)
               .values([
@@ -148,11 +155,12 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             const response = await readFixtureDayEntries(fixture, {
               date: DAY_ENTRIES_DATE,
             });
-            if (response instanceof HttpStatusResponse) {
-              return panic("Expected the member's day entries");
-            }
+            const entries =
+              response instanceof HttpStatusResponse
+                ? panic("Expected the member's day entries")
+                : response.entries;
             expect(
-              response.entries.toSorted((left, right) =>
+              entries.toSorted((left, right) =>
                 compareCodeUnit(left.id, right.id),
               ),
             ).toEqual(
@@ -170,7 +178,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               ].toSorted((left, right) => compareCodeUnit(left.id, right.id)),
             );
             // Nothing about the time of day leaves the server.
-            for (const entry of response.entries) {
+            for (const entry of entries) {
               expect(Object.keys(entry).toSorted()).toEqual([
                 "durationMinutes",
                 "id",

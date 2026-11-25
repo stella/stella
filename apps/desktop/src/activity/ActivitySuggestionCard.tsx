@@ -1183,10 +1183,12 @@ const RecordedElsewhereNote = ({
           role="status"
         >
           <span className="text-pretty">
-            {t("recordedElsewhere", {
-              day,
-              duration: durationLabel(status.minutes * MINUTE_MS),
-            })}
+            {t(
+              day === "today"
+                ? "recordedElsewhereToday"
+                : "recordedElsewhereOnDay",
+              { duration: durationLabel(status.minutes * MINUTE_MS) },
+            )}
           </span>
           <Button onClick={onReview} size="xs" variant="outline">
             {t("recordedElsewhereReview")}
