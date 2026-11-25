@@ -161,9 +161,8 @@ test("the details screen offers both answers, neither chosen, and continues only
   view.getByText(activity.disclosure.detailsStay);
   expect(view.queryByText(settings.permissionAccessibility)).toBeNull();
   const next = view.getByRole("button", { name: onboarding.continue });
-  expect(next.hasAttribute("disabled") || next.ariaDisabled === "true").toBe(
-    true,
-  );
+  // A disabled button with a reason stays focusable: `aria-disabled`.
+  expect(next.getAttribute("aria-disabled")).toBe("true");
   fireEvent.click(next);
   await act(nextMacrotask);
   await heading(view, setup.details.title);
