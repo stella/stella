@@ -1390,7 +1390,9 @@ const declareLawCases = async (fixture: FixtureRuntime) => {
                 : []),
             ];
             await waitFor(() =>
-              expect(requests).toEqual(expect.arrayContaining(expectedRequests)),
+              expect(
+                expectedRequests.filter((path) => !requests.includes(path)),
+              ).toEqual([]),
             );
             await waitFor(() => expect(queryClient.isFetching()).toBe(0));
             expect(caughtErrors).toEqual([]);
