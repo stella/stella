@@ -10,6 +10,7 @@ import {
 } from "@stll/db-load-gate/health";
 
 import type { ReplayRunReport } from "@/api/handlers/case-law/ingestion/replay";
+import type { SafeId } from "@/api/lib/branded-types";
 
 import { replayHealthConfig } from "./replay-enrolment";
 import {
