@@ -310,7 +310,7 @@ export const checkEntityCreateTargetForInsert = async ({
  */
 type ValidateEntityCreateGenerator = AsyncGenerator<
   Err<never, SafeDbError>,
-  Ok<undefined, never> | Err<never, HandlerError<400>>,
+  Ok<undefined> | Err<never, HandlerError<400>>,
   unknown
 >;
 
