@@ -190,6 +190,7 @@ mod tests {
       axum::serve(listener, router).await.unwrap();
     });
     let day = day_events(&account, "2026-10-02", "Europe/Prague").await;
+    drop(account);
     server.abort();
     day
   }

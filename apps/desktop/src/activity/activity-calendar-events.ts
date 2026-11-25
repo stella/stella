@@ -38,7 +38,7 @@ export type CalendarEventBlock = DayCalendarRange & {
   recordedMs: number;
 };
 
-export type CalendarAllDayEvent = {
+type CalendarAllDayEvent = {
   id: string;
   title: string;
   response: DesktopCalendarResponse;

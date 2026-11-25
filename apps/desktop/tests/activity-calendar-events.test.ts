@@ -180,7 +180,7 @@ describe("calendar events beside recorded time", () => {
       }))
       .filter(({ startMs, endMs }) => endMs > startMs);
     assertProperty(
-      "activity-calendar.recorded-time-within-event",
+      "recorded time inside an event never exceeds the event",
       fc.property(
         fc.array(range, { maxLength: 6 }),
         fc.array(fc.tuple(range, fc.boolean()), { maxLength: 12 }),
