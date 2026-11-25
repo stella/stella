@@ -254,6 +254,14 @@
       "estimatedTokens": 475
     },
     {
+      "name": "list_site_notes",
+      "nameChars": 15,
+      "descriptionChars": 379,
+      "inputSchemaChars": 235,
+      "totalChars": 629,
+      "estimatedTokens": 230
+    },
+    {
       "name": "list_tasks",
       "nameChars": 10,
       "descriptionChars": 379,
@@ -428,14 +436,6 @@
       "inputSchemaChars": 1645,
       "totalChars": 2344,
       "estimatedTokens": 919
-    },
-    {
-      "name": "read_site_notes",
-      "nameChars": 15,
-      "descriptionChars": 379,
-      "inputSchemaChars": 235,
-      "totalChars": 629,
-      "estimatedTokens": 230
     },
     {
       "name": "read_statute",
