@@ -206,8 +206,8 @@ export const startFlowRun = async (
         }),
       );
     }
-    return await authorization.value.execute<StartFlowRunOutcome>(
-      async () =>
+    return await authorization.value.execute(
+      async (): Promise<StartFlowRunOutcome> =>
         await Result.gen(async function* () {
           const runId = createSafeId<"flowRun">();
           const actorId =

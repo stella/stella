@@ -455,7 +455,7 @@ export const getBaseMap = async (): Promise<BaseMap> => {
   return await baseMapPromise;
 };
 
-type Topology = {
+export type WorldAtlasTopology = {
   transform: { scale: number[]; translate: number[] };
   arcs: number[][][];
   objects: {
@@ -477,7 +477,7 @@ const decodeTopology = ({
   transform: { scale, translate },
   arcs,
   objects,
-}: Topology): BaseMap => {
+}: WorldAtlasTopology): BaseMap => {
   const [scaleX = 1, scaleY = 1] = scale;
   const [translateX = 0, translateY = 0] = translate;
   const decodedArcs = arcs.map((arc) => {

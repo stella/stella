@@ -3224,7 +3224,10 @@ export const createAuth = (
       }),
     },
   });
-  return Object.assign(isLocalDevOpen() ? instrumentQueryOrigins(auth) : auth, {
+  const instrumentedAuth = isLocalDevOpen()
+    ? instrumentQueryOrigins(auth)
+    : auth;
+  return Object.assign(instrumentedAuth, {
     organizationCreateEndpoint: organizationPlugin.endpoints.createOrganization,
     organizationUpdateEndpoint: organizationPlugin.endpoints.updateOrganization,
   });
