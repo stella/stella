@@ -368,7 +368,7 @@ pub(crate) fn record_decision(
       .update(&namespace, |record| {
         record.answer = Some(LastAnswer::Refused { reason });
       })
-      .map(drop)
+      .map(|_record| ())
   };
   match gates.access_at(DesktopFeature::ActivityTimeline, now) {
     FeatureAccess::Enabled => {
@@ -394,7 +394,7 @@ pub(crate) fn record_decision(
           };
           record.answer = Some(LastAnswer::Granted(current));
         })
-        .map(drop)
+        .map(|_record| ())
     }
     FeatureAccess::Off(OffReason::NotAvailable) => refused(StopReason::NotAvailable),
     FeatureAccess::Off(OffReason::ReconnectNeeded) => {
