@@ -124,3 +124,18 @@ test("still rejects a widened Record<string, V> annotation even when keyof typeo
     ]),
   ).toEqual([1]);
 });
+
+test("resolves keyof typeof exemptions by scope binding, not identifier name", async () => {
+  expect(
+    await lint([
+      "declare const key: string;",
+      "export const MAP = { a: '1' } as const satisfies Record<string, string>;",
+      "export const inner = () => {",
+      "  const MAP = { b: '2' } as const satisfies Record<string, string>;",
+      "  type InnerKey = keyof typeof MAP;",
+      "  return (k: InnerKey) => MAP[k];",
+      "};",
+      "export const read = MAP[key];",
+    ]),
+  ).toEqual([2]);
+});

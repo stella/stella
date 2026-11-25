@@ -33,13 +33,15 @@
 // scripts/design-lint-baseline.json, and each count may only fall.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
-import type { ESTree } from "@oxlint/plugins";
+import type { ESTree, Variable } from "@oxlint/plugins";
 
 import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 import {
   filenameForContext,
   getCalleeName,
   isAstNode,
+  isIdentifierReference,
+  resolveVariable,
   staticStringValue,
   unwrapExpression,
 } from "./utils.ts";
@@ -173,8 +175,8 @@ const typedLiteral = (
     : null;
 };
 
-/** If `node` is `keyof typeof <Ident>`, returns `<Ident>`. */
-const keyofTypeofTarget = (node: unknown): string | null => {
+/** If `node` is `keyof typeof <Ident>`, returns the `<Ident>` AST node. */
+const keyofTypeofTarget = (node: unknown): AstNode | null => {
   if (
     !isAstNode(node) ||
     node.type !== "TSTypeOperator" ||
@@ -189,12 +191,7 @@ const keyofTypeofTarget = (node: unknown): string | null => {
   if (!isAstNode(inner) || inner.type !== "TSTypeQuery") {
     return null;
   }
-  const exprName: unknown = inner.exprName;
-  return isAstNode(exprName) &&
-    exprName.type === "Identifier" &&
-    typeof exprName.name === "string"
-    ? exprName.name
-    : null;
+  return isIdentifierReference(inner.exprName) ? inner.exprName : null;
 };
 
 const isLiteralKey = (node: unknown): boolean => {
@@ -298,22 +295,25 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        let keyofTargets = new Set<string>();
-        let candidates: {
+        const keyofTargets = new Set<Variable>();
+        const candidates: {
           readonly node: ESTree.VariableDeclarator;
           readonly name: string;
           readonly viaAnnotation: boolean;
+          readonly variables: readonly Variable[];
         }[] = [];
 
         return {
           Program() {
-            keyofTargets = new Set<string>();
-            candidates = [];
+            keyofTargets.clear();
+            candidates.length = 0;
           },
           TSTypeOperator(node) {
             const target = keyofTypeofTarget(node);
-            if (target !== null) {
-              keyofTargets.add(target);
+            const variable =
+              target === null ? null : resolveVariable(context, target);
+            if (variable !== null) {
+              keyofTargets.add(variable);
             }
           },
           VariableDeclarator(node) {
@@ -328,11 +328,11 @@ export default eslintCompatPlugin({
               return;
             }
             const exported = isExportedDeclaration(node);
+            const declaredVariables =
+              context.sourceCode.getDeclaredVariables(node);
             let lookedUp = false;
             let exportedByName = false;
-            for (const variable of context.sourceCode.getDeclaredVariables(
-              node,
-            )) {
+            for (const variable of declaredVariables) {
               for (const reference of variable.references) {
                 const use = lookupUse(reference.identifier);
                 lookedUp ||= use === "lookup";
@@ -350,13 +350,17 @@ export default eslintCompatPlugin({
               node,
               name: match.name,
               viaAnnotation: match.viaAnnotation,
+              variables: declaredVariables,
             });
           },
           "Program:exit"() {
-            for (const { node, name, viaAnnotation } of candidates) {
+            for (const { node, name, viaAnnotation, variables } of candidates) {
               // Source-of-truth registry: `satisfies Record<string, V>` validates
               // values while preserving literal keys for `keyof typeof <MAP>`.
-              if (!viaAnnotation && keyofTargets.has(name)) {
+              if (
+                !viaAnnotation &&
+                variables.some((variable) => keyofTargets.has(variable))
+              ) {
                 continue;
               }
               // First-week rollout: only declarations on lines this change
