@@ -37,8 +37,8 @@ describe("Switch", () => {
       expect(markup).not.toContain("bg-primary");
       expect(markup).not.toContain("bg-background");
     }
-    expect(on).toContain("data-checked");
-    expect(off).toContain("data-unchecked");
+    expect(on).toContain('aria-checked="true"');
+    expect(off).toContain('aria-checked="false"');
   });
 
   test("keeps the switch mounted when disabled with a disabledReason", () => {
