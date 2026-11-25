@@ -172,6 +172,19 @@
     "evidenceUntitled": "Cím nélkül · {app}",
     "excludeApp": "{name} rögzítésének leállítása",
     "excludeAppConfirmation": "A(z) {name} rögzítésének leállítása. Törli az alkalmazás összes korábbi tevékenységét is? A törlés nem vonható vissza.",
+    "gap": "{duration} billentyűzet és egér nélkül",
+    "gapAfter": "{duration} billentyűzet és egér nélkül, előtte: {item}",
+    "gapDisplay": {
+      "locked": "A képernyő zárolva volt.",
+      "slept": "A kijelző vagy a számítógép alvó állapotban volt.",
+      "stayedOn": "A képernyő bekapcsolva maradt."
+    },
+    "gapEnd": {
+      "dayEnd": "A következő napon folytatódik.",
+      "input": "A billentyűzet vagy az egér újbóli használatával ért véget.",
+      "stop": "A rögzítés leállásával ért véget."
+    },
+    "gapNotCounted": "Nem számít rögzített időnek.",
     "granularity": "Rács",
     "hours": "{hours} ó",
     "incompatibleActivity": "Az alkalmazás ezen verziója nem tudja olvasni a mentett tevékenységet. A folytatáshoz frissítse az alkalmazást.",

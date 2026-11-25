@@ -172,6 +172,19 @@
     "evidenceUntitled": "Bez nosaukuma · {app}",
     "excludeApp": "Pārtraukt ierakstīt {name}",
     "excludeAppConfirmation": "Pārtraukt ierakstīt {name}. Vai dzēst arī visas šīs lietotnes iepriekšējās darbības? Dzēšanu nevar atsaukt.",
+    "gap": "{duration} bez tastatūras un peles",
+    "gapAfter": "{duration} bez tastatūras un peles, pirms tam: {item}",
+    "gapDisplay": {
+      "locked": "Ekrāns bija bloķēts.",
+      "slept": "Displejs vai dators bija miega režīmā.",
+      "stayedOn": "Ekrāns palika ieslēgts."
+    },
+    "gapEnd": {
+      "dayEnd": "Turpinās nākamajā dienā.",
+      "input": "Beidzās, kad atkal izmantoja tastatūru vai peli.",
+      "stop": "Beidzās, kad ierakstīšana apstājās."
+    },
+    "gapNotCounted": "Netiek ieskaitīts ierakstītajā laikā.",
     "granularity": "Režģis",
     "hours": "{hours} st.",
     "incompatibleActivity": "Šī lietotnes versija nevar nolasīt saglabāto darbību. Lai turpinātu, atjauniniet lietotni.",

@@ -172,6 +172,19 @@
     "evidenceUntitled": "Be pavadinimo · {app}",
     "excludeApp": "Nebeįrašyti {name}",
     "excludeAppConfirmation": "Nebeįrašyti {name}. Taip pat ištrinti visą ankstesnę šios programos veiklą? Ištrynimo atšaukti negalima.",
+    "gap": "{duration} be klaviatūros ir pelės",
+    "gapAfter": "{duration} be klaviatūros ir pelės, prieš tai: {item}",
+    "gapDisplay": {
+      "locked": "Ekranas buvo užrakintas.",
+      "slept": "Ekranas arba kompiuteris perėjo į miego režimą.",
+      "stayedOn": "Ekranas liko įjungtas."
+    },
+    "gapEnd": {
+      "dayEnd": "Tęsiasi kitą dieną.",
+      "input": "Baigėsi vėl panaudojus klaviatūrą ar pelę.",
+      "stop": "Baigėsi sustojus įrašymui."
+    },
+    "gapNotCounted": "Neįskaičiuojama į įrašytą laiką.",
     "granularity": "Tinklelis",
     "hours": "{hours} val.",
     "incompatibleActivity": "Ši programos versija negali perskaityti įrašytos veiklos. Norėdami tęsti, atnaujinkite programą.",

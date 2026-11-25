@@ -172,6 +172,19 @@
     "evidenceUntitled": "Sem título · {app}",
     "excludeApp": "Parar de registrar {name}",
     "excludeAppConfirmation": "Parar de registrar {name}. Excluir também todas as atividades anteriores deste aplicativo? A exclusão não pode ser desfeita.",
+    "gap": "{duration} sem teclado nem mouse",
+    "gapAfter": "{duration} sem teclado nem mouse depois de {item}",
+    "gapDisplay": {
+      "locked": "A tela estava bloqueada.",
+      "slept": "A tela ou o computador entrou em repouso.",
+      "stayedOn": "A tela ficou ligada."
+    },
+    "gapEnd": {
+      "dayEnd": "Continua no dia seguinte.",
+      "input": "Terminou quando o teclado ou o mouse voltaram a ser usados.",
+      "stop": "Terminou quando o registro parou."
+    },
+    "gapNotCounted": "Não conta como tempo registrado.",
     "granularity": "Grade",
     "hours": "{hours} h",
     "incompatibleActivity": "Esta versão do aplicativo não consegue ler a atividade salva. Atualize o aplicativo para continuar.",

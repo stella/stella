@@ -172,6 +172,19 @@
     "evidenceUntitled": "Ohne Titel · {app}",
     "excludeApp": "{name} nicht mehr aufzeichnen",
     "excludeAppConfirmation": "{name} nicht mehr aufzeichnen. Auch alle bisherigen Aktivitäten dieser App löschen? Das Löschen kann nicht rückgängig gemacht werden.",
+    "gap": "{duration} ohne Eingabe",
+    "gapAfter": "{duration} ohne Eingabe nach {item}",
+    "gapDisplay": {
+      "locked": "Der Bildschirm war gesperrt.",
+      "slept": "Der Bildschirm oder der Computer war im Ruhezustand.",
+      "stayedOn": "Der Bildschirm blieb an."
+    },
+    "gapEnd": {
+      "dayEnd": "Geht am nächsten Tag weiter.",
+      "input": "Endete mit der nächsten Eingabe.",
+      "stop": "Endete, als die Aufzeichnung stoppte."
+    },
+    "gapNotCounted": "Zählt nicht als aufgezeichnete Zeit.",
     "granularity": "Raster",
     "hours": "{hours} Std.",
     "incompatibleActivity": "Die gespeicherte Aktivität kann von dieser App-Version nicht gelesen werden. Aktualisieren Sie die App, um fortzufahren.",

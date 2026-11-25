@@ -48,8 +48,8 @@ objc2-avf-audio = { version = "0.3", default-features = false, features = [
   "AVAudioTypes",
   "std",
 ] }
-objc2-core-foundation = { version = "0.3", default-features = false, features = ["CFBase", "CFMachPort", "CFNumber", "CFPreferences", "CFRunLoop", "CFString", "std"] }
-objc2-core-graphics = { version = "0.3", default-features = false, features = ["CGEvent", "CGEventSource", "CGEventTypes", "CGRemoteOperation", "objc2", "std"] }
+objc2-core-foundation = { version = "0.3", default-features = false, features = ["CFBase", "CFDictionary", "CFMachPort", "CFNumber", "CFPreferences", "CFRunLoop", "CFString", "std"] }
+objc2-core-graphics = { version = "0.3", default-features = false, features = ["CGDirectDisplay", "CGDisplayConfiguration", "CGEvent", "CGEventSource", "CGEventTypes", "CGRemoteOperation", "CGSession", "objc2", "std"] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
   "NSBundle",
   "NSError",
@@ -80,6 +80,8 @@ windows-sys = { version = "0.61", features = [
   "Win32_System_Diagnostics_ToolHelp",
   "Win32_System_Pipes",
   "Win32_System_Power",
+  "Win32_System_StationsAndDesktops",
+  "Win32_System_SystemServices",
   "Win32_System_Threading",
   "Win32_UI_Input_KeyboardAndMouse",
   "Win32_UI_WindowsAndMessaging",

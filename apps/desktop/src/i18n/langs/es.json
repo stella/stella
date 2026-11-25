@@ -172,6 +172,19 @@
     "evidenceUntitled": "Sin título · {app}",
     "excludeApp": "Dejar de registrar {name}",
     "excludeAppConfirmation": "Dejar de registrar {name}. ¿Eliminar también toda la actividad anterior de esta aplicación? La eliminación no se puede deshacer.",
+    "gap": "{duration} sin teclado ni ratón",
+    "gapAfter": "{duration} sin teclado ni ratón tras {item}",
+    "gapDisplay": {
+      "locked": "La pantalla estaba bloqueada.",
+      "slept": "La pantalla o el ordenador entraron en reposo.",
+      "stayedOn": "La pantalla siguió encendida."
+    },
+    "gapEnd": {
+      "dayEnd": "Continúa al día siguiente.",
+      "input": "Terminó al volver a usar el teclado o el ratón.",
+      "stop": "Terminó al detenerse el registro."
+    },
+    "gapNotCounted": "No cuenta como tiempo registrado.",
     "granularity": "Cuadrícula",
     "hours": "{hours} h",
     "incompatibleActivity": "Esta versión de la aplicación no puede leer la actividad guardada. Actualice la aplicación para continuar.",

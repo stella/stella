@@ -64,6 +64,12 @@ import type {
   ActivityDaySnapshot,
 } from "./activity-types";
 import {
+  GAP_DISPLAY_KEYS,
+  GAP_END_KEYS,
+  unrecordedRanges,
+} from "./activity-unrecorded";
+import type { UnrecordedRange } from "./activity-unrecorded";
+import {
   BrowserTitlesNotice,
   OpenAccessibilitySettingsButton,
 } from "./ActivityCaptureDetails";
@@ -439,6 +445,7 @@ export const ActivityDayCalendar = ({
     useDayMatters({ snapshot, draftedEntries, nowMs });
   const suggestions = matchedSuggestions(day.groups, leftOut);
   const outages = outageRanges(snapshot.outages);
+  const unrecorded = unrecordedRanges(outages, snapshot.gaps, day.segments);
   const editingDisabledReason = getEditingDisabledReason(submission, t);
   // While Activity cannot record, its history is read-only.
   const editable =
@@ -580,7 +587,7 @@ export const ActivityDayCalendar = ({
   const columns = useCalendarColumns({
     phase: candidates.type === "loading" ? "pending" : "ready",
     segments: day.segments,
-    outages,
+    unrecorded,
     granularity: preferences.granularity,
     sourceAppVisuals: snapshot.sourceAppVisuals,
     rangeSelection: editable,
@@ -693,7 +700,7 @@ export const ActivityDayCalendar = ({
           // empty hours up to the day's edge.
           instants: [
             ...day.segments.flatMap(({ startMs, endMs }) => [startMs, endMs]),
-            ...outages.flatMap(({ startMs, endMs }) => [startMs, endMs]),
+            ...unrecorded.flatMap(({ startMs, endMs }) => [startMs, endMs]),
             ...(snapshot.date === snapshot.today ? [nowMs] : []),
             // A range set on its card stays in view wherever it is moved.
             ...rangeEdges(openCard),
@@ -868,8 +875,8 @@ type CalendarColumnsOptions = {
   /** `pending` while the matters that group the day are still read. */
   phase: "pending" | "ready";
   segments: readonly MatchedSegment[];
-  /** Time the member wanted recorded and Activity could not record. */
-  outages: readonly OutageRange[];
+  /** Time Activity could not record, and time with no input. */
+  unrecorded: readonly UnrecordedRange<MatchedSegment>[];
   granularity: DayCalendarGranularity;
   sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
   rangeSelection: boolean;
@@ -887,7 +894,7 @@ type CalendarColumnsOptions = {
 function useCalendarColumns({
   phase,
   segments,
-  outages,
+  unrecorded,
   granularity,
   sourceAppVisuals,
   rangeSelection,
@@ -922,6 +929,64 @@ function useCalendarColumns({
     ];
   }
   const titleOf = segmentTitles(segments);
+
+  /** Unrecorded time, hatched and neutral: a gap only says how long no
+   * input came and after what, and offers nothing. */
+  const unrecordedBlock = (
+    range: UnrecordedRange<MatchedSegment>,
+  ): DayCalendarBlock => {
+    const formatted = formatRange(range.startMs, range.endMs);
+    switch (range.type) {
+      case "outage": {
+        const reason = t(STOP_REASON_KEYS[range.reason]);
+        return {
+          accessibleLabel: t("unrecordedLabel", { range: formatted, reason }),
+          caption: formatted,
+          endMs: range.endMs,
+          id: `outage:${String(range.startMs)}:${range.reason}`,
+          kind: "unrecorded",
+          startMs: range.startMs,
+          title: <bdi>{t("unrecorded", { reason })}</bdi>,
+          tone: { type: "neutral" },
+        };
+      }
+      case "gap": {
+        const duration = durationLabel(range.endMs - range.startMs);
+        const item =
+          range.after === null
+            ? null
+            : (titleOf(range.after) ?? range.after.appName);
+        const title =
+          item === null
+            ? t("gap", { duration })
+            : t("gapAfter", { duration, item });
+        return {
+          accessibleLabel: `${title}, ${formatted}`,
+          caption: formatted,
+          endMs: range.endMs,
+          id: `gap:${String(range.startMs)}`,
+          kind: "unrecorded",
+          startMs: range.startMs,
+          title: <bdi>{title}</bdi>,
+          tone: { type: "neutral" },
+          tooltip: {
+            content: (
+              <span className="flex flex-col gap-1">
+                <span>{formatted}</span>
+                <span>{t(GAP_DISPLAY_KEYS[range.display])}</span>
+                <span>{t(GAP_END_KEYS[range.endedBy])}</span>
+                <span>{t("gapNotCounted")}</span>
+              </span>
+            ),
+            type: "text",
+          },
+        };
+      }
+      default:
+        range satisfies never;
+        return panic("Unhandled unrecorded range");
+    }
+  };
 
   const activity = activityBlocks(segments, granularity).map(
     (block): DayCalendarBlock => {
@@ -1016,19 +1081,8 @@ function useCalendarColumns({
     },
   );
 
-  for (const outage of outages) {
-    const range = formatRange(outage.startMs, outage.endMs);
-    const reason = t(STOP_REASON_KEYS[outage.reason]);
-    activity.push({
-      accessibleLabel: t("unrecordedLabel", { range, reason }),
-      caption: range,
-      endMs: outage.endMs,
-      id: `outage:${String(outage.startMs)}:${outage.reason}`,
-      kind: "unrecorded",
-      startMs: outage.startMs,
-      title: <bdi>{t("unrecorded", { reason })}</bdi>,
-      tone: { type: "neutral" },
-    });
+  for (const range of unrecorded) {
+    activity.push(unrecordedBlock(range));
   }
 
   const entries: DayCalendarBlock[] = draftedBlocks(

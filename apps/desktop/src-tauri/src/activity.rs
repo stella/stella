@@ -162,6 +162,94 @@ pub struct ActivitySegment {
   pub end: DateTime<Utc>,
 }
 
+macro_rules! define_gap_kinds {
+  (
+    $(#[$display_meta:meta])* $display:ident { $($(#[$dv_meta:meta])* $dv:ident),+ $(,)? }
+    $(#[$end_meta:meta])* $end:ident { $($(#[$ev_meta:meta])* $ev:ident),+ $(,)? }
+  ) => {
+    $(#[$display_meta])*
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub enum $display { $($(#[$dv_meta])* $dv),+ }
+
+    impl $display {
+      #[cfg(test)]
+      const ALL: &'static [Self] = &[$(Self::$dv),+];
+    }
+
+    $(#[$end_meta])*
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub enum $end { $($(#[$ev_meta])* $ev),+ }
+
+    impl $end {
+      #[cfg(test)]
+      const ALL: &'static [Self] = &[$(Self::$ev),+];
+    }
+  };
+}
+
+define_gap_kinds! {
+  /// What the screen did while no input came. A later variant wins: one
+  /// lock or sleep anywhere in the stretch names all of it.
+  GapDisplay {
+    StayedOn,
+    Locked,
+    /// The display or the whole computer slept.
+    Slept,
+  }
+  /// What ended a stretch with no input.
+  GapEnd {
+    /// Input came again, or a call started.
+    Input,
+    /// Recording stopped, paused, or the clock was set back: the stretch
+    /// ends at the last sample that saw it.
+    Stop,
+    /// The local day ended; the rest belongs to the next day.
+    DayEnd,
+  }
+}
+
+/// A stretch with no input between recorded activity, kept so the member
+/// can say in review what it was. It holds times and the screen's state
+/// only; it is never counted as recorded time. Kept when it lasted at least
+/// [`MIN_GAP`] and at most [`MAX_GAP`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityGap {
+  pub start: DateTime<Utc>,
+  pub end: DateTime<Utc>,
+  pub ended_by: GapEnd,
+  pub display: GapDisplay,
+}
+
+/// A shorter stretch is a pause the idle threshold already ignores.
+const MIN_GAP: chrono::Duration = chrono::Duration::minutes(5);
+/// A longer stretch is time away, not a pause in work worth asking about.
+const MAX_GAP: chrono::Duration = chrono::Duration::hours(4);
+
+impl ActivityGap {
+  fn kept(&self) -> bool {
+    let length = self.end - self.start;
+    (MIN_GAP..=MAX_GAP).contains(&length)
+  }
+}
+
+/// The screen now, as a gap's display names it.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn screen_display() -> GapDisplay {
+  match stella_desktop_macos::screen_state() {
+    stella_desktop_macos::ScreenState::On => GapDisplay::StayedOn,
+    stella_desktop_macos::ScreenState::Locked => GapDisplay::Locked,
+    stella_desktop_macos::ScreenState::DisplayAsleep => GapDisplay::Slept,
+  }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn screen_display() -> GapDisplay {
+  GapDisplay::StayedOn
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ActivityPersistenceStatus {
@@ -199,8 +287,9 @@ pub enum Observation {
     window_title: Option<String>,
     privacy: CapturedWindowPrivacy,
   },
-  /// No input for at least the idle threshold, for `idle` in total.
-  Idle { idle: Duration },
+  /// No input for at least the idle threshold, for `idle` in total, with
+  /// what the screen did meanwhile.
+  Idle { idle: Duration, display: GapDisplay },
   /// No attributable app, or one the user excluded.
   Unattributed,
 }
@@ -267,6 +356,14 @@ struct OpenSegment {
   idle_since: Option<DateTime<Utc>>,
   partition: DayPartition,
   privacy: CapturedWindowPrivacy,
+}
+
+/// A stretch with no input, while it lasts.
+struct OpenGap {
+  start: DateTime<Utc>,
+  last_seen: DateTime<Utc>,
+  display: GapDisplay,
+  partition: DayPartition,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -454,6 +551,8 @@ pub struct ActivityDaySnapshot {
   drafted_entries: Vec<ActivityDraftedEntry>,
   manual_assignments: Vec<ActivityManualAssignment>,
   pending_batch: Option<ActivityPendingBatch>,
+  /// Stretches of the day with no input between recorded activity.
+  gaps: Vec<ActivityGap>,
   /// Stretches of the day the member wanted recorded and Activity could not
   /// record.
   outages: ActivityDayOutages,
@@ -660,10 +759,14 @@ pub struct ActivityManager {
   settings: ActivitySettings,
   persistence: ActivityPersistence,
   open: Option<OpenSegment>,
+  open_gap: Option<OpenGap>,
   /// Days written in this process, loaded from disk before the first write
   /// so a flush never drops what an earlier run stored.
   days: BTreeMap<NaiveDate, Vec<ActivitySegment>>,
   dirty: BTreeSet<NaiveDate>,
+  /// Gaps of the days a gap closed on in this process, loaded like `days`.
+  gaps: BTreeMap<NaiveDate, Vec<ActivityGap>>,
+  dirty_gaps: BTreeSet<NaiveDate>,
   drafted_entries: BTreeMap<NaiveDate, Vec<ActivityDraftedEntry>>,
   manual_assignments: BTreeMap<NaiveDate, Vec<ActivityManualAssignment>>,
   pending_batches: BTreeMap<NaiveDate, ActivityPendingBatch>,
@@ -894,8 +997,11 @@ impl ActivityManager {
       settings: ActivitySettings::default(),
       persistence: ActivityPersistence::Initializing,
       open: None,
+      open_gap: None,
       days: BTreeMap::new(),
       dirty: BTreeSet::new(),
+      gaps: BTreeMap::new(),
+      dirty_gaps: BTreeSet::new(),
       drafted_entries: BTreeMap::new(),
       manual_assignments: BTreeMap::new(),
       pending_batches: BTreeMap::new(),
@@ -984,7 +1090,10 @@ impl ActivityManager {
     self.persistence = persistence;
     self.settings = settings;
     self.open = None;
+    self.open_gap = None;
     self.days.clear();
+    self.gaps.clear();
+    self.dirty_gaps.clear();
     self.drafted_entries.clear();
     self.manual_assignments.clear();
     self.pending_batches.clear();
@@ -1355,7 +1464,12 @@ impl ActivityManager {
           wall_elapsed.abs_diff(elapsed) > WALL_CLOCK_TOLERANCE
         })
       {
-        closed |= self.close_open_at_last_sample();
+        // Wall time passed without samples: the computer slept (the
+        // monotonic clock stops during sleep on macOS), as presence also
+        // concludes from such a jump. A clock set back ends the stretch.
+        let slept = wall_elapsed
+          .is_ok_and(|wall_elapsed| wall_elapsed + WALL_CLOCK_TOLERANCE >= elapsed);
+        closed |= self.sample_gap(slept);
       }
     }
     self.last_sample = Some((now, monotonic));
@@ -1394,6 +1508,7 @@ impl ActivityManager {
       }
       open.last_input = open.last_input.max(last_input);
     }
+    let input_returned = !matches!(observation, Observation::Idle { .. });
     // Day boundaries are pinned when opening; a changed zone cannot move an
     // already flushed prefix into another file.
     // Foreground attribution starts at this observation; input may precede
@@ -1410,13 +1525,42 @@ impl ActivityManager {
       }
       closed |= self.close_open(now.min(boundary));
     }
+    if let Some(gap) = self.open_gap.take_if(|gap| gap.partition != partition) {
+      let boundary = gap.partition.next_start;
+      let display = gap.display;
+      closed |= self.close_gap(gap, now.min(boundary), GapEnd::DayEnd);
+      // The stretch goes on in the new day.
+      if now >= boundary {
+        self.open_gap = Some(OpenGap {
+          start: boundary,
+          last_seen: now,
+          display,
+          partition: partition.clone(),
+        });
+      }
+    }
+    if input_returned && let Some(gap) = self.open_gap.take() {
+      closed |= self.close_gap(gap, last_input, GapEnd::Input);
+    }
     match observation {
-      Observation::Idle { idle } => {
+      Observation::Idle { idle, display } => {
         let idle_since = chrono::Duration::from_std(idle)
           .ok()
           .and_then(|idle| now.checked_sub_signed(idle))
           .unwrap_or(now);
         closed |= self.close_open(idle_since);
+        if let Some(gap) = self.open_gap.as_mut() {
+          gap.last_seen = now;
+          gap.display = gap.display.max(display);
+        } else {
+          let start = self.gap_start(idle_since, &partition);
+          self.open_gap = Some(OpenGap {
+            start,
+            last_seen: now,
+            display,
+            partition,
+          });
+        }
       }
       Observation::Unattributed => closed |= self.close_open(now),
       Observation::Call {
@@ -1538,6 +1682,114 @@ impl ActivityManager {
     closed
   }
 
+  /// Samples stopped for a while. Recorded activity ends at its last
+  /// sample. After a sleep the stretch without input goes on, starting
+  /// where input last came when activity was open; a clock set back ends it
+  /// at its last sample.
+  fn sample_gap(&mut self, slept: bool) -> bool {
+    let mut closed = false;
+    if slept {
+      match self.open_gap.as_mut() {
+        Some(gap) => gap.display = GapDisplay::Slept,
+        None => {
+          self.open_gap = self.open.as_ref().map(|open| OpenGap {
+            start: self.gap_start(open.last_input.min(open.last_seen), &open.partition),
+            last_seen: open.last_seen,
+            display: GapDisplay::Slept,
+            partition: open.partition.clone(),
+          });
+        }
+      }
+    } else if let Some(gap) = self.open_gap.take() {
+      let last_seen = gap.last_seen;
+      closed |= self.close_gap(gap, last_seen, GapEnd::Stop);
+    }
+    closed | self.close_open_at_last_sample()
+  }
+
+  /// Where a stretch without input seen at `idle_since` starts: never
+  /// before recorded time (a call records time without input) or its day.
+  fn gap_start(
+    &self,
+    idle_since: DateTime<Utc>,
+    partition: &DayPartition,
+  ) -> DateTime<Utc> {
+    let recorded_until = self
+      .days
+      .get(&partition.date)
+      .and_then(|day| day.last())
+      .map_or(idle_since, |segment| segment.end);
+    let day_start = local_day_span(partition.date).0;
+    idle_since.max(day_start).max(recorded_until)
+  }
+
+  /// Closes a stretch without input at `end`, keeping it when its length
+  /// is in the kept range. Returns whether it was kept.
+  fn close_gap(&mut self, gap: OpenGap, end: DateTime<Utc>, ended_by: GapEnd) -> bool {
+    let closed = ActivityGap {
+      start: gap.start,
+      end: end.min(gap.partition.next_start).max(gap.start),
+      ended_by,
+      display: gap.display,
+    };
+    if !closed.kept() {
+      return false;
+    }
+    let date = gap.partition.date;
+    let Some(gaps) = self.gaps_mut(date) else {
+      return false;
+    };
+    // A restart or a clock set back cannot overlap a kept gap.
+    if gaps
+      .iter()
+      .any(|kept| kept.start < closed.end && closed.start < kept.end)
+    {
+      return false;
+    }
+    let position = gaps.partition_point(|kept| kept.start < closed.start);
+    gaps.insert(position, closed);
+    self.dirty_gaps.insert(date);
+    true
+  }
+
+  /// The cached gaps of `date`, loading the file first. `None` when the
+  /// file exists but cannot be read: writing would overwrite it.
+  fn gaps_mut(&mut self, date: NaiveDate) -> Option<&mut Vec<ActivityGap>> {
+    if !self.gaps.contains_key(&date) {
+      let loaded = match &self.persistence {
+        ActivityPersistence::Encrypted(store) => match store.load_gaps(date) {
+          Ok(gaps) => gaps,
+          Err(_) => {
+            tracing::warn!("activity day is unreadable; a gap is not added to it");
+            return None;
+          }
+        },
+        _ => Vec::new(),
+      };
+      self.gaps.insert(date, loaded);
+    }
+    self.gaps.get_mut(&date)
+  }
+
+  /// The day's kept gaps; `Err` when its file cannot be read.
+  fn day_gaps(&self, date: NaiveDate) -> Result<Vec<ActivityGap>, String> {
+    if let Some(gaps) = self.gaps.get(&date) {
+      return Ok(gaps.clone());
+    }
+    match &self.persistence {
+      ActivityPersistence::Encrypted(store) => store.load_gaps(date),
+      ActivityPersistence::DeletionOnly(_)
+      | ActivityPersistence::KeyMissing(_)
+      | ActivityPersistence::Unreadable(_)
+      | ActivityPersistence::Incompatible(_) => {
+        Err("activity history is unreadable".into())
+      }
+      ActivityPersistence::Initializing | ActivityPersistence::MemoryOnly => {
+        Ok(Vec::new())
+      }
+    }
+  }
+
   fn close_open_at_last_sample(&mut self) -> bool {
     match self.open.as_ref().map(|open| open.last_seen) {
       Some(last_seen) => self.close_open(last_seen),
@@ -1640,6 +1892,7 @@ impl ActivityManager {
     let open_pieces = self.open_pieces();
     let ActivityPersistence::Encrypted(store) = &self.persistence else {
       self.dirty.clear();
+      self.dirty_gaps.clear();
       return Ok(());
     };
     let mut dates = self.dirty.clone();
@@ -1667,6 +1920,19 @@ impl ActivityManager {
     for date in written {
       self.dirty.remove(&date);
     }
+    for date in self.dirty_gaps.clone() {
+      let Some(gaps) = self.gaps.get(&date) else {
+        continue;
+      };
+      match store.save_gaps(date, gaps) {
+        Ok(()) => {
+          self.dirty_gaps.remove(&date);
+        }
+        Err(error) => {
+          failure.get_or_insert(error);
+        }
+      }
+    }
     failure.map_or(Ok(()), Err)
   }
 
@@ -1680,6 +1946,10 @@ impl ActivityManager {
   pub fn stop(&mut self, now: DateTime<Utc>) -> Result<(), String> {
     self.observation_generation = self.observation_generation.wrapping_add(1);
     self.close_open_at_last_sample();
+    if let Some(gap) = self.open_gap.take() {
+      let last_seen = gap.last_seen;
+      self.close_gap(gap, last_seen, GapEnd::Stop);
+    }
     self.flush(now)
   }
 
@@ -1717,6 +1987,12 @@ impl ActivityManager {
       .retain(|date, _| *date >= earliest || pending_dates.contains(date));
     self
       .dirty
+      .retain(|date| *date >= earliest || pending_dates.contains(date));
+    self
+      .gaps
+      .retain(|date, _| *date >= earliest || pending_dates.contains(date));
+    self
+      .dirty_gaps
       .retain(|date| *date >= earliest || pending_dates.contains(date));
     self
       .drafted_entries
@@ -1772,7 +2048,16 @@ impl ActivityManager {
     {
       self.open = None;
     }
+    if self
+      .open_gap
+      .as_ref()
+      .is_some_and(|gap| gap.partition.date == date)
+    {
+      self.open_gap = None;
+    }
     self.days.remove(&date);
+    self.gaps.remove(&date);
+    self.dirty_gaps.remove(&date);
     self.drafted_entries.remove(&date);
     self.manual_assignments.remove(&date);
     self.dirty.remove(&date);
@@ -1953,7 +2238,10 @@ impl ActivityManager {
     }
     self.observation_generation = self.observation_generation.wrapping_add(1);
     self.open = None;
+    self.open_gap = None;
     self.days.clear();
+    self.gaps.clear();
+    self.dirty_gaps.clear();
     self.drafted_entries.clear();
     self.manual_assignments.clear();
     self.dirty.clear();
@@ -2431,6 +2719,10 @@ impl ActivityManager {
         Ok(entries) => (entries, false),
         Err(_) => (Vec::new(), true),
       };
+    let (gaps, gaps_unreadable) = match self.day_gaps(date) {
+      Ok(gaps) => (gaps, false),
+      Err(_) => (Vec::new(), true),
+    };
     let bounds = self.history_bounds(date, today);
     let deletion_status = current_day_failure.unwrap_or(bounds.deletion_status);
     ActivityDaySnapshot {
@@ -2455,7 +2747,9 @@ impl ActivityManager {
       unreadable: unreadable
         || draft_unreadable
         || assignments_unreadable
-        || pending_unreadable,
+        || pending_unreadable
+        || gaps_unreadable,
+      gaps,
       manual_assignments,
       pending_batch,
       drafted_entries,
@@ -2943,7 +3237,10 @@ fn observe_now(
   settings: &ActivitySettings,
 ) -> Observation {
   if idle >= IDLE_THRESHOLD {
-    return Observation::Idle { idle };
+    return Observation::Idle {
+      idle,
+      display: screen_display(),
+    };
   }
   let Some(foreground) = foreground_app::current(app) else {
     return Observation::Unattributed;
@@ -3030,7 +3327,9 @@ fn sample(app: &AppHandle, state: &ActivityAppState, calls: &mut CallDetector) {
       return;
     };
     if !capture_permitted(app, &manager) || !manager.is_recording() {
-      if manager.open.is_some() && manager.stop(Utc::now()).is_err() {
+      if (manager.open.is_some() || manager.open_gap.is_some())
+        && manager.stop(Utc::now()).is_err()
+      {
         tracing::warn!("activity timeline could not be written");
       }
       calls.reset();
@@ -3386,7 +3685,10 @@ mod tests {
         observation: if active {
           active_observation()
         } else {
-          Observation::Idle { idle }
+          Observation::Idle {
+            idle,
+            display: GapDisplay::StayedOn,
+          }
         },
         partition: partition_in(&Local, self.wall),
       });
@@ -4893,6 +5195,7 @@ mod tests {
       at(405),
       Observation::Idle {
         idle: Duration::from_secs(305),
+        display: GapDisplay::StayedOn,
       },
     );
 
@@ -4922,6 +5225,7 @@ mod tests {
       at(1),
       Observation::Idle {
         idle: Duration::from_secs(600),
+        display: GapDisplay::StayedOn,
       },
     );
     assert!(segments(&manager).is_empty());
@@ -6540,7 +6844,25 @@ mod tests {
       contract["stopReasons"],
       serde_json::Value::Object(stop_reasons)
     );
+    assert_eq!(contract["gapDisplays"], name_set(GapDisplay::ALL));
+    assert_eq!(contract["gapEnds"], name_set(GapEnd::ALL));
     assert_eq!(contract["changedEvent"], CHANGED_EVENT);
+  }
+
+  /// The serialized names of `values`, as the contract's key sets list them.
+  fn name_set<T: Serialize>(values: &[T]) -> serde_json::Value {
+    serde_json::Value::Object(
+      values
+        .iter()
+        .map(|value| {
+          let serde_json::Value::String(name) = serde_json::to_value(value).unwrap()
+          else {
+            panic!("a contract value must serialize as a string");
+          };
+          (name, serde_json::Value::Bool(true))
+        })
+        .collect(),
+    )
   }
 
   /// The local stella AI approval is gone: drafting consent lives on the
@@ -6617,6 +6939,7 @@ mod tests {
       at(2470),
       Observation::Idle {
         idle: Duration::from_secs(2410),
+        display: GapDisplay::StayedOn,
       },
     );
     manager.stop(at(2470)).unwrap();
@@ -6721,5 +7044,420 @@ mod tests {
     assert!(manager.settings.ignore_calls);
     manager.set_detect_calls(true, at(75)).unwrap();
     assert!(!manager.settings.ignore_calls);
+  }
+
+  /// One sampler iteration at `now`, `idle` after the last input, with the
+  /// monotonic clock following the wall clock unless the test moves it.
+  fn sample_gap_at(
+    manager: &mut ActivityManager,
+    now: DateTime<Utc>,
+    monotonic: Duration,
+    idle: Duration,
+    observation: Observation,
+  ) {
+    manager.observe_at(now, monotonic, idle, observation, partition_in(&Local, now));
+  }
+
+  /// Drives samples every five seconds from `from` to `to` (seconds after
+  /// `at(0)`), input last seen at `last_input`; idle samples report
+  /// `display`.
+  fn idle_span(
+    manager: &mut ActivityManager,
+    span: (i64, i64),
+    last_input: i64,
+    display: impl Fn(i64) -> GapDisplay,
+  ) {
+    for second in (span.0..=span.1).step_by(5) {
+      let idle = Duration::from_secs(u64::try_from(second - last_input).unwrap());
+      let observation = if idle >= IDLE_THRESHOLD {
+        Observation::Idle {
+          idle,
+          display: display(second),
+        }
+      } else {
+        active("word")
+      };
+      sample_gap_at(manager, at(second), monotonic_at(second), idle, observation);
+    }
+  }
+
+  fn monotonic_at(second: i64) -> Duration {
+    Duration::from_secs(u64::try_from(100_000 + second).unwrap())
+  }
+
+  fn active_at(manager: &mut ActivityManager, second: i64) {
+    sample_gap_at(
+      manager,
+      at(second),
+      monotonic_at(second),
+      Duration::ZERO,
+      active("word"),
+    );
+  }
+
+  fn gaps(manager: &ActivityManager) -> Vec<(i64, i64, GapEnd, GapDisplay)> {
+    manager
+      .gaps
+      .values()
+      .flatten()
+      .map(|gap| {
+        (
+          (gap.start - at(0)).num_seconds(),
+          (gap.end - at(0)).num_seconds(),
+          gap.ended_by,
+          gap.display,
+        )
+      })
+      .collect()
+  }
+
+  #[test]
+  fn a_gap_is_kept_from_five_minutes_to_four_hours() {
+    assert_eq!(MIN_GAP.to_std().unwrap(), IDLE_THRESHOLD);
+    let gap = |seconds: i64| ActivityGap {
+      start: at(0),
+      end: at(seconds),
+      ended_by: GapEnd::Input,
+      display: GapDisplay::StayedOn,
+    };
+    assert!(!gap(4 * 60 + 59).kept());
+    assert!(gap(5 * 60).kept());
+    assert!(gap(4 * 60 * 60).kept());
+    assert!(!gap(4 * 60 * 60 + 1).kept());
+  }
+
+  #[test]
+  fn an_idle_stretch_is_kept_as_a_gap_between_recorded_activity() {
+    let mut manager = recording_manager();
+    for second in (0..=100).step_by(5) {
+      active_at(&mut manager, second);
+    }
+    idle_span(&mut manager, (105, 1200), 100, |_| GapDisplay::StayedOn);
+    active_at(&mut manager, 1205);
+    active_at(&mut manager, 1210);
+    manager.stop(at(1210)).unwrap();
+
+    assert_eq!(
+      segments(&manager),
+      [("word".into(), 0, 100), ("word".into(), 1205, 1210)]
+    );
+    assert_eq!(
+      gaps(&manager),
+      [(100, 1205, GapEnd::Input, GapDisplay::StayedOn)]
+    );
+  }
+
+  #[test]
+  fn a_sleep_shorter_than_five_minutes_leaves_no_gap() {
+    for (back_after, kept) in [(299, false), (300, true)] {
+      let mut manager = recording_manager();
+      for second in (0..=100).step_by(5) {
+        active_at(&mut manager, second);
+      }
+      // macOS stops the monotonic clock while asleep.
+      sample_gap_at(
+        &mut manager,
+        at(100 + back_after),
+        monotonic_at(105),
+        Duration::ZERO,
+        active("word"),
+      );
+      let expected = if kept {
+        vec![(100, 100 + back_after, GapEnd::Input, GapDisplay::Slept)]
+      } else {
+        Vec::new()
+      };
+      assert_eq!(gaps(&manager), expected, "back after {back_after} s");
+    }
+  }
+
+  #[test]
+  fn a_gap_over_four_hours_is_not_kept() {
+    for (away, kept) in [(4 * 60 * 60, true), (4 * 60 * 60 + 5, false)] {
+      let mut manager = recording_manager();
+      active_at(&mut manager, 0);
+      active_at(&mut manager, 5);
+      idle_span(&mut manager, (10, 5 + away - 5), 5, |_| {
+        GapDisplay::StayedOn
+      });
+      active_at(&mut manager, 5 + away);
+      assert_eq!(gaps(&manager).len(), usize::from(kept), "away {away} s");
+    }
+  }
+
+  #[test]
+  fn a_lock_or_a_sleep_names_the_whole_gap() {
+    let mut manager = recording_manager();
+    active_at(&mut manager, 0);
+    active_at(&mut manager, 5);
+    idle_span(&mut manager, (10, 900), 5, |second| {
+      if (600..700).contains(&second) {
+        GapDisplay::Locked
+      } else {
+        GapDisplay::StayedOn
+      }
+    });
+    active_at(&mut manager, 905);
+    // Locked for a while, then the display slept for an hour.
+    idle_span(&mut manager, (910, 1500), 905, |second| {
+      if second < 1300 {
+        GapDisplay::Locked
+      } else {
+        GapDisplay::StayedOn
+      }
+    });
+    sample_gap_at(
+      &mut manager,
+      at(5100),
+      monotonic_at(1505),
+      Duration::from_secs(5100 - 905),
+      Observation::Idle {
+        idle: Duration::from_secs(5100 - 905),
+        display: GapDisplay::StayedOn,
+      },
+    );
+    sample_gap_at(
+      &mut manager,
+      at(5105),
+      monotonic_at(1510),
+      Duration::ZERO,
+      active("word"),
+    );
+
+    assert_eq!(
+      gaps(&manager),
+      [
+        (5, 905, GapEnd::Input, GapDisplay::Locked),
+        (905, 5105, GapEnd::Input, GapDisplay::Slept),
+      ]
+    );
+  }
+
+  #[test]
+  fn a_stop_or_a_clock_set_back_ends_a_gap_at_its_last_sample() {
+    let mut manager = recording_manager();
+    active_at(&mut manager, 0);
+    active_at(&mut manager, 5);
+    idle_span(&mut manager, (10, 900), 5, |_| GapDisplay::StayedOn);
+    manager.stop(at(905)).unwrap();
+    assert_eq!(
+      gaps(&manager),
+      [(5, 900, GapEnd::Stop, GapDisplay::StayedOn)]
+    );
+
+    let mut manager = recording_manager();
+    active_at(&mut manager, 0);
+    active_at(&mut manager, 5);
+    idle_span(&mut manager, (10, 900), 5, |_| GapDisplay::StayedOn);
+    sample_gap_at(
+      &mut manager,
+      at(400),
+      monotonic_at(905),
+      Duration::ZERO,
+      active("word"),
+    );
+    assert_eq!(
+      gaps(&manager),
+      [(5, 900, GapEnd::Stop, GapDisplay::StayedOn)]
+    );
+  }
+
+  #[test]
+  fn a_call_without_input_is_never_inside_a_gap() {
+    let mut manager = recording_manager();
+    for second in (0..=60).step_by(5) {
+      active_at(&mut manager, second);
+    }
+    for second in (65..=1200).step_by(5) {
+      sample_gap_at(
+        &mut manager,
+        at(second),
+        monotonic_at(second),
+        Duration::ZERO,
+        call("teams", None),
+      );
+    }
+    // Input last came at 60 s, before the call.
+    idle_span(&mut manager, (1205, 1600), 60, |_| GapDisplay::StayedOn);
+    active_at(&mut manager, 1605);
+
+    assert_eq!(
+      gaps(&manager),
+      [(1200, 1605, GapEnd::Input, GapDisplay::StayedOn)]
+    );
+  }
+
+  #[test]
+  fn a_gap_across_midnight_is_split_between_the_days() {
+    let date = NaiveDate::from_ymd_opt(2026, 3, 10).unwrap();
+    let midnight = local_midnight(date.succ_opt().unwrap());
+    let offset = (midnight - at(0)).num_seconds();
+    let mut manager = recording_manager();
+    active_at(&mut manager, offset - 1200);
+    active_at(&mut manager, offset - 1195);
+    idle_span(
+      &mut manager,
+      (offset - 1190, offset + 600),
+      offset - 1195,
+      |_| GapDisplay::StayedOn,
+    );
+    active_at(&mut manager, offset + 605);
+
+    assert_eq!(
+      gaps(&manager),
+      [
+        (offset - 1195, offset, GapEnd::DayEnd, GapDisplay::StayedOn),
+        (offset, offset + 605, GapEnd::Input, GapDisplay::StayedOn),
+      ]
+    );
+    assert_eq!(
+      manager.gaps.keys().copied().collect::<Vec<_>>(),
+      [date, date.succ_opt().unwrap()]
+    );
+  }
+
+  #[test]
+  fn gaps_are_written_with_the_day_and_old_days_read_without_them() {
+    let root =
+      std::env::temp_dir().join(format!("stella-gaps-{}", uuid::Uuid::new_v4()));
+    let store = ActivityStore::new([7; 32], root.clone());
+    let date = local_date(at(0));
+    store
+      .save_day(
+        date,
+        &[ActivitySegment {
+          app_identifier: "word".into(),
+          app_name: "Word".into(),
+          window_title: None,
+          document: None,
+          matter_id: None,
+          call: false,
+          start: at(0),
+          end: at(5),
+        }],
+      )
+      .unwrap();
+    // A file written before gaps existed reads as having none.
+    assert!(store.load_gaps(date).unwrap().is_empty());
+
+    let mut manager = ActivityManager::new();
+    manager.install(
+      ActivityPersistence::Encrypted(store.clone()),
+      ActivitySettings {
+        recording_status: ActivityRecordingStatus::Recording,
+        ..ActivitySettings::default()
+      },
+      at(5),
+    );
+    active_at(&mut manager, 10);
+    active_at(&mut manager, 15);
+    idle_span(&mut manager, (20, 700), 15, |_| GapDisplay::Locked);
+    active_at(&mut manager, 705);
+    manager.stop(at(710)).unwrap();
+
+    let saved = store.load_gaps(date).unwrap();
+    assert_eq!(
+      saved,
+      [ActivityGap {
+        start: at(15),
+        end: at(705),
+        ended_by: GapEnd::Input,
+        display: GapDisplay::Locked,
+      }]
+    );
+    assert_eq!(store.load_day(date).unwrap().len(), 2);
+    std::fs::remove_dir_all(root).unwrap();
+  }
+
+  /// Whatever the samples, recorded time and gaps never overlap, every gap
+  /// is within the kept range and inside its day, and gaps never overlap
+  /// each other: what the member may attest is never recorded time.
+  #[test]
+  fn recorded_time_and_gaps_never_overlap() {
+    for seed in 0..64_u64 {
+      let mut random = SplitMix(seed);
+      let mut manager = recording_manager();
+      let mut wall = 0_i64;
+      let mut monotonic = 0_i64;
+      let mut last_input = 0_i64;
+      for _ in 0..400 {
+        match random.below(20) {
+          // Sleep: wall time passes, the monotonic clock barely moves.
+          0 => {
+            wall += i64::try_from(60 * (1 + random.below(300))).unwrap();
+            monotonic += 5;
+          }
+          // A clock set back.
+          1 => {
+            wall -= i64::try_from(1 + random.below(900)).unwrap();
+            monotonic += 5;
+          }
+          // Paused, then resumed at the next sample.
+          2 => {
+            manager.stop(at(wall)).unwrap();
+            continue;
+          }
+          _ => {
+            wall += 5;
+            monotonic += 5;
+          }
+        }
+        let observation = match random.below(10) {
+          0..=3 => {
+            last_input = wall;
+            active(if random.below(2) == 0 { "word" } else { "mail" })
+          }
+          4 => {
+            last_input = wall;
+            call("teams", None)
+          }
+          _ => {
+            let idle = wall - last_input;
+            if idle >= 300 {
+              Observation::Idle {
+                idle: Duration::from_secs(u64::try_from(idle).unwrap()),
+                display: GapDisplay::ALL[usize::try_from(random.below(3)).unwrap()],
+              }
+            } else {
+              active("word")
+            }
+          }
+        };
+        let idle =
+          Duration::from_secs(u64::try_from((wall - last_input).max(0)).unwrap());
+        let idle = match observation {
+          Observation::Call { .. } => Duration::ZERO,
+          _ => idle,
+        };
+        sample_gap_at(
+          &mut manager,
+          at(wall),
+          Duration::from_secs(u64::try_from(100_000 + monotonic).unwrap()),
+          idle,
+          observation,
+        );
+      }
+      manager.stop(at(wall)).unwrap();
+
+      for (date, day_gaps) in &manager.gaps {
+        let (day_start, day_end) = local_day_span(*date);
+        for pair in day_gaps.windows(2) {
+          assert!(pair[0].end <= pair[1].start, "seed {seed}: gaps overlap");
+        }
+        for gap in day_gaps {
+          assert!(gap.kept(), "seed {seed}: a gap outside the kept range");
+          assert!(
+            gap.start >= day_start && gap.end <= day_end,
+            "seed {seed}: a gap outside its day"
+          );
+          for segment in manager.days.get(date).into_iter().flatten() {
+            assert!(
+              segment.end <= gap.start || segment.start >= gap.end,
+              "seed {seed}: recorded time inside a gap"
+            );
+          }
+        }
+      }
+    }
   }
 }

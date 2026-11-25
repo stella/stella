@@ -88,6 +88,21 @@ type ActivityOutage = {
 export type ActivityDayOutages =
   { status: "read"; outages: ActivityOutage[] } | { status: "unreadable" };
 
+/** What the screen did while no input came. */
+export type ActivityGapDisplay = keyof typeof activityContract.gapDisplays;
+/** What ended a stretch with no input. */
+export type ActivityGapEnd = keyof typeof activityContract.gapEnds;
+
+/** A stretch with no input between recorded activity: times and the
+ * screen's state only, never counted as recorded time. */
+export type ActivityGap = {
+  /** RFC 3339 instants. */
+  start: string;
+  end: string;
+  endedBy: ActivityGapEnd;
+  display: ActivityGapDisplay;
+};
+
 /** The detail-capture choices both activity views show. */
 export type ActivityCaptureSettings = {
   captureDetails: boolean;
@@ -146,6 +161,7 @@ export type ActivityDaySnapshot = {
   sourceAppVisuals: ClipboardSourceAppVisual[];
   today: string;
   unreadable: boolean;
+  gaps: ActivityGap[];
   outages: ActivityDayOutages;
   /** Set while Activity cannot record; the history is then read-only. */
   stoppedReason: ActivityStopReason | null;
@@ -359,14 +375,34 @@ const isDayOutages = (value: unknown): value is ActivityDayOutages => {
   }
 };
 
+const isGap = (value: unknown): value is ActivityGap => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const { endedBy, display } = value;
+  return (
+    isRange(value) &&
+    typeof endedBy === "string" &&
+    Object.hasOwn(activityContract.gapEnds, endedBy) &&
+    typeof display === "string" &&
+    Object.hasOwn(activityContract.gapDisplays, display)
+  );
+};
+
 export const isActivityDaySnapshot = (
   value: unknown,
 ): value is ActivityDaySnapshot => {
   if (!isRecord(value)) {
     return false;
   }
-  const { unreadable, recordingStatus, segments, outages, stoppedReason } =
-    value;
+  const {
+    unreadable,
+    recordingStatus,
+    segments,
+    gaps,
+    outages,
+    stoppedReason,
+  } = value;
   return (
     isSettingsState(value) &&
     typeof unreadable === "boolean" &&
@@ -374,6 +410,8 @@ export const isActivityDaySnapshot = (
     isOneOf(ACTIVITY_RECORDING_STATUSES, recordingStatus) &&
     Array.isArray(segments) &&
     segments.every(isSegment) &&
+    Array.isArray(gaps) &&
+    gaps.every(isGap) &&
     isDayOutages(outages) &&
     (stoppedReason === null || isActivityStopReason(stoppedReason))
   );

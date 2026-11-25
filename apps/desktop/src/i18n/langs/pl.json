@@ -172,6 +172,19 @@
     "evidenceUntitled": "Bez tytułu · {app}",
     "excludeApp": "Przestań zapisywać {name}",
     "excludeAppConfirmation": "Przestać rejestrować {name}. Usunąć też całą wcześniejszą aktywność tej aplikacji? Usunięcia nie można cofnąć.",
+    "gap": "{duration} bez klawiatury i myszy",
+    "gapAfter": "{duration} bez klawiatury i myszy, wcześniej: {item}",
+    "gapDisplay": {
+      "locked": "Ekran był zablokowany.",
+      "slept": "Ekran lub komputer był uśpiony.",
+      "stayedOn": "Ekran pozostał włączony."
+    },
+    "gapEnd": {
+      "dayEnd": "Odcinek trwa dalej następnego dnia.",
+      "input": "Odcinek zakończył się ponownym użyciem klawiatury lub myszy.",
+      "stop": "Odcinek zakończył się zatrzymaniem rejestrowania."
+    },
+    "gapNotCounted": "Nie liczy się jako zarejestrowany czas.",
     "granularity": "Siatka",
     "hours": "{hours} godz.",
     "incompatibleActivity": "Ta wersja aplikacji nie może odczytać zapisanej aktywności. Zaktualizuj aplikację, aby kontynuować.",

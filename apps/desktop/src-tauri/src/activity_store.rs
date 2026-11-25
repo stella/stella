@@ -19,7 +19,7 @@ use std::{
 };
 
 use crate::activity::{
-  ActivityDeletionError, ActivityDeletionRecovery, ActivityDraftedEntry,
+  ActivityDeletionError, ActivityDeletionRecovery, ActivityDraftedEntry, ActivityGap,
   ActivityManualAssignment, ActivityOtherHistoryRecovery, ActivityPendingBatch,
   ActivitySegment, ActivitySettings, format_date, parse_date,
 };
@@ -43,6 +43,9 @@ struct ActivityDayFile {
   manual_assignments: Vec<ActivityManualAssignment>,
   #[serde(default)]
   pending_batch: Option<ActivityPendingBatch>,
+  /// Files written before gaps were kept have none.
+  #[serde(default, skip_serializing_if = "Vec::is_empty")]
+  gaps: Vec<ActivityGap>,
   #[serde(flatten)]
   extra: BTreeMap<String, serde_json::Value>,
 }
@@ -317,6 +320,7 @@ impl ActivityStore {
           drafted_entries: Vec::new(),
           manual_assignments: Vec::new(),
           pending_batch: None,
+          gaps: Vec::new(),
           extra: BTreeMap::new(),
         });
     let saved_pending = day.pending_batch.clone();
@@ -362,6 +366,7 @@ impl ActivityStore {
       && day.drafted_entries.is_empty()
       && day.manual_assignments.is_empty()
       && day.pending_batch.is_none()
+      && day.gaps.is_empty()
       && day.extra.is_empty()
     {
       return remove_file_if_present(self.day_file(date).path());
@@ -378,6 +383,23 @@ impl ActivityStore {
   ) -> Result<(), String> {
     self.mutate_day(date, PendingMutation::Preserve, |day| {
       day.segments = segments.to_vec();
+    })
+  }
+
+  pub fn load_gaps(&self, date: NaiveDate) -> Result<Vec<ActivityGap>, String> {
+    Ok(
+      self
+        .day_file(date)
+        .load::<ActivityDayFile>()?
+        .map(|day| day.gaps)
+        .unwrap_or_default(),
+    )
+  }
+
+  /// Gap rewrites preserve the exact pending batch.
+  pub fn save_gaps(&self, date: NaiveDate, gaps: &[ActivityGap]) -> Result<(), String> {
+    self.mutate_day(date, PendingMutation::Preserve, |day| {
+      day.gaps = gaps.to_vec();
     })
   }
 
@@ -1146,6 +1168,33 @@ mod tests {
     );
     store.delete_all_days().unwrap();
     assert_eq!(store.load_matter_learning_checked().unwrap(), None);
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn a_day_written_before_gaps_reads_with_none() {
+    let day: ActivityDayFile =
+      serde_json::from_value(serde_json::json!({"segments": []})).unwrap();
+    assert!(day.gaps.is_empty());
+  }
+
+  #[test]
+  fn segment_and_gap_rewrites_keep_each_other() {
+    let (store, root) = store();
+    let recorded = segment("word");
+    let gap = crate::activity::ActivityGap {
+      start: recorded.end,
+      end: recorded.end + chrono::Duration::minutes(20),
+      ended_by: crate::activity::GapEnd::Input,
+      display: crate::activity::GapDisplay::Locked,
+    };
+    store.save_day(date(1), &[recorded.clone()]).unwrap();
+    store.save_gaps(date(1), &[gap]).unwrap();
+    store.save_day(date(1), &[recorded.clone()]).unwrap();
+    assert_eq!(store.load_gaps(date(1)).unwrap(), [gap]);
+    store.save_gaps(date(1), &[]).unwrap();
+    assert_eq!(store.load_day(date(1)).unwrap(), [recorded]);
+    assert!(store.load_gaps(date(1)).unwrap().is_empty());
     ActivityStore::remove(&root).unwrap();
   }
 

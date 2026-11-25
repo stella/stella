@@ -172,6 +172,19 @@
     "evidenceUntitled": "Bez názvu · {app}",
     "excludeApp": "Přestat zaznamenávat {name}",
     "excludeAppConfirmation": "Přestat zaznamenávat {name}. Smazat také veškerou dosavadní aktivitu této aplikace? Smazání nelze vrátit zpět.",
+    "gap": "{duration} bez klávesnice a myši",
+    "gapAfter": "{duration} bez klávesnice a myši, předtím: {item}",
+    "gapDisplay": {
+      "locked": "Obrazovka byla zamčená.",
+      "slept": "Displej nebo počítač byl v režimu spánku.",
+      "stayedOn": "Obrazovka zůstala zapnutá."
+    },
+    "gapEnd": {
+      "dayEnd": "Úsek pokračuje následující den.",
+      "input": "Úsek skončil dalším použitím klávesnice nebo myši.",
+      "stop": "Úsek skončil zastavením záznamu."
+    },
+    "gapNotCounted": "Nezapočítává se do zaznamenaného času.",
     "granularity": "Mřížka",
     "hours": "{hours} h",
     "incompatibleActivity": "Tato verze aplikace nedokáže přečíst uloženou aktivitu. Pro pokračování aplikaci aktualizujte.",
