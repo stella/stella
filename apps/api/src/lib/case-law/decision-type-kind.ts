@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds the competition authority's printed `příkaz` to the facet table, which no parser reads.
 // parser-output-unchanged: adds the Supreme Court collection's opinion types to the facet table, which no parser reads.
 // parser-output-unchanged: adds the Brazilian decision types to the facet table, which no parser reads.
 import { panic } from "better-result";
@@ -62,6 +63,10 @@ export const STATED_DECISION_TYPE_KINDS = {
   "rozsudek.": "judgment",
   "trestní příkaz": "penal_order",
   "tr.příkaz": "penal_order",
+  // An administrative authority's order (ÚOHS prints it as its title): a
+  // decision imposing a duty without a hearing, § 150 of the Czech
+  // Administrative Procedure Code (zákon č. 500/2004 Sb.).
+  příkaz: "decision",
   opatření: "court_direction",
   "rozhodnutí ministerstva spravedlnosti": "ministry_of_justice_decision",
   "příkaz ministerstva spravedlnosti": "ministry_of_justice_decision",
