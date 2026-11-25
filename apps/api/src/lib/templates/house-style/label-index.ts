@@ -841,7 +841,9 @@ const parallelColumns = (
   const repeated = [...columnsByLabel.values()].filter(
     (columns) => columns.size > 1,
   ).length;
-  return repeated >= PARALLEL_LABELS_MIN ? columnByBlockId : new Map();
+  return repeated >= PARALLEL_LABELS_MIN
+    ? columnByBlockId
+    : new Map<string, number>();
 };
 
 /** Reads every paragraph's label and nests the entries. */
