@@ -2847,7 +2847,10 @@ const GENERATOR_DECLARATIONS = [
   {
     id: "harness-releases",
     outputKind: "committed",
-    outputs: ["apps/desktop/src-tauri/harness/releases.gen.json"],
+    outputs: [
+      "apps/desktop/src-tauri/harness/releases.gen.json",
+      "apps/desktop/src-tauri/harness/ci-clis.gen.json",
+    ],
     inputs: [
       "apps/desktop/src-tauri/harness/pins.json",
       "scripts/generate-harness-releases.ts",
