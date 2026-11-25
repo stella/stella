@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { cellCitationViewId, correspondenceViewId } from "./view-layout";
+import {
+  cellCitationColumnHidden,
+  cellCitationViewId,
+  correspondenceViewId,
+} from "./view-layout";
 
 const view = (id: string, type: string) => ({ id, layout: { type } });
 
@@ -52,5 +56,14 @@ describe("the view a cited review cell opens in", () => {
       "a",
     );
     expect(cellCitationViewId([tree], "cap", undefined)).toBeNull();
+  });
+
+  test("says when the table it opened in hides the column", () => {
+    const hiding = [table("a", ["cap"])];
+    const viewId = cellCitationViewId(hiding, "cap", undefined);
+    expect(viewId).toBe("a");
+    expect(cellCitationColumnHidden(hiding, "a", "cap")).toBe(true);
+    expect(cellCitationColumnHidden(views, "b", "cap")).toBe(false);
+    expect(cellCitationColumnHidden(views, "missing", "cap")).toBe(false);
   });
 });

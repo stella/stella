@@ -254,6 +254,7 @@
     },
     "cancelQueuedMessage": "Cancelar mensaje en cola",
     "caseLawGreeting": "Pregunta sobre esta decisión; el texto completo está disponible aquí.",
+    "cellCitationColumnHidden": "Todas las tablas ocultan esta columna. Muéstrala para ver la celda.",
     "cellCitationUnavailable": "Esta celda ya no está disponible.",
     "chatAbout": "Insertar en chat de IA",
     "choosePromptImprovementStrategy": "Opciones para mejorar el prompt",

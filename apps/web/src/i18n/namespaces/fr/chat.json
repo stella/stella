@@ -254,6 +254,7 @@
     },
     "cancelQueuedMessage": "Annuler le message en file d’attente",
     "caseLawGreeting": "Posez vos questions sur cette décision ; son texte intégral est disponible ici.",
+    "cellCitationColumnHidden": "Tous les tableaux masquent cette colonne. Affichez-la pour voir la cellule.",
     "cellCitationUnavailable": "Cette cellule n'est plus disponible.",
     "chatAbout": "Insérer dans la conversation IA",
     "choosePromptImprovementStrategy": "Options d’amélioration du prompt",

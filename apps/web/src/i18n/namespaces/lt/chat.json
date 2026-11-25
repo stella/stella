@@ -254,6 +254,7 @@
     },
     "cancelQueuedMessage": "Atšaukti eilėje esančią žinutę",
     "caseLawGreeting": "Klauskite apie šį sprendimą; visas tekstas pasiekiamas čia.",
+    "cellCitationColumnHidden": "Visose lentelėse šis stulpelis paslėptas. Parodykite jį, kad matytumėte langelį.",
     "cellCitationUnavailable": "Šis langelis nebepasiekiamas.",
     "chatAbout": "Įterpti į DI pokalbį",
     "choosePromptImprovementStrategy": "Užklausos tobulinimo parinktys",

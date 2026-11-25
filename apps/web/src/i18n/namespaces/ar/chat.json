@@ -254,6 +254,7 @@
     },
     "cancelQueuedMessage": "إلغاء الرسالة المُدرجة في قائمة الانتظار",
     "caseLawGreeting": "اسأل عن هذا القرار؛ نصّه الكامل متاح هنا.",
+    "cellCitationColumnHidden": "كل الجداول تُخفي هذا العمود. أظهِره لرؤية الخلية.",
     "cellCitationUnavailable": "لم تعد هذه الخلية متاحة.",
     "chatAbout": "تحدّث عن هذا",
     "choosePromptImprovementStrategy": "خيارات تحسين الطلب",

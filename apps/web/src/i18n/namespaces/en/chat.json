@@ -254,6 +254,7 @@
     },
     "cancelQueuedMessage": "Cancel queued message",
     "caseLawGreeting": "Ask about this decision; its full text is available here.",
+    "cellCitationColumnHidden": "Every table here hides that column. Show the column to see the cell.",
     "cellCitationUnavailable": "That cell is no longer available.",
     "chatAbout": "Chat about this",
     "choosePromptImprovementStrategy": "Prompt improvement options",

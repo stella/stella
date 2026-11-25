@@ -16,7 +16,10 @@ import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { justificationsOptions } from "@/lib/workspaces/queries/workspace";
 import { getCurrentWorkspaceView } from "@/lib/workspaces/use-workspace-view-params";
-import { cellCitationViewId } from "@/lib/workspaces/view-layout";
+import {
+  cellCitationColumnHidden,
+  cellCitationViewId,
+} from "@/lib/workspaces/view-layout";
 
 type OpenCellCitationOptions = {
   navigate: ReturnType<typeof useNavigate>;
@@ -94,6 +97,12 @@ export const openCellCitation = async ({
         to: "/workspaces/$workspaceId/$viewId",
         params: { workspaceId, viewId },
       });
+      if (open !== latestOpen) {
+        return;
+      }
+      if (cellCitationColumnHidden(views, viewId, propertyId)) {
+        notifyUserProblem(t("chat.cellCitationColumnHidden"));
+      }
       const { cell, file } = fields;
       if (file?.content.type !== "file") {
         return;

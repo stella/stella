@@ -254,6 +254,7 @@
     },
     "cancelQueuedMessage": "Sorba állított üzenet visszavonása",
     "caseLawGreeting": "Kérdezzen erről a határozatról; a teljes szöveg itt elérhető.",
+    "cellCitationColumnHidden": "Minden táblázat elrejti ezt az oszlopot. Jelenítse meg a cella megtekintéséhez.",
     "cellCitationUnavailable": "Ez a cella már nem érhető el.",
     "chatAbout": "Beszúrás az AI-csevegésbe",
     "choosePromptImprovementStrategy": "Promptjavítási lehetőségek",

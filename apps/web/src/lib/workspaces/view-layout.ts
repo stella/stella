@@ -96,6 +96,20 @@ export const cellCitationViewId = (
   );
 };
 
+/** Whether the view a citation opened in hides the cited column, as every
+ * table does when `cellCitationViewId` falls back to any table. */
+export const cellCitationColumnHidden = (
+  views: readonly {
+    id: string;
+    layout: { hiddenProperties: readonly string[] };
+  }[],
+  viewId: string,
+  propertyId: string,
+): boolean =>
+  views
+    .find((view) => view.id === viewId)
+    ?.layout.hiddenProperties.includes(propertyId) === true;
+
 /**
  * Apply a partial change to a view layout.
  *

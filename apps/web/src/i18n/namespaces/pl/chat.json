@@ -254,6 +254,7 @@
     },
     "cancelQueuedMessage": "Anuluj wiadomość w kolejce",
     "caseLawGreeting": "Zapytaj mnie o to orzeczenie; mam dostęp do pełnej treści.",
+    "cellCitationColumnHidden": "Wszystkie tabele ukrywają tę kolumnę. Pokaż ją, aby zobaczyć komórkę.",
     "cellCitationUnavailable": "Ta komórka nie jest już dostępna.",
     "chatAbout": "Omów na czacie",
     "choosePromptImprovementStrategy": "Opcje ulepszania promptu",
