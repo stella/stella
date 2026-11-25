@@ -1,0 +1,657 @@
+// The source document's own numbering, read into an index a cross-reference
+// can be resolved against: which block is article XI, which is its paragraph
+// 2, which is letter d) under that. Automatic list labels and labels typed at
+// the start of a paragraph are read alike, because contracts mix both.
+
+import { panic } from "better-result";
+
+import {
+  countedOrdinal,
+  parseLabelShape,
+} from "@/api/lib/house-style/designators";
+import type {
+  DesignatorNumeral,
+  LabelShape,
+} from "@/api/lib/house-style/designators";
+import type {
+  DocxBlock,
+  DocxBlockManifest,
+} from "@/api/lib/house-style/folio-contract";
+
+export type LabelLevel =
+  "article" | "clause" | "letter" | "roman" | "annex" | "recital";
+
+export type LabelEntry = {
+  blockId: string;
+  /** Position in `manifest.blocks`. */
+  position: number;
+  level: LabelLevel;
+  origin: "auto" | "manual";
+  shape: LabelShape;
+  /** Length of a typed label and the blanks after it at the start of the
+   *  block's text; 0 for an automatic label. */
+  manualLength: number;
+  /** The designator folded to lower case, for letters, romans and annexes. */
+  core: string;
+  /** An article's or an annex's counted ordinal; a clause's last component. */
+  ordinal: number | null;
+  /** The article this entry sits in; its own block for an article. */
+  articleBlockId: string | null;
+  /** That article's ordinal, also known from a dotted label (`5.1`) when no
+   *  article heading was recognised. */
+  articleOrdinal: number | null;
+  /** A clause's number within its article: `5.1.2` is `[1, 2]`. Empty for
+   *  other levels. */
+  clausePath: number[];
+  parentBlockId: string | null;
+  /** The annex heading this entry sits under; null in the main body. */
+  annexBlockId: string | null;
+  /** An annex entry that is a line of the list of annexes, not a heading. */
+  listed: boolean;
+  /** An article or annex heading's title; from the next block when the
+   *  heading is split over two paragraphs. */
+  title: string;
+  titleBlockId: string | null;
+};
+
+export type BlockContext = {
+  articleBlockId: string | null;
+  clauseBlockId: string | null;
+  /** The innermost letter or roman item the block sits in. */
+  itemBlockId: string | null;
+  annexBlockId: string | null;
+};
+
+export type LabelIndex = {
+  entries: readonly LabelEntry[];
+  entryByBlockId: ReadonlyMap<string, LabelEntry>;
+  contextByBlockId: ReadonlyMap<string, BlockContext>;
+  /** The document heads its own articles with `§`, as German contracts do. */
+  usesSectionSign: boolean;
+  /** Paragraph blocks of a table of contents; they repeat every heading. */
+  contentsBlockIds: ReadonlySet<string>;
+};
+
+const HEADING_TITLE_MAX = 160;
+const BLANK = /^[ \t\u00A0]*/u;
+const CONTENTS_STYLE =
+  /^(?:toc|obsah|verzeichnis|inhaltsverzeichnis|table of contents)[ \u00A0]?\d/iu;
+/** A leader tab and a page number: a contents line typed or frozen. */
+const CONTENTS_LINE = /\t\d{1,4}[ \u00A0]*$/u;
+const HEADING_STYLE = /heading|nadpis|überschrift|title|titul|titel/iu;
+const SENTENCE_END = /[.;:,][ \u00A0]*$/u;
+/** A typed keyword label followed by these words is a sentence about the
+ *  provision (`Článek 5 této smlouvy se mění`), not its heading. */
+const DEICTIC_START =
+  /^(?:této|tohoto|těchto|smlouvy|of\b|hereof|dieses|dieser|des\b|der\b)/iu;
+const ANNEX_LIST_INTRO =
+  /(?:příloh|annex|schedule|appendi|exhibit|anlage|anhang|anhänge)[^.]{0,80}:[ \u00A0]*$/iu;
+
+/** Whether the block is a line of the source's table of contents. */
+export const isContentsBlock = ({
+  styleName,
+  text,
+}: Pick<DocxBlock, "styleName" | "text">): boolean =>
+  (styleName !== null && CONTENTS_STYLE.test(styleName)) ||
+  CONTENTS_LINE.test(text);
+
+const isHeadingStyled = ({
+  outlineLevel,
+  styleName,
+}: Pick<DocxBlock, "outlineLevel" | "styleName">): boolean =>
+  outlineLevel !== null ||
+  (styleName !== null && HEADING_STYLE.test(styleName));
+
+const isTitleText = (text: string): boolean => {
+  const trimmed = text.trim();
+  return trimmed.length <= HEADING_TITLE_MAX && !SENTENCE_END.test(trimmed);
+};
+
+type RawLabel = {
+  origin: "auto" | "manual";
+  shape: LabelShape;
+  manualLength: number;
+  /** The block's text after the label. */
+  remainder: string;
+};
+
+const hasDesignator = (label: string): boolean => /[\p{L}\p{N}]/u.test(label);
+
+const readAutoLabel = (block: DocxBlock, label: string): RawLabel | null => {
+  const trimmed = label.trim();
+  if (!hasDesignator(trimmed)) {
+    return null;
+  }
+  const shape = parseLabelShape(trimmed);
+  if (shape === null || shape.length !== trimmed.length) {
+    return null;
+  }
+  return { origin: "auto", shape, manualLength: 0, remainder: block.text };
+};
+
+/** A typed label is taken only when it is set off the way a label is; a
+ *  sentence may open with a number (`10 dnů`, `1. ledna`). */
+const isTypedLabel = (shape: LabelShape, after: string): boolean => {
+  if (shape.keyword !== null) {
+    return /^(?:$|[\s:–—-])/u.test(after);
+  }
+  const blank = BLANK.exec(after)?.[0] ?? "";
+  if (blank === "") {
+    return false;
+  }
+  const next = after.slice(blank.length);
+  if (next === "") {
+    return false;
+  }
+  if (shape.numeral === "decimal") {
+    const dotted = (shape.path?.length ?? 0) > 1;
+    const bracketed = shape.close !== "";
+    return (
+      dotted ||
+      bracketed ||
+      blank.includes("\t") ||
+      (shape.period && !/^\p{Ll}/u.test(next))
+    );
+  }
+  if (shape.numeral === "upperRoman" || shape.numeral === "upperAmbiguous") {
+    return shape.period || shape.close !== "";
+  }
+  if (shape.numeral === "upperLetter") {
+    return shape.close !== "" || (shape.period && blank.includes("\t"));
+  }
+  return shape.close !== "";
+};
+
+const readManualLabel = (block: DocxBlock): RawLabel | null => {
+  const lead = BLANK.exec(block.text)?.[0].length ?? 0;
+  const body = block.text.slice(lead);
+  const shape = parseLabelShape(body);
+  if (shape === null) {
+    return null;
+  }
+  const after = body.slice(shape.length);
+  if (!isTypedLabel(shape, after)) {
+    return null;
+  }
+  const blank = BLANK.exec(after)?.[0].length ?? 0;
+  return {
+    origin: "manual",
+    shape,
+    manualLength: lead + shape.length + blank,
+    remainder: after.slice(blank),
+  };
+};
+
+const readLabel = (block: DocxBlock): RawLabel | null => {
+  if (block.kind !== "paragraph" || isContentsBlock(block)) {
+    return null;
+  }
+  return block.label === null
+    ? readManualLabel(block)
+    : readAutoLabel(block, block.label);
+};
+
+/** A heading states a title or nothing; a sentence that opens with a
+ *  provision's name runs on. */
+const isHeadingRemainder = (remainder: string): boolean => {
+  const title = remainder.replace(/^[\s:–—-]+/u, "");
+  return isTitleText(title) && !DEICTIC_START.test(title);
+};
+
+const titleOf = (remainder: string): string =>
+  remainder.replace(/^[\s:–—.-]+/u, "").trim();
+
+type NumeralFamily = "roman" | "letter";
+
+const familyOf = (numeral: DesignatorNumeral): NumeralFamily | null => {
+  switch (numeral) {
+    case "upperRoman":
+    case "lowerRoman":
+      return "roman";
+    case "upperLetter":
+    case "lowerLetter":
+      return "letter";
+    case "decimal":
+    case "upperAmbiguous":
+    case "lowerAmbiguous":
+      return null;
+    default: {
+      numeral satisfies never;
+      return panic("Unhandled numeral");
+    }
+  }
+};
+
+const isAmbiguous = (numeral: DesignatorNumeral): boolean =>
+  numeral === "upperAmbiguous" || numeral === "lowerAmbiguous";
+
+type ListMemory = { core: string; family: NumeralFamily };
+
+/** `i` after `h` is a letter, `v` after `iv` is a numeral, and a list that
+ *  opens with `i` counts in numerals. */
+const ambiguousFamily = (
+  previous: ListMemory | undefined,
+  core: string,
+): NumeralFamily => {
+  const followsLetter =
+    previous?.family === "letter" &&
+    previous.core.length === 1 &&
+    (previous.core.codePointAt(0) ?? 0) + 1 === core.codePointAt(0);
+  if (followsLetter) {
+    return "letter";
+  }
+  return previous?.family === "roman" || core === "i" ? "roman" : "letter";
+};
+
+/** Decides the single characters that are both a letter and a roman numeral
+ *  by the list they stand in. Null for a decimal label. */
+const resolveFamilies = (
+  blocks: readonly DocxBlock[],
+  raws: readonly (RawLabel | null)[],
+): (NumeralFamily | null)[] => {
+  const previousByList = new Map<string, ListMemory>();
+  return raws.map((raw, position) => {
+    if (raw === null) {
+      return null;
+    }
+    const { numeral, open, close } = raw.shape;
+    const known = familyOf(numeral);
+    if (known === null && !isAmbiguous(numeral)) {
+      return null;
+    }
+    const numbering = blocks[position]?.numbering ?? null;
+    const listKey =
+      numbering === null
+        ? `typed:${numeral.startsWith("upper") ? "upper" : "lower"}:${open}${close}`
+        : `auto:${String(numbering.numId)}:${String(numbering.ilvl)}`;
+    const core = raw.shape.core.toLowerCase();
+    const family = known ?? ambiguousFamily(previousByList.get(listKey), core);
+    previousByList.set(listKey, { core, family });
+    return family;
+  });
+};
+
+/** One block of the walk: its place, and its label when it has one. */
+type Row = {
+  block: DocxBlock;
+  position: number;
+  raw: RawLabel | null;
+  family: NumeralFamily | null;
+};
+
+type LabelledRow = Row & { raw: RawLabel };
+
+type Scheme = {
+  /** Articles carry a keyword or a roman numeral of their own. */
+  namedArticles: boolean;
+  /** Clauses carry dotted numbers, so a bare `5.` heads article 5. */
+  dotted: boolean;
+};
+
+type Walk = {
+  rows: readonly Row[];
+  scheme: Scheme;
+  article: LabelEntry | null;
+  clauses: LabelEntry[];
+  letter: LabelEntry | null;
+  roman: LabelEntry | null;
+  annex: LabelEntry | null;
+  sawArticle: boolean;
+  usesSectionSign: boolean;
+};
+
+const isLabelled = (row: Row): row is LabelledRow => row.raw !== null;
+
+const isUpperCase = ({ shape }: RawLabel): boolean =>
+  shape.core === shape.core.toUpperCase();
+
+const isNamedArticle = ({ block, raw, family }: LabelledRow): boolean => {
+  const { keyword } = raw.shape;
+  if (keyword === "article" || keyword === "sectionSign") {
+    return raw.origin === "auto" || isHeadingRemainder(raw.remainder);
+  }
+  const counted = family === "roman" && isUpperCase(raw) && keyword === null;
+  if (!counted || !raw.shape.period) {
+    return false;
+  }
+  return raw.origin === "auto"
+    ? isHeadingStyled(block) || isTitleText(block.text)
+    : isHeadingRemainder(raw.remainder);
+};
+
+const samePath = (left: readonly number[], right: readonly number[]) =>
+  left.length === right.length &&
+  left.every((value, index) => value === right[index]);
+
+const nextTitleBlock = (
+  rows: readonly Row[],
+  position: number,
+): DocxBlock | null => {
+  const next = rows[position + 1];
+  if (
+    next === undefined ||
+    next.raw !== null ||
+    next.block.kind !== "paragraph" ||
+    next.block.label !== null ||
+    next.block.text.trim() === "" ||
+    !isTitleText(next.block.text) ||
+    isContentsBlock(next.block)
+  ) {
+    return null;
+  }
+  return next.block;
+};
+
+const previousText = (rows: readonly Row[], position: number): string => {
+  for (let index = position - 1; index >= 0; index -= 1) {
+    const text = rows[index]?.block.text ?? "";
+    if (text.trim() !== "") {
+      return text;
+    }
+  }
+  return "";
+};
+
+const isAnnexRow = (row: Row | undefined): row is LabelledRow =>
+  row !== undefined &&
+  isLabelled(row) &&
+  row.raw.shape.keyword === "annex" &&
+  (row.raw.origin === "auto" || isHeadingRemainder(row.raw.remainder));
+
+/** Lines of the list of annexes stand together or under a sentence that
+ *  announces them; a heading stands alone. */
+const isListedAnnex = (rows: readonly Row[], position: number): boolean =>
+  isAnnexRow(rows[position - 1]) ||
+  isAnnexRow(rows[position + 1]) ||
+  ANNEX_LIST_INTRO.test(previousText(rows, position));
+
+type EntryBase = Pick<
+  LabelEntry,
+  | "blockId"
+  | "position"
+  | "origin"
+  | "shape"
+  | "manualLength"
+  | "core"
+  | "annexBlockId"
+  | "listed"
+  | "title"
+  | "titleBlockId"
+>;
+
+const baseEntry = (
+  walk: Walk,
+  { block, position, raw }: LabelledRow,
+): EntryBase => ({
+  blockId: block.id,
+  position,
+  origin: raw.origin,
+  shape: raw.shape,
+  manualLength: raw.manualLength,
+  core: raw.shape.core.toLowerCase(),
+  annexBlockId: walk.annex?.blockId ?? null,
+  listed: false,
+  title: "",
+  titleBlockId: null,
+});
+
+const headingTitle = (
+  rows: readonly Row[],
+  { position, raw }: LabelledRow,
+): Pick<LabelEntry, "title" | "titleBlockId"> => {
+  const own = titleOf(raw.remainder);
+  if (own !== "") {
+    return { title: own, titleBlockId: null };
+  }
+  const next = nextTitleBlock(rows, position);
+  return next === null
+    ? { title: "", titleBlockId: null }
+    : { title: next.text.trim(), titleBlockId: next.id };
+};
+
+const closeProvisions = (walk: Walk): void => {
+  walk.clauses = [];
+  walk.letter = null;
+  walk.roman = null;
+};
+
+const openArticle = (
+  walk: Walk,
+  row: LabelledRow,
+  ordinal: number | null,
+): LabelEntry => {
+  const entry: LabelEntry = {
+    ...baseEntry(walk, row),
+    ...headingTitle(walk.rows, row),
+    level: "article",
+    ordinal,
+    articleBlockId: row.block.id,
+    articleOrdinal: ordinal,
+    clausePath: [],
+    parentBlockId: null,
+  };
+  walk.article = entry;
+  closeProvisions(walk);
+  walk.sawArticle = true;
+  walk.usesSectionSign ||= row.raw.shape.keyword === "sectionSign";
+  return entry;
+};
+
+type ClausePlace = {
+  /** The clause's number within its article. */
+  path: number[];
+  /** The article a dotted label names; null for a label that names none. */
+  articleOrdinal: number | null;
+};
+
+const openClause = (
+  walk: Walk,
+  row: LabelledRow,
+  { path, articleOrdinal }: ClausePlace,
+): LabelEntry => {
+  // A dotted label names its article; an article heading that was not
+  // recognised must not lend the previous article's block.
+  const article =
+    walk.article !== null &&
+    (articleOrdinal === null || walk.article.ordinal === articleOrdinal)
+      ? walk.article
+      : null;
+  walk.article = article;
+  const ordinal = article?.ordinal ?? articleOrdinal;
+  walk.clauses = walk.clauses.filter(
+    (open) =>
+      open.clausePath.length < path.length &&
+      open.articleOrdinal === ordinal &&
+      samePath(open.clausePath, path.slice(0, open.clausePath.length)),
+  );
+  const entry: LabelEntry = {
+    ...baseEntry(walk, row),
+    level: "clause",
+    ordinal: path.at(-1) ?? null,
+    articleBlockId: article?.blockId ?? null,
+    articleOrdinal: ordinal,
+    clausePath: path,
+    parentBlockId: walk.clauses.at(-1)?.blockId ?? article?.blockId ?? null,
+  };
+  walk.clauses.push(entry);
+  walk.letter = null;
+  walk.roman = null;
+  return entry;
+};
+
+const openItem = (
+  walk: Walk,
+  row: LabelledRow,
+  level: "letter" | "roman",
+): LabelEntry => {
+  const clause = walk.clauses.at(-1) ?? null;
+  const parent =
+    level === "roman"
+      ? (walk.letter ?? clause ?? walk.article)
+      : (clause ?? walk.article);
+  const entry: LabelEntry = {
+    ...baseEntry(walk, row),
+    level,
+    ordinal: null,
+    articleBlockId: walk.article?.blockId ?? null,
+    articleOrdinal: walk.article?.ordinal ?? clause?.articleOrdinal ?? null,
+    clausePath: [],
+    parentBlockId: parent?.blockId ?? null,
+  };
+  if (level === "letter") {
+    walk.letter = entry;
+    walk.roman = null;
+  } else {
+    walk.roman = entry;
+  }
+  return entry;
+};
+
+const openAnnex = (walk: Walk, row: LabelledRow): LabelEntry => {
+  const listed = isListedAnnex(walk.rows, row.position);
+  const entry: LabelEntry = {
+    ...baseEntry(walk, row),
+    ...headingTitle(walk.rows, row),
+    level: "annex",
+    ordinal: countedOrdinal(row.raw.shape.core),
+    articleBlockId: null,
+    articleOrdinal: null,
+    clausePath: [],
+    parentBlockId: null,
+    annexBlockId: null,
+    listed,
+  };
+  // A heading opens the annex's own numbering; a line of the list does not.
+  if (!listed) {
+    walk.annex = entry;
+    walk.article = null;
+    closeProvisions(walk);
+  }
+  return entry;
+};
+
+const openNumbered = (
+  walk: Walk,
+  row: LabelledRow,
+  path: readonly number[],
+): LabelEntry | null => {
+  const { shape } = row.raw;
+  const [first, ...rest] = path;
+  if (first === undefined) {
+    return null;
+  }
+  if (rest.length === 0) {
+    const headsArticle =
+      shape.close === "" &&
+      !walk.scheme.namedArticles &&
+      (walk.scheme.dotted || isHeadingStyled(row.block));
+    return headsArticle
+      ? openArticle(walk, row, first)
+      : openClause(walk, row, { path: [first], articleOrdinal: null });
+  }
+  // Under a named article whose clauses are labelled `1.`, `2.`, the label
+  // `1.1` is the first sub-clause of clause 1, not a clause of article 1.
+  const outer = walk.clauses.at(0);
+  const relative =
+    walk.article !== null &&
+    walk.scheme.namedArticles &&
+    outer?.shape.path?.length === 1 &&
+    outer.clausePath.at(0) === first;
+  return relative
+    ? openClause(walk, row, { path: [...path], articleOrdinal: null })
+    : openClause(walk, row, { path: rest, articleOrdinal: first });
+};
+
+const classify = (walk: Walk, row: LabelledRow): LabelEntry | null => {
+  const { shape } = row.raw;
+  if (shape.keyword === "annex") {
+    return isAnnexRow(row) ? openAnnex(walk, row) : null;
+  }
+  if (isNamedArticle(row)) {
+    return openArticle(walk, row, countedOrdinal(shape.core));
+  }
+  if (shape.keyword !== null) {
+    return null;
+  }
+  if (shape.path !== null) {
+    return openNumbered(walk, row, shape.path);
+  }
+  if (row.family === null || (row.family === "roman" && isUpperCase(row.raw))) {
+    return null;
+  }
+  // Capital letters in front of the first article are recitals.
+  if (
+    row.family === "letter" &&
+    isUpperCase(row.raw) &&
+    !walk.sawArticle &&
+    walk.annex === null
+  ) {
+    return {
+      ...baseEntry(walk, row),
+      level: "recital",
+      ordinal: null,
+      articleBlockId: null,
+      articleOrdinal: null,
+      clausePath: [],
+      parentBlockId: null,
+    };
+  }
+  return openItem(walk, row, row.family);
+};
+
+/** Reads every paragraph's label and nests the entries. */
+export const buildLabelIndex = ({
+  blocks,
+}: Pick<DocxBlockManifest, "blocks">): LabelIndex => {
+  const raws = blocks.map(readLabel);
+  const families = resolveFamilies(blocks, raws);
+  const rows = blocks.map((block, position): Row => ({
+    block,
+    position,
+    raw: raws[position] ?? null,
+    family: families[position] ?? null,
+  }));
+  const labelled = rows.filter(isLabelled);
+  const walk: Walk = {
+    rows,
+    scheme: {
+      namedArticles: labelled.some(isNamedArticle),
+      dotted: labelled.some(({ raw }) => (raw.shape.path?.length ?? 0) > 1),
+    },
+    article: null,
+    clauses: [],
+    letter: null,
+    roman: null,
+    annex: null,
+    sawArticle: false,
+    usesSectionSign: false,
+  };
+
+  const entries: LabelEntry[] = [];
+  const contextByBlockId = new Map<string, BlockContext>();
+  const contentsBlockIds = new Set<string>();
+  for (const row of rows) {
+    const { block } = row;
+    if (block.kind === "paragraph" && isContentsBlock(block)) {
+      contentsBlockIds.add(block.id);
+    }
+    const entry = isLabelled(row) ? classify(walk, row) : null;
+    if (entry !== null) {
+      entries.push(entry);
+    }
+    contextByBlockId.set(block.id, {
+      articleBlockId: walk.article?.blockId ?? null,
+      clauseBlockId: walk.clauses.at(-1)?.blockId ?? null,
+      itemBlockId: walk.roman?.blockId ?? walk.letter?.blockId ?? null,
+      annexBlockId: walk.annex?.blockId ?? null,
+    });
+  }
+
+  return {
+    entries,
+    entryByBlockId: new Map(entries.map((entry) => [entry.blockId, entry])),
+    contextByBlockId,
+    usesSectionSign: walk.usesSectionSign,
+    contentsBlockIds,
+  };
+};
