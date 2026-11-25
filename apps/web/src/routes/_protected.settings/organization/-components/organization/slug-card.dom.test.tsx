@@ -122,7 +122,7 @@ test("the Arabic opaque option sends no explicit slug", async () => {
   expect(within(dialog).getByRole("textbox").getAttribute("dir")).toBe("ltr");
   await act(async () => {
     fireEvent.click(
-      within(dialog).getByRole("checkbox", {
+      within(dialog).getByRole("switch", {
         name: arMessages.settings.organization.slug.opaque,
       }),
     );
@@ -172,9 +172,9 @@ test("pending changes disable editing, cancellation and duplicate submissions", 
   });
   expect(save.getAttribute("aria-disabled")).toBe("true");
   expect(within(dialog).getByRole("textbox")).toHaveProperty("disabled", true);
-  expect(
-    within(dialog).getByRole("checkbox").getAttribute("aria-disabled"),
-  ).toBe("true");
+  expect(within(dialog).getByRole("switch").getAttribute("aria-disabled")).toBe(
+    "true",
+  );
   expect(
     within(dialog)
       .getByRole("button", { name: messages.common.cancel })

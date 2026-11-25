@@ -577,7 +577,7 @@
       "auditLogsResourceId": "ID prostředku",
       "auditLogsResourceIdentifier": "ID prostředku: {id}",
       "auditLogsResourceType": "Typ prostředku",
-      "auditLogsResourceTypePlaceholder": "např. workspace",
+      "auditLogsResourceTypePlaceholder": "např. spis",
       "auditLogsSentenceAccess": "Otevřeno: {resource}.",
       "auditLogsSentenceActivity": "Zaznamenána aktivita pro {resource}.",
       "auditLogsSentenceCancel": "Zrušeno: {resource}.",

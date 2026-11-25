@@ -31,6 +31,8 @@ type JurisdictionPickerProps = {
   suggestedCountryCodes?: readonly CountryCode[];
   onChange: (jurisdictions: PracticeJurisdiction[]) => void;
   autoFocus?: boolean;
+  disabled?: boolean;
+  disabledReason?: string;
 };
 
 export const JurisdictionPicker = ({
@@ -38,6 +40,8 @@ export const JurisdictionPicker = ({
   suggestedCountryCodes = NO_SUGGESTED_COUNTRY_CODES,
   onChange,
   autoFocus = false,
+  disabled = false,
+  disabledReason,
 }: JurisdictionPickerProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -58,6 +62,9 @@ export const JurisdictionPicker = ({
   const suggestedSet = new Set(suggestedCountryCodes);
 
   const toggleCountry = (countryCode: CountryCode) => {
+    if (disabled) {
+      return;
+    }
     if (selectedSet.has(countryCode)) {
       onChange(removeJurisdiction(selected, countryCode));
       return;
@@ -77,6 +84,9 @@ export const JurisdictionPicker = ({
   };
 
   const makePrimary = (countryCode: CountryCode) => {
+    if (disabled) {
+      return;
+    }
     onChange(
       selected.map((jurisdiction) => ({
         ...jurisdiction,
@@ -121,6 +131,8 @@ export const JurisdictionPicker = ({
               <Button
                 aria-pressed={isSelected}
                 className="min-w-0 flex-1"
+                disabled={disabled}
+                disabledReason={disabledReason}
                 onClick={() => toggleCountry(country.code)}
                 size="row"
                 variant="ghost"
@@ -152,6 +164,8 @@ export const JurisdictionPicker = ({
                     name: country.name,
                   })}
                   aria-pressed={isPrimary}
+                  disabled={disabled}
+                  disabledReason={disabledReason}
                   onClick={() => makePrimary(country.code)}
                   size="icon-sm"
                   variant={isPrimary ? "ghost" : "muted"}

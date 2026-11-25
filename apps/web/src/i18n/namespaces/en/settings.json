@@ -577,7 +577,7 @@
       "auditLogsResourceId": "Resource ID",
       "auditLogsResourceIdentifier": "Resource ID: {id}",
       "auditLogsResourceType": "Resource type",
-      "auditLogsResourceTypePlaceholder": "e.g. workspace",
+      "auditLogsResourceTypePlaceholder": "e.g. matter",
       "auditLogsSentenceAccess": "Opened {resource}.",
       "auditLogsSentenceActivity": "Recorded activity for {resource}.",
       "auditLogsSentenceCancel": "Cancelled {resource}.",

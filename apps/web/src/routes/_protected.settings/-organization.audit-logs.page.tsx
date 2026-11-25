@@ -28,6 +28,7 @@ import { MatterRefLink } from "@/components/matter-ref-link";
 import { MEMBER_CHOICE, MemberCombobox } from "@/components/member-combobox";
 import type { MemberOption } from "@/components/member-combobox";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import Tooltip from "@/components/tooltip";
 import { useFormatter } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -38,11 +39,13 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { organizationOptions } from "@/lib/organization/queries";
 import { queryView, routeRowsPhase } from "@/lib/query-view.logic";
 import type { QueryView } from "@/lib/query-view.logic";
+import { formatFullTimestamp } from "@/lib/relative-time";
 import { downloadFile } from "@/lib/utils";
 import {
   ALL_PERFORMERS,
   AUDIT_LOG_PAGE_LIMIT,
   DEFAULT_PERFORMER_FILTER,
+  resolveAuditResourceTypeFilter,
   toPerformerChoice,
 } from "@/routes/_protected.settings/-organization.audit-logs.logic";
 import type { PerformerChoice } from "@/routes/_protected.settings/-organization.audit-logs.logic";
@@ -203,6 +206,10 @@ export function AuditLogsPage() {
   });
   const performer =
     filterPerformer === ALL_PERFORMERS ? undefined : filterPerformer;
+  const resolvedResourceType = resolveAuditResourceTypeFilter(
+    filterResourceType,
+    (resourceType) => t(AUDIT_RESOURCE_PROJECTIONS[resourceType]),
+  );
 
   const handleFilterChange = <T,>(setter: (val: T) => void, val: T) => {
     setter(val);
@@ -213,7 +220,7 @@ export function AuditLogsPage() {
     limit: AUDIT_LOG_PAGE_LIMIT,
     cursor,
     action: filterAction || undefined,
-    resourceType: filterResourceType || undefined,
+    resourceType: resolvedResourceType,
     userId: filterPerson?.userId,
     performer,
     from: dateRange.from,
@@ -281,8 +288,8 @@ export function AuditLogsPage() {
         if (filterAction) {
           cleanParams["action"] = filterAction;
         }
-        if (filterResourceType) {
-          cleanParams["resourceType"] = filterResourceType;
+        if (resolvedResourceType) {
+          cleanParams["resourceType"] = resolvedResourceType;
         }
         if (filterPerson) {
           cleanParams["userId"] = filterPerson.userId;
@@ -351,6 +358,7 @@ export function AuditLogsPage() {
         <Button
           disabled={exporting}
           disabledReason={t("settings.organization.auditLogsExporting")}
+          loading={exporting}
           onClick={handleExportClick}
           variant="outline"
         >
@@ -579,15 +587,22 @@ function AuditLogRow({
       ),
     },
     time: {
-      className: "text-xs whitespace-nowrap tabular-nums",
-      content: format.dateTime(new Date(log.createdAt).getTime(), {
-        year: "numeric",
-        month: "numeric",
-        day: "numeric",
-        hour: "numeric",
-        minute: "numeric",
-        second: "numeric",
-      }),
+      align: "start",
+      className: "text-xs whitespace-nowrap",
+      numeric: true,
+      tone: "muted",
+      content: (
+        <Tooltip content={formatFullTimestamp(log.createdAt)} render={<span />}>
+          {format.dateTime(new Date(log.createdAt).getTime(), {
+            year: "numeric",
+            month: "numeric",
+            day: "numeric",
+            hour: "numeric",
+            minute: "numeric",
+            second: "numeric",
+          })}
+        </Tooltip>
+      ),
     },
     actor: {
       className: "max-w-48 text-xs",
@@ -634,8 +649,11 @@ function AuditLogRow({
           const cell = cells[id];
           return (
             <TableCell
+              align={"align" in cell ? cell.align : undefined}
               className={cn("className" in cell && cell.className)}
               key={id}
+              numeric={"numeric" in cell ? cell.numeric : undefined}
+              tone={"tone" in cell ? cell.tone : undefined}
             >
               {cell.content}
             </TableCell>

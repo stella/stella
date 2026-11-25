@@ -60,7 +60,7 @@ export function ActiveEntitlementCardFace({
                 id="settings.organization.usageUnitsThisPeriod"
               />
             </span>
-            <span className="font-medium">{remainingUsage}</span>
+            <span className="font-medium tabular-nums">{remainingUsage}</span>
           </div>
           <p className="text-muted-foreground text-sm tabular-nums">
             {formattedUsage}
@@ -75,7 +75,7 @@ export function EntitlementPending() {
   return (
     <ActiveEntitlementCardFace
       action={
-        <ButtonFace size="default" variant="ghost">
+        <ButtonFace size="default" variant="outline">
           <PendingText
             barClassName="w-16"
             id="settings.organization.usageManage"

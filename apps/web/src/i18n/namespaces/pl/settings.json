@@ -577,7 +577,7 @@
       "auditLogsResourceId": "Identyfikator zasobu",
       "auditLogsResourceIdentifier": "Identyfikator zasobu: {id}",
       "auditLogsResourceType": "Typ zasobu",
-      "auditLogsResourceTypePlaceholder": "np. workspace",
+      "auditLogsResourceTypePlaceholder": "np. sprawa",
       "auditLogsSentenceAccess": "Otwarto: {resource}.",
       "auditLogsSentenceActivity": "Zarejestrowano aktywność dla {resource}.",
       "auditLogsSentenceCancel": "Anulowano: {resource}.",
