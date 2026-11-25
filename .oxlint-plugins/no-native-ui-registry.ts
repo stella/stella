@@ -589,11 +589,11 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
     "the app's palette is a sheet of Button rows over a search Input",
   ),
   composer: webOnly(
-    "the web's rich-text composer; the app composes from the shared composer tokens with Textarea and Button",
+    "the web's rich-text composer and its menus; the app's composer renders through ComposerFrame with Textarea and Button",
   ),
-  "composer-frame": webOnly(
-    "the web composer box measured from DOM layout; the app's composer has no shared frame yet",
-  ),
+  // The frame replaces a hand-built row of Views, which
+  // no-control-beside-textbox reports, not one React Native component.
+  "composer-frame": renderer("ComposerFrame from @stll/ui/composer-frame", []),
   "context-menu": webOnly(
     "a phone opens a context menu through the platform (expo-router Link.Menu)",
   ),

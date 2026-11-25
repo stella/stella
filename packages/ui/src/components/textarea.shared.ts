@@ -5,4 +5,11 @@
 
 import type { TextFieldContract } from "./input.shared";
 
-export type TextareaContract = Omit<TextFieldContract, "onValueChange">;
+export type TextareaContract = Omit<TextFieldContract, "onValueChange"> & {
+  /**
+   * `composer`: a borderless editor for the `text` slot of a
+   * `ComposerFrame`, in the composer's type. It grows with what is typed; the
+   * frame caps it and scrolls it.
+   */
+  appearance?: "default" | "composer";
+};

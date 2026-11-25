@@ -8,7 +8,7 @@ import { useTranslations } from "use-intl";
 import type { ChatLocalRunSteerRefusal } from "@stll/api-contract/chat-run-target";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import { Button } from "@stll/ui/button";
-import { COMPOSER_BOX_CLASS } from "@stll/ui/composer-tokens";
+import { ComposerFrame } from "@stll/ui/composer-frame";
 import { Text } from "@stll/ui/text";
 import { Textarea } from "@stll/ui/textarea";
 
@@ -54,13 +54,15 @@ import { sizeInUnits } from "@/state/scan-pages";
 import { useUiColors } from "@/theme";
 
 /**
- * The message box under a thread: the web's compact composer, its box from
- * the same tokens (`@stll/ui/composer-tokens`), with the (+) control, the
- * one-line text cell that grows, and the round send button. Sized for a
- * thumb rather than a pointer: body text and 36pt controls, where the web's
- * 28pt controls and 14px text read tiny on a phone. It grows with what is
- * typed up to a few lines, then scrolls. While an answer is arriving its button stops the
- * answer instead of sending; it can stop once the server has named the turn.
+ * The message box under a thread: the web's compact composer, laid out by
+ * the same `ComposerFrame` (`@stll/ui/composer-frame`), with the (+) control,
+ * the text, and the round send button. Sized for a thumb rather than a
+ * pointer: body text and 36pt controls, where the web's 28pt controls and
+ * 14px text read tiny on a phone. One line sits between its controls; once
+ * the text needs a second line it spans the box over the control row, grows
+ * to the frame's cap, then scrolls. While an answer is arriving its button
+ * stops the answer instead of sending; it can stop once the server has named
+ * the turn.
  *
  * The (+) attaches files, as the web's does: a file from Files or a scanned
  * document. Each shows as a chip above the text while it is read, and goes
@@ -273,7 +275,6 @@ export const ChatComposer = ({
   // screen, as the platform's own message fields are. Elsewhere it keeps the
   // web's bordered box.
   const glass = Platform.OS === "ios";
-  const Box = glass ? GlassBox : BorderedBox;
 
   return (
     <View className={`${glass ? "" : "bg-background"} gap-1 px-3 pt-1 pb-2`}>
@@ -297,27 +298,33 @@ export const ChatComposer = ({
         </Button>
       ) : null}
       <KeptDictationBar dictation={dictation} />
-      <Box>
-        {files.attachments.length === 0 ? null : (
-          <ScrollView
-            contentContainerStyle={styles.chips}
-            horizontal
-            keyboardShouldPersistTaps="handled"
-            showsHorizontalScrollIndicator={false}
-          >
-            {files.attachments.map((attachment) => (
-              <DraftChip
-                attachment={attachment}
-                key={attachment.id}
-                onRemove={() => {
-                  files.remove(attachment.id);
-                }}
-              />
-            ))}
-          </ScrollView>
-        )}
-        <View className="min-h-[54px] flex-row items-end gap-2 px-2 py-1.5">
-          {dictation.phase === "idle" ? (
+      <ComposerFrame
+        attachments={
+          files.attachments.length === 0 ? null : (
+            <ScrollView
+              contentContainerStyle={styles.chips}
+              horizontal
+              keyboardShouldPersistTaps="handled"
+              showsHorizontalScrollIndicator={false}
+            >
+              {files.attachments.map((attachment) => (
+                <DraftChip
+                  attachment={attachment}
+                  key={attachment.id}
+                  onRemove={() => {
+                    files.remove(attachment.id);
+                  }}
+                />
+              ))}
+            </ScrollView>
+          )
+        }
+        Box={glass ? GlassBox : undefined}
+        // The raw draft, not the trimmed message: blank lines are still lines
+        // the text must not squeeze between the controls.
+        empty={draft === ""}
+        leading={
+          dictation.phase === "idle" ? (
             <ComposerAttachMenu
               onAttachFile={files.pickDocument}
               onScan={canScan() ? files.scanDocument : undefined}
@@ -330,66 +337,71 @@ export const ChatComposer = ({
               label={t("dictationCancel")}
               onPress={dictation.cancel}
             />
-          )}
-          <View className="min-w-0 flex-1 py-2.25">
-            {dictation.phase === "idle" ? (
-              <Textarea
-                accessibilityLabel={t("composerPlaceholder")}
-                {...field.inputProps}
-                placeholder={t("composerPlaceholder")}
-                unstyled
-                value={draft}
+          )
+        }
+        ring="none"
+        stature="compact"
+        text={
+          dictation.phase === "idle" ? (
+            <Textarea
+              accessibilityLabel={t("composerPlaceholder")}
+              appearance="composer"
+              {...field.inputProps}
+              placeholder={t("composerPlaceholder")}
+              value={draft}
+            />
+          ) : (
+            <View className="flex-row items-center gap-2">
+              <Text
+                accessibilityLiveRegion="polite"
+                className={
+                  dictation.noSignal ? "flex-1" : "text-muted-foreground flex-1"
+                }
+                variant={dictation.noSignal ? "error" : "body"}
+              >
+                {dictationLine}
+              </Text>
+              {dictation.phase === "recording" ? (
+                <DictationLevel level={dictation.level} />
+              ) : null}
+            </View>
+          )
+        }
+        trailing={
+          <>
+            {busy && onQueue !== undefined && hasDraft ? (
+              <RoundButton
+                enabled={canSend}
+                filled={false}
+                Icon={ClockIcon}
+                label={t("queue.prompt")}
+                onPress={queue}
               />
-            ) : (
-              <View className="flex-row items-center gap-2">
-                <Text
-                  accessibilityLiveRegion="polite"
-                  className={
-                    dictation.noSignal
-                      ? "flex-1"
-                      : "text-muted-foreground flex-1"
-                  }
-                  variant={dictation.noSignal ? "error" : "body"}
-                >
-                  {dictationLine}
-                </Text>
-                {dictation.phase === "recording" ? (
-                  <DictationLevel level={dictation.level} />
-                ) : null}
-              </View>
-            )}
-          </View>
-          {busy && onQueue !== undefined && hasDraft ? (
-            <RoundButton
-              enabled={canSend}
-              filled={false}
-              Icon={ClockIcon}
-              label={t("queue.prompt")}
-              onPress={queue}
-            />
-          ) : null}
-          {busy && canSteer ? (
-            <RoundButton
-              enabled
-              filled={false}
-              Icon={SendIcon}
-              label={t("steerPrompt")}
-              onPress={steer}
-            />
-          ) : null}
-          <RoundButton {...action} />
-        </View>
-      </Box>
+            ) : null}
+            {busy && canSteer ? (
+              <RoundButton
+                enabled
+                filled={false}
+                Icon={SendIcon}
+                label={t("steerPrompt")}
+                onPress={steer}
+              />
+            ) : null}
+            <RoundButton {...action} />
+          </>
+        }
+      />
     </View>
   );
 };
 
-// A one-line text cell is 42pt tall (24pt line, 9pt above and below); the
-// 36pt round controls sit centred on it. A plain button keeps a 2pt
-// transparent border around its content, so its box is 40pt to hold the
-// 36pt circle.
-const ROUND_BOX = "mb-px size-10 shrink-0";
+// The 36pt round controls: a plain button keeps a 2pt transparent border
+// around its content, so its box is 40pt to hold the circle, and 2pt of slop
+// on each side reaches the 44pt touch target. The frame centres them on the
+// text line.
+const ROUND_BOX = "size-10 shrink-0";
 const ROUND = "size-9 items-center justify-center rounded-full";
+const ROUND_SLOP = 2;
 
 type RoundButtonProps = {
   readonly enabled: boolean;
@@ -455,6 +467,7 @@ const RoundButton = ({
       className={ROUND_BOX}
       delayLongPress={HOLD_TO_TALK_MS}
       disabled={!enabled}
+      hitSlop={ROUND_SLOP}
       onLongPress={onLongPress}
       onPress={onPress}
       onPressOut={onPressOut}
@@ -466,11 +479,6 @@ const RoundButton = ({
     </Button>
   );
 };
-
-/** The web's bordered message box, from its composer tokens. */
-const BorderedBox = ({ children }: React.PropsWithChildren) => (
-  <View className={`${COMPOSER_BOX_CLASS} border-border`}>{children}</View>
-);
 
 /** The message box as a Liquid Glass capsule. */
 const GlassBox = ({ children }: React.PropsWithChildren) => (
@@ -585,7 +593,7 @@ const CHIP_STATUS = {
 >;
 
 const styles = StyleSheet.create({
-  // Rounded to half the one-line row (54pt), so one line reads as a capsule.
+  // Rounded to half the one-line bar (54pt), so one line reads as a capsule.
   glass: {
     borderRadius: 27,
   },

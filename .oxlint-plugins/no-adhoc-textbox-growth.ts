@@ -1,13 +1,14 @@
 // How tall a textbox grows, and where it scrolls once it stops, belongs to
 // its primitive. `ComposerFrame` (`@stll/ui/composer-frame`) caps a composer's text
 // and scrolls it in its own region, outside the controls; `Textarea`
-// (`@stll/ui/textarea`) grows a form field and caps it with `maxRows`. A cap
-// set by hand on the textbox puts the scroller on the editable element itself,
+// (`@stll/ui/textarea`) grows a form field and caps it with `maxRows`. The
+// React Native `ComposerFrame` caps a phone composer's text the same way. A
+// cap set by hand on the textbox puts the scroller on the editable element itself,
 // wherever its parent happens to place it: beside the controls, its
 // scrollbar mid-box, its last line clipped against a button.
 //
 // Invariant: outside the owner modules, no class string sets a textbox's
-// growth or scroll cap.
+// growth or scroll cap, and no style sets a multi-line field's maxHeight.
 //
 // Rejected:
 //   `field-sizing-content` and `field-sizing-fixed`, under any variant
@@ -16,7 +17,11 @@
 //   selects a textbox through a descendant or child combinator:
 //   `[&_.ProseMirror]:max-h-32`, `[&_textarea]:max-h-48`,
 //   `[&>.tiptap]:overflow-y-auto`, `[&_[contenteditable]]:overflow-auto`;
-//   a `max-h-*` in the `className` of a `textarea` or `Textarea`;
+//   a `max-h-*` in the `className` of a `textarea`, a `Textarea`, or a React
+//   Native `TextInput` or `Input` with `multiline`;
+//   a `maxHeight` in the `style` of the same textboxes: written in the
+//   attribute, or in a same-file `StyleSheet.create` entry it names
+//   (`style={styles.field}`);
 //   a `max-h-*` or `overflow-*` in an editor's `attributes` `class` (the
 //   classes a TipTap or ProseMirror view puts on its editable element).
 //
@@ -31,7 +36,8 @@
 // literal and template chunk in a scoped file is tokenized, so a utility in a
 // `cn()` argument is read like one written on the element; the `className`
 // and `attributes` checks need the string written inside that attribute or
-// property. A cap set from a stylesheet or an inline style is not seen.
+// property. A cap set from a CSS stylesheet, or from a style object imported
+// from another file, is not seen.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
@@ -40,11 +46,17 @@ import {
   classTokens,
   classVariants,
   elementName,
+  everyNode,
+  getCalleeName,
   getPropertyName,
   isAstNode,
+  isIdentifierReference,
+  memberPropertyName,
+  resolveVariable,
+  stableInitializer,
   templateElementRaw,
 } from "./utils.ts";
-import type { AstNode } from "./utils.ts";
+import type { AstNode, ScopeContext } from "./utils.ts";
 
 const FIELD_SIZING = new Set(["field-sizing-content", "field-sizing-fixed"]);
 
@@ -60,6 +72,46 @@ const TEXTBOX_SELECTORS = [
 ];
 
 const TEXTBOX_ELEMENTS = new Set(["textarea", "Textarea"]);
+
+// A React Native field is a growing textbox only when it is `multiline`.
+const MULTILINE_FIELDS = new Set(["TextInput", "Input"]);
+
+// `prop`, `prop="..."` or `prop={...}` other than `{false}`.
+const isOn = (element: AstNode, name: string): boolean => {
+  const opening = element.openingElement;
+  const attributes =
+    isAstNode(opening) && Array.isArray(opening.attributes)
+      ? opening.attributes.filter(isAstNode)
+      : [];
+  const attribute = attributes.find(
+    (candidate) =>
+      candidate.type === "JSXAttribute" &&
+      isAstNode(candidate.name) &&
+      candidate.name.name === name,
+  );
+  if (attribute === undefined) {
+    return false;
+  }
+  const { value } = attribute;
+  return !(
+    isAstNode(value) &&
+    value.type === "JSXExpressionContainer" &&
+    isAstNode(value.expression) &&
+    value.expression.type === "Literal" &&
+    value.expression.value === false
+  );
+};
+
+const isTextboxElement = (element: AstNode): boolean => {
+  const name = elementName(element);
+  if (name === null) {
+    return false;
+  }
+  return (
+    TEXTBOX_ELEMENTS.has(name) ||
+    (MULTILINE_FIELDS.has(name) && isOn(element, "multiline"))
+  );
+};
 
 const isCap = (base: string): boolean =>
   base.startsWith("max-h-") ||
@@ -198,8 +250,7 @@ const findingFor = (
   }
   if (tokens.some(maxHeightToken)) {
     const owner = classNameOwner(node);
-    const name = owner === null ? null : elementName(owner);
-    if (name !== null && TEXTBOX_ELEMENTS.has(name)) {
+    if (owner !== null && isTextboxElement(owner)) {
       return "textboxMaxHeight";
     }
   }
@@ -208,6 +259,60 @@ const findingFor = (
   }
   return null;
 };
+
+const isMaxHeightKey = (property: AstNode): boolean =>
+  property.type === "Property" && getPropertyName(property.key) === "maxHeight";
+
+// The object a `StyleSheet.create({ ... })` call declares, if `initializer`
+// is one.
+const styleSheetObject = (initializer: AstNode): AstNode | null => {
+  if (
+    initializer.type !== "CallExpression" ||
+    getCalleeName(initializer.callee) !== "StyleSheet.create" ||
+    !Array.isArray(initializer.arguments)
+  ) {
+    return null;
+  }
+  const argument: unknown = initializer.arguments[0];
+  return isAstNode(argument) && argument.type === "ObjectExpression"
+    ? argument
+    : null;
+};
+
+// The entry `styles.name` reads from a same-file `StyleSheet.create`.
+const styleSheetEntry = (
+  member: AstNode,
+  context: ScopeContext,
+): AstNode | null => {
+  const name = memberPropertyName(member);
+  if (name === null || !isIdentifierReference(member.object)) {
+    return null;
+  }
+  const variable = resolveVariable(context, member.object);
+  const initializer = variable === null ? null : stableInitializer(variable);
+  const sheet = initializer === null ? null : styleSheetObject(initializer);
+  if (sheet === null || !Array.isArray(sheet.properties)) {
+    return null;
+  }
+  const entry = sheet.properties
+    .filter(isAstNode)
+    .find((property) => getPropertyName(property.key) === name);
+  return entry === undefined || !isAstNode(entry.value) ? null : entry.value;
+};
+
+// Whether a textbox's `style` caps its height: a `maxHeight` written in the
+// attribute, or in the same-file style sheet entry it names.
+const styleCapsHeight = (value: unknown, context: ScopeContext): boolean =>
+  everyNode(value).some((node) => {
+    if (isMaxHeightKey(node)) {
+      return true;
+    }
+    if (node.type !== "MemberExpression") {
+      return false;
+    }
+    const entry = styleSheetEntry(node, context);
+    return entry !== null && everyNode(entry).some(isMaxHeightKey);
+  });
 
 const FIX =
   "A composer renders its text through ComposerFrame from " +
@@ -225,6 +330,7 @@ export default eslintCompatPlugin({
             "A textbox's growth or scroll cap is set by hand (field-sizing, " +
             `or max-h/overflow through a textbox selector). ${FIX}`,
           textboxMaxHeight: `A textarea's height cap is set by hand. ${FIX}`,
+          styleMaxHeight: `A multi-line field's maxHeight is set by hand in its style. ${FIX}`,
           editorAttributes:
             "An editor's editable element is capped or made to scroll by " +
             `its own classes. ${FIX}`,
@@ -240,7 +346,30 @@ export default eslintCompatPlugin({
             context.report({ node, messageId: finding });
           }
         };
-        return { Literal: check, TemplateElement: check };
+        const checkStyle = (node: unknown) => {
+          if (
+            !isAstNode(node) ||
+            !isAstNode(node.name) ||
+            node.name.name !== "style"
+          ) {
+            return;
+          }
+          const opening = node.parent;
+          const element = isAstNode(opening) ? opening.parent : null;
+          if (
+            isAstNode(element) &&
+            element.type === "JSXElement" &&
+            isTextboxElement(element) &&
+            styleCapsHeight(node.value, context)
+          ) {
+            context.report({ node, messageId: "styleMaxHeight" });
+          }
+        };
+        return {
+          Literal: check,
+          TemplateElement: check,
+          JSXAttribute: checkStyle,
+        };
       },
     },
   },
