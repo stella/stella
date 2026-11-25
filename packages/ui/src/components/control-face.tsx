@@ -314,7 +314,7 @@ export const SwitchFace = ({
     className={cn(
       SWITCH_ROOT_CLASS_NAME,
       SWITCH_ROOT_SIZE_CLASS_NAME[size],
-      "bg-input",
+      "bg-switch-track",
       FACE_UNAVAILABLE_CLASS,
       className,
     )}

@@ -13,9 +13,18 @@ export const CHECKBOX_CLASS_NAME =
  */
 export type SwitchSize = "sm" | "default";
 
-/** The switch's track: its shape, colours and focus ring. */
+/**
+ * The switch's track: its shape, colours and focus ring. On is the green
+ * checked track, off the grey one; both stand 3:1 against the surface in
+ * every palette (`--switch-track*` in ../styles/theme.css), under a white
+ * thumb.
+ */
 export const SWITCH_ROOT_CLASS_NAME =
-  "focus-visible:ring-ring focus-visible:ring-offset-background data-checked:bg-primary data-unchecked:bg-input relative inline-flex shrink-0 items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-offset-1 data-disabled:opacity-64";
+  "focus-visible:ring-ring focus-visible:ring-offset-background data-checked:bg-switch-track-checked data-unchecked:bg-switch-track relative inline-flex shrink-0 items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-offset-1 data-disabled:opacity-64";
+
+/** The switch's thumb: white on both tracks, in light and dark. */
+export const SWITCH_THUMB_CLASS_NAME =
+  "pointer-events-none block rounded-full bg-switch-thumb shadow-xs transition-transform";
 
 export const SWITCH_ROOT_SIZE_CLASS_NAME = {
   default: "h-5 w-9",

@@ -50,6 +50,9 @@
   --color-sidebar: var(--sidebar);
   --color-ring: var(--ring);
   --color-input: var(--input);
+  --color-switch-track: var(--switch-track);
+  --color-switch-track-checked: var(--switch-track-checked);
+  --color-switch-thumb: var(--switch-thumb);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
@@ -363,6 +366,16 @@
   --highlight-foreground: var(--color-neutral-900);
   --border: --alpha(var(--color-black) / 10%);
   --input: --alpha(var(--color-black) / 12%);
+  /* A switch's track, off and on, under a white thumb: each stands at least
+     3:1 against the page and the cards it sits on, so "on" never depends on
+     the thumb's side alone. The thumb stays white in every palette. */
+  --switch-track: color-mix(
+    in srgb,
+    var(--color-neutral-400) 50%,
+    var(--color-neutral-500)
+  );
+  --switch-track-checked: var(--color-emerald-600);
+  --switch-thumb: var(--color-white);
   --ring: var(--color-neutral-400);
   --sidebar: var(--color-neutral-50);
   /* Light 80% and dark 72% land at the same contrast (about 9.2:1) on their
@@ -415,6 +428,8 @@
   --highlight-foreground: var(--color-neutral-100);
   --border: --alpha(var(--color-white) / 8%);
   --input: --alpha(var(--color-white) / 10%);
+  --switch-track: var(--color-neutral-500);
+  --switch-track-checked: var(--color-emerald-600);
   --ring: var(--color-neutral-500);
   --sidebar: color-mix(
     in srgb,
@@ -464,6 +479,8 @@
   --highlight-foreground: #100f0f;
   --border: #dad8ce;
   --input: #cecdc3;
+  --switch-track: #878580;
+  --switch-track-checked: #66800b;
   --ring: #b7b5ac;
   --sidebar: #f2f0e5;
   --sidebar-foreground: #1c1b1a;
@@ -503,6 +520,8 @@
   --highlight-foreground: #cecdc3;
   --border: #343331;
   --input: #403e3c;
+  --switch-track: #6f6e69;
+  --switch-track-checked: #879a39;
   --ring: #575653;
   --sidebar: #1c1b1a;
   --sidebar-foreground: #b7b5ac;
@@ -545,6 +564,8 @@
   --highlight-foreground: #2e3440;
   --border: #d8dee9;
   --input: #cdd4e0;
+  --switch-track: #6d7a8f;
+  --switch-track-checked: #6d8b5e;
   --ring: #b8c1cf;
   --sidebar: #e5e9f0;
   --sidebar-foreground: #3b4252;
@@ -584,6 +605,8 @@
   --highlight-foreground: #d8dee9;
   --border: #434c5e;
   --input: #4c566a;
+  --switch-track: color-mix(in srgb, #4c566a 50%, #d8dee9);
+  --switch-track-checked: #a3be8c;
   --ring: #616e88;
   --sidebar: #3b4252;
   --sidebar-foreground: #d8dee9;
@@ -1076,6 +1099,12 @@
     --highlight-foreground: var(--color-neutral-900);
     --border: --alpha(var(--color-black) / 10%);
     --input: --alpha(var(--color-black) / 12%);
+    --switch-track: color-mix(
+      in srgb,
+      var(--color-neutral-400) 50%,
+      var(--color-neutral-500)
+    );
+    --switch-track-checked: var(--color-emerald-600);
     --ring: var(--color-neutral-400);
     --sidebar: var(--color-neutral-50);
     --sidebar-foreground: var(--color-neutral-900);

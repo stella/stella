@@ -477,6 +477,7 @@
     "scripts/tauri-autofix-workflow.test.ts": ["**"],
     "scripts/test-shards.test.ts": ["**"],
     "scripts/test-subject-reachability.test.ts": ["**"],
+    "scripts/theme-switch-contrast.test.ts": ["**"],
     "scripts/thin-queue.test.ts": ["**"],
     "scripts/toast-error-census.test.ts": ["**"],
     "scripts/transfer-read-guard.test.ts": ["**"],
