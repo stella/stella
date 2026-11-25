@@ -19,7 +19,7 @@
  *   + extraction enqueues.
  */
 import { panic, Result } from "better-result";
-import type { Err } from "better-result";
+import type { Err, Ok } from "better-result";
 import { and, eq, ne, or, sql } from "drizzle-orm";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
@@ -310,7 +310,7 @@ export const checkEntityCreateTargetForInsert = async ({
  */
 type ValidateEntityCreateGenerator = AsyncGenerator<
   Err<never, SafeDbError>,
-  Result<void, HandlerError<400>>,
+  Ok<undefined, never> | Err<never, HandlerError<400>>,
   unknown
 >;
 
