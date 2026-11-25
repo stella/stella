@@ -60,10 +60,10 @@ const channel = (hex: string, index: number) => {
 
 /** WCAG relative luminance of an opaque `#rrggbb` (or `#rgb`) colour. */
 const luminance = (color: string) => {
-  const hex =
-    color.length === 4
-      ? `#${[...color.slice(1)].map((digit) => digit + digit).join("")}`
-      : color;
+  const hex = color.replace(
+    /^#(?<r>[\da-f])(?<g>[\da-f])(?<b>[\da-f])$/u,
+    "#$<r>$<r>$<g>$<g>$<b>$<b>",
+  );
   if (!/^#[\da-f]{6}$/u.test(hex)) {
     throw new Error(`Expected an opaque colour, got ${color}`);
   }
