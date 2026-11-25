@@ -12,6 +12,7 @@ use crate::{
   local_window::{ActivityAccountFeature, ActivityCaller, LocalCaller},
   time_entry_submit::{
     self, ConfirmedBatch, ConfirmedTimeEntry, CreatedEntry, Matter, MatterCandidate,
+    MatterResolution,
   },
 };
 
@@ -144,6 +145,20 @@ pub async fn time_entry_candidates(
   require_account(&caller, &gates, &account)?;
   drop(account);
   Ok(candidates)
+}
+
+#[tauri::command]
+pub async fn time_entry_resolve_matters(
+  caller: ActivityCaller,
+  gates: State<'_, FeatureGates>,
+  accounts: State<'_, AccountState>,
+  ids: Vec<String>,
+) -> Result<Vec<MatterResolution>, String> {
+  let account = linked_account(&caller, &gates, &accounts).await?;
+  let resolved = time_entry_submit::resolve_matters(&account, &ids).await?;
+  require_account(&caller, &gates, &account)?;
+  drop(account);
+  Ok(resolved)
 }
 
 #[tauri::command]

@@ -178,6 +178,7 @@
     "joinedActivity": "Not counted for this matter",
     "keepHistory": "Keep history",
     "latestDayReached": "You are viewing the latest day available.",
+    "matterUnavailable": "Matter unavailable",
     "memoryOnly": "Not saved in this build",
     "missingKeyEraseConfirmation": "Saved activity and pending draft recovery will be deleted. Created drafts may already exist. This cannot be undone.",
     "mixedActivity": "Quick switching",

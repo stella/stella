@@ -1,4 +1,10 @@
-import type { DesktopTimeEntryMatterCandidate } from "@stll/api-contract/desktop-time-entries";
+import { panic } from "better-result";
+
+import {
+  type DesktopMatterResolution,
+  type DesktopTimeEntryMatterCandidate,
+  isDesktopMatterId,
+} from "@stll/api-contract/desktop-time-entries";
 import { normalizeUnicode } from "@stll/text-normalize";
 import { Temporal } from "@stll/time";
 
@@ -14,9 +20,18 @@ import type { ActivityManualAssignment } from "./activity-types";
 
 type ActivityRange = { start: string; end: string };
 export type MatchConfidence = "strong" | "likely" | "manual" | "unmatched";
+/**
+ * What the day's own records (a stella document session, a manual
+ * assignment) say about a segment's matter, as the member's own access
+ * resolved it: `none` when no record names one, `open` when the member can
+ * open it, `unresolved` while no read has answered for it, `unavailable`
+ * when the member cannot open it. An unavailable matter is never named.
+ */
+type RecordedMatter = "none" | "open" | "unresolved" | "unavailable";
 export type MatchedSegment = TimedSegment & {
   matter: DesktopTimeEntryMatterCandidate | null;
   confidence: MatchConfidence;
+  recordedMatter: RecordedMatter;
   evidence: string[];
   drafted: boolean;
 };
@@ -48,6 +63,9 @@ export type DayReviewGroup = {
 type MatchDayOptions = {
   segments: readonly TimedSegment[];
   candidates: readonly DesktopTimeEntryMatterCandidate[];
+  /** The day's recorded matters outside the shortlist, resolved by id in
+   * the same read. */
+  resolved: readonly DesktopMatterResolution[];
   captureDetails: boolean;
   manualAssignments: readonly ActivityManualAssignment[];
   draftedEntries: readonly (ActivityRange & { entryId: string })[];
@@ -134,6 +152,7 @@ const likelyMatter = ({
 type MatchSegmentOptions = {
   segment: TimedSegment;
   candidates: readonly DesktopTimeEntryMatterCandidate[];
+  access: MatterAccess;
   captureDetails: boolean;
   assignment: ActivityManualAssignment | undefined;
   drafted: boolean;
@@ -142,6 +161,7 @@ type MatchSegmentOptions = {
 const matchSegment = ({
   segment,
   candidates,
+  access,
   captureDetails,
   assignment,
   drafted,
@@ -157,43 +177,28 @@ const matchSegment = ({
         ),
       ]
     : [];
-  if (assignment) {
-    const candidate = candidates.find(({ id }) => id === assignment.matterId);
-    const matter =
-      candidate ??
-      (assignment.matter
-        ? {
-            ...assignment.matter,
-            signals: {
-              lastWorkedAt: null,
-              newlyAssignedAt: null,
-              upcomingDeadline: null,
-            },
-          }
-        : null);
+  // A record's own matter outranks any heuristic, and an unavailable one is
+  // reported as such rather than replaced by a guess.
+  const recordedId = assignment?.matterId ?? segment.matterId;
+  if (recordedId) {
+    const matter = access.open.get(recordedId) ?? null;
+    if (matter === null) {
+      return {
+        ...segment,
+        matter,
+        confidence: "unmatched",
+        recordedMatter: access.unavailable.has(recordedId)
+          ? "unavailable"
+          : "unresolved",
+        evidence,
+        drafted,
+      };
+    }
     return {
       ...segment,
       matter,
-      confidence: matter ? "manual" : "unmatched",
-      evidence,
-      drafted,
-    };
-  }
-  const strong = candidates.find(({ id }) => id === segment.matterId);
-  if (strong) {
-    return {
-      ...segment,
-      matter: strong,
-      confidence: "strong",
-      evidence,
-      drafted,
-    };
-  }
-  if (segment.matterId) {
-    return {
-      ...segment,
-      matter: null,
-      confidence: "unmatched",
+      confidence: assignment ? "manual" : "strong",
+      recordedMatter: "open",
       evidence,
       drafted,
     };
@@ -201,13 +206,21 @@ const matchSegment = ({
   if (captureDetails) {
     const matter = likelyMatter({ candidates, evidence, distinctiveTokens });
     if (matter) {
-      return { ...segment, matter, confidence: "likely", evidence, drafted };
+      return {
+        ...segment,
+        matter,
+        confidence: "likely",
+        recordedMatter: "none",
+        evidence,
+        drafted,
+      };
     }
   }
   return {
     ...segment,
     matter: null,
     confidence: "unmatched",
+    recordedMatter: "none",
     evidence,
     drafted,
   };
@@ -373,16 +386,81 @@ export const leadingMatter = (
     : null;
 };
 
+/** The matters one read under the member's own access can open, by id, and
+ * the ids it answered could not be opened. */
+type MatterAccess = {
+  open: ReadonlyMap<string, DesktopTimeEntryMatterCandidate>;
+  unavailable: ReadonlySet<string>;
+};
+const matterAccess = (
+  candidates: readonly DesktopTimeEntryMatterCandidate[],
+  resolved: readonly DesktopMatterResolution[],
+): MatterAccess => {
+  const open = new Map(candidates.map((matter) => [matter.id, matter]));
+  const unavailable = new Set<string>();
+  for (const resolution of resolved) {
+    switch (resolution.type) {
+      case "accessible":
+        open.set(resolution.matter.id, resolution.matter);
+        break;
+      case "inaccessible":
+        unavailable.add(resolution.id);
+        break;
+      default:
+        resolution satisfies never;
+        panic("Unknown matter access");
+    }
+  }
+  return { open, unavailable };
+};
+
+type RecordedMatterIdsOptions = {
+  segments: readonly { matterId?: string | null }[];
+  manualAssignments: readonly ActivityManualAssignment[];
+};
+/** Every matter the day's own records name, each once. */
+export const recordedMatterIds = ({
+  segments,
+  manualAssignments,
+}: RecordedMatterIdsOptions) => [
+  ...new Set([
+    ...segments.flatMap(({ matterId }) => (matterId ? [matterId] : [])),
+    ...manualAssignments.map(({ matterId }) => matterId),
+  ]),
+];
+
+type UnresolvedMatterIdsOptions = {
+  ids: readonly string[];
+  candidates: readonly DesktopTimeEntryMatterCandidate[];
+  resolved: readonly DesktopMatterResolution[];
+};
+/** The recorded ids no read has answered for yet, in a stable order. An id
+ * that is not a matter id cannot name one, so it is never asked for. */
+export const unresolvedMatterIds = ({
+  ids,
+  candidates,
+  resolved,
+}: UnresolvedMatterIdsOptions) => {
+  const { open, unavailable } = matterAccess(candidates, resolved);
+  return ids
+    .filter(
+      (id) => !open.has(id) && !unavailable.has(id) && isDesktopMatterId(id),
+    )
+    .sort();
+};
+
 /** Splitting at every review boundary prevents assignments or receipts from
  * claiming time beyond the exact range the user selected. */
 export const matchDay = ({
   segments,
   candidates,
+  resolved,
   captureDetails,
   manualAssignments,
   draftedEntries,
 }: MatchDayOptions) => {
-  const orderedCandidates = [...candidates].sort((left, right) =>
+  const access = matterAccess(candidates, resolved);
+  const orderedCandidates = [...access.open.values()].sort((left, right) =>
     left.id.localeCompare(right.id),
   );
   const distinctiveTokens = distinctiveTokenIndex(orderedCandidates);
@@ -438,6 +516,7 @@ export const matchDay = ({
         matchSegment({
           segment,
           candidates: orderedCandidates,
+          access,
           distinctiveTokens,
           captureDetails,
           assignment,

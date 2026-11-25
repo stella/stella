@@ -126,6 +126,11 @@ test.describe("inspector tabs on a phone", () => {
     // And by keyboard, back to the other tab.
     await page.keyboard.press("Enter");
     await expect(menu).toBeVisible();
+    // The menu takes focus a moment after it shows; a key pressed before
+    // that reaches nothing.
+    await expect(
+      page.locator('[role="menu"]:focus, [role="menu"] :focus'),
+    ).toHaveCount(1);
     await page.keyboard.press("End");
     await expect(items.nth(1)).toBeFocused();
     await page.keyboard.press("Enter");

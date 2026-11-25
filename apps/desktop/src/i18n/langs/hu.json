@@ -178,6 +178,7 @@
     "joinedActivity": "Nem számít bele az ügy idejébe",
     "keepHistory": "Előzmények megtartása",
     "latestDayReached": "A legkésőbbi elérhető napot nézi.",
+    "matterUnavailable": "Az ügy nem érhető el",
     "memoryOnly": "Ebben a buildben nem kerül mentésre",
     "missingKeyEraseConfirmation": "A mentett tevékenység és a függőben lévő piszkozatok helyreállítási adatai törlődnek. A létrehozott piszkozatok már létezhetnek. Ez a művelet nem vonható vissza.",
     "mixedActivity": "Gyors váltogatás",

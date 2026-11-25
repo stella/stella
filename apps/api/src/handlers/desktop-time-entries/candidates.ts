@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import {
   DESKTOP_ACTIVITY_REVIEW_LIMIT,
@@ -7,13 +7,7 @@ import {
 } from "@stll/api-contract/desktop-time-entries";
 import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
-import {
-  contacts,
-  entities,
-  timeEntries,
-  workspaceMembers,
-  workspaces,
-} from "@/api/db/schema";
+import { workspaces } from "@/api/db/schema";
 import {
   ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
@@ -21,10 +15,14 @@ import {
 } from "@/api/lib/api-handlers";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
-import { TASK_STATUS } from "@/api/lib/entity-constants";
-import { workTask } from "@/api/lib/tasks/work-task";
 
 import { authorizeDesktopTimeEntries } from "./authorize";
+import {
+  matterCandidateRanking,
+  matterCandidateSignals,
+  selectMatterCandidates,
+  toMatterCandidate,
+} from "./matter-candidate-projection";
 
 export const createDesktopMatterCandidatesEndpoint = (
   authorizeAccount: typeof authorizeDesktopAccount = authorizeDesktopAccount,
@@ -43,47 +41,18 @@ export const createDesktopMatterCandidatesEndpoint = (
       const account = yield* Result.await(
         authorizeDesktopTimeEntries(request, authorizeAccount),
       );
-      // Correlated reads use the existing matter-leading indexes and never read
-      // another user's document or time-entry activity into a matching signal.
-      const lastWorkedAtSignal = sql<string | null>`greatest(
-      (select max(${timeEntries.dateWorked})::text from ${timeEntries} where ${timeEntries.workspaceId} = ${workspaces.id} and ${timeEntries.userId} = ${account.userId} and ${timeEntries.dateWorked} between current_date - 14 and current_date),
-      (select max(${entities.updatedAt})::text from ${entities} where ${entities.workspaceId} = ${workspaces.id} and ${entities.kind} = 'document' and ${entities.lastEditedBy} = ${account.userId} and ${entities.updatedAt} >= now() - interval '14 days'),
-      (select max(${entities.createdAt})::text from ${entities} where ${entities.workspaceId} = ${workspaces.id} and ${entities.kind} = 'document' and ${entities.createdBy} = ${account.userId} and ${entities.createdAt} >= now() - interval '14 days')
-    )`;
-      const newlyAssignedAtSignal = sql<
-        string | null
-      >`(select max(${workspaceMembers.createdAt})::text from ${workspaceMembers} where ${workspaceMembers.workspaceId} = ${workspaces.id} and ${workspaceMembers.userId} = ${account.userId} and ${workspaceMembers.createdAt} >= now() - interval '7 days')`;
-      const upcomingDeadlineSignal = sql<
-        string | null
-      >`(select min(${entities.dueDate})::text from ${entities} where ${entities.workspaceId} = ${workspaces.id} and ${workTask(entities)} and (${entities.status} is null or ${entities.status} not in (${TASK_STATUS.DONE}, ${TASK_STATUS.CANCELLED})) and ${entities.dueDate} between current_date and current_date + 7)`;
+      const signals = matterCandidateSignals(account.userId);
       const page = yield* Result.await(
         account.safeDb(async (tx) =>
           readCursorPage(
-            tx
-              .select({
-                id: workspaces.id,
-                name: workspaces.name,
-                reference: workspaces.reference,
-                color: workspaces.color,
-                clientName: contacts.displayName,
-                lastWorkedAt: lastWorkedAtSignal,
-                newlyAssignedAt: newlyAssignedAtSignal,
-                upcomingDeadline: upcomingDeadlineSignal,
-              })
-              .from(workspaces)
-              .leftJoin(contacts, eq(contacts.id, workspaces.clientId))
+            selectMatterCandidates(tx, signals)
               .where(
                 and(
                   eq(workspaces.organizationId, account.organizationId),
                   eq(workspaces.status, WORKSPACE_STATUS.active),
                 ),
               )
-              .orderBy(
-                sql`${lastWorkedAtSignal} desc nulls last`,
-                sql`${newlyAssignedAtSignal} desc nulls last`,
-                sql`${upcomingDeadlineSignal} asc nulls last`,
-                workspaces.id,
-              ),
+              .orderBy(...matterCandidateRanking(signals)),
             {
               limit: DESKTOP_ACTIVITY_REVIEW_LIMIT,
               cursorForItem: ({ id }) => String(id),
@@ -93,14 +62,7 @@ export const createDesktopMatterCandidatesEndpoint = (
       );
       return Result.ok({
         // Matching uses the ranked first page as a shortlist of likely matters.
-        matters: page.items.map(
-          ({ lastWorkedAt, newlyAssignedAt, upcomingDeadline, ...matter }) => ({
-            ...matter,
-            id: String(matter.id),
-            reference: matter.reference || null,
-            signals: { lastWorkedAt, newlyAssignedAt, upcomingDeadline },
-          }),
-        ),
+        matters: page.items.map(toMatterCandidate),
       });
     },
   );

@@ -178,6 +178,7 @@
     "joinedActivity": "No computado en este asunto",
     "keepHistory": "Conservar historial",
     "latestDayReached": "Está viendo el último día disponible.",
+    "matterUnavailable": "Asunto no disponible",
     "memoryOnly": "No se guarda en esta compilación",
     "missingKeyEraseConfirmation": "Se eliminarán la actividad guardada y los datos de recuperación de borradores pendientes. Es posible que los borradores creados ya existan. Esta acción no se puede deshacer.",
     "mixedActivity": "Cambios rápidos",

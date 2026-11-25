@@ -1,7 +1,4 @@
-import type {
-  DesktopMatter,
-  DesktopTimeEntryBatch,
-} from "@stll/api-contract/desktop-time-entries";
+import type { DesktopTimeEntryBatch } from "@stll/api-contract/desktop-time-entries";
 
 import activityContract from "../../fixtures/activity-contract.json" with { type: "json" };
 import {
@@ -62,11 +59,12 @@ export type ActivityAppExclusion = {
   name: string;
 };
 
+/** A range filed under a matter by id. The matter's name is read under the
+ * member's current access, never from local history. */
 export type ActivityManualAssignment = {
   start: string;
   end: string;
   matterId: string;
-  matter?: DesktopMatter & { clientName: string | null };
 };
 
 export type ActivityDeletionStatus =
@@ -163,35 +161,8 @@ const isRange = (value: unknown): value is { start: string; end: string } => {
   const { start, end } = value;
   return typeof start === "string" && typeof end === "string";
 };
-const isAssignedMatter = (
-  value: unknown,
-): value is DesktopMatter & { clientName: string | null } => {
-  if (!isRecord(value)) {
-    return false;
-  }
-  const { id, name, reference, color, clientName } = value;
-  return (
-    typeof id === "string" &&
-    typeof name === "string" &&
-    (reference === null || typeof reference === "string") &&
-    (color === null || typeof color === "string") &&
-    (clientName === null || typeof clientName === "string")
-  );
-};
-const isAssignment = (value: unknown): value is ActivityManualAssignment => {
-  if (!isRecord(value)) {
-    return false;
-  }
-  const { matterId, matter } = value;
-  if (!isRange(value)) {
-    return false;
-  }
-  return (
-    typeof matterId === "string" &&
-    (matter === undefined ||
-      (isAssignedMatter(matter) && matter.id === matterId))
-  );
-};
+const isAssignment = (value: unknown): value is ActivityManualAssignment =>
+  isRecord(value) && typeof value["matterId"] === "string" && isRange(value);
 const isPendingEntry = (
   value: unknown,
 ): value is DesktopTimeEntryBatch["entries"][number] => {
