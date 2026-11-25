@@ -1,9 +1,11 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
+import { readPresent } from "@/api/lib/errors/read-outcome";
+
 import { createLatestDesktopRelease, type FeedFetch } from "./latest-release";
 
-const present = (value: string) => ({ type: "present", value });
+const present = (value: string) => readPresent(value);
 
 /** A feed that answers `bodies` in turn and counts its reads. */
 const scriptedFeed = (bodies: readonly (string | null)[]) => {
