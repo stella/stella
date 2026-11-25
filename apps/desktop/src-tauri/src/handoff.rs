@@ -2,7 +2,6 @@
 
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
 use crate::types::ErrorResponse;
-use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Manager};
 use tokio::sync::Mutex;
@@ -816,6 +815,7 @@ async fn take_parked_for_account_at(
 #[cfg(test)]
 mod tests {
   use super::*;
+  use std::sync::Arc;
 
   const TEST_NOW: Duration = Duration::from_secs(1_000);
   use std::future::Future;

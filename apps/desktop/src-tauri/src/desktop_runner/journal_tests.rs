@@ -503,7 +503,10 @@ fn only_an_accepted_run_that_has_not_finished_counts_as_running() {
   // No journal open: no runner ever ran for this account.
   assert!(!journal.has_running_run());
 
-  journal.replace("account".to_owned(), Journal::open(JournalBacking::Memory, 0));
+  journal.replace(
+    "account".to_owned(),
+    Journal::open(JournalBacking::Memory, 0),
+  );
   let refused = "0192f3a0-6b1c-7d2e-8f30-000000000003";
   journal
     .insert(

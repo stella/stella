@@ -28,7 +28,10 @@ import type { DesktopErrorReport } from "../telemetry/desktop-telemetry";
 /** The event the native updater announces each state change with. */
 export const UPDATER_STATE_EVENT = "updater-state";
 
-const reportUpdaterFailure = (code: DesktopErrorReport["code"]) => {
+/** Reports a failure of the updater's view to the desktop's telemetry. */
+type ReportUpdaterFailure = (code: DesktopErrorReport["code"]) => void;
+
+const reportUpdaterFailure: ReportUpdaterFailure = (code) => {
   reportDesktopError({
     code,
     operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
@@ -42,14 +45,14 @@ const reportUpdaterFailure = (code: DesktopErrorReport["code"]) => {
  * Settings all move it, so a download started anywhere shows here. Answers
  * and events can arrive out of order; the higher revision wins.
  */
-const createUpdaterStore = () => {
+const createUpdaterStore = (reportFailure: ReportUpdaterFailure) => {
   let latest: UpdaterSnapshot | null = null;
   let stopListening: (() => void) | null = null;
   const listeners = new Set<() => void>();
 
   const accept = (value: unknown) => {
     if (!isUpdaterSnapshot(value)) {
-      reportUpdaterFailure(DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse);
+      reportFailure(DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse);
       return;
     }
     if (latest !== null && value.revision <= latest.revision) {
@@ -67,7 +70,7 @@ const createUpdaterStore = () => {
     if (Result.isOk(answer)) {
       accept(answer.value);
     } else {
-      reportUpdaterFailure(DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed);
+      reportFailure(DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed);
     }
   };
 
@@ -79,9 +82,7 @@ const createUpdaterStore = () => {
         accept(event.payload);
       },
       onError: () => {
-        reportUpdaterFailure(
-          DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
-        );
+        reportFailure(DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed);
       },
       // Read once the event is live, so no change falls between the two.
       onSubscribed: () => {
@@ -108,8 +109,13 @@ const createUpdaterStore = () => {
  * holds a relaunch back. Both answer with what is already under way when a
  * check or install is running.
  */
-export const useUpdateCheck = () => {
-  const [store] = useState(createUpdaterStore);
+export const useUpdateCheck = ({
+  reportFailure = reportUpdaterFailure,
+}: {
+  /** Where failures go; the desktop's telemetry unless a caller says. */
+  reportFailure?: ReportUpdaterFailure;
+} = {}) => {
+  const [store] = useState(() => createUpdaterStore(reportFailure));
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
 
   const run = async () => {

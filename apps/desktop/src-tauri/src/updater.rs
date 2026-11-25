@@ -30,8 +30,8 @@
 
 use std::future::Future;
 use std::sync::OnceLock;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::PoisonError;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
@@ -266,10 +266,11 @@ pub async fn install_from_settings(handle: &AppHandle) -> UpdaterSnapshot {
 /// installs, through `clearance::ask`.
 async fn relaunch_blocker(handle: &AppHandle) -> Option<RelaunchBlocker> {
   use tauri::Manager;
-  if let Some(sessions) = handle.try_state::<crate::commands::AppState>()
-    && sessions.lock().await.has_active_edit_sessions()
-  {
-    return Some(RelaunchBlocker::EditSessions);
+  if let Some(sessions) = handle.try_state::<crate::commands::AppState>() {
+    let editing = sessions.lock().await.has_active_edit_sessions();
+    if editing {
+      return Some(RelaunchBlocker::EditSessions);
+    }
   }
   if handle
     .try_state::<crate::desktop_runner::DesktopRunnerControl>()
@@ -623,7 +624,12 @@ impl UpdaterBoard {
 
   /// Announces that `blocker` holds `version` back, telling the member the
   /// first time and whenever what blocks it changes.
-  fn defer<Host: UpdaterHost>(&self, host: &Host, version: &str, blocker: RelaunchBlocker) {
+  fn defer<Host: UpdaterHost>(
+    &self,
+    host: &Host,
+    version: &str,
+    blocker: RelaunchBlocker,
+  ) {
     let deferred = UpdaterState::Deferred {
       version: version.to_owned(),
       until: blocker,
@@ -988,15 +994,15 @@ mod tests {
       self.download_result.clone().map(|()| "package")
     }
 
-    fn relaunch_blocker(
-      &self,
-    ) -> impl Future<Output = Option<RelaunchBlocker>> + Send {
+    fn relaunch_blocker(&self) -> impl Future<Output = Option<RelaunchBlocker>> + Send {
       self.blocker_checks.fetch_add(1, Ordering::SeqCst);
-      let mut blockers = self.blockers.lock().unwrap();
-      let answer = if blockers.len() > 1 {
-        blockers.pop_front().flatten()
-      } else {
-        blockers.front().copied().flatten()
+      let answer = {
+        let mut blockers = self.blockers.lock().unwrap();
+        if blockers.len() > 1 {
+          blockers.pop_front().flatten()
+        } else {
+          blockers.front().copied().flatten()
+        }
       };
       std::future::ready(answer)
     }
@@ -1071,11 +1077,10 @@ mod tests {
       // The run finishes.
       host.recheck.notify_one();
     };
-    let (outcome, ()) = tokio::time::timeout(Duration::from_secs(5), async {
-      tokio::join!(update, run)
-    })
-    .await
-    .expect("the install goes ahead once the run finished");
+    let (outcome, ()) =
+      tokio::time::timeout(Duration::from_secs(5), async { tokio::join!(update, run) })
+        .await
+        .expect("the install goes ahead once the run finished");
 
     assert!(
       matches!(outcome, CheckOutcome::Installed { version } if version == "0.9.90")
@@ -1148,7 +1153,10 @@ mod tests {
     assert!(
       matches!(outcome, CheckOutcome::Deferred { version } if version == "0.9.90")
     );
-    assert_eq!(board.snapshot().state, deferred(RelaunchBlocker::EditSessions));
+    assert_eq!(
+      board.snapshot().state,
+      deferred(RelaunchBlocker::EditSessions)
+    );
     assert_eq!(FakeHost::count(&host.downloads), 0);
     assert_eq!(FakeHost::count(&host.blocker_checks), 1);
     assert_eq!(FakeHost::count(&host.installs), 0);

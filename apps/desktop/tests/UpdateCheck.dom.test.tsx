@@ -3,7 +3,16 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import type { UpdaterSnapshot } from "@stll/api-contract/desktop-rpc";
 
+import type { DesktopErrorReport } from "../src/telemetry/desktop-telemetry";
+
 GlobalRegistrator.register({ url: "http://localhost/" });
+
+// The row's failure reports, recorded per test through the hook's reporter.
+// The desktop's own reporter sends each distinct failure once per window,
+// which would let one test's report hide the next one's; every test here
+// starts with none.
+const errorReports: DesktopErrorReport["code"][] = [];
+const telemetry = await import("../src/telemetry/desktop-telemetry");
 
 const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
@@ -23,6 +32,7 @@ afterEach(async () => {
   await act(nextMacrotask);
   cleanup();
   clearMocks();
+  errorReports.length = 0;
 });
 
 afterAll(async () => {
@@ -51,7 +61,11 @@ const CheckedRow = ({ onEmailSupport }: { onEmailSupport: () => void }) => (
   <AppVersionRow
     onEmailSupport={onEmailSupport}
     supportEmail={SUPPORT_EMAIL}
-    updateCheck={useUpdateCheck()}
+    updateCheck={useUpdateCheck({
+      reportFailure: (code) => {
+        errorReports.push(code);
+      },
+    })}
     versionLabel="0.9.86"
   />
 );
@@ -310,6 +324,23 @@ test("an update waiting for an agent run says so and forces no restart", async (
   expect(view.commands).toEqual(["updater_state"]);
 });
 
+test("a waiting update with a blocker the row does not know is not shown", async () => {
+  const view = await renderRow({
+    state: () => ({
+      revision: 5,
+      state: { status: "deferred", version: "0.9.90", until: "lunch" },
+    }),
+  });
+
+  expect(view.queryByText("0.9.90", { exact: false })).toBeNull();
+  expect(view.checkButton()).toBeDefined();
+  await waitFor(() => {
+    expect(errorReports).toEqual([
+      telemetry.DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+    ]);
+  });
+});
+
 test("a failed check and a failed install are told apart", async () => {
   const view = await renderRow({
     check: () => ({
@@ -341,7 +372,9 @@ test("an answer the row does not know is reported, not shown", async () => {
   await view.checkNow();
 
   await waitFor(() => {
-    expect(view.commands).toContain("desktop_report_error");
+    expect(errorReports).toEqual([
+      telemetry.DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+    ]);
   });
   expect(view.queryByText(SUPPORT_LINE, { exact: false })).toBeNull();
 });
@@ -354,18 +387,4 @@ test("updates the organization manages are named as such", async () => {
   expect(
     await view.findByText(defaultMessages.tray.updatesManaged),
   ).toBeDefined();
-});
-
-// After the report test: a failure reports once per window, so this one,
-// which also reports, must not take that report first.
-test("a waiting update with a blocker the row does not know is not shown", async () => {
-  const view = await renderRow({
-    state: () => ({
-      revision: 5,
-      state: { status: "deferred", version: "0.9.90", until: "lunch" },
-    }),
-  });
-
-  expect(view.queryByText("0.9.90", { exact: false })).toBeNull();
-  expect(view.checkButton()).toBeDefined();
 });
