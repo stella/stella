@@ -114,6 +114,8 @@ export const prepareEntityReadScalingTables = async (db: GatedTestDb) =>
     agentSkills,
     agentSkillResources,
     billingGuidelineFiles,
+    timeEntries,
+    workspaceMembers,
   ]);
 
 export const seedEntityReadScaling = async (db: GatedTestDb, size: number) => {

@@ -217,6 +217,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/dictation/learned-fixes": "crud",
   "GET /v1/desktop/feature-access": "crud",
   "GET /v1/desktop/matter-candidates": "crud",
+  "GET /v1/desktop/matter-candidates/resolve": "crud",
   "GET /v1/desktop/matters": "crud",
   "GET /v1/desktop/presence": "crud",
   "GET /v1/desktop/runner": "stream",

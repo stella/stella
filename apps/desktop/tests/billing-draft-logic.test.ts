@@ -46,6 +46,7 @@ const segment = (
   endMs: 60_000,
   matter: null,
   confidence: "strong",
+  recordedMatter: "open",
   evidence: [],
   drafted: false,
   ...fields,

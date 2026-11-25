@@ -5,9 +5,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { panic } from "better-result";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
 
-import { DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH } from "@stll/api-contract/desktop-time-entries";
+import {
+  DESKTOP_ACTIVITY_REVIEW_LIMIT,
+  DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH,
+} from "@stll/api-contract/desktop-time-entries";
 import type {
   DesktopMatter,
+  DesktopMatterResolution,
   DesktopTimeEntryBatch,
   DesktopTimeEntryBatchResponse,
   DesktopTimeEntryMatterCandidate,
@@ -48,6 +52,7 @@ import {
   segmentTitles,
   suggestionPieces,
   suggestionSummary,
+  UNAVAILABLE_MATTER_TOPIC,
 } from "./activity-calendar-logic";
 import type {
   ActivityBlock,
@@ -87,7 +92,12 @@ import type {
   BillingDraftSettingsControl,
 } from "./billing-draft-settings";
 import type { CaptureModeCommand } from "./capture-modes";
-import { EVIDENCE_DETAIL_LIMIT, matchDay } from "./day-review-logic";
+import {
+  EVIDENCE_DETAIL_LIMIT,
+  matchDay,
+  recordedMatterIds,
+  unresolvedMatterIds,
+} from "./day-review-logic";
 import type { MatchedSegment } from "./day-review-logic";
 import { SuggestionPieceLabel } from "./SuggestionPieceLabel";
 import { explainedBrowsers, missingTitlesReason } from "./title-capture-logic";
@@ -100,7 +110,11 @@ const ENTRIES_COLUMN_ID = "entries";
 type CandidateState =
   | { type: "loading" }
   | { type: "failed" }
-  | { type: "ready"; matters: DesktopTimeEntryMatterCandidate[] };
+  | {
+      type: "ready";
+      matters: DesktopTimeEntryMatterCandidate[];
+      resolved: DesktopMatterResolution[];
+    };
 type BatchItem = {
   entry: DesktopTimeEntryBatch["entries"][number];
   ranges: { start: string; end: string }[];
@@ -397,7 +411,9 @@ export const ActivityDayCalendar = ({
   const t = useTranslations("activity");
   const format = useFormatter();
   const locale = useLocale();
-  const { candidates, refreshCandidates } = useMatterCandidates();
+  const { candidates, refreshCandidates } = useMatterCandidates(
+    recordedMatterIds(snapshot),
+  );
   const [localDrafts, setLocalDrafts] = useState<DraftedEntries>([]);
   const { submission, submitBatch, errorMessage } = useBatchSubmission({
     date: snapshot.date,
@@ -417,6 +433,7 @@ export const ActivityDayCalendar = ({
   const day = matchDay({
     segments: timedSegments(snapshot.segments),
     candidates: matters,
+    resolved: candidates.type === "ready" ? candidates.resolved : [],
     captureDetails: snapshot.captureDetails,
     manualAssignments: snapshot.manualAssignments,
     draftedEntries,
@@ -949,8 +966,12 @@ function useCalendarColumns({
           />
         );
       }
+      const unavailable = block.topic === UNAVAILABLE_MATTER_TOPIC;
       const topic =
-        block.matter?.name ?? appName ?? block.title ?? t("mixedActivity");
+        block.matter?.name ??
+        (unavailable ? t("matterUnavailable") : appName) ??
+        block.title ??
+        t("mixedActivity");
       const detail =
         block.matter === null && appName === null ? null : block.title;
       const label = [topic, duration, detail]
@@ -1755,7 +1776,26 @@ function useBatchSubmission({
   return { submission, submitBatch, errorMessage };
 }
 
-function useMatterCandidates() {
+/** Resolves matter ids in requests the contract bounds. */
+const resolveMatters = async (ids: readonly string[]) => {
+  const requests: Promise<DesktopMatterResolution[]>[] = [];
+  for (
+    let start = 0;
+    start < ids.length;
+    start += DESKTOP_ACTIVITY_REVIEW_LIMIT
+  ) {
+    requests.push(
+      invoke<DesktopMatterResolution[]>("time_entry_resolve_matters", {
+        ids: ids.slice(start, start + DESKTOP_ACTIVITY_REVIEW_LIMIT),
+      }),
+    );
+  }
+  return (await Promise.all(requests)).flat();
+};
+
+/** The shortlist, plus every matter the day's records name outside it,
+ * resolved by id under the member's own access as the day names it. */
+function useMatterCandidates(recordedIds: readonly string[]) {
   const [candidates, setCandidates] = useState<CandidateState>({
     type: "loading",
   });
@@ -1765,7 +1805,7 @@ function useMatterCandidates() {
     invoke<DesktopTimeEntryMatterCandidate[]>("time_entry_candidates")
       .then((matters) => {
         if (request === candidateRequest.current) {
-          setCandidates({ type: "ready", matters });
+          setCandidates({ type: "ready", matters, resolved: [] });
         }
         return undefined;
       })
@@ -1781,6 +1821,42 @@ function useMatterCandidates() {
       candidateRequest.current += 1;
     };
   }, [refreshCandidates]);
+  // One key per set of unanswered ids, so a day that names a new matter
+  // asks once, and an answered day asks nothing.
+  const unresolved =
+    candidates.type === "ready"
+      ? unresolvedMatterIds({
+          ids: recordedIds,
+          candidates: candidates.matters,
+          resolved: candidates.resolved,
+        }).join(" ")
+      : "";
+  useEffect(() => {
+    if (unresolved === "") {
+      return;
+    }
+    const request = candidateRequest.current;
+    resolveMatters(unresolved.split(" "))
+      .then((resolved) => {
+        if (request === candidateRequest.current) {
+          setCandidates((current) =>
+            current.type === "ready"
+              ? {
+                  type: "ready",
+                  matters: current.matters,
+                  resolved: [...current.resolved, ...resolved],
+                }
+              : current,
+          );
+        }
+        return undefined;
+      })
+      .catch(() => {
+        if (request === candidateRequest.current) {
+          setCandidates({ type: "failed" });
+        }
+      });
+  }, [unresolved]);
   return { candidates, refreshCandidates };
 }
 

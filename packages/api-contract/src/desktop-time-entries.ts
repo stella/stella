@@ -68,6 +68,50 @@ export type DesktopMatterCandidatesResponse = v.InferOutput<
   typeof desktopMatterCandidatesResponseSchema
 >;
 
+const desktopMatterIdSchema = v.pipe(v.string(), v.uuid());
+
+/** Whether a matter the day's records name is one the member can open. */
+export const DESKTOP_MATTER_ACCESS = ["accessible", "inaccessible"] as const;
+
+/** Matters named by id: one `id` parameter per matter, each answered once,
+ * in the order asked. */
+export const desktopMatterResolveQuerySchema = v.strictObject({
+  id: v.union([
+    desktopMatterIdSchema,
+    v.pipe(
+      v.array(desktopMatterIdSchema),
+      v.minLength(1),
+      v.maxLength(DESKTOP_ACTIVITY_REVIEW_LIMIT),
+      v.check(
+        (ids) => new Set(ids).size === ids.length,
+        "Each matter is named once",
+      ),
+    ),
+  ]),
+});
+export const isDesktopMatterId = (id: string) =>
+  v.is(desktopMatterIdSchema, id);
+
+const desktopMatterResolutionSchema = v.variant("type", [
+  v.strictObject({
+    type: v.literal(DESKTOP_MATTER_ACCESS[0]),
+    matter: desktopMatterCandidateSchema,
+  }),
+  v.strictObject({
+    type: v.literal(DESKTOP_MATTER_ACCESS[1]),
+    id: desktopMatterIdSchema,
+  }),
+]);
+export type DesktopMatterResolution = v.InferOutput<
+  typeof desktopMatterResolutionSchema
+>;
+export const desktopMatterResolveResponseSchema = v.strictObject({
+  matters: v.pipe(
+    v.array(desktopMatterResolutionSchema),
+    v.maxLength(DESKTOP_ACTIVITY_REVIEW_LIMIT),
+  ),
+});
+
 export const desktopTimeEntryBatchItemSchema = v.strictObject({
   matterId: v.pipe(v.string(), v.uuid()),
   dateWorked: apiDateSchema,

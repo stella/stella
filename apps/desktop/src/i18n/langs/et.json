@@ -178,6 +178,7 @@
     "joinedActivity": "Selle toimiku aja hulka ei arvestata",
     "keepHistory": "Säilita ajalugu",
     "latestDayReached": "Vaatate viimast saadaolevat päeva.",
+    "matterUnavailable": "Toimik pole saadaval",
     "memoryOnly": "Selles versioonis ei salvestata",
     "missingKeyEraseConfirmation": "Salvestatud tegevus ja pooleliolevate mustandite taastamisandmed kustutatakse. Loodud mustandid võivad juba olemas olla. Seda ei saa tagasi võtta.",
     "mixedActivity": "Kiire vahetamine",

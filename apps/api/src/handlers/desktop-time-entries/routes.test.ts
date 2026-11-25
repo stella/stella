@@ -26,6 +26,7 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 import { createDesktopMatterCandidatesEndpoint } from "./candidates";
 import { createDesktopTimeEntryEndpoint } from "./create";
 import { createDesktopMattersEndpoint } from "./matters";
+import { createDesktopMatterResolveEndpoint } from "./resolve";
 import { desktopTimeEntriesRoute } from "./routes";
 
 const testState = createTestState({ file: import.meta.path, config: env });
@@ -48,6 +49,7 @@ test("desktop time entry endpoints require desktop account credentials", async (
   for (const path of [
     "matters",
     "matter-candidates",
+    `matter-candidates/resolve?id=${WORKSPACE_ID}`,
     `time-entries/${WORKSPACE_ID}`,
     "time-entries/batch",
     "time-entries/batch/status",
@@ -84,6 +86,7 @@ const exercise = async ({
   missingMatter,
   picker,
   candidates,
+  resolve,
   emailVerified = true,
   color = "--option-emerald",
 }: {
@@ -95,9 +98,21 @@ const exercise = async ({
   missingMatter?: boolean;
   picker?: boolean;
   candidates?: boolean;
+  /** Matter ids the desktop resolves; the database holds only `WORKSPACE_ID`. */
+  resolve?: readonly string[];
   color?: string | null;
 }) => {
   const inserted: unknown[] = [];
+  const candidateRow = {
+    id: WORKSPACE_ID,
+    name: "Matter",
+    reference: "M-1",
+    color,
+    clientName: "Client",
+    lastWorkedAt: "2026-10-08",
+    newlyAssignedAt: null,
+    upcomingDeadline: "2026-10-12",
+  };
   const { scopedDb } = createScopedDbMock(
     {
       query: {
@@ -121,20 +136,11 @@ const exercise = async ({
         from: () => ({
           leftJoin: () => ({
             where: () => ({
-              orderBy: () => ({
-                limit: async () => [
-                  {
-                    id: WORKSPACE_ID,
-                    name: "Matter",
-                    reference: "M-1",
-                    color,
-                    clientName: "Client",
-                    lastWorkedAt: "2026-10-08",
-                    newlyAssignedAt: null,
-                    upcomingDeadline: "2026-10-12",
-                  },
-                ],
-              }),
+              orderBy: () => ({ limit: async () => [candidateRow] }),
+              limit: async () =>
+                resolve?.some((id) => id.toLowerCase() === WORKSPACE_ID)
+                  ? [candidateRow]
+                  : [],
             }),
           }),
         }),
@@ -215,10 +221,12 @@ const exercise = async ({
   const matters = createDesktopMattersEndpoint(authorizeAccount);
   const candidateEndpoint =
     createDesktopMatterCandidatesEndpoint(authorizeAccount);
+  const resolveEndpoint = createDesktopMatterResolveEndpoint(authorizeAccount);
   await using server = serve(
     routes(
       {
         "/matter-candidates": { GET: candidateEndpoint },
+        "/matter-candidates/resolve": { GET: resolveEndpoint },
         "/time-entries/:workspaceId": { PUT: create },
         "/matters": { GET: matters },
       },
@@ -241,10 +249,14 @@ const exercise = async ({
   if (candidates) {
     url = "http://localhost/v1/desktop/matter-candidates";
   }
+  if (resolve) {
+    const query = new URLSearchParams(resolve.map((id) => ["id", id]));
+    url = `http://localhost/v1/desktop/matter-candidates/resolve?${query.toString()}`;
+  }
   const response = await server.fetch(
     new Request(
       url,
-      picker || candidates
+      picker || candidates || resolve
         ? {}
         : {
             method: "PUT",
@@ -364,5 +376,57 @@ test("candidate endpoint preserves bounded caller-scoped matching signals and fe
   expect(result.inserted).toEqual([]);
   for (const hidden of ["activity-timeline", "time-billing"] as const) {
     expect((await exercise({ candidates: true, hidden })).status).toBe(403);
+  }
+});
+
+test("resolving names only matters the caller can open, each once, in the order asked", async () => {
+  const other = "00000000-0000-4000-8000-0000000000ff";
+  const result = await exercise({
+    resolve: [other, WORKSPACE_ID.toUpperCase()],
+  });
+  expect(result.status).toBe(200);
+  expect(result.body).toEqual({
+    matters: [
+      { type: "inaccessible", id: other },
+      {
+        type: "accessible",
+        matter: {
+          id: WORKSPACE_ID,
+          name: "Matter",
+          reference: "M-1",
+          color: "--option-emerald",
+          clientName: "Client",
+          signals: {
+            lastWorkedAt: "2026-10-08",
+            newlyAssignedAt: null,
+            upcomingDeadline: "2026-10-12",
+          },
+        },
+      },
+    ],
+  });
+  expect((await exercise({ resolve: [other] })).body).toEqual({
+    matters: [{ type: "inaccessible", id: other }],
+  });
+  for (const hidden of ["activity-timeline", "time-billing"] as const) {
+    expect((await exercise({ resolve: [WORKSPACE_ID], hidden })).status).toBe(
+      403,
+    );
+  }
+});
+
+test("resolving refuses ids that are not one bounded list of distinct matter ids", async () => {
+  const many = Array.from(
+    { length: 101 },
+    (_, index) =>
+      `00000000-0000-4000-8000-${index.toString().padStart(12, "0")}`,
+  );
+  for (const resolve of [
+    [],
+    ["not-a-matter"],
+    [WORKSPACE_ID, WORKSPACE_ID],
+    many,
+  ]) {
+    expect((await exercise({ resolve })).status).toBe(422);
   }
 });

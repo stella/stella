@@ -113,6 +113,29 @@ struct CandidatesResponse {
   matters: Vec<MatterCandidate>,
 }
 
+/// Whether a matter the day's records name is one the member can open; an
+/// inaccessible matter carries no name.
+#[derive(Deserialize, Serialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum MatterResolution {
+  Accessible { matter: MatterCandidate },
+  Inaccessible { id: String },
+}
+
+impl MatterResolution {
+  fn id(&self) -> &str {
+    match self {
+      Self::Accessible { matter } => &matter.matter.id,
+      Self::Inaccessible { id } => id,
+    }
+  }
+}
+
+#[derive(Deserialize)]
+struct ResolveResponse {
+  matters: Vec<MatterResolution>,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreatedEntry {
@@ -191,6 +214,16 @@ pub async fn search_matters(
   Ok(response.matters)
 }
 
+fn is_bounded_candidate(candidate: &MatterCandidate) -> bool {
+  !candidate.matter.id.is_empty()
+    && candidate.matter.id.len() <= 200
+    && candidate.matter.name.len() <= 1024
+    && candidate
+      .client_name
+      .as_ref()
+      .is_none_or(|name| name.len() <= 1024)
+}
+
 pub async fn candidates(
   account: &AccountRequest,
 ) -> Result<Vec<MatterCandidate>, String> {
@@ -206,17 +239,57 @@ pub async fn candidates(
   .await?;
   let result: CandidatesResponse =
     serde_json::from_slice(&body).map_err(json_cause_logged(FAILURE))?;
-  if result.matters.len() > 100
-    || result.matters.iter().any(|candidate| {
-      candidate.matter.id.is_empty()
-        || candidate.matter.id.len() > 200
-        || candidate.matter.name.len() > 1024
-        || candidate
-          .client_name
-          .as_ref()
-          .is_some_and(|name| name.len() > 1024)
-    })
+  if result.matters.len() > MATTER_LIST_LIMIT
+    || !result.matters.iter().all(is_bounded_candidate)
   {
+    return Err(FAILURE.to_string());
+  }
+  Ok(result.matters)
+}
+
+/// The contract's bound on matters per shortlist or resolve request.
+const MATTER_LIST_LIMIT: usize = 100;
+
+/// Resolves matters by id under the member's own access. Every id must be a
+/// distinct matter id; the answer must name each one once, in order.
+pub async fn resolve_matters(
+  account: &AccountRequest,
+  ids: &[String],
+) -> Result<Vec<MatterResolution>, String> {
+  let ids: Vec<String> = ids.iter().map(|id| id.to_ascii_lowercase()).collect();
+  if ids.is_empty()
+    || ids.len() > MATTER_LIST_LIMIT
+    || ids.iter().any(|id| uuid::Uuid::try_parse(id).is_err())
+    || ids.iter().collect::<std::collections::HashSet<_>>().len() != ids.len()
+  {
+    return Err(FAILURE.to_string());
+  }
+  let query: Vec<(&str, &str)> = ids.iter().map(|id| ("id", id.as_str())).collect();
+  let body = response_body(crate::http_client::device_proof_request(
+    client()?
+      .get(format!(
+        "{}/v1/desktop/matter-candidates/resolve",
+        account.api_base_url
+      ))
+      .query(&query),
+    &account.device_key,
+    Some(&account.credential.key),
+    None,
+  )?)
+  .await?;
+  let result: ResolveResponse =
+    serde_json::from_slice(&body).map_err(json_cause_logged(FAILURE))?;
+  let answered_in_order = result.matters.len() == ids.len()
+    && result
+      .matters
+      .iter()
+      .zip(&ids)
+      .all(|(resolution, id)| resolution.id() == id);
+  let bounded = result.matters.iter().all(|resolution| match resolution {
+    MatterResolution::Accessible { matter } => is_bounded_candidate(matter),
+    MatterResolution::Inaccessible { .. } => true,
+  });
+  if !answered_in_order || !bounded {
     return Err(FAILURE.to_string());
   }
   Ok(result.matters)
@@ -402,6 +475,8 @@ mod tests {
     AccountRequest::fixture(account).await
   }
 
+  const RESOLVED_ID: &str = "00000000-0000-4000-8000-000000000001";
+
   #[tokio::test]
   async fn matter_lookups_sign_the_final_request_with_the_account_device() {
     use axum::{extract::OriginalUri, routing::get};
@@ -430,13 +505,23 @@ mod tests {
           Some("fixture_key"),
           None,
         );
-        match uri.path() {
-          "/v1/desktop/matters" => assert_eq!(uri.query(), Some("query=A%2F101")),
-          "/v1/desktop/matter-candidates" => assert_eq!(uri.query(), None),
+        let body = match uri.path() {
+          "/v1/desktop/matters" => {
+            assert_eq!(uri.query(), Some("query=A%2F101"));
+            serde_json::json!({"matters": []})
+          }
+          "/v1/desktop/matter-candidates" => {
+            assert_eq!(uri.query(), None);
+            serde_json::json!({"matters": []})
+          }
+          "/v1/desktop/matter-candidates/resolve" => {
+            assert_eq!(uri.query(), Some(&*format!("id={RESOLVED_ID}")));
+            serde_json::json!({"matters": [{"type": "inaccessible", "id": RESOLVED_ID}]})
+          }
           _ => panic!("Unexpected matter lookup route"),
-        }
+        };
         received.fetch_add(1, Ordering::SeqCst);
-        async { Json(serde_json::json!({"matters": []})) }
+        async { Json(body) }
       }),
     );
     let server = tokio::spawn(async move {
@@ -444,8 +529,15 @@ mod tests {
     });
     assert!(search_matters(&account, "A/101").await.unwrap().is_empty());
     assert!(candidates(&account).await.unwrap().is_empty());
+    let resolved = resolve_matters(&account, &[RESOLVED_ID.to_ascii_uppercase()])
+      .await
+      .unwrap();
+    assert!(matches!(
+      resolved.as_slice(),
+      [MatterResolution::Inaccessible { id }] if id == RESOLVED_ID
+    ));
     drop(account);
-    assert_eq!(requests.load(Ordering::SeqCst), 2);
+    assert_eq!(requests.load(Ordering::SeqCst), 3);
     server.abort();
   }
 

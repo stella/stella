@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { expect } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
@@ -11,25 +11,15 @@ import {
   featureEnrolments,
   organizationSettings,
 } from "@/api/db/schema";
-import { desktopDeviceProofReplays } from "@/api/db/schema/desktop-device-proof-replay";
-import { createMembershipScopedDb, markRlsDatabase } from "@/api/db/scoped";
-import { env } from "@/api/env";
 import { createDesktopBillingDraftSettingsReadEndpoint } from "@/api/handlers/desktop-time-entries/billing-draft-settings";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
 import { createSafeId } from "@/api/lib/branded-types";
-import {
-  desktopProofRequestUrl,
-  VerifiedDesktopDeviceProof,
-} from "@/api/lib/business-registries/desktop/proof";
-import { ConsumedDesktopDeviceProof } from "@/api/lib/business-registries/desktop/proof-store";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
-import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
-import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { desktopScalingAccount } from "@/api/tests/read-scaling/desktop-account";
 import type { seedEntityReadScaling } from "@/api/tests/read-scaling/entity-fixture";
 
 type ReadFixture = Awaited<ReturnType<typeof seedEntityReadScaling>>;
@@ -50,7 +40,7 @@ export const measureDesktopBillingDraftSettings = async (
   const request = new Request(
     "https://api.example.test/v1/desktop/billing-drafts/settings",
   );
-  let receipt: ConsumedDesktopDeviceProof | undefined;
+  let release: (() => Promise<void>) | undefined;
   try {
     await db.insert(organization).values({
       id: otherOrganizationId,
@@ -148,55 +138,17 @@ export const measureDesktopBillingDraftSettings = async (
       pg_temp."agent_skills"
       TO stella`);
 
-    const signer = await createDesktopDeviceSigner();
-    const credential = "scaling-credential";
-    const signed = await signer.signRequest({ request, credential });
-    const verified = (
-      await VerifiedDesktopDeviceProof.verify({
-        request: signed,
-        expectedUrl: desktopProofRequestUrl(
-          signed,
-          env.PUBLIC_URL ?? env.BETTER_AUTH_URL,
-        ),
-        expectedThumbprint: signer.deviceJkt,
-        binding: { type: "account", keyId: "scaling-key", credential },
-      })
-    ).unwrap();
-    receipt = (
-      await ConsumedDesktopDeviceProof.claim({ proof: verified, db })
-    ).unwrap();
-    const account = {
+    const desktop = await desktopScalingAccount({
+      db,
       organizationId,
       userId,
-      keyId: "scaling-key",
-      consumedProof: receipt,
-      memberRole: sessionMemberRole("member"),
-      scopedDb: createMembershipScopedDb(markRlsDatabase(db), {
-        organizationId,
-        userId,
-        serverValidatedWorkspaceIds: [],
-      }),
-    };
+      request,
+    });
+    release = desktop.release;
     // The registry retains the canonical mounted definition. Its measurement
     // uses this same production factory with only credential verification supplied.
     const endpoint = createDesktopBillingDraftSettingsReadEndpoint(
-      async () =>
-        await Promise.resolve(
-          Result.ok({
-            ...account,
-            featureAccessSnapshot: buildFeatureAccessSnapshot({
-              organizationId,
-              userId,
-              identity: {
-                email: `${userId}@example.test`,
-                emailVerified: true,
-              },
-              enrolments: [
-                { featureId: "time-billing", organizationId, userId },
-              ],
-            }),
-          }),
-        ),
+      desktop.authorizeAccount,
     );
     return await runWithMeasuredQueryCounter(async (counter) => {
       const response = await endpoint.handler(
@@ -224,11 +176,7 @@ export const measureDesktopBillingDraftSettings = async (
       };
     });
   } finally {
-    if (receipt !== undefined) {
-      await db
-        .delete(desktopDeviceProofReplays)
-        .where(eq(desktopDeviceProofReplays.jti, receipt.proof.jti));
-    }
+    await release?.();
     await db
       .delete(billingDraftUserSettings)
       .where(
