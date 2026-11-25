@@ -235,9 +235,6 @@ const expected = ({
     site: SITE,
     reason,
   });
-  if (!granted) {
-    return ask("site_not_allowed");
-  }
   if (report !== "same" && report !== "noValue") {
     return ask("page_unconfirmed");
   }
@@ -247,7 +244,9 @@ const expected = ({
   if (typing && report === "noValue") {
     return ask("possible_secret");
   }
-  return { type: "run", by: "site-grant", origin: SITE };
+  return granted
+    ? { type: "run", by: "site-grant", origin: SITE }
+    : ask("site_not_allowed");
 };
 
 describe("decideBrowserStep", () => {
@@ -513,11 +512,16 @@ describe("why a step on an element asks", () => {
           report,
           new Set([...grants, decision.site]),
         );
+        // Only a question asked for nothing but the website may be answered
+        // by an approval of it; any other reason holds the step back.
         if (decision.reason === "site_not_allowed") {
           expect(grants.has(decision.site)).toBe(false);
-          expect(after).not.toEqual(decision);
+          expect(after).toEqual({
+            type: BROWSER_STEP_GATE.run,
+            by: "site-grant",
+            origin: decision.site,
+          });
         } else {
-          expect(grants.has(decision.site)).toBe(true);
           expect(after).toEqual(decision);
         }
       }),

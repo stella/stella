@@ -502,10 +502,10 @@ const browserCardQuestion = ({
  * website then follow at once.
  *
  * The member's stored website approvals are the one source of truth for both:
- * a step asked about because its run does not allow the website yet (a run
+ * a step asked about for nothing but the website (`siteNotAllowed`: a run
  * on the member's computer took its approvals when it started) is answered
  * by an approval the API holds now, read fresh, as always allowing it there
- * would. Like a stored tool grant, an approval the API did not confirm
+ * would. A step held back for any other reason is never answered so. Like a stored tool grant, an approval the API did not confirm
  * (`unconfirmed`) answers nothing, and the card offers to allow the website.
  */
 const useBrowserCardApproval = ({
@@ -546,31 +546,16 @@ const useBrowserCardApproval = ({
       : null;
   const siteGrantOrigin = unconfirmed ? null : (grantedSite ?? askedSite);
   const site = question?.site ?? null;
-  /** The site the card offers to always allow: one the asking run does not allow yet. */
-  const offerable = (() => {
-    if (question === null) {
-      return null;
-    }
-    switch (question.reason) {
-      case BROWSER_STEP_ASK_REASON.siteNotAllowed:
-        return question.site;
-      // A desktop that did not say why: offered unless the member allows it.
-      case null:
-        return question.site !== null &&
-          !sites.grantedOrigins.has(question.site)
-          ? question.site
-          : null;
-      // Always allowing the website would not answer the step.
-      case BROWSER_STEP_ASK_REASON.noSite:
-      case BROWSER_STEP_ASK_REASON.pageUnconfirmed:
-      case BROWSER_STEP_ASK_REASON.embeddedFrame:
-      case BROWSER_STEP_ASK_REASON.possibleSecret:
-        return null;
-      default:
-        question.reason satisfies never;
-        return panic("Unhandled browser ask reason");
-    }
-  })();
+  // The site the card offers to always allow: one the asking run does not
+  // allow (it asks for nothing but the website), or one the member does not
+  // allow yet, whatever else holds this step back.
+  const askedSiteOf = question === null ? null : question.site;
+  const offerable =
+    askedSiteOf === null ||
+    (question?.reason !== BROWSER_STEP_ASK_REASON.siteNotAllowed &&
+      sites.grantedOrigins.has(askedSiteOf))
+      ? null
+      : askedSiteOf;
   return {
     /** Answers the card when the user always allows its website. */
     approveSite: (approvalId: string, toolName: ApprovalToolName) => {

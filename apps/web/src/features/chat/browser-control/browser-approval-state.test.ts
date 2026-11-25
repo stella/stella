@@ -190,13 +190,6 @@ describe("the browser gate on what the extension reported", () => {
                   return { type: "run", by: "level" };
                 }
                 const typing = step.command.action === "fill";
-                if (!granted) {
-                  return {
-                    type: "ask",
-                    site: SITE,
-                    reason: "site_not_allowed",
-                  };
-                }
                 if (history !== "same" && history !== "noValue") {
                   return {
                     type: "ask",
@@ -204,9 +197,12 @@ describe("the browser gate on what the extension reported", () => {
                     reason: "page_unconfirmed",
                   };
                 }
-                return typing && history === "noValue"
-                  ? { type: "ask", site: SITE, reason: "possible_secret" }
-                  : { type: "run", by: "site-grant", origin: SITE };
+                if (typing && history === "noValue") {
+                  return { type: "ask", site: SITE, reason: "possible_secret" };
+                }
+                return granted
+                  ? { type: "run", by: "site-grant", origin: SITE }
+                  : { type: "ask", site: SITE, reason: "site_not_allowed" };
               })();
               expect({
                 level,

@@ -1714,10 +1714,14 @@ describe("website approvals on the member's computer", () => {
         gate === "ask" ? [step] : [],
       );
       expect(browser.offeredSites).toEqual(gate === "ask" ? [SITE] : []);
-      // A step on a website the run allows asks only for the field.
+      // A field that may hold a secret asks whatever the run allows.
       expect(browser.reasons).toEqual(
         gate === "ask"
-          ? [granted === "this" ? "possible_secret" : "site_not_allowed"]
+          ? [
+              step === "type" && !valueReported
+                ? "possible_secret"
+                : "site_not_allowed",
+            ]
           : [],
       );
       expect(browser.sent).toHaveLength(gate === "refuse" ? 1 : 2);

@@ -147,9 +147,10 @@ export type BrowserStepGateInput = {
  */
 export const BROWSER_STEP_ASK_REASON = {
   /**
-   * The member does not always allow the website: the one reason always
-   * allowing it answers. Every other reason is about a website the member
-   * already allows.
+   * The member does not always allow the website, and nothing else holds
+   * the step back: always allowing the website answers it. Every other
+   * reason holds a step back whatever the member allows, so no website
+   * approval may answer a question asked for it.
    */
   siteNotAllowed: "site_not_allowed",
   /** The address names no website a website approval can hold. */
@@ -215,13 +216,15 @@ const TOP_FRAME_ID = 0;
 
 /**
  * Whether a website approval answers `command`, a step the level asks
- * about: only when the member always allows the website of the page the
- * step was written for, and the command names the very page the browser
- * reported last (address and revision). The target must sit in the top
- * frame: a read merges every controllable frame, including another
- * website's embedded one, and names only the top frame's address. Typing
- * into a field the browser reported no value for may be typing a secret, so
- * no approval covers it. Otherwise the question and why it is asked.
+ * about: only when the command names the very page the browser reported
+ * last (address and revision), and the member always allows that page's
+ * website. The target must sit in the top frame: a read merges every
+ * controllable frame, including another website's embedded one, and names
+ * only the top frame's address. Typing into a field the browser reported no
+ * value for may be typing a secret, so no approval covers it. Otherwise the
+ * question and why it is asked: what holds the step back whatever the
+ * member allows comes first, so `siteNotAllowed` means an approval for the
+ * website would answer the step.
  */
 const siteGrantDecision = (
   command: BrowserControlElementCommand,
@@ -236,9 +239,6 @@ const siteGrantDecision = (
   });
   if (site === null) {
     return ask(BROWSER_STEP_ASK_REASON.noSite);
-  }
-  if (!grantedOrigins.has(site)) {
-    return ask(BROWSER_STEP_ASK_REASON.siteNotAllowed);
   }
   if (
     page === null ||
@@ -255,6 +255,9 @@ const siteGrantDecision = (
     !page.valueRefs.has(command.target.ref)
   ) {
     return ask(BROWSER_STEP_ASK_REASON.possibleSecret);
+  }
+  if (!grantedOrigins.has(site)) {
+    return ask(BROWSER_STEP_ASK_REASON.siteNotAllowed);
   }
   return { type: BROWSER_STEP_GATE.run, by: "site-grant", origin: site };
 };

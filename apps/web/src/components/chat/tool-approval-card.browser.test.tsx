@@ -545,10 +545,10 @@ describe("always allowing a website", () => {
     );
     expect(framed).not.toContain(alwaysAllowSite);
     // A website not allowed says so, and offers to allow it.
-    const notAllowed = renderCard(
-      browserPart(clickNews, "approval-requested"),
-      undefined,
-      { user: member },
+    const notAllowed = afterReport(readOf("https://example.com/news"), () =>
+      renderCard(browserPart(clickNews, "approval-requested"), undefined, {
+        user: member,
+      }),
     );
     expect(notAllowed).toContain(
       messages.chat.approval.browser.askReason.siteNotAllowed,
