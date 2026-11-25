@@ -487,11 +487,26 @@ describe("AcpTurnSession permission requests", () => {
     session.begin(SESSION, { type: "fresh" });
     const turn = session.turn();
     const events: HarnessEvent[] = [];
+    let arrived = Promise.withResolvers<undefined>();
     const collected = (async () => {
       for await (const event of turn.events) {
         events.push(event);
+        arrived.resolve(undefined);
+        arrived = Promise.withResolvers<undefined>();
       }
     })();
+    /** The approval the turn asked, once its event reached the reader. */
+    const asked = async () => {
+      for (;;) {
+        const found = events.find(
+          (event) => event.type === "approval.requested",
+        );
+        if (found?.type === "approval.requested") {
+          return found.request;
+        }
+        await arrived.promise;
+      }
+    };
     session.prompted(prompt.promise);
     const ask = (
       id: number,
@@ -511,7 +526,7 @@ describe("AcpTurnSession permission requests", () => {
       prompt.resolve(Result.ok({ stopReason: "end_turn" }));
       await collected;
     };
-    return { ask, end, events, session, turn, wire, collected };
+    return { ask, asked, end, events, session, turn, wire, collected };
   };
 
   const ONCE = [
@@ -519,32 +534,21 @@ describe("AcpTurnSession permission requests", () => {
     { optionId: "no", kind: "reject_once" },
   ];
 
-  const requestIdOf = (events: readonly HarnessEvent[]) => {
-    const asked = events.find((event) => event.type === "approval.requested");
-    return asked?.type === "approval.requested"
-      ? asked.request.requestId
-      : null;
-  };
-
   test("a request the agent withdraws closes its question while the turn goes on, and an answer then reaches nothing", async () => {
-    const { ask, end, events, session, turn, wire } = askingSession();
+    const { ask, asked, end, events, session, turn, wire } = askingSession();
     ask(7, ONCE);
-    const requestId = requestIdOf(events);
-    expect(requestId).not.toBeNull();
+    const { requestId } = await asked();
     session.handlers.notification(ACP_AGENT_NOTIFICATIONS.cancelRequest, {
       requestId: 7,
     });
-    expect(events).toContainEqual({
-      type: "interaction.resolved",
-      requestId: requestId ?? "",
-    });
+    await Promise.resolve();
     expect(wire).toContainEqual({
       kind: "respond",
       body: { id: 7, result: { outcome: { outcome: "cancelled" } } },
     });
     const late = await turn.respond({
       type: "approval",
-      requestId: requestId ?? "",
+      requestId,
       decision: "approve",
     });
     expect(Result.isError(late)).toBe(true);
@@ -553,6 +557,7 @@ describe("AcpTurnSession permission requests", () => {
       requestId: 99,
     });
     await end();
+    expect(events).toContainEqual({ type: "interaction.resolved", requestId });
     expect(events.at(-1)?.type).toBe("turn.completed");
   });
 
@@ -578,17 +583,15 @@ describe("AcpTurnSession permission requests", () => {
   });
 
   test("a prompt that refuses only with 'reject always' still offers Deny", async () => {
-    const { ask, end, events } = askingSession();
+    const { ask, asked, end } = askingSession();
     ask(5, [
       { optionId: "yes", kind: "allow_once" },
       { optionId: "never", kind: "reject_always" },
     ]);
-    const asked = events.find((event) => event.type === "approval.requested");
-    expect(
-      asked?.type === "approval.requested"
-        ? asked.request.options.map(({ decision }) => decision)
-        : [],
-    ).toEqual(["approve", "deny"]);
+    expect((await asked()).options.map(({ decision }) => decision)).toEqual([
+      "approve",
+      "deny",
+    ]);
     await end();
   });
 });
