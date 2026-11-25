@@ -33,6 +33,7 @@ import {
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
@@ -388,5 +389,11 @@ const buildPrompt = ({
   sections.push(`Current SKILL.md:\n${currentBody}`);
   return sections.join("\n\n");
 };
+
+declareAggregateMutation(suggestSkillImprovements, {
+  type: "independent",
+  reason:
+    "Creates one new draft proposal row referencing an existing skill revision; does not mutate the skill or existing proposals.",
+});
 
 export default suggestSkillImprovements;

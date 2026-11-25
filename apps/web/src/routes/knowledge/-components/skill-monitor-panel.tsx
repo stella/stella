@@ -59,6 +59,7 @@ type SkillMonitorPanelProps = {
 
 export function SkillMonitorPanel({ skillId }: SkillMonitorPanelProps) {
   const tMonitor = useTranslations("knowledge.agentSkills.monitor");
+  const tRoot = useTranslations();
   const locale = useFormattingLocale();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const [days, setDays] = useState<MonitorWindowDays>(7);
@@ -135,8 +136,12 @@ export function SkillMonitorPanel({ skillId }: SkillMonitorPanelProps) {
               <SelectValue />
             </SelectTrigger>
             <SelectPopup>
-              <SelectItem value="7">{tMonitor("window7d")}</SelectItem>
-              <SelectItem value="30">{tMonitor("window30d")}</SelectItem>
+              <SelectItem value="7">
+                {tRoot("workspaces.filters.date.last7d")}
+              </SelectItem>
+              <SelectItem value="30">
+                {tRoot("workspaces.filters.date.last30d")}
+              </SelectItem>
               <SelectItem value="90">{tMonitor("window90d")}</SelectItem>
             </SelectPopup>
           </Select>
@@ -154,7 +159,7 @@ export function SkillMonitorPanel({ skillId }: SkillMonitorPanelProps) {
           <>
             <div className="rounded-lg border p-4">
               <p className="text-muted-foreground mb-3 text-xs font-semibold tracking-wider uppercase">
-                {tMonitor("overview")}
+                {tRoot("workspaces.views.layouts.overview")}
               </p>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                 <MetricCell
@@ -179,7 +184,7 @@ export function SkillMonitorPanel({ skillId }: SkillMonitorPanelProps) {
                 />
                 <MetricCell
                   detail={tMonitor("readsSplit", {
-                    chat: formatNumber(data.chatReads),
+                    chatCount: formatNumber(data.chatReads),
                     mcp: formatNumber(data.mcpReads),
                   })}
                   label={tMonitor("totalReads")}

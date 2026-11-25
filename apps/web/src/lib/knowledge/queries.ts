@@ -929,21 +929,30 @@ export const skillMonitorOptions = (
   skillId: string,
   days: 7 | 30 | 90,
 ) =>
-  queryOptions({
-    queryKey: knowledgeKeys.skills.monitor(
-      organizationId,
-      userId,
-      skillId,
-      days,
-    ),
-    queryFn: async ({ signal }) => {
-      const response = await api
-        .skills({ skillId: toSafeId<"agentSkill">(skillId) })
-        .monitor.get({ query: { days: String(days) }, fetch: { signal } });
-      return unwrapApiResponse(response);
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: knowledgeKeys.skills.monitor(
+        organizationId,
+        userId,
+        skillId,
+        days,
+      ),
+      queryFn: async ({ signal }) => {
+        const response = await api
+          .skills({ skillId: toSafeId<"agentSkill">(skillId) })
+          .monitor.get({ query: { days: String(days) }, fetch: { signal } });
+        return unwrapApiResponse(response);
+      },
+      staleTime: STALE_TIME.ONE.MINUTE,
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.AGENT_SKILL,
+        RESOURCE_TYPE.AGENT_SKILL_RESOURCE,
+      ],
+      scope: { type: "organization", organizationId, userId },
     },
-    staleTime: STALE_TIME.ONE.MINUTE,
-  });
+  );
 
 export const skillRevisionsOptions = (
   organizationId: string,

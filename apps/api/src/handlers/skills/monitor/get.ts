@@ -15,6 +15,46 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
+
+type AgentSkillResourceRow = typeof agentSkillResources.$inferSelect;
+
+const MONITOR_RESOURCE_SELECTION = {
+  path: agentSkillResources.path,
+} as const;
+
+const UNPROJECTED_MONITOR_RESOURCE_COLUMNS = [
+  // Only the path is shown in the context-file usage table; internal IDs,
+  // tenant/skill foreign keys, file contents, sizes, and binary storage
+  // metadata are not part of usage analytics.
+  "id",
+  "organizationId",
+  "skillId",
+  "content",
+  "sizeBytes",
+  "originalS3Key",
+  "originalSha256",
+  "originalSizeBytes",
+  "originalMediaType",
+  "createdAt",
+] as const satisfies readonly (keyof AgentSkillResourceRow)[];
+
+type MissingMonitorResourceColumn = UnprojectedColumns<
+  AgentSkillResourceRow,
+  typeof MONITOR_RESOURCE_SELECTION,
+  (typeof UNPROJECTED_MONITOR_RESOURCE_COLUMNS)[number]
+>;
+type UnexpectedMonitorResourceColumn = UnbackedProjectionKeys<
+  AgentSkillResourceRow,
+  typeof MONITOR_RESOURCE_SELECTION,
+  (typeof UNPROJECTED_MONITOR_RESOURCE_COLUMNS)[number]
+>;
+
+true satisfies MissingMonitorResourceColumn extends never ? true : never;
+true satisfies UnexpectedMonitorResourceColumn extends never ? true : never;
 
 const MONITOR_AUDIT_ROW_LIMIT = 20_000;
 
@@ -74,7 +114,7 @@ const getSkillMonitor = createSafeRootHandler(
       yield* Result.await(
         safeDb(async (tx) => {
           const resources = await tx
-            .select({ path: agentSkillResources.path })
+            .select(MONITOR_RESOURCE_SELECTION)
             .from(agentSkillResources)
             .where(
               and(

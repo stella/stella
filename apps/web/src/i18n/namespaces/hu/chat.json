@@ -1063,8 +1063,8 @@
     "statusProposed": "Elbírálás alatt",
     "statusRejected": "Elutasítva",
     "submitForReview": "Beküldés elbírálásra",
-    "suggestImprovements": "Suggest improvements",
-    "suggestingImprovements": "Suggesting…",
+    "suggestImprovements": "Fejlesztések javaslása",
+    "suggestingImprovements": "Javaslat készítése…",
     "summaryLabel": "Összefoglaló",
     "summaryPlaceholder": "Mi változik?"
   },

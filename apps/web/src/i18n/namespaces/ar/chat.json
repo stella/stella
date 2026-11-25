@@ -1063,8 +1063,8 @@
     "statusProposed": "قيد المراجعة",
     "statusRejected": "مرفوض",
     "submitForReview": "إرسال للمراجعة",
-    "suggestImprovements": "Suggest improvements",
-    "suggestingImprovements": "Suggesting…",
+    "suggestImprovements": "اقتراح تحسينات",
+    "suggestingImprovements": "جارٍ الاقتراح…",
     "summaryLabel": "الملخص",
     "summaryPlaceholder": "ما الذي يتغيّر؟"
   },

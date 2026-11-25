@@ -195,7 +195,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   const canViewMonitor = access !== "none";
   const resolvedTab = resolveSkillEditorTab(activeTab, canViewMonitor);
   const tabLabels: Record<SkillEditorTab, string> = {
-    configure: tSkills("tabConfigure"),
+    configure: t("organization.aiConfig.configure"),
     monitor: tSkills("tabMonitor"),
     settings: tSkills("howItRuns"),
   };
@@ -762,14 +762,14 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 value={resolvedTab}
               >
                 <SelectTrigger
-                  aria-label={tSkills("tabConfigure")}
+                  aria-label={t("organization.aiConfig.configure")}
                   className="h-8 w-fit min-w-28 sm:h-7"
                 >
                   <SelectValue>{tabLabels[resolvedTab]}</SelectValue>
                 </SelectTrigger>
                 <SelectPopup>
                   <SelectItem value="configure">
-                    {tSkills("tabConfigure")}
+                    {t("organization.aiConfig.configure")}
                   </SelectItem>
                   {canViewMonitor && (
                     <SelectItem value="monitor">
@@ -799,7 +799,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 variant="outline"
               >
                 <PlayIcon className="size-3.5" />
-                {tSkills("previewSkill")}
+                {t("common.preview")}
               </Button>
             )}
             {access !== "none" && !enabled && resolvedTab !== "settings" && (
@@ -871,7 +871,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                     className="text-foreground me-auto text-sm font-medium"
                     data-slot="skill-editor-files"
                   >
-                    {tSkills("contextSection")}
+                    {t("chat.composerMenu.context")}
                   </span>
                   {allFolderIds.size > 0 && (
                     <FolderExpandToggle
@@ -974,7 +974,6 @@ function SkillInstructionsCard({
   skillId,
 }: SkillInstructionsCardProps) {
   const t = useTranslations();
-  const tSkills = useTranslations("knowledge.agentSkills");
   return (
     <div data-slot="skill-editor-instructions">
       {isLoading && <SkillFilesPending />}
@@ -993,7 +992,7 @@ function SkillInstructionsCard({
             onPersistBody={onPersistBody}
             onRestoreBody={onRestoreBody}
             skillId={skillId}
-            title={tSkills("instructionsSection")}
+            title={t("flows.steps.instructions")}
           />
         </div>
       )}
