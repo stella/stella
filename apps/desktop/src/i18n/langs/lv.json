@@ -1411,9 +1411,7 @@
     "waitingForFileSelection": "Atlasiet ierakstu vai aizveriet failu atlasītāju."
   },
   "tray": {
-    "aboutStellaDesktop": "Par stella desktop",
     "activeEdits": "{count, plural, zero {{count} aktīvu labojumu} one {{count} aktīvs labojums} other {{count} aktīvi labojumi}}",
-    "activeEditsSubmenu": "Aktīvie labojumi",
     "activity": "Darbība",
     "activityNow": "Tagad: {name}",
     "activityOff": "Darbība: Izslēgta",
@@ -1431,7 +1429,6 @@
     "documentsSyncing": "{count, plural, zero {{count} dokumentu tiek sinhronizēts} one {{count} dokuments tiek sinhronizēts} other {{count} dokumenti tiek sinhronizēti}}",
     "finishEditing": "Pabeigt rediģēšanu",
     "needsAttention": "Nepieciešama uzmanība",
-    "noActiveEdits": "Nav aktīvu labojumu",
     "openActivity": "Atvērt darbību",
     "openFile": "Atvērt failu",
     "quitStellaDesktop": "Iziet no stella desktop",
@@ -1447,10 +1444,6 @@
     "sessionSavingDraft": "Tiek saglabāts melnraksts",
     "settings": "Iestatījumi",
     "showTranscription": "Rādīt transkripciju",
-    "support": "Atbalsts",
-    "supportCopyDiagnostics": "Kopēt diagnostiku",
-    "supportEmailSupport": "E-pasta atbalsts",
-    "supportRevealAppData": "Rādīt lietotnes datus",
     "temporaryWorkingCopies": "Pagaidu darba kopijas",
     "transcribeRecording": "Transkribēt ierakstu…",
     "transcriptionProgress": "Notiek transkribēšana: {done} no {total} min",

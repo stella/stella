@@ -1411,9 +1411,7 @@
     "waitingForFileSelection": "اختر تسجيلاً أو أغلق نافذة اختيار الملفات."
   },
   "tray": {
-    "aboutStellaDesktop": "حول stella desktop",
     "activeEdits": "{count, plural, zero {لا تحريرات نشطة} one {تحرير نشط واحد} two {تحريران نشطان} few {{count} تحريرات نشطة} many {{count} تحريراً نشطاً} other {{count} تحرير نشط}}",
-    "activeEditsSubmenu": "التحريرات النشطة",
     "activity": "النشاط",
     "activityNow": "الآن: {name}",
     "activityOff": "النشاط: متوقف",
@@ -1431,7 +1429,6 @@
     "documentsSyncing": "{count, plural, zero {لا مستندات قيد المزامنة} one {مستند واحد قيد المزامنة} two {مستندان قيد المزامنة} few {{count} مستندات قيد المزامنة} many {{count} مستنداً قيد المزامنة} other {{count} مستند قيد المزامنة}}",
     "finishEditing": "إنهاء التحرير",
     "needsAttention": "يتطلب انتباهك",
-    "noActiveEdits": "لا توجد تحريرات نشطة",
     "openActivity": "فتح النشاط",
     "openFile": "فتح الملف",
     "quitStellaDesktop": "إنهاء stella desktop",
@@ -1447,10 +1444,6 @@
     "sessionSavingDraft": "حفظ المسودة",
     "settings": "الإعدادات",
     "showTranscription": "إظهار النص",
-    "support": "الدعم",
-    "supportCopyDiagnostics": "نسخ معلومات التشخيص",
-    "supportEmailSupport": "مراسلة الدعم بالبريد",
-    "supportRevealAppData": "إظهار بيانات التطبيق",
     "temporaryWorkingCopies": "نسخ العمل المؤقتة",
     "transcribeRecording": "تحويل تسجيل إلى نص…",
     "transcriptionProgress": "جارٍ التحويل إلى نص: {done} من {total} د",

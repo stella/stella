@@ -1411,9 +1411,7 @@
     "waitingForFileSelection": "Seleccione una grabación o cierre el selector de archivos."
   },
   "tray": {
-    "aboutStellaDesktop": "Acerca de stella desktop",
     "activeEdits": "{count, plural, one {1 edición activa} other {{count} ediciones activas}}",
-    "activeEditsSubmenu": "Ediciones activas",
     "activity": "Actividad",
     "activityNow": "Ahora: {name}",
     "activityOff": "Actividad: Desactivada",
@@ -1431,7 +1429,6 @@
     "documentsSyncing": "{count, plural, one {1 documento sincronizándose} other {{count} documentos sincronizándose}}",
     "finishEditing": "Finalizar edición",
     "needsAttention": "Necesita atención",
-    "noActiveEdits": "Sin ediciones activas",
     "openActivity": "Abrir actividad",
     "openFile": "Abrir archivo",
     "quitStellaDesktop": "Salir de stella desktop",
@@ -1447,10 +1444,6 @@
     "sessionSavingDraft": "Guardando borrador",
     "settings": "Configuración",
     "showTranscription": "Mostrar transcripción",
-    "support": "Soporte",
-    "supportCopyDiagnostics": "Copiar diagnósticos",
-    "supportEmailSupport": "Soporte por correo",
-    "supportRevealAppData": "Mostrar datos de la app",
     "temporaryWorkingCopies": "Copias de trabajo temporales",
     "transcribeRecording": "Transcribir una grabación…",
     "transcriptionProgress": "Transcripción en curso: {done} de {total} min",

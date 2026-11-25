@@ -51,7 +51,6 @@ export type SettingsView = {
   page: SettingsPage;
   agentFocus: AgentSettingsFocus | null;
   dictationFocus: "microphone" | null;
-  checkForUpdates: boolean;
 };
 
 /** The view a native `tab` and `focus` name; null for an unknown page. A
@@ -71,6 +70,5 @@ export const settingsView = ({
     agentFocus: tab === "agents" && isAgentSettingsFocus(focus) ? focus : null,
     dictationFocus:
       tab === "dictation" && focus === "microphone" ? focus : null,
-    checkForUpdates: tab === "about" && focus === "update-check",
   };
 };
