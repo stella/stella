@@ -312,17 +312,6 @@ const defaultReadWorkspaceMembersHandler: typeof readWorkspaceMembersHandler =
       await import("@/api/handlers/workspaces/workspace-members-read")
     ).readWorkspaceMembersHandler(input);
 
-type StellaToolName =
-  | "case_law_coverage"
-  | "list_matters"
-  | "read_case_law_citations"
-  | "read_case_law_decision"
-  | "read_contact"
-  | "read_content_across_matters"
-  | "search_case_law"
-  | "search_across_matters"
-  | "set_practice_jurisdictions";
-
 // --- Text-field specs (plan 049, Option B) --------------------------------
 
 /**
@@ -4996,7 +4985,10 @@ export const STELLA_TOOL_HANDLERS = {
   search_case_law: handleSearchCaseLawTool,
   search_across_matters: handleSearchAcrossMattersTool,
   set_practice_jurisdictions: handleSetPracticeJurisdictionsTool,
-} satisfies Record<StellaToolName, McpToolHandler>;
+} satisfies Record<
+  (typeof STELLA_TOOL_DEFINITIONS)[number]["name"],
+  McpToolHandler
+>;
 
 export const STELLA_TOOL_SET = defineMcpToolSet(
   STELLA_TOOL_DEFINITIONS,

@@ -37,10 +37,6 @@ export const PROFILE_SHORTCUT_FIELD_CLASS = "max-w-xs";
 /** The width of a locale preference's picker (the page's `w-56` trigger). */
 const LOCALE_PREFERENCE_TRIGGER_CLASS = "w-56";
 
-/** The locale preferences the profile sets. */
-type LocalePreference =
-  "language" | "regionalFormat" | "calendar" | "weekStart" | "numbers";
-
 /** The locale preferences in order, by the caption each row shows. */
 export const LOCALE_PREFERENCE_LABELS = {
   language: "common.language",
@@ -48,7 +44,7 @@ export const LOCALE_PREFERENCE_LABELS = {
   calendar: "appearance.calendar",
   weekStart: "appearance.weekStart",
   numbers: "appearance.numbers",
-} as const satisfies Record<LocalePreference, PendingTextKey>;
+} as const;
 
 /** One locale preference: its caption at the start, its picker at the end. */
 export const PreferenceRow = ({
@@ -158,7 +154,9 @@ const SaveButtonPending = () => (
   </ButtonFace>
 );
 
-const LOCALE_PREFERENCE_ROWS = Object.values(LOCALE_PREFERENCE_LABELS);
+const LOCALE_PREFERENCE_ROWS: readonly PendingTextKey[] = Object.values(
+  LOCALE_PREFERENCE_LABELS,
+);
 
 const ProfilePendingView = () => (
   <SettingsPagePending area="account">

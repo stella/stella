@@ -198,14 +198,6 @@ import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority
 import { selectOperationByPresence } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-type TemplateToolName =
-  | "list_templates"
-  | "fill_template"
-  | "save_filled_template"
-  | "create_template"
-  | "configure_template_fields"
-  | "preview_template_conditions";
-
 /** Max assembled-text length returned inline; full bytes ride along as base64. */
 const TEMPLATE_FILL_TEXT_MAX_CHARS = 16_000;
 const SAVE_FILLED_TEMPLATE_RENDER_TIMEOUT_MS = 300_000;
@@ -3224,7 +3216,10 @@ export const TEMPLATE_TOOL_HANDLERS = {
   list_templates: handleListTemplatesTool,
   preview_template_conditions: handlePreviewTemplateConditionsTool,
   save_filled_template: handleSaveFilledTemplateTool,
-} satisfies Record<TemplateToolName, McpToolHandler>;
+} satisfies Record<
+  (typeof TEMPLATE_TOOL_DEFINITIONS)[number]["name"],
+  McpToolHandler
+>;
 
 export const TEMPLATE_TOOL_SET = defineMcpToolSet(
   TEMPLATE_TOOL_DEFINITIONS,

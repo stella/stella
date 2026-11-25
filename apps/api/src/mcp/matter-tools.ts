@@ -174,19 +174,6 @@ import {
 } from "@/api/mcp/valibot-tool-definition";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
-type MatterToolName =
-  | "save_matter"
-  | "delete_matter"
-  | "list_contacts"
-  | "save_contact"
-  | "delete_contact"
-  | "lookup_business_registry"
-  | "check_counterparty"
-  | "list_tasks"
-  | "save_task"
-  | "delete_task"
-  | "link_matter_contact";
-
 /** Statuses a matter can be flipped to through save_matter. */
 const MATTER_STATUSES = [
   WORKSPACE_STATUS.active,
@@ -3130,7 +3117,10 @@ export const MATTER_TOOL_HANDLERS = {
   save_task: handleSaveTaskTool,
   delete_task: handleDeleteTaskTool,
   link_matter_contact: handleLinkMatterContactTool,
-} satisfies Record<MatterToolName, McpToolHandler>;
+} satisfies Record<
+  (typeof MATTER_TOOL_DEFINITIONS)[number]["name"],
+  McpToolHandler
+>;
 
 export const MATTER_TOOL_SET = defineMcpToolSet(
   MATTER_TOOL_DEFINITIONS,

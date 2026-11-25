@@ -86,8 +86,6 @@ import {
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { openMcpRead } from "@/api/mcp/write-tool-authority";
 
-type CompatToolName = "fetch" | "search";
-
 type FetchableEntity = {
   entityId: string;
   fieldId: string | null;
@@ -670,7 +668,10 @@ const handleCompatFetchTool: McpToolHandler<
 export const COMPAT_TOOL_HANDLERS = {
   fetch: handleCompatFetchTool,
   search: handleCompatSearchTool,
-} satisfies Record<CompatToolName, McpToolHandler>;
+} satisfies Record<
+  (typeof COMPAT_TOOL_DEFINITIONS)[number]["name"],
+  McpToolHandler
+>;
 
 export const COMPAT_TOOL_SET = defineMcpToolSet(
   COMPAT_TOOL_DEFINITIONS,

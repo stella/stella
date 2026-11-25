@@ -156,20 +156,6 @@ import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority
 import { selectOperationByPresence } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
-type DocumentToolName =
-  | "compare_documents"
-  | "prepare_file_comparison"
-  | "prepare_file_comparison_from_links"
-  | "open_file_comparison"
-  | "list_documents"
-  | "read_document"
-  | "save_document"
-  | "upload_document_version"
-  | "open_document_version_upload"
-  | "delete_document"
-  | "list_properties"
-  | "set_field_value";
-
 const PROPERTY_WRITE_METHODS = {
   file: "unsupported",
   // Neither is settable through set_field_value: money needs a currency
@@ -2668,7 +2654,10 @@ export const DOCUMENT_TOOL_HANDLERS = {
   save_document: handleSaveDocumentTool,
   [DOCUMENT_VERSION_UPLOAD_TRANSPORT.toolName]: handleUploadDocumentVersionTool,
   set_field_value: handleSetFieldValueTool,
-} satisfies Record<DocumentToolName, McpToolHandler>;
+} satisfies Record<
+  (typeof DOCUMENT_TOOL_DEFINITIONS)[number]["name"],
+  McpToolHandler
+>;
 
 export const DOCUMENT_TOOL_SET = defineMcpToolSet(
   DOCUMENT_TOOL_DEFINITIONS,

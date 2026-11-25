@@ -111,14 +111,6 @@ import {
 } from "@/api/mcp/valibot-tool-definition";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
-type BillingToolName =
-  | "list_time_entries"
-  | "save_time_entry"
-  | "delete_time_entry"
-  | "resolve_rate"
-  | "list_invoices"
-  | "get_usage";
-
 // --- list_time_entries text-field specs ---------------------------------
 
 /** Shape `list_time_entries` redacts on both the list and detail branch. */
@@ -1944,7 +1936,10 @@ export const BILLING_TOOL_HANDLERS = {
   resolve_rate: handleResolveRateTool,
   list_invoices: handleListInvoicesTool,
   get_usage: handleGetUsageTool,
-} satisfies Record<BillingToolName, McpToolHandler>;
+} satisfies Record<
+  (typeof BILLING_TOOL_DEFINITIONS)[number]["name"],
+  McpToolHandler
+>;
 
 export const BILLING_TOOL_SET = defineMcpToolSet(
   BILLING_TOOL_DEFINITIONS,
