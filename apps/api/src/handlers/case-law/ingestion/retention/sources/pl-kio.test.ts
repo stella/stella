@@ -87,6 +87,25 @@ describe("pl-kio retention projection", () => {
     });
   });
 
+  test("a numbering label set as an inline box is a word of its own", async () => {
+    const label =
+      '<span style="font-size:11pt;display:inline-block;text-indent:0;">';
+    expect(
+      await project(
+        encodeSourceRawEnvelope({
+          listing: "{}",
+          document: `<html><body><p>${label}a)</span><span>zamawiający wezwał</span></p><p>${label}B.</span>Wykonawca</p></body></html>`,
+        }),
+      ),
+    ).toEqual({
+      type: "source",
+      source: {
+        type: "paragraphs",
+        paragraphs: ["a) zamawiający wezwał", "B. Wykonawca"],
+      },
+    });
+  });
+
   test("a ruling stored without its document states no publisher text", async () => {
     expect(
       await project(
