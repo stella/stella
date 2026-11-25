@@ -107,7 +107,9 @@ const handleReadSiteNotes: TypedMcpToolHandler<
       hint: NOT_HTTPS_HINT,
     });
   }
-  const notes = await readBrowserSiteNotes({
+  const notes = await (
+    context.testDependencies?.readBrowserSiteNotes ?? readBrowserSiteNotes
+  )({
     origin,
     owner: { organizationId: context.organizationId, userId: context.userId },
     safeDb: context.safeDb,
@@ -128,7 +130,9 @@ const handleSaveSiteNotes: TypedMcpToolHandler<
       "Send the page address and a list of changes, each { type: add | confirm | replace | remove } with the fields its type takes.",
     );
   }
-  const saved = await saveBrowserSiteNotes({
+  const saved = await (
+    context.testDependencies?.saveBrowserSiteNotes ?? saveBrowserSiteNotes
+  )({
     actor: "agent",
     changes: parsed.output.changes,
     owner: { organizationId: context.organizationId, userId: context.userId },

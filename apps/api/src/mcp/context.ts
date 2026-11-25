@@ -88,6 +88,10 @@ import type {
   readProvisionWorkLinked,
 } from "@/api/lib/case-law/provision-filter";
 import type { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
+import type {
+  readBrowserSiteNotes,
+  saveBrowserSiteNotes,
+} from "@/api/lib/chat/browser-site-notes/store";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
 import {
@@ -212,6 +216,9 @@ export type McpRequestContext = {
     createPlaybookTableRuns?: typeof createPlaybookTableRuns;
     createTimeEntryHandler?: typeof createTimeEntryHandler;
     readCaseLawCoverageHandler?: typeof readCaseLawCoverageHandler;
+    /** Replaces the website-notes store reads and writes. */
+    readBrowserSiteNotes?: typeof readBrowserSiteNotes;
+    saveBrowserSiteNotes?: typeof saveBrowserSiteNotes;
     searchDecisionsHandler?: typeof searchDecisionsHandler;
     caseLawSearchContinuation?: CaseLawContinuation;
     publicReadResponseDeadlineMs?: number;
