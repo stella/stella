@@ -191,6 +191,13 @@
       },
       "patternInPath": "{pattern} asukohas {path}",
       "ranOnModel": "Töötas mudelil {model}",
+      "request": {
+        "cancelled": "Vastamata: see vastus peatati.",
+        "runFailed": "Vastamata: agent lõpetas enne seda sammu veaga.",
+        "runFinished": "Pole vaja: agent lõpetas ilma selle sammuta.",
+        "runLost": "Vastamata: teie arvuti lõpetas selle vastuse töötlemise.",
+        "withdrawn": "Pole enam vaja: agent jätkas ilma selle sammuta."
+      },
       "sessionNotResumed": "Teie arvutis töötav programmeerimisagent ei saanud pooleli jäänud kohast edasi minna, seega jätkas ta selle vestluse sõnumite põhjal.",
       "status": {
         "failed": "Ebaõnnestus",

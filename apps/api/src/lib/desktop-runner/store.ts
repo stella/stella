@@ -2683,6 +2683,38 @@ export const readRunRequestClosure = async (
   return parsed.success ? parsed.output.chunk.value : null;
 };
 
+/**
+ * Whether an answer to request `requestId` of run `runId` is queued: an
+ * approval's decision or a question's answers, keyed by the request.
+ */
+export const readRunRequestAnswered = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  {
+    owner,
+    runId,
+    requestId,
+  }: { owner: RunOwner; runId: string; requestId: string },
+): Promise<boolean> => {
+  const [answer] = await db
+    .select({ id: desktopRunnerCommands.id })
+    .from(desktopRunnerCommands)
+    .innerJoin(runs, eq(runs.runId, desktopRunnerCommands.runId))
+    .where(
+      and(
+        eq(desktopRunnerCommands.runId, runId),
+        eq(runs.userId, owner.userId),
+        eq(runs.organizationId, owner.organizationId),
+        inArray(desktopRunnerCommands.kind, [
+          DESKTOP_RUNNER_SERVER_MESSAGE.runApproval,
+          DESKTOP_RUNNER_SERVER_MESSAGE.runAnswer,
+        ]),
+        eq(desktopRunnerCommands.commandKey, requestId),
+      ),
+    )
+    .limit(1);
+  return answer !== undefined;
+};
+
 export type ChatTurnRunOptions = { owner: RunOwner; chat: ChatRunBinding };
 
 /** The run a handed-over chat turn reads on, and where its last reader stopped. */

@@ -191,6 +191,13 @@
       },
       "patternInPath": "{pattern} ({path})",
       "ranOnModel": "Vykdyta su modeliu {model}",
+      "request": {
+        "cancelled": "Neatsakyta: šis atsakymas sustabdytas.",
+        "runFailed": "Neatsakyta: agentas sustojo dėl klaidos prieš šį veiksmą.",
+        "runFinished": "Nereikia: agentas baigė be šio veiksmo.",
+        "runLost": "Neatsakyta: jūsų kompiuteris nustojo apdoroti šį atsakymą.",
+        "withdrawn": "Nebereikia: agentas tęsė be šio veiksmo."
+      },
       "sessionNotResumed": "Programavimo agentas jūsų kompiuteryje negalėjo grįžti ten, kur sustojo, todėl tęsė darbą remdamasis šio pokalbio žinutėmis.",
       "status": {
         "failed": "Nepavyko",

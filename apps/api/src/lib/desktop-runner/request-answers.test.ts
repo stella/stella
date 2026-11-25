@@ -83,12 +83,19 @@ const control = ({
   run = approvalAsked,
   closure = null,
   queued = { type: "queued" },
+  answered = false,
+  ended,
 }: {
   run?: ChatRunForRequest | null;
   closure?: DesktopRunnerRequestEvent | null;
   queued?: QueueCommandOutcome;
+  /** Whether an answer to the request is queued already. */
+  answered?: boolean;
+  /** The run as a read after the command finds it. */
+  ended?: ChatRunForRequest;
 } = {}) => {
   const sent: string[] = [];
+  let reads = 0;
   const queue = (kind: string) => {
     sent.push(kind);
     return Result.ok(queued);
@@ -96,7 +103,14 @@ const control = ({
   return {
     sent,
     control: {
-      readChatRunForRequest: async () => await Promise.resolve(Result.ok(run)),
+      readChatRunForRequest: async () => {
+        reads += 1;
+        return await Promise.resolve(
+          Result.ok(reads > 1 && ended !== undefined ? ended : run),
+        );
+      },
+      readRunRequestAnswered: async () =>
+        await Promise.resolve(Result.ok(answered)),
       readRunRequestClosure: async () =>
         await Promise.resolve(Result.ok(closure)),
       answerApproval: async () => await Promise.resolve(queue("approval")),
@@ -172,12 +186,32 @@ describe("answering what a run on the member's computer asked", () => {
     }
   });
 
-  test("a run that ends between the read and the command reads by its end", async () => {
+  test("a run that ends between the read and the command reads by its end, read again", async () => {
     expect(
       await answer(
-        control({ queued: { type: "run_ended", state: "finished" } }),
+        control({
+          queued: { type: "run_ended", state: "finished" },
+          ended: { ...approvalAsked, state: "finished", outcome: "completed" },
+        }),
+      ),
+    ).toEqual({ type: "expired", expiry: "run_finished" });
+    // A run that ended with no outcome of its own was lost.
+    expect(
+      await answer(
+        control({
+          queued: { type: "run_ended", state: "lost" },
+          ended: { ...approvalAsked, state: "lost", outcome: null },
+        }),
       ),
     ).toEqual({ type: "expired", expiry: "run_lost" });
+  });
+
+  test("dismissing a question already answered keeps the answer and stops nothing", async () => {
+    const fake = control({ run: questionAsked, answered: true });
+    expect(await answer(fake, { type: "dismiss" })).toEqual({
+      type: "answered",
+    });
+    expect(fake.sent).toEqual([]);
   });
 
   test("a withdrawn or stopped request is told so", async () => {

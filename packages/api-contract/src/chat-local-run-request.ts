@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -261,3 +262,53 @@ export const pendingLocalRunApprovalOf = (
       request.ask.kind === "approval" &&
       request.toolCallId === toolCallId,
   ) ?? null;
+
+/**
+ * Why a request closed without the member's answer reaching its run, as the
+ * web's and the phone's cards say it, neutrally: the run's output stands as it is. A pending
+ * request in a turn that no longer runs reads as the turn's stop. `null` for
+ * a request answered, or still waiting in a running turn.
+ */
+export type LocalRunRequestUnanswered = NonNullable<
+  ReturnType<typeof unansweredLocalRunRequest>
+>;
+
+export const unansweredLocalRunRequest = (
+  request: ChatLocalRunRequest | null,
+  turnRuns: boolean,
+):
+  | "runFinished"
+  | "runFailed"
+  | "withdrawn"
+  | "runLost"
+  | "cancelled"
+  | null => {
+  if (request === null) {
+    return null;
+  }
+  switch (request.status) {
+    case "resolved":
+      return null;
+    case "pending":
+      return turnRuns ? null : "cancelled";
+    case "cancelled":
+      return "cancelled";
+    case "expired":
+      switch (request.expiry) {
+        case "run_finished":
+          return "runFinished";
+        case "run_failed":
+          return "runFailed";
+        case "withdrawn":
+          return "withdrawn";
+        case "run_lost":
+          return "runLost";
+        default:
+          request.expiry satisfies never;
+          return panic("Unknown local run request expiry");
+      }
+    default:
+      request satisfies never;
+      return panic("Unknown local run request status");
+  }
+};

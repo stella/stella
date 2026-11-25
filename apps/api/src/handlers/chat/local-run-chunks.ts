@@ -1018,12 +1018,24 @@ const createRunRequests = (rewrite: RewriteContext) => {
       let opened = false;
       for (const interrupt of interrupts) {
         const request = requestOf(interrupt);
-        if (
-          request === null ||
-          requests.has(request.requestId) ||
-          requests.size >= CHAT_LOCAL_RUN_MAX_REQUESTS
-        ) {
+        if (request === null || requests.has(request.requestId)) {
           continue;
+        }
+        // The list stays within its bound by retiring the oldest closed
+        // request: an open one is never dropped from the member's view.
+        if (requests.size >= CHAT_LOCAL_RUN_MAX_REQUESTS) {
+          const retired = [...requests.values()].find(
+            ({ status }) => status !== "pending",
+          );
+          if (retired === undefined) {
+            // Every one still waits on the member: the run asked more at
+            // once than one answer shows.
+            logger.warn("chat.local_run.requests_full", {
+              runId: rewrite.runnerRunId,
+            });
+            continue;
+          }
+          requests.delete(retired.requestId);
         }
         requests.set(request.requestId, request);
         opened = true;

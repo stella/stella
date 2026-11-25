@@ -191,6 +191,13 @@
       },
       "patternInPath": "{pattern} w {path}",
       "ranOnModel": "Wykonano na modelu {model}",
+      "request": {
+        "cancelled": "Bez odpowiedzi: ta odpowiedź została zatrzymana.",
+        "runFailed": "Bez odpowiedzi: agent zakończył pracę z błędem przed tym krokiem.",
+        "runFinished": "Niepotrzebne: agent skończył bez tego kroku.",
+        "runLost": "Bez odpowiedzi: Twój komputer przestał przetwarzać tę odpowiedź.",
+        "withdrawn": "Już niepotrzebne: agent kontynuował bez tego kroku."
+      },
       "sessionNotResumed": "Agent programistyczny na Twoim komputerze nie mógł wznowić pracy tam, gdzie skończył, dlatego kontynuował na podstawie wiadomości z tego czatu.",
       "status": {
         "failed": "Niepowodzenie",

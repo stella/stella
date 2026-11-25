@@ -3,10 +3,12 @@ import { useState } from "react";
 import { View } from "react-native";
 import { useTranslations } from "use-intl";
 
-import type {
-  ChatLocalRunRequest,
-  ChatLocalRunRequestAnswer,
-  ChatLocalRunRequestAnswerOutcome,
+import {
+  type ChatLocalRunRequest,
+  type ChatLocalRunRequestAnswer,
+  type ChatLocalRunRequestAnswerOutcome,
+  type LocalRunRequestUnanswered,
+  unansweredLocalRunRequest,
 } from "@stll/api-contract/chat-local-run-request";
 import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
@@ -14,11 +16,28 @@ import { Text } from "@stll/ui/text";
 import { QuestionCard } from "@/components/chat-input-card";
 
 /**
+ * Why steps the run asked about went on without the person's answer, said
+ * neutrally: the run's output beside them stands as it is.
+ */
+export const LocalRunRequestNotices = ({
+  reasons,
+}: {
+  reasons: readonly LocalRunRequestUnanswered[];
+}) => {
+  const t = useTranslations("chat");
+  return reasons.map((reason) => (
+    <Text key={reason} variant="caption">
+      {t(`localRun.request.${reason}`)}
+    </Text>
+  ));
+};
+
+/**
  * What the run on the person's computer asks while its turn keeps running:
  * the oldest pending request of the live answer, as the web's card asks it.
  * Its answer goes to the run beside the turn; the turn's stream then closes
  * the request, which hides the card. The run may also go on without it, and
- * its end closes the request the same way.
+ * its end closes the request the same way, and the card then says why.
  */
 export const LocalRunRequestCard = ({
   onAnswer,
@@ -35,17 +54,27 @@ export const LocalRunRequestCard = ({
   const [sent, setSent] = useState<string | null>(null);
   const request = requests.find(({ status }) => status === "pending");
   if (request === undefined) {
-    return null;
+    const reasons = [
+      ...new Set(
+        requests.flatMap(
+          (closed) => unansweredLocalRunRequest(closed, true) ?? [],
+        ),
+      ),
+    ];
+    return reasons.length === 0 ? null : (
+      <LocalRunRequestNotices reasons={reasons} />
+    );
   }
-  const busy = sent === request.requestId;
+  const { requestId } = request;
+  const busy = sent === requestId;
   const answer = (reply: ChatLocalRunRequestAnswer) => {
-    setSent(request.requestId);
+    setSent(requestId);
     void (async () => {
-      const outcome = await onAnswer(request.requestId, reply);
+      const outcome = await onAnswer(requestId, reply);
       // Not sent: the person can answer again. Any other outcome closes the
-      // request on the stream.
+      // request on the stream. A later request's answer keeps its own mark.
       if (outcome === null || outcome.type === "refused") {
-        setSent(null);
+        setSent((current) => (current === requestId ? null : current));
       }
     })();
   };
@@ -73,15 +102,17 @@ export const LocalRunRequestCard = ({
     <View className="gap-3" key={request.requestId}>
       <Text variant="label">{ask.message}</Text>
       <View className="flex-row flex-wrap gap-2">
-        <Button
-          disabled={busy}
-          onPress={() => {
-            answer({ type: "approval", decision: "approve" });
-          }}
-          size="sm"
-        >
-          {t("approvalAllowOnce")}
-        </Button>
+        {ask.decisions.includes("approve") ? (
+          <Button
+            disabled={busy}
+            onPress={() => {
+              answer({ type: "approval", decision: "approve" });
+            }}
+            size="sm"
+          >
+            {t("approvalAllowOnce")}
+          </Button>
+        ) : null}
         {ask.decisions.includes("approve_for_session") ? (
           <Button
             disabled={busy}
@@ -94,16 +125,18 @@ export const LocalRunRequestCard = ({
             {t("approvalAllowInConversation")}
           </Button>
         ) : null}
-        <Button
-          disabled={busy}
-          onPress={() => {
-            answer({ type: "approval", decision: "deny" });
-          }}
-          size="sm"
-          variant="outline"
-        >
-          {t("approvalDeny")}
-        </Button>
+        {ask.decisions.includes("deny") ? (
+          <Button
+            disabled={busy}
+            onPress={() => {
+              answer({ type: "approval", decision: "deny" });
+            }}
+            size="sm"
+            variant="outline"
+          >
+            {t("approvalDeny")}
+          </Button>
+        ) : null}
       </View>
     </View>
   );

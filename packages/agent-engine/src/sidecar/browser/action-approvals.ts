@@ -116,12 +116,15 @@ const approvalCall = (asked: BrowserApprovalRequest) => {
  * chat never shows a step done that did not happen. The events go into the
  * run's stream beside the harness's, through `withEvents`.
  */
+/** What the id of every question these approvals ask starts with. */
+const BROWSER_STEP_REQUEST = "browser-step-";
+
 export const createActionApprovals = () => {
   const side = createEventQueue<HarnessEvent>();
   const pending = new Map<string, (decision: ApprovalDecision) => void>();
 
   const request: ApproveAction = async (asked) => {
-    const requestId = `browser-step-${crypto.randomUUID()}`;
+    const requestId = `${BROWSER_STEP_REQUEST}${crypto.randomUUID()}`;
     const toolCall = nativeToolCall(requestId, {
       name: HARNESS_TOOL_NAMES.browser,
       input: approvalCall(asked),
@@ -204,6 +207,12 @@ export const createActionApprovals = () => {
 
   return {
     request,
+    /**
+     * Whether `requestId` is one of these questions, open or closed: a late
+     * answer to one withdrawn never reaches the harness, which never asked.
+     */
+    asked: (requestId: string): boolean =>
+      requestId.startsWith(BROWSER_STEP_REQUEST),
     /**
      * Answers the question `requestId` (the id it was asked under); false
      * when it is not one of these, so the harness's own approvals go on.

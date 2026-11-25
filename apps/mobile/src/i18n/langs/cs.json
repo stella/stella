@@ -191,6 +191,13 @@
       },
       "patternInPath": "{pattern} v {path}",
       "ranOnModel": "Běželo na modelu {model}",
+      "request": {
+        "cancelled": "Bez odpovědi: tato odpověď byla zastavena.",
+        "runFailed": "Bez odpovědi: agent skončil s chybou dřív, než k tomuto kroku došlo.",
+        "runFinished": "Není potřeba: agent dokončil práci bez tohoto kroku.",
+        "runLost": "Bez odpovědi: váš počítač přestal tuto odpověď zpracovávat.",
+        "withdrawn": "Už není potřeba: agent pokračoval bez tohoto kroku."
+      },
       "sessionNotResumed": "Programovací agent ve vašem počítači nemohl navázat tam, kde skončil, a tak pokračoval podle zpráv v tomto chatu.",
       "status": {
         "failed": "Selhalo",

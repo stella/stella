@@ -73,6 +73,7 @@ import {
   readRun,
   readRunInputText,
   readRunOutputFile,
+  readRunRequestAnswered,
   readRunRequestClosure,
   readSteerableChatRun,
   readStoredRunEvents,
@@ -779,6 +780,34 @@ const readSteeredText = async (
     catch: toDatabaseError,
   });
 
+/** What an answer reads of a run's requests (`request-answers.ts`). */
+const requestReads = (db: DesktopRunnerDb) => ({
+  /** The thread's run that asked request `requestId`. */
+  readChatRunForRequest: async (
+    options: Parameters<typeof readChatRunForRequest>[1],
+  ): Promise<Result<ChatRunForRequest | null, DatabaseError>> =>
+    await Result.tryPromise({
+      try: async () => await readChatRunForRequest(db, options),
+      catch: toDatabaseError,
+    }),
+  /** Whether an answer to request `requestId` of the run is queued. */
+  readRunRequestAnswered: async (
+    options: Parameters<typeof readRunRequestAnswered>[1],
+  ): Promise<Result<boolean, DatabaseError>> =>
+    await Result.tryPromise({
+      try: async () => await readRunRequestAnswered(db, options),
+      catch: toDatabaseError,
+    }),
+  /** How the run reported request `requestId` closed, if it did. */
+  readRunRequestClosure: async (
+    options: Parameters<typeof readRunRequestClosure>[1],
+  ): Promise<Result<DesktopRunnerRequestEvent | null, DatabaseError>> =>
+    await Result.tryPromise({
+      try: async () => await readRunRequestClosure(db, options),
+      catch: toDatabaseError,
+    }),
+});
+
 /**
  * What the rest of the API uses to run work on a member's computer: pick a
  * computer, queue commands for a run, read what the run produced. Commands are
@@ -973,22 +1002,7 @@ export const createDesktopRunnerControl = ({
         try: async () => await readChatRunSession(db, options),
         catch: toDatabaseError,
       }),
-    /** The thread's run that asked request `requestId`. */
-    readChatRunForRequest: async (
-      options: Parameters<typeof readChatRunForRequest>[1],
-    ): Promise<Result<ChatRunForRequest | null, DatabaseError>> =>
-      await Result.tryPromise({
-        try: async () => await readChatRunForRequest(db, options),
-        catch: toDatabaseError,
-      }),
-    /** How the run reported request `requestId` closed, if it did. */
-    readRunRequestClosure: async (
-      options: Parameters<typeof readRunRequestClosure>[1],
-    ): Promise<Result<DesktopRunnerRequestEvent | null, DatabaseError>> =>
-      await Result.tryPromise({
-        try: async () => await readRunRequestClosure(db, options),
-        catch: toDatabaseError,
-      }),
+    ...requestReads(db),
     /** The run a handed-over chat turn reads on (`readHandedOverChatRun`). */
     readHandedOverChatRun: async (
       options: Parameters<typeof readHandedOverChatRun>[1],

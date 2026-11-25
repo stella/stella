@@ -21,6 +21,7 @@ import {
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
 } from "@stll/api-contract/chat";
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
+import { unansweredLocalRunRequest } from "@stll/api-contract/chat-local-run-request";
 import { localRunSubagentGroups } from "@stll/api-contract/chat-local-run-steps";
 import { chatLocalRunParentCallId } from "@stll/api-contract/chat-local-run-tool";
 import { CHAT_LOCAL_RUN_STEER_TOOL } from "@stll/api-contract/chat-run-target";
@@ -172,7 +173,6 @@ import { LocalRunRequestNotice } from "@/components/chat/local-run-request-notic
 import {
   awaitedLocalRunApproval,
   localRunRequestOfCall,
-  unansweredLocalRunRequest,
 } from "@/components/chat/local-run-request.logic";
 import { localRunSubagentConversation } from "@/components/chat/local-run-step-output";
 import { LocalRunSubagentGroup } from "@/components/chat/local-run-subagent-card";

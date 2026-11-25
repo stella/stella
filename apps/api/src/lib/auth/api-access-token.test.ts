@@ -478,6 +478,25 @@ describe("which routes an API access token opens", () => {
     ).toEqual({ admitted: true });
   });
 
+  test("answering what the member's computer asks opens for the phone app's token alone", () => {
+    const answer = {
+      method: "POST",
+      route:
+        "/v1/chat/threads/:threadId/turns/:turnId/requests/:requestId/answer",
+    } as const;
+    expect(
+      admitApiAccessTokenRoute({
+        ...answer,
+        client: "mobile",
+        scopes: MOBILE_SCOPES,
+      }),
+    ).toEqual({ admitted: true });
+    // Another app holding the chat scope, such as the Outlook add-in.
+    expect(
+      admitApiAccessTokenRoute({ ...answer, scopes: ["stella:chat"] }),
+    ).toEqual({ admitted: false, reason: "client" });
+  });
+
   test("a coding agent's step content and the image it viewed open at the chat scope only", () => {
     for (const route of [
       "/v1/chat/threads/:threadId/local-run-steps/:callId/content",

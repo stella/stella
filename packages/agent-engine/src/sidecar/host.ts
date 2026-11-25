@@ -813,12 +813,12 @@ export class SidecarHost {
         this.withRun(message, (run) => {
           // A browser tool's question about one of its steps is answered here.
           const native = run.requests.get(message.requestId);
-          if (
-            native !== undefined &&
+          if (native !== undefined && run.approvals.asked(native)) {
+            // A question withdrawn before its answer came keeps reading as
+            // withdrawn: the answer records nothing and reaches nothing.
             run.approvals.answer(native, message.decision, () => {
               run.answered.set(message.requestId, message.decision);
-            })
-          ) {
+            });
             return;
           }
           this.respond(
@@ -1285,14 +1285,22 @@ export class SidecarHost {
     }
     const turn = run.turn;
     // Marked before the harness hears it: the harness may close the
-    // request the moment it takes the answer.
-    run.answered.set(requestId, decision);
+    // request the moment it takes the answer. An earlier answer's mark
+    // stands; a repeat never rewrites the decision that reached it.
+    const marks = !run.answered.has(requestId);
+    if (marks) {
+      run.answered.set(requestId, decision);
+    }
     const answer = async () => {
       const answered = await turn.respond(response(native));
       if (Result.isError(answered)) {
         this.options.log(
           `the harness refused a response: ${answered.error.reason}`,
         );
+        // Refused: the request closes as the harness says, not answered.
+        if (marks) {
+          run.answered.delete(requestId);
+        }
       }
     };
     this.detached(answer(), "sidecar.respond");

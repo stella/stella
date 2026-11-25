@@ -45,6 +45,7 @@ type AnswerControl = Pick<
   | "answerApproval"
   | "answerQuestion"
   | "readChatRunForRequest"
+  | "readRunRequestAnswered"
   | "readRunRequestClosure"
 > & {
   /**
@@ -100,11 +101,10 @@ const closedOutcome = (
   }
 };
 
-/** What a queued command made of the answer. */
+/** What a queued command made of the answer; `ended` when the run had ended. */
 const queuedOutcome = (
   queued: QueueCommandOutcome,
-  run: ChatRunForRequest,
-): ChatLocalRunRequestAnswerOutcome => {
+): ChatLocalRunRequestAnswerOutcome | "ended" => {
   switch (queued.type) {
     // A duplicate: the first answer was queued already, its receipt stands.
     case "queued":
@@ -113,7 +113,7 @@ const queuedOutcome = (
     // The run ended between the read and the command.
     case "run_ended":
     case "run_not_found":
-      return endedRunOutcome(run.outcome);
+      return "ended";
     case "command_limit":
       return { type: "refused", reason: "run_full" };
     case "too_large":
@@ -151,11 +151,22 @@ type AnswerRunRequestOptions = {
  * Hand the member's answer to the run that asked `requestId`, or say why it
  * cannot reach it. `null` when no run of this member's turn asked it.
  */
-export const answerRunRequest = async (
+/**
+ * The request as its run stands: the run that asked it (`null` for none),
+ * and the outcome an answer gets when it can no longer reach the run, or
+ * `null` while the request is open.
+ */
+const requestState = async (
   control: AnswerControl,
-  { owner, chat, requestId, answer }: AnswerRunRequestOptions,
+  { owner, chat, requestId }: Omit<AnswerRunRequestOptions, "answer">,
 ): Promise<
-  Result<ChatLocalRunRequestAnswerOutcome | null, DatabaseError | SafeDbError>
+  Result<
+    {
+      run: ChatRunForRequest;
+      closed: ChatLocalRunRequestAnswerOutcome | null;
+    } | null,
+    DatabaseError
+  >
 > => {
   const found = await control.readChatRunForRequest({ owner, chat, requestId });
   if (found.isErr()) {
@@ -174,10 +185,30 @@ export const answerRunRequest = async (
     return Result.err(closure.error);
   }
   if (closure.value !== null) {
-    return Result.ok(closedOutcome(closure.value));
+    return Result.ok({ run, closed: closedOutcome(closure.value) });
   }
-  if (!DESKTOP_RUNNER_OPEN_RUN_STATES.some((state) => state === run.state)) {
-    return Result.ok(endedRunOutcome(run.outcome));
+  const open = DESKTOP_RUNNER_OPEN_RUN_STATES.some(
+    (state) => state === run.state,
+  );
+  return Result.ok({ run, closed: open ? null : endedRunOutcome(run.outcome) });
+};
+
+export const answerRunRequest = async (
+  control: AnswerControl,
+  { owner, chat, requestId, answer }: AnswerRunRequestOptions,
+): Promise<
+  Result<ChatLocalRunRequestAnswerOutcome | null, DatabaseError | SafeDbError>
+> => {
+  const state = await requestState(control, { owner, chat, requestId });
+  if (state.isErr()) {
+    return Result.err(state.error);
+  }
+  if (state.value === null) {
+    return Result.ok(null);
+  }
+  const { run, closed } = state.value;
+  if (closed !== null) {
+    return Result.ok(closed);
   }
   const asksApproval =
     run.askedBy === DESKTOP_RUNNER_DESKTOP_MESSAGE.runApprovalRequest;
@@ -208,9 +239,20 @@ export const answerRunRequest = async (
             });
       }
       case "dismiss": {
-        // Dismissing a question is the member's stop of the turn.
+        // Dismissing a question is the member's stop of the turn; one
+        // already answered keeps that answer, whose receipt stands.
         if (asksApproval) {
           return null;
+        }
+        const answered = await control.readRunRequestAnswered({
+          owner,
+          runId: run.runId,
+          requestId,
+        });
+        if (answered.isErr() || answered.value) {
+          return answered.map((): QueueCommandOutcome => ({
+            type: "duplicate",
+          }));
         }
         const stopped = await control.stopTurn({ owner, runId: run.runId });
         return stopped.map((): QueueCommandOutcome => ({ type: "queued" }));
@@ -229,5 +271,11 @@ export const answerRunRequest = async (
       ? panic("An answer the request schema admits broke the command contract")
       : Result.err(queued.error);
   }
-  return Result.ok(queuedOutcome(queued.value, run));
+  const outcome = queuedOutcome(queued.value);
+  if (outcome !== "ended") {
+    return Result.ok(outcome);
+  }
+  // The run ended since it was read: the answer reads by how it ended.
+  const ended = await requestState(control, { owner, chat, requestId });
+  return ended.map((now) => now?.closed ?? endedRunOutcome(null));
 };

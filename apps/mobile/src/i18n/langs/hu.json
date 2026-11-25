@@ -191,6 +191,13 @@
       },
       "patternInPath": "{pattern} itt: {path}",
       "ranOnModel": "Ezen a modellen futott: {model}",
+      "request": {
+        "cancelled": "Nincs válasz: ez a válasz le lett állítva.",
+        "runFailed": "Nincs válasz: az ügynök hibával leállt e lépés előtt.",
+        "runFinished": "Nincs rá szükség: az ügynök e lépés nélkül végzett.",
+        "runLost": "Nincs válasz: a számítógépe leállította ennek a válasznak a feldolgozását.",
+        "withdrawn": "Már nincs rá szükség: az ügynök e lépés nélkül folytatta."
+      },
       "sessionNotResumed": "A számítógépén futó kódoló ügynök nem tudta onnan folytatni, ahol abbahagyta, ezért a csevegés üzeneteiből dolgozott tovább.",
       "status": {
         "failed": "Sikertelen",

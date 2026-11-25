@@ -1769,13 +1769,23 @@ export const createChatRuntime = ({
               : Result.ok(data.outcome);
           }),
       );
-      if (Result.isError(sent)) {
-        captureRuntimeError(sent.error.cause);
+      // An answer to a turn the page has left is not this turn's error.
+      const failed = (cause: unknown) => {
+        if (turnId === answeredTurn) {
+          captureRuntimeError(cause);
+        } else {
+          getAnalytics().captureError(toError(cause), {
+            fingerprintKey: "chatRuntime:localRunAnswer",
+            scope: { type: "handler", handlerId: "chatRuntime:localRunAnswer" },
+          });
+        }
         return null;
+      };
+      if (Result.isError(sent)) {
+        return failed(sent.error.cause);
       }
       if (Result.isError(sent.value)) {
-        captureRuntimeError(sent.value.error);
-        return null;
+        return failed(sent.value.error);
       }
       return sent.value.value;
     };
@@ -1804,7 +1814,8 @@ export const createChatRuntime = ({
       interruptId,
       answers === null ? { type: "dismiss" } : { type: "question", answers },
     );
-    return outcome === null ? "not_sent" : "sent";
+    // Refused unsent: the question stays open for another answer.
+    return outcome === null || outcome.type === "refused" ? "not_sent" : "sent";
   };
 
   /**

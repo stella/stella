@@ -7,12 +7,12 @@ import {
   type ChatLocalRunRequest,
   type ChatLocalRunRequestExpiry,
   type ChatLocalRunRequestStatus,
+  unansweredLocalRunRequest,
 } from "@stll/api-contract/chat-local-run-request";
 
 import {
   awaitedLocalRunApproval,
   localRunRequestOfCall,
-  unansweredLocalRunRequest,
 } from "@/components/chat/local-run-request.logic";
 
 const CALL_ID = "local:run-1:item_cmd";

@@ -2,12 +2,9 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
-import type { unansweredLocalRunRequest } from "@/components/chat/local-run-request.logic";
-import type { TranslationKey } from "@/i18n/types";
+import type { LocalRunRequestUnanswered } from "@stll/api-contract/chat-local-run-request";
 
-type UnansweredReason = NonNullable<
-  ReturnType<typeof unansweredLocalRunRequest>
->;
+import type { TranslationKey } from "@/i18n/types";
 
 const UNANSWERED_KEYS = {
   runFinished: "chat.localRun.request.runFinished",
@@ -15,7 +12,7 @@ const UNANSWERED_KEYS = {
   withdrawn: "chat.localRun.request.withdrawn",
   runLost: "chat.localRun.request.runLost",
   cancelled: "chat.localRun.request.cancelled",
-} as const satisfies Record<UnansweredReason, TranslationKey>;
+} as const satisfies Record<LocalRunRequestUnanswered, TranslationKey>;
 
 /**
  * A step the run on the member's computer asked about and went on without:
@@ -27,7 +24,7 @@ export const LocalRunRequestNotice = ({
   reason,
 }: {
   card: ReactNode;
-  reason: UnansweredReason;
+  reason: LocalRunRequestUnanswered;
 }) => {
   const t = useTranslations();
   return (

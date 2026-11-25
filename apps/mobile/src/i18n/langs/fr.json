@@ -191,6 +191,13 @@
       },
       "patternInPath": "{pattern} dans {path}",
       "ranOnModel": "Exécuté avec {model}",
+      "request": {
+        "cancelled": "Sans réponse : cette réponse a été arrêtée.",
+        "runFailed": "Sans réponse : l’agent s’est arrêté sur une erreur avant cette étape.",
+        "runFinished": "Inutile : l’agent a terminé sans cette étape.",
+        "runLost": "Sans réponse : votre ordinateur a cessé de traiter cette réponse.",
+        "withdrawn": "Plus nécessaire : l’agent a continué sans cette étape."
+      },
       "sessionNotResumed": "L’agent de code de votre ordinateur n’a pas pu reprendre là où il s’était arrêté : il a donc poursuivi à partir des messages de cette conversation.",
       "status": {
         "failed": "Échec",
