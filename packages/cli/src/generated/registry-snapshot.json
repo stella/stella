@@ -12422,7 +12422,7 @@
   {
     "cli": {
       "command": ["site-notes", "save"],
-      "scope": "chat"
+      "scope": "knowledge_write"
     },
     "name": "save_site_notes",
     "description": "Keep your notes on a research website current, with a page address. Notes are about the site's mechanics only, never the member's matter, a client, a person or one search. `add` what works (`works`), what does not (`failed`), or a failure and its fix (`fixed`); re-adding a kept note confirms it. `confirm` a note you followed that worked; `replace` or `remove` one that no longer works, in the same run. At most 30 notes per website and 100 websites; past the cap the least recently confirmed goes; nothing expires by age. A change with an e-mail, credential, phone, account or identity number, or an address with a query string returns in `issues` with the reason; fix and resend only that change.",

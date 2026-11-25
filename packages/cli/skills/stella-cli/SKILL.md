@@ -151,7 +151,7 @@ requires (request it at `stella auth login --scopes`).
 | rate | `stella rate resolve` | read |  |
 | search | `stella search matters` | search | paginated |
 | site-notes | `stella site-notes read` | read |  |
-| site-notes | `stella site-notes save` | chat | destructive (needs `--yes` off a TTY) |
+| site-notes | `stella site-notes save` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | task | `stella task delete` | matters_write | destructive (needs `--yes` off a TTY) |
 | task | `stella task list` | read | paginated |
 | task | `stella task save` | matters_write | destructive (needs `--yes` off a TTY) |
