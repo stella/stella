@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 const RULE = "no-adhoc-textbox-growth";
-const lint = (source: string) =>
+const lint = async (source: string) =>
   lintSingleRule(RULE, source, { sourcePath: "source.tsx" });
 
 test("rejects the hand-set caps the composers carried", async () => {

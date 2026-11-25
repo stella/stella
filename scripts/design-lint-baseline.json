@@ -257,7 +257,6 @@
     "apps/web/src/components/ai-suggestions/host.tsx": 1,
     "apps/web/src/components/ai-suggestions/review-margin-notes.tsx": 1,
     "apps/web/src/components/app-sidebar.tsx": 1,
-    "apps/web/src/components/chat-editor-provider.tsx": 1,
     "apps/web/src/components/chat/chat-draft-attachment-chips.tsx": 1,
     "apps/web/src/components/chat/create-document-draft-inspector-editor.tsx": 1,
     "apps/web/src/components/chat/needs-matter-card.tsx": 1,

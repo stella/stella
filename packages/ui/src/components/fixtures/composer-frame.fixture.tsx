@@ -11,7 +11,8 @@ import { Textarea } from "../textarea";
 // growing textarea, so the layout switch, the scroll region and the action
 // row are measured from the browser's own layout.
 const params = new URLSearchParams(window.location.search);
-const width = Number(params.get("width") ?? "360");
+// A CSS length, so the query never needs converting to a number.
+const width = `${params.get("width") ?? "360"}px`;
 
 const ComposerFrameFixture = () => {
   const [draft, setDraft] = useState("");

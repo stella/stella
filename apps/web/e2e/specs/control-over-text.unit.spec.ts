@@ -21,7 +21,7 @@ test("flags a send button positioned over an editor's text", async ({
   await page.setContent(
     `${STYLE}<div class="box" style="position: relative">
       <div contenteditable="true">${DRAFT}</div>
-      <button class="send" aria-label="Send" style="position: absolute; inset-inline-end: 4px; bottom: 4px">↑</button>
+      <button class="send" aria-label="Send" style="position: absolute; inset-inline-end: 4px; top: 0">↑</button>
     </div>`,
   );
 

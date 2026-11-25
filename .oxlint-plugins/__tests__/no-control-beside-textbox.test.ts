@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 const RULE = "no-control-beside-textbox";
-const lint = (source: string, ruleOptions?: unknown) =>
+const lint = async (source: string, ruleOptions?: unknown) =>
   lintSingleRule(RULE, source, {
     sourcePath: "source.tsx",
     ...(ruleOptions === undefined ? {} : { ruleOptions }),

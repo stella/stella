@@ -356,7 +356,9 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `ColorPickerContent` `presentation`: `inline`, `popover`
 - `ComboboxTrigger` `variant`: `field`, `plain`
 - `CommandItem` `size`: `default`, `row`
-- `ComposerPlaceholder` `stature`: `compact`, `large`
+- `ComposerFrame` `ring`: `anonymized`, `attention`, `focus`, `none`
+- `ComposerFrame` `surface`: `document`, `page`
+- `ComposerFrame` `stature`: `compact`, `large`
 - `CourtBadge`, `DocumentIdentityBadge` `size`: `default`, `inline`, `prose`
 - `CourtBadge` `weight`: `dashed`, `outline`, `solid`, `tinted`
 - `DatePickerPopover`, `DateRangeFilter`, `SegmentedIconToggle`, `SegmentedIconToggleFace` `size`: `compact`, `touch`

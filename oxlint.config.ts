@@ -8102,7 +8102,6 @@ const config = defineConfig({
         "apps/web/src/**/*.tsx",
         "apps/desktop/src/**/*.tsx",
         "apps/outlook/src/**/*.tsx",
-        "apps/extension/src/**/*.tsx",
         "packages/ui/src/**/*.tsx",
         "packages/workspace-ui/src/**/*.tsx",
         "packages/markdown-editor/src/**/*.tsx",

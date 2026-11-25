@@ -33,30 +33,34 @@ const DRAFT_POINTS = Array.from(
 
 // A mention without a matter id reads nothing from the API, so the bench
 // renders offline; the chip draws from the node's own attributes.
+const mentionParagraph = (
+  id: string,
+  label: string,
+  trailing = " ",
+): JSONContent => ({
+  type: "paragraph",
+  content: [
+    {
+      type: "mention",
+      attrs: {
+        id,
+        label,
+        category: "entity",
+        kind: "document",
+        mimeType: DOCX_MIME,
+      },
+    },
+    { type: "text", text: trailing },
+  ],
+});
+
 const mentionDoc = (
   id: string,
   label: string,
   trailing = " ",
 ): JSONContent => ({
   type: "doc",
-  content: [
-    {
-      type: "paragraph",
-      content: [
-        {
-          type: "mention",
-          attrs: {
-            id,
-            label,
-            category: "entity",
-            kind: "document",
-            mimeType: DOCX_MIME,
-          },
-        },
-        { type: "text", text: trailing },
-      ],
-    },
-  ],
+  content: [mentionParagraph(id, label, trailing)],
 });
 
 const DOCS = {
@@ -98,11 +102,11 @@ const DOCS = {
   "compact-draft": {
     type: "doc",
     content: [
-      ...(mentionDoc(
+      mentionParagraph(
         "00000000-0000-4000-8000-000000000705",
         SHORT_LABEL,
         " covers these points:",
-      ).content ?? []),
+      ),
       ...DRAFT_POINTS.map((point) => ({
         type: "paragraph",
         content: [{ type: "text", text: point }],

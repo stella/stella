@@ -195,10 +195,16 @@ export const ComposerFrame = ({
       return undefined;
     }
     const observer = new ResizeObserver(() => {
-      const lineHeight = Number.parseFloat(
-        getComputedStyle(content).lineHeight,
+      // The ruler is one empty line in the text's own type, so its height is
+      // the line height in pixels at any font size, with nothing to parse.
+      const ruler = content.querySelector<HTMLElement>(
+        '[data-slot="composer-line-ruler"]',
       );
-      if (content.clientHeight > lineHeight * SECOND_LINE_THRESHOLD) {
+      const lineHeight = ruler?.offsetHeight ?? 0;
+      if (
+        lineHeight > 0 &&
+        content.clientHeight > lineHeight * SECOND_LINE_THRESHOLD
+      ) {
         setSecondLine(true);
       }
     });
@@ -242,6 +248,13 @@ export const ComposerFrame = ({
               data-slot="composer-text"
               ref={measureText}
             >
+              <span
+                aria-hidden="true"
+                className="pointer-events-none invisible absolute start-0 top-0"
+                data-slot="composer-line-ruler"
+              >
+                {"\u200B"}
+              </span>
               {text}
               {placeholder !== undefined && (
                 <div className="text-foreground-placeholder pointer-events-none absolute inset-x-0 top-0 flex h-5 min-w-0 items-center gap-2">

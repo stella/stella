@@ -153,6 +153,9 @@ export const NO_NATIVE_UI_REGISTRY = {
     "a command palette is a combobox over actions",
   ),
   composer: noNative("the chat composer surface"),
+  "composer-frame": noNative(
+    "the composer box; its text field is the textarea rule's",
+  ),
   "composer-tokens": notComponent("composer style tokens"),
   "context-menu": owned(
     nativeRuleId("menu"),
@@ -587,6 +590,9 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   ),
   composer: webOnly(
     "the web's rich-text composer; the app composes from the shared composer tokens with Textarea and Button",
+  ),
+  "composer-frame": webOnly(
+    "the web composer box measured from DOM layout; the app's composer has no shared frame yet",
   ),
   "context-menu": webOnly(
     "a phone opens a context menu through the platform (expo-router Link.Menu)",
