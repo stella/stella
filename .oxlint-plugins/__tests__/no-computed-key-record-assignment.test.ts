@@ -355,3 +355,19 @@ describe.serial("no-computed-key-record-assignment", () => {
     ).toEqual([4, 7]);
   });
 });
+
+test("allows reads guarded by a local Object.hasOwn type predicate or compound || early return", async () => {
+  expect(
+    await lint([
+      "const TABLE: Record<string, number> = { a: 1, b: 2 };",
+      "const isKnown = (k: string): k is keyof typeof TABLE => Object.hasOwn(TABLE, k);",
+      "export const readPredicate = (key: string) => (isKnown(key) ? TABLE[key] : 0);",
+      "export const readEarlyReturn = (key: string, flag: boolean) => {",
+      "  if (!isKnown(key) || !flag) {",
+      "    return 0;",
+      "  }",
+      "  return TABLE[key];",
+      "};",
+    ]),
+  ).toEqual([]);
+});

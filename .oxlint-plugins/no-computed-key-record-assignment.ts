@@ -411,10 +411,91 @@ const ownKeyTest = (
       )
     );
   });
-  return (
+  if (
     Boolean(objectHasOwn || helper) &&
     sameBinding(context, { left: node.arguments.at(0), right: table }) &&
     sameBinding(context, { left: node.arguments.at(1), right: key })
+  ) {
+    return true;
+  }
+  return (
+    variable !== null &&
+    node.arguments.length === 1 &&
+    localOwnKeyPredicate(context, {
+      variable,
+      arg: node.arguments.at(0),
+      table,
+      key,
+    })
+  );
+};
+
+const singleReturnExpression = (body: unknown): unknown => {
+  if (!isAstNode(body)) {
+    return null;
+  }
+  if (body.type !== "BlockStatement") {
+    return body;
+  }
+  if (!Array.isArray(body.body) || body.body.length !== 1) {
+    return null;
+  }
+  const stmt = body.body.at(0);
+  return isAstNode(stmt) && stmt.type === "ReturnStatement"
+    ? stmt.argument
+    : null;
+};
+
+/** Recognizes a local 1-parameter `Object.hasOwn(TABLE, param)` type predicate. */
+const localOwnKeyPredicate = (
+  context: ScopeContext,
+  {
+    variable,
+    arg,
+    table,
+    key,
+  }: { variable: Variable; arg: unknown; table: unknown; key: unknown },
+): boolean => {
+  const def = variable.defs.at(0)?.node;
+  const fn =
+    isAstNode(def) && def.type === "VariableDeclarator"
+      ? unwrapExpression(def.init)
+      : isAstNode(def) && def.type === "FunctionDeclaration"
+        ? def
+        : null;
+  if (
+    !fn ||
+    !isFunction(fn) ||
+    !Array.isArray(fn.params) ||
+    fn.params.length !== 1 ||
+    !isIdentifierReference(fn.params.at(0))
+  ) {
+    return false;
+  }
+  const body = singleReturnExpression(fn.body);
+  return (
+    body !== null &&
+    sameBinding(context, { left: arg, right: key }) &&
+    ownKeyTest(context, { test: body, table, key: fn.params.at(0) })
+  );
+};
+
+/** Whether `test` being false guarantees `ownKeyTest(table, key)` (supports `!x` and `!x || y`). */
+const negatedOwnKeyTest = (
+  context: ScopeContext,
+  { test, table, key }: { test: unknown; table: unknown; key: unknown },
+): boolean => {
+  const node = unwrapExpression(test);
+  if (node?.type === "LogicalExpression" && node.operator === "||") {
+    return (
+      negatedOwnKeyTest(context, { test: node.left, table, key }) ||
+      negatedOwnKeyTest(context, { test: node.right, table, key })
+    );
+  }
+  return (
+    node?.type === "UnaryExpression" &&
+    node.operator === "!" &&
+    ownKeyTest(context, { test: node.argument, table, key })
   );
 };
 
@@ -512,10 +593,8 @@ const guardedRead = (context: ScopeContext, value: unknown): boolean => {
           continue;
         }
         if (
-          statement.test.type === "UnaryExpression" &&
-          statement.test.operator === "!" &&
-          ownKeyTest(context, {
-            test: statement.test.argument,
+          negatedOwnKeyTest(context, {
+            test: statement.test,
             table: read.object,
             key: read.property,
           }) &&
