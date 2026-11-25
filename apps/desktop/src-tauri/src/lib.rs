@@ -21,6 +21,8 @@ mod billing_draft_commands;
 mod billing_draft_settings;
 mod billing_draft_submit;
 mod bridge;
+mod calendar_commands;
+mod calendar_read;
 mod chatgpt_auth;
 mod chatgpt_auth_commands;
 mod claude_code_auth;

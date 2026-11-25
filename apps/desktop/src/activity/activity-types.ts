@@ -41,6 +41,10 @@ export const ACTIVITY_DETAILS_ACCESS = [
 ] as const;
 export type ActivityDetailsAccess = (typeof ACTIVITY_DETAILS_ACCESS)[number];
 
+/** Where the day review reads calendar events from; `off` reads nothing. */
+export const ACTIVITY_CALENDAR_SOURCES = ["off", "microsoft365"] as const;
+export type ActivityCalendarSource = (typeof ACTIVITY_CALENDAR_SOURCES)[number];
+
 export type ActivitySegment = {
   appIdentifier: string;
   appName: string;
@@ -129,6 +133,7 @@ export type ActivitySettingsSnapshot = ActivityCaptureSettings & {
   retention: ActivityRetention;
   excludedApps: ActivityAppExclusion[];
   detectCalls: boolean;
+  calendarSource: ActivityCalendarSource;
   otherAccountHistoryDays: number;
   apps: ActivityAppExclusion[];
 };
@@ -153,6 +158,7 @@ export type ActivityDaySnapshot = {
   detailsAccess: ActivityDetailsAccess;
   browserApps: ActivityAppExclusion[];
   browserTitleApps: ActivityAppExclusion[];
+  calendarSource: ActivityCalendarSource;
   otherAccountHistoryDays: number;
   persistence: ActivityPersistenceStatus;
   recordingStatus: ActivityRecordingStatus;
@@ -331,6 +337,7 @@ const isSettingsState = (value: Record<string, unknown>) => {
     persistence,
     retention,
     excludedApps,
+    calendarSource,
   } = value;
   return (
     typeof date === "string" &&
@@ -347,6 +354,7 @@ const isSettingsState = (value: Record<string, unknown>) => {
     otherAccountHistoryDays >= 0 &&
     isOneOf(ACTIVITY_PERSISTENCE_STATUSES, persistence) &&
     isOneOf(ACTIVITY_RETENTIONS, retention) &&
+    isOneOf(ACTIVITY_CALENDAR_SOURCES, calendarSource) &&
     Array.isArray(excludedApps) &&
     excludedApps.every(isExclusion)
   );

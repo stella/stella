@@ -12,6 +12,7 @@ import {
   totalDurationMs,
 } from "../src/activity/activity-logic";
 import {
+  ACTIVITY_CALENDAR_SOURCES,
   ACTIVITY_CHANGED_EVENT,
   ACTIVITY_DETAILS_ACCESS,
   ACTIVITY_RECORDING_STATUSES,
@@ -40,6 +41,7 @@ describe("activity contract", () => {
       ...ACTIVITY_RECORDING_STATUSES,
     ]);
     expect(contract.detailsAccess).toEqual([...ACTIVITY_DETAILS_ACCESS]);
+    expect(contract.calendarSources).toEqual([...ACTIVITY_CALENDAR_SOURCES]);
     expect(contract.maxMetadataBytes).toBe(MAX_ACTIVITY_METADATA_BYTES);
     expect(contract.changedEvent).toBe(ACTIVITY_CHANGED_EVENT);
   });
@@ -57,6 +59,7 @@ describe("activity contract", () => {
       otherAccountHistoryDays: 0,
       captureDetails: false,
       detectCalls: true,
+      calendarSource: "off",
       appNameOnlyApps: [],
       browserApps: [],
       sourceAppVisuals: [],
@@ -130,6 +133,14 @@ describe("activity contract", () => {
     expect(isActivityDaySnapshot({ ...snapshot, detectCalls: undefined })).toBe(
       false,
     );
+    for (const calendarSource of [undefined, "google", true]) {
+      expect(isActivityDaySnapshot({ ...snapshot, calendarSource })).toBe(
+        false,
+      );
+    }
+    expect(
+      isActivityDaySnapshot({ ...snapshot, calendarSource: "microsoft365" }),
+    ).toBe(true);
     expect(
       isActivityDaySnapshot({
         ...snapshot,
@@ -248,6 +259,7 @@ describe("activity contract", () => {
       otherAccountHistoryDays: 0,
       captureDetails: false,
       detectCalls: true,
+      calendarSource: "off",
       appNameOnlyApps: [],
       detailsAccess: "disabled",
       browserApps: [],

@@ -22,6 +22,7 @@
     "allow-time-entry-resolve-matters",
     "allow-activity-get-matter-learning",
     "allow-activity-save-matter-learning",
+    "allow-calendar-day-events",
     "allow-time-entry-submit-batch-confirmed",
     "allow-activity-assign-ranges",
     "allow-billing-draft-get-settings",

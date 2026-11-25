@@ -102,6 +102,18 @@ pub enum ActivityRecordingStatus {
   Paused,
 }
 
+/// Where the day review reads calendar events from, `Off` until the user
+/// turns it on. Events are shown beside the timeline, never recorded.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ActivityCalendarSource {
+  #[default]
+  Off,
+  /// The member's Microsoft 365 calendar, through the stella server's
+  /// connection.
+  Microsoft365,
+}
+
 /// New settings record nothing (recording `Off`) and, once started, app
 /// names only: every field's default.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -125,6 +137,8 @@ pub struct ActivitySettings {
   /// Calls are detected unless the user turned it off.
   #[serde(default)]
   pub ignore_calls: bool,
+  #[serde(default)]
+  pub calendar_source: ActivityCalendarSource,
   #[serde(flatten)]
   pub extra: BTreeMap<String, serde_json::Value>,
 }
@@ -544,6 +558,7 @@ pub struct ActivityDaySnapshot {
   details_access: ActivityDetailsAccess,
   browser_title_apps: Vec<AppExclusion>,
   browser_apps: Vec<AppExclusion>,
+  calendar_source: ActivityCalendarSource,
   segments: Vec<ActivitySegment>,
   source_app_visuals: Vec<crate::foreground_app_visual::ClipboardSourceAppVisual>,
   /// A day whose file exists but cannot be read.
@@ -652,6 +667,7 @@ pub struct ActivitySettingsSnapshot {
   details_access: ActivityDetailsAccess,
   browser_title_apps: Vec<AppExclusion>,
   browser_apps: Vec<AppExclusion>,
+  calendar_source: ActivityCalendarSource,
   /// The apps recorded on `date`, longest first.
   apps: Vec<AppExclusion>,
   source_app_visuals: Vec<crate::foreground_app_visual::ClipboardSourceAppVisual>,
@@ -1234,6 +1250,21 @@ impl ActivityManager {
       intent: self.settings.recording_status,
       persisted,
     })
+  }
+
+  pub fn calendar_source(&self) -> ActivityCalendarSource {
+    self.settings.calendar_source
+  }
+
+  pub fn set_calendar_source(
+    &mut self,
+    source: ActivityCalendarSource,
+  ) -> Result<(), String> {
+    self.require_writable()?;
+    if self.settings.calendar_source == source {
+      return Ok(());
+    }
+    self.update_settings(|settings| settings.calendar_source = source)
   }
 
   pub fn set_detect_calls(
@@ -2753,6 +2784,7 @@ impl ActivityManager {
       details_access,
       browser_title_apps: self.settings.browser_title_apps.clone(),
       browser_apps,
+      calendar_source: self.settings.calendar_source,
       source_app_visuals: Vec::new(),
       segments,
       unreadable: unreadable
@@ -2830,6 +2862,7 @@ impl ActivityManager {
       details_access,
       browser_title_apps: self.settings.browser_title_apps.clone(),
       browser_apps: self.browser_apps(&segments),
+      calendar_source: self.settings.calendar_source,
       apps: day_apps(&segments),
       source_app_visuals: Vec::new(),
     }
@@ -4228,6 +4261,7 @@ mod tests {
         "apps",
         "browserApps",
         "browserTitleApps",
+        "calendarSource",
         "captureDetails",
         "date",
         "deletionStatus",
@@ -6885,6 +6919,17 @@ mod tests {
     );
     assert_eq!(contract["gapDisplays"], name_set(GapDisplay::ALL));
     assert_eq!(contract["gapEnds"], name_set(GapEnd::ALL));
+    let calendar_sources = [
+      ActivityCalendarSource::Off,
+      ActivityCalendarSource::Microsoft365,
+    ]
+    .iter()
+    .map(|source| serde_json::to_value(source).unwrap())
+    .collect::<Vec<_>>();
+    assert_eq!(
+      contract["calendarSources"],
+      serde_json::Value::Array(calendar_sources)
+    );
     assert_eq!(contract["changedEvent"], CHANGED_EVENT);
   }
 
@@ -7597,5 +7642,33 @@ mod tests {
         }
       }
     }
+  }
+
+  #[test]
+  fn calendar_events_stay_off_until_the_user_turns_them_on() {
+    let settings: ActivitySettings = serde_json::from_value(serde_json::json!({
+      "recordingStatus": "recording",
+      "retention": "month",
+    }))
+    .unwrap();
+    assert_eq!(settings.calendar_source, ActivityCalendarSource::Off);
+    assert_eq!(
+      ActivitySettings::default().calendar_source,
+      ActivityCalendarSource::Off
+    );
+    let mut manager = recording_manager();
+    manager
+      .set_calendar_source(ActivityCalendarSource::Microsoft365)
+      .unwrap();
+    assert_eq!(
+      manager.calendar_source(),
+      ActivityCalendarSource::Microsoft365
+    );
+    let written = serde_json::to_value(&manager.settings).unwrap();
+    assert_eq!(written["calendarSource"], "microsoft365");
+    manager
+      .set_calendar_source(ActivityCalendarSource::Off)
+      .unwrap();
+    assert_eq!(manager.calendar_source(), ActivityCalendarSource::Off);
   }
 }

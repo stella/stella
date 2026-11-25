@@ -50,6 +50,7 @@ test("desktop time entry endpoints require desktop account credentials", async (
     "matters",
     "matter-candidates",
     `matter-candidates/resolve?id=${WORKSPACE_ID}`,
+    "calendar-events?date=2026-10-02&timeZone=Europe%2FPrague",
     `time-entries/${WORKSPACE_ID}`,
     "time-entries/batch",
     "time-entries/batch/status",

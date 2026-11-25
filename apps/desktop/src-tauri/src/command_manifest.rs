@@ -170,6 +170,8 @@ macro_rules! with_stella_commands {
       activity_setup::activity_set_capture_details => "activity_set_capture_details",
       activity_setup::activity_set_detect_calls => "activity_set_detect_calls",
       activity_settings::activity_set_retention => "activity_set_retention",
+      activity_settings::activity_set_calendar_source => "activity_set_calendar_source",
+      calendar_commands::calendar_day_events => "calendar_day_events",
       activity_settings::activity_exclude_app => "activity_exclude_app",
       activity_settings::activity_remove_app_exclusion => "activity_remove_app_exclusion",
       activity_settings::activity_delete_day => "activity_delete_day",

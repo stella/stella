@@ -48,6 +48,7 @@ import { dataExportReadScalingScenarios } from "./data-exports";
 import { decisionAnchorRedirectsScalingScenario } from "./decision-anchor-redirects";
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
+import { desktopCalendarEventsScalingScenario } from "./desktop-calendar-events";
 import { desktopRunnerUpgradeScalingScenario } from "./desktop-runner-upgrade";
 import {
   desktopDictationCleanupModelsScalingScenario,
@@ -144,6 +145,7 @@ const measuredApiScenarios = [
   browseCourtsScalingScenario,
   accountExportDownloadScalingScenario,
   desktopRunnerUpgradeScalingScenario,
+  desktopCalendarEventsScalingScenario,
   chatLocalRunnersScalingScenario,
   chatLocalFilesUndoScalingScenario,
   chatBackgroundTasksScalingScenario,

@@ -81,6 +81,9 @@ export const LOCAL_ONLY_FEATURES = [
         module: "src/billing_draft_commands.rs",
         prefixes: ["billing_draft_create_"],
       },
+      // The day's calendar events, read only while the user has turned them
+      // on, for the day the window shows.
+      { module: "src/calendar_commands.rs", prefixes: ["calendar_"] },
     ],
     id: "activity",
     telemetry: "fixedCodes",
@@ -93,10 +96,12 @@ export const LOCAL_ONLY_FEATURES = [
     windowModules: {
       "src-tauri/capabilities/activity.json": [
         "src/activity/ActivityApp.tsx",
+        "src/activity/ActivityCalendarEvents.tsx",
         "src/activity/ActivityCaptureDetails.tsx",
         "src/activity/ActivityDayCalendar.tsx",
         "src/activity/ActivitySuggestionCard.tsx",
         "src/activity/MatterPicker.tsx",
+        "src/activity/activity-calendar-events.ts",
         "src/activity/activity-calendar-logic.ts",
         "src/activity/billing-draft-logic.ts",
         "src/activity/billing-draft-settings.ts",
@@ -183,8 +188,13 @@ export const isFeatureModule = (
   file === `${feature.id}.rs` ||
   (file.startsWith(`${feature.id}_`) && file.endsWith(".rs"));
 
-/** Network owners accepting explicit confirmation, never recorded activity. */
-export const CONFIRMED_ENTRY_NETWORK_MODULES = [
+/**
+ * Network owners the activity window reaches. They send what the user
+ * confirmed or asked for (an entry, a draft request, a day to read calendar
+ * events for), never recorded activity.
+ */
+export const ACTIVITY_NETWORK_MODULES = [
   "time_entry_submit.rs",
   "billing_draft_submit.rs",
+  "calendar_read.rs",
 ] as const;

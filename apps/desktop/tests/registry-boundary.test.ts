@@ -98,6 +98,7 @@ const accountBearerOwners = {
   "http_client.rs": "key: &crate::device_proof::DeviceKey",
   "time_entry_submit.rs": "account: &AccountRequest",
   "billing_draft_submit.rs": "account: &AccountRequest",
+  "calendar_read.rs": "account: &AccountRequest",
   "dictation_cleanup.rs": "account: &AccountRequest",
   "dictation_cloud.rs": "account: &AccountRequest",
   // Holds the dictation account request until the reply is read.

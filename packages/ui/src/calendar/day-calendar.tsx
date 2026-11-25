@@ -95,7 +95,10 @@ export type DayCalendarBlock =
   | (DayCalendarBlockFields & { kind: "mixed" })
   | (DayCalendarBlockFields & { kind: "segment" })
   /** Time that should have been recorded and was not: drawn hatched. */
-  | (DayCalendarBlockFields & { kind: "unrecorded" });
+  | (DayCalendarBlockFields & { kind: "unrecorded" })
+  /** Time that was only scheduled, such as a calendar event: drawn as an
+   * outline, never as recorded or entered time. */
+  | (DayCalendarBlockFields & { kind: "scheduled" });
 
 export type DayCalendarRangeSelection =
   { label: string; type: "enabled" } | { type: "disabled" };
@@ -104,7 +107,14 @@ type DayCalendarColumnHeader = {
   badge?: ReactNode;
   id: string;
   label: ReactNode;
+  /** `narrow` for a lane that only annotates the columns beside it. */
+  width?: "narrow";
 };
+
+const COLUMN_TRACKS = {
+  narrow: "minmax(0, 0.6fr)",
+  regular: "minmax(0, 1fr)",
+} as const;
 
 /**
  * A `locked` column has no blocks field, so caller data cannot reach it: it
@@ -409,7 +419,10 @@ export const DayCalendar = ({
   };
 
   const gridStyle = {
-    gridTemplateColumns: `${GUTTER_WIDTH} repeat(${String(columns.length)}, minmax(0, 1fr))`,
+    gridTemplateColumns: [
+      GUTTER_WIDTH,
+      ...columns.map(({ width }) => COLUMN_TRACKS[width ?? "regular"]),
+    ].join(" "),
   } satisfies CSSProperties;
   const bodyStyle = { blockSize: height } satisfies CSSProperties;
   const slotHeight = DAY_CALENDAR_SLOT_HEIGHT_PX[granularity];
@@ -645,6 +658,7 @@ const BLOCK_MIN_PX = 6;
 const BLOCK_KIND_CLASSES = {
   entry: "font-medium",
   mixed: "text-muted-foreground",
+  scheduled: "text-muted-foreground border border-current/40",
   segment: "",
   unrecorded:
     "text-muted-foreground border border-dashed border-current/30 bg-[repeating-linear-gradient(135deg,transparent_0_6px,color-mix(in_oklab,currentColor_12%,transparent)_6px_12px)]",
@@ -893,7 +907,8 @@ function blockSurfaceStyle(block: DayCalendarBlock): BlockSurfaceStyle {
   switch (tone.type) {
     case "neutral": {
       return {
-        backgroundColor: suggestion ? "transparent" : undefined,
+        backgroundColor:
+          suggestion || block.kind === "scheduled" ? "transparent" : undefined,
       };
     }
     case "topic": {

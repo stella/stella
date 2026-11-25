@@ -37,6 +37,8 @@ import {
 import { Separator } from "@stll/ui/separator";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
+import { callEventTitle } from "./activity-calendar-events";
+import type { CalendarEventBlock } from "./activity-calendar-events";
 import {
   activityBlocks,
   blockDetails,
@@ -69,6 +71,10 @@ import {
   unrecordedRanges,
 } from "./activity-unrecorded";
 import type { UnrecordedRange } from "./activity-unrecorded";
+import {
+  CalendarEventsNotice,
+  useDayCalendarEvents,
+} from "./ActivityCalendarEvents";
 import {
   BrowserTitlesNotice,
   OpenAccessibilitySettingsButton,
@@ -413,6 +419,103 @@ type ActivityDayCalendarProps = {
   onReviewStatusChange: (status: ActivityReviewStatus) => void;
 };
 
+type SuggestionAcceptanceInput = {
+  editable: boolean;
+  narratives: ReturnType<typeof useSuggestionDrafts>;
+  submitBatch: ReturnType<typeof useBatchSubmission>["submitBatch"];
+  date: ActivityDaySnapshot["date"];
+  timeZone: string;
+  onSaved: (
+    suggestion: ActivitySuggestion,
+    items: readonly BatchItem[],
+  ) => void;
+};
+
+/** Accepting a reviewed suggestion, whole or split, saves it as one confirmed
+ * batch; once saved, `onSaved` hears which entries it became. */
+const suggestionAcceptance = ({
+  editable,
+  narratives,
+  submitBatch,
+  date,
+  timeZone,
+  onSaved,
+}: SuggestionAcceptanceInput) => {
+  const accept = (suggestion: ActivitySuggestion) => {
+    const edit = narratives.editFor(suggestion);
+    if (
+      !editable ||
+      edit.matter === null ||
+      edit.narrative.trim().length === 0 ||
+      suggestion.roundedTenths === 0
+    ) {
+      return;
+    }
+    // One confirmed entry per batch: the batch path keeps the idempotency
+    // key and the stored pending request for this single acceptance.
+    submitBatch(
+      {
+        idempotencyKey: crypto.randomUUID(),
+        items: [
+          {
+            entry: {
+              matterId: edit.matter.id,
+              dateWorked: date,
+              timezoneId: timeZone,
+              durationMinutes: suggestion.roundedTenths * 6,
+              narrative: edit.narrative,
+              billable: edit.billable,
+              ...(edit.classification === null
+                ? {}
+                : { classification: edit.classification }),
+            },
+            ranges: suggestion.ranges,
+          },
+        ],
+      },
+      afterSaved(suggestion),
+    );
+  };
+  /** An accepted split or move creates its entries in one confirmed batch,
+   * each covering its own share of the recorded time. */
+  const acceptStructure = (suggestion: ActivitySuggestion) => {
+    const structure = narratives.structure(suggestion);
+    const edit = narratives.editFor(suggestion);
+    if (
+      !editable ||
+      structure === null ||
+      edit.matter === null ||
+      suggestion.roundedTenths === 0
+    ) {
+      return;
+    }
+    submitBatch(
+      {
+        idempotencyKey: crypto.randomUUID(),
+        items: structureItems({
+          structure,
+          card: {
+            matterId: edit.matter.id,
+            narrative: edit.narrative,
+            billable: edit.billable,
+            classification: edit.classification,
+          },
+          durationMinutes: suggestion.roundedTenths * 6,
+          ranges: suggestion.ranges,
+          date,
+          timezoneId: timeZone,
+        }),
+      },
+      afterSaved(suggestion),
+    );
+  };
+  const afterSaved =
+    (suggestion: ActivitySuggestion) => (items: readonly BatchItem[]) => {
+      onSaved(suggestion, items);
+    };
+  return { accept, acceptStructure };
+};
+
 export const ActivityDayCalendar = ({
   header,
   notice,
@@ -446,6 +549,7 @@ export const ActivityDayCalendar = ({
   const suggestions = matchedSuggestions(day.groups, leftOut);
   const outages = outageRanges(snapshot.outages);
   const unrecorded = unrecordedRanges(outages, snapshot.gaps, day.segments);
+  const calendar = useDayCalendarEvents(snapshot, day.segments);
   const editingDisabledReason = getEditingDisabledReason(submission, t);
   // While Activity cannot record, its history is read-only.
   const editable =
@@ -494,79 +598,17 @@ export const ActivityDayCalendar = ({
     }
     open({ id: next.id, type: "suggestion" }, next);
   };
-  const accept = (suggestion: ActivitySuggestion) => {
-    const edit = narratives.editFor(suggestion);
-    if (
-      !editable ||
-      edit.matter === null ||
-      edit.narrative.trim().length === 0 ||
-      suggestion.roundedTenths === 0
-    ) {
-      return;
-    }
-    // One confirmed entry per batch: the batch path keeps the idempotency
-    // key and the stored pending request for this single acceptance.
-    submitBatch(
-      {
-        idempotencyKey: crypto.randomUUID(),
-        items: [
-          {
-            entry: {
-              matterId: edit.matter.id,
-              dateWorked: snapshot.date,
-              timezoneId: timeZone,
-              durationMinutes: suggestion.roundedTenths * 6,
-              narrative: edit.narrative,
-              billable: edit.billable,
-              ...(edit.classification === null
-                ? {}
-                : { classification: edit.classification }),
-            },
-            ranges: suggestion.ranges,
-          },
-        ],
-      },
-      afterSaved(suggestion),
-    );
-  };
-  /** An accepted split or move creates its entries in one confirmed batch,
-   * each covering its own share of the recorded time. */
-  const acceptStructure = (suggestion: ActivitySuggestion) => {
-    const structure = narratives.structure(suggestion);
-    const edit = narratives.editFor(suggestion);
-    if (
-      !editable ||
-      structure === null ||
-      edit.matter === null ||
-      suggestion.roundedTenths === 0
-    ) {
-      return;
-    }
-    submitBatch(
-      {
-        idempotencyKey: crypto.randomUUID(),
-        items: structureItems({
-          structure,
-          card: {
-            matterId: edit.matter.id,
-            narrative: edit.narrative,
-            billable: edit.billable,
-            classification: edit.classification,
-          },
-          durationMinutes: suggestion.roundedTenths * 6,
-          ranges: suggestion.ranges,
-          date: snapshot.date,
-          timezoneId: timeZone,
-        }),
-      },
-      afterSaved(suggestion),
-    );
-  };
-  const afterSaved =
-    (suggestion: ActivitySuggestion) => (items: readonly BatchItem[]) => {
+  const { accept, acceptStructure } = suggestionAcceptance({
+    editable,
+    narratives,
+    submitBatch,
+    date: snapshot.date,
+    timeZone,
+    onSaved: (suggestion, items) => {
       learning.learnFrom(suggestion, items);
       openNext(suggestion);
-    };
+    },
+  });
   const reject = (suggestion: ActivitySuggestion) => {
     if (suggestion.type === "matched") {
       setLeftOut((current) => new Set([...current, suggestion.id]));
@@ -597,6 +639,8 @@ export const ActivityDayCalendar = ({
     onActivate: (suggestion) =>
       open({ id: suggestion.id, type: "suggestion" }, suggestion),
     titlesNoticeFor: titlesNotices.forApps,
+    calendarColumn: calendar.column,
+    calendarEvents: calendar.lane.timed,
   });
 
   const card =
@@ -675,6 +719,7 @@ export const ActivityDayCalendar = ({
         <CandidatesFailedAlert onRetry={refreshCandidates} />
       ) : null}
       <MatterLearningNotice learning={learning} day={day} />
+      <CalendarEventsNotice calendar={calendar} />
       <SubmissionFeedback
         submission={submission}
         errorMessage={errorMessage}
@@ -701,6 +746,7 @@ export const ActivityDayCalendar = ({
           instants: [
             ...day.segments.flatMap(({ startMs, endMs }) => [startMs, endMs]),
             ...unrecorded.flatMap(({ startMs, endMs }) => [startMs, endMs]),
+            ...calendar.instants,
             ...(snapshot.date === snapshot.today ? [nowMs] : []),
             // A range set on its card stays in view wherever it is moved.
             ...rangeEdges(openCard),
@@ -887,10 +933,16 @@ type CalendarColumnsOptions = {
   /** Why browsers among these apps recorded no titles, with the action that
    * records them; `null` when there is nothing to explain. */
   titlesNoticeFor: (identifiers: readonly string[]) => ReactElement | null;
+  /** The Calendar lane beside Activity; `null` while calendar events are
+   * off. */
+  calendarColumn: DayCalendarColumn | null;
+  /** The day's timed events, which name the recorded calls they overlap. */
+  calendarEvents: readonly CalendarEventBlock[];
 };
 
-/** The Activity column (recorded time) and the Time entries column (created
- * drafts and suggestions). */
+/** The Activity column (recorded time), the Calendar lane when calendar
+ * events are on, and the Time entries column (created drafts and
+ * suggestions). */
 function useCalendarColumns({
   phase,
   segments,
@@ -903,6 +955,8 @@ function useCalendarColumns({
   narrativeFor,
   onActivate,
   titlesNoticeFor,
+  calendarColumn,
+  calendarEvents,
 }: CalendarColumnsOptions): DayCalendarColumn[] {
   const t = useTranslations("activity");
   const format = useFormatter();
@@ -925,6 +979,7 @@ function useCalendarColumns({
     const placeholders = contiguousRuns(segments);
     return [
       { ...activityHeader, placeholders, type: "pending" },
+      ...(calendarColumn === null ? [] : [calendarColumn]),
       { ...entriesHeader, placeholders, type: "pending" },
     ];
   }
@@ -1042,8 +1097,13 @@ function useCalendarColumns({
         (unavailable ? t("matterUnavailable") : appName) ??
         block.title ??
         t("mixedActivity");
+      // A recorded call is the record of a meeting; the calendar event it
+      // overlaps only names it.
+      const eventTitle =
+        topicApp?.call === true ? callEventTitle(block, calendarEvents) : null;
       const detail =
-        block.matter === null && appName === null ? null : block.title;
+        eventTitle ??
+        (block.matter === null && appName === null ? null : block.title);
       const label = [topic, duration, detail]
         .filter((part) => part !== null)
         .join(" · ");
@@ -1148,6 +1208,7 @@ function useCalendarColumns({
       rangeSelection: { type: "disabled" },
       type: "blocks",
     },
+    ...(calendarColumn === null ? [] : [calendarColumn]),
     {
       ...entriesHeader,
       blocks: entries,
