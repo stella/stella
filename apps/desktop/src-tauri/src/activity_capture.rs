@@ -34,6 +34,7 @@ pub enum StopReason {
 }
 
 impl StopReason {
+  #[cfg(test)]
   pub const ALL: &'static [Self] = &[
     Self::ReconnectNeeded,
     Self::NotAvailable,
@@ -267,9 +268,8 @@ impl CaptureMonitor {
         self.read = Some((loaded.namespace.clone(), Some(loaded.intent)));
         self.written = Some(choice);
       }
-      Err(error) => {
-        tracing::warn!(error = %error, "activity recording choice was not recorded");
-      }
+      // The cause is logged where the write failed.
+      Err(_) => tracing::warn!("activity recording choice was not recorded"),
     }
   }
 
@@ -281,8 +281,8 @@ impl CaptureMonitor {
     }
     let intent = match self.records.as_ref().map(|records| records.load(namespace)) {
       Some(Ok(record)) => record.map(|record| record.intent),
-      Some(Err(error)) => {
-        tracing::warn!(error = %error, "activity recording choice could not be read");
+      Some(Err(_)) => {
+        tracing::warn!("activity recording choice could not be read");
         None
       }
       None => None,
@@ -362,15 +362,15 @@ pub(crate) fn stopped() -> Option<ActivityStopped> {
 fn notify_stopped(app: &AppHandle, reason: StopReason) {
   use tauri_plugin_notification::NotificationExt;
 
-  if let Err(error) = app
-    .notification()
-    .builder()
-    .title(crate::i18n::t("notification.activityStoppedTitle"))
-    .body(crate::i18n::t(reason.notification_key()))
-    .show()
-  {
-    tracing::warn!(error = %error, "activity stop was not notified");
-  }
+  crate::logging::best_effort(
+    app
+      .notification()
+      .builder()
+      .title(crate::i18n::t("notification.activityStoppedTitle"))
+      .body(crate::i18n::t(reason.notification_key()))
+      .show(),
+    "activity stop was not notified",
+  );
 }
 
 #[cfg(test)]
