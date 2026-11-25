@@ -23,7 +23,7 @@ export const REFERENCE_FIELD_SWITCHES = {
   numberWithoutWords: String.raw`\n \t \h`,
 } as const;
 
-export type ReferenceFieldNumbering =
+type ReferenceFieldNumbering =
   /** The output keeps the source's designators: the level text is patched
    *  to print what the source label prints. */
   | { mode: "keepSource"; sourceLabel: string }
@@ -35,7 +35,7 @@ export type ReferenceFieldNumbering =
       counters: readonly number[];
     };
 
-export type ReferenceFieldRequest = {
+type ReferenceFieldRequest = {
   /** The designator as the source prints it: the span the field replaces,
    *  brackets included. */
   designatorText: string;
@@ -45,7 +45,7 @@ export type ReferenceFieldRequest = {
   numbering: ReferenceFieldNumbering;
 };
 
-export type ReferenceField = {
+type ReferenceField = {
   instruction: string;
   expectedText: string;
   /** `renumbered` when the field shows another designator than the source
@@ -62,7 +62,7 @@ type ReferenceFieldErrorReason =
    *  rendered. */
   | "unrenderable-level";
 
-export class ReferenceFieldError extends TaggedError("ReferenceFieldError")<{
+class ReferenceFieldError extends TaggedError("ReferenceFieldError")<{
   message: string;
   reason: ReferenceFieldErrorReason;
 }> {

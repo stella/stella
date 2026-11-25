@@ -64,15 +64,15 @@ export type TemplatePlanSourceItem = {
   mergeNext?: "lineBreak" | "space";
 };
 
-export type TemplatePlanItem =
+type TemplatePlanItem =
   | { kind: "template"; templateBlockIds: string[] }
   | TemplatePlanSourceItem
   | { kind: "slot"; templateBlockId: string; sourceBlockIds: string[] };
 
-export type TemplatePlanOmitReason =
+type TemplatePlanOmitReason =
   "empty" | "sourceToc" | "pageArtifact" | "duplicateLabel";
 
-export type TemplatePlanReference = {
+type TemplatePlanReference = {
   blockId: string;
   start: number;
   end: number;
@@ -148,9 +148,7 @@ const manifestSchema = v.strictObject({
   warnings: v.array(v.string()),
 });
 
-export class DocxBlockManifestError extends TaggedError(
-  "DocxBlockManifestError",
-)<{
+class DocxBlockManifestError extends TaggedError("DocxBlockManifestError")<{
   message: string;
 }> {}
 

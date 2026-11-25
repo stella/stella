@@ -20,7 +20,7 @@ type BlockDetail = {
 };
 
 /** A plain paragraph by its text, or a paragraph with its details. */
-export type BlockSpec = string | BlockDetail;
+type BlockSpec = string | BlockDetail;
 
 /** An auto-numbered paragraph. */
 export const numbered = (

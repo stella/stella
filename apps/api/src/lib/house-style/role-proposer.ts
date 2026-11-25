@@ -33,7 +33,7 @@ export type HouseStyleRole =
   | "body";
 
 /** Where a role lands in the template. */
-export type TemplateRoleTarget = {
+type TemplateRoleTarget = {
   styleId: string;
   /** The list level that numbers the role; null for an unnumbered role. */
   numbering: { numId: number; ilvl: number } | null;
@@ -45,7 +45,7 @@ export type TemplateRoleMap = Readonly<
   Record<HouseStyleRole, TemplateRoleTarget | null>
 >;
 
-export type RoleProposal = {
+type RoleProposal = {
   blockId: string;
   role: HouseStyleRole;
   confidence: number;
@@ -56,7 +56,7 @@ export type RoleProposal = {
   mergedIntoBlockId: string | null;
 };
 
-export type RolePlanProposal = {
+type RolePlanProposal = {
   /** Plan items for every placed block, in document order. Tables are
    *  placed as they are and carry no role. */
   body: TemplatePlanSourceItem[];
@@ -229,7 +229,7 @@ const firstPosition = (
       break;
     }
     const block = blocks[position];
-    if (block !== undefined && block.kind === "paragraph" && test(block)) {
+    if (block?.kind === "paragraph" && test(block)) {
       return position;
     }
   }

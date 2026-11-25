@@ -9,7 +9,7 @@ import { parseRomanNumeral } from "@stll/api-contract/magyar-kozlony-designation
 import type { Segment, Token } from "@/api/lib/house-style/reference-chain";
 import type { HeadLevel } from "@/api/lib/house-style/reference-grammar";
 
-export type UnitKind = "annex" | "article" | "clause" | "item" | "recital";
+type UnitKind = "annex" | "article" | "clause" | "item" | "recital";
 
 /** One designator with the path it is read under. */
 export type Unit = {

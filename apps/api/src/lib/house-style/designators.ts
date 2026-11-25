@@ -20,7 +20,7 @@ export type DesignatorNumeral =
   | "upperAmbiguous"
   | "lowerAmbiguous";
 
-export type LabelKeyword = "article" | "sectionSign" | "annex";
+type LabelKeyword = "article" | "sectionSign" | "annex";
 
 export type LabelShape = {
   keyword: LabelKeyword | null;
@@ -64,10 +64,8 @@ const LOWER_A = 97;
 export const letterOrdinal = (token: string): number | null => {
   const lower = token.toLowerCase();
   const first = lower.codePointAt(0);
-  if (first === undefined || !/^[a-z]+$/u.test(lower)) {
-    return null;
-  }
-  if ([...lower].some((letter) => letter !== lower.charAt(0))) {
+  // One letter, repeated: `a`, `bb`, never `ab`.
+  if (first === undefined || !/^([a-z])\1*$/u.test(lower)) {
     return null;
   }
   return (lower.length - 1) * LETTERS_IN_ALPHABET + (first - LOWER_A) + 1;

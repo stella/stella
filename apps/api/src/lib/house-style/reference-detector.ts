@@ -35,7 +35,7 @@ import type { Unit } from "@/api/lib/house-style/reference-units";
 
 /** Why a chain was read as internal or external. Codes, never text: the
  *  model step that adjudicates the unknown ones is given no document text. */
-export type ReferenceEvidence =
+type ReferenceEvidence =
   | TailEvidence
   /** `§` in a document that does not head its own articles with it. */
   | "sectionSign"
@@ -47,7 +47,7 @@ export type ReferenceEvidence =
    *  something else. Never linked without the model's decision. */
   | "looseHead";
 
-export type ReferenceResolution =
+type ReferenceResolution =
   | { status: "resolved"; targetBlockId: string; confidence: number }
   | {
       status: "ambiguous";
@@ -57,7 +57,7 @@ export type ReferenceResolution =
   /** External chains are not resolved. */
   | { status: "skipped" };
 
-export type ReferenceDesignator = {
+type ReferenceDesignator = {
   /** Offsets into the block's text; brackets are inside the span, a closing
    *  period is not. */
   start: number;
@@ -82,7 +82,7 @@ export type DetectedReference = {
 };
 
 /** A decision left to the model step: ids and enumerated options only. */
-export type ReferenceAmbiguity =
+type ReferenceAmbiguity =
   | {
       kind: "scope";
       referenceId: string;
@@ -95,7 +95,7 @@ export type ReferenceAmbiguity =
       candidates: { targetBlockId: string; confidence: number }[];
     };
 
-export type ReferenceDetection = {
+type ReferenceDetection = {
   references: DetectedReference[];
   ambiguities: ReferenceAmbiguity[];
 };

@@ -16,9 +16,13 @@ import {
 /** Every indexed block as `<level> <key>`, in document order. */
 const keysOf = (manifest: DocxBlockManifest): string[] => {
   const index = buildLabelIndex(manifest);
-  return index.entries.map(
-    (entry) => `${entry.level} ${provisionKey(index, entry.blockId)}`,
-  );
+  return index.entries.map((entry) => {
+    const key = provisionKey(index, entry.blockId);
+    // Annex and recital keys already say what they are.
+    return entry.level === "annex" || entry.level === "recital"
+      ? key
+      : `${entry.level} ${key}`;
+  });
 };
 
 describe("buildLabelIndex", () => {
@@ -239,7 +243,11 @@ describe("buildLabelIndex", () => {
     const index = buildLabelIndex(manifest);
     expect(
       index.entries
-        .filter(({ core }) => core === "i" || core === "v")
+        .filter(
+          ({ core, level }) =>
+            (level === "letter" || level === "roman") &&
+            (core === "i" || core === "v"),
+        )
         .map((entry) => `${entry.level} ${provisionKey(index, entry.blockId)}`),
     ).toEqual(["letter I/1/i", "roman I/2/i", "roman I/2/v"]);
   });

@@ -88,7 +88,7 @@ const ANNEX_LIST_INTRO =
   /(?:příloh|annex|schedule|appendi|exhibit|anlage|anhang|anhänge)[^.]{0,80}:[ \u00A0]*$/iu;
 
 /** Whether the block is a line of the source's table of contents. */
-export const isContentsBlock = ({
+const isContentsBlock = ({
   styleName,
   text,
 }: Pick<DocxBlock, "styleName" | "text">): boolean =>
