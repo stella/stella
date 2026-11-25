@@ -170,6 +170,9 @@ export const NO_EXCLUSIONS: PlanExclusions = {
   merges: new Set(),
 };
 
+/** A table whose cells the plan places as they are. */
+const NO_NESTED: readonly TemplatePlanNestedParagraph[] = [];
+
 const CLAUSE_ROLES = ["clause1", "clause2", "clause3"] as const;
 
 /** Where a role without a style of its own lands, nearest first. */
@@ -674,7 +677,7 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
     }
     if (block.kind === "table") {
       const item = tableItem(context, placed, block);
-      placedCount += (item.nested ?? []).filter(({ blockId }) =>
+      placedCount += (item.nested ?? NO_NESTED).filter(({ blockId }) =>
         placementById.has(blockId),
       ).length;
       body.push(item);
@@ -984,8 +987,6 @@ type LabelRequest = {
   stripLabel: string | null;
   labelAsText: boolean;
 };
-
-const NO_NESTED: readonly TemplatePlanNestedParagraph[] = [];
 
 const NO_LABEL_REQUEST: LabelRequest = {
   numbered: false,
