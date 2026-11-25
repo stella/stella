@@ -150,7 +150,6 @@ requires (request it at `stella auth login --scopes`).
 | playbook | `stella playbook save` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | rate | `stella rate resolve` | read |  |
 | search | `stella search matters` | search | paginated |
-| site-notes | `stella site-notes list` | read |  |
 | site-notes | `stella site-notes save` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | task | `stella task delete` | matters_write | destructive (needs `--yes` off a TTY) |
 | task | `stella task list` | read | paginated |
@@ -365,8 +364,6 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --activity-code
 - `stella search matters`
   - `--query` — Search query (string)
-- `stella site-notes list`
-  - `--url` — A page address on the website, as the browser reported it; only its origin is kept. (string)
 - `stella site-notes save`
   - `--url` — A page address on the website, as the browser reported it; only its origin is kept. (string)
   - via `--input` only: changes
