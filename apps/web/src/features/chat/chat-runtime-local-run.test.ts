@@ -2,6 +2,8 @@ import { afterEach, expect, test } from "bun:test";
 
 import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
+  CHAT_LOCAL_RUN_STEER_EVENT,
+  CHAT_LOCAL_RUN_STEER_SOURCE,
   type ChatLocalRunComputerEvent,
 } from "@stll/api-contract/chat-run-target";
 import {
@@ -38,6 +40,9 @@ const installRunningTurn = () => {
   let sent = 0;
   let joined: ReadableStreamDefaultController<Uint8Array> | null = null;
   const queued: unknown[] = [];
+  /** The bodies of the steers the page posted, in order. */
+  const steers: unknown[] = [];
+  const steerPosted = Promise.withResolvers<undefined>();
   const write = (
     controller: ReadableStreamDefaultController<Uint8Array>,
     event: unknown,
@@ -48,8 +53,18 @@ const installRunningTurn = () => {
     sent += 1;
   };
   globalThis.fetch = Object.assign(
-    async (input: RequestInfo | URL) => {
+    async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = input instanceof Request ? input.url : input.toString();
+      if (new URL(url, "http://localhost").pathname.endsWith("/steer")) {
+        const request =
+          input instanceof Request
+            ? input
+            : new Request(new URL(url, "http://localhost"), init);
+        steers.push(await request.json());
+        steerPosted.resolve(undefined);
+        // Taken to the computer; the turn's stream says what became of it.
+        return Response.json({ steer: { type: "queued" } });
+      }
       if (url.includes("/join")) {
         return new Response(
           new ReadableStream<Uint8Array>({
@@ -82,6 +97,9 @@ const installRunningTurn = () => {
       }
     },
     end: () => joined?.close(),
+    steers,
+    /** Settles once the page has posted a steer. */
+    steerPosted: steerPosted.promise,
   };
 };
 
@@ -277,4 +295,44 @@ test("a page opened on a turn that takes messages says so before its stream does
   expect(openLoadedTurn().getSnapshot().turnSteering).toBe(
     CHAT_TURN_STEERING.notSteerable,
   );
+});
+
+test("a message handed to the running turn is always one the page queued, at the revision it read", async () => {
+  const server = installRunningTurn();
+  const runtime = openLoadedTurn(CHAT_TURN_STEERING.steerable);
+  const unsubscribe = runtime.subscribe(() => undefined);
+  const inputId = "018f0000-0000-7000-8000-0000000000c1";
+  try {
+    server.send({ type: "RUN_STARTED", runId: RUN_ID, threadId: THREAD_ID });
+    await awaitSnapshot(runtime, (snapshot) => snapshot.isLoading);
+
+    const steering = runtime.steerLocalTurn({
+      inputId,
+      text: "Only the Prague leases, please.",
+      revision: 3,
+    });
+    await server.steerPosted;
+    // The queue shows the message until the turn takes it, and the server
+    // removes it from the queue at this revision when the turn does.
+    expect(server.steers).toEqual([
+      {
+        inputId,
+        text: "Only the Prague leases, please.",
+        source: { type: CHAT_LOCAL_RUN_STEER_SOURCE.queued, revision: 3 },
+      },
+    ]);
+
+    server.send({
+      type: "CUSTOM",
+      name: CHAT_LOCAL_RUN_STEER_EVENT,
+      value: { inputId, status: "steered" },
+    });
+    expect(await steering).toEqual({ type: "steered" });
+
+    server.send({ type: "RUN_FINISHED", runId: RUN_ID, threadId: THREAD_ID });
+    server.end();
+    await awaitSnapshot(runtime, (snapshot) => !snapshot.isLoading);
+  } finally {
+    unsubscribe();
+  }
 });

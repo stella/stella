@@ -30,6 +30,7 @@ import { CHAT_LOCAL_RUN_INTERRUPT_REASONS } from "@stll/api-contract/chat-local-
 import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
   CHAT_LOCAL_RUN_STEER_EVENT,
+  CHAT_LOCAL_RUN_STEER_SOURCE,
   chatLocalRunComputerEventSchema,
   type ChatLocalRunQuestionReply,
   type ChatLocalRunSteerEvent,
@@ -319,13 +320,16 @@ export type ChatRuntime = ChatActivitySession & {
     answers: ChatLocalRunQuestionReply["answers"] | null,
   ) => Promise<LocalRunAnswerDelivery>;
   /**
-   * Hand a message to the turn running on the member's computer without
-   * stopping it; idempotent on `inputId`. See `ChatSteerOutcome`.
+   * Hand queued message `inputId`, read at `revision`, to the turn running
+   * on the member's computer without stopping it; idempotent on `inputId`.
+   * See `ChatSteerOutcome`. This page steers only messages it has queued,
+   * so a message is on screen from its send until the turn shows it as its
+   * own, and a turn that does not take it leaves it where it is.
    */
   steerLocalTurn: (input: {
     inputId: string;
     text: string;
-    source: ChatLocalRunSteerSource;
+    revision: number;
   }) => Promise<ChatSteerOutcome>;
   getSnapshot: () => ChatRuntimeSnapshot;
   /** Answer the latest message again: a regeneration, which the server
@@ -1765,12 +1769,16 @@ export const createChatRuntime = ({
   const steerLocalTurn = async ({
     inputId,
     text,
-    source,
+    revision,
   }: {
     inputId: string;
     text: string;
-    source: ChatLocalRunSteerSource;
+    revision: number;
   }): Promise<ChatSteerOutcome> => {
+    const source = {
+      type: CHAT_LOCAL_RUN_STEER_SOURCE.queued,
+      revision,
+    } as const satisfies ChatLocalRunSteerSource;
     // The loading the steer was asked in: a later one is another request,
     // which the steer must not reach.
     const loading = loadingGeneration;

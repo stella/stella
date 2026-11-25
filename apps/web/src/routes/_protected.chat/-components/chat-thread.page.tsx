@@ -13,6 +13,7 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import {
   CHAT_MEMBER_SEND_ACTION,
+  CHAT_SEND_INTENT,
   type ChatMemberSendAction,
   type ChatThreadSendState,
   type ChatTurnSteering,
@@ -335,6 +336,7 @@ export const ChatThreadPage = ({
     resendLatestMessage,
     sendMessage,
     queueMessage,
+    sendIntentOf,
     queue,
     stop,
     stopPending,
@@ -643,9 +645,14 @@ export const ChatThreadPage = ({
         },
       });
       // Inside the member's send gesture, before any await: a turn for
-      // their computer opens stella desktop when none is connected.
-      if (!handledReserved || newThreadMessages.length > 0) {
-        composerModels.openDesktopForSend();
+      // their computer opens stella desktop when none is connected. `/new`
+      // with a message starts a new thread's turn; any other message goes
+      // where this thread's send routing puts it, and one steered into or
+      // queued behind a running turn opens nothing.
+      if (newThreadMessages.length > 0) {
+        composerModels.openDesktopForSend(CHAT_SEND_INTENT.start);
+      } else if (!handledReserved) {
+        composerModels.openDesktopForSend(sendIntentOf(action));
       }
       if (handledReserved) {
         const newThreadMessage = newThreadMessages.at(0);
@@ -848,7 +855,11 @@ export const ChatThreadPage = ({
                                 );
                                 detached(
                                   controller.submit(async (draft) => {
-                                    composerModels.openDesktopForSend();
+                                    composerModels.openDesktopForSend(
+                                      sendIntentOf(
+                                        CHAT_MEMBER_SEND_ACTION.send,
+                                      ),
+                                    );
                                     if (!(await ensureAIAvailable())) {
                                       return CHAT_SEND_KEPT;
                                     }
