@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/chat/browser-site-notes/store.ts",
+  "delta": 1,
+  "reason": "A save applies the agent's website note changes in order, because a later change may name a note an earlier one kept or removed; one save carries at most 30 changes, all under the member's collection lock."
+}
