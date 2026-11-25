@@ -940,7 +940,7 @@ export type DayEntriesRead =
 /** What a suggestion says about its matter's time recorded elsewhere. */
 export type RecordedElsewhere =
   | { type: "none" }
-  | { matterId: string; minutes: number; type: "recorded" }
+  | { minutes: number; type: "recorded" }
   /** The day's entries could not be read, so a duplicate cannot be ruled
    * out. */
   | { type: "unknown" };
@@ -979,9 +979,7 @@ export const recordedElsewhere = ({
           minutes += entry.durationMinutes;
         }
       }
-      return minutes > 0
-        ? { type: "recorded", matterId, minutes }
-        : { type: "none" };
+      return minutes > 0 ? { type: "recorded", minutes } : { type: "none" };
     }
     default:
       dayEntries satisfies never;

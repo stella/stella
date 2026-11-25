@@ -442,8 +442,8 @@ type ActivityDayCalendarProps = {
   onPreferencesChange: (preferences: ActivityCalendarPreferences) => void;
   onCopy: (text: string, onSettled: (copied: boolean) => void) => void;
   onCaptureCommand: CaptureCommandRunner;
-  /** Opens the matter's time in stella web. */
-  onOpenMatterTime: (matterId: string) => void;
+  /** Opens the member's own time for the day in stella web. */
+  onOpenDayTime: () => void;
   onReviewStatusChange: (status: ActivityReviewStatus) => void;
 };
 
@@ -545,14 +545,14 @@ export const ActivityDayCalendar = ({
   onPreferencesChange,
   onCopy,
   onCaptureCommand,
-  onOpenMatterTime,
+  onOpenDayTime,
   onReviewStatusChange,
 }: ActivityDayCalendarProps) => {
   const t = useTranslations("activity");
   const format = useFormatter();
   const locale = useLocale();
   const nowMs = Temporal.Now.instant().epochMilliseconds;
-  const elsewhere = useRecordedElsewhere(snapshot, onOpenMatterTime);
+  const elsewhere = useRecordedElsewhere(snapshot, onOpenDayTime);
   const [localDrafts, setLocalDrafts] = useState<DraftedEntries>([]);
   const { submission, submitBatch, errorMessage } = useBatchSubmission({
     date: snapshot.date,
@@ -2462,7 +2462,7 @@ function useMatterCandidates(recordedIds: readonly string[]) {
  */
 function useRecordedElsewhere(
   { date, today }: Pick<ActivityDaySnapshot, "date" | "today">,
-  onReview: (matterId: string) => void,
+  onReview: () => void,
 ) {
   const [dayEntries, setDayEntries] = useState<DayEntriesRead>({
     type: "loading",

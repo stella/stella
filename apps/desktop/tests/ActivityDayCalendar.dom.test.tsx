@@ -117,7 +117,7 @@ const renderDay = async (snapshot: ActivityDaySnapshot) => {
         onPreferencesChange={noop}
         onCopy={noop}
         onCaptureCommand={noop}
-        onOpenMatterTime={noop}
+        onOpenDayTime={noop}
         onReviewStatusChange={noop}
       />
     </DesktopIntlProvider>,

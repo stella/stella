@@ -165,29 +165,28 @@ pub async fn time_entry_day_entries(
   Ok(entries)
 }
 
-/// The web page that lists a matter's time, where the member reviews entries
-/// recorded elsewhere.
-fn matter_time_url(web_origin: &str, matter_id: &str) -> Result<String, String> {
-  let matter = uuid::Uuid::parse_str(matter_id)
-    .map_err(crate::logging::with_cause_logged(REFUSAL))?;
+/// The member's own week in stella web, opened on the reviewed day, where
+/// the entries recorded elsewhere are listed.
+fn day_time_url(web_origin: &str, date: &str) -> Result<String, String> {
+  let day = activity::parse_date(date)?;
   Ok(format!(
-    "{web_origin}/workspaces/{}/timesheets",
-    matter.hyphenated()
+    "{web_origin}/time?date={}",
+    activity::format_date(day)
   ))
 }
 
 #[tauri::command]
-pub async fn time_entry_open_matter_time(
+pub async fn time_entry_open_day_time(
   caller: ActivityCaller,
   app: AppHandle,
   gates: State<'_, FeatureGates>,
   accounts: State<'_, AccountState>,
-  matter_id: String,
+  date: String,
 ) -> Result<(), String> {
   use tauri_plugin_opener::OpenerExt;
 
   let account = linked_account(&caller, &gates, &accounts).await?;
-  let url = matter_time_url(&account.web_origin, &matter_id)?;
+  let url = day_time_url(&account.web_origin, &date)?;
   drop(account);
   app
     .opener()
@@ -354,23 +353,13 @@ mod tests {
   }
 
   #[test]
-  fn matter_time_links_open_only_a_matter_id_on_the_linked_web_origin() {
+  fn day_time_links_open_only_a_calendar_date_on_the_linked_web_origin() {
     assert_eq!(
-      matter_time_url(
-        "https://example.test",
-        "00000000-0000-4000-8000-00000000000A"
-      ),
-      Ok("https://example.test/workspaces/00000000-0000-4000-8000-00000000000a/timesheets".into())
+      day_time_url("https://example.test", "2026-10-07"),
+      Ok("https://example.test/time?date=2026-10-07".into())
     );
-    for refused in [
-      "../settings",
-      "00000000-0000-4000-8000-000000000001/../x",
-      "",
-    ] {
-      assert_eq!(
-        matter_time_url("https://example.test", refused),
-        Err(REFUSAL.to_string())
-      );
+    for refused in ["2026-10-07&view=approvals", "../settings", "2026-02-30", ""] {
+      assert!(day_time_url("https://example.test", refused).is_err());
     }
   }
 

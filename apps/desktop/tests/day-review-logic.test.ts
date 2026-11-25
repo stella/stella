@@ -708,7 +708,7 @@ describe("time recorded elsewhere on a suggestion's matter", () => {
         draftedEntries: [drafted("mine")],
         matterId: "a",
       }),
-    ).toEqual({ type: "recorded", matterId: "a", minutes: 90 });
+    ).toEqual({ type: "recorded", minutes: 90 });
   });
 
   test("says nothing when only this computer recorded the matter, and warns of a day it could not read", () => {
@@ -777,7 +777,7 @@ describe("time recorded elsewhere on a suggestion's matter", () => {
             .reduce((sum, { durationMinutes }) => sum + durationMinutes, 0);
           expect(status).toEqual(
             elsewhere > 0
-              ? { type: "recorded", matterId: "a", minutes: elsewhere }
+              ? { type: "recorded", minutes: elsewhere }
               : { type: "none" },
           );
         },

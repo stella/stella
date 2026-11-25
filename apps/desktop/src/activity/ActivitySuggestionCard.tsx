@@ -124,7 +124,7 @@ type RecordedElsewhereNotice = {
   draftedEntries: readonly ActivityDaySnapshot["draftedEntries"][number][];
   /** How the copy names the reviewed day. */
   day: "today" | "other";
-  onReview: (matterId: string) => void;
+  onReview: () => void;
   onRetry: () => void;
 };
 
@@ -1188,11 +1188,7 @@ const RecordedElsewhereNote = ({
               duration: durationLabel(status.minutes * MINUTE_MS),
             })}
           </span>
-          <Button
-            onClick={() => onReview(status.matterId)}
-            size="xs"
-            variant="outline"
-          >
+          <Button onClick={onReview} size="xs" variant="outline">
             {t("recordedElsewhereReview")}
           </Button>
         </div>

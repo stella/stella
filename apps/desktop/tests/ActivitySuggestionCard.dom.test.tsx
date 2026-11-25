@@ -209,9 +209,9 @@ describe("a selected range's card", () => {
 });
 
 describe("time on the matter from another computer or the web", () => {
-  test("is named with a link to the entries, and the card can still be accepted", async () => {
+  test("is named with a link to the day in stella web, and the card can still be accepted", async () => {
     const accepted: number[] = [];
-    const reviewed: string[] = [];
+    let reviewed = 0;
     testing.render(
       <DesktopIntlProvider language="en" messages={defaultMessages}>
         <SelectedRangeCard
@@ -236,8 +236,8 @@ describe("time on the matter from another computer or the web", () => {
               },
             ],
             day: "today",
-            onReview: (matterId) => {
-              reviewed.push(matterId);
+            onReview: () => {
+              reviewed += 1;
             },
             onRetry: noop,
           }}
@@ -257,7 +257,7 @@ describe("time on the matter from another computer or the web", () => {
         }),
       );
     });
-    expect(reviewed).toEqual([MATTER.id]);
+    expect(reviewed).toBe(1);
     await testing.act(async () => {
       testing.fireEvent.click(
         testing.screen.getByRole("button", {

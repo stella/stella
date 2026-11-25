@@ -86,7 +86,7 @@ type ActivityCommand =
   | "activity_copy_text"
   | "activity_open_settings"
   | "activity_set_recording_status"
-  | "time_entry_open_matter_time";
+  | "time_entry_open_day_time";
 
 type RunCommand = (
   command: ActivityCommand,
@@ -541,8 +541,8 @@ const DayContent = ({
       header={header}
       notice={notice}
       onCaptureCommand={onCommand}
-      onOpenMatterTime={(matterId) =>
-        onCommand("time_entry_open_matter_time", { matterId })
+      onOpenDayTime={() =>
+        onCommand("time_entry_open_day_time", { date: snapshot.date })
       }
       snapshot={snapshot}
       preferences={preferences}
@@ -703,7 +703,7 @@ const ActivityApp = () => {
     switch (command) {
       case "activity_copy_text":
         return t("errorCopy");
-      case "time_entry_open_matter_time":
+      case "time_entry_open_day_time":
         return tSettings("errorOpenStellaWeb");
       default:
         return t("errorUpdate");
