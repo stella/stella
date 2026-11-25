@@ -3,7 +3,7 @@ import type { ComponentType, LazyExoticComponent } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { plugin } from "bun";
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, expect, mock, test } from "bun:test";
 import * as v from "valibot";
 
 import { runInRequest } from "@stll/start-runtime/test-request";
@@ -1202,6 +1202,45 @@ const declareLawCases = async (fixture: FixtureRuntime) => {
       await import("@/components/inspector/inspector-tabs-store");
     const { INSPECTOR_PANE_INTENT } =
       await import("@/components/inspector/inspector-store-types");
+    const { use } = await import("react");
+    /**
+     * A member's chrome on the law page reads AI availability from two lazy
+     * chunks, the search dialog and the session inspector, and defers each
+     * read until its component has mounted. On a slow first load the chunks
+     * resolve after the page is on screen, outside `act`. The test holds both
+     * until it is waiting, so it always runs in that order, and it waits for
+     * each request it expects rather than for an idle query client, which is
+     * just as idle before a deferred read starts. Without a hold the real
+     * components render unchanged.
+     */
+    const memberChromeHold: { until: Promise<undefined> | null } = {
+      until: null,
+    };
+    const holdLazyChrome = async <Name extends string, Props extends object>(
+      specifier: string,
+      load: () => Promise<Record<Name, ComponentType<Props>>>,
+      name: Name,
+    ) => {
+      const module = await load();
+      const Real = module[name];
+      const Held = (props: Props) => {
+        if (memberChromeHold.until !== null) {
+          use(memberChromeHold.until);
+        }
+        return <Real {...props} />;
+      };
+      await mock.module(specifier, () => ({ ...module, [name]: Held }));
+    };
+    await holdLazyChrome(
+      "@/components/search-dialog",
+      async () => await import("@/components/search-dialog"),
+      "SearchDialog",
+    );
+    await holdLazyChrome(
+      "@/components/public-session-inspector",
+      async () => await import("@/components/public-session-inspector"),
+      "PublicSessionInspector",
+    );
     const viewType = "test-route-shell-provider-probe";
     const InspectorMemberProbe = () => {
       const member = useAuthenticatedUser();
@@ -1275,6 +1314,8 @@ const declareLawCases = async (fixture: FixtureRuntime) => {
             staticData: { ...lawLayout.options.staticData, providerScopes: [] },
           });
         }
+        const chromeHeld = Promise.withResolvers<undefined>();
+        memberChromeHold.until = chromeHeld.promise;
         useInspectorTabsStore.getState().openView({
           type: viewType,
           id: "test-route-shell-provider-tab",
@@ -1295,6 +1336,11 @@ const declareLawCases = async (fixture: FixtureRuntime) => {
               },
             });
           });
+          // The held chrome has read nothing yet: the order is forced.
+          expect(requests).not.toContain(
+            "/v1/organization-settings/ai-availability",
+          );
+          chromeHeld.resolve(undefined);
           if (scenario === "undeclared") {
             await waitFor(() =>
               expect(
@@ -1327,17 +1373,30 @@ const declareLawCases = async (fixture: FixtureRuntime) => {
                   ?.textContent,
               ).toBe(JSON.stringify(expected)),
             );
+            // A member's chrome reads AI availability once it has mounted;
+            // nothing reads it for a visitor, who has no session.
+            const expectedRequests = [
+              "/v1/case/decisions/latest",
+              ...(state.audience === "member"
+                ? ["/v1/organization-settings/ai-availability"]
+                : []),
+            ];
+            await waitFor(() =>
+              expect(requests).toEqual(expect.arrayContaining(expectedRequests)),
+            );
             await waitFor(() => expect(queryClient.isFetching()).toBe(0));
             expect(caughtErrors).toEqual([]);
-            expect(requests).toContain("/v1/case/decisions/latest");
-            expect(
-              requests.includes("/v1/organization-settings/ai-availability"),
-            ).toBe(state.audience === "member");
+            if (state.audience !== "member") {
+              expect(requests).not.toContain(
+                "/v1/organization-settings/ai-availability",
+              );
+            }
           }
           expect(unexpectedRequests).toEqual([]);
         } finally {
           lawLeaf.update(originalLeafOptions);
           lawLayout.update(originalLayoutOptions);
+          memberChromeHold.until = null;
           useInspectorTabsStore.setState(originalTabs, true);
           await act(async () => {
             await queryClient.cancelQueries();
