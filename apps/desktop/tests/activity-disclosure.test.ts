@@ -205,6 +205,7 @@ const segmentWith = (document: string): MatchedSegment => ({
   appName: "App",
   call: false,
   confidence: "strong",
+  recordedMatter: "open",
   document,
   drafted: false,
   endMs: 60_000,

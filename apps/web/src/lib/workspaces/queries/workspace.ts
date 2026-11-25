@@ -1,12 +1,15 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { useMatch } from "@tanstack/react-router";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
+
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { queryView } from "@/lib/query-view.logic";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceJustification } from "@/lib/types";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import {
   workspaceJustificationsQueryRoot,
   workspaceWorkflowQueryRoot,
@@ -121,19 +124,25 @@ export const justificationsOptions = ({
   workspaceId,
   entityIds,
 }: JustificationsOptionsInput) =>
-  queryOptions({
-    queryKey: workspaceKeys.justificationsByEntities({
-      workspaceId,
-      entityIds,
-    }),
-    queryFn: async ({ signal }) => {
-      const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .justifications.query.post(
-          { entityIds: entityIds.map((id) => toSafeId<"entity">(id)) },
-          { fetch: { signal } },
-        );
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: workspaceKeys.justificationsByEntities({
+        workspaceId,
+        entityIds,
+      }),
+      queryFn: async ({ signal }) => {
+        const response = await api
+          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .justifications.query.post(
+            { entityIds: entityIds.map((id) => toSafeId<"entity">(id)) },
+            { fetch: { signal } },
+          );
 
-      return unwrapApiResponse(response).map(toWorkspaceJustification);
+        return unwrapApiResponse(response).map(toWorkspaceJustification);
+      },
+    }),
+    {
+      resources: [RESOURCE_TYPE.FLOW_RUN, RESOURCE_TYPE.WORKSPACE],
+      scope: { type: "workspace", workspaceId },
     },
-  });
+  );

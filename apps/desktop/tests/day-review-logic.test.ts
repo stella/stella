@@ -1,27 +1,35 @@
 import { describe, expect, test } from "bun:test";
+import * as fc from "fast-check";
 
-import type { DesktopTimeEntryMatterCandidate } from "@stll/api-contract/desktop-time-entries";
+import type {
+  DesktopMatterResolution,
+  DesktopTimeEntryMatterCandidate,
+} from "@stll/api-contract/desktop-time-entries";
+import { assertProperty } from "@stll/property-testing";
 
 import { timedSegments, totalDurationMs } from "../src/activity/activity-logic";
 import {
   cleanSharedContext,
   matchDay,
+  recordedMatterIds,
+  unresolvedMatterIds,
   withoutAppSuffix,
 } from "../src/activity/day-review-logic";
 
-const candidates = [
-  {
-    id: "a",
-    name: "Alpha dispute",
-    reference: "A-101",
-    color: null,
-    clientName: "Common client",
-    signals: {
-      lastWorkedAt: null,
-      newlyAssignedAt: null,
-      upcomingDeadline: null,
-    },
+const ALPHA = {
+  id: "a",
+  name: "Alpha dispute",
+  reference: "A-101",
+  color: null,
+  clientName: "Common client",
+  signals: {
+    lastWorkedAt: null,
+    newlyAssignedAt: null,
+    upcomingDeadline: null,
   },
+} satisfies DesktopTimeEntryMatterCandidate;
+const candidates = [
+  ALPHA,
   {
     id: "b",
     name: "Beta dispute",
@@ -35,6 +43,11 @@ const candidates = [
     },
   },
 ] satisfies DesktopTimeEntryMatterCandidate[];
+const MATTER_IDS = [
+  "00000000-0000-4000-8000-000000000001",
+  "00000000-0000-4000-8000-000000000002",
+  "00000000-0000-4000-8000-000000000003",
+] as const;
 const at = (seconds: number) =>
   new Date(Date.UTC(2026, 9, 9, 9, 0, seconds)).toISOString();
 const segment = (
@@ -57,6 +70,7 @@ const review = (
   matchDay({
     segments: timedSegments(segments),
     candidates,
+    resolved: [],
     captureDetails,
     manualAssignments: [],
     draftedEntries: [],
@@ -72,7 +86,70 @@ describe("local matter day review", () => {
       expect(result.segments.at(0)?.matterId).toBe("outside-shortlist");
       expect(result.segments.at(0)?.matter).toBeNull();
       expect(result.segments.at(0)?.confidence).toBe("unmatched");
+      expect(result.segments.at(0)?.recordedMatter).toBe("unresolved");
     }
+  });
+
+  test("a recorded matter off the shortlist matches once resolved, and an inaccessible one is unavailable", () => {
+    const outside = {
+      ...ALPHA,
+      id: "outside",
+      name: "Outside matter",
+      reference: "O-1",
+    };
+    const result = matchDay({
+      segments: timedSegments([
+        segment(0, 30, "A-101", "outside"),
+        segment(30, 60, "A-101", "lost"),
+      ]),
+      candidates,
+      resolved: [
+        { type: "accessible", matter: outside },
+        { type: "inaccessible", id: "lost" },
+      ],
+      captureDetails: true,
+      manualAssignments: [],
+      draftedEntries: [],
+    });
+    expect(
+      result.segments.map(({ matter, confidence, recordedMatter }) => [
+        matter?.id,
+        confidence,
+        recordedMatter,
+      ]),
+    ).toEqual([
+      ["outside", "strong", "open"],
+      [undefined, "unmatched", "unavailable"],
+    ]);
+  });
+
+  test("only recorded matter ids no read answered for are asked for, each once", () => {
+    const ids = recordedMatterIds({
+      segments: [
+        { matterId: MATTER_IDS[2] },
+        { matterId: null },
+        {},
+        { matterId: MATTER_IDS[1] },
+      ],
+      manualAssignments: [
+        { start: at(0), end: at(1), matterId: MATTER_IDS[0] },
+        { start: at(1), end: at(2), matterId: MATTER_IDS[2] },
+        { start: at(2), end: at(3), matterId: "not-a-matter-id" },
+      ],
+    });
+    expect(ids).toEqual([
+      MATTER_IDS[2],
+      MATTER_IDS[1],
+      MATTER_IDS[0],
+      "not-a-matter-id",
+    ]);
+    expect(
+      unresolvedMatterIds({
+        ids,
+        candidates: [{ ...ALPHA, id: MATTER_IDS[0] }],
+        resolved: [{ type: "inaccessible", id: MATTER_IDS[1] }],
+      }),
+    ).toEqual([MATTER_IDS[2]]);
   });
 
   test("aggregates disconnected short segments per matter without adding away time", () => {
@@ -131,6 +208,7 @@ describe("local matter day review", () => {
       matchDay({
         segments: timedSegments([segment(0, 30, "B-202")]),
         candidates: candidates.toReversed(),
+        resolved: [],
         captureDetails: true,
         manualAssignments: [],
         draftedEntries: [],
@@ -163,6 +241,7 @@ describe("local matter day review", () => {
         const result = matchDay({
           segments: timedSegments([segment(0, 30, title)]),
           candidates: ordered,
+          resolved: [],
           captureDetails: true,
           manualAssignments: [],
           draftedEntries: [],
@@ -174,6 +253,7 @@ describe("local matter day review", () => {
           segment(0, 30, "Riverside Meadow Northbank Southbank", "b"),
         ]),
         candidates: ordered,
+        resolved: [],
         captureDetails: true,
         manualAssignments: [],
         draftedEntries: [],
@@ -188,6 +268,7 @@ describe("local matter day review", () => {
       const result = matchDay({
         segments: original,
         candidates,
+        resolved: [],
         captureDetails: true,
         manualAssignments: [
           { start: at(boundary), end: at(60), matterId: "b" },
@@ -205,6 +286,7 @@ describe("local matter day review", () => {
     const result = matchDay({
       segments: timedSegments([segment(0, 60, "A-101", "a")]),
       candidates,
+      resolved: [{ type: "inaccessible", id: "removed" }],
       captureDetails: true,
       manualAssignments: [
         { start: at(0), end: at(60), matterId: "b" },
@@ -212,11 +294,133 @@ describe("local matter day review", () => {
       ],
       draftedEntries: [],
     });
-    expect(result.segments.map(({ matter }) => matter?.id)).toEqual([
-      "b",
-      undefined,
-      "b",
+    expect(
+      result.segments.map(({ matter, recordedMatter }) => [
+        matter?.id,
+        recordedMatter,
+      ]),
+    ).toEqual([
+      ["b", "open"],
+      [undefined, "unavailable"],
+      ["b", "open"],
     ]);
+  });
+
+  test("no suggestion ever names a matter outside the accessible set of the same read", () => {
+    const pool = ["a", "b", "c", "d", "e"].map((id, index) => ({
+      ...ALPHA,
+      id,
+      name: `${id.toUpperCase()}lpha matter ${String(index)}`,
+      reference: `${id.toUpperCase()}-${String(index)}0${String(index)}`,
+      clientName: `Client ${id}`,
+    }));
+    /** Where each pooled matter stands in one read. */
+    const standing = fc.constantFrom(
+      "shortlisted",
+      "resolved",
+      "inaccessible",
+      "unanswered",
+    );
+    const pooledId = fc.constantFrom(...pool.map(({ id }) => id), "unknown");
+    const windowTitle = fc
+      .array(
+        fc.oneof(
+          fc.constantFrom(
+            ...pool.flatMap(({ name, reference, clientName }) => [
+              name,
+              reference,
+              clientName,
+            ]),
+          ),
+          fc.constantFrom("draft", "notes", "Re:"),
+        ),
+        { maxLength: 3 },
+      )
+      .map((parts) => parts.join(" "));
+    const recorded = fc.record({
+      start: fc.integer({ min: 0, max: 50 }),
+      length: fc.integer({ min: 1, max: 10 }),
+      matterId: fc.option(pooledId, { nil: null }),
+      title: windowTitle,
+    });
+    assertProperty(
+      "no suggestion ever names a matter outside the accessible set of the same read",
+      fc.property(
+        fc.array(standing, { minLength: pool.length, maxLength: pool.length }),
+        fc.array(recorded, { maxLength: 8 }),
+        fc.array(
+          fc.record({
+            start: fc.integer({ min: 0, max: 50 }),
+            length: fc.integer({ min: 1, max: 20 }),
+            matterId: pooledId,
+          }),
+          { maxLength: 3 },
+        ),
+        fc.boolean(),
+        (standings, recordedSegments, assignments, captureDetails) => {
+          const shortlist = pool.filter(
+            (_, index) => standings[index] === "shortlisted",
+          );
+          const resolved = pool.flatMap(
+            (matter, index): DesktopMatterResolution[] => {
+              const matterStanding = standings.at(index) ?? "unanswered";
+              switch (matterStanding) {
+                case "resolved":
+                  return [{ type: "accessible", matter }];
+                case "inaccessible":
+                  return [{ type: "inaccessible", id: matter.id }];
+                case "shortlisted":
+                case "unanswered":
+                  return [];
+                default:
+                  matterStanding satisfies never;
+                  return [];
+              }
+            },
+          );
+          const open = new Map(
+            [
+              ...shortlist,
+              ...resolved.flatMap((resolution) =>
+                resolution.type === "accessible" ? [resolution.matter] : [],
+              ),
+            ].map((matter) => [matter.id, matter]),
+          );
+          const result = matchDay({
+            segments: timedSegments(
+              recordedSegments.map(({ start, length, matterId, title }) =>
+                segment(start, start + length, title, matterId),
+              ),
+            ),
+            candidates: shortlist,
+            resolved,
+            captureDetails,
+            manualAssignments: assignments.map(
+              ({ start, length, matterId }) => ({
+                start: at(start),
+                end: at(start + length),
+                matterId,
+              }),
+            ),
+            draftedEntries: [],
+          });
+          for (const { matter, recordedMatter } of [
+            ...result.segments,
+            ...result.groups.map((group) => ({
+              matter: group.matter,
+              recordedMatter: "none",
+            })),
+          ]) {
+            if (matter !== null) {
+              expect(open.get(matter.id)).toBe(matter);
+            }
+            if (recordedMatter === "unavailable") {
+              expect(matter).toBeNull();
+            }
+          }
+        },
+      ),
+    );
   });
 });
 
@@ -310,6 +514,7 @@ describe("window title evidence", () => {
         window(50, 55, chrome, "Google Chrome"),
       ]),
       candidates,
+      resolved: [],
       captureDetails: true,
       manualAssignments: [],
       draftedEntries: [],

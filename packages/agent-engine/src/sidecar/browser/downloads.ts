@@ -1,6 +1,13 @@
 import { panic, Result } from "better-result";
 import type { BigIntStats } from "node:fs";
-import { type FileHandle, lstat, open, realpath, rm } from "node:fs/promises";
+import {
+  type FileHandle,
+  lstat,
+  open,
+  readdir,
+  realpath,
+  rm,
+} from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -12,6 +19,7 @@ import {
   type BrowserDownloadStopReason,
 } from "@stll/api-contract/browser-control";
 import { isPathInside } from "@stll/portable-path";
+import { createSha256 } from "@stll/sha256/node";
 
 import {
   createWorkspaceFolder,
@@ -38,6 +46,11 @@ import {
  * Only a file in the staging folder, under a staged name, is ever removed
  * from Chrome's folder, and only the very file this check opened: that is
  * the file this download created.
+ *
+ * A PDF whose bytes are already in the downloads folder is not kept twice:
+ * the outcome names the copy already there (`duplicate`). Each folder
+ * takes one download at a time, so two copies of one file arriving
+ * together never each take the other for the original.
  */
 
 /** Where in the run's folder downloaded files go. */
@@ -79,13 +92,21 @@ const BROWSER_DOWNLOAD_REFUSAL = {
 type BrowserDownloadRefusal =
   (typeof BROWSER_DOWNLOAD_REFUSAL)[keyof typeof BROWSER_DOWNLOAD_REFUSAL];
 
-/** What the agent learns of one download. */
-export type BrowserDownloadOutcome =
+/** What this module makes of one download. */
+export type ReceivedDownload =
   | {
       status: "saved";
       /** `/`-separated, relative to the run's folder. */
       path: string;
       bytes: number;
+      /** SHA-256 of the saved bytes, lowercase hex. */
+      sha256: string;
+      /**
+       * The same bytes were already in the downloads folder: `path` names
+       * that copy, and no other was made.
+       */
+      duplicate: boolean;
+      /** The address Chrome fetched the file from in the end. */
       sourceUrl: string;
     }
   | {
@@ -94,6 +115,40 @@ export type BrowserDownloadOutcome =
       message: string;
       sourceUrl: string;
     };
+
+/**
+ * Where a download came from beyond its own address, as the chat saw it:
+ * the page the chat's tab was on when it started (the PDF itself for a
+ * shown PDF's save), null when the chat had read no page then or the file
+ * came from another site; and when it settled, as an ISO 8601 instant.
+ */
+export type DownloadProvenance = { pageUrl: string | null; at: string };
+
+/** What the agent learns of one download. */
+export type BrowserDownloadOutcome =
+  | (Extract<ReceivedDownload, { status: "saved" }> & {
+      pageUrl: string | null;
+      downloadedAt: string;
+    })
+  | (Extract<ReceivedDownload, { status: "refused" }> & {
+      pageUrl: string | null;
+    });
+
+/** `received` with where it came from, as the agent reads it. */
+export const withProvenance = (
+  received: ReceivedDownload,
+  { at, pageUrl }: DownloadProvenance,
+): BrowserDownloadOutcome => {
+  switch (received.status) {
+    case "saved":
+      return { ...received, downloadedAt: at, pageUrl };
+    case "refused":
+      return { ...received, pageUrl };
+    default:
+      received satisfies never;
+      return panic("Unhandled received download");
+  }
+};
 
 const LIMIT_MIB = BROWSER_CONTROL_LIMITS.downloadBytes / (1024 * 1024);
 
@@ -123,7 +178,7 @@ const REFUSAL_MESSAGES = {
 const refused = (
   reason: BrowserDownloadRefusal,
   sourceUrl: string,
-): BrowserDownloadOutcome => ({
+): ReceivedDownload => ({
   message: REFUSAL_MESSAGES[reason],
   reason,
   sourceUrl,
@@ -333,27 +388,120 @@ const createTarget = async (
   return null;
 };
 
-type Copied = { type: "copied"; bytes: number } | { type: "too_large" };
+type Copied =
+  { type: "copied"; bytes: number; sha256: string } | { type: "too_large" };
 
-/** Copies `source` into `target`, stopping once it outgrows the limit. */
+/**
+ * Copies `source` into `target`, or only reads it without one, stopping
+ * once it outgrows the limit; with the SHA-256 of what was read.
+ */
 const copyBounded = async (
   source: FileHandle,
-  target: FileHandle,
+  target: FileHandle | null,
 ): Promise<Copied> => {
   const buffer = new Uint8Array(COPY_CHUNK_BYTES);
+  const hash = createSha256();
   let total = 0;
   for (;;) {
     // await-in-loop: one chunk in memory at a time.
     const { bytesRead } = await source.read(buffer, 0, buffer.length, total);
     if (bytesRead === 0) {
-      return { bytes: total, type: "copied" };
+      return { bytes: total, sha256: hash.digest("hex"), type: "copied" };
     }
     total += bytesRead;
     if (total > BROWSER_CONTROL_LIMITS.downloadBytes) {
       return { type: "too_large" };
     }
-    await target.write(buffer, 0, bytesRead);
+    const chunk = buffer.subarray(0, bytesRead);
+    hash.update(chunk);
+    await target?.write(chunk);
   }
+};
+
+/** Names in the downloads folder looked at for an earlier copy, at most. */
+const MAX_COMPARED_NAMES = 4096;
+
+type Fingerprint = { bytes: number; sha256: string };
+
+/**
+ * What a file in the downloads folder is beside a download: the same bytes
+ * (`same`), other bytes or no regular file (`other`), or one that could not
+ * be read through (`unreadable`), which counts as no copy of it.
+ */
+type Comparison = "other" | "same" | "unreadable";
+
+/**
+ * Compares the file at `relativePath` in the run's folder with
+ * `fingerprint`: its size first, then its SHA-256. Opened through
+ * `openInWorkspace`, so a link is never followed to compare what it points
+ * at.
+ */
+const compareWith = async (
+  workspaceDir: string,
+  relativePath: string,
+  fingerprint: Fingerprint,
+): Promise<Comparison> => {
+  const opened = await openInWorkspace(workspaceDir, relativePath, "read");
+  if (Result.isError(opened)) {
+    return "unreadable";
+  }
+  const handle = opened.value;
+  const compared = await Result.tryPromise(async (): Promise<Comparison> => {
+    try {
+      const stat = await handle.stat();
+      if (!stat.isFile() || stat.size !== fingerprint.bytes) {
+        return "other";
+      }
+      const read = await copyBounded(handle, null);
+      return read.type === "copied" && read.sha256 === fingerprint.sha256
+        ? "same"
+        : "other";
+    } finally {
+      await handle.close();
+    }
+  });
+  return Result.isOk(compared) ? compared.value : "unreadable";
+};
+
+/**
+ * Whether the run's downloads folder already holds the same bytes: the
+ * copy's `/`-separated path (`found`), none (`none`), or a folder that
+ * could not be listed (`unlisted`). Only PDFs of the same size are read;
+ * the first by name wins.
+ */
+type EarlierCopy =
+  { type: "found"; path: string } | { type: "none" } | { type: "unlisted" };
+
+const earlierCopy = async (
+  workspaceDir: string,
+  fingerprint: Fingerprint,
+): Promise<EarlierCopy> => {
+  const listed = await Result.tryPromise(
+    async () =>
+      await readdir(path.join(workspaceDir, BROWSER_DOWNLOADS_FOLDER), {
+        withFileTypes: true,
+      }),
+  );
+  if (Result.isError(listed)) {
+    return { type: "unlisted" };
+  }
+  const names = listed.value
+    .filter(
+      (entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".pdf"),
+    )
+    .map((entry) => entry.name)
+    .toSorted()
+    .slice(0, MAX_COMPARED_NAMES);
+  for (const name of names) {
+    const relativePath = `${BROWSER_DOWNLOADS_FOLDER}/${name}`;
+    // await-in-loop: one file open at a time, and the first match ends it.
+    if (
+      (await compareWith(workspaceDir, relativePath, fingerprint)) === "same"
+    ) {
+      return { path: relativePath, type: "found" };
+    }
+  }
+  return { type: "none" };
 };
 
 const startsWithPdfMagic = async (source: FileHandle) => {
@@ -428,7 +576,7 @@ const takeOpened = async ({
   sourceUrl: string;
   suggestedName: string;
   workspaceDir: string;
-}): Promise<BrowserDownloadOutcome> => {
+}): Promise<ReceivedDownload> => {
   const opened = await source.stat({ bigint: true });
   if (!opened.isFile()) {
     return refused(BROWSER_DOWNLOAD_REFUSAL.notAFile, sourceUrl);
@@ -447,6 +595,27 @@ const takeOpened = async ({
   );
   if (Result.isError(folder)) {
     return refused(BROWSER_DOWNLOAD_REFUSAL.folderUnavailable, sourceUrl);
+  }
+  // Read once before anything is written: the same bytes already saved
+  // are named, not copied again.
+  const read = await copyBounded(source, null);
+  if (read.type === "too_large") {
+    await removeIfSame(file, opened);
+    return refused(BROWSER_DOWNLOAD_REFUSAL.tooLarge, sourceUrl);
+  }
+  // A folder that cannot be listed holds no copy this could name: the
+  // download is saved as a file of its own, which is never wrong.
+  const earlier = await earlierCopy(workspaceDir, read);
+  if (earlier.type === "found") {
+    await removeIfSame(file, opened);
+    return {
+      bytes: read.bytes,
+      duplicate: true,
+      path: earlier.path,
+      sha256: read.sha256,
+      sourceUrl,
+      status: "saved",
+    };
   }
   await seams.afterFolderCheck?.();
   const target = await createTarget(
@@ -471,7 +640,9 @@ const takeOpened = async ({
       await removeIfSame(file, opened);
       return {
         bytes: result.bytes,
+        duplicate: false,
         path: target.relativePath,
+        sha256: result.sha256,
         sourceUrl,
         status: "saved",
       };
@@ -486,15 +657,11 @@ type BrowserDownloadPlace = StagingBounds & {
   seams?: BrowserDownloadSeams;
 };
 
-/**
- * Takes one download the extension reported for a run whose folder is
- * `workspaceDir`: the saved PDF lands in its downloads folder, and anything
- * else is refused with a reason the agent can relay.
- */
-export const receiveBrowserDownload = async (
+/** Takes one download; see `receiveBrowserDownload`. */
+const receiveOne = async (
   download: BrowserDownload,
   { home, seams = {}, workspaceDir }: BrowserDownloadPlace,
-): Promise<BrowserDownloadOutcome> => {
+): Promise<ReceivedDownload> => {
   const { sourceUrl } = download;
   if (download.outcome === "stopped") {
     return refused(stoppedRefusal(download.reason), sourceUrl);
@@ -536,4 +703,39 @@ export const receiveBrowserDownload = async (
   return Result.isOk(taken)
     ? taken.value
     : refused(BROWSER_DOWNLOAD_REFUSAL.unreadable, sourceUrl);
+};
+
+/**
+ * The download each run folder is taking now, by folder: the next waits
+ * for it, so looking for an earlier copy and making one are one step per
+ * folder.
+ */
+const takingInto = new Map<string, Promise<void>>();
+
+/**
+ * Takes one download the extension reported for a run whose folder is
+ * `workspaceDir`: the saved PDF lands in its downloads folder unless the
+ * same bytes are there already, and anything else is refused with a
+ * reason the agent can relay. A folder takes one download at a time.
+ */
+export const receiveBrowserDownload = async (
+  download: BrowserDownload,
+  place: BrowserDownloadPlace,
+): Promise<ReceivedDownload> => {
+  const folder = path.resolve(place.workspaceDir);
+  const before = takingInto.get(folder) ?? Promise.resolve();
+  const taking = before.then(async () => await receiveOne(download, place));
+  // Settles either way, so a take that throws never holds the next.
+  const done = taking.then(
+    () => undefined,
+    () => undefined,
+  );
+  takingInto.set(folder, done);
+  try {
+    return await taking;
+  } finally {
+    if (takingInto.get(folder) === done) {
+      takingInto.delete(folder);
+    }
+  }
 };

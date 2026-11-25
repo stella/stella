@@ -98,6 +98,7 @@
     "scripts/check-playwright-config-scope.test.ts": ["**"],
     "scripts/check-policy-evidence.test.ts": ["**"],
     "scripts/check-pr-body.test.ts": ["**"],
+    "scripts/check-pr-guards.test.ts": ["scripts/check-pr-guards.ts"],
     "scripts/check-projection-totality.test.ts": ["**"],
     "scripts/check-public-assets.test.ts": ["**"],
     "scripts/check-public-law-pages.logic.test.ts": ["**"],

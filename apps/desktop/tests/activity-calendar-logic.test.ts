@@ -94,6 +94,7 @@ const day = (
   matchDay({
     segments: timedSegments(segments),
     candidates: [LEASE, SERVICES],
+    resolved: [],
     captureDetails: true,
     manualAssignments: [],
     draftedEntries,

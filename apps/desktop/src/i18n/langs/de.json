@@ -178,6 +178,7 @@
     "joinedActivity": "Nicht auf diese Akte angerechnet",
     "keepHistory": "Verlauf behalten",
     "latestDayReached": "Sie sehen den letzten verfügbaren Tag.",
+    "matterUnavailable": "Akte nicht verfügbar",
     "memoryOnly": "In diesem Build nicht gespeichert",
     "missingKeyEraseConfirmation": "Die gespeicherte Aktivität und die Wiederherstellungsdaten ausstehender Entwürfe werden gelöscht. Erstellte Entwürfe können bereits vorhanden sein. Dies kann nicht rückgängig gemacht werden.",
     "mixedActivity": "Schneller Wechsel",

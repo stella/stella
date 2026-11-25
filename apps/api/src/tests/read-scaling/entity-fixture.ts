@@ -28,6 +28,8 @@ import {
   fields,
   organizationSettings,
   properties,
+  timeEntries,
+  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { desktopDeviceProofReplays } from "@/api/db/schema/desktop-device-proof-replay";
@@ -114,6 +116,8 @@ export const prepareEntityReadScalingTables = async (db: GatedTestDb) =>
     agentSkills,
     agentSkillResources,
     billingGuidelineFiles,
+    timeEntries,
+    workspaceMembers,
   ]);
 
 export const seedEntityReadScaling = async (db: GatedTestDb, size: number) => {
