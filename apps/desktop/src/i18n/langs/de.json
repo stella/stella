@@ -50,6 +50,7 @@
     "batchFailed": "Entwürfe konnten nicht erstellt werden. Versuchen Sie es erneut.",
     "billingDraftsForgetPreference": "Vorgabe vergessen",
     "billingDraftsGranted": "stella KI entwirft die Beschreibungen Ihrer Zeiteinträge aus den Details, die jeder Eintrag zeigt.",
+    "billingDraftsManaged": "Ihre Organisation hat Entwürfe von stella KI auf diesem Computer deaktiviert.",
     "billingDraftsPreference": "Ihre Vorgabe für Entwürfe",
     "billingDraftsRevoked": "stella KI entwirft keine Beschreibungen, bis Sie es erlauben.",
     "billingDraftsTitle": "Entwürfe mit stella KI",
@@ -99,6 +100,7 @@
     "deleteOtherAccountHistory": "Verlauf anderer Konten löschen",
     "deleteOtherAccountHistoryConfirmation": "Den Verlauf anderer Konten für {days, plural, one {# Tag} other {# Tage}} auf diesem Gerät löschen? Das kann nicht rückgängig gemacht werden.",
     "deletionOnly": "Die gespeicherte Aktivität kann nicht geöffnet werden, weil ihr Schlüssel im Schlüsselbund fehlt. Sie können die gespeicherte Aktivität und die Wiederherstellungsdaten ausstehender Entwürfe löschen, um neu zu beginnen.",
+    "detailsManaged": "Ihre Organisation hat Fenstertitel und Dokumente auf diesem Computer deaktiviert. App-Namen werden weiter aufgezeichnet.",
     "detailsUnavailable": "Details sind auf diesem Gerät nicht verfügbar. App-Namen werden weiterhin erfasst.",
     "detectCalls": "Anrufe erfassen",
     "detectCallsDescription": "Solange Teams, Zoom oder ein Browser Ihr Mikrofon verwendet, zählt diese Zeit als Anruf, auch wenn Sie nur zuhören oder in einer anderen App arbeiten. Ton wird nie aufgezeichnet.",
@@ -116,6 +118,7 @@
       },
       "aiDraftProvider": "den KI-Anbieter Ihrer Kanzlei oder den von stella KI",
       "control": "Nichts wird aufgezeichnet, bevor Sie auf Aufzeichnung starten klicken. Pausieren, Apps ausschließen oder Tage löschen können Sie jederzeit.",
+      "detailsStay": "Fenstertitel und Dokumentnamen bleiben auf diesem Computer, solange Sie keinen Entwurf von stella KI anfordern",
       "never": {
         "audio": "Ton vom Mikrofon",
         "keystrokes": "Tastenanschläge oder getippter Text",
@@ -128,7 +131,7 @@
         "app": "Welche App im Vordergrund ist, alle paar Sekunden",
         "browserTitles": "Browser-Tab-Titel, nur in Browsern, die Sie zulassen",
         "calls": "Zeit in Anrufen, solange Sie es nicht abschalten",
-        "details": "Fenstertitel und auf dem Mac der vollständige Pfad jedes geöffneten Dokuments samt Ordnern, solange Sie sie nicht abschalten"
+        "details": "Fenstertitel und auf dem Mac der vollständige Pfad jedes geöffneten Dokuments samt Ordnern, nur wenn Sie das wählen"
       },
       "recordedTitle": "Was aufgezeichnet wird",
       "sent": {
@@ -965,9 +968,13 @@
         "title": "Anrufe"
       },
       "details": {
-        "appNamesOnly": "Nur App-Namen werden aufgezeichnet.",
-        "body": "Damit unterscheiden Sie Ihre Akten leichter, wenn Sie den Tag durchgehen.",
+        "body": "Wählen Sie, was Aktivität aufzeichnet. Mit Fenstertiteln und Dokumentnamen unterscheiden Sie Ihre Akten leichter, wenn Sie den Tag durchgehen.",
         "browsers": "Browser zeichnen Tab-Titel erst auf, wenn Sie es erlauben. Aktivität fragt nach jedem Browser, sobald sie ihn zum ersten Mal sieht.",
+        "choices": {
+          "appNamesOnly": "Nur App-Namen aufzeichnen",
+          "withDetails": "Auch Fenstertitel und Dokumentnamen aufzeichnen"
+        },
+        "choose": "Wählen Sie eine Option, um fortzufahren.",
         "title": "Fenstertitel und Dokumente"
       },
       "screens": {

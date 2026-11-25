@@ -50,6 +50,7 @@
     "batchFailed": "Koncepty sa nepodarilo vytvoriť. Skúste to znova.",
     "billingDraftsForgetPreference": "Zabudnúť preferenciu",
     "billingDraftsGranted": "stella AI navrhuje popisy vašich časových záznamov z podrobností, ktoré každý záznam zobrazuje.",
+    "billingDraftsManaged": "Vaša organizácia v tomto počítači vypla návrhy od stella AI.",
     "billingDraftsPreference": "Vaša preferencia pre návrhy",
     "billingDraftsRevoked": "stella AI nenavrhne žiadny popis, kým ju nepovolíte.",
     "billingDraftsTitle": "Návrhy stella AI",
@@ -99,6 +100,7 @@
     "deleteOtherAccountHistory": "Vymazať históriu iných účtov",
     "deleteOtherAccountHistoryConfirmation": "Vymazať históriu iných účtov na tomto zariadení za {days, plural, one {# deň} few {# dni} other {# dní}}? Vymazanie sa nedá vrátiť späť.",
     "deletionOnly": "Uloženú aktivitu nemožno otvoriť, pretože v kľúčenke chýba jej kľúč. Ak chcete začať znova, môžete vymazať uloženú aktivitu a údaje na obnovenie čakajúcich konceptov.",
+    "detailsManaged": "Vaša organizácia v tomto počítači vypla záznam názvov okien a dokumentov. Názvy aplikácií sa zaznamenávajú ďalej.",
     "detailsUnavailable": "Podrobnosti na tomto zariadení nie sú dostupné. Názvy aplikácií sa naďalej zaznamenávajú.",
     "detectCalls": "Zaznamenávať hovory",
     "detectCallsDescription": "Keď Teams, Zoom alebo prehliadač používa mikrofón, tento čas sa počíta ako hovor, aj keď len počúvate alebo pracujete v inej aplikácii. Zvuk sa nikdy nenahráva.",
@@ -116,6 +118,7 @@
       },
       "aiDraftProvider": "poskytovateľovi AI, ktorého používa vaša kancelária, alebo poskytovateľovi stella AI",
       "control": "Nič sa nezaznamenáva, kým nestlačíte Začať zaznamenávať. Kedykoľvek môžete pozastaviť, vylúčiť aplikácie alebo vymazať ktorýkoľvek deň.",
+      "detailsStay": "Názvy okien a dokumentov zostávajú v tomto počítači, pokiaľ si nevyžiadate návrh od stella AI",
       "never": {
         "audio": "Zvuk z mikrofónu",
         "keystrokes": "Stlačenia klávesov ani písaný text",
@@ -128,7 +131,7 @@
         "app": "Ktorá aplikácia je v popredí, každých pár sekúnd",
         "browserTitles": "Názvy kariet prehliadača, len v prehliadačoch, ktoré povolíte",
         "calls": "Čas v hovoroch, kým to nevypnete",
-        "details": "Názvy okien a na Macu celá cesta ku každému otvorenému dokumentu vrátane priečinkov, kým ich nevypnete"
+        "details": "Názvy okien a na Macu celá cesta ku každému otvorenému dokumentu vrátane priečinkov, len ak ich zvolíte"
       },
       "recordedTitle": "Čo sa zaznamenáva",
       "sent": {
@@ -965,9 +968,13 @@
         "title": "Hovory"
       },
       "details": {
-        "appNamesOnly": "Zaznamenávajú sa len názvy aplikácií.",
-        "body": "Pri prechádzaní dňa podľa nich ľahšie rozlíšite jednotlivé spisy.",
+        "body": "Zvoľte, čo má Aktivita zaznamenávať. Podľa názvov okien a dokumentov pri prechádzaní dňa ľahšie rozlíšite jednotlivé spisy.",
         "browsers": "Prehliadače zaznamenávajú názvy kariet, až keď to povolíte. Aktivita sa na každý prehliadač opýta, keď ho prvýkrát uvidí.",
+        "choices": {
+          "appNamesOnly": "Zaznamenávať len názvy aplikácií",
+          "withDetails": "Zaznamenávať aj názvy okien a dokumentov"
+        },
+        "choose": "Ak chcete pokračovať, vyberte jednu z možností.",
         "title": "Názvy okien a dokumentov"
       },
       "screens": {

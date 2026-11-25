@@ -50,6 +50,7 @@
     "batchFailed": "Drafts could not be created. Try again.",
     "billingDraftsForgetPreference": "Forget preference",
     "billingDraftsGranted": "stella AI drafts the descriptions of your time entries from the details each entry shows.",
+    "billingDraftsManaged": "Your organization has turned off stella AI drafts on this computer.",
     "billingDraftsPreference": "Your drafting preference",
     "billingDraftsRevoked": "stella AI drafts no descriptions until you allow it.",
     "billingDraftsTitle": "stella AI drafts",
@@ -99,6 +100,7 @@
     "deleteOtherAccountHistory": "Delete history from other accounts",
     "deleteOtherAccountHistoryConfirmation": "Delete {days, plural, one {# saved day} other {# saved days}} from other accounts on this device? This cannot be undone.",
     "deletionOnly": "Saved activity cannot be opened because its key is missing from the keychain. You can erase saved activity and pending draft recovery to start again.",
+    "detailsManaged": "Your organization has turned off window titles and documents on this computer. App names are still recorded.",
     "detailsUnavailable": "Details are unavailable on this device. App names are still recorded.",
     "detectCalls": "Record calls",
     "detectCallsDescription": "While Teams, Zoom or a browser uses your microphone, that time counts as the call, even if you only listen or work in another app. Audio is never recorded.",
@@ -116,6 +118,7 @@
       },
       "aiDraftProvider": "the AI provider your firm uses, or stella AI's",
       "control": "Nothing is recorded until you press Start recording. Pause, exclude apps or delete any day whenever you like.",
+      "detailsStay": "Window titles and document names stay on this computer unless you ask for a stella AI draft",
       "never": {
         "audio": "Sound from the microphone",
         "keystrokes": "Keystrokes or typed text",
@@ -128,7 +131,7 @@
         "app": "Which app is in front, every few seconds",
         "browserTitles": "Browser tab titles, only in browsers you allow",
         "calls": "Time on calls, unless you turn it off",
-        "details": "Window titles and, on a Mac, the full path of each open document, folders included, unless you turn them off"
+        "details": "Window titles and, on a Mac, the full path of each open document, folders included, only if you choose them"
       },
       "recordedTitle": "What is recorded",
       "sent": {
@@ -965,9 +968,13 @@
         "title": "Calls"
       },
       "details": {
-        "appNamesOnly": "Only app names are recorded.",
-        "body": "They help you tell matters apart when you review the day.",
+        "body": "Choose what Activity records. Window titles and document names help you tell matters apart when you review the day.",
         "browsers": "Browsers record tab titles only once you allow it. Activity asks about each browser the first time it sees it.",
+        "choices": {
+          "appNamesOnly": "Record app names only",
+          "withDetails": "Also record window titles and document names"
+        },
+        "choose": "Choose one to continue.",
         "title": "Window titles and documents"
       },
       "screens": {

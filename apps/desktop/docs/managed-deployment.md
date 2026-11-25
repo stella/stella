@@ -4,13 +4,20 @@ Administrators can fix these settings for every user of a Mac or PC. The
 app reads them once at launch; a change applies the next time stella desktop
 starts.
 
-| Key                | Type    | Effect                                                                                   |
-| ------------------ | ------- | ---------------------------------------------------------------------------------------- |
-| `DisableUpdates`   | Boolean | No update checks: background, tray and handoff. The tray says updates are managed.       |
-| `DisableActivity`  | Boolean | The activity timeline stays off even when the server enables it for the account.         |
-| `DisableClipboard` | Boolean | No clipboard history: nothing is recorded, and no shortcut, tray item or link opens it.  |
-| `ServerWebOrigin`  | String  | With `ServerApiURL`: the self-hosted server trusted without the approval prompt.         |
-| `ServerApiURL`     | String  | With `ServerWebOrigin`: that server's API. "Connect to stella web" links to this server. |
+| Key                       | Type    | Effect                                                                                   |
+| ------------------------- | ------- | ---------------------------------------------------------------------------------------- |
+| `DisableUpdates`          | Boolean | No update checks: background, tray and handoff. The tray says updates are managed.       |
+| `DisableActivity`         | Boolean | The activity timeline stays off even when the server enables it for the account.         |
+| `DisableActivityDetails`  | Boolean | The activity timeline records app names only: no window titles or documents.             |
+| `DisableActivityAiDrafts` | Boolean | No stella AI drafts from the activity timeline, whatever the user and the server allow.  |
+| `DisableClipboard`        | Boolean | No clipboard history: nothing is recorded, and no shortcut, tray item or link opens it.  |
+| `ServerWebOrigin`         | String  | With `ServerApiURL`: the self-hosted server trusted without the approval prompt.         |
+| `ServerApiURL`            | String  | With `ServerWebOrigin`: that server's API. "Connect to stella web" links to this server. |
+
+Every switch only turns something off. No key turns a feature on or makes a
+choice for the user: whether the activity timeline records at all, and whether
+it records window titles and documents, stays the user's choice wherever the
+organization has not turned it off.
 
 `DisableUpdates` leaves deployment to the organization. The server supports a
 desktop build until a newer one has been published for 30 days and then refuses
@@ -25,6 +32,17 @@ of it.
 `DisableActivity` stops recording and closes the activity window, like any
 other closed feature gate. Data already recorded stays on the device until
 retention removes it.
+
+`DisableActivityDetails` keeps window titles and documents out of new
+activity, whatever the user chose; setup skips the details question, and
+Settings say the organization turned details off. Titles recorded before are
+not shown. The user's own choice is kept and applies again once the key is
+removed.
+
+`DisableActivityAiDrafts` keeps every stella AI draft on the device: no draft
+request leaves it, and consent cannot be granted. Settings say the
+organization turned drafts off; setup and Settings offer only withdrawing
+consent given before.
 
 `DisableClipboard` keeps clipboard history from starting: the clipboard is
 never read, the global shortcut is not registered, the tray has no Clipboard
@@ -62,6 +80,10 @@ General › Device Management; its values are forced in the same way.
   <true/>
   <key>DisableActivity</key>
   <true/>
+  <key>DisableActivityDetails</key>
+  <true/>
+  <key>DisableActivityAiDrafts</key>
+  <true/>
   <key>DisableClipboard</key>
   <true/>
   <key>ServerWebOrigin</key>
@@ -76,7 +98,7 @@ Booleans must be plist booleans (`<true/>`, or `-bool true` with
 
 ## Windows
 
-Registry key: `Software\Policies\stella\Desktop`. The two switches are
+Registry key: `Software\Policies\stella\Desktop`. The switches are
 read from `HKEY_LOCAL_MACHINE` first, then `HKEY_CURRENT_USER`; the server
 keys only from `HKEY_LOCAL_MACHINE`, because they grant trust. Booleans are
 `REG_DWORD` (`1` on, `0` off); server values are `REG_SZ`.
@@ -87,6 +109,8 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\stella\Desktop]
 "DisableUpdates"=dword:00000001
 "DisableActivity"=dword:00000001
+"DisableActivityDetails"=dword:00000001
+"DisableActivityAiDrafts"=dword:00000001
 "DisableClipboard"=dword:00000001
 "ServerWebOrigin"="https://stella.firm.example"
 "ServerApiURL"="https://api.stella.firm.example"

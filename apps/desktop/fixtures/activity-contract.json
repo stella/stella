@@ -4,7 +4,8 @@
     "disabled",
     "ready",
     "accessibilityRequired",
-    "unavailable"
+    "unavailable",
+    "managed"
   ],
   "changedEvent": "activity-timeline-changed",
   "deletionStatuses": {

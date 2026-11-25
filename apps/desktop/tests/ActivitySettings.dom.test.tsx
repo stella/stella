@@ -48,6 +48,8 @@ const SETTINGS = {
 const renderPane = async (native: {
   readable: boolean;
   captureDetails?: boolean;
+  detailsAccess?: "disabled" | "managed";
+  draftPolicy?: "account" | "managedOff";
 }) => {
   mockIPC(
     (command, args) => {
@@ -58,6 +60,23 @@ const renderPane = async (native: {
         return {
           ...SETTINGS,
           captureDetails: native.captureDetails ?? SETTINGS.captureDetails,
+          detailsAccess: native.detailsAccess ?? SETTINGS.detailsAccess,
+        };
+      }
+      if (
+        command === "billing_draft_get_settings" &&
+        native.draftPolicy !== undefined
+      ) {
+        return {
+          policy: native.draftPolicy,
+          scopeKey: '["org_fixture","user_fixture"]',
+          settings: {
+            consent: "revoked",
+            effectiveMode:
+              native.draftPolicy === "managedOff" ? "off" : "plain",
+            preference: null,
+            revision: "revision-1",
+          },
         };
       }
       if (command === "activity_set_detect_calls") {
@@ -140,4 +159,28 @@ test("the title setting describes what flipping it does in its current state", a
     ).getAttribute("aria-checked"),
   ).toBe("true");
   expect(description()).toBe(messages.captureDetailsDescription);
+});
+
+test("where policy keeps details off, the row says so and offers nothing to turn on", async () => {
+  const { findAllByText, queryByRole } = await renderPane({
+    readable: true,
+    detailsAccess: "managed",
+  });
+  // The row and the per-app list both say who decided.
+  expect((await findAllByText(messages.detailsManaged)).length).toBeGreaterThan(
+    0,
+  );
+  expect(queryByRole("checkbox", { name: messages.captureDetails })).toBeNull();
+  expect(
+    document.body.textContent?.includes(messages.captureModesDetailsOff),
+  ).toBe(false);
+});
+
+test("where policy turns drafts off, the drafts row says so and asks for no consent", async () => {
+  const { findByText, queryByRole } = await renderPane({
+    readable: true,
+    draftPolicy: "managedOff",
+  });
+  await findByText(messages.billingDraftsManaged);
+  expect(queryByRole("button", { name: messages.aiDraftAllow })).toBeNull();
 });

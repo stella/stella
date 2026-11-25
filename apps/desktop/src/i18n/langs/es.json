@@ -50,6 +50,7 @@
     "batchFailed": "No se pudieron crear los borradores. Inténtelo de nuevo.",
     "billingDraftsForgetPreference": "Olvidar la preferencia",
     "billingDraftsGranted": "stella IA redacta las descripciones de tus registros de tiempo a partir de los detalles que muestra cada registro.",
+    "billingDraftsManaged": "Tu organización ha desactivado los borradores de stella IA en este ordenador.",
     "billingDraftsPreference": "Tu preferencia de redacción",
     "billingDraftsRevoked": "stella IA no redacta descripciones hasta que lo permitas.",
     "billingDraftsTitle": "Propuestas de stella IA",
@@ -99,6 +100,7 @@
     "deleteOtherAccountHistory": "Eliminar historial de otras cuentas",
     "deleteOtherAccountHistoryConfirmation": "¿Eliminar el historial de otras cuentas de {days, plural, one {# día} other {# días}} en este dispositivo? Esta acción no se puede deshacer.",
     "deletionOnly": "La actividad guardada no se puede abrir porque falta su clave en el llavero. Puede borrar la actividad guardada y los datos de recuperación de borradores pendientes para empezar de nuevo.",
+    "detailsManaged": "Tu organización ha desactivado los títulos de ventanas y los documentos en este ordenador. Los nombres de las aplicaciones se siguen registrando.",
     "detailsUnavailable": "Los detalles no están disponibles en este dispositivo. Los nombres de las aplicaciones se siguen registrando.",
     "detectCalls": "Registrar llamadas",
     "detectCallsDescription": "Mientras Teams, Zoom o un navegador usan tu micrófono, ese tiempo cuenta como la llamada, aunque solo escuches o trabajes en otra aplicación. Nunca se graba audio.",
@@ -116,6 +118,7 @@
       },
       "aiDraftProvider": "al proveedor de IA que usa tu despacho, o al de stella IA",
       "control": "No se registra nada hasta que pulses Empezar a registrar. Puedes pausar, excluir aplicaciones o eliminar cualquier día cuando quieras.",
+      "detailsStay": "Los títulos de ventanas y los nombres de documentos se quedan en este ordenador salvo que pidas un borrador de stella IA",
       "never": {
         "audio": "Sonido del micrófono",
         "keystrokes": "Pulsaciones de teclas o texto escrito",
@@ -128,7 +131,7 @@
         "app": "Qué aplicación está en primer plano, cada pocos segundos",
         "browserTitles": "Títulos de pestañas del navegador, solo en los navegadores que permitas",
         "calls": "Tiempo en llamadas, salvo que lo desactives",
-        "details": "Títulos de ventanas y, en Mac, la ruta completa de cada documento abierto, carpetas incluidas, salvo que los desactives"
+        "details": "Títulos de ventanas y, en Mac, la ruta completa de cada documento abierto, carpetas incluidas, solo si los eliges"
       },
       "recordedTitle": "Qué se registra",
       "sent": {
@@ -965,9 +968,13 @@
         "title": "Llamadas"
       },
       "details": {
-        "appNamesOnly": "Solo se registran los nombres de las aplicaciones.",
-        "body": "Te ayudan a distinguir los asuntos cuando repasas el día.",
+        "body": "Elige qué registra Actividad. Los títulos de ventanas y los nombres de documentos te ayudan a distinguir los asuntos cuando repasas el día.",
         "browsers": "Los navegadores registran los títulos de las pestañas solo cuando lo permites. Actividad pregunta por cada navegador la primera vez que lo ve.",
+        "choices": {
+          "appNamesOnly": "Registrar solo los nombres de las aplicaciones",
+          "withDetails": "Registrar también los títulos de ventanas y los nombres de documentos"
+        },
+        "choose": "Elige una opción para continuar.",
         "title": "Títulos de ventanas y documentos"
       },
       "screens": {

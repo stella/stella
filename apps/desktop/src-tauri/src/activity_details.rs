@@ -121,6 +121,9 @@ pub fn capture(
 }
 
 pub fn access_status(enabled: bool) -> ActivityDetailsAccess {
+  if crate::managed_policy::current().activity_details_disabled {
+    return ActivityDetailsAccess::Managed;
+  }
   if !enabled {
     return ActivityDetailsAccess::Disabled;
   }

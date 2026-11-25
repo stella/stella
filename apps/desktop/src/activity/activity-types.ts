@@ -39,6 +39,8 @@ export const ACTIVITY_DETAILS_ACCESS = [
   "ready",
   "accessibilityRequired",
   "unavailable",
+  // Managed policy keeps details off, whatever the user chose.
+  "managed",
 ] as const;
 export type ActivityDetailsAccess = (typeof ACTIVITY_DETAILS_ACCESS)[number];
 
