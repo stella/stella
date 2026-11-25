@@ -419,6 +419,103 @@ type ActivityDayCalendarProps = {
   onReviewStatusChange: (status: ActivityReviewStatus) => void;
 };
 
+type SuggestionAcceptanceInput = {
+  editable: boolean;
+  narratives: ReturnType<typeof useSuggestionDrafts>;
+  submitBatch: ReturnType<typeof useBatchSubmission>["submitBatch"];
+  date: ActivityDaySnapshot["date"];
+  timeZone: string;
+  onSaved: (
+    suggestion: ActivitySuggestion,
+    items: readonly BatchItem[],
+  ) => void;
+};
+
+/** Accepting a reviewed suggestion, whole or split, saves it as one confirmed
+ * batch; once saved, `onSaved` hears which entries it became. */
+const suggestionAcceptance = ({
+  editable,
+  narratives,
+  submitBatch,
+  date,
+  timeZone,
+  onSaved,
+}: SuggestionAcceptanceInput) => {
+  const accept = (suggestion: ActivitySuggestion) => {
+    const edit = narratives.editFor(suggestion);
+    if (
+      !editable ||
+      edit.matter === null ||
+      edit.narrative.trim().length === 0 ||
+      suggestion.roundedTenths === 0
+    ) {
+      return;
+    }
+    // One confirmed entry per batch: the batch path keeps the idempotency
+    // key and the stored pending request for this single acceptance.
+    submitBatch(
+      {
+        idempotencyKey: crypto.randomUUID(),
+        items: [
+          {
+            entry: {
+              matterId: edit.matter.id,
+              dateWorked: date,
+              timezoneId: timeZone,
+              durationMinutes: suggestion.roundedTenths * 6,
+              narrative: edit.narrative,
+              billable: edit.billable,
+              ...(edit.classification === null
+                ? {}
+                : { classification: edit.classification }),
+            },
+            ranges: suggestion.ranges,
+          },
+        ],
+      },
+      afterSaved(suggestion),
+    );
+  };
+  /** An accepted split or move creates its entries in one confirmed batch,
+   * each covering its own share of the recorded time. */
+  const acceptStructure = (suggestion: ActivitySuggestion) => {
+    const structure = narratives.structure(suggestion);
+    const edit = narratives.editFor(suggestion);
+    if (
+      !editable ||
+      structure === null ||
+      edit.matter === null ||
+      suggestion.roundedTenths === 0
+    ) {
+      return;
+    }
+    submitBatch(
+      {
+        idempotencyKey: crypto.randomUUID(),
+        items: structureItems({
+          structure,
+          card: {
+            matterId: edit.matter.id,
+            narrative: edit.narrative,
+            billable: edit.billable,
+            classification: edit.classification,
+          },
+          durationMinutes: suggestion.roundedTenths * 6,
+          ranges: suggestion.ranges,
+          date,
+          timezoneId: timeZone,
+        }),
+      },
+      afterSaved(suggestion),
+    );
+  };
+  const afterSaved =
+    (suggestion: ActivitySuggestion) => (items: readonly BatchItem[]) => {
+      onSaved(suggestion, items);
+    };
+  return { accept, acceptStructure };
+};
+
 export const ActivityDayCalendar = ({
   header,
   notice,
@@ -501,79 +598,17 @@ export const ActivityDayCalendar = ({
     }
     open({ id: next.id, type: "suggestion" }, next);
   };
-  const accept = (suggestion: ActivitySuggestion) => {
-    const edit = narratives.editFor(suggestion);
-    if (
-      !editable ||
-      edit.matter === null ||
-      edit.narrative.trim().length === 0 ||
-      suggestion.roundedTenths === 0
-    ) {
-      return;
-    }
-    // One confirmed entry per batch: the batch path keeps the idempotency
-    // key and the stored pending request for this single acceptance.
-    submitBatch(
-      {
-        idempotencyKey: crypto.randomUUID(),
-        items: [
-          {
-            entry: {
-              matterId: edit.matter.id,
-              dateWorked: snapshot.date,
-              timezoneId: timeZone,
-              durationMinutes: suggestion.roundedTenths * 6,
-              narrative: edit.narrative,
-              billable: edit.billable,
-              ...(edit.classification === null
-                ? {}
-                : { classification: edit.classification }),
-            },
-            ranges: suggestion.ranges,
-          },
-        ],
-      },
-      afterSaved(suggestion),
-    );
-  };
-  /** An accepted split or move creates its entries in one confirmed batch,
-   * each covering its own share of the recorded time. */
-  const acceptStructure = (suggestion: ActivitySuggestion) => {
-    const structure = narratives.structure(suggestion);
-    const edit = narratives.editFor(suggestion);
-    if (
-      !editable ||
-      structure === null ||
-      edit.matter === null ||
-      suggestion.roundedTenths === 0
-    ) {
-      return;
-    }
-    submitBatch(
-      {
-        idempotencyKey: crypto.randomUUID(),
-        items: structureItems({
-          structure,
-          card: {
-            matterId: edit.matter.id,
-            narrative: edit.narrative,
-            billable: edit.billable,
-            classification: edit.classification,
-          },
-          durationMinutes: suggestion.roundedTenths * 6,
-          ranges: suggestion.ranges,
-          date: snapshot.date,
-          timezoneId: timeZone,
-        }),
-      },
-      afterSaved(suggestion),
-    );
-  };
-  const afterSaved =
-    (suggestion: ActivitySuggestion) => (items: readonly BatchItem[]) => {
+  const { accept, acceptStructure } = suggestionAcceptance({
+    editable,
+    narratives,
+    submitBatch,
+    date: snapshot.date,
+    timeZone,
+    onSaved: (suggestion, items) => {
       learning.learnFrom(suggestion, items);
       openNext(suggestion);
-    };
+    },
+  });
   const reject = (suggestion: ActivitySuggestion) => {
     if (suggestion.type === "matched") {
       setLeftOut((current) => new Set([...current, suggestion.id]));
