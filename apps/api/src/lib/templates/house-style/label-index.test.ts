@@ -423,6 +423,30 @@ describe("buildLabelIndex", () => {
     expect(keysOf(manifest)).toEqual(["article I", "clause I/1"]);
   });
 
+  test("a roman numeral alone on its line heads an article", () => {
+    const manifest = manifestOf([
+      "I.",
+      "Úvodní ustanovení",
+      numbered("1)", "Text.", 1),
+      "II. ",
+      "Definice pojmů",
+      numbered("1)", "Text.", 2),
+      numbered("2)", "Text.", 2),
+    ]);
+    const index = buildLabelIndex(manifest);
+    expect(keysOf(manifest)).toEqual([
+      "article I",
+      "clause I/1",
+      "article II",
+      "clause II/1",
+      "clause II/2",
+    ]);
+    expect(index.entryByBlockId.get("p3")).toMatchObject({
+      title: "Definice pojmů",
+      titleBlockId: "p4",
+    });
+  });
+
   test("roman headings without a keyword", () => {
     const manifest = manifestOf([
       "I. Úvodní ustanovení",

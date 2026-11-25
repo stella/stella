@@ -144,6 +144,13 @@ const isTypedLabel = (shape: LabelShape, after: string): boolean => {
   if (shape.keyword !== null) {
     return /^(?:$|[\s:–—-])/u.test(after);
   }
+  // A roman numeral alone on its line heads an article whose title follows
+  // in the next paragraph.
+  const counted =
+    shape.numeral === "upperRoman" || shape.numeral === "upperAmbiguous";
+  if (counted && shape.period && after.trim() === "") {
+    return true;
+  }
   const blank = BLANK.exec(after)?.[0] ?? "";
   if (blank === "") {
     return false;
