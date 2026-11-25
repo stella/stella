@@ -177,7 +177,10 @@ const WritableMatterColorContextPicker = ({
   return (
     <>
       {trigger.trigger === "contextmenu" ? (
-        <ContextMenuSurface onOpenContextMenu={() => setOpen(true)}>
+        <ContextMenuSurface
+          onOpenContextMenu={() => setOpen(true)}
+          preserveNativeTargets={false}
+        >
           <span className={triggerClassName}>{content}</span>
         </ContextMenuSurface>
       ) : (
