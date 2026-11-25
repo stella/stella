@@ -2496,7 +2496,7 @@ describe("Codex background terminals after a turn", () => {
  * which runs offline, and a turn runs against a model provider on
  * 127.0.0.1 that never answers, with every other host behind a proxy that
  * refuses. Without a CLI the suite is skipped; the fake-server suites above
- * always run. CI installs the pinned CLI (`scripts/ci-harness-clis.ts`) and
+ * always run. CI installs the pinned CLI (`scripts/ci-harness-clis.sh`) and
  * says so in `STELLA_REAL_HARNESS_CLIS`, which makes the suite required.
  */
 

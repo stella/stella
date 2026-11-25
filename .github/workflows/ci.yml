@@ -3161,11 +3161,14 @@ jobs:
         run: bun --cwd .claude/mcp test
 
       # The agent engine's installed-CLI suites run against the CLIs the
-      # desktop app pins, instead of being skipped.
+      # desktop app pins, instead of being skipped. Uncached: the download,
+      # digest check and unpack take about 2 s.
       - name: Install pinned harness CLIs
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && needs.ci-plan.outputs.package_checks_required == 'true' && matrix.shard == 'rest' && (steps.affected.outputs.flag == '' || contains(needs.ci-plan.outputs.test_scope, '@stll/agent-engine')) }}
         timeout-minutes: 5
-        uses: ./.github/actions/harness-clis
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci-harness-clis.sh "$RUNNER_TEMP/harness-clis"
 
       # The API test runner sizes its parallel lanes from the runner's cores
       # and memory (apps/api/scripts/test-lanes.ts); print what it sees.

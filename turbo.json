@@ -1104,7 +1104,7 @@
     },
     "@stll/agent-engine#test": {
       "dependsOn": ["transit"],
-      // The real CLIs CI installed (scripts/ci-harness-clis.ts): their suites
+      // The real CLIs CI installed (scripts/ci-harness-clis.sh): their suites
       // run only where one is installed, so a pass without one never replays
       // where one is.
       "env": ["STELLA_REAL_HARNESS_CLIS"],

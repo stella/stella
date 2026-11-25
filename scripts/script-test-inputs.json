@@ -163,11 +163,6 @@
     "scripts/ci-failure-digest.test.ts": ["**"],
     "scripts/ci-gate-classes.test.ts": ["**"],
     "scripts/ci-generated-sources.test.ts": ["**"],
-    "scripts/ci-harness-clis.test.ts": [
-      "apps/desktop/src-tauri/harness/pins.json",
-      "packages/sha256/src/**",
-      "scripts/ci-harness-clis.ts"
-    ],
     "scripts/ci-install-store.test.ts": ["**"],
     "scripts/ci-install.test.ts": ["**"],
     "scripts/ci-job-classification.test.ts": ["**"],
