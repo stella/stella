@@ -560,8 +560,15 @@ const useBrowserCardApproval = ({
           !sites.grantedOrigins.has(question.site)
           ? question.site
           : null;
-      default:
+      // Always allowing the website would not answer the step.
+      case BROWSER_STEP_ASK_REASON.noSite:
+      case BROWSER_STEP_ASK_REASON.pageUnconfirmed:
+      case BROWSER_STEP_ASK_REASON.embeddedFrame:
+      case BROWSER_STEP_ASK_REASON.possibleSecret:
         return null;
+      default:
+        question.reason satisfies never;
+        return panic("Unhandled browser ask reason");
     }
   })();
   return {

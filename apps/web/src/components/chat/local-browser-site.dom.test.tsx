@@ -66,11 +66,12 @@ const member = {
 const askedStep = (
   url: string,
   action = "click",
-  why: string | undefined = "site_not_allowed",
+  /** Null for a question from a desktop that did not say why. */
+  why: string | null = "site_not_allowed",
 ) => ({
   action,
   asked: { name: "Search", role: "button", url },
-  ...(why === undefined ? {} : { why }),
+  ...(why === null ? {} : { why }),
 });
 
 const localBrowserPart = (input: unknown) => ({
@@ -258,7 +259,7 @@ describe("always allowing a website from a step on the member's computer", () =>
 
   test("a question from a desktop that did not say why offers a website only while it is not allowed", () => {
     const { queryClient, view } = renderLocalCard(
-      askedStep(`${SITE}/search`, "click", undefined),
+      askedStep(`${SITE}/search`, "click", null),
       { allowed: [SITE] },
     );
     expect(
