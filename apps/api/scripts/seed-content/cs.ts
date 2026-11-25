@@ -4,7 +4,7 @@
 // everything else the pack supplies.
 import { MARKETING_LOCALE_MARKERS } from "@stll/playwright-tools/marketing-locales";
 
-import { seedId } from "../seed-utils";
+import { seedAvatar, seedId } from "../seed-utils";
 import {
   CS_DOCUMENT_TEXTS,
   CS_EMAILS,
@@ -1157,24 +1157,21 @@ export const CS_SEED_CONTENT = {
       id: "test-user-cs-alena-jandova",
       name: "Alena Jandová",
       email: "alena.jandova@stella.dev",
-      image:
-        "https://api.dicebear.com/9.x/avataaars/svg?seed=alena-jandova&backgroundColor=b6e3f4",
+      image: seedAvatar(0),
       hourlyRate: 4500,
     },
     {
       id: "test-user-cs-bohumil-mares",
       name: "Bohumil Mareš",
       email: "bohumil.mares@stella.dev",
-      image:
-        "https://api.dicebear.com/9.x/avataaars/svg?seed=bohumil-mares&backgroundColor=d1d4f9",
+      image: seedAvatar(1),
       hourlyRate: 2500,
     },
     {
       id: "test-user-cs-klara-novakova",
       name: "Klára Nováková",
       email: "klara.novakova@stella.dev",
-      image:
-        "https://api.dicebear.com/9.x/avataaars/svg?seed=klara-novakova&backgroundColor=ffd5dc",
+      image: seedAvatar(2),
       hourlyRate: 4500,
     },
   ],
