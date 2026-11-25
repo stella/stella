@@ -176,7 +176,12 @@ const choose = async (menu: HTMLElement, name: string) => {
   const item = within(menu)
     .getAllByRole("menuitemradio")
     .find((candidate) =>
-      candidate.textContent.replace(/^Selected/u, "").startsWith(name),
+      // A permission mode is an icon named by its label; a checked row
+      // starts with its indicator's "Selected" title.
+      (
+        candidate.getAttribute("aria-label") ??
+        candidate.textContent.replace(/^Selected/u, "")
+      ).startsWith(name),
     );
   if (item === undefined) {
     throw new Error(`no ${name} choice`);
@@ -213,9 +218,10 @@ test("the where chip switches the place, and the model chip lists that place's m
   expect(
     within(places).getByText(messages.chat.runOn.cloudDescription),
   ).toBeTruthy();
+  // Only the chosen place says what it is.
   expect(
-    within(places).getByText(messages.chat.runOn.yourComputerDescription),
-  ).toBeTruthy();
+    within(places).queryByText(messages.chat.runOn.yourComputerDescription),
+  ).toBeNull();
   await choose(places, "Codex");
   expect(chosen).toEqual([LOCAL_TARGET]);
   // Picking a place closes the menu.

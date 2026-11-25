@@ -386,6 +386,14 @@
     "chat.pastedText.fromPromptFallback": [
       "de"
     ],
+    "chat.runOn.agent": [
+      "cs",
+      "de",
+      "et",
+      "fr",
+      "pl",
+      "sk"
+    ],
     "chat.runOn.cloud": [
       "cs",
       "de",
