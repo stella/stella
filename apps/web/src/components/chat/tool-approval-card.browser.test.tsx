@@ -504,6 +504,56 @@ describe("always allowing a website", () => {
       },
     );
     expect(markup).not.toContain(alwaysAllowSite);
+    // Nothing was reported for the tab, so the card says why it asks.
+    expect(markup).toContain(
+      messages.chat.approval.browser.askReason.pageUnconfirmed,
+    );
+  });
+
+  test("a step that still asks on an allowed website says why, never a bare allow once", () => {
+    const allowed = () => withAllowedSites(["https://example.com"]);
+    const typeInto = stepOn(
+      "https://example.com/news",
+      { action: "fill", value: "Dana" },
+      "textbox",
+    );
+    // The browser reported the page, but no value for the field.
+    const secret = afterReport(readOf("https://example.com/news"), () =>
+      renderCard(browserPart(typeInto, "approval-requested"), undefined, {
+        queryClient: allowed(),
+        user: member,
+      }),
+    );
+    expect(secret).toContain(messages.chat.approval.allowOnce);
+    expect(secret).toContain(
+      messages.chat.approval.browser.askReason.possibleSecret,
+    );
+    expect(secret).not.toContain(alwaysAllowSite);
+    // A click in a frame embedded in the page.
+    const framed = afterReport(readOf("https://example.com/news"), () =>
+      renderCard(
+        browserPart(
+          { ...clickNews, target: { ...clickNews.target, ref: "e:4:1" } },
+          "approval-requested",
+        ),
+        undefined,
+        { queryClient: allowed(), user: member },
+      ),
+    );
+    expect(framed).toContain(
+      messages.chat.approval.browser.askReason.embeddedFrame,
+    );
+    expect(framed).not.toContain(alwaysAllowSite);
+    // A website not allowed says so, and offers to allow it.
+    const notAllowed = renderCard(
+      browserPart(clickNews, "approval-requested"),
+      undefined,
+      { user: member },
+    );
+    expect(notAllowed).toContain(
+      messages.chat.approval.browser.askReason.siteNotAllowed,
+    );
+    expect(notAllowed).toContain(alwaysAllowSite);
   });
 
   test("another subdomain or port of an allowed website is still offered", () => {

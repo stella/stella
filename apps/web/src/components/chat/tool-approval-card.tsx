@@ -13,7 +13,12 @@ import {
 } from "@stll/api-contract/browser-control";
 import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
 import { browserSiteGrantHost } from "@stll/api-contract/browser-site-grants";
-import { BROWSER_STEP_GATE } from "@stll/api-contract/browser-step-gate";
+import {
+  BROWSER_STEP_ASK_REASON,
+  BROWSER_STEP_GATE,
+  type BrowserStepAskReason,
+  type BrowserStepDecision,
+} from "@stll/api-contract/browser-step-gate";
 import { isDeclinedChatToolCall } from "@stll/api-contract/chat";
 import {
   localRunProposedPlan,
@@ -76,7 +81,10 @@ import type {
   PendingApprovalToolPart,
   SuggestChangesApplyOutput,
 } from "@/components/chat/chat-ui-tools";
-import { localBrowserApprovalSite } from "@/components/chat/local-browser-site";
+import {
+  type LocalBrowserQuestion,
+  localBrowserQuestion,
+} from "@/components/chat/local-browser-site";
 import { useLocalRunSubtitleText } from "@/components/chat/local-run-subtitle";
 import { findMcpConnectorIconHref } from "@/components/chat/mcp-connector-icon";
 import {
@@ -110,6 +118,7 @@ import {
 import { useBrowserSiteGrants } from "@/features/chat/browser-control/browser-site-grants";
 import { useMountEffect } from "@/hooks/use-effect";
 import { revealTranscriptElement } from "@/hooks/use-stick-to-bottom";
+import type { TranslationKey } from "@/i18n/types";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
@@ -442,6 +451,44 @@ export const PendingToolApprovalCard = ({
 };
 
 /**
+ * What a browser card asks the member, and why: the shared gate's question
+ * for a step of a chat on stella's models, decided here, or the question the
+ * desktop's gate put for a step on the member's computer. A website approval
+ * the API no longer confirms (`unconfirmed`) asks as a website not allowed.
+ * Null when the card asks nothing of the browser gate.
+ */
+const browserCardQuestion = ({
+  decision,
+  local,
+  unconfirmed,
+}: {
+  decision: BrowserStepDecision | null;
+  local: LocalBrowserQuestion | null;
+  unconfirmed: boolean;
+}): LocalBrowserQuestion | null => {
+  if (decision === null) {
+    return local;
+  }
+  switch (decision.type) {
+    case BROWSER_STEP_GATE.ask:
+      return { reason: decision.reason, site: decision.site };
+    case BROWSER_STEP_GATE.run:
+      return unconfirmed && decision.by === "site-grant"
+        ? {
+            reason: BROWSER_STEP_ASK_REASON.siteNotAllowed,
+            site: decision.origin,
+          }
+        : null;
+    case BROWSER_STEP_GATE.refuse:
+    case BROWSER_STEP_GATE.needsMember:
+      return null;
+    default:
+      decision satisfies never;
+      return panic("Unhandled browser step decision");
+  }
+};
+
+/**
  * How a browser command card is answered, by the shared browser gate
  * (`decideBrowserStep`): the permission level the card's turn was sent with,
  * what the extension last reported for the controlled tab, the websites the
@@ -449,52 +496,80 @@ export const PendingToolApprovalCard = ({
  * runs, or a page opened on a website the chat has been on, answers itself;
  * one the level refuses (Plan) or hands
  * to the member (a sign-in) also goes through, so the executor answers the
- * model with why it did not run. Like a stored tool grant, a website
- * approval the API did not confirm (`unconfirmed`) answers nothing.
- * A browser step on the member's computer names its website in its question
- * (`localSite`); always allowing it there approves the step for the rest of
- * the run, whose later steps on the website then follow at once.
+ * model with why it did not run. A browser step on the member's computer
+ * comes with the desktop's question (`local`); always allowing its website
+ * there approves the step for the rest of the run, whose later steps on the
+ * website then follow at once.
+ *
+ * The member's stored website approvals are the one source of truth for both:
+ * a step asked about because its run does not allow the website yet (a run
+ * on the member's computer took its approvals when it started) is answered
+ * by an approval the API holds now, read fresh, as always allowing it there
+ * would. Like a stored tool grant, an approval the API did not confirm
+ * (`unconfirmed`) answers nothing, and the card offers to allow the website.
  */
 const useBrowserCardApproval = ({
   browserCommand,
   level,
-  localSite,
+  local,
   threadId,
   unconfirmed,
 }: {
   browserCommand: BrowserControlCommand | null;
   level: DesktopRunnerApprovalMode;
-  localSite: string | null;
+  local: LocalBrowserQuestion | null;
   threadId: string | null;
   unconfirmed: boolean;
 }) => {
   const { handleApprove, handleApproveForRun } = useChatApproval();
-  const sites = useBrowserSiteGrants(
-    browserCommand !== null || localSite !== null,
-  );
+  const sites = useBrowserSiteGrants(browserCommand !== null || local !== null);
   const decision = useBrowserStepDecision({
     command: browserCommand,
     grantedOrigins: sites.grantedOrigins,
     level,
     threadId,
   });
+  const question = browserCardQuestion({ decision, local, unconfirmed });
+  // The website a stored approval may answer the card for: one the gate
+  // here already answered by it, or one a run on the member's computer asks
+  // about only because it took its approvals before the member allowed it.
   const grantedSite =
     decision?.type === BROWSER_STEP_GATE.run && decision.by === "site-grant"
       ? decision.origin
       : null;
-  const siteGrantOrigin = unconfirmed ? null : grantedSite;
-  // The website the question names: the page the step was written for, or
-  // the one a website approval the API did not confirm was for.
-  const unconfirmedSite = unconfirmed ? grantedSite : null;
-  const site =
-    decision?.type === BROWSER_STEP_GATE.ask ? decision.site : unconfirmedSite;
-  const offerable = site ?? localSite;
+  const askedSite =
+    local !== null &&
+    local.reason === BROWSER_STEP_ASK_REASON.siteNotAllowed &&
+    local.site !== null &&
+    sites.grantedOrigins.has(local.site)
+      ? local.site
+      : null;
+  const siteGrantOrigin = unconfirmed ? null : (grantedSite ?? askedSite);
+  const site = question?.site ?? null;
+  /** The site the card offers to always allow: one the asking run does not allow yet. */
+  const offerable = (() => {
+    if (question === null) {
+      return null;
+    }
+    switch (question.reason) {
+      case BROWSER_STEP_ASK_REASON.siteNotAllowed:
+        return question.site;
+      // A desktop that did not say why: offered unless the member allows it.
+      case null:
+        return question.site !== null &&
+          !sites.grantedOrigins.has(question.site)
+          ? question.site
+          : null;
+      default:
+        return null;
+    }
+  })();
   return {
     /** Answers the card when the user always allows its website. */
     approveSite: (approvalId: string, toolName: ApprovalToolName) => {
       detached(
         Promise.resolve(
-          localSite === null
+          local === null
             ? handleApprove(approvalId, toolName)
             : handleApproveForRun(approvalId),
         ),
@@ -502,18 +577,21 @@ const useBrowserCardApproval = ({
       );
     },
     /**
-     * Whether the API still allows the site, read with a request of its own.
-     * The card decides again once that read is back, on what the extension
-     * reported at that moment: a re-paired controller, a failed command or a
-     * moved tab in the meantime makes it ask.
+     * Whether the API allows the site now, read with a request of its own.
+     * A card on stella's models decides again once that read is back, on
+     * what the extension reported at that moment: a re-paired controller, a
+     * failed command or a moved tab in the meantime makes it ask.
      */
     confirmSiteGrant: async (): Promise<boolean> => {
-      if (siteGrantOrigin === null || browserCommand === null) {
+      if (siteGrantOrigin === null) {
         return false;
       }
       const fresh = await sites.readFresh();
       if (fresh === null) {
         return false;
+      }
+      if (browserCommand === null) {
+        return local !== null && fresh.has(siteGrantOrigin);
       }
       const now = currentBrowserStepDecision({
         command: browserCommand,
@@ -538,17 +616,41 @@ const useBrowserCardApproval = ({
         decision.type === BROWSER_STEP_GATE.needsMember ||
         (decision.type === BROWSER_STEP_GATE.run &&
           decision.by !== "site-grant")),
-    /** The site the card offers to always allow: named, and not yet allowed. */
-    offeredSite:
-      offerable !== null &&
-      sites.canGrant &&
-      !sites.grantedOrigins.has(offerable)
-        ? offerable
-        : null,
+    /** The site the card offers to always allow. */
+    offeredSite: offerable !== null && sites.canGrant ? offerable : null,
+    /** Why the card asks; null when it asks nothing of the browser gate or the desktop did not say. */
+    reason: question?.reason ?? null,
     site,
     siteGrantOrigin,
     sites,
   };
+};
+
+/** The line a card that asks shows for each reason. */
+const BROWSER_ASK_REASON_KEY = {
+  [BROWSER_STEP_ASK_REASON.siteNotAllowed]:
+    "chat.approval.browser.askReason.siteNotAllowed",
+  [BROWSER_STEP_ASK_REASON.noSite]: "chat.approval.browser.askReason.noSite",
+  [BROWSER_STEP_ASK_REASON.pageUnconfirmed]:
+    "chat.approval.browser.askReason.pageUnconfirmed",
+  [BROWSER_STEP_ASK_REASON.embeddedFrame]:
+    "chat.approval.browser.askReason.embeddedFrame",
+  [BROWSER_STEP_ASK_REASON.possibleSecret]:
+    "chat.approval.browser.askReason.possibleSecret",
+} as const satisfies Record<BrowserStepAskReason, TranslationKey>;
+
+/** Why a browser card asks, in one line; nothing for a card the gate asks nothing of. */
+const BrowserAskReasonLine = ({
+  reason,
+}: {
+  reason: BrowserStepAskReason | null;
+}) => {
+  const t = useTranslations();
+  return reason === null ? null : (
+    <p className="border-border/50 text-muted-foreground border-t px-3 py-2 text-xs">
+      {t(BROWSER_ASK_REASON_KEY[reason])}
+    </p>
+  );
 };
 
 /**
@@ -743,7 +845,7 @@ export const ToolApprovalCard = ({
     browserCommand,
     level:
       browserGate?.levelFor(part.id) ?? DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
-    localSite: localBrowserApprovalSite(name, getApprovalPartInput(part)),
+    local: localBrowserQuestion(name, getApprovalPartInput(part)),
     threadId: browserGate?.threadId ?? null,
     unconfirmed: approvalId === unconfirmedGrantApprovalId,
   });
@@ -782,7 +884,11 @@ export const ToolApprovalCard = ({
             } else if (shouldAutoApprove) {
               const answerIfConfirmed = async () => {
                 if (await confirmAutoApproval()) {
-                  await onApprove(approvalId, name);
+                  if (browserApproval.siteGrantOrigin === null) {
+                    await onApprove(approvalId, name);
+                  } else {
+                    browserApproval.approveSite(approvalId, name);
+                  }
                   return;
                 }
                 setUnconfirmedGrantApprovalId(approvalId);
@@ -892,6 +998,9 @@ export const ToolApprovalCard = ({
         <div className="px-3">
           <ToolCallRawError rawErrorDetails={rawErrorDetails} />
         </div>
+      )}
+      {approvalId && asksForDecision && !isBlocked && (
+        <BrowserAskReasonLine reason={browserApproval.reason} />
       )}
       {approvalId && asksForDecision && !isBlocked && (
         <div className="border-border/50 flex flex-wrap items-center gap-2 border-t px-3 py-2">
