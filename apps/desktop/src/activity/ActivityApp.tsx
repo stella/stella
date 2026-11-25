@@ -699,15 +699,15 @@ const ActivityApp = () => {
   });
   const errorRead = t("errorRead");
   const tSettings = useTranslations("settings");
+  // Every other command changes a setting.
   const commandError = (command: ActivityCommand) => {
-    switch (command) {
-      case "activity_copy_text":
-        return t("errorCopy");
-      case "time_entry_open_day_time":
-        return tSettings("errorOpenStellaWeb");
-      default:
-        return t("errorUpdate");
+    if (command === "activity_copy_text") {
+      return t("errorCopy");
     }
+    if (command === "time_entry_open_day_time") {
+      return tSettings("errorOpenStellaWeb");
+    }
+    return t("errorUpdate");
   };
 
   const runCommand: RunCommand = (command, args, onSuccess, onFailure) => {
