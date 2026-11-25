@@ -13,7 +13,6 @@ import { MULTIPART_ENVELOPE_MAX_BYTES } from "@stll/api-contract/limits";
 import type { SafeDbError } from "@/api/db/safe-db-types";
 import { chatThreads } from "@/api/db/schema";
 import {
-  type BrowserDownloadChat,
   fileBrowserDownload,
   type FileBrowserDownloadDependencies,
 } from "@/api/handlers/chat/browser-downloads/file-download";
@@ -44,6 +43,9 @@ export const browserDownloadBodySchema = v.strictObject({
 /** The largest request either route reads: one file and its form. */
 export const BROWSER_DOWNLOAD_REQUEST_MAX_BYTES =
   BROWSER_DOWNLOAD_FILE_MAX_BYTES + MULTIPART_ENVELOPE_MAX_BYTES;
+
+/** The chat a download is filed for, as the filing owner takes it. */
+type BrowserDownloadChat = Parameters<typeof fileBrowserDownload>[0]["chat"];
 
 type FileForOwnChat = {
   /** The chat as the caller verified it, before its matter is read. */
