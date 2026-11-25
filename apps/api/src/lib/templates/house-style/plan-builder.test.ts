@@ -367,6 +367,31 @@ describe("buildTemplatePlan, automatic labels no list prints", () => {
     });
   }
 
+  test("a bullet keeps its mark on a spare level under the house scheme too", () => {
+    const bulleted = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec s výčtem:", 1),
+      numbered("-", "první položka", 5),
+      numbered("-", "druhá položka", 5),
+    ]);
+    for (const mode of ["keepSource", "houseScheme"] as const) {
+      const { plan, labelsNotKept } = build(bulleted, mode);
+      const item = itemOf(plan, bulleted, "první položka");
+      expect(item).not.toHaveProperty("labelAsText");
+      const numbering = item?.numbering ?? null;
+      expect(numbering).not.toBeNull();
+      expect(plan.numberingPatches).toContainEqual(
+        expect.objectContaining({
+          ilvl: numbering?.ilvl,
+          numFmt: "bullet",
+          lvlText: "-",
+        }),
+      );
+      expect(labelsNotKept).toEqual([]);
+    }
+  });
+
   test("a numbered cell placed with its table keeps its number as text", () => {
     const table = inColumns(2, [
       numbered("I. 1)", "Položka", 7),

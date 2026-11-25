@@ -464,10 +464,20 @@ export const numberPlacements = ({
     mode === "keepSource"
       ? voteLevelPatterns(candidates)
       : new Map<string, LabelPattern>();
-  const standsFor =
+  // The house scheme numbers the roles' own levels. A template that has
+  // no level for bullets says nothing about them: there a bulleted
+  // paragraph keeps its mark on a spare level, as it does when the source's
+  // numbering is kept.
+  const standsFor = assignSpareLevels(
     mode === "keepSource"
-      ? assignSpareLevels(candidates, chosen, spareLevels)
-      : new Map<string, ProfileListLevel>();
+      ? candidates
+      : candidates.filter(
+          ({ level, pattern }) =>
+            level === null && pattern?.numFmt === "bullet",
+        ),
+    chosen,
+    spareLevels,
+  );
   const usedLevels = new Map<string, ProfileListLevel>();
   for (const placement of candidates) {
     // The house scheme numbers the roles' own levels only.
