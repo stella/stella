@@ -1,0 +1,15 @@
+{
+  "codex": {
+    "version": "0.166.0",
+    "assets": {
+      "linux-x64": {
+        "url": "https://github.com/openai/codex/releases/download/rust-v0.166.0/codex-x86_64-unknown-linux-musl.zst",
+        "sha256": "5a2832a53f9366c5f57a1fee7639822d2a7b4527bc26cfb2ea67b00ef2bca87d"
+      },
+      "linux-arm64": {
+        "url": "https://github.com/openai/codex/releases/download/rust-v0.166.0/codex-aarch64-unknown-linux-musl.zst",
+        "sha256": "cae38c9a99d13ed0515d294e1eb094592118b43461cb907402bdf9fda94aa76a"
+      }
+    }
+  }
+}
