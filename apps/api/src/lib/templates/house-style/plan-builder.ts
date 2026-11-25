@@ -109,6 +109,10 @@ type FormattingNoteItem =
       end: number;
       reason: UnlinkedReason;
       highlighted: boolean;
+      /** The house scheme gave the cited provision another number and no
+       *  field stands in for the typed one: the citation reads wrong until
+       *  a person corrects it. Always highlighted. */
+      targetRenumbered?: true;
     }
   | {
       kind: "referenceSuspected";
@@ -845,15 +849,33 @@ const markReferences = ({
   const unread = labelled.filter(({ id }) => !index.entryByBlockId.has(id));
   const numberingRead =
     unread.length <= labelled.length * UNREAD_LABELS_SHARE_MAX;
+  /** Whether the output prints another label for the block than the
+   *  source: only the house scheme does that. */
+  const isRenumbered = (targetBlockId: string | null): boolean => {
+    const target =
+      targetBlockId === null ? undefined : placementById.get(targetBlockId);
+    const planned =
+      target === undefined ? null : plannedLabelOf(target, levelsByList);
+    return (
+      context.mode === "houseScheme" &&
+      planned !== null &&
+      planned.trim() !== (target?.sourceLabel ?? "").trim()
+    );
+  };
   const unlinked = (
     { blockId }: DetectedReference,
     { start, end, level }: Designator,
     reason: UnlinkedReason,
+    targetBlockId: string | null = null,
   ) => {
-    const highlighted =
+    // A citation left as text names its target by the old number. Where
+    // the target got a new one, the place is marked for a person to fix.
+    const targetRenumbered = isRenumbered(targetBlockId);
+    const unresolved =
       (numberingRead || level === "annex") &&
-      (reason === "unresolved" || reason === "ambiguous") &&
-      claim(blockId, start, end);
+      (reason === "unresolved" || reason === "ambiguous");
+    const highlighted =
+      (unresolved || targetRenumbered) && claim(blockId, start, end);
     if (highlighted) {
       marks.highlights.push({ blockId, start, end, color: highlightColor });
     }
@@ -864,6 +886,7 @@ const markReferences = ({
       end,
       reason,
       highlighted,
+      ...(targetRenumbered ? { targetRenumbered } : {}),
     });
   };
   /** Why the designator cannot be a field to `targetBlockId`, or the field. */
@@ -920,7 +943,12 @@ const markReferences = ({
           ? target.reason
           : link(reference, designator, target.targetBlockId);
       if (typeof linked === "string") {
-        unlinked(reference, designator, linked);
+        unlinked(
+          reference,
+          designator,
+          linked,
+          "reason" in target ? null : target.targetBlockId,
+        );
       } else {
         marks.references.push(linked);
       }

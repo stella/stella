@@ -178,7 +178,12 @@ describe("validateTemplateProfile", () => {
       ...kept,
       regions: { ...kept.regions, contents: [], keepBefore: ["p5"] },
     };
-    for (const split of [inContents, inFront]) {
+    // Whole, but placed with its end in front of its start.
+    const outOfOrder = {
+      ...kept,
+      regions: { ...kept.regions, contents: ["p5"], keepBefore: ["p6", "p7"] },
+    };
+    for (const split of [inContents, inFront, outOfOrder]) {
       expect(validateTemplateProfile(split, empty)).toEqual([
         { severity: "error", code: "fieldKeptInPart", blockId: "p5" },
       ]);

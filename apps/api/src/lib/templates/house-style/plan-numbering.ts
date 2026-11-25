@@ -420,6 +420,34 @@ const countLists = ({
   return null;
 };
 
+type LevelIndent = ProfileListLevel["indent"];
+
+/**
+ * The indent a spare level is patched with. It lies deeper than the level
+ * it stands in for and would indent its paragraphs further, so it takes
+ * that level's indent; null where the two agree already. A level indents
+ * its first line one way: hanging, or first line.
+ */
+const takenIndent = (
+  origin: LevelIndent | undefined,
+  own: LevelIndent,
+): NonNullable<TemplatePlanNumberingPatch["indent"]> | null => {
+  if (
+    origin === undefined ||
+    (origin.left === own.left &&
+      origin.hanging === own.hanging &&
+      origin.firstLine === own.firstLine)
+  ) {
+    return null;
+  }
+  const firstLine = origin.hanging === null ? origin.firstLine : null;
+  return {
+    ...(origin.left === null ? {} : { left: origin.left }),
+    ...(origin.hanging === null ? {} : { hanging: origin.hanging }),
+    ...(firstLine === null ? {} : { firstLine }),
+  };
+};
+
 /** The label the plan's list prints for a paragraph; null when the
  *  paragraph joins no list. */
 export const plannedLabelOf = (
@@ -520,18 +548,7 @@ export const numberPlacements = ({
         placement.level !== null &&
         levelKey(placement.level) === key,
     );
-    // A spare level lies deeper than the level it stands in for and would
-    // indent its paragraphs further; it takes that level's indent.
-    const origin = standsFor.get(key)?.indent;
-    const indent =
-      origin === undefined ||
-      (origin.left === level.indent.left &&
-        origin.hanging === level.indent.hanging)
-        ? null
-        : {
-            ...(origin.left === null ? {} : { left: origin.left }),
-            ...(origin.hanging === null ? {} : { hanging: origin.hanging }),
-          };
+    const indent = takenIndent(standsFor.get(key)?.indent, level.indent);
     const stated = indent !== null && Object.keys(indent).length > 0;
     // A level whose own paragraphs all kept their typed label is patched
     // too: the levels below it print its counter in the format counted

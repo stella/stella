@@ -260,6 +260,28 @@ describe("buildTemplatePlan, list instances", () => {
     });
   });
 
+  test("a spare level takes a first-line indent of the level it stands in for", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec:", 1),
+      numbered("a)", "případ;", 2),
+      numbered("(a)", "případ psaný jinak;", 3),
+    ]);
+    const profile = structuredClone(PROFILE);
+    const letter = profile.roles.letter?.numbering;
+    if (letter) {
+      letter.indent = { left: 2268, hanging: null, firstLine: 284 };
+    }
+    const { plan } = build(manifest, "keepSource", { profile });
+    expect(plan.numberingPatches).toContainEqual({
+      abstractNumId: 4,
+      ilvl: 5,
+      numFmt: "lowerLetter",
+      indent: { left: 2268, firstLine: 284 },
+    });
+  });
+
   test("a second format of one level and a bullet take spare levels", () => {
     const manifest = manifestOf([
       "SMLOUVA",
@@ -569,14 +591,26 @@ describe("buildTemplatePlan, the house scheme", () => {
       ["2.2", String.raw`\n \h`],
     ]);
     // The article level prints `Art. 2`: a field would show `.2`, so the
-    // reference to the article stays text.
+    // reference to the article stays text. The article is renumbered, so
+    // the typed `II` is marked for a person to correct.
     expect(note.items).toContainEqual(
       expect.objectContaining({
         kind: "referenceUnlinked",
         blockId: citing,
         reason: "punctuatedLevelWords",
+        highlighted: true,
+        targetRenumbered: true,
       }),
     );
+    expect(plan.highlights).toContainEqual(
+      expect.objectContaining({ blockId: citing }),
+    );
+    // Where the source's numbers are kept, nothing is renumbered.
+    expect(
+      build(manifest).note.items.filter(
+        (item) => item.kind === "referenceUnlinked" && item.targetRenumbered,
+      ),
+    ).toEqual([]);
   });
 });
 

@@ -895,8 +895,9 @@ export const validateTemplateProfile = (
       issues.push({ severity: "error", code: "unknownBlock", blockId });
     }
   }
-  // Every region that keeps template blocks, not the contents alone.
-  const kept = new Set([...keepBefore, ...contents]);
+  // Every region that keeps template blocks, in the order they are placed:
+  // the front blocks, then the contents.
+  const emitted = [...keepBefore, ...contents];
   for (const { blockId, endBlockId } of inspection.fields) {
     if (blockId === undefined || endBlockId === undefined) {
       continue;
@@ -905,9 +906,14 @@ export const validateTemplateProfile = (
       order.indexOf(blockId),
       order.indexOf(endBlockId) + 1,
     );
-    // A field over several blocks is kept whole and in order, or not at all.
-    const keptOfSpan = span.filter((id) => kept.has(id));
-    if (keptOfSpan.length > 0 && keptOfSpan.length < span.length) {
+    // A field over several blocks is kept whole, in one run and in its
+    // order, or not at all.
+    const first = emitted.findIndex((id) => span.includes(id));
+    const whole =
+      first !== -1 &&
+      span.every((id, offset) => emitted[first + offset] === id) &&
+      emitted.filter((id) => span.includes(id)).length === span.length;
+    if (first !== -1 && !whole) {
       issues.push({ severity: "error", code: "fieldKeptInPart", blockId });
     }
   }

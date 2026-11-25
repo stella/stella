@@ -58,7 +58,9 @@ type RepairCause =
   /** The output would print another label than the source. */
   | "labelDiffers"
   /** A field's cached text is not what its target's label gives. */
-  | "fieldTextDiffers";
+  | "fieldTextDiffers"
+  /** The engine could not say what the target's label gives the field. */
+  | "fieldTextUnverified";
 
 type PageCounts =
   | { status: "measured"; source: number; output: number }
@@ -369,9 +371,12 @@ export const formatOntoTemplate = async ({
     }
     for (const { targetBlockId, expectedText, predictedText } of report
       .references.results) {
-      if (predictedText !== null && predictedText !== expectedText) {
-        repaired =
-          exclude("targets", targetBlockId, "fieldTextDiffers") || repaired;
+      // A field whose text the engine cannot vouch for is no more
+      // returned than one it contradicts.
+      if (predictedText !== expectedText) {
+        const cause =
+          predictedText === null ? "fieldTextUnverified" : "fieldTextDiffers";
+        repaired = exclude("targets", targetBlockId, cause) || repaired;
       }
     }
     if (repaired) {

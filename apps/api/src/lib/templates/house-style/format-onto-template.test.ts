@@ -25,7 +25,12 @@ const OUTPUT = new Uint8Array([3]);
 type Answer =
   | { refuse: TemplateEngineRefusal; blockId?: string }
   /** Blocks whose output label differs, and targets whose field text does. */
-  | { labelDiffers?: string[]; fieldDiffers?: string[]; labelLost?: string[] };
+  | {
+      labelDiffers?: string[];
+      fieldDiffers?: string[];
+      fieldUnverified?: string[];
+      labelLost?: string[];
+    };
 
 type FakeEngine = TemplatePlanEngine & { plans: TemplatePlan[] };
 
@@ -41,6 +46,16 @@ const fakeEngine = (
     const labelDiffers = "refuse" in answer ? [] : (answer.labelDiffers ?? []);
     const fieldDiffers = "refuse" in answer ? [] : (answer.fieldDiffers ?? []);
     const labelLost = "refuse" in answer ? [] : (answer.labelLost ?? []);
+    const fieldUnverified =
+      "refuse" in answer ? [] : (answer.fieldUnverified ?? []);
+    const predictionOf = (targetBlockId: string, expectedText: string) => {
+      if (fieldUnverified.includes(targetBlockId)) {
+        return null;
+      }
+      return fieldDiffers.includes(targetBlockId)
+        ? `${expectedText}.`
+        : expectedText;
+    };
     const labels = new Map(manifest.blocks.map(({ id, label }) => [id, label]));
     return {
       ok: true,
@@ -74,9 +89,7 @@ const fakeEngine = (
             blockId,
             targetBlockId,
             expectedText,
-            predictedText: fieldDiffers.includes(targetBlockId)
-              ? `${expectedText}.`
-              : expectedText,
+            predictedText: predictionOf(targetBlockId, expectedText),
           }),
         ),
       },
@@ -229,6 +242,22 @@ describe("formatOntoTemplate", () => {
       (formatted.plan.references ?? []).filter(
         ({ targetBlockId }) =>
           targetBlockId === clause || targetBlockId === article,
+      ),
+    ).toEqual([]);
+  });
+
+  test("leaves a reference as text when the engine cannot say what its field shows", async () => {
+    const engine = fakeEngine(manifest, [{ fieldUnverified: [article] }]);
+    const formatted = (await format(engine)).unwrap();
+    expect(formatted.outcome.repairs).toEqual([
+      { cause: "fieldTextUnverified", blockId: article },
+    ]);
+    expect(engine.plans.at(0)?.references).toContainEqual(
+      expect.objectContaining({ targetBlockId: article }),
+    );
+    expect(
+      (formatted.plan.references ?? []).filter(
+        ({ targetBlockId }) => targetBlockId === article,
       ),
     ).toEqual([]);
   });

@@ -184,7 +184,7 @@ export type TemplatePlanNumberingPatch = {
   suff?: "tab" | "space" | "nothing";
   /** The level's paragraph indent, in twentieths of a point; a value left
    *  out keeps what the level states. */
-  indent?: { left?: number; hanging?: number };
+  indent?: { left?: number; hanging?: number; firstLine?: number };
 };
 
 export type TemplatePlan = {
