@@ -1,5 +1,5 @@
 ---
-"@stll/ui": patch
+"@stll/ui": minor
 ---
 
-`DayCalendar` draws an `unrecorded` block hatched, for time that should have been recorded and was not.
+`DayCalendarBlock` gains the `unrecorded` kind, drawn hatched, for time that should have been recorded and was not. Code that switches over every block kind needs a case for it. No entrypoint is removed.
