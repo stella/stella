@@ -928,6 +928,11 @@
     "unusable": "غير قابل للاستخدام"
   },
   "notification": {
+    "activityStoppedNotAvailableBody": "لم يعد النشاط متاحًا لهذا الحساب. يبقى ما تم تسجيله على هذا الكمبيوتر.",
+    "activityStoppedPolicyBody": "أوقفت مؤسستك النشاط على هذا الكمبيوتر. يبقى ما تم تسجيله على هذا الكمبيوتر.",
+    "activityStoppedReconnectBody": "أعد الاتصال بحساب stella لمواصلة التسجيل.",
+    "activityStoppedSignedOutBody": "سجّل الدخول إلى حساب stella مجددًا لمواصلة التسجيل.",
+    "activityStoppedTitle": "توقف النشاط عن التسجيل",
     "checkpointDelayedBody": "{fileName}: تبقى التغييرات محلية وستُعاد المحاولة تلقائياً",
     "checkpointDelayedTitle": "تأخرت مزامنة المسودة",
     "diagnosticsCopiedBody": "الصقها في طلب الدعم عند الحاجة.",
@@ -1419,6 +1424,10 @@
     "activityPaused": "النشاط: متوقف مؤقتًا · {hours} س اليوم",
     "activityRecording": "النشاط: جارٍ التسجيل · {hours} س اليوم",
     "activityResume": "استئناف التسجيل",
+    "activityStoppedNotAvailable": "النشاط: توقف التسجيل · غير متاح لهذا الحساب",
+    "activityStoppedPolicy": "النشاط: توقف التسجيل · أوقفته مؤسستك",
+    "activityStoppedReconnect": "النشاط: توقف التسجيل · يلزم إعادة الاتصال",
+    "activityStoppedSignedOut": "النشاط: توقف التسجيل · تم تسجيل الخروج",
     "checkForUpdates": "التحقق من التحديثات",
     "dictation": "الإملاء",
     "dictationFix": "تصحيح آخر إملاء…",

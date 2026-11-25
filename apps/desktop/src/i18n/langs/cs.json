@@ -928,6 +928,11 @@
     "unusable": "Nelze použít"
   },
   "notification": {
+    "activityStoppedNotAvailableBody": "Aktivita už pro tento účet není k dispozici. Co bylo zaznamenáno, zůstává na tomto počítači.",
+    "activityStoppedPolicyBody": "Vaše organizace vypnula Aktivitu na tomto počítači. Co bylo zaznamenáno, zůstává na tomto počítači.",
+    "activityStoppedReconnectBody": "Znovu se připojte ke svému účtu stella, aby záznam pokračoval.",
+    "activityStoppedSignedOutBody": "Znovu se přihlaste ke svému účtu stella, aby záznam pokračoval.",
+    "activityStoppedTitle": "Aktivita přestala zaznamenávat",
     "checkpointDelayedBody": "{fileName}: změny zůstávají uložené v počítači a synchronizace se automaticky zkusí znovu",
     "checkpointDelayedTitle": "Synchronizace konceptu se zpozdila",
     "diagnosticsCopiedBody": "Vložte ji do žádosti o podporu, když bude potřeba.",
@@ -1419,6 +1424,10 @@
     "activityPaused": "Aktivita: Pozastaveno · dnes {hours} h",
     "activityRecording": "Aktivita: Záznam · dnes {hours} h",
     "activityResume": "Pokračovat v záznamu",
+    "activityStoppedNotAvailable": "Aktivita: Zastaveno · Pro tento účet není k dispozici",
+    "activityStoppedPolicy": "Aktivita: Zastaveno · Vypnuto vaší organizací",
+    "activityStoppedReconnect": "Aktivita: Zastaveno · Je nutné znovu připojit účet",
+    "activityStoppedSignedOut": "Aktivita: Zastaveno · Odhlášeno",
     "checkForUpdates": "Zkontrolovat aktualizace",
     "dictation": "Diktování",
     "dictationFix": "Opravit poslední diktát…",

@@ -785,7 +785,7 @@ impl ActivityStore {
     Ok(())
   }
 
-  fn is_account_namespace(namespace: &str) -> bool {
+  pub(crate) fn is_account_namespace(namespace: &str) -> bool {
     namespace.len() == 64 && namespace.bytes().all(|byte| byte.is_ascii_hexdigit())
   }
 

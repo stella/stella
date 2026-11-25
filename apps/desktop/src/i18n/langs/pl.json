@@ -928,6 +928,11 @@
     "unusable": "Nie można użyć"
   },
   "notification": {
+    "activityStoppedNotAvailableBody": "Aktywność nie jest już dostępna dla tego konta. To, co zostało zarejestrowane, pozostaje na tym komputerze.",
+    "activityStoppedPolicyBody": "Twoja organizacja wyłączyła Aktywność na tym komputerze. To, co zostało zarejestrowane, pozostaje na tym komputerze.",
+    "activityStoppedReconnectBody": "Połącz się ponownie z kontem stella, aby kontynuować rejestrowanie.",
+    "activityStoppedSignedOutBody": "Zaloguj się ponownie do konta stella, aby kontynuować rejestrowanie.",
+    "activityStoppedTitle": "Aktywność przestała rejestrować",
     "checkpointDelayedBody": "{fileName}: zmiany pozostają lokalne i zostaną automatycznie ponowione",
     "checkpointDelayedTitle": "Opóźniona synchronizacja wersji roboczej",
     "diagnosticsCopiedBody": "Wklej ją do zgłoszenia wsparcia, gdy będzie potrzebna.",
@@ -1419,6 +1424,10 @@
     "activityPaused": "Aktywność: Wstrzymana · dziś {hours} h",
     "activityRecording": "Aktywność: Rejestrowanie · dziś {hours} h",
     "activityResume": "Wznów rejestrowanie",
+    "activityStoppedNotAvailable": "Aktywność: Zatrzymana · Niedostępna dla tego konta",
+    "activityStoppedPolicy": "Aktywność: Zatrzymana · Wyłączona przez Twoją organizację",
+    "activityStoppedReconnect": "Aktywność: Zatrzymana · Wymagane ponowne połączenie",
+    "activityStoppedSignedOut": "Aktywność: Zatrzymana · Wylogowano",
     "checkForUpdates": "Sprawdź aktualizacje",
     "dictation": "Dyktowanie",
     "dictationFix": "Popraw ostatnie dyktowanie…",

@@ -928,6 +928,11 @@
     "unusable": "Nem használható"
   },
   "notification": {
+    "activityStoppedNotAvailableBody": "A Tevékenység már nem érhető el ehhez a fiókhoz. Ami eddig rögzítésre került, ezen a számítógépen marad.",
+    "activityStoppedPolicyBody": "A szervezete kikapcsolta a Tevékenységet ezen a számítógépen. Ami eddig rögzítésre került, ezen a számítógépen marad.",
+    "activityStoppedReconnectBody": "Csatlakozzon újra a stella-fiókjához a rögzítés folytatásához.",
+    "activityStoppedSignedOutBody": "Jelentkezzen be újra a stella-fiókjába a rögzítés folytatásához.",
+    "activityStoppedTitle": "A Tevékenység leállította a rögzítést",
     "checkpointDelayedBody": "{fileName}: a változtatások helyben maradnak, és automatikusan újrapróbálkoznak",
     "checkpointDelayedTitle": "A piszkozat szinkronizálása késik",
     "diagnosticsCopiedBody": "Illessze be a támogatási kérelmébe, amikor szükséges.",
@@ -1419,6 +1424,10 @@
     "activityPaused": "Tevékenység: Szünetel · ma {hours} ó",
     "activityRecording": "Tevékenység: Rögzítés · ma {hours} ó",
     "activityResume": "Rögzítés folytatása",
+    "activityStoppedNotAvailable": "Tevékenység: Leállt · Ehhez a fiókhoz nem érhető el",
+    "activityStoppedPolicy": "Tevékenység: Leállt · A szervezete kikapcsolta",
+    "activityStoppedReconnect": "Tevékenység: Leállt · Újracsatlakozás szükséges",
+    "activityStoppedSignedOut": "Tevékenység: Leállt · Kijelentkezett",
     "checkForUpdates": "Frissítések keresése",
     "dictation": "Diktálás",
     "dictationFix": "Utolsó diktálás javítása…",

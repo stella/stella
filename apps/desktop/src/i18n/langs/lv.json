@@ -928,6 +928,11 @@
     "unusable": "Nav izmantojama"
   },
   "notification": {
+    "activityStoppedNotAvailableBody": "Darbība šim kontam vairs nav pieejama. Ierakstītais paliek šajā datorā.",
+    "activityStoppedPolicyBody": "Jūsu organizācija izslēdza Darbību šajā datorā. Ierakstītais paliek šajā datorā.",
+    "activityStoppedReconnectBody": "Atkārtoti pieslēdzieties savam stella kontam, lai turpinātu ierakstīšanu.",
+    "activityStoppedSignedOutBody": "Vēlreiz pierakstieties savā stella kontā, lai turpinātu ierakstīšanu.",
+    "activityStoppedTitle": "Darbība pārtrauca ierakstīšanu",
     "checkpointDelayedBody": "{fileName}: izmaiņas paliek lokālas un tiks automātiski mēģinātas vēlreiz",
     "checkpointDelayedTitle": "Melnraksta sinhronizācija aizkavēta",
     "diagnosticsCopiedBody": "Ielīmējiet to savā atbalsta pieprasījumā, kad nepieciešams.",
@@ -1419,6 +1424,10 @@
     "activityPaused": "Darbība: Apturēta · šodien {hours} st.",
     "activityRecording": "Darbība: Ierakstīšana · šodien {hours} st.",
     "activityResume": "Atsākt ierakstīšanu",
+    "activityStoppedNotAvailable": "Darbība: Pārtraukta · Šim kontam nav pieejama",
+    "activityStoppedPolicy": "Darbība: Pārtraukta · Izslēdza jūsu organizācija",
+    "activityStoppedReconnect": "Darbība: Pārtraukta · Nepieciešams atkārtots savienojums",
+    "activityStoppedSignedOut": "Darbība: Pārtraukta · Izrakstīts",
     "checkForUpdates": "Pārbaudīt atjauninājumus",
     "dictation": "Diktēšana",
     "dictationFix": "Labot pēdējo diktātu…",
