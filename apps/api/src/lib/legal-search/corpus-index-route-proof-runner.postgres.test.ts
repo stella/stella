@@ -395,6 +395,12 @@ if (!databaseUrl || !runPostgresTests) {
           "--concurrency",
           "2",
         ];
+        // The fixture's attestations already wrote the serving generation's
+        // rows (each revokes); the run must leave them exactly as they are.
+        const servingBefore = (await proofRows(db)).filter(
+          ({ generation }) => generation === FLIP_V7,
+        );
+        expect(servingBefore.length).toBeGreaterThan(0);
         const first = await runCommand(db, fixture, args);
         expect({ code: first.code, err: first.err }).toEqual({
           code: 0,
@@ -402,14 +408,21 @@ if (!databaseUrl || !runPostgresTests) {
         });
         expect(first.out).toContain(`proving ${FLIP_V10} (requested)`);
         expect(first.out).not.toContain(`proving ${FLIP_V7}`);
-        // The serving generation was never walked: it holds no proof row,
-        // and the run still ends 0, since every selected route is current.
+        // The serving generation was never walked: its rows are untouched and
+        // unproven, and the run still ends 0, since every selected route is
+        // current.
         const rows = await proofRows(db);
-        expect(rows.length).toBeGreaterThan(0);
-        expect(new Set(rows.map(({ generation }) => generation))).toEqual(
-          new Set([FLIP_V10]),
+        expect(rows.filter(({ generation }) => generation === FLIP_V7)).toEqual(
+          servingBefore,
         );
-        expect(rows.every(({ provenAt }) => provenAt !== null)).toBe(true);
+        expect(servingBefore.every(({ provenAt }) => provenAt === null)).toBe(
+          true,
+        );
+        const requested = rows.filter(
+          ({ generation }) => generation === FLIP_V10,
+        );
+        expect(requested.length).toBeGreaterThan(0);
+        expect(requested.every(({ provenAt }) => provenAt !== null)).toBe(true);
 
         // Every selected route current already: the run walks nothing.
         const again = await runCommand(db, fixture, args);
