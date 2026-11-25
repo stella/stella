@@ -102,7 +102,9 @@ pub enum ActivityRecordingStatus {
   Paused,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// New settings record nothing (recording `Off`) and, once started, app
+/// names only: every field's default.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActivitySettings {
   pub recording_status: ActivityRecordingStatus,
@@ -125,21 +127,6 @@ pub struct ActivitySettings {
   pub ignore_calls: bool,
   #[serde(flatten)]
   pub extra: BTreeMap<String, serde_json::Value>,
-}
-
-impl Default for ActivitySettings {
-  fn default() -> Self {
-    Self {
-      recording_status: ActivityRecordingStatus::default(),
-      retention: ActivityRetention::default(),
-      excluded_apps: Vec::new(),
-      capture_details: false,
-      app_name_only_apps: Vec::new(),
-      browser_title_apps: Vec::new(),
-      ignore_calls: false,
-      extra: BTreeMap::new(),
-    }
-  }
 }
 
 impl ActivitySettings {

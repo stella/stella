@@ -172,7 +172,7 @@ test("where policy keeps details off, the row says so and offers nothing to turn
   );
   expect(queryByRole("checkbox", { name: messages.captureDetails })).toBeNull();
   expect(
-    document.body.textContent?.includes(messages.captureModesDetailsOff),
+    document.body.textContent.includes(messages.captureModesDetailsOff),
   ).toBe(false);
 });
 
