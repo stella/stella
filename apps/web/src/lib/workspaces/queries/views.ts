@@ -1,10 +1,13 @@
 import { queryOptions } from "@tanstack/react-query";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
+
 import { useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import {
   type CachedWorkspaceView,
   selectAvailableWorkspaceViews,
@@ -30,15 +33,21 @@ export const viewsKeys = {
 };
 
 export const viewsOptions = (workspaceId: string) =>
-  queryOptions({
-    queryKey: viewsKeys.localized(workspaceId),
-    queryFn: async ({ signal }): Promise<CachedWorkspaceView[]> => {
-      const response = await api
-        .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .get({ fetch: { signal } });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: viewsKeys.localized(workspaceId),
+      queryFn: async ({ signal }): Promise<CachedWorkspaceView[]> => {
+        const response = await api
+          .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .get({ fetch: { signal } });
 
-      return unwrapApiResponse(response);
+        return unwrapApiResponse(response);
+      },
+      select: selectAvailableWorkspaceViews,
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    }),
+    {
+      resources: [RESOURCE_TYPE.WORKSPACE_VIEW],
+      scope: { type: "workspace", workspaceId },
     },
-    select: selectAvailableWorkspaceViews,
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-  });
+  );
