@@ -1010,6 +1010,44 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(terminal(events)).toEqual({ type: "turn.interrupted" });
   });
 
+  test("an interrupt Codex refuses as too early is asked again, for the turn Codex names", async () => {
+    const interruptOn = async (event: HarnessEvent, turn: HarnessTurn) => {
+      if (event.type === "tool.started") {
+        await turn.interrupt();
+      }
+    };
+    for (const [scenario, turnIds] of [
+      ["interrupt_not_registered", ["turn-1", "turn-1"]],
+      ["interrupt_other_turn", ["turn-1", "turn-2"]],
+    ] as const) {
+      const { events, received } = await run(scenario, {
+        onEvent: interruptOn,
+      });
+      expect(
+        received()
+          .filter(({ method }) => method === "turn/interrupt")
+          .map(({ params }) => params),
+      ).toEqual(
+        turnIds.map((turnId) => ({ threadId: FAKE_THREAD_ID, turnId })),
+      );
+      expect(terminal(events)).toEqual({ type: "turn.interrupted" });
+    }
+  });
+
+  test("an interrupt refused for another reason is not asked again, and the turn still stops", async () => {
+    const { events, received } = await run("interrupt_refused", {
+      onEvent: async (event, turn) => {
+        if (event.type === "tool.started") {
+          await turn.interrupt();
+        }
+      },
+    });
+    expect(
+      received().filter(({ method }) => method === "turn/interrupt"),
+    ).toHaveLength(1);
+    expect(terminal(events)).toEqual({ type: "turn.interrupted" });
+  });
+
   test("a steer joins the running turn through turn/steer and is settled where the server took it", async () => {
     const inputId = crypto.randomUUID();
     const { events, received } = await run("steered", {

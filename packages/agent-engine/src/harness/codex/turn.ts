@@ -158,6 +158,28 @@ const questionsFromParams = (questions: QuestionParams): HarnessQuestion[] =>
     };
   });
 
+/** The waits before each new interrupt request Codex refused as too early. */
+const INTERRUPT_RETRY_DELAYS_MS = [25, 50, 100, 200, 400] as const;
+/** Codex has not registered the turn as interruptible yet, or it ended. */
+const NO_ACTIVE_TURN = /no active turn to interrupt/u;
+/** Codex runs another turn of this process than the one named. */
+const ACTIVE_TURN_MISMATCH = /expected active turn id (\S+) but found (\S+)/u;
+
+/**
+ * The turn to ask again to interrupt after Codex refused `turnId` with
+ * `message`, or `null` when the refusal is not one asking again can fix.
+ */
+const interruptRetryTarget = (
+  message: string,
+  turnId: string,
+): string | null => {
+  const mismatch = ACTIVE_TURN_MISMATCH.exec(message);
+  if (mismatch !== null) {
+    return mismatch[1] === turnId ? (mismatch[2] ?? null) : null;
+  }
+  return NO_ACTIVE_TURN.test(message) ? turnId : null;
+};
+
 const ZERO_USAGE: HarnessUsage = {
   inputTokens: 0,
   cachedInputTokens: 0,
@@ -1412,11 +1434,46 @@ export class CodexTurnSession {
         // nothing to ask, so the turn ends as interrupted at once.
         return false;
       }
+      return this.requestInterrupt(client, this.turnId);
+    });
+  }
+
+  /**
+   * Ask Codex to stop the turn. Right after a turn starts, Codex can answer
+   * that no turn is active until it registers the turn, or name another turn
+   * it now runs in this process; both are asked again, a few times, while
+   * this turn is still the session's own. Whether Codex took the request.
+   */
+  private async requestInterrupt(
+    client: AppServerClient,
+    ownTurnId: string,
+  ): Promise<boolean> {
+    let turnId = ownTurnId;
+    for (const delayMs of [...INTERRUPT_RETRY_DELAYS_MS, null]) {
       const requested = await client.request("turn/interrupt", {
         threadId: this.threadId,
-        turnId: this.turnId,
+        turnId,
       });
-      return Result.isOk(requested);
-    });
+      if (Result.isOk(requested)) {
+        return true;
+      }
+      if (delayMs === null || requested.error.reason !== "rejected") {
+        return false;
+      }
+      const next = interruptRetryTarget(requested.error.message, turnId);
+      if (next === null) {
+        return false;
+      }
+      await Bun.sleep(delayMs);
+      if (this.lifecycle.ended) {
+        // The turn ended meanwhile: nothing is left to stop.
+        return true;
+      }
+      if (this.turnId !== ownTurnId) {
+        return false;
+      }
+      turnId = next;
+    }
+    return false;
   }
 }
