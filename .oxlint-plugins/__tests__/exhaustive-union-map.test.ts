@@ -148,3 +148,29 @@ test("rejects a single-use local key union that only duplicates a satisfies map'
     ]),
   ).toEqual([1]);
 });
+
+test("allows a key union exported via export type specifier", async () => {
+  expect(
+    await lint([
+      "type ActionKey = 'a' | 'b';",
+      "export type { ActionKey };",
+      "export const ACTIONS = { a: 1, b: 2 } as const satisfies Record<ActionKey, number>;",
+    ]),
+  ).toEqual([]);
+});
+
+test("does not cross-link function-scoped type aliases with the same name", async () => {
+  expect(
+    await lint([
+      "export const first = () => {",
+      "  type Key = 'a' | 'b';",
+      "  const MAP = { a: 1, b: 2 } as const satisfies Record<Key, number>;",
+      "  return MAP;",
+      "};",
+      "export const second = () => {",
+      "  type Key = 'a' | 'b';",
+      "  return (k: Key) => k;",
+      "};",
+    ]),
+  ).toEqual([]);
+});

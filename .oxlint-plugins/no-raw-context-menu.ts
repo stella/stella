@@ -70,23 +70,22 @@ const isPassiveListener = (optionsArg: unknown): boolean => {
   if (!Array.isArray(properties)) {
     return false;
   }
-  return properties.some((prop) => {
+  let passive = false;
+  for (const prop of properties) {
     if (
       !isAstNode(prop) ||
       prop.type !== "Property" ||
       prop.computed === true
     ) {
-      return false;
+      passive = false;
+      continue;
     }
-    const name = getPropertyName(prop.key);
-    const val: unknown = prop.value;
-    return (
-      name === "passive" &&
-      isAstNode(val) &&
-      val.type === "Literal" &&
-      val.value === true
-    );
-  });
+    if (getPropertyName(prop.key) === "passive") {
+      const val: unknown = prop.value;
+      passive = isAstNode(val) && val.type === "Literal" && val.value === true;
+    }
+  }
+  return passive;
 };
 
 /** The static name a member expression reads, or null. */

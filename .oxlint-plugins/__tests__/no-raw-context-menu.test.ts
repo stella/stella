@@ -68,3 +68,16 @@ host.addEventListener("contextmenu", dismiss, { capture: true, passive: true });
     ),
   ).toEqual([]);
 });
+
+test("rejects contextmenu listeners where a later spread or property overrides passive", async () => {
+  expect(
+    await lintSingleRule(
+      RULE,
+      `declare const host: HTMLElement;
+const dismiss = () => undefined;
+host.addEventListener("contextmenu", dismiss, { passive: true, ...{ passive: false } });
+host.addEventListener("contextmenu", dismiss, { passive: true, passive: false });`,
+      { sourcePath: "apps/web/src/components/row.tsx" },
+    ),
+  ).toEqual([3, 4]);
+});

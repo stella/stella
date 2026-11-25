@@ -95,6 +95,14 @@ export default eslintCompatPlugin({
           name: string,
         ) => {
           const variables = context.sourceCode.getDeclaredVariables(node);
+          const reassigned = variables.some((variable) =>
+            variable.references.some(
+              (reference) => reference.isWrite() && !reference.init,
+            ),
+          );
+          if (reassigned) {
+            return;
+          }
           const calledDirectly = variables.some((variable) =>
             variable.references.some((reference) =>
               isDirectCallCallee(reference.identifier),

@@ -400,6 +400,8 @@ export default eslintCompatPlugin({
             readonly keys: ReadonlySet<string>;
           }
         >();
+        const exportedTypeNames = new Set<string>();
+        const shadowedTypeNames = new Set<string>();
         const typeRefCounts = new Map<string, number>();
         const satisfiesKeyMaps: {
           readonly typeName: string;
@@ -412,8 +414,21 @@ export default eslintCompatPlugin({
             keyofTargets.clear();
             candidates.length = 0;
             localStringUnions.clear();
+            exportedTypeNames.clear();
+            shadowedTypeNames.clear();
             typeRefCounts.clear();
             satisfiesKeyMaps.length = 0;
+          },
+          ExportSpecifier(node) {
+            const parent: unknown = node.parent;
+            if (
+              isAstNode(parent) &&
+              parent.type === "ExportNamedDeclaration" &&
+              parent.source === null &&
+              isIdentifierReference(node.local)
+            ) {
+              exportedTypeNames.add(node.local.name);
+            }
           },
           TSTypeAliasDeclaration(node) {
             const parent: unknown = node.parent;
@@ -422,6 +437,10 @@ export default eslintCompatPlugin({
             }
             const id: unknown = node.id;
             if (!isIdentifierReference(id)) {
+              return;
+            }
+            if (!isAstNode(parent) || parent.type !== "Program") {
+              shadowedTypeNames.add(id.name);
               return;
             }
             const keys = stringLiteralUnionKeys(node.typeAnnotation);
@@ -449,7 +468,16 @@ export default eslintCompatPlugin({
             if (!isAstNode(declaration) || declaration.kind !== "const") {
               return;
             }
-            const keyRefMatch = satisfiesKeyRefLiteral(node);
+            const declParent: unknown = declaration.parent;
+            const atModuleTop =
+              isAstNode(declParent) &&
+              (declParent.type === "Program" ||
+                (declParent.type === "ExportNamedDeclaration" &&
+                  isAstNode(declParent.parent) &&
+                  declParent.parent.type === "Program"));
+            const keyRefMatch = atModuleTop
+              ? satisfiesKeyRefLiteral(node)
+              : null;
             if (keyRefMatch !== null) {
               satisfiesKeyMaps.push({
                 typeName: keyRefMatch.keyRef.name,
@@ -524,6 +552,12 @@ export default eslintCompatPlugin({
               });
             }
             for (const { typeName, mapName, keys } of satisfiesKeyMaps) {
+              if (
+                exportedTypeNames.has(typeName) ||
+                shadowedTypeNames.has(typeName)
+              ) {
+                continue;
+              }
               const union = localStringUnions.get(typeName);
               if (
                 union === undefined ||

@@ -28,3 +28,13 @@ test("allows identity callbacks passed by reference and non-identity helpers", a
     ]),
   ).toEqual([]);
 });
+
+test("allows bindings that are reassigned after initialization", async () => {
+  expect(
+    await lint([
+      "let normalise = (value: string) => value;",
+      "normalise = (value: string) => value.trim();",
+      "export const cleaned = normalise(' hi ');",
+    ]),
+  ).toEqual([]);
+});
