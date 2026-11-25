@@ -162,6 +162,8 @@ export const AppVersionRow = ({
     blockedReason = t(DEFERRED_MESSAGES[action.until], {
       version: action.version,
     });
+  } else if (action.kind === "downloading") {
+    blockedReason = t("updates.downloading", { version: action.version });
   } else if (action.kind === "installing") {
     blockedReason = t("updates.installInProgress");
   }
@@ -207,7 +209,9 @@ export const AppVersionRow = ({
         <Button
           disabled={action.kind !== "install"}
           disabledReason={blockedReason}
-          loading={action.kind === "installing"}
+          loading={
+            action.kind === "downloading" || action.kind === "installing"
+          }
           onClick={() => {
             void install();
           }}
@@ -223,6 +227,7 @@ export const AppVersionRow = ({
 type UpdaterAction =
   | { kind: "check"; checking: boolean }
   | { kind: "install" }
+  | { kind: "downloading"; version: string }
   | { kind: "installing" }
   | { kind: "waiting"; until: RelaunchBlocker; version: string };
 
@@ -241,6 +246,7 @@ const updaterAction = (state: UpdaterState | null): UpdaterAction => {
     case "available":
       return { kind: "install" };
     case "downloading":
+      return { kind: "downloading", version: state.version };
     case "installing":
       return { kind: "installing" };
     case "deferred":

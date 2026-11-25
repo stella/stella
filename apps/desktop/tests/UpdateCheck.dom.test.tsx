@@ -154,14 +154,15 @@ test("nothing but the button shows while the updater is idle", async () => {
 test("opened mid-install, the row shows the download and its progress", async () => {
   const view = await renderRow({ state: () => downloading(7, 50, 200) });
 
-  expect(await view.findByText(DOWNLOADING)).toBeDefined();
+  // Said in the row, and again as the reason the button is disabled.
+  expect(await view.findByText(DOWNLOADING, { selector: "p" })).toBeDefined();
   expect(view.getByText("25% downloaded")).toBeDefined();
 
   // Neither a check nor an install can start while it runs, whoever started
   // it; the one button stays reachable and says why.
   const installButton = view.getByRole("button", {
     name: messages.install,
-    description: messages.installInProgress,
+    description: DOWNLOADING,
   });
   expect(installButton.getAttribute("aria-disabled")).toBe("true");
   expect(
@@ -176,7 +177,7 @@ test("an install started elsewhere follows the updater's announcements", async (
   const view = await renderRow({});
 
   await view.announce(downloading(2, 10, null));
-  expect(view.getByText(DOWNLOADING)).toBeDefined();
+  expect(view.getByText(DOWNLOADING, { selector: "p" })).toBeDefined();
   // The size is not known yet, so no share is named.
   expect(view.queryByText("downloaded", { exact: false })).toBeNull();
 
@@ -190,6 +191,13 @@ test("an install started elsewhere follows the updater's announcements", async (
   const installing =
     "Installing version 0.9.90. stella desktop restarts when it is done.";
   expect(view.getByText(installing)).toBeDefined();
+  // The download is over: the button now names the install.
+  expect(
+    view.getByRole("button", {
+      name: messages.install,
+      description: messages.installInProgress,
+    }),
+  ).toBeDefined();
 
   // An announcement older than the one shown changes nothing.
   await view.announce({ revision: 3, state: { status: "up_to_date" } });

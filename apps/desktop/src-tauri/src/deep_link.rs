@@ -445,7 +445,7 @@ async fn redeem_handoff(
   }
   // Held until this returns, on every path: from the handoff's update check
   // on, no update relaunches the app before its document is open.
-  let handoff = crate::updater::reserve_handoff();
+  let handoff = crate::updater::reserve_handoff().await;
   let trusted = match run.target {
     crate::handoff::Target::DesktopEdit => {
       is_trusted_api_base_url(manager, &run.api_base_url).await

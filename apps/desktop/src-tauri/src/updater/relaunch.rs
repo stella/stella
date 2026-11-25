@@ -21,7 +21,7 @@ pub(super) use macos::after_update;
 #[cfg(not(target_os = "macos"))]
 pub(super) fn after_update(
   handle: &tauri::AppHandle,
-  _clearance: &super::RelaunchClearance,
+  _clearance: &super::RelaunchClearance<'_>,
 ) -> Result<(), String> {
   crate::desktop_crash::clean_exit(handle);
   handle.restart()
@@ -63,7 +63,7 @@ fi
 
   pub(in crate::updater) fn after_update(
     handle: &AppHandle,
-    _clearance: &crate::updater::RelaunchClearance,
+    _clearance: &crate::updater::RelaunchClearance<'_>,
   ) -> Result<(), String> {
     let env = handle.env();
     let binary = tauri::process::current_binary(&env)

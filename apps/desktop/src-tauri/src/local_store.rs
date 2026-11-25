@@ -488,7 +488,7 @@ pub fn disable_autostart(app: &tauri::AppHandle) -> Result<(), String> {
 pub fn install_update(
   update: &tauri_plugin_updater::Update,
   package: &crate::updater::VerifiedUpdatePackage,
-  _clearance: &crate::updater::RelaunchClearance,
+  _clearance: &crate::updater::RelaunchClearance<'_>,
 ) -> Result<(), String> {
   update
     .install(package.as_bytes())
