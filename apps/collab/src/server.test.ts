@@ -28,6 +28,8 @@ type FakeStellaApiOptions = {
   generation?: number;
   /** `previous-release` answers heartbeats with `{ activeAt }` only. */
   heartbeatContract?: "current" | "previous-release";
+  /** A reader token the API admits to the room but whose heartbeat it refuses. */
+  heartbeatRefusedToken?: string;
   holdFirstStore?: boolean;
   initialSnapshotBase64?: string | null;
   loadFailureStatus?: number;
@@ -122,11 +124,27 @@ const TEST_SERVICE_TOKEN = "test_collaboration_service_token_32_chars";
 const DOCKER_OPERATION_TIMEOUT_MS = 10_000;
 const DOCKER_CLEANUP_TIMEOUT_MS = 250;
 
+/** Counts stateless messages as the server receives them; this hook runs
+ *  before the server's own `onStateless`, so a count proves arrival. */
+const countReceivedStatelessMessages = (
+  collabServer: Awaited<ReturnType<typeof createCollabServer>>,
+) => {
+  let received = 0;
+  collabServer.hocuspocus.configuration.extensions.unshift({
+    onStateless: async () => {
+      await Promise.resolve();
+      received += 1;
+    },
+  });
+  return () => received;
+};
+
 const createFakeStellaApi = ({
   additionalRoomIds = [],
   canEdit = true,
   generation = 0,
   heartbeatContract = "current",
+  heartbeatRefusedToken,
   holdFirstStore = false,
   initialSnapshotBase64 = null,
   loadFailureStatus,
@@ -176,7 +194,9 @@ const createFakeStellaApi = ({
           (acceptedRoomId) => `{${acceptedRoomId}}` === requestedRoomName,
         );
         const isReader =
-          readerToken !== undefined && requestToken === readerToken;
+          (readerToken !== undefined && requestToken === readerToken) ||
+          (heartbeatRefusedToken !== undefined &&
+            requestToken === heartbeatRefusedToken);
         const tokenAuthorized =
           requestToken === token ||
           isReader ||
@@ -232,6 +252,12 @@ const createFakeStellaApi = ({
 
       if (url.pathname === "/v1/folio-collab-rooms/heartbeat") {
         heartbeatRequestBodies.push(body);
+        if (
+          heartbeatRefusedToken !== undefined &&
+          body["token"] === heartbeatRefusedToken
+        ) {
+          return Response.json({ message: "Unauthorized" }, { status: 401 });
+        }
         const isReader =
           readerToken !== undefined && body["token"] === readerToken;
         if (
@@ -1162,6 +1188,181 @@ describe("collaboration server", () => {
       fakeApi.releaseFirstStore();
       provider.destroy();
       document.destroy();
+      await collabServer.destroy();
+      await fakeApi.destroy();
+    }
+  });
+
+  test("shares one waiting store among flushes that arrive while a store runs", async () => {
+    const fakeApi = createFakeStellaApi({ holdFirstStore: true });
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      debounceMs: 10_000,
+      maxDebounceMs: 10_000,
+      port: 0,
+      serviceToken: TEST_SERVICE_TOKEN,
+    });
+    const document = new Doc();
+    const requestIds = Array.from(
+      { length: 6 },
+      (_, index) => `00000000-0000-4000-8000-00000000008${String(index)}`,
+    );
+    const acknowledgements = new Set<string>();
+    const provider = createProvider({
+      name: TEST_ROOM_NAME,
+      onStateless: (payload) => {
+        const parsed: unknown = JSON.parse(payload);
+        if (
+          typeof parsed === "object" &&
+          parsed !== null &&
+          "requestId" in parsed &&
+          typeof parsed.requestId === "string"
+        ) {
+          acknowledgements.add(parsed.requestId);
+        }
+      },
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+      ydoc: document,
+    });
+    const requestFlush = (requestId: string) => {
+      provider.sendStateless(
+        JSON.stringify({ requestId, type: FOLIO_COLLAB_FLUSH_REQUEST_TYPE }),
+      );
+    };
+    const receivedFlushes = countReceivedStatelessMessages(collabServer);
+
+    try {
+      await waitFor(
+        () => provider.isAuthenticated,
+        "Provider did not authenticate.",
+      );
+      document.getText("body").insert(0, "first");
+      provider.flushPendingUpdates();
+      const [firstRequestId, ...laterRequestIds] = requestIds;
+      requestFlush(firstRequestId ?? "");
+      await waitFor(
+        () => fakeApi.storeRequests() === 1,
+        "First snapshot store did not start.",
+      );
+
+      document.getText("body").insert(5, " later");
+      provider.flushPendingUpdates();
+      for (const requestId of laterRequestIds) {
+        requestFlush(requestId);
+      }
+      await waitFor(
+        () => receivedFlushes() === requestIds.length,
+        "The server did not receive every flush request.",
+      );
+      fakeApi.releaseFirstStore();
+      await waitFor(
+        () => acknowledgements.size === requestIds.length,
+        "Not every flush was acknowledged.",
+      );
+
+      expect(fakeApi.storeRequests()).toBe(2);
+      const restored = new Doc();
+      applyUpdate(
+        restored,
+        Buffer.from(fakeApi.latestSnapshotBase64() ?? "", "base64"),
+      );
+      expect(getTextContent(restored, "body")).toBe("first later");
+      restored.destroy();
+    } finally {
+      fakeApi.releaseFirstStore();
+      provider.destroy();
+      document.destroy();
+      await collabServer.destroy();
+      await fakeApi.destroy();
+    }
+  });
+
+  test("ignores a flush request from a read-only session", async () => {
+    const fakeApi = createFakeStellaApi({ readerToken: "collab_token_reader" });
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      debounceMs: 10_000,
+      maxDebounceMs: 10_000,
+      port: 0,
+      serviceToken: TEST_SERVICE_TOKEN,
+    });
+    const readerDocument = new Doc();
+    const writerDocument = new Doc();
+    const readerRequestId = "00000000-0000-4000-8000-000000000078";
+    const writerRequestId = "00000000-0000-4000-8000-000000000079";
+    const readerAcknowledgements: string[] = [];
+    const writerAcknowledgements: string[] = [];
+    const acknowledgedRequestId = (payload: string) => {
+      const parsed: unknown = JSON.parse(payload);
+      return typeof parsed === "object" &&
+        parsed !== null &&
+        "requestId" in parsed &&
+        typeof parsed.requestId === "string"
+        ? parsed.requestId
+        : null;
+    };
+    const reader = createProvider({
+      name: TEST_ROOM_NAME,
+      onStateless: (payload) => {
+        const requestId = acknowledgedRequestId(payload);
+        if (requestId !== null) {
+          readerAcknowledgements.push(requestId);
+        }
+      },
+      token: "collab_token_reader",
+      url: collabServer.websocketUrl,
+      ydoc: readerDocument,
+    });
+    const writer = createProvider({
+      name: TEST_ROOM_NAME,
+      onStateless: (payload) => {
+        const requestId = acknowledgedRequestId(payload);
+        if (requestId !== null) {
+          writerAcknowledgements.push(requestId);
+        }
+      },
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+      ydoc: writerDocument,
+    });
+    const receivedFlushes = countReceivedStatelessMessages(collabServer);
+
+    try {
+      await waitFor(
+        () => reader.isAuthenticated && writer.isAuthenticated,
+        "Reader and writer did not both authenticate.",
+      );
+      reader.sendStateless(
+        JSON.stringify({
+          requestId: readerRequestId,
+          type: FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
+        }),
+      );
+      await waitFor(
+        () => receivedFlushes() === 1,
+        "The server did not receive the reader's flush request.",
+      );
+      // A store the reader started would now run ahead of the writer's flush,
+      // which would then need a second store of its own.
+      writer.sendStateless(
+        JSON.stringify({
+          requestId: writerRequestId,
+          type: FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
+        }),
+      );
+      await waitFor(
+        () => writerAcknowledgements.includes(writerRequestId),
+        "The writer's flush was not acknowledged.",
+      );
+
+      expect(fakeApi.storeRequests()).toBe(1);
+      expect(readerAcknowledgements).toEqual([]);
+    } finally {
+      reader.destroy();
+      writer.destroy();
+      readerDocument.destroy();
+      writerDocument.destroy();
       await collabServer.destroy();
       await fakeApi.destroy();
     }
@@ -2110,6 +2311,68 @@ describe("collaboration server", () => {
     } finally {
       provider.destroy();
       ydoc.destroy();
+      await collabServer.destroy();
+      await fakeApi.destroy();
+    }
+  });
+
+  test("keeps other participants' heartbeats when one join fails", async () => {
+    const fakeApi = createFakeStellaApi({
+      heartbeatRefusedToken: "collab_token_refused",
+    });
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      debounceMs: 10_000,
+      maxDebounceMs: 10_000,
+      port: 0,
+      roomActivityHeartbeatIntervalMs: 20,
+      serviceToken: TEST_SERVICE_TOKEN,
+    });
+    const writerDocument = new Doc();
+    const refusedDocument = new Doc();
+    let refusedJoinFailed = false;
+    const writer = createProvider({
+      name: TEST_ROOM_NAME,
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+      ydoc: writerDocument,
+    });
+    let refused: HocuspocusProvider | undefined;
+    const writerHeartbeats = () =>
+      fakeApi
+        .heartbeatRequestBodies()
+        .filter((body) => body["token"] === "collab_token_test").length;
+
+    try {
+      await waitFor(
+        () => writer.isAuthenticated,
+        "Writer did not authenticate.",
+      );
+      refused = new HocuspocusProvider({
+        document: refusedDocument,
+        name: TEST_ROOM_NAME,
+        onAuthenticationFailed: () => {
+          refusedJoinFailed = true;
+        },
+        token: "collab_token_refused",
+        url: collabServer.websocketUrl,
+      });
+      await waitFor(
+        () => refusedJoinFailed,
+        "The refused join was not rejected.",
+      );
+
+      const heartbeatsAfterFailedJoin = writerHeartbeats();
+      await waitFor(
+        () => writerHeartbeats() > heartbeatsAfterFailedJoin + 4,
+        "The writer's heartbeats stopped after another join failed.",
+      );
+      expect(writer.isAuthenticated).toBe(true);
+    } finally {
+      refused?.destroy();
+      writer.destroy();
+      refusedDocument.destroy();
+      writerDocument.destroy();
       await collabServer.destroy();
       await fakeApi.destroy();
     }
