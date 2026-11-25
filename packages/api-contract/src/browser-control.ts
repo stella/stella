@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-export const BROWSER_CONTROL_PROTOCOL_VERSION = 8 as const;
+export const BROWSER_CONTROL_PROTOCOL_VERSION = 9 as const;
 export const BROWSER_CONTROL_TOOL_NAME = "use-browser" as const;
 export const BROWSE_WEB_TOOL_NAME = "browse_web" as const;
 
@@ -139,7 +139,24 @@ export const BROWSER_CONTROL_LIMITS = {
   downloadNameChars: 255,
   /** Where Chrome saved a download, as reported. */
   downloadPathChars: 4096,
+  /**
+   * Raw bytes in one piece of a download the extension hands a stella tab
+   * (`download-chunk`); the last piece may be shorter.
+   */
+  downloadChunkBytes: 1024 * 1024,
+  /** Downloads one result hands the model; later ones ride on the next. */
+  resultDownloads: 8,
 } as const;
+
+/** The most pieces one download handed to a stella tab may come in. */
+export const BROWSER_DOWNLOAD_MAX_CHUNKS = Math.ceil(
+  BROWSER_CONTROL_LIMITS.downloadBytes /
+    BROWSER_CONTROL_LIMITS.downloadChunkBytes,
+);
+
+/** Base64 characters of one full piece (`downloadChunkBytes`, padded). */
+const DOWNLOAD_CHUNK_CHARS =
+  Math.ceil(BROWSER_CONTROL_LIMITS.downloadChunkBytes / 3) * 4;
 
 const boundedIdSchema = v.pipe(
   v.string(),
@@ -656,7 +673,77 @@ export const BROWSER_CONTROL_ERROR_CODE = {
 export type BrowserControlErrorCode =
   (typeof BROWSER_CONTROL_ERROR_CODE)[keyof typeof BROWSER_CONTROL_ERROR_CODE];
 
+/**
+ * Where a file the member's browser downloaded for a chat was filed: a
+ * document of the chat's matter, `duplicate` when the matter already held
+ * the same bytes and that document is named instead of a new one; or a file
+ * kept with a chat in no matter (`browser-downloads` owns the filing).
+ */
+export const browserDownloadFiledSchema = v.variant("type", [
+  v.strictObject({
+    type: v.literal("document"),
+    workspaceId: v.pipe(v.string(), v.uuid()),
+    entityId: v.pipe(v.string(), v.uuid()),
+    name: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+    duplicate: v.boolean(),
+  }),
+  v.strictObject({
+    type: v.literal("chat_file"),
+    fileId: v.pipe(v.string(), v.uuid()),
+    name: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+  }),
+]);
+
+export type BrowserDownloadFiled = v.InferOutput<
+  typeof browserDownloadFiledSchema
+>;
+
+const downloadedFromSchema = v.pipe(
+  v.string(),
+  v.maxLength(BROWSER_CONTROL_LIMITS.urlChars),
+);
+
+/**
+ * A download a chat on stella's models made in its tabs, as a result
+ * reports it: filed with the chat, or not filed, with why. Only the stella
+ * tab that ran the step sets it, never the extension.
+ */
+const browserResultDownloadSchema = v.variant("outcome", [
+  v.strictObject({
+    filed: browserDownloadFiledSchema,
+    outcome: v.literal("filed"),
+    sourceUrl: downloadedFromSchema,
+  }),
+  v.strictObject({
+    message: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(BROWSER_CONTROL_LIMITS.errorMessageChars),
+    ),
+    name: v.pipe(
+      v.string(),
+      v.maxLength(BROWSER_CONTROL_LIMITS.downloadNameChars),
+    ),
+    outcome: v.literal("not-filed"),
+    sourceUrl: downloadedFromSchema,
+  }),
+]);
+
+export type BrowserResultDownload = v.InferOutput<
+  typeof browserResultDownloadSchema
+>;
+
+/** The downloads a result hands the model, oldest first; absent when none. */
+const resultDownloadsSchema = v.optional(
+  v.pipe(
+    v.array(browserResultDownloadSchema),
+    v.minLength(1),
+    v.maxLength(BROWSER_CONTROL_LIMITS.resultDownloads),
+  ),
+);
+
 const browserControlSuccessSchema = v.strictObject({
+  downloads: resultDownloadsSchema,
   protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
   snapshot: browserControlSnapshotSchema,
   status: v.literal("success"),
@@ -664,6 +751,7 @@ const browserControlSuccessSchema = v.strictObject({
 
 /** A `find` ran: it read the page but changed nothing, not even the snapshot click and fill address. */
 const browserControlFoundResultSchema = v.strictObject({
+  downloads: resultDownloadsSchema,
   found: browserControlFoundSchema,
   protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
   status: v.literal("found"),
@@ -671,6 +759,7 @@ const browserControlFoundResultSchema = v.strictObject({
 
 const browserControlErrorSchema = v.strictObject({
   code: v.picklist(Object.values(BROWSER_CONTROL_ERROR_CODE)),
+  downloads: resultDownloadsSchema,
   message: v.pipe(
     v.string(),
     v.maxLength(BROWSER_CONTROL_LIMITS.errorMessageChars),
@@ -703,6 +792,8 @@ export const SUPERSEDED_BROWSER_SNAPSHOT_NOTE =
  * (see `chat-tool-result-retention`).
  */
 const browserControlSupersededSchema = v.strictObject({
+  /** The downloads the result handed the model, kept whole. */
+  downloads: resultDownloadsSchema,
   note: v.pipe(v.string(), v.maxLength(1000)),
   page: v.strictObject({
     contentTrust: v.literal(BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent),
@@ -779,7 +870,9 @@ export const supersedeBrowserControlResult = (
   const found = v.safeParse(browserControlFoundResultSchema, output);
   if (found.success) {
     const { contentTrust, more, tabId, title, url } = found.output.found;
+    const { downloads } = found.output;
     return {
+      ...(downloads === undefined ? {} : { downloads }),
       note: SUPERSEDED_BROWSER_FIND_NOTE,
       page: {
         contentTrust,
@@ -796,8 +889,9 @@ export const supersedeBrowserControlResult = (
   if (!result.success) {
     return null;
   }
-  const { snapshot } = result.output;
+  const { downloads, snapshot } = result.output;
   return {
+    ...(downloads === undefined ? {} : { downloads }),
     note: SUPERSEDED_BROWSER_SNAPSHOT_NOTE,
     page: {
       contentTrust: snapshot.contentTrust,
@@ -886,6 +980,168 @@ export type BrowserExtensionRequest = v.InferOutput<
   typeof browserExtensionRequestSchema
 >;
 
+/** Why the extension stopped a download a chat's tab started. */
+export const BROWSER_DOWNLOAD_STOP_REASON = {
+  /** Neither its type nor its name says PDF. */
+  notPdf: "not-pdf",
+  /** Chrome said it is larger than `BROWSER_CONTROL_LIMITS.downloadBytes`. */
+  tooLarge: "too-large",
+  /** Too many of the chat's downloads were still running. */
+  tooMany: "too-many",
+  /** Chrome could not finish it. */
+  interrupted: "interrupted",
+  /**
+   * A shown PDF's address answered its save with a redirect, which the
+   * save never follows.
+   */
+  redirected: "redirected",
+} as const;
+
+type DownloadStopReasons = typeof BROWSER_DOWNLOAD_STOP_REASON;
+
+export type BrowserDownloadStopReason =
+  DownloadStopReasons[keyof DownloadStopReasons];
+
+/**
+ * Why the extension stopped a download a chat on stella's models made in
+ * its tabs: a desktop chat's reasons, and one more.
+ */
+export const BROWSER_WEB_DOWNLOAD_STOP_REASON = {
+  ...BROWSER_DOWNLOAD_STOP_REASON,
+  /**
+   * The file cannot be fetched again: its address is the page's own
+   * (`blob:`, `data:`) or not a public HTTPS one, or fetching it again did
+   * not return a PDF.
+   */
+  notRefetchable: "not-refetchable",
+} as const;
+
+type WebDownloadStopReasons = typeof BROWSER_WEB_DOWNLOAD_STOP_REASON;
+
+export type BrowserWebDownloadStopReason =
+  WebDownloadStopReasons[keyof WebDownloadStopReasons];
+
+const downloadNameSchema = v.pipe(
+  v.string(),
+  v.maxLength(BROWSER_CONTROL_LIMITS.downloadNameChars),
+);
+
+/** The address a download came from; clipped, so a long `data:` URL still reports. */
+const downloadSourceUrlSchema = v.pipe(
+  v.string(),
+  v.maxLength(BROWSER_CONTROL_LIMITS.urlChars),
+);
+
+/** One download the extension hands on, from its start to its report. */
+const deliveryIdSchema = v.pipe(v.string(), v.uuid());
+
+/**
+ * A download the chat's tabs made while the web connection holds the
+ * browser. Chrome's own download is stopped; the extension fetches the
+ * file once more and hands it, in pieces (`download-chunk`) and then its
+ * end (`download-end`) under the same `deliveryId`, to the stella tab whose
+ * command ran last. `turnId` is that command's chat turn. Sent before the
+ * command's result when the download started during it. `pageUrl` is the
+ * page the chat's tab was on, only when the file came from that page's
+ * site.
+ */
+const browserExtensionDownloadStartedSchema = v.strictObject({
+  controllerId: controllerIdSchema,
+  deliveryId: deliveryIdSchema,
+  pageUrl: v.nullable(downloadSourceUrlSchema),
+  protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
+  source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.extension),
+  sourceUrl: downloadSourceUrlSchema,
+  suggestedName: downloadNameSchema,
+  turnId: boundedIdSchema,
+  type: v.literal("download-started"),
+});
+
+/** One piece of a download's bytes, base64, in order from `index` 0. */
+const browserExtensionDownloadChunkSchema = v.strictObject({
+  controllerId: controllerIdSchema,
+  data: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(DOWNLOAD_CHUNK_CHARS),
+    v.base64(),
+  ),
+  deliveryId: deliveryIdSchema,
+  index: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(0),
+    v.maxValue(BROWSER_DOWNLOAD_MAX_CHUNKS - 1),
+  ),
+  protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
+  source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.extension),
+  type: v.literal("download-chunk"),
+});
+
+/**
+ * A download's end: every piece was sent (`captured`, with the bytes and
+ * pieces the stella tab must have received), or the extension stopped it.
+ */
+const browserExtensionDownloadEndSchema = v.strictObject({
+  controllerId: controllerIdSchema,
+  deliveryId: deliveryIdSchema,
+  end: v.variant("outcome", [
+    v.strictObject({
+      bytes: v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(BROWSER_CONTROL_LIMITS.downloadBytes),
+      ),
+      chunks: v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(BROWSER_DOWNLOAD_MAX_CHUNKS),
+      ),
+      outcome: v.literal("captured"),
+    }),
+    v.strictObject({
+      outcome: v.literal("stopped"),
+      reason: v.picklist(Object.values(BROWSER_WEB_DOWNLOAD_STOP_REASON)),
+    }),
+  ]),
+  protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
+  source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.extension),
+  type: v.literal("download-end"),
+});
+
+export type BrowserExtensionDownloadMessage = v.InferOutput<
+  | typeof browserExtensionDownloadStartedSchema
+  | typeof browserExtensionDownloadChunkSchema
+  | typeof browserExtensionDownloadEndSchema
+>;
+
+/** Bytes as a download piece carries them. */
+export const encodeDownloadChunk = (bytes: Uint8Array): string => {
+  let binary = "";
+  // In slices, so no call passes the engine's argument limit.
+  for (let start = 0; start < bytes.length; start += 0x80_00) {
+    binary += String.fromCodePoint(...bytes.subarray(start, start + 0x80_00));
+  }
+  return btoa(binary);
+};
+
+/** A download piece's bytes; null when `data` is not base64. */
+export const decodeDownloadChunk = (data: string): Uint8Array | null => {
+  let binary: string;
+  try {
+    binary = atob(data);
+  } catch {
+    return null;
+  }
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.codePointAt(index) ?? 0;
+  }
+  return bytes;
+};
+
 const browserExtensionPongResponseSchema = v.strictObject({
   allSitesGranted: v.boolean(),
   /** The tab chat currently operates, or null when none is controlled. */
@@ -908,6 +1164,9 @@ const browserExtensionCommandResponseSchema = v.strictObject({
 export const browserExtensionResponseSchema = v.variant("type", [
   browserExtensionPongResponseSchema,
   browserExtensionCommandResponseSchema,
+  browserExtensionDownloadStartedSchema,
+  browserExtensionDownloadChunkSchema,
+  browserExtensionDownloadEndSchema,
 ]);
 
 export type BrowserExtensionResponse = v.InferOutput<
@@ -1129,39 +1388,6 @@ export const BROWSER_DOWNLOAD_STAGED_NAME_PATTERN =
 export const browserDownloadStagedPath = (uuid: string): string =>
   `${BROWSER_DOWNLOAD_STAGING_FOLDER}/${uuid}.pdf`;
 
-/** Why the extension stopped a download a stella desktop chat's tab started. */
-export const BROWSER_DOWNLOAD_STOP_REASON = {
-  /** Neither its type nor its name says PDF. */
-  notPdf: "not-pdf",
-  /** Chrome said it is larger than `BROWSER_CONTROL_LIMITS.downloadBytes`. */
-  tooLarge: "too-large",
-  /** Too many of the chat's downloads were still running. */
-  tooMany: "too-many",
-  /** Chrome could not finish it. */
-  interrupted: "interrupted",
-  /**
-   * A shown PDF's address answered its save with a redirect, which the
-   * save never follows.
-   */
-  redirected: "redirected",
-} as const;
-
-type DownloadStopReasons = typeof BROWSER_DOWNLOAD_STOP_REASON;
-
-export type BrowserDownloadStopReason =
-  DownloadStopReasons[keyof DownloadStopReasons];
-
-const downloadNameSchema = v.pipe(
-  v.string(),
-  v.maxLength(BROWSER_CONTROL_LIMITS.downloadNameChars),
-);
-
-/** The address a download came from; clipped, so a long `data:` URL still reports. */
-const downloadSourceUrlSchema = v.pipe(
-  v.string(),
-  v.maxLength(BROWSER_CONTROL_LIMITS.urlChars),
-);
-
 const browserDownloadSchema = v.variant("outcome", [
   v.strictObject({
     outcome: v.literal("saved"),
@@ -1187,9 +1413,6 @@ const browserDownloadSchema = v.variant("outcome", [
 ]);
 
 export type BrowserDownload = v.InferOutput<typeof browserDownloadSchema>;
-
-/** One download a stella desktop chat takes, from its start to its report. */
-const deliveryIdSchema = v.pipe(v.string(), v.uuid());
 
 /**
  * A download a stella desktop chat takes has started: Chrome is saving it

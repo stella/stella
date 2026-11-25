@@ -649,6 +649,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/chat/improve-prompt": "crud",
   "POST /v1/chat/local-runs/:runId/outputs": "crud",
   "POST /v1/chat/local-runs/:runId/browser-downloads": "crud",
+  "POST /v1/chat/threads/:threadId/browser-downloads": "crud",
   "PUT /v1/chat/local-runs/:runId/steps/:stepKey/content": "crud",
   "POST /v1/chat/table-chart": "ai",
   "POST /v1/chat/template-thread": "crud",

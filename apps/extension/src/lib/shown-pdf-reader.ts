@@ -1,7 +1,11 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import { BROWSER_DOWNLOAD_STOP_REASON } from "@stll/api-contract/browser-control";
+import {
+  BROWSER_CONTROL_LIMITS,
+  BROWSER_DOWNLOAD_STOP_REASON,
+  encodeDownloadChunk,
+} from "@stll/api-contract/browser-control";
 
 import { parseControllableUrl } from "./origin-policy";
 
@@ -21,6 +25,12 @@ const TARGET = "stella-shown-pdf-reader";
 
 /** The port the worker opens to the offscreen document for one request. */
 export const SHOWN_PDF_READER_PORT = "stella-shown-pdf-reader";
+
+/**
+ * The bytes each read kept, by their `blob:` address, in the offscreen
+ * document: a slice is read from here, never fetched again.
+ */
+const keptBlobs = new Map<string, Blob>();
 
 /** A message's sender, as far as the reader's check reads it. */
 type ReaderSender = {
@@ -64,6 +74,13 @@ const shownPdfReadSchema = v.variant("type", [
   }),
 ]);
 
+const offsetSchema = v.pipe(
+  v.number(),
+  v.integer(),
+  v.minValue(0),
+  v.maxValue(BROWSER_CONTROL_LIMITS.downloadBytes),
+);
+
 const readerRequestSchema = v.variant("type", [
   v.strictObject({
     maxBytes: v.pipe(v.number(), v.integer(), v.minValue(0)),
@@ -76,7 +93,20 @@ const readerRequestSchema = v.variant("type", [
     target: v.literal(TARGET),
     type: v.literal("release"),
   }),
+  v.strictObject({
+    downloadUrl: v.pipe(v.string(), v.startsWith("blob:")),
+    end: offsetSchema,
+    start: offsetSchema,
+    target: v.literal(TARGET),
+    type: v.literal("slice"),
+  }),
 ]);
+
+/** A slice the offscreen document read of bytes it keeps, base64. */
+const shownPdfSliceSchema = v.strictObject({
+  data: v.pipe(v.string(), v.minLength(1), v.base64()),
+  type: v.literal("slice"),
+});
 
 type ShownPdfReaderRequest = v.InferOutput<typeof readerRequestSchema>;
 
@@ -115,9 +145,21 @@ export const takeShownPdfReaderRequest = (
     return null;
   }
   const request = parsed.output;
-  return request.type === "read" && parseControllableUrl(request.url) === null
-    ? null
-    : request;
+  switch (request.type) {
+    case "read":
+      return parseControllableUrl(request.url) === null ? null : request;
+    case "release":
+      return request;
+    // One piece at a time, never more than a download piece holds.
+    case "slice":
+      return request.end > request.start &&
+        request.end - request.start <= BROWSER_CONTROL_LIMITS.downloadChunkBytes
+        ? request
+        : null;
+    default:
+      request satisfies never;
+      return panic("Unhandled shown PDF reader request");
+  }
 };
 
 const isRedirect = (response: Response): boolean =>
@@ -240,14 +282,41 @@ export const readShownPdf = async (
   if (read.type !== "bytes") {
     return read;
   }
+  const blob = new Blob(read.chunks, { type: "application/pdf" });
+  const downloadUrl = URL.createObjectURL(blob);
+  keptBlobs.set(downloadUrl, blob);
   return {
     bytes: read.total,
-    downloadUrl: URL.createObjectURL(
-      new Blob(read.chunks, { type: "application/pdf" }),
-    ),
+    downloadUrl,
     fetchedUrl: response.url === "" ? url : response.url,
     type: "read",
   };
+};
+
+/** Frees a read's bytes: its address and the bytes it names. */
+export const releaseKeptBytes = (downloadUrl: string): void => {
+  keptBlobs.delete(downloadUrl);
+  URL.revokeObjectURL(downloadUrl);
+};
+
+/**
+ * Answers one slice of bytes a read kept, base64, in the offscreen
+ * document; bytes no read keeps (released, or never read) close the port
+ * unanswered.
+ */
+export const answerShownPdfSlice = async (
+  request: { downloadUrl: string; end: number; start: number },
+  post: (answer: v.InferOutput<typeof shownPdfSliceSchema>) => void,
+): Promise<boolean> => {
+  const blob = keptBlobs.get(request.downloadUrl);
+  if (blob === undefined || request.end > blob.size) {
+    return false;
+  }
+  const bytes = new Uint8Array(
+    await blob.slice(request.start, request.end).arrayBuffer(),
+  );
+  post({ data: encodeDownloadChunk(bytes), type: "slice" });
+  return true;
 };
 
 /**
@@ -260,9 +329,7 @@ export const answerShownPdfRead = async (
   post: (answer: ShownPdfRead) => void,
   {
     read = readShownPdf,
-    revoke = (downloadUrl: string) => {
-      URL.revokeObjectURL(downloadUrl);
-    },
+    revoke = releaseKeptBytes,
   }: {
     read?: (url: string, maxBytes: number) => Promise<ShownPdfRead>;
     revoke?: (downloadUrl: string) => void;
@@ -284,6 +351,15 @@ export type ShownPdfReader = {
   read: (url: string, maxBytes: number) => Promise<ShownPdfRead>;
   /** Frees a `blob:` address once Chrome no longer needs it. */
   release: (downloadUrl: string) => Promise<void>;
+  /**
+   * The bytes from `start` to `end` of what a read kept, base64, at most a
+   * download piece of them; null when the reader keeps none there.
+   */
+  slice: (
+    downloadUrl: string,
+    start: number,
+    end: number,
+  ) => Promise<string | null>;
 };
 
 const OFFSCREEN_PATH = "offscreen.html";
@@ -366,6 +442,17 @@ export const createOffscreenShownPdfReader = (
     },
     release: async (downloadUrl) => {
       await ask({ downloadUrl, target: TARGET, type: "release" });
+    },
+    slice: async (downloadUrl, start, end) => {
+      const answer = await ask({
+        downloadUrl,
+        end,
+        start,
+        target: TARGET,
+        type: "slice",
+      });
+      const parsed = v.safeParse(shownPdfSliceSchema, answer);
+      return parsed.success ? parsed.output.data : null;
     },
   };
 };

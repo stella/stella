@@ -171,17 +171,18 @@ describe("downloads in chat's tabs", () => {
       .map(({ condition }) => condition.excludedResponseHeaders ?? []);
   };
 
-  test("under the web connection no download response gets through", async () => {
-    const rules = await exemptions(null);
-    expect(rules).toHaveLength(2);
-    expect(rules).toEqual([[], []]);
+  const pdf = [
+    { header: "content-type", values: ["application/pdf*"] },
+    { header: "content-disposition", values: ["*.pdf*"] },
+  ];
+
+  test("under the web connection only a response that says it is a PDF gets through", async () => {
+    // The download check stops Chrome's download and fetches it again for
+    // the chat page; anything else is still blocked in the network.
+    expect(await exemptions(null)).toEqual([pdf, pdf]);
   });
 
   test("a desktop chat's tab may receive a response that says it is a PDF", async () => {
-    const pdf = [
-      { header: "content-type", values: ["application/pdf*"] },
-      { header: "content-disposition", values: ["*.pdf*"] },
-    ];
     expect(await exemptions("desktop:thread-1")).toEqual([pdf, pdf]);
   });
 });

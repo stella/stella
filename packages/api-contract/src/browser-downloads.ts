@@ -67,26 +67,8 @@ export const BROWSER_DOWNLOAD_FORM_FIELD = {
 export const localRunBrowserDownloadPath = (runId: string) =>
   `${STELLA_API_VERSION_PREFIX}/chat/local-runs/${encodeURIComponent(runId)}/browser-downloads` as const;
 
-/**
- * Where a filed download is: a document of the chat's matter, `duplicate`
- * when the matter already held the same bytes and that document is named
- * instead of a new one; or a file kept with a chat in no matter.
- */
-export const browserDownloadFiledSchema = v.variant("type", [
-  v.strictObject({
-    type: v.literal("document"),
-    workspaceId: v.pipe(v.string(), v.uuid()),
-    entityId: v.pipe(v.string(), v.uuid()),
-    name: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
-    duplicate: v.boolean(),
-  }),
-  v.strictObject({
-    type: v.literal("chat_file"),
-    fileId: v.pipe(v.string(), v.uuid()),
-    name: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
-  }),
-]);
-
-export type BrowserDownloadFiled = v.InferOutput<
-  typeof browserDownloadFiledSchema
->;
+/** Where a filed download is; a browser result names it too, so it lives beside the results. */
+export {
+  type BrowserDownloadFiled,
+  browserDownloadFiledSchema,
+} from "./browser-control";

@@ -99,11 +99,23 @@ type WaitForSignIn = (options: {
 
 const MAX_SIGN_IN_RETRIES = 3;
 
+/**
+ * Opens one step that reaches the extension, from its first command to its
+ * result: the result it closes with is what the model gets (the chat's
+ * downloads ride on it, `browser-download-inbox`).
+ */
+type OpenBrowserStep = () => {
+  close: (result: BrowserControlResult) => Promise<BrowserControlResult>;
+};
+
 export const createBrowserToolExecutionCache = (
   execute: BrowserCommandExecutor,
   beginCommand: BeginBrowserCommand,
   decide: DecideBrowserCommand,
-  waitForSignIn?: WaitForSignIn,
+  {
+    openStep,
+    waitForSignIn,
+  }: { openStep?: OpenBrowserStep; waitForSignIn?: WaitForSignIn } = {},
 ) => {
   const executions = new Map<string, Promise<BrowserControlResult>>();
 
@@ -120,6 +132,9 @@ export const createBrowserToolExecutionCache = (
       return refusal;
     }
     const finish = beginCommand();
+    // Opened before the first command, so a download it starts, or one that
+    // arrives during a sign-in hand-over, belongs to this step.
+    const step = openStep?.();
     let succeeded = false;
     try {
       let result = await execute(input, toolCallId, commandRun);
@@ -148,7 +163,7 @@ export const createBrowserToolExecutionCache = (
         }
       }
       succeeded = result.status !== "error";
-      return result;
+      return step === undefined ? result : await step.close(result);
     } finally {
       finish(succeeded);
     }

@@ -235,6 +235,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "A member's own pins on their chats are set on every deployment that serves chat",
   ],
   [
+    "/v1/chat/threads/:threadId/browser-downloads",
+    "A member's own chat files what their paired browser extension downloaded for it on every deployment that serves chat; the document write owner decides each matter write",
+  ],
+  [
     "/v1/chat/browser-site-grants",
     "A member's standing website approvals for chat's browser actions are listed, added and removed on every deployment that serves chat; the browser tool itself needs the member's paired extension",
   ],

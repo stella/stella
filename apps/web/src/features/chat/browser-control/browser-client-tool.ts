@@ -13,6 +13,7 @@ import {
   currentBrowserStepDecision,
   observeBrowserVisit,
 } from "./browser-approval-state";
+import { browserDownloadInbox } from "./browser-download-filing";
 import { executeBrowserExtensionCommand } from "./browser-extension-bridge";
 import { waitForBrowserSignIn } from "./browser-sign-in-handoff";
 import { createBrowserToolExecutionCache } from "./browser-tool-execution";
@@ -64,7 +65,10 @@ export const createBrowserExtensionTool = ({
         level: levelFor(toolCallId),
         threadId,
       }),
-    waitForBrowserSignIn,
+    {
+      openStep: () => browserDownloadInbox.openStep(threadId),
+      waitForSignIn: waitForBrowserSignIn,
+    },
   );
   const stopper = createTurnStopper();
 
@@ -82,6 +86,12 @@ export const createBrowserExtensionTool = ({
     const turnId =
       turnIdFor(toolCallId) ??
       panic("A browser command ran in a thread without a user message");
+    // A download the turn's tabs make is filed with this chat, unless its
+    // level files nothing.
+    browserDownloadInbox.rememberTurn(turnId, {
+      filesNothing: levelFor(toolCallId) === "plan",
+      threadId,
+    });
     return await executions.executeOnce(toolCallId, input, {
       signal: stopper.signalFor(turnId),
       turnId,

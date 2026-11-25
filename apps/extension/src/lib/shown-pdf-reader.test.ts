@@ -1,9 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { BROWSER_CONTROL_LIMITS } from "@stll/api-contract/browser-control";
+
 import {
   answerShownPdfRead,
+  answerShownPdfSlice,
   createOffscreenShownPdfReader,
   readShownPdf,
+  releaseKeptBytes,
   type ShownPdfRead,
   takeShownPdfReaderRequest,
 } from "./shown-pdf-reader";
@@ -123,6 +127,72 @@ const pdf = () =>
   new Response(PDF_BYTES, {
     headers: { "cache-control": "no-store", "content-type": "application/pdf" },
   });
+
+describe("slices of what a read kept", () => {
+  const slice = (start: number, end: number) =>
+    ({
+      downloadUrl: `blob:chrome-extension://${EXTENSION_ID}/1`,
+      end,
+      start,
+      target: "stella-shown-pdf-reader",
+      type: "slice",
+    }) as const;
+
+  test("it takes one download piece at most, from the extension's worker only", () => {
+    const piece = BROWSER_CONTROL_LIMITS.downloadChunkBytes;
+    expect(
+      takeShownPdfReaderRequest(slice(0, piece), WORKER, EXTENSION_ID),
+    ).toEqual(slice(0, piece));
+    for (const request of [slice(0, piece + 1), slice(10, 10), slice(9, 3)]) {
+      expect(
+        takeShownPdfReaderRequest(request, WORKER, EXTENSION_ID),
+      ).toBeNull();
+    }
+    expect(
+      takeShownPdfReaderRequest(
+        slice(0, 10),
+        { id: EXTENSION_ID, tab: pageTab },
+        EXTENSION_ID,
+      ),
+    ).toBeNull();
+  });
+
+  test("a slice of a read's bytes is those bytes; once released, nothing is answered", async () => {
+    const site = serve(() => pdf());
+    const read = await readShownPdf(`${site.origin}/decisions/42`, 1024);
+    if (read.type !== "read") {
+      throw new Error("Expected a read");
+    }
+    const answers: string[] = [];
+    const post = ({ data }: { data: string }) => {
+      answers.push(data);
+    };
+
+    expect(
+      await answerShownPdfSlice(
+        { downloadUrl: read.downloadUrl, end: 5, start: 0 },
+        post,
+      ),
+    ).toBe(true);
+    expect(answers.map((data) => atob(data))).toEqual(["%PDF-"]);
+    // Past the end of what was kept: nothing to answer.
+    expect(
+      await answerShownPdfSlice(
+        { downloadUrl: read.downloadUrl, end: read.bytes + 1, start: 0 },
+        post,
+      ),
+    ).toBe(false);
+
+    releaseKeptBytes(read.downloadUrl);
+    expect(
+      await answerShownPdfSlice(
+        { downloadUrl: read.downloadUrl, end: 5, start: 0 },
+        post,
+      ),
+    ).toBe(false);
+    expect(answers).toHaveLength(1);
+  });
+});
 
 describe("reading a shown PDF for its save", () => {
   test("a redirect is never followed: its target is never asked for", async () => {

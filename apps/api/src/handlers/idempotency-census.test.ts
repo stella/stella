@@ -483,6 +483,11 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "stream",
   },
+  // Filing the same bytes again names the document the matter already holds.
+  "POST /v1/chat/threads/:threadId/browser-downloads": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/chat/threads/:threadId/connectors/:toolCallId": {
     type: "non-replay",
     reason: "credential",

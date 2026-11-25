@@ -58,8 +58,10 @@ export const createBrowserControlTool = () => ({
       "has already been on never waits; by the user's permission level, opening another website, clicks and typing " +
       "may wait for the user's approval, and in Plan clicks and typing return `permission-denied`: " +
       "read and propose those steps instead. Passwords, login, and MFA remain manual: `needs-member` means the " +
-      "page asks for a sign-in, so ask the user to sign in in that tab, then take a `snapshot`. Use `go-back` for history. Downloads are blocked in your tabs; file uploads, " +
-      "cookies, hidden DOM, CAPTCHA solving, and arbitrary JavaScript are unavailable, so never claim them.",
+      "page asks for a sign-in, so ask the user to sign in in that tab, then take a `snapshot`. Use `go-back` for history. A PDF your tabs download is filed into this " +
+      "chat's matter (kept with the chat when it has none), and a result's `downloads` names the document it " +
+      "became, or one the matter already held, or says why a file was not filed; a download still arriving is " +
+      "listed by a later result. Other files are not saved. File uploads, cookies, hidden DOM, CAPTCHA solving, and arbitrary JavaScript are unavailable, so never claim them.",
     inputSchema: toTanStackToolSchema(browserControlCommandSchema),
     // Chat keeps an earlier page read as its superseded projection
     // (`chat-tool-result-retention`), so a stored call holds either shape.

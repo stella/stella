@@ -1,3 +1,4 @@
+import fileChatThreadBrowserDownload from "@/api/handlers/chat/browser-downloads/chat-thread";
 import createBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/create";
 import deleteBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/delete";
 import listBrowserSiteGrants from "@/api/handlers/chat/browser-site-grants/list";
@@ -159,6 +160,9 @@ export const chatRoute = routes(
     },
     "/threads/:threadId/queue/:messageId/send-now": {
       POST: sendQueuedChatMessageNow,
+    },
+    "/threads/:threadId/browser-downloads": {
+      POST: fileChatThreadBrowserDownload,
     },
     "/threads/:threadId/fork": { POST: forkThread },
     "/threads/:threadId/export": { POST: createMessageExport },
