@@ -13,6 +13,7 @@ import {
 } from "@stll/api-contract/chat-command";
 import {
   CHAT_CLOUD_RUN_TARGET,
+  chatCloudRunTarget,
   type ChatLocalRunTarget,
   type ChatRunTarget,
 } from "@stll/api-contract/chat-run-target";
@@ -356,6 +357,19 @@ describe("a new chat's first send bound for the member's computer", () => {
     expect(picks).toEqual([]);
     expect(handedOff()).toBeUndefined();
     expect(await storedRunTarget(threadId)).toEqual(CHAT_CLOUD_RUN_TARGET);
+  });
+
+  test("a first send on stella at another permission level stores that level", async () => {
+    const threadId = newThreadId();
+    streamChatMock.mockClear();
+    const fullAuto = chatCloudRunTarget("full_auto");
+
+    const result = await sendMessage.handler(firstSend(threadId, fullAuto));
+
+    expect(result).toBeInstanceOf(Response);
+    expect(handedOff()).toBeUndefined();
+    // A later send that names no target, or a reload, runs at that level.
+    expect(await storedRunTarget(threadId)).toEqual(fullAuto);
   });
 
   test("an answer names the turn once the send is accepted, a refusal included, and not before", async () => {

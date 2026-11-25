@@ -6,7 +6,8 @@ import {
 
 /**
  * The website a browser step on the member's computer asks about, by exact
- * origin: the page the desktop read, as it named it in the question. Null
+ * origin: the page the desktop read, as it named it in the question, or the
+ * address a page is opened at. Null
  * for any other card, or a page that cannot hold a website approval.
  * Always allowing it answers the step for the rest of its run; the desktop
  * then adds the website it read itself, never this one.
@@ -22,9 +23,15 @@ export const localBrowserApprovalSite = (
     CHAT_LOCAL_RUN_TOOL_NAMES.browser,
     input,
   );
-  return call?.name === CHAT_LOCAL_RUN_TOOL_NAMES.browser &&
-    "asked" in call.input &&
-    call.input.asked !== undefined
-    ? browserSiteGrantOrigin(call.input.asked.url)
+  if (call?.name !== CHAT_LOCAL_RUN_TOOL_NAMES.browser) {
+    return null;
+  }
+  if ("asked" in call.input) {
+    return call.input.asked === undefined
+      ? null
+      : browserSiteGrantOrigin(call.input.asked.url);
+  }
+  return "url" in call.input && call.input.url !== undefined
+    ? browserSiteGrantOrigin(call.input.url)
     : null;
 };

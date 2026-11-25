@@ -62,7 +62,13 @@ const cacheAt = (
   cache: createBrowserToolExecutionCache(
     execute,
     state.beginCommand,
-    (command) => state.decide({ command, grantedOrigins: NO_GRANTS, level }),
+    (command) =>
+      state.decide({
+        command,
+        grantedOrigins: NO_GRANTS,
+        level,
+        threadId: null,
+      }),
   ),
   state,
 });
@@ -166,7 +172,12 @@ describe("chat browser tool execution cache", () => {
     const click = ELEMENT_STEPS[0].command;
     const granted = new Set(["https://example.com"]);
     const byGrant = () =>
-      state.decide({ command: click, grantedOrigins: granted, level: "ask" });
+      state.decide({
+        command: click,
+        grantedOrigins: granted,
+        level: "ask",
+        threadId: null,
+      });
 
     await cache.executeOnce("call-1", { action: "snapshot" }, RUN);
     expect(byGrant()).toEqual({
@@ -203,12 +214,22 @@ describe("chat browser tool execution cache", () => {
 
     const pending = cache.executeOnce("call-1", { action: "snapshot" }, RUN);
     expect(
-      state.decide({ command: click, grantedOrigins: granted, level: "ask" }),
+      state.decide({
+        command: click,
+        grantedOrigins: granted,
+        level: "ask",
+        threadId: null,
+      }),
     ).toMatchObject({ type: "ask" });
     answer(success);
     await pending;
     expect(
-      state.decide({ command: click, grantedOrigins: granted, level: "ask" }),
+      state.decide({
+        command: click,
+        grantedOrigins: granted,
+        level: "ask",
+        threadId: null,
+      }),
     ).toMatchObject({ type: "run", by: "site-grant" });
   });
 
@@ -234,6 +255,7 @@ describe("chat browser tool execution cache", () => {
         command: ELEMENT_STEPS[0].command,
         grantedOrigins: new Set(["https://example.com"]),
         level: "ask",
+        threadId: null,
       }),
     ).toMatchObject({ type: "ask" });
   });

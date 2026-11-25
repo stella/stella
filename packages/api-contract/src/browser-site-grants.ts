@@ -10,9 +10,10 @@ import { BROWSER_CONTROL_LIMITS } from "./browser-control";
  *
  * A grant turns a browser step the chat's permission level would ask about
  * into one that runs, on a computer and on stella's models alike
- * (`browser-step-gate.ts`): only when the page the step acts on is the
+ * (`browser-step-gate.ts`): a step on a page only when the page is the
  * granted origin as the browser itself last reported it, never a URL the
- * model supplied. It never lifts Plan or a sign-in, and never the API's
+ * model supplied; opening a page when the address it opens is on the
+ * granted origin. It never lifts Plan or a sign-in, and never the API's
  * approval gate for `use-browser`: the user's own browser applies it when it
  * answers an approval card.
  */

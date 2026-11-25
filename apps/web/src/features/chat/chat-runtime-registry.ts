@@ -732,6 +732,7 @@ export const acquireChatRuntime = ({
       refreshPersistedThread();
     },
     reloadThread: refreshPersistedThread,
+    storedRunTarget: data.runTarget,
     turnsStarted,
   });
   if (context !== undefined) {

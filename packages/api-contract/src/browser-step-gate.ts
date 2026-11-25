@@ -52,10 +52,11 @@ export type BrowserStepKind = (typeof BROWSER_STEP_KINDS)[number];
 export const BROWSER_SEARCH_FIELD_ROLE = "searchbox";
 
 /**
- * Each level's answer per kind of step. Opening, reading, finding, going
- * back and switching between the chat's tabs never ask at any level, so
- * they have no row here. Plan opens and reads only. A level added to the
- * contract fails here until its rule is set.
+ * Each level's answer per kind of step on an element. Reading, finding,
+ * going back and switching between the chat's tabs never ask at any level,
+ * so they have no row here; opening a page follows `BROWSER_LEVEL_NEW_SITE`.
+ * Plan opens and reads only. A level added to the contract fails here until
+ * its rule is set.
  */
 export const BROWSER_LEVEL_GATES = {
   plan: { click: "refuse", search: "refuse", type: "refuse" },
@@ -66,6 +67,18 @@ export const BROWSER_LEVEL_GATES = {
   DesktopRunnerApprovalMode,
   Record<BrowserStepKind, BrowserLevelGate>
 >;
+
+/**
+ * Each level's answer for opening a page on a website the chat has not been
+ * on (`visitedOrigins`) and the member does not always allow. A website the
+ * chat has been on opens at every level.
+ */
+export const BROWSER_LEVEL_NEW_SITE = {
+  plan: "run",
+  ask: "ask",
+  auto: "run",
+  full_auto: "run",
+} as const satisfies Record<DesktopRunnerApprovalMode, BrowserLevelGate>;
 
 /** The kind of a step on an element. */
 export const browserStepKind = (
@@ -119,12 +132,20 @@ export type BrowserStepGateInput = {
   signIn: boolean;
   /** The exact origins the member always allows (`browser-site-grants`). */
   grantedOrigins: ReadonlySet<string>;
+  /**
+   * The exact origins (`browserSiteGrantOrigin`) of every page the browser
+   * reported for this chat: pages it opened or read, never an address the
+   * model wrote.
+   */
+  visitedOrigins: ReadonlySet<string>;
 };
 
 export type BrowserStepDecision =
   | { type: typeof BROWSER_STEP_GATE.run; by: "level" }
   /** A website approval for `origin` answered the step. */
   | { type: typeof BROWSER_STEP_GATE.run; by: "site-grant"; origin: string }
+  /** The page opens on `origin`, a website the chat has already been on. */
+  | { type: typeof BROWSER_STEP_GATE.run; by: "visited"; origin: string }
   /**
    * `site` is the website the question names, by exact origin: the page
    * the step was written for. It is the website an "always allow on this
@@ -198,11 +219,50 @@ const elementStepDecision = (
 };
 
 /**
+ * Opening a page: the one step whose address the model writes, so the
+ * address itself is what the member may be asked about. It opens without
+ * asking on a website the chat has already been on or the member always
+ * allows; otherwise the level decides (`BROWSER_LEVEL_NEW_SITE`). An address
+ * that names no website a grant can hold is never one the chat has been on.
+ */
+const openStepDecision = ({
+  command,
+  grantedOrigins,
+  level,
+  visitedOrigins,
+}: BrowserStepGateInput & {
+  command: Extract<
+    BrowserControlCommand,
+    { action: typeof BROWSER_CONTROL_ACTION.open }
+  >;
+}): BrowserStepDecision => {
+  const origin = browserSiteGrantOrigin(command.url);
+  if (origin !== null && visitedOrigins.has(origin)) {
+    return { type: BROWSER_STEP_GATE.run, by: "visited", origin };
+  }
+  const gate = BROWSER_LEVEL_NEW_SITE[level];
+  switch (gate) {
+    case BROWSER_STEP_GATE.run:
+      return RUNS_BY_LEVEL;
+    case BROWSER_STEP_GATE.ask:
+      return origin !== null && grantedOrigins.has(origin)
+        ? { type: BROWSER_STEP_GATE.run, by: "site-grant", origin }
+        : { type: BROWSER_STEP_GATE.ask, site: origin };
+    default:
+      gate satisfies never;
+      return panic("Unhandled browser level gate");
+  }
+};
+
+/**
  * Whether a browser step runs, asks, is refused or goes to the member.
  *
- * - Opening, reading, finding, going back and switching to another of the
- *   chat's tabs run at every level: they move between or read pages, which
- *   the browser holds to what the chat may reach.
+ * - Opening a page runs on a website the chat has already been on, or one
+ *   the member always allows; on any other website the level decides
+ *   (`BROWSER_LEVEL_NEW_SITE`): Ask asks first.
+ * - Reading, finding, going back and switching to another of the chat's
+ *   tabs run at every level: they read pages or return to a page a tab of
+ *   the chat already shows, never an address the model wrote.
  * - A step on an element of a page the browser handed to the member for a
  *   sign-in goes to the member at every level.
  * - Otherwise the level decides by the kind of step (`BROWSER_LEVEL_GATES`).
@@ -216,6 +276,7 @@ export const decideBrowserStep = (
   const { command } = input;
   switch (command.action) {
     case BROWSER_CONTROL_ACTION.open:
+      return openStepDecision({ ...input, command });
     case BROWSER_CONTROL_ACTION.snapshot:
     case BROWSER_CONTROL_ACTION.find:
     case BROWSER_CONTROL_ACTION.goBack:

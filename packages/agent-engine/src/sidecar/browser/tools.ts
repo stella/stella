@@ -20,6 +20,7 @@ import {
   browserDocumentAddress,
   type BrowserObservedTab,
 } from "@stll/api-contract/browser-control";
+import { browserSiteGrantOrigin } from "@stll/api-contract/browser-site-grants";
 import {
   BROWSER_STEP_GATE,
   type BrowserReportedPage,
@@ -153,7 +154,7 @@ const UNTRUSTED_AND_CITING =
 /** `tools/list` as the agent sees it; each schema mirrors `INPUT_SCHEMAS`. */
 const TOOL_DEFINITIONS = {
   open: {
-    description: `Open a public HTTPS page in the browser this chat uses, in the chat's tab (a new tab the first time), and read it. With newTab true it opens in a new tab of this chat instead, which the tools then work in; the chat keeps at most ${String(BROWSER_CONTROL_LIMITS.tabs)} tabs. Returns the page as snapshot does. A page that asks for a sign-in returns needs_member: ask the member to sign in in the browser window that shows it, then call snapshot. ${PDF_NOTE} ${DOWNLOADS_NOTE}`,
+    description: `Open a public HTTPS page in the browser this chat uses, in the chat's tab (a new tab the first time), and read it. With newTab true it opens in a new tab of this chat instead, which the tools then work in; the chat keeps at most ${String(BROWSER_CONTROL_LIMITS.tabs)} tabs. Returns the page as snapshot does. In Ask mode, opening a website this chat has not opened or read yet asks the member first, unless they always allow it. A page that asks for a sign-in returns needs_member: ask the member to sign in in the browser window that shows it, then call snapshot. ${PDF_NOTE} ${DOWNLOADS_NOTE}`,
     inputSchema: {
       type: "object",
       properties: {
@@ -612,13 +613,21 @@ type BrowserApprovalStep =
   | { action: "select"; option: string };
 
 /** What the member is asked to allow: the step, the element and the page. */
-type BrowserApprovalQuestion = BrowserApprovalStep & {
+type BrowserElementQuestion = BrowserApprovalStep & {
   /** The element's role and accessible name, as the page reads them. */
   role: string;
   name: string;
   /** The page's address. */
   url: string;
 };
+
+/**
+ * Opening a page on a website the chat has not been on: the address the
+ * agent wrote, which is what the member allows.
+ */
+type BrowserOpenQuestion = { action: "open"; url: string };
+
+type BrowserApprovalQuestion = BrowserElementQuestion | BrowserOpenQuestion;
 
 /** A browser step that changes the page, as the member is asked about it. */
 export type BrowserApprovalRequest = BrowserApprovalQuestion & {
@@ -644,9 +653,9 @@ export type ApproveAction = (
 ) => Promise<ApprovalTicket>;
 
 /** What the member is asked about `command`: the step, the element and the page. */
-const approvalQuestion = (
+const elementQuestion = (
   command: BrowserControlElementCommand,
-): BrowserApprovalQuestion => {
+): BrowserElementQuestion => {
   const about = {
     name: command.target.name,
     role: command.target.role,
@@ -671,6 +680,19 @@ const approvalQuestion = (
 const isElementCommand = (
   command: BrowserControlCommand,
 ): command is BrowserControlElementCommand => "target" in command;
+
+/** What the member is asked about a step the gate asks about. */
+const approvalQuestion = (
+  command: BrowserControlCommand,
+): BrowserApprovalQuestion => {
+  if (command.action === BROWSER_CONTROL_ACTION.open) {
+    return { action: "open", url: command.url };
+  }
+  if (!isElementCommand(command)) {
+    return panic("Only opening a page or a step on an element asks the member");
+  }
+  return elementQuestion(command);
+};
 
 /** The page the chat last read, as the browser reported it, for the gate. */
 const reportedPage = (seen: PageSeen | null): BrowserReportedPage | null =>
@@ -880,10 +902,15 @@ const gateStep = async (
     signIn,
     signal,
     siteGrants,
+    visited,
   }: Pick<
     LocalBrowserCallContext,
     "approvals" | "approve" | "signal" | "siteGrants"
-  > & { page: BrowserReportedPage | null; signIn: boolean },
+  > & {
+    page: BrowserReportedPage | null;
+    signIn: boolean;
+    visited: ReadonlySet<string>;
+  },
 ): Promise<GatedStep> => {
   const decision = decideBrowserStep({
     command: step,
@@ -891,6 +918,7 @@ const gateStep = async (
     level: approvals,
     reportedPage: page,
     signIn,
+    visitedOrigins: visited,
   });
   switch (decision.type) {
     case BROWSER_STEP_GATE.run:
@@ -900,9 +928,6 @@ const gateStep = async (
     case BROWSER_STEP_GATE.needsMember:
       return { type: "answered", result: signInPendingResult() };
     case BROWSER_STEP_GATE.ask: {
-      if (!isElementCommand(step)) {
-        return panic("Only a step on an element asks the member");
-      }
       const ticket = await approve({
         ...approvalQuestion(step),
         signal,
@@ -1083,8 +1108,31 @@ const COMMAND_BUILDERS = {
   (input: unknown, seen: PageSeen | null) => BuiltCommand
 >;
 
-/** One chat's browser tools. */
-export const createLocalBrowserSession = () => {
+/**
+ * Adds the website of a page the browser reported for the chat to the
+ * websites the chat has been on: the page's own address, never one the
+ * agent wrote.
+ */
+const recordVisit = (
+  visited: Set<string>,
+  result: BrowserControlResult | null,
+): void => {
+  if (result?.status !== "success") {
+    return;
+  }
+  const origin = browserSiteGrantOrigin(result.snapshot.url);
+  if (origin !== null) {
+    visited.add(origin);
+  }
+};
+
+/**
+ * One chat's browser tools. `visited` holds the websites the chat has been
+ * on (`decideBrowserStep`'s `visitedOrigins`); it outlives a run, so a later
+ * turn of the chat opens them without asking, as a chat on stella's models
+ * does.
+ */
+export const createLocalBrowserSession = (visited = new Set<string>()) => {
   let seen: PageSeen | null = null;
   // The browser's latest answer handed the tab's page to the member for a
   // sign-in, and no page was read since: steps on it go to the member.
@@ -1126,6 +1174,7 @@ export const createLocalBrowserSession = () => {
         signIn,
         signal,
         siteGrants,
+        visited,
       });
       if (gated.type === "answered") {
         return gated.result;
@@ -1167,6 +1216,7 @@ export const createLocalBrowserSession = () => {
                   },
                 ),
               );
+        recordVisit(visited, returned);
         // The agent sees neither page, so no element id of either stays
         // valid: an id counts only once a read the agent saw listed it, and
         // a snapshot comes first. The tab's record and the document the
@@ -1189,6 +1239,7 @@ export const createLocalBrowserSession = () => {
       }
       if (result.status === "success") {
         seen = seenAfter(seen, result.snapshot, wentBack);
+        recordVisit(visited, result);
       }
       const shownAddress =
         result.status === "success" &&

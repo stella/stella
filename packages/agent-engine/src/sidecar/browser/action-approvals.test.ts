@@ -172,6 +172,42 @@ test("a key press and an option name the key and the option, and chat keeps the 
   }
 });
 
+test("opening a page names its address, and chat keeps it as the step's address", async () => {
+  const approvals = createActionApprovals();
+  const harness = createEventQueue<HarnessEvent>();
+  const stream = approvals.withEvents(harness.items)[Symbol.asyncIterator]();
+  const url = "https://fixture-library.test/search?q=notice";
+  const decided = approvals.request({
+    action: "open",
+    signal: new AbortController().signal,
+    site: "https://fixture-library.test",
+    url,
+  });
+  const next = await stream.next();
+  const event = next.done === true ? undefined : next.value;
+  if (event?.type !== "approval.requested") {
+    throw new Error("Expected an approval request");
+  }
+  expect(event.request.reason).toBe(`Open ${url}`);
+  expect(event.request.toolCall.input).toEqual({ action: "open", url });
+  expect(
+    parseChatLocalRunToolCall(
+      CHAT_LOCAL_RUN_TOOL_NAMES.browser,
+      event.request.toolCall.input,
+    ),
+  ).toEqual({
+    name: CHAT_LOCAL_RUN_TOOL_NAMES.browser,
+    input: { action: "open", url },
+  });
+  // The website the answer may always allow is offered.
+  expect(event.request.options.map(({ id }) => id)).toContain(
+    APPROVAL_DECISION.approveSite,
+  );
+  approvals.declineAll();
+  await decided;
+  harness.close();
+});
+
 test("the question is withdrawn when the agent's call ends", async () => {
   const approvals = createActionApprovals();
   const harness = createEventQueue<HarnessEvent>();

@@ -1746,3 +1746,115 @@ describe("website approvals on the member's computer", () => {
     expect(browser.sent).toHaveLength(2);
   });
 });
+
+describe("opening a website on Ask", () => {
+  const SITE = "https://fixture-library.test";
+  const OTHER = "https://other-library.test/search?q=notice";
+  const open = (url: string) => ({ url });
+
+  test("a website the chat has not been on asks first, by its own address; one it has been on opens at once", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder(
+      [page("r-1"), pageAt("r-2", DECISION_URL), pageAt("r-3", OTHER)],
+      { approvals: "ask" },
+    );
+    await session.call("open", open(SEARCH_URL), browser.context);
+    await session.call("open", open(DECISION_URL), browser.context);
+    await session.call("open", open(OTHER), browser.context);
+    expect(browser.asked).toEqual([
+      { action: "open", url: SEARCH_URL },
+      { action: "open", url: OTHER },
+    ]);
+    expect(browser.offeredSites).toEqual([SITE, "https://other-library.test"]);
+    expect(browser.sent.map(({ command }) => command.action)).toEqual([
+      "open",
+      "open",
+      "open",
+    ]);
+  });
+
+  test("a declined open never reaches the browser, and the website stays new", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([], {
+      approvals: "ask",
+      decision: APPROVAL_DECISION.deny,
+    });
+    const declined = await session.call("open", open(OTHER), browser.context);
+    expect(parsed(declined)).toMatchObject({ status: "declined" });
+    await session.call("open", open(OTHER), browser.context);
+    expect(browser.asked).toHaveLength(2);
+    expect(browser.sent).toEqual([]);
+  });
+
+  test("a website the member always allows opens without asking, and always allowing one keeps it for the run", async () => {
+    const session = createLocalBrowserSession();
+    const siteGrants = new Set<string>();
+    const browser = recorder([page("r-1"), pageAt("r-2", OTHER)], {
+      approvals: "ask",
+      decision: APPROVAL_DECISION.approveSite,
+      siteGrants,
+    });
+    await session.call("open", open(SEARCH_URL), browser.context);
+    expect([...siteGrants]).toEqual([SITE]);
+    const granted = recorder([pageAt("r-3", OTHER)], {
+      approvals: "ask",
+      siteGrants: new Set(["https://other-library.test"]),
+    });
+    await createLocalBrowserSession().call(
+      "open",
+      open(OTHER),
+      granted.context,
+    );
+    expect(granted.asked).toEqual([]);
+    expect(granted.sent).toHaveLength(1);
+    expect(browser.asked).toHaveLength(1);
+  });
+
+  test("a later run of the chat opens the websites an earlier run was on", async () => {
+    const visited = new Set<string>();
+    const first = recorder([page("r-1")], { approvals: "ask" });
+    await createLocalBrowserSession(visited).call(
+      "open",
+      open(SEARCH_URL),
+      first.context,
+    );
+    const later = recorder([pageAt("r-2", DECISION_URL)], { approvals: "ask" });
+    await createLocalBrowserSession(visited).call(
+      "open",
+      open(DECISION_URL),
+      later.context,
+    );
+    expect(first.asked).toHaveLength(1);
+    expect(later.asked).toEqual([]);
+  });
+
+  test("Auto, Full auto and Plan open a new website without asking", async () => {
+    for (const approvals of ["auto", "full_auto", "plan"] as const) {
+      const browser = recorder([pageAt("r-1", OTHER)], { approvals });
+      await createLocalBrowserSession().call(
+        "open",
+        open(OTHER),
+        browser.context,
+      );
+      expect({ approvals, asked: browser.asked }).toEqual({
+        approvals,
+        asked: [],
+      });
+    }
+  });
+
+  test("a page reached by a redirect counts as the website it landed on", async () => {
+    const session = createLocalBrowserSession();
+    // Opening the search page lands on the other library.
+    const browser = recorder([pageAt("r-1", OTHER), pageAt("r-2", OTHER)], {
+      approvals: "ask",
+    });
+    await session.call("open", open(SEARCH_URL), browser.context);
+    await session.call(
+      "open",
+      open("https://other-library.test/doc/2"),
+      browser.context,
+    );
+    expect(browser.asked).toEqual([{ action: "open", url: SEARCH_URL }]);
+  });
+});

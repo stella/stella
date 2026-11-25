@@ -17,6 +17,7 @@ describe("chat browser client tool", () => {
   test("registers the approved browser command as a native client tool", () => {
     const { tool } = createBrowserExtensionTool({
       levelFor: () => "ask",
+      threadId: "thread-1",
       turnIdFor: () => "turn-1",
     });
 
@@ -133,6 +134,7 @@ describe("browser commands after a stop", () => {
     // A regeneration reruns the same user message, so the same turn.
     const browser = createBrowserExtensionTool({
       levelFor: () => "ask",
+      threadId: "thread-1",
       turnIdFor: () => "user-1",
     });
 

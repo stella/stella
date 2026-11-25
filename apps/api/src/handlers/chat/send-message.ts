@@ -1309,13 +1309,19 @@ const createTurnVisualOrigin = ({
   });
 
 /**
- * Store the target a local turn runs on as the thread's own, so what reads the
- * thread later (follow-up suggestions, a reload) treats its transcript as
- * local even when the Run on menu's own save did not land.
+ * Store the target a turn runs on as the thread's own, so what reads the
+ * thread later (follow-up suggestions, a reload, a send that names no
+ * target) treats its transcript as local, or runs at the permission level it
+ * was sent with, even when the Run on menu's own save did not land: a local
+ * turn's target, and the level of a cloud turn whose send named it on a
+ * thread that runs on stella. A cloud turn on a thread that runs on the
+ * member's computer leaves the thread's choice as it is.
  */
 const keepThreadRunTarget = async ({
   organizationId,
   recordAuditEvent,
+  requested,
+  resumed,
   routedLocally,
   runTarget,
   safeDb,
@@ -1325,7 +1331,15 @@ const keepThreadRunTarget = async ({
 }: {
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
-  /** Whether the turn was routed to a computer; a cloud turn keeps it as is. */
+  /** The target the send named, if any. */
+  requested: ChatRunTarget | undefined;
+  /**
+   * Whether the request resumes a paused run, which keeps the policy it
+   * started with: its target was stored then, and storing this request's
+   * would misstate it.
+   */
+  resumed: boolean;
+  /** Whether the turn was routed to a computer. */
   routedLocally: boolean;
   runTarget: ChatRunTarget;
   safeDb: SafeDb;
@@ -1333,14 +1347,19 @@ const keepThreadRunTarget = async ({
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
 }) => {
-  if (!routedLocally) {
+  const threadRunsOn = chatRunTargetOf(thread.data);
+  // A send that names no target runs where the thread already runs; the
+  // agent sandbox is never the thread's own target.
+  const stores =
+    !resumed &&
+    (routedLocally ||
+      (requested?.kind === CHAT_RUN_TARGET_KIND.cloud &&
+        threadRunsOn.kind === CHAT_RUN_TARGET_KIND.cloud));
+  if (!stores || sameChatRunTarget(threadRunsOn, runTarget)) {
     return Result.ok();
   }
   const runsOn = storedChatRunTarget(runTarget);
-  const stored = thread.data.chatLocalRunTarget;
-  if (sameChatRunTarget(chatRunTargetOf(thread.data), runTarget)) {
-    return Result.ok();
-  }
+  const { chatCloudApprovals, chatLocalRunTarget } = thread.data;
   return await safeDb(async (tx) => {
     await tx
       .update(chatThreads)
@@ -1358,7 +1377,14 @@ const keepThreadRunTarget = async ({
       resourceId: thread.data.id,
       workspaceId,
       changes: {
-        chatLocalRunTarget: { old: stored, new: runsOn.chatLocalRunTarget },
+        chatLocalRunTarget: {
+          old: chatLocalRunTarget,
+          new: runsOn.chatLocalRunTarget,
+        },
+        chatCloudApprovals: {
+          old: chatCloudApprovals,
+          new: runsOn.chatCloudApprovals,
+        },
       },
     });
   });
@@ -3044,9 +3070,9 @@ export const createSendMessage = (
           keepThreadRunTarget({
             organizationId: session.activeOrganizationId,
             recordAuditEvent,
-            // A resumed run keeps the policy it started with, so its target
-            // was stored then; storing this request's would misstate it.
-            routedLocally: localRun !== undefined && resume === undefined,
+            requested: requestedBody.runTarget,
+            resumed: resume !== undefined,
+            routedLocally: localRun !== undefined,
             runTarget: body.runTarget,
             safeDb,
             thread,

@@ -295,6 +295,7 @@ export const ChatTabPanel = ({
     isLoadingOlder,
     loadOlderError,
     approvalIdsAwaitedAtOpen,
+    browserGate,
     continuePausedTurn,
     resendLatestMessage,
     sendMessage,
@@ -728,7 +729,7 @@ export const ChatTabPanel = ({
         value={{
           activeOrganizationId,
           approvalIdsAwaitedAtOpen,
-          browserLevel: composerModels.runTarget.approvals,
+          browserGate,
           alwaysApprovedTools,
           conversationApprovedTools,
           confirmStoredApprovalGrant,

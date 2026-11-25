@@ -24,6 +24,7 @@ import {
 import { createUuid } from "@/lib/uuid";
 
 import {
+  browserApprovalPairing,
   observeBrowserResult,
   resetBrowserApproval,
 } from "./browser-approval-state";
@@ -73,6 +74,12 @@ const BROWSER_EXTENSION_STATES = {
 
 type PendingRequest = {
   command: BrowserControlCommand;
+  /**
+   * The browser gate's pairing the request was sent under
+   * (`browserApprovalPairing`): its answer tells the gate nothing once the
+   * pairing changed.
+   */
+  pairing: number;
   /** Ends the wait when chat stops the command. */
   detach: () => void;
   resolve: (result: BrowserControlResult) => void;
@@ -251,8 +258,8 @@ const handleExtensionMessage = (data: unknown): void => {
     };
   }
   // The browser gate judges the next command by this report, never by a URL
-  // the model wrote.
-  observeBrowserResult(response.result);
+  // the model wrote, and never by an answer from an earlier pairing.
+  observeBrowserResult(response.result, pending.pairing);
   pending.resolve(response.result);
 };
 
@@ -514,6 +521,7 @@ export const executeBrowserExtensionCommand = async (
     runtime.pendingRequests.set(requestId, {
       command,
       detach: () => signal.removeEventListener("abort", onStop),
+      pairing: browserApprovalPairing(),
       resolve,
       timeout,
     });

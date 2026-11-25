@@ -65,9 +65,9 @@ const at = (role: string) => ({
   target: { context: ABSENT, href: ABSENT, name: "Field", ref: FIELD, role },
 });
 
-/** Each step and the kind Jan's rule (2026-11-12) names it by. */
+/** Each step and the kind Jan's rule (2026-11-12, opening 2026-11-25) names it by. */
 const STEPS = [
-  { kind: "free", command: { action: "open", url: `${SITE}/` } },
+  { kind: "open", command: { action: "open", url: `${SITE}/` } },
   { kind: "free", command: { action: "snapshot" } },
   {
     kind: "free",
@@ -97,19 +97,22 @@ const STEPS = [
     command: { action: "select", value: "2024", ...at("combobox") },
   },
 ] as const satisfies readonly {
-  kind: "free" | "click" | "search" | "type";
+  kind: "free" | "open" | "click" | "search" | "type";
   command: BrowserControlCommand;
 }[];
 
+/** `open` is opening a website the chat has not been on. */
 const RULE = {
-  plan: { click: "refuse", search: "refuse", type: "refuse" },
-  ask: { click: "ask", search: "run", type: "ask" },
-  auto: { click: "run", search: "run", type: "ask" },
-  full_auto: { click: "run", search: "run", type: "run" },
+  plan: { open: "run", click: "refuse", search: "refuse", type: "refuse" },
+  ask: { open: "ask", click: "ask", search: "run", type: "ask" },
+  auto: { open: "run", click: "run", search: "run", type: "ask" },
+  full_auto: { open: "run", click: "run", search: "run", type: "run" },
 } as const satisfies Record<
   DesktopRunnerApprovalMode,
-  Record<"click" | "search" | "type", "run" | "ask" | "refuse">
+  Record<"open" | "click" | "search" | "type", "run" | "ask" | "refuse">
 >;
+
+const THREAD = "thread-1";
 
 /**
  * What the extension told this tab before the step: the page the step was
@@ -160,10 +163,21 @@ describe("the browser gate on what the extension reported", () => {
                 command: step.command,
                 grantedOrigins: new Set(granted ? [SITE] : []),
                 level,
+                threadId: THREAD,
               });
               const expected = ((): BrowserStepDecision => {
                 if (step.kind === "free") {
                   return { type: "run", by: "level" };
+                }
+                // Nothing here was a visit of this chat's: only its own
+                // commands' pages are (`observeVisit`).
+                if (step.kind === "open") {
+                  if (RULE[level].open === "run") {
+                    return { type: "run", by: "level" };
+                  }
+                  return granted
+                    ? { type: "run", by: "site-grant", origin: SITE }
+                    : { type: "ask", site: SITE };
                 }
                 if (signIn) {
                   return { type: "needs_member" };
@@ -211,15 +225,24 @@ describe("what the extension reported", () => {
   const click = STEPS[5].command;
   const GRANTED = new Set([SITE]);
   const byGrant = (state: ReturnType<typeof createBrowserApprovalState>) =>
-    state.decide({ command: click, grantedOrigins: GRANTED, level: "ask" })
-      .type === "run";
+    state.decide({
+      command: click,
+      grantedOrigins: GRANTED,
+      level: "ask",
+      threadId: THREAD,
+    }).type === "run";
 
   test("a read of the page after a sign-in hand-over lets steps go on", () => {
     const state = createBrowserApprovalState();
     HISTORIES.same(state);
     state.observeResult(SIGN_IN);
     expect(
-      state.decide({ command: click, grantedOrigins: GRANTED, level: "ask" }),
+      state.decide({
+        command: click,
+        grantedOrigins: GRANTED,
+        level: "ask",
+        threadId: THREAD,
+      }),
     ).toEqual({ type: "needs_member" });
     state.observeResult(pageRead(PAGE_URL, "revision-1", "draft"));
     state.beginCommand()(true);
@@ -234,7 +257,12 @@ describe("what the extension reported", () => {
       code: BROWSER_CONTROL_ERROR_CODE.timedOut,
     });
     expect(
-      state.decide({ command: click, grantedOrigins: GRANTED, level: "auto" }),
+      state.decide({
+        command: click,
+        grantedOrigins: GRANTED,
+        level: "auto",
+        threadId: THREAD,
+      }),
     ).toEqual({ type: "needs_member" });
   });
 
@@ -247,7 +275,12 @@ describe("what the extension reported", () => {
     state.observeResult(SIGN_IN);
     state.reset();
     expect(
-      state.decide({ command: click, grantedOrigins: GRANTED, level: "auto" }),
+      state.decide({
+        command: click,
+        grantedOrigins: GRANTED,
+        level: "auto",
+        threadId: THREAD,
+      }),
     ).toEqual({ type: "run", by: "level" });
   });
 
@@ -280,6 +313,50 @@ describe("what the extension reported", () => {
     expect(byGrant(state)).toBe(false);
   });
 
+  test("an answer to a request sent under an earlier pairing changes nothing", () => {
+    const state = createBrowserApprovalState();
+    const sentUnder = state.pairing();
+    state.reset();
+    state.observeResult(pageRead(PAGE_URL, "revision-1", "draft"), sentUnder);
+    state.observeResult(SIGN_IN, sentUnder);
+    state.beginCommand()(true);
+    expect(byGrant(state)).toBe(false);
+    state.observeResult(
+      pageRead(PAGE_URL, "revision-1", "draft"),
+      state.pairing(),
+    );
+    state.beginCommand()(true);
+    expect(byGrant(state)).toBe(true);
+  });
+
+  test("a find on another address after a failure cannot vouch for the earlier page", () => {
+    const found = (url: string): BrowserControlResult => ({
+      found: {
+        contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
+        matches: [],
+        tabId: 7,
+        title: "Example",
+        total: 0,
+        totalCapped: false,
+        type: "text",
+        url,
+      },
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: "found",
+    });
+    const state = createBrowserApprovalState();
+    HISTORIES.failed(state);
+    state.observeResult(found("https://other.test/"));
+    state.beginCommand()(true);
+    expect(byGrant(state)).toBe(false);
+
+    const same = createBrowserApprovalState();
+    HISTORIES.failed(same);
+    same.observeResult(found(PAGE_URL));
+    same.beginCommand()(true);
+    expect(byGrant(same)).toBe(true);
+  });
+
   test("subscribers hear every change", () => {
     const state = createBrowserApprovalState();
     let heard = 0;
@@ -292,5 +369,101 @@ describe("what the extension reported", () => {
     unsubscribe();
     state.reset();
     expect(heard).toBe(4);
+  });
+});
+
+describe("the websites a chat has been on", () => {
+  const openAt = (url: string) =>
+    ({ action: "open", url }) as const satisfies BrowserControlCommand;
+  const decideOpen = (
+    state: ReturnType<typeof createBrowserApprovalState>,
+    url: string,
+    threadId: string | null,
+    level: DesktopRunnerApprovalMode = "ask",
+  ) =>
+    state.decide({
+      command: openAt(url),
+      grantedOrigins: new Set(),
+      level,
+      threadId,
+    });
+
+  test("on Ask a chat opens a website it has been on, and asks for any other", () => {
+    const state = createBrowserApprovalState();
+    expect(decideOpen(state, `${SITE}/a`, THREAD)).toEqual({
+      type: "ask",
+      site: SITE,
+    });
+    state.observeVisit(THREAD, pageRead(PAGE_URL, "revision-1", "draft"));
+    expect(decideOpen(state, `${SITE}/other?q=1`, THREAD)).toEqual({
+      type: "run",
+      by: "visited",
+      origin: SITE,
+    });
+    expect(decideOpen(state, "https://other.test/", THREAD)).toEqual({
+      type: "ask",
+      site: "https://other.test",
+    });
+    // Another chat of the web tab, or no known chat, has been on none.
+    expect(decideOpen(state, `${SITE}/a`, "thread-2")).toEqual({
+      type: "ask",
+      site: SITE,
+    });
+    expect(decideOpen(state, `${SITE}/a`, null)).toEqual({
+      type: "ask",
+      site: SITE,
+    });
+  });
+
+  test("only a page the browser reported is a visit, and a new pairing keeps them", () => {
+    const state = createBrowserApprovalState();
+    state.observeVisit(THREAD, SIGN_IN);
+    expect(decideOpen(state, `${SITE}/a`, THREAD).type).toBe("ask");
+    state.observeVisit(THREAD, pageRead(PAGE_URL, "revision-1", "draft"));
+    state.reset();
+    expect(decideOpen(state, `${SITE}/a`, THREAD).type).toBe("run");
+  });
+
+  test("Auto, Full auto and Plan open any website without asking", () => {
+    const state = createBrowserApprovalState();
+    for (const level of DESKTOP_RUNNER_APPROVAL_MODES.filter(
+      (mode) => mode !== "ask",
+    )) {
+      expect(decideOpen(state, "https://other.test/", THREAD, level)).toEqual({
+        type: "run",
+        by: "level",
+      });
+    }
+  });
+
+  test("an account change forgets every chat's websites and turn levels", () => {
+    const state = createBrowserApprovalState();
+    state.observeVisit(THREAD, pageRead(PAGE_URL, "revision-1", "draft"));
+    state.recordTurnLevel(THREAD, "turn-1", "full_auto");
+    state.restoreOwner();
+    expect(decideOpen(state, `${SITE}/a`, THREAD).type).toBe("ask");
+    expect(state.turnLevel(THREAD, "turn-1")).toBeNull();
+  });
+});
+
+describe("the level each turn was sent with", () => {
+  test("is kept per chat and turn, and a new send of the turn replaces it", () => {
+    const state = createBrowserApprovalState();
+    state.recordTurnLevel(THREAD, "turn-1", "ask");
+    state.recordTurnLevel("thread-2", "turn-1", "full_auto");
+    expect(state.turnLevel(THREAD, "turn-1")).toBe("ask");
+    expect(state.turnLevel("thread-2", "turn-1")).toBe("full_auto");
+    expect(state.turnLevel(THREAD, "turn-2")).toBeNull();
+    state.recordTurnLevel(THREAD, "turn-1", "plan");
+    expect(state.turnLevel(THREAD, "turn-1")).toBe("plan");
+  });
+
+  test("keeps the newest turns only", () => {
+    const state = createBrowserApprovalState();
+    for (let turn = 0; turn <= 256; turn += 1) {
+      state.recordTurnLevel(THREAD, `turn-${String(turn)}`, "auto");
+    }
+    expect(state.turnLevel(THREAD, "turn-0")).toBeNull();
+    expect(state.turnLevel(THREAD, "turn-256")).toBe("auto");
   });
 });

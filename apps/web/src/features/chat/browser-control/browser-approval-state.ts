@@ -8,6 +8,7 @@ import {
   type BrowserControlResult,
   type BrowserControlSnapshot,
 } from "@stll/api-contract/browser-control";
+import { browserSiteGrantOrigin } from "@stll/api-contract/browser-site-grants";
 import {
   type BrowserReportedPage,
   type BrowserStepDecision,
@@ -22,8 +23,17 @@ import { onStorageOwnerChange } from "@/lib/account/user-scoped-storage";
  * shared browser gate (`decideBrowserStep`) judges a chat's next browser
  * command by. Scoped to the web tab: one stella tab pairs with one
  * controlled Chrome tab, so the report lives and dies with that pairing
- * rather than with a thread.
+ * rather than with a thread. Beside it, per chat: the websites the chat has
+ * been on, and the permission level each of its turns was sent with.
  */
+
+/** Turns whose permission level is kept, across every chat of the web tab. */
+const TRACKED_TURN_LEVELS = 256;
+
+const NO_VISITS: ReadonlySet<string> = new Set();
+
+const turnKey = (threadId: string, turnId: string) =>
+  `${threadId}\u0000${turnId}`;
 
 /** The controlled tab's page from a successful result: never a URL the model wrote. */
 const toBrowserReportedPage = (
@@ -63,6 +73,14 @@ const signInAfter = (
 
 export const createBrowserApprovalState = () => {
   const listeners = new Set<() => void>();
+  // The websites each chat has been on, by thread: the origins of pages the
+  // extension reported for the chat's commands.
+  const visited = new Map<string, Set<string>>();
+  // The permission level each chat turn was sent with, by thread and turn.
+  const turnLevels = new Map<string, DesktopRunnerApprovalMode>();
+  // Bumped by every reset: an answer to a request sent under an earlier
+  // pairing says nothing of the tab now controlled.
+  let pairing = 0;
   let reportedPage: BrowserReportedPage | null = null;
   let signIn = false;
   let commandsInFlight = 0;
@@ -123,6 +141,9 @@ export const createBrowserApprovalState = () => {
     /** The observable state keeps its subscribers as each account is read. */
     restoreOwner(): void {
       ownerEpoch += 1;
+      pairing += 1;
+      visited.clear();
+      turnLevels.clear();
       commandsInFlight = 0;
       failureEpoch = 0;
       lastSuccessEpoch = null;
@@ -135,27 +156,83 @@ export const createBrowserApprovalState = () => {
       command,
       grantedOrigins,
       level,
-    }: {
-      command: BrowserControlCommand;
-      grantedOrigins: ReadonlySet<string>;
-      level: DesktopRunnerApprovalMode;
-    }): BrowserStepDecision {
+      threadId,
+    }: BrowserStepDecisionInput): BrowserStepDecision {
       return decideBrowserStep({
         command,
         grantedOrigins,
         level,
         reportedPage: settledPage(),
         signIn,
+        visitedOrigins:
+          threadId === null ? NO_VISITS : (visited.get(threadId) ?? NO_VISITS),
       });
     },
     getVersion: (): number => version,
-    /** What the extension answered for the controlled tab. */
-    observeResult(result: BrowserControlResult): void {
+    /** The pairing a request is sent under (`observeResult`'s `sentUnder`). */
+    pairing: (): number => pairing,
+    /**
+     * What the extension answered for the controlled tab. An answer to a
+     * request sent under an earlier pairing (`sentUnder`) changes nothing.
+     * A `find` reports only the page's address: on another address than the
+     * reported page, that page no longer counts.
+     */
+    observeResult(result: BrowserControlResult, sentUnder?: number): void {
+      if (sentUnder !== undefined && sentUnder !== pairing) {
+        return;
+      }
       if (result.status === "success") {
         reportedPage = toBrowserReportedPage(result.snapshot);
+      } else if (
+        result.status === "found" &&
+        reportedPage !== null &&
+        result.found.url !== reportedPage.url
+      ) {
+        reportedPage = null;
       }
       signIn = signInAfter(signIn, result);
       notify();
+    },
+    /** Records the website a chat's command reported a page from. */
+    observeVisit(threadId: string, result: BrowserControlResult): void {
+      if (result.status !== "success") {
+        return;
+      }
+      const origin = browserSiteGrantOrigin(result.snapshot.url);
+      if (origin === null) {
+        return;
+      }
+      const chat = visited.get(threadId) ?? new Set<string>();
+      if (chat.has(origin)) {
+        return;
+      }
+      chat.add(origin);
+      visited.set(threadId, chat);
+      notify();
+    },
+    /** Keeps the permission level a chat turn was sent with. */
+    recordTurnLevel(
+      threadId: string,
+      turnId: string,
+      level: DesktopRunnerApprovalMode,
+    ): void {
+      const key = turnKey(threadId, turnId);
+      turnLevels.delete(key);
+      turnLevels.set(key, level);
+      // A Map iterates in insertion order, so the first key is the oldest.
+      if (turnLevels.size > TRACKED_TURN_LEVELS) {
+        const [oldest] = turnLevels.keys();
+        if (oldest !== undefined) {
+          turnLevels.delete(oldest);
+        }
+      }
+    },
+    /** The level a chat turn was sent with; null for one not sent here. */
+    turnLevel(
+      threadId: string,
+      turnId: string,
+    ): DesktopRunnerApprovalMode | null {
+      return turnLevels.get(turnKey(threadId, turnId)) ?? null;
     },
     /**
      * Forgets what the extension reported: the controller re-paired or
@@ -163,6 +240,7 @@ export const createBrowserApprovalState = () => {
      */
     reset(): void {
       failureEpoch += 1;
+      pairing += 1;
       reportedPage = null;
       signIn = false;
       notify();
@@ -174,6 +252,15 @@ export const createBrowserApprovalState = () => {
       };
     },
   };
+};
+
+/** What a browser command is decided by, besides what the extension reported. */
+type BrowserStepDecisionInput = {
+  command: BrowserControlCommand;
+  grantedOrigins: ReadonlySet<string>;
+  level: DesktopRunnerApprovalMode;
+  /** The chat the command is for; null where none is known, which has been on no website. */
+  threadId: string | null;
 };
 
 type BrowserApprovalState = ReturnType<typeof createBrowserApprovalState>;
@@ -196,9 +283,35 @@ export const resetBrowserApproval = (): void => {
   getState().reset();
 };
 
-export const observeBrowserResult = (result: BrowserControlResult): void => {
-  getState().observeResult(result);
+/** The pairing a request to the extension is sent under. */
+export const browserApprovalPairing = (): number => getState().pairing();
+
+export const observeBrowserResult = (
+  result: BrowserControlResult,
+  sentUnder: number,
+): void => {
+  getState().observeResult(result, sentUnder);
 };
+
+export const observeBrowserVisit = (
+  threadId: string,
+  result: BrowserControlResult,
+): void => {
+  getState().observeVisit(threadId, result);
+};
+
+export const recordBrowserTurnLevel = (
+  threadId: string,
+  turnId: string,
+  level: DesktopRunnerApprovalMode,
+): void => {
+  getState().recordTurnLevel(threadId, turnId, level);
+};
+
+export const browserTurnLevel = (
+  threadId: string,
+  turnId: string,
+): DesktopRunnerApprovalMode | null => getState().turnLevel(threadId, turnId);
 
 /**
  * How the shared gate answers a browser command at this moment, read outside
@@ -206,11 +319,9 @@ export const observeBrowserResult = (result: BrowserControlResult): void => {
  * before a command runs, so a pairing reset or a failed command in the
  * meantime counts.
  */
-export const currentBrowserStepDecision = (input: {
-  command: BrowserControlCommand;
-  grantedOrigins: ReadonlySet<string>;
-  level: DesktopRunnerApprovalMode;
-}): BrowserStepDecision => getState().decide(input);
+export const currentBrowserStepDecision = (
+  input: BrowserStepDecisionInput,
+): BrowserStepDecision => getState().decide(input);
 
 const subscribeBrowserApproval = (listener: () => void) =>
   getState().subscribe(listener);
@@ -229,15 +340,12 @@ const useBrowserApprovalVersion = (): number =>
  */
 export const useBrowserStepDecision = ({
   command,
-  grantedOrigins,
-  level,
-}: {
+  ...input
+}: Omit<BrowserStepDecisionInput, "command"> & {
   command: BrowserControlCommand | null;
-  grantedOrigins: ReadonlySet<string>;
-  level: DesktopRunnerApprovalMode;
 }): BrowserStepDecision | null => {
   useBrowserApprovalVersion();
   return command === null
     ? null
-    : currentBrowserStepDecision({ command, grantedOrigins, level });
+    : currentBrowserStepDecision({ ...input, command });
 };

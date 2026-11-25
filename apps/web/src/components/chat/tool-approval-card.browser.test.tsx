@@ -15,6 +15,7 @@ import {
 import { USE_CONNECTOR_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
 import {
   DESKTOP_RUNNER_APPROVAL_MODES,
+  DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
   type DesktopRunnerApprovalMode,
 } from "@stll/api-contract/desktop-runner";
 
@@ -27,7 +28,9 @@ import type { ToolApprovalGrant } from "@/components/chat/chat-ui-tools";
 import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
 import {
   beginBrowserCommand,
+  browserApprovalPairing,
   observeBrowserResult,
+  observeBrowserVisit,
   resetBrowserApproval,
 } from "@/features/chat/browser-control/browser-approval-state";
 import { browserSiteGrantsOptions } from "@/features/chat/browser-control/browser-site-grants";
@@ -43,6 +46,8 @@ const noop = () => undefined;
 type RenderOptions = {
   level?: DesktopRunnerApprovalMode;
   queryClient?: QueryClient;
+  /** The chat the card is in; each has been on its own websites. */
+  threadId?: string;
   user?: AuthenticatedUser | null;
 };
 
@@ -80,7 +85,12 @@ const withAllowedSites = (origins: readonly string[]) => {
 const renderCard = (
   part: unknown,
   grants: ReadonlySet<ToolApprovalGrant> = new Set(),
-  { level, queryClient = new QueryClient(), user = null }: RenderOptions = {},
+  {
+    level = DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
+    queryClient = new QueryClient(),
+    threadId = "thread-card",
+    user = null,
+  }: RenderOptions = {},
 ) => {
   if (!isApprovalPart(part)) {
     throw new Error("Expected a browser approval part");
@@ -91,7 +101,7 @@ const renderCard = (
         value={{
           activeOrganizationId: "org-1",
           approvalIdsAwaitedAtOpen: new Set(),
-          browserLevel: level,
+          browserGate: { threadId, levelFor: () => level },
           alwaysApprovedTools: grants,
           conversationApprovedTools: grants,
           confirmStoredApprovalGrant: async () =>
@@ -184,7 +194,7 @@ const readOf = (url: string): BrowserControlResult => ({
 /** Renders with the extension having reported `result` for the tab. */
 const afterReport = <T,>(result: BrowserControlResult, render: () => T): T => {
   resetBrowserApproval();
-  observeBrowserResult(result);
+  observeBrowserResult(result, browserApprovalPairing());
   beginBrowserCommand()(result.status !== "error");
   try {
     return render();
@@ -222,9 +232,9 @@ describe("browser approval card", () => {
     const STEPS = [
       { name: "read", input: readPage, kind: "free" },
       {
-        name: "open",
+        name: "open a website the chat has not been on",
         input: { action: "open", url: "https://example.com/" },
-        kind: "free",
+        kind: "open",
       },
       {
         name: "click",
@@ -260,10 +270,10 @@ describe("browser approval card", () => {
       },
     ] as const;
     const ASKS = {
-      plan: { click: false, search: false, type: false },
-      ask: { click: true, search: false, type: true },
-      auto: { click: false, search: false, type: true },
-      full_auto: { click: false, search: false, type: false },
+      plan: { open: false, click: false, search: false, type: false },
+      ask: { open: true, click: true, search: false, type: true },
+      auto: { open: false, click: false, search: false, type: true },
+      full_auto: { open: false, click: false, search: false, type: false },
     } as const;
     for (const level of DESKTOP_RUNNER_APPROVAL_MODES) {
       for (const signIn of [false, true]) {
@@ -284,8 +294,11 @@ describe("browser approval card", () => {
                 { level },
               ),
           );
+          // Opening names its own website, whatever the tab asks for.
           const asks =
-            step.kind !== "free" && !signIn && ASKS[level][step.kind];
+            step.kind === "open"
+              ? ASKS[level].open
+              : step.kind !== "free" && !signIn && ASKS[level][step.kind];
           expect({
             level,
             signIn,
@@ -350,6 +363,29 @@ describe("browser approval card", () => {
 
     expect(markup).toContain(messages.chat.approval.browser.actions.snapshot);
     expect(markup).not.toContain(browserQuestion);
+  });
+
+  test("on Ask, a page on a website the chat has been on opens without asking", () => {
+    const threadId = "thread-visited";
+    observeBrowserVisit(threadId, readOf("https://example.com/start"));
+    const openAt = (url: string, inThread: string) =>
+      renderCard(
+        browserPart({ action: "open", url }, "approval-requested"),
+        undefined,
+        { level: "ask", threadId: inThread, user: member },
+      );
+    expect(openAt("https://example.com/other?q=1", threadId)).not.toContain(
+      browserQuestion,
+    );
+    // Another website, or the same one in another chat, asks first and
+    // offers to always allow the website it opens.
+    for (const markup of [
+      openAt("https://other.test/?q=1", threadId),
+      openAt("https://example.com/other", "thread-other"),
+    ]) {
+      expect(markup).toContain(browserQuestion);
+      expect(markup).toContain(messages.chat.approval.browser.alwaysAllowSite);
+    }
   });
 
   test("names a new tab and a tab switch with the website they lead to", () => {

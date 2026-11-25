@@ -32,9 +32,10 @@ type BrowserCommandExecutor = (
 /** Marks a command as running; the returned callback reports how it ended. */
 type BeginBrowserCommand = () => (succeeded: boolean) => void;
 
-/** How the shared browser gate answers a command right before it runs. */
+/** How the shared browser gate answers a tool call's command right before it runs. */
 type DecideBrowserCommand = (
   command: BrowserControlCommand,
+  toolCallId: string,
 ) => BrowserStepDecision;
 
 const refused = (
@@ -113,7 +114,8 @@ export const createBrowserToolExecutionCache = (
   ): Promise<BrowserControlResult> => {
     // A malformed command goes to the extension, which refuses it.
     const command = parseBrowserControlCommand(input);
-    const refusal = command === null ? null : refusalOf(decide(command));
+    const refusal =
+      command === null ? null : refusalOf(decide(command, toolCallId));
     if (refusal !== null) {
       return refusal;
     }

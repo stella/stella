@@ -667,6 +667,7 @@ describe("the reported page after the controlled tab changes", () => {
       command: click,
       grantedOrigins: GRANTED,
       level: "ask",
+      threadId: null,
     }).type === "run";
 
   /** Reads tab 7 at revision-1 through the extension, as the executor does. */
@@ -711,6 +712,28 @@ describe("the reported page after the controlled tab changes", () => {
     }
   });
 
+  test("an answer to a command sent before the pairing changed reports nothing", async () => {
+    connect();
+    const finish = beginBrowserCommand();
+    const read = executeBrowserExtensionCommand(
+      { action: "open", url: "https://example.com/" },
+      "call-before-re-pairing",
+      run(),
+    );
+    const posted = postedCommands().at(-1);
+    if (!posted) {
+      throw new TypeError("No command posted");
+    }
+    report("controller-2", 7);
+    answer(posted.requestId, snapshotResult(7, "revision-1"));
+    finish((await read).status === "success");
+    // A command under the new pairing settles; the late page still counts
+    // for nothing.
+    beginBrowserCommand()(true);
+
+    expect(grantAnswersClick()).toBe(false);
+  });
+
   test("a sign-in hand-over holds every step on the page until it is read again", async () => {
     connect();
     await readPage();
@@ -737,6 +760,7 @@ describe("the reported page after the controlled tab changes", () => {
           command: click,
           grantedOrigins: GRANTED,
           level,
+          threadId: null,
         }),
       ).toEqual({ type: "needs_member" });
     }

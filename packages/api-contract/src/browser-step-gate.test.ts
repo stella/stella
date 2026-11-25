@@ -37,8 +37,17 @@ const STEPS = (ref: string) =>
   [
     {
       name: "open",
-      kind: "free",
+      kind: "open",
       command: { action: BROWSER_CONTROL_ACTION.open, url: `${SITE}/` },
+    },
+    {
+      name: "open in a new tab",
+      kind: "open",
+      command: {
+        action: BROWSER_CONTROL_ACTION.open,
+        newTab: true,
+        url: `${SITE}/search?q=contract`,
+      },
     },
     {
       name: "snapshot",
@@ -128,16 +137,19 @@ const STEPS = (ref: string) =>
     },
   ] as const satisfies readonly {
     name: string;
-    kind: "free" | "click" | "search" | "type";
+    kind: "free" | "open" | "click" | "search" | "type";
     command: BrowserControlCommand;
   }[];
 
-/** Jan's rule (2026-11-12), per level: which kinds ask, run or are refused. */
+/**
+ * Jan's rule (2026-11-12, opening 2026-11-25), per level: which kinds ask,
+ * run or are refused. `open` is opening a website the chat has not been on.
+ */
 const RULE = {
-  plan: { click: "refuse", search: "refuse", type: "refuse" },
-  ask: { click: "ask", search: "run", type: "ask" },
-  auto: { click: "run", search: "run", type: "ask" },
-  full_auto: { click: "run", search: "run", type: "run" },
+  plan: { open: "run", click: "refuse", search: "refuse", type: "refuse" },
+  ask: { open: "ask", click: "ask", search: "run", type: "ask" },
+  auto: { open: "run", click: "run", search: "run", type: "ask" },
+  full_auto: { open: "run", click: "run", search: "run", type: "run" },
 } as const;
 
 const PAGE_REPORTS = {
@@ -176,17 +188,31 @@ const expected = ({
   report,
   signIn,
   stepName,
+  visited,
 }: {
   granted: boolean;
-  kind: "free" | "click" | "search" | "type";
+  kind: "free" | "open" | "click" | "search" | "type";
   level: DesktopRunnerApprovalMode;
   ref: string;
   report: keyof typeof PAGE_REPORTS;
   signIn: boolean;
   stepName: string;
+  visited: boolean;
 }): BrowserStepDecision => {
   if (kind === "free") {
     return { type: "run", by: "level" };
+  }
+  // Opening names its own website, whatever the tab shows or asks for.
+  if (kind === "open") {
+    if (visited) {
+      return { type: "run", by: "visited", origin: SITE };
+    }
+    if (RULE[level].open === "run") {
+      return { type: "run", by: "level" };
+    }
+    return granted
+      ? { type: "run", by: "site-grant", origin: SITE }
+      : { type: "ask", site: SITE };
   }
   if (signIn) {
     return { type: "needs_member" };
@@ -205,58 +231,104 @@ const expected = ({
 };
 
 describe("decideBrowserStep", () => {
-  test("every level, step, website approval, page report and sign-in", () => {
+  test("every level, step, website approval, visit, page report and sign-in", () => {
     let cases = 0;
     for (const level of LEVELS) {
       for (const ref of [TOP_FIELD, FRAME_FIELD]) {
         for (const step of STEPS(ref)) {
           for (const report of REPORT_NAMES) {
             for (const granted of [false, true]) {
-              for (const signIn of [false, true]) {
-                cases += 1;
-                const decision = decideBrowserStep({
-                  command: step.command,
-                  grantedOrigins: new Set(granted ? [SITE] : []),
-                  level,
-                  reportedPage: PAGE_REPORTS[report],
-                  signIn,
-                });
-                expect({
-                  level,
-                  ref,
-                  report,
-                  granted,
-                  signIn,
-                  step: step.name,
-                  decision,
-                }).toEqual({
-                  level,
-                  ref,
-                  report,
-                  granted,
-                  signIn,
-                  step: step.name,
-                  decision: expected({
-                    granted,
-                    kind: step.kind,
+              for (const visited of [false, true]) {
+                for (const signIn of [false, true]) {
+                  cases += 1;
+                  const decision = decideBrowserStep({
+                    command: step.command,
+                    grantedOrigins: new Set(granted ? [SITE] : []),
+                    level,
+                    reportedPage: PAGE_REPORTS[report],
+                    signIn,
+                    visitedOrigins: new Set(visited ? [SITE] : []),
+                  });
+                  expect({
                     level,
                     ref,
                     report,
+                    granted,
+                    visited,
                     signIn,
-                    stepName: step.name,
-                  }),
-                });
+                    step: step.name,
+                    decision,
+                  }).toEqual({
+                    level,
+                    ref,
+                    report,
+                    granted,
+                    visited,
+                    signIn,
+                    step: step.name,
+                    decision: expected({
+                      granted,
+                      kind: step.kind,
+                      level,
+                      ref,
+                      report,
+                      signIn,
+                      stepName: step.name,
+                      visited,
+                    }),
+                  });
+                }
               }
             }
           }
         }
       }
     }
-    expect(cases).toBe(LEVELS.length * 2 * 11 * 5 * 2 * 2);
+    expect(cases).toBe(LEVELS.length * 2 * 12 * 5 * 2 * 2 * 2);
+  });
+
+  test("on Ask, opening a website the chat has not been on asks, by its origin", () => {
+    const open = (url: string) =>
+      decideBrowserStep({
+        command: { action: BROWSER_CONTROL_ACTION.open, url },
+        grantedOrigins: new Set(["https://granted.example"]),
+        level: "ask",
+        reportedPage: PAGE_REPORTS.same,
+        signIn: false,
+        visitedOrigins: new Set([SITE]),
+      });
+    // The page the tab shows is no visit to another website.
+    expect(open("https://other.example/?q=1")).toEqual({
+      type: "ask",
+      site: "https://other.example",
+    });
+    // A visit is by exact origin: not a subdomain, not plain http.
+    expect(open("https://www.example.com/")).toEqual({
+      type: "ask",
+      site: "https://www.example.com",
+    });
+    expect(open("http://example.com/")).toEqual({ type: "ask", site: null });
+    // An address no approval can name always asks, and offers none.
+    expect(open("https://user:secret@example.com/")).toEqual({
+      type: "ask",
+      site: null,
+    });
+    expect(open(`${SITE}/any/path?q=2`)).toEqual({
+      type: "run",
+      by: "visited",
+      origin: SITE,
+    });
+    expect(open("https://granted.example/a")).toEqual({
+      type: "run",
+      by: "site-grant",
+      origin: "https://granted.example",
+    });
   });
 
   test("a website approval never lifts Plan or a sign-in", () => {
-    for (const step of STEPS(TOP_FIELD).filter(({ kind }) => kind !== "free")) {
+    for (const step of STEPS(TOP_FIELD).filter(
+      ({ kind }) => kind !== "free" && kind !== "open",
+    )) {
       const granted = new Set([SITE]);
       expect(
         decideBrowserStep({
@@ -265,6 +337,7 @@ describe("decideBrowserStep", () => {
           level: "plan",
           reportedPage: PAGE_REPORTS.same,
           signIn: false,
+          visitedOrigins: new Set(),
         }),
       ).toEqual({ type: "refuse" });
       for (const level of LEVELS) {
@@ -275,6 +348,7 @@ describe("decideBrowserStep", () => {
             level,
             reportedPage: PAGE_REPORTS.same,
             signIn: true,
+            visitedOrigins: new Set(),
           }),
         ).toEqual({ type: "needs_member" });
       }
@@ -295,6 +369,7 @@ describe("decideBrowserStep", () => {
           level: "ask",
           reportedPage: PAGE_REPORTS.same,
           signIn: false,
+          visitedOrigins: new Set(),
         }),
       ).toEqual({ type: "ask", site: SITE });
     }

@@ -443,9 +443,11 @@ export const PendingToolApprovalCard = ({
 
 /**
  * How a browser command card is answered, by the shared browser gate
- * (`decideBrowserStep`): the chat's permission level, what the extension last
- * reported for the controlled tab, and the member's website approvals. A
- * step the level runs answers itself; one the level refuses (Plan) or hands
+ * (`decideBrowserStep`): the permission level the card's turn was sent with,
+ * what the extension last reported for the controlled tab, the websites the
+ * chat has been on, and the member's website approvals. A step the level
+ * runs, or a page opened on a website the chat has been on, answers itself;
+ * one the level refuses (Plan) or hands
  * to the member (a sign-in) also goes through, so the executor answers the
  * model with why it did not run. Like a stored tool grant, a website
  * approval the API did not confirm (`unconfirmed`) answers nothing.
@@ -457,11 +459,13 @@ const useBrowserCardApproval = ({
   browserCommand,
   level,
   localSite,
+  threadId,
   unconfirmed,
 }: {
   browserCommand: BrowserControlCommand | null;
   level: DesktopRunnerApprovalMode;
   localSite: string | null;
+  threadId: string | null;
   unconfirmed: boolean;
 }) => {
   const { handleApprove, handleApproveForRun } = useChatApproval();
@@ -472,15 +476,18 @@ const useBrowserCardApproval = ({
     command: browserCommand,
     grantedOrigins: sites.grantedOrigins,
     level,
+    threadId,
   });
-  const siteGrantOrigin =
-    decision?.type === BROWSER_STEP_GATE.run &&
-    decision.by === "site-grant" &&
-    !unconfirmed
+  const grantedSite =
+    decision?.type === BROWSER_STEP_GATE.run && decision.by === "site-grant"
       ? decision.origin
       : null;
-  // The website the question names: the page the step was written for.
-  const site = decision?.type === BROWSER_STEP_GATE.ask ? decision.site : null;
+  const siteGrantOrigin = unconfirmed ? null : grantedSite;
+  // The website the question names: the page the step was written for, or
+  // the one a website approval the API did not confirm was for.
+  const unconfirmedSite = unconfirmed ? grantedSite : null;
+  const site =
+    decision?.type === BROWSER_STEP_GATE.ask ? decision.site : unconfirmedSite;
   const offerable = site ?? localSite;
   return {
     /** Answers the card when the user always allows its website. */
@@ -512,6 +519,7 @@ const useBrowserCardApproval = ({
         command: browserCommand,
         grantedOrigins: fresh,
         level,
+        threadId,
       });
       return (
         now.type === BROWSER_STEP_GATE.run &&
@@ -521,13 +529,15 @@ const useBrowserCardApproval = ({
     },
     /**
      * Whether the card answers itself without a website approval: the level
-     * runs the step, or does not run it at all and the executor says why.
+     * runs the step, the page opens on a website the chat has been on, or
+     * the step does not run at all and the executor says why.
      */
     answersByLevel:
       decision !== null &&
       (decision.type === BROWSER_STEP_GATE.refuse ||
         decision.type === BROWSER_STEP_GATE.needsMember ||
-        (decision.type === BROWSER_STEP_GATE.run && decision.by === "level")),
+        (decision.type === BROWSER_STEP_GATE.run &&
+          decision.by !== "site-grant")),
     /** The site the card offers to always allow: named, and not yet allowed. */
     offeredSite:
       offerable !== null &&
@@ -676,7 +686,7 @@ export const ToolApprovalCard = ({
   const {
     activeOrganizationId,
     approvalIdsAwaitedAtOpen,
-    browserLevel,
+    browserGate,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -731,8 +741,10 @@ export const ToolApprovalCard = ({
       : null;
   const browserApproval = useBrowserCardApproval({
     browserCommand,
-    level: browserLevel ?? DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
+    level:
+      browserGate?.levelFor(part.id) ?? DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
     localSite: localBrowserApprovalSite(name, getApprovalPartInput(part)),
+    threadId: browserGate?.threadId ?? null,
     unconfirmed: approvalId === unconfirmedGrantApprovalId,
   });
   // A stored grant or website approval answers a card only once the API
