@@ -135,7 +135,7 @@ the default provider chain (see `getTanStackTextModelById`).
   model pick the right tool or command and arguments for a natural-language
   task, scored without executing anything?
 - `site-notes-local.ts`: can an agent keep its research-website notes through
-  `read_site_notes` and `save_site_notes`: read before the first step on a
+  `list_site_notes` and `save_site_notes`: read before the first step on a
   website with notes, confirm a note that worked, replace or remove one the
   website no longer matches, add what it learned, and keep the member's work
   out of the notes? `check` scores the reference and leaking calls through the

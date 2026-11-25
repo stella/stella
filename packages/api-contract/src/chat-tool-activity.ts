@@ -171,7 +171,7 @@ const BUILT_IN_CHAT_TOOL_DISPLAY = {
     label: "validate_skill_package",
   },
   "use-browser": { category: "research", label: "use-browser" },
-  read_site_notes: { category: "research", label: "read_site_notes" },
+  list_site_notes: { category: "research", label: "list_site_notes" },
   save_site_notes: { category: "mutation", label: "save_site_notes" },
   web_search: { category: "research", label: "web_search" },
 } as const satisfies Record<
@@ -510,7 +510,7 @@ const RESEARCH_TOOL_READ_AREA = {
   read_document: "openDocument",
   read_section: "openDocument",
   // The agent's own notes about a website, not a read of the web.
-  read_site_notes: null,
+  list_site_notes: null,
   read_story: "openDocument",
   review_folder_consistency: "documents",
   "search-across-matters": "documents",

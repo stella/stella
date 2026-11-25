@@ -6,7 +6,7 @@ import { browserSiteGrantOrigin } from "@stll/api-contract/browser-site-grants";
 import {
   BROWSER_SITE_NOTE_REFUSAL_CODE,
   browserSiteNotesSchema,
-  READ_SITE_NOTES_TOOL_NAME,
+  LIST_SITE_NOTES_TOOL_NAME,
   readBrowserSiteNotesInputSchema,
   SAVE_SITE_NOTES_TOOL_NAME,
   saveBrowserSiteNotesInputSchema,
@@ -19,7 +19,7 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import {
-  READ_SITE_NOTES_DESCRIPTION,
+  LIST_SITE_NOTES_DESCRIPTION,
   SAVE_SITE_NOTES_DESCRIPTION,
 } from "@/api/lib/chat/browser-site-notes/agent-surface";
 import {
@@ -113,9 +113,9 @@ const saveNotes = async (
 export const createBrowserSiteNotesTools = (
   props: CreateBrowserSiteNotesToolsProps,
 ) => ({
-  [READ_SITE_NOTES_TOOL_NAME]: toolDefinition({
-    name: READ_SITE_NOTES_TOOL_NAME,
-    description: READ_SITE_NOTES_DESCRIPTION,
+  [LIST_SITE_NOTES_TOOL_NAME]: toolDefinition({
+    name: LIST_SITE_NOTES_TOOL_NAME,
+    description: LIST_SITE_NOTES_DESCRIPTION,
     inputSchema: toTanStackToolSchema(readBrowserSiteNotesInputSchema),
     outputSchema: toTanStackToolSchema(browserSiteNotesSchema),
   }).server(async ({ url }) => {

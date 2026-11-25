@@ -354,7 +354,7 @@ type ChangeIssue = Omit<SaveBrowserSiteNotesOutput["issues"][number], "index">;
 const UNKNOWN_NOTE: ChangeIssue = {
   code: BROWSER_SITE_NOTE_REFUSAL_CODE.unknownNote,
   reason:
-    "No note with that id is kept for this website; call read_site_notes for the current ids.",
+    "No note with that id is kept for this website; call list_site_notes for the current ids.",
 };
 
 const keptNote = (site: SiteWrite, content: BrowserSiteNoteContent) =>

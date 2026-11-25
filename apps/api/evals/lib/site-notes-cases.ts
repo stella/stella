@@ -1,7 +1,7 @@
 import * as v from "valibot";
 
 import {
-  READ_SITE_NOTES_TOOL_NAME,
+  LIST_SITE_NOTES_TOOL_NAME,
   SAVE_SITE_NOTES_TOOL_NAME,
   saveBrowserSiteNotesInputSchema,
 } from "@stll/api-contract/browser-site-notes";
@@ -16,7 +16,7 @@ import { cleanBrowserSiteNoteContent } from "../../src/lib/chat/browser-site-not
  */
 export type SiteNotesCase = {
   id: string;
-  /** The notes `read_site_notes` returned at the start of the run. */
+  /** The notes `list_site_notes` returned at the start of the run. */
   kept: readonly {
     id: string;
     kind: "works" | "failed" | "fixed";
@@ -144,7 +144,7 @@ export const scoreSiteNotesRun = (
     caseId: testCase.id,
     readsFirst:
       !testCase.expect.readsFirst ||
-      named.at(0)?.name === READ_SITE_NOTES_TOOL_NAME,
+      named.at(0)?.name === LIST_SITE_NOTES_TOOL_NAME,
     parses: rejected.length === 0 && saves.length > 0,
     clean: contentChanges.every(
       (change) => cleanBrowserSiteNoteContent(change).type === "clean",
@@ -165,9 +165,9 @@ export const siteNotesPrompt = (testCase: SiteNotesCase) =>
     `You browsed the research website ${SITE} for the member.`,
     testCase.kept.length === 0
       ? "You keep no notes for it yet."
-      : `You keep notes for it; ${READ_SITE_NOTES_TOOL_NAME} returns: ${JSON.stringify({ origin: SITE, notes: testCase.kept })}`,
+      : `You keep notes for it; ${LIST_SITE_NOTES_TOOL_NAME} returns: ${JSON.stringify({ origin: SITE, notes: testCase.kept })}`,
     `What happened: ${testCase.session}`,
-    `Reply with the JSON array of tool calls you make, in order, each { "name", "args" }, using ${READ_SITE_NOTES_TOOL_NAME} and ${SAVE_SITE_NOTES_TOOL_NAME} as their descriptions define them.`,
+    `Reply with the JSON array of tool calls you make, in order, each { "name", "args" }, using ${LIST_SITE_NOTES_TOOL_NAME} and ${SAVE_SITE_NOTES_TOOL_NAME} as their descriptions define them.`,
   ].join("\n\n");
 
 /**
@@ -200,7 +200,7 @@ export const REFERENCE_CALLS: Readonly<
     },
   ],
   "note-still-works": [
-    { name: READ_SITE_NOTES_TOOL_NAME, args: { url: `${SITE}/search` } },
+    { name: LIST_SITE_NOTES_TOOL_NAME, args: { url: `${SITE}/search` } },
     {
       name: SAVE_SITE_NOTES_TOOL_NAME,
       args: {
@@ -212,7 +212,7 @@ export const REFERENCE_CALLS: Readonly<
     },
   ],
   "site-changed": [
-    { name: READ_SITE_NOTES_TOOL_NAME, args: { url: SITE } },
+    { name: LIST_SITE_NOTES_TOOL_NAME, args: { url: SITE } },
     {
       name: SAVE_SITE_NOTES_TOOL_NAME,
       args: {
@@ -236,7 +236,7 @@ export const REFERENCE_CALLS: Readonly<
 export const LEAKING_CALLS: Readonly<Record<string, readonly RecordedCall[]>> =
   {
     "site-changed": [
-      { name: READ_SITE_NOTES_TOOL_NAME, args: { url: SITE } },
+      { name: LIST_SITE_NOTES_TOOL_NAME, args: { url: SITE } },
       {
         name: SAVE_SITE_NOTES_TOOL_NAME,
         args: {

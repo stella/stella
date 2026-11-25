@@ -111,7 +111,7 @@ export const prepareEntityReadScalingTables = async (db: GatedTestDb) =>
     auditLogs,
     organizationSettings,
     billingDraftUserSettings,
-    // The member's website notes, which read_site_notes scaling seeds.
+    // The member's website notes, which list_site_notes scaling seeds.
     chatBrowserSiteNotes,
     featureEnrolments,
     desktopDeviceProofReplays,

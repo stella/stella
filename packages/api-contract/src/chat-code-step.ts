@@ -54,7 +54,7 @@ const SCRIPT_READ_AREA = {
   list_playbooks: "other",
   list_properties: "other",
   list_reader_annotations: "other",
-  read_site_notes: "other",
+  list_site_notes: "other",
   list_tasks: "matters",
   list_templates: "other",
   list_time_entries: "matters",

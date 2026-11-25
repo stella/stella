@@ -145,7 +145,7 @@ const TOOL_COVERAGE = {
     "needs an annotation, which only create_reader_annotation (public corpus) makes",
   ),
   save_site_notes: RUN,
-  read_site_notes: RUN,
+  list_site_notes: RUN,
   list_time_entries: RUN,
   save_time_entry: RUN,
   delete_time_entry: RUN,
@@ -385,7 +385,7 @@ const STEPS: readonly Step[] = [
     }),
   },
   {
-    tool: "read_site_notes",
+    tool: "list_site_notes",
     args: () => ({ url: "https://research.example.org/search" }),
   },
   {

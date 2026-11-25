@@ -248,6 +248,10 @@ test("every read tool permission declaration stays visible in review", () => {
       },
       {
         "kind": "all",
+        "name": "list_site_notes",
+      },
+      {
+        "kind": "all",
         "name": "list_tasks",
       },
       {
@@ -323,10 +327,6 @@ test("every read tool permission declaration stays visible in review", () => {
         "kind": "open-read",
         "name": "read_provision_history",
         "reason": "public legislation corpus",
-      },
-      {
-        "kind": "all",
-        "name": "read_site_notes",
       },
       {
         "kind": "open-read",
