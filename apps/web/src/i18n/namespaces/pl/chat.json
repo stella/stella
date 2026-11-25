@@ -445,9 +445,11 @@
     "localRun": {
       "backgroundTasks": "{count, plural, one {# zadanie działa w tle} few {# zadania działają w tle} many {# zadań działa w tle} other {# zadania działa w tle}}",
       "desktopSettingsSteps": "W stella desktop na swoim komputerze otwórz Ustawienia › Ogólne › Subskrypcje AI.",
+      "errorFailed": "Agent na Twoim komputerze zakończył tę odpowiedź bez podania przyczyny. Spróbuj ponownie.",
       "errorFolderUnavailable": "Folder powiązany z tym czatem jest niedostępny na Twoim komputerze. Sprawdź go w stella desktop, a potem wyślij to ponownie.",
       "errorLimitReached": "Agent programistyczny na Twoim komputerze osiągnął limit użycia. Spróbuj ponownie po odnowieniu limitu.",
       "errorLimitResetsAt": "Agent programistyczny na Twoim komputerze osiągnął limit użycia. Możesz spróbować ponownie po {time}.",
+      "errorLost": "Twój komputer przejął tę odpowiedź, a potem przestał odpowiadać. Upewnij się, że stella desktop jest otwarty i połączony, i spróbuj ponownie.",
       "errorNeedsLogin": "Agent programistyczny na Twoim komputerze wymaga ponownego zalogowania. Zaloguj się w stella desktop i spróbuj ponownie.",
       "errorNotReached": "Twój komputer nie przejął tej odpowiedzi. Upewnij się, że stella desktop jest otwarty i połączony, i spróbuj ponownie.",
       "errorRelinked": "stella desktop został ponownie połączony na Twoim komputerze, więc ta odpowiedź została zatrzymana. Wyślij ją ponownie.",

@@ -103,6 +103,8 @@ export const AI_ERROR_RETRYABLE = {
   local_runner_needs_login: false,
   local_runner_limit_reached: false,
   local_runner_unavailable: true,
+  local_runner_lost: true,
+  local_runner_failed: true,
   // The same conversation never fits; only a shorter one does.
   local_runner_turn_too_large: false,
   // The same turn grows the same way; a new message starts a new run.
@@ -144,6 +146,8 @@ export const AI_ERROR_FAILURE_CODE = {
   local_runner_needs_login: "provider-error",
   local_runner_limit_reached: "provider-error",
   local_runner_unavailable: "provider-error",
+  local_runner_lost: "provider-error",
+  local_runner_failed: "provider-error",
   local_runner_turn_too_large: "provider-error",
   // The turn's delivery log refused its output, not the model.
   turn_too_large: "persistence",

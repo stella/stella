@@ -445,9 +445,11 @@
     "localRun": {
       "backgroundTasks": "{count, plural, one {# háttérfeladat fut} other {# háttérfeladat fut}}",
       "desktopSettingsSteps": "A számítógépén a stella desktopban nyissa meg a Beállítások › Általános › AI-előfizetések részt.",
+      "errorFailed": "A számítógépén futó ügynök indoklás nélkül befejezte ezt a választ. Próbálja újra.",
       "errorFolderUnavailable": "A csevegéshez csatolt mappa nem érhető el a számítógépén. Ellenőrizze a stella desktopban, majd küldje el újra.",
       "errorLimitReached": "A számítógépén futó kódoló ügynök elérte a használati korlátját. Próbálja újra, amint a korlát visszaáll.",
       "errorLimitResetsAt": "A számítógépén futó kódoló ügynök elérte a használati korlátját. {time} után újra megpróbálhatja.",
+      "errorLost": "A számítógépe átvette ezt a választ, majd nem reagált tovább. Ellenőrizze, hogy a stella desktop meg van nyitva és csatlakozik, majd próbálja újra.",
       "errorNeedsLogin": "A számítógépén futó kódoló ügynök újbóli bejelentkezést kér. Jelentkezzen be a stella desktopban, majd próbálja újra.",
       "errorNotReached": "A számítógépe nem vette át ezt a választ. Ellenőrizze, hogy a stella desktop meg van nyitva és csatlakozik, majd próbálja újra.",
       "errorRelinked": "A stella desktop újra lett kapcsolva a számítógépén, ezért ez a válasz leállt. Küldje el újra.",

@@ -445,9 +445,11 @@
     "localRun": {
       "backgroundTasks": "{count, plural, one {# tarefa em segundo plano em execução} other {# tarefas em segundo plano em execução} many {# tarefas em segundo plano em execução}}",
       "desktopSettingsSteps": "No stella desktop do seu computador, abra Configurações › Geral › Assinaturas de IA.",
+      "errorFailed": "O agente no seu computador encerrou esta resposta sem dizer o motivo. Tente de novo.",
       "errorFolderUnavailable": "A pasta vinculada a este chat não está disponível no seu computador. Verifique-a no stella desktop e envie isto de novo.",
       "errorLimitReached": "O agente de programação do seu computador atingiu o limite de uso. Tente de novo quando o limite for renovado.",
       "errorLimitResetsAt": "O agente de programação do seu computador atingiu o limite de uso. Você poderá tentar novamente a partir de {time}.",
+      "errorLost": "Seu computador assumiu esta resposta e depois parou de responder. Verifique se o stella desktop está aberto e conectado e tente de novo.",
       "errorNeedsLogin": "O agente de programação do seu computador precisa que você entre novamente. Entre pelo stella desktop e tente de novo.",
       "errorNotReached": "Seu computador não assumiu esta resposta. Verifique se o stella desktop está aberto e conectado e tente de novo.",
       "errorRelinked": "O stella desktop foi vinculado de novo no seu computador, então esta resposta parou. Envie-a de novo.",

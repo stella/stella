@@ -451,11 +451,40 @@ describe("a turn on the member's computer", () => {
     const { end, body } = await turn.ended();
     expect(end).toBe("stored");
     expect(turn.outcomes).toMatchObject([
-      { type: "failed", error: "local_runner_unavailable" },
+      { type: "failed", error: "local_runner_lost" },
     ]);
-    expect(body).toContain('"code":"local_runner_unavailable"');
+    expect(body).toContain('"code":"local_runner_lost"');
     // The gateway ended the run; nothing is left to interrupt.
     expect(computer.queued.interrupts).toBe(0);
+  });
+
+  test("fails as ended without a reason when its run failed and its harness named none", async () => {
+    const clock = createDeadlineClock();
+    const computer = createComputer();
+    const turn = startTurn({
+      clock,
+      runsOn: CHAT_RUN_TARGET_KIND.local,
+      source: localSource(computer),
+    });
+    // The run reports no error of its own before its failed end.
+    computer.events(
+      (
+        await harnessChunks([
+          {
+            type: "session.started",
+            sessionId: harnessSessionId("session-failed-silently"),
+            continuation: { type: "fresh" },
+          },
+        ])
+      ).filter((chunk) => chunk.type !== EventType.RUN_ERROR),
+    );
+    computer.finish("failed");
+    const { end, body } = await turn.ended();
+    expect(end).toBe("stored");
+    expect(turn.outcomes).toMatchObject([
+      { type: "failed", error: "local_runner_failed" },
+    ]);
+    expect(body).toContain('"code":"local_runner_failed"');
   });
 
   test("settles the queued messages it steered before it reads the run's end", async () => {

@@ -712,6 +712,8 @@ describe("AI provider canary retry contract", () => {
       local_runner_needs_login: false,
       local_runner_limit_reached: false,
       local_runner_unavailable: false,
+      local_runner_lost: false,
+      local_runner_failed: false,
       local_runner_turn_too_large: false,
       turn_too_large: false,
       local_runner_not_reached: false,
