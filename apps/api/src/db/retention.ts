@@ -163,8 +163,16 @@ export const TABLE_RETENTION = {
   entity_deletion_cleanup_requests: {
     boundedBy: "Durable deletion queue drained by entity deletion cleanup.",
   },
+  entities: {
+    boundedBy:
+      "Matter-owned documents, folders and tasks, held to the matter's document limit and deleted with their matter or by document deletion.",
+  },
   entity_versions: {
     boundedBy: "Matter-owned version history and document deletion.",
+  },
+  document_counters: {
+    boundedBy:
+      "One reference counter per matter, cascade-deleted with its matter.",
   },
   fields: { boundedBy: "Matter-owned field configuration and deletion." },
   folio_collab_contributions: {
