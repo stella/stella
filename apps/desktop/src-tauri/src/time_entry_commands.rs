@@ -9,9 +9,7 @@ use crate::{
     BatchReservationError,
   },
   feature_gate::{DesktopFeature, FeatureGates},
-  local_window::{
-    ActivityAccountFeature, ActivityCaller, ActivitySettingsCaller, LocalCaller,
-  },
+  local_window::{ActivityAccountFeature, ActivityCaller, LocalCaller},
   time_entry_submit::{
     self, ConfirmedBatch, ConfirmedTimeEntry, CreatedEntry, Matter, MatterCandidate,
     MatterResolution,
@@ -149,11 +147,9 @@ pub async fn time_entry_candidates(
   Ok(candidates)
 }
 
-/// Settings resolves the matters its rules name, so the rule list never
-/// shows a name the member can no longer open.
 #[tauri::command]
 pub async fn time_entry_resolve_matters(
-  caller: ActivitySettingsCaller,
+  caller: ActivityCaller,
   gates: State<'_, FeatureGates>,
   accounts: State<'_, AccountState>,
   ids: Vec<String>,

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { invoke } from "@tauri-apps/api/core";
 import { useTranslations } from "use-intl";
 
 import type { DesktopMatterResolution } from "@stll/api-contract/desktop-time-entries";
@@ -9,9 +10,9 @@ import { Trash2Icon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 
 import type { MatterRule } from "./matter-learning";
-import { useMatterRules } from "./matter-learning-store";
 import { resolveMatters } from "./matter-resolve";
 import { useRuleLabel } from "./matter-rule-label";
+import { useMatterRules } from "./matter-rules-store";
 
 type MatterNames =
   | { type: "loading" }
@@ -32,7 +33,11 @@ const useRuleMatterNames = (rules: readonly MatterRule[]) => {
     let current = true;
     const asked = request.slice(request.indexOf(":") + 1);
     if (asked !== "") {
-      resolveMatters(asked.split(" "))
+      resolveMatters(asked.split(" "), (chunk) =>
+        invoke<DesktopMatterResolution[]>("time_entry_resolve_rule_matters", {
+          ids: chunk,
+        }),
+      )
         .then((resolved) => {
           if (current) {
             setNames({ type: "ready", resolved });

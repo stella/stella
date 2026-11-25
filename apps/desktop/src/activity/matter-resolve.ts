@@ -1,5 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
-
 import {
   DESKTOP_ACTIVITY_REVIEW_LIMIT,
   type DesktopMatterResolution,
@@ -7,9 +5,12 @@ import {
 } from "@stll/api-contract/desktop-time-entries";
 
 /** Resolves matter ids under the member's own access, in requests the
- * contract bounds. An id that is not a matter id names no matter and is
- * never asked for. */
-export const resolveMatters = async (ids: readonly string[]) => {
+ * contract bounds, through the calling window's own command. An id that is
+ * not a matter id names no matter and is never asked for. */
+export const resolveMatters = async (
+  ids: readonly string[],
+  resolve: (chunk: string[]) => Promise<DesktopMatterResolution[]>,
+) => {
   const asked = ids.filter(isDesktopMatterId);
   const requests: Promise<DesktopMatterResolution[]>[] = [];
   for (
@@ -18,9 +19,7 @@ export const resolveMatters = async (ids: readonly string[]) => {
     start += DESKTOP_ACTIVITY_REVIEW_LIMIT
   ) {
     requests.push(
-      invoke<DesktopMatterResolution[]>("time_entry_resolve_matters", {
-        ids: asked.slice(start, start + DESKTOP_ACTIVITY_REVIEW_LIMIT),
-      }),
+      resolve(asked.slice(start, start + DESKTOP_ACTIVITY_REVIEW_LIMIT)),
     );
   }
   return (await Promise.all(requests)).flat();

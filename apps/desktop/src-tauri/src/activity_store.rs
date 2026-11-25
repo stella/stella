@@ -23,9 +23,9 @@ use crate::activity::{
   ActivityManualAssignment, ActivityOtherHistoryRecovery, ActivityPendingBatch,
   ActivitySegment, ActivitySettings, format_date, parse_date,
 };
+use crate::activity_matter_learning::StoredMatterLearning;
 use crate::keychain::{self, LocalDataKey, LocalDataKeyLookup};
 use crate::local_store::{EncryptedJsonFile, EncryptedReadError, create_private_dir};
-use crate::matter_learning::StoredMatterLearning;
 
 const LABEL: &str = "activity";
 const SETTINGS_FILE_NAME: &str = "settings.json.enc";

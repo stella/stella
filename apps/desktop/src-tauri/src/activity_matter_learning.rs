@@ -1,8 +1,9 @@
 //! The member's matter rules and the weights this computer learned from their
 //! confirmed entries (`apps/desktop/src/activity/matter-learning.ts` computes
-//! them). Held only in the account's encrypted activity store, never sent
-//! anywhere, and naming matters by id only. Each save names the revision it
-//! read, so the activity window and Settings never overwrite each other.
+//! them), for the activity window. Held only in the account's encrypted
+//! activity store, never sent anywhere, and naming matters by id only. Each
+//! save names the revision it read, so the activity window and Settings
+//! (`activity_matter_rules`) never overwrite each other.
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
@@ -11,9 +12,7 @@ use crate::{
   activity::{self, ActivityAppState},
   activity_commands::lock_error,
   activity_store::ActivityStore,
-  local_window::{
-    ActivityAccountFeature, ActivityCaller, ActivitySettingsCaller, LocalCaller,
-  },
+  local_window::{ActivityAccountFeature, ActivityCaller, LocalCaller},
 };
 
 // The bounds `MATTER_LEARNING_LIMITS` in `matter-learning.ts` states.
@@ -79,7 +78,7 @@ pub struct EvidenceTally {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MatterLearning {
-  rules: Vec<MatterRule>,
+  pub(crate) rules: Vec<MatterRule>,
   learned: Vec<LearnedAssociation>,
   tallies: Vec<EvidenceTally>,
 }
@@ -88,8 +87,8 @@ pub struct MatterLearning {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StoredMatterLearning {
-  revision: u64,
-  learning: MatterLearning,
+  pub(crate) revision: u64,
+  pub(crate) learning: MatterLearning,
 }
 
 #[cfg(test)]
@@ -127,7 +126,7 @@ fn is_valid_value(value: &str, max_chars: usize) -> bool {
     && !value.chars().any(char::is_control)
 }
 
-fn validate_rules(rules: &[MatterRule]) -> Result<(), String> {
+pub(crate) fn validate_rules(rules: &[MatterRule]) -> Result<(), String> {
   let valid = rules.len() <= MAX_RULES
     && rules.iter().all(|rule| {
       is_valid_id(&rule.id)
@@ -177,18 +176,6 @@ pub enum MatterLearningRead {
   Unavailable,
 }
 
-/// The rules alone, for Settings: never the learned weights, which come from
-/// window titles.
-#[derive(Debug, Serialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
-pub enum MatterRulesRead {
-  Stored {
-    revision: u64,
-    rules: Vec<MatterRule>,
-  },
-  Unavailable,
-}
-
 /// A save's outcome: `Conflict` when another window saved since the read the
 /// change was made from; the caller reads again and reapplies its change.
 #[derive(Debug, PartialEq, Eq, Serialize)]
@@ -199,7 +186,7 @@ pub enum MatterLearningSave {
   Unavailable,
 }
 
-fn read<F: ActivityAccountFeature>(
+pub(crate) fn read<F: ActivityAccountFeature>(
   app: &AppHandle,
   state: &ActivityAppState,
   caller: &LocalCaller<F>,
@@ -249,7 +236,7 @@ fn save_locked(
   })
 }
 
-fn save<F: ActivityAccountFeature>(
+pub(crate) fn save<F: ActivityAccountFeature>(
   app: &AppHandle,
   state: &ActivityAppState,
   caller: &LocalCaller<F>,
@@ -296,36 +283,6 @@ pub fn activity_save_matter_learning(
 ) -> Result<MatterLearningSave, String> {
   learning.validate()?;
   save(&app, &state, &caller, revision, |stored| *stored = learning)
-}
-
-#[tauri::command]
-pub fn activity_get_matter_rules(
-  caller: ActivitySettingsCaller,
-  app: AppHandle,
-  state: State<'_, ActivityAppState>,
-) -> Result<MatterRulesRead, String> {
-  Ok(match read(&app, &state, &caller)? {
-    Some(stored) => MatterRulesRead::Stored {
-      revision: stored.revision,
-      rules: stored.learning.rules,
-    },
-    None => MatterRulesRead::Unavailable,
-  })
-}
-
-/// Replaces the rules only; what was learned stays.
-#[tauri::command]
-pub fn activity_save_matter_rules(
-  caller: ActivitySettingsCaller,
-  app: AppHandle,
-  state: State<'_, ActivityAppState>,
-  revision: u64,
-  rules: Vec<MatterRule>,
-) -> Result<MatterLearningSave, String> {
-  validate_rules(&rules)?;
-  save(&app, &state, &caller, revision, |stored| {
-    stored.rules = rules;
-  })
 }
 
 #[cfg(test)]
