@@ -936,18 +936,13 @@ type ContainsMoney<T, Depth extends MoneyCheckDepth = 8> = unknown extends T
       ? true
       : T extends NonMoneyLeaf
         ? false
-        : T extends HttpStatusResponse<infer _Code, infer Body>
-          ? ContainsMoney<Body, PrevMoneyCheckDepth[Depth]>
-          : T extends readonly (infer Item)[]
-            ? ContainsMoney<Item, PrevMoneyCheckDepth[Depth]>
-            : T extends object
-              ? {
-                  [K in keyof T]: ContainsMoney<
-                    T[K],
-                    PrevMoneyCheckDepth[Depth]
-                  >;
-                }[keyof T]
-              : false;
+        : T extends readonly (infer Item)[]
+          ? ContainsMoney<Item, PrevMoneyCheckDepth[Depth]>
+          : T extends object
+            ? {
+                [K in keyof T]: ContainsMoney<T[K], PrevMoneyCheckDepth[Depth]>;
+              }[keyof T]
+            : false;
 
 type MoneyShapeMatches<T, Schema, Depth extends MoneyCheckDepth = 8> =
   T extends HttpStatusResponse<infer _Code, infer Body>
