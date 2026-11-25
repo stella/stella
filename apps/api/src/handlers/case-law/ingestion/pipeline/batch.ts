@@ -559,7 +559,7 @@ type ApplyDecisionBatchOptions = {
  * decisions take their turn for it in the process (`createGraphTurns`)
  * rather than on a pooled connection.
  */
-export const DECISION_BATCH_CONCURRENCY = 16;
+const DECISION_BATCH_CONCURRENCY = 16;
 
 /**
  * Why a batch left records unstarted: its insert limit, then the signal, in

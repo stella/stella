@@ -75,7 +75,7 @@ const recordedClusters = (): RecordedCluster[] =>
     });
 
 /** The reporter citation a fixture record is published under. */
-export const fixtureReporterCitation = (namespace: number, index: number) => ({
+const fixtureReporterCitation = (namespace: number, index: number) => ({
   volume: String(namespace),
   reporter: "U.S.",
   page: String(1000 + index),
@@ -140,7 +140,7 @@ type IngestFixtureOptions = {
 };
 
 /** The source records, before the adapter maps them. */
-export const courtListenerFixtureRecords = ({
+const courtListenerFixtureRecords = ({
   count,
   namespace,
 }: IngestFixtureOptions): RecordedCluster[] => {

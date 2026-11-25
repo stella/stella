@@ -31,13 +31,11 @@ const statedKeys = ({
 }: Extract<CaseLawIngestionBatchRecord, { type: "decision" }>["decision"]) => [
   docketKey(caseNumber),
   ...(legacyCaseNumber === undefined ? [] : [docketKey(legacyCaseNumber)]),
-  ...[
-    sourceDocumentId,
-    ...(sourceDocumentIdAliases ?? []),
-    ...(sourceDocumentIdRepairAliases ?? []),
-  ].flatMap((identity) =>
-    identity === undefined ? [] : [identityKey(identity)],
-  ),
+  ...[sourceDocumentId, sourceDocumentIdAliases, sourceDocumentIdRepairAliases]
+    .flat()
+    .flatMap((identity) =>
+      identity === undefined ? [] : [identityKey(identity)],
+    ),
 ];
 
 /**

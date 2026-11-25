@@ -31,6 +31,9 @@ import {
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 
 const databaseUrl = process.env["DATABASE_URL"];
+
+/** The child maps the stream and writes a whole batch before the kill point. */
+const CRASH_POINT_WAIT_MS = 300_000;
 const enabled =
   process.env["STELLA_RUN_POSTGRES_TESTS"] === "true" && Boolean(databaseUrl);
 if (!databaseUrl || !enabled) {
@@ -286,8 +289,7 @@ if (!databaseUrl || !enabled) {
                   {
                     description: "the killed run to reach its second batch",
                     intervalMs: 5,
-                    // timeout: the child first maps the stream and writes a whole batch.
-                    timeoutMs: 5 * 60_000,
+                    timeoutMs: CRASH_POINT_WAIT_MS,
                   },
                 );
                 child.kill("SIGKILL");
