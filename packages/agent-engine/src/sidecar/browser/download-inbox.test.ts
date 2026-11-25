@@ -2,7 +2,11 @@ import { describe, expect, test } from "bun:test";
 
 import type { BrowserDownload } from "@stll/api-contract/browser-control";
 
-import { createDownloadInbox, DOWNLOAD_SETTLE_WAIT_MS } from "./download-inbox";
+import {
+  createDownloadInbox,
+  DOWNLOAD_SETTLE_WAIT_MS,
+  MAX_DOWNLOAD_WAIT_MS,
+} from "./download-inbox";
 
 const PDF_ADDRESS = "https://fixture-library.test/decisions/42/file";
 const RUN = {
@@ -21,6 +25,7 @@ const stopped = (sourceUrl: string): BrowserDownload => ({
 
 const REFUSED_INTERRUPTED = {
   message: "Chrome could not finish the download.",
+  pageUrl: null,
   reason: "interrupted",
   status: "refused",
 } as const;
@@ -53,10 +58,14 @@ const manualClock = () => {
   };
 };
 
-const inboxWith = (clock: ReturnType<typeof manualClock>["clock"]) =>
+const inboxWith = (
+  clock: ReturnType<typeof manualClock>["clock"],
+  pageOf: (threadId: string) => string | null = () => null,
+) =>
   createDownloadInbox({
     clock,
     home: "/unused-home",
+    pageOf,
     runOf: (threadId) => (threadId === RUN.threadId ? RUN : null),
   });
 
@@ -213,7 +222,11 @@ describe("a document the tab shows", () => {
       signal: NOT_STOPPED,
       since: inbox.mark(),
     });
-    const outcome = { ...REFUSED_INTERRUPTED, sourceUrl: FETCHED };
+    const outcome = {
+      ...REFUSED_INTERRUPTED,
+      pageUrl: PDF_ADDRESS,
+      sourceUrl: FETCHED,
+    };
     expect(first.shown).toEqual(outcome);
     // The same entry as in the list, so a result can leave it out there.
     expect(first.downloads.some((entry) => entry === first.shown)).toBe(true);
@@ -252,11 +265,14 @@ describe("a document the tab shows", () => {
     createDownloadInbox({
       clock: manualClock().clock,
       home: "/unused-home",
+      pageOf: () => null,
       receive: async (download) =>
         download.outcome === "saved"
           ? {
               bytes: download.bytes,
+              duplicate: false,
               path: "Downloads/Judgment 42.pdf",
+              sha256: "0".repeat(64),
               sourceUrl: download.sourceUrl,
               status: "saved",
             }
@@ -368,11 +384,14 @@ describe("downloads and the runs of a chat", () => {
     const inbox = createDownloadInbox({
       clock: manualClock().clock,
       home: "/unused-home",
+      pageOf: () => null,
       receive: async (download, { workspaceDir }) => {
         hooks.onSave(download.sourceUrl);
         return await Promise.resolve({
           bytes: 10,
+          duplicate: false,
           path: `${workspaceDir}/Downloads/file.pdf`,
+          sha256: "0".repeat(64),
           sourceUrl: download.sourceUrl,
           status: "saved" as const,
         });
@@ -458,5 +477,170 @@ describe("downloads and the runs of a chat", () => {
     expect(await take(inbox, RUN)).toMatchObject({ saving: 1 });
     inbox.forgetRun(RUN.runId);
     expect(await take(inbox, RUN)).toMatchObject({ saving: 0 });
+  });
+});
+
+describe("where a download came from", () => {
+  const SEARCH_PAGE = "https://fixture-library.test/search?q=notice";
+  const DECISION_PAGE = "https://fixture-library.test/decisions/42";
+
+  test("a page's download comes from the page the chat was on as it started", async () => {
+    const page = { current: DECISION_PAGE };
+    const inbox = inboxWith(manualClock().clock, () => page.current);
+    inbox.arrive(started("d-1"));
+    // The click that started it moved the chat on before it settled.
+    page.current = SEARCH_PAGE;
+    inbox.arrive(settled("d-1"));
+
+    const taken = await inbox.take(RUN, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: inbox.mark(),
+    });
+    expect(taken.downloads).toEqual([
+      {
+        ...REFUSED_INTERRUPTED,
+        pageUrl: DECISION_PAGE,
+        sourceUrl: PDF_ADDRESS,
+      },
+    ]);
+  });
+
+  test("one stopped before it started comes from the page the chat is on at its report", async () => {
+    const inbox = inboxWith(manualClock().clock, () => SEARCH_PAGE);
+    inbox.arrive(settled("d-1"));
+
+    const taken = await inbox.take(RUN, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: inbox.mark(),
+    });
+    expect(taken.downloads).toMatchObject([{ pageUrl: SEARCH_PAGE }]);
+  });
+
+  test("a shown PDF's save comes from the PDF itself, whatever page the chat read", async () => {
+    const inbox = inboxWith(manualClock().clock, () => SEARCH_PAGE);
+    inbox.arrive(started("d-1", RUN.threadId, `${PDF_ADDRESS}#page=2`));
+    inbox.arrive(settled("d-1", PDF_ADDRESS, PDF_ADDRESS));
+
+    const taken = await inbox.take(RUN, {
+      shownAddress: PDF_ADDRESS,
+      signal: NOT_STOPPED,
+      since: inbox.mark(),
+    });
+    expect(taken.shown).toMatchObject({ pageUrl: PDF_ADDRESS });
+  });
+
+  test("a saved one carries when it arrived", async () => {
+    const time = manualClock();
+    const inbox = createDownloadInbox({
+      clock: time.clock,
+      home: "/unused-home",
+      pageOf: () => DECISION_PAGE,
+      receive: async (download) =>
+        await Promise.resolve({
+          bytes: 10,
+          duplicate: false,
+          path: "Downloads/Judgment 42.pdf",
+          sha256: "a".repeat(64),
+          sourceUrl: download.sourceUrl,
+          status: "saved" as const,
+        }),
+      runOf: () => RUN,
+    });
+    time.state.time = Date.UTC(2026, 10, 25, 9, 30);
+    inbox.arrive(settled("d-1"));
+
+    const taken = await inbox.take(RUN, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: inbox.mark(),
+    });
+    expect(taken.downloads).toEqual([
+      {
+        bytes: 10,
+        downloadedAt: "2026-11-25T09:30:00Z",
+        duplicate: false,
+        pageUrl: DECISION_PAGE,
+        path: "Downloads/Judgment 42.pdf",
+        sha256: "a".repeat(64),
+        sourceUrl: PDF_ADDRESS,
+        status: "saved",
+      },
+    ]);
+  });
+});
+
+describe("waiting for downloads after the step returned", () => {
+  test("a download still saving after its step's result is waited for and handed out once it settles", async () => {
+    const time = manualClock();
+    const inbox = inboxWith(time.clock);
+    const since = inbox.mark();
+    inbox.arrive(started("d-1"));
+
+    // The click's own result gives up after the settle wait.
+    const step = inbox.take(RUN, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since,
+    });
+    time.runOut();
+    expect(await step).toMatchObject({ downloads: [], saving: 1 });
+
+    // A later wait counts every download still saving, whenever it began.
+    const waiting = inbox.take(RUN, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: 0,
+      waitMs: MAX_DOWNLOAD_WAIT_MS,
+    });
+    expect(time.pending()).toEqual([MAX_DOWNLOAD_WAIT_MS]);
+    inbox.arrive(settled("d-1"));
+
+    expect(await waiting).toEqual({
+      downloads: [{ ...REFUSED_INTERRUPTED, sourceUrl: PDF_ADDRESS }],
+      saving: 0,
+      shown: null,
+      shownSaving: false,
+    });
+    expect(time.pending()).toEqual([]);
+  });
+
+  test("a wait that runs out says how many are still saving", async () => {
+    const time = manualClock();
+    const inbox = inboxWith(time.clock);
+    inbox.arrive(started("d-1"));
+    inbox.arrive(started("d-2"));
+
+    const waiting = inbox.take(RUN, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: 0,
+      waitMs: 5000,
+    });
+    inbox.arrive(settled("d-1"));
+    // One settled; the wait goes on for the other.
+    expect(time.pending()).toEqual([5000]);
+    time.runOut();
+
+    expect(await waiting).toMatchObject({
+      downloads: [{ status: "refused" }],
+      saving: 1,
+    });
+  });
+
+  test("another chat's downloads are never waited for", async () => {
+    const time = manualClock();
+    const inbox = inboxWith(time.clock);
+    inbox.arrive(started("d-1", "thread-2"));
+
+    const waited = await inbox.take(RUN, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: 0,
+      waitMs: MAX_DOWNLOAD_WAIT_MS,
+    });
+    expect(waited).toMatchObject({ downloads: [], saving: 0 });
+    expect(time.pending()).toEqual([]);
   });
 });

@@ -312,11 +312,12 @@ type LocalBrowserSession = ReturnType<typeof createLocalBrowserSession>;
 const downloadInboxFor = (
   source: LocalBrowserMcpOptions["downloads"],
   runOf: (threadId: string) => BrowserMcpRun | null,
+  pageOf: (threadId: string) => string | null,
 ) => {
   if (source === null) {
     return null;
   }
-  const inbox = createDownloadInbox({ home: source.home, runOf });
+  const inbox = createDownloadInbox({ home: source.home, pageOf, runOf });
   source.onDownload(inbox.arrive);
   return inbox;
 };
@@ -328,6 +329,35 @@ const NOTHING_DOWNLOADED: TakenDownloads = {
   shown: null,
   shownSaving: false,
 };
+
+/**
+ * What one call hands out of the chat's downloads: those since its last
+ * result, waiting a moment for the ones the call started (`since`), and
+ * for `wait_for_downloads` every one still saving for the run, whenever
+ * it began.
+ */
+const callDownloads = (
+  inbox: ReturnType<typeof createDownloadInbox> | null,
+  {
+    held,
+    signal,
+    since,
+  }: { held: BrowserMcpRun; signal: AbortSignal; since: number },
+) => ({
+  downloads: async (shownAddress: string | null): Promise<TakenDownloads> =>
+    inbox === null
+      ? NOTHING_DOWNLOADED
+      : await inbox.take(held, { shownAddress, signal, since }),
+  waitForDownloads: async (waitMs: number): Promise<TakenDownloads> =>
+    inbox === null
+      ? NOTHING_DOWNLOADED
+      : await inbox.take(held, {
+          shownAddress: null,
+          signal,
+          since: 0,
+          waitMs,
+        }),
+});
 
 /** What the chat's tools need to know of the browser its pages are in. */
 const chatBrowser = (browser: HostRouter, threadId: string) => ({
@@ -355,6 +385,9 @@ const createChatSessions = () => {
       sessions.set(threadId, created);
       return created;
     },
+    /** The address of the page the chat last read, while it has a session. */
+    pageOf: (threadId: string): string | null =>
+      sessions.get(threadId)?.page() ?? null,
     /** The chat's last run ended: its page state goes, its visits stay. */
     drop: (threadId: string): void => {
       sessions.delete(threadId);
@@ -389,7 +422,11 @@ export const startLocalBrowserMcp = ({
 }: LocalBrowserMcpOptions): LocalBrowserMcp => {
   const endpoints = createEndpoints(browser.releaseChat);
   const sessions = createChatSessions();
-  const downloads = downloadInboxFor(downloadSource, endpoints.runOf);
+  const downloads = downloadInboxFor(
+    downloadSource,
+    endpoints.runOf,
+    sessions.pageOf,
+  );
   const listener = { host: "" };
 
   const answer = async (
@@ -453,10 +490,7 @@ export const startLocalBrowserMcp = ({
             await sessions.of(held.threadId).call(name, input, {
               ...chatBrowser(browser, held.threadId),
               ...runApprovals(held),
-              downloads: async (shownAddress) =>
-                downloads === null
-                  ? NOTHING_DOWNLOADED
-                  : await downloads.take(held, { shownAddress, signal, since }),
+              ...callDownloads(downloads, { held, signal, since }),
               signal,
               send: async (command, observedTab) =>
                 await browser.request(
