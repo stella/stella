@@ -356,9 +356,10 @@ export const WorkspaceBreadcrumb = ({
                       exact: true,
                       includeSearch: false,
                     }}
-                    activeProps={{
-                      className: "text-foreground font-semibold",
-                    }}
+                    // Weight never follows the route: a click lands on the
+                    // matter root for one frame before its default view
+                    // redirect, so an active-only bold would flash.
+                    activeProps={{ className: "text-foreground" }}
                     className="hover:text-foreground inline-flex max-w-80 min-w-0 items-center gap-1.5"
                     params={{
                       workspaceId,
