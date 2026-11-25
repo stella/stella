@@ -51,23 +51,22 @@ const readChangedFiles = (baseRef: string): readonly string[] => {
   }).trim();
   const committed = execFileSync(
     "git",
-    ["diff", "--name-only", `${mergeBase}...HEAD`],
+    ["diff", "--name-only", "-z", `${mergeBase}...HEAD`],
     { cwd: REPO_ROOT, encoding: "utf-8", maxBuffer: CHILD_MAX_BUFFER },
   );
-  const working = execFileSync("git", ["diff", "--name-only", "HEAD"], {
+  const working = execFileSync("git", ["diff", "--name-only", "-z", "HEAD"], {
     cwd: REPO_ROOT,
     encoding: "utf-8",
     maxBuffer: CHILD_MAX_BUFFER,
   });
   const untracked = execFileSync(
     "git",
-    ["ls-files", "--others", "--exclude-standard"],
+    ["ls-files", "--others", "--exclude-standard", "-z"],
     { cwd: REPO_ROOT, encoding: "utf-8", maxBuffer: CHILD_MAX_BUFFER },
   );
-  return `${committed}\n${working}\n${untracked}`
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
+  return [committed, working, untracked]
+    .flatMap((output) => output.split("\0"))
+    .filter((entry) => entry.length > 0);
 };
 
 const parseArgs = (argv: readonly string[]) => {

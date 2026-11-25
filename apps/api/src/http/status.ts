@@ -26,10 +26,13 @@ const REASON_PHRASES = new Map([
  * Without a body the answer is the status text (`status(404)` sends
  * "Not Found"), except for the bodiless statuses above.
  */
+declare const httpStatusResponseBrand: unique symbol;
+
 export class HttpStatusResponse<
   const TCode extends number = number,
   const TBody = unknown,
 > {
+  declare readonly [httpStatusResponseBrand]: true;
   readonly code: TCode;
   readonly response: TBody;
 
