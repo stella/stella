@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { AGENT_HARNESSES } from "./agent-harness";
+import { BROWSER_SITE_GRANTS_MAX } from "./browser-site-grants";
 import { CHAT_LOCAL_RUN_TOOL_LIMITS } from "./chat-local-run-tool";
 import {
   DESKTOP_RUNNER_ANSWER_LIMITS,
@@ -407,6 +408,48 @@ describe("desktop runner fixtures", () => {
         name,
         success: v.safeParse(desktopRunnerServerMessageSchema, message).success,
       }).toEqual({ name, success: false });
+    }
+  });
+});
+
+describe("website approvals for a running run", () => {
+  const grants = (origins: unknown) =>
+    v.safeParse(desktopRunnerServerMessageSchema, {
+      type: DESKTOP_RUNNER_SERVER_MESSAGE.runSiteGrants,
+      runId: "0192f3a0-6b1c-7d2e-8f30-000000000001",
+      revision: "0192f3a0-6b1c-7d2e-8f30-0000000000c3",
+      origins,
+    }).success;
+
+  test("restate exact HTTPS origins, as many as a member keeps", () => {
+    expect(grants([])).toBe(true);
+    expect(
+      grants(["https://fixture-library.test", "https://fixture.test:8443"]),
+    ).toBe(true);
+    expect(
+      grants(
+        Array.from(
+          { length: BROWSER_SITE_GRANTS_MAX },
+          (_, index) => `https://site-${String(index)}.fixture.test`,
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  test("refuse a page address, another scheme, a spelling the parser would change, or one website too many", () => {
+    for (const origins of [
+      ["https://fixture-library.test/catalog"],
+      ["http://fixture-library.test"],
+      ["https://Fixture-Library.test"],
+      ["https://fixture-library.test:443"],
+      Array.from(
+        { length: BROWSER_SITE_GRANTS_MAX + 1 },
+        (_, index) => `https://site-${String(index)}.fixture.test`,
+      ),
+    ]) {
+      expect({ origins: origins.slice(0, 1), parses: grants(origins) }).toEqual(
+        { origins: origins.slice(0, 1), parses: false },
+      );
     }
   });
 });

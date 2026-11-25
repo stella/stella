@@ -21,6 +21,7 @@ import {
 import * as v from "valibot";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
+import { BROWSER_SITE_GRANTS_MAX } from "@stll/api-contract/browser-site-grants";
 import {
   DESKTOP_RUNNER_REQUEST_EVENT,
   type DesktopRunnerRequestEvent,
@@ -44,6 +45,7 @@ import {
 } from "@stll/api-contract/desktop-runner";
 
 import {
+  chatBrowserSiteGrants,
   chatMessageRevisions,
   chatMessages,
   chatThreads,
@@ -2131,6 +2133,175 @@ export const insertRunCommand = async (
         run.connection === "connected"
           ? { sessionId: run.sessionId, instanceId: run.instanceId }
           : null,
+    };
+  });
+
+/** Most open runs one account holds: each computer's held runs, at most. */
+const MAX_OPEN_RUNS_PER_ACCOUNT = (
+  limits: Pick<DesktopRunnerLimits, "maxRunnersPerAccount">,
+) => limits.maxRunnersPerAccount * MAX_HELD_RUNS;
+
+type QueueSiteGrantsOptions = {
+  owner: RunOwner;
+  /** The id the queued set is sent under, the same for every run. */
+  revision: string;
+  limits: Pick<
+    DesktopRunnerLimits,
+    "maxCommandsPerRun" | "maxRunnersPerAccount"
+  >;
+  /**
+   * The message each run is sent, checked before it is queued: the
+   * contract's shape, and one frame's size.
+   */
+  compose: (message: {
+    runId: string;
+    revision: string;
+    origins: readonly string[];
+  }) => object;
+};
+
+export type QueuedSiteGrants = {
+  /** The member's website approvals as queued, by origin. */
+  readonly origins: readonly string[];
+  /** Runs that hold the set now, as their only `run.site_grants`. */
+  readonly queued: readonly string[];
+  /** Open runs that hold as many commands as one run may: sent nothing. */
+  readonly full: readonly string[];
+  /** The open sockets holding the runs it was queued for, once each. */
+  readonly holders: readonly RunHolder[];
+};
+
+/**
+ * Queue the member's website approvals, read as they stand now, for every
+ * run of `owner` that is still open. Each run keeps only its newest set:
+ * the one queued before is removed, so a replay sends the newest, and the
+ * set never takes more than one of a run's commands. Taken under the
+ * member's approvals lock, so of two changes the one that reads last queues
+ * last, and the set every run ends with is the stored one. A run whose other
+ * commands fill its cap keeps the set it holds and is reported.
+ */
+export const queueRunSiteGrants = async (
+  db: DesktopRunnerDb,
+  { owner, revision, limits, compose }: QueueSiteGrantsOptions,
+): Promise<QueuedSiteGrants> =>
+  await withAggregateTransaction(db, async (tx) => {
+    const id = {
+      organizationId: owner.organizationId,
+      userId: owner.userId,
+    };
+    await withAggregateLock({ aggregate: "chatToolGrants", id, tx });
+    await withAggregateLock({ aggregate: "desktopRunnerCapacity", id, tx });
+    const stored = await readBounded(
+      tx
+        .select({ origin: chatBrowserSiteGrants.origin })
+        .from(chatBrowserSiteGrants)
+        .where(
+          and(
+            eq(chatBrowserSiteGrants.organizationId, owner.organizationId),
+            eq(chatBrowserSiteGrants.userId, owner.userId),
+          ),
+        )
+        .orderBy(asc(chatBrowserSiteGrants.origin)),
+      BROWSER_SITE_GRANTS_MAX,
+    );
+    // Creation refuses past the cap under the same lock.
+    if (stored.type === "overflow") {
+      return panic("Stored browser site grants exceed their per-user cap");
+    }
+    const origins = stored.rows.map(({ origin }) => origin);
+    const open = await readBounded(
+      tx
+        .select({
+          runId: runs.runId,
+          sessionId: runner.sessionId,
+          instanceId: runner.instanceId,
+          connection: runner.connection,
+        })
+        .from(runs)
+        .innerJoin(
+          runner,
+          and(
+            eq(runner.userId, runs.userId),
+            eq(runner.organizationId, runs.organizationId),
+            eq(runner.desktopId, runs.desktopId),
+            eq(runner.deviceJkt, runs.deviceJkt),
+          ),
+        )
+        .where(
+          and(
+            eq(runs.userId, owner.userId),
+            eq(runs.organizationId, owner.organizationId),
+            inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
+          ),
+        )
+        .orderBy(asc(runs.runId)),
+      MAX_OPEN_RUNS_PER_ACCOUNT(limits),
+    );
+    // Each computer holds at most its held runs, and an account at most its
+    // computers.
+    if (open.type === "overflow") {
+      return panic("An account holds more open runs than its computers may");
+    }
+    if (open.rows.length === 0) {
+      return { origins, queued: [], full: [], holders: [] };
+    }
+    const runIds = open.rows.map(({ runId }) => runId);
+    // The set a run holds already is replaced, so it takes no room of its own.
+    const counts = new Map(
+      (
+        await tx
+          .select({
+            runId: desktopRunnerCommands.runId,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(desktopRunnerCommands)
+          .where(
+            and(
+              inArray(desktopRunnerCommands.runId, runIds),
+              ne(desktopRunnerCommands.kind, "run.site_grants"),
+            ),
+          )
+          .groupBy(desktopRunnerCommands.runId)
+      ).map(({ runId, count }) => [runId, count]),
+    );
+    const roomy = open.rows.filter(
+      ({ runId }) => (counts.get(runId) ?? 0) < limits.maxCommandsPerRun,
+    );
+    const roomyIds = new Set(roomy.map(({ runId }) => runId));
+    if (roomy.length > 0) {
+      // audit: skip - runner socket bookkeeping; the approval change is audited where it is made
+      await tx
+        .delete(desktopRunnerCommands)
+        .where(
+          and(
+            inArray(desktopRunnerCommands.runId, [...roomyIds]),
+            eq(desktopRunnerCommands.kind, "run.site_grants"),
+          ),
+        );
+      // audit: skip - runner socket bookkeeping; the approval change is audited where it is made
+      await tx.insert(desktopRunnerCommands).values(
+        roomy.map(({ runId }) => ({
+          runId,
+          kind: "run.site_grants" as const,
+          commandKey: revision,
+          payload: compose({ runId, revision, origins }),
+        })),
+      );
+    }
+    const holders = new Map<string, RunHolder>();
+    for (const run of roomy) {
+      if (run.connection === "connected") {
+        holders.set(run.sessionId, {
+          sessionId: run.sessionId,
+          instanceId: run.instanceId,
+        });
+      }
+    }
+    return {
+      origins,
+      queued: roomy.map(({ runId }) => runId),
+      full: runIds.filter((runId) => !roomyIds.has(runId)),
+      holders: [...holders.values()],
     };
   });
 

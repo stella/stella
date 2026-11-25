@@ -842,6 +842,18 @@ impl Runner {
           || self.host.answer(answer),
         )
       }
+      ServerMessage::RunSiteGrants(grants) => {
+        let run_id = grants.run_id.clone();
+        let revision = grants.revision;
+        self.forward_once(
+          &run_id,
+          |record| record.site_grants.contains(&revision),
+          |record| {
+            record.site_grants.insert(revision);
+          },
+          || self.host.site_grants(grants),
+        )
+      }
       ServerMessage::RunInterrupt(RunRef { run_id }) => self.forward_once(
         &run_id,
         |record| record.interrupted,

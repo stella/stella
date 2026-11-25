@@ -17,6 +17,10 @@ import path from "node:path";
 import * as v from "valibot";
 
 import {
+  DESKTOP_RUNNER_REQUEST_EVENT,
+  desktopRunnerRequestEventSchema,
+} from "@stll/api-contract/chat-local-run-request";
+import {
   CHAT_LOCAL_RUN_STEPS_AWAITED_EVENT,
   chatLocalRunStepsAwaitedSchema,
 } from "@stll/api-contract/chat-local-run-step-content";
@@ -39,6 +43,12 @@ import {
 import { readCompleteLines } from "../../scripts/fake-harness-peer";
 import { bundledHarnessCompatibility } from "../harness/compatibility";
 import { PROTOCOL_LOG_OFF } from "../protocol-log";
+import type { LocalBrowserMcp } from "./browser/mcp-server";
+import {
+  APPROVAL_DECISION,
+  type ApprovalTicket,
+  type BrowserApprovalRequest,
+} from "./browser/tools";
 import {
   HOLDER_ENDPOINT_FILE,
   HOLDER_LOG_FILE,
@@ -2273,6 +2283,307 @@ describe("harness holder over its socket", () => {
     });
     reconnected.client.send({ type: "ack", runId, seq: finished.seq });
     expect(await holder.exited).toBe(0);
+  });
+});
+
+describe("the member's website approvals while a run goes on", () => {
+  const LIBRARY = "https://fixture-library.test";
+  const ARCHIVE = "https://fixture-archive.test";
+  const COURT = "https://fixture-court.test";
+
+  type BrowserRun = Parameters<LocalBrowserMcp["register"]>[0];
+  type ApprovalRequestOutput = Extract<
+    SidecarHostOutput,
+    { type: "run.approval_request" }
+  >;
+
+  /**
+   * A real host and fake harness whose turn waits on its own approval, with
+   * the browser tools' endpoint standing in: the run they serve is kept, so
+   * its steps ask through the host's approvals as the tools' steps do.
+   */
+  const runWithBrowser = async (memberGrants: string[]) => {
+    const root = mkdtempSync(path.join(tmpdir(), "stella-sidecar-grants-"));
+    const configDir = path.join(root, "codex-home");
+    const workspaceDir = path.join(root, "workspace");
+    mkdirSync(configDir);
+    mkdirSync(workspaceDir);
+    const served: BrowserRun[] = [];
+    const browser: LocalBrowserMcp = {
+      origin: "http://127.0.0.1:9",
+      readOnlyHost: false,
+      register: (run) => {
+        served.push(run);
+        return {
+          serverName: "stella_browser",
+          url: "http://127.0.0.1:9/mcp/run",
+          token: "browser-endpoint-secret",
+        };
+      },
+      unregister: () => undefined,
+      park: () => null,
+      adopt: () => null,
+      drop: () => undefined,
+      stop: async () => {
+        await Promise.resolve();
+      },
+    };
+    const written: SidecarHostOutput[] = [];
+    const waiters: {
+      take: (message: SidecarHostOutput) => boolean;
+    }[] = [];
+    const host = new SidecarHost({
+      send: (message) => {
+        written.push(message);
+        for (const waiter of waiters.splice(0)) {
+          if (!waiter.take(message)) {
+            waiters.push(waiter);
+          }
+        }
+        return true;
+      },
+      log: () => {},
+      protocolLog: PROTOCOL_LOG_OFF,
+      environment: {
+        PATH: process.env["PATH"] ?? "",
+        FAKE_HARNESS_LOG: path.join(root, "fake.log"),
+      },
+      processGrantTimeoutMs: WAIT_MS,
+      browser,
+    });
+    cleanups.push(async () => {
+      await host.shutdown();
+      rmSync(root, { recursive: true, force: true });
+    });
+    /** The next message `matches` takes, one already written included. */
+    const next = async <T extends SidecarHostOutput>(
+      matches: (message: SidecarHostOutput) => message is T,
+    ): Promise<T> => {
+      const seen = written.find(matches);
+      if (seen !== undefined) {
+        return seen;
+      }
+      const { promise, resolve } = Promise.withResolvers<T>();
+      waiters.push({
+        take: (message) => {
+          if (!matches(message)) {
+            return false;
+          }
+          resolve(message);
+          return true;
+        },
+      });
+      return await promise;
+    };
+    host.configure("1.4.0", API_ORIGIN);
+    const runId = crypto.randomUUID();
+    host.handle({
+      type: "run.start",
+      runId,
+      threadId: "thread-1",
+      harness: "codex",
+      executable: fakeCodex(root, "approval"),
+      configDir,
+      launch: PLAIN_LAUNCH,
+      workspaceDir,
+      cacheDir: path.join(root, "agent-package-cache"),
+      stepOutputDir: path.join(root, "runs", "chat.step-outputs"),
+      model: "gpt-test",
+      reasoningEffort: null,
+      instructions: "Use the stella MCP server.",
+      messages: [{ role: "user", content: "Find the notice period." }],
+      attachments: [],
+      skillFolders: [],
+      toolPath: [],
+      unreadablePaths: [],
+      session: { type: "fresh" },
+      policy: {
+        network: "open",
+        fs: "workspace",
+        approvals: "ask",
+        browserSiteGrants: memberGrants,
+      },
+      mcp: {
+        serverName: "stella",
+        url: `${API_ORIGIN}/mcp`,
+        token: RUN_TOKEN,
+        expiresAt: "2026-10-28T12:00:00.000Z",
+      },
+    });
+    const approvalRequest = (summary: string) => async () =>
+      await next(
+        (message): message is ApprovalRequestOutput =>
+          message.type === "run.approval_request" &&
+          message.summary.startsWith(summary),
+      );
+    // The harness's own question: its turn is open and waits.
+    const harnessRequest = await approvalRequest("")();
+    const run = served.at(0) ?? panic("the run was handed no browser tools");
+
+    /**
+     * A click on `site` the gate asks about because the run does not allow
+     * the website, held to the run's approvals as the gate holds it; resolves
+     * to the ticket and the request id chat is asked under.
+     */
+    const ask = async (
+      site: string,
+      name: string,
+    ): Promise<{ ticket: Promise<ApprovalTicket>; requestId: string }> => {
+      const request: BrowserApprovalRequest = {
+        action: "click",
+        name,
+        reason: "site_not_allowed",
+        role: "button",
+        signal: new AbortController().signal,
+        site,
+        url: `${site}/search`,
+        allowSite: () => {
+          run.siteGrants.add(site);
+        },
+        allowedNow: () => run.siteGrants.has(site),
+      };
+      const ticket = run.approve(request);
+      const asked = await approvalRequest(`Click the button "${name}"`)();
+      return { ticket, requestId: asked.requestId };
+    };
+
+    /** How chat reads the close of each request, by request id. */
+    const closes = () =>
+      new Map(
+        written.flatMap((message) => {
+          if (
+            message.type !== "run.event" ||
+            message.chunk["name"] !== DESKTOP_RUNNER_REQUEST_EVENT
+          ) {
+            return [];
+          }
+          const value = v.parse(
+            desktopRunnerRequestEventSchema,
+            message.chunk["value"],
+          );
+          return [[value.requestId, value] as const];
+        }),
+      );
+
+    const finish = async () => {
+      host.handle({
+        type: "run.approval",
+        runId,
+        requestId: harnessRequest.requestId,
+        decision: "deny",
+      });
+      return await next(
+        (
+          message,
+        ): message is Extract<SidecarHostOutput, { type: "run.finished" }> =>
+          message.type === "run.finished",
+      );
+    };
+
+    const update = (origins: string[]) => {
+      host.handle({
+        type: "run.site_grants",
+        runId,
+        revision: crypto.randomUUID(),
+        origins,
+      });
+    };
+
+    return { ask, closes, finish, host, run, runId, update };
+  };
+
+  test("a new approval reaches the browser tools' own set and lets the steps it answers go on", async () => {
+    const { ask, closes, finish, run, update } = await runWithBrowser([
+      ARCHIVE,
+    ]);
+    const tools = run.siteGrants;
+    const search = await ask(LIBRARY, "Search");
+    const nextPage = await ask(LIBRARY, "Next page");
+    const elsewhere = await ask(COURT, "Open file");
+
+    update([LIBRARY]);
+
+    // The member's set as it stands now, in the very set the tools read.
+    expect(run.siteGrants).toBe(tools);
+    expect([...tools]).toEqual([LIBRARY]);
+    expect((await search.ticket).decision).toBe(APPROVAL_DECISION.approve);
+    expect((await nextPage.ticket).decision).toBe(APPROVAL_DECISION.approve);
+    await finish();
+    const closed = closes();
+    // Both read as approved; the one on another website was not answered.
+    expect(closed.get(search.requestId)).toEqual({
+      requestId: search.requestId,
+      status: "resolved",
+      decision: "approve",
+    });
+    expect(closed.get(nextPage.requestId)).toEqual({
+      requestId: nextPage.requestId,
+      status: "resolved",
+      decision: "approve",
+    });
+    expect(closed.get(elsewhere.requestId)).not.toMatchObject({
+      status: "resolved",
+    });
+    expect((await elsewhere.ticket).decision).toBe(APPROVAL_DECISION.deny);
+  });
+
+  test("always allowing a website in the run settles its other waiting steps, as approved", async () => {
+    const { ask, closes, finish, host, run, runId } = await runWithBrowser([]);
+    const search = await ask(LIBRARY, "Search");
+    const nextPage = await ask(LIBRARY, "Next page");
+    const elsewhere = await ask(COURT, "Open file");
+
+    host.handle({
+      type: "run.approval",
+      runId,
+      requestId: search.requestId,
+      decision: "approve_for_session",
+    });
+
+    expect([...run.siteGrants]).toEqual([LIBRARY]);
+    expect((await search.ticket).decision).toBe(APPROVAL_DECISION.approveSite);
+    expect((await nextPage.ticket).decision).toBe(APPROVAL_DECISION.approve);
+    await finish();
+    const closed = closes();
+    expect(closed.get(search.requestId)).toMatchObject({
+      status: "resolved",
+      decision: "approve_for_session",
+    });
+    expect(closed.get(nextPage.requestId)).toMatchObject({
+      status: "resolved",
+      decision: "approve",
+    });
+    expect((await elsewhere.ticket).decision).toBe(APPROVAL_DECISION.deny);
+  });
+
+  test("a revoke removes the member's approval, even one also given in the run, and keeps what only the run allowed", async () => {
+    const { ask, finish, host, run, runId, update } = await runWithBrowser([
+      LIBRARY,
+    ]);
+    // The member always allows a website in the run only.
+    const court = await ask(COURT, "Open file");
+    host.handle({
+      type: "run.approval",
+      runId,
+      requestId: court.requestId,
+      decision: "approve_for_session",
+    });
+    await court.ticket;
+    expect(new Set(run.siteGrants)).toEqual(new Set([LIBRARY, COURT]));
+
+    // An approval chat stored for it arrives, then the member removes both.
+    update([LIBRARY, ARCHIVE]);
+    expect(new Set(run.siteGrants)).toEqual(new Set([LIBRARY, ARCHIVE, COURT]));
+    update([]);
+    expect([...run.siteGrants]).toEqual([COURT]);
+    update([COURT]);
+    update([]);
+    expect([...run.siteGrants]).toEqual([]);
+    // A revoke answers nothing: a step on the website asks again.
+    const again = await ask(LIBRARY, "Search");
+    update([]);
+    expect((await finish()).outcome).toBe("completed");
+    expect((await again.ticket).decision).toBe(APPROVAL_DECISION.deny);
   });
 });
 

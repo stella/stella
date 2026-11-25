@@ -71,8 +71,8 @@ use protocol::{
 use crate::runner_protocol::{
   Ack, ApprovalKind, ApprovalMode, Harness, HarnessModel, HarnessReport,
   HarnessUnavailableReason, JsonObject, LimitedHarness, ReadyHarness, ReasoningEffort,
-  RejectReason, RunAnswer, RunApproval, RunInput, RunOutcome, RunRef, RunTokenRefresh,
-  SignedOutHarness, UnavailableHarness, UnsupportedHarness,
+  RejectReason, RunAnswer, RunApproval, RunInput, RunOutcome, RunRef, RunSiteGrants,
+  RunTokenRefresh, SignedOutHarness, UnavailableHarness, UnsupportedHarness,
 };
 
 const LOG_TARGET: &str = "harness_sidecar";
@@ -488,6 +488,14 @@ impl HarnessSidecar {
   /// Answers to a blocking question the run asked.
   pub(crate) fn answer(&self, answer: RunAnswer) -> Result<(), SidecarUnavailable> {
     self.forward(answer.run_id.clone(), &HostMessage::RunAnswer(answer))
+  }
+
+  /// The member's website approvals as they stand now.
+  pub(crate) fn site_grants(
+    &self,
+    grants: RunSiteGrants,
+  ) -> Result<(), SidecarUnavailable> {
+    self.forward(grants.run_id.clone(), &HostMessage::RunSiteGrants(grants))
   }
 
   pub(crate) fn interrupt(&self, run_id: &str) -> Result<(), SidecarUnavailable> {

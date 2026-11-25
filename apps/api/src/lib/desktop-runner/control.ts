@@ -64,6 +64,8 @@ import {
   type InsertedCommand,
   insertRunCommand,
   type MemberRunner,
+  type QueuedSiteGrants,
+  queueRunSiteGrants,
   readChatRunForRequest,
   readChatRunSession,
   readConnectedRunners,
@@ -83,6 +85,7 @@ import {
   type StoredRunEvent,
 } from "@/api/lib/desktop-runner/store";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { logger } from "@/api/lib/observability/logger";
 
 type ReadyHarnessReport = Extract<
   DesktopRunnerHarnessReport,
@@ -597,6 +600,73 @@ const queue = async (
   return Result.ok({ type: "queued" });
 };
 
+/**
+ * The `run.site_grants` a run is sent, checked as `queue` checks a command:
+ * a stored approval is an exact HTTPS origin, and the most a member keeps
+ * fits one frame, so a set that fails either was corrupted.
+ */
+const siteGrantsMessage = ({
+  runId,
+  revision,
+  origins,
+}: {
+  runId: string;
+  revision: string;
+  origins: readonly string[];
+}): object => {
+  const checked = v.safeParse(desktopRunnerServerMessageSchema, {
+    type: DESKTOP_RUNNER_SERVER_MESSAGE.runSiteGrants,
+    runId,
+    revision,
+    origins,
+  });
+  if (!checked.success) {
+    return panic(
+      invalid(DESKTOP_RUNNER_SERVER_MESSAGE.runSiteGrants, checked.issues)
+        .message,
+    );
+  }
+  return fitsOneFrame(checked.output)
+    ? checked.output
+    : panic("The member's website approvals outgrew one frame");
+};
+
+/**
+ * Send the member's website approvals, as they stand now, to every run of
+ * theirs still open on their computers, after a change to them: each run's
+ * browser steps follow the newest set while the run goes on. A computer that
+ * is away receives it when it reconnects. A run that holds as many commands
+ * as one run may is left out, and logged.
+ */
+const pushSiteGrants = async (
+  deps: ControlDeps,
+  { owner }: { owner: RunOwner },
+): Promise<Result<QueuedSiteGrants, DatabaseError>> => {
+  const pushed = await Result.tryPromise({
+    try: async () =>
+      await queueRunSiteGrants(deps.db, {
+        owner,
+        revision: Bun.randomUUIDv7(),
+        limits: deps.limits,
+        compose: siteGrantsMessage,
+      }),
+    catch: toDatabaseError,
+  });
+  if (pushed.isErr()) {
+    return pushed;
+  }
+  const { full, holders } = pushed.value;
+  if (full.length > 0) {
+    logger.warn("desktop_runner.site_grants_run_full", {
+      runs: full.length,
+    });
+  }
+  for (const holder of holders) {
+    deps.doorbell.ring(holder);
+  }
+  return pushed;
+};
+
 type MessageRestoreOptions = {
   owner: RunOwner;
   threadId: SafeId<"chatThread">;
@@ -907,6 +977,12 @@ export const createDesktopRunnerControl = ({
         requestId,
         answers,
       }),
+    /**
+     * Send the member's website approvals as they stand now to each of their
+     * open runs; call after a change to them committed.
+     */
+    pushSiteGrants: async (options: { owner: RunOwner }) =>
+      await pushSiteGrants(deps, options),
     /** Stop the current turn; the run stays open. */
     interruptRun: async ({ owner, runId }: RunOptions) =>
       await queue(deps, owner, {

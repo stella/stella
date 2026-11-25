@@ -1127,6 +1127,8 @@ const SIDECAR_HOST_FIELDS: Readonly<
     decision: vocabulary(DESKTOP_RUNNER_APPROVAL_DECISIONS),
   },
   "run.answer": { runId: IDENTIFIER, requestId: IDENTIFIER, answers: SIZE },
+  // The websites the member allows: logged as their count only.
+  "run.site_grants": { runId: IDENTIFIER, revision: IDENTIFIER, origins: SIZE },
   // A steer's text is the member's words: logged as its size only.
   "run.input": {
     runId: IDENTIFIER,

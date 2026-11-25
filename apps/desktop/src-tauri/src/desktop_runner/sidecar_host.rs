@@ -62,8 +62,8 @@ use crate::local_linked_folders::LinkedFolderRefusal;
 use crate::runner_protocol::{
   FolderRestore, FolderRestoreOutcome, Harness, HarnessCapability, HarnessReport,
   HarnessUnavailableReason, JsonObject, LinkedFolderReport, MAX_FRAME_BYTES,
-  MissingHarness, RejectReason, RunAnswer, RunApproval, RunInput, RunOutcome, RunStart,
-  RunTokenRefresh, UnavailableHarness,
+  MissingHarness, RejectReason, RunAnswer, RunApproval, RunInput, RunOutcome,
+  RunSiteGrants, RunStart, RunTokenRefresh, UnavailableHarness,
 };
 
 const LOG_TARGET: &str = "desktop_runner::host";
@@ -1296,6 +1296,10 @@ impl HarnessHost for SidecarHarnessHost {
 
   fn answer(&self, answer: RunAnswer) -> Forwarded {
     self.forward("answer", |sidecar| sidecar.answer(answer))
+  }
+
+  fn site_grants(&self, grants: RunSiteGrants) -> Forwarded {
+    self.forward("site grants", |sidecar| sidecar.site_grants(grants))
   }
 
   fn interrupt(&self, run_id: &str) -> Forwarded {

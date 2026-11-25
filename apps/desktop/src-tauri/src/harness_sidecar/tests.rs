@@ -436,6 +436,16 @@ fn commands_for_a_run_reach_the_holder() {
         .unwrap(),
       })
       .unwrap();
+    sidecar
+      .site_grants(crate::runner_protocol::RunSiteGrants {
+        run_id: run_id.clone(),
+        revision: crate::runner_protocol::SiteGrantsRevision::try_from(
+          "0192f3a0-6b1c-7d2e-8f30-0000000000f1".to_owned(),
+        )
+        .unwrap(),
+        origins: vec!["https://fixture-library.test".to_owned()],
+      })
+      .unwrap();
     sidecar.interrupt(&run_id).unwrap();
     sidecar.cancel(&run_id).unwrap();
     assert_eq!(
@@ -459,6 +469,7 @@ fn commands_for_a_run_reach_the_holder() {
       "run.token",
       "run.approval",
       "run.answer",
+      "run.site_grants",
       "run.interrupt",
       "run.cancel",
       "ack",

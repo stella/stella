@@ -277,6 +277,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/desktop-runner/runtime.ts",
     "apps/api/src/lib/desktop-runner/sealed-answers.ts",
     "apps/api/src/lib/desktop-runner/session.ts",
+    "apps/api/src/lib/desktop-runner/site-grants.ts",
     "apps/api/src/lib/desktop-runner/step-content-answer.ts",
     "apps/api/src/lib/desktop-runner/step-contents.ts",
     "apps/api/src/lib/document-translation/*",

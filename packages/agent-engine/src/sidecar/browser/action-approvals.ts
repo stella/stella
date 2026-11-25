@@ -119,9 +119,15 @@ const approvalCall = (asked: BrowserApprovalRequest) => {
 /** What the id of every question these approvals ask starts with. */
 const BROWSER_STEP_REQUEST = "browser-step-";
 
+/** A question still waiting, with what settles it and the step it asks about. */
+type PendingQuestion = {
+  readonly asked: BrowserApprovalRequest;
+  readonly settle: (decision: ApprovalDecision) => void;
+};
+
 export const createActionApprovals = () => {
   const side = createEventQueue<HarnessEvent>();
-  const pending = new Map<string, (decision: ApprovalDecision) => void>();
+  const pending = new Map<string, PendingQuestion>();
 
   const request: ApproveAction = async (asked) => {
     const requestId = `${BROWSER_STEP_REQUEST}${crypto.randomUUID()}`;
@@ -160,7 +166,7 @@ export const createActionApprovals = () => {
         settle(APPROVAL_DECISION.deny);
       }
     };
-    pending.set(requestId, settle);
+    pending.set(requestId, { asked, settle });
     side.push({
       type: "approval.requested",
       request: {
@@ -199,9 +205,28 @@ export const createActionApprovals = () => {
 
   /** Settles every open question as declined: the run is ending. */
   const declineAll = () => {
-    for (const [requestId, settle] of pending) {
+    for (const [requestId, { settle }] of pending) {
       pending.delete(requestId);
       settle(APPROVAL_DECISION.deny);
+    }
+  };
+
+  /**
+   * Settles as approved every open question whose step the run's gate now
+   * runs without asking, as it stands: after the member always allowed a
+   * website, here or in chat, the other steps waiting on that website go
+   * on. A question the gate still asks, for another website or for a reason
+   * no website approval answers (a sign-in, a field that may hold a secret,
+   * a level that asks about every such step), keeps waiting. `taken` runs
+   * for each before its end is reported, with the id it was asked under.
+   */
+  const settleAllowed = (taken: (requestId: string) => void) => {
+    for (const [requestId, { asked, settle }] of pending) {
+      if (asked.allowedNow()) {
+        pending.delete(requestId);
+        taken(requestId);
+        settle(APPROVAL_DECISION.approve);
+      }
     }
   };
 
@@ -216,6 +241,9 @@ export const createActionApprovals = () => {
     /**
      * Answers the question `requestId` (the id it was asked under); false
      * when it is not one of these, so the harness's own approvals go on.
+     * An answer that always allows the step's website adds it to the run's
+     * approvals before the step goes on; `settleAllowed` then lets the
+     * other questions it answers go on too.
      */
     answer: (
       requestId: string,
@@ -223,15 +251,19 @@ export const createActionApprovals = () => {
       /** Runs before the question's end is reported: the answer reached it. */
       taken: () => void = () => undefined,
     ): boolean => {
-      const settle = pending.get(requestId);
-      if (settle === undefined) {
+      const question = pending.get(requestId);
+      if (question === undefined) {
         return false;
       }
       pending.delete(requestId);
+      if (decision === SESSION_APPROVAL) {
+        question.asked.allowSite?.();
+      }
       taken();
-      settle(decision);
+      question.settle(decision);
       return true;
     },
+    settleAllowed,
     declineAll,
     /**
      * The harness's events with these questions' events beside them, in

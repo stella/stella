@@ -15,10 +15,10 @@ use serde_json::Value;
 use crate::runner_protocol::{
   Ack, ApprovalKind, ApprovalMode, Harness, HarnessCapability, JsonObject, McpBinding,
   ReasoningEffort, RunAnswer, RunApproval, RunAttachment, RunInput, RunOutcome,
-  RunPolicy, RunRef, RunTokenRefresh,
+  RunPolicy, RunRef, RunSiteGrants, RunTokenRefresh,
 };
 
-pub(crate) const SIDECAR_PROTOCOL: u32 = 7;
+pub(crate) const SIDECAR_PROTOCOL: u32 = 8;
 /// Largest line either side writes or accepts, in UTF-8 bytes.
 pub(crate) const MAX_LINE_BYTES: usize = 8 * 1024 * 1024;
 /// Runs one `hello` may resume or list.
@@ -278,6 +278,9 @@ pub(crate) enum HostMessage {
   RunApproval(RunApproval),
   #[serde(rename = "run.answer")]
   RunAnswer(RunAnswer),
+  /// The member's website approvals as they stand now; the newest holds.
+  #[serde(rename = "run.site_grants")]
+  RunSiteGrants(RunSiteGrants),
   #[serde(rename = "run.interrupt")]
   RunInterrupt(RunRef),
   #[serde(rename = "run.cancel")]
@@ -307,6 +310,7 @@ impl HostMessage {
     "run.input",
     "run.approval",
     "run.answer",
+    "run.site_grants",
     "run.interrupt",
     "run.cancel",
     "run.token",

@@ -44,8 +44,8 @@ use super::state::RunnerState;
 use crate::device_proof::DeviceKey;
 use crate::runner_protocol::{
   ApprovalKind, DESKTOP_ID_HEADER, Harness, HarnessReport, MAX_FRAME_BYTES, PATH,
-  PROTOCOL, RejectReason, RunAnswer, RunApproval, RunInput, RunOutcome, RunStart,
-  RunTokenRefresh,
+  PROTOCOL, RejectReason, RunAnswer, RunApproval, RunInput, RunOutcome, RunSiteGrants,
+  RunStart, RunTokenRefresh,
 };
 
 const WAIT: Duration = Duration::from_secs(10);
@@ -288,6 +288,14 @@ impl HarnessHost for RecordingHost {
       "answer {} {}",
       answer.request_id,
       questions.join(",")
+    ))
+  }
+
+  fn site_grants(&self, grants: RunSiteGrants) -> Forwarded {
+    self.take(format!(
+      "site grants {} {}",
+      String::from(grants.revision),
+      grants.origins.join(",")
     ))
   }
 
@@ -800,6 +808,96 @@ async fn duplicate_commands_reach_the_host_once_also_after_a_restart_and_only_a_
 }
 
 #[tokio::test]
+async fn each_website_approval_revision_reaches_the_host_once_also_after_a_restart() {
+  let gateway = Gateway::bind().await;
+  let host = Arc::new(RecordingHost::default());
+  let setup = Setup::new(Arc::clone(&host) as Arc<dyn HarnessHost>);
+  let runner = setup.start(&gateway);
+  let mut connection = gateway.accept().await;
+  connection.hello().await;
+  connection.welcome(&[]).await;
+  let grants = |revision: &str, origins: &[&str]| {
+    json!({
+      "type": "run.site_grants",
+      "runId": RUN,
+      "revision": revision,
+      "origins": origins,
+    })
+  };
+  let first = grants(
+    "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
+    &["https://fixture-library.test"],
+  );
+  let newest = grants("0192f3a0-6b1c-7d2e-8f30-0000000000f2", &[]);
+  connection
+    .send(run_start(RUN, "2026-10-28T13:00:00.000Z"))
+    .await;
+  connection.receive_type("run.accepted").await;
+  connection.send(first.clone()).await;
+  connection.send(first.clone()).await;
+  connection.send(newest.clone()).await;
+  // A run this desktop does not hold is sent nothing.
+  connection
+    .send(json!({
+      "type": "run.site_grants",
+      "runId": "0192f3a0-6b1c-7d2e-8f30-0000000000e1",
+      "revision": "0192f3a0-6b1c-7d2e-8f30-0000000000f3",
+      "origins": [],
+    }))
+    .await;
+  // Answered in order, so everything before it was handled.
+  connection
+    .send(run_start(RUN, "2026-10-28T13:00:00.000Z"))
+    .await;
+  connection.receive_type("run.accepted").await;
+  assert_eq!(
+    host.calls(),
+    [
+      format!("start {RUN}"),
+      "site grants 0192f3a0-6b1c-7d2e-8f30-0000000000f1 https://fixture-library.test"
+        .to_owned(),
+      "site grants 0192f3a0-6b1c-7d2e-8f30-0000000000f2 ".to_owned(),
+    ]
+  );
+  runner.stop().await;
+
+  let restarted_host = Arc::new(RecordingHost::default());
+  let restarted = Setup {
+    host: Arc::clone(&restarted_host) as Arc<dyn HarnessHost>,
+    reports: Arc::new(NoHarnessReports),
+    journal_dir: setup.journal_dir.clone(),
+    timing: timing(),
+    device_key: setup.device_key.clone(),
+    desktop_id: setup.desktop_id,
+    signed_in: true,
+    // A new app process opens the journal from disk again.
+    journal: Arc::new(SharedJournal::default()),
+  };
+  let runner = restarted.start(&gateway);
+  let mut connection = gateway.accept().await;
+  connection.hello().await;
+  connection.welcome(&[(RUN, 0)]).await;
+  // The API replays the run's newest set on a new socket; a newer one
+  // follows it.
+  connection.send(newest).await;
+  let later = grants(
+    "0192f3a0-6b1c-7d2e-8f30-0000000000f4",
+    &["https://fixture-archive.test"],
+  );
+  connection.send(later.clone()).await;
+  connection.send(later).await;
+  connection
+    .send(run_start(RUN, "2026-10-28T13:00:00.000Z"))
+    .await;
+  connection.receive_type("run.accepted").await;
+  assert_eq!(
+    restarted_host.calls(),
+    ["site grants 0192f3a0-6b1c-7d2e-8f30-0000000000f4 https://fixture-archive.test"]
+  );
+  runner.stop().await;
+}
+
+#[tokio::test]
 async fn a_command_the_host_did_not_take_reaches_it_when_the_api_resends_it() {
   let gateway = Gateway::bind().await;
   let host = Arc::new(RecordingHost::default());
@@ -831,6 +929,12 @@ async fn a_command_the_host_did_not_take_reaches_it_when_the_api_resends_it() {
       "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000d2",
       "answers": {"tone": ["Formal"]},
     }),
+    json!({
+      "type": "run.site_grants",
+      "runId": RUN,
+      "revision": "0192f3a0-6b1c-7d2e-8f30-0000000000f1",
+      "origins": ["https://fixture-library.test"],
+    }),
     json!({"type": "run.interrupt", "runId": RUN}),
     json!({"type": "run.cancel", "runId": RUN}),
   ];
@@ -838,6 +942,8 @@ async fn a_command_the_host_did_not_take_reaches_it_when_the_api_resends_it() {
     "input 0192f3a0-6b1c-7d2e-8f30-0000000000c1".to_owned(),
     "approval 0192f3a0-6b1c-7d2e-8f30-0000000000d1".to_owned(),
     "answer 0192f3a0-6b1c-7d2e-8f30-0000000000d2 tone".to_owned(),
+    "site grants 0192f3a0-6b1c-7d2e-8f30-0000000000f1 https://fixture-library.test"
+      .to_owned(),
     format!("interrupt {RUN}"),
     format!("cancel {RUN}"),
   ];

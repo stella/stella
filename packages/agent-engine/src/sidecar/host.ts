@@ -303,6 +303,9 @@ type RunStop = (typeof RUN_STOP)[keyof typeof RUN_STOP];
 
 type ApprovalDecision = (typeof DESKTOP_RUNNER_APPROVAL_DECISIONS)[number];
 
+/** How a question the run's approvals let go on reads once it closes. */
+const APPROVED = "approve" satisfies ApprovalDecision;
+
 type HeldRun = {
   /** The run's folder, resolved: no restore touches it while the run is held. */
   readonly workspaceDir: string;
@@ -331,6 +334,19 @@ type HeldRun = {
   checkpoint: DesktopRunnerCheckpointEvent | null;
   /** The browser tools' questions to the member about their steps. */
   readonly approvals: ActionApprovals;
+  /**
+   * The websites the run's browser steps run on without asking, by exact
+   * origin: the member's approvals, and those the member allowed in this
+   * run. The browser tools hold this very set, so a change reaches their
+   * next step.
+   */
+  readonly siteGrants: Set<string>;
+  /**
+   * The member's approvals as the run last received them (`run.start`,
+   * then each `run.site_grants`): what a newer set no longer holds leaves
+   * `siteGrants`.
+   */
+  memberSiteGrants: ReadonlySet<string>;
   /** Cut by a stop, so the run's browser steps end with it, not with the turn. */
   readonly browserStop: AbortController;
   /**
@@ -559,7 +575,10 @@ const resolvedInteraction = (
   event: Extract<HarnessEvent, { type: "interaction.resolved" }>,
 ): HarnessEvent => {
   const requestId = runnerRequestIdOf(run.requests, event.requestId);
-  const decision = run.answered.get(requestId);
+  // A browser question the run's approvals let go on before it was
+  // relabelled is recorded under its own id.
+  const decision =
+    run.answered.get(requestId) ?? run.answered.get(event.requestId);
   if (decision === undefined) {
     return {
       ...event,
@@ -573,6 +592,47 @@ const resolvedInteraction = (
     closed: "answered",
     ...(decision === null ? {} : { decision }),
   };
+};
+
+/**
+ * Settles the run's waiting browser questions its gate now runs without
+ * asking, each recorded as approved under its runner id (the harness's own
+ * id while the question is not relabelled yet), so its close reads as the
+ * answer that let it go on.
+ */
+const settleAllowedSteps = (
+  run: Pick<HeldRun, "answered" | "approvals" | "requests">,
+) => {
+  run.approvals.settleAllowed((nativeId) => {
+    run.answered.set(runnerRequestIdOf(run.requests, nativeId), APPROVED);
+  });
+};
+
+/**
+ * Takes the member's approvals as they stand now into the run: a website
+ * the member no longer allows leaves the run's set, even where the member
+ * allowed it in this run too, a new one joins it, and a website allowed only
+ * in this run stays. The browser tools' own set changes, then the questions
+ * the new set answers go on.
+ */
+const updateSiteGrants = (
+  run: Pick<
+    HeldRun,
+    "answered" | "approvals" | "memberSiteGrants" | "requests" | "siteGrants"
+  >,
+  origins: readonly string[],
+) => {
+  const next = new Set(origins);
+  for (const origin of run.memberSiteGrants) {
+    if (!next.has(origin)) {
+      run.siteGrants.delete(origin);
+    }
+  }
+  for (const origin of next) {
+    run.siteGrants.add(origin);
+  }
+  run.memberSiteGrants = next;
+  settleAllowedSteps(run);
 };
 
 /** The event stream for a run that ends before its harness starts. */
@@ -820,9 +880,17 @@ export class SidecarHost {
           if (native !== undefined && run.approvals.asked(native)) {
             // A question withdrawn before its answer came keeps reading as
             // withdrawn: the answer records nothing and reaches nothing.
-            run.approvals.answer(native, message.decision, () => {
-              run.answered.set(message.requestId, message.decision);
-            });
+            const answered = run.approvals.answer(
+              native,
+              message.decision,
+              () => {
+                run.answered.set(message.requestId, message.decision);
+              },
+            );
+            // Always allowing a website lets its other waiting steps go on.
+            if (answered) {
+              settleAllowedSteps(run);
+            }
             return;
           }
           this.respond(
@@ -844,6 +912,11 @@ export class SidecarHost {
             requestId,
             answers: message.answers,
           }));
+        });
+        return;
+      case "run.site_grants":
+        this.withRun(message, (run) => {
+          updateSiteGrants(run, message.origins);
         });
         return;
       case "run.interrupt":
@@ -1048,6 +1121,8 @@ export class SidecarHost {
       outputSharing: new AbortController(),
       checkpoint: null,
       approvals: createActionApprovals(),
+      siteGrants: new Set(message.policy.browserSiteGrants),
+      memberSiteGrants: new Set(message.policy.browserSiteGrants),
       browserStop: new AbortController(),
       live: null,
       launch: null,
@@ -1529,7 +1604,7 @@ export class SidecarHost {
       runId,
       threadId: message.threadId,
       approvals: message.policy.approvals,
-      siteGrants: new Set(message.policy.browserSiteGrants),
+      siteGrants: run.siteGrants,
       approve: run.approvals.request,
       stopped: run.browserStop.signal,
       workspaceDir: message.workspaceDir,
