@@ -49,7 +49,7 @@ import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import {
   chatRunTargetOf,
   localRunContextUsage,
-  localRunTargetField,
+  NO_STORED_CHAT_RUN_TARGET,
 } from "@/api/lib/chat/run-target";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
@@ -292,6 +292,7 @@ const getMessages = createSafeRootHandler(
             chatModel: true,
             chatReasoningEffort: true,
             chatLocalRunTarget: true,
+            chatCloudApprovals: true,
             forkedFromMessageId: true,
             parentThreadId: true,
             updatedAt: true,
@@ -467,7 +468,7 @@ const getMessages = createSafeRootHandler(
           webSearchEnabled: false,
           model: null,
           reasoningEffort: null,
-          ...localRunTargetField(chatRunTargetOf(null)),
+          runTarget: chatRunTargetOf(NO_STORED_CHAT_RUN_TARGET),
           // A not-yet-created draft still carries the cache-stable floor its
           // first send will pay. Web search is off (`webSearchEnabled: false`)
           // and the model defaults (`threadChatModel: null`) until the draft
@@ -532,7 +533,7 @@ const getMessages = createSafeRootHandler(
     // same model the next send uses.
     const context: ThreadContextMeter =
       localRunContextUsage({
-        target: chatRunTargetOf(thread.chatLocalRunTarget),
+        target: chatRunTargetOf(thread),
         messages: persistedMessages,
       }) ??
       buildNextSendContext({
@@ -556,7 +557,7 @@ const getMessages = createSafeRootHandler(
     const activeTurnSteering = await readActiveTurnSteering({
       activeTurnId: page.activeTurnId,
       organizationId: session.activeOrganizationId,
-      runTarget: chatRunTargetOf(thread.chatLocalRunTarget),
+      runTarget: chatRunTargetOf(thread),
       threadId,
       userId: user.id,
     });
@@ -582,8 +583,7 @@ const getMessages = createSafeRootHandler(
       webSearchEnabled: thread.webSearchEnabled,
       model: thread.chatModel,
       reasoningEffort: thread.chatReasoningEffort,
-      // Present only for a thread whose turns run on a computer; absent is cloud.
-      ...localRunTargetField(chatRunTargetOf(thread.chatLocalRunTarget)),
+      runTarget: chatRunTargetOf(thread),
       context,
     });
   },

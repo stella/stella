@@ -367,7 +367,7 @@ export const ENUM_COLUMNS = {
   chat_limit_reminders: ["on_reset"],
   chat_queue_holds: ["reason"],
   chat_secrets: ["decision"],
-  chat_threads: ["chat_reasoning_effort"],
+  chat_threads: ["chat_cloud_approvals", "chat_reasoning_effort"],
   chat_tool_grants: ["scope"],
   chat_turns: [
     "cancellation_reason",

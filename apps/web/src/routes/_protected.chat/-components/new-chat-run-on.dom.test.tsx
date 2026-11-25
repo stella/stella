@@ -151,7 +151,7 @@ const draftThread = ({
   model: null,
   olderCursor: null,
   reasoningEffort: null,
-  ...(runTarget === null ? {} : { runTarget }),
+  runTarget: runTarget ?? { kind: "cloud", approvals: "ask" },
   threadExists: exists,
   threadRevision: "2026-10-10T12:00:00.000Z",
   usedAnonymization: false,
@@ -679,7 +679,7 @@ test("a new chat whose remembered computer is offline starts in the cloud and sa
     }),
   ).toBeTruthy();
   expect(await sendFirstTurn(server, ui)).toMatchObject({
-    forwardedProps: { runTarget: { kind: "cloud" } },
+    forwardedProps: { runTarget: { kind: "cloud", approvals: "ask" } },
   });
   // Nothing was opened for a computer the chat does not run on.
   expect(open).not.toHaveBeenCalled();
@@ -772,7 +772,7 @@ test("a new chat left on stella cloud sends its first turn without a computer", 
   await testing.waitFor(() => expect(server.sends).toHaveLength(1));
   // Named, so the server never runs it on a computer the thread once used.
   expect(server.sends.at(0)).toMatchObject({
-    forwardedProps: { runTarget: { kind: "cloud" } },
+    forwardedProps: { runTarget: { kind: "cloud", approvals: "ask" } },
   });
   expect(server.patches).toEqual([]);
   expect(server.unexpected).toEqual([]);

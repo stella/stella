@@ -163,14 +163,14 @@ const sendNextQueuedChatMessage = async ({
     }
     const thread = await tx.query.chatThreads.findFirst({
       where: { id: { eq: threadId } },
-      columns: { chatLocalRunTarget: true },
+      columns: { chatLocalRunTarget: true, chatCloudApprovals: true },
     });
     if (thread === undefined) {
       return panic("The thread locked in this transaction has no row");
     }
     return {
       ...read,
-      threadRunTarget: chatRunTargetOf(thread.chatLocalRunTarget),
+      threadRunTarget: chatRunTargetOf(thread),
     };
   });
   if (gate.isErr()) {

@@ -206,7 +206,7 @@ test("the model chip names the reasoning effort once one is chosen", async () =>
 });
 
 test("the where chip switches the place, and the model chip lists that place's models", async () => {
-  const { chosen } = renderChips({ kind: "cloud" });
+  const { chosen } = renderChips({ kind: "cloud", approvals: "ask" });
   expect(await screen.findByRole("button", { name: AUTO_LABEL })).toBeTruthy();
 
   const places = await openMenu(CLOUD_PLACE);
@@ -235,7 +235,7 @@ test("the where chip switches the place, and the model chip lists that place's m
   await closeMenu();
 
   await choose(await openMenu(CODEX_PLACE), messages.chat.runOn.cloud);
-  expect(chosen).toEqual([LOCAL_TARGET, { kind: "cloud" }]);
+  expect(chosen).toEqual([LOCAL_TARGET, { kind: "cloud", approvals: "ask" }]);
   await waitForMenuClosed();
   const cloudModels = await openMenu(AUTO_LABEL);
   expect(within(cloudModels).getByPlaceholderText(SEARCH)).toBeTruthy();
@@ -244,7 +244,7 @@ test("the where chip switches the place, and the model chip lists that place's m
 
 test("the computer's agents say whether they can take a turn, and what to do when not", async () => {
   const { chosen } = renderChips(
-    { kind: "cloud" },
+    { kind: "cloud", approvals: "ask" },
     {
       ...READINESS,
       runners: READINESS.runners.map((runner) => ({
@@ -298,7 +298,7 @@ test("a chat on a computer that is offline says so on the where chip", async () 
 
 test("an agent starts on the model it marks as its default, offered first", async () => {
   const { chosen } = renderChips(
-    { kind: "cloud" },
+    { kind: "cloud", approvals: "ask" },
     {
       ...READINESS,
       runners: READINESS.runners.map((runner) => ({
@@ -352,7 +352,10 @@ test("an agent starts on the model it marks as its default, offered first", asyn
 });
 
 test("a member who may not run turns on a computer sees the model chip alone", async () => {
-  renderChips({ kind: "cloud" }, { status: "hidden" });
+  renderChips(
+    { kind: "cloud", approvals: "ask" },
+    { status: "hidden", maxApprovals: "full_auto" },
+  );
   expect(await screen.findByRole("button", { name: AUTO_LABEL })).toBeTruthy();
   expect(screen.queryByRole("button", { name: CLOUD_PLACE })).toBeNull();
 });
@@ -377,7 +380,7 @@ const failRunnerReads = () => {
 test("a failed read of the computers keeps the where chip, says so, and offers a retry", async () => {
   const restore = failRunnerReads();
   try {
-    renderChips({ kind: "cloud" }, "unreadable");
+    renderChips({ kind: "cloud", approvals: "ask" }, "unreadable");
     const places = await openMenu(CLOUD_PLACE);
     expect(
       await within(places).findByText(messages.chat.runOn.checkFailed),

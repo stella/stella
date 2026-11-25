@@ -1,0 +1,4 @@
+{
+  "add-column": "chat_threads gains the nullable chat_cloud_approvals column with no default, a metadata-only catalog change with no table rewrite under 1s lock_timeout and 5s statement_timeout.",
+  "add-constraint": "The CHECK constraint on chat_threads.chat_cloud_approvals is added NOT VALID with no existing-row scan under 1s lock_timeout and 5s statement_timeout."
+}

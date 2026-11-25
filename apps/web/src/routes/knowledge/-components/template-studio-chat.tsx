@@ -677,6 +677,7 @@ const TemplateStudioChatInner = ({
     messages,
     refreshAnswers,
     approvalIdsAwaitedAtOpen,
+    browserGate,
     continuePausedTurn,
     resendLatestMessage,
     sendMessage,
@@ -1429,6 +1430,7 @@ const TemplateStudioChatInner = ({
         value={{
           activeOrganizationId,
           approvalIdsAwaitedAtOpen,
+          browserGate,
           alwaysApprovedTools,
           conversationApprovedTools,
           confirmStoredApprovalGrant,

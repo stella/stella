@@ -9,11 +9,11 @@ import {
   BROWSER_CONTROL_ACTION,
   BROWSER_CONTROL_TOOL_NAME,
   BROWSER_FIND_TYPE,
-  isReadOnlyBrowserCommand,
   parseBrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
 import { browserSiteGrantHost } from "@stll/api-contract/browser-site-grants";
+import { BROWSER_STEP_GATE } from "@stll/api-contract/browser-step-gate";
 import { isDeclinedChatToolCall } from "@stll/api-contract/chat";
 import {
   localRunProposedPlan,
@@ -29,6 +29,10 @@ import {
   getReadableInputRows,
   humanizeIdentifier,
 } from "@stll/api-contract/chat-tool-input-rows";
+import {
+  DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
+  type DesktopRunnerApprovalMode,
+} from "@stll/api-contract/desktop-runner";
 import { Button } from "@stll/ui/button";
 import {
   Collapsible,
@@ -96,15 +100,9 @@ import type { ToolCallAction } from "@/components/chat/tool-call-card";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { useProxiedIconSrc } from "@/components/proxied-icon";
 import {
-  BROWSER_APPROVAL_MODE,
-  browserCommandSites,
-  currentBrowserAutoApproval,
-  recordBrowserSiteGrantApproval,
-  setBrowserApprovalMode,
-  useBrowserApprovalMode,
-  useBrowserAutoApproval,
-  useBrowserObservedPage,
-} from "@/features/chat/browser-control/browser-approval-mode";
+  currentBrowserStepDecision,
+  useBrowserStepDecision,
+} from "@/features/chat/browser-control/browser-approval-state";
 import {
   type BrowserApprovalDetail,
   getBrowserApprovalDetails,
@@ -444,43 +442,53 @@ export const PendingToolApprovalCard = ({
 };
 
 /**
- * How a browser card relates to website approvals: the website the card
- * names (by exact origin), whether the reads mode or a website approval may
- * answer it, and the user's stored approvals. Like a stored tool grant, a
- * website approval the API did not confirm (`unconfirmed`) answers nothing.
+ * How a browser command card is answered, by the shared browser gate
+ * (`decideBrowserStep`): the permission level the card's turn was sent with,
+ * what the extension last reported for the controlled tab, the websites the
+ * chat has been on, and the member's website approvals. A step the level
+ * runs, or a page opened on a website the chat has been on, answers itself;
+ * one the level refuses (Plan) or hands
+ * to the member (a sign-in) also goes through, so the executor answers the
+ * model with why it did not run. Like a stored tool grant, a website
+ * approval the API did not confirm (`unconfirmed`) answers nothing.
  * A browser step on the member's computer names its website in its question
  * (`localSite`); always allowing it there approves the step for the rest of
  * the run, whose later steps on the website then follow at once.
  */
 const useBrowserCardApproval = ({
   browserCommand,
+  level,
   localSite,
+  threadId,
   unconfirmed,
 }: {
   browserCommand: BrowserControlCommand | null;
+  level: DesktopRunnerApprovalMode;
   localSite: string | null;
+  threadId: string | null;
   unconfirmed: boolean;
 }) => {
   const { handleApprove, handleApproveForRun } = useChatApproval();
   const sites = useBrowserSiteGrants(
     browserCommand !== null || localSite !== null,
   );
-  const autoApproval = useBrowserAutoApproval({
+  const decision = useBrowserStepDecision({
     command: browserCommand,
     grantedOrigins: sites.grantedOrigins,
+    level,
+    threadId,
   });
-  const observedPage = useBrowserObservedPage();
-  // The offer follows the website the card names; whether an approval
-  // answers the command is decided on the proven one (`autoApproval`).
-  const shownSite =
-    browserCommand === null
-      ? null
-      : browserCommandSites({ command: browserCommand, observedPage }).shown;
-  const siteGrantOrigin =
-    autoApproval.type === "site-grant" && !unconfirmed
-      ? autoApproval.origin
+  const grantedSite =
+    decision?.type === BROWSER_STEP_GATE.run && decision.by === "site-grant"
+      ? decision.origin
       : null;
-  const offerable = shownSite ?? localSite;
+  const siteGrantOrigin = unconfirmed ? null : grantedSite;
+  // The website the question names: the page the step was written for, or
+  // the one a website approval the API did not confirm was for.
+  const unconfirmedSite = unconfirmed ? grantedSite : null;
+  const site =
+    decision?.type === BROWSER_STEP_GATE.ask ? decision.site : unconfirmedSite;
+  const offerable = site ?? localSite;
   return {
     /** Answers the card when the user always allows its website. */
     approveSite: (approvalId: string, toolName: ApprovalToolName) => {
@@ -495,12 +503,11 @@ const useBrowserCardApproval = ({
     },
     /**
      * Whether the API still allows the site, read with a request of its own.
-     * The card decides again once that read is back, on the approval state
-     * of that moment: a re-paired controller, a failed command or a moved
-     * tab in the meantime makes it ask. The site is kept with the call, and
-     * its result is checked against it once the command ran.
+     * The card decides again once that read is back, on what the extension
+     * reported at that moment: a re-paired controller, a failed command or a
+     * moved tab in the meantime makes it ask.
      */
-    confirmSiteGrant: async (toolCallId: string): Promise<boolean> => {
+    confirmSiteGrant: async (): Promise<boolean> => {
       if (siteGrantOrigin === null || browserCommand === null) {
         return false;
       }
@@ -508,28 +515,37 @@ const useBrowserCardApproval = ({
       if (fresh === null) {
         return false;
       }
-      const now = currentBrowserAutoApproval({
+      const now = currentBrowserStepDecision({
         command: browserCommand,
         grantedOrigins: fresh,
+        level,
+        threadId,
       });
       return (
-        now.type === "site-grant" &&
-        now.origin === siteGrantOrigin &&
-        recordBrowserSiteGrantApproval(toolCallId, now.origin)
+        now.type === BROWSER_STEP_GATE.run &&
+        now.by === "site-grant" &&
+        now.origin === siteGrantOrigin
       );
     },
-    isReadsAutoApproval: autoApproval.type === "reads-mode",
     /**
-     * The site the card offers to always allow: the one it names, when known
-     * and not yet allowed.
+     * Whether the card answers itself without a website approval: the level
+     * runs the step, the page opens on a website the chat has been on, or
+     * the step does not run at all and the executor says why.
      */
+    answersByLevel:
+      decision !== null &&
+      (decision.type === BROWSER_STEP_GATE.refuse ||
+        decision.type === BROWSER_STEP_GATE.needsMember ||
+        (decision.type === BROWSER_STEP_GATE.run &&
+          decision.by !== "site-grant")),
+    /** The site the card offers to always allow: named, and not yet allowed. */
     offeredSite:
       offerable !== null &&
       sites.canGrant &&
       !sites.grantedOrigins.has(offerable)
         ? offerable
         : null,
-    shownSite,
+    site,
     siteGrantOrigin,
     sites,
   };
@@ -670,6 +686,7 @@ export const ToolApprovalCard = ({
   const {
     activeOrganizationId,
     approvalIdsAwaitedAtOpen,
+    browserGate,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -718,18 +735,20 @@ export const ToolApprovalCard = ({
     : undefined;
 
   const approvalId = isApprovalRequested ? getApprovalId(part) : null;
-  const browserApprovalMode = useBrowserApprovalMode();
   const browserCommand =
     name === BROWSER_CONTROL_TOOL_NAME
       ? parseBrowserControlCommand(getApprovalPartInput(part))
       : null;
   const browserApproval = useBrowserCardApproval({
     browserCommand,
+    level:
+      browserGate?.levelFor(part.id) ?? DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
     localSite: localBrowserApprovalSite(name, getApprovalPartInput(part)),
+    threadId: browserGate?.threadId ?? null,
     unconfirmed: approvalId === unconfirmedGrantApprovalId,
   });
   // A stored grant or website approval answers a card only once the API
-  // confirms it still holds; opted-in browser page reads need no grant.
+  // confirms it still holds; a browser step the level decides needs none.
   const isGrantAutoApproval =
     approvalId !== unconfirmedGrantApprovalId &&
     hasAutomaticApproval({
@@ -741,13 +760,13 @@ export const ToolApprovalCard = ({
   const confirmAutoApproval =
     browserApproval.siteGrantOrigin === null
       ? async () => await confirmStoredApprovalGrant(name)
-      : async () => await browserApproval.confirmSiteGrant(part.id);
+      : async () => await browserApproval.confirmSiteGrant();
   const shouldAutoApprove =
     !isBlocked &&
     !awaitedAtOpen(approvalId, approvalIdsAwaitedAtOpen) &&
     !requiresPerCallChatApproval(name) &&
     (isGrantAutoApproval ||
-      browserApproval.isReadsAutoApproval ||
+      browserApproval.answersByLevel ||
       browserApproval.siteGrantOrigin !== null);
   const automaticResponse =
     approvalId === null
@@ -758,7 +777,7 @@ export const ToolApprovalCard = ({
             setResponded(true);
             if (isBlocked) {
               onDeny(approvalId);
-            } else if (browserApproval.isReadsAutoApproval) {
+            } else if (browserApproval.answersByLevel) {
               onApprove(approvalId, name);
             } else if (shouldAutoApprove) {
               const answerIfConfirmed = async () => {
@@ -780,9 +799,13 @@ export const ToolApprovalCard = ({
             isAwaitingUser && !responded && (isBlocked || shouldAutoApprove),
         };
   // Answered cards stop asking, even while the answer waits for the rest of
-  // a batch.
+  // a batch; a browser step the level decides never asks at all.
   const asksForDecision =
-    isAwaitingUser && isApprovalRequested && !responded && !isProcessing;
+    isAwaitingUser &&
+    isApprovalRequested &&
+    !responded &&
+    !isProcessing &&
+    !(shouldAutoApprove && browserApproval.answersByLevel);
   const isAwaitingDecision = asksForDecision && !isBlocked;
   const beginManualResponse = (id: string): boolean => {
     if (submittedApprovalIdRef.current === id) {
@@ -859,7 +882,7 @@ export const ToolApprovalCard = ({
 
       <ToolApprovalSummary
         activeFileName={activeFileName}
-        browserSite={browserApproval.shownSite}
+        browserSite={browserApproval.site}
         externalInput={showsExternalInput ? externalInput : undefined}
         isAwaitingDecision={isAwaitingDecision}
         part={part}
@@ -870,16 +893,6 @@ export const ToolApprovalCard = ({
           <ToolCallRawError rawErrorDetails={rawErrorDetails} />
         </div>
       )}
-      {isAwaitingDecision &&
-        browserCommand !== null &&
-        browserApprovalMode === BROWSER_APPROVAL_MODE.autoApproveReads && (
-          <BrowserApprovalModeNotice
-            onReset={() =>
-              setBrowserApprovalMode(BROWSER_APPROVAL_MODE.askEveryTime)
-            }
-          />
-        )}
-
       {approvalId && asksForDecision && !isBlocked && (
         <div className="border-border/50 flex flex-wrap items-center gap-2 border-t px-3 py-2">
           <Button
@@ -907,25 +920,6 @@ export const ToolApprovalCard = ({
               site={browserApproval.offeredSite}
             />
           )}
-          {browserCommand !== null &&
-            isReadOnlyBrowserCommand(browserCommand) &&
-            browserApprovalMode === BROWSER_APPROVAL_MODE.askEveryTime && (
-              <Button
-                onClick={() => {
-                  if (!beginManualResponse(approvalId)) {
-                    return;
-                  }
-                  setBrowserApprovalMode(
-                    BROWSER_APPROVAL_MODE.autoApproveReads,
-                  );
-                  onApprove(approvalId, name);
-                }}
-                size="xs"
-                variant="outline"
-              >
-                {t("chat.approval.browser.autoApproveReads")}
-              </Button>
-            )}
           {canAllowInConversation && (
             <Button
               onClick={() => {
@@ -1434,18 +1428,6 @@ const browserActionTranslationKey = (command: BrowserControlCommand) => {
   }
 };
 
-const BrowserApprovalModeNotice = ({ onReset }: { onReset: () => void }) => {
-  const t = useTranslations();
-  return (
-    <div className="border-border/50 text-muted-foreground flex items-center gap-2 border-t px-3 py-1.5 text-xs">
-      <span>{t("chat.approval.browser.modeReads")}</span>
-      <Button className="ms-auto" onClick={onReset} size="xs" variant="ghost">
-        {t("chat.approval.browser.askAgain")}
-      </Button>
-    </div>
-  );
-};
-
 const BrowserControlInputSummary = ({
   input,
   isAwaitingDecision,
@@ -1453,7 +1435,7 @@ const BrowserControlInputSummary = ({
 }: {
   input: unknown;
   isAwaitingDecision: boolean;
-  /** The website the command acts on or moves to, by origin. */
+  /** The website the question names, by origin. */
   site: string | null;
 }) => {
   const t = useTranslations();
@@ -1482,8 +1464,9 @@ const BrowserControlInputSummary = ({
     }
   };
   const details = getBrowserApprovalDetails(command);
-  // A read or going back names no address of its own; while it asks, the
-  // card names the website the tab is on, the one "always allow" covers.
+  // A step on a page names no address of its own; while it asks, the card
+  // names the website of the page it was written for, the one "always
+  // allow" covers.
   const pageSite =
     isAwaitingDecision &&
     site !== null &&

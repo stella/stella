@@ -330,6 +330,7 @@ export const ChatThreadPage = ({
     isLoadingOlder,
     loadOlderError,
     approvalIdsAwaitedAtOpen,
+    browserGate,
     continuePausedTurn,
     resendLatestMessage,
     sendMessage,
@@ -746,6 +747,7 @@ export const ChatThreadPage = ({
           value={{
             activeOrganizationId,
             approvalIdsAwaitedAtOpen,
+            browserGate,
             alwaysApprovedTools,
             conversationApprovedTools,
             confirmStoredApprovalGrant,

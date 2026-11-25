@@ -754,9 +754,9 @@
       },
       "enterSlug": "Sisestage organisatsiooni URL-i lühinimi.",
       "localRuns": {
-        "description": "Kõige rohkem, mida programmeerimisagent tohib küsimata teha, kui ta käitab vestlust liikme arvutis. Madalam piir kehtib iga liikme järgmisest sõnumist; juba käimasolev käivitus säilitab oma õigused.",
-        "title": "Programmeerimisagendid liikmete arvutites",
-        "updated": "Programmeerimisagentide õigused on uuendatud"
+        "description": "Kõige rohkem, mida vestlus tohib küsimata teha: programmeerimisagent, mis käitab vestlust liikme arvutis, ja sammud liikme brauseris. Madalam piir kehtib iga liikme järgmisest sõnumist; juba käimasolev käivitus säilitab oma õigused.",
+        "title": "Vestluse õigused",
+        "updated": "Vestluse õigused on uuendatud"
       },
       "logoInvalid": "Valige kuni 5 MB suurune PNG-, JPEG- või WebP-pilt.",
       "matterNumbering": "Toimikute nummerdamine",

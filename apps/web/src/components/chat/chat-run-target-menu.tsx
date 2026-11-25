@@ -5,7 +5,6 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
-  CHAT_CLOUD_RUN_TARGET,
   CHAT_RUN_TARGET_KIND,
   type ChatLocalRunHarness,
   type ChatRunTarget,
@@ -34,6 +33,8 @@ import {
   chatLocalFolderOptions,
   type ChatLocalHarnessOption,
   chatLocalHarnessOptionsFor,
+  CLOUD_PERMISSION_KEYS,
+  cloudRunTargetWithin,
   defaultHarnessModel,
   LOCAL_RUN_PERMISSION_KEYS,
   type LocalRunFolderProblem,
@@ -446,6 +447,10 @@ export const ChatRunTargetMenu = ({
   };
   const maxApprovals = localRunMaxApprovals(readiness);
   const permissions = permissionView(selected, options, maxApprovals);
+  const permissionKeys =
+    selected.kind === CHAT_RUN_TARGET_KIND.cloud
+      ? CLOUD_PERMISSION_KEYS
+      : LOCAL_RUN_PERMISSION_KEYS;
 
   return (
     <>
@@ -462,7 +467,9 @@ export const ChatRunTargetMenu = ({
             so it closes; a permission pick keeps it open for another. */}
         <MenuRadioItem
           closeOnClick
-          onClick={() => choose(CHAT_CLOUD_RUN_TARGET)}
+          onClick={() =>
+            choose(cloudRunTargetWithin(selected.approvals, maxApprovals))
+          }
           value={CHAT_RUN_TARGET_KIND.cloud}
         >
           <PlaceLabel
@@ -589,11 +596,16 @@ export const ChatRunTargetMenu = ({
           </MenuGroup>
         </>
       )}
-      {selected.kind === "local" && permissions?.type === "choice" && (
+      {permissions?.type === "choice" && (
         <>
           <MenuSeparator />
           <MenuRadioGroup value={selected.approvals}>
             <MenuGroupLabel>{t("chat.localRun.permissions")}</MenuGroupLabel>
+            {selected.kind === CHAT_RUN_TARGET_KIND.cloud && (
+              <p className="text-muted-foreground text-2xs px-2 pb-1.5 text-pretty">
+                {t("chat.runOn.cloudPermissionsHint")}
+              </p>
+            )}
             {permissions.modes.map(({ mode, availability }) => (
               <MenuRadioItem
                 disabled={availability !== "available"}
@@ -604,10 +616,10 @@ export const ChatRunTargetMenu = ({
                 <PlaceLabel
                   description={
                     availability === "available"
-                      ? t(LOCAL_RUN_PERMISSION_KEYS[mode].description)
+                      ? t(permissionKeys[mode].description)
                       : t(UNAVAILABLE_PERMISSION_KEY[availability])
                   }
-                  title={t(LOCAL_RUN_PERMISSION_KEYS[mode].label)}
+                  title={t(permissionKeys[mode].label)}
                 />
               </MenuRadioItem>
             ))}

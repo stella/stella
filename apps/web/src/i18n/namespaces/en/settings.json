@@ -754,9 +754,9 @@
       },
       "enterSlug": "Enter the organization URL slug.",
       "localRuns": {
-        "description": "The most a coding agent may do without asking when it runs a chat on a member's computer. A lower limit applies from each member's next message; a run already going keeps its permissions.",
-        "title": "Coding agents on members' computers",
-        "updated": "Coding agent permissions updated"
+        "description": "The most chat may do without asking: a coding agent running a chat on a member's computer, and steps in a member's browser. A lower limit applies from each member's next message; a run already going keeps its permissions.",
+        "title": "Chat permissions",
+        "updated": "Chat permissions updated"
       },
       "logoInvalid": "Choose a PNG, JPEG or WebP image up to 5 MB.",
       "matterNumbering": "Matter numbering",

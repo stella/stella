@@ -108,6 +108,7 @@ const savedThread = {
   model: null,
   olderCursor: null,
   reasoningEffort: null,
+  runTarget: { kind: "cloud", approvals: "ask" },
   threadExists: true,
   threadRevision: "2026-10-10T12:00:00.000Z",
   usedAnonymization: false,
@@ -291,7 +292,7 @@ const serveSavedBuilder = ({
       }
       // The composer's where chip: this member runs no turns on a computer.
       if (pathname.endsWith("/chat/local-runners")) {
-        return Response.json({ status: "hidden" });
+        return Response.json({ status: "hidden", maxApprovals: "full_auto" });
       }
       // Nothing of this chat runs in the background on a computer.
       if (

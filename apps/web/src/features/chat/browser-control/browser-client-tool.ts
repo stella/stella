@@ -6,11 +6,13 @@ import {
   browserControlCommandJsonSchema,
   browserControlResultJsonSchema,
 } from "@stll/api-contract/browser-control-json-schema";
+import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
 
 import {
   beginBrowserCommand,
-  browserApprovalProvenanceFor,
-} from "./browser-approval-mode";
+  currentBrowserStepDecision,
+  observeBrowserVisit,
+} from "./browser-approval-state";
 import { executeBrowserExtensionCommand } from "./browser-extension-bridge";
 import { waitForBrowserSignIn } from "./browser-sign-in-handoff";
 import { createBrowserToolExecutionCache } from "./browser-tool-execution";
@@ -23,17 +25,45 @@ type BrowserExtensionToolOptions = {
    * commands per turn, and Stop ends a turn.
    */
   turnIdFor: (toolCallId?: string) => string | null;
+  /**
+   * The permission level of the turn a tool call belongs to, the one its
+   * card answers by: a step the level refuses (Plan) is answered without
+   * reaching the extension.
+   */
+  levelFor: (toolCallId: string) => DesktopRunnerApprovalMode;
+  /** The chat's thread: the websites its commands reach are kept for it. */
+  threadId: string;
 };
 
+/** Website approvals never lift a refusal or a sign-in, so none are read. */
+const NO_GRANTS: ReadonlySet<string> = new Set();
+
 export const createBrowserExtensionTool = ({
+  levelFor,
+  threadId,
   turnIdFor,
 }: BrowserExtensionToolOptions) => {
   // The outcome is tracked per web tab, not per chat runtime: every chat in
-  // this tab drives the same controlled Chrome tab.
+  // this tab drives the same controlled Chrome tab. The websites a page was
+  // reported from are kept for this chat.
   const executions = createBrowserToolExecutionCache(
-    executeBrowserExtensionCommand,
+    async (input, toolCallId, run) => {
+      const result = await executeBrowserExtensionCommand(
+        input,
+        toolCallId,
+        run,
+      );
+      observeBrowserVisit(threadId, result);
+      return result;
+    },
     beginBrowserCommand,
-    browserApprovalProvenanceFor,
+    (command, toolCallId) =>
+      currentBrowserStepDecision({
+        command,
+        grantedOrigins: NO_GRANTS,
+        level: levelFor(toolCallId),
+        threadId,
+      }),
     waitForBrowserSignIn,
   );
   const stopper = createTurnStopper();

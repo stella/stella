@@ -335,18 +335,35 @@ const chatBrowser = (browser: HostRouter, threadId: string) => ({
   browserMoves: () => browser.browserMoves(threadId),
 });
 
-/** A chat's page state, kept while any run of the chat is held. */
-const sessionFor = (
-  sessions: Map<string, LocalBrowserSession>,
-  threadId: string,
-) => {
-  const existing = sessions.get(threadId);
-  if (existing !== undefined) {
-    return existing;
-  }
-  const created = createLocalBrowserSession();
-  sessions.set(threadId, created);
-  return created;
+/**
+ * Each chat's page state, kept while any run of the chat is held. The
+ * websites a chat has been on stay for the sidecar's life: a later run of
+ * the chat opens them without asking.
+ */
+const createChatSessions = () => {
+  const sessions = new Map<string, LocalBrowserSession>();
+  const visited = new Map<string, Set<string>>();
+  return {
+    of: (threadId: string): LocalBrowserSession => {
+      const existing = sessions.get(threadId);
+      if (existing !== undefined) {
+        return existing;
+      }
+      const chatVisited = visited.get(threadId) ?? new Set<string>();
+      visited.set(threadId, chatVisited);
+      const created = createLocalBrowserSession(chatVisited);
+      sessions.set(threadId, created);
+      return created;
+    },
+    /** The chat's last run ended: its page state goes, its visits stay. */
+    drop: (threadId: string): void => {
+      sessions.delete(threadId);
+    },
+    clear: (): void => {
+      sessions.clear();
+      visited.clear();
+    },
+  };
 };
 
 type LocalBrowserMcpOptions = {
@@ -371,7 +388,7 @@ export const startLocalBrowserMcp = ({
   version,
 }: LocalBrowserMcpOptions): LocalBrowserMcp => {
   const endpoints = createEndpoints(browser.releaseChat);
-  const sessions = new Map<string, LocalBrowserSession>();
+  const sessions = createChatSessions();
   const downloads = downloadInboxFor(downloadSource, endpoints.runOf);
   const listener = { host: "" };
 
@@ -433,7 +450,7 @@ export const startLocalBrowserMcp = ({
         const result = await whileCalling(
           { id, requestSignal, serving },
           async (signal) =>
-            await sessionFor(sessions, held.threadId).call(name, input, {
+            await sessions.of(held.threadId).call(name, input, {
               ...chatBrowser(browser, held.threadId),
               ...runApprovals(held),
               downloads: async (shownAddress) =>
@@ -539,7 +556,7 @@ export const startLocalBrowserMcp = ({
     browser.cancel({ controllerId: ended.held.threadId, turnId: runId });
     downloads?.forgetRun(runId);
     if (!endpoints.servesThread(ended.held.threadId)) {
-      sessions.delete(ended.held.threadId);
+      sessions.drop(ended.held.threadId);
     }
     return ended.key;
   };

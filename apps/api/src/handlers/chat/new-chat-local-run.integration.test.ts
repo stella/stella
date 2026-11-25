@@ -11,9 +11,11 @@ import {
   CHAT_COMMAND_ERROR_CODE,
   CHAT_COMMAND_ID_HEADER,
 } from "@stll/api-contract/chat-command";
-import type {
-  ChatLocalRunTarget,
-  ChatRunTarget,
+import {
+  CHAT_CLOUD_RUN_TARGET,
+  chatCloudRunTarget,
+  type ChatLocalRunTarget,
+  type ChatRunTarget,
 } from "@stll/api-contract/chat-run-target";
 import {
   DESKTOP_RUNNER_FEATURE_ID,
@@ -283,11 +285,9 @@ const firstSend = (
 const storedRunTarget = async (threadId: SafeId<"chatThread">) => {
   const row = await testDb.query.chatThreads.findFirst({
     where: { id: { eq: threadId } },
-    columns: { chatLocalRunTarget: true },
+    columns: { chatLocalRunTarget: true, chatCloudApprovals: true },
   });
-  return row === undefined
-    ? undefined
-    : chatRunTargetOf(row.chatLocalRunTarget);
+  return row === undefined ? undefined : chatRunTargetOf(row);
 };
 
 /** The computer run the send handed its turn to, if any. */
@@ -356,7 +356,20 @@ describe("a new chat's first send bound for the member's computer", () => {
     expect(result).toBeInstanceOf(Response);
     expect(picks).toEqual([]);
     expect(handedOff()).toBeUndefined();
-    expect(await storedRunTarget(threadId)).toEqual({ kind: "cloud" });
+    expect(await storedRunTarget(threadId)).toEqual(CHAT_CLOUD_RUN_TARGET);
+  });
+
+  test("a first send on stella at another permission level stores that level", async () => {
+    const threadId = newThreadId();
+    streamChatMock.mockClear();
+    const fullAuto = chatCloudRunTarget("full_auto");
+
+    const result = await sendMessage.handler(firstSend(threadId, fullAuto));
+
+    expect(result).toBeInstanceOf(Response);
+    expect(handedOff()).toBeUndefined();
+    // A later send that names no target, or a reload, runs at that level.
+    expect(await storedRunTarget(threadId)).toEqual(fullAuto);
   });
 
   test("an answer names the turn once the send is accepted, a refusal included, and not before", async () => {
@@ -384,7 +397,7 @@ describe("a send retried under its command id after a lost answer", () => {
   // One send path for both targets: the retry learns its first attempt's
   // turn whether that turn runs on stella or on the member's computer.
   const targets: [string, ChatRunTarget][] = [
-    ["stella's cloud model", { kind: "cloud" }],
+    ["stella's cloud model", CHAT_CLOUD_RUN_TARGET],
     ["the member's computer", CODEX],
   ];
   test.each(targets)(
@@ -465,7 +478,7 @@ describe("a send to a thread that runs on the member's computer", () => {
     const threadId = await threadOnCodex();
 
     const result = await sendMessage.handler(
-      firstSend(threadId, { kind: "cloud" }),
+      firstSend(threadId, CHAT_CLOUD_RUN_TARGET),
     );
 
     expect(result).toBeInstanceOf(Response);

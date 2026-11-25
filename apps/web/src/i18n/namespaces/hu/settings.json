@@ -754,9 +754,9 @@
       },
       "enterSlug": "Adja meg a szervezet URL-azonosítóját.",
       "localRuns": {
-        "description": "Legfeljebb ennyit tehet meg egy kódoló ügynök kérdezés nélkül, amikor egy tag számítógépén futtat egy csevegést. Az alacsonyabb korlát minden tag következő üzenetétől érvényes; a már futó munkamenet megtartja az engedélyeit.",
-        "title": "Kódoló ügynökök a tagok számítógépein",
-        "updated": "A kódoló ügynökök engedélyei frissítve"
+        "description": "Legfeljebb ennyit tehet a csevegés kérdezés nélkül: egy kódoló ügynök, amely egy tag számítógépén futtat csevegést, valamint a lépések egy tag böngészőjében. Az alacsonyabb korlát minden tag következő üzenetétől érvényes; a már futó munkamenet megtartja az engedélyeit.",
+        "title": "Csevegési engedélyek",
+        "updated": "Csevegési engedélyek frissítve"
       },
       "logoInvalid": "Válasszon legfeljebb 5 MB méretű PNG-, JPEG- vagy WebP-képet.",
       "matterNumbering": "Ügyszámozás",

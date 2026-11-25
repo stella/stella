@@ -1068,8 +1068,19 @@ describe("chat thread messages", () => {
   });
 
   const browsingTask = "Find the registry's opening hours";
+  // A click: at the default level it asks, where opening a page would not.
   const browserApproval = (id: string) => {
-    const input = { action: "open", url: `https://www.example.cz/${id}` };
+    const input = {
+      action: "click",
+      page: { revision: "revision-1", url: `https://www.example.cz/${id}` },
+      target: {
+        context: { type: "absent" },
+        href: { type: "absent" },
+        name: "Opening hours",
+        ref: "e:0:1",
+        role: "button",
+      },
+    };
     return {
       approval: { id: `${id}-approval`, needsApproval: true },
       arguments: JSON.stringify(input),
@@ -1198,7 +1209,7 @@ describe("chat thread messages", () => {
     ]);
 
     expect(approvalCardsOutsideClosedPanels(html)).toBe(1);
-    expect(renderedText(html)).toContain("https://www.example.cz/inner-page");
+    expect(renderedText(html)).toContain("www.example.cz");
   });
 
   test("folds a run that renders settled", () => {

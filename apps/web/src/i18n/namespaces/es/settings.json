@@ -754,9 +754,9 @@
       },
       "enterSlug": "Introduzca el identificador de la organización para la URL.",
       "localRuns": {
-        "description": "Lo máximo que puede hacer un agente de programación sin preguntar cuando ejecuta un chat en el ordenador de un miembro. Un límite más bajo se aplica a partir del siguiente mensaje de cada miembro; una ejecución ya en curso conserva sus permisos.",
-        "title": "Agentes de programación en los ordenadores de los miembros",
-        "updated": "Permisos de los agentes de programación actualizados"
+        "description": "Lo máximo que puede hacer el chat sin preguntar: un agente de programación que ejecuta un chat en el ordenador de un miembro y los pasos en el navegador de un miembro. Un límite más bajo se aplica a partir del siguiente mensaje de cada miembro; una ejecución ya en curso conserva sus permisos.",
+        "title": "Permisos del chat",
+        "updated": "Permisos del chat actualizados"
       },
       "logoInvalid": "Elige una imagen PNG, JPEG o WebP de hasta 5 MB.",
       "matterNumbering": "Numeración de asuntos",

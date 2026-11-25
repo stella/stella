@@ -151,6 +151,7 @@ const ChatThreadDomPage = ({
         value={{
           activeOrganizationId: organizationId,
           approvalIdsAwaitedAtOpen: session.approvalIdsAwaitedAtOpen,
+          browserGate: session.browserGate,
           alwaysApprovedTools: session.alwaysApprovedTools,
           conversationApprovedTools: session.conversationApprovedTools,
           confirmStoredApprovalGrant: session.confirmStoredApprovalGrant,

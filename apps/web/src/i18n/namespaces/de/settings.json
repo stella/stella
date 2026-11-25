@@ -754,9 +754,9 @@
       },
       "enterSlug": "Geben Sie den URL-Kurznamen der Organisation ein.",
       "localRuns": {
-        "description": "Wie viel ein Coding-Agent höchstens ohne Nachfrage tun darf, wenn er einen Chat auf dem Computer eines Mitglieds ausführt. Ein niedrigeres Limit gilt ab der nächsten Nachricht jedes Mitglieds; ein bereits laufender Durchlauf behält seine Berechtigungen.",
-        "title": "Coding-Agenten auf den Computern der Mitglieder",
-        "updated": "Berechtigungen der Coding-Agenten aktualisiert"
+        "description": "Wie viel der Chat höchstens ohne Nachfrage tun darf: ein Coding-Agent, der einen Chat auf dem Computer eines Mitglieds ausführt, und Schritte im Browser eines Mitglieds. Ein niedrigeres Limit gilt ab der nächsten Nachricht jedes Mitglieds; ein bereits laufender Durchlauf behält seine Berechtigungen.",
+        "title": "Chat-Berechtigungen",
+        "updated": "Chat-Berechtigungen aktualisiert"
       },
       "logoInvalid": "Wählen Sie ein PNG-, JPEG- oder WebP-Bild mit höchstens 5 MB.",
       "matterNumbering": "Aktennummerierung",

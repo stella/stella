@@ -325,10 +325,23 @@ test("a harness that runs in one mode offers no choice and says how it behaves",
   ]);
 });
 
-test("a cloud turn has no permission choice", async () => {
-  const { view } = renderMenu({ kind: "cloud" });
-  await waitFor(() => view.getByText(messages.chat.runOn.yourComputer));
-  expect(view.queryByText("Permissions")).toBeNull();
+test("a cloud turn offers every level, saying what each does in the browser", async () => {
+  const { view, chosen } = renderMenu({ kind: "cloud", approvals: "ask" });
+  await waitFor(() => view.getByText(messages.chat.runOn.cloudPermissionsHint));
+  expect(view.queryByText(messages.chat.localRun.permissions)).not.toBeNull();
+  const { runOn } = messages.chat;
+  for (const description of [
+    runOn.cloudPermissionPlanDescription,
+    runOn.cloudPermissionAskDescription,
+    runOn.cloudPermissionAutoDescription,
+    runOn.cloudPermissionFullAutoDescription,
+  ]) {
+    expect(view.queryByText(description)).not.toBeNull();
+  }
+  fireEvent.click(
+    await radioItem(view, messages.chat.localRun.permissionFullAuto),
+  );
+  expect(chosen).toEqual([{ kind: "cloud", approvals: "full_auto" }]);
 });
 
 test("the places open with the cloud, the member's computer and its ready agents", async () => {
@@ -344,7 +357,7 @@ test("the places open with the cloud, the member's computer and its ready agents
   if (cloud !== undefined) {
     fireEvent.click(cloud);
   }
-  expect(chosen).toEqual([{ kind: "cloud" }]);
+  expect(chosen).toEqual([{ kind: "cloud", approvals: "ask" }]);
 });
 
 test("picking another agent starts it on its recommended model, and the chosen agent keeps its own", async () => {
@@ -393,7 +406,10 @@ test("choosing an agent on a computer that is not connected opens stella desktop
   const open = spyOn(desktopBridge, "openDesktopUrl").mockImplementation(() => {
     opened = true;
   });
-  const { view, chosen } = renderMenu({ kind: "cloud" }, offline);
+  const { view, chosen } = renderMenu(
+    { kind: "cloud", approvals: "ask" },
+    offline,
+  );
 
   const codex = await waitFor(() => {
     const item = view
@@ -489,7 +505,7 @@ test("an agent that needs signing in opens stella desktop at its card and then s
     () => undefined,
   );
   const { view, chosen } = renderMenu(
-    { kind: "cloud" },
+    { kind: "cloud", approvals: "ask" },
     withHarnessStates({ codex: "needs_login", "claude-code": "needs_login" }),
   );
 
@@ -534,7 +550,7 @@ test.each([
       () => undefined,
     );
     const { view, chosen } = renderMenu(
-      { kind: "cloud" },
+      { kind: "cloud", approvals: "ask" },
       withHarnessStates({ codex: state, "claude-code": "needs_login" }),
     );
     const codex = await harnessRow(view, "Codex");
@@ -558,7 +574,7 @@ test("an agent the member sets up themselves says how, and opens nothing", async
     () => undefined,
   );
   const { view, chosen } = renderMenu(
-    { kind: "cloud" },
+    { kind: "cloud", approvals: "ask" },
     withHarnessStates({ codex: "needs_login", antigravity: "needs_login" }),
   );
   const antigravity = await harnessRow(view, "Antigravity");

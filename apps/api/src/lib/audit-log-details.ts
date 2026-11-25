@@ -43,6 +43,7 @@ const CHAT_THREAD_SETTING_FIELDS = [
   "chatModel",
   "chatReasoningEffort",
   "chatLocalRunTarget",
+  "chatCloudApprovals",
   "contextMatterIds",
   "dataWorkspaceIds",
   "limitReminder",

@@ -107,7 +107,7 @@ const renderLocalCard = (
 };
 
 describe("always allowing a website from a step on the member's computer", () => {
-  test("names the exact origin of the page the desktop read", () => {
+  test("names the exact origin of the page the desktop read, or of the address it opens", () => {
     const { browser } = CHAT_LOCAL_RUN_TOOL_NAMES;
     expect(
       localBrowserApprovalSite(browser, askedStep(`${SITE}/search?q=x`)),
@@ -119,8 +119,18 @@ describe("always allowing a website from a step on the member's computer", () =>
       ),
     ).toBeNull();
     expect(
-      localBrowserApprovalSite(browser, { action: "open", url: `${SITE}/` }),
+      localBrowserApprovalSite(browser, {
+        action: "open",
+        url: `${SITE}/search?q=notice`,
+      }),
+    ).toBe(SITE);
+    expect(
+      localBrowserApprovalSite(browser, {
+        action: "open",
+        url: "http://fixture-library.test/",
+      }),
     ).toBeNull();
+    expect(localBrowserApprovalSite(browser, { action: "open" })).toBeNull();
     expect(
       localBrowserApprovalSite("web_search", askedStep(`${SITE}/`)),
     ).toBeNull();
@@ -135,6 +145,18 @@ describe("always allowing a website from a step on the member's computer", () =>
     );
     expect(approvedForRun).toEqual(["local-approval"]);
     expect(approvedOnce).toEqual([]);
+    queryClient.clear();
+  });
+
+  test("opening a website the chat has not been on offers to always allow it", () => {
+    const { approvedForRun, queryClient, view } = renderLocalCard({
+      action: "open",
+      url: `${SITE}/search?q=notice`,
+    });
+    fireEvent.click(
+      within(view.container).getByRole("button", { name: ALWAYS_ALLOW_SITE }),
+    );
+    expect(approvedForRun).toEqual(["local-approval"]);
     queryClient.clear();
   });
 

@@ -37,6 +37,7 @@ import {
   type ChatLocalRunSteerOutcome,
   type ChatLocalRunSteerRefusal,
   type ChatLocalRunSteerSource,
+  type ChatRunTarget,
 } from "@stll/api-contract/chat-run-target";
 import {
   CHAT_TURN_STEERING,
@@ -45,6 +46,10 @@ import {
   chatTurnSteeringEventSchema,
 } from "@stll/api-contract/chat-send-intent";
 import { createChatTurnTimingObserver } from "@stll/api-contract/chat-turn-duration";
+import {
+  DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
+  type DesktopRunnerApprovalMode,
+} from "@stll/api-contract/desktop-runner";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
   ChatReconnectError,
@@ -68,6 +73,10 @@ import {
   hasRunningToolCallInLatestAssistantMessage,
   isChatClientRequestActive,
 } from "@/components/chat/chat-ui-tools";
+import {
+  browserTurnLevel,
+  recordBrowserTurnLevel,
+} from "@/features/chat/browser-control/browser-approval-state";
 import { createBrowserExtensionTool } from "@/features/chat/browser-control/browser-client-tool";
 import {
   BrowserBridgeUnmountedError,
@@ -279,8 +288,20 @@ export type ToolApprovalResponse = {
   scope?: "session";
 };
 
+/**
+ * What a chat's browser steps are decided by besides what the extension
+ * reported: the chat, and the permission level of the turn a tool call
+ * belongs to (the one it was sent with), so a later pick in the composer
+ * applies to the next turn only.
+ */
+export type ChatBrowserGate = {
+  threadId: string;
+  levelFor: (toolCallId: string) => DesktopRunnerApprovalMode;
+};
+
 export type ChatRuntime = ChatActivitySession & {
   readonly [CHAT_RUNTIME_BRAND]: true;
+  browserGate: ChatBrowserGate;
   resolveToolApproval: (
     response: ToolApprovalResponse,
     options?: ChatSendMessageOptions,
@@ -461,6 +482,9 @@ type CreateChatRuntimeProps = {
   /** The turns the page started on the thread in the runtimes this one
    *  replaces: replacing a runtime is not a turn, so the count goes on. */
   turnsStarted?: number | undefined;
+  /** Where the thread's turns run, as the server stored it when read: what
+   *  a turn not sent from this page, or sent naming no target, runs at. */
+  storedRunTarget?: ChatRunTarget | undefined;
 };
 
 type ActiveToolResultOperation = {
@@ -612,6 +636,7 @@ export const createChatRuntime = ({
   onFinish,
   reloadThread,
   scheduleEmit = scheduleStreamEmit,
+  storedRunTarget,
   turnsStarted = 0,
 }: CreateChatRuntimeProps): ChatRuntime => {
   const observeTurnTimings = createChatTurnTimingObserver();
@@ -639,6 +664,20 @@ export const createChatRuntime = ({
         : activeTurnSteering,
     turnSentAt: null,
     turnsStarted,
+  };
+  // The level of the thread's turns as the server stored it: a turn this
+  // page did not send, or one sent naming no target, runs at it.
+  const storedApprovals =
+    storedRunTarget?.approvals ?? DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE;
+  const browserGate: ChatBrowserGate = {
+    threadId: key.threadId,
+    levelFor: (toolCallId) => {
+      const turn = browserTurnId(snapshot.messages, toolCallId);
+      return (
+        (turn === null ? null : browserTurnLevel(key.threadId, turn)) ??
+        storedApprovals
+      );
+    },
   };
   /** The server turn the latest request runs; null from a new message until
    *  the server names its turn. */
@@ -1044,6 +1083,16 @@ export const createChatRuntime = ({
           }),
       });
       const requestBody = readQueryResult(prepared);
+      // A new turn keeps the level it is sent with: a later pick in the
+      // composer applies to the next turn, never to this one's browser
+      // steps. A send that names no target runs where the thread runs.
+      if (requestBody.message.role === "user") {
+        recordBrowserTurnLevel(
+          key.threadId,
+          requestBody.message.id,
+          requestBody.runTarget?.approvals ?? storedApprovals,
+        );
+      }
       const send = () => {
         postedCommandRunId =
           requestBody.turnIntent === undefined ? runContext.runId : undefined;
@@ -1119,6 +1168,8 @@ export const createChatRuntime = ({
   // persisted user message, so a runtime rebuilt mid-turn charges the same
   // turn.
   const browserTool = createBrowserExtensionTool({
+    levelFor: browserGate.levelFor,
+    threadId: key.threadId,
     turnIdFor: (toolCallId) => browserTurnId(snapshot.messages, toolCallId),
   });
 
@@ -1974,6 +2025,7 @@ export const createChatRuntime = ({
 
   const runtime = {
     [CHAT_RUNTIME_BRAND]: true,
+    browserGate,
     reportedUnknownActivityTypes: new Set<string>(),
     resolveToolApproval: async (response, options) => {
       if (isStoppedTurn()) {

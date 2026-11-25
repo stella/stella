@@ -35,9 +35,10 @@ type LocalRunnersDependencies = {
 /**
  * The member's computers and what each harness a chat turn can run on last
  * reported (ready with its models, sign-in needed, limited until a time, not
- * installed), and the most the organization lets a run do without asking.
- * `hidden` when the member cannot run chat turns on a computer,
- * so the composer offers nothing.
+ * installed), and the most the organization lets a turn do without asking.
+ * `hidden` when the member cannot run chat turns on a computer, so the
+ * composer offers no computer; the ceiling still holds turns on stella's
+ * models.
  */
 const createLocalRunnersEndpoint = (dependencies?: LocalRunnersDependencies) =>
   createSafeRootHandler(config, async function* ({ safeDb, session, user }) {
@@ -48,8 +49,12 @@ const createLocalRunnersEndpoint = (dependencies?: LocalRunnersDependencies) =>
     const snapshot = yield* Result.await(
       loadFeatureAccessSnapshot({ safeDb, ...owner }),
     );
+    // The ceiling holds turns on stella's models too, so every member reads it.
+    const maxApprovals = yield* Result.await(
+      readLocalRunApprovalCeiling(safeDb, owner.organizationId),
+    );
     if (!isFeatureEnabled(snapshot, DESKTOP_RUNNER_FEATURE_ID, owner)) {
-      return answer({ status: "hidden" });
+      return answer({ status: "hidden", maxApprovals });
     }
     const control =
       dependencies?.control() ?? getDesktopRunnerControl().control;
@@ -57,9 +62,6 @@ const createLocalRunnersEndpoint = (dependencies?: LocalRunnersDependencies) =>
     if (runners.isErr()) {
       return Result.err(runners.error);
     }
-    const maxApprovals = yield* Result.await(
-      readLocalRunApprovalCeiling(safeDb, owner.organizationId),
-    );
     const enabled: ChatLocalRunReadiness = {
       status: "enabled",
       runners: runners.value.map((runner) => ({

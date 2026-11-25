@@ -11,17 +11,17 @@ import {
   type BrowserControlResult,
   type BrowserExtensionRequest,
 } from "@stll/api-contract/browser-control";
+import { DESKTOP_RUNNER_APPROVAL_MODES } from "@stll/api-contract/desktop-runner";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import { buildSendRequestBody } from "@/features/chat/chat-runtime";
-import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { createUuid } from "@/lib/uuid";
 
 import {
-  BROWSER_APPROVAL_MODE,
-  setBrowserApprovalMode,
-} from "./browser-approval-mode";
+  beginBrowserCommand,
+  currentBrowserStepDecision,
+} from "./browser-approval-state";
 import { listenForBrowserExtensionAnnouncement } from "./browser-extension-announcement";
 import {
   BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS,
@@ -59,7 +59,6 @@ type FakeWindow = {
   sessionStorage: Pick<Storage, "getItem" | "setItem">;
 };
 
-const APPROVAL_MODE_KEY = userStorageKey("stella.chat.browserApprovalMode");
 const storedValues = new Map<string, string>();
 
 let previousWindow: PropertyDescriptor | undefined;
@@ -660,53 +659,113 @@ describe("command identity", () => {
   });
 });
 
-describe("approval after the controlled tab changes", () => {
-  const autoApprovesReads = () =>
-    storedValues.get(APPROVAL_MODE_KEY) ===
-    JSON.stringify(BROWSER_APPROVAL_MODE.autoApproveReads);
+describe("the reported page after the controlled tab changes", () => {
+  const GRANTED = new Set(["https://example.com"]);
+  /** Whether a website approval answers a click on the page last read. */
+  const grantAnswersClick = () =>
+    currentBrowserStepDecision({
+      command: click,
+      grantedOrigins: GRANTED,
+      level: "ask",
+      threadId: null,
+    }).type === "run";
 
-  test("the first report from the extension keeps the reads opt-in", () => {
+  /** Reads tab 7 at revision-1 through the extension, as the executor does. */
+  const readPage = async () => {
+    const finish = beginBrowserCommand();
+    const read = executeBrowserExtensionCommand(
+      { action: "open", url: "https://example.com/" },
+      `call-${createUuid()}`,
+      run(),
+    );
+    const posted = postedCommands().at(-1);
+    if (!posted) {
+      throw new TypeError("No command posted");
+    }
+    answer(posted.requestId, snapshotResult(7, "revision-1"));
+    finish((await read).status === "success");
+  };
+
+  test("a page chat itself read stays reported when the extension confirms its tab", async () => {
     connect();
-    setBrowserApprovalMode(BROWSER_APPROVAL_MODE.autoApproveReads);
-    report("controller-1");
+    await readPage();
+    report("controller-1", 7);
 
-    expect(autoApprovesReads()).toBe(true);
+    expect(grantAnswersClick()).toBe(true);
   });
 
-  test("re-pairing, disconnecting and handing over a tab each ask again", () => {
+  test("re-pairing, disconnecting and handing over a tab each forget the page", async () => {
     for (const change of [
-      () => report("controller-2"),
+      () => report("controller-2", 7),
       () => report(null),
       () => report("controller-1", 9),
     ]) {
       unmount?.();
       unmount = null;
       connect();
-      setBrowserApprovalMode(BROWSER_APPROVAL_MODE.autoApproveReads);
+      await readPage();
+      expect(grantAnswersClick()).toBe(true);
 
       change();
 
-      expect(autoApprovesReads()).toBe(false);
+      expect(grantAnswersClick()).toBe(false);
     }
   });
 
-  test("a tab chat itself opened does not count as a change", async () => {
+  test("an answer to a command sent before the pairing changed reports nothing", async () => {
     connect();
-    setBrowserApprovalMode(BROWSER_APPROVAL_MODE.autoApproveReads);
-    const opened = executeBrowserExtensionCommand(
+    const finish = beginBrowserCommand();
+    const read = executeBrowserExtensionCommand(
       { action: "open", url: "https://example.com/" },
-      "call-1",
+      "call-before-re-pairing",
       run(),
     );
-    const [posted] = postedCommands();
+    const posted = postedCommands().at(-1);
     if (!posted) {
       throw new TypeError("No command posted");
     }
+    report("controller-2", 7);
     answer(posted.requestId, snapshotResult(7, "revision-1"));
-    await opened;
-    report("controller-1", 7);
+    finish((await read).status === "success");
+    // A command under the new pairing settles; the late page still counts
+    // for nothing.
+    beginBrowserCommand()(true);
 
-    expect(autoApprovesReads()).toBe(true);
+    expect(grantAnswersClick()).toBe(false);
+  });
+
+  test("a sign-in hand-over holds every step on the page until it is read again", async () => {
+    connect();
+    await readPage();
+    const finish = beginBrowserCommand();
+    const clicked = executeBrowserExtensionCommand(
+      click,
+      "call-sign-in",
+      run(),
+    );
+    const posted = postedCommands().at(-1);
+    if (!posted) {
+      throw new TypeError("No command posted");
+    }
+    answer(posted.requestId, {
+      code: BROWSER_CONTROL_ERROR_CODE.needsMember,
+      message: "The page asks for a sign-in.",
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: "error",
+    });
+    finish((await clicked).status !== "error");
+    for (const level of DESKTOP_RUNNER_APPROVAL_MODES) {
+      expect(
+        currentBrowserStepDecision({
+          command: click,
+          grantedOrigins: GRANTED,
+          level,
+          threadId: null,
+        }),
+      ).toEqual({ type: "needs_member" });
+    }
+    await readPage();
+    expect(grantAnswersClick()).toBe(true);
   });
 });
 

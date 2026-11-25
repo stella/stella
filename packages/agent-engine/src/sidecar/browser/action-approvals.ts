@@ -48,12 +48,16 @@ const SITE_OPTIONS: readonly HarnessApprovalOption[] = [
 /**
  * What the member is asked, in the harness's words: the kind of step, the
  * key or option, the element's role and accessible name, and the page's
- * address. Never text read from the page beyond the element's name. Chat
- * shows the question in the member's language from the call's `asked`.
+ * address; for opening a page, its address. Never text read from the page
+ * beyond the element's name. Chat shows the question in the member's
+ * language from the call's `asked`, or the address `open` keeps.
  */
 const approvalReason = (asked: BrowserApprovalRequest): string => {
-  const element = `the ${asked.role} "${asked.name}" on ${asked.url}`;
   const reason = (() => {
+    if (asked.action === "open") {
+      return `Open ${asked.url}`;
+    }
+    const element = `the ${asked.role} "${asked.name}" on ${asked.url}`;
     switch (asked.action) {
       case "click":
         return `Click ${element}`;
@@ -73,6 +77,9 @@ const approvalReason = (asked: BrowserApprovalRequest): string => {
 
 /** The approval's call, as chat keeps it: the step and what it is about. */
 const approvalCall = (asked: BrowserApprovalRequest) => {
+  if (asked.action === "open") {
+    return { action: asked.action, url: asked.url };
+  }
   const about = { name: asked.name, role: asked.role, url: asked.url };
   switch (asked.action) {
     case "click":
