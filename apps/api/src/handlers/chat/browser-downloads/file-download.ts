@@ -43,11 +43,10 @@ import {
   DocumentWriteRefusedError,
 } from "@/api/lib/entities/authorize-document-write";
 import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
-import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import {
-  refuseSecondCopy,
+  createEntityFromBufferOnce,
   SameBytesFiledError,
-} from "@/api/lib/entities/same-bytes-guard";
+} from "@/api/lib/entities/create-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   FileScanRejectedError,
@@ -94,31 +93,8 @@ export type BrowserDownloadChat = {
 };
 
 export type FileBrowserDownloadDependencies = {
-  createEntityFromBuffer?: typeof createEntityFromBuffer;
+  createEntityFromBuffer?: typeof createEntityFromBufferOnce;
   uploads?: UploadUserFileDependencies;
-};
-
-/**
- * Runs one document write, or names the document that already holds the
- * same bytes when `refuseSecondCopy` rolled the write back.
- */
-const createOrNameCopy = async (
-  write: () => ReturnType<typeof createEntityFromBuffer>,
-): Promise<
-  | {
-      type: "created";
-      result: Awaited<ReturnType<typeof createEntityFromBuffer>>;
-    }
-  | { type: "copy"; entityId: SafeId<"entity">; name: string }
-> => {
-  try {
-    return { result: await write(), type: "created" };
-  } catch (error) {
-    if (SameBytesFiledError.is(error)) {
-      return { entityId: error.entityId, name: error.name, type: "copy" };
-    }
-    throw error;
-  }
 };
 
 const isPdf = (bytes: Uint8Array): boolean =>
@@ -322,50 +298,37 @@ export const fileBrowserDownload = async ({
       contentHash,
     };
     const create =
-      dependencies.createEntityFromBuffer ?? createEntityFromBuffer;
-    const created = await createOrNameCopy(
-      async () =>
-        await create({
-          authority: CALLER_AUTHORIZED,
-          scopedDb: chat.scopedDb,
-          organizationId: chat.organizationId,
-          workspaceId: matter.id,
-          userId: chat.userId,
-          recordAuditEvent: inMatter(chat.recordAuditEvent, matter.id),
-          buffer: scanned.bytes,
-          fileName,
-          mimeType: PDF_MIME_TYPE,
-          encryption,
-          scanWarnings: scanned.scanWarnings ?? undefined,
-          source,
-          // Under the matter's creation lock: a filing of the same bytes that
-          // committed first is seen here, and this one rolls back.
-          afterCreate: async (tx, document) => {
-            await refuseSecondCopy(tx, {
-              createdEntityId: document.entityId,
-              sha256Hex: contentHash,
-              workspaceId: matter.id,
-            });
-          },
-        }),
-    );
-    if (created.type === "copy") {
-      return Result.ok({
-        type: "document" as const,
-        workspaceId: matter.id,
-        entityId: created.entityId,
-        name: created.name,
-        duplicate: true,
-      });
-    }
-    if (Result.isError(created.result)) {
-      return Result.err(storeFailure(created.result.error));
+      dependencies.createEntityFromBuffer ?? createEntityFromBufferOnce;
+    const created = await create({
+      authority: CALLER_AUTHORIZED,
+      scopedDb: chat.scopedDb,
+      organizationId: chat.organizationId,
+      workspaceId: matter.id,
+      userId: chat.userId,
+      recordAuditEvent: inMatter(chat.recordAuditEvent, matter.id),
+      buffer: scanned.bytes,
+      fileName,
+      mimeType: PDF_MIME_TYPE,
+      encryption,
+      scanWarnings: scanned.scanWarnings ?? undefined,
+      source,
+    });
+    if (Result.isError(created)) {
+      return SameBytesFiledError.is(created.error)
+        ? Result.ok({
+            type: "document" as const,
+            workspaceId: matter.id,
+            entityId: created.error.entityId,
+            name: created.error.name,
+            duplicate: true,
+          })
+        : Result.err(storeFailure(created.error));
     }
     return Result.ok({
       type: "document" as const,
       workspaceId: matter.id,
-      entityId: created.result.value.entityId,
-      name: created.result.value.fileName,
+      entityId: created.value.entityId,
+      name: created.value.fileName,
       duplicate: false,
     });
   });

@@ -1,5 +1,0 @@
-{
-  "metric": "try-catch-outside-boundary",
-  "delta": 1,
-  "reason": "createOrNameCopy catches only the SameBytesFiledError its own afterCreate hook throws to roll back a second copy, turns it into the existing document, and re-throws everything else unchanged."
-}

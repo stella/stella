@@ -77,6 +77,7 @@ import {
 } from "@/api/lib/search/process-extraction";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { findExactDuplicates } from "@/api/lib/uploads/exact-duplicates";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 const cleanupSettlementFailure = failureSink({
@@ -155,6 +156,13 @@ class InvalidParentError extends TaggedError("InvalidParentError")<{
   message: string;
 }> {}
 
+/** The matter already holds these bytes as a document's current file. */
+export class SameBytesFiledError extends TaggedError("SameBytesFiledError")<{
+  message: string;
+  entityId: SafeId<"entity">;
+  name: string;
+}> {}
+
 type CreateEntityFromBufferValue = {
   entityId: SafeId<"entity">;
   entityVersionId: SafeId<"entityVersion">;
@@ -173,14 +181,22 @@ export type CreateEntityFromBufferResult = Result<
   | OrganizationFileUsageError
 >;
 
+type CreateDocumentResult = Result<
+  CreateEntityFromBufferValue,
+  | DocumentTooLargeError
+  | DocumentWriteRefusedError
+  | EntityLimitError
+  | InvalidParentError
+  | MissingFilePropertyError
+  | OrganizationFileUsageError
+  | SameBytesFiledError
+>;
+
 /**
- * Create a new entity from a raw file buffer. Handles S3
- * upload, Gotenberg PDF conversion, DB entity creation,
- * and triggers search extraction.
- *
- * Shared between the upload handler and AI chat tools.
+ * Both creators' one implementation: `createEntityFromBuffer`, and
+ * `createEntityFromBufferOnce` when the matter keeps one document per file.
  */
-export const createEntityFromBuffer = async ({
+const createDocument = async ({
   scopedDb,
   organizationId,
   workspaceId,
@@ -195,9 +211,19 @@ export const createEntityFromBuffer = async ({
   provenance,
   authority,
   source,
+  oneCopyPerMatter,
   afterCreate,
   dependencies = defaultCreateEntityFromBufferDependencies,
-}: CreateEntityFromBufferInput): Promise<CreateEntityFromBufferResult> => {
+}: CreateEntityFromBufferInput & {
+  /**
+   * Keep the matter to one document per file: when another document's
+   * current file already holds these bytes, nothing is created and
+   * `SameBytesFiledError` names that document. Checked inside the creating
+   * transaction, under the matter's creation lock, so two creations of the
+   * same bytes at once keep one document.
+   */
+  oneCopyPerMatter: boolean;
+}): Promise<CreateDocumentResult> => {
   const submittedBytes =
     buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
   if (submittedBytes.byteLength > FILE_SIZE_LIMIT_BYTES.document) {
@@ -545,6 +571,22 @@ export const createEntityFromBuffer = async ({
           }),
         });
 
+        if (oneCopyPerMatter) {
+          const [copy] = await findExactDuplicates({
+            tx,
+            workspaceId,
+            sha256Hexes: [sha256Hex],
+            exceptEntityId: entityId,
+          });
+          if (copy !== undefined) {
+            throw new SameBytesFiledError({
+              message: "The matter already holds this file",
+              entityId: copy.entityId,
+              name: copy.entityName,
+            });
+          }
+        }
+
         await afterCreate?.(tx, {
           entityId,
           entityVersionId,
@@ -625,7 +667,8 @@ export const createEntityFromBuffer = async ({
       if (
         EntityLimitError.is(error) ||
         InvalidParentError.is(error) ||
-        DocumentWriteRefusedError.is(error)
+        DocumentWriteRefusedError.is(error) ||
+        SameBytesFiledError.is(error)
       ) {
         return Result.err(error);
       }
@@ -723,3 +766,33 @@ export const createEntityFromBuffer = async ({
     renamed: fileName !== requestedFileName,
   });
 };
+
+/**
+ * Create a new entity from a raw file buffer. Handles S3
+ * upload, Gotenberg PDF conversion, DB entity creation,
+ * and triggers search extraction.
+ *
+ * Shared between the upload handler and AI chat tools.
+ */
+export const createEntityFromBuffer = async (
+  input: CreateEntityFromBufferInput,
+): Promise<CreateEntityFromBufferResult> => {
+  const created = await createDocument({ ...input, oneCopyPerMatter: false });
+  if (Result.isOk(created)) {
+    return Result.ok(created.value);
+  }
+  const { error } = created;
+  return SameBytesFiledError.is(error)
+    ? panic("Only a one-copy create checks for the same bytes")
+    : Result.err(error);
+};
+
+/**
+ * `createEntityFromBuffer` that keeps the matter to one document per file:
+ * when another document's current file already holds the same bytes,
+ * nothing is created and `SameBytesFiledError` names that document.
+ */
+export const createEntityFromBufferOnce = async (
+  input: CreateEntityFromBufferInput,
+): Promise<CreateDocumentResult> =>
+  await createDocument({ ...input, oneCopyPerMatter: true });

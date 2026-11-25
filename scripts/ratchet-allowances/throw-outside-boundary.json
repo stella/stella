@@ -1,5 +1,5 @@
 {
   "metric": "throw-outside-boundary",
   "delta": 1,
-  "reason": "refuseSecondCopy runs as createEntityFromBuffer's afterCreate inside the document's creating transaction; throwing is the only way that hook rolls a second copy of the same bytes back under the matter's creation lock."
+  "reason": "createEntityFromBuffer's oneCopyPerMatter check rolls a second copy of the same bytes back inside the creating transaction, under the matter's creation lock, and returns it as SameBytesFiledError beside the other in-transaction refusals that file already throws and converts."
 }
