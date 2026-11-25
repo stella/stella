@@ -5,9 +5,10 @@
  *
  * Order matters and is load-bearing:
  *   1. sanitize every field the reporter wrote, and count what was removed;
- *   2. fingerprint the sanitized content;
+ *   2. fingerprint the sanitized content and its reporter;
  *   3. atomically find-or-insert the fingerprint in the last day — a match is
- *      an idempotent resend and answers with the original receipt;
+ *      the same reporter's idempotent resend and answers with the original
+ *      receipt;
  *   4. store the row, so a receipt always addresses something;
  *   5. deliver to every configured channel, outside the transaction, and
  *      record each outcome on the row.
@@ -192,13 +193,16 @@ export const submitFeedbackReport = async ({
   const sanitizedInstance =
     instance === undefined ? undefined : sanitizeFeedbackInstance(instance);
   const redactions = reportRedactions + (sanitizedInstance?.redactions ?? 0);
-  const fingerprint = feedbackFingerprint(report, sanitizedInstance?.instance);
-
-  const receipt = newReceipt();
   const identity =
     reporter.via === "intake"
       ? { userId: null, organizationId: null }
       : { userId: reporter.userId, organizationId: reporter.organizationId };
+  const fingerprint = feedbackFingerprint(report, sanitizedInstance?.instance, {
+    via: reporter.via,
+    ...identity,
+  });
+
+  const receipt = newReceipt();
 
   const stored = await Result.tryPromise({
     try: async () =>
