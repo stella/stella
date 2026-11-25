@@ -73,6 +73,38 @@ export const manifestOf = (specs: readonly BlockSpec[]): DocxBlockManifest => ({
   warnings: [],
 });
 
+/**
+ * Lays paragraphs out in a table of parallel columns, row by row: with two
+ * columns, the first paragraph is the left cell of row 0, the second its
+ * right cell, and so on. The table block comes first, as the engine
+ * reports it.
+ */
+export const inColumns = (
+  columns: number,
+  specs: readonly BlockSpec[],
+): DocxBlockManifest => {
+  const manifest = manifestOf(specs);
+  const first = manifest.blocks.at(0);
+  if (first === undefined) {
+    return manifest;
+  }
+  const table: DocxBlock = {
+    ...first,
+    id: "t0",
+    kind: "table",
+    text: "",
+    label: null,
+    numbering: null,
+    hash: "ht0",
+    cells: manifest.blocks.map((block, position) => ({
+      row: Math.floor(position / columns),
+      col: position % columns,
+      blockIds: [block.id],
+    })),
+  };
+  return { ...manifest, blocks: [table, ...manifest.blocks] };
+};
+
 /** The id of the first block whose text starts with `start`. */
 export const blockIdOf = (
   { blocks }: DocxBlockManifest,

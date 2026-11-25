@@ -46,6 +46,9 @@ export type LabelEntry = {
   parentBlockId: string | null;
   /** The annex heading this entry sits under; null in the main body. */
   annexBlockId: string | null;
+  /** The column the entry stands in when the document runs in parallel
+   *  columns (two languages side by side); null otherwise. */
+  column: number | null;
   /** An annex entry that is a line of the list of annexes, not a heading. */
   listed: boolean;
   /** An article or annex heading's title; from the next block when the
@@ -70,6 +73,9 @@ export type LabelIndex = {
   usesSectionSign: boolean;
   /** Paragraph blocks of a table of contents; they repeat every heading. */
   contentsBlockIds: ReadonlySet<string>;
+  /** The column of each block of a document that runs in parallel columns;
+   *  empty for any other document. */
+  columnByBlockId: ReadonlyMap<string, number>;
 };
 
 const HEADING_TITLE_MAX = 160;
@@ -321,6 +327,8 @@ type Walk = {
   annex: LabelEntry | null;
   sawArticle: boolean;
   usesSectionSign: boolean;
+  /** The parallel column this walk reads; null for the main story. */
+  column: number | null;
 };
 
 const isLabelled = (row: Row): row is LabelledRow => row.raw !== null;
@@ -489,6 +497,7 @@ type EntryBase = Pick<
   | "manualLength"
   | "core"
   | "annexBlockId"
+  | "column"
   | "listed"
   | "title"
   | "titleBlockId"
@@ -505,6 +514,7 @@ const baseEntry = (
   manualLength: raw.manualLength,
   core: raw.shape.core.toLowerCase(),
   annexBlockId: walk.annex?.blockId ?? null,
+  column: walk.column,
   listed: false,
   title: "",
   titleBlockId: null,
@@ -712,6 +722,63 @@ const classify = (walk: Walk, row: LabelledRow): LabelEntry | null => {
   return openItem(walk, row, row.family);
 };
 
+/** Columns must share this many article numbers to count as parallel. */
+const PARALLEL_ARTICLES_MIN = 2;
+
+/**
+ * The column of every table-cell block when the document runs in parallel
+ * columns: a contract in two languages side by side, each column with its
+ * own headings for the same articles. Each column is then read as a text
+ * of its own. Empty when no two columns head the same articles, so price
+ * tables and signature tables stay part of the one main story.
+ */
+const parallelColumns = (
+  blocks: readonly DocxBlock[],
+  structural: readonly LabelledRow[],
+): Map<string, number> => {
+  const columnByBlockId = new Map<string, number>();
+  for (const { cells } of blocks) {
+    if (cells === undefined) {
+      continue;
+    }
+    for (const { col, blockIds } of cells) {
+      for (const blockId of blockIds) {
+        columnByBlockId.set(blockId, col);
+      }
+    }
+  }
+  const scheme = numberedScheme(structural);
+  const ordinalsByColumn = new Map<number, Set<number>>();
+  for (const row of structural) {
+    const column = columnByBlockId.get(row.block.id);
+    const named = isNamedArticle(row)
+      ? countedOrdinal(row.raw.shape.core)
+      : null;
+    const bare = headsArticle(scheme, row) ? row.raw.shape.path?.at(0) : null;
+    const ordinal = named ?? bare ?? null;
+    if (column === undefined || ordinal === null) {
+      continue;
+    }
+    const ordinals = ordinalsByColumn.get(column);
+    if (ordinals === undefined) {
+      ordinalsByColumn.set(column, new Set([ordinal]));
+    } else {
+      ordinals.add(ordinal);
+    }
+  }
+  const columns = [...ordinalsByColumn.values()];
+  const parallel = columns.some((ordinals, position) =>
+    columns
+      .slice(position + 1)
+      .some(
+        (others) =>
+          [...ordinals].filter((ordinal) => others.has(ordinal)).length >=
+          PARALLEL_ARTICLES_MIN,
+      ),
+  );
+  return parallel ? columnByBlockId : new Map();
+};
+
 /** Reads every paragraph's label and nests the entries. */
 export const buildLabelIndex = ({
   blocks,
@@ -735,25 +802,37 @@ export const buildLabelIndex = ({
     structural.find(
       (row) => isAnnexRow(row) && !listedAnnexes.has(row.position),
     )?.position ?? Number.POSITIVE_INFINITY;
-  const walk: Walk = {
-    rows,
-    listedAnnexes,
-    numberedArticles,
-    schemes: {
-      body: schemeOf(
-        structural.filter(({ position }) => position < firstAnnex),
-      ),
-      annexes: schemeOf(
-        structural.filter(({ position }) => position > firstAnnex),
-      ),
-    },
-    article: null,
-    clauses: [],
-    letter: null,
-    roman: null,
-    annex: null,
-    sawArticle: false,
-    usesSectionSign: false,
+  const schemes = {
+    body: schemeOf(structural.filter(({ position }) => position < firstAnnex)),
+    annexes: schemeOf(
+      structural.filter(({ position }) => position > firstAnnex),
+    ),
+  };
+  const columnByBlockId = parallelColumns(blocks, structural);
+  // One walk per parallel column, and one for everything outside them.
+  const walks = new Map<number | null, Walk>();
+  const walkOf = (block: DocxBlock): Walk => {
+    const column = columnByBlockId.get(block.id) ?? null;
+    const open = walks.get(column);
+    if (open !== undefined) {
+      return open;
+    }
+    const opened: Walk = {
+      rows,
+      listedAnnexes,
+      numberedArticles,
+      schemes,
+      article: null,
+      clauses: [],
+      letter: null,
+      roman: null,
+      annex: null,
+      sawArticle: false,
+      usesSectionSign: false,
+      column,
+    };
+    walks.set(column, opened);
+    return opened;
   };
 
   const entries: LabelEntry[] = [];
@@ -764,6 +843,7 @@ export const buildLabelIndex = ({
     if (block.kind === "paragraph" && isContentsBlock(block)) {
       contentsBlockIds.add(block.id);
     }
+    const walk = walkOf(block);
     const entry = isLabelled(row) ? classify(walk, row) : null;
     if (entry !== null) {
       entries.push(entry);
@@ -780,7 +860,10 @@ export const buildLabelIndex = ({
     entries,
     entryByBlockId: new Map(entries.map((entry) => [entry.blockId, entry])),
     contextByBlockId,
-    usesSectionSign: walk.usesSectionSign,
+    usesSectionSign: [...walks.values()].some(
+      ({ usesSectionSign }) => usesSectionSign,
+    ),
     contentsBlockIds,
+    columnByBlockId,
   };
 };

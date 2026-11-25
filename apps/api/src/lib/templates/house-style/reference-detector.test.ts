@@ -10,6 +10,7 @@ import {
   englishAgreement,
   germanContract,
   heading,
+  inColumns,
   manifestOf,
   numbered,
   partsContract,
@@ -677,6 +678,69 @@ describe("German references", () => {
       ],
       ["Gemäß Ziff. 5.1.", ["Ziff. 5.1", "internal", "5.1→5/1"]],
     ]);
+  });
+});
+
+describe("parallel columns", () => {
+  const bilingual = inColumns(2, [
+    "Článek I.\nPředmět",
+    "Article I\nSubject",
+    numbered("1.", "Dodavatel dodá zboží.", 1),
+    numbered("1.", "The supplier delivers the goods.", 2),
+    "Článek II.\nCena",
+    "Article II\nPrice",
+    numbered("1.", "Cena za plnění dle čl. I odst. 1 této smlouvy.", 3),
+    numbered("1.", "The price of the delivery under Article I paragraph 1.", 4),
+    numbered("2.", "Viz odst. 1 tohoto článku.", 3),
+    numbered("2.", "See paragraph 1 of this Article.", 4),
+  ]);
+
+  test("each column is indexed as a text of its own", () => {
+    const index = buildLabelIndex(bilingual);
+    expect(
+      index.entries.map(({ blockId, column }) => [blockId, column]),
+    ).toEqual([
+      ["p0", 0],
+      ["p1", 1],
+      ["p2", 0],
+      ["p3", 1],
+      ["p4", 0],
+      ["p5", 1],
+      ["p6", 0],
+      ["p7", 1],
+      ["p8", 0],
+      ["p9", 1],
+    ]);
+    expect(index.entryByBlockId.get("p7")).toMatchObject({
+      articleBlockId: "p5",
+      parentBlockId: "p5",
+    });
+  });
+
+  test("a reference resolves within its own column", () => {
+    const targets = (start: string) => {
+      const blockId = blockIdOf(bilingual, start);
+      return detectReferences(bilingual)
+        .references.filter((reference) => reference.blockId === blockId)
+        .flatMap(({ designators }) => designators)
+        .map(({ resolution }) =>
+          resolution.status === "resolved" ? resolution.targetBlockId : null,
+        );
+    };
+    expect(targets("Cena za plnění")).toEqual(["p0", "p2"]);
+    expect(targets("The price of")).toEqual(["p1", "p3"]);
+    expect(targets("Viz odst.")).toEqual(["p6"]);
+    expect(targets("See paragraph")).toEqual(["p7"]);
+  });
+
+  test("a table that does not repeat the articles stays in the main story", () => {
+    const manifest = inColumns(2, [
+      "Článek I.\nCeny",
+      "Položka",
+      numbered("1.", "Ceny uvádí tabulka.", 1),
+      "Cena",
+    ]);
+    expect([...buildLabelIndex(manifest).columnByBlockId]).toEqual([]);
   });
 });
 

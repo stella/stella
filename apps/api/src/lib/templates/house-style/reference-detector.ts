@@ -378,6 +378,19 @@ const resolveUnit = (options: ResolveOptions, unit: Unit): Candidates => {
   }
 };
 
+/** In a document of parallel columns a reference means the provision of
+ *  its own column: the English text cites the English article. */
+const inColumn = (
+  candidates: Candidates,
+  column: number | undefined,
+): Candidates => {
+  if (column === undefined) {
+    return candidates;
+  }
+  const own = candidates.entries.filter((entry) => entry.column === column);
+  return own.length > 0 ? { ...candidates, entries: own } : candidates;
+};
+
 const unitLevel = (
   unit: Unit,
   resolved: LabelEntry | undefined,
@@ -507,12 +520,13 @@ const toReference = (
         : CONFIDENCE.relativeDeictic,
     ownArticle: tail.relative === "article",
   };
+  const column = lookup.index.columnByBlockId.get(block.id);
   let resolved: Resolved[] = buildUnits(chain.segments).map((unit) => ({
     unit,
     candidates:
       unit.annex !== null && unit.kind !== "annex"
         ? NONE
-        : resolveUnit(options, unit),
+        : inColumn(resolveUnit(options, unit), column),
   }));
   let { end } = chain;
   // `čl. 5 a 10 dnů`: a number after a conjunction that names no provision
