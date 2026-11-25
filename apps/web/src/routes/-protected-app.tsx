@@ -440,46 +440,45 @@ function ProtectedContent() {
   const workspace =
     workspaceView.type === "items" ? workspaceView.items : undefined;
   const chromeActions = (
-    <ContextMenuSurface
-      onOpenContextMenu={handleIconRowContextMenu}
-      render={<div className="ms-auto flex shrink-0 items-center gap-0.5" />}
-    >
-      {workspaceId && showMatterActions && (
-        <>
-          {/* A phone's bar leaves the matter's crumb too little room with
+    <ContextMenuSurface onOpenContextMenu={handleIconRowContextMenu}>
+      <div className="ms-auto flex shrink-0 items-center gap-0.5">
+        {workspaceId && showMatterActions && (
+          <>
+            {/* A phone's bar leaves the matter's crumb too little room with
               this beside it; the matter's menu and inspector still pin. */}
-          {!isMobile && (
+            {!isMobile && (
+              <Button
+                onClick={() => togglePin(workspaceId)}
+                size="icon-sm"
+                title={isPinned ? t("common.unpin") : t("common.pin")}
+                variant="ghost"
+              >
+                {isPinned ? (
+                  <PinOffIcon className="size-4" />
+                ) : (
+                  <PinIcon className="size-4" />
+                )}
+              </Button>
+            )}
             <Button
-              onClick={() => togglePin(workspaceId)}
+              onClick={() => {
+                openMatterInspector({
+                  workspaceId,
+                  label: workspace?.name ?? t("workspaces.matterInfo"),
+                  color: workspace?.color ?? null,
+                });
+              }}
               size="icon-sm"
-              title={isPinned ? t("common.unpin") : t("common.pin")}
+              title={t("workspaces.matterInfo")}
               variant="ghost"
             >
-              {isPinned ? (
-                <PinOffIcon className="size-4" />
-              ) : (
-                <PinIcon className="size-4" />
-              )}
+              <CogIcon className="size-4" />
             </Button>
-          )}
-          <Button
-            onClick={() => {
-              openMatterInspector({
-                workspaceId,
-                label: workspace?.name ?? t("workspaces.matterInfo"),
-                color: workspace?.color ?? null,
-              });
-            }}
-            size="icon-sm"
-            title={t("workspaces.matterInfo")}
-            variant="ghost"
-          >
-            <CogIcon className="size-4" />
-          </Button>
-        </>
-      )}
-      <GlobalTimer />
-      {inboxPreviewEnabled && <NotificationBell />}
+          </>
+        )}
+        <GlobalTimer />
+        {inboxPreviewEnabled && <NotificationBell />}
+      </div>
     </ContextMenuSurface>
   );
 

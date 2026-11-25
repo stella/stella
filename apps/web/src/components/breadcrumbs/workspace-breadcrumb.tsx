@@ -350,42 +350,42 @@ export const WorkspaceBreadcrumb = ({
                 <ContextMenuSurface
                   onOpenContextMenu={() => startEditingName()}
                   preserveNativeTargets={false}
-                  render={
-                    <Link
-                      activeOptions={{
-                        exact: true,
-                        includeSearch: false,
-                      }}
-                      activeProps={{
-                        className: "text-foreground font-semibold",
-                      }}
-                      className="hover:text-foreground inline-flex max-w-80 min-w-0 items-center gap-1.5"
-                      params={{
-                        workspaceId,
-                      }}
-                      to="/workspaces/$workspaceId"
-                    />
-                  }
                 >
-                  <TruncatedText
-                    className="whitespace-pre"
-                    render={<BidiText as="span" />}
+                  <Link
+                    activeOptions={{
+                      exact: true,
+                      includeSearch: false,
+                    }}
+                    activeProps={{
+                      className: "text-foreground font-semibold",
+                    }}
+                    className="hover:text-foreground inline-flex max-w-80 min-w-0 items-center gap-1.5"
+                    params={{
+                      workspaceId,
+                    }}
+                    to="/workspaces/$workspaceId"
                   >
-                    {displayName}
-                  </TruncatedText>
-                  {showMatterNumber && workspace.reference && !isEditingRef ? (
-                    <ContextMenuSurface
-                      onOpenContextMenu={() =>
-                        refRename.startEditing(workspace.reference)
-                      }
-                      preserveNativeTargets={false}
-                      render={
-                        <span className="text-foreground-muted shrink-0 text-sm whitespace-pre" />
-                      }
+                    <TruncatedText
+                      className="whitespace-pre"
+                      render={<BidiText as="span" />}
                     >
-                      {workspace.reference}
-                    </ContextMenuSurface>
-                  ) : null}
+                      {displayName}
+                    </TruncatedText>
+                    {showMatterNumber &&
+                    workspace.reference &&
+                    !isEditingRef ? (
+                      <ContextMenuSurface
+                        onOpenContextMenu={() =>
+                          refRename.startEditing(workspace.reference)
+                        }
+                        preserveNativeTargets={false}
+                      >
+                        <span className="text-foreground-muted shrink-0 text-sm whitespace-pre">
+                          {workspace.reference}
+                        </span>
+                      </ContextMenuSurface>
+                    ) : null}
+                  </Link>
                 </ContextMenuSurface>
                 {isEditingRef ? null : (
                   <MatterSwitcher matter={workspace} revealOnHover />
@@ -436,26 +436,25 @@ export const WorkspaceBreadcrumb = ({
         <ContextMenuSurface
           onOpenContextMenu={() => startEditingName()}
           preserveNativeTargets={false}
-          render={
-            <Link
-              activeOptions={{ exact: true, includeSearch: false }}
-              activeProps={{ className: "text-foreground font-semibold" }}
-              className="hover:text-foreground max-w-80 min-w-0 font-semibold"
-              dir="auto"
-              onClick={() => {
-                startEditingName();
-              }}
-              params={{ workspaceId }}
-              to="/workspaces/$workspaceId"
-            />
-          }
         >
-          <TruncatedText
-            className="whitespace-pre"
-            render={<BidiText as="span" />}
+          <Link
+            activeOptions={{ exact: true, includeSearch: false }}
+            activeProps={{ className: "text-foreground font-semibold" }}
+            className="hover:text-foreground max-w-80 min-w-0 font-semibold"
+            dir="auto"
+            onClick={() => {
+              startEditingName();
+            }}
+            params={{ workspaceId }}
+            to="/workspaces/$workspaceId"
           >
-            {displayName}
-          </TruncatedText>
+            <TruncatedText
+              className="whitespace-pre"
+              render={<BidiText as="span" />}
+            >
+              {displayName}
+            </TruncatedText>
+          </Link>
         </ContextMenuSurface>
         {referenceSegment}
         {isEditingRef ? null : <MatterSwitcher matter={workspace} />}
