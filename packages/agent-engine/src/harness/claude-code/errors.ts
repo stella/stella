@@ -30,6 +30,19 @@ const AUTH_ERRORS: ReadonlySet<string> = new Set([
 ]);
 const RATE_LIMIT_ERROR = "rate_limit";
 
+/**
+ * The CLI words a missing or expired sign-in several ways ("Not logged in ·
+ * Please run /login", "Login expired · Run /login to sign in again"), all as
+ * the text of a `success` result marked as an error: the instruction to run
+ * `/login` is what they share.
+ */
+const LOGIN_REQUIRED_TEXT = /\brun \/login\b/iu;
+
+const isLoginRequired = (result: ClaudeResultMessage): boolean =>
+  result.subtype === "success" &&
+  result.is_error &&
+  LOGIN_REQUIRED_TEXT.test(result.result ?? "");
+
 const latest = (instants: readonly Temporal.Instant[]): string | null => {
   let max: Temporal.Instant | null = null;
   for (const instant of instants) {
@@ -121,7 +134,8 @@ export const classifyResultFailure = ({
     "The harness turn failed.";
   if (
     (assistantError !== null && AUTH_ERRORS.has(assistantError)) ||
-    result.api_error_status === HTTP_UNAUTHORIZED
+    result.api_error_status === HTTP_UNAUTHORIZED ||
+    isLoginRequired(result)
   ) {
     return { type: "auth_required", message };
   }
