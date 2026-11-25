@@ -66,6 +66,15 @@ export const desktopMatterCandidatesResponseSchema = v.strictObject({
     v.array(desktopMatterCandidateSchema),
     v.maxLength(DESKTOP_ACTIVITY_REVIEW_LIMIT),
   ),
+  /** The organization's minimum billing unit, a divisor of an hour; the
+   * review shows what an entry bills under it before it is created. */
+  timeMinimumUnitMinutes: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(1),
+    v.maxValue(60),
+    v.check((minutes) => 60 % minutes === 0),
+  ),
 });
 export type DesktopMatterCandidatesResponse = v.InferOutput<
   typeof desktopMatterCandidatesResponseSchema

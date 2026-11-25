@@ -69,7 +69,7 @@ test("desktop batch permits only reviewed billing fields and bounded whole durat
     );
   }
 });
-test("desktop candidates require complete local-matching signals and a bounded response", () => {
+test("desktop candidates require complete local-matching signals, the billing unit and a bounded response", () => {
   const matter = {
     id: entry.matterId,
     name: "Matter",
@@ -82,23 +82,29 @@ test("desktop candidates require complete local-matching signals and a bounded r
       upcomingDeadline: null,
     },
   };
+  const response = { matters: [matter], timeMinimumUnitMinutes: 6 };
   expect(
-    v.safeParse(desktopMatterCandidatesResponseSchema, { matters: [matter] })
-      .success,
+    v.safeParse(desktopMatterCandidatesResponseSchema, response).success,
   ).toBe(true);
-  expect(
-    v.safeParse(desktopMatterCandidatesResponseSchema, {
-      matters: [{ ...matter, signals: { lastWorkedAt: null } }],
-    }).success,
-  ).toBe(false);
-  expect(
-    v.safeParse(desktopMatterCandidatesResponseSchema, {
+  for (const invalid of [
+    { ...response, matters: [{ ...matter, signals: { lastWorkedAt: null } }] },
+    {
+      ...response,
       matters: Array.from(
         { length: DESKTOP_ACTIVITY_REVIEW_LIMIT + 1 },
         () => matter,
       ),
-    }).success,
-  ).toBe(false);
+    },
+    { matters: [matter] },
+    // The unit is a whole divisor of an hour.
+    { ...response, timeMinimumUnitMinutes: 0 },
+    { ...response, timeMinimumUnitMinutes: 7 },
+    { ...response, timeMinimumUnitMinutes: 2.5 },
+  ]) {
+    expect(
+      v.safeParse(desktopMatterCandidatesResponseSchema, invalid).success,
+    ).toBe(false);
+  }
 });
 
 test("batch recovery accepts only a key and distinguishes committed receipts from cancellation", () => {

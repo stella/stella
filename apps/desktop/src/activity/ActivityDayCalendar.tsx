@@ -8,6 +8,7 @@ import { useFormatter, useLocale, useTranslations } from "use-intl";
 import { DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH } from "@stll/api-contract/desktop-time-entries";
 import type {
   DesktopMatter,
+  DesktopMatterCandidatesResponse,
   DesktopMatterResolution,
   DesktopTimeEntryBatch,
   DesktopTimeEntryBatchResponse,
@@ -27,6 +28,7 @@ import type {
   DayCalendarRange,
 } from "@stll/ui/day-calendar.logic";
 import { PhoneIcon } from "@stll/ui/icons";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Select,
   SelectItem,
@@ -51,6 +53,7 @@ import {
   segmentTitles,
   suggestionPieces,
   suggestionSummary,
+  toSuggestion,
   UNAVAILABLE_MATTER_TOPIC,
 } from "./activity-calendar-logic";
 import type {
@@ -58,12 +61,13 @@ import type {
   ActivitySuggestion,
   SuggestionSummary,
 } from "./activity-calendar-logic";
-import { calendarDate, timedSegments } from "./activity-logic";
+import { calendarDate, MINUTE_MS, timedSegments } from "./activity-logic";
 import { outageRanges, STOP_REASON_KEYS } from "./activity-outages";
 import type { OutageRange } from "./activity-outages";
 import type {
   ActivityAppExclusion,
   ActivityDaySnapshot,
+  ActivityManualAssignment,
 } from "./activity-types";
 import {
   GAP_DISPLAY_KEYS,
@@ -94,7 +98,11 @@ import {
   revertActions,
   structureItems,
 } from "./billing-draft-logic";
-import type { CardDraft, DraftFailureKind } from "./billing-draft-logic";
+import type {
+  CardDraft,
+  CardDraftTarget,
+  DraftFailureKind,
+} from "./billing-draft-logic";
 import { useBillingDraftSettings } from "./billing-draft-settings";
 import type {
   BillingDraftSettings,
@@ -102,13 +110,15 @@ import type {
 } from "./billing-draft-settings";
 import type { CaptureModeCommand } from "./capture-modes";
 import {
+  BRIEF_MS,
   EVIDENCE_DETAIL_LIMIT,
   matchDay,
   recordedMatterIds,
   segmentEvidence,
+  segmentRanges,
   unresolvedMatterIds,
 } from "./day-review-logic";
-import type { MatchedSegment } from "./day-review-logic";
+import type { DayReviewGroup, MatchedSegment } from "./day-review-logic";
 import {
   acceptProposal,
   declineProposal,
@@ -123,7 +133,12 @@ import { resolveMatters } from "./matter-resolve";
 import { SuggestionPieceLabel } from "./SuggestionPieceLabel";
 import { explainedBrowsers, missingTitlesReason } from "./title-capture-logic";
 import type { ExplainedBrowser } from "./title-capture-logic";
-import { useDurationLabel, useMinutesLabel } from "./use-duration-label";
+import {
+  useBilledLabel,
+  useDurationLabel,
+  useMinutesLabel,
+} from "./use-duration-label";
+import type { EntryBilling } from "./use-duration-label";
 
 const ACTIVITY_COLUMN_ID = "activity";
 const ENTRIES_COLUMN_ID = "entries";
@@ -131,11 +146,10 @@ const ENTRIES_COLUMN_ID = "entries";
 type CandidateState =
   | { type: "loading" }
   | { type: "failed" }
-  | {
+  | ({
       type: "ready";
-      matters: DesktopTimeEntryMatterCandidate[];
       resolved: DesktopMatterResolution[];
-    };
+    } & DesktopMatterCandidatesResponse);
 type BatchItem = {
   entry: DesktopTimeEntryBatch["entries"][number];
   ranges: { start: string; end: string }[];
@@ -149,10 +163,17 @@ type Submission =
 export type ActivityReviewStatus = Submission["type"];
 type DraftedEntries = ActivityDaySnapshot["draftedEntries"];
 
+/** Why nothing on the day can change now, if anything stops it. While
+ * Activity cannot record, its history is read-only: every action that
+ * would change the review says so, as the stop notice does. */
 const getEditingDisabledReason = (
   submission: Submission,
-  t: (key: "creatingDrafts" | "pendingRetry") => string,
+  stoppedReason: ActivityDaySnapshot["stoppedReason"],
+  t: ReturnType<typeof useTranslations<"activity">>,
 ): string | undefined => {
+  if (stoppedReason !== null) {
+    return t("stoppedNotice", { reason: t(STOP_REASON_KEYS[stoppedReason]) });
+  }
   switch (submission.type) {
     case "submitting":
       return t("creatingDrafts");
@@ -447,7 +468,7 @@ const suggestionAcceptance = ({
       !editable ||
       edit.matter === null ||
       edit.narrative.trim().length === 0 ||
-      suggestion.roundedTenths === 0
+      suggestion.workedMinutes === 0
     ) {
       return;
     }
@@ -457,20 +478,13 @@ const suggestionAcceptance = ({
       {
         idempotencyKey: crypto.randomUUID(),
         items: [
-          {
-            entry: {
-              matterId: edit.matter.id,
-              dateWorked: date,
-              timezoneId: timeZone,
-              durationMinutes: suggestion.roundedTenths * 6,
-              narrative: edit.narrative,
-              billable: edit.billable,
-              ...(edit.classification === null
-                ? {}
-                : { classification: edit.classification }),
-            },
-            ranges: suggestion.ranges,
-          },
+          cardEntryItem({
+            edit,
+            matterId: edit.matter.id,
+            suggestion,
+            date,
+            timeZone,
+          }),
         ],
       },
       afterSaved(suggestion),
@@ -485,7 +499,7 @@ const suggestionAcceptance = ({
       !editable ||
       structure === null ||
       edit.matter === null ||
-      suggestion.roundedTenths === 0
+      suggestion.workedMinutes === 0
     ) {
       return;
     }
@@ -500,7 +514,7 @@ const suggestionAcceptance = ({
             billable: edit.billable,
             classification: edit.classification,
           },
-          durationMinutes: suggestion.roundedTenths * 6,
+          durationMinutes: suggestion.workedMinutes,
           ranges: suggestion.ranges,
           date,
           timezoneId: timeZone,
@@ -539,21 +553,21 @@ export const ActivityDayCalendar = ({
       setLocalDrafts((current) => [...current, ...drafted]),
   });
   const [leftOut, setLeftOut] = useState<ReadonlySet<string>>(new Set());
+  const review = useDayReview({ leftOut, localDrafts, nowMs, snapshot });
+  const { candidates, day, suggestions } = review;
   const [openCard, setOpenCard] = useState<OpenCard>({ type: "closed" });
   const titlesNotices = useTitlesNotices(snapshot, onCaptureCommand);
 
   const timeZone = Temporal.Now.timeZoneId();
-  const draftedEntries = [...snapshot.draftedEntries, ...localDrafts];
-  const { day, matters, candidates, refreshCandidates, ...learning } =
-    useDayMatters({ snapshot, draftedEntries, nowMs });
-  const suggestions = matchedSuggestions(day.groups, leftOut);
   const outages = outageRanges(snapshot.outages);
   const unrecorded = unrecordedRanges(outages, snapshot.gaps, day.segments);
   const calendar = useDayCalendarEvents(snapshot, day.segments);
-  const editingDisabledReason = getEditingDisabledReason(submission, t);
-  // While Activity cannot record, its history is read-only.
-  const editable =
-    editingDisabledReason === undefined && snapshot.stoppedReason === null;
+  const editingDisabledReason = getEditingDisabledReason(
+    submission,
+    snapshot.stoppedReason,
+    t,
+  );
+  const editable = editingDisabledReason === undefined;
   const drafting = useBillingDraftSettings(true);
   const narratives = useSuggestionDrafts({
     drafting,
@@ -564,7 +578,7 @@ export const ActivityDayCalendar = ({
 
   const rangeSuggestion = ({ id, range }: RangeCard) =>
     manualSuggestion({
-      drafted: draftedEntries,
+      drafted: review.draftedEntries,
       id,
       range,
       segments: day.segments,
@@ -605,7 +619,7 @@ export const ActivityDayCalendar = ({
     date: snapshot.date,
     timeZone,
     onSaved: (suggestion, items) => {
-      learning.learnFrom(suggestion, items);
+      review.learning.learnFrom(suggestion, items);
       openNext(suggestion);
     },
   });
@@ -616,12 +630,8 @@ export const ActivityDayCalendar = ({
     openNext(suggestion);
   };
 
-  const hours = (tenths: number) =>
-    format.number(tenths / 10, {
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1,
-    });
-  const summaryLabel = useSummaryLabel();
+  const minutesLabel = useMinutesLabel();
+  const summaryLabel = useSummaryLabel(entryBilling(candidates));
   // Matters group the day, so its blocks wait for them: drawn before they
   // arrive, every block a matter claims would be drawn again as another one,
   // under a pointer or focus already on it. The grid shimmers meanwhile where
@@ -633,7 +643,7 @@ export const ActivityDayCalendar = ({
     granularity: preferences.granularity,
     sourceAppVisuals: snapshot.sourceAppVisuals,
     rangeSelection: editable,
-    draftedEntries,
+    draftedEntries: review.draftedEntries,
     suggestions,
     narrativeFor: (suggestion) => narratives.editFor(suggestion).narrative,
     onActivate: (suggestion) =>
@@ -655,7 +665,7 @@ export const ActivityDayCalendar = ({
           timeZone,
         })}
         edit={narratives.editFor(openSuggestion)}
-        candidates={matters}
+        candidates={review.matters}
         editingDisabledReason={editingDisabledReason}
         timeLabel={summaryLabel(suggestionSummary(openSuggestion))}
         sourceAppVisuals={snapshot.sourceAppVisuals}
@@ -678,6 +688,7 @@ export const ActivityDayCalendar = ({
         onEdit={(change) => narratives.update(openSuggestion, change)}
         onAccept={() => accept(openSuggestion)}
         onReject={() => reject(openSuggestion)}
+        onIncludeSlivers={() => review.additions.includeSlivers(openSuggestion)}
         onClose={() => setOpenCard({ type: "closed" })}
         onCopy={async () =>
           // Resolves once the copy settles; a failed copy is reported by the
@@ -685,7 +696,7 @@ export const ActivityDayCalendar = ({
           new Promise<boolean>((resolve) => {
             const edit = narratives.editFor(openSuggestion);
             onCopy(
-              `${edit.matter?.name ?? t("newEntry")} · ${format.dateTime(calendarDate(snapshot.date), { dateStyle: "medium" })} · ${t("hours", { hours: hours(openSuggestion.roundedTenths) })}: ${edit.narrative}`,
+              `${edit.matter?.name ?? t("newEntry")} · ${format.dateTime(calendarDate(snapshot.date), { dateStyle: "medium" })} · ${minutesLabel(openSuggestion.workedMinutes)}: ${edit.narrative}`,
               resolve,
             );
           })
@@ -716,9 +727,9 @@ export const ActivityDayCalendar = ({
       {/* Matters cannot be read while Activity cannot record; the stop
           notice already says why. */}
       {candidates.type === "failed" && snapshot.stoppedReason === null ? (
-        <CandidatesFailedAlert onRetry={refreshCandidates} />
+        <CandidatesFailedAlert onRetry={review.refreshCandidates} />
       ) : null}
-      <MatterLearningNotice learning={learning} day={day} />
+      <MatterLearningNotice learning={review.learning} day={day} />
       <CalendarEventsNotice calendar={calendar} />
       <SubmissionFeedback
         submission={submission}
@@ -774,8 +785,203 @@ export const ActivityDayCalendar = ({
         }
         timeZone={timeZone}
       />
+      <BriefTouches
+        touches={review.briefTouches}
+        editingDisabledReason={editingDisabledReason}
+        onAdd={(touch) => {
+          const added = review.additions.addTouch(touch);
+          open({ id: added.id, type: "suggestion" }, added);
+        }}
+      />
       <p className="text-muted-foreground text-xs">{t("calendarHint")}</p>
     </div>
+  );
+};
+
+type CardEntryOptions = {
+  edit: SuggestionEdit;
+  /** The edit's matter, once the card has one. */
+  matterId: string;
+  suggestion: ActivitySuggestion;
+  date: string;
+  timeZone: string;
+};
+
+/** The one entry a confirmed card saves. It carries the minutes worked; the
+ * server bills them under the organization's minimum unit. */
+const cardEntryItem = ({
+  edit,
+  matterId,
+  suggestion,
+  date,
+  timeZone,
+}: CardEntryOptions): BatchItem => ({
+  entry: {
+    matterId,
+    dateWorked: date,
+    timezoneId: timeZone,
+    durationMinutes: suggestion.workedMinutes,
+    narrative: edit.narrative,
+    billable: edit.billable,
+    ...(edit.classification === null
+      ? {}
+      : { classification: edit.classification }),
+  },
+  ranges: suggestion.ranges,
+});
+
+/** The organization's minimum billing unit, once the candidates hold it. */
+const entryBilling = (candidates: CandidateState): EntryBilling =>
+  candidates.type === "ready"
+    ? { minimumUnitMinutes: candidates.timeMinimumUnitMinutes, type: "known" }
+    : { type: "unknown" };
+
+type DayReviewOptions = {
+  leftOut: ReadonlySet<string>;
+  localDrafts: DraftedEntries;
+  nowMs: number;
+  snapshot: ActivityDaySnapshot;
+};
+
+/** The day matched (`useDayMatters`), with what the member took in by their
+ * own action, as suggestions and brief touches. */
+function useDayReview({
+  leftOut,
+  localDrafts,
+  nowMs,
+  snapshot,
+}: DayReviewOptions) {
+  const additions = useMemberAdditions();
+  const draftedEntries = [...snapshot.draftedEntries, ...localDrafts];
+  const { learningStore, learnFrom, ...matched } = useDayMatters({
+    snapshot,
+    manualAssignments: additions.withSlivers(snapshot.manualAssignments),
+    draftedEntries,
+    nowMs,
+  });
+  return {
+    ...matched,
+    additions,
+    draftedEntries,
+    learning: { learningStore, learnFrom },
+    ...additions.review(matched.day, leftOut),
+  };
+}
+
+/** What the member took in by their own action: brief touches added as
+ * entries, and slivers included in a suggestion as assignments to its
+ * matter. */
+function useMemberAdditions() {
+  const [addedTouches, setAddedTouches] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
+  const [includedSlivers, setIncludedSlivers] = useState<
+    ActivityManualAssignment[]
+  >([]);
+  /** The day's suggestions with the brief touches added, and the brief
+   * touches still listed. */
+  const review = (
+    { groups, briefTouches }: ReturnType<typeof matchDay>,
+    leftOut: ReadonlySet<string>,
+  ) => ({
+    suggestions: matchedSuggestions(
+      [...groups, ...briefTouches.filter(({ id }) => addedTouches.has(id))],
+      leftOut,
+    ),
+    briefTouches: briefTouches.filter(
+      ({ id }) => !addedTouches.has(id) && !leftOut.has(id),
+    ),
+  });
+  /** Adds a brief touch and returns its suggestion, for its card to open. */
+  const addTouch = (touch: DayReviewGroup) => {
+    setAddedTouches((current) => new Set([...current, touch.id]));
+    return toSuggestion(touch);
+  };
+  // The card's include action is disabled while editing is.
+  const includeSlivers = ({ matter, slivers }: ActivitySuggestion) => {
+    if (matter === null) {
+      return;
+    }
+    setIncludedSlivers((current) => [
+      ...current,
+      ...segmentRanges(slivers).map((range) => ({
+        ...range,
+        matterId: matter.id,
+        matter: {
+          id: matter.id,
+          name: matter.name,
+          reference: matter.reference,
+          color: matter.color,
+          clientName: matter.clientName,
+        },
+      })),
+    ]);
+  };
+  /** The stored assignments with the included slivers. */
+  const withSlivers = (stored: readonly ActivityManualAssignment[]) => [
+    ...stored,
+    ...includedSlivers,
+  ];
+  return { addTouch, includeSlivers, review, withSlivers };
+}
+
+/** Matters recorded too briefly to suggest on their own, each with the one
+ * action that adds it as an entry of the least time an entry holds. */
+const BriefTouches = ({
+  touches,
+  editingDisabledReason,
+  onAdd,
+}: {
+  touches: readonly DayReviewGroup[];
+  editingDisabledReason: string | undefined;
+  onAdd: (touch: DayReviewGroup) => void;
+}) => {
+  const t = useTranslations("activity");
+  const durationLabel = useDurationLabel();
+  const minutesLabel = useMinutesLabel();
+  if (touches.length === 0) {
+    return null;
+  }
+  return (
+    <section
+      aria-labelledby="activity-brief-touches"
+      className="flex flex-col gap-1.5 text-xs"
+    >
+      <h3 className="font-medium" id="activity-brief-touches">
+        {t("briefTouches")}
+      </h3>
+      <p className="text-muted-foreground text-pretty">
+        {t("briefTouchesHint", {
+          duration: minutesLabel(BRIEF_MS / MINUTE_MS),
+        })}
+      </p>
+      <ul className="flex flex-col gap-1">
+        {touches.map((touch) => (
+          <li className="flex items-center gap-2" key={touch.id}>
+            {touch.matter === null ? null : (
+              <MatterIcon matter={touch.matter} className="size-3.5 shrink-0" />
+            )}
+            <TruncatedText className="min-w-0 flex-1" render={<bdi />}>
+              {touch.matter?.name ?? t("newEntry")}
+            </TruncatedText>
+            <span className="text-muted-foreground shrink-0 tabular-nums">
+              {durationLabel(touch.durationMs)}
+            </span>
+            <Button
+              disabled={editingDisabledReason !== undefined}
+              disabledReason={editingDisabledReason}
+              onClick={() => onAdd(touch)}
+              size="xs"
+              variant="ghost"
+            >
+              {t("addBriefTouch", {
+                duration: minutesLabel(touch.workedMinutes),
+              })}
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 };
 
@@ -848,30 +1054,48 @@ const emptyDayMessage = ({
   }
 };
 
+/** How a card names the minutes its entry claims, with what they bill. */
+const ENTRY_TIME_MESSAGES = {
+  matched: "entryTimeRecorded",
+  manual: "entryTimeSelected",
+} as const satisfies Record<SuggestionSummary["source"], string>;
+
 /** What a suggestion card's header says about its time: its range or how
- * many pieces it has, and the hours the entry bills. */
-const useSummaryLabel = () => {
+ * many pieces it has, then the minutes the entry claims and, once the
+ * organization's minimum unit is known, what they bill under it. */
+const useSummaryLabel = (billing: EntryBilling) => {
   const t = useTranslations("activity");
   const format = useFormatter();
-  const hours = (tenths: number) =>
-    format.number(tenths / 10, {
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1,
-    });
+  const minutesLabel = useMinutesLabel();
+  const billedLabel = useBilledLabel();
+  const entryTime = ({ source, workedMinutes }: SuggestionSummary) => {
+    switch (billing.type) {
+      case "unknown":
+        return minutesLabel(workedMinutes);
+      case "known":
+        return t(ENTRY_TIME_MESSAGES[source], {
+          billed: billedLabel(workedMinutes, billing.minimumUnitMinutes),
+          worked: minutesLabel(workedMinutes),
+        });
+      default:
+        billing satisfies never;
+        return panic("Unhandled entry billing");
+    }
+  };
   return (summary: SuggestionSummary) => {
     switch (summary.type) {
       case "range":
         return t("suggestionRange", {
-          hours: hours(summary.tenths),
           range: format.dateTimeRange(summary.startMs, summary.endMs, {
             hour: "numeric",
             minute: "2-digit",
           }),
+          time: entryTime(summary),
         });
       case "pieces":
         return t("suggestionPieces", {
           count: summary.count,
-          hours: hours(summary.tenths),
+          time: entryTime(summary),
         });
       default:
         summary satisfies never;
@@ -964,11 +1188,6 @@ function useCalendarColumns({
     format.dateTimeRange(startMs, endMs, {
       hour: "numeric",
       minute: "2-digit",
-    });
-  const hours = (tenths: number) =>
-    format.number(tenths / 10, {
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1,
     });
   const durationLabel = useDurationLabel();
   const minutesLabel = useMinutesLabel();
@@ -1167,7 +1386,7 @@ function useCalendarColumns({
   });
   for (const suggestion of suggestions) {
     const name = suggestion.matter?.name ?? t("newEntry");
-    const roundedHours = hours(suggestion.roundedTenths);
+    const total = minutesLabel(suggestion.workedMinutes);
     // Each piece shows its own time; the matter's total is its card's.
     const narrative = narrativeFor(suggestion).trim();
     for (const piece of suggestionPieces(suggestion)) {
@@ -1176,9 +1395,9 @@ function useCalendarColumns({
       entries.push({
         accessibleLabel: t("suggestionPieceLabel", {
           duration,
-          hours: roundedHours,
           matter: name,
           range,
+          total,
         }),
         // The description reads under the time, as on a timesheet.
         ...(narrative.length > 0 ? { caption: <bdi>{narrative}</bdi> } : {}),
@@ -1342,6 +1561,9 @@ type Drafted = {
   structure: CardDraft["structure"];
   /** The matter the draft was written for. */
   matterId: string;
+  /** The minutes the card claimed when the draft was written; its split or
+   * move accounts for exactly these. */
+  durationMinutes: number;
   /** Why the last refinement failed, until the next one. */
   refineFailure: DraftFailureKind | null;
 };
@@ -1365,12 +1587,16 @@ type DraftStatus =
   | { kind: DraftFailureKind; matterId: string; type: "failed" };
 
 type DraftAnswer =
-  | { draft: CardDraft; type: "drafted" }
+  /** `target` is the matter and minutes the draft was written for. */
+  | { draft: CardDraft; target: CardDraftTarget; type: "drafted" }
   | { kind: DraftFailureKind; type: "failed" }
   /** Consent changed meanwhile; nothing to show. */
   | { type: "quiet" };
 
-const draftedFrom = (draft: CardDraft, matterId: string): Drafted => ({
+const draftedFrom = (
+  draft: CardDraft,
+  { matterId, durationMinutes }: CardDraftTarget,
+): Drafted => ({
   narrativeLanguage: draft.narrativeLanguage,
   codeNames: draft.codeNames,
   earlierEntries: draft.earlierEntries,
@@ -1378,6 +1604,7 @@ const draftedFrom = (draft: CardDraft, matterId: string): Drafted => ({
   structure: draft.structure,
   result: draft.result,
   matterId,
+  durationMinutes,
   refineFailure: null,
 });
 
@@ -1408,6 +1635,18 @@ const draftForMatter = (status: DraftStatus, edit: SuggestionEdit) =>
   status.type === "drafted" && edit.matter?.id === status.matterId
     ? status
     : null;
+
+/** The draft's split or move, for the matter and the minutes it was drafted
+ * for: once included time or a moved range changes the card's minutes, it no
+ * longer accounts for them. */
+const draftStructure = (
+  status: DraftStatus,
+  edit: SuggestionEdit,
+  { workedMinutes }: Pick<ActivitySuggestion, "workedMinutes">,
+) => {
+  const drafted = draftForMatter(status, edit);
+  return drafted?.durationMinutes === workedMinutes ? drafted.structure : null;
+};
 
 /** What a card's stella AI area shows. */
 const draftAssistView = ({
@@ -1593,13 +1832,11 @@ function useSuggestionDrafts({
       }
       return { kind, type: "failed" };
     }
-    const draft = cardDraftFrom(outcome.response.value, {
-      matterId,
-      durationMinutes: suggestion.roundedTenths * 6,
-    });
+    const target = { matterId, durationMinutes: suggestion.workedMinutes };
+    const draft = cardDraftFrom(outcome.response.value, target);
     return draft === null
       ? { kind: "failed", type: "failed" }
-      : { draft, type: "drafted" };
+      : { draft, target, type: "drafted" };
   };
 
   const draft = (suggestion: ActivitySuggestion) => {
@@ -1629,7 +1866,7 @@ function useSuggestionDrafts({
           return panic("Unhandled draft answer");
       }
       settle(id, request, {
-        ...draftedFrom(answer.draft, matter.id),
+        ...draftedFrom(answer.draft, answer.target),
         type: "drafted",
       });
       // A classification belongs to the matter it was drafted for, and text
@@ -1685,7 +1922,7 @@ function useSuggestionDrafts({
         case "drafted":
           settle(id, request, {
             base,
-            drafted: draftedFrom(answer.draft, matter.id),
+            drafted: draftedFrom(answer.draft, answer.target),
             previous: drafted,
             proposal: answer.draft,
             type: "proposed",
@@ -1792,10 +2029,9 @@ function useSuggestionDrafts({
     codeNames: (suggestion: ActivitySuggestion) =>
       draftForMatter(statusFor(suggestion), editFor(suggestion))?.codeNames ??
       [],
-    /** The split or move on offer, for the matter it was drafted for. */
+    /** The split or move on offer; see {@link draftStructure}. */
     structure: (suggestion: ActivitySuggestion) =>
-      draftForMatter(statusFor(suggestion), editFor(suggestion))?.structure ??
-      null,
+      draftStructure(statusFor(suggestion), editFor(suggestion), suggestion),
     view: (suggestion: ActivitySuggestion) =>
       draftAssistView({
         settings,
@@ -1903,13 +2139,20 @@ type LearningStore = ReturnType<typeof useMatterLearning>;
 
 type DayMattersOptions = {
   snapshot: ActivityDaySnapshot;
+  /** The stored assignments with what the member included meanwhile. */
+  manualAssignments: readonly ActivityManualAssignment[];
   draftedEntries: DraftedEntries;
   nowMs: number;
 };
 /** The day matched: against the shortlist plus each id a record, rule or
  * learned weight names, resolved under the member's access before anything
  * is suggested. */
-function useDayMatters({ snapshot, draftedEntries, nowMs }: DayMattersOptions) {
+function useDayMatters({
+  snapshot,
+  manualAssignments,
+  draftedEntries,
+  nowMs,
+}: DayMattersOptions) {
   const timed = timedSegments(snapshot.segments);
   const learningStore = useMatterLearning();
   const learning =
@@ -1933,7 +2176,7 @@ function useDayMatters({ snapshot, draftedEntries, nowMs }: DayMattersOptions) {
     candidates: matters,
     resolved: candidates.type === "ready" ? candidates.resolved : [],
     captureDetails: snapshot.captureDetails,
-    manualAssignments: snapshot.manualAssignments,
+    manualAssignments,
     draftedEntries,
     learning,
     nowMs,
@@ -2120,10 +2363,15 @@ function useMatterCandidates(recordedIds: readonly string[]) {
   const candidateRequest = useRef(0);
   const refreshCandidates = useCallback(() => {
     const request = ++candidateRequest.current;
-    invoke<DesktopTimeEntryMatterCandidate[]>("time_entry_candidates")
-      .then((matters) => {
+    invoke<DesktopMatterCandidatesResponse>("time_entry_candidates")
+      .then(({ matters, timeMinimumUnitMinutes }) => {
         if (request === candidateRequest.current) {
-          setCandidates({ type: "ready", matters, resolved: [] });
+          setCandidates({
+            type: "ready",
+            matters,
+            timeMinimumUnitMinutes,
+            resolved: [],
+          });
         }
         return undefined;
       })
@@ -2166,8 +2414,7 @@ function useMatterCandidates(recordedIds: readonly string[]) {
           setCandidates((current) =>
             current.type === "ready"
               ? {
-                  type: "ready",
-                  matters: current.matters,
+                  ...current,
                   resolved: [...current.resolved, ...resolved],
                 }
               : current,

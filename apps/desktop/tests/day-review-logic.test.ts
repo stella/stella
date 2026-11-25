@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as fc from "fast-check";
 
@@ -159,26 +160,145 @@ describe("local matter day review", () => {
     ).toEqual([MATTER_IDS[2]]);
   });
 
-  test("aggregates disconnected short segments per matter without adding away time", () => {
+  test("aggregates disconnected segments per matter without adding away time", () => {
     const result = review([
-      segment(0, 30, "A-101"),
-      segment(30, 60, "B-202"),
-      segment(3600, 3630, "A-101"),
+      segment(0, 90, "A-101"),
+      segment(90, 240, "B-202"),
+      segment(3600, 3690, "A-101"),
     ]);
     expect(
-      result.groups.map(({ id, durationMs, roundedTenths }) => ({
+      result.groups.map(({ id, durationMs, workedMinutes }) => ({
         id,
         durationMs,
-        roundedTenths,
+        workedMinutes,
       })),
     ).toEqual([
-      { id: "a", durationMs: 60_000, roundedTenths: 1 },
-      { id: "b", durationMs: 30_000, roundedTenths: 1 },
+      { id: "a", durationMs: 180_000, workedMinutes: 3 },
+      { id: "b", durationMs: 150_000, workedMinutes: 2 },
     ]);
     expect(
       result.groups.reduce((sum, group) => sum + group.durationMs, 0),
-    ).toBe(90_000);
+    ).toBe(330_000);
   });
+
+  test("a matter recorded under two minutes is a brief touch, not a suggestion", () => {
+    const result = review([segment(0, 5, "A-101"), segment(5, 300, "B-202")]);
+    expect(
+      result.groups.map(({ id, workedMinutes }) => [id, workedMinutes]),
+    ).toEqual([["b", 4]]);
+    expect(
+      result.briefTouches.map(({ id, durationMs, workedMinutes }) => [
+        id,
+        durationMs,
+        workedMinutes,
+      ]),
+    ).toEqual([["a", 5000, 1]]);
+  });
+
+  test("unclaimed time between two stretches of one matter is offered, never counted", () => {
+    const result = review([
+      segment(0, 120, "A-101"),
+      segment(120, 170, "Inbox"),
+      segment(170, 300, "A-101"),
+    ]);
+    const alpha = result.groups.find(({ id }) => id === "a");
+    expect(alpha?.durationMs).toBe(250_000);
+    expect(alpha?.slivers.map(({ startMs, endMs }) => endMs - startMs)).toEqual(
+      [50_000],
+    );
+  });
+
+  test("another matter's time, or time recorded with a matter not offered, is never a sliver", () => {
+    for (const between of [
+      segment(120, 170, "B-202"),
+      segment(120, 170, "Inbox", "outside-shortlist"),
+    ]) {
+      const result = review([
+        segment(0, 120, "A-101"),
+        between,
+        segment(170, 300, "A-101"),
+      ]);
+      expect(result.groups.find(({ id }) => id === "a")?.slivers).toEqual([]);
+    }
+  });
+
+  test("unclaimed time of two minutes or more is no sliver", () => {
+    const result = review([
+      segment(0, 120, "A-101"),
+      segment(120, 240, "Inbox"),
+      segment(240, 360, "A-101"),
+    ]);
+    expect(result.groups.find(({ id }) => id === "a")?.slivers).toEqual([]);
+  });
+
+  test("taking slivers in after another matter's entry never claims more than was recorded", () => {
+    const segments = timedSegments([
+      segment(0, 156, "A-101"),
+      segment(156, 234, "B-202"),
+      segment(234, 240, "Inbox"),
+      segment(240, 318, "B-202"),
+    ]);
+    type Options = Parameters<typeof matchDay>[0];
+    const day = (
+      manualAssignments: Options["manualAssignments"],
+      draftedEntries: Options["draftedEntries"],
+    ) =>
+      matchDay({
+        segments,
+        candidates,
+        resolved: [],
+        learning: EMPTY_MATTER_LEARNING,
+        nowMs: NOW_MS,
+        captureDetails: true,
+        manualAssignments,
+        draftedEntries,
+      });
+    const alpha =
+      day([], []).groups.find(({ id }) => id === "a") ??
+      panic("Alpha is suggested");
+    // Alpha's entry is created first, at the minutes it then claimed.
+    const created = alpha.ranges.map((range) => ({
+      ...range,
+      entryId: "alpha-entry",
+    }));
+    const beta = day([], created).groups.find(({ id }) => id === "b");
+    const included = (beta?.slivers ?? []).map(({ startMs, endMs }) => ({
+      start: new Date(startMs).toISOString(),
+      end: new Date(endMs).toISOString(),
+      matterId: "b",
+    }));
+    const after = day(included, created);
+    const matterMs = after.segments
+      .filter(({ matter }) => matter !== null)
+      .reduce((sum, { endMs, startMs }) => sum + endMs - startMs, 0);
+    const suggestedMinutes = after.groups.reduce(
+      (sum, { workedMinutes }) => sum + workedMinutes,
+      0,
+    );
+    expect(
+      (alpha.workedMinutes + suggestedMinutes) * 60_000,
+    ).toBeLessThanOrEqual(matterMs);
+  });
+
+  test("an entry's rest under a minute is no brief touch; a minute or more adds rounded down", () => {
+    const touches = (end: number) =>
+      matchDay({
+        segments: timedSegments([
+          segment(0, end, "A-101"),
+          segment(end, end + 300, "B-202"),
+        ]),
+        candidates,
+        resolved: [],
+        learning: EMPTY_MATTER_LEARNING,
+        nowMs: NOW_MS,
+        captureDetails: true,
+        manualAssignments: [],
+        draftedEntries: [{ start: at(0), end: at(120), entryId: "alpha" }],
+      }).briefTouches.map(({ id, workedMinutes }) => [id, workedMinutes]);
+    expect(touches(125)).toEqual([]);
+    expect(touches(200)).toEqual([["a", 1]]);
+  });
+
   test("session identity outranks tokens, and metadata only matches after consent", () => {
     const segments = [segment(0, 30, "B-202", "a"), segment(30, 60, "B-202")];
     expect(
@@ -209,20 +329,21 @@ describe("local matter day review", () => {
       expect(review([segment(0, 30, title)]).groups.at(0)?.matter).toBeNull();
     }
     expect(
-      review([segment(0, 30, "Ａ－１０１")]).groups.at(0)?.matter?.id,
+      review([segment(0, 30, "Ａ－１０１")]).segments.at(0)?.matter?.id,
     ).toBe("a");
-    expect(review([segment(0, 30, "B-202")]).groups).toEqual(
-      matchDay({
-        segments: timedSegments([segment(0, 30, "B-202")]),
-        candidates: candidates.toReversed(),
-        resolved: [],
-        learning: EMPTY_MATTER_LEARNING,
-        nowMs: NOW_MS,
-        captureDetails: true,
-        manualAssignments: [],
-        draftedEntries: [],
-      }).groups,
-    );
+    const { groups, briefTouches } = review([segment(0, 30, "B-202")]);
+    const reversed = matchDay({
+      segments: timedSegments([segment(0, 30, "B-202")]),
+      candidates: candidates.toReversed(),
+      resolved: [],
+      learning: EMPTY_MATTER_LEARNING,
+      nowMs: NOW_MS,
+      captureDetails: true,
+      manualAssignments: [],
+      draftedEntries: [],
+    });
+    expect(groups).toEqual(reversed.groups);
+    expect(briefTouches).toEqual(reversed.briefTouches);
   });
   test("distinctive whole name and client tokens match partial evidence without resolving ambiguity", () => {
     const matters = candidates.map((candidate) => ({

@@ -96,11 +96,6 @@ export const lockTimePolicy = async (
   return toTimePolicy(settings);
 };
 
-export const roundToBillingIncrement = (
-  minutes: number,
-  minimumUnitMinutes: number,
-): number => Math.ceil(minutes / minimumUnitMinutes) * minimumUnitMinutes;
-
 const getTimeEntryDateValidationError = ({
   dateWorked,
   today,

@@ -13,6 +13,7 @@ import {
   createSafeBoundedPublicHandler,
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
+import { readTimePolicy } from "@/api/lib/billing-time";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
 
@@ -60,9 +61,16 @@ export const createDesktopMatterCandidatesEndpoint = (
           ),
         ),
       );
+      const policy = yield* Result.await(
+        readTimePolicy({
+          safeDb: account.safeDb,
+          organizationId: account.organizationId,
+        }),
+      );
       return Result.ok({
         // Matching uses the ranked first page as a shortlist of likely matters.
         matters: page.items.map(toMatterCandidate),
+        timeMinimumUnitMinutes: policy.timeMinimumUnitMinutes,
       });
     },
   );

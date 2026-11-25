@@ -4,9 +4,10 @@ import { Temporal } from "@stll/time";
 
 import contract from "../fixtures/activity-contract.json" with { type: "json" };
 import {
+  apportionWhole,
   appTotals,
   documentName,
-  roundedTenthsOfHour,
+  recordedMinutes,
   shiftDate,
   timedSegments,
   totalDurationMs,
@@ -324,16 +325,21 @@ describe("activity day logic", () => {
     expect(documentName("C:\\private\\folder\\memo.docx")).toBe("memo.docx");
   });
 
-  test("durations round up to whole six-minute increments", () => {
-    expect(roundedTenthsOfHour(0)).toBe(0);
-    expect(roundedTenthsOfHour(1)).toBe(1);
-    expect(roundedTenthsOfHour(6 * MINUTE)).toBe(1);
-    expect(roundedTenthsOfHour(6 * MINUTE + 1)).toBe(2);
-    for (let minutes = 1; minutes <= 600; minutes += 1) {
-      const tenths = roundedTenthsOfHour(minutes * MINUTE);
-      expect(tenths * 6).toBeGreaterThanOrEqual(minutes);
-      expect((tenths - 1) * 6).toBeLessThan(minutes);
-    }
+  test("recorded durations become whole minutes that never exceed the recorded total", () => {
+    // A glance of five seconds claims nothing on its own.
+    expect(recordedMinutes([5000])).toEqual([0]);
+    expect(recordedMinutes([31 * MINUTE + 30_000])).toEqual([31]);
+    // 31.6 + 10.5 minutes hold 42 whole minutes; the larger remainder takes
+    // the one the rounded-down values leave over.
+    expect(recordedMinutes([1_896_000, 630_000])).toEqual([32, 10]);
+    expect(recordedMinutes([])).toEqual([]);
+  });
+
+  test("apportioning keeps a fixed total and refuses one outside the values' range", () => {
+    expect(apportionWhole([0.5, 0.5, 0.5], 2)).toEqual([1, 1, 0]);
+    expect(apportionWhole([1.2, 2.9], 4)).toEqual([1, 3]);
+    expect(() => apportionWhole([1.2, 2.9], 6)).toThrow("outside the values");
+    expect(() => apportionWhole([1.2, 2.9], 2)).toThrow("outside the values");
   });
 
   test("calendar dates shift across month and year boundaries", () => {

@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import { BILLING_STATUS } from "@stll/api-contract";
 import { apiDateSchema } from "@stll/api-contract/api-date";
+import { roundToBillingIncrement } from "@stll/api-contract/billing";
 import { TIME_ENTRY_RATE_REQUIRED_CODE } from "@stll/api-contract/time-entries";
 
 import type { SafeDb } from "@/api/db/safe-db-types";
@@ -13,11 +14,7 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
-import {
-  getTimePolicyViolation,
-  readTimePolicy,
-  roundToBillingIncrement,
-} from "@/api/lib/billing-time";
+import { getTimePolicyViolation, readTimePolicy } from "@/api/lib/billing-time";
 import { recordBillingCapCrossingsForMatters } from "@/api/lib/billing/arrangements";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import { resolveRate } from "@/api/lib/billing/rates";

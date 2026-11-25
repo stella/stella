@@ -83,7 +83,7 @@ const SelectedRangeCard = ({
         written: 0,
       }}
       flags={[]}
-      onAccept={() => onAccept(suggestion.roundedTenths * 6)}
+      onAccept={() => onAccept(suggestion.workedMinutes)}
       onAcceptProposal={noop}
       onAcceptStructure={noop}
       onAllow={noop}
@@ -93,6 +93,7 @@ const SelectedRangeCard = ({
       onDraft={noop}
       onEdit={noop}
       onRefine={noop}
+      onIncludeSlivers={noop}
       onReject={noop}
       onRestoreTemplate={noop}
       onUndo={noop}
@@ -228,6 +229,7 @@ const ConsentCard = ({
     onDraft={noop}
     onEdit={noop}
     onRefine={noop}
+    onIncludeSlivers={noop}
     onReject={noop}
     onRestoreTemplate={noop}
     onUndo={noop}
@@ -418,6 +420,7 @@ const renderAssist = async (assist: CardProps["assist"]) => {
         onDraft={record("draft")}
         onEdit={noop}
         onRefine={noop}
+        onIncludeSlivers={noop}
         onReject={noop}
         onRestoreTemplate={noop}
         onUndo={noop}
