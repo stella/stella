@@ -7,7 +7,7 @@ import {
   SKILL_REQUIRED_TOOLS_METADATA_KEY,
 } from "@stll/skills";
 
-import { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-definitions";
+import { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-names";
 
 // Kept apart from `required-tools.ts`: this module reads the tool registry,
 // which the availability helpers' importers (the registry among them) must not.

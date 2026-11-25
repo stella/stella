@@ -12,9 +12,9 @@ import type { PeriodActionKind } from "@/api/lib/rate-limit/action-kinds";
 import type { ServiceClassification } from "@/api/lib/rate-limit/service-classification";
 import type { ResourceSetRealtime } from "@/api/lib/resource-set-realtime";
 import type { WriteContract } from "@/api/lib/write-contract/write-contract";
+import type { McpReadClass } from "@/api/mcp/constants";
 // Type-only: keep endpoint metadata independent of the expensive MCP schema graph.
 import type { McpToolName } from "@/api/mcp/static-tool-names";
-import type { McpReadClass } from "@/api/mcp/tool-types";
 
 /**
  * The closed set of curated static MCP tool names. Every `type: "tool"` and

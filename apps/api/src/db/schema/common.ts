@@ -100,11 +100,6 @@ import type {
   PropertyContent,
   PropertyTool,
 } from "@/api/db/schema-validators";
-import type {
-  ChatCompactionSummary,
-  ChatMessageRole,
-  PersistedChatMessageContent,
-} from "@/api/handlers/chat/types";
 import type { ClauseMetadata } from "@/api/handlers/clauses/metadata";
 import type { TemplateRecipeDefinition } from "@/api/handlers/template-recipes/definition";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -113,6 +108,11 @@ import type {
   SafeId,
   SafeIdType,
 } from "@/api/lib/branded-types";
+import type {
+  ChatCompactionSummary,
+  ChatMessageRole,
+  PersistedChatMessageContent,
+} from "@/api/lib/chat/persisted-chat-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import type {
   DocumentSource,

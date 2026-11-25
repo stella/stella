@@ -11,9 +11,8 @@ import type { ReleaseFailureEventProperties } from "@/api/lib/observability/rele
 import { RELEASE_FAILURE_EVENT } from "@/api/lib/observability/release-failure-contract";
 import type { ResolvedTanStackTextModelInfo } from "@/api/lib/tanstack-ai-models";
 import type { McpCredentialType } from "@/api/mcp/auth";
-import type { McpMode } from "@/api/mcp/constants";
+import type { McpMode, McpTransport } from "@/api/mcp/constants";
 import type { McpErrorCode } from "@/api/mcp/error-codes";
-import type { McpTransport } from "@/api/mcp/request-metrics";
 
 export const SERVER_ANALYTICS_EVENTS = {
   aiGeneration: "$ai_generation",
