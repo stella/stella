@@ -1,10 +1,14 @@
 import { Fragment } from "react";
-import type { MouseEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
 import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import {
+  ContextMenuSurface,
+  type ContextMenuSurfaceOpenEvent,
+} from "@stll/ui/entity-actions";
 import { XIcon } from "@stll/ui/icons";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { TruncatedText } from "@stll/ui/truncated-text";
@@ -91,7 +95,7 @@ type InspectorTabHeaderProps = {
    * (rename, close, close others, close all) are also reachable
    * from the visible label inside the ribbon.
    */
-  onLabelContextMenu?: (event: MouseEvent<HTMLElement>) => void;
+  onLabelContextMenu?: (details: ContextMenuSurfaceOpenEvent) => void;
   /**
    * Inline-edit controls. When `active` is true the input is
    * rendered in place of the label.
@@ -152,19 +156,24 @@ export const InspectorTabHeader = ({
             // sidebar row puts its client under the matter, so the name gets
             // the whole width instead of sharing one line with the chip.
             <div className="flex min-w-0 flex-col items-start text-xs font-medium md:flex-row md:items-center md:gap-2">
-              <TruncatedText
-                aria-label={label}
-                className={cn(
-                  "max-w-full whitespace-pre",
-                  onStartRename !== undefined && "cursor-text",
-                )}
-                onContextMenu={onLabelContextMenu}
-                onDoubleClick={onStartRename}
-                tabIndex={0}
-                tooltip={label}
+              <ContextMenuSurface
+                disabled={onLabelContextMenu === undefined}
+                onOpenContextMenu={(details) => onLabelContextMenu?.(details)}
+                preserveNativeTargets={false}
               >
-                <UserText>{label}</UserText>
-              </TruncatedText>
+                <TruncatedText
+                  aria-label={label}
+                  className={cn(
+                    "max-w-full whitespace-pre",
+                    onStartRename !== undefined && "cursor-text",
+                  )}
+                  onDoubleClick={onStartRename}
+                  tabIndex={0}
+                  tooltip={label}
+                >
+                  <UserText>{label}</UserText>
+                </TruncatedText>
+              </ContextMenuSurface>
               {matter !== undefined && (
                 <>
                   <span

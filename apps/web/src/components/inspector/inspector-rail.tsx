@@ -6,7 +6,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { EntityActions } from "@stll/ui/entity-actions";
+import { ContextMenuSurface, EntityActions } from "@stll/ui/entity-actions";
 import { NewChatIcon, PanelRightIcon } from "@stll/ui/icons";
 import {
   entityTabGlyph,
@@ -16,7 +16,6 @@ import {
 } from "@stll/ui/inspector";
 import type { InspectorEntityTabInactiveIcon } from "@stll/ui/inspector";
 import { getMatterSwatch } from "@stll/ui/matter-colors";
-import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 
@@ -424,47 +423,52 @@ const VerticalTabCell = ({
 
   return (
     <>
-      <InspectorEntityTab
-        active={active}
-        className={cn(
-          "border-b-0",
-          dragOver && "bg-accent ring-ring ring-2 ring-inset",
-        )}
-        draggable
-        glyph={tabGlyph(tab)}
-        icon={<InspectorTabIcon tab={tab} />}
-        inactiveIcon={tabInactiveIcon(tab)}
-        label={tooltipLabel}
-        onClose={onClose}
-        onContextMenu={containedEventHandler(contextMenu.openAt)}
-        onKeyDown={contextMenu.onKeyDown}
-        onDragStart={(event) => {
-          event.dataTransfer.setData(INSPECTOR_TAB_DRAG_TYPE, tab.id);
-          event.dataTransfer.effectAllowed = "move";
-        }}
-        onDragOver={(event) => {
-          if (!event.dataTransfer.types.includes(INSPECTOR_TAB_DRAG_TYPE)) {
-            return;
-          }
-          event.preventDefault();
-          event.dataTransfer.dropEffect = "move";
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDragEnd={() => setDragOver(false)}
-        onDrop={(event) => {
-          setDragOver(false);
-          const sourceId = event.dataTransfer.getData(INSPECTOR_TAB_DRAG_TYPE);
-          if (!sourceId) {
-            return;
-          }
-          event.preventDefault();
-          event.stopPropagation();
-          onDropTab({ sourceId, targetId: tab.id });
-        }}
-        onSelect={activateFromRail}
-        ref={tabRef}
-      />
+      <ContextMenuSurface
+        onOpenContextMenu={contextMenu.openFromSurface}
+        preserveNativeTargets={false}
+      >
+        <InspectorEntityTab
+          active={active}
+          className={cn(
+            "border-b-0",
+            dragOver && "bg-accent ring-ring ring-2 ring-inset",
+          )}
+          draggable
+          glyph={tabGlyph(tab)}
+          icon={<InspectorTabIcon tab={tab} />}
+          inactiveIcon={tabInactiveIcon(tab)}
+          label={tooltipLabel}
+          onClose={onClose}
+          onDragStart={(event) => {
+            event.dataTransfer.setData(INSPECTOR_TAB_DRAG_TYPE, tab.id);
+            event.dataTransfer.effectAllowed = "move";
+          }}
+          onDragOver={(event) => {
+            if (!event.dataTransfer.types.includes(INSPECTOR_TAB_DRAG_TYPE)) {
+              return;
+            }
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDragEnd={() => setDragOver(false)}
+          onDrop={(event) => {
+            setDragOver(false);
+            const sourceId = event.dataTransfer.getData(
+              INSPECTOR_TAB_DRAG_TYPE,
+            );
+            if (!sourceId) {
+              return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            onDropTab({ sourceId, targetId: tab.id });
+          }}
+          onSelect={activateFromRail}
+          ref={tabRef}
+        />
+      </ContextMenuSurface>
       {contextMenu.element}
     </>
   );

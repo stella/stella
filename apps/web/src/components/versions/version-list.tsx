@@ -17,6 +17,10 @@ import { markerPattern } from "@stll/template-conditions";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
+  ContextMenuSurface,
+  type ContextMenuSurfaceOpenEvent,
+} from "@stll/ui/entity-actions";
+import {
   AiActionIcon,
   ChevronDownIcon,
   ChevronRightIcon,
@@ -67,7 +71,7 @@ type VersionRowProps = {
   /** Trailing buttons on the action row (download, ...). */
   actions?: React.ReactNode;
   onActivate?: () => void;
-  onContextMenu?: (event: React.MouseEvent) => void;
+  onOpenContextMenu?: (details: ContextMenuSurfaceOpenEvent) => void;
   /** Diff vs the previous version; empty array means no changes. */
   loadDiff?: (() => Promise<VersionDiffSegment[]>) | null;
   /** Label for the diff toggle where there is nothing earlier to compare. */
@@ -93,7 +97,7 @@ export const VersionRow = ({
   meta,
   actions,
   onActivate,
-  onContextMenu,
+  onOpenContextMenu,
   loadDiff,
   diffLabel,
   summarize,
@@ -207,12 +211,7 @@ export const VersionRow = ({
   let headerElement: React.ReactNode;
   if (onActivate) {
     headerElement = (
-      <Button
-        className="block w-full"
-        onClick={onActivate}
-        onContextMenu={onContextMenu}
-        variant="plain"
-      >
+      <Button className="block w-full" onClick={onActivate} variant="plain">
         <span
           className={cn(headerClassName, !isSelected && "hover:bg-muted/50")}
         >
@@ -221,10 +220,16 @@ export const VersionRow = ({
       </Button>
     );
   } else {
+    headerElement = <div className={headerClassName}>{header}</div>;
+  }
+  if (onOpenContextMenu !== undefined) {
     headerElement = (
-      <div className={headerClassName} onContextMenu={onContextMenu}>
-        {header}
-      </div>
+      <ContextMenuSurface
+        onOpenContextMenu={onOpenContextMenu}
+        preserveNativeTargets={false}
+      >
+        {headerElement}
+      </ContextMenuSurface>
     );
   }
 

@@ -495,7 +495,7 @@ export const InspectorPanel = ({
           <Suspense fallback={<ChatTabPanelShell tab={activeTab} />}>
             <ChatTabPanel
               onClose={() => handleCloseTab(activeTab.id)}
-              onLabelContextMenu={ribbonContextMenu.openAt}
+              onLabelContextMenu={ribbonContextMenu.openFromSurface}
               tab={activeTab}
             />
           </Suspense>
@@ -600,7 +600,7 @@ export const InspectorPanel = ({
             peekPdfViewId={
               resolveWorkspaceViewParams(tab.workspaceId, currentView).viewId
             }
-            ribbonLabelContextMenuOpenAt={ribbonContextMenu.openAt}
+            ribbonLabelContextMenuOpenAt={ribbonContextMenu.openFromSurface}
             scaleOffsets={scaleOffsets}
             setDocxCompatibilityByTab={setDocxCompatibilityByTab}
             setDocxScrollTopByTab={setDocxScrollTopByTab}
