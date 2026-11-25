@@ -3070,6 +3070,11 @@ const createHarness = ({
           ) {
             return [];
           }
+          // The erased-account repair's probe: no erased row still holds a
+          // delivery-failure record, so its completion holds.
+          if (query.includes("email_undeliverable_address")) {
+            return [];
+          }
           if (query.includes("starts_with")) {
             return queryIndexArtifacts(params);
           }
