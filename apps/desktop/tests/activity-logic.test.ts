@@ -68,6 +68,7 @@ describe("activity contract", () => {
       segments: [segment("word", 0, 5)],
       today: "2026-03-10",
       unreadable: false,
+      gaps: [],
       outages: { status: "read", outages: [] },
       stoppedReason: null,
     };
@@ -196,7 +197,29 @@ describe("activity contract", () => {
         outages: { status: "unreadable" },
       }),
     ).toBe(true);
+    for (const display of Object.keys(contract.gapDisplays)) {
+      for (const endedBy of Object.keys(contract.gapEnds)) {
+        expect(
+          isActivityDaySnapshot({
+            ...snapshot,
+            gaps: [{ start: at(5), end: at(20), endedBy, display }],
+          }),
+        ).toBe(true);
+      }
+    }
     for (const invalid of [
+      { gaps: undefined },
+      { gaps: [{ start: at(5), end: at(20), endedBy: "input" }] },
+      {
+        gaps: [
+          {
+            start: at(5),
+            end: at(20),
+            endedBy: "__proto__",
+            display: "locked",
+          },
+        ],
+      },
       { stoppedReason: "unknown" },
       { stoppedReason: undefined },
       { outages: [] },

@@ -4,9 +4,11 @@
 //! a small plain record per account namespace keeps what the app needs while
 //! that store is closed: the member's recording choice and the server's last
 //! answer about Activity (a confirmed grant's times, or the refusal's
-//! reason). A second plain file per namespace keeps the stretches the member
-//! wanted recorded but Activity could not record (`CaptureOutage`: start,
-//! end, reason). Neither holds anything recorded.
+//! reason). It holds nothing recorded. The stretches the member wanted
+//! recorded but Activity could not record (`CaptureOutage`: start, end,
+//! reason) say when the computer was in use, so they are written into the
+//! account's encrypted store under its key, and deleted and expired with its
+//! days.
 //!
 //! Server actions follow the live decision only. Until the server is reached
 //! after a start, local recording follows the last answer: a confirmed grant
@@ -35,9 +37,7 @@ use crate::{
 
 const RECORDS_DIR_NAME: &str = "activity-capture";
 const RECORD_SUFFIX: &str = "json";
-const OUTAGES_SUFFIX: &str = "outages.json";
 const MAX_RECORD_BYTES: u64 = 4 * 1024;
-const MAX_OUTAGES_BYTES: u64 = 512 * 1024;
 /// Enough for a stop every working minute of a long day, for weeks.
 const MAX_OUTAGES: usize = 2048;
 /// The longest Activity keeps a day (`ActivityRetention::Quarter`).
@@ -258,21 +258,54 @@ pub struct CaptureOutage {
 /// Record files are read, changed and written whole; one writer at a time.
 static RECORD_WRITES: Mutex<()> = Mutex::new(());
 
-/// The plain per-namespace files.
+/// Where each account's outages are written.
+enum OutageStores {
+  /// The account's own encrypted store, with its key from the keychain.
+  Accounts,
+  /// One folder of stores under one key.
+  #[cfg(test)]
+  Fixed(PathBuf),
+}
+
+/// The plain per-namespace files, and where outages go.
 pub struct CaptureRecords {
   dir: PathBuf,
+  outage_stores: OutageStores,
 }
 
 impl CaptureRecords {
   pub fn in_app_data() -> Option<Self> {
     dirs::data_dir().map(|dir| Self {
       dir: dir.join(APP_DATA_DIR_NAME).join(RECORDS_DIR_NAME),
+      outage_stores: OutageStores::Accounts,
     })
   }
 
   #[cfg(test)]
   pub(crate) fn at(dir: PathBuf) -> Self {
-    Self { dir }
+    Self {
+      outage_stores: OutageStores::Fixed(dir.join("stores")),
+      dir,
+    }
+  }
+
+  /// The encrypted store `namespace`'s outages are written to; `None` while
+  /// it has no key, and then none are kept.
+  pub(crate) fn outage_store(
+    &self,
+    namespace: &str,
+  ) -> Option<crate::activity_store::ActivityStore> {
+    if !crate::activity_store::ActivityStore::is_account_namespace(namespace) {
+      return None;
+    }
+    match &self.outage_stores {
+      OutageStores::Accounts => crate::activity::keyed_store(namespace),
+      #[cfg(test)]
+      OutageStores::Fixed(root) => Some(crate::activity_store::ActivityStore::new(
+        [5; 32],
+        root.join(namespace),
+      )),
+    }
   }
 
   fn path(&self, namespace: &str, suffix: &str) -> Result<PathBuf, String> {
@@ -315,22 +348,14 @@ impl CaptureRecords {
     Ok(record)
   }
 
+  #[cfg(test)]
   pub(crate) fn load_outages(
     &self,
     namespace: &str,
   ) -> Result<Vec<CaptureOutage>, String> {
-    Ok(
-      read_json(&self.path(namespace, OUTAGES_SUFFIX)?, MAX_OUTAGES_BYTES)?
-        .unwrap_or_default(),
-    )
-  }
-
-  fn save_outages(
-    &self,
-    namespace: &str,
-    outages: &[CaptureOutage],
-  ) -> Result<(), String> {
-    self.write(&self.path(namespace, OUTAGES_SUFFIX)?, &outages)
+    self
+      .outage_store(namespace)
+      .map_or_else(|| Ok(Vec::new()), |store| store.load_outages())
   }
 }
 
@@ -565,6 +590,9 @@ struct OpenOutage {
   outage: CaptureOutage,
   last_monotonic: Duration,
   flushed_at: Duration,
+  /// The store's deletion count when the outage opened; a deletion since
+  /// may have taken what it holds.
+  deletions: u64,
 }
 
 /// Checks Activity's state; owned by the sampler thread.
@@ -582,7 +610,6 @@ pub(crate) struct CaptureMonitor {
   backdate_from: Option<DateTime<Utc>>,
   last_check: Option<Duration>,
   outages_saved: bool,
-  outages: Option<(String, Vec<CaptureOutage>)>,
   /// The namespaces whose record or outage file could not be read at the
   /// last try. Neither is cached; both are read again, and the failure is
   /// logged once while it lasts.
@@ -604,7 +631,6 @@ impl CaptureMonitor {
       backdate_from: None,
       last_check: None,
       outages_saved: false,
-      outages: None,
       unreadable_record: None,
       unreadable_outages: None,
       open: None,
@@ -669,64 +695,49 @@ impl CaptureMonitor {
     record
   }
 
-  /// The namespace's outages; `None` while their file cannot be read, so it
-  /// is never replaced by a list that lost them.
-  fn outage_list(&mut self, namespace: &str) -> Option<&mut Vec<CaptureOutage>> {
-    if self
-      .outages
-      .as_ref()
-      .is_none_or(|(cached, _)| cached != namespace)
-    {
-      let outages = match self
-        .records
-        .as_ref()
-        .map(|records| records.load_outages(namespace))
-      {
-        Some(Ok(outages)) => outages,
-        Some(Err(_)) => {
-          if self.unreadable_outages.as_deref() != Some(namespace) {
-            tracing::warn!("activity outages could not be read");
-            self.unreadable_outages = Some(namespace.to_string());
-          }
-          return None;
-        }
-        None => Vec::new(),
-      };
-      self.unreadable_outages = None;
-      self.outages = Some((namespace.to_string(), outages));
-    }
-    self.outages.as_mut().map(|(_, list)| list)
-  }
-
-  /// Writes the open outage into its namespace's list.
+  /// Writes the open outage into its namespace's list, read from its store
+  /// for each write so a deletion in between is never undone. A deletion of
+  /// outage time since the outage opened ends it unwritten: it goes on from
+  /// the next check.
   fn flush_open(&mut self, monotonic: Duration, now: DateTime<Utc>) {
-    let Some(open) = self.open.clone() else {
+    let Some(open) = self.open.as_mut() else {
       return;
     };
-    let Some(list) = self.outage_list(&open.namespace) else {
+    open.flushed_at = monotonic;
+    let open = open.clone();
+    let Some(store) = self
+      .records
+      .as_ref()
+      .and_then(|records| records.outage_store(&open.namespace))
+    else {
       return;
     };
-    match list.iter().position(|outage| {
-      outage.start == open.outage.start && outage.reason == open.outage.reason
-    }) {
-      Some(index) => list[index].end = open.outage.end,
-      None => list.push(open.outage),
-    }
-    list.retain(|outage| outage.end >= now - OUTAGE_RETENTION);
-    if list.len() > MAX_OUTAGES {
-      let excess = list.len() - MAX_OUTAGES;
-      list.drain(..excess);
-    }
-    let list = list.clone();
-    if let Some(records) = &self.records {
-      if records.save_outages(&open.namespace, &list).is_ok() {
-        self.outages_saved = true;
-      } else {
-        tracing::warn!("activity outage was not recorded");
+    let written = store.update_outages(open.deletions, |list| {
+      match list.iter().position(|outage| {
+        outage.start == open.outage.start && outage.reason == open.outage.reason
+      }) {
+        Some(index) => list[index].end = open.outage.end,
+        None => list.push(open.outage),
       }
-    }
-    if let Some(open) = self.open.as_mut() {
-      open.flushed_at = monotonic;
+      list.retain(|outage| outage.end >= now - OUTAGE_RETENTION);
+      if list.len() > MAX_OUTAGES {
+        let excess = list.len() - MAX_OUTAGES;
+        list.drain(..excess);
+      }
+    });
+    match written {
+      Ok(true) => {
+        self.unreadable_outages = None;
+        self.outages_saved = true;
+      }
+      Ok(false) => self.open = None,
+      // A list that cannot be read is left as it is.
+      Err(_) => {
+        if self.unreadable_outages.as_deref() != Some(open.namespace.as_str()) {
+          tracing::warn!("activity outage was not recorded");
+          self.unreadable_outages = Some(open.namespace);
+        }
+      }
     }
   }
 
@@ -762,6 +773,11 @@ impl CaptureMonitor {
           return;
         }
         self.close_open(input.monotonic, input.now);
+        let deletions = self
+          .records
+          .as_ref()
+          .and_then(|records| records.outage_store(&namespace))
+          .map_or(0, |store| store.outage_deletions());
         self.open = Some(OpenOutage {
           namespace,
           outage: CaptureOutage {
@@ -771,6 +787,7 @@ impl CaptureMonitor {
           },
           last_monotonic: input.monotonic,
           flushed_at: input.monotonic,
+          deletions,
         });
         self.flush_open(input.monotonic, input.now);
       }
@@ -883,14 +900,19 @@ impl CaptureMonitor {
     }
   }
 
-  /// Whether the open outage or a written one covers `at`.
+  /// Whether the open outage or one written for `namespace` covers `at`.
   #[cfg(test)]
-  pub(crate) fn outage_covers(&self, at: DateTime<Utc>) -> bool {
+  pub(crate) fn outage_covers(&self, namespace: &str, at: DateTime<Utc>) -> bool {
+    let written = self
+      .records
+      .as_ref()
+      .and_then(|records| records.load_outages(namespace).ok())
+      .unwrap_or_default();
     self
       .open
       .iter()
       .map(|open| &open.outage)
-      .chain(self.outages.iter().flat_map(|(_, list)| list.iter()))
+      .chain(written.iter())
       .any(|outage| outage.start <= at && at <= outage.end)
   }
 
@@ -946,24 +968,6 @@ fn notify_stopped(app: &AppHandle, reason: StopReason) {
       .show(),
     "activity stop was not notified",
   );
-}
-
-/// The outages of one account that overlap `[start, end)`.
-pub(crate) fn outages_between(
-  namespace: &str,
-  start: DateTime<Utc>,
-  end: DateTime<Utc>,
-) -> Result<Vec<CaptureOutage>, String> {
-  let Some(records) = CaptureRecords::in_app_data() else {
-    return Ok(Vec::new());
-  };
-  Ok(
-    records
-      .load_outages(namespace)?
-      .into_iter()
-      .filter(|outage| outage.start < end && outage.end > start)
-      .collect(),
-  )
 }
 
 #[cfg(test)]
@@ -1287,7 +1291,9 @@ mod tests {
 
   #[test]
   fn a_sleep_or_a_clock_step_ends_the_open_outage_at_the_last_check() {
-    let mut monitor = CaptureMonitor::new(None);
+    let records = records();
+    let dir = records.dir.clone();
+    let mut monitor = CaptureMonitor::new(Some(records));
     let stopped = off(OffReason::NotAvailable);
     let with_choice = |input: CheckInput| CheckInput {
       loaded: Some(loaded(ActivityRecordingStatus::Recording)),
@@ -1306,10 +1312,8 @@ mod tests {
       active: false,
       ..with_choice(input(stopped, 3615))
     });
-    let outages = monitor
-      .outages
-      .as_ref()
-      .map(|(_, list)| list.clone())
+    let outages = CaptureRecords::at(dir.clone())
+      .load_outages(NAMESPACE)
       .unwrap();
     let spans = outages
       .iter()
@@ -1317,16 +1321,18 @@ mod tests {
       .collect::<Vec<_>>();
     assert_eq!(spans, [5, 0, 0]);
     assert!(monitor.open.is_none());
+    std::fs::remove_dir_all(dir).unwrap();
   }
 
   #[test]
   fn a_file_that_could_not_be_read_is_read_again_and_never_replaced() {
     let records = records();
     let dir = records.dir.clone();
+    let outages = records.outage_store(NAMESPACE).unwrap().outages_path();
+    std::fs::create_dir_all(outages.parent().unwrap()).unwrap();
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(records.path(NAMESPACE, RECORD_SUFFIX).unwrap(), "partial").unwrap();
-    std::fs::write(records.path(NAMESPACE, OUTAGES_SUFFIX).unwrap(), "partial")
-      .unwrap();
+    std::fs::write(&outages, "partial").unwrap();
     let mut monitor = CaptureMonitor::new(Some(records));
     let refused = |seconds| CheckInput {
       loaded: Some(loaded(ActivityRecordingStatus::Recording)),
@@ -1336,22 +1342,8 @@ mod tests {
     monitor.check(&refused(0));
     assert!(monitor.is_stopped());
     // The unreadable outage file is left as it is.
-    assert_eq!(
-      std::fs::read_to_string(
-        CaptureRecords::at(dir.clone())
-          .path(NAMESPACE, OUTAGES_SUFFIX)
-          .unwrap()
-      )
-      .unwrap(),
-      "partial"
-    );
-    std::fs::write(
-      CaptureRecords::at(dir.clone())
-        .path(NAMESPACE, OUTAGES_SUFFIX)
-        .unwrap(),
-      "[]",
-    )
-    .unwrap();
+    assert_eq!(std::fs::read_to_string(&outages).unwrap(), "partial");
+    std::fs::remove_file(&outages).unwrap();
     for seconds in (5..=60).step_by(5) {
       monitor.check(&refused(seconds));
     }
@@ -1469,23 +1461,39 @@ mod tests {
         answer: None,
       })
     );
+    // Outages say when the computer was in use: they are kept encrypted in
+    // the account's store, never beside the plain record.
     let at = DateTime::parse_from_rfc3339("2026-03-10T12:00:00Z")
       .unwrap()
       .with_timezone(&Utc);
-    records
-      .save_outages(
-        NAMESPACE,
-        &[CaptureOutage {
-          start: at,
-          end: at + chrono::Duration::minutes(5),
-          reason: StopReason::ReconnectNeeded,
-        }],
-      )
-      .unwrap();
+    let outage = CaptureOutage {
+      start: at,
+      end: at + chrono::Duration::minutes(5),
+      reason: StopReason::ReconnectNeeded,
+    };
+    let store = records.outage_store(NAMESPACE).unwrap();
+    assert!(
+      store
+        .update_outages(store.outage_deletions(), |list| list.push(outage))
+        .unwrap()
+    );
+    assert_eq!(records.load_outages(NAMESPACE).unwrap(), [outage]);
+    let written = std::fs::read_to_string(store.outages_path()).unwrap();
+    assert!(
+      !written.contains("2026-03-10"),
+      "outage times are not encrypted"
+    );
+    assert!(
+      !written.contains("reconnectNeeded"),
+      "outage reasons are not encrypted"
+    );
     assert_eq!(
-      std::fs::read_to_string(records.path(NAMESPACE, OUTAGES_SUFFIX).unwrap())
-        .unwrap(),
-      r#"[{"start":"2026-03-10T12:00:00Z","end":"2026-03-10T12:05:00Z","reason":"reconnectNeeded"}]"#
+      std::fs::read_dir(&records.dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .filter(|name| name != "stores")
+        .collect::<Vec<_>>(),
+      [format!("{NAMESPACE}.{RECORD_SUFFIX}")]
     );
     for namespace in ["../outside", "", "A"] {
       assert!(
@@ -1497,6 +1505,48 @@ mod tests {
       .unwrap();
     assert!(records.load(NAMESPACE).is_err());
     std::fs::remove_dir_all(&records.dir).unwrap();
+  }
+
+  #[test]
+  fn deleted_history_takes_its_outages_and_a_later_write_cannot_restore_them() {
+    let records = records();
+    let dir = records.dir.clone();
+    let store = records.outage_store(NAMESPACE).unwrap();
+    let mut monitor = CaptureMonitor::new(Some(records));
+    let refused = |seconds| CheckInput {
+      loaded: Some(loaded(ActivityRecordingStatus::Recording)),
+      ..input(off(OffReason::ReconnectNeeded), seconds)
+    };
+    for seconds in (0..=90).step_by(5) {
+      monitor.check(&refused(seconds));
+    }
+    let date = refused(0).now.with_timezone(&chrono::Local).date_naive();
+    assert_eq!(store.load_outages().unwrap().len(), 1);
+    store.delete_day(date).unwrap();
+    assert!(store.load_outages().unwrap().is_empty());
+    // The stop goes on: the next writes keep only time after the deletion.
+    for seconds in (95..=240).step_by(5) {
+      monitor.check(&refused(seconds));
+    }
+    let outages = store.load_outages().unwrap();
+    assert!(!outages.is_empty());
+    for outage in &outages {
+      assert!(
+        outage.start > refused(90).now,
+        "deleted outage time was written back"
+      );
+    }
+
+    // Deleting all history takes every outage, and the open one with it.
+    store.delete_all_days().unwrap();
+    assert!(!store.outages_path().exists());
+    for seconds in (245..=400).step_by(5) {
+      monitor.check(&refused(seconds));
+    }
+    for outage in store.load_outages().unwrap() {
+      assert!(outage.start > refused(240).now);
+    }
+    std::fs::remove_dir_all(dir).unwrap();
   }
 
   #[test]

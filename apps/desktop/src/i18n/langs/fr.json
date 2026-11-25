@@ -172,6 +172,19 @@
     "evidenceUntitled": "Sans titre · {app}",
     "excludeApp": "Ne plus enregistrer {name}",
     "excludeAppConfirmation": "Ne plus enregistrer {name}. Supprimer aussi toutes les activités passées de cette application ? La suppression est irréversible.",
+    "gap": "{duration} sans clavier ni souris",
+    "gapAfter": "{duration} sans clavier ni souris après {item}",
+    "gapDisplay": {
+      "locked": "L’écran était verrouillé.",
+      "slept": "L’écran ou l’ordinateur était en veille.",
+      "stayedOn": "L’écran est resté allumé."
+    },
+    "gapEnd": {
+      "dayEnd": "Se poursuit le jour suivant.",
+      "input": "S’est terminé à la reprise du clavier ou de la souris.",
+      "stop": "S’est terminé à l’arrêt de l’enregistrement."
+    },
+    "gapNotCounted": "Non compté comme temps enregistré.",
     "granularity": "Grille",
     "hours": "{hours} h",
     "incompatibleActivity": "Cette version de l'application ne peut pas lire l'activité enregistrée. Mettez l'application à jour pour continuer.",

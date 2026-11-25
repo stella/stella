@@ -172,6 +172,19 @@
     "evidenceUntitled": "Pealkirjata · {app}",
     "excludeApp": "Lõpeta rakenduse {name} salvestamine",
     "excludeAppConfirmation": "Lõpeta rakenduse {name} salvestamine. Kas kustutada ka kogu selle rakenduse varasem tegevus? Kustutamist ei saa tagasi võtta.",
+    "gap": "{duration} ilma klaviatuuri ja hiireta",
+    "gapAfter": "{duration} ilma klaviatuuri ja hiireta, enne seda: {item}",
+    "gapDisplay": {
+      "locked": "Ekraan oli lukus.",
+      "slept": "Ekraan või arvuti oli unerežiimis.",
+      "stayedOn": "Ekraan jäi sisse."
+    },
+    "gapEnd": {
+      "dayEnd": "Jätkub järgmisel päeval.",
+      "input": "Lõppes, kui klaviatuuri või hiirt taas kasutati.",
+      "stop": "Lõppes, kui salvestamine peatus."
+    },
+    "gapNotCounted": "Ei lähe arvesse salvestatud ajana.",
     "granularity": "Ruudustik",
     "hours": "{hours} h",
     "incompatibleActivity": "See rakenduse versioon ei saa salvestatud tegevust lugeda. Jätkamiseks uuendage rakendust.",

@@ -172,6 +172,19 @@
     "evidenceUntitled": "Untitled · {app}",
     "excludeApp": "Stop recording {name}",
     "excludeAppConfirmation": "Stop recording {name}. Also delete all past activity for this app? Deletion cannot be undone.",
+    "gap": "{duration} with no input",
+    "gapAfter": "{duration} with no input after {item}",
+    "gapDisplay": {
+      "locked": "The screen was locked.",
+      "slept": "The display or the computer slept.",
+      "stayedOn": "The screen stayed on."
+    },
+    "gapEnd": {
+      "dayEnd": "Continues on the next day.",
+      "input": "Ended when input came again.",
+      "stop": "Ended when recording stopped."
+    },
+    "gapNotCounted": "Not counted as recorded time.",
     "granularity": "Grid",
     "hours": "{hours} h",
     "incompatibleActivity": "Saved activity cannot be read by this version of the app. Update the app to continue.",
