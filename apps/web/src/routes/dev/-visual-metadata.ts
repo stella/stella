@@ -64,6 +64,12 @@ export const menuCommitBenches = {
   many: "twenty-four rows",
 } as const;
 
+/** Render loops kept on purpose, for the storm watch's own browser test. */
+export const stormWatchBenches = {
+  "frame-loop": "a component that re-renders itself every animation frame",
+  "slow-loop": "a component that re-renders itself every 120 ms",
+} as const;
+
 // Browser tests share the fixture census without importing the app graph.
 export const visualRegistry = {
   "appeal-reviews": {
@@ -98,6 +104,7 @@ export const visualRegistry = {
   "button-label": { label: "Button labels", layout: "plain" },
   "sortable-head": { label: "Sortable table heads", layout: "plain" },
   "menu-commits": { label: "Menu commits", layout: "plain" },
+  "storm-watch": { label: "Storm watch loops", layout: "plain" },
   "chat-continuation-error": {
     label: "Chat continuation recovery",
     layout: "plain",

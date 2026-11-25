@@ -2049,6 +2049,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_SEED_LOCALE",
   "STELLA_SEED_ORG_ID",
   "STELLA_SEED_USER_ID",
+  // The e2e storm watch: off, report (default) or enforce.
+  "STELLA_STORM_WATCH",
   "STELLA_TEST_LATEST_TAG",
   // Runner-owned migrated database cloned by isolated PostgreSQL suites.
   "STELLA_TEST_TEMPLATE_DATABASE",
