@@ -948,10 +948,14 @@ async fn a_website_approval_set_the_host_refused_never_follows_a_newer_one_it_to
     .send(run_start(RUN, "2026-10-28T13:00:00.000Z"))
     .await;
   connection.receive_type("run.accepted").await;
+  // The older set was offered once, while the host refused; once it took
+  // the newer one, the replayed older set goes nowhere.
   assert_eq!(
     host.calls(),
     [
       format!("start {RUN}"),
+      "refused site grants 0192f3a0-6b1c-7d2e-8f30-0000000000f1 https://fixture-library.test"
+        .to_owned(),
       "site grants 0192f3a0-6b1c-7d2e-8f30-0000000000f2 ".to_owned(),
     ]
   );
