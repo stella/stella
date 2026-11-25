@@ -657,17 +657,15 @@ pub(crate) enum PreferencesTab {
   Dictation,
   Agents,
   Activity,
-  About,
 }
 
 impl PreferencesTab {
   #[cfg(test)]
-  const ALL: [Self; 5] = [
+  const ALL: [Self; 4] = [
     Self::General,
     Self::Dictation,
     Self::Agents,
     Self::Activity,
-    Self::About,
   ];
 
   const fn id(self) -> &'static str {
@@ -676,7 +674,6 @@ impl PreferencesTab {
       Self::Dictation => "dictation",
       Self::Agents => "agents",
       Self::Activity => "activity",
-      Self::About => "about",
     }
   }
 }
