@@ -103,6 +103,17 @@ impl StopReason {
       Self::NotAvailable | Self::BlockedByPolicy | Self::NotConfirmed => false,
     }
   }
+
+  /// Whether recorded history stays readable while the stop lasts. A refused
+  /// credential (which also answers for a member who left the organization),
+  /// a sign-out and managed policy close it; it stays readable while Activity
+  /// is only not enabled for the account or the server has not been reached.
+  pub const fn history_readable(self) -> bool {
+    match self {
+      Self::NotAvailable | Self::NotConfirmed => true,
+      Self::ReconnectNeeded | Self::SignedOut | Self::BlockedByPolicy => false,
+    }
+  }
 }
 
 /// Activity cannot record for an account whose member turned it on.
@@ -541,6 +552,8 @@ pub(crate) struct CheckInput {
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct CheckEffects {
   pub view_changed: bool,
+  /// An outage reached its file, so an open day view reads again.
+  pub outages_saved: bool,
   pub notify: Option<StopReason>,
   /// Open the store of the account Activity now records for on a grant.
   pub initialize: bool,
@@ -564,6 +577,11 @@ pub(crate) struct CaptureMonitor {
   record: Option<((u64, String), Option<CaptureRecord>)>,
   /// When the current wait for a first answer began (monotonic, wall).
   pending_since: Option<(Duration, DateTime<Utc>)>,
+  /// Where the first outage of a wait for an answer starts: the wait's own
+  /// start, while the computer stayed in use since.
+  backdate_from: Option<DateTime<Utc>>,
+  last_check: Option<Duration>,
+  outages_saved: bool,
   outages: Option<(String, Vec<CaptureOutage>)>,
   /// The namespaces whose record or outage file could not be read at the
   /// last try. Neither is cached; both are read again, and the failure is
@@ -583,6 +601,9 @@ impl CaptureMonitor {
       written: None,
       record: None,
       pending_since: None,
+      backdate_from: None,
+      last_check: None,
+      outages_saved: false,
       outages: None,
       unreadable_record: None,
       unreadable_outages: None,
@@ -697,10 +718,12 @@ impl CaptureMonitor {
       list.drain(..excess);
     }
     let list = list.clone();
-    if let Some(records) = &self.records
-      && records.save_outages(&open.namespace, &list).is_err()
-    {
-      tracing::warn!("activity outage was not recorded");
+    if let Some(records) = &self.records {
+      if records.save_outages(&open.namespace, &list).is_ok() {
+        self.outages_saved = true;
+      } else {
+        tracing::warn!("activity outage was not recorded");
+      }
     }
     if let Some(open) = self.open.as_mut() {
       open.flushed_at = monotonic;
@@ -773,12 +796,23 @@ impl CaptureMonitor {
       Permission::Pending => {
         if self.pending_since.is_none() {
           self.pending_since = Some((input.monotonic, input.now));
+          self.backdate_from = Some(input.now);
         }
       }
       Permission::Live | Permission::Remembered { .. } | Permission::Stopped(_) => {
         self.pending_since = None;
+        self.backdate_from = None;
       }
     }
+    // Idle time or a sleep since the wait began is not an outage.
+    let continuous = input.active
+      && self.last_check.is_none_or(|last| {
+        input.monotonic.saturating_sub(last) <= crate::activity::MAX_SAMPLE_GAP
+      });
+    if !continuous {
+      self.backdate_from = None;
+    }
+    self.last_check = Some(input.monotonic);
     let waited = self.pending_since.is_some_and(|(since, _)| {
       input.monotonic.saturating_sub(since) >= CONFIRMATION_WAIT
     });
@@ -803,10 +837,13 @@ impl CaptureMonitor {
         }),
         Some(namespace),
       ) if input.active => {
-        // A stop found after the wait for a first answer began with it.
-        let start = match (reason, self.pending_since) {
-          (StopReason::NotConfirmed, Some((_, since))) => since,
-          _ => input.now,
+        // The first stop found after the wait for an answer began with it.
+        let start = match reason {
+          StopReason::NotConfirmed => self.backdate_from.take().unwrap_or(input.now),
+          StopReason::ReconnectNeeded
+          | StopReason::NotAvailable
+          | StopReason::BlockedByPolicy
+          | StopReason::SignedOut => input.now,
         };
         Some((namespace.clone(), reason, start))
       }
@@ -825,7 +862,9 @@ impl CaptureMonitor {
         })
       }
       (_, CaptureView::Stopped(stopped), binding) => Some(Published::Stopped {
-        binding: binding.clone(),
+        binding: binding
+          .clone()
+          .filter(|_| stopped.reason.history_readable()),
         stopped,
       }),
       _ => None,
@@ -835,6 +874,7 @@ impl CaptureMonitor {
         != input.binding.as_ref().map(|binding| &binding.1);
     CheckEffects {
       view_changed,
+      outages_saved: std::mem::take(&mut self.outages_saved),
       notify: match (notify, view) {
         (true, CaptureView::Stopped(stopped)) => Some(stopped.reason),
         _ => None,
@@ -885,6 +925,8 @@ impl CaptureMonitor {
     }
     if effects.view_changed {
       crate::activity::capture_changed(app);
+    } else if effects.outages_saved {
+      crate::activity::emit_changed(app);
     }
     if let Some(reason) = effects.notify {
       notify_stopped(app, reason);
@@ -1138,7 +1180,9 @@ mod tests {
     assert_eq!(
       restarted.published(),
       Some(&Published::Stopped {
-        binding: Some((1, NAMESPACE.into())),
+        // A refused credential also answers for a member who left: the
+        // history closes with it.
+        binding: None,
         stopped: ActivityStopped {
           reason: StopReason::ReconnectNeeded,
           intent: ActivityRecordingStatus::Recording,
@@ -1319,6 +1363,57 @@ mod tests {
       1
     );
     std::fs::remove_dir_all(dir).unwrap();
+  }
+
+  #[test]
+  fn history_stays_readable_only_while_activity_is_not_enabled_or_unreached() {
+    for reason in StopReason::ALL {
+      let expected = match reason {
+        StopReason::NotAvailable | StopReason::NotConfirmed => true,
+        StopReason::ReconnectNeeded
+        | StopReason::SignedOut
+        | StopReason::BlockedByPolicy => false,
+      };
+      assert_eq!(reason.history_readable(), expected, "{reason:?}");
+    }
+    let mut monitor = CaptureMonitor::new(None);
+    let effects = monitor.check(&CheckInput {
+      loaded: Some(loaded(ActivityRecordingStatus::Recording)),
+      ..input(off(OffReason::NotAvailable), 0)
+    });
+    assert!(effects.view_changed);
+    assert!(matches!(
+      monitor.published(),
+      Some(Published::Stopped {
+        binding: Some(_),
+        ..
+      })
+    ));
+  }
+
+  #[test]
+  fn only_a_wait_spent_in_use_is_backdated_into_its_first_outage() {
+    let waiting = |seconds, active| CheckInput {
+      active,
+      loaded: Some(loaded(ActivityRecordingStatus::Recording)),
+      ..input(off(OffReason::Undecided), seconds)
+    };
+    let start = |monitor: &CaptureMonitor| {
+      monitor.open.as_ref().map(|open| {
+        (open.outage.start - input(FeatureAccess::Enabled, 0).now).num_seconds()
+      })
+    };
+    let mut in_use = CaptureMonitor::new(None);
+    for seconds in (0..=120).step_by(5) {
+      in_use.check(&waiting(seconds, true));
+    }
+    assert_eq!(start(&in_use), Some(0));
+
+    let mut idle_between = CaptureMonitor::new(None);
+    for seconds in (0..=125).step_by(5) {
+      idle_between.check(&waiting(seconds, seconds != 60));
+    }
+    assert_eq!(start(&idle_between), Some(120));
   }
 
   #[test]
