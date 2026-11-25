@@ -2163,7 +2163,7 @@ type QueueSiteGrantsOptions = {
 export type QueuedSiteGrants = {
   /** The member's website approvals as queued, by origin. */
   readonly origins: readonly string[];
-  /** Runs that hold the set now, as their only `run.site_grants`. */
+  /** Runs the set was queued for, after the sets queued for them before. */
   readonly queued: readonly string[];
   /** Open runs that hold as many commands as one run may: sent nothing. */
   readonly full: readonly string[];
@@ -2173,12 +2173,13 @@ export type QueuedSiteGrants = {
 
 /**
  * Queue the member's website approvals, read as they stand now, for every
- * run of `owner` that is still open. Each run keeps only its newest set:
- * the one queued before is removed, so a replay sends the newest, and the
- * set never takes more than one of a run's commands. Taken under the
+ * run of `owner` that is still open, after the sets queued for it before.
+ * Every set stays queued: the computer takes each in order and tells what a
+ * set no longer holds from the one before it, so a revoke reaches the run
+ * even when the computer was away for the change before it. Taken under the
  * member's approvals lock, so of two changes the one that reads last queues
- * last, and the set every run ends with is the stored one. A run whose other
- * commands fill its cap keeps the set it holds and is reported.
+ * last, and the set every run ends with is the stored one. A run that holds
+ * as many commands as one run may is left out and reported.
  */
 export const queueRunSiteGrants = async (
   db: DesktopRunnerDb,
@@ -2246,7 +2247,6 @@ export const queueRunSiteGrants = async (
       return { origins, queued: [], full: [], holders: [] };
     }
     const runIds = open.rows.map(({ runId }) => runId);
-    // The set a run holds already is replaced, so it takes no room of its own.
     const counts = new Map(
       (
         await tx
@@ -2255,12 +2255,7 @@ export const queueRunSiteGrants = async (
             count: sql<number>`count(*)::int`,
           })
           .from(desktopRunnerCommands)
-          .where(
-            and(
-              inArray(desktopRunnerCommands.runId, runIds),
-              ne(desktopRunnerCommands.kind, "run.site_grants"),
-            ),
-          )
+          .where(inArray(desktopRunnerCommands.runId, runIds))
           .groupBy(desktopRunnerCommands.runId)
       ).map(({ runId, count }) => [runId, count]),
     );
@@ -2269,15 +2264,6 @@ export const queueRunSiteGrants = async (
     );
     const roomyIds = new Set(roomy.map(({ runId }) => runId));
     if (roomy.length > 0) {
-      // audit: skip - runner socket bookkeeping; the approval change is audited where it is made
-      await tx
-        .delete(desktopRunnerCommands)
-        .where(
-          and(
-            inArray(desktopRunnerCommands.runId, [...roomyIds]),
-            eq(desktopRunnerCommands.kind, "run.site_grants"),
-          ),
-        );
       // audit: skip - runner socket bookkeeping; the approval change is audited where it is made
       await tx.insert(desktopRunnerCommands).values(
         roomy.map(({ runId }) => ({

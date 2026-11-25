@@ -337,7 +337,7 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
  * key (`runId`, `requestId`, `inputId` or a site grants `revision`), kept until
  * the run is deleted and replayed whenever its desktop reconnects; the desktop
  * drops what it has seen. A stored `run.start` holds no MCP token: one is
- * minted on every send. A newer `run.site_grants` replaces the run's older one.
+ * minted on every send.
  */
 export const desktopRunnerCommands = p.pgTable.withRLS(
   "desktop_runner_commands",

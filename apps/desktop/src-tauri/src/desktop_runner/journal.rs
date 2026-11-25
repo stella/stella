@@ -100,8 +100,8 @@ pub(crate) struct RunRecord {
   /// `run.answer` request ids already handed to the host; never the answers.
   pub(crate) answers: BTreeSet<String>,
   /// `run.site_grants` revisions already handed to the host; never the
-  /// websites. The API keeps only a run's newest one, so a replay after a
-  /// reconnect sends that one, and only one not handed over yet goes on.
+  /// websites. The API replays every set of a run in order after a
+  /// reconnect, and only those not handed over yet go on.
   pub(crate) site_grants: BTreeSet<SiteGrantsRevision>,
   pub(crate) interrupted: bool,
   pub(crate) cancelled: bool,

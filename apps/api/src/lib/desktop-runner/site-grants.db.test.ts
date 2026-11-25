@@ -276,7 +276,7 @@ describe("the member's website approvals reach their open runs", () => {
     ]);
   });
 
-  test("a newer set replaces the one a run holds, and a revoke reaches it as a smaller set", async () => {
+  test("each change queues the whole set after the ones before, in order, so a revoke reaches the run as the set without it", async () => {
     await allow(owner, [LIBRARY]);
     const { desktopId } = await seedComputer(owner);
     const runId = await startRun(owner, desktopId);
@@ -285,21 +285,20 @@ describe("the member's website approvals reach their open runs", () => {
 
     await allow(owner, [COURT]);
     await pushed(owner);
-    const grown = await siteGrantsOf([runId]);
-    expect(grown.map(({ message }) => message)).toMatchObject([
-      { origins: [LIBRARY, COURT].toSorted() },
-    ]);
-
     await revoke(owner, LIBRARY);
     await revoke(owner, COURT);
     await pushed(owner);
-    const shrunk = await siteGrantsOf([runId]);
-    expect(shrunk).toHaveLength(1);
-    expect(shrunk[0]?.message).toMatchObject({ origins: [] });
-    expect(shrunk[0]?.commandKey).not.toBe(grown[0]?.commandKey);
+
+    const sets = await siteGrantsOf([runId]);
+    expect(sets.map(({ message }) => message)).toMatchObject([
+      { origins: [LIBRARY] },
+      { origins: [LIBRARY, COURT].toSorted() },
+      { origins: [] },
+    ]);
+    expect(new Set(sets.map(({ commandKey }) => commandKey)).size).toBe(3);
   });
 
-  test("a run whose other commands fill its cap keeps the set it holds and is reported", async () => {
+  test("a run that holds as many commands as one run may is left out and reported", async () => {
     await allow(owner, [LIBRARY]);
     const { desktopId } = await seedComputer(owner);
     const runId = await startRun(owner, desktopId);
@@ -309,9 +308,6 @@ describe("the member's website approvals reach their open runs", () => {
     const kept = await siteGrantsOf([runId]);
     expect(kept).toHaveLength(1);
 
-    expect((await control().interruptRun({ owner, runId })).unwrap()).toEqual({
-      type: "queued",
-    });
     await allow(owner, [ARCHIVE]);
     const full = await pushed(owner, 2);
     expect(full.full).toContain(runId);

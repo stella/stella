@@ -8420,7 +8420,7 @@ describe("the member's website approvals while a run goes on", () => {
         message.type === "run.site_grants" && message.runId === runId,
     );
 
-  test("the computer holding the run is sent each newer set, and a new socket only the newest", async () => {
+  test("the computer holding the run is sent each newer set, and a new socket every set again, in order", async () => {
     await allowOnly([LIBRARY, ARCHIVE]);
     const { desktopId, runId, desktop } = await acceptedRun(instance);
     (await control.pushSiteGrants({ owner })).unwrap();
@@ -8434,14 +8434,15 @@ describe("the member's website approvals while a run goes on", () => {
     expect(newer.revision).not.toBe(sent.revision);
     await desktop.close();
 
+    // The computer drops the sets it has seen and tells a revoke from the
+    // set before it, so it is sent each one again.
     const back = await openDesktop(instance, desktopId);
     await back.hello([{ runId, lastSeq: 0 }]);
-    expect(await back.receive("run.site_grants", ofRun(runId))).toEqual(newer);
     // Commands go out in order: once the interrupt arrives, nothing older is
     // still to come.
     (await control.interruptRun({ owner, runId })).unwrap();
     await back.receive("run.interrupt", ofRun(runId));
-    expect(sentSets(back, runId)).toEqual([newer]);
+    expect(sentSets(back, runId)).toEqual([sent, newer]);
     await back.close();
     await allowOnly([]);
   });
