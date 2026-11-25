@@ -1,12 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
 import type { BrowserDownload } from "@stll/api-contract/browser-control";
+import { waitFor } from "@stll/test-kit";
 
 import {
   createDownloadInbox,
   DOWNLOAD_SETTLE_WAIT_MS,
   MAX_DOWNLOAD_WAIT_MS,
 } from "./download-inbox";
+import type { ReceivedDownload } from "./downloads";
 
 const PDF_ADDRESS = "https://fixture-library.test/decisions/42/file";
 const RUN = {
@@ -606,6 +608,84 @@ describe("where a download came from", () => {
         status: "saved",
       },
     ]);
+  });
+});
+
+describe("a result's bound covers the save as well", () => {
+  /** An inbox whose saves finish only when the test says so. */
+  const slowInbox = (time: ReturnType<typeof manualClock>) => {
+    const saves: PromiseWithResolvers<ReceivedDownload>[] = [];
+    const inbox = createDownloadInbox({
+      clock: time.clock,
+      home: "/unused-home",
+      pageOf: () => null,
+      receive: async () => {
+        const save = Promise.withResolvers<ReceivedDownload>();
+        saves.push(save);
+        return await save.promise;
+      },
+      runOf: () => RUN,
+    });
+    return { inbox, saves };
+  };
+
+  const SAVED: ReceivedDownload = {
+    bytes: 10,
+    duplicate: false,
+    path: "Downloads/Judgment 42.pdf",
+    sha256: "a".repeat(64),
+    sourceUrl: PDF_ADDRESS,
+    status: "saved",
+  };
+
+  test("a save still running when the bound runs out is counted as saving, then listed by a later result", async () => {
+    const time = manualClock();
+    const { inbox, saves } = slowInbox(time);
+    inbox.arrive(settled("d-1"));
+
+    const first = inbox.take(RUN, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: inbox.mark(),
+    });
+    // The save gets the result's bound, and no more.
+    expect(
+      await waitFor(
+        () => (time.pending().length > 0 ? time.pending() : undefined),
+        { description: "the result to wait for the save" },
+      ),
+    ).toEqual([DOWNLOAD_SETTLE_WAIT_MS]);
+    time.runOut();
+    expect(await first).toMatchObject({ downloads: [], saving: 1 });
+
+    saves.at(0)?.resolve(SAVED);
+    const later = await inbox.take(RUN, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: inbox.mark(),
+    });
+    expect(later).toMatchObject({
+      downloads: [{ path: SAVED.path, status: "saved" }],
+      saving: 0,
+    });
+  });
+
+  test("a wait that is stopped returns at once, and the save stays held", async () => {
+    const time = manualClock();
+    const { inbox } = slowInbox(time);
+    inbox.arrive(settled("d-1"));
+    const stop = new AbortController();
+
+    const taking = inbox.take(RUN, {
+      shownAddress: null,
+      signal: stop.signal,
+      since: 0,
+      waitMs: MAX_DOWNLOAD_WAIT_MS,
+    });
+    stop.abort();
+
+    expect(await taking).toMatchObject({ downloads: [], saving: 1 });
+    expect(time.pending()).toEqual([]);
   });
 });
 
