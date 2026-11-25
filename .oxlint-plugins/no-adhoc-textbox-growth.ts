@@ -42,6 +42,7 @@ import {
   elementName,
   getPropertyName,
   isAstNode,
+  templateElementRaw,
 } from "./utils.ts";
 import type { AstNode } from "./utils.ts";
 
@@ -70,11 +71,33 @@ const isCap = (base: string): boolean =>
 // Tailwind spells the descendant combinator `_`; `>` is the child combinator.
 const COMBINATORS = ["_", ">"];
 
+// A pseudo-class name; `_` is not one of its characters, since Tailwind
+// spells the descendant combinator with it.
+const PSEUDO_NAME = /[a-z0-9-]/iu;
+
+/**
+ * The index just past the pseudo-classes and pseudo-elements that start at
+ * `at` (`:hover`, `:focus-visible`, `::placeholder`), or `at` itself when none
+ * does. A functional pseudo-class never reaches here whole: `classTokens`
+ * splits on parentheses.
+ */
+const skipPseudoClasses = (variants: string, at: number): number => {
+  let index = at;
+  while (variants.charAt(index) === ":") {
+    index += 1;
+    while (PSEUDO_NAME.test(variants.charAt(index))) {
+      index += 1;
+    }
+  }
+  return index;
+};
+
 /**
  * Whether a variant's arbitrary selector lands on the textbox itself: the
- * textbox follows a combinator and ends the selector (`]`) or takes a
- * pseudo-class (`:`). `[&_.ProseMirror_p]` selects a paragraph inside the
- * editor, not the editor.
+ * textbox follows a combinator and ends the selector (`]`), possibly after
+ * pseudo-classes of its own (`[&_.ProseMirror:focus]`).
+ * `[&_.ProseMirror_p]` and `[&_.ProseMirror:hover_pre]` select an element
+ * inside the editor, not the editor.
  */
 const selectsTextbox = (variants: string): boolean =>
   TEXTBOX_SELECTORS.some((selector) =>
@@ -82,8 +105,8 @@ const selectsTextbox = (variants: string): boolean =>
       const needle = `${combinator}${selector}`;
       let at = variants.indexOf(needle);
       while (at !== -1) {
-        const next = variants.charAt(at + needle.length);
-        if (next === "]" || next === ":") {
+        const end = skipPseudoClasses(variants, at + needle.length);
+        if (variants.charAt(end) === "]") {
           return true;
         }
         at = variants.indexOf(needle, at + 1);
@@ -105,20 +128,10 @@ const capToken = (token: string): boolean => isCap(classBaseName(token));
 const maxHeightToken = (token: string): boolean =>
   classBaseName(token).startsWith("max-h-");
 
-const textOf = (node: AstNode): string | null => {
-  if (node.type === "Literal" && typeof node.value === "string") {
-    return node.value;
-  }
-  if (
-    node.type === "TemplateElement" &&
-    isAstNode(node.value) &&
-    "raw" in node.value &&
-    typeof node.value.raw === "string"
-  ) {
-    return node.value.raw;
-  }
-  return null;
-};
+const textOf = (node: AstNode): string | null =>
+  node.type === "Literal" && typeof node.value === "string"
+    ? node.value
+    : templateElementRaw(node);
 
 // The JSX element whose `className` this string is written in, if any.
 const classNameOwner = (node: AstNode): AstNode | null => {

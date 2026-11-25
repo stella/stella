@@ -34,8 +34,20 @@ test("rejects every textbox selector under any combinator", async () => {
 const b = "[&_[contenteditable]]:overflow-auto";
 const c = "[&_[role=textbox]]:max-h-60";
 const d = "[&_.ProseMirror:focus]:overflow-y-scroll";
-const e = "md:field-sizing-content";`),
-  ).toEqual([1, 2, 3, 4, 5]);
+const e = "md:field-sizing-content";
+const f = "[&_.ProseMirror:hover]:max-h-64";
+const g = "[&>textarea:focus-visible]:overflow-y-auto";`),
+  ).toEqual([1, 2, 3, 4, 5, 6, 7]);
+});
+
+test("reads template literal chunks like string literals", async () => {
+  expect(
+    await lint(`const cls = \`field-sizing-content\`;
+const bar = <PromptEditorContent className={\`\${base} [&_.ProseMirror]:max-h-32\`} />;
+const ask = <Textarea className={\`w-full max-h-40\`} />;
+const editorProps = { attributes: { class: \`overflow-y-auto text-sm\` } };
+const ok = \`[&_.ProseMirror]:min-h-15 \${tone}\`;`),
+  ).toEqual([1, 2, 3, 4]);
 });
 
 test("accepts floors, typography, content inside the editor and other chrome", async () => {
@@ -46,6 +58,7 @@ const c = <div className="max-h-80 overflow-y-auto" />;
 const d = <Input className="max-h-9" />;
 const e = { class: "max-h-48", attributes: { role: "textbox" } };
 const f = { attributes: { class: "min-h-10 text-sm" } };
-const g = "[&_.ProseMirror]:overflow-hidden";`),
+const g = "[&_.ProseMirror]:overflow-hidden";
+const h = "[&_.ProseMirror:hover_pre]:max-h-64 [&_.ProseMirror:focus>pre]:overflow-x-auto";`),
   ).toEqual([]);
 });

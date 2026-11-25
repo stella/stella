@@ -12,7 +12,8 @@ import type { Locator, Page } from "@playwright/test";
  * instead. A textbox's text is its text lines (an editor's, through a range
  * over its text) or its content box (a textarea's), each cut to what its
  * clipping ancestors (a scroll region) let show; a control is any visible
- * button. A control whose box crosses a visible text line covers the text,
+ * button (no transparent ancestor either), cut the same way. A control whose
+ * shown box crosses a visible text line covers the text,
  * whatever laid the two out.
  *
  * Runs inside the page, so it is self-contained: nothing from this module is
@@ -33,6 +34,20 @@ const collectControlsOverText = (root: Element): string[] => {
       ? box
       : null;
   };
+  // Opacity is not inherited: a transparent ancestor hides an element whose
+  // own computed opacity is 1.
+  const transparent = (element: Element) => {
+    for (
+      let node: Element | null = element;
+      node !== null;
+      node = node.parentElement
+    ) {
+      if (Number.parseFloat(getComputedStyle(node).opacity) === 0) {
+        return true;
+      }
+    }
+    return false;
+  };
   const visible = (element: Element) => {
     const style = getComputedStyle(element);
     const rect = element.getBoundingClientRect();
@@ -40,7 +55,7 @@ const collectControlsOverText = (root: Element): string[] => {
       rect.width > 0 &&
       rect.height > 0 &&
       style.visibility === "visible" &&
-      Number.parseFloat(style.opacity) > 0 &&
+      !transparent(element) &&
       element.closest("[inert], [aria-hidden='true']") === null
     );
   };
@@ -127,7 +142,11 @@ const collectControlsOverText = (root: Element): string[] => {
       if (textbox.contains(control)) {
         continue;
       }
-      const box = control.getBoundingClientRect();
+      // Only the part of the control its clipping ancestors let show.
+      const box = clipped(control, control.getBoundingClientRect());
+      if (box === null) {
+        continue;
+      }
       if (lines.some((line) => intersect(line, box) !== null)) {
         const label =
           control.getAttribute("aria-label") ??

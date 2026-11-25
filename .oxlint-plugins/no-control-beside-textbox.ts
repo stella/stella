@@ -28,7 +28,8 @@
 // holds, and what sits beside that column is the page's layout (a header's
 // actions beside its title and description), not the textbox's. The walk
 // also stops at a portaled popup (`*Popup`, `*Portal`, `DialogContent`),
-// whose content is laid out elsewhere.
+// whose content is laid out elsewhere, and a control inside a portaled popup
+// in a sibling subtree (a dialog's buttons) is not beside the textbox.
 //
 // Accepted:
 //   a column (`flex flex-col`, a one-column grid) holding the text over a
@@ -58,6 +59,7 @@ import {
   isIdentifierReference,
   resolveVariable,
   stableInitializer,
+  templateElementRaw,
 } from "./utils.ts";
 import type { AstNode, ScopeContext } from "./utils.ts";
 
@@ -201,15 +203,11 @@ const classNameTokens = (element: AstNode, context: ScopeContext): string[] => {
     }
     visited.add(root);
     for (const node of everyNode(root)) {
+      const chunk = templateElementRaw(node);
       if (node.type === "Literal" && typeof node.value === "string") {
         tokens.push(...wholeClassTokens(node.value));
-      } else if (
-        node.type === "TemplateElement" &&
-        isAstNode(node.value) &&
-        "raw" in node.value &&
-        typeof node.value.raw === "string"
-      ) {
-        tokens.push(...wholeClassTokens(node.value.raw));
+      } else if (chunk !== null) {
+        tokens.push(...wholeClassTokens(chunk));
       } else if (isIdentifierReference(node)) {
         const variable = resolveVariable(context, node);
         const initializer =
@@ -286,6 +284,23 @@ const isPositionedOverText = (tokens: readonly string[]): boolean => {
 const contains = (outer: AstNode, inner: AstNode): boolean =>
   outer.range[0] <= inner.range[0] && inner.range[1] <= outer.range[1];
 
+const isPortaled = (element: AstNode): boolean => {
+  const name = elementName(element);
+  return name !== null && PORTALED.test(name);
+};
+
+// The JSX elements a sibling lays out here: a portaled popup's content is
+// laid out elsewhere, so the popup and everything inside it drop out.
+const laidOutElements = (sibling: unknown): AstNode[] => {
+  const elements = everyNode(sibling).filter(
+    (node) => node.type === "JSXElement",
+  );
+  const portals = elements.filter(isPortaled);
+  return elements.filter(
+    (element) => !portals.some((portal) => contains(portal, element)),
+  );
+};
+
 type SiblingFinding = "beside" | "over" | null;
 
 const siblingFinding = (
@@ -294,9 +309,7 @@ const siblingFinding = (
   options: RuleOptions,
   context: ScopeContext,
 ): SiblingFinding => {
-  const elements = everyNode(sibling).filter(
-    (node) => node.type === "JSXElement",
-  );
+  const elements = laidOutElements(sibling);
   const controls = elements.filter((element) => {
     const name = elementName(element);
     return name !== null && isControlName(name, options);
@@ -373,8 +386,7 @@ export default eslintCompatPlugin({
               return;
             }
             for (const ancestor of layoutAncestors(node)) {
-              const name = elementName(ancestor);
-              if (name !== null && PORTALED.test(name)) {
+              if (isPortaled(ancestor)) {
                 return;
               }
               const children = Array.isArray(ancestor.children)
