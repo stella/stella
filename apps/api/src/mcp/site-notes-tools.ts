@@ -50,11 +50,6 @@ const saveArgsSchema = nullAsAbsent(saveBrowserSiteNotesInputSchema);
 const NOT_HTTPS_HINT =
   "Pass the address of a page on the website as the browser reported it (https://...); only HTTPS websites keep notes.";
 
-const SITE_NOTE_PERMISSIONS = {
-  type: "all",
-  permissions: { chat: ["create"] },
-} as const;
-
 const definitions = [
   defineValibotMcpTool({
     name: READ_SITE_NOTES_TOOL_NAME,
@@ -68,7 +63,7 @@ const definitions = [
     description: READ_SITE_NOTES_DESCRIPTION,
     inputSchema: readArgsSchema,
     access: "read",
-    permissions: SITE_NOTE_PERMISSIONS,
+    permissions: { type: "all", permissions: { chat: ["create"] } },
     readClass: "tenant",
     // The API keeps no personal data, credential or search address in a
     // note (`browserSiteNoteContentRefusal`): what is left describes a
@@ -91,9 +86,9 @@ const definitions = [
     inputSchema: saveArgsSchema,
     access: "write",
     accountAccess: "sandbox",
-    permissions: SITE_NOTE_PERMISSIONS,
+    permissions: { type: "all", permissions: { chat: ["create"] } },
     anonymized: { exposure: "excluded", reason: "write" },
-    scope: "stella:chat",
+    scope: "stella:knowledge_write",
   }),
 ] as const;
 

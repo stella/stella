@@ -328,7 +328,8 @@
       "default": {"title": 13, "description": 396, "inputSchema": 6303, "outputSchema": 1039, "annotations": 114, "payloadUtf8Bytes": 8008}
     },
     "save_site_notes": {
-      "advanced": {"title": 29, "description": 699, "inputSchema": 2358, "outputSchema": 1180, "annotations": 129, "payloadUtf8Bytes": 4540}
+      "advanced": {"title": 29, "description": 699, "inputSchema": 2358, "outputSchema": 1180, "annotations": 129, "payloadUtf8Bytes": 4540},
+      "default": {"title": 29, "description": 699, "inputSchema": 2358, "outputSchema": 1180, "annotations": 129, "payloadUtf8Bytes": 4540}
     },
     "save_task": {
       "advanced": {"title": 9, "description": 371, "inputSchema": 1863, "outputSchema": 396, "annotations": 110, "payloadUtf8Bytes": 2888},

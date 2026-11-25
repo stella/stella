@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "Confirming a website note only moves its confirmation time when the agent followed it and it worked; creating, replacing, removing and pruning notes are audited."
+}

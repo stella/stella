@@ -78,7 +78,9 @@ export type BrowserSiteNoteContentRefusal = {
   reason: string;
 };
 
-const EMAIL = /[^\s@<>()[\]",;:]+@[^\s@<>()[\]",;:]+\.[a-z]{2,}/iu;
+// One character before the `@` is enough to find an address; matching the
+// whole local part would make the search super-linear.
+const EMAIL = /[^\s@<>()[\]",;:]@[^\s@<>()[\]",;:]*\.[a-z]{2,}/iu;
 
 // An address with a query string: a scheme or `www.` start, then `?` and a
 // parameter. A path alone is fine ("the /search page").

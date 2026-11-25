@@ -17,6 +17,7 @@ import {
 } from "@stll/api-contract/browser-site-notes";
 import { assertProperty } from "@stll/property-testing";
 
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { chatBrowserSiteNotes } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import deleteBrowserSiteNoteHandler from "@/api/handlers/chat/browser-site-notes/delete";
@@ -29,6 +30,7 @@ import {
   createOrganizationScopedTestDb,
   createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   BROWSER_SITE_NOTES_PAGE,
   browserSiteNotesScalingScenario,
@@ -82,8 +84,10 @@ afterAll(async () => {
   await releaseRlsFixture();
 });
 
-const collectAudit: AuditRecorder = async (_tx, event) => {
-  audits.push({ action: event.action, metadata: event.metadata });
+const collectAudit: AuditRecorder = async (_tx, recorded) => {
+  for (const event of Array.isArray(recorded) ? recorded : [recorded]) {
+    audits.push({ action: event.action, metadata: event.metadata });
+  }
   await Promise.resolve();
 };
 
@@ -95,7 +99,9 @@ const ownerOf = (
 ): BrowserSiteNoteOwner => ({ organizationId, userId });
 
 const safeDbOf = (owner: BrowserSiteNoteOwner) =>
-  createSafeDb(testDb, [], owner.organizationId, owner.userId);
+  asTestRaw<SafeDb>(
+    createSafeDb(testDb, [], owner.organizationId, owner.userId),
+  );
 
 const save = async (
   changes: readonly BrowserSiteNoteChange[],
@@ -137,7 +143,10 @@ const add = (
 ) => ({ type: "add", kind, step, text }) as const;
 
 /** Moves a note's confirmation into the past, as an earlier run left it. */
-const ageNote = async (noteId: string, minutes: number) => {
+const ageNote = async (
+  noteId: SafeId<"chatBrowserSiteNote">,
+  minutes: number,
+) => {
   await testDb
     .update(chatBrowserSiteNotes)
     .set({

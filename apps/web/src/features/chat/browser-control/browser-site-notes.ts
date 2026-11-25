@@ -36,7 +36,7 @@ type BrowserSiteNotesResponse = Awaited<
   ReturnType<NonNullable<ReturnType<typeof browserSiteNotesOptions>["queryFn"]>>
 >;
 
-export type NotedBrowserSite = BrowserSiteNotesResponse["sites"][number];
+type NotedBrowserSite = BrowserSiteNotesResponse["sites"][number];
 
 export type BrowserSiteNote = NotedBrowserSite["notes"][number];
 

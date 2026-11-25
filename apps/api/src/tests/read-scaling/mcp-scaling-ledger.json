@@ -121,6 +121,10 @@
       "reason": "Requires a read_provision_history fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
     {
+      "id": "read_site_notes",
+      "reason": "Reads one website's notes, bounded by the per-website cap of 30 under the member's own index; the Settings list of every note is measured by the chat browser site notes API scenario."
+    },
+    {
       "id": "read_statute",
       "reason": "Requires a read_statute fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
@@ -264,6 +268,10 @@
     },
     {
       "id": "save_playbook",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "save_site_notes",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {

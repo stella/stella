@@ -247,7 +247,10 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       scope: "read",
       itemsKey: "notes",
     },
-    save_site_notes: { command: ["site-notes", "save"], scope: "chat" },
+    save_site_notes: {
+      command: ["site-notes", "save"],
+      scope: "knowledge_write",
+    },
 
     search_across_matters: {
       command: ["search", "matters"],

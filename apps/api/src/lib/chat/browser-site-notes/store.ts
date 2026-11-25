@@ -39,7 +39,7 @@ export type BrowserSiteNoteOwner = {
 };
 
 /** Who changed a note, kept in its audit entry. */
-export type BrowserSiteNoteActor = "agent" | "member";
+type BrowserSiteNoteActor = "agent" | "member";
 
 type StoredNote = {
   id: SafeId<"chatBrowserSiteNote">;
@@ -155,9 +155,12 @@ export const listNotedBrowserSites = async ({
     }
     const sites = new Map<string, BrowserSiteNoteView[]>();
     for (const row of read.rows) {
-      const notes = sites.get(row.origin) ?? [];
-      notes.push(toNote(row));
-      sites.set(row.origin, notes);
+      const notes = sites.get(row.origin);
+      if (notes === undefined) {
+        sites.set(row.origin, [toNote(row)]);
+      } else {
+        notes.push(toNote(row));
+      }
     }
     return [...sites].map(([origin, notes]) => ({ origin, notes }));
   });
@@ -272,8 +275,10 @@ const noteAuditEvent = (
   metadata: { browserOrigin: origin, noteKind: note.kind, cause },
 });
 
-const noteOnSite = ({ owner, origin }: SiteWrite, noteId: string) =>
-  and(onSite(owner, origin), eq(chatBrowserSiteNotes.id, noteId));
+const noteOnSite = (
+  { owner, origin }: SiteWrite,
+  noteId: SafeId<"chatBrowserSiteNote">,
+) => and(onSite(owner, origin), eq(chatBrowserSiteNotes.id, noteId));
 
 const confirmNote = async (site: SiteWrite, note: StoredNote) => {
   // audit: skip - a confirmation only moves the note's confirmation time
