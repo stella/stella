@@ -87,14 +87,15 @@ export const schemaScopedDb =
       return await callback(tx);
     });
 
-export const insertCourtListenerSource = async (
+export const insertIngestSource = async (
   scopedDb: ScopedDb,
   sourceId: SafeId<"caseLawSource">,
+  adapterKey: string = IMPORT_SOURCE_KEYS.COURTLISTENER,
 ): Promise<void> => {
   await scopedDb(async (tx) => {
     await tx.insert(caseLawSources).values({
       id: sourceId,
-      adapterKey: IMPORT_SOURCE_KEYS.COURTLISTENER,
+      adapterKey,
       name: "Ingest fixture",
     });
   });
@@ -194,6 +195,11 @@ export const applyIngestStream = async ({
   return applied;
 };
 
+/**
+ * A payload's place in its pack: the pack key and offset follow the order
+ * payloads joined the pack, so only the member's own digest is compared.
+ */
+const PACK_PLACE = /pack:[^"@]+@\d+\+\d+#/gu;
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gu;
 const TIMESTAMP = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/u;
 
@@ -208,8 +214,8 @@ export type CanonicalCaseLawState = Record<string, string[]>;
 /**
  * Every row of the run's tables, comparable across runs: a decision id reads
  * as the publisher identity of its row, any other generated id as `uuid`,
- * clock readings and serial counters are dropped, and each table's rows are
- * sorted. `exclude` names columns a comparison leaves out, with its reason
+ * clock readings and serial counters are dropped, a payload's place in its
+ * pack reads as its digest alone, and each table's rows are sorted. `exclude` names columns a comparison leaves out, with its reason
  * at the call site.
  */
 export const canonicalCaseLawState = async (
@@ -256,10 +262,9 @@ export const canonicalCaseLawState = async (
               )
               .toSorted(([left], [right]) => (left < right ? -1 : 1)),
           );
-          return JSON.stringify(kept).replaceAll(
-            UUID,
-            (id) => tokens.get(id) ?? "uuid",
-          );
+          return JSON.stringify(kept)
+            .replaceAll(PACK_PLACE, "pack:#")
+            .replaceAll(UUID, (id) => tokens.get(id) ?? "uuid");
         })
         .toSorted();
     }

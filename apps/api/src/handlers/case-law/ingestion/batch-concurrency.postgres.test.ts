@@ -14,14 +14,17 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { CorpusPackError } from "@/api/lib/legal-search/corpus-pack";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
-import { courtListenerIngestFixture } from "@/api/tests/helpers/case-law-ingest-fixture";
+import {
+  courtListenerIngestFixture,
+  czechIngestFixture,
+} from "@/api/tests/helpers/case-law-ingest-fixture";
 import {
   type AppliedBatch,
   applyIngestStream,
   canonicalCaseLawState,
   cloneCaseLawSchema,
   dropCaseLawSchema,
-  insertCourtListenerSource,
+  insertIngestSource,
   objectStoreCorpus,
   schemaScopedDb,
 } from "@/api/tests/helpers/case-law-ingest-schema";
@@ -65,7 +68,7 @@ if (!databaseUrl || !enabled) {
     const tables = await cloneCaseLawSchema(admin.db, schemaName);
     try {
       const scopedDb = schemaScopedDb(db, schemaName);
-      await insertCourtListenerSource(scopedDb, sourceId);
+      await insertIngestSource(scopedDb, sourceId);
       return await run({ scopedDb, tables, schemaName });
     } finally {
       await dropCaseLawSchema(admin.db, schemaName);
@@ -129,16 +132,28 @@ if (!databaseUrl || !enabled) {
       "a concurrent batch writes what the serial batch writes",
       async () => {
         const decisions = stream(7101);
+        const czech = czechIngestFixture({ count: 240 });
         const sourceId = createSafeId<"caseLawSource">();
+        const czechSourceId = createSafeId<"caseLawSource">();
         const fakeS3 = startFakeS3();
         try {
           await withGatedTestClients(databaseUrl, async ({ openClient }) => {
             const applyTwice = async (concurrency: number, max: number) =>
               await withRun({ openClient, sourceId, max }, async (run) => {
+                await insertIngestSource(run.scopedDb, czechSourceId, "cz-ns");
                 const first = await applyIngestStream({
                   scopedDb: run.scopedDb,
                   sourceId,
                   decisions,
+                  concurrency,
+                  corpus: landing(),
+                });
+                // Decisions that cite each other by docket: the graph
+                // resolves a citation on write or on its target's arrival.
+                const cited = await applyIngestStream({
+                  scopedDb: run.scopedDb,
+                  sourceId: czechSourceId,
+                  decisions: czech,
                   concurrency,
                   corpus: landing(),
                 });
@@ -153,7 +168,7 @@ if (!databaseUrl || !enabled) {
                   firstOrder: 10n,
                 });
                 return {
-                  tallies: tallies([...first, ...again]),
+                  tallies: tallies([...first, ...cited, ...again]),
                   state: await canonicalCaseLawState(run.scopedDb, run.tables),
                 };
               });
@@ -167,9 +182,15 @@ if (!databaseUrl || !enabled) {
             expect(
               serial.state["case_law_decisions"]?.length ?? 0,
             ).toBeGreaterThan(400);
+            const citations = serial.state["case_law_citations"] ?? [];
+            expect(citations.length).toBeGreaterThan(400);
+            // Resolved both ways: to a decision written before the citing one
+            // and to one written after it.
             expect(
-              serial.state["case_law_citations"]?.length ?? 0,
-            ).toBeGreaterThan(0);
+              citations.filter((row) =>
+                row.includes('"cited_decision_id":"decision:'),
+              ).length,
+            ).toBeGreaterThan(400);
             expect(concurrent.tallies).toEqual(serial.tallies);
             expect(concurrent.state).toEqual(serial.state);
           });
@@ -228,16 +249,20 @@ if (!databaseUrl || !enabled) {
                         import.meta.url,
                       ),
                     ),
+                    "--s3",
+                    fakeS3.endpoint,
+                    "--schema",
+                    run.schemaName,
+                    "--source",
+                    sourceId,
+                    "--count",
+                    String(count),
+                    "--namespace",
+                    String(namespace),
+                    "--concurrency",
+                    "16",
                   ],
-                  env: {
-                    ...process.env,
-                    INGEST_CRASH_S3_ENDPOINT: fakeS3.endpoint,
-                    INGEST_CRASH_SCHEMA: run.schemaName,
-                    INGEST_CRASH_SOURCE_ID: sourceId,
-                    INGEST_CRASH_COUNT: String(count),
-                    INGEST_CRASH_NAMESPACE: String(namespace),
-                    INGEST_CRASH_CONCURRENCY: "16",
-                  },
+                  env: process.env,
                   stdout: "ignore",
                   stderr: "inherit",
                 });

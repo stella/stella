@@ -12,7 +12,7 @@ import {
   applyIngestStream,
   cloneCaseLawSchema,
   dropCaseLawSchema,
-  insertCourtListenerSource,
+  insertIngestSource,
   objectStoreCorpus,
   useCaseLawSchema,
 } from "@/api/tests/helpers/case-law-ingest-schema";
@@ -116,7 +116,7 @@ const measure = async (concurrency: number) => {
     const fakeS3 = startFakeS3({ delayMs: s3DelayMs });
     try {
       const sourceId = createSafeId<"caseLawSource">();
-      await insertCourtListenerSource(scopedDb, sourceId);
+      await insertIngestSource(scopedDb, sourceId);
       traces.length = 0;
       const decisions = courtListenerIngestFixture({ count, namespace: 7001 });
       const started = performance.now();

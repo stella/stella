@@ -19,7 +19,12 @@ import { readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 
 import { mapCourtListenerRecord as uncheckedMapCourtListenerRecord } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/map";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
@@ -141,11 +146,13 @@ export const courtListenerFixtureRecords = ({
 }: IngestFixtureOptions): RecordedCluster[] => {
   const templates = recordedClusters();
   return Array.from({ length: count }, (_, index) => {
-    const template =
-      templates[index % templates.length] ??
-      panic("The recorded clusters are empty");
     const revisionOf = index % 97 === 96 && index >= 200 ? index - 200 : null;
     const docketOf = revisionOf ?? (index % 41 === 40 ? index - 1 : index);
+    // A repeat takes the template of the record it repeats, so it carries
+    // the same reporters and with them the same primary citation.
+    const template =
+      templates[docketOf % templates.length] ??
+      panic("The recorded clusters are empty");
     const identity = revisionOf ?? index;
     const clusterId = String(namespace * 100_000 + identity);
     const docketId = String(namespace * 100_000 + docketOf);
@@ -232,3 +239,35 @@ export const courtListenerIngestFixture = (
       "a re-keyed recorded cluster maps to a decision",
     ),
   );
+
+/**
+ * A Czech Supreme Court stream whose reasons cite other decisions of the
+ * stream by docket, earlier and later ones, so the citation graph resolves
+ * citations both on write and on a cited decision's arrival. Every 23rd
+ * record cites a docket the stream never holds.
+ */
+export const czechIngestFixture = ({
+  count,
+}: {
+  count: number;
+}): IngestionResult[] =>
+  Array.from({ length: count }, (_, index) => {
+    const earlier = (index * 7 + 3) % Math.max(index, 1);
+    const later = Math.min(index + 1 + (index % 4), count - 1);
+    const absent = index % 23 === 22 ? " a sp. zn. 99 Cdo 1/1999" : "";
+    const text = `Podle rozhodnutí sp. zn. 21 Cdo ${1000 + earlier}/2019 a sp. zn. 21 Cdo ${1000 + later}/2019${absent} je závěr shodný.`;
+    return plainTextIngestionResult({
+      caseNumber: `21 Cdo ${1000 + index}/2019`,
+      court: "Nejvyšší soud",
+      country: "CZE",
+      language: "cs",
+      sourceDocumentId: `ingest-fixture-${index}`,
+      decisionDate: "2019-03-01",
+      metadata: {},
+      rawHash: `ingest-fixture-hash-${index}`,
+      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      fulltext: text,
+      sections: [{ index: 0, type: "argumentation", title: null, text }],
+      documentAst: {},
+    });
+  });

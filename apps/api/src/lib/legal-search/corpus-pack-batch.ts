@@ -1,7 +1,5 @@
 import { panic, Result } from "better-result";
 
-import { mapWithConcurrency } from "@stll/concurrency";
-
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import { corpusMemberLayout } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -166,13 +164,6 @@ type PlannedEntry = {
   reserved: WriteCorpusResult;
   packKey: string | null;
 };
-
-/**
- * Most settlements of one group in flight. Each is a short transaction on
- * its own decision, so they overlap their round trips; the pool bounds the
- * connections they hold.
- */
-const SETTLEMENT_CONCURRENCY = 16;
 
 const packedWrite = (
   locations: PackedMemberLocations,
@@ -500,36 +491,29 @@ export const openCorpusPackBatch = ({
     group: readonly PlannedEntry[],
     reserved: CaseLawCorpusUploadReservations,
   ): Promise<void> => {
-    // Each settlement is one short transaction that fences one decision
-    // against redaction: it locks that decision's row, then its intent, as
-    // redaction does. Settlements of different decisions share no row and
-    // run concurrently; the entries of one decision settle in batch order,
-    // so the last observation's settlement is the last one, as before.
+    // Sequential on purpose: each settlement is one short transaction that
+    // fences one decision against redaction, and the handle they run on is
+    // the batch's own.
     const orphaned: SafeId<"caseLawCorpusUploadIntent">[] = [];
-    await mapWithConcurrency({
-      items: [...Map.groupBy(group, ({ entry }) => entry.decisionId).values()],
-      limit: SETTLEMENT_CONCURRENCY,
-      operation: async (decisionEntries) => {
-        for (const entry of decisionEntries) {
-          const reservation = reserved.get(entry.entry.decisionId);
-          if (reservation === undefined || reservation.type === "redacted") {
-            outcomes.set(entry.entry.decisionId, {
-              type: "redacted-or-missing",
-            });
-            continue;
-          }
-          if (reservation.type === "busy") {
-            outcomes.set(entry.entry.decisionId, { type: "busy" });
-            continue;
-          }
-          const outcome = await settleReserved(entry, reservation.intentId);
-          outcomes.set(entry.entry.decisionId, outcome);
-          if (outcome.type === "failed") {
-            orphaned.push(reservation.intentId);
-          }
-        }
-      },
-    });
+    for (const entry of group) {
+      const reservation = reserved.get(entry.entry.decisionId);
+      if (reservation === undefined || reservation.type === "redacted") {
+        outcomes.set(entry.entry.decisionId, { type: "redacted-or-missing" });
+        continue;
+      }
+      if (reservation.type === "busy") {
+        outcomes.set(entry.entry.decisionId, { type: "busy" });
+        continue;
+      }
+      // Each settlement is one short transaction fencing one decision, so
+      // they are sequential by construction: the batch owns the handle and
+      // the rows must be taken one at a time.
+      const outcome = await settleReserved(entry, reservation.intentId);
+      outcomes.set(entry.entry.decisionId, outcome);
+      if (outcome.type === "failed") {
+        orphaned.push(reservation.intentId);
+      }
+    }
     if (orphaned.length > 0) {
       await enqueueCaseLawCorpusUploadIntentCleanups({
         intentIds: orphaned,
