@@ -6,7 +6,8 @@
  * halves of its job on the dev playground: menus opened as fast as a test
  * drives them are input, not a storm (the false alarm the old rate canary
  * raised on the composer's menus), while a loop one click started and
- * nothing keeps feeding is a storm, at frame rate or far below it.
+ * nothing keeps feeding is a storm, at frame rate or far below it. A storm
+ * on a page the test opened beside its own, and closed, still counts.
  */
 
 import { expect, type Page, test } from "@playwright/test";
@@ -14,7 +15,11 @@ import { expect, type Page, test } from "@playwright/test";
 import { DEFAULT_QUIESCENCE_LIMITS } from "@stll/render-probe/storm-ledger";
 
 import { menuCommitBenches } from "../../src/routes/dev/-visual-metadata";
-import { addStormWatch, stormWatchFailures } from "../helpers/storm-watch";
+import {
+  addStormWatch,
+  stormWatchChecks,
+  stormWatchFailures,
+} from "../helpers/storm-watch";
 import {
   readStormWatch,
   STORM_WATCH_GLOBAL,
@@ -105,4 +110,26 @@ test("a loop too slow for any rate threshold still never goes quiet", async ({
     "SlowLoop",
   );
   expect(stormWatchFailures(watched).length).toBeGreaterThan(0);
+});
+
+test("a storm on a page the test opened and closed still counts", async ({
+  context,
+  page,
+}) => {
+  const beside = await context.newPage();
+  await beside.goto("/dev?visual=storm-watch", {
+    waitUntil: "domcontentloaded",
+  });
+  await beside
+    .locator('[data-playground-section="storm-watch:frame-loop"]')
+    .getByRole("button")
+    .click();
+  // Reading waits out the loop, so the page has reported before it closes.
+  expect((await read(beside)).report.reported.length).toBeGreaterThan(0);
+  await beside.close();
+
+  const checks = await stormWatchChecks(context, page);
+  const closed = checks.find(({ annotation }) => annotation["closed"] === true);
+  expect(closed?.page, "the closed page is checked").toBe(1);
+  expect(closed?.failures.join("\n")).toContain("FrameLoop");
 });

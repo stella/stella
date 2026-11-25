@@ -14,6 +14,7 @@ import {
   type StormViolation,
 } from "../../../../packages/render-probe/src/storm-ledger";
 import {
+  STORM_WATCH_BINDING,
   STORM_WATCH_GLOBAL,
   type StormWatchQuiescence,
   type StormWatchState,
@@ -57,13 +58,32 @@ const topComponents = (snapshot: RenderSnapshot) =>
     .slice(0, REPORTED_COMPONENTS)
     .map(([name, entry]) => ({ name, ...entry }));
 
+// Each report also goes to the test as it happens (./storm-watch.ts binds
+// the function), so a page the test closes before its end still counts.
+const forward = (report: StormWatchViolationReport) => {
+  const binding: unknown = Reflect.get(globalThis, STORM_WATCH_BINDING);
+  if (typeof binding !== "function") {
+    return;
+  }
+  try {
+    const delivery: unknown = Reflect.apply(binding, globalThis, [report]);
+    if (delivery instanceof Promise) {
+      delivery.catch(() => undefined);
+    }
+  } catch {
+    // The page keeps its own copy; a lost delivery only costs the early copy.
+  }
+};
+
 const recordViolations = (found: readonly StormViolation[]) => {
   for (const violation of found) {
     if (reported.length < REPORTED_VIOLATIONS) {
-      reported.push({
+      const report = {
         violation,
         components: topComponents(probe.snapshot()),
-      });
+      };
+      reported.push(report);
+      forward(report);
     }
   }
 };
@@ -127,13 +147,15 @@ if (typeof existingHook === "object" && existingHook !== null) {
 }
 
 // Input: only trusted events, the ones a person or the test driver caused.
-// An event the app dispatches itself can be part of a loop.
+// An event the app dispatches itself can be part of a loop, and so can one
+// the browser fires for something the app did: `scroll` after scrollTo,
+// `focusin`/`focusout` after focus(), pointer boundary events when layout
+// moves under a still pointer. Those are left out; the wheel, key or pointer
+// press that starts a real scroll or focus change is already here.
 const INPUT_EVENTS = [
   "pointerdown",
   "pointerup",
   "pointermove",
-  "pointerover",
-  "pointerout",
   "click",
   "dblclick",
   "contextmenu",
@@ -147,9 +169,6 @@ const INPUT_EVENTS = [
   "cut",
   "copy",
   "wheel",
-  "scroll",
-  "focusin",
-  "focusout",
   "dragstart",
   "dragover",
   "drop",
@@ -158,15 +177,12 @@ const INPUT_EVENTS = [
   "touchend",
   "resize",
 ] as const;
-// Events that fire continuously while a pointer moves or a page scrolls
+// Events that fire continuously while a pointer moves or a wheel turns
 // refill at most once per interval, so a sweep of the mouse cannot keep
 // topping up the bucket while a loop runs beside it.
 const CONTINUOUS_EVENTS: ReadonlySet<string> = new Set([
   "pointermove",
-  "pointerover",
-  "pointerout",
   "wheel",
-  "scroll",
   "dragover",
 ]);
 const CONTINUOUS_REFILL_MS = 100;

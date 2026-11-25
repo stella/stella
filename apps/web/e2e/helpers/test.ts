@@ -197,9 +197,9 @@ export const test = base.extend<BrowserErrorFixtures>({
     await runFixture(context);
   },
   stormWatch: [
-    async ({ page }, runFixture, testInfo) => {
+    async ({ context, page }, runFixture, testInfo) => {
       await runFixture(undefined);
-      await checkStormWatch(page, testInfo);
+      await checkStormWatch(context, page, testInfo);
     },
     { auto: true },
   ],

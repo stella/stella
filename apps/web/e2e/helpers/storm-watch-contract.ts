@@ -7,6 +7,9 @@ import type {
 /** Where the page exposes the storm watch to the test driver. */
 export const STORM_WATCH_GLOBAL = "__STLL_STORM_WATCH__";
 
+/** The function the test binds into each page to receive reports live. */
+export const STORM_WATCH_BINDING = "__STLL_STORM_WATCH_REPORT__";
+
 export type StormWatchComponent = ComponentRenders & { name: string };
 
 export type StormWatchViolationReport = {
