@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 4,
+  "reason": "The citation-arrival queue is derived public case-law bookkeeping written by ingestion only: a decision write enqueues its arrivals, a drain takes them and reopens derived citation resolutions, the standing walk moves one that keeps failing to the back of the queue, and an erasure withdraws an erased decision's arrivals under the erasure's own audit. None is a user action."
+}
