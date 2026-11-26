@@ -298,16 +298,15 @@ if (!databaseUrl || !enabled) {
         try {
           await withGatedTestClients(databaseUrl, async ({ openClient }) => {
             await withRun({ openClient, sourceId, max: 2 }, async (run) => {
-              const [stored, elsewhere, unrelated] = courtListenerIngestFixture(
-                { count: 3, namespace: 7105 },
-              );
-              if (
-                stored?.sourceDocumentId === undefined ||
-                elsewhere === undefined ||
-                unrelated === undefined
-              ) {
-                return panic("The fixture lost its records");
-              }
+              const fixture = courtListenerIngestFixture({
+                count: 3,
+                namespace: 7105,
+              });
+              const fixtureRecord = (index: number): IngestionResult =>
+                fixture[index] ?? panic("The fixture lost a record");
+              const stored = fixtureRecord(0);
+              const elsewhere = fixtureRecord(1);
+              const unrelated = fixtureRecord(2);
               await applyIngestStream({
                 scopedDb: run.scopedDb,
                 sourceId,
@@ -696,7 +695,7 @@ if (!databaseUrl || !enabled) {
                   try: async () => await ingest,
                   catch: (cause) => cause,
                 });
-                return panic("The citation walk failed", walked.error);
+                panic("The citation walk failed", walked.error);
               }
               const applied = await ingest;
               expect(applied.every(({ halt }) => halt === null)).toBe(true);
