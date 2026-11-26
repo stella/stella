@@ -439,6 +439,16 @@ export const corpusIndexRouteProofs = p.pgTable(
     passIndexIncarnation: p.varchar("pass_index_incarnation", {
       length: CORPUS_INDEX_INCARNATION_MAX_LENGTH,
     }),
+    /**
+     * The key ranges the pass under way is split into, each with its own
+     * cursor (`CorpusIndexRouteCensusRange`): `{ passId, ranges }`, void
+     * unless `passId` is this row's `pass_id`; null until the pass's first
+     * page lays them out. The pass proves the route once every range has
+     * walked both phases. `pass_through`, `pass_expectation`, `pass_cursor`
+     * and `pass_inspected` above are the single-cursor walk this replaced:
+     * still reset with every new pass, never advanced by a split pass.
+     */
+    passRanges: p.jsonb("pass_ranges"),
     /** The number of the last clean pass; null until one completes. */
     provenPassNumber: p.bigint("proven_pass_number", { mode: "number" }),
     /** When the last clean pass started: its oldest observation. */

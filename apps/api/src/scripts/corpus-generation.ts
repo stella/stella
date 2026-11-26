@@ -8,7 +8,7 @@ import { panic, Result, TaggedError } from "better-result";
  *   bun run src/scripts/corpus-generation.ts serve --family case_law --generation case_law_v10 [--replacing case_law_v7 --actor <id> --reason <text> --apply]
  *   bun run src/scripts/corpus-generation.ts parity --family case_law --generation case_law_v10 [--exempt-minutes 20] [--coverage-pages 2000] [--coverage-from <entity|start>] [--list]
  *   bun run src/scripts/corpus-generation.ts seed --family case_law --generation case_law_v10 [--pages 1000]
- *   bun run src/scripts/corpus-generation.ts prove --family case_law --generation case_law_v10 [--hours 11] [--until-current] [--only-requested] [--concurrency 4]
+ *   bun run src/scripts/corpus-generation.ts prove --family case_law --generation case_law_v10 [--hours 11] [--until-current] [--only-requested] [--concurrency 4] [--ranges 8]
  *   bun run src/scripts/corpus-generation.ts retire --family case_law --generation case_law_v8 [--defer-cleanup] [--actor <id> --reason <text> --apply]
  *
  * `serve` runs the guarded flip (`corpus-index-generation-flip.ts`), the one
@@ -140,7 +140,10 @@ import {
   corpusIndexManifestDigest,
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import { CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS } from "@/api/lib/legal-search/corpus-index-route-proof-contract";
+import {
+  CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS,
+  CORPUS_INDEX_ROUTE_PROOF_RANGES_MAX,
+} from "@/api/lib/legal-search/corpus-index-route-proof-contract";
 import {
   type CorpusIndexRouteProofRun,
   createCorpusIndexRouteProofBrake,
@@ -183,6 +186,8 @@ const PROVE_MAX_HOURS = 11;
 /** Routes one proof run walks at once by default, and at most. */
 const PROVE_DEFAULT_CONCURRENCY = 4;
 const PROVE_MAX_CONCURRENCY = 16;
+/** Key ranges a large route's pass is split into, each walked on its own. */
+const PROVE_DEFAULT_RANGES = 8;
 /** Census pages one proof run reads at most: no run reaches it in its hours. */
 const PROVE_MAX_PAGES = 10_000_000;
 /** How long the proof run waits on locks (a flip's fence) or the brake. */
@@ -274,7 +279,11 @@ Options (prove):
                          current.
   --only-requested       Prove the named generation alone: not the serving
                          one, nor the one the latest flip demoted.
-  --concurrency <n>      Routes walked at once (default ${String(PROVE_DEFAULT_CONCURRENCY)}, at most ${String(PROVE_MAX_CONCURRENCY)}).
+  --concurrency <n>      Pages walked at once, over every route and range
+                         (default ${String(PROVE_DEFAULT_CONCURRENCY)}, at most ${String(PROVE_MAX_CONCURRENCY)}).
+  --ranges <n>           Key ranges a route's new pass is split into, each
+                         walked on its own (default ${String(PROVE_DEFAULT_RANGES)}, at most ${String(CORPUS_INDEX_ROUTE_PROOF_RANGES_MAX)});
+                         a route whose last clean pass was small gets fewer.
 
 Exit codes (serve): 0 flipped (or, dry run, every check passed), 3 parity
 regressions, 4 undecided, 10 registry, 11 route proofs, 12 seeding, 13 engine
@@ -403,6 +412,7 @@ type CorpusGenerationCommand =
       untilCurrent: boolean;
       onlyRequested: boolean;
       concurrency: number;
+      ranges: number;
     }
   | {
       type: "retire";
@@ -497,6 +507,7 @@ type CommandValues = {
   "until-current"?: boolean | undefined;
   "only-requested"?: boolean | undefined;
   concurrency?: string | undefined;
+  ranges?: string | undefined;
 };
 
 /** Why `prove`'s options do not fit the command, or null when they do. */
@@ -512,8 +523,9 @@ const proveOptionRefusal = (
   return values.hours !== undefined ||
     values["until-current"] === true ||
     values["only-requested"] === true ||
-    values.concurrency !== undefined
-    ? "--hours, --until-current, --only-requested and --concurrency belong to prove."
+    values.concurrency !== undefined ||
+    values.ranges !== undefined
+    ? "--hours, --until-current, --only-requested, --concurrency and --ranges belong to prove."
     : null;
 };
 
@@ -696,6 +708,7 @@ const parseCorpusGenerationCommand = (
           "until-current": { type: "boolean" },
           "only-requested": { type: "boolean" },
           concurrency: { type: "string" },
+          ranges: { type: "string" },
         },
       }),
     catch: (cause) =>
@@ -823,6 +836,16 @@ const parseCorpusGenerationCommand = (
           `--concurrency must be a whole number from 1 to ${String(PROVE_MAX_CONCURRENCY)}.`,
         );
       }
+      const ranges = parseWholeNumber(
+        values.ranges,
+        PROVE_DEFAULT_RANGES,
+        CORPUS_INDEX_ROUTE_PROOF_RANGES_MAX,
+      );
+      if (ranges === null || ranges === 0) {
+        return usageError(
+          `--ranges must be a whole number from 1 to ${String(CORPUS_INDEX_ROUTE_PROOF_RANGES_MAX)}.`,
+        );
+      }
       return Result.ok({
         type: "prove",
         target: target.value,
@@ -830,6 +853,7 @@ const parseCorpusGenerationCommand = (
         untilCurrent: values["until-current"] === true,
         onlyRequested: values["only-requested"] === true,
         concurrency,
+        ranges,
       });
     }
     default:
@@ -1971,6 +1995,7 @@ const runProve = async (
     untilCurrent,
     onlyRequested,
     concurrency,
+    ranges,
   }: Extract<CorpusGenerationCommand, { type: "prove" }>,
 ): Promise<Result<number, CorpusGenerationRefusal>> => {
   write(
@@ -1999,6 +2024,7 @@ const runProve = async (
       onlyRequested,
       untilCurrent,
       concurrency,
+      rangesPerRoute: ranges,
       fencePatienceMs: PROVE_PATIENCE_MS,
       now,
       sleep: Bun.sleep,

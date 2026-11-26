@@ -30,6 +30,7 @@ import {
   corpusIndexRouteProofs,
 } from "@/api/db/schema";
 import { lockCorpusIndexProjectionFlipTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
+import { advanceCorpusIndexRouteProof } from "@/api/lib/legal-search/corpus-index-route-proof";
 import { CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS } from "@/api/lib/legal-search/corpus-index-route-proof-contract";
 import {
   CORPUS_INDEX_ROUTE_PROOF_REFRESH_MS,
@@ -46,6 +47,7 @@ import {
   revokeCorpusIndexRouteProofTx,
   startCorpusIndexRouteCensusPageTx,
 } from "@/api/lib/legal-search/corpus-index-route-proof-store";
+import { isRecord } from "@/api/lib/type-guards";
 import { runCorpusGenerationCommand } from "@/api/scripts/corpus-generation";
 import {
   type GatedTestDb,
@@ -149,27 +151,44 @@ const verdictOf = (
 ): CorpusIndexGenerationRouteProofs =>
   ran.proofs.get(generation) ?? panic(`${generation} was not proven`);
 
-const proofRow = async (db: GatedTestDb, indexId: string) =>
-  (
-    await db
-      .select({
-        passNumber: corpusIndexRouteProofs.passNumber,
-        passCursor: corpusIndexRouteProofs.passCursor,
-        passInspected: corpusIndexRouteProofs.passInspected,
-        passExpectation: corpusIndexRouteProofs.passExpectation,
-        provenPassNumber: corpusIndexRouteProofs.provenPassNumber,
-        provenInspected: corpusIndexRouteProofs.provenInspected,
-        revokedPassNumber: corpusIndexRouteProofs.revokedPassNumber,
-        revokeReason: corpusIndexRouteProofs.revokeReason,
-      })
-      .from(corpusIndexRouteProofs)
-      .where(
-        and(
-          eq(corpusIndexRouteProofs.generation, FLIP_V10),
-          eq(corpusIndexRouteProofs.indexId, indexId),
-        ),
-      )
-  ).at(0) ?? panic(`No proof row for ${indexId}`);
+/**
+ * The route's proof row, with where its pass stands read from the pass's
+ * first range: at its beginning before the pass's ranges are laid out.
+ */
+const proofRow = async (db: GatedTestDb, indexId: string) => {
+  const { passId, passRanges, ...row } =
+    (
+      await db
+        .select({
+          passNumber: corpusIndexRouteProofs.passNumber,
+          passId: corpusIndexRouteProofs.passId,
+          passRanges: corpusIndexRouteProofs.passRanges,
+          provenPassNumber: corpusIndexRouteProofs.provenPassNumber,
+          provenInspected: corpusIndexRouteProofs.provenInspected,
+          revokedPassNumber: corpusIndexRouteProofs.revokedPassNumber,
+          revokeReason: corpusIndexRouteProofs.revokeReason,
+        })
+        .from(corpusIndexRouteProofs)
+        .where(
+          and(
+            eq(corpusIndexRouteProofs.generation, FLIP_V10),
+            eq(corpusIndexRouteProofs.indexId, indexId),
+          ),
+        )
+    ).at(0) ?? panic(`No proof row for ${indexId}`);
+  const first =
+    isRecord(passRanges) &&
+    passRanges["passId"] === passId &&
+    Array.isArray(passRanges["ranges"])
+      ? passRanges["ranges"].find(isRecord)
+      : undefined;
+  return {
+    ...row,
+    passExpectation: first?.["expectation"] ?? "present",
+    passCursor: first?.["cursor"] ?? null,
+    passInspected: first?.["inspected"] ?? 0,
+  };
+};
 
 const proofRows = async (db: GatedTestDb) =>
   await db
@@ -458,7 +477,7 @@ if (!databaseUrl || !runPostgresTests) {
         ]);
         expect(misplaced.code).toBe(1);
         expect(misplaced.err.join("\n")).toContain(
-          "--only-requested and --concurrency belong to prove",
+          "--only-requested, --concurrency and --ranges belong to prove",
         );
       });
     });
@@ -875,6 +894,7 @@ if (!databaseUrl || !runPostgresTests) {
                     await recordCorpusIndexRouteCensusPageTx(tx, {
                       route: POL_ROUTE,
                       pass: runner.pass,
+                      range: runner.range,
                       incarnation: POL_INCARNATION,
                       inspected: 2,
                       nextCursor: flipEntityId(2),
@@ -885,6 +905,217 @@ if (!databaseUrl || !runPostgresTests) {
             } else {
               expect(runner.pass.id).toBe(state.passId);
             }
+          },
+        });
+      });
+    });
+
+    test("a run that splits each pass into ranges proves every route on the decisions it holds", async () => {
+      await withDb(async (db) => {
+        const fixture = await standPair(db);
+        const ran = await run(db, fixture, {
+          onlyRequested: true,
+          rangesPerRoute: 3,
+          concurrency: 3,
+        });
+        expect(ran.stop).toEqual({ type: "all_current" });
+        expect(await proofRow(db, POL_V10)).toMatchObject({
+          provenPassNumber: 1,
+          provenInspected: DECISIONS.length,
+        });
+      });
+    });
+
+    test("two runners ending the two ranges of a pass at once prove the route once, and two pages of one range record once", async () => {
+      await withDb(async (db) => {
+        const fixture = await standPair(db);
+        const walk = runnerOf(db);
+        const pageOf = async (range: number) =>
+          await advanceCorpusIndexRouteProof({
+            runInTransaction: walk,
+            client: fixture.engineClient,
+            admit: async (_unit, work) => await work(),
+            route: POL_ROUTE,
+            range,
+            ranges: 2,
+            limit: 2,
+          });
+        const startRange = async (range: number) => {
+          const started = await walk(
+            async (tx) =>
+              await startCorpusIndexRouteCensusPageTx(
+                tx,
+                POL_ROUTE,
+                { type: "present", incarnation: POL_INCARNATION },
+                { range, ranges: 2 },
+              ),
+          );
+          return started.type === "pass"
+            ? started
+            : panic(`The range was not walked: ${started.type}`);
+        };
+        /**
+         * A fresh pass of the route, split in two, with both ranges walked
+         * up to their last page; nothing proven before it.
+         */
+        const standRangesAtTheirEnd = async () => {
+          await db
+            .update(corpusIndexRouteProofs)
+            .set({
+              provenPassNumber: null,
+              provenPassStartedAt: null,
+              provenAt: null,
+              provenInspected: null,
+              provenIndexIncarnation: null,
+            })
+            .where(
+              and(
+                eq(corpusIndexRouteProofs.generation, FLIP_V10),
+                eq(corpusIndexRouteProofs.indexId, POL_V10),
+              ),
+            );
+          await walk(
+            async (tx) =>
+              await revokeCorpusIndexRouteProofTx(
+                tx,
+                POL_ROUTE,
+                "present_drift",
+              ),
+          );
+          for (const range of [0, 1]) {
+            for (let page = 0; page < 10; page += 1) {
+              // db-await-in-loop: each page reads the cursor the previous recorded
+              const walked = await pageOf(range);
+              if (walked.isErr()) {
+                panic(`The range's page failed: ${walked.error.message}`);
+              }
+              if (walked.value.advance.type === "phase_completed") {
+                break;
+              }
+            }
+          }
+          return [await startRange(0), await startRange(1)] as const;
+        };
+        const recordEnd = async (tx: Transaction, started: StartedPass) =>
+          await recordCorpusIndexRouteCensusPageTx(tx, {
+            route: POL_ROUTE,
+            pass: started.pass,
+            range: started.range,
+            incarnation: POL_INCARNATION,
+            inspected: 0,
+            nextCursor: null,
+            complete: true,
+          });
+        const passState = async () =>
+          (
+            await db
+              .select({
+                passNumber: corpusIndexRouteProofs.passNumber,
+                provenPassNumber: corpusIndexRouteProofs.provenPassNumber,
+                provenInspected: corpusIndexRouteProofs.provenInspected,
+                passRanges: corpusIndexRouteProofs.passRanges,
+              })
+              .from(corpusIndexRouteProofs)
+              .where(
+                and(
+                  eq(corpusIndexRouteProofs.generation, FLIP_V10),
+                  eq(corpusIndexRouteProofs.indexId, POL_V10),
+                ),
+              )
+          ).at(0) ?? panic(`No proof row for ${POL_V10}`);
+
+        // Each runner ends its own range: whichever commits second sees the
+        // other's end and proves the route, once.
+        let ends: StartedPass[] = [];
+        const steps: string[] = [];
+        await withInterleaving({
+          databaseUrl,
+          a: {
+            steps: [
+              {
+                name: "end",
+                run: async (tx) => {
+                  steps.push(
+                    (await recordEnd(tx, ends[0] ?? panic("No range"))).type,
+                  );
+                },
+              },
+            ],
+          },
+          b: {
+            steps: [
+              {
+                name: "end",
+                run: async (tx) => {
+                  steps.push(
+                    (await recordEnd(tx, ends[1] ?? panic("No range"))).type,
+                  );
+                },
+              },
+            ],
+          },
+          reset: async () => {
+            steps.length = 0;
+            ends = [...(await standRangesAtTheirEnd())];
+          },
+          readState: passState,
+          invariant: ({ outcomes, state }) => {
+            expect(outcomes).toEqual({
+              a: { status: "committed" },
+              b: { status: "committed" },
+            });
+            expect(steps.toSorted()).toEqual(["proven", "range_completed"]);
+            const stood = ends[0] ?? panic("No range");
+            expect(state).toMatchObject({
+              provenPassNumber: stood.pass.number,
+              passNumber: stood.pass.number + 1,
+              provenInspected: DECISIONS.length,
+              passRanges: null,
+            });
+          },
+        });
+
+        // Both runners read the same page of one range: one records it.
+        let same: StartedPass | null = null;
+        await withInterleaving({
+          databaseUrl,
+          a: {
+            steps: [
+              {
+                name: "end",
+                run: async (tx) => {
+                  steps.push(
+                    (await recordEnd(tx, same ?? panic("No range"))).type,
+                  );
+                },
+              },
+            ],
+          },
+          b: {
+            steps: [
+              {
+                name: "end",
+                run: async (tx) => {
+                  steps.push(
+                    (await recordEnd(tx, same ?? panic("No range"))).type,
+                  );
+                },
+              },
+            ],
+          },
+          reset: async () => {
+            steps.length = 0;
+            const [zero] = await standRangesAtTheirEnd();
+            same = zero;
+          },
+          readState: passState,
+          invariant: ({ outcomes, state }) => {
+            expect(outcomes).toEqual({
+              a: { status: "committed" },
+              b: { status: "committed" },
+            });
+            expect(steps.toSorted()).toEqual(["range_completed", "superseded"]);
+            expect(state.provenPassNumber).toBeNull();
           },
         });
       });

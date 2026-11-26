@@ -15,7 +15,10 @@ import {
   lockRegisteredCorpusProjectionManifestForMutation,
   readRegisteredCorpusProjectionManifestForCleanup,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
-import { CORPUS_PROJECTION_DELETE_MAX_REVISIONS } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import {
+  CORPUS_PROJECTION_CENSUS_MAX_REVISIONS,
+  CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
+} from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
   corpusProjectionAcceptedAppendCleanupFence,
   corpusProjectionAppendIsPublished,
@@ -72,10 +75,10 @@ const validateCensusPage = ({
   if (
     !Number.isSafeInteger(limit) ||
     limit < 1 ||
-    limit > CORPUS_PROJECTION_DELETE_MAX_REVISIONS
+    limit > CORPUS_PROJECTION_CENSUS_MAX_REVISIONS
   ) {
     return panic(
-      `Corpus projection census page size must be an integer from 1 to ${CORPUS_PROJECTION_DELETE_MAX_REVISIONS}`,
+      `Corpus projection census page size must be an integer from 1 to ${CORPUS_PROJECTION_CENSUS_MAX_REVISIONS}`,
     );
   }
   if (after !== null && !isUuid(after)) {
@@ -186,7 +189,7 @@ export const revalidateAppliedCorpusProjectionCensusTx = async (
 ): Promise<AppliedCorpusProjectionCensusCandidate[]> => {
   if (
     options.revisions.length === 0 ||
-    options.revisions.length > CORPUS_PROJECTION_DELETE_MAX_REVISIONS
+    options.revisions.length > CORPUS_PROJECTION_CENSUS_MAX_REVISIONS
   ) {
     return panic("Corpus projection census revalidation batch is invalid");
   }

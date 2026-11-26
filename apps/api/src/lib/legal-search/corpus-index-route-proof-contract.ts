@@ -59,3 +59,17 @@ export type CorpusIndexRoutePassRestartReason =
 
 /** The engine's identity of one incarnation of an index id, as stored. */
 export const CORPUS_INDEX_INCARNATION_MAX_LENGTH = 160;
+
+/**
+ * The most key ranges one census pass of a route is split into, each walked
+ * by its own cursor. The split only spreads the walk over runners; what a
+ * proof certifies is the same for one range or many.
+ */
+export const CORPUS_INDEX_ROUTE_PROOF_RANGES_MAX = 16;
+
+/**
+ * The fewest revisions a range is worth on a route whose last clean pass is
+ * known: a smaller route gets fewer ranges, so its pages are not spent on
+ * phases with next to nothing to walk.
+ */
+export const CORPUS_INDEX_ROUTE_PROOF_RANGE_MIN_ROWS = 25_000;

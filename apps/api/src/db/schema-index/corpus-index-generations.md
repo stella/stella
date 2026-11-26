@@ -93,30 +93,31 @@ corpus_index_route_proofs.pass_expectation          text         not null       
 corpus_index_route_proofs.pass_cursor               uuid         null              corpus-index-generations.ts:428  Where the pass resumes within its phase; null at the phase's start.
 corpus_index_route_proofs.pass_inspected            bigint       default,not null  corpus-index-generations.ts:430  Revisions the pass under way has found exactly as recorded.
 corpus_index_route_proofs.pass_index_incarnation    varchar      null              corpus-index-generations.ts:439  The engine incarnation of the index (`CorpusIndexIncarnation`) the pass under way read first; null until it reads the engine.
-corpus_index_route_proofs.proven_pass_number        bigint       null              corpus-index-generations.ts:443  The number of the last clean pass; null until one completes.
-corpus_index_route_proofs.proven_pass_started_at    timestamptz  null              corpus-index-generations.ts:445  When the last clean pass started: its oldest observation.
-corpus_index_route_proofs.proven_at                 timestamptz  null              corpus-index-generations.ts:447  When the last clean pass completed.
-corpus_index_route_proofs.proven_inspected          bigint       null              corpus-index-generations.ts:449  Revisions the last clean pass inspected.
-corpus_index_route_proofs.proven_index_incarnation  varchar      null              corpus-index-generations.ts:454  The incarnation the last clean pass started and ended on; a reader that finds another one in the engine holds no proof of this index.
-corpus_index_route_proofs.revoked_at                timestamptz  null              corpus-index-generations.ts:458  When a change voiding the proof last revoked it.
-corpus_index_route_proofs.revoked_pass_number       bigint       null              corpus-index-generations.ts:463  The pass the last revocation started: only a pass numbered this or later proves the route again.
-corpus_index_route_proofs.revoke_reason             text         null              corpus-index-generations.ts:465  Which change it was (`CORPUS_INDEX_ROUTE_PROOF_REVOKE_REASONS`).
-corpus_index_route_proofs.created_at                timestamptz  default,not null  corpus-index-generations.ts:468
-corpus_index_route_proofs.updated_at                timestamptz  default,not null  corpus-index-generations.ts:469
+corpus_index_route_proofs.pass_ranges               jsonb        null              corpus-index-generations.ts:451  The key ranges the pass under way is split into, each with its own cursor (`CorpusIndexRouteCensusRange`): `{ passId, ranges }`, void unless `passId` is this r…
+corpus_index_route_proofs.proven_pass_number        bigint       null              corpus-index-generations.ts:453  The number of the last clean pass; null until one completes.
+corpus_index_route_proofs.proven_pass_started_at    timestamptz  null              corpus-index-generations.ts:455  When the last clean pass started: its oldest observation.
+corpus_index_route_proofs.proven_at                 timestamptz  null              corpus-index-generations.ts:457  When the last clean pass completed.
+corpus_index_route_proofs.proven_inspected          bigint       null              corpus-index-generations.ts:459  Revisions the last clean pass inspected.
+corpus_index_route_proofs.proven_index_incarnation  varchar      null              corpus-index-generations.ts:464  The incarnation the last clean pass started and ended on; a reader that finds another one in the engine holds no proof of this index.
+corpus_index_route_proofs.revoked_at                timestamptz  null              corpus-index-generations.ts:468  When a change voiding the proof last revoked it.
+corpus_index_route_proofs.revoked_pass_number       bigint       null              corpus-index-generations.ts:473  The pass the last revocation started: only a pass numbered this or later proves the route again.
+corpus_index_route_proofs.revoke_reason             text         null              corpus-index-generations.ts:475  Which change it was (`CORPUS_INDEX_ROUTE_PROOF_REVOKE_REASONS`).
+corpus_index_route_proofs.created_at                timestamptz  default,not null  corpus-index-generations.ts:478
+corpus_index_route_proofs.updated_at                timestamptz  default,not null  corpus-index-generations.ts:479
 ```
 
-## corpus_index_generation_flips · `corpusIndexGenerationFlips` · corpus-index-generations.ts:546 · rls
+## corpus_index_generation_flips · `corpusIndexGenerationFlips` · corpus-index-generations.ts:556 · rls
 
 One row per whole-family serving flip: who made it, when, which pair, and the evidence the guarded flip gathered (the registry identities and the parity verdic…
 
 ```text
-corpus_index_generation_flips.id               pUuid        pk,not null       corpus-index-generations.ts:549
-corpus_index_generation_flips.family           text         not null          corpus-index-generations.ts:550
-corpus_index_generation_flips.from_generation  varchar      null              corpus-index-generations.ts:552  The generation that served before; null on a family's first flip.
-corpus_index_generation_flips.to_generation    varchar      not null          corpus-index-generations.ts:555
-corpus_index_generation_flips.actor            varchar      not null          corpus-index-generations.ts:558
-corpus_index_generation_flips.reason           varchar      not null          corpus-index-generations.ts:559
-corpus_index_generation_flips.evidence         jsonb        not null          corpus-index-generations.ts:560
-corpus_index_generation_flips.evidence_digest  varchar      not null          corpus-index-generations.ts:565  SHA-256 (hex) of the row's canonical record: pair, actor, reason, flip instant and evidence (`corpusIndexGenerationFlipReceiptDigest`).
-corpus_index_generation_flips.flipped_at       timestamptz  default,not null  corpus-index-generations.ts:566
+corpus_index_generation_flips.id               pUuid        pk,not null       corpus-index-generations.ts:559
+corpus_index_generation_flips.family           text         not null          corpus-index-generations.ts:560
+corpus_index_generation_flips.from_generation  varchar      null              corpus-index-generations.ts:562  The generation that served before; null on a family's first flip.
+corpus_index_generation_flips.to_generation    varchar      not null          corpus-index-generations.ts:565
+corpus_index_generation_flips.actor            varchar      not null          corpus-index-generations.ts:568
+corpus_index_generation_flips.reason           varchar      not null          corpus-index-generations.ts:569
+corpus_index_generation_flips.evidence         jsonb        not null          corpus-index-generations.ts:570
+corpus_index_generation_flips.evidence_digest  varchar      not null          corpus-index-generations.ts:575  SHA-256 (hex) of the row's canonical record: pair, actor, reason, flip instant and evidence (`corpusIndexGenerationFlipReceiptDigest`).
+corpus_index_generation_flips.flipped_at       timestamptz  default,not null  corpus-index-generations.ts:576
 ```
