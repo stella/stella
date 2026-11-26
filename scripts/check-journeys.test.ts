@@ -415,7 +415,9 @@ const run = async ({
         );
       }
       if (scenario.delay) {
-        await Bun.sleep(scenario.delay);
+        await new Promise<void>((resolve) => {
+          req.signal.addEventListener("abort", () => resolve(), { once: true });
+        });
       }
       const status =
         pathname !== "/mcp" &&

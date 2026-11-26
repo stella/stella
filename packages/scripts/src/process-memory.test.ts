@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { expect, test } from "bun:test";
+import { expect, jest, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -446,6 +446,7 @@ for (const boundary of ["census", "reading"] as const) {
       const signals: { pid: number; signal: NodeJS.Signals | 0 }[] = [];
       let samples = 0;
       const bytes = budget === "above" ? 1200 : 300;
+      jest.useFakeTimers();
       const watchdog = watchTestProcessMemory({
         child: {
           pid: 42,
@@ -484,7 +485,7 @@ for (const boundary of ["census", "reading"] as const) {
       });
       try {
         if (budget === "below") {
-          await Bun.sleep(40);
+          jest.advanceTimersByTime(40);
           expect(samples).toBeGreaterThan(1);
           expect(failures).toEqual([]);
         } else {
@@ -498,6 +499,7 @@ for (const boundary of ["census", "reading"] as const) {
         expect(warnings).toHaveLength(1);
       } finally {
         await watchdog.stop();
+        jest.useRealTimers();
       }
     });
   }
@@ -539,6 +541,7 @@ test("a process-group budget sums surviving workers and signals only the group",
 });
 
 test("an empty process group ends ownership before its PGID can be reused", async () => {
+  jest.useFakeTimers();
   let samples = 0;
   const watchdog = watchTestProcessMemory({
     child: {
@@ -568,10 +571,11 @@ test("an empty process group ends ownership before its PGID can be reused", asyn
     intervalMs: 10,
   });
   try {
-    await Bun.sleep(40);
+    jest.advanceTimersByTime(40);
     expect(samples).toBe(1);
     expect(watchdog.peakBytes()).toBe(0);
   } finally {
     await watchdog.stop();
+    jest.useRealTimers();
   }
 });
