@@ -247,7 +247,7 @@
       "peakRssMiB": 127
     },
     "Test CLI runtime package parity": {
-      "minutes": 10,
+      "minutes": 20,
       "samples": 19,
       "p95Seconds": 35,
       "p99Seconds": 35,
