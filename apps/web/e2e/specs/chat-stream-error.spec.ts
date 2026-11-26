@@ -24,10 +24,10 @@ const EMPTY_REPLY_COPY =
 
 // Regression: a first-turn stream error used to drive the thread page into a
 // sustained render storm (~133 commits/sec) and drop the turn without any
-// visible error state. The render-storm canary turns a recurrence into a
-// console.error, which the auto `browserErrors` fixture
-// (apps/web/e2e/helpers/test.ts) fails this spec on — the assertions below
-// only need to pin the visible error affordance.
+// visible error state. The storm watch (apps/web/e2e/helpers/storm-watch.ts)
+// fails this spec on a recurrence: commits with nothing arriving to cause
+// them, or a page that never goes quiet. The assertions below only need to
+// pin the visible error affordance.
 test("a first-turn stream error surfaces retry UI without a render storm", async ({
   page,
   browserErrors,
@@ -108,9 +108,8 @@ test("a first-turn stream error surfaces retry UI without a render storm", async
   await expect(transcript).toContainText(EMPTY_REPLY_COPY);
   await expect(errorBoundary).toHaveCount(0);
 
-  // Hold the settled error state open long enough for the render-storm canary
-  // (2 sustained one-second windows) to trip if the error path still loops;
-  // the browserErrors fixture fails the spec on its console.error.
+  // Hold the settled error state open long enough for a loop on the error
+  // path to use up the storm watch's allowance, which fails the spec.
   await page.waitForTimeout(4000);
 });
 

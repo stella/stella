@@ -30,6 +30,7 @@ import {
   corpusIndexRouteProofs,
 } from "@/api/db/schema";
 import { lockCorpusIndexProjectionFlipTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
+import { CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS } from "@/api/lib/legal-search/corpus-index-route-proof-contract";
 import {
   CORPUS_INDEX_ROUTE_PROOF_REFRESH_MS,
   type CorpusIndexRouteProofRun,
@@ -205,6 +206,12 @@ const pagesOf = (ran: Extract<CorpusIndexRouteProofRun, { type: "ran" }>) =>
     ran.routes.map(({ route, pages }) => [route.indexId, pages]),
   );
 
+/** `extraHours` past the maximum age, before the database clock. */
+const hoursPastMaxAge = (extraHours: number) =>
+  sql`clock_timestamp() - make_interval(secs => ${
+    (CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS + extraHours) * 3600
+  })`;
+
 /**
  * Move the route's proof back past the maximum age, and its group's
  * attestation further back, so the proof reads `expired` (not younger than
@@ -213,7 +220,7 @@ const pagesOf = (ran: Extract<CorpusIndexRouteProofRun, { type: "ran" }>) =>
 const expireProof = async (db: GatedTestDb, indexId: string) => {
   await db
     .update(corpusIndexGroupEnrollments)
-    .set({ attestedAt: sql`clock_timestamp() - INTERVAL '27 hours'` })
+    .set({ attestedAt: hoursPastMaxAge(3) })
     .where(
       and(
         eq(corpusIndexGroupEnrollments.generation, FLIP_V10),
@@ -223,8 +230,8 @@ const expireProof = async (db: GatedTestDb, indexId: string) => {
   await db
     .update(corpusIndexRouteProofs)
     .set({
-      provenPassStartedAt: sql`clock_timestamp() - INTERVAL '26 hours'`,
-      provenAt: sql`clock_timestamp() - INTERVAL '25 hours'`,
+      provenPassStartedAt: hoursPastMaxAge(2),
+      provenAt: hoursPastMaxAge(1),
     })
     .where(
       and(
@@ -256,14 +263,17 @@ const startPolPage = async (tx: Transaction): Promise<StartedPass> => {
     : panic(`The route was not walked: ${started.type}`);
 };
 
-/** The route's open pass is two decisions in and started 25 hours ago. */
+/**
+ * The route's open pass is two decisions in and started an hour past the
+ * maximum age.
+ */
 const standPassTooOldToProve = async (db: GatedTestDb) => {
   await db
     .update(corpusIndexRouteProofs)
     .set({
       passNumber: 1,
       passId: STALE_PASS_ID,
-      passStartedAt: sql`clock_timestamp() - INTERVAL '25 hours'`,
+      passStartedAt: hoursPastMaxAge(1),
       passExpectation: "present",
       passCursor: flipEntityId(2),
       passInspected: 2,

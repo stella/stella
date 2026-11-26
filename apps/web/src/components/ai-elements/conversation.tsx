@@ -66,7 +66,11 @@ export const ConversationContent = ({
     // scroll button can't leak above the fade/composer — see
     // `chat-thread.page.tsx`), this scrollbar stays trapped inside that
     // context exactly like the native one did: no behavior change there.
-    <ScrollArea scrollbarClassName="z-[60]" viewportRef={scrollRef}>
+    <ScrollArea
+      data-slot="conversation-scroll-area"
+      scrollbarClassName="z-[60]"
+      viewportRef={scrollRef}
+    >
       <div
         className={cn(CONVERSATION_CONTENT_CLASS, className)}
         {...props}
