@@ -3545,7 +3545,15 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           LEG_SPECS: ${{ toJSON(matrix.specs) }}
           LEG: ${{ matrix.suite }}
-        run: bash scripts/ci/run-browser-suite.sh ui-components @stll/ui test:browser
+        run: |
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            bun --filter @stll/ui test:browser
+            exit 0
+          fi
+          listed=$(bun scripts/ci-browser-suites.ts specs ui-components)
+          [[ -n "$listed" ]] || { echo "No changed specs in this suite."; exit 0; }
+          mapfile -t specs <<< "$listed"
+          bun --filter @stll/ui test:browser -- "${specs[@]}"
 
       - name: Test desktop browser interactions
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (startsWith(matrix.suite, 'desktop-') && steps.desktop-browser-tests.outputs.required == 'true') }}
@@ -3585,7 +3593,15 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           LEG_SPECS: ${{ toJSON(matrix.specs) }}
           LEG: ${{ matrix.suite }}
-        run: bash scripts/ci/run-browser-suite.sh extension @stll/extension test:e2e
+        run: |
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            bun --filter @stll/extension test:e2e
+            exit 0
+          fi
+          listed=$(bun scripts/ci-browser-suites.ts specs extension)
+          [[ -n "$listed" ]] || { echo "No changed specs in this suite."; exit 0; }
+          mapfile -t specs <<< "$listed"
+          bun --filter @stll/extension test:e2e -- "${specs[@]}"
 
       - name: Upload browser test timings
         if: always()
