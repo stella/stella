@@ -90,7 +90,18 @@ const readAuthorizationServerMetadata = createSafePublicHandler(
       ),
     );
     if (!response.ok) {
-      return Result.ok(response);
+      const detail = yield* Result.await(
+        Result.tryPromise(async () => await response.text()),
+      );
+      return Result.err(
+        new HandlerError({
+          status: response.status,
+          code: "metadata_unavailable",
+          message:
+            detail.trim().slice(0, 256) ||
+            "Authorization server metadata is unavailable",
+        }),
+      );
     }
     const payload: unknown = yield* Result.await(
       Result.tryPromise(async () => await response.json()),
