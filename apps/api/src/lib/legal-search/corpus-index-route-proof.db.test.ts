@@ -6,7 +6,10 @@
  * drift found by a page is repaired and revokes the proof in the repair's
  * transaction, a page read across a revocation or by a second runner is never
  * recorded, an open pass too old to prove is started over while a young one
- * is resumed, and only declared, attested routes can be walked at all.
+ * is resumed, and only declared, attested routes can be walked at all. A
+ * census page may name more revisions than a delete batch, a pass begun at
+ * one page size proves the same at another, and a census that times out
+ * halves the page.
  */
 import { panic, Result } from "better-result";
 import {
@@ -30,6 +33,7 @@ import {
   corpusIndexRouteProofs,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { registeredCorpusIndexGroups } from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
   attestCorpusIndexGroupEnrollmentTx,
@@ -44,9 +48,15 @@ import { proveCorpusProjectionRevisionsPresent } from "@/api/lib/legal-search/co
 import { proveAcceptedCorpusProjectionAppendsTx } from "@/api/lib/legal-search/corpus-index-projection-store";
 import {
   advanceCorpusIndexRouteProof,
+  CORPUS_INDEX_ROUTE_CENSUS_PAGE_MAX,
+  CORPUS_INDEX_ROUTE_CENSUS_PAGE_MIN,
+  type CorpusIndexRouteCensusPageSize,
   type CorpusIndexRouteProofAdmission,
   type CorpusIndexRouteProofAdvance,
   type CorpusIndexRouteProofWorkUnit,
+  initialCorpusIndexRouteCensusPageSize,
+  isCorpusIndexReadTimeout,
+  nextCorpusIndexRouteCensusPageSize,
 } from "@/api/lib/legal-search/corpus-index-route-proof";
 import { CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS } from "@/api/lib/legal-search/corpus-index-route-proof-contract";
 import {
@@ -103,6 +113,10 @@ let incarnations: Map<string, string>;
 /** An index recreated at the given incarnation read, counted across calls. */
 let switchIncarnation: { atRead: number; indexId: string; to: string } | null;
 let reads: { census: number; count: number; incarnation: number };
+/** Every revision a census read asked the engine for, in order. */
+let asked: string[];
+/** A census naming more revisions than this times out, as the engine would. */
+let censusTimesOutAbove: number | null;
 let admitted: CorpusIndexRouteProofWorkUnit[];
 
 const PROJECTION_REVISION_TERM = /projection_revision:"(?<revision>[^"]+)"/gu;
@@ -110,16 +124,27 @@ const PROJECTION_REVISION_TERM = /projection_revision:"(?<revision>[^"]+)"/gu;
 const engineClient = {
   aggregate: async ({ query }: { indexId: string; query: string }) => {
     reads.census += 1;
-    const buckets = [...query.matchAll(PROJECTION_REVISION_TERM)].flatMap(
-      ({ groups }) => {
-        const revision = groups?.["revision"];
-        const count =
-          revision === undefined ? undefined : engine.get(revision)?.count;
-        return count === undefined || count === 0
-          ? []
-          : [{ key: revision, doc_count: count }];
-      },
-    );
+    const terms = [...query.matchAll(PROJECTION_REVISION_TERM)];
+    if (censusTimesOutAbove !== null && terms.length > censusTimesOutAbove) {
+      const timedOut = new Error("The operation timed out.");
+      timedOut.name = "TimeoutError";
+      return Result.err(
+        new CorpusIndexError({
+          message: "corpus index POST search failed within its budget",
+          cause: timedOut,
+          reach: "unreachable",
+        }),
+      );
+    }
+    asked.push(...terms.map(({ groups }) => groups?.["revision"] ?? ""));
+    const buckets = terms.flatMap(({ groups }) => {
+      const revision = groups?.["revision"];
+      const count =
+        revision === undefined ? undefined : engine.get(revision)?.count;
+      return count === undefined || count === 0
+        ? []
+        : [{ key: revision, doc_count: count }];
+    });
     return Result.ok({
       projection_revisions: {
         buckets,
@@ -262,16 +287,17 @@ const governor: CorpusIndexRouteProofAdmission = async (unit, work) => {
 
 const advance = async (
   route: CorpusIndexRoute = ROUTE,
+  limit: number = PAGE,
 ): Promise<CorpusIndexRouteProofAdvance> => {
   const advanced = await advanceCorpusIndexRouteProof({
     runInTransaction,
     client: engineClient,
     admit: governor,
     route,
-    limit: PAGE,
+    limit,
   });
   return Result.isOk(advanced)
-    ? advanced.value
+    ? advanced.value.advance
     : panic(`Route census failed: ${advanced.error.message}`);
 };
 
@@ -435,6 +461,8 @@ beforeEach(async () => {
     ]),
   );
   reads = { census: 0, count: 0, incarnation: 0 };
+  asked = [];
+  censusTimesOutAbove = null;
   switchIncarnation = null;
   admitted = [];
 });
@@ -1217,5 +1245,195 @@ describe("route readiness proof", () => {
     } finally {
       resetLogSinkForTesting();
     }
+  });
+});
+
+/** Applied revisions in two inserts, for fixtures larger than a page. */
+const seedAppliedMany = async (indices: readonly number[]) => {
+  await db.insert(corpusIndexProjectionIntents).values(
+    indices.map((index) => ({
+      id: revisionId(index),
+      family: ROUTE.family,
+      generation: ROUTE.generation,
+      entityId: entityId(index),
+      epoch: 1n,
+      fingerprint: fingerprint(1),
+      indexId: ROUTE.indexId,
+      status: "applied" as const,
+      appendStartedAt: APPLIED_AT,
+      appendCommittedAt: APPLIED_AT,
+      expectedDocumentCount: 3,
+      appliedAt: APPLIED_AT,
+    })),
+  );
+  await db.insert(corpusIndexProjectionStates).values(
+    indices.map((index) => ({
+      family: ROUTE.family,
+      generation: ROUTE.generation,
+      entityId: entityId(index),
+      desiredAction: "upsert" as const,
+      desiredEpoch: 1n,
+      desiredFingerprint: fingerprint(1),
+      desiredIndexId: ROUTE.indexId,
+      appliedAction: "upsert" as const,
+      appliedEpoch: 1n,
+      appliedRevision: revisionId(index),
+      appliedFingerprint: fingerprint(1),
+      appliedIndexId: ROUTE.indexId,
+      appliedAt: APPLIED_AT,
+    })),
+  );
+  for (const index of indices) {
+    engine.set(revisionId(index), { indexId: ROUTE.indexId, count: 3 });
+  }
+};
+
+describe("census page size", () => {
+  test("a census page names more revisions than a delete batch", async () => {
+    const indices = Array.from({ length: 200 }, (_, at) => at);
+    await seedAppliedMany(indices);
+    expect(
+      await advance(ROUTE, CORPUS_INDEX_ROUTE_CENSUS_PAGE_MAX),
+    ).toMatchObject({
+      type: "phase_completed",
+      expectation: "present",
+      inspected: 200,
+    });
+    expect(reads.census).toBe(1);
+    expect(asked).toHaveLength(200);
+    expect(admitted).toEqual([
+      { step: "census", revisions: CORPUS_INDEX_ROUTE_CENSUS_PAGE_MAX },
+    ]);
+  });
+
+  test("a pass begun at 128 revisions a page continues at a larger size, on the same pass, to the same proof", async () => {
+    const indices = Array.from({ length: 300 }, (_, at) => at);
+    await seedAppliedMany(indices);
+    await seedSettled(400);
+    const every = [...indices, 400].map(revisionId).toSorted();
+
+    // The pass walks one page at the size a run before this one used.
+    expect(await advance(ROUTE, 128)).toMatchObject({
+      type: "advanced",
+      inspected: 128,
+    });
+    const begun = await passRow();
+    expect(begun).toMatchObject({ passNumber: 1, passInspected: 128 });
+
+    // A run at a larger size resumes it from its cursor: same pass, no key
+    // read twice, and the proof counts every revision once.
+    const steps: string[] = [];
+    for (let page = 0; page < 10; page += 1) {
+      // db-await-in-loop: each page reads the cursor the previous recorded
+      const step = await advance(ROUTE, CORPUS_INDEX_ROUTE_CENSUS_PAGE_MAX);
+      steps.push(stepName(step));
+      if (step.type === "proven") {
+        break;
+      }
+    }
+    expect(steps).toEqual(["present:phase_completed", "absent:proven"]);
+    expect(asked.toSorted()).toEqual(every);
+    expect(await statusOf()).toMatchObject({
+      type: "current",
+      inspected: 301,
+      incarnation: `${ROUTE.indexId}:01JFIRST`,
+    });
+    expect(
+      await db
+        .select({ provenPassNumber: corpusIndexRouteProofs.provenPassNumber })
+        .from(corpusIndexRouteProofs)
+        .where(eq(corpusIndexRouteProofs.indexId, ROUTE.indexId)),
+    ).toEqual([{ provenPassNumber: begun.passNumber }]);
+  });
+
+  test("a page that times out halves, and the walk goes on at the smaller size", async () => {
+    const indices = Array.from({ length: 100 }, (_, at) => at);
+    await seedAppliedMany(indices);
+    censusTimesOutAbove = 40;
+    let size = initialCorpusIndexRouteCensusPageSize();
+    const limits: number[] = [];
+    for (let page = 0; page < 20; page += 1) {
+      limits.push(size.limit);
+      // db-await-in-loop: each page reads the cursor the previous recorded
+      const walked = await advanceCorpusIndexRouteProof({
+        runInTransaction,
+        client: engineClient,
+        admit: governor,
+        route: ROUTE,
+        limit: size.limit,
+      });
+      if (walked.isErr()) {
+        expect(isCorpusIndexReadTimeout(walked.error)).toBe(true);
+        size = nextCorpusIndexRouteCensusPageSize(size, { type: "timed_out" });
+        continue;
+      }
+      const { advance: step, censusMs } = walked.value;
+      size = nextCorpusIndexRouteCensusPageSize(size, {
+        type: "read",
+        censusMs: censusMs ?? 0,
+        revisions: "inspected" in step ? step.inspected : 0,
+      });
+      if (step.type === "phase_completed") {
+        break;
+      }
+    }
+    // 128 and 64 time out and record nothing; 32 walks the hundred in four
+    // pages, each revision read once.
+    expect(limits).toEqual([128, 64, 32, 32, 32, 32]);
+    expect(asked.toSorted()).toEqual(indices.map(revisionId).toSorted());
+    expect(await passRow()).toMatchObject({
+      passNumber: 1,
+      passExpectation: "absent",
+    });
+  });
+
+  test("the size halves on a slow or timed-out census, doubles after fast full pages, and stays in its bounds", () => {
+    const start = initialCorpusIndexRouteCensusPageSize();
+    expect(start).toEqual({ limit: 128, fast: 0 });
+    const fastFull = (size: CorpusIndexRouteCensusPageSize) =>
+      nextCorpusIndexRouteCensusPageSize(size, {
+        type: "read",
+        censusMs: 500,
+        revisions: size.limit,
+      });
+    let size = start;
+    for (let page = 0; page < 3; page += 1) {
+      size = fastFull(size);
+    }
+    expect(size).toEqual({ limit: 128, fast: 3 });
+    size = fastFull(size);
+    expect(size).toEqual({ limit: 256, fast: 0 });
+    for (let page = 0; page < 40; page += 1) {
+      size = fastFull(size);
+    }
+    expect(size.limit).toBe(CORPUS_INDEX_ROUTE_CENSUS_PAGE_MAX);
+    // A short page or a middling one says nothing about a larger one.
+    expect(
+      nextCorpusIndexRouteCensusPageSize(
+        { limit: 128, fast: 3 },
+        { type: "read", censusMs: 500, revisions: 100 },
+      ),
+    ).toEqual({ limit: 128, fast: 0 });
+    expect(
+      nextCorpusIndexRouteCensusPageSize(
+        { limit: 128, fast: 3 },
+        { type: "read", censusMs: 4000, revisions: 128 },
+      ),
+    ).toEqual({ limit: 128, fast: 0 });
+    // Slower than half the timeout halves before the engine gives up.
+    expect(
+      nextCorpusIndexRouteCensusPageSize(
+        { limit: 512, fast: 2 },
+        { type: "read", censusMs: 6000, revisions: 512 },
+      ),
+    ).toEqual({ limit: 256, fast: 0 });
+    size = { limit: 64, fast: 0 };
+    for (let page = 0; page < 5; page += 1) {
+      size = nextCorpusIndexRouteCensusPageSize(size, { type: "timed_out" });
+    }
+    expect(size).toEqual({
+      limit: CORPUS_INDEX_ROUTE_CENSUS_PAGE_MIN,
+      fast: 0,
+    });
   });
 });
