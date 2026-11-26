@@ -50,7 +50,8 @@ export const SettingsSidebar = ({
     <aside
       className={cn(
         "bg-sidebar text-sidebar-foreground border-sidebar-border flex w-51 shrink-0 flex-col gap-3 overflow-hidden border-e px-4 pb-3",
-        topInset === "titleBar" ? "pt-11" : "pt-3",
+        // The account at the top keeps the window's edge inset.
+        topInset === "titleBar" ? "pt-11" : "pt-4",
       )}
     >
       <SidebarIdentity
@@ -144,7 +145,7 @@ const SidebarIdentity = ({
     // No end padding: the status line gets the room to name the usual host
     // whole, and the avatar stays in line with the page icons below.
     <Button
-      className="h-auto w-full min-w-0 justify-start gap-2 py-1.5 ps-2 pe-0 text-start font-normal"
+      className="h-auto w-full min-w-0 justify-start gap-2 py-1.5 ps-2 pe-0 text-start font-normal sm:h-auto"
       data-sidebar-account=""
       onClick={onOpen}
       variant="ghost"
