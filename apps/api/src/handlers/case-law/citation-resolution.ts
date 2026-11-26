@@ -139,7 +139,6 @@ import {
   PROCEDURAL_DECISION_TYPES,
   unsettledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   caseNumberKeyAmongSql,
@@ -150,7 +149,6 @@ import { languageGroupWorkKeySql } from "@/api/lib/case-law/decision-work";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { errorSystemFields } from "@/api/lib/errors/utils";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
-import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 import {
   brandPersistedCaseLawCitationId,
@@ -1049,6 +1047,12 @@ const drainArrivalsBeforeWalk = async (
   if (Result.isOk(drained)) {
     return drained.value?.settled ?? null;
   }
+  // Loaded only to report: both read the runtime environment, and migrations,
+  // which run without it, load this module.
+  const [{ logger }, { captureError }] = await Promise.all([
+    import("@/api/lib/observability/logger"),
+    import("@/api/lib/analytics/capture"),
+  ]);
   logger.error(
     "case_law.citation_arrivals.walk_drain_failed",
     sanitizeErrorAttributesForOutput({
