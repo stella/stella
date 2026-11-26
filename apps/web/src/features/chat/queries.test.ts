@@ -23,7 +23,6 @@ import {
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
 import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
-import { sleep } from "@stll/concurrency/sleep";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { requestTest as test } from "@stll/start-runtime/test-request";
 
@@ -64,6 +63,12 @@ import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { APIError, chatRefusal } from "@/lib/errors/api";
 import { type SafeId, toSafeId } from "@/lib/safe-id";
 import { workspaceActivityOptions } from "@/lib/workspaces/queries";
+
+const flushMicrotasks = async (turns = 4) => {
+  for (let i = 0; i < turns; i += 1) {
+    await Promise.resolve();
+  }
+};
 
 const createMessage = (id = "message-A"): PersistedChatMessage => ({
   id,
@@ -2953,7 +2958,7 @@ describe("chat runtime", () => {
       id: "approval_tool-first",
     });
     // The answer is applied on a microtask; let it wait for the batch.
-    await sleep(0);
+    await flushMicrotasks();
     await sendThreadChatMessage(
       runtime,
       createOutgoingMessage(
@@ -4578,7 +4583,7 @@ describe("file thread binding", () => {
 
     // The binding itself started the grants read; nothing mounted yet.
     expect(client.getQueryState(grantsKey)).toBeDefined();
-    await sleep(0);
+    await flushMicrotasks();
     expect(requested.some((path) => path.includes("/tool-grants"))).toBeTrue();
   });
 });

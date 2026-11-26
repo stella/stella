@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useMountEffect } from "@stll/ui/effects";
 import { DictateIcon, XIcon } from "@stll/ui/icons";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
@@ -41,7 +42,7 @@ const DictationNoticeApp = () => {
     null,
   );
 
-  useEffect(() => {
+  useMountEffect(() => {
     let disposed = false;
     const read = async () => {
       const result = await Result.tryPromise(async () =>
@@ -75,7 +76,7 @@ const DictationNoticeApp = () => {
       disposed = true;
       stopListening();
     };
-  }, []);
+  });
 
   if (snapshot === null) {
     return <main className="dictation-notice-window" />;

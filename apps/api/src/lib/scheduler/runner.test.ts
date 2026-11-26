@@ -6,6 +6,7 @@ import {
   beforeEach,
   describe,
   expect,
+  jest,
   test,
 } from "bun:test";
 import { desc, DrizzleQueryError, eq } from "drizzle-orm";
@@ -1152,6 +1153,7 @@ describe("lease heartbeat", () => {
   test("stops the task once renewals have failed for a whole lease", async () => {
     const { promise: lost, resolve: onLeaseLost } =
       Promise.withResolvers<undefined>();
+    jest.useFakeTimers();
     let lostCount = 0;
     const heartbeat = startLeaseHeartbeat({
       db: unreachableDb,
@@ -1168,15 +1170,28 @@ describe("lease heartbeat", () => {
     });
 
     try {
+      for (let step = 0; step < 10; step += 1) {
+        jest.advanceTimersByTime(5);
+        for (let turn = 0; turn < 10; turn += 1) {
+          await Promise.resolve();
+        }
+      }
       await lost;
-      await Bun.sleep(30);
+      for (let step = 0; step < 6; step += 1) {
+        jest.advanceTimersByTime(5);
+        for (let turn = 0; turn < 10; turn += 1) {
+          await Promise.resolve();
+        }
+      }
       expect(lostCount).toBe(1);
     } finally {
       heartbeat.stop();
+      jest.useRealTimers();
     }
   });
 
   test("keeps the task while failed renewals are still within the lease", async () => {
+    jest.useFakeTimers();
     let lostCount = 0;
     const heartbeat = startLeaseHeartbeat({
       db: unreachableDb,
@@ -1191,9 +1206,18 @@ describe("lease heartbeat", () => {
       signal: new AbortController().signal,
     });
 
-    await Bun.sleep(50);
-    heartbeat.stop();
-    expect(lostCount).toBe(0);
+    try {
+      for (let step = 0; step < 10; step += 1) {
+        jest.advanceTimersByTime(5);
+        for (let turn = 0; turn < 10; turn += 1) {
+          await Promise.resolve();
+        }
+      }
+      expect(lostCount).toBe(0);
+    } finally {
+      heartbeat.stop();
+      jest.useRealTimers();
+    }
   });
 });
 

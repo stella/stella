@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
@@ -166,7 +166,7 @@ export const ReaderAnswerCard = ({
       observerRef.current = null;
     };
   }, [card]);
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     if (!active) {
       visibility.current = "tracking";
       revealedRevision.current = null;

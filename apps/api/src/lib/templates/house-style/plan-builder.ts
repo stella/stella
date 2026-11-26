@@ -31,7 +31,10 @@ import type {
   TemplatePlanSection,
   TemplatePlanSourceItem,
 } from "@/api/lib/templates/house-style/folio-contract";
-import { buildLabelIndex } from "@/api/lib/templates/house-style/label-index";
+import {
+  buildLabelIndex,
+  isRunningText,
+} from "@/api/lib/templates/house-style/label-index";
 import type { LabelIndex } from "@/api/lib/templates/house-style/label-index";
 import {
   numberPlacements,
@@ -143,6 +146,10 @@ type FormattingNoteItem =
    *  list. */
   | { kind: "labelConvertedToText"; blockId: string; reason: LabelKeptReason }
   | { kind: "roleWithoutStyle"; role: HouseStyleRole; blocks: number }
+  /** The document numbers running text like articles. `blocks` such
+   *  paragraphs keep their numbers and are set as clauses, not as
+   *  headings. */
+  | { kind: "articlesSetAsText"; blocks: number }
   /** The source starts a page in front of this block and the output does
    *  not: a table cannot be told to start one. */
   | { kind: "pageStartNotKept"; blockId: string; reason: "table" }
@@ -322,6 +329,10 @@ type Context = {
   outline: OutlineLevels;
   /** Blocks placed under a role the template has no style for. */
   stylelessRoles: Map<HouseStyleRole, number>;
+  /** The document numbers its paragraphs at the level of articles: most of
+   *  what reads as an article heading is running text. Such a document
+   *  has clauses where another has headings. */
+  articlesRunOn: boolean;
   items: FormattingNoteItem[];
 };
 
@@ -412,6 +423,29 @@ const borrowedLevelOf = (
   target?.numbering ??
   (bulleted ? (profile.roles.letter?.numbering ?? null) : null);
 
+/**
+ * Whether most of what the document numbers like articles is running text:
+ * paragraphs `1.` to `11.` of an agreement without headings. A heading
+ * whose title stands in the next paragraph is one.
+ */
+const articlesRunOn = (context: Context): boolean => {
+  const { topLevel, index } = context;
+  const articles = topLevel.flatMap((block) => {
+    const entry = index.entryByBlockId.get(block.id);
+    return block.kind === "paragraph" &&
+      entry !== undefined &&
+      roleOf(context, block) === "articleHeading"
+      ? [{ block, entry }]
+      : [];
+  });
+  const running = articles.filter(
+    ({ block, entry }) =>
+      entry.titleBlockId === null &&
+      isRunningText(block.text.slice(entry.manualLength)),
+  );
+  return running.length > articles.length / 2;
+};
+
 /** One paragraph's style and what it asks of the numbering. */
 const placementOf = (
   context: Context,
@@ -422,10 +456,14 @@ const placementOf = (
   const entry = index.entryByBlockId.get(block.id) ?? null;
   const own = profile.roles[role];
   const ownLevel = own?.numbering ?? null;
+  // Running text numbered like an article keeps the article's level, and
+  // with it its number, and reads as the clause it is.
+  const styleRole =
+    role === "articleHeading" && context.articlesRunOn ? "clause1" : role;
   const target =
     entry === null && ownLevel !== null && NUMBERED_ONLY.has(role)
       ? styleTarget(context, "body")
-      : styleTarget(context, role);
+      : styleTarget(context, styleRole);
   const mark = (block.label ?? "").trim();
   const bulleted = entry === null && isBulletMark(mark);
   const placement: Placement = {
@@ -1050,8 +1088,12 @@ const settleBrokenHeadings = (
   if (heading === null || level === null) {
     return;
   }
+  // Only paragraphs set as headings are centred.
   const onLevel = placements.filter(
-    (placement) => placement.numbered && placement.level === level,
+    (placement) =>
+      placement.numbered &&
+      placement.level === level &&
+      placement.styleId === heading.styleId,
   );
   const { left, hanging } = level.indent;
   const offCentre =
@@ -1650,7 +1692,7 @@ const markReferences = ({
 /** Labels that stay text or are lost, suspected references and roles the
  *  template has no style for. */
 const noteReadings = (
-  { items, stylelessRoles }: Context,
+  { items, stylelessRoles, articlesRunOn: articlesRunOnFlag }: Context,
   { placements }: Placed,
   references: readonly DetectedReference[],
   suspicions: readonly ReferenceSuspicion[],
@@ -1696,6 +1738,12 @@ const noteReadings = (
   }
   for (const [role, count] of stylelessRoles) {
     items.push({ kind: "roleWithoutStyle", role, blocks: count });
+  }
+  const asText = articlesRunOnFlag
+    ? placements.filter(({ role }) => role === "articleHeading").length
+    : 0;
+  if (asText > 0) {
+    items.push({ kind: "articlesSetAsText", blocks: asText });
   }
 };
 
@@ -1874,9 +1922,11 @@ export const buildTemplatePlan = ({
       ),
     },
     stylelessRoles: new Map(),
+    articlesRunOn: false,
     items: [],
   };
 
+  context.articlesRunOn = articlesRunOn(context);
   context.keptSections = sectionsToKeep(context);
   const placed = placeParagraphs(context);
   const { patches, levelsByList } = numberPlacements({

@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslations } from "use-intl";
 
 import type { DesktopMatter } from "@stll/api-contract/desktop-time-entries";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { ChevronDownIcon } from "@stll/ui/icons";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
@@ -32,7 +33,7 @@ export const TranscribeMatterPicker = ({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState<Search>({ type: "idle" });
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!open) {
       return undefined;
     }

@@ -102,7 +102,9 @@ describe("withReservedSession", () => {
       },
     });
     // The statement has finished; the cancel is still on its way.
-    await Bun.sleep(10);
+    for (let turn = 0; turn < 20; turn += 1) {
+      await Promise.resolve();
+    }
     expect(events).not.toContain("close");
     expect(events).not.toContain("release");
     cancelSent.resolve(undefined);

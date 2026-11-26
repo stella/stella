@@ -16,6 +16,7 @@ import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { useExternalSyncEffect, useLayoutSyncEffect } from "@stll/ui/effects";
+import { useLayoutMeasurement, useObservedValue } from "@stll/ui/effects-dom";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -137,6 +138,8 @@ type WorkspaceTableProps<TRow extends TableRowData> = {
 // scroll it shares. (The flat table owns its scroll and keeps the default.)
 const noopScrollTo = () => undefined;
 
+const NO_WRAPPER_METRICS = { wrapperWidth: 0, verticalScrollbarWidth: 0 };
+
 export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
   table,
   rowHost,
@@ -154,49 +157,39 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
   outerScrollRef,
 }: WorkspaceTableProps<TRow>) => {
   const inlineFlow = outerScrollRef !== undefined;
-  const tableWrapperRef = useRef<HTMLDivElement>(null);
-  const headerRowsRef = useRef<HTMLDivElement>(null);
+  // Held in state so the measurements below observe each element from the
+  // commit that attaches it.
+  const [tableWrapper, setTableWrapper] = useState<HTMLDivElement | null>(null);
+  const [headerRows, setHeaderRows] = useState<HTMLDivElement | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
   const lastSelectedIndex = useRef<number | null>(null);
   const previousScrollMetrics = useRef<HorizontalScrollMetrics | null>(null);
   const lastColumnDropPosition = useRef<ColumnDropPosition | null>(null);
   const [expandedTableCell, setExpandedTableCell] =
     useState<ExpandedTableCell | null>(null);
-  const [wrapperWidth, setWrapperWidth] = useState(0);
-  const [verticalScrollbarWidth, setVerticalScrollbarWidth] = useState(0);
+  const { wrapperWidth, verticalScrollbarWidth } = useLayoutMeasurement(
+    tableWrapper,
+    (element) => ({
+      wrapperWidth: element.clientWidth,
+      verticalScrollbarWidth: getVerticalScrollbarWidth(element),
+    }),
+    [],
+    NO_WRAPPER_METRICS,
+  );
   // What the rail's "+" centres on. Starts at the height the header cells
   // carry as a class and then follows what this table's header row measures:
   // a header that wraps or stacks is taller than one line of text.
-  const [headerHeight, setHeaderHeight] = useState<number>(
+  const headerHeight = useLayoutMeasurement(
+    headerRows,
+    (element) => element.getBoundingClientRect().height,
+    [],
     TOOLBAR_ROW_HEIGHT_PX,
   );
   // Offset of this section's rows within the shared grouped scroll, so the
   // virtualizer windows the right rows. Stays 0 for the flat table (it owns its
-  // own scroll); measured + kept current by the effect below for grouped.
-  const rowsContainerRef = useRef<HTMLDivElement>(null);
-  const [scrollMargin, setScrollMargin] = useState(0);
-
-  const updateWrapperWidth = useCallback((nextWrapperWidth: number) => {
-    setWrapperWidth((current) =>
-      current === nextWrapperWidth ? current : nextWrapperWidth,
-    );
-  }, []);
-
-  const updateHeaderHeight = useCallback((nextHeaderHeight: number) => {
-    setHeaderHeight((current) =>
-      current === nextHeaderHeight ? current : nextHeaderHeight,
-    );
-  }, []);
-
-  const updateVerticalScrollbarWidth = useCallback(
-    (nextVerticalScrollbarWidth: number) => {
-      setVerticalScrollbarWidth((current) =>
-        current === nextVerticalScrollbarWidth
-          ? current
-          : nextVerticalScrollbarWidth,
-      );
-    },
-    [],
+  // own scroll); measured + kept current below for grouped.
+  const [rowsContainer, setRowsContainer] = useState<HTMLDivElement | null>(
+    null,
   );
 
   useExternalSyncEffect(() => {
@@ -301,16 +294,69 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
     TABLE_ROW_OVERSCAN,
     TABLE_ROW_FIRST_PAINT_OVERSCAN,
   );
+  // Grouped sections share one scroll, so each virtualizes its rows against it.
+  // `scrollMargin` is this section's row offset within the scroll content; it is
+  // scroll-invariant, so we re-measure on layout changes (other groups loading
+  // or collapsing shift this section's offset), not on scroll.
+  const scrollMargin = useObservedValue<HTMLDivElement, number>(
+    inlineFlow ? rowsContainer : null,
+    (rows, emit) => {
+      const content = outerScrollRef?.current;
+      const scrollEl = getScrollableAncestor(rows);
+      if (!content || !scrollEl) {
+        return () => undefined;
+      }
+      let measured = 0;
+      const measure = () => {
+        const margin =
+          rows.getBoundingClientRect().top -
+          scrollEl.getBoundingClientRect().top +
+          scrollEl.scrollTop;
+        // Dead-band: ignore sub-row jitter so a settling measurement can't
+        // drive a measure -> re-render -> re-measure cycle.
+        if (Math.abs(measured - margin) < 4) {
+          return;
+        }
+        measured = margin;
+        emit(margin);
+      };
+      // Debounce through a frame: as rows settle the ResizeObserver fires in a
+      // burst; coalescing into one post-layout measurement breaks the feedback
+      // loop (measure -> scrollMargin -> re-window -> resize -> measure) that
+      // would otherwise re-render-storm and re-mount the route while scrolling.
+      let frame = 0;
+      let scheduled = false;
+      const scheduleMeasure = () => {
+        if (scheduled) {
+          return;
+        }
+        scheduled = true;
+        frame = requestAnimationFrame(() => {
+          scheduled = false;
+          measure();
+        });
+      };
+      measure();
+      const observer = new ResizeObserver(scheduleMeasure);
+      observer.observe(content);
+      observer.observe(scrollEl);
+      return () => {
+        cancelAnimationFrame(frame);
+        observer.disconnect();
+      };
+    },
+    [outerScrollRef],
+    0,
+  );
   const rowVirtualizer = useVirtualizer({
     count: rowModel.rows.length,
     getScrollElement: () => {
       if (!inlineFlow) {
-        return tableWrapperRef.current;
+        return tableWrapper;
       }
       // Grouped sections virtualize against the shared ancestor scroll, not
       // their own (non-scrolling) wrapper.
-      const wrapper = tableWrapperRef.current;
-      return wrapper ? getScrollableAncestor(wrapper) : null;
+      return tableWrapper ? getScrollableAncestor(tableWrapper) : null;
     },
     estimateSize: () => TABLE_ROW_ESTIMATE_PX,
     getItemKey: getVirtualRowKey,
@@ -343,56 +389,6 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, [hasNextPage, isFetchingNextPage, onLoadMore]);
-  // Grouped sections share one scroll, so each virtualizes its rows against it.
-  // `scrollMargin` is this section's row offset within the scroll content; it is
-  // scroll-invariant, so we re-measure on layout changes (other groups loading
-  // or collapsing shift this section's offset), not on scroll.
-  useExternalSyncEffect(() => {
-    const rowsContainer = rowsContainerRef.current;
-    const content = outerScrollRef?.current;
-    if (!inlineFlow || !rowsContainer || !content) {
-      return undefined;
-    }
-    const scrollEl = getScrollableAncestor(rowsContainer);
-    if (!scrollEl) {
-      return undefined;
-    }
-    const measure = () => {
-      const margin =
-        rowsContainer.getBoundingClientRect().top -
-        scrollEl.getBoundingClientRect().top +
-        scrollEl.scrollTop;
-      // Dead-band: ignore sub-row jitter so a settling measurement can't drive a
-      // measure -> re-render -> re-measure cycle.
-      setScrollMargin((previous) =>
-        Math.abs(previous - margin) < 4 ? previous : margin,
-      );
-    };
-    // Debounce through a frame: as rows settle the ResizeObserver fires in a
-    // burst; coalescing into one post-layout measurement breaks the feedback
-    // loop (measure -> setScrollMargin -> re-window -> resize -> measure) that
-    // would otherwise re-render-storm and re-mount the route while scrolling.
-    let frame = 0;
-    let scheduled = false;
-    const scheduleMeasure = () => {
-      if (scheduled) {
-        return;
-      }
-      scheduled = true;
-      frame = requestAnimationFrame(() => {
-        scheduled = false;
-        measure();
-      });
-    };
-    measure();
-    const observer = new ResizeObserver(scheduleMeasure);
-    observer.observe(content);
-    observer.observe(scrollEl);
-    return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-    };
-  }, [inlineFlow, outerScrollRef]);
   // Every layout windows its rows now; grouped sections virtualize against the
   // shared scroll via scrollMargin, the flat table against its wrapper. Until
   // one of them is measured the virtualizer has no window, and the body draws
@@ -495,7 +491,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
   );
 
   useExternalSyncEffect(() => {
-    const element = tableWrapperRef.current;
+    const element = tableWrapper;
     if (!element) {
       return undefined;
     }
@@ -558,38 +554,10 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
         },
       }),
     );
-  }, [handleColumnReorder, inlineFlow]);
-
-  useExternalSyncEffect(() => {
-    const element = tableWrapperRef.current;
-    const headerRows = headerRowsRef.current;
-    if (!element || !headerRows) {
-      return undefined;
-    }
-
-    const updateMetrics = () => {
-      const nextWrapperWidth = element.clientWidth;
-      const nextVerticalScrollbarWidth = getVerticalScrollbarWidth(element);
-      updateWrapperWidth(nextWrapperWidth);
-      updateVerticalScrollbarWidth(nextVerticalScrollbarWidth);
-      updateHeaderHeight(headerRows.getBoundingClientRect().height);
-    };
-
-    updateMetrics();
-    const resizeObserver = new ResizeObserver(updateMetrics);
-    resizeObserver.observe(element);
-    resizeObserver.observe(headerRows);
-
-    return () => resizeObserver.disconnect();
-  }, [
-    inlineFlow,
-    updateHeaderHeight,
-    updateVerticalScrollbarWidth,
-    updateWrapperWidth,
-  ]);
+  }, [handleColumnReorder, inlineFlow, tableWrapper]);
 
   useLayoutSyncEffect(() => {
-    const element = tableWrapperRef.current;
+    const element = tableWrapper;
     if (!element) {
       return;
     }
@@ -606,7 +574,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
     if (anchored !== null) {
       element.scrollLeft = anchored;
     }
-  }, [tableWidth, wrapperWidth]);
+  }, [tableWidth, tableWrapper, wrapperWidth]);
 
   return (
     <div
@@ -623,7 +591,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
             (inlineFlow ? "w-full" : WORKSPACE_TABLE_SCROLL_CLASS),
         )}
         data-slot={WORKSPACE_TABLE_SCROLL_SLOT}
-        ref={tableWrapperRef}
+        ref={setTableWrapper}
       >
         <div
           aria-busy={showsSkeletonRows || undefined}
@@ -641,7 +609,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
               "bg-background z-30",
               stickyColumnHeader && "sticky top-0",
             )}
-            ref={headerRowsRef}
+            ref={setHeaderRows}
             role="rowgroup"
           >
             {table.getHeaderGroups().map((headerGroup) => (
@@ -682,7 +650,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
           </div>
           <div
             className="flex flex-1 flex-col"
-            ref={rowsContainerRef}
+            ref={setRowsContainer}
             role="rowgroup"
           >
             {paddingTop > 0 && (

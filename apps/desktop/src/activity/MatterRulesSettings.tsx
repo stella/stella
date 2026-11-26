@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslations } from "use-intl";
 
 import type { DesktopMatterResolution } from "@stll/api-contract/desktop-time-entries";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { Form } from "@stll/ui/form";
 import { Trash2Icon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
@@ -29,7 +30,7 @@ const useRuleMatterNames = (rules: readonly MatterRule[]) => {
     .join(" ");
   // A retry asks again for the same ids.
   const request = `${String(attempt)}:${ids}`;
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     let current = true;
     const asked = request.slice(request.indexOf(":") + 1);
     if (asked !== "") {

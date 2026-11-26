@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
+
+import { useExternalSyncEffect, useMountEffect } from "@stll/ui/effects";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { isAntigravityStatus } from "./antigravity-status";
@@ -83,7 +85,7 @@ export const AgentSubscriptionsSection = ({
   const antigravityRequestSeq = useRef(0);
   const antigravityMounted = useRef(true);
 
-  useEffect(() => {
+  useMountEffect(() => {
     antigravityMounted.current = true;
     antigravityRequestSeq.current += 1;
     const seq = antigravityRequestSeq.current;
@@ -103,7 +105,7 @@ export const AgentSubscriptionsSection = ({
     return () => {
       antigravityMounted.current = false;
     };
-  }, []);
+  });
 
   /**
    * Asks the CLI again (the native side probes it now) and shows the answer,
@@ -398,7 +400,7 @@ const useFocusRequest = ({
   shown: Record<AgentSettingsFocus, boolean>;
 }) => {
   const ready = focus !== null && shown[focus];
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (focus === null || !ready) {
       return;
     }
@@ -447,7 +449,7 @@ export const useNativeStatus = <T,>({
   const [status, setStatus] = useState<T | null>(null);
   // The mounted effect's ordered read; a no-op outside it.
   const refreshLive = useRef<() => void>(() => undefined);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     let disposed = false;
     let latest = 0;
     const refresh = async () => {

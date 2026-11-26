@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactElement, ReactNode, RefObject } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
@@ -16,6 +16,7 @@ import {
 } from "@stll/business-registries/default-formats";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect, useMountEffect } from "@stll/ui/effects";
 import {
   Building2Icon,
   ChevronDownIcon,
@@ -200,7 +201,7 @@ export const RegistrySearch = ({
   const setError = (message: string | null) =>
     setFailure(message === null ? null : { scope, message });
 
-  useEffect(() => {
+  useMountEffect(() => {
     let disposed = false;
     const refresh = () => {
       const request = ++connectionGeneration.current;
@@ -259,9 +260,9 @@ export const RegistrySearch = ({
       window.removeEventListener("focus", refresh);
       stopListening();
     };
-  }, []);
+  });
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (connectionReadAttempt === 0) {
       return;
     }
@@ -270,7 +271,7 @@ export const RegistrySearch = ({
 
   const connectionExpiresAt =
     connection?.status === "connected" ? connection.expiresAt : null;
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!connectionExpiresAt) {
       return () => undefined;
     }
@@ -284,7 +285,7 @@ export const RegistrySearch = ({
     return () => window.clearTimeout(timer);
   }, [connectionExpiresAt]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const request = ++generation.current;
     formatRequests.current.clear();
     if (
@@ -543,7 +544,7 @@ export const RegistrySearch = ({
     });
   };
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const input = searchInput.current;
     if (source !== "registry" || !input) {
       return () => undefined;
@@ -585,7 +586,7 @@ export const RegistrySearch = ({
     };
     input.addEventListener("keydown", handleSearchKey);
     return () => input.removeEventListener("keydown", handleSearchKey);
-  });
+  }, [activeResult, currentSearch.status, scope, searchInput, source]);
   let emptyText = registrySearchHint(t, connection, registryId);
   if (connection === null) {
     emptyText = t("registryLoading");

@@ -2,6 +2,8 @@ import { Queue } from "bullmq";
 import type { Job, JobsOptions } from "bullmq";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { settledWithin } from "@stll/test-kit";
+
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 
@@ -68,9 +70,10 @@ const createHarness = (processor: ProbeProcessor, attempts = 1): Harness => {
       }
       const { promise, resolve } = Promise.withResolvers<undefined>();
       waiters.push({ count, resolve: () => resolve(undefined) });
-      const timer = setTimeout(() => resolve(undefined), SETTLE_TIMEOUT_MS);
-      await promise;
-      clearTimeout(timer);
+      await settledWithin(promise, {
+        description: "BullMQ jobs to settle",
+        timeoutMs: SETTLE_TIMEOUT_MS,
+      });
       expect(settledCount).toBeGreaterThanOrEqual(count);
     },
     startWorker: () => {

@@ -705,7 +705,10 @@ describe("the cursor", () => {
   test("a cursor from another revision starts this one from the beginning", () => {
     expect(
       parsePlNsaCursor(`${"0".repeat(40)}:12:500`, PL_NSA_SNAPSHOT),
-    ).toEqual({ shard: 0, row: 0 });
+    ).toEqual({
+      shard: 0,
+      row: 0,
+    });
     expect(
       parsePlNsaCursor(
         encodePlNsaCursor({ shard: 12, row: 500 }, PL_NSA_SNAPSHOT),
@@ -925,7 +928,9 @@ describe("the adapter", () => {
   test("wraps a reader failure as the page's error", async () => {
     const result = await plNsaAdapter.fetchPage(
       `${PL_NSA_SNAPSHOT.revision}:0:0`,
-      { cacheDirectory: "/dev/null/unwritable" },
+      {
+        cacheDirectory: "/dev/null/unwritable",
+      },
     );
     expect(Result.isError(result)).toBe(true);
   });
@@ -1069,7 +1074,11 @@ describe("the deciding court comes from the record", () => {
 
   test("the Supreme Court and the Constitutional Tribunal keep their own names and ranks", () => {
     expect(plNsaCourt("Sąd Najwyższy", "Wyrok Sądu Najwyższego")).toMatchObject(
-      { name: "Sąd Najwyższy", level: "supreme", statedBy: "court-name" },
+      {
+        name: "Sąd Najwyższy",
+        level: "supreme",
+        statedBy: "court-name",
+      },
     );
     expect(
       plNsaCourt("Trybunał Konstytucyjny", "Uchwała Trybunału Konstytucyjnego"),
@@ -1452,7 +1461,9 @@ describe("overlapping window reads", () => {
       local: async (shard, signal) => {
         inFlight += 1;
         most = Math.max(most, inFlight);
-        await Bun.sleep(5);
+        for (let turn = 0; turn < 20; turn += 1) {
+          await Promise.resolve();
+        }
         const result = await file.local(shard, signal);
         inFlight -= 1;
         return result;

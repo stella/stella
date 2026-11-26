@@ -257,7 +257,9 @@ test("SSR responses error the body after a source fails during a pending read", 
   failSource();
   expect(await rejectionOf(pending)).toBe(failure);
   // Let detached cancellation rejections settle before counting reports.
-  await Bun.sleep(0);
+  for (let i = 0; i < 4; i += 1) {
+    await Promise.resolve();
+  }
   expect(errors).toEqual([failure]);
   expect(source.locked).toBe(false);
 });

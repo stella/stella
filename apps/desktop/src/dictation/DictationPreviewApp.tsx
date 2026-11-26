@@ -1,8 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
+
+import { useMountEffect } from "@stll/ui/effects";
+import { useLayoutMeasurement } from "@stll/ui/effects-dom";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import {
@@ -56,7 +59,7 @@ const DictationPreviewApp = () => {
   const t = useTranslations("dictation.preview");
   const [snapshot, setSnapshot] = useState<PreviewSnapshot>(HIDDEN);
 
-  useEffect(() => {
+  useMountEffect(() => {
     let disposed = false;
     const refresh = async () => {
       const result = await Result.tryPromise(async () =>
@@ -94,21 +97,17 @@ const DictationPreviewApp = () => {
       disposed = true;
       stopListening();
     };
-  }, []);
+  });
 
-  // The top edge fades only once older lines have left it.
-  const textBox = useRef<HTMLDivElement>(null);
-  const [overflowing, setOverflowing] = useState(false);
-  useLayoutEffect(() => {
-    const box = textBox.current;
-    const line = box?.firstElementChild;
-    setOverflowing(
-      snapshot.text !== "" &&
-        box !== null &&
-        line instanceof HTMLElement &&
-        line.offsetHeight > box.clientHeight,
-    );
-  }, [snapshot.text]);
+  // The top edge fades only once older lines have left it. Measured before
+  // paint whenever the text changes or the box resizes.
+  const [textBox, setTextBox] = useState<HTMLDivElement | null>(null);
+  const overflowing = useLayoutMeasurement(
+    textBox,
+    linesOverflow,
+    [snapshot.text],
+    false,
+  );
 
   const visible = snapshot.stage !== "hidden" && snapshot.text !== "";
   return (
@@ -133,7 +132,7 @@ const DictationPreviewApp = () => {
           <div
             className="dictation-preview-text mt-1 text-sm leading-snug"
             data-overflowing={overflowing}
-            ref={textBox}
+            ref={setTextBox}
           >
             <p>{snapshot.text}</p>
           </div>
@@ -141,6 +140,12 @@ const DictationPreviewApp = () => {
       ) : null}
     </main>
   );
+};
+
+/** Whether the text box's line runs taller than the box. */
+const linesOverflow = (box: HTMLDivElement): boolean => {
+  const line = box.firstElementChild;
+  return line instanceof HTMLElement && line.offsetHeight > box.clientHeight;
 };
 
 export default DictationPreviewApp;

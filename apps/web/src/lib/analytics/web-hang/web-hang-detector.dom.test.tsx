@@ -1,12 +1,17 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { Analytics } from "@/lib/analytics/types";
 
 import type { HangLocks } from "./web-hang-detector";
+
+const flushMicrotasks = async (turns = 4) => {
+  for (let i = 0; i < turns; i += 1) {
+    await Promise.resolve();
+  }
+};
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat/private-id" });
 const {
@@ -519,14 +524,14 @@ test("a disposed replacement does not retire abandoned boot markers", async () =
 test("pagehide releases the liveness lock with the marker and pageshow takes both back", async () => {
   const fake = createFakeLocks();
   const { markerKey } = setup({ locks: fake.locks });
-  await sleep(0);
+  await flushMicrotasks();
   expect(fake.held.has(markerKey ?? "")).toBe(true);
   window.dispatchEvent(new Event("pagehide"));
-  await sleep(0);
+  await flushMicrotasks();
   expect(fake.held.has(markerKey ?? "")).toBe(false);
   expect(local.getItem(markerKey ?? "")).toBeNull();
   window.dispatchEvent(new Event("pageshow"));
-  await sleep(0);
+  await flushMicrotasks();
   expect(fake.held.has(markerKey ?? "")).toBe(true);
   expect(local.getItem(markerKey ?? "")).not.toBeNull();
 });
@@ -570,7 +575,7 @@ test.each([
       expect(tasks).toHaveLength(1);
       expect(local.getItem(markerKey)).toContain('"phase":"boot"');
       window.dispatchEvent(new Event("pagehide"));
-      await sleep(0);
+      await flushMicrotasks();
       expect(fake.held.has(markerKey)).toBe(false);
       if (idleDelivery === "hidden") {
         runIdle();
@@ -578,7 +583,7 @@ test.each([
       }
       expect(local.getItem(markerKey)).toBeNull();
       window.dispatchEvent(new Event("pageshow"));
-      await sleep(0);
+      await flushMicrotasks();
       expect(fake.held.has(markerKey)).toBe(true);
       expect(tasks).toHaveLength(1);
       expect(local.getItem(markerKey)).toContain('"phase":"boot"');
@@ -603,11 +608,11 @@ test.each([
 test("a document holds its liveness lock until it is disposed", async () => {
   const fake = createFakeLocks();
   const { detector, markerKey } = setup({ locks: fake.locks });
-  await sleep(0);
+  await flushMicrotasks();
   expect(markerKey).toBeDefined();
   expect(fake.held.has(markerKey ?? "")).toBe(true);
   detector.dispose();
-  await sleep(0);
+  await flushMicrotasks();
   expect(fake.held.has(markerKey ?? "")).toBe(false);
 });
 test("heartbeats run every three seconds only while visible and refresh on visibility changes", () => {

@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
+
+import { useMountEffect } from "@stll/ui/effects";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { isHoldKey } from "../shared/hold-key";
@@ -174,7 +176,7 @@ export const useDictation = (): DictationControls => {
   // The read the effect below owns, for a reload on request.
   const reread = useRef<() => void>(() => undefined);
 
-  useEffect(() => {
+  useMountEffect(() => {
     let disposed = false;
     const refresh = async () => {
       latest.current += 1;
@@ -208,7 +210,7 @@ export const useDictation = (): DictationControls => {
       disposed = true;
       stopListening();
     };
-  }, []);
+  });
 
   /** Runs one native action and keeps the snapshot it returns. */
   const run = async (action: () => Promise<unknown>) => {

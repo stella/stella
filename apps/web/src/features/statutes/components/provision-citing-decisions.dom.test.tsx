@@ -3,7 +3,6 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { PROVISION_CITING_SNAPSHOT_LIMIT } from "@stll/api-contract/provision-citing-decisions";
 import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-version-basis";
-import { sleep } from "@stll/concurrency/sleep";
 import type { UiLocale } from "@stll/locales";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
@@ -43,9 +42,6 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 afterAll(async () => {
-  await act(async () => {
-    await sleep(0);
-  });
   await unregisterDomEnvironment();
 });
 

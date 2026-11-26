@@ -11,7 +11,6 @@ import {
 import { STATED_DATE_RELATIONS } from "@stll/api-contract/provision-applied-version";
 import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-version-basis";
 import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version-basis";
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { toSafeId } from "@/lib/safe-id";
@@ -51,9 +50,6 @@ afterEach(async () => {
 afterAll(async () => {
   cleanup();
   // Let React's scheduled work drain before the DOM goes away.
-  await act(async () => {
-    await sleep(50);
-  });
   await unregisterDomEnvironment();
 });
 
@@ -363,7 +359,9 @@ for (const [locale, messages] of [
       // A pointer click lands after the focus that opened the preview.
       fireEvent.click(provisionChip);
       await act(async () => {
-        await sleep(0);
+        for (let i = 0; i < 4; i += 1) {
+          await Promise.resolve();
+        }
       });
       expect(
         ui.baseElement.querySelector('[data-slot="reference-peek"]')

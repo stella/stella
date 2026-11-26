@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 
 import { Button } from "../components/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../components/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/tooltip";
+import { useExternalSyncEffect } from "../effects/effects";
 import {
   INLINE_OVERFLOW_ITEM_ATTRIBUTE,
   INLINE_OVERFLOW_TRIGGER_ATTRIBUTE,
@@ -86,7 +87,7 @@ export const InspectorFacetBar = <F extends string>({
   // is the confirmation. An imperative Web Animations API call on the
   // active chip's own element, exactly like the rail's `flashTabElement`,
   // rather than a toggled `animate-pulse` utility class.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (pulseSeq === undefined || pulseSeq === lastPulseSeq.current) {
       return;
     }

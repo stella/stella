@@ -1,7 +1,6 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { AuthCapabilities } from "./sign-in-panel.logic";
@@ -40,7 +39,6 @@ afterEach(() => {
   }
 });
 afterAll(async () => {
-  await sleep(0);
   globalThis.fetch = originalFetch;
   await unregisterDomEnvironment();
 });

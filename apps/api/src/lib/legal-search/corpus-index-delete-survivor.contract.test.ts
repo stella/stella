@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { waitForExternalState } from "@stll/property-testing/external-state";
+import { waitFor } from "@stll/test-kit";
 
 import { envBase } from "@/api/env-base";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -157,22 +158,24 @@ const isEngineLag = (
 type VerifyOnceCaughtUpOptions = {
   task: CorpusIndexDeleteTask;
   intentIds?: CorpusProjectionCleanupSettlementLease["intentIds"];
-  deadline?: number;
 };
 
 /** Proves the task again until the engine's delete pipeline has caught up. */
 const verifyOnceCaughtUp = async ({
   task,
   intentIds = [REVISION],
-  deadline = Date.now() + SETTLE_TIMEOUT_MS,
-}: VerifyOnceCaughtUpOptions): Promise<CorpusProjectionCleanupSettlementResult> => {
-  const result = await verifyNow(task, intentIds);
-  if (!isEngineLag(result) || Date.now() > deadline) {
-    return result;
-  }
-  await Bun.sleep(POLL_MS);
-  return await verifyOnceCaughtUp({ task, intentIds, deadline });
-};
+}: VerifyOnceCaughtUpOptions): Promise<CorpusProjectionCleanupSettlementResult> =>
+  await waitFor(
+    async () => {
+      const result = await verifyNow(task, intentIds);
+      return isEngineLag(result) ? undefined : result;
+    },
+    {
+      description: "delete pipeline to catch up",
+      intervalMs: POLL_MS,
+      timeoutMs: SETTLE_TIMEOUT_MS,
+    },
+  );
 
 /** The index must stop publishing shard updates before it is removed. */
 const waitForIngestIdle = async (): Promise<void> => {

@@ -6,9 +6,9 @@ import {
   queryOptions,
 } from "@tanstack/react-query";
 import type { QueryFunctionContext } from "@tanstack/react-query";
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, jest, mock, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { queryView } from "@/lib/query-view.logic";
@@ -68,7 +68,9 @@ describe("ensureCriticalQueryData", () => {
     expect(caughtError.queryKey).toEqual(queryKey);
     expect(caughtError.message).toContain(JSON.stringify(queryKey));
 
-    await sleep(0);
+    for (let i = 0; i < 4; i += 1) {
+      await Promise.resolve();
+    }
 
     expect(abortReceived).toBe(true);
     expect(queryClient.getQueryCache().find({ queryKey })?.state).toMatchObject(
@@ -131,29 +133,35 @@ describe("ensureCriticalQueryData", () => {
   });
 
   test("does not cancel queries that resolve before the timeout", async () => {
-    const queryClient = new QueryClient();
-    const queryKey = ["workspaces", "ws_2"] as const;
-    let abortReceived = false;
+    jest.useFakeTimers();
+    try {
+      const queryClient = new QueryClient();
+      const queryKey = ["workspaces", "ws_2"] as const;
+      let abortReceived = false;
 
-    const result = await ensureCriticalQueryData(
-      queryClient,
-      {
-        queryKey,
-        queryFn: async ({ signal }) => {
-          signal.addEventListener("abort", () => {
-            abortReceived = true;
-          });
-          return "ok";
+      const result = await ensureCriticalQueryData(
+        queryClient,
+        {
+          queryKey,
+          queryFn: async ({ signal }) => {
+            signal.addEventListener("abort", () => {
+              abortReceived = true;
+            });
+            return "ok";
+          },
         },
-      },
-      { timeoutMs: 1 },
-    );
+        { timeoutMs: 1 },
+      );
 
-    await sleep(5);
+      jest.advanceTimersByTime(5);
+      await Promise.resolve();
 
-    expect(result).toBe("ok");
-    expect(abortReceived).toBe(false);
-    expect(queryClient.getQueryData<string>(queryKey)).toBe("ok");
+      expect(result).toBe("ok");
+      expect(abortReceived).toBe(false);
+      expect(queryClient.getQueryData<string>(queryKey)).toBe("ok");
+    } finally {
+      restoreRealTimers();
+    }
   });
 });
 

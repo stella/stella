@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
+
+import { useMountEffect } from "@stll/ui/effects";
 
 import { subscribeDesktopEvent } from "./desktop-events";
 
@@ -23,7 +25,7 @@ export const useDictationAvailability = () => {
   const [availability, setAvailability] =
     useState<DictationAvailability>("loading");
 
-  useEffect(() => {
+  useMountEffect(() => {
     let disposed = false;
     let request = 0;
     const read = async () => {
@@ -55,7 +57,7 @@ export const useDictationAvailability = () => {
       disposed = true;
       stopListening();
     };
-  }, []);
+  });
 
   return availability;
 };

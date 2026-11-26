@@ -1,10 +1,11 @@
 import type { PropsWithChildren } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, jest, test } from "bun:test";
 
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import type {
   AnalysisQueryResult,
@@ -399,44 +400,64 @@ describe("shared lazy decision analysis", () => {
       );
     });
     const client = clientWithAvailability();
-    const { result } = renderHook(() => useLazyDecisionAnalysis(eligible), {
-      wrapper: wrapperFor({ client }),
-    });
+    let result!: { current: ReturnType<typeof useLazyDecisionAnalysis> };
+    jest.useFakeTimers();
+    try {
+      ({ result } = renderHook(() => useLazyDecisionAnalysis(eligible), {
+        wrapper: wrapperFor({ client }),
+      }));
 
-    await waitFor(() => expect(result.current.state.status).toBe("error"));
-    expect(result.current.state).toEqual({
-      status: "error",
-      error: {
-        kind: "failed",
-        code: "provider_unavailable",
-        key: { source: "organization", provider: "google" },
-        providerDiagnostic: diagnostic,
-      },
-    });
-    // The failure is terminal: past a whole poll interval the query has not
-    // read the row again (which, before the record existed, started the run
-    // that just failed a second time).
-    expect(
-      isTerminalAnalysisResult(
-        client.getQueryData(decisionAnalysisOptions(key).queryKey),
-      ),
-    ).toBe(true);
-    await act(async () => {
-      await Bun.sleep(2500);
-    });
-    expect(requests.length).toBe(1);
+      await act(async () => {
+        for (let turn = 0; turn < 10; turn += 1) {
+          jest.advanceTimersByTime(0);
+          await Promise.resolve();
+        }
+      });
+      expect(result.current.state).toEqual({
+        status: "error",
+        error: {
+          kind: "failed",
+          code: "provider_unavailable",
+          key: { source: "organization", provider: "google" },
+          providerDiagnostic: diagnostic,
+        },
+      });
+      // The failure is terminal: past a whole poll interval on the same fake
+      // clock the query has not read the row again (which, before the record
+      // existed, started the run that just failed a second time).
+      expect(
+        isTerminalAnalysisResult(
+          client.getQueryData(decisionAnalysisOptions(key).queryKey),
+        ),
+      ).toBe(true);
+      await act(async () => {
+        jest.advanceTimersByTime(2500);
+        await Promise.resolve();
+      });
+      expect(requests.length).toBe(1);
 
-    await act(async () => {
-      result.current.generate();
-    });
-    await waitFor(() => expect(retried.value).toBe(true));
-    expect(new URL(requests[1]?.url ?? "").searchParams.get("retry")).toBe(
-      "true",
-    );
-    // real-time: the hook polls the analysis status on its own interval
-    await waitFor(() => expect(result.current.state.status).toBe("done"), {
-      timeout: 5000,
-    });
+      await act(async () => {
+        result.current.generate();
+        for (let turn = 0; turn < 10; turn += 1) {
+          jest.advanceTimersByTime(0);
+          await Promise.resolve();
+        }
+      });
+      expect(retried.value).toBe(true);
+      expect(new URL(requests[1]?.url ?? "").searchParams.get("retry")).toBe(
+        "true",
+      );
+      await act(async () => {
+        jest.advanceTimersByTime(2500);
+        for (let turn = 0; turn < 10; turn += 1) {
+          jest.advanceTimersByTime(0);
+          await Promise.resolve();
+        }
+      });
+      expect(result.current.state.status).toBe("done");
+    } finally {
+      restoreRealTimers();
+    }
     // Only the explicit retry carried the flag; the polls that followed it
     // were plain reads.
     expect(

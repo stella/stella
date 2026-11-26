@@ -9,6 +9,12 @@ import {
 } from "@/api/lib/rate-limit/action-admission";
 import type { ActionCostObservation } from "@/api/lib/usage/action-costs/context";
 
+const flushMicrotasks = async (): Promise<void> => {
+  for (let turn = 0; turn < 20; turn += 1) {
+    await Promise.resolve();
+  }
+};
+
 test("pending action admission retains its organization and execution callback", async () => {
   const entered = Promise.withResolvers<undefined>();
   const proceed = Promise.withResolvers<undefined>();
@@ -211,7 +217,7 @@ const manualTiming = (redis: ReturnType<typeof sharedRedis>) => {
       currentTime = scheduled.at;
       redis.setTime(currentTime);
       scheduled.callback();
-      await Bun.sleep(0);
+      await flushMicrotasks();
     },
     setTime: (time: number) => {
       currentTime = time;

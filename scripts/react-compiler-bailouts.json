@@ -129,12 +129,6 @@
       "`try`/`finally` without `catch` is not supported by React Compiler"
     ]
   },
-  "apps/web/src/components/workspaces/copy-to-matter-dialog.tsx::CopyToMatterDialog": {
-    "memos": 0,
-    "reasons": [
-      "Logical assignment operators (||=, &&=, ??=) are not yet supported"
-    ]
-  },
   "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts::useCreateBBoxes": {
     "memos": 1,
     "reasons": [
@@ -161,7 +155,7 @@
     "reasons": ["This value cannot be modified"]
   },
   "apps/web/src/components/workspaces/table/workspace-table/workspace-table.tsx::WorkspaceTable": {
-    "memos": 9,
+    "memos": 6,
     "reasons": ["Use of incompatible library"]
   },
   "apps/web/src/components/workspaces/workflow-start-confirmation-prompt.tsx::WorkflowStartConfirmationPromptProvider": {

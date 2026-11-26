@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { panic } from "better-result";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
@@ -22,6 +22,7 @@ import {
 import { CopyButton } from "@stll/ui/copy-button";
 import type { DayCalendarRange } from "@stll/ui/day-calendar.logic";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
+import { useLatestCallback, useMountEffect } from "@stll/ui/effects";
 import { Form } from "@stll/ui/form";
 import { AiActionIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
@@ -236,7 +237,7 @@ export const ActivitySuggestionCard = ({
   // its actions show however low on the day it opens. While it stays on
   // screen it keeps them in view as it grows (a draft arrives, details
   // open); a card scrolled away is left there.
-  useEffect(() => {
+  useMountEffect(() => {
     // The effect runs after the card's section has mounted.
     const element =
       card.current ?? panic("Suggestion card mounted without its element");
@@ -250,7 +251,7 @@ export const ActivitySuggestionCard = ({
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, []);
+  });
   const acceptDisabledReason = (() => {
     if (editingDisabledReason !== undefined) {
       return editingDisabledReason;
@@ -269,7 +270,7 @@ export const ActivitySuggestionCard = ({
   const acceptable = acceptDisabledReason === undefined;
   const shortcutLabel = (keys: ShortcutKeys) =>
     formatShortcut({ keys, layout: null, locale, platform: PLATFORM });
-  const runShortcut = useEffectEvent((shortcut: CardShortcut) => {
+  const runShortcut = useLatestCallback((shortcut: CardShortcut) => {
     switch (shortcut) {
       case "accept":
         if (acceptable) {
@@ -292,7 +293,7 @@ export const ActivitySuggestionCard = ({
   // Shortcuts work wherever focus is in the card, and from the page body
   // after a control that held focus disappears; a popover such as the
   // matter search keeps its own keys.
-  useEffect(() => {
+  useMountEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const shortcut = cardShortcut(event);
       const target = event.target;
@@ -315,7 +316,7 @@ export const ActivitySuggestionCard = ({
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, []);
+  });
   const title = edit.matter?.name ?? t("newEntry");
 
   return (
