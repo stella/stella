@@ -1,5 +1,5 @@
 import type { APIRequestContext } from "@playwright/test";
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import * as v from "valibot";
@@ -19,6 +19,7 @@ import {
   type SmokeRouteDef,
   type SmokeWorld,
 } from "../helpers/smoke-route-defs";
+import { test } from "../helpers/storm-watch-fixture";
 import { createBrowserErrorCollector } from "../helpers/test";
 import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 import { createTestWorkspace } from "../helpers/workspace";
