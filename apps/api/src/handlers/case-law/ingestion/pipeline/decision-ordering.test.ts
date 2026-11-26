@@ -1,4 +1,7 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+
+import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
 
 import { createSafeId } from "@/api/lib/branded-types";
 import {
@@ -9,7 +12,8 @@ import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { courtListenerIngestFixture } from "@/api/tests/helpers/case-law-ingest-fixture";
 
-import { decisionOrderingKeys } from "./decision-ordering";
+import { observeDecision } from "./decision-identity";
+import { connectOrderingKeys, decisionOrderingKeys } from "./decision-ordering";
 import { sourceContractForAdapter } from "./source-contract";
 
 const sourceId = createSafeId<"caseLawSource">();
@@ -137,10 +141,20 @@ describe("decisionOrderingKeys", () => {
       court: "A court the directory does not know",
       country: "USA",
     });
-    expect(keysOf(refused).length).toBeGreaterThan(0);
-    expect(
-      share(keysOf(refused), keysOf(czDecision({ sourceDocumentId: "doc-1" }))),
-    ).toBe(true);
+    // Refused by a returned error or a thrown one, as the write refuses it.
+    const observed = Result.try(() =>
+      observeDecision({
+        metadataUrlSchema: czNs.metadataUrlSchema,
+        input: refused,
+        sourceId,
+        heldDecisionAttachment: czNs.heldDecisionAttachment,
+      }),
+    ).andThen((observation) => observation);
+    expect(Result.isError(observed)).toBe(true);
+    expect(keysOf(refused)).toEqual([
+      `docket\u0000${createCaseLawDecisionSlug("21 Cdo 5/2019")}`,
+      "identity\u0000doc-1",
+    ]);
   });
 
   test("a source rejection has no keys", () => {
@@ -170,5 +184,43 @@ describe("decisionOrderingKeys", () => {
     expect(share(keys[40] ?? [], keys[39] ?? [])).toBe(true);
     expect(share(keys[290] ?? [], keys[90] ?? [])).toBe(true);
     expect(share(keys[10] ?? [], keys[11] ?? [])).toBe(false);
+  });
+});
+
+describe("connectOrderingKeys", () => {
+  test("records naming one stored decision by different values share a key", () => {
+    // Two registered aliases of one stored decision, stated by records of
+    // different dockets: nothing the records state meets.
+    const [first, second, other] = connectOrderingKeys(
+      [
+        ["identity\u0000alias-a", "docket\u0000one"],
+        ["identity\u0000alias-b", "docket\u0000two"],
+        ["identity\u0000doc-3", "docket\u0000three"],
+      ],
+      [
+        ["decision\u0000d", "identity\u0000alias-a"],
+        ["decision\u0000d", "identity\u0000alias-b"],
+      ],
+    );
+    expect(first).toEqual(second);
+    expect(first).toHaveLength(1);
+    expect(other).not.toEqual(first);
+  });
+
+  test("records joined through a third share a key", () => {
+    const [first, second, third] = connectOrderingKeys([
+      ["a", "b"],
+      ["c"],
+      ["b", "c"],
+    ]);
+    expect(first).toEqual(second);
+    expect(second).toEqual(third);
+  });
+
+  test("records without keys keep none", () => {
+    expect(connectOrderingKeys([[], ["a"]])).toEqual([
+      [],
+      ["component\u0000a"],
+    ]);
   });
 });

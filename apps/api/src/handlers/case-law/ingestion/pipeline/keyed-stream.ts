@@ -8,7 +8,7 @@ type KeyedStreamOptions<Item, Value> = {
    * Keys of an item: an item never starts while an earlier item sharing one
    * of them is still running.
    */
-  keysOf: (item: Item) => readonly string[];
+  keysOf: (item: Item, index: number) => readonly string[];
   /**
    * Asked before every start, and again whenever a started operation settles
    * or the consumer takes a result. While it answers false nothing starts;
@@ -77,9 +77,14 @@ export const streamKeyedInOrder = async function* <Item, Value>({
     inFlight += 1;
     const value = (async () => await operation(item, index))();
     const settled = (async () => {
-      await Promise.allSettled([value]);
+      const [outcome] = await Promise.allSettled([value]);
       hold(keys, -1);
       inFlight -= 1;
+      if (outcome?.status === "rejected") {
+        // The consumer receives this rejection at its index; nothing starts
+        // in the meantime, so the slot it frees stays empty.
+        closed = true;
+      }
       fill();
     })();
     started.push({ index, value, settled });
@@ -93,7 +98,8 @@ export const streamKeyedInOrder = async function* <Item, Value>({
       return;
     }
     const { item, index } = entry;
-    const keys = heldKeys?.index === index ? heldKeys.keys : keysOf(item);
+    const keys =
+      heldKeys?.index === index ? heldKeys.keys : keysOf(item, index);
     if (keys.some((key) => running.has(key))) {
       heldKeys = { index, keys };
       return;

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { streamKeyedInOrder } from "./keyed-stream";
 
@@ -201,5 +202,32 @@ describe("streamKeyedInOrder", () => {
       yielded.push(index);
     }
     expect(yielded).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  test("a rejection starts nothing after it, before the consumer sees it", async () => {
+    const started: number[] = [];
+    const yielded: number[] = [];
+    const stream = streamKeyedInOrder({
+      items: [0, 1, 2],
+      limit: 1,
+      keysOf: () => [],
+      admits: () => true,
+      operation: async (item) => {
+        started.push(item);
+        await turns(1);
+        if (item === 0) {
+          throw new Error("refused");
+        }
+        return item;
+      },
+    });
+    const consumed = (async () => {
+      for await (const { index } of stream) {
+        yielded.push(index);
+      }
+    })();
+    expect(await rejectionOf(consumed)).toEqual(new Error("refused"));
+    expect(yielded).toEqual([]);
+    expect(started).toEqual([0]);
   });
 });

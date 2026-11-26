@@ -16,7 +16,7 @@ import type {
   RejectedCaseLawIngestionRecord,
 } from "@/api/handlers/case-law/ingestion/pipeline/batch-types";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
-import { decisionOrderingKeys } from "@/api/handlers/case-law/ingestion/pipeline/decision-ordering";
+import { planDecisionOrdering } from "@/api/handlers/case-law/ingestion/pipeline/decision-ordering";
 import { CASE_LAW_CORPUS_DEPENDENCIES } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import {
@@ -585,43 +585,75 @@ const unstartedStop = ({
 
 type BatchOrdering = {
   limit: number;
-  keysOf: (record: CaseLawIngestionBatchRecord) => readonly string[];
+  keysOf: (
+    record: CaseLawIngestionBatchRecord,
+    index: number,
+  ) => readonly string[];
+};
+
+const SERIAL_ORDERING: BatchOrdering = { limit: 1, keysOf: () => [] };
+
+type BatchOrderingOptions = {
+  records: readonly CaseLawIngestionBatchRecord[];
+  sourceId: SafeId<"caseLawSource">;
+  scopedDb: ScopedDb;
+  resolveSourceContract: SourceContractResolver;
+  concurrency: number;
 };
 
 /**
  * How the batch's records may overlap. A source whose records enrich
  * decisions another source holds is written one record at a time: what its
  * records meet is the host's, which nothing the record states keys. So is a
- * batch whose source contract does not resolve: each record then fails on it
- * as the serial batch did.
+ * batch whose source contract does not resolve (each record then fails on
+ * it as the serial batch did), and one whose reach into stored decisions
+ * cannot be read or is too wide to split on.
  */
-const batchOrdering = async (
-  sourceId: SafeId<"caseLawSource">,
-  resolveSourceContract: SourceContractResolver,
-  concurrency: number,
-): Promise<BatchOrdering> => {
+const batchOrdering = async ({
+  records,
+  sourceId,
+  scopedDb,
+  resolveSourceContract,
+  concurrency,
+}: BatchOrderingOptions): Promise<BatchOrdering> => {
+  if (concurrency <= 1) {
+    return SERIAL_ORDERING;
+  }
   const contract = await Result.tryPromise({
     try: async () => await resolveSourceContract(sourceId),
     catch: (cause) => cause,
   });
   if (
-    concurrency <= 1 ||
     Result.isError(contract) ||
     contract.value.heldDecisionAttachment !== null
   ) {
-    return { limit: 1, keysOf: () => [] };
+    return SERIAL_ORDERING;
   }
-  const { value } = contract;
+  const planned = await Result.tryPromise({
+    try: async () =>
+      await planDecisionOrdering({
+        records,
+        sourceId,
+        contract: contract.value,
+        scopedDb,
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(planned) || planned.value === null) {
+    return SERIAL_ORDERING;
+  }
+  const keys = planned.value;
   return {
     limit: concurrency,
-    keysOf: (record) => decisionOrderingKeys(record, sourceId, value),
+    keysOf: (_record, index) => keys[index] ?? [],
   };
 };
 
 /**
  * Apply decisions under one observation. Each goes through `processDecision`:
- * decisions that share no identity, docket or ECLI key are written
- * concurrently, those that share one in batch order, and every answer is
+ * decisions that can reach no common row (by identity, docket, ECLI or a
+ * stored decision they both name, see `planDecisionOrdering`) are written
+ * concurrently, the others in batch order, and every answer is
  * folded in batch order, so the tally, the ledger and where the batch stops
  * read as a serial batch's. Their payloads join one pack flushed once they
  * are processed, and their failures are written to the ledger in one insert.
@@ -682,15 +714,18 @@ export const applyDecisionBatch = async (
     },
     flush: pack.flush,
   });
-  const ordering = await batchOrdering(
+  const ordering = await batchOrdering({
+    records: batchRecords,
     sourceId,
+    scopedDb,
     resolveSourceContract,
     concurrency,
-  );
+  });
   const graphTurn = createGraphTurns();
   // Started records not yet folded may each still insert a row, so the
   // insert limit counts them until their answer is in.
   let started = 0;
+  let folded = 0;
   const attempts = streamKeyedInOrder<
     CaseLawIngestionBatchRecord,
     RecordAttempt
@@ -700,6 +735,10 @@ export const applyDecisionBatch = async (
     keysOf: ordering.keysOf,
     admits: () =>
       signal?.aborted !== true &&
+      // Written one at a time, a record starts only once the one before it
+      // is folded, so a stop on that one leaves it unstarted, as the serial
+      // batch did.
+      (ordering.limit > 1 || started === folded) &&
       (insertLimit === undefined ||
         tally.inserted + started - tally.settlements.length < insertLimit),
     operation: async (record, index) => {
@@ -751,6 +790,7 @@ export const applyDecisionBatch = async (
         context,
         observation,
       });
+      folded++;
       if (halt !== null) {
         break;
       }
