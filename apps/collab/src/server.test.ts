@@ -14,6 +14,7 @@ import { CANONICAL_YJS_AUTHORITY } from "@stll/folio-core/controller/canonicalYj
 import { createDocx, createEmptyDocument } from "@stll/folio-core/server";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { settledWithin } from "@stll/test-kit";
 
 import { createCollabServer } from "./server";
 
@@ -472,7 +473,6 @@ const runDocker = async ({
       ? ["docker", "kill", "--signal", "KILL", containerId]
       : ["docker", "start", containerId];
   const dockerProcess = spawn(args);
-  let timeout: ReturnType<typeof setTimeout> | undefined;
   const commandCompleted = dockerProcess.exited.then(async (exitCode) => {
     const stderr = await new Response(dockerProcess.stderr).text();
     if (exitCode !== 0) {
@@ -482,24 +482,24 @@ const runDocker = async ({
   });
 
   try {
-    await Promise.race([
-      commandCompleted,
-      ...(observed === undefined ? [] : [observed]),
-      new Promise<never>((_resolve, reject) => {
-        timeout = setTimeout(() => {
-          reject(
-            new Error(`docker ${action} exceeded ${String(timeoutMs)} ms`),
-          );
-        }, timeoutMs);
-      }),
-    ]);
+    await settledWithin(
+      Promise.race([
+        commandCompleted,
+        ...(observed === undefined ? [] : [observed]),
+      ]),
+      {
+        description: `docker ${action}`,
+        timeoutMs,
+      },
+    );
   } finally {
-    if (timeout !== undefined) {
-      clearTimeout(timeout);
-    }
     if (dockerProcess.exitCode === null) {
       dockerProcess.kill(9);
-      await Promise.race([dockerProcess.exited, Bun.sleep(cleanupTimeoutMs)]);
+      await settledWithin(dockerProcess.exited, {
+        description: `docker ${action} cleanup`,
+        timeoutMs: cleanupTimeoutMs,
+        // swallow-ok: best-effort bounded wait for killed docker cleanup process
+      }).catch(() => undefined);
     } else {
       await commandCompleted;
     }
@@ -698,22 +698,22 @@ describe("collaboration server", () => {
       expect(await response.text()).toBe("Welcome to Hocuspocus!");
       expect((await fetch(`${collabServer.httpUrl}/readyz`)).status).toBe(200);
 
-      await new Promise<void>((resolve, reject) => {
-        const websocket = new WebSocket(collabServer.websocketUrl);
-        const timeout = setTimeout(() => {
-          reject(new Error("WebSocket did not open."));
-        }, 1000);
-
-        websocket.addEventListener("open", () => {
-          clearTimeout(timeout);
-          websocket.close();
-          resolve();
-        });
-        websocket.addEventListener("error", () => {
-          clearTimeout(timeout);
-          reject(new Error("WebSocket failed to open."));
-        });
-      });
+      await settledWithin(
+        new Promise<void>((resolve, reject) => {
+          const websocket = new WebSocket(collabServer.websocketUrl);
+          websocket.addEventListener("open", () => {
+            websocket.close();
+            resolve();
+          });
+          websocket.addEventListener("error", () => {
+            reject(new Error("WebSocket failed to open."));
+          });
+        }),
+        {
+          description: "WebSocket to open",
+          timeoutMs: 1000,
+        },
+      );
     } finally {
       await collabServer.destroy();
       await fakeApi.destroy();

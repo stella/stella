@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { settledWithin } from "@stll/test-kit";
+
 import {
   claimedBatches,
   holdSharedRunUntilPendingForTest,
@@ -28,21 +30,11 @@ const nextTurn = async () =>
     setImmediate(resolve);
   });
 
-const completeWithin = async <T>(promise: Promise<T>, label: string) => {
-  const expired = Promise.withResolvers<never>();
-  const timeout = setTimeout(() => {
-    expired.reject(
-      new Error(`Timed out waiting for ${label}`, {
-        cause: new Error("A shared lint request remained unsettled"),
-      }),
-    );
-  }, 1000);
-  try {
-    return await Promise.race([promise, expired.promise]);
-  } finally {
-    clearTimeout(timeout);
-  }
-};
+const completeWithin = async <T>(promise: Promise<T>, label: string) =>
+  await settledWithin(promise, {
+    description: label,
+    timeoutMs: 1000,
+  });
 
 const fakeRunnerFor =
   (code: string, reportedText: string) => async (args: readonly string[]) => {
