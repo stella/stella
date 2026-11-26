@@ -11,7 +11,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
-import { useObjectUrl } from "@stll/ui/effects/dom";
+import { useObjectUrl } from "@stll/ui/effects-dom";
 import { XIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 

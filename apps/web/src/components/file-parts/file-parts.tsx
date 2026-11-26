@@ -18,7 +18,7 @@ import type {
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { useObjectUrl } from "@stll/ui/effects/dom";
+import { useObjectUrl } from "@stll/ui/effects-dom";
 import { formatFileSize } from "@stll/ui/file-size";
 import {
   AlertTriangleIcon,
