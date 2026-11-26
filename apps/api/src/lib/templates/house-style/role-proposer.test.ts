@@ -80,6 +80,33 @@ describe("proposeBlockRoles", () => {
     });
   });
 
+  test("a bullet whose mark is a letter is a bullet", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I. Rozsah",
+      numbered("1.", "Dodavatel uvede:", 1),
+      numbered("o", "pevný počet případů,", 2),
+      numbered("o", "proměnný počet případů.", 2),
+    ]);
+    const marked = {
+      ...manifest,
+      blocks: manifest.blocks.map((block) =>
+        block.label === "o" && block.numbering !== null
+          ? {
+              ...block,
+              numbering: { ...block.numbering, bullet: true as const },
+            }
+          : block,
+      ),
+    };
+    expect(rolesOf(marked)).toMatchObject({
+      "pevný počet případů,": "bullet",
+      "proměnný počet případů.": "bullet",
+    });
+    // Without the engine's word for it the mark reads as a letter.
+    expect(rolesOf(manifest)["pevný počet případů,"]).not.toBe("bullet");
+  });
+
   test("the proposal of a merged title points at its heading", () => {
     const manifest = czechContract("Text.");
     const proposals = proposeBlockRoles({ manifest });
