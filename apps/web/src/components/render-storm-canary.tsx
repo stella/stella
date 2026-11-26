@@ -14,6 +14,7 @@ import type {
 import {
   createRenderStormMonitor,
   isUnderStormWatch,
+  RENDER_STORM_CANARY_TAG,
 } from "@/lib/render-storm-canary";
 
 const RENDER_STORM_CANARY_PROFILER_ID = "render-storm-canary";
@@ -125,7 +126,7 @@ const emitRenderStormError = (details: RenderStormDetails) => {
     return;
   }
   emitDevCanaryError(
-    "render-storm",
+    RENDER_STORM_CANARY_TAG,
     `sustained render storm detected: ~${details.commitsPerSecond} commits/sec ` +
       `(phases: ${formatPhaseBreakdown(details.phaseCounts)}; ` +
       `regions: ${formatRegionBreakdown(details.regionCounts)}). A component is re-rendering ` +

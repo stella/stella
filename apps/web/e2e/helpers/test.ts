@@ -1,13 +1,14 @@
 import { expect, test as base } from "@playwright/test";
 import type { ConsoleMessage, Page } from "@playwright/test";
 
+import { RENDER_STORM_CANARY_TAG } from "../../src/lib/render-storm-canary";
 import { checkStormWatch, installStormWatch } from "./storm-watch";
 
-// What the dev render-storm canary logs, for refusing patterns that would
-// excuse a storm.
-const RENDER_STORM_MESSAGES = [
-  "[render-storm] sustained render storm detected: ~120 commits/sec",
-] as const;
+// Every message the dev render-storm canary logs carries its tag. Such an
+// entry fails the spec whatever it tolerates or expects: storms are the
+// storm watch's to judge, and no spec may excuse one.
+const isRenderStormEntry = (entry: string) =>
+  entry.includes(`[${RENDER_STORM_CANARY_TAG}]`);
 
 export type BrowserErrorCollector = {
   entries: () => string[];
@@ -119,17 +120,6 @@ export const createBrowserErrorCollector = (
   // a later matching pass could miss an entry an earlier one matched.
   const stateless = (pattern: RegExp) =>
     new RegExp(pattern.source, pattern.flags.replace(/[gy]/gu, ""));
-  // Storms are the storm watch's to judge, and no spec may excuse one.
-  const excusable = (pattern: RegExp) => {
-    if (
-      RENDER_STORM_MESSAGES.some((message) => stateless(pattern).test(message))
-    ) {
-      throw new TypeError(
-        `${String(pattern)} would excuse a render storm; fix the loop the storm watch names instead`,
-      );
-    }
-    return stateless(pattern);
-  };
 
   return {
     add: (message) => {
@@ -137,10 +127,10 @@ export const createBrowserErrorCollector = (
     },
     entries: () => [...errors],
     expectCaptured: (pattern) => {
-      expectedPatterns.push(excusable(pattern));
+      expectedPatterns.push(stateless(pattern));
     },
     tolerate: ({ pattern }) => {
-      toleratedPatterns.push(excusable(pattern));
+      toleratedPatterns.push(stateless(pattern));
     },
     assertEmpty: (label) => {
       const collected = errors.splice(0);
@@ -148,6 +138,7 @@ export const createBrowserErrorCollector = (
       const tolerated = toleratedPatterns.splice(0);
       const unmatched = collected.filter(
         (entry) =>
+          isRenderStormEntry(entry) ||
           ![...patterns, ...tolerated].some((pattern) => pattern.test(entry)),
       );
       const unobserved = patterns.filter(

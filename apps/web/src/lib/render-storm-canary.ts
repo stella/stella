@@ -29,6 +29,9 @@ const createEmptyPhaseCounts = (): RenderStormPhaseCounts => ({
 // above real streaming traffic while staying well below the loop floor.
 export const RENDER_STORM_THRESHOLD_COMMITS_PER_SECOND = 80;
 
+/** The `[tag]` every canary message starts with (see @/lib/dev-canary). */
+export const RENDER_STORM_CANARY_TAG = "render-storm";
+
 /**
  * The global the dev-only canary counts every commit of the app in, for e2e
  * specs that hold a surface to a commit budget tighter than the storm
