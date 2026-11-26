@@ -11,6 +11,7 @@ import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier
 import { drawPropertySamples } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCitationArrivals,
   caseLawCitations,
@@ -23,17 +24,20 @@ import {
   citationArrivalsOf,
   drainCitationArrivals,
   enqueueCitationArrivals,
-  reopenCitationsForArrivals,
   reopenCitationsForDecisionIdentifiers,
-  UNKEYED_CITATIONS_REMAIN_SQL,
 } from "@/api/handlers/case-law/citation-arrivals";
-import type { CitationArrival } from "@/api/handlers/case-law/citation-arrivals";
 import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import {
   CITATION_IDENTIFIER_MATCH_KEY_FUNCTION,
   CITATION_IDENTIFIER_MATCH_KEY_TRIGGER,
 } from "@/api/handlers/case-law/citation-identifier-match-key";
 import { citationResolutionPolicyRows } from "@/api/handlers/case-law/citation-jurisdiction-policy";
+import {
+  reopenCitationsForArrivals,
+  tryResolveCitationBatch,
+  UNKEYED_CITATIONS_REMAIN_SQL,
+} from "@/api/handlers/case-law/citation-resolution";
+import type { CitationArrival } from "@/api/handlers/case-law/citation-resolution";
 import {
   CITATION_RESOLUTION_STATUS,
   citationReopenableByKeySql,
@@ -433,23 +437,27 @@ const unkeyedRemain = async (): Promise<boolean> => {
   return isRecord(row) && row["remain"] === true;
 };
 
+type BackfillBatchRow = {
+  last_id: string | null;
+  picked: number;
+  keyed: number;
+};
+
 /** Run the online repair's batch statement until it picks nothing. */
 const runBackfill = async (batchSize: number): Promise<number> => {
   let cursor: string | null = null;
   let keyed = 0;
   for (;;) {
     // db-await-in-loop: the repair is a keyset walk, one batch after another
-    const { rows } = await client.query<{
-      last_id: string | null;
-      picked: number;
-      keyed: number;
-    }>(
-      citationMatchKeyBatchSql('public."case_law_citations"', {
-        after: cursor !== null,
-      }),
-      cursor === null ? [batchSize] : [batchSize, cursor],
-    );
-    const batch = rows.at(0) ?? fail("the backfill batch returned no row");
+    const { rows }: { rows: BackfillBatchRow[] } =
+      await client.query<BackfillBatchRow>(
+        citationMatchKeyBatchSql('public."case_law_citations"', {
+          after: cursor !== null,
+        }),
+        cursor === null ? [batchSize] : [batchSize, cursor],
+      );
+    const batch: BackfillBatchRow =
+      rows.at(0) ?? fail("the backfill batch returned no row");
     if (batch.picked === 0 || batch.last_id === null) {
       return keyed;
     }
@@ -1024,6 +1032,35 @@ test("a drain that does not commit leaves its arrivals for the next one", async 
     reopened: 1,
   });
   expect(await statusOf(waiting)).toBe(CITATION_RESOLUTION_STATUS.RESOLVED);
+});
+
+test("the standing walk takes arrivals a failed drain left behind, with no later write", async () => {
+  const { arriving, waiting } = await queueCorpus();
+  await enqueue(arriving);
+  // The write's own drain fails; nothing else is ever written.
+  const failing = async <T>(
+    run: (
+      tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+    ) => Promise<T>,
+  ): Promise<T> =>
+    await db.transaction(async (tx) => {
+      await run(tx);
+      throw new Error("the drain's transaction fails");
+    });
+  expect(await rejectionOf(drainCitationArrivals(failing))).toBeInstanceOf(
+    Error,
+  );
+  expect(await queued()).toBe(1);
+  expect(await statusOf(waiting)).toBe(CITATION_RESOLUTION_STATUS.UNMATCHED);
+
+  const scopedDb: ScopedDb = async (callback) =>
+    await db.transaction(async (tx) => await callback(asTestRaw(tx)));
+  const batch = await tryResolveCitationBatch(scopedDb, { limit: 50 });
+  expect(batch).not.toBeNull();
+  expect(await queued()).toBe(0);
+  expect(await statusOf(waiting)).toBe(CITATION_RESOLUTION_STATUS.RESOLVED);
+  // What the arrival settled is counted with the batch.
+  expect(batch?.resolved).toBeGreaterThanOrEqual(1);
 });
 
 test("an erased decision's arrivals are withdrawn with it and reopen nothing", async () => {

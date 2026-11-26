@@ -53,7 +53,7 @@ const COLUMNS = {
   citationKey: sql.raw('"citation_key"'),
 };
 
-export const CITATION_MATCH_KEY_PENDING = render(
+const CITATION_MATCH_KEY_PENDING = render(
   citationIdentifierMatchKeyPendingSql(COLUMNS),
 );
 
@@ -104,7 +104,7 @@ const decodeBatch = (
     : panic("Invalid citation match-key batch row");
 };
 
-export const createCitationIdentifierMatchKeyBackfill = ({
+const createCitationIdentifierMatchKeyBackfill = ({
   batchSize = BATCH,
   ...options
 }: PendingRowBackfillOptions = {}) =>

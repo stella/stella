@@ -2,7 +2,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 
 export default {
   id: "indexes-case-law-citations-identifier-match-key-pending-idx",
-  revision: 1605,
+  revision: 1606,
   lifecycle: "pending",
   type: "indexes",
   values: [

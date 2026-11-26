@@ -4,12 +4,12 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
+import { citationArrivalsOf } from "@/api/handlers/case-law/citation-arrivals";
 import {
   arrivingRowsOf,
-  citationArrivalsOf,
+  reopenForArrivalsSql,
   UNKEYED_CITATIONS_REMAIN_SQL,
-} from "@/api/handlers/case-law/citation-arrivals";
-import { reopenForArrivalsSql } from "@/api/handlers/case-law/citation-resolution";
+} from "@/api/handlers/case-law/citation-resolution";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 import { createTestPglite } from "@/api/tests/pglite-test-db";

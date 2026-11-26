@@ -14,38 +14,35 @@
  * arrivals it took in that same transaction. A drain that does not commit
  * leaves its arrivals for the next, so an arrival is never lost between the
  * write and its reopen. A page of decisions drains once, after the page; a
- * caller with a single decision drains after it.
+ * caller with a single decision drains after it. Neither is the only drain:
+ * the standing walk (`tryResolveCitationBatch`) takes whatever they left
+ * behind before each of its batches, so a failed drain, or a page that queued
+ * more than one drain takes, never waits on a later decision write.
  *
  * The reopen reads the citations by their stored match key
  * (`citation-identifier-match-key.ts`) through an equality index. A citation
  * stored before that key existed is matched by its folded columns instead,
  * and only while such rows remain.
  */
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
-import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 
-import { caseLawCitationArrivals, caseLawCitations } from "@/api/db/schema";
+import { caseLawCitationArrivals } from "@/api/db/schema";
 import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
-import { citationIdentifierMatchKeyPendingSql } from "@/api/handlers/case-law/citation-identifier-match-key";
-import { citationResolutionPolicyRows } from "@/api/handlers/case-law/citation-jurisdiction-policy";
 import {
-  CITATION_ARRIVAL_SETTLE_CAP,
-  NOTHING_REOPENED,
-  reopenedOf,
-  reopenForArrivalsSql,
-  settleReopenedCitations,
+  drainCitationArrivalsIn,
+  NOTHING_DRAINED,
+  reopenCitationsForArrivals,
 } from "@/api/handlers/case-law/citation-resolution";
 import type {
-  ArrivingRow,
-  CitationResolutionCounts,
+  CitationArrival,
+  CitationArrivalDrain,
   ReopenedCitations,
 } from "@/api/handlers/case-law/citation-resolution";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -56,20 +53,7 @@ import { errorSystemFields } from "@/api/lib/errors/utils";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
-import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
-
-/** One identifier a stored decision holds, as the citation graph reads it. */
-export type CitationArrival = {
-  decisionId: SafeId<"caseLawDecision">;
-  type: DecisionIdentifierType;
-  /** The identifier's normalized value under `caseNumberMatchKey`. */
-  matchKey: string;
-  /** The decision's country, which decides whose citations it can answer. */
-  jurisdiction: CaseLawJurisdiction;
-  /** The decision's date; a citation older than it was never about it. */
-  decisionDate: string | null;
-};
 
 type DecisionIdentifiersArrival = {
   decisionId: SafeId<"caseLawDecision">;
@@ -100,98 +84,6 @@ export const citationArrivalsOf = ({
     });
   }
   return [...arrivals.values()];
-};
-
-/**
- * Arrivals reopening as one statement, with the settle bound that keeps a
- * drain's cost independent of how often its decisions are cited: the bound
- * one decision write had, per decision, up to a ceiling for the drain.
- */
-export const CITATION_ARRIVAL_DRAIN_SETTLE_CEILING = 5000;
-
-const settleCapFor = (arrivals: readonly CitationArrival[]): number =>
-  Math.min(
-    CITATION_ARRIVAL_SETTLE_CAP *
-      new Set(arrivals.map(({ decisionId }) => decisionId)).size,
-    CITATION_ARRIVAL_DRAIN_SETTLE_CEILING,
-  );
-
-/** The citing countries whose citations a decision of `jurisdiction` can answer. */
-const citingCountriesReaching = (jurisdiction: CaseLawJurisdiction): string[] =>
-  citationResolutionPolicyRows().flatMap(
-    ({ jurisdiction: citing, resolvesTo }) =>
-      resolvesTo.includes(jurisdiction) ? [citing] : [],
-  );
-
-/**
- * Whether any citation still waits for its stored key. One probe of the
- * repair's partial index, which is empty once the repair has run.
- */
-export const UNKEYED_CITATIONS_REMAIN_SQL = sql`
-  SELECT EXISTS (
-    SELECT 1
-      FROM ${caseLawCitations}
-     WHERE ${citationIdentifierMatchKeyPendingSql({
-       identifierMatchKey: caseLawCitations.identifierMatchKey,
-       normalizedIdentifierValue: caseLawCitations.normalizedIdentifierValue,
-       citationKey: caseLawCitations.citationKey,
-     })}
-  ) AS remain`;
-
-const unkeyedCitationsRemain = async (
-  tx: CitationGraphTransaction,
-): Promise<boolean> => {
-  const row = executedRows(await tx.execute(UNKEYED_CITATIONS_REMAIN_SQL)).at(
-    0,
-  );
-  return isRecord(row) && row["remain"] === true;
-};
-
-/** The arrivals as the statement reads them; an arrival nobody cites across is dropped. */
-export const arrivingRowsOf = (
-  arrivals: readonly CitationArrival[],
-): ArrivingRow[] =>
-  arrivals.flatMap((arrival) => {
-    const citingCountries = citingCountriesReaching(arrival.jurisdiction);
-    return citingCountries.length === 0
-      ? []
-      : [
-          {
-            decision_id: arrival.decisionId,
-            type: arrival.type,
-            match_key: arrival.matchKey,
-            decision_date: arrival.decisionDate,
-            citing_countries: citingCountries,
-          },
-        ];
-  });
-
-/**
- * Reopen every citation the arrivals can answer differently, in one
- * statement (`reopenForArrivalsSql`).
- *
- * Exactly the rows the per-decision reopen selected for each arrival, which
- * `citation-arrivals.db.test.ts` holds it to, read through indexes: the
- * stored key on the citation side, the identifiers' match-key index on the
- * holder side, and the cited-decision index from a holder to its citations.
- */
-export const reopenCitationsForArrivals = async (
-  tx: CitationGraphTransaction,
-  arrivals: readonly CitationArrival[],
-  cap: number = settleCapFor(arrivals),
-): Promise<ReopenedCitations> => {
-  const arriving = arrivingRowsOf(arrivals);
-  if (arriving.length === 0) {
-    return NOTHING_REOPENED;
-  }
-  // Rows stored before the key existed are matched by their folded columns
-  // until the repair has keyed them; the arm is left out once none remain.
-  const matchUnkeyed = await unkeyedCitationsRemain(tx);
-  // audit: skip — reopens derived public case-law citation resolutions
-  const result: unknown = await tx.execute(
-    reopenForArrivalsSql({ arriving, matchUnkeyed, cap }),
-  );
-  return reopenedOf(result);
 };
 
 /**
@@ -246,40 +138,6 @@ export const enqueueCitationArrivals = async (
   return arrivals.length;
 };
 
-const IDENTIFIER_TYPES: ReadonlySet<string> = new Set(
-  Object.values(DECISION_IDENTIFIER_TYPES),
-);
-
-const isDecisionIdentifierType = (
-  value: unknown,
-): value is DecisionIdentifierType =>
-  typeof value === "string" && IDENTIFIER_TYPES.has(value);
-
-const decodeArrival = (row: unknown): CitationArrival => {
-  if (!isRecord(row)) {
-    return panic("Invalid citation arrival row");
-  }
-  const decisionId = row["decision_id"];
-  const type = row["identifier_type"];
-  const matchKey = row["match_key"];
-  const jurisdiction = row["jurisdiction"];
-  const decisionDate = row["decision_date"];
-  return typeof decisionId === "string" &&
-    isDecisionIdentifierType(type) &&
-    typeof matchKey === "string" &&
-    typeof jurisdiction === "string" &&
-    isCaseLawJurisdiction(jurisdiction) &&
-    (typeof decisionDate === "string" || decisionDate === null)
-    ? {
-        decisionId: brandPersistedCaseLawDecisionId(decisionId),
-        type,
-        matchKey,
-        jurisdiction,
-        decisionDate,
-      }
-    : panic("Invalid citation arrival row");
-};
-
 /**
  * Who drains a decision write's arrivals: the decision itself after its
  * write, or the caller once after a page of them.
@@ -291,22 +149,6 @@ export const CITATION_ARRIVAL_DRAIN_OWNER = {
 
 export type CitationArrivalDrainOwner =
   (typeof CITATION_ARRIVAL_DRAIN_OWNER)[keyof typeof CITATION_ARRIVAL_DRAIN_OWNER];
-
-/** Arrivals one drain takes; the next drain continues where it stopped. */
-export const CITATION_ARRIVAL_DRAIN_LIMIT = 2000;
-
-export type CitationArrivalDrain = {
-  /** Arrivals taken from the queue. */
-  drained: number;
-  reopened: number;
-  settled: CitationResolutionCounts | null;
-};
-
-const NOTHING_DRAINED: CitationArrivalDrain = {
-  drained: 0,
-  reopened: 0,
-  settled: null,
-};
 
 type GraphExecutor = { execute: (query: SQL) => Promise<unknown> };
 
@@ -326,55 +168,28 @@ const arrivalsWaiting = async <TTx extends GraphExecutor>(
   });
 
 /**
- * Take up to `limit` arrivals, oldest first, reopen what they answer and
- * settle it, in one graph transaction that also deletes them. An empty queue
- * is read without the graph lock, so a caller with nothing enqueued does not
- * wait behind the graph.
+ * Take a bounded batch of arrivals, oldest first, reopen what they answer and
+ * settle it, in one graph transaction that also deletes them
+ * (`drainCitationArrivalsIn`). An empty queue is read without the graph lock,
+ * so a caller with nothing enqueued does not wait behind the graph.
  */
 export const drainCitationArrivals = async <TTx extends GraphExecutor>(
   transact: GraphTransactionRunner<TTx>,
-  { limit = CITATION_ARRIVAL_DRAIN_LIMIT }: { limit?: number } = {},
+  options: { limit?: number } = {},
 ): Promise<CitationArrivalDrain> => {
   if (!(await arrivalsWaiting(transact))) {
     return NOTHING_DRAINED;
   }
-  // Drains are serialized by the graph lock, so no two take the same rows.
-  return await runCitationGraphTransaction(transact, async (tx) => {
-    // audit: skip — derived public case-law citation queue, not a user action
-    const taken: unknown = await tx.execute(sql`
-      WITH picked AS (
-        SELECT id
-          FROM ${caseLawCitationArrivals}
-         ORDER BY id
-         LIMIT ${limit}
-      )
-      DELETE FROM ${caseLawCitationArrivals} arrival
-       USING picked
-       WHERE arrival.id = picked.id
-      RETURNING arrival.decision_id::text AS decision_id,
-                arrival.identifier_type,
-                arrival.match_key,
-                arrival.jurisdiction,
-                arrival.decision_date::text AS decision_date
-    `);
-    const arrivals = executedRows(taken).map(decodeArrival);
-    if (arrivals.length === 0) {
-      return NOTHING_DRAINED;
-    }
-    const cap = settleCapFor(arrivals);
-    const reopened = await reopenCitationsForArrivals(tx, arrivals, cap);
-    return {
-      drained: arrivals.length,
-      reopened: reopened.reopened,
-      settled: await settleReopenedCitations(tx, [reopened], cap),
-    };
-  });
+  return await runCitationGraphTransaction(
+    transact,
+    async (tx) => await drainCitationArrivalsIn(tx, options),
+  );
 };
 
 /**
  * Drain after a write that already committed. A failed drain leaves its
- * arrivals queued for the next one, so it is reported, never raised: the
- * write it follows stands either way.
+ * arrivals queued for the next one, the next write's or the standing walk's,
+ * so it is reported, never raised: the write it follows stands either way.
  */
 export const drainCitationArrivalsAfterWrite = async <
   TTx extends GraphExecutor,
