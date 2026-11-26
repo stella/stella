@@ -15,6 +15,14 @@
 // returns; `startTransition` and `flushSync` callbacks run synchronously and
 // count as the effect's own body.
 //
+// Followed: a local helper the effect calls synchronously (a function
+// declaration, an arrow or function bound to a const, or one wrapped in
+// useCallback / useLatestCallback) that itself writes state synchronously, at
+// any depth of such helpers. `const recompute = () => setCount(...)` called
+// from the effect is the same write as calling the setter there. In an async
+// helper only the part before its first `await` runs synchronously; a write
+// after it lands once the effect has returned, like a promise callback.
+//
 // Allowed: writes from a callback the effect hands to an external system (a
 // subscription, an observer, a timer, a promise), which run when that system
 // says so, not on every render.
@@ -63,6 +71,24 @@ export const EFFECT_HOOKS = new Set([
 ]);
 /** Calls that run their callback before returning, inside the effect. */
 const SYNCHRONOUS_RUNNERS = new Set(["startTransition", "flushSync"]);
+/** Hooks that return the function they are given, or one that calls it. */
+const FUNCTION_WRAPPERS = new Set(["useCallback", "useLatestCallback"]);
+
+// The function a binding holds: `const f = () => ...`, `const f = function`,
+// or `const f = useCallback(() => ..., deps)`.
+const boundFunction = (init) => {
+  if (FUNCTIONS.has(init?.type)) {
+    return init;
+  }
+  if (
+    init?.type === "CallExpression" &&
+    FUNCTION_WRAPPERS.has(calleeName(init.callee) ?? "") &&
+    FUNCTIONS.has(init.arguments[0]?.type)
+  ) {
+    return init.arguments[0];
+  }
+  return null;
+};
 
 // The name a callee is called by: `name(...)` or `object.name(...)`.
 export const calleeName = (callee) =>
@@ -144,12 +170,64 @@ export default eslintCompatPlugin({
       createOnce(context) {
         const setters = new Set();
         const findings: Parameters<typeof context.report>[0][] = [];
+        // Local helpers by binding, the functions that write state
+        // synchronously, and every call of a bound helper with the function
+        // whose synchronous run it belongs to.
+        const helpers = new Map();
+        const writers = new Set();
+        const helperCalls: {
+          node: unknown;
+          variable: unknown;
+          owner: unknown;
+        }[] = [];
+        const directWrites: { node: unknown; owner: unknown }[] = [];
+        // The start of the first `await` in each async function.
+        const firstAwait = new Map();
+        const afterFirstAwait = (owner, node) =>
+          owner?.async === true &&
+          firstAwait.has(owner) &&
+          firstAwait.get(owner) < node.range[0];
         return {
           Program() {
             setters.clear();
             findings.length = 0;
+            helpers.clear();
+            writers.clear();
+            helperCalls.length = 0;
+            firstAwait.clear();
+            directWrites.length = 0;
+          },
+          AwaitExpression(node) {
+            const owner = enclosingFunction(node);
+            if (owner && !(firstAwait.get(owner) <= node.range[0])) {
+              firstAwait.set(owner, node.range[0]);
+            }
+          },
+          ForOfStatement(node) {
+            if (node.await) {
+              const owner = enclosingFunction(node);
+              if (owner && !(firstAwait.get(owner) <= node.range[0])) {
+                firstAwait.set(owner, node.range[0]);
+              }
+            }
+          },
+          FunctionDeclaration(node) {
+            if (node.id && isIdentifierReference(node.id)) {
+              const variable = resolveVariable(context, node.id);
+              if (variable) {
+                helpers.set(variable, node);
+              }
+            }
           },
           VariableDeclarator(node) {
+            const helper =
+              node.id.type === "Identifier" ? boundFunction(node.init) : null;
+            if (helper && isIdentifierReference(node.id)) {
+              const variable = resolveVariable(context, node.id);
+              if (variable) {
+                helpers.set(variable, helper);
+              }
+            }
             if (
               node.id.type !== "ArrayPattern" ||
               node.init?.type !== "CallExpression" ||
@@ -166,18 +244,52 @@ export default eslintCompatPlugin({
             }
           },
           CallExpression(node) {
-            if (
-              !isIdentifierReference(node.callee) ||
-              !setters.has(resolveVariable(context, node.callee))
-            ) {
+            if (!isIdentifierReference(node.callee)) {
               return;
             }
+            const variable = resolveVariable(context, node.callee);
             const owner = synchronousOwner(node);
+            if (!setters.has(variable)) {
+              helperCalls.push({ node, variable, owner });
+              return;
+            }
+            // Visited in source order, but an await later in the source can
+            // only follow this call, so the check waits for the exit pass.
+            directWrites.push({ node, owner });
             if (isEffectCallback(owner) || isEffectCleanup(owner)) {
               findings.push({ node, messageId: "effectStateWrite" });
             }
           },
           "Program:exit"() {
+            for (const { node, owner } of directWrites) {
+              if (owner && !afterFirstAwait(owner, node)) {
+                writers.add(owner);
+              }
+            }
+            // A function that synchronously calls a writer writes too.
+            let grew = true;
+            while (grew) {
+              grew = false;
+              for (const { node, variable, owner } of helperCalls) {
+                if (
+                  owner &&
+                  !writers.has(owner) &&
+                  writers.has(helpers.get(variable)) &&
+                  !afterFirstAwait(owner, node)
+                ) {
+                  writers.add(owner);
+                  grew = true;
+                }
+              }
+            }
+            for (const { node, variable, owner } of helperCalls) {
+              if (
+                writers.has(helpers.get(variable)) &&
+                (isEffectCallback(owner) || isEffectCleanup(owner))
+              ) {
+                findings.push({ node, messageId: "effectStateWrite" });
+              }
+            }
             const options: unknown = context.options[0];
             const census =
               typeof options === "object" &&
