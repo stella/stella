@@ -26,10 +26,10 @@ import committedWeights from "../../mcp-connect-tool-weights.json" with { type: 
 // holds on every serving generation (37).
 // Research website notes add read_site_notes and save_site_notes (3,701
 // characters together) for coding agents that browse on the member's
-// computer. reformat_into_template adds 1,461 characters for applying an
+// computer. reformat_into_template adds 1,466 characters for applying an
 // organisation template's house style to a stored document.
 // These measured limits include that shape; lower them as tools shrink.
-const TOTAL_CONNECT_CHAR_BUDGET = 145_920;
+const TOTAL_CONNECT_CHAR_BUDGET = 145_925;
 const PER_TOOL_CONNECT_CHAR_CAP = 8179;
 
 describe("MCP connect-time tool budget", () => {
