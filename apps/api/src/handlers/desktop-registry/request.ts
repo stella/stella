@@ -40,7 +40,7 @@ import {
   desktopRegistryRequestHeaders,
 } from "@/api/lib/business-registries/desktop/request-contract";
 import { revokeDesktopRegistryCredential } from "@/api/lib/business-registries/desktop/revocation";
-import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { userIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const defaultFormatSourceSchema = v.picklist([
@@ -85,8 +85,8 @@ const desktopRegistryConfigResponseSchema = v.object({
     v.pipe(v.string(), v.maxLength(DESKTOP_ACCOUNT_IMAGE_MAX_LENGTH)),
   ),
   identity: v.object({
-    userId: resourceIdSchema("user"),
-    organizationId: resourceIdSchema("organization"),
+    userId: userIdSchema,
+    organizationId: v.pipe(v.string(), v.maxLength(128)),
   }),
   organizationName: v.pipe(v.string(), v.maxLength(256)),
 });
