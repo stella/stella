@@ -161,6 +161,23 @@ const readAutoLabel = (block: DocxBlock, label: string): RawLabel | null => {
   };
 };
 
+/** A month's name behind a number and a period: the day of a date
+ *  (`24. Juni 2021`, `1. Januar`), not a label. Czech writes its months in
+ *  lower case, which no label is followed by anyway. */
+const MONTH_NAME =
+  /^(?:januar|jänner|februar|märz|april|mai|juni|juli|august|september|oktober|november|dezember|january|february|march|may|june|july|october|december)(?![\p{L}])/iu;
+
+/** What stands behind the month of a date: a year, a mark, a word in
+ *  lower case, or nothing. A heading that opens with a month's name
+ *  (`May Deliveries`) goes on with a capital. */
+const DATE_REST =
+  /^\p{L}+(?:$|\s*[,.;:)]|[ \u00A0]+(?:\d{2,4}(?!\p{L})|\p{Ll}))/u;
+
+/** Whether the text behind a number and a period is the rest of a date,
+ *  whatever blank parts the two. */
+const isDateRest = (next: string): boolean =>
+  MONTH_NAME.test(next) && DATE_REST.test(next);
+
 /** A typed label is taken only when it is set off the way a label is; a
  *  sentence may open with a number (`10 dnů`, `1. ledna`). */
 const isTypedLabel = (shape: LabelShape, after: string): boolean => {
@@ -185,12 +202,14 @@ const isTypedLabel = (shape: LabelShape, after: string): boolean => {
   if (shape.numeral === "decimal") {
     const dotted = (shape.path?.length ?? 0) > 1;
     const bracketed = shape.close !== "";
-    return (
-      dotted ||
-      bracketed ||
-      blank.includes("\t") ||
-      (shape.period && !/^\p{Ll}/u.test(next))
-    );
+    if (dotted || bracketed) {
+      return true;
+    }
+    // The day of a date is no label, behind a blank or behind a tab.
+    if (shape.period && isDateRest(next)) {
+      return false;
+    }
+    return blank.includes("\t") || (shape.period && !/^\p{Ll}/u.test(next));
   }
   if (shape.numeral === "upperRoman" || shape.numeral === "upperAmbiguous") {
     return shape.period || shape.close !== "";
