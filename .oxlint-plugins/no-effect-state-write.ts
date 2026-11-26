@@ -68,6 +68,43 @@ export const EFFECT_HOOKS = new Set([
 ]);
 /** Calls that run their callback before returning, inside the effect. */
 const SYNCHRONOUS_RUNNERS = new Set(["startTransition", "flushSync"]);
+// Statements and expressions an await can sit in and still run on every
+// call: no branch, loop, short-circuit or nested function between it and
+// the helper's top-level statement list.
+const UNCONDITIONAL_PARENTS = new Set([
+  "AwaitExpression",
+  "AssignmentExpression",
+  "ExpressionStatement",
+  "ReturnStatement",
+  "VariableDeclaration",
+  "VariableDeclarator",
+]);
+
+// Whether `node` (an await, or a `for await` loop) runs every time `owner`
+// runs: it sits in one of `owner`'s top-level statements, reached only
+// through UNCONDITIONAL_PARENTS.
+const suspendsUnconditionally = (node, owner) => {
+  let current = node;
+  while (current.parent && current.parent !== owner.body) {
+    const parent = current.parent;
+    // A top-level try block runs on every call too; its catch handler only
+    // when something before it threw, which rarely precedes the first await.
+    const tryBlock =
+      parent.type === "BlockStatement" &&
+      parent.parent?.type === "TryStatement" &&
+      parent.parent.block === parent;
+    if (tryBlock) {
+      current = parent.parent;
+      continue;
+    }
+    if (!UNCONDITIONAL_PARENTS.has(parent.type)) {
+      return false;
+    }
+    current = parent;
+  }
+  return current.parent === owner.body && owner.body?.type === "BlockStatement";
+};
+
 /** Hooks that return the function they are given, or one that calls it. */
 const FUNCTION_WRAPPERS = new Set(["useCallback", "useLatestCallback"]);
 
@@ -175,7 +212,12 @@ export default eslintCompatPlugin({
         const afterFirstAwait = (owner, node) =>
           owner?.async === true &&
           firstAwait.has(owner) &&
-          firstAwait.get(owner) < node.range[0];
+          firstAwait.get(owner) <= node.range[0];
+        const recordSuspension = (owner, end: number) => {
+          if (!(firstAwait.get(owner) <= end)) {
+            firstAwait.set(owner, end);
+          }
+        };
         return {
           Program() {
             setters.clear();
@@ -188,16 +230,16 @@ export default eslintCompatPlugin({
           },
           AwaitExpression(node) {
             const owner = enclosingFunction(node);
-            if (owner && !(firstAwait.get(owner) <= node.range[0])) {
-              firstAwait.set(owner, node.range[0]);
+            // The helper has suspended once this await has evaluated its
+            // operand, so only code after the whole expression runs later.
+            if (owner && suspendsUnconditionally(node, owner)) {
+              recordSuspension(owner, node.range[1]);
             }
           },
           ForOfStatement(node) {
-            if (node.await) {
-              const owner = enclosingFunction(node);
-              if (owner && !(firstAwait.get(owner) <= node.range[0])) {
-                firstAwait.set(owner, node.range[0]);
-              }
+            const owner = enclosingFunction(node);
+            if (node.await && owner && suspendsUnconditionally(node, owner)) {
+              recordSuspension(owner, node.right.range[1]);
             }
           },
           FunctionDeclaration(node) {

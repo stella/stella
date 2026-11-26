@@ -86,3 +86,15 @@ test("allows a helper that writes only after an await, or that the effect only h
     ),
   ).toEqual([]);
 });
+
+test("counts a write after an await that does not always suspend, or inside the awaited operand", async () => {
+  expect(
+    await lintSingleRule(
+      RULE,
+      [
+        "function A({ needsFetch }) { const [x, setX] = useState(0); const load = async () => { if (needsFetch) await fetchValue(); setX(1); }; useEffect(() => { void load(); }, []); }",
+        "function B() { const [x, setX] = useState(0); const load = async () => { await setX(1); }; useEffect(() => { void load(); }, []); }",
+      ].join("\n"),
+    ),
+  ).toEqual([1, 2]);
+});
