@@ -10,10 +10,10 @@ import {
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
+import { reopenCitationsForDecisionIdentifiers } from "@/api/handlers/case-law/citation-arrivals";
 import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import {
   CITATION_ARRIVAL_SETTLE_CAP,
-  reopenCitationsForDecisionIdentifiers,
   settleReopenedCitations,
 } from "@/api/handlers/case-law/citation-resolution";
 import {

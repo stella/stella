@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext, useMemo } from "react";
 import type * as React from "react";
 
 import { rendersNothing } from "../lib/renders-nothing";
@@ -135,11 +135,16 @@ const DetailsGrid = ({
   variant = "sheet",
   ...props
 }: DetailsGridProps) => {
-  const shape = {
-    labelWidth: labelWidth ?? (variant === "list" ? "auto" : "md"),
-    orientation,
-    variant,
-  };
+  // One shape object per shape, so the cells under it re-render only when
+  // the shape changes.
+  const shape = useMemo(
+    () => ({
+      labelWidth: labelWidth ?? (variant === "list" ? "auto" : "md"),
+      orientation,
+      variant,
+    }),
+    [labelWidth, orientation, variant],
+  );
   if (variant === "list") {
     if (orientation === "horizontal") {
       return (

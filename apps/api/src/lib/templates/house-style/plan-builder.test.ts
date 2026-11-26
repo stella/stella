@@ -843,6 +843,67 @@ describe("buildTemplatePlan, justified lines in front of a manual line break", (
   });
 });
 
+describe("buildTemplatePlan, citations of a level that prints punctuated words", () => {
+  // Articles `Čl. 1` to `Čl. 6`: a number-only field would show `.2`.
+  const fieldsOf = (citing: string) => {
+    const manifest = czechDecimalContract(citing);
+    const { plan, note } = build(manifest);
+    const blockId = blockIdOf(manifest, citing);
+    return {
+      citing,
+      references: (plan.references ?? []).filter(
+        (reference) => reference.blockId === blockId,
+      ),
+      unlinked: note.items.filter(
+        (item) => item.kind === "referenceUnlinked" && item.blockId === blockId,
+      ),
+    };
+  };
+
+  test("one field stands for word and number, in the citation's spelling", () => {
+    const { citing, references, unlinked } = fieldsOf(
+      "Podle čl. 3 této smlouvy platí čl. 2.1 obdobně.",
+    );
+    expect(
+      references.map(({ start, end, instruction, expectedText }) => ({
+        cited: citing.slice(start, end),
+        instruction,
+        expectedText,
+      })),
+    ).toEqual([
+      {
+        cited: "čl. 3",
+        instruction: String.raw`\n \* lower \h`,
+        expectedText: "čl. 3",
+      },
+      { cited: "2.1", instruction: String.raw`\n \h`, expectedText: "2.1" },
+    ]);
+    expect(unlinked).toEqual([]);
+  });
+
+  test("a citation at the start of a sentence needs no letter-case format", () => {
+    const { references } = fieldsOf("Čl. 3 této smlouvy se použije obdobně.");
+    expect(references).toEqual([
+      expect.objectContaining({
+        start: 0,
+        instruction: String.raw`\n \h`,
+        expectedText: "Čl. 3",
+      }),
+    ]);
+  });
+
+  test("other words, or another blank, leave the citation as text with the reason", () => {
+    expect(fieldsOf("Podle článku 3 této smlouvy.")).toMatchObject({
+      references: [],
+      unlinked: [expect.objectContaining({ reason: "punctuatedLevelWords" })],
+    });
+    expect(fieldsOf("Podle čl.\u00A03 této smlouvy.")).toMatchObject({
+      references: [],
+      unlinked: [expect.objectContaining({ reason: "blankDiffers" })],
+    });
+  });
+});
+
 describe("buildTemplatePlan, what is left unlinked", () => {
   const manifest = czechContract(
     "Viz čl. XX této smlouvy a čl. II odst. 2 této smlouvy.",

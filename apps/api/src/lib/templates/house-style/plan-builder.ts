@@ -47,6 +47,7 @@ import type {
 } from "@/api/lib/templates/house-style/plan-numbering";
 import type { DetectedReference } from "@/api/lib/templates/house-style/reference-detector";
 import {
+  selectLabelField,
   selectReferenceField,
   showsBareNumber,
 } from "@/api/lib/templates/house-style/reference-fields";
@@ -94,8 +95,15 @@ type UnlinkedReason =
   | "designatorMismatch"
   /** The target's level prints words with punctuation (`Čl. 3`,
    *  `Příloha č. 2`); a field drops the words and keeps the punctuation,
-   *  so it would show `.2`. */
+   *  so it would show `.2`. And the citation does not print those words
+   *  itself (`článku 3`), so no field stands for word and number either. */
   | "punctuatedLevelWords"
+  /** The citation prints the label's words in a spelling no field gives
+   *  back: lower case in front of a roman number (`čl. IV`). */
+  | "caseNotReproducible"
+  /** The citation prints the label's words with another blank than the
+   *  label (a no-break space for a plain one); a field would change it. */
+  | "blankDiffers"
   /** The reference stands in the paragraph it names. */
   | "sameParagraph"
   /** The span cannot carry a field: it lies in a stripped label or in a
@@ -1102,16 +1110,61 @@ type MarkOptions = {
 
 type Designator = DetectedReference["designators"][number];
 
-type Field = Pick<TemplatePlanReference, "instruction" | "expectedText">;
+type Field = Pick<TemplatePlanReference, "instruction" | "expectedText"> & {
+  /** Where the field starts when it covers more than the designator. */
+  start?: number;
+};
+
+/** A citation: the block's text and the designator's span in it. */
+type Citation = { text: string; start: number; end: number };
+
+const LABEL_FIELD_REASONS = {
+  "case-not-reproducible": "caseNotReproducible",
+  "blank-differs": "blankDiffers",
+} as const;
+
+/**
+ * The field for a citation of a target whose level prints punctuated
+ * words: one field over word and number that prints the whole label, or
+ * why the citation stays text.
+ */
+const labelFieldOf = (
+  citation: Citation,
+  levelText: string,
+  label: string | null,
+  keepsSourceNumbers: boolean,
+): Field | UnlinkedReason => {
+  if (label === null) {
+    return "punctuatedLevelWords";
+  }
+  const field = selectLabelField({
+    ...citation,
+    levelText,
+    label,
+    keepsSourceNumbers,
+  });
+  if (field.isOk()) {
+    const { instruction, expectedText, start } = field.value;
+    return { instruction, expectedText, start };
+  }
+  const { reason } = field.error;
+  if (reason === "case-not-reproducible" || reason === "blank-differs") {
+    return LABEL_FIELD_REASONS[reason];
+  }
+  return reason === "designator-mismatch"
+    ? "designatorMismatch"
+    : "punctuatedLevelWords";
+};
 
 /** The field that stands for a designator citing `target`, or why none
  *  shows exactly what the reference prints. */
 const fieldOf = (
   { mode }: Context,
   levelsByList: ReadonlyMap<number, ListLevelFormat[]>,
-  designatorText: string,
-  { level, sourceLabel, counters }: Placement,
+  citation: Citation,
+  target: Placement,
 ): Field | UnlinkedReason => {
+  const { level, sourceLabel, counters } = target;
   const levels =
     level === null ? undefined : levelsByList.get(level.abstractNumId);
   const own = levels?.find(({ ilvl }) => ilvl === level?.ilvl);
@@ -1121,7 +1174,7 @@ const fieldOf = (
   // Under the house scheme the field shows the template's number, which
   // may differ from the designator the sentence was written with.
   const field = selectReferenceField({
-    designatorText,
+    designatorText: citation.text.slice(citation.start, citation.end),
     levelText: own.lvlText,
     numbering:
       mode === "keepSource"
@@ -1134,9 +1187,17 @@ const fieldOf = (
       expectedText: field.value.expectedText,
     };
   }
-  return field.error.reason === "punctuated-words"
-    ? "punctuatedLevelWords"
-    : "designatorMismatch";
+  if (field.error.reason !== "punctuated-words") {
+    return "designatorMismatch";
+  }
+  // No field shows the bare number of such a level; one over the
+  // citation's word and number shows the label the output prints.
+  return labelFieldOf(
+    citation,
+    own.lvlText,
+    mode === "keepSource" ? sourceLabel : plannedLabelOf(target, levelsByList),
+    mode === "keepSource",
+  );
 };
 
 /** The block a designator cites, or why it names none. */
@@ -1283,16 +1344,25 @@ const markReferences = ({
     if (paragraphOf(reference.blockId) === paragraphOf(targetBlockId)) {
       return "sameParagraph";
     }
-    const text = blockById.get(reference.blockId)?.text.slice(start, end);
+    const text = blockById.get(reference.blockId)?.text;
     if (text === undefined) {
       return "notPlaceable";
     }
-    const field = fieldOf(context, levelsByList, text, target);
+    const field = fieldOf(context, levelsByList, { text, start, end }, target);
     if (typeof field === "string") {
       return field;
     }
-    return claim(reference.blockId, start, end)
-      ? { blockId: reference.blockId, start, end, targetBlockId, ...field }
+    const { instruction, expectedText } = field;
+    const from = field.start ?? start;
+    return claim(reference.blockId, from, end)
+      ? {
+          blockId: reference.blockId,
+          start: from,
+          end,
+          targetBlockId,
+          instruction,
+          expectedText,
+        }
       : "notPlaceable";
   };
   for (const reference of references) {

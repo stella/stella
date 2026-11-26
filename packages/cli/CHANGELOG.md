@@ -1,5 +1,17 @@
 # @stll/cli
 
+## 8.5.0
+
+### Minor Changes
+
+- [#9508](https://github.com/stella/stella/pull/9508) [`b0f3597`](https://github.com/stella/stella/commit/b0f3597dcef8a540bd0a6a08f4713251453218f0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `stella site-notes save` to add, confirm, replace or remove the research notes an agent keeps about how a research website works.
+
+### Patch Changes
+
+- [#9506](https://github.com/stella/stella/pull/9506) [`b587e43`](https://github.com/stella/stella/commit/b587e43d708853910665d9b4826126ae4d2716b3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A document's version history names where a file the member's browser downloaded for a chat came from (`browserDownload`).
+
+- [#9517](https://github.com/stella/stella/pull/9517) [`c5eddf7`](https://github.com/stella/stella/commit/c5eddf7057a283edae1c21d461d0448f26d8959d) Thanks [@NavpreetSSidhu](https://github.com/NavpreetSSidhu)! - Transcribe a recording in a matter (`recording-transcriptions runs-create`) and follow the run (`recording-transcriptions runs-get`); the transcript is saved beside the recording.
+
 ## 8.4.1
 
 ### Patch Changes
