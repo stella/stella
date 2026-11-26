@@ -4,8 +4,9 @@
  * generation reaches `all_current`; with `--only-requested` the serving
  * generation is never walked; an until-current run gives a current route no
  * page while another is not current, and walks again a proof revoked or
- * expired before or during the run; a decision the engine lost revokes its
- * route's proof and the same run proves the route again; a run that dies
+ * expired before or during the run, even while it waits on a missing
+ * index; a decision the engine lost revokes its route's proof and the same
+ * run proves the route again; a run that dies
  * mid-pass is resumed by the next one from the stored cursor, on the same
  * pass; while a flip holds the projection mutation fence, the runner
  * records nothing and stops instead of interleaving with it; and two runners
@@ -564,6 +565,63 @@ if (!databaseUrl || !runPostgresTests) {
           [revokedLater.indexId]: 1,
         });
         expect(verdictOf(again, FLIP_V10).type).toBe("all_current");
+      });
+    });
+
+    test("an until-current run waiting on a missing index still reads the proofs again and walks a proof revoked meanwhile", async () => {
+      await withDb(async (db, observer) => {
+        const fixture = await standPair(db);
+        const proven = await run(db, fixture, { onlyRequested: true });
+        expect(proven.stop).toEqual({ type: "all_current" });
+        const missing =
+          proven.routes.find(({ route }) => route.indexId !== POL_V10)?.route ??
+          panic("The generation declares one route only");
+        // The one route not current has no index: the run sets it aside and
+        // waits to read it again, five minutes on.
+        await runnerOf(db)(
+          async (tx) =>
+            await revokeCorpusIndexRouteProofTx(tx, missing, "present_drift"),
+        );
+        fixture.incarnations.delete(missing.indexId);
+        const revocation = { done: false };
+        const again = await run(db, fixture, {
+          onlyRequested: true,
+          // Shorter than the set-aside route's recheck: only a reading of
+          // the proofs within the wait reaches the revoked route.
+          budget: {
+            endsAt: clock.now() + 4 * CORPUS_INDEX_ROUTE_PROOF_REFRESH_MS,
+            pages: 500,
+          },
+          sleep: async (ms) => {
+            if (!revocation.done) {
+              revocation.done = true;
+              await observer.transaction(
+                async (tx) =>
+                  await revokeCorpusIndexRouteProofTx(
+                    asTestRaw<Transaction>(tx),
+                    POL_ROUTE,
+                    "present_drift",
+                  ),
+              );
+            }
+            await clock.advance(ms);
+          },
+        });
+        expect(revocation.done).toBe(true);
+        expect(again.stop).toEqual({ type: "budget_spent" });
+        const reportOf = (indexId: string) =>
+          again.routes.find(({ route }) => route.indexId === indexId) ??
+          panic(`${indexId} has no report`);
+        expect(reportOf(missing.indexId)).toMatchObject({
+          pages: 1,
+          proofs: 0,
+          setAside: { type: "index_missing" },
+        });
+        expect(reportOf(POL_V10).proofs).toBe(1);
+        const row = await proofRow(db, POL_V10);
+        expect(row.provenPassNumber).toBeGreaterThanOrEqual(
+          row.revokedPassNumber ?? panic("The proof was never revoked"),
+        );
       });
     });
 

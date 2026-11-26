@@ -21,9 +21,9 @@
  * clock, the predicate the flip reads), and gives a route proven current no
  * page while another is not: the run ends once every route is current, so a
  * page on a current route would only delay that. It reads the proofs again
- * after every proof it records, and after any page once its last reading is
- * `CORPUS_INDEX_ROUTE_PROOF_REFRESH_MS` old, so a proof revoked or expired
- * while it runs is walked again. A pass a current route leaves idle either proves
+ * after every proof it records, and once its last reading is
+ * `CORPUS_INDEX_ROUTE_PROOF_REFRESH_MS` old after the next page or within
+ * any wait, so a proof revoked or expired while it runs is walked again. A pass a current route leaves idle either proves
  * later or, too old to prove, is started over by the store
  * (`pass_too_old_to_prove`). A crash or a stop resumes from the cursor the
  * store holds.
@@ -99,7 +99,8 @@ const ROUTES_MAX = 64;
 const IDLE_POLL_MS = 50;
 /**
  * How old an `untilCurrent` run's reading of which routes are current may
- * grow before the next page reads the proofs again.
+ * grow before it reads the proofs again (after the next page, or ending a
+ * wait).
  */
 export const CORPUS_INDEX_ROUTE_PROOF_REFRESH_MS = 60_000;
 
@@ -674,9 +675,47 @@ const refreshProofs = async (walk: Walk): Promise<void> => {
   walk.stop ??= untilCurrentStop(walk.options.untilCurrent, proofs);
 };
 
+/**
+ * One turn of a worker on what `takeRoute` gave it: with no route due, read
+ * the proofs again if an `untilCurrent` run's reading is due, or else wait,
+ * never past the run's end nor (`untilCurrent`) past the next reading; with
+ * a route, walk one page of it and apply what the page did.
+ */
+const turn = async (
+  walk: Walk,
+  taken: Exclude<ReturnType<typeof takeRoute>, { type: "none" }>,
+): Promise<void> => {
+  const { now, sleep, budget, untilCurrent } = walk.options;
+  if (taken.type === "wait") {
+    if (untilCurrent && now() >= walk.refreshAt) {
+      await refreshProofs(walk);
+      return;
+    }
+    const until = untilCurrent
+      ? Math.min(budget.endsAt, walk.refreshAt)
+      : budget.endsAt;
+    await sleep(Math.min(taken.ms, Math.max(until - now(), 0)));
+    return;
+  }
+  const { report } = taken;
+  walk.busy.add(report);
+  walk.pages += 1;
+  const paced = await walk.options.pace();
+  if (paced.type !== "braked" && heldCurrent(walk, report)) {
+    // A reading while the brake held this worker found the route current.
+    walk.busy.delete(report);
+    walk.pages -= 1;
+    return;
+  }
+  const step: Step =
+    paced.type === "braked" ? paced : await stepOf(walk, report.route);
+  walk.busy.delete(report);
+  await applyStep(walk, report, step);
+};
+
 /** One worker: take the next due route, walk one page, until the run stops. */
 const work = async (walk: Walk): Promise<void> => {
-  const { now, sleep, budget } = walk.options;
+  const { now, budget } = walk.options;
   while (walk.stop === null) {
     if (now() >= budget.endsAt || walk.pages >= budget.pages) {
       walk.stop = { type: "budget_spent" };
@@ -687,19 +726,8 @@ const work = async (walk: Walk): Promise<void> => {
       walk.stop = { type: "nothing_to_walk" };
       return;
     }
-    if (taken.type === "wait") {
-      await sleep(Math.min(taken.ms, Math.max(budget.endsAt - now(), 0)));
-      continue;
-    }
-    const { report } = taken;
-    walk.busy.add(report);
-    walk.pages += 1;
-    const paced = await walk.options.pace();
-    const step: Step =
-      paced.type === "braked" ? paced : await stepOf(walk, report.route);
-    walk.busy.delete(report);
-    // db-await-in-loop: a proof's effects are read before the next page
-    await applyStep(walk, report, step);
+    // db-await-in-loop: one page or one reading of the proofs per turn
+    await turn(walk, taken);
   }
 };
 
