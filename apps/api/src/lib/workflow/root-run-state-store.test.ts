@@ -1,11 +1,10 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, jest, test } from "bun:test";
+
+import { deferred } from "@stll/test-kit";
 
 import { createRootRunStateSend } from "@/api/lib/workflow/root-run-state-store";
 
 const COMMAND_TIMEOUT_MS = 20;
-// Long enough that the bound above is reached first, short enough to keep the
-// test quick.
-const LATE_CONNECT_MS = 200;
 
 /**
  * The class this pins: run state is a lock and its bookkeeping, so a command
@@ -17,26 +16,37 @@ const LATE_CONNECT_MS = 200;
  */
 describe("the root run-state command path", () => {
   test("does not send a command whose connection arrived after the deadline", async () => {
-    const sent: string[] = [];
-    const send = createRootRunStateSend(async () => {
-      await Bun.sleep(LATE_CONNECT_MS);
-      return {
-        send: async (command: string) => {
-          sent.push(command);
-          return await Promise.resolve("OK");
-        },
-      };
-    }, COMMAND_TIMEOUT_MS);
+    jest.useFakeTimers();
+    try {
+      const sent: string[] = [];
+      const connectGate = deferred<undefined>();
+      const send = createRootRunStateSend(async () => {
+        await connectGate.promise;
+        return {
+          send: async (command: string) => {
+            sent.push(command);
+            return await Promise.resolve("OK");
+          },
+        };
+      }, COMMAND_TIMEOUT_MS);
 
-    const rejection: unknown = await send("DEL", ["key"]).then(
-      () => null,
-      (error: unknown) => error,
-    );
-    // Past the connect, so the command has had its chance to be sent.
-    await Bun.sleep(LATE_CONNECT_MS);
+      const pending = send("DEL", ["key"]).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      jest.advanceTimersByTime(COMMAND_TIMEOUT_MS);
+      const rejection: unknown = await pending;
+      // Release the late connect so the command has its chance to be sent.
+      connectGate.resolve(undefined);
+      for (let turn = 0; turn < 20; turn += 1) {
+        await Promise.resolve();
+      }
 
-    expect(rejection).toMatchObject({ _tag: "TimeoutError" });
-    expect(sent).toEqual([]);
+      expect(rejection).toMatchObject({ _tag: "TimeoutError" });
+      expect(sent).toEqual([]);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test("sends a command that reached a live connection inside the bound", async () => {

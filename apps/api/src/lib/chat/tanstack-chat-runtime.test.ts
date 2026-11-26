@@ -19,7 +19,6 @@ import {
   CHAT_TOOL_EXECUTOR_METADATA_KEY,
   isServerChatToolCall,
 } from "@stll/api-contract/chat";
-import { sleep } from "@stll/concurrency/sleep";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -88,7 +87,7 @@ test("finishes an asynchronous document mutation before a sibling read starts", 
       name: "write_document",
       description: "Write the document",
     }).server(async () => {
-      await sleep(0);
+      await flushMicrotasks();
       documentVersion = 2;
       return { version: documentVersion };
     }),
@@ -179,7 +178,7 @@ test("sequential gated and ungated calls execute in document order after approva
               description: "Approved document write",
               needsApproval: true,
             }).server(async () => {
-              await sleep(0);
+              await flushMicrotasks();
               executed.push("approved_write");
               versions.push(++documentVersion);
               return { version: documentVersion };
@@ -188,7 +187,7 @@ test("sequential gated and ungated calls execute in document order after approva
               name: "write_document",
               description: "Document write",
             }).server(async () => {
-              await sleep(0);
+              await flushMicrotasks();
               executed.push("write_document");
               versions.push(++documentVersion);
               return { version: documentVersion };
@@ -390,7 +389,9 @@ test("SDK-resolved MCP tools retain server ownership behind approval, including 
     expect(isServerChatToolCall(deferred)).toBe(true);
     expect(
       starts.find((chunk) => chunk.toolCallId === "mcp-read")?.metadata,
-    ).toMatchObject({ [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" });
+    ).toMatchObject({
+      [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server",
+    });
     expect(executed).toBe(0);
   }
 });
@@ -598,7 +599,7 @@ test("a plain client request after a pending gate can finish while server succes
       description: "Approved write",
       needsApproval: true,
     }).server(async () => {
-      await sleep(0);
+      await flushMicrotasks();
       executed.push("approved_write");
       versions.push(++documentVersion);
       return { version: documentVersion };
@@ -611,7 +612,7 @@ test("a plain client request after a pending gate can finish while server succes
       name: "write_document",
       description: "Document write",
     }).server(async () => {
-      await sleep(0);
+      await flushMicrotasks();
       executed.push("write_document");
       versions.push(++documentVersion);
       return { version: documentVersion };
@@ -711,7 +712,9 @@ test("a plain client request after a pending gate can finish while server succes
   expect(settledCalls.every((part) => part.state === "complete")).toBe(true);
   expect(
     settledCalls.find((part) => part.id === "client-order-1"),
-  ).toMatchObject({ output: clientOutput });
+  ).toMatchObject({
+    output: clientOutput,
+  });
 });
 
 type StrippedChunkType = keyof typeof STRIPPED_CHUNK_KEYS;
@@ -842,6 +845,12 @@ const tanstackMetadataOf = (chunk: object): Record<string, unknown> => {
   return typeof tanstack === "object" && tanstack !== null
     ? { ...tanstack }
     : {};
+};
+
+const flushMicrotasks = async (): Promise<void> => {
+  for (let turn = 0; turn < 20; turn += 1) {
+    await Promise.resolve();
+  }
 };
 
 describe("engine-emitted chunk shape", () => {

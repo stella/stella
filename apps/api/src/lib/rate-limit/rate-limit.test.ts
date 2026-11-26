@@ -683,7 +683,9 @@ describe("RedisRateLimitContext", () => {
       context.init(RATE_LIMIT_OPTIONS);
 
       const increment = context.increment("api:client", WINDOW_MS, 1000);
-      await Bun.sleep(0);
+      for (let turn = 0; turn < 20; turn += 1) {
+        await Promise.resolve();
+      }
       expect(sendCalls).toBe(0);
       finishConnect();
 

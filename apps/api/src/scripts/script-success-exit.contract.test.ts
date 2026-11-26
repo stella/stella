@@ -6,6 +6,7 @@ import {
   parseSource,
   walk,
 } from "@stll/scripts/src/syntax-tree";
+import { settledWithin } from "@stll/test-kit";
 
 const successPhase = (source: string): string => {
   const parsed = parseSource("script.ts", source);
@@ -83,18 +84,25 @@ for (const { path, output, fixtures } of [
       stdout: "pipe",
       stderr: "pipe",
     });
-    const deadline = setTimeout(() => child.kill(), 2000);
     try {
-      const [stdout, stderr, exit] = await Promise.all([
-        new Response(child.stdout).text(),
-        new Response(child.stderr).text(),
-        child.exited,
-      ]);
+      const [stdout, stderr, exit] = await settledWithin(
+        Promise.all([
+          new Response(child.stdout).text(),
+          new Response(child.stderr).text(),
+          child.exited,
+        ]),
+        {
+          description: "script to exit after completing work",
+          timeoutMs: 3000,
+        },
+      );
       expect(stdout).toContain(output);
       expect(stderr).toBe("");
       expect(exit).toBe(0);
-    } finally {
-      clearTimeout(deadline);
+    } catch (error) {
+      child.kill();
+      await child.exited;
+      throw error;
     }
   });
 }
