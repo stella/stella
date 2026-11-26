@@ -424,8 +424,9 @@ type Walk = {
   schemes: { body: Scheme; annexes: Scheme };
   /** Positions of annex lines that name an annex without opening it. */
   listedAnnexes: ReadonlySet<number>;
-  /** Ordinals of the articles the document's automatic numbering heads. */
-  numberedArticles: ReadonlySet<number>;
+  /** Positions of typed article headings that head no article of the
+   *  document's own numbering. */
+  articleMentions: ReadonlySet<number>;
   /** Positions of numbered list items that only list the headings. */
   listedHeadings: ReadonlySet<number>;
   article: LabelEntry | null;
@@ -620,6 +621,43 @@ const isArticleMention = (
     numberedArticles.has(ordinal) &&
     isNamedArticle(row)
   );
+};
+
+/**
+ * The positions of the typed article headings that head no article of the
+ * document's own numbering. A mention is one; so is every heading that
+ * counts on from it (`Article 4` behind a mentioned `Article 3`): a part
+ * that counts its own articles (a model contract in an annex) is one run,
+ * and its later headings are no more the document's articles than its
+ * first ones, whose numbers the document's own articles happen to take.
+ */
+const articleMentionPositions = (
+  numberedArticles: ReadonlySet<number>,
+  labelled: readonly LabelledRow[],
+): Set<number> => {
+  const mentions = new Set<number>();
+  /** The ordinal of the typed article heading read last, when it was one
+   *  of these. */
+  let counted: number | null = null;
+  for (const row of labelled) {
+    if (row.raw.origin !== "manual" || !isNamedArticle(row)) {
+      continue;
+    }
+    const { core, path } = row.raw.shape;
+    const ordinal = countedOrdinal(core) ?? path?.at(0) ?? null;
+    const heads = path === null || path.length <= 1;
+    if (
+      isArticleMention(numberedArticles, row) ||
+      (heads && counted !== null && ordinal === counted + 1)
+    ) {
+      mentions.add(row.position);
+      // A clause of such an article (`Article 4.2`) counts nothing on.
+      counted = heads ? ordinal : counted;
+    } else {
+      counted = null;
+    }
+  }
+  return mentions;
 };
 
 /**
@@ -851,7 +889,7 @@ const classify = (walk: Walk, row: LabelledRow): LabelEntry | null => {
     return isAnnexRow(row) ? openAnnex(walk, row) : null;
   }
   if (isNamedArticle(row)) {
-    if (walk.annex === null && isArticleMention(walk.numberedArticles, row)) {
+    if (walk.annex === null && walk.articleMentions.has(row.position)) {
       return null;
     }
     // A keyword over a dotted number (`Article 5.1 Fees`) heads a clause of
@@ -1088,9 +1126,10 @@ export const buildLabelIndex = ({
   const labelled = rows.filter(isLabelled);
   const numberedArticles = numberedArticleOrdinals(labelled);
   const listedHeadings = listedHeadingPositions(labelled);
+  const articleMentions = articleMentionPositions(numberedArticles, labelled);
   // Mentions say nothing about how the document numbers itself.
   const structural = labelled.filter(
-    (row) => !isArticleMention(numberedArticles, row),
+    ({ position }) => !articleMentions.has(position),
   );
   const listedAnnexes = listedAnnexPositions(rows, structural);
   const firstAnnex =
@@ -1117,7 +1156,7 @@ export const buildLabelIndex = ({
     const opened: Walk = {
       rows,
       listedAnnexes,
-      numberedArticles,
+      articleMentions,
       listedHeadings,
       schemes,
       article: spanning?.article ?? null,

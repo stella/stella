@@ -2448,4 +2448,47 @@ describe("buildTemplatePlan, an article heading the index does not count", () =>
     // The numbered articles keep their numbers.
     expect(itemOf(plan, manifest, "Definitions")?.numbering).not.toBeNull();
   });
+
+  test("the articles of a part that counts its own are set alike, also past the document's last number", () => {
+    const article = (label: string, text: string) => ({
+      ...numbered(label, text, 1),
+      styleName: "heading 1",
+      outlineLevel: 0,
+    });
+    const own = (text: string) => ({
+      text,
+      styleName: "heading 5",
+      outlineLevel: 4,
+    });
+    const manifest = manifestOf([
+      "AGREEMENT",
+      article("1.", "Definitions"),
+      numbered("1.1", "In this agreement the following terms apply.", 1),
+      article("2.", "Term"),
+      numbered("2.1", "The agreement runs for one year.", 1),
+      // The model contract has more articles than the agreement.
+      own("Article 1 Subject matter"),
+      "This specific contract implements the agreement.",
+      own("Article 2 Price"),
+      "The price is fixed.",
+      own("Article 3 Communication details"),
+      "Notices go to the addresses below.",
+      own("Article 4 Guarantee"),
+      "A guarantee is provided on request.",
+    ]);
+    const { plan } = build(manifest);
+    for (const start of [
+      "Article 1 Subject",
+      "Article 2 Price",
+      "Article 3 Communication",
+      "Article 4 Guarantee",
+    ]) {
+      const typed = itemOf(plan, manifest, start);
+      expect(typed).toMatchObject({
+        styleId: PROFILE.roles.articleHeading?.styleId,
+        numbering: null,
+      });
+      expect(typed).not.toHaveProperty("stripLabel");
+    }
+  });
 });
