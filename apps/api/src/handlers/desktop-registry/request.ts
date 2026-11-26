@@ -15,6 +15,7 @@ import type {
 import { Temporal } from "@stll/time";
 
 import {
+  DESKTOP_REGISTRY_RENDERED_TEXT_MAX_LENGTH,
   formatDesktopRegistry,
   getDesktopRegistryConfig,
   searchDesktopRegistry,
@@ -48,7 +49,7 @@ const defaultFormatSourceSchema = v.picklist([
   DESKTOP_REGISTRY_DEFAULT_FORMAT_SOURCE.organization,
 ]);
 
-const desktopRegistryDefaultFormatResponseSchema = v.object({
+const desktopRegistryDefaultFormatResponseSchema = v.strictObject({
   defaultFormatId: v.nullable(v.pipe(v.string(), v.maxLength(128))),
   defaultFormatSource: v.nullable(defaultFormatSourceSchema),
 });
@@ -107,8 +108,16 @@ const desktopRegistrySearchResponseSchema = v.object({
       v.object({
         id: v.pipe(v.string(), v.maxLength(128)),
         name: v.pipe(v.string(), v.maxLength(512)),
-        text: v.pipe(v.string(), v.maxLength(32_768)),
-        rendered: v.optional(v.pipe(v.string(), v.maxLength(32_768))),
+        text: v.pipe(
+          v.string(),
+          v.maxLength(DESKTOP_REGISTRY_RENDERED_TEXT_MAX_LENGTH),
+        ),
+        rendered: v.optional(
+          v.pipe(
+            v.string(),
+            v.maxLength(DESKTOP_REGISTRY_RENDERED_TEXT_MAX_LENGTH),
+          ),
+        ),
       }),
     ),
     v.maxLength(100),
@@ -116,8 +125,14 @@ const desktopRegistrySearchResponseSchema = v.object({
 });
 
 const desktopRegistryFormatResponseSchema = v.object({
-  text: v.pipe(v.string(), v.maxLength(65_536)),
-  rendered: v.pipe(v.string(), v.maxLength(65_536)),
+  text: v.pipe(
+    v.string(),
+    v.maxLength(DESKTOP_REGISTRY_RENDERED_TEXT_MAX_LENGTH),
+  ),
+  rendered: v.pipe(
+    v.string(),
+    v.maxLength(DESKTOP_REGISTRY_RENDERED_TEXT_MAX_LENGTH),
+  ),
 });
 
 // Keep `search` before `setDefaultFormat`: both carry `defaultFormatId` and
