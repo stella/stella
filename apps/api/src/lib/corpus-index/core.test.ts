@@ -160,13 +160,17 @@ describe("settleBoth", () => {
       return "loaded";
     });
 
-    const settled = settleBoth(
-      Promise.reject(new Error("boom")),
-      sibling,
-    ).catch((error: unknown) => error);
+    let isSettled = false;
+    const settled = settleBoth(Promise.reject(new Error("boom")), sibling)
+      .catch((error: unknown) => error)
+      .finally(() => {
+        isSettled = true;
+      });
     for (let turn = 0; turn < 10; turn += 1) {
       await Promise.resolve();
     }
+    expect(isSettled).toBe(false);
+    expect(siblingFinished).toBe(false);
     siblingGate.resolve(undefined);
     const caught = await settled;
 
