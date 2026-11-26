@@ -143,6 +143,8 @@ const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
     "no dedicated endpoint: MCP-only launcher for the portable two-file comparison App, which stages through prepare_file_comparison (apps/api/src/mcp/file-comparison-picker-tool.ts)",
   prepare_feedback:
     "no dedicated endpoint: sanitize-only draft step, returns the report for human approval and writes nothing (apps/api/src/mcp/feedback-tools.ts)",
+  reformat_into_template:
+    "no dedicated endpoint: MCP and chat tool over the house-style formatter; it reads the stored document and template and saves the output through createEntityFromBuffer (apps/api/src/mcp/reformat-into-template-tool.ts)",
   read_site_notes:
     "no dedicated endpoint: the agent's own website notes, read through the store the chat tool and Settings share (apps/api/src/mcp/site-notes-tools.ts)",
   save_site_notes:

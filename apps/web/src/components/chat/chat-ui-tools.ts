@@ -314,6 +314,7 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   add_matter_member: true,
   remove_matter_member: true,
   update_organization_settings: true,
+  reformat_into_template: true,
   remember: true,
   reply_comment: false,
   resolve_comment: false,

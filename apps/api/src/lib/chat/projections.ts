@@ -76,6 +76,11 @@ import {
   SANCTIONS_UNAVAILABLE_REASONS,
 } from "@/api/lib/lists/sanctions/screening-vocabulary";
 import { SEARCH_PAGINATION_OUTCOME_SCHEMA } from "@/api/lib/search/pagination-outcome-projection";
+import {
+  REFORMAT_NOTE_ITEM_KINDS,
+  REFORMAT_NUMBERING_MODES,
+  REFORMAT_TEMPLATE_HEALTH_KINDS,
+} from "@/api/lib/templates/reformat-into-template-contract";
 
 import {
   caseNumberTypeProjection,
@@ -3033,6 +3038,67 @@ export const CREATE_TEMPLATE_PROJECTION = v.strictObject({
   // numbers differ for a template that declares any.
   fieldCount: v.number(),
   ...TEMPLATE_DESCRIBE_PROJECTION.entries,
+});
+
+const count = () => v.pipe(v.number(), v.integer());
+
+/**
+ * reformat_into_template: the new document (in the source's matter, so its
+ * ref is recovered from `entity_id`), the template used and the formatting
+ * note. Block ids are the engine's paragraph handles (`p12`), not tenant ids;
+ * `text` quotes the document, so a UUID inside it is masked, not dropped.
+ */
+export const REFORMAT_INTO_TEMPLATE_PROJECTION = v.strictObject({
+  entityId: chatEntityRef({ from: "inputEntityWorkspace", param: "entity_id" }),
+  entityVersionId: passthroughId(),
+  fileName: v.string(),
+  template: v.strictObject({
+    templateId: passthroughId(),
+    name: v.string(),
+    selection: v.picklist(["given", "automatic"]),
+  }),
+  note: v.strictObject({
+    numbering: v.picklist(REFORMAT_NUMBERING_MODES),
+    counts: v.strictObject({
+      paragraphsPlaced: count(),
+      paragraphsOmitted: count(),
+      paragraphsNumbered: count(),
+      labelsWrittenAsText: count(),
+      referencesLinked: count(),
+      referencesKeptAsText: count(),
+      referencesHighlighted: count(),
+      footnotes: count(),
+      endnotes: count(),
+      fieldsFrozen: count(),
+      fillerLeft: count(),
+      commentsDropped: count(),
+      sectionBreaksDropped: count(),
+      repairs: count(),
+    }),
+    pages: v.strictObject({
+      source: v.nullable(count()),
+      output: v.nullable(count()),
+    }),
+    items: v.array(
+      v.strictObject({
+        kind: v.picklist(REFORMAT_NOTE_ITEM_KINDS),
+        blockId: v.optional(v.string()),
+        reason: v.optional(v.string()),
+        text: v.optional(contentText()),
+        targetBlockId: v.optional(v.string()),
+        count: v.optional(count()),
+        highlighted: v.optional(v.boolean()),
+      }),
+    ),
+    itemsOmitted: count(),
+    templateHealth: v.array(
+      v.strictObject({
+        kind: v.picklist(REFORMAT_TEMPLATE_HEALTH_KINDS),
+        styleId: v.optional(v.string()),
+        level: v.optional(count()),
+      }),
+    ),
+  }),
 });
 
 /**

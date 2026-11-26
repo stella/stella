@@ -74,6 +74,7 @@ export const WRITE_TOOL_REALTIME = {
   set_practice_jurisdictions: NO_ROUTE_REALTIME,
   fill_template: NO_ROUTE_REALTIME,
   save_filled_template: NO_ROUTE_REALTIME,
+  reformat_into_template: NO_ROUTE_REALTIME,
   create_template: NO_ROUTE_REALTIME,
   configure_template_fields: NO_ROUTE_REALTIME,
   // The executor runs the capability's safe handler, which announces itself.

@@ -103,6 +103,7 @@ const TOOL_COVERAGE = {
     "asks a model provider to decide AI conditions",
   ),
   save_filled_template: excluded(OBJECT_STORAGE),
+  reformat_into_template: excluded(OBJECT_STORAGE),
   list_documents: RUN,
   read_document: RUN,
   save_document: RUN,

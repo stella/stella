@@ -292,6 +292,10 @@
     "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
   },
   {
+    "id": "mcp:reformat_into_template",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
     "id": "mcp:list_documents",
     "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
   },
