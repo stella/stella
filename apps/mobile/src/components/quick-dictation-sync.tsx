@@ -1,9 +1,9 @@
-import { useEffect, useEffectEvent } from "react";
-
 import * as Linking from "expo-linking";
 import { usePathname, useRouter } from "expo-router";
 import { AppState } from "react-native";
 import { useTranslations } from "use-intl";
+
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 
 import { useSession } from "@/connection/session-provider";
 import {
@@ -37,7 +37,7 @@ export const QuickDictationSync = () => {
   // Registers the activity's layout, which the native side starts by name.
   const available = QUICK_DICTATION_AVAILABLE && DictationActivity !== null;
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!available) {
       return;
     }
@@ -60,7 +60,7 @@ export const QuickDictationSync = () => {
     );
   }, [available, chat, signedIn, t]);
 
-  const openWhenFinished = useEffectEvent(async () => {
+  const openWhenFinished = useLatestCallback(async () => {
     if (
       !signedIn ||
       AppState.currentState !== "active" ||
@@ -73,7 +73,7 @@ export const QuickDictationSync = () => {
     }
   });
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!available) {
       return undefined;
     }
@@ -95,7 +95,7 @@ export const QuickDictationSync = () => {
       returns.remove();
       changes?.remove();
     };
-  }, [available]);
+  }, [available, openWhenFinished]);
 
   return null;
 };

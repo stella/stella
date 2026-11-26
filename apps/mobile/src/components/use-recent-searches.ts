@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
@@ -36,7 +38,7 @@ export const useRecentSearches = (
   }>({ key, searches: [] });
   const recents = useRef<RecentSearches | null>(null);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     let current = true;
     recents.current = openRecentSearches({
       key,

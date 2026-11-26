@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { AppState } from "react-native";
+
+import { useMountEffect } from "@stll/ui/effects";
 
 import {
   onKeyboardDictation,
@@ -21,7 +23,7 @@ export const useKeyboardStatus = (): {
   const refresh = () => {
     setStatus(readKeyboardStatus());
   };
-  useEffect(() => {
+  useMountEffect(() => {
     const read = () => {
       setStatus(readKeyboardStatus());
     };
@@ -35,6 +37,6 @@ export const useKeyboardStatus = (): {
       stop();
       foreground.remove();
     };
-  }, []);
+  });
   return { status, refresh };
 };
