@@ -861,21 +861,25 @@ const levelsSetApart = (
   if (roles.body !== null && body !== null) {
     looksByStyle.set(roles.body.styleId, body);
   }
-  const shared = [...looksByStyle.values()]
-    .map((look) => ({
-      look,
-      styles: [...looksByStyle.values()].filter((other) =>
-        sameLook(look, other),
-      ).length,
-    }))
-    .toSorted((left, right) => right.styles - left.styles);
-  const [most, next] = shared;
+  // Each look once, with the number of styles that have it.
+  const byLook = new Map<string, { look: Look; styles: number }>();
+  for (const look of looksByStyle.values()) {
+    const key = `${String(look.bold)}:${String(look.size)}`;
+    const counted = byLook.get(key);
+    if (counted === undefined) {
+      byLook.set(key, { look, styles: 1 });
+    } else {
+      counted.styles += 1;
+    }
+  }
+  const [most, next] = [...byLook.values()].toSorted(
+    (left, right) => right.styles - left.styles,
+  );
+  // Two looks with as many styles each: none is the template's own.
   if (
     most === undefined ||
     most.styles < 2 ||
-    (next !== undefined &&
-      !sameLook(most.look, next.look) &&
-      next.styles === most.styles)
+    (next !== undefined && next.styles === most.styles)
   ) {
     return [];
   }

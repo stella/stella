@@ -469,6 +469,18 @@ describe("validateTemplateProfile", () => {
       ).health,
     ).toEqual([]);
     expect(inferTemplateProfile(template).health).toEqual([]);
+    // Two looks with as many styles each (two plain clause styles, two
+    // bold item styles, the body in a third size): no look is the
+    // template's own, and nothing is found.
+    expect(
+      inferTemplateProfile(
+        withLooks({
+          Letter: { bold: true, size: 22 },
+          Roman: { bold: true, size: 22 },
+          Body: { bold: false, size: 20 },
+        }),
+      ).health,
+    ).toEqual([]);
   });
 
   test("a finding that names a style the template lacks is refused", () => {
