@@ -84,14 +84,33 @@ const readAuthorizationServerMetadata = createSafePublicHandler(
   },
   async function* ({ request, set }) {
     const response = yield* Result.await(
-      Result.tryPromise(
-        async () =>
+      Result.tryPromise({
+        try: async () =>
           await handleOAuthAuthorizationServerMetadataRequest(request),
-      ),
+        catch: () =>
+          new HandlerError({
+            status: 502,
+            code: "metadata_unavailable",
+            message: "Authorization server metadata is unavailable",
+          }),
+      }),
     );
+    for (const [key, value] of response.headers.entries()) {
+      if (key.toLowerCase() !== "content-length") {
+        set.headers[key] = value;
+      }
+    }
     if (!response.ok) {
       const detail = yield* Result.await(
-        Result.tryPromise(async () => await response.text()),
+        Result.tryPromise({
+          try: async () => await response.text(),
+          catch: () =>
+            new HandlerError({
+              status: 502,
+              code: "metadata_unavailable",
+              message: "Authorization server metadata is unavailable",
+            }),
+        }),
       );
       let errorStatus: 400 | 404 | 502 = 502;
       if (response.status === 404) {
@@ -110,7 +129,15 @@ const readAuthorizationServerMetadata = createSafePublicHandler(
       );
     }
     const payload: unknown = yield* Result.await(
-      Result.tryPromise(async () => await response.json()),
+      Result.tryPromise({
+        try: async () => await response.json(),
+        catch: () =>
+          new HandlerError({
+            status: 500,
+            code: "invalid_response",
+            message: "Authorization server metadata failed response validation",
+          }),
+      }),
     );
     const parsed = v.safeParse(
       authorizationServerMetadataResponseSchema,
@@ -124,11 +151,6 @@ const readAuthorizationServerMetadata = createSafePublicHandler(
           message: "Authorization server metadata failed response validation",
         }),
       );
-    }
-    for (const [key, value] of response.headers.entries()) {
-      if (key.toLowerCase() !== "content-length") {
-        set.headers[key] = value;
-      }
     }
     set.status = response.status;
     return Result.ok(parsed.output);
