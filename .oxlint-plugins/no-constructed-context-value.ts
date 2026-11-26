@@ -146,6 +146,16 @@ const variableKind = (
   if (definition.type === "ClassName") {
     return "class";
   }
+  // A destructured binding holds part of its initializer, not the whole of
+  // it, so only a plain `const name = ...` is classified.
+  const declarator = definition.node;
+  if (
+    !isAstNode(declarator) ||
+    !isAstNode(declarator.id) ||
+    declarator.id.type !== "Identifier"
+  ) {
+    return null;
+  }
   const initializer = stableInitializer(variable);
   return initializer === null
     ? null
@@ -227,6 +237,23 @@ const functionName = (node: AstNode): string | null => {
   return null;
 };
 
+/** Whether `node` is evaluated inside a function rather than at module load. */
+const isInsideFunction = (node: unknown): boolean => {
+  if (!isAstNode(node)) {
+    return false;
+  }
+  for (
+    let current = parentOf(node);
+    current !== null;
+    current = parentOf(current)
+  ) {
+    if (FUNCTION_TYPES.has(current.type)) {
+      return true;
+    }
+  }
+  return false;
+};
+
 /** The outermost function that holds `node`, or `node` when none does. */
 const outermostFunction = (node: AstNode): AstNode => {
   let outermost = node;
@@ -298,7 +325,12 @@ export default eslintCompatPlugin({
           FunctionDeclaration: coverFunction,
           FunctionExpression: coverFunction,
           JSXOpeningElement(node) {
-            if (!isProviderName(context, node.name)) {
+            // A provider built at module scope is evaluated once, not per
+            // render.
+            if (
+              !isProviderName(context, node.name) ||
+              !isInsideFunction(node)
+            ) {
               return;
             }
             for (const attribute of node.attributes) {
