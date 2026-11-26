@@ -5368,6 +5368,21 @@ const config = defineConfig({
       },
     },
     {
+      // Raw useEffect, banned in the product frontend, is banned on every
+      // other React surface too: effects go through the sanctioned wrappers in
+      // @stll/ui/effects. Tests drive React directly and stay outside it.
+      files: [...REACT_SURFACE_FILES_BEYOND_PRODUCT],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "**/fixtures/**",
+        "**/*.fixture.{ts,tsx}",
+      ],
+      rules: {
+        "no-raw-use-effect/no-raw-use-effect": "error",
+      },
+    },
+    {
       // The render-loop rules the product frontend holds, on every other React
       // surface: a fresh Zustand selector result, an unstable external-store
       // snapshot and a ref mirrored during render loop the same way there.
