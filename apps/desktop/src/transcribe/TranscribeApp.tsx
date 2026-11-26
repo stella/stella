@@ -137,6 +137,7 @@ const TranscribeApp = () => {
 
   // Reads what the window can offer; a read that fails offers to try again.
   // Each read returns what cancels it.
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const loadSnapshot = useCallback(() => {
     let disposed = false;
     // A named function, not one invoked in place: an inline call is read as
@@ -173,6 +174,7 @@ const TranscribeApp = () => {
   // The model a recording would go to, read before a file can be chosen
   // for stella AI: the window shows it, with its warning where its provider
   // keeps the audio, and a start names it back.
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const loadModel = useCallback(() => {
     let disposed = false;
     const load = async () => {
@@ -194,6 +196,7 @@ const TranscribeApp = () => {
       disposed = true;
     };
   }, []);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const reloadModel = useCallback(() => {
     options.current.model = MODEL_LOADING;
     setModel(MODEL_LOADING);

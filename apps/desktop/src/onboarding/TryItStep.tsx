@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { panic } from "better-result";
 import { useLocale, useTranslations } from "use-intl";
@@ -53,7 +53,7 @@ export const TryItStep = ({ onBack, onContinue, snapshot }: StepProps) => {
   const [held, setHeld] = useState<ShortcutModifier[]>([]);
   const [feedback, setFeedback] = useState<TryFeedback>({ type: "idle" });
   const [focused, setFocused] = useState(() => document.hasFocus());
-  const stopRecording = useCallback(() => setRecordingRequested(false), []);
+  const stopRecording = () => setRecordingRequested(false);
 
   const recording =
     recordingRequested || shortcut?.registration === "unavailable";
