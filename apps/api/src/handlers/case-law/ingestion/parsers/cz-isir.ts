@@ -1,3 +1,4 @@
+// parser-output-unchanged: the paragraph-numbering warning names the source by its adapter key; parsed blocks and text are unchanged.
 /**
  * A court decision the insolvency register (isir.justice.cz) publishes, read
  * from its stored paragraphs.
@@ -412,7 +413,7 @@ export const parseCzIsirDecision = (
   }
   const { caseNumber, court, decisionDate, decisionType } = identity.value;
   const blocks = courtParagraphNumbers(blocksOf(paragraphs), {
-    parser: SOURCE_SYSTEM,
+    parser: "cz-isir",
     caseNumber,
     url: sourceUrl,
   });

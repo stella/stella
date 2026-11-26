@@ -11,6 +11,9 @@
  *    unextracted, so fixing the parser forces the declaration to follow.
  * 4. Backlog skips and unrecorded claims agree exactly with the committed
  *    baseline, which only shrinks.
+ * 5. Every source's paragraph-number reader agrees with its disposition: a
+ *    source that provides numbers reads them, and one that reads none
+ *    stores none in any recording.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -24,6 +27,8 @@ import { listSourceRegistrations } from "@/api/handlers/case-law/ingestion/adapt
 import baseline from "@/api/handlers/case-law/ingestion/adapters/processed-field-backlog-baseline.json";
 import {
   BACKLOG_SKIP_REASONS,
+  COURT_PARAGRAPH_NUMBERING_CONVENTIONS,
+  COURT_PARAGRAPH_READERS,
   PROCESSED_FIELD_INVENTORY,
   PROCESSED_FIELD_SKIP_REASONS,
   PROCESSED_FIELDS,
@@ -272,6 +277,54 @@ describe("processed-field inventory", () => {
       ).flat();
       expect(documents.length).toBeGreaterThan(0);
       expect(PROCESSED_FIELD_CHECKS[field](disposition, documents)).toEqual([]);
+    });
+  });
+});
+
+describe("court paragraph readers", () => {
+  const readerOf = (source: ProcessedFieldSourceKey) =>
+    COURT_PARAGRAPH_NUMBERING_CONVENTIONS[source];
+
+  test("a source that provides court numbers declares a reader of them", () => {
+    const readerless = SOURCES.filter(
+      (source) =>
+        PROCESSED_FIELD_INVENTORY[source]["court-paragraph-numbers"]
+          .disposition === "provided" &&
+        readerOf(source) === COURT_PARAGRAPH_READERS.NONE,
+    );
+    expect(readerless).toEqual([]);
+  });
+
+  test("only the legacy sources read a printed marker with a grammar of their own", () => {
+    // Shrinks only: a new source reads printed markers through the shared
+    // extractor, `courtParagraphNumbers`, whose subject its reader types.
+    expect(
+      SOURCES.filter(
+        (source) => readerOf(source) === COURT_PARAGRAPH_READERS.OWN_MARKER,
+      ),
+    ).toEqual(["hu-bhgy"]);
+  });
+
+  describe.each(
+    SOURCES.flatMap((source) => {
+      const { evidence } =
+        PROCESSED_FIELD_INVENTORY[source]["court-paragraph-numbers"];
+      return readerOf(source) === COURT_PARAGRAPH_READERS.NONE &&
+        evidence.kind === "recording"
+        ? [{ source, fixtures: evidence.fixtures }]
+        : [];
+    }),
+  )("$source", ({ source, fixtures }) => {
+    test("stores no court paragraph numbers in its recordings", async () => {
+      const reader = PROCESSED_FIELD_EVIDENCE_READERS[source];
+      if (reader === null) {
+        throw new Error(`${source} has no evidence reader`);
+      }
+      const documents = (await Promise.all(fixtures.map(reader))).flat();
+      expect(documents.length).toBeGreaterThan(0);
+      expect(
+        documents.filter(({ ast }) => paragraphNumbers(ast.blocks).length > 0),
+      ).toEqual([]);
     });
   });
 });

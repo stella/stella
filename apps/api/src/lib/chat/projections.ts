@@ -35,6 +35,7 @@ import {
   ENTITY_CHECK_SUBJECT_TYPES,
   ENTITY_CHECK_UNAVAILABLE_REASONS,
 } from "@stll/business-registries/entity-checks";
+import { DECISION_PARAGRAPH_NUMBERING } from "@stll/legal-ast/court-paragraph-number";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { READER_TEXT_QUOTE_ORPHAN_REASONS } from "@stll/legal-ast/reader-text-quote";
 
@@ -1846,15 +1847,26 @@ const caseLawDecisionProjection = v.strictObject({
   matches: v.optional(
     v.strictObject({
       hitCount: v.number(),
+      numbering: v.pipe(
+        v.picklist(DECISION_PARAGRAPH_NUMBERING),
+        v.description(
+          "court: the decision's paragraphs carry the court's own numbers, each paragraph's label and #par= link. none: no stored paragraph carries one, so cite the decision, never a position.",
+        ),
+      ),
       paragraphs: v.array(
         v.strictObject({
           position: v.pipe(
             v.number(),
             v.description(
-              "Stella 1-based passage position, independent of the publisher label.",
+              "Stella 1-based passage position, independent of the court's numbering: never a paragraph number to cite.",
             ),
           ),
-          label: v.nullable(v.string()),
+          label: v.pipe(
+            v.nullable(v.string()),
+            v.description(
+              "With numbering court, the court's paragraph number where this paragraph has one; otherwise a number the paragraph prints at its start, or null.",
+            ),
+          ),
           headingPath: v.pipe(
             v.array(v.string()),
             v.description(

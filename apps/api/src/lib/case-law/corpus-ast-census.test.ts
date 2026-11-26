@@ -96,6 +96,12 @@ describe("stored reader-schema census", () => {
         invalid: 2,
         unreadable: 1,
         withoutAst: 1,
+        paragraphNumbering: {
+          reader: "leading-marker",
+          court: 0,
+          none: 1,
+          noneButPrinted: 0,
+        },
       },
     ]);
   });
@@ -145,6 +151,12 @@ describe("stored reader-schema census", () => {
         invalid: 1,
         unreadable: 0,
         withoutAst: 0,
+        paragraphNumbering: {
+          reader: "leading-marker",
+          court: 0,
+          none: 0,
+          noneButPrinted: 0,
+        },
       },
       {
         adapterKey: "sk-courts",
@@ -154,6 +166,12 @@ describe("stored reader-schema census", () => {
         invalid: 0,
         unreadable: 0,
         withoutAst: 0,
+        paragraphNumbering: {
+          reader: "leading-marker",
+          court: 0,
+          none: 1,
+          noneButPrinted: 0,
+        },
       },
       {
         adapterKey: "sk-us",
@@ -163,8 +181,103 @@ describe("stored reader-schema census", () => {
         invalid: 0,
         unreadable: 0,
         withoutAst: 1,
+        paragraphNumbering: {
+          reader: "leading-marker",
+          court: 0,
+          none: 0,
+          noneButPrinted: 0,
+        },
       },
     ]);
     expect(JSON.stringify(counts)).not.toContain("Synthetic decision");
+  });
+
+  test("counts stored court numbers, their absence, and numbering left in the text, by source", async () => {
+    const paragraph = (index: number, plainText: string, number?: number) => ({
+      id: `b${String(index)}`,
+      anchorId: `p-${String(index)}`,
+      type: "paragraph",
+      inlines: [{ type: "text", text: plainText }],
+      plainText,
+      ...(number === undefined ? {} : { number }),
+    });
+    const withBlocks = (blocks: readonly unknown[]) => ({
+      ...validAst,
+      blocks,
+    });
+    const reasons = [
+      "Krajský soud žalobu zamítl.",
+      "Stěžovatel podal kasační stížnost.",
+      "Kasační stížnost není důvodná.",
+    ];
+    const numbered = withBlocks(
+      reasons.map((text, index) => paragraph(index + 1, text, index + 1)),
+    );
+    const printed = withBlocks(
+      reasons.map((text, index) =>
+        paragraph(index + 1, `[${String(index + 1)}] ${text}`),
+      ),
+    );
+    const unnumbered = withBlocks(
+      reasons.map((text, index) => paragraph(index + 1, text)),
+    );
+    const rows = [
+      { id: "1", adapterKey: "cz-nss", documentAst: numbered },
+      { id: "2", adapterKey: "cz-nss", documentAst: printed },
+      { id: "3", adapterKey: "cz-nss", documentAst: unnumbered },
+      { id: "4", adapterKey: "eu-ecj", documentAst: numbered },
+      { id: "5", adapterKey: "retired-source", documentAst: unnumbered },
+    ].map((row) => ({ ...row, parserVersion: 1, astS3Key: null }));
+    let read = false;
+    const counts = await corpusAstCensus({
+      readBatch: async () => {
+        if (read) {
+          return [];
+        }
+        read = true;
+        return rows;
+      },
+      readPayload: async () => null,
+      readTombstones: async () => new Set(),
+      pause: async () => {},
+    });
+    expect(
+      counts.map(({ adapterKey, valid, paragraphNumbering }) => ({
+        adapterKey,
+        valid,
+        paragraphNumbering,
+      })),
+    ).toEqual([
+      {
+        adapterKey: "cz-nss",
+        valid: 3,
+        paragraphNumbering: {
+          reader: "leading-marker",
+          court: 1,
+          none: 2,
+          noneButPrinted: 1,
+        },
+      },
+      {
+        adapterKey: "eu-ecj",
+        valid: 1,
+        paragraphNumbering: {
+          reader: "publisher-structure",
+          court: 1,
+          none: 0,
+          noneButPrinted: 0,
+        },
+      },
+      {
+        adapterKey: "retired-source",
+        valid: 1,
+        paragraphNumbering: {
+          reader: null,
+          court: 0,
+          none: 1,
+          noneButPrinted: 0,
+        },
+      },
+    ]);
   });
 });
