@@ -29,6 +29,7 @@ import {
 import { StellaMark } from "@/components/stella-mark";
 import { env } from "@/env";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { createErrorReference } from "@/lib/analytics/error-reference";
 import type { ErrorReference } from "@/lib/analytics/error-reference";
@@ -75,29 +76,25 @@ type UseNetworkRetryResult = {
  *  - Schedules a single delayed retry per render where the error
  *    is still network-shaped and the counter is below the limit.
  *  - Cleans up the pending timer on unmount or when the network
- *    flag flips, so a stale retry never fires after recovery. */
+ *    flag flips, so a stale retry never fires after recovery.
+ *  A retry is pending exactly while the error is network-shaped and the
+ *  counter is below the limit, so that is read off the counter at render
+ *  rather than kept as state the effect writes. */
 const useNetworkRetry = ({
   networkError,
   retry,
 }: UseNetworkRetryOptions): UseNetworkRetryResult => {
-  const [isAutoRetrying, setIsAutoRetrying] = useState(
-    () => networkError && networkRetryCount < AUTO_RETRY_LIMIT,
-  );
-
   useExternalSyncEffect(() => {
     if (!networkError) {
       networkRetryCount = 0;
-      setIsAutoRetrying(false);
       return undefined;
     }
 
     if (networkRetryCount >= AUTO_RETRY_LIMIT) {
-      setIsAutoRetrying(false);
       return undefined;
     }
 
     networkRetryCount += 1;
-    setIsAutoRetrying(true);
     const timer = setTimeout(retry, AUTO_RETRY_DELAY_MS);
     return () => clearTimeout(timer);
   }, [networkError, retry]);
@@ -106,9 +103,11 @@ const useNetworkRetry = ({
     networkRetryCount = 0;
   });
 
+  const retriesExhausted =
+    networkError && networkRetryCount >= AUTO_RETRY_LIMIT;
   return {
-    isAutoRetrying,
-    retriesExhausted: networkError && networkRetryCount >= AUTO_RETRY_LIMIT,
+    isAutoRetrying: networkError && !retriesExhausted,
+    retriesExhausted,
   };
 };
 
@@ -279,9 +278,13 @@ const UnexpectedRouteError = ({
   const analytics = useAnalytics();
   const routeErrorLifecycle = useRouteErrorLifecycle();
   const t = useTranslations();
-  const [errorReference, setErrorReference] = useState<ErrorReference | null>(
-    null,
-  );
+  // Made once per mount on the client; held back until hydration ends, so
+  // a server-rendered panel never shows a reference the client replaces.
+  const [clientErrorReference] = useState(createErrorReference);
+  const hydrated = useHydrated();
+  const errorReference: ErrorReference | null = hydrated
+    ? clientErrorReference
+    : null;
   const [reportOpen, setReportOpen] = useState(false);
   const recoveryStarted = useRef(false);
   // Mounted on first use so the form chunk is never fetched for an error
@@ -316,12 +319,10 @@ const UnexpectedRouteError = ({
       return;
     }
     recoveryStarted.current = true;
-    const reference = createErrorReference();
-    setErrorReference(reference);
     routeErrorLifecycle.shown({
       error: routeError,
       recovery: recovery.type,
-      reference,
+      reference: clientErrorReference,
     });
   });
 

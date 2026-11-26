@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useState, useSyncExternalStore } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
@@ -13,6 +13,7 @@ import type { CleanedBlock, CleanedRun } from "@stll/transcript/cleanup";
 import { Button } from "@stll/ui/button";
 import { CopyButton } from "@stll/ui/copy-button";
 import { DocumentMark } from "@stll/ui/document-mark";
+import { useExternalSyncEffect, useKeyedState } from "@stll/ui/effects";
 import { ChevronDownIcon, FileTextIcon, InfoIcon } from "@stll/ui/icons";
 import {
   Menu,
@@ -110,78 +111,19 @@ export const useRecordingCleanup = ({
   finished: boolean;
   autoStart: boolean;
 }): RecordingCleanup => {
-  const [parts, setParts] = useState<PartState[]>([]);
-  const [started, setStarted] = useState(autoStart);
-  const sending = useRef<string | null>(null);
-
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
-  const run = useCallback(
-    async (
-      index: number,
-      part: Pick<PartState, "text">,
-      previous: string | null,
-    ) => {
-      const answer = await requestCleanup(job, part.text, previous);
-      setParts((current) =>
-        current.map((entry, at) =>
-          at === index
-            ? {
-                ...entry,
-                status: answer === null ? "failed" : "done",
-                result: answer,
-              }
-            : entry,
-        ),
-      );
-    },
-    [job],
+  const [runner] = useKeyedState(job, () =>
+    createCleanupRunner({ job, autoStart }),
   );
-
-  useEffect(() => {
-    if (!started || parts.some((part) => part.status === "running")) {
-      return;
-    }
-    const last = parts.at(-1);
-    const part = nextCleanupPart({
-      paragraphs,
-      from: last?.to ?? 0,
-      finished,
-      first: parts.length === 0,
-      maxCharacters: MAX_PART_CHARACTERS,
-    });
-    if (part === null) {
-      return;
-    }
-    const key = `${job}:${part.from}`;
-    if (sending.current === key) {
-      return;
-    }
-    sending.current = key;
-    const index = parts.length;
-    const previous = previousMarkdown(parts, index);
-    setParts((current) => [
-      ...current,
-      { ...part, status: "running", result: null },
-    ]);
-    void run(index, part, previous);
-  }, [finished, job, paragraphs, parts, run, started]);
-
-  const retry = (index: number) => {
-    const part = parts[index];
-    // One request at a time: a retry waits until the running part ends.
-    if (
-      part?.status !== "failed" ||
-      parts.some((entry) => entry.status === "running")
-    ) {
-      return;
-    }
-    setParts((current) =>
-      current.map((entry, at) =>
-        at === index ? { ...entry, status: "running" } : entry,
-      ),
-    );
-    void run(index, part, previousMarkdown(parts, index));
-  };
+  const { parts, started } = useSyncExternalStore(
+    runner.subscribe,
+    runner.getSnapshot,
+  );
+  // The transcript so far goes to the runner, which sends the next part once
+  // it is ready and nothing else is running.
+  useExternalSyncEffect(
+    () => runner.attach({ paragraphs, finished }),
+    [finished, paragraphs, runner],
+  );
 
   const done = parts.flatMap((part) =>
     part.result === null ? [] : [part.result],
@@ -213,9 +155,153 @@ export const useRecordingCleanup = ({
     ),
     busy: parts.some((part) => part.status === "running"),
     failed: parts.filter((part) => part.status === "failed").length,
-    retry,
+    retry: runner.retry,
     started,
-    start: () => setStarted(true),
+    start: runner.start,
+  };
+};
+
+type CleanupInput = { paragraphs: readonly Paragraph[]; finished: boolean };
+
+type CleanupState = { parts: readonly PartState[]; started: boolean };
+
+type CleanupRunner = {
+  subscribe: (onChange: () => void) => () => void;
+  getSnapshot: () => CleanupState;
+  /** Takes the transcript so far and sends what is ready; the returned
+   *  function stops sending (an answer still in flight is kept). */
+  attach: (input: CleanupInput) => () => void;
+  retry: (index: number) => void;
+  start: () => void;
+};
+
+/**
+ * The cleanup queue, outside React: one request at a time, and the next
+ * part goes as soon as an answer lands or more transcript arrives, so
+ * nothing has to watch the parts it writes to send the next one.
+ */
+export const createCleanupRunner = ({
+  job,
+  autoStart,
+  clean = requestCleanup,
+}: {
+  job: number;
+  autoStart: boolean;
+  clean?: typeof requestCleanup;
+}): CleanupRunner => {
+  let state: CleanupState = { parts: [], started: autoStart };
+  let input: CleanupInput = { paragraphs: [], finished: false };
+  let attached = false;
+  const listeners = new Set<() => void>();
+
+  const setParts = (
+    update: (parts: readonly PartState[]) => PartState[],
+  ): void => {
+    state = { ...state, parts: update(state.parts) };
+    for (const listener of listeners) {
+      listener();
+    }
+  };
+
+  const send = async (
+    index: number,
+    text: string,
+    previous: string | null,
+  ): Promise<void> => {
+    // A request that throws counts as a lost part: shown as transcribed,
+    // with Try again, never left running.
+    const result = await Result.tryPromise(async () =>
+      clean(job, text, previous),
+    );
+    const answer = Result.isOk(result) ? result.value : null;
+    setParts((parts) =>
+      parts.map((entry, at) =>
+        at === index
+          ? {
+              ...entry,
+              status: answer === null ? "failed" : "done",
+              result: answer,
+            }
+          : entry,
+      ),
+    );
+    sendNext();
+  };
+
+  // Sends the next ready part unless a part is running, cleanup has not
+  // started, or nothing is attached.
+  const sendNext = (): void => {
+    const { parts, started } = state;
+    if (
+      !attached ||
+      !started ||
+      parts.some((part) => part.status === "running")
+    ) {
+      return;
+    }
+    const part = nextCleanupPart({
+      paragraphs: input.paragraphs,
+      from: parts.at(-1)?.to ?? 0,
+      finished: input.finished,
+      first: parts.length === 0,
+      maxCharacters: MAX_PART_CHARACTERS,
+    });
+    if (part === null) {
+      return;
+    }
+    const index = parts.length;
+    const previous = previousMarkdown(parts, index);
+    setParts((current) => [
+      ...current,
+      { ...part, status: "running", result: null },
+    ]);
+    void send(index, part.text, previous);
+  };
+
+  return {
+    subscribe: (onChange) => {
+      listeners.add(onChange);
+      return () => {
+        listeners.delete(onChange);
+      };
+    },
+    getSnapshot: () => state,
+    attach: (next) => {
+      input = next;
+      attached = true;
+      sendNext();
+      return () => {
+        attached = false;
+      };
+    },
+    retry: (index) => {
+      const { parts } = state;
+      const part = parts[index];
+      // One request at a time: a retry waits until the running part ends.
+      if (
+        part?.status !== "failed" ||
+        parts.some((entry) => entry.status === "running")
+      ) {
+        return;
+      }
+      const previous = previousMarkdown(parts, index);
+      setParts((current) =>
+        current.map((entry, at) =>
+          at === index ? { ...entry, status: "running" } : entry,
+        ),
+      );
+      void send(index, part.text, previous);
+    },
+    start: () => {
+      if (state.started) {
+        return;
+      }
+      state = { ...state, started: true };
+      for (const listener of listeners) {
+        listener();
+      }
+      sendNext();
+    },
   };
 };
 
