@@ -30,7 +30,12 @@ const atCourtsAdapter = createAtCourtsAdapter({
   now: () => new Date(),
   readText: async (url, init) =>
     await readGatedResponseText({
-      request: async () => await fetch(url, init),
+      request: async () =>
+        await fetch(url, {
+          ...(init.headers !== undefined ? { headers: init.headers } : {}),
+          ...(init.redirect !== undefined ? { redirect: init.redirect } : {}),
+          ...(init.signal !== undefined ? { signal: init.signal } : {}),
+        }),
       signal: init.signal ?? undefined,
       refusalScope: init.refusalScope ?? "document",
     }),
