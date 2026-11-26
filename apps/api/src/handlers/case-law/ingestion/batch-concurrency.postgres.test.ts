@@ -35,6 +35,7 @@ import {
 import {
   type AppliedBatch,
   applyIngestStream,
+  batchHoldsCursor,
   canonicalCaseLawState,
   cloneCaseLawSchema,
   dropCaseLawSchema,
@@ -147,7 +148,7 @@ if (!databaseUrl || !enabled) {
         fromBatch,
       });
       applied.push(...batches);
-      const held = batches.findIndex(({ halt }) => halt !== null);
+      const held = batches.findIndex(batchHoldsCursor);
       if (held === -1) {
         return { passes: pass, applied };
       }

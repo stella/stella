@@ -191,9 +191,19 @@ const isRejection = (
 export type AppliedBatch = Awaited<ReturnType<typeof applyDecisionBatch>>;
 
 /**
+ * Whether a crawl holds its cursor on this batch's page and reads it again:
+ * the batch stopped, or a corpus write of it failed.
+ */
+export const batchHoldsCursor = ({
+  halt,
+  corpusWriteFailures,
+}: AppliedBatch): boolean => halt !== null || corpusWriteFailures > 0;
+
+/**
  * Apply a stream the way a crawl applies its pages: one batch per bounded
- * part, each under its own observation, in order. A batch that stops holds
- * the stream there, as a crawl holds its cursor on the page: the batches
+ * part, each under its own observation, in order. A batch that stops, or
+ * whose corpus write failed, holds the stream there, as a crawl holds its
+ * cursor on the page (`batchHoldsCursor`): the batches
  * after it are not applied, and the caller resumes at the held one
  * (`fromBatch`).
  */
@@ -238,7 +248,7 @@ export const applyIngestStream = async ({
       resolveSourceContract,
     );
     applied.push(appliedBatch);
-    if (appliedBatch.halt !== null) {
+    if (batchHoldsCursor(appliedBatch)) {
       break;
     }
     order += 1n;
