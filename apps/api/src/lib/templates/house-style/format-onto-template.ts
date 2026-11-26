@@ -201,7 +201,11 @@ const changedLabels = (
       ({ blockId, sourceLabel, outputLabel }) =>
         numbered.has(blockId) &&
         !bullets.has(blockId) &&
+        // A list level that prints nothing shows no label to hold the
+        // output to: the paragraph's typed label is checked as it is
+        // stripped.
         sourceLabel !== null &&
+        sourceLabel.trim() !== "" &&
         sourceLabel.trim() !== (outputLabel ?? "").trim(),
     )
     .map(({ blockId }) => blockId);

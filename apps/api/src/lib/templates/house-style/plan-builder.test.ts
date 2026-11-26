@@ -498,6 +498,44 @@ describe("buildTemplatePlan, pages the source starts", () => {
     expect(note.counts.pageStarts).toBe(1);
   });
 
+  test("a page start between an article's heading and its text moves in front of the heading", () => {
+    const { plan, note } = build(
+      withFacts(
+        [
+          "SMLOUVA",
+          "Článek I. Předmět",
+          "První ujednání.",
+          "Článek II. Cena",
+          "",
+          "Druhé ujednání.",
+        ],
+        { 4: { pageBreaks: 1 } },
+      ),
+    );
+    expect(starts(plan)).toEqual(["p3"]);
+    expect(note.items.filter(({ kind }) => kind === "pageStartMoved")).toEqual([
+      { kind: "pageStartMoved", blockId: "p3", fromBlockId: "p5" },
+    ]);
+    expect(note.counts.pageStarts).toBe(1);
+  });
+
+  test("a page start behind running text numbered like an article stays where it is", () => {
+    const { plan, note } = build(
+      withFacts(
+        [
+          "SMLOUVA",
+          "1.\tStrany se dohodly, že veškeré informace, které si předají, zůstanou důvěrné po dobu pěti let.",
+          "Příloha č. 1",
+        ],
+        { 2: { pageBreakBefore: true } },
+      ),
+    );
+    expect(starts(plan)).toEqual(["p2"]);
+    expect(note.items.some(({ kind }) => kind === "pageStartMoved")).toBe(
+      false,
+    );
+  });
+
   test("a paragraph's own page start is carried, except on the document's first block", () => {
     const { plan } = build(
       withFacts(["SMLOUVA", "Text.", "Příloha č. 1", "Seznam."], {
@@ -727,10 +765,10 @@ describe("buildTemplatePlan, pages the source starts", () => {
     ).toEqual([true, false]);
   });
 
-  test("a title that starts a page is not joined to the heading before it", () => {
+  test("a title that starts a page takes an article's heading with it, and is no part of another heading", () => {
     const reading = (
       blockId: string,
-      role: "title" | "articleHeading" | "clause1",
+      role: "title" | "articleHeading" | "annexHeading" | "clause1" | "body",
       mergedIntoBlockId: string | null = null,
     ) => ({
       blockId,
@@ -750,19 +788,72 @@ describe("buildTemplatePlan, pages the source starts", () => {
     expect(itemOf(joined.plan, manifestOf(texts), "Článek I.")?.mergeNext).toBe(
       "none",
     );
-    for (const facts of [
+    for (const [facts, annexFacts] of [
       // By its own formatting, and by the section that ends in front of it.
-      { 2: { pageBreakBefore: true } } as const,
-      { 1: { endsSection: true }, 2: { sectionIndex: 1 } } as const,
-    ]) {
+      [{ 2: { pageBreakBefore: true } }, { 3: { pageBreakBefore: true } }],
+      [
+        { 1: { endsSection: true }, 2: { sectionIndex: 1 } },
+        { 2: { endsSection: true }, 3: { sectionIndex: 1 } },
+      ],
+    ] as const) {
       const manifest = withFacts(texts, facts, [
         section(0, "nextPage"),
         section(1, "nextPage"),
       ]);
-      const { plan } = build(manifest, "keepSource", { roles });
-      expect(itemOf(plan, manifest, "Článek I.")?.mergeNext).toBeUndefined();
-      expect(starts(plan)).toEqual(["p2"]);
+      // The article's heading and its title start the page together.
+      const { plan, note } = build(manifest, "keepSource", { roles });
+      expect(itemOf(plan, manifest, "Článek I.")?.mergeNext).toBe("none");
+      expect(starts(plan)).toEqual(["p1"]);
+      expect(
+        note.items.filter(({ kind }) => kind === "pageStartMoved"),
+      ).toEqual([{ kind: "pageStartMoved", blockId: "p1", fromBlockId: "p2" }]);
+
+      // An annex may be headed on a page of its own: its title stays a
+      // line of the page it starts.
+      const annexTexts = ["SMLOUVA", "Text.", "Příloha č. 1", "Ceník", "Ceny."];
+      const annex = withFacts(annexTexts, annexFacts, [
+        section(0, "nextPage"),
+        section(1, "nextPage"),
+      ]);
+      const kept = build(annex, "keepSource", {
+        roles: [
+          reading("p0", "title"),
+          reading("p1", "body"),
+          reading("p2", "annexHeading"),
+          reading("p3", "annexHeading", "p2"),
+          reading("p4", "body"),
+        ],
+      });
+      expect(
+        itemOf(kept.plan, annex, "Příloha č. 1")?.mergeNext,
+      ).toBeUndefined();
+      expect(starts(kept.plan)).toEqual(["p3"]);
     }
+
+    // In front of a table, which cannot be told to start a page, the
+    // heading still starts it.
+    const cells = inColumns(1, ["položka"]).blocks.map((block) => ({
+      ...block,
+      id: `c${block.id}`,
+      ...(block.cells === undefined
+        ? {}
+        : {
+            cells: block.cells.map((cell) => ({
+              ...cell,
+              blockIds: cell.blockIds.map((id) => `c${id}`),
+            })),
+          }),
+    }));
+    const headed = withFacts(texts.slice(0, 3), {
+      2: { pageBreakBefore: true },
+    });
+    const beforeTable = build(
+      { ...headed, blocks: [...headed.blocks, ...cells] },
+      "keepSource",
+      { roles: roles.slice(0, 3) },
+    );
+    expect(starts(beforeTable.plan)).toEqual(["p1"]);
+    expect(notes(beforeTable.note, "pageStartNotKept")).toEqual([]);
   });
 
   test("between two tables one blank paragraph stays, and the page starts once", () => {
@@ -1053,11 +1144,11 @@ describe("buildTemplatePlan, running text numbered like articles", () => {
       styleId: "Clause1",
       numbering: { ilvl: PROFILE.roles.articleHeading?.numbering?.ilvl },
     });
-    // The one real heading among them is set like its siblings.
-    expect(itemOf(plan, manifest, "4.\tZávěrečná")?.styleId).toBe("Clause1");
+    // The heading among them stays a heading.
+    expect(itemOf(plan, manifest, "4.\tZávěrečná")?.styleId).toBe("Article");
     expect(
       note.items.filter(({ kind }) => kind === "articlesSetAsText"),
-    ).toEqual([{ kind: "articlesSetAsText", blocks: 4 }]);
+    ).toEqual([{ kind: "articlesSetAsText", blocks: 3 }]);
   });
 
   test("a document with headings keeps them", () => {
