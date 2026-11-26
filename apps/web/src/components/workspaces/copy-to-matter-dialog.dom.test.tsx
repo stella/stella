@@ -194,3 +194,114 @@ test("the mounted move dialog localizes deferred refusals for complete and parti
     }
   }
 });
+
+test("every opening starts over from the preset target matter", async () => {
+  const { useState } = await import("react");
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  type Opening = { open: boolean; preset: string | null };
+  const Harness = () => {
+    const [opening, setOpening] = useState<Opening>({
+      open: true,
+      preset: "target-matter",
+    });
+    return (
+      <>
+        <button
+          onClick={() => setOpening({ open: false, preset: opening.preset })}
+          data-testid="close"
+          type="button"
+        />
+        <button
+          onClick={() => setOpening({ open: true, preset: "target-matter" })}
+          data-testid="open-with-preset"
+          type="button"
+        />
+        <button
+          onClick={() => setOpening({ open: true, preset: null })}
+          data-testid="open-without-preset"
+          type="button"
+        />
+        <CopyToMatterDialog
+          entities={[
+            {
+              entityId: "first-item",
+              entityName: "first-item",
+              kind: "document",
+              ancestorIds: [],
+            },
+          ]}
+          initialTargetWorkspaceId={opening.preset}
+          onOpenChange={(open) => {
+            setOpening({ open, preset: opening.preset });
+          }}
+          open={opening.open}
+          sourceWorkspaceId="source-matter"
+        />
+      </>
+    );
+  };
+  const appRouter = router.createRouter({
+    history: router.createMemoryHistory({ initialEntries: ["/"] }),
+    isServer: false,
+    routeTree: router.createRootRoute({ component: Harness }),
+  });
+  const view = render(
+    <QueryClientProvider client={queryClient}>
+      <AuthenticatedUserProvider
+        user={{
+          activeOrganizationId: "test-org",
+          email: "member@example.test",
+          id: "member",
+          image: null,
+          name: "Member",
+          preferredName: null,
+          timezoneId: "UTC",
+          wordEditShortcut: null,
+        }}
+      >
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <TooltipProvider>
+            <router.RouterProvider router={appRouter} />
+          </TooltipProvider>
+        </IntlProvider>
+      </AuthenticatedUserProvider>
+    </QueryClientProvider>,
+  );
+  const submit = (name: string) =>
+    view.getByRole("button", { name, hidden: true });
+  const isDisabled = (button: HTMLElement) =>
+    button.hasAttribute("disabled") ||
+    button.getAttribute("aria-disabled") === "true";
+  const click = (name: string) => {
+    fireEvent.click(view.getByRole("button", { name, hidden: true }));
+  };
+
+  // The preset is a target, so the transfer can go; Move changes the button.
+  await waitFor(() => {
+    expect(isDisabled(submit(messages.common.copy))).toBe(false);
+  });
+  click(messages.workspaces.copyToMatter.moveOption);
+  expect(submit(messages.workspaces.copyToMatter.moveButton)).toBeDefined();
+
+  // Closed by its owner, and opened again: back to copying into the preset.
+  fireEvent.click(view.getByTestId("close"));
+  await waitFor(() => {
+    expect(
+      view.queryByText(messages.workspaces.copyToMatter.title) === null,
+    ).toBe(true);
+  });
+  fireEvent.click(view.getByTestId("open-with-preset"));
+  await waitFor(() => {
+    expect(isDisabled(submit(messages.common.copy))).toBe(false);
+  });
+
+  // A drop without a preset, while open, starts with no target at all.
+  fireEvent.click(view.getByTestId("open-without-preset"));
+  await waitFor(() => {
+    expect(isDisabled(submit(messages.common.copy))).toBe(true);
+  });
+  view.unmount();
+  queryClient.clear();
+});

@@ -20,7 +20,6 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
-import { useExternalSyncEffect } from "@stll/ui/effects";
 import { CopyPlusIcon, DuplicateIcon, TrashIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Separator } from "@stll/ui/separator";
@@ -67,6 +66,38 @@ export const MatterMetadataPanel = ({
   workspaceId,
   onDeleted,
 }: MatterMetadataPanelProps) => {
+  const workspaceQuery = useQuery(workspaceOptions(workspaceId));
+  const workspace = workspaceQuery.data;
+  if (workspaceQuery.isError || !workspace) {
+    return null;
+  }
+  // Keyed by the matter, so its drafts, dialogs and confirmations start
+  // over when the panel shows another one.
+  return (
+    <MatterMetadataForm
+      key={workspaceId}
+      onDeleted={onDeleted}
+      workspace={workspace}
+      workspaceId={workspaceId}
+    />
+  );
+};
+
+type MatterMetadataFormProps = {
+  workspaceId: string;
+  onDeleted: (() => void) | undefined;
+  workspace: {
+    name: string;
+    reference: string;
+    stampedVersionCount: number;
+  };
+};
+
+const MatterMetadataForm = ({
+  workspaceId,
+  workspace,
+  onDeleted,
+}: MatterMetadataFormProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -74,18 +105,17 @@ export const MatterMetadataPanel = ({
   const [duplicateMode, setDuplicateMode] = useState<DuplicateMode | null>(
     null,
   );
-  const [nameValue, setNameValue] = useState("");
-  const [nameDirty, setNameDirty] = useState(false);
+  // An edit holds only what was typed; `null` shows the saved value, so a
+  // refetch comes through while the field is untouched.
+  const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const nameValue = nameDraft ?? workspace.name;
   const escapedNameRef = useRef(false);
-  const [referenceValue, setReferenceValue] = useState("");
-  const [referenceDirty, setReferenceDirty] = useState(false);
+  const [referenceDraft, setReferenceDraft] = useState<string | null>(null);
+  const referenceValue = referenceDraft ?? workspace.reference;
   const [referenceError, setReferenceError] = useState("");
   const [referenceConfirmation, setReferenceConfirmation] =
     useState<ReferenceConfirmation>({ status: "closed" });
-  const seededWorkspaceIdRef = useRef<string | null>(null);
 
-  const workspaceQuery = useQuery(workspaceOptions(workspaceId));
-  const workspace = workspaceQuery.data;
   const deleteWorkspace = useDeleteWorkspace();
   const duplicateWorkspace = useDuplicateWorkspace();
   const canCreateWorkspace = usePermissions({ workspace: ["create"] });
@@ -93,49 +123,19 @@ export const MatterMetadataPanel = ({
   const updateWorkspace = useUpdateWorkspace();
   const referenceConflictMessage = useReferenceConflictMessage();
 
-  useExternalSyncEffect(() => {
-    if (!workspace) {
-      return;
-    }
-    if (seededWorkspaceIdRef.current !== workspaceId) {
-      seededWorkspaceIdRef.current = workspaceId;
-      escapedNameRef.current = false;
-      setNameDirty(false);
-      setReferenceDirty(false);
-      setNameValue(workspace.name);
-      setReferenceValue(workspace.reference);
-      setReferenceError("");
-      setReferenceConfirmation({ status: "closed" });
-      return;
-    }
-
-    if (!nameDirty) {
-      setNameValue(workspace.name);
-    }
-    if (!referenceDirty) {
-      setReferenceValue(workspace.reference);
-      setReferenceError("");
-    }
-  }, [nameDirty, referenceDirty, workspace, workspaceId]);
   const handleSaveName = () => {
-    if (!workspace) {
-      return;
-    }
     if (escapedNameRef.current) {
       escapedNameRef.current = false;
-      setNameValue(workspace.name);
-      setNameDirty(false);
+      setNameDraft(null);
       return;
     }
 
     const trimmed = nameValue.trim();
     if (!trimmed || trimmed === workspace.name) {
-      setNameValue(workspace.name);
-      setNameDirty(false);
+      setNameDraft(null);
       return;
     }
 
-    const fallbackName = workspace.name;
     updateWorkspace.mutate(
       {
         workspaceId,
@@ -143,12 +143,11 @@ export const MatterMetadataPanel = ({
       },
       {
         onSuccess: () => {
-          setNameDirty(false);
+          setNameDraft(null);
         },
         onError: (error) => {
           notifyUserError(error, t("errors.actionFailed"));
-          setNameValue(fallbackName);
-          setNameDirty(false);
+          setNameDraft(null);
         },
       },
     );
@@ -164,7 +163,7 @@ export const MatterMetadataPanel = ({
       },
       {
         onSuccess: () => {
-          setReferenceDirty(false);
+          setReferenceDraft(null);
           detached(
             queryClient.invalidateQueries({
               queryKey: workspacesKeys.byId(workspaceId),
@@ -179,26 +178,18 @@ export const MatterMetadataPanel = ({
             return;
           }
           notifyUserError(error, t("errors.actionFailed"));
-          setReferenceDirty(false);
+          setReferenceDraft(null);
         },
       },
     );
   };
 
   const revertReference = () => {
-    if (!workspace) {
-      return;
-    }
-    setReferenceValue(workspace.reference);
-    setReferenceDirty(false);
+    setReferenceDraft(null);
     setReferenceError("");
   };
 
   const handleSaveReference = () => {
-    if (!workspace) {
-      return;
-    }
-
     const edit = resolveReferenceEdit({
       currentReference: workspace.reference,
       nextReference: referenceValue,
@@ -316,10 +307,6 @@ export const MatterMetadataPanel = ({
     );
   };
 
-  if (workspaceQuery.isError || !workspace) {
-    return null;
-  }
-
   // Document references are built from the matter reference, so the helper
   // spells out the numbering it produces. It reads the value being typed, not
   // the saved one, so the example tracks the edit before it is committed.
@@ -353,8 +340,7 @@ export const MatterMetadataPanel = ({
             onBlur={handleSaveName}
             maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
             onChange={(e) => {
-              setNameDirty(true);
-              setNameValue(e.target.value);
+              setNameDraft(e.target.value);
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -390,8 +376,7 @@ export const MatterMetadataPanel = ({
               disabled={updateWorkspace.isPending}
               onBlur={handleSaveReference}
               onChange={(e) => {
-                setReferenceDirty(true);
-                setReferenceValue(e.target.value);
+                setReferenceDraft(e.target.value);
                 setReferenceError("");
               }}
               onKeyDown={(e) => {

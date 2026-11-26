@@ -1,8 +1,4 @@
 {
-  "apps/desktop/src/activity/ActivityDayCalendar.tsx": 1,
-  "apps/desktop/src/dictation/DictationPreviewApp.tsx": 1,
-  "apps/desktop/src/onboarding/TryItStep.tsx": 2,
-  "apps/desktop/src/transcribe/TranscribeCleanup.tsx": 1,
   "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx": 3,
   "apps/web/src/components/ai-suggestions/use-folio-document-blocks.ts": 1,
   "apps/web/src/components/app-sidebar.tsx": 1,
@@ -22,11 +18,6 @@
   "apps/web/src/components/pdf/page-organizer.tsx": 1,
   "apps/web/src/components/pdf/pdf-selection-toolbar.tsx": 1,
   "apps/web/src/components/render-storm-canary.dom.test.tsx": 1,
-  "apps/web/src/components/route-components.tsx": 4,
-  "apps/web/src/components/search-chat-preview.tsx": 2,
-  "apps/web/src/components/search-dialog.tsx": 1,
-  "apps/web/src/components/workspaces/copy-to-matter-dialog.tsx": 1,
-  "apps/web/src/components/workspaces/matter-metadata-sheet.tsx": 9,
   "apps/web/src/features/chat/components/proxy-chat-link.tsx": 1,
   "apps/web/src/features/desktop/desktop-connection-card.tsx": 2,
   "apps/web/src/hooks/use-external-file-drop.ts": 2,
@@ -43,6 +34,5 @@
   "apps/web/src/routes/dev/-components/chat-long-paste-playground.tsx": 1,
   "apps/web/src/routes/dev/-components/playbook-editor-playground.tsx": 1,
   "apps/web/src/routes/knowledge/-components/template-studio-chat.tsx": 1,
-  "apps/web/src/routes/onboarding/-components/onboarding-wizard.tsx": 3,
-  "packages/ui/src/kanban/virtual-cell.tsx": 1
+  "apps/web/src/routes/onboarding/-components/onboarding-wizard.tsx": 3
 }

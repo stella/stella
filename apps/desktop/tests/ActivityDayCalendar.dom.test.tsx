@@ -148,3 +148,63 @@ test("while Activity cannot record, a brief touch cannot be added", async () => 
   // Nothing opened: the brief touch is still listed and no card took it.
   expect(await addBriefTouch(view)).toBe(button);
 });
+
+test("a stored retry goes back to editing once its pending batch is gone", async () => {
+  mockIPC((command) => {
+    switch (command) {
+      case "time_entry_candidates":
+        return CANDIDATES;
+      case "time_entry_resolve_matters":
+        return [];
+      case "activity_get_matter_learning":
+        return { type: "unavailable" };
+      default:
+        return null;
+    }
+  });
+  const statuses: string[] = [];
+  const day = (snapshot: ActivityDaySnapshot) => (
+    <DesktopIntlProvider language="en" messages={defaultMessages}>
+      <ActivityDayCalendar
+        header={null}
+        snapshot={snapshot}
+        preferences={{ granularity: 15 }}
+        onPreferencesChange={noop}
+        onCopy={noop}
+        onCaptureCommand={noop}
+        onReviewStatusChange={(status) => {
+          statuses.push(status);
+        }}
+      />
+    </DesktopIntlProvider>
+  );
+  const pending = {
+    ...SNAPSHOT,
+    pendingBatch: {
+      idempotencyKey: "batch-1",
+      entries: [
+        {
+          matterId: MATTER.id,
+          dateWorked: "2026-10-07",
+          timezoneId: "UTC",
+          durationMinutes: 6,
+          narrative: "Lease review",
+          billable: true,
+        },
+      ],
+      ranges: [
+        [{ start: "2026-10-07T09:00:00Z", end: "2026-10-07T09:01:00Z" }],
+      ],
+    },
+  } satisfies ActivityDaySnapshot;
+  const view = testing.render(day(pending));
+  await testing.act(nextMacrotask);
+  expect(statuses.at(-1)).toBe("retry");
+
+  // Sent from another window, or discarded in settings: the snapshot no
+  // longer carries the batch.
+  view.rerender(day(SNAPSHOT));
+  await testing.act(nextMacrotask);
+  expect(statuses.at(-1)).toBe("editing");
+  expect(statuses).not.toContain("submitting");
+});
