@@ -28,6 +28,15 @@ export const CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES =
 export const CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES =
   LIMITS.corpusPayloadMaxDecompressedBytes;
 export const CORPUS_PROJECTION_DELETE_MAX_REVISIONS = 128;
+/**
+ * The most revisions one census aggregation names. A census only reads, so
+ * its bound is the engine's aggregation timeout
+ * (`CORPUS_INDEX_AGGREGATION_TIMEOUT_MS`), not the delete batch: production
+ * route proof pages of 128 revisions took 0.9 to 2.7 s at the median and up
+ * to 9.8 s at the worst on one route. Callers size their pages within this
+ * bound by what they measure (`corpus-index-route-proof.ts`).
+ */
+export const CORPUS_PROJECTION_CENSUS_MAX_REVISIONS = 512;
 export const CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS = 5000;
 
 /**
@@ -292,16 +301,13 @@ export const appendCorpusProjectionBatch = async ({
   });
 };
 
-export const corpusProjectionRevisionsQuery = (
+/** The raw `projection_revision` terms of 1 to `max` revisions, OR-ed. */
+const projectionRevisionTerms = (
   revisions: readonly ProjectionRevision[],
+  { max, purpose }: { max: number; purpose: string },
 ): string => {
-  if (
-    revisions.length === 0 ||
-    revisions.length > CORPUS_PROJECTION_DELETE_MAX_REVISIONS
-  ) {
-    return panic(
-      `corpus projection delete requires 1-${CORPUS_PROJECTION_DELETE_MAX_REVISIONS} revisions`,
-    );
+  if (revisions.length === 0 || revisions.length > max) {
+    return panic(`corpus projection ${purpose} requires 1-${max} revisions`);
   }
   return revisions
     .map((revision) =>
@@ -311,6 +317,14 @@ export const corpusProjectionRevisionsQuery = (
     )
     .join(" OR ");
 };
+
+export const corpusProjectionRevisionsQuery = (
+  revisions: readonly ProjectionRevision[],
+): string =>
+  projectionRevisionTerms(revisions, {
+    max: CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
+    purpose: "delete",
+  });
 
 type CorpusProjectionDeleteClient = Pick<CorpusIndexClient, "deleteByQuery">;
 
@@ -355,7 +369,10 @@ export const censusCorpusProjectionRevisions = async ({
 }: ProjectionRevisionCensusOptions): Promise<
   Result<CorpusProjectionRevisionCensus, CorpusIndexError>
 > => {
-  const query = corpusProjectionRevisionsQuery(revisions);
+  const query = projectionRevisionTerms(revisions, {
+    max: CORPUS_PROJECTION_CENSUS_MAX_REVISIONS,
+    purpose: "census",
+  });
   const aggregated = await client.aggregate({
     observer: "unobserved",
     indexId,

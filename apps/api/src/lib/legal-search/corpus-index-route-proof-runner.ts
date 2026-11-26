@@ -38,6 +38,11 @@
  * take it first too), so a runner transaction never waits on a lock the flip
  * holds while holding one the flip wants.
  *
+ * Page size. Each route keeps its own census page size, adapted to how long
+ * its census reads take (`nextCorpusIndexRouteCensusPageSize`), unless the
+ * caller fixes one. A size is not part of a pass, so a run resumes a pass
+ * another run walked at any size.
+ *
  * Paced by the caller's governor (`admit`), one unit per page and per repair,
  * and by a bounded number of routes walked at once. Engine failures and
  * transient database failures back off per route; a route the manifest no
@@ -65,8 +70,13 @@ import type {
 import { lockCorpusIndexProjectionWriterTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
 import {
   advanceCorpusIndexRouteProof,
+  type CorpusIndexRouteCensusPageSize,
   type CorpusIndexRouteProofAdmission,
   type CorpusIndexRouteProofAdvance,
+  type CorpusIndexRouteProofPage,
+  initialCorpusIndexRouteCensusPageSize,
+  isCorpusIndexReadTimeout,
+  nextCorpusIndexRouteCensusPageSize,
 } from "@/api/lib/legal-search/corpus-index-route-proof";
 import {
   type CorpusIndexGenerationRouteProofs,
@@ -303,6 +313,8 @@ type CorpusIndexRouteProofRouteReport = {
   setAside: SetAside | null;
   /** A failed or refused page waits until this instant before the next. */
   backoffUntil: number;
+  /** The route's census page size. */
+  pageSize: CorpusIndexRouteCensusPageSize;
 };
 
 type CorpusIndexRouteProofStop =
@@ -362,7 +374,10 @@ export type CorpusIndexRouteProofRunOptions = {
   concurrency: number;
   /** How long the fence may stay held before the run stops. */
   fencePatienceMs: number;
-  /** Revisions per census page; the census default when omitted. */
+  /**
+   * Revisions per census page, fixed; when omitted each route adapts its own
+   * (`nextCorpusIndexRouteCensusPageSize`).
+   */
   pageLimit?: number;
   now: () => number;
   sleep: (ms: number) => Promise<void>;
@@ -384,7 +399,7 @@ const routeName = ({ generation, indexId }: CorpusIndexRoute) =>
   `${generation}/${indexId}`;
 
 type Step =
-  | { type: "advanced"; advance: CorpusIndexRouteProofAdvance }
+  | { type: "advanced"; page: CorpusIndexRouteProofPage }
   | { type: "engine_failed"; error: CorpusIndexError }
   | { type: "lock_refused" }
   | { type: "braked"; waitedMs: number }
@@ -462,8 +477,9 @@ const takeRoute = (
   return { type: "wait", ms: Math.max(Math.min(...waits), 0) };
 };
 
-const stepOf = async (walk: Walk, route: CorpusIndexRoute): Promise<Step> => {
+const stepOf = async (walk: Walk, report: RouteReport): Promise<Step> => {
   const { options } = walk;
+  const { route } = report;
   const ran = await Result.tryPromise({
     try: async () =>
       await advanceCorpusIndexRouteProof({
@@ -471,9 +487,7 @@ const stepOf = async (walk: Walk, route: CorpusIndexRoute): Promise<Step> => {
         client: options.clientFor(route),
         admit: options.admit,
         route,
-        ...(options.pageLimit === undefined
-          ? {}
-          : { limit: options.pageLimit }),
+        limit: options.pageLimit ?? report.pageSize.limit,
       }),
     catch: (cause) => cause,
   });
@@ -484,7 +498,7 @@ const stepOf = async (walk: Walk, route: CorpusIndexRoute): Promise<Step> => {
   }
   return ran.value.isErr()
     ? { type: "engine_failed", error: ran.value.error }
-    : { type: "advanced", advance: ran.value.value };
+    : { type: "advanced", page: ran.value.value };
 };
 
 /** Count a route's failure: back it off, or stop the run after too many. */
@@ -564,6 +578,25 @@ const settle = (
   }
 };
 
+/** Adapt the route's census page size to what one page's census took. */
+const learnPageSize = (report: RouteReport, step: Step): void => {
+  if (step.type === "engine_failed" && isCorpusIndexReadTimeout(step.error)) {
+    report.pageSize = nextCorpusIndexRouteCensusPageSize(report.pageSize, {
+      type: "timed_out",
+    });
+    return;
+  }
+  if (step.type !== "advanced" || step.page.censusMs === null) {
+    return;
+  }
+  const { advance, censusMs } = step.page;
+  report.pageSize = nextCorpusIndexRouteCensusPageSize(report.pageSize, {
+    type: "read",
+    censusMs,
+    revisions: "inspected" in advance ? advance.inspected : 0,
+  });
+};
+
 /** Apply one page's step to the run; resolves once its effects are read. */
 const applyStep = async (
   walk: Walk,
@@ -583,6 +616,7 @@ const applyStep = async (
     return;
   }
   walk.lockRefusedSince = null;
+  learnPageSize(report, step);
   switch (step.type) {
     case "braked":
       walk.stop ??= { type: "braked", waitedMs: step.waitedMs };
@@ -604,7 +638,7 @@ const applyStep = async (
       );
       return;
     case "advanced": {
-      const proven = settle(walk.options, report, step.advance);
+      const proven = settle(walk.options, report, step.page.advance);
       if (walk.options.untilCurrent && (proven || now() >= walk.refreshAt)) {
         await refreshProofs(walk);
       }
@@ -708,7 +742,7 @@ const turn = async (
     return;
   }
   const step: Step =
-    paced.type === "braked" ? paced : await stepOf(walk, report.route);
+    paced.type === "braked" ? paced : await stepOf(walk, report);
   walk.busy.delete(report);
   await applyStep(walk, report, step);
 };
@@ -765,6 +799,7 @@ const routeReports = (
       failures: 0,
       setAside: null,
       backoffUntil: 0,
+      pageSize: initialCorpusIndexRouteCensusPageSize(),
     }));
   });
 
