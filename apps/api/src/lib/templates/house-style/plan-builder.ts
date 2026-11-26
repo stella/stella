@@ -64,6 +64,7 @@ import type {
 } from "@/api/lib/templates/house-style/role-proposer";
 import { LEVEL_ROLES } from "@/api/lib/templates/house-style/template-profile";
 import type {
+  ProfileListLevel,
   ProfileRoleTarget,
   TemplateHealthFinding,
   TemplateProfile,
@@ -397,6 +398,20 @@ const styleTarget = (
   return null;
 };
 
+/**
+ * The level a role without one of its own stands beside: the level of the
+ * role whose style it borrows. A bullet borrows the style of unnumbered
+ * text, which has no level; it hangs where the template's lettered items
+ * do, from the start of the text they belong to.
+ */
+const borrowedLevelOf = (
+  profile: TemplateProfile,
+  target: ProfileRoleTarget | null,
+  bulleted: boolean,
+): ProfileListLevel | null =>
+  target?.numbering ??
+  (bulleted ? (profile.roles.letter?.numbering ?? null) : null);
+
 /** One paragraph's style and what it asks of the numbering. */
 const placementOf = (
   context: Context,
@@ -419,7 +434,8 @@ const placementOf = (
     entry,
     styleId: target?.styleId ?? null,
     level: entry === null && !bulleted ? null : ownLevel,
-    borrowedLevel: own === null ? (target?.numbering ?? null) : null,
+    borrowedLevel:
+      own === null ? borrowedLevelOf(profile, target, bulleted) : null,
     sourceLabel: null,
     pattern: null,
     ordinal: null,

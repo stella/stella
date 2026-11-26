@@ -336,7 +336,14 @@ describe("buildTemplatePlan, list instances", () => {
           numFmt: "lowerLetter",
           indent: { left: 2268, hanging: 567 },
         },
-        { abstractNumId: 4, ilvl: 6, numFmt: "bullet", lvlText: "•" },
+        // A bullet hangs where the lettered items do.
+        {
+          abstractNumId: 4,
+          ilvl: 6,
+          numFmt: "bullet",
+          lvlText: "•",
+          indent: { left: 2268, hanging: 567 },
+        },
       ]),
     );
     expect(note.items.filter(({ kind }) => kind.startsWith("label"))).toEqual(
