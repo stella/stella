@@ -3851,6 +3851,10 @@ jobs:
       )
     runs-on: ubuntu-24.04
     timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [1, 2]
     permissions:
       contents: read
       actions: write
@@ -3917,6 +3921,7 @@ jobs:
           CI_CHECK_POOL_INPUTS: ${{ toJSON(inputs) }}
           CI_CHECK_POOL_TOKEN: ${{ github.token }}
           CI_COMPARISON_BASE: ${{ needs.ci-plan.outputs.target_base_sha }}
+          CI_CHECK_POOL_PARTITION: ${{ format('{0}/2', matrix.partition) }}
         run: |
           needs_file=$(mktemp)
           cat > "$needs_file" <<'CI_CHECK_POOL_NEEDS_JSON'
