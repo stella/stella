@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { BLOCK_DIRECTIVE_KINDS } from "@stll/template-conditions";
 import type { TemplatePackCatalogue } from "@stll/template-packs";
 import type { GeneratedTemplatePack } from "@stll/template-packs/schema";
 
@@ -180,12 +181,15 @@ const tableRowPositionSchema = v.union([
 const previewParagraphSchema = v.object({
   index: v.number(),
   text: v.pipe(v.string(), v.maxLength(65_536)),
-  source: paragraphSourceSchema,
+  source: v.optional(paragraphSourceSchema),
   style: v.optional(v.pipe(v.string(), v.maxLength(128))),
   bold: v.optional(v.boolean()),
   fontSize: v.optional(v.number()),
   alignment: v.optional(paragraphAlignmentSchema),
   tableRow: v.optional(tableRowPositionSchema),
+  isDirective: v.optional(v.boolean()),
+  directiveKind: v.optional(v.picklist(BLOCK_DIRECTIVE_KINDS)),
+  directiveExpression: v.optional(v.pipe(v.string(), v.maxLength(4096))),
 });
 
 const clauseProvenanceSchema = v.object({
