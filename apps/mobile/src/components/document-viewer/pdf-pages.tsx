@@ -5,7 +5,6 @@
 // assumes).
 import "pdfjs-dist/legacy/build/pdf.worker.mjs";
 import {
-  useCallback,
   useEffect,
   useEffectEvent,
   useLayoutEffect,
@@ -21,6 +20,7 @@ import type {
 } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 import { NEUTRAL_COLORS } from "@stll/brand";
+import { useComposedRefs } from "@stll/ui/effects/refs";
 
 import { anchoredScroll, canvasScale, scaledScroll } from "./zoom";
 
@@ -184,10 +184,7 @@ export const PdfPages = ({
       lead: PAGE_GAP,
     });
   }, [layout, zoom]);
-  const holdScroller = useCallback((node: HTMLDivElement | null) => {
-    scrolling.current = node;
-    setScroller(node);
-  }, []);
+  const holdScroller = useComposedRefs(scrolling, setScroller);
 
   if (pdf === null || layout === null) {
     return null;

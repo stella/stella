@@ -2,7 +2,7 @@ import type { RefObject } from "react";
 
 import type { DocxEditorRef } from "@stll/folio-react";
 import { useExternalSyncEffect } from "@stll/ui/effects";
-import { composeRefs } from "@stll/ui/utils";
+import { useComposedRefs } from "@stll/ui/effects/refs";
 
 import { useDocxFitZoom } from "@/components/docx-preview-zoom";
 import { useDocxFind } from "@/components/docx/use-docx-find";
@@ -46,7 +46,7 @@ export const useDocxEditorViewport = ({
   }, [editorRef, zoomMode, targetZoom]);
   // Stable ref callback so React doesn't detach/re-attach the fit-zoom
   // ResizeObserver every render.
-  const composedContainerRef = composeRefs(containerRef, fitZoomRef);
+  const composedContainerRef = useComposedRefs(containerRef, fitZoomRef);
   // Full view leaves Cmd+F to Folio's own dialog, which has the whole
   // viewport to sit in; only the docked inspector needs its own bar.
   const find = useDocxFind({

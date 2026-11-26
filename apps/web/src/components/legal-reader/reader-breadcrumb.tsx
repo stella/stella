@@ -8,6 +8,7 @@ import type { ReaderAiDisclosureContext } from "@stll/api-contract/ai-disclosure
 import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useObservedValue } from "@stll/ui/effects/dom";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -17,7 +18,6 @@ import { cn } from "@stll/ui/utils";
 import {
   compactReaderPath,
   fitReaderPath,
-  fitWidth,
   readerProvisionNumber,
   splitReaderHeading,
 } from "./reader-breadcrumb.logic";
@@ -323,6 +323,34 @@ const TrailMenu = ({ entries, nameOf, onJump }: TrailMenuProps) => {
   );
 };
 
+// The fit for the measured widths: a provision number is the current label,
+// which is never cut.
+const fitPath = (
+  widths: Readonly<Record<string, number>>,
+  visible: readonly ReaderBreadcrumbSegment[],
+  hiddenCount: number,
+  path: readonly ReaderBreadcrumbSegment[],
+) => {
+  const crumbs = visible.map(({ anchorId }) => ({
+    label: widths[`label:${anchorId}`] ?? 0,
+    full: widths[`full:${anchorId}`] ?? 0,
+  }));
+  const numberWidth =
+    readerProvisionNumber(path.at(-1)?.title ?? "") === null
+      ? 0
+      : (crumbs.at(-1)?.label ?? 0);
+  return fitReaderPath({
+    available: widths["available"] ?? 0,
+    crumbs,
+    hiddenCount,
+    separatorWidth: SEPARATOR_WIDTH,
+    menuWidth: MENU_WIDTH,
+    minimumTitleWidth: MINIMUM_TITLE_WIDTH,
+    maximumAncestorLabelWidth: MAXIMUM_ANCESTOR_LABEL_WIDTH,
+    minimumCurrentWidth: Math.max(TOUCH_TARGET_WIDTH, numberWidth),
+  });
+};
+
 export const ReaderBreadcrumb = ({
   trail,
   rows,
@@ -345,73 +373,67 @@ export const ReaderBreadcrumb = ({
     }
   };
   const { visible, hidden } = compactReaderPath(path);
-  const [layout, setLayout] = useState<ReturnType<typeof fitReaderPath>>();
+  const [bar, setBar] = useState<HTMLElement | null>(null);
   const [contentsOpen, setContentsOpen] = useState(false);
   const contentsPopupRef = useRef<HTMLDivElement>(null);
   const current = path.at(-1);
   const ancestors = visible.slice(0, -1);
+  // The widths the fit is spent from, read off the hidden measurer: the bar's
+  // room (less the AI mark beside an analysis trail) and each visible crumb's
+  // label and full width, keyed `label:<anchor>` / `full:<anchor>`. Observed,
+  // so a rewrap or a font load fits again; read again for a new set of crumbs.
+  const visibleKey = visible.map(({ anchorId }) => anchorId).join("\u0000");
+  const widths = useObservedValue<
+    HTMLElement,
+    Readonly<Record<string, number>> | null
+  >(
+    bar,
+    (node, emit) => {
+      const update = () => {
+        if (node.clientWidth === 0) {
+          return;
+        }
+        const mark = node.querySelector<HTMLElement>(
+          "[data-breadcrumb-ai-mark]",
+        );
+        const crumbWidth = (part: "label" | "full", anchorId: string) =>
+          node
+            .querySelector<HTMLElement>(
+              `[data-breadcrumb-${part}="${CSS.escape(anchorId)}"]`,
+            )
+            ?.getBoundingClientRect().width ?? 0;
+        emit(
+          Object.fromEntries<number>([
+            [
+              "available",
+              node.clientWidth - (mark?.getBoundingClientRect().width ?? 0),
+            ],
+            ...visible.flatMap(({ anchorId }) => [
+              [`label:${anchorId}`, crumbWidth("label", anchorId)] as const,
+              [`full:${anchorId}`, crumbWidth("full", anchorId)] as const,
+            ]),
+          ]),
+        );
+      };
+      const observer = new ResizeObserver(update);
+      observer.observe(node);
+      for (const label of node.querySelectorAll<HTMLElement>(
+        "[data-breadcrumb-label], [data-breadcrumb-full]",
+      )) {
+        observer.observe(label);
+      }
+      update();
+      return () => observer.disconnect();
+    },
+    [visibleKey],
+    null,
+  );
+  const layout =
+    widths === null ? undefined : fitPath(widths, visible, hidden.length, path);
   const fitOf = (index: number) => layout?.fits[index];
   const widthOf = (index: number) => {
     const fit = fitOf(index);
     return fit === undefined || fit.type === "folded" ? undefined : fit.width;
-  };
-  const measure = (node: HTMLElement | null) => {
-    if (node === null) {
-      return undefined;
-    }
-    const update = () => {
-      if (node.clientWidth === 0) {
-        return;
-      }
-      const widthOfMeasure = (part: "label" | "full", anchorId: string) =>
-        node
-          .querySelector<HTMLElement>(
-            `[data-breadcrumb-${part}="${CSS.escape(anchorId)}"]`,
-          )
-          ?.getBoundingClientRect().width ?? 0;
-      const crumbs = compactReaderPath(path).visible.map(({ anchorId }) => ({
-        label: widthOfMeasure("label", anchorId),
-        full: widthOfMeasure("full", anchorId),
-      }));
-      // A provision number is the current label, which is never cut.
-      const numberWidth =
-        readerProvisionNumber(path.at(-1)?.title ?? "") === null
-          ? 0
-          : (crumbs.at(-1)?.label ?? 0);
-      // The AI mark beside an analysis trail keeps its own width.
-      const mark = node.querySelector<HTMLElement>("[data-breadcrumb-ai-mark]");
-      const fitted = fitReaderPath({
-        available:
-          node.clientWidth - (mark?.getBoundingClientRect().width ?? 0),
-        crumbs,
-        hiddenCount: compactReaderPath(path).hidden.length,
-        separatorWidth: SEPARATOR_WIDTH,
-        menuWidth: MENU_WIDTH,
-        minimumTitleWidth: MINIMUM_TITLE_WIDTH,
-        maximumAncestorLabelWidth: MAXIMUM_ANCESTOR_LABEL_WIDTH,
-        minimumCurrentWidth: Math.max(TOUCH_TARGET_WIDTH, numberWidth),
-      });
-      setLayout((previous) =>
-        previous?.showMenu === fitted.showMenu &&
-        previous.fits.length === fitted.fits.length &&
-        previous.fits.every(
-          (fit, index) =>
-            fit.type === fitted.fits[index]?.type &&
-            fitWidth(fit) === fitWidth(fitted.fits[index]),
-        )
-          ? previous
-          : fitted,
-      );
-    };
-    const observer = new ResizeObserver(update);
-    observer.observe(node);
-    for (const label of node.querySelectorAll<HTMLElement>(
-      "[data-breadcrumb-label], [data-breadcrumb-full]",
-    )) {
-      observer.observe(label);
-    }
-    update();
-    return () => observer.disconnect();
   };
   // Every outer level not on the bar, in document order: the middle levels
   // the trail always keeps off it, and any it folded for want of width.
@@ -507,7 +529,7 @@ export const ReaderBreadcrumb = ({
       aria-label={t("statutes.outline")}
       className="relative min-w-0 flex-1 overflow-hidden"
       data-slot="reader-breadcrumb"
-      ref={measure}
+      ref={setBar}
     >
       <span aria-atomic="true" aria-live="polite" className="sr-only">
         {path.map(({ title }) => nameOf(title)).join(" › ")}

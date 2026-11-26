@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
+import { useLatestCallback } from "@stll/ui/effects";
 
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import type { TranslationKey } from "@/i18n/types";
@@ -62,6 +63,15 @@ export const AnswerFormatProposal = ({
       })(),
       "answer-format.refresh",
     );
+  // One identity for the component's lifetime, so the frame's ref below
+  // registers it once; it calls the latest `cancelStale`.
+  const onStaleKeyDown = useLatestCallback((event: KeyboardEvent) => {
+    if (event.key !== "Escape") {
+      return;
+    }
+    event.preventDefault();
+    cancelStale();
+  });
   const staleNotice = (
     <AnswerEditFrame
       aria-label={t("chat.answerEdit.textStyle")}
@@ -70,15 +80,8 @@ export const AnswerFormatProposal = ({
           return undefined;
         }
         node.focus();
-        const onKeyDown = (event: KeyboardEvent) => {
-          if (event.key !== "Escape") {
-            return;
-          }
-          event.preventDefault();
-          cancelStale();
-        };
-        node.addEventListener("keydown", onKeyDown);
-        return () => node.removeEventListener("keydown", onKeyDown);
+        node.addEventListener("keydown", onStaleKeyDown);
+        return () => node.removeEventListener("keydown", onStaleKeyDown);
       }}
     >
       <AnswerEditNotice status="stale" onCancel={cancelStale} />

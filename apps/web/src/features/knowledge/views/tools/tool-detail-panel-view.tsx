@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
+import { useLayoutMeasurement } from "@stll/ui/effects/dom";
 import {
   BanknoteIcon,
   CogIcon,
@@ -188,25 +189,17 @@ export const ToolDetailPanelView = ({
 const ExpandableText = ({ text }: { text: string }) => {
   const t = useTranslations();
   const [expanded, setExpanded] = useState(false);
-  const [overflowing, setOverflowing] = useState(false);
+  const [textElement, setTextElement] = useState<HTMLElement | null>(null);
 
   // Measure only while clamped, so overflow is detected against the
-  // line-clamp height. A ResizeObserver keeps it correct across font
-  // loads, panel animation, and width changes.
-  const textRef = (el: HTMLElement | null) => {
-    if (expanded || !el) {
-      return undefined;
-    }
-
-    const measure = () => {
-      setOverflowing(el.scrollHeight > el.clientHeight + 1);
-    };
-
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  };
+  // line-clamp height. The observer keeps it correct across font loads,
+  // panel animation, and width changes; new text is measured again.
+  const overflowing = useLayoutMeasurement(
+    expanded ? null : textElement,
+    (el) => el.scrollHeight > el.clientHeight + 1,
+    [text],
+    false,
+  );
 
   return (
     <div className="flex flex-col items-start gap-1.5">
@@ -215,7 +208,7 @@ const ExpandableText = ({ text }: { text: string }) => {
         className="text-foreground text-sm leading-relaxed text-pretty"
         hint={false}
         lines={expanded ? "none" : 5}
-        ref={textRef}
+        ref={setTextElement}
         render={<p />}
       >
         {text}

@@ -3,6 +3,9 @@ import type { RefCallback, RefObject } from "react";
 
 import { panic } from "better-result";
 
+import { useLayoutSyncEffect } from "@stll/ui/effects";
+import { useComposedRefs } from "@stll/ui/effects/refs";
+
 import {
   attachFollowState,
   decideContentResize,
@@ -94,12 +97,39 @@ export const revealTranscriptElement = (element: HTMLElement) => {
  */
 export const useStickToBottom = () => {
   const scrollElementRef = useRef<HTMLDivElement | null>(null);
-  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(
+    null,
+  );
+  const [content, setContent] = useState<HTMLDivElement | null>(null);
+  // The ref object is set as the element attaches, for consumers that read
+  // it from their own layout effects; the state drives the listeners below.
+  const scrollRef = useComposedRefs(scrollElementRef, setScrollElement);
+  // Whether the view is pinned, for the element it was decided on. The
+  // escape state belongs to the scroll element, not the provider: the
+  // provider outlives a thread switch (the chat page keeps one instance
+  // across `/chat/$threadId` navigations, and its composer reads this
+  // context), so a freshly mounted viewport reads as pinned until it says
+  // otherwise, and `isScrollable && !isAtBottom` cannot flash the scroll
+  // button over a transcript that is already pinned.
+  const [bottom, setBottom] = useState<{
+    element: HTMLDivElement | null;
+    value: boolean;
+  }>({ element: null, value: true });
+  const isAtBottom = bottom.element === scrollElement ? bottom.value : true;
   /** Whether the scroll container has more content than fits the viewport. */
   const [isScrollable, setIsScrollable] = useState(false);
   /** Escape state of the attached element; the transitions live in
    *  `use-stick-to-bottom.logic.ts`. */
   const followState = useRef<FollowState>(attachFollowState(0));
+
+  const setIsAtBottom = (value: boolean) => {
+    const element = scrollElementRef.current;
+    setBottom((current) =>
+      current.element === element && current.value === value
+        ? current
+        : { element, value },
+    );
+  };
 
   const scrollToBottom = () => {
     const el = scrollElementRef.current;
@@ -111,23 +141,14 @@ export const useStickToBottom = () => {
     setIsAtBottom(true);
   };
 
-  const scrollRef = (el: HTMLDivElement | null) => {
+  useLayoutSyncEffect(() => {
+    const el = scrollElement;
     if (!el) {
       return undefined;
     }
-
-    scrollElementRef.current = el;
-    // The escape state belongs to the scroll element, not the provider. The
-    // provider outlives a thread switch (the chat page keeps one instance
-    // across `/chat/$threadId` navigations, and its composer reads this
-    // context), so a freshly mounted viewport must start pinned; otherwise
-    // a scroll-up in the previous thread would carry over and the new
-    // transcript would land wherever the old scroll offset happened to be.
+    // A freshly attached viewport starts pinned, wherever the previous
+    // thread's scroll offset happened to be.
     followState.current = attachFollowState(el.scrollTop);
-    // The observable state moves with the refs: the content observer would
-    // restore it a frame later, but until then `isScrollable && !isAtBottom`
-    // can flash the scroll button over a transcript that is already pinned.
-    setIsAtBottom(true);
 
     const applyTransition = (transition: FollowTransition) => {
       followState.current = transition.state;
@@ -151,13 +172,12 @@ export const useStickToBottom = () => {
     el.addEventListener("scroll", onScroll, { passive: true });
     el.addEventListener("wheel", onWheel, { passive: true });
     return () => {
-      scrollElementRef.current = null;
       el.removeEventListener("scroll", onScroll);
       el.removeEventListener("wheel", onWheel);
     };
-  };
+  }, [scrollElement]);
 
-  const contentRef = (content: HTMLDivElement | null) => {
+  useLayoutSyncEffect(() => {
     if (!content) {
       return undefined;
     }
@@ -195,12 +215,12 @@ export const useStickToBottom = () => {
       cancelAnimationFrame(raf);
       observer.disconnect();
     };
-  };
+  }, [content]);
 
   return {
     scrollRef,
     scrollElementRef,
-    contentRef,
+    contentRef: setContent,
     isAtBottom,
     isScrollable,
     scrollToBottom,

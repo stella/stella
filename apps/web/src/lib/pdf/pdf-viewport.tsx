@@ -9,10 +9,10 @@ import { useShallow } from "zustand/react/shallow";
 
 import { Button } from "@stll/ui/button";
 import { useExternalSyncEffect } from "@stll/ui/effects";
+import { useComposedRefs } from "@stll/ui/effects/refs";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
 import { ScrollArea } from "@stll/ui/scroll-area";
-import { composeRefs } from "@stll/ui/utils";
 
 import { DOCKED_COMPOSER_CLEARANCE } from "@/components/ai-suggestions/composer-geometry";
 import { SecretInput } from "@/components/secret-input";
@@ -259,9 +259,10 @@ const PDFViewerContent = ({
     lastReportedPageRef,
   });
 
-  const pdfContentRef = useMemo(
-    () => composeRefs(containerRef, fitToWidthRef, pageVisibilityRef),
-    [fitToWidthRef, pageVisibilityRef],
+  const pdfContentRef = useComposedRefs(
+    containerRef,
+    fitToWidthRef,
+    pageVisibilityRef,
   );
 
   if (searchPageQuery.error && !searchPageQuery.isFetching) {

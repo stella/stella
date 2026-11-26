@@ -254,9 +254,7 @@ export const WorkspaceBreadcrumb = ({
           onValueChange={refRename.setDraft}
           onCancel={refRename.cancel}
           placeholder={t("workspaces.referencePlaceholder")}
-          ref={(el) => {
-            setRefInputEl(el);
-          }}
+          ref={setRefInputEl}
           value={refDraft}
         />
       );
