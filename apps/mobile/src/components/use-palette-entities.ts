@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Result } from "better-result";
+
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { useSession } from "@/connection/session-provider";
 import { listChatThreads } from "@/state/chat-threads";
@@ -24,7 +26,7 @@ export const usePaletteEntities = (): PaletteEntities => {
   const { state } = useSession();
   const [entities, setEntities] = useState(NONE);
   const source = state.status === "signed-in" ? state.source : null;
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (source === null) {
       return undefined;
     }

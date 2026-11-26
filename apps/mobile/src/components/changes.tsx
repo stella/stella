@@ -1,14 +1,8 @@
-import {
-  createContext,
-  startTransition,
-  use,
-  useEffect,
-  useEffectEvent,
-  useRef,
-  useState,
-} from "react";
+import { createContext, startTransition, use, useRef, useState } from "react";
 
 import { panic } from "better-result";
+
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 
 /**
  * What the app can change, each of which some list shows: from a sheet or a
@@ -81,16 +75,16 @@ export const useRevisedLoad = <T,>(
   const revision = useRevision(...kinds);
   const [load, setLoad] = useState(start);
   const loadedFor = useRef(revision);
-  const reload = useEffectEvent(() => {
+  const reload = useLatestCallback(() => {
     startTransition(() => {
       setLoad(start());
     });
   });
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (loadedFor.current !== revision) {
       loadedFor.current = revision;
       reload();
     }
-  }, [revision]);
+  }, [revision, reload]);
   return [load, setLoad] as const;
 };
