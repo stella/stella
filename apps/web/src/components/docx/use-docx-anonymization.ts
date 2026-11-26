@@ -1,10 +1,10 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import type { EditorView } from "@tiptap/pm/view";
 
 import type { FolioAnonymizationTerm } from "@stll/folio-react";
-import { useExternalSyncEffect } from "@stll/ui/effects";
+import { useExternalSyncEffect, useKeyedState } from "@stll/ui/effects";
 
 import {
   useInspectorAnonymizationStore,
@@ -22,6 +22,8 @@ import {
   buildExcludedCanonicalsSet,
   mergeAnonymizationTerms,
 } from "./docx-edit-mode.logic";
+
+const NO_DETECTED_TERMS: FolioAnonymizationTerm[] = [];
 
 type UseDocxAnonymizationHighlightsOptions = {
   editorView: EditorView | null;
@@ -71,9 +73,6 @@ export const useDocxAnonymizationHighlights = ({
   // pipeline) so edits and reloads pick up new entities without
   // re-running on every keystroke, and does nothing while the
   // document stays unchanged.
-  const [detectedAnonymizationTerms, setDetectedAnonymizationTerms] = useState<
-    FolioAnonymizationTerm[]
-  >([]);
   // Exposed by the detection effect below so the exclusions-watching
   // effect can kick a fresh run the moment the allowlist changes, and
   // the match callback can report document changes.
@@ -106,12 +105,15 @@ export const useDocxAnonymizationHighlights = ({
         .markAnonymizationPipelineFailed(fieldId);
     }
   }, [fieldId, isAnonymizationActive, policyReadFailed]);
+  // Never detect against missing policy. Leaving the facet or losing its
+  // policy clears previous detections until a complete read returns: the
+  // detected terms belong to one detecting stretch and start over with it.
+  const detecting = editorView !== null && isAnonymizationActive && policyReady;
+  const [detectedAnonymizationTerms, setDetectedAnonymizationTerms] =
+    useKeyedState<FolioAnonymizationTerm[]>(detecting, NO_DETECTED_TERMS);
   useExternalSyncEffect(() => {
     const view = editorView;
     if (!view || !isAnonymizationActive || !policyReady) {
-      // Never detect against missing policy. Leaving the facet or losing
-      // its policy clears previous detections until a complete read returns.
-      setDetectedAnonymizationTerms([]);
       return undefined;
     }
     const detection = startAnonymizationDetection({
@@ -130,7 +132,14 @@ export const useDocxAnonymizationHighlights = ({
       detectionRef.current = null;
       detection.stop();
     };
-  }, [editorView, isAnonymizationActive, policyReady, workspaceId, fieldId]);
+  }, [
+    editorView,
+    isAnonymizationActive,
+    policyReady,
+    setDetectedAnonymizationTerms,
+    workspaceId,
+    fieldId,
+  ]);
   // Per-doc allowlist: canonicals the user has flagged as false
   // positives. The chat-anon worker filters these out of its
   // detected entities itself; we still need to strip them from
