@@ -161,7 +161,7 @@
     "reasons": ["This value cannot be modified"]
   },
   "apps/web/src/components/workspaces/table/workspace-table/workspace-table.tsx::WorkspaceTable": {
-    "memos": 9,
+    "memos": 6,
     "reasons": ["Use of incompatible library"]
   },
   "apps/web/src/components/workspaces/workflow-start-confirmation-prompt.tsx::WorkflowStartConfirmationPromptProvider": {
