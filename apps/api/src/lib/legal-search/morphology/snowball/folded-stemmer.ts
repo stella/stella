@@ -21,7 +21,9 @@
  * - `among` tables: each row's string folded, rows that fold together merged
  *   (see {@link FoldedCollision}), re-sorted and re-linked the way the Snowball
  *   compiler lays a table out, because the runtime binary-searches it;
- * - `eq_s`, `slice_from`, `insert`: the literal folded;
+ * - `eq_s`, `slice_from`: the literal folded (`insert` needs no fold: every
+ *   algorithm folded here inserts ASCII, or text it sliced from the already
+ *   folded word, which `query-stems.test.ts` holds the generated code to);
  * - the letters a prelude rewrites into its own spelling (see
  *   {@link FoldedPrelude}): never matched, as folded text holds none.
  * - groupings: a class holds a folded letter when it holds any letter that
@@ -306,10 +308,6 @@ export const foldedSnowballStemmer = (
 
     protected override slice_from(s: string): void {
       super.slice_from(written(s));
-    }
-
-    protected override insert(c_bra: number, c_ket: number, s: string): void {
-      super.insert(c_bra, c_ket, written(s));
     }
 
     protected override find_among(

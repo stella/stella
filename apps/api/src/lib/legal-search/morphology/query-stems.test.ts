@@ -9,6 +9,8 @@ import { describe, expect, test } from "bun:test";
  * check below runs the real stemmers on both sides; nothing is mocked.
  */
 import fc from "fast-check";
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 
 import { assertProperty } from "@stll/property-testing";
 import { normalizeUnicode } from "@stll/text-normalize";
@@ -422,4 +424,25 @@ test("query stems begin with the stems, stay bounded, and never repeat a leaf", 
       },
     ),
   );
+});
+
+test("every literal a folded algorithm inserts is already folded", () => {
+  // The folded stemmers fold what the algorithm matches and slices in, but
+  // not what it inserts (see `snowball/folded-stemmer.ts`).
+  const directory = path.join(import.meta.dir, "snowball");
+  const inserted = readdirSync(directory)
+    .filter((entry) => entry.endsWith(".gen.ts") && entry !== "greek.gen.ts")
+    .flatMap((entry) =>
+      [
+        ...readFileSync(path.join(directory, entry), "utf-8").matchAll(
+          /this\.insert\([^,]+,[^,]+,\s*"((?:[^"\\]|\\.)*)"\)/gu,
+        ),
+      ].map((match) =>
+        (match[1] ?? "").replaceAll(/\\u([0-9a-f]{4})/giu, (_, hex: string) =>
+          String.fromCodePoint(Number.parseInt(hex, 16)),
+        ),
+      ),
+    );
+  expect(inserted.length).toBeGreaterThan(0);
+  expect(inserted.filter((literal) => !/^[a-z]*$/u.test(literal))).toEqual([]);
 });
