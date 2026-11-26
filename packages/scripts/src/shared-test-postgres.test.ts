@@ -143,10 +143,13 @@ test("concurrent cold provisioning callers create exactly one container", async 
     }
     return Result.ok(args.at(0) === "inspect" ? "true" : "");
   };
+  let publishHandle: ReturnType<typeof setImmediate> | undefined;
   const startContainer = () => {
     runs++;
     if (runs === 1) {
-      published = true;
+      publishHandle = setImmediate(() => {
+        published = true;
+      });
     }
     return Result.ok("started");
   };
@@ -173,6 +176,7 @@ test("concurrent cold provisioning callers create exactly one container", async 
     expect(runs).toBe(1);
     expect(readdirSync(state)).toEqual(["container.lock"]);
   } finally {
+    clearImmediate(publishHandle);
     rmSync(state, { recursive: true, force: true });
   }
 });

@@ -294,6 +294,9 @@ describe("shared documentation MCP HTTP server", () => {
     // Upload bytes keep arriving after the answer, as from a client that does
     // not read until it has sent everything.
     let uploading = true;
+    let sentBytes = 0;
+    const maxUploadBytes = 50 * 1024 * 1024;
+    const chunkBytes = 256 * 1024;
     const stopUploading = () => {
       uploading = false;
     };
@@ -303,8 +306,10 @@ describe("shared documentation MCP HTTP server", () => {
         socket.write(
           `POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\ncontent-type: application/json\r\ncontent-length: ${100 * 1024 * 1024}\r\n\r\n`,
         );
-        // Ten MiB of a declared hundred: past the drain bound, and the upload never completes.
-        if (socket.write(Buffer.alloc(10 * 1024 * 1024, 120))) {
+        // Ten MiB of a declared hundred: past the drain bound, and capped at 50 MiB so the upload never completes.
+        const initialBytes = 10 * 1024 * 1024;
+        sentBytes += initialBytes;
+        if (socket.write(Buffer.alloc(initialBytes, 120))) {
           setImmediate(pumpUpload);
         } else {
           socket.once("drain", pumpUpload);
@@ -312,10 +317,18 @@ describe("shared documentation MCP HTTP server", () => {
       },
     );
     const pumpUpload = () => {
-      if (!uploading || !socket.writable || socket.destroyed) {
+      if (
+        !uploading ||
+        !socket.writable ||
+        socket.destroyed ||
+        sentBytes >= maxUploadBytes
+      ) {
         return;
       }
-      const canContinue = socket.write(Buffer.alloc(256 * 1024, 120));
+      const remaining = maxUploadBytes - sentBytes;
+      const nextBytes = Math.min(chunkBytes, remaining);
+      sentBytes += nextBytes;
+      const canContinue = socket.write(Buffer.alloc(nextBytes, 120));
       if (canContinue) {
         setImmediate(pumpUpload);
       } else {
@@ -323,6 +336,11 @@ describe("shared documentation MCP HTTP server", () => {
       }
     };
     const socketClosed = new Promise<void>((resolve) => {
+      socket.once("end", () => {
+        if (uploading && socket.writable && !socket.destroyed) {
+          socket.write(Buffer.alloc(1024, 120));
+        }
+      });
       socket.once("close", () => {
         stopUploading();
         resolve();
