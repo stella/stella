@@ -339,11 +339,11 @@ describe("custom oxlint guardrails", () => {
       "apps/web/src/components/workspaces/table/workspace-table/workspace-table.tsx",
     );
 
-    expect(tableSource).toContain("useExternalSyncEffect(() => {");
-    expect(tableSource).toContain("const element = tableWrapperRef.current");
-    expect(tableSource).toContain("new ResizeObserver(updateMetrics)");
-    expect(tableSource).toContain("ref={tableWrapperRef}");
+    // The wrapper is held in state and measured by the observer primitive,
+    // never by a callback ref that observes or writes state itself.
+    expect(tableSource).toContain("useLayoutMeasurement(\n    tableWrapper,");
+    expect(tableSource).toContain("ref={setTableWrapper}");
     expect(tableSource).not.toContain("tableWrapperObserverRef");
-    expect(tableSource).not.toContain("composeRefs(tableWrapperRef");
+    expect(tableSource).not.toContain("composeRefs(");
   });
 });
