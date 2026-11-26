@@ -116,7 +116,9 @@ test("email-code requests share response status, body and scheduled time for eac
   const clock = createTestClock();
   try {
     const fixtures = await Promise.all(
-      accountStates.map((state) => createScheduledAuth(state, clock)),
+      accountStates.map(
+        async (state) => await createScheduledAuth(state, clock),
+      ),
     );
     const startedAt = Date.now();
     const completed: { status: number; body: unknown; elapsed: number }[] = [];

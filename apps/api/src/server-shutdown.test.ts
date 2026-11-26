@@ -1,18 +1,16 @@
 import { describe, expect, test } from "bun:test";
 
-import { settledWithin } from "@stll/test-kit";
+import { HAPPY_PATH_TIMEOUT_MS, settledWithin } from "@stll/test-kit";
 
 import {
   API_SHUTDOWN_OUTCOME,
   shutdownApiServices,
 } from "@/api/server-shutdown";
 
-const TEST_DEADLINE_MS = 100;
-
 const observeWithinDeadline = async <T>(operation: Promise<T>) =>
   await settledWithin(operation, {
     description: "API service stop to settle",
-    timeoutMs: TEST_DEADLINE_MS,
+    timeoutMs: HAPPY_PATH_TIMEOUT_MS,
   });
 
 describe("API service shutdown", () => {
