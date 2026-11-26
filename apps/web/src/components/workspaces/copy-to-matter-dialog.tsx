@@ -16,7 +16,6 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
-import { useExternalSyncEffect } from "@stll/ui/effects";
 import { Label } from "@stll/ui/label";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -56,6 +55,45 @@ export const CopyToMatterDialog = ({
   entities,
   initialTargetWorkspaceId,
 }: CopyToMatterDialogProps) => {
+  // Held here, above the form, so a transfer still running after the dialog
+  // closes or its preset changes keeps the next form from starting another.
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  return (
+    <Dialog onOpenChange={() => onOpenChange(false)} open={open}>
+      <DialogPopup className="max-w-lg">
+        {/* The popup's content mounts each time the dialog opens, and is keyed
+            by the preset, so every drop starts from its own target matter. */}
+        <CopyToMatterForm
+          entities={entities}
+          initialTargetWorkspaceId={initialTargetWorkspaceId ?? null}
+          isSubmitting={isSubmitting}
+          key={initialTargetWorkspaceId ?? ""}
+          onOpenChange={onOpenChange}
+          onSubmittingChange={setIsSubmitting}
+          sourceWorkspaceId={sourceWorkspaceId}
+        />
+      </DialogPopup>
+    </Dialog>
+  );
+};
+
+type CopyToMatterFormProps = Omit<
+  CopyToMatterDialogProps,
+  "open" | "initialTargetWorkspaceId"
+> & {
+  initialTargetWorkspaceId: string | null;
+  isSubmitting: boolean;
+  onSubmittingChange: (submitting: boolean) => void;
+};
+
+const CopyToMatterForm = ({
+  onOpenChange,
+  sourceWorkspaceId,
+  entities,
+  initialTargetWorkspaceId,
+  isSubmitting,
+  onSubmittingChange: setIsSubmitting,
+}: CopyToMatterFormProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -69,24 +107,7 @@ export const CopyToMatterDialog = ({
         }
       : null,
   );
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const resolveTarget = useResolveMatterTarget();
-
-  // The dialog is mounted once and reused across drops, so re-seed the target
-  // matter each time it opens with a fresh preset (drag-onto-matter path).
-  useExternalSyncEffect(() => {
-    if (open) {
-      setTarget(
-        initialTargetWorkspaceId
-          ? {
-              type: "existing",
-              workspaceId: initialTargetWorkspaceId,
-              parentId: null,
-            }
-          : null,
-      );
-    }
-  }, [open, initialTargetWorkspaceId]);
 
   const transferEntities = getCopyToMatterRootEntities(entities);
   const singleEntity =
@@ -140,15 +161,19 @@ export const CopyToMatterDialog = ({
 
       if (Result.isError(result)) {
         failedCount++;
-        firstError ??= result.error;
-        firstErrorMessage ??= t("errors.actionFailed");
+        if (failedCount === 1) {
+          firstError = result.error;
+          firstErrorMessage = t("errors.actionFailed");
+        }
         continue;
       }
       const { error } = result.value;
       if (error) {
         failedCount++;
-        firstError ??= toAPIError(error);
-        firstErrorMessage ??= t(getCopyToMatterErrorKey(error.value));
+        if (failedCount === 1) {
+          firstError = toAPIError(error);
+          firstErrorMessage = t(getCopyToMatterErrorKey(error.value));
+        }
       }
     }
 
@@ -208,104 +233,96 @@ export const CopyToMatterDialog = ({
     onOpenChange(false);
   };
 
-  const handleClose = () => {
-    setTarget(null);
-    setMode("copy");
-    onOpenChange(false);
-  };
-
   return (
-    <Dialog onOpenChange={handleClose} open={open}>
-      <DialogPopup className="max-w-lg">
-        <DialogFormState
-          dirty={
-            mode !== "copy" ||
-            (initialTargetWorkspaceId
-              ? target?.type !== "existing" ||
-                target.workspaceId !== initialTargetWorkspaceId ||
-                target.parentId !== null
-              : target !== null)
-          }
-          onDiscard={() => {
-            setMode("copy");
-            setTarget(
-              initialTargetWorkspaceId
-                ? {
-                    type: "existing",
-                    workspaceId: initialTargetWorkspaceId,
-                    parentId: null,
-                  }
-                : null,
-            );
-          }}
-        />
-        <DialogHeader>
-          <DialogTitle>{t("workspaces.copyToMatter.title")}</DialogTitle>
-          <DialogDescription>
-            {singleEntity
-              ? t("workspaces.copyToMatter.description", {
-                  name: singleEntity.entityName,
-                })
-              : t("workspaces.copyToMatter.descriptionCount", {
-                  count: transferEntities.length,
-                })}
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <DialogFormState
+        dirty={
+          mode !== "copy" ||
+          (initialTargetWorkspaceId
+            ? target?.type !== "existing" ||
+              target.workspaceId !== initialTargetWorkspaceId ||
+              target.parentId !== null
+            : target !== null)
+        }
+        onDiscard={() => {
+          setMode("copy");
+          setTarget(
+            initialTargetWorkspaceId
+              ? {
+                  type: "existing",
+                  workspaceId: initialTargetWorkspaceId,
+                  parentId: null,
+                }
+              : null,
+          );
+        }}
+      />
+      <DialogHeader>
+        <DialogTitle>{t("workspaces.copyToMatter.title")}</DialogTitle>
+        <DialogDescription>
+          {singleEntity
+            ? t("workspaces.copyToMatter.description", {
+                name: singleEntity.entityName,
+              })
+            : t("workspaces.copyToMatter.descriptionCount", {
+                count: transferEntities.length,
+              })}
+        </DialogDescription>
+      </DialogHeader>
 
-        <DialogPanel className="space-y-4">
-          {/* Copy/Move toggle */}
-          <div className="space-y-2">
-            <Label>{t("workspaces.copyToMatter.operation")}</Label>
-            <div className="flex gap-2">
-              <Button
-                onClick={() => setMode("copy")}
-                size="sm"
-                variant={mode === "copy" ? "default" : "outline"}
-              >
-                {t("workspaces.copyToMatter.copyOption")}
-              </Button>
-              <Button
-                onClick={() => setMode("move")}
-                size="sm"
-                variant={mode === "move" ? "default" : "outline"}
-              >
-                {t("workspaces.copyToMatter.moveOption")}
-              </Button>
-            </div>
+      <DialogPanel className="space-y-4">
+        {/* Copy/Move toggle */}
+        <div className="space-y-2">
+          <Label>{t("workspaces.copyToMatter.operation")}</Label>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => setMode("copy")}
+              size="sm"
+              variant={mode === "copy" ? "default" : "outline"}
+            >
+              {t("workspaces.copyToMatter.copyOption")}
+            </Button>
+            <Button
+              onClick={() => setMode("move")}
+              size="sm"
+              variant={mode === "move" ? "default" : "outline"}
+            >
+              {t("workspaces.copyToMatter.moveOption")}
+            </Button>
           </div>
+        </div>
 
-          <MatterTargetPicker
-            excludeWorkspaceId={sourceWorkspaceId}
-            onChange={setTarget}
-            value={target}
-          />
-        </DialogPanel>
+        <MatterTargetPicker
+          excludeWorkspaceId={sourceWorkspaceId}
+          onChange={setTarget}
+          value={target}
+        />
+      </DialogPanel>
 
-        <DialogFooter>
-          <Button onClick={handleClose} variant="ghost">
-            {t("common.cancel")}
-          </Button>
-          <Button
-            disabled={!target || isSubmitting}
-            disabledReason={
-              isSubmitting ? t("common.copying") : t("common.selectAMatter")
+      <DialogFooter>
+        <Button onClick={() => onOpenChange(false)} variant="ghost">
+          {t("common.cancel")}
+        </Button>
+        <Button
+          disabled={!target || isSubmitting}
+          disabledReason={
+            isSubmitting ? t("common.copying") : t("common.selectAMatter")
+          }
+          onClick={() => {
+            detached(handleSubmit(), "copy-to-matter-dialog.submit");
+          }}
+        >
+          {(() => {
+            if (isSubmitting) {
+              return t("common.loading");
             }
-            onClick={() => {
-              detached(handleSubmit(), "copy-to-matter-dialog.submit");
-            }}
-          >
-            {(() => {
-              if (isSubmitting) {
-                return t("common.loading");
-              }
-              if (mode === "copy") {
-                return t("common.copy");
-              }
-              return t("workspaces.copyToMatter.moveButton");
-            })()}
-          </Button>
-        </DialogFooter>
-      </DialogPopup>
-    </Dialog>
+            if (mode === "copy") {
+              return t("common.copy");
+            }
+            return t("workspaces.copyToMatter.moveButton");
+          })()}
+        </Button>
+      </DialogFooter>
+    </>
   );
 };

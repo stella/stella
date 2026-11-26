@@ -139,6 +139,30 @@ export type TemplateInspection = {
     nums: { numId: number; abstractNumId: number }[];
   };
   fields: TemplateField[];
+  /** Text effects of the template whose values show nothing, each with
+   *  what its run properties belong to. Absent from an inspection read
+   *  before they were reported. */
+  invisibleEffects?: TemplateInvisibleEffect[];
+};
+
+/** A text effect that shows nothing. It can still change how the text is
+ *  treated: a run with a 3-D scene, even the default one, is drawn as a
+ *  picture. The engine writes its output without such effects. */
+type TemplateInvisibleEffect = {
+  part: string;
+  effect:
+    | "glow"
+    | "shadow"
+    | "reflection"
+    | "textOutline"
+    | "textFill"
+    | "scene3d"
+    | "props3d";
+  owner:
+    | { kind: "level"; abstractNumId: number | null; ilvl: number | null }
+    | { kind: "style"; styleId: string | null }
+    | { kind: "defaults" }
+    | { kind: "text" };
 };
 
 /** The list a placed paragraph joins. A number names a list of the

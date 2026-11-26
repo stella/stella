@@ -1,4 +1,4 @@
-import { useCallback, useId, useState } from "react";
+import { useId, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
@@ -27,6 +27,7 @@ import { compareText, markSide } from "@stll/legal-ast/statute-diff-marks";
 import type { StatuteCompareSide } from "@stll/legal-ast/statute-diff-marks";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
+import { useLayoutMeasurement } from "@stll/ui/effects-dom";
 import { ArrowDownIcon, ArrowUpIcon, XIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
@@ -788,18 +789,15 @@ const VirtualCompareGroups = ({
   // The masthead scrolls with the rows, so the list starts below it; the
   // virtualizer is told its height to place the rows after it. Observed, not
   // read once: the masthead rewraps as the pane narrows or widens.
-  const [mastheadHeight, setMastheadHeight] = useState(0);
-  const measureMasthead = useCallback((element: HTMLDivElement) => {
-    const measure = () => setMastheadHeight(element.offsetHeight);
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    measure();
-
-    return () => {
-      observer.disconnect();
-      setMastheadHeight(0);
-    };
-  }, []);
+  const [mastheadElement, setMastheadElement] = useState<HTMLDivElement | null>(
+    null,
+  );
+  const mastheadHeight = useLayoutMeasurement(
+    mastheadElement,
+    (element) => element.offsetHeight,
+    [],
+    0,
+  );
   const [flashed, setFlashed] = useState<FlashedRow | null>(null);
   const locations = locateCompareRows(groups);
   const virtualizer = useVirtualizer({
@@ -846,7 +844,7 @@ const VirtualCompareGroups = ({
             below it; the clearance is measured with the masthead. */}
         <div
           className={cn("flow-root", VIEWER_OVERLAY_BAR_TOP_CLEARANCE)}
-          ref={measureMasthead}
+          ref={setMastheadElement}
         >
           {masthead === null ? null : <StatuteMasthead masthead={masthead} />}
         </div>

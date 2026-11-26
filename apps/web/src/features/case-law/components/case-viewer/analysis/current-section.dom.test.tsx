@@ -8,7 +8,8 @@ import type { FlatAnalysisHeading } from "./types";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
-const { cleanup, fireEvent, render } = await import("@testing-library/react");
+const { cleanup, fireEvent, render, waitFor } =
+  await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { CurrentSection } = await import("./current-section");
@@ -42,13 +43,16 @@ const mount = (offsets: { first: number; second: number }, scrollTop = 0) => {
   const scrollTo = mock(() => undefined);
   container.scrollTo = scrollTo;
   Object.defineProperty(container, "scrollTop", { value: scrollTop });
-  for (const [id, offset] of Object.entries(offsets)) {
+  const current = { ...offsets };
+  const addBlock = (id: keyof typeof current) => {
     const block = container.ownerDocument.createElement("p");
     block.id = id;
     block.getBoundingClientRect = () =>
-      new DOMRect(0, CONTAINER_TOP + offset, 400, 24);
+      new DOMRect(0, CONTAINER_TOP + current[id], 400, 24);
     container.append(block);
-  }
+  };
+  addBlock("first");
+  addBlock("second");
   const view = render(
     <IntlProvider locale="en" messages={messages}>
       <CurrentSection
@@ -59,12 +63,14 @@ const mount = (offsets: { first: number; second: number }, scrollTop = 0) => {
           ])
         }
         headings={[heading("first"), heading("second")]}
-        scrollContainerRef={{ current: container }}
+        scrollContainer={container}
       />
     </IntlProvider>,
   );
   return {
+    container,
     control: view.getByRole("button", { hidden: true }),
+    offsets: current,
     scrollTo,
   };
 };
@@ -102,5 +108,18 @@ describe("the section held above the notes", () => {
       second: READER_BREADCRUMB_CLEARANCE + 500,
     });
     expect(control.closest("[inert]")).not.toBeNull();
+  });
+
+  test("scrolling a heading past the bar makes it the section", async () => {
+    const { container, control, offsets } = mount({
+      first: -400,
+      second: READER_BREADCRUMB_CLEARANCE + 100,
+    });
+    expect(control.textContent).toContain("Section first");
+    offsets.second = -100;
+    fireEvent.scroll(container);
+    await waitFor(() => {
+      expect(control.textContent).toContain("Section second");
+    });
   });
 });

@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import type React from "react";
 
@@ -419,6 +420,8 @@ const isSuggestionPluginActive = (state: EditorState): boolean =>
 
 const isUsableEditor = (editor: Editor | null | undefined): editor is Editor =>
   editor !== null && editor !== undefined && !editor.isDestroyed;
+
+const noEditorSubscription = () => undefined;
 
 const isSelectionAtStart = ({ selection }: EditorState) =>
   selection.empty && selection.from <= 1;
@@ -848,23 +851,6 @@ export const useChatEditor = ({
     },
   }));
   const attachments = draft?.attachments ?? EMPTY_ATTACHMENTS;
-  const [isEmpty, setIsEmpty] = useState(() =>
-    areDraftDocsEqual(draftDoc, EMPTY_CHAT_DRAFT_DOC),
-  );
-  const isEmptyRef = useRef(isEmpty);
-  // Route every emptiness sync through this transition guard: `setIsEmpty` is
-  // called from the editor's synchronous dispatch path on every keystroke,
-  // and React's eager same-value bailout is not guaranteed while other
-  // updates are pending — each enqueued no-op still feeds the
-  // max-update-depth counter under sustained fast input. The ref makes the
-  // no-op structural: only genuine empty<->non-empty transitions reach React.
-  const applyIsEmpty = useLatestCallback((nextIsEmpty: boolean) => {
-    if (isEmptyRef.current === nextIsEmpty) {
-      return;
-    }
-    isEmptyRef.current = nextIsEmpty;
-    setIsEmpty(nextIsEmpty);
-  });
   const showCredentialPasteNotice = useCredentialPasteNotice();
   const warnCredentialSend = useCredentialSendNotice();
   const pastedTextAttachmentsRef = useRef<unknown>(null);
@@ -970,8 +956,6 @@ export const useChatEditor = ({
       nextEditor: Editor;
       transactions: readonly Transaction[];
     }) => {
-      applyIsEmpty(nextEditor.isEmpty);
-
       // A store->editor echo (the draft-apply effect or submit-restore
       // pushing an already-stored draft back in) must never re-enter the
       // persist path: a `setContent`/`getJSON` roundtrip can normalize the
@@ -1251,7 +1235,6 @@ export const useChatEditor = ({
       editorRef.current = nextEditor;
       pastedTextAttachmentsRef.current =
         nextEditor.state.doc.attrs[PASTED_TEXT_ATTACHMENTS_ATTR];
-      applyIsEmpty(nextEditor.isEmpty);
     },
     onUpdate: ({ editor: nextEditor, transaction, appendedTransactions }) => {
       handleEditorUpdate({
@@ -1263,6 +1246,30 @@ export const useChatEditor = ({
 
   // oxlint-disable-next-line react/refs -- latest-ref mirror: holds the live editor instance for imperative access from out-of-render handlers and plugins
   editorRef.current = editor;
+
+  // Whether the composer holds nothing is read from the editor itself, which
+  // is the store: every transaction notifies, and only a real empty <->
+  // non-empty transition re-renders (a boolean snapshot), so sustained fast
+  // typing enqueues no updates. A store->editor echo, a submit's clear and a
+  // restored draft all arrive as transactions too.
+  const subscribeEmptiness = (onChange: () => void) => {
+    if (!isUsableEditor(editor)) {
+      return noEditorSubscription;
+    }
+    editor.on("transaction", onChange);
+    return () => {
+      editor.off("transaction", onChange);
+    };
+  };
+  const readIsEmpty = () =>
+    isUsableEditor(editor)
+      ? editor.isEmpty
+      : areDraftDocsEqual(draftDoc, EMPTY_CHAT_DRAFT_DOC);
+  const isEmpty = useSyncExternalStore(
+    subscribeEmptiness,
+    readIsEmpty,
+    readIsEmpty,
+  );
 
   const syncEditorPlugins = useCallback(
     (targetEditor: Editor) => {
@@ -1334,7 +1341,6 @@ export const useChatEditor = ({
         editorDoc: editor.getJSON(),
       })
     ) {
-      applyIsEmpty(editor.isEmpty);
       return undefined;
     }
 
@@ -1349,9 +1355,8 @@ export const useChatEditor = ({
     });
     pastedTextAttachmentsRef.current =
       editor.state.doc.attrs[PASTED_TEXT_ATTACHMENTS_ATTR];
-    applyIsEmpty(editor.isEmpty);
     return undefined;
-  }, [applyIsEmpty, draftDoc, editor]);
+  }, [draftDoc, editor]);
 
   const focus = useCallback(() => {
     if (!isUsableEditor(editor)) {
@@ -1686,7 +1691,6 @@ export const useChatEditor = ({
         })
         .clearContent()
         .run();
-      applyIsEmpty(true);
       draftStartedThreadKeyRef.current = null;
 
       const restoreDraft = (restoreThreadKey: string) => {
@@ -1701,7 +1705,6 @@ export const useChatEditor = ({
         // The editor may have been destroyed during `await send(...)`;
         if (!editor.isDestroyed) {
           applyDraftDocToEditor(editor, doc);
-          applyIsEmpty(editor.isEmpty);
           if (!editor.isEmpty || files.length > 0) {
             draftStartedThreadKeyRef.current = restoreThreadKey;
           }
@@ -1720,7 +1723,6 @@ export const useChatEditor = ({
       }
     },
     [
-      applyIsEmpty,
       clearDraft,
       debouncedPersistEditorDraft,
       editor,

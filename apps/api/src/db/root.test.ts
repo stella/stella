@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
+import { settledWithin } from "@stll/test-kit";
+
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -48,29 +50,29 @@ if (!databaseUrl || !runPostgresTests) {
             heldTransactionSettled = heldTransaction.catch(() => undefined);
 
             try {
-              const readyResult = await Promise.race([
-                transactionReady.then(() => "ready" as const),
-                heldTransaction,
-                Bun.sleep(queryTimeoutMs).then(() => "timeout" as const),
-              ]);
+              await settledWithin(
+                Promise.race([
+                  transactionReady.then(() => "ready" as const),
+                  heldTransaction,
+                ]),
+                {
+                  description: "held transaction to be ready",
+                  timeoutMs: queryTimeoutMs, // timeout: bounded DB pool probe budget
+                },
+              );
 
-              if (readyResult === "timeout") {
-                throw new Error("timed out waiting for held transaction");
-              }
-
-              const queryResult = await Promise.race([
+              const queryResult = await settledWithin(
                 peerPool.db.execute(
                   sql<ProbeRow>`SELECT 42::int AS value`,
                   "objects",
                 ),
-                Bun.sleep(queryTimeoutMs).then(() => "timeout" as const),
-              ]);
+                {
+                  description: "peer pool probe query to settle",
+                  timeoutMs: queryTimeoutMs, // timeout: bounded DB pool probe budget
+                },
+              );
 
-              expect(queryResult).not.toBe("timeout");
-
-              if (queryResult !== "timeout") {
-                expect(queryResult.at(0)?.["value"]).toBe(42);
-              }
+              expect(queryResult.at(0)?.["value"]).toBe(42);
             } finally {
               releaseHeldTransaction?.();
 

@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { createTestClock } from "@stll/test-kit";
 
 import { desktopEditSessionEventsHandler } from "@/api/handlers/entities/desktop-edit-session-events";
@@ -8,6 +7,12 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifications";
 import { LIMITS } from "@/api/lib/limits";
 import { broadcastSessionEvent } from "@/api/lib/sse";
+
+const flushMicrotasks = async (): Promise<void> => {
+  for (let turn = 0; turn < 20; turn += 1) {
+    await Promise.resolve();
+  }
+};
 
 const authorizeDesktopEditSessionMock = mock();
 const readDesktopEditSessionEventStateMock = mock();
@@ -162,7 +167,7 @@ describe("desktop edit session events", () => {
       return response;
     });
 
-    await sleep(0);
+    await flushMicrotasks();
     expect(refreshDesktopEditSessionLivenessMock).toHaveBeenCalledWith(
       scope.transactions.at(1),
       {

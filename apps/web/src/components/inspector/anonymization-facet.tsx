@@ -29,7 +29,6 @@ import {
 } from "@stll/ui/combobox";
 import {
   useExternalSyncEffect,
-  useLatestCallback,
   useLayoutSyncEffect,
   useMountEffect,
 } from "@stll/ui/effects";
@@ -331,6 +330,35 @@ const withDetectedGroupExpanded = (
   return next;
 };
 
+/**
+ * The term field's draft. Folio selection bridge: picks up PM selections
+ * that live in the off-screen hidden PM and aren't visible to
+ * `window.getSelection()`. The docx editor wrapper wraps `view.dispatch` and
+ * publishes the latest selected text on every selection-bearing transaction;
+ * each published selection is a new object. The draft takes one in the render
+ * that first sees it (on mount, on a field switch, or as it arrives) and keeps
+ * it until the user types or a newer selection lands. A field without a
+ * selection leaves the draft alone.
+ */
+const useTermDraft = (activeFieldId: string | null) => {
+  const [draft, setDraft] = useState("");
+  const folioSelection = useInspectorAnonymizationStore((s) =>
+    activeFieldId === null
+      ? undefined
+      : s.documentTextSelectionByFieldId[activeFieldId],
+  );
+  const [takenSelection, setTakenSelection] =
+    useState<typeof folioSelection>(undefined);
+  const offeredSelection = folioSelection ?? takenSelection;
+  if (offeredSelection !== takenSelection) {
+    setTakenSelection(offeredSelection);
+    if (offeredSelection !== undefined) {
+      setDraft(offeredSelection.text);
+    }
+  }
+  return [draft, setDraft] as const;
+};
+
 export const AnonymizationFacet = ({
   workspaceId,
   activeFieldId,
@@ -411,7 +439,7 @@ export const AnonymizationFacet = ({
     },
   });
 
-  const [pendingValue, setPendingValue] = useState("");
+  const [pendingValue, setPendingValue] = useTermDraft(activeFieldId);
   const [pendingLabel, setPendingLabel] = useState<LabelOption>(DEFAULT_LABEL);
 
   // Tell the document editor to paint the in-document highlight
@@ -458,7 +486,7 @@ export const AnonymizationFacet = ({
     // programmatically on an off-screen hidden PM and renders
     // visible selection via a custom overlay. Folio
     // selections come in via the inspector store
-    // (subscribed below); the listener here only
+    // (read by `useTermDraft`); the listener here only
     // handles the PDF case.
     const PREVIEW_SURFACES = ".textLayer";
     const isInsidePreview = (node: Node | null): boolean => {
@@ -490,35 +518,6 @@ export const AnonymizationFacet = ({
     document.addEventListener("selectionchange", handler);
     return () => document.removeEventListener("selectionchange", handler);
   });
-
-  // Folio selection bridge — picks up PM selections that
-  // live in the off-screen hidden PM and aren't visible to
-  // `window.getSelection()`. The docx editor wrapper
-  // wraps `view.dispatch` and publishes the latest
-  // selected text here on every selection-bearing
-  // transaction.
-  const lastConsumedSelectionRef = useRef<unknown>(null);
-  const consumeFolioSelection = useLatestCallback(() => {
-    if (activeFieldId === null) {
-      return;
-    }
-    const selection =
-      useInspectorAnonymizationStore.getState().documentTextSelectionByFieldId[
-        activeFieldId
-      ];
-    if (
-      selection === undefined ||
-      selection === lastConsumedSelectionRef.current
-    ) {
-      return;
-    }
-    lastConsumedSelectionRef.current = selection;
-    setPendingValue(selection.text);
-  });
-  useExternalSyncEffect(() => {
-    consumeFolioSelection();
-    return useInspectorAnonymizationStore.subscribe(consumeFolioSelection);
-  }, [activeFieldId, consumeFolioSelection]);
 
   const addTerm = async (canonical: string, label: LabelOption) => {
     const trimmed = canonical.trim();

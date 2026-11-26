@@ -1,7 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 
 import { ChatReconnectError } from "@stll/chat/durable-transport";
-import { sleep } from "@stll/concurrency/sleep";
 
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { toSafeId } from "@/lib/safe-id";
@@ -91,18 +90,15 @@ test("a running turn rejoins when its page mounts after the runtime was created"
   );
   const page = openLoadedTurn();
   // Hydration subscribes well after the loader built the runtime.
-  await sleep(50);
+  for (let i = 0; i < 4; i += 1) {
+    await Promise.resolve();
+  }
   const unsubscribe = page.runtime.subscribe(() => undefined);
-  const deadline = Promise.withResolvers<undefined>();
-  const deadlineTimer = setTimeout(() => {
-    deadline.resolve(undefined);
-  }, 2000);
   try {
-    await Promise.race([joined.promise, deadline.promise]);
+    await joined.promise;
     expect(joins).toBe(1);
     expect(page.errors).toEqual([]);
   } finally {
-    clearTimeout(deadlineTimer);
     unsubscribe();
   }
 });

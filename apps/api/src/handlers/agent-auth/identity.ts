@@ -20,9 +20,69 @@ import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import {
   ACCOUNT_ACCESS,
   createSafePublicHandler,
+  safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { safePublicHandlerErrorResponseSchema } from "@/api/lib/search/public-error-response";
+
+const agentClaimCeremonySchema = v.object({
+  user_code: v.pipe(v.string(), v.maxLength(64)),
+  verification_uri: v.pipe(v.string(), v.maxLength(2048)),
+  verification_uri_complete: v.pipe(v.string(), v.maxLength(2048)),
+  expires_in: v.number(),
+  interval: v.number(),
+});
+
+const agentIdentityResponseSchema = v.union([
+  v.object({
+    registration_id: v.pipe(v.string(), v.maxLength(128)),
+    registration_type: v.literal("anonymous"),
+    claim_token: v.pipe(v.string(), v.maxLength(512)),
+    access_token: v.pipe(v.string(), v.maxLength(16_384)),
+    token_type: v.literal("Bearer"),
+    expires_in: v.number(),
+    scope: v.pipe(v.string(), v.maxLength(1024)),
+    claim_uri: v.pipe(v.string(), v.maxLength(2048)),
+  }),
+  v.object({
+    registration_id: v.pipe(v.string(), v.maxLength(128)),
+    registration_type: v.literal("service_auth"),
+    claim_url: v.pipe(v.string(), v.maxLength(2048)),
+    claim_token: v.pipe(v.string(), v.maxLength(512)),
+    claim_token_expires: v.pipe(v.string(), v.maxLength(64)),
+    post_claim_scopes: v.pipe(
+      v.array(v.pipe(v.string(), v.maxLength(128))),
+      v.maxLength(32),
+    ),
+    claim: agentClaimCeremonySchema,
+  }),
+  v.object({
+    registration_id: v.pipe(v.string(), v.maxLength(128)),
+    registration_type: v.literal("identity_assertion"),
+    identity_assertion: v.pipe(v.string(), v.maxLength(16_384)),
+    assertion_expires: v.pipe(v.string(), v.maxLength(64)),
+    scopes: v.pipe(
+      v.array(v.pipe(v.string(), v.maxLength(128))),
+      v.maxLength(32),
+    ),
+  }),
+]);
+
+const agentIdentityErrorResponseSchema = v.object({
+  ...safePublicHandlerErrorResponseSchema.entries,
+  retryAfterMs: v.optional(v.number()),
+  error: v.optional(v.pipe(v.string(), v.maxLength(128))),
+  claim: v.optional(agentClaimCeremonySchema),
+  registration_id: v.optional(v.pipe(v.string(), v.maxLength(128))),
+  registration_type: v.optional(v.pipe(v.string(), v.maxLength(64))),
+  claim_url: v.optional(v.pipe(v.string(), v.maxLength(2048))),
+  claim_token: v.optional(v.pipe(v.string(), v.maxLength(512))),
+  claim_token_expires: v.optional(v.pipe(v.string(), v.maxLength(64))),
+  post_claim_scopes: v.optional(
+    v.pipe(v.array(v.pipe(v.string(), v.maxLength(128))), v.maxLength(32)),
+  ),
+});
 
 /**
  * Body is a discriminated union on `type`. `identity_assertion` (ID-JAG)
@@ -43,6 +103,13 @@ const config = {
       assertion: v.pipe(v.string(), v.minLength(1), v.maxLength(8192)),
     }),
   ]),
+  response: {
+    ...safePublicHandlerResponseSchemasWithStatusText(
+      agentIdentityResponseSchema,
+    ),
+    401: agentIdentityErrorResponseSchema,
+    403: agentIdentityErrorResponseSchema,
+  },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
   cache: { kind: "none" },

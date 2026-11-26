@@ -1,7 +1,6 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
@@ -87,7 +86,9 @@ test("a cached grant the API no longer holds does not answer a new card", async 
 
   // Let the confirmation settle; the card must still be asking.
   await act(async () => {
-    await sleep(20);
+    for (let i = 0; i < 4; i += 1) {
+      await Promise.resolve();
+    }
   });
   expect(approved).toEqual([]);
   queryClient.clear();

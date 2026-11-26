@@ -307,7 +307,9 @@ describe("withProviderRetryWait", () => {
     const pending = settle(
       async () => await withProviderRetryWait(controller.signal, call.run),
     );
-    await Bun.sleep(5);
+    for (let turn = 0; turn < 20; turn += 1) {
+      await Promise.resolve();
+    }
     controller.abort(reason);
     const outcome = await pending;
     expect(call.calls).toHaveLength(1);

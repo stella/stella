@@ -12,6 +12,8 @@ import type {
 } from "@stll/api-contract/reader-answers";
 import { READER_ANSWER_QUESTION_MAX_LENGTH } from "@stll/api-contract/reader-answers";
 import { Button } from "@stll/ui/button";
+import { useLayoutSyncEffect } from "@stll/ui/effects";
+import { useComposedRefs } from "@stll/ui/effects-refs";
 import { Form } from "@stll/ui/form";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
@@ -140,11 +142,14 @@ export const ReaderAnswerCard = ({
       ? "readerAnswers.loading"
       : "readerAnswers.waitForCurrentAction",
   );
-  const observe = (node: HTMLElement | null) => {
-    if (node === null) {
+  const [card, setCard] = useState<HTMLElement | null>(null);
+  const attachCard = useComposedRefs(cardRef, setCard);
+  // A card scrolled out of view minimises itself, unless it is the one being
+  // revealed. Registered before paint, so the reveal frame below finds it.
+  useLayoutSyncEffect(() => {
+    if (card === null) {
       return undefined;
     }
-    cardRef.current = node;
     const observer = new IntersectionObserver((entries) => {
       for (const entry of entries) {
         if (entry.isIntersecting && visibility.current !== "awaiting-reveal") {
@@ -155,13 +160,12 @@ export const ReaderAnswerCard = ({
       }
     });
     observerRef.current = observer;
-    observer.observe(node);
+    observer.observe(card);
     return () => {
       observer.disconnect();
       observerRef.current = null;
-      cardRef.current = null;
     };
-  };
+  }, [card]);
   useLayoutEffect(() => {
     if (!active) {
       visibility.current = "tracking";
@@ -215,7 +219,7 @@ export const ReaderAnswerCard = ({
       aria-busy={busy}
       className="reader-chrome bg-background rounded-md p-2 text-xs shadow-sm"
       data-reader-answer-id={answer.id}
-      ref={observe}
+      ref={attachCard}
     >
       <div className="flex items-center justify-between gap-1">
         <TruncatedText className="text-foreground-muted">

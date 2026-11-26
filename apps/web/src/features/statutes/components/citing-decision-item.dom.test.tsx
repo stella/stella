@@ -3,7 +3,6 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import type { CaseLawDecisionSummary } from "@stll/api-contract/case-law-decision-summary";
 import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-version-basis";
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { toSafeId } from "@/lib/safe-id";
@@ -12,7 +11,7 @@ import type { CitingDecisionRow } from "./provision-citing-decisions";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
-const { act, cleanup, fireEvent, render, waitFor } =
+const { cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -43,9 +42,6 @@ afterEach(() => {
 });
 afterAll(async () => {
   cleanup();
-  await act(async () => {
-    await sleep(0);
-  });
   await unregisterDomEnvironment();
 });
 

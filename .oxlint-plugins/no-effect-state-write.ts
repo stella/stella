@@ -65,14 +65,14 @@ export const EFFECT_HOOKS = new Set([
 const SYNCHRONOUS_RUNNERS = new Set(["startTransition", "flushSync"]);
 
 // The name a callee is called by: `name(...)` or `object.name(...)`.
-const calleeName = (callee) =>
+export const calleeName = (callee) =>
   isIdentifier(callee)
     ? callee.name
     : callee?.type === "MemberExpression"
       ? getPropertyName(callee.property)
       : null;
 
-const isStateHook = (context, callee) => {
+export const isStateHook = (context, callee) => {
   if (isIdentifier(callee) && STATE_HOOKS.has(callee.name)) {
     return true;
   }

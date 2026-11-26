@@ -5,7 +5,6 @@ import {
   type RefObject,
   type UIEvent,
   useId,
-  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -23,6 +22,7 @@ import {
   useVirtualizer,
 } from "@tanstack/react-virtual";
 
+import { useLayoutMeasurement } from "../effects/dom";
 import { type OptionColor, resolveOptionColor } from "../lib/option-color";
 import { cn } from "../lib/utils";
 import {
@@ -251,27 +251,14 @@ export const KanbanVirtualCell = <TRow,>({
   // reflows with the cell's width. Measured before the first paint, so no
   // frame ever pins a card's header at the action's place, and zero whenever
   // the footer closes the cell instead, which leaves the board's offset alone.
-  const stickyFooterRef = useRef<HTMLDivElement>(null);
-  const [stickyFooterHeight, setStickyFooterHeight] = useState(0);
-  useLayoutEffect(() => {
-    const element = stickyFooterRef.current;
-    if (element === null) {
-      setStickyFooterHeight(0);
-      return undefined;
-    }
-    // A repeat of the height React already rendered would only cost a render.
-    const measure = (height: number) => {
-      setStickyFooterHeight((current) =>
-        current === height ? current : height,
-      );
-    };
-    measure(element.getBoundingClientRect().height);
-    const observer = new ResizeObserver(() => {
-      measure(element.getBoundingClientRect().height);
-    });
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [hasStickyFooter]);
+  const [stickyFooterElement, setStickyFooterElement] =
+    useState<HTMLDivElement | null>(null);
+  const stickyFooterHeight = useLayoutMeasurement(
+    stickyFooterElement,
+    measureHeight,
+    [],
+    0,
+  );
 
   // The resting surface is translucent unless a caller sets one of their own,
   // so a pinned action repaints the cell's surface over an opaque base: cards
@@ -281,7 +268,7 @@ export const KanbanVirtualCell = <TRow,>({
     <div
       className={cn("bg-background sticky z-10", KANBAN_STICKY_TOP_CLASS)}
       data-kanban-cell-footer="sticky-start"
-      ref={stickyFooterRef}
+      ref={setStickyFooterElement}
     >
       <div
         className={cn(
@@ -361,6 +348,10 @@ export const KanbanVirtualCell = <TRow,>({
     </SortableContext>
   );
 };
+
+function measureHeight(element: HTMLDivElement): number {
+  return element.getBoundingClientRect().height;
+}
 
 function resolveKanbanCellAppearance({
   accent,

@@ -17,6 +17,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import { settledWithin } from "@stll/test-kit";
 import { createTestState } from "@stll/test-state";
 
 import { envBase } from "@/api/env-base";
@@ -92,8 +93,6 @@ const SETTLE_BUDGET_MS = 5000;
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 10;
-// Time for a connect rejected by `kill()` to reach its handler.
-const CONNECT_SETTLE_MS = 100;
 const RATE_LIMIT_OPTIONS = {
   duration: RATE_LIMIT_WINDOW_MS,
   generator: () => "outage-client",
@@ -114,16 +113,8 @@ const EVENT = resourceUpdatedRealtimeEvent(
 /** Resolve to the settled outcome, or reject if the promise hangs. */
 const settle = async <T>(
   promise: Promise<T>,
-): Promise<
-  { status: "ok"; value: T } | { status: "error"; error: unknown }
-> => {
-  const timeout = new Promise<never>((_resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error("Valkey consumer did not settle within its budget"));
-    }, SETTLE_BUDGET_MS);
-    timer.unref();
-  });
-  return await Promise.race([
+): Promise<{ status: "ok"; value: T } | { status: "error"; error: unknown }> =>
+  await settledWithin(
     promise.then(
       (value): { status: "ok"; value: T } => ({ status: "ok", value }),
       (error: unknown): { status: "error"; error: unknown } => ({
@@ -131,9 +122,11 @@ const settle = async <T>(
         error,
       }),
     ),
-    timeout,
-  ]);
-};
+    {
+      description: "Valkey consumer to settle",
+      timeoutMs: SETTLE_BUDGET_MS,
+    },
+  );
 
 describe("the outage under test", () => {
   // Without this the suite would be vacuous wherever a local Valkey happens to
@@ -224,7 +217,9 @@ describe("rate limiting during a Valkey outage", () => {
     // a connect failure nor escape as an unhandled rejection, which would fail
     // this file.
     context.kill();
-    await Bun.sleep(CONNECT_SETTLE_MS);
+    for (let turn = 0; turn < 20; turn += 1) {
+      await Promise.resolve();
+    }
     expect(operations).not.toContain("connect");
   });
 

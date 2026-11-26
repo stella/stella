@@ -4,6 +4,8 @@ import { createPortal } from "react-dom";
 
 import { holdReferencePeeks } from "@stll/decision-reader/reference-peek-layering";
 import { useMountEffect } from "@stll/ui/effects";
+import { useElementSize } from "@stll/ui/effects-dom";
+import { useComposedRefs } from "@stll/ui/effects-refs";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -33,6 +35,8 @@ type SelectionToolbarProps = {
   onAttach?: ((node: HTMLDivElement | null) => void) | undefined;
 };
 
+const UNMEASURED_BAR = { width: 0, height: 0 };
+
 /**
  * The floating bar over selected text, shared by the document reader's
  * mark-up bar, the PDF viewer's selection bar and the chat's selection
@@ -53,29 +57,10 @@ export const SelectionToolbar = ({
   doc,
   onAttach,
 }: SelectionToolbarProps) => {
-  const [barSize, setBarSize] = useState({ width: 0, height: 0 });
+  const [bar, setBar] = useState<HTMLDivElement | null>(null);
+  const barSize = useElementSize(bar) ?? UNMEASURED_BAR;
   useMountEffect(holdReferencePeeks);
-  const attachBar = (node: HTMLDivElement | null) => {
-    onAttach?.(node);
-    if (node === null) {
-      return undefined;
-    }
-    const measure = () => {
-      const rect = node.getBoundingClientRect();
-      setBarSize((previous) =>
-        previous.width === rect.width && previous.height === rect.height
-          ? previous
-          : { width: rect.width, height: rect.height },
-      );
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(node);
-    return () => {
-      observer.disconnect();
-      onAttach?.(null);
-    };
-  };
+  const attachBar = useComposedRefs(setBar, onAttach);
 
   const host = doc?.body ?? null;
   if (host === null) {

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { type Deferred, deferred } from "@stll/test-kit";
+import { createFakeTimers, type Deferred, deferred } from "@stll/test-kit";
 
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 
@@ -134,14 +134,15 @@ describe("auth rate-limit storage", () => {
     await storage.consume("ip:invalid", { max: 1, window: 60 });
     expect(
       await storage.consume("ip:invalid", { max: 1, window: 60 }),
-    ).toMatchObject({ allowed: false });
+    ).toMatchObject({
+      allowed: false,
+    });
   });
 
   test("falls back only when the command deadline fires while Redis stays pending", async () => {
-    const timerId = setTimeout(() => {}, 0);
-    clearTimeout(timerId);
+    const timerId = 42;
     const scheduled = deferred<{ callback: () => void; delayMs: number }>();
-    const cleared: ReturnType<typeof setTimeout>[] = [];
+    const cleared: (ReturnType<typeof setTimeout> | number)[] = [];
     const storage = createAuthRateLimitStorage({
       redis: new FakeRedisClient(),
       commandTimer: {
@@ -171,16 +172,19 @@ describe("auth rate-limit storage", () => {
   });
 
   test("clears command timeout timers after Redis resolves", async () => {
+    const timers = createFakeTimers();
     let activeTimerCount = 0;
     const storage = createAuthRateLimitStorage({
       redis: new FakeRedisClient(),
       commandTimer: {
         set: (callback, delayMs) => {
           activeTimerCount += 1;
-          return setTimeout(callback, delayMs);
+          return timers.setTimeout(callback, delayMs);
         },
         clear: (timeoutId) => {
-          clearTimeout(timeoutId);
+          if (typeof timeoutId === "number") {
+            timers.clearTimeout(timeoutId);
+          }
           activeTimerCount -= 1;
         },
       },

@@ -276,30 +276,49 @@ test("abort stops a cache-lock wait promptly", async () => {
     JSON.stringify({ pid: process.pid, started: Date.now(), token: "owner" }),
   );
   const controller = new AbortController();
-  const abort = setTimeout(() => controller.abort(), 20);
+  const enteredWait = deferred<undefined>();
   let builds = 0;
-  try {
-    const rejection = await acquireCachedSnapshot({
-      cacheDir,
-      key,
-      build: async (filePath) => {
-        builds += 1;
-        writeFileSync(filePath, "unexpected");
-      },
-      validate: async () => true,
-      signal: controller.signal,
-      timeoutMs: 5000,
-    }).then(
-      () => {
-        throw new Error("Expected snapshot acquisition to reject");
-      },
-      (error: unknown) => error,
-    );
-    expect(rejection).toBeInstanceOf(SnapshotBuildError);
-    expect(builds).toBe(0);
-  } finally {
-    clearTimeout(abort);
-  }
+  const pending = acquireCachedSnapshot({
+    cacheDir,
+    key,
+    build: async (filePath) => {
+      builds += 1;
+      writeFileSync(filePath, "unexpected");
+    },
+    validate: async () => true,
+    signal: controller.signal,
+    timeoutMs: 5000,
+    waitForLock: async (signal) => {
+      enteredWait.resolve(undefined);
+      await new Promise<void>((_resolve, reject) => {
+        if (signal?.aborted) {
+          reject(
+            new SnapshotBuildError({ message: "interrupted", exitCode: 1 }),
+          );
+          return;
+        }
+        signal?.addEventListener(
+          "abort",
+          () => {
+            reject(
+              new SnapshotBuildError({ message: "interrupted", exitCode: 1 }),
+            );
+          },
+          { once: true },
+        );
+      });
+    },
+  }).then(
+    () => {
+      throw new Error("Expected snapshot acquisition to reject");
+    },
+    (error: unknown) => error,
+  );
+  await enteredWait.promise;
+  controller.abort();
+  const rejection = await pending;
+  expect(rejection).toBeInstanceOf(SnapshotBuildError);
+  expect(builds).toBe(0);
 });
 
 test("abort during cached validation preserves the archive and digest", async () => {

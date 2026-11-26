@@ -1,11 +1,11 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterAll, describe, expect } from "bun:test";
+import { setImmediate as nextMacrotask } from "node:timers/promises";
 
 import {
   PROFESSIONAL_USE_STATEMENT_VERSION,
   PROFESSIONAL_USE_TERMS_VERSION,
 } from "@stll/api-contract/professional-use";
-import { sleep } from "@stll/concurrency/sleep";
 import { requestTest as test } from "@stll/start-runtime/test-request";
 
 // The session the server reports; changed by "another tab".
@@ -111,7 +111,9 @@ const createTab = async () => {
 };
 
 const settle = async () => {
-  await sleep(20);
+  for (let i = 0; i < 4; i += 1) {
+    await nextMacrotask();
+  }
 };
 
 describe("a tab told that the session changed elsewhere", () => {
