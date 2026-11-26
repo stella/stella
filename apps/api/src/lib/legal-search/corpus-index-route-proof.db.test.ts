@@ -307,8 +307,11 @@ const hoursInterval = (hours: number) =>
 const PAST_MAX_AGE_HOURS = CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS + 1;
 
 /** The judged status of one declared route. */
-const statusOf = async (indexId: string = ROUTE.indexId) => {
-  const verdict = await readVerdict();
+const statusOf = async (
+  indexId: string = ROUTE.indexId,
+  options?: { maxAgeHours?: number },
+) => {
+  const verdict = await readVerdict(options);
   switch (verdict.type) {
     case "all_current": {
       const route =
@@ -931,11 +934,11 @@ describe("route readiness proof", () => {
     // A reader may tighten the bound below the proof's age.
     expect(
       (
-        await readVerdict({
+        await statusOf(ROUTE.indexId, {
           maxAgeHours: CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS - 1,
         })
       ).type,
-    ).toBe("not_ready");
+    ).toBe("expired");
     await passTook(CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS + 0.1);
     expect((await statusOf()).type).toBe("expired");
   });
@@ -945,11 +948,11 @@ describe("route readiness proof", () => {
     await advanceUntilProven();
     expect(
       (
-        await readVerdict({
+        await statusOf(ROUTE.indexId, {
           maxAgeHours: CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS,
         })
       ).type,
-    ).toBe("all_current");
+    ).toBe("current");
     for (const maxAgeHours of [
       CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS + 0.1,
       0,
