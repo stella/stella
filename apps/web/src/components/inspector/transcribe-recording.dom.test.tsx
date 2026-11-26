@@ -50,11 +50,13 @@ const run = (overrides: Record<string, unknown>) => ({
 const originalFetch = globalThis.fetch;
 let starts: unknown[] = [];
 let startAnswer: () => Response;
+let runAnswer: () => Response;
 let current: ReturnType<typeof run>;
 beforeEach(() => {
   starts = [];
   startAnswer = () => Response.json({ runId: RUN_ID });
   current = run({});
+  runAnswer = () => Response.json({ run: current });
   globalThis.fetch = Object.assign(
     async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input instanceof Request ? input.url : input);
@@ -65,7 +67,7 @@ beforeEach(() => {
         return startAnswer();
       }
       if (url.endsWith(`/recording-transcriptions/runs/${RUN_ID}`)) {
-        return Response.json({ run: current });
+        return runAnswer();
       }
       throw new TypeError(`Unexpected transport: ${url}`);
     },
@@ -195,4 +197,15 @@ test("a refused start offers a retry", async () => {
   await transcribe();
   expect(await screen.findByRole("alert")).toBeDefined();
   expect(screen.getByRole("button", { name: "Retry" })).toBeDefined();
+});
+
+test("a failed run read retries the read, not the start", async () => {
+  runAnswer = () => Response.json({ message: "Forbidden" }, { status: 403 });
+  show();
+  await transcribe();
+  await screen.findByRole("alert");
+  runAnswer = () => Response.json({ run: current });
+  fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  await screen.findByText("Transcribing… 25%");
+  expect(starts).toHaveLength(1);
 });

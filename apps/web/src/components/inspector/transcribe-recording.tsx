@@ -16,6 +16,7 @@ import {
 } from "@/components/inspector/recording-transcription-queries";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -77,14 +78,23 @@ export const TranscribeRecording = ({
             entityId: toSafeId<"entity">(entityId),
             fieldId: toSafeId<"field">(fieldId),
           },
-          send: async (body, request) => {
-            const reply = await workspace["recording-transcriptions"].runs.post(
-              body,
-              request,
-            );
-            unwrapApiResponse(reply);
-            return reply;
-          },
+          send: async (body, replayRequest) =>
+            await invokeCapability(
+              "recording-transcriptions.runs.create",
+              async (request) => {
+                const reply = await workspace[
+                  "recording-transcriptions"
+                ].runs.post(body, {
+                  ...request,
+                  headers: {
+                    "Idempotency-Key": replayRequest.headers["Idempotency-Key"],
+                    ...request.headers,
+                  },
+                });
+                unwrapApiResponse(reply);
+                return reply;
+              },
+            ),
         }),
       ),
   });
@@ -104,6 +114,14 @@ export const TranscribeRecording = ({
 
   const retry = () => {
     if (start.isPending) {
+      return;
+    }
+    if (
+      runId !== null &&
+      run?.status !== "failed" &&
+      run?.status !== "cancelled"
+    ) {
+      detached(runQuery.refetch(), "transcribe-recording.refetch");
       return;
     }
     setRunId(null);
