@@ -43,7 +43,7 @@ const matter = (name: string, reference: string) => ({
   visibility: "all_members",
 });
 
-test("the name follows the saved matter until edited, and starts over on another matter", async () => {
+test("the name follows the saved matter until edited, survives a failed refetch, and starts over on another matter", async () => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false, staleTime: Number.POSITIVE_INFINITY },
@@ -105,6 +105,18 @@ test("the name follows the saved matter until edited, and starts over on another
     }
     return input;
   };
+  // Hidden, the field is either gone or under a host that is not displayed.
+  const nameShown = () => {
+    const input = view.container.querySelector("input");
+    let node: HTMLElement | null = input;
+    while (node !== null) {
+      if (node.style.display === "none") {
+        return false;
+      }
+      node = node.parentElement;
+    }
+    return input !== null;
+  };
   const nameValue = () =>
     view.container.querySelector("input")?.value ?? "(no field)";
 
@@ -129,6 +141,26 @@ test("the name follows the saved matter until edited, and starts over on another
     queryClient.setQueryData(
       workspacesKeys.byId("matter-one"),
       matter("Lease renewal 2", "L-1"),
+    );
+  });
+  await waitFor(() => {
+    expect(nameValue()).toBe("Draft name");
+  });
+
+  // A background refetch that fails hides the form but keeps the draft.
+  await act(async () => {
+    queryClient
+      .getQueryCache()
+      .find({ queryKey: workspacesKeys.byId("matter-one") })
+      ?.setState({ error: new Error("offline"), status: "error" });
+  });
+  await waitFor(() => {
+    expect(nameShown()).toBe(false);
+  });
+  await act(async () => {
+    queryClient.setQueryData(
+      workspacesKeys.byId("matter-one"),
+      matter("Lease renewal 3", "L-1"),
     );
   });
   await waitFor(() => {

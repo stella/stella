@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useRef, useState } from "react";
+import { Activity, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -68,18 +68,21 @@ export const MatterMetadataPanel = ({
 }: MatterMetadataPanelProps) => {
   const workspaceQuery = useQuery(workspaceOptions(workspaceId));
   const workspace = workspaceQuery.data;
-  if (workspaceQuery.isError || !workspace) {
+  if (!workspace) {
     return null;
   }
   // Keyed by the matter, so its drafts, dialogs and confirmations start
-  // over when the panel shows another one.
+  // over when the panel shows another one. A failed background refetch
+  // hides the form without unmounting it, so an edit in progress survives.
   return (
-    <MatterMetadataForm
-      key={workspaceId}
-      onDeleted={onDeleted}
-      workspace={workspace}
-      workspaceId={workspaceId}
-    />
+    <Activity mode={workspaceQuery.isError ? "hidden" : "visible"}>
+      <MatterMetadataForm
+        key={workspaceId}
+        onDeleted={onDeleted}
+        workspace={workspace}
+        workspaceId={workspaceId}
+      />
+    </Activity>
   );
 };
 
