@@ -91,7 +91,7 @@ export const runSelectedPackages = async (
     );
     if (budgetExclusion !== undefined) {
       report(
-        `pre-push-typecheck: ${workspace.name} skipped (${budgetExclusion.measuredTime}, ${budgetExclusion.measuredMemory} measured; over the pre-push budget); run bun run typecheck:changed locally or let CI check it`,
+        `pre-push-typecheck: ${workspace.name} skipped (${budgetExclusion.measuredTime}, ${budgetExclusion.measuredMemory} measured; over the pre-push budget); run typecheck:changed locally or let CI check it`,
       );
       continue;
     }

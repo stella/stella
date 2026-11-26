@@ -198,7 +198,7 @@ test("an over-budget package is skipped while an unlisted package runs", async (
   ).toBe(0);
   expect(runs).toEqual(["@stll/small"]);
   expect(reports).toEqual([
-    "pre-push-typecheck: @stll/web skipped (75.6 s, 1.14 GB measured; over the pre-push budget); run bun run typecheck:changed locally or let CI check it",
+    "pre-push-typecheck: @stll/web skipped (75.6 s, 1.14 GB measured; over the pre-push budget); run typecheck:changed locally or let CI check it",
     "pre-push typecheck: checking @stll/small",
   ]);
 });
