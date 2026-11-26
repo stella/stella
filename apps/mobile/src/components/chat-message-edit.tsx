@@ -1,4 +1,4 @@
-import { use, useEffect, useEffectEvent, useRef, useState } from "react";
+import { use, useRef, useState } from "react";
 
 import { panic, Result } from "better-result";
 import { ActionSheetIOS, Alert, Platform, View } from "react-native";
@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import type { ChatLocalFilesUndoRead } from "@stll/api-contract/chat-local-files-undo";
 import { sleep } from "@stll/concurrency/sleep";
 import { Button } from "@stll/ui/button";
+import { useLatestCallback, useMountEffect } from "@stll/ui/effects";
 import { Switch } from "@stll/ui/switch";
 import { Text } from "@stll/ui/text";
 import { Textarea } from "@stll/ui/textarea";
@@ -114,7 +115,7 @@ const ChatMessageEdit = ({
    * that may still change: an undo on its way, or the turn the form stopped
    * as it opened still ending.
    */
-  const followRead = useEffectEvent(() => {
+  const followRead = useLatestCallback(() => {
     const openedAt = epochMilliseconds();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const load = async () => {
@@ -146,14 +147,14 @@ const ChatMessageEdit = ({
     };
   });
 
-  useEffect(() => {
+  useMountEffect(() => {
     open.current = true;
     const stop = followRead();
     return () => {
       open.current = false;
       stop();
     };
-  }, []);
+  });
 
   const choice = editFilesChoice({ read, checked: undoFiles, problem });
   const draft: EditDraft = { text, kept };

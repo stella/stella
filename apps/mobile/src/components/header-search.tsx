@@ -1,8 +1,10 @@
-import { createContext, use, useEffect, useRef, useState } from "react";
+import { createContext, use, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { panic } from "better-result";
 import type { SearchBarCommands } from "react-native-screens";
+
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 /** How long typing pauses before a search counts as settled. */
 const SETTLE_MS = 300;
@@ -62,7 +64,7 @@ export const HeaderSearchProvider = ({
     setSearch(closedSearch(effectiveTab));
   }
   // The field is the system's and keeps its text; a new tab closes it.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (fieldTab.current !== search.tab) {
       fieldTab.current = search.tab;
       searchBar.current?.cancelSearch();

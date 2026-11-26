@@ -1,6 +1,6 @@
 "use dom";
 
-import { Fragment, useEffect, useEffectEvent } from "react";
+import { Fragment } from "react";
 import type { ReactNode } from "react";
 
 import dmSansRegular from "@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.ttf";
@@ -8,6 +8,12 @@ import dmSansMedium from "@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.
 import dmSansSemiBold from "@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.ttf";
 import { panic } from "better-result";
 import type { DOMProps } from "expo/dom";
+
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useMountEffect,
+} from "@stll/ui/effects";
 
 import { bundledFontUrl, useDomAppearance } from "@/components/dom-theme";
 import type { DomAppearance } from "@/components/dom-theme";
@@ -42,17 +48,17 @@ const DecisionText = ({
 }: DecisionTextProps) => {
   useDomAppearance(appearance);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     document.documentElement.style.fontSize = `${String(16 * textScale)}px`;
   }, [textScale]);
 
-  const follow = useEffectEvent((href: string) => {
+  const follow = useLatestCallback((href: string) => {
     onLink(href);
   });
 
   // One listener for every link, so the page carries data and no handlers,
   // and a tap never navigates the web view itself.
-  useEffect(() => {
+  useMountEffect(() => {
     const listener = (event: MouseEvent) => {
       const anchor =
         event.target instanceof Element ? event.target.closest("a") : null;
@@ -67,7 +73,7 @@ const DecisionText = ({
     return () => {
       document.removeEventListener("click", listener);
     };
-  }, []);
+  });
 
   return (
     <>

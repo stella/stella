@@ -1,16 +1,24 @@
 import { describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
-import { deferred } from "@stll/test-kit";
+import { createTestClock, deferred, type TestClock } from "@stll/test-kit";
 
 import { mapWithConcurrency, streamWithConcurrency } from "./index";
 
-const elapsedMs = async (
+const virtualElapsedMs = async (
+  clock: TestClock,
   operation: () => Promise<unknown>,
 ): Promise<number> => {
-  const startedAt = Bun.nanoseconds();
-  await operation();
-  return (Bun.nanoseconds() - startedAt) / 1e6;
+  const startedAt = clock.monotonic();
+  const pending = operation();
+  const drainClock = async (): Promise<void> => {
+    await Promise.resolve();
+    if (await clock.advanceToNext()) {
+      await drainClock();
+    }
+  };
+  await Promise.all([pending, drainClock()]);
+  return clock.monotonic() - startedAt;
 };
 
 /** The shape this helper replaced, kept as the harness's baseline. */
@@ -104,7 +112,7 @@ describe("streamWithConcurrency", () => {
         operation: async (value) => {
           active += 1;
           peakActive = Math.max(peakActive, active);
-          await Bun.sleep(5);
+          await Promise.resolve();
           active -= 1;
           return value;
         },
@@ -141,16 +149,22 @@ describe("streamWithConcurrency", () => {
   test("rethrows in input order after the results before it", async () => {
     const failure = new Error("third item");
     const yielded: number[] = [];
+    const failed = deferred();
+    const releaseOthers = deferred();
     const stream = streamWithConcurrency({
       items: [0, 1, 2, 3, 4],
       limit: 5,
       operation: async (value) => {
         // The failure settles first; the consumer must still see 0 and 1.
-        await Bun.sleep(value === 2 ? 0 : 20);
-        return value === 2 ? await Promise.reject(failure) : value;
+        if (value === 2) {
+          failed.resolve();
+          return await Promise.reject(failure);
+        }
+        await releaseOthers.promise;
+        return value;
       },
     });
-    const rejection = await (async () => {
+    const consuming = (async () => {
       for await (const value of stream) {
         yielded.push(value);
       }
@@ -159,6 +173,10 @@ describe("streamWithConcurrency", () => {
       () => null,
       (error: unknown) => error,
     );
+    await failed.promise;
+    await Promise.resolve();
+    releaseOthers.resolve();
+    const rejection = await consuming;
     expect(yielded).toEqual([0, 1]);
     expect(rejection).toBe(failure);
   });
@@ -174,19 +192,32 @@ describe("streamWithConcurrency", () => {
   test("one slow item per window does not cost a window each", async () => {
     const limit = 8;
     const items = Array.from({ length: 32 }, (_unused, index) => index);
-    const operation = async (index: number) => {
-      await Bun.sleep(index % limit === 0 ? 120 : 10);
+    const makeOperation = (clock: TestClock) => async (index: number) => {
+      await clock.sleep(index % limit === 0 ? 120 : 10);
       return index;
     };
 
-    // Measured back to back, so the comparison survives a slow machine.
-    const windowed = await elapsedMs(
-      async () => await windowedMap({ items, limit, operation }),
+    const windowedClock = createTestClock();
+    const windowed = await virtualElapsedMs(
+      windowedClock,
+      async () =>
+        await windowedMap({
+          items,
+          limit,
+          operation: makeOperation(windowedClock),
+        }),
     );
-    const pooled = await elapsedMs(
+    const pooledClock = createTestClock();
+    const pooled = await virtualElapsedMs(
+      pooledClock,
       async () =>
         await drain(
-          streamWithConcurrency({ items, limit, lookAhead: limit, operation }),
+          streamWithConcurrency({
+            items,
+            limit,
+            lookAhead: limit,
+            operation: makeOperation(pooledClock),
+          }),
         ),
     );
 
@@ -199,8 +230,10 @@ describe("streamWithConcurrency", () => {
     const items = Array.from({ length: 64 }, (_unused, index) => index);
     const pooled = Math.ceil(items.length / limit) * latencyMs;
     const serial = items.length * latencyMs;
+    const clock = createTestClock();
 
-    const total = await elapsedMs(
+    const total = await virtualElapsedMs(
+      clock,
       async () =>
         await drain(
           streamWithConcurrency({
@@ -208,7 +241,7 @@ describe("streamWithConcurrency", () => {
             limit,
             lookAhead: limit,
             operation: async (index) => {
-              await Bun.sleep(latencyMs);
+              await clock.sleep(latencyMs);
               return index;
             },
           }),
@@ -225,6 +258,7 @@ describe("streamWithConcurrency", () => {
    * next reads have to already be in flight when it returns.
    */
   test("keeps the pool in flight while the consumer is busy", async () => {
+    const clock = createTestClock();
     const limit = 4;
     const lookAhead = 4;
     let started = 0;
@@ -235,15 +269,17 @@ describe("streamWithConcurrency", () => {
       lookAhead,
       operation: async (index) => {
         started += 1;
-        await Bun.sleep(5);
+        await clock.sleep(5);
         completed += 1;
         return index;
       },
     });
 
-    expect((await stream.next()).value).toBe(0);
+    const first = stream.next();
+    await clock.advance(5);
+    expect((await first).value).toBe(0);
     // Long enough for every operation the pool will start to finish.
-    await Bun.sleep(100);
+    await clock.advance(100);
 
     // A full pool, the look-ahead, and the slot the consumed result freed,
     // and nothing past that: work continues while the consumer is blocked,
@@ -254,6 +290,7 @@ describe("streamWithConcurrency", () => {
   });
 
   test("without look-ahead a settled result holds its slot", async () => {
+    const clock = createTestClock();
     const limit = 4;
     let started = 0;
     const stream = streamWithConcurrency({
@@ -261,13 +298,15 @@ describe("streamWithConcurrency", () => {
       limit,
       operation: async (index) => {
         started += 1;
-        await Bun.sleep(5);
+        await clock.sleep(5);
         return index;
       },
     });
 
-    expect((await stream.next()).value).toBe(0);
-    await Bun.sleep(100);
+    const first = stream.next();
+    await clock.advance(5);
+    expect((await first).value).toBe(0);
+    await clock.advance(100);
 
     // The consumer has taken one result, so exactly one slot reopened.
     expect(started).toBe(limit + 1);
@@ -281,6 +320,7 @@ describe("streamWithConcurrency", () => {
    * list behind the consumer's back.
    */
   test("stops refilling once the consumer closes the stream", async () => {
+    const clock = createTestClock();
     const items = Array.from({ length: 32 }, (_unused, index) => index);
     let started = 0;
     const stream = streamWithConcurrency({
@@ -289,42 +329,51 @@ describe("streamWithConcurrency", () => {
       lookAhead: 4,
       operation: async (index) => {
         started += 1;
-        await Bun.sleep(5);
+        await clock.sleep(5);
         return index;
       },
     });
 
-    expect((await stream.next()).value).toBe(0);
-    await stream.return(undefined);
+    const first = stream.next();
+    await clock.advance(5);
+    expect((await first).value).toBe(0);
+    const closing = stream.return(undefined);
+    await clock.advance(5);
+    await closing;
     const startedWhenClosed = started;
 
     // Long enough for every operation still running to settle and refill.
-    await Bun.sleep(100);
+    await clock.advance(100);
 
     expect(started).toBe(startedWhenClosed);
     expect(started).toBeLessThan(items.length);
   });
 
   test("a consumer that breaks out closes the pool the same way", async () => {
+    const clock = createTestClock();
     const items = Array.from({ length: 32 }, (_unused, index) => index);
     let started = 0;
-    for await (const value of streamWithConcurrency({
-      items,
-      limit: 4,
-      lookAhead: 4,
-      operation: async (index) => {
-        started += 1;
-        await Bun.sleep(5);
-        return index;
-      },
-    })) {
-      if (value === 0) {
-        break;
+    const loop = (async () => {
+      for await (const value of streamWithConcurrency({
+        items,
+        limit: 4,
+        lookAhead: 4,
+        operation: async (index) => {
+          started += 1;
+          await clock.sleep(5);
+          return index;
+        },
+      })) {
+        if (value === 0) {
+          break;
+        }
       }
-    }
+    })();
+    await clock.advance(10);
+    await loop;
     const startedWhenClosed = started;
 
-    await Bun.sleep(100);
+    await clock.advance(100);
 
     expect(started).toBe(startedWhenClosed);
     expect(started).toBeLessThan(items.length);
@@ -336,23 +385,28 @@ describe("streamWithConcurrency", () => {
    * afterwards would be writing into work its owner has finished with.
    */
   test("closing waits for the operations already running", async () => {
+    const clock = createTestClock();
     let started = 0;
     let completed = 0;
-    for await (const value of streamWithConcurrency({
-      items: Array.from({ length: 32 }, (_unused, index) => index),
-      limit: 4,
-      lookAhead: 4,
-      operation: async (index) => {
-        started += 1;
-        await Bun.sleep(20);
-        completed += 1;
-        return index;
-      },
-    })) {
-      if (value === 0) {
-        break;
+    const loop = (async () => {
+      for await (const value of streamWithConcurrency({
+        items: Array.from({ length: 32 }, (_unused, index) => index),
+        limit: 4,
+        lookAhead: 4,
+        operation: async (index) => {
+          started += 1;
+          await clock.sleep(20);
+          completed += 1;
+          return index;
+        },
+      })) {
+        if (value === 0) {
+          break;
+        }
       }
-    }
+    })();
+    await clock.advance(40);
+    await loop;
 
     // No sleep: the loop does not finish until the generator has unwound.
     expect(completed).toBe(started);
@@ -371,7 +425,7 @@ describe("streamWithConcurrency", () => {
         operation: async (value) => {
           active += 1;
           peakActive = Math.max(peakActive, active);
-          await Bun.sleep(5);
+          await Promise.resolve();
           active -= 1;
           return value;
         },

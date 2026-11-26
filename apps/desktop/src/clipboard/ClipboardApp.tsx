@@ -2,8 +2,6 @@ import {
   Fragment,
   useCallback,
   useDeferredValue,
-  useEffect,
-  useEffectEvent,
   useReducer,
   useRef,
   useState,
@@ -48,6 +46,11 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useMountEffect,
+} from "@stll/ui/effects";
 import { Form } from "@stll/ui/form";
 import {
   ArrowLeftIcon,
@@ -1408,7 +1411,7 @@ const ClipboardWelcomeDialog = ({
     },
   ];
 
-  useEffect(() => {
+  useMountEffect(() => {
     let mounted = true;
     void invoke<boolean>("is_autostart_enabled")
       .then((enabled) => {
@@ -1443,7 +1446,7 @@ const ClipboardWelcomeDialog = ({
     return () => {
       mounted = false;
     };
-  }, []);
+  });
 
   const completeWelcome = () => {
     if (autostartChoice.status === "loading") {
@@ -1745,14 +1748,14 @@ const ClipboardApp = () => {
     welcomeRequested ||
     (snapshot.welcomeStatus === "pending" && !welcomeDismissed);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (snapshot === EMPTY_SNAPSHOT) {
       return;
     }
     markClipboardSnapshotApplied(snapshot);
   }, [snapshot]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     markClipboardShellCommit();
     const stopObservingReopens = observeClipboardReopens();
     let disposed = false;
@@ -2088,7 +2091,7 @@ const ClipboardApp = () => {
     timelineRef.current?.focus();
   };
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const focusActiveCard = () => {
       if (activeItemId) {
         revealCard({
@@ -2300,7 +2303,7 @@ const ClipboardApp = () => {
   // Native presentation owns the session. The page also sees focus and blur
   // for focus moves inside the window (WebView2), which must neither clear
   // nor commit a selection.
-  const handleWindowSession = useEffectEvent(
+  const handleWindowSession = useLatestCallback(
     (windowSession: ClipboardWindowSession) => {
       switch (windowSession.type) {
         case "opened":
@@ -2331,7 +2334,7 @@ const ClipboardApp = () => {
     },
   );
 
-  useEffect(
+  useExternalSyncEffect(
     () =>
       subscribeDesktopEvent<unknown>({
         event: CLIPBOARD_WINDOW_SESSION_EVENT,
@@ -2355,7 +2358,7 @@ const ClipboardApp = () => {
           setError({ message: t("errorUpdateHistory"), source: "operation" });
         },
       }),
-    [t],
+    [handleWindowSession, t],
   );
 
   const copyItemFromEnter = (item: ClipboardItem, shiftKey: boolean) => {
@@ -2418,7 +2421,7 @@ const ClipboardApp = () => {
     );
   };
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const itemIds = new Set(snapshot.items.map((item) => item.id));
     const groupIds = new Set(snapshot.groups.map((group) => group.id));
     const cleanups: (() => void)[] = [];
@@ -2785,7 +2788,7 @@ const ClipboardApp = () => {
     switchScope(action);
   };
 
-  const handleKeyDown = useEffectEvent((event: KeyboardEvent) => {
+  const handleKeyDown = useLatestCallback((event: KeyboardEvent) => {
     if (dialog.type !== "closed" || welcomeOpen) {
       return;
     }
@@ -2924,7 +2927,7 @@ const ClipboardApp = () => {
     }
   });
 
-  const handleEscape = useEffectEvent((event: KeyboardEvent) => {
+  const handleEscape = useLatestCallback((event: KeyboardEvent) => {
     if (event.key !== "Escape" || event.isComposing || event.defaultPrevented) {
       return;
     }
@@ -2956,7 +2959,7 @@ const ClipboardApp = () => {
   // listener, and the window handler below hides the window only when nothing
   // claimed it; stopping Escape here would swallow it whenever focus still
   // sits on an overlay trigger inside the footer.
-  const handleKeyDownCapture = useEffectEvent((event: KeyboardEvent) => {
+  const handleKeyDownCapture = useLatestCallback((event: KeyboardEvent) => {
     if (
       dialog.type !== "closed" ||
       welcomeOpen ||
@@ -2973,7 +2976,7 @@ const ClipboardApp = () => {
     handleControlsKeyDown(event, event.target);
   });
 
-  useEffect(() => {
+  useMountEffect(() => {
     const timeline = timelineRef.current;
     if (!timeline) {
       return () => undefined;
@@ -2988,7 +2991,7 @@ const ClipboardApp = () => {
       timeline.removeEventListener("keydown", handleKeyDownCapture, true);
       window.removeEventListener("keydown", handleEscape);
     };
-  }, []);
+  });
 
   const captureActive = snapshot.captureStatus === "active";
   const nextCaptureStatus: ClipboardCaptureStatus = captureActive

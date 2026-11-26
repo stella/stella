@@ -1,8 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 
 import * as Notifications from "expo-notifications";
 import { useRouter } from "expo-router";
 import { useLocale } from "use-intl";
+
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { useSession } from "@/connection/session-provider";
 import { PUSH_NOTIFICATIONS } from "@/env";
@@ -24,7 +26,7 @@ export const PushRegistration = () => {
   const response = Notifications.useLastNotificationResponse();
   const opened = useRef<string | null>(null);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!PUSH_NOTIFICATIONS || source === null) {
       return;
     }
@@ -41,7 +43,7 @@ export const PushRegistration = () => {
     })();
   }, [locale, source]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const id = response?.notification.request.identifier;
     if (
       !PUSH_NOTIFICATIONS ||

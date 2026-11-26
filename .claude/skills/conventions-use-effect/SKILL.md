@@ -172,11 +172,19 @@ under load). Split volatile values into their own context, or expose them via
 ref + subscribe; the stable-API context's fields must be referentially
 permanent for the provider's lifetime.
 
-## useLayoutEffect
+## useLayoutEffect and useInsertionEffect
 
-Not covered by the ban (it has legitimate pre-paint imperative uses), but the
-same decision order applies. Reach for it only when a measurement or imperative
-write must happen before the browser paints.
+Banned as raw hooks too (`no-raw-use-layout-effect`), and the same decision
+order applies first. When work genuinely must happen before the browser
+paints, use the sanctioned hooks, the only modules that call React's layout
+effects. A host write or registration before paint (scroll anchoring, zoom, a
+class toggle, an animated value, a registry other layout effects read) goes
+through `useLayoutSyncEffect(effect, deps)`, or `useMountLayoutEffect` for a
+mount-only one, from `@stll/ui/effects`, and never writes React state. A ref
+that follows the latest committed value is `useLatest` (or `useIsMounted` for
+a mounted flag) from the same module. A value measured from the DOM into state
+comes from `useLayoutMeasurement` or `useObservedValue` in
+`@stll/ui/effects-dom`, given the element held by `ref={setElement}`.
 
 ## Stale async responses
 

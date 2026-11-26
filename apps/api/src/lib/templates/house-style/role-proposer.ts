@@ -350,10 +350,18 @@ const readFrontMatter = (
           confidence: CONFIDENCE.alternative,
         });
   }
-  return reading("title", CONFIDENCE.subtitle, {
-    role: "body",
-    confidence: CONFIDENCE.beforeTitle,
-  });
+  // Between the title and the parties a line belongs to the title when it
+  // is set like one: centred, or in capitals. Anything else there is text
+  // (a note on how to fill the form in, a sentence that opens the deed).
+  return block.alignment === "center" || isTitleShaped(block)
+    ? reading("title", CONFIDENCE.subtitle, {
+        role: "body",
+        confidence: CONFIDENCE.beforeTitle,
+      })
+    : reading("body", CONFIDENCE.plain, {
+        role: "title",
+        confidence: CONFIDENCE.weakAlternative,
+      });
 };
 
 const readUnlabelled = (

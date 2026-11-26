@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
+
+import { useMountEffect } from "@stll/ui/effects";
 
 import {
   ACTIVITY_CHANGED_EVENT,
@@ -70,7 +72,7 @@ export const useActivitySetup = (): ActivitySetupControls => {
     await read();
   };
 
-  useEffect(() => {
+  useMountEffect(() => {
     let disposed = false;
     const refresh = async () => {
       latest.current += 1;
@@ -102,7 +104,7 @@ export const useActivitySetup = (): ActivitySetupControls => {
       disposed = true;
       stopListening();
     };
-  }, []);
+  });
 
   /** Runs one native change, then reads the state it left. */
   const run = async (change: () => Promise<unknown>) => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
@@ -15,6 +15,7 @@ import type {
   TimerActivityLabels,
   TimerActivityProps,
 } from "@stll/api-contract/timer-activity";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { useRevision } from "@/components/changes";
 import { epochMilliseconds } from "@/connection/clock";
@@ -184,7 +185,7 @@ const TimerActivityRefresh = ({
   const words = useTranslations("timerActivity");
   const locale = useLocale();
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     // Unmounting aborts, so a refresh that outlives it changes nothing.
     const unmounted = new AbortController();
     // Read afresh after each await: a property read once would narrow to
@@ -306,7 +307,7 @@ export const TimerActivitySync = () => {
   });
   const source = state.status === "signed-in" ? state.source : null;
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const subscription = AppState.addEventListener("change", (next) => {
       if (next === "active") {
         refresh();
@@ -329,7 +330,7 @@ export const TimerActivitySync = () => {
     };
   }, [refresh]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (source === null) {
       void showTimerActivity(null);
     }

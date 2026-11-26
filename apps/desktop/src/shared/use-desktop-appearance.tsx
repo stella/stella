@@ -1,14 +1,9 @@
-import {
-  createContext,
-  use,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { createContext, use, useCallback, useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
+
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import {
   describeError,
@@ -75,7 +70,7 @@ export const useAppliedDesktopAppearance = (
     setAppearance(next);
   }, []);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     let disposed = false;
     let readStarted = false;
     // Runs once the listener is live: a change emitted before then would be
@@ -145,7 +140,7 @@ export const useAppliedDesktopAppearance = (
     };
   }, [adopt, telemetryWindow]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const mediaQuery = window.matchMedia(DARK_SCHEME_QUERY);
     const update = () => {
       applyColorScheme(effectiveColorScheme(appearance, mediaQuery.matches));
