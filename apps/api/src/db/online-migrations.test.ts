@@ -2692,6 +2692,18 @@ const POSTGRES_IDENTIFIER_MAX_LENGTH = 63;
 const artifactPrefix = (name: string, suffix: "_ccnew" | "_ccold") =>
   `${name.slice(0, POSTGRES_IDENTIFIER_MAX_LENGTH - suffix.length)}${suffix}`;
 
+/** Repair probes this fixture answers with no row left to repair. */
+const EMPTY_REPAIR_PROBES = [
+  "SELECT 1 FROM public.search_history_entries",
+  "SELECT 1 FROM public.chat_run_log_entries",
+  // No claim written before asserted dates is left to read.
+  "SELECT 1 FROM public.legal_list_claims",
+  // No chat turn stored before positions is left to number.
+  "SELECT 1 FROM public.chat_turns",
+  // No citation stored before its match key is left to key.
+  "SELECT 1 FROM public.case_law_citations",
+] as const;
+
 const createHarness = ({
   newestAppliedMigration = "99999999999999_later_release",
   artifacts = {},
@@ -2963,16 +2975,7 @@ const createHarness = ({
           ) {
             return [];
           }
-          if (
-            query.startsWith("SELECT 1 FROM public.search_history_entries") ||
-            query.startsWith("SELECT 1 FROM public.chat_run_log_entries") ||
-            // No claim written before asserted dates is left to read.
-            query.startsWith("SELECT 1 FROM public.legal_list_claims") ||
-            // No chat turn stored before positions is left to number.
-            query.startsWith("SELECT 1 FROM public.chat_turns") ||
-            // No citation stored before its match key is left to key.
-            query.startsWith("SELECT 1 FROM public.case_law_citations")
-          ) {
+          if (EMPTY_REPAIR_PROBES.some((probe) => query.startsWith(probe))) {
             return [];
           }
           if (query.startsWith("SELECT 1 FROM public.")) {

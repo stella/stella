@@ -1275,7 +1275,7 @@ export type ReopenedCitations = {
   citationIds: readonly SafeId<"caseLawCitation">[];
 };
 
-export const NOTHING_REOPENED: ReopenedCitations = {
+const NOTHING_REOPENED: ReopenedCitations = {
   reopened: 0,
   citationIds: [],
 };
@@ -1296,7 +1296,7 @@ const reopenedSelectSql = (
                LIMIT ${cap}
             ) picked) AS ids`;
 
-export const reopenedOf = (result: unknown): ReopenedCitations => {
+const reopenedOf = (result: unknown): ReopenedCitations => {
   const row = executedRows(result).at(0);
   if (!isRecord(row)) {
     return NOTHING_REOPENED;
