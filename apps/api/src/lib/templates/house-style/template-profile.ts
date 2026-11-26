@@ -957,8 +957,40 @@ const inferHealth = (
 };
 
 /**
- * The deeper levels of another list of the template that no style is bound
- * to: none of the roles' lists, and not the outline's.
+ * The list levels something of the template stands on: a style bound to
+ * one, or a paragraph of the template numbered by one (a numbered line in
+ * a letterhead the output keeps). Giving such a level another mark would
+ * change what those print.
+ */
+const occupiedLevels = ({
+  styles,
+  blocks,
+  numbering: { nums },
+}: TemplateInspection): Set<string> => {
+  const listOf = new Map(
+    nums.map(({ numId, abstractNumId }) => [numId, abstractNumId]),
+  );
+  const occupied = new Set<string>();
+  for (const { numPr } of styles) {
+    const list = numPr === null ? undefined : listOf.get(numPr.numId);
+    if (numPr !== null && list !== undefined) {
+      occupied.add(`${String(list)}:${String(numPr.ilvl)}`);
+    }
+  }
+  for (const { numbering } of blocks) {
+    if (numbering !== null) {
+      occupied.add(
+        `${String(numbering.abstractNumId)}:${String(numbering.ilvl)}`,
+      );
+    }
+  }
+  return occupied;
+};
+
+/**
+ * The deeper levels of another list of the template that nothing stands
+ * on: none of the roles' lists, not the outline's, no level a style is
+ * bound to or a paragraph of the template is numbered by.
  */
 const inferMarkLevels = (
   inspection: TemplateInspection,
@@ -991,8 +1023,13 @@ const inferMarkLevels = (
   if (markList === undefined || markNumId === undefined) {
     return [];
   }
+  const occupied = occupiedLevels(inspection);
   return markList.levels
-    .filter(({ ilvl }) => ilvl > 0)
+    .filter(
+      ({ ilvl }) =>
+        ilvl > 0 &&
+        !occupied.has(`${String(markList.abstractNumId)}:${String(ilvl)}`),
+    )
     .map(({ ilvl, numFmt, lvlText, start, indent }) => ({
       numId: markNumId,
       ilvl,

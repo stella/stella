@@ -547,6 +547,34 @@ describe("validateTemplateProfile", () => {
     expect(validateTemplateProfile(listed, withList)).toEqual([]);
     expect(parseTemplateProfile(listed).isOk()).toBe(true);
     expect(inferTemplateProfile(template).markLevels).toEqual([]);
+
+    // A level a paragraph of the template is numbered by, or a style is
+    // bound to, is taken: giving it a mark would change what those print.
+    const first = withList.blocks.at(0);
+    const used = {
+      ...withList,
+      blocks:
+        first === undefined
+          ? withList.blocks
+          : [
+              { ...first, numbering: { numId: 30, ilvl: 1, abstractNumId: 9 } },
+              ...withList.blocks.slice(1),
+            ],
+      styles: [
+        ...withList.styles,
+        {
+          styleId: "ListedTwo",
+          name: "Listed Two",
+          type: "paragraph" as const,
+          basedOn: null,
+          numPr: { numId: 30, ilvl: 2 },
+          outlineLvl: null,
+          alignment: null,
+          isDefault: false,
+        },
+      ],
+    };
+    expect(inferTemplateProfile(used).markLevels).toEqual([]);
   });
 
   test("a template with very many such findings still gives a profile that reads back", () => {
