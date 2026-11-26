@@ -5191,7 +5191,6 @@ const config = defineConfig({
       files: ["apps/web/src/**/*.{ts,tsx}", "apps/desktop/src/**/*.{ts,tsx}"],
       excludeFiles: [
         "apps/web/src/**/*.{test,spec}.{ts,tsx}",
-        "apps/desktop/src/**/*.{test,spec}.{ts,tsx}",
         "apps/web/src/hooks/use-effect.ts",
         ...new Set(
           Object.keys(reactCompilerBailouts).map((key) =>

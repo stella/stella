@@ -2,6 +2,7 @@ import {
   forwardRef,
   Fragment,
   memo,
+  useCallback,
   useEffect,
   useEffectEvent,
   useId,
@@ -581,10 +582,13 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
   const editorRef = useRef<HTMLDivElement>(null);
   // React applies `autoFocus` to form controls only, so the clip text, a
   // contenteditable, takes focus when each open mounts it.
-  const attachEditor = (node: HTMLDivElement | null) => {
+  // The React Compiler leaves this ref callback uncached; a new one each
+  // render would re-attach and pull focus back from the name field.
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const attachEditor = useCallback((node: HTMLDivElement | null) => {
     editorRef.current = node;
     node?.focus({ preventScroll: true });
-  };
+  }, []);
   // Text and HTML are regenerated from the DOM on save and never round-trip
   // byte-for-byte, so an untouched editor submits the stored content instead:
   // a group-only save must not read as a content edit.

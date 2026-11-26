@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 13,
+  "reason": "apps/desktop now builds with the React Compiler and takes no-manual-memo like apps/web. Twelve useCallbacks stay because an effect lists them as dependencies and react-hooks/exhaustive-deps cannot see compiler memoization; one stays because the compiler leaves the clip editor's focusing ref callback uncached. Each carries the reason apps/web uses for the same case."
+}
