@@ -2680,7 +2680,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Reformat into template is additive and does not overwrite or remove existing state.",
       "openWorldHint": "Reformat into template is confined to the private workspace or a bounded computation."
     },
-    "description": "Apply an organisation template's house style to a stored DOCX and save the result as a new document beside it; the source is not changed. The text is carried over verbatim: styles, numbering, headers and footers come from the template, and cross-references become fields. Omit template_id to use the matching template tagged \\"house-style\\". A document that cannot be reformatted without changing its text (tracked changes, a number the template would not show) is refused and nothing is saved. Returns the new document and a formatting note: counts, references and labels kept as text, and template findings.",
+    "description": "Apply an organisation template's house style to a stored DOCX and save the result as a new document beside it; the source is not changed. The text is carried over verbatim: styles, numbering, headers and footers come from the template, and a cross-reference whose target is certain becomes a field. Omit template_id to use the matching template tagged \\"house-style\\". A document that cannot be reformatted without changing its text (tracked changes, a number the template would not show) is refused and nothing is saved. Returns the new document and a formatting note: counts, what stayed text, template findings.",
     "annotations": {
       "title": "Reformat into template",
       "destructiveHint": false,
@@ -10567,7 +10567,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Reformat into template is additive and does not overwrite or remove existing state.",
       "openWorldHint": "Reformat into template is confined to the private workspace or a bounded computation."
     },
-    "description": "Apply an organisation template's house style to a stored DOCX and save the result as a new document beside it; the source is not changed. The text is carried over verbatim: styles, numbering, headers and footers come from the template, and cross-references become fields. Omit template_id to use the matching template tagged \\"house-style\\". A document that cannot be reformatted without changing its text (tracked changes, a number the template would not show) is refused and nothing is saved. Returns the new document and a formatting note: counts, references and labels kept as text, and template findings.",
+    "description": "Apply an organisation template's house style to a stored DOCX and save the result as a new document beside it; the source is not changed. The text is carried over verbatim: styles, numbering, headers and footers come from the template, and a cross-reference whose target is certain becomes a field. Omit template_id to use the matching template tagged \\"house-style\\". A document that cannot be reformatted without changing its text (tracked changes, a number the template would not show) is refused and nothing is saved. Returns the new document and a formatting note: counts, what stayed text, template findings.",
     "annotations": {
       "title": "Reformat into template",
       "destructiveHint": false,
