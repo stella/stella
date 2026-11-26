@@ -487,12 +487,8 @@ const createStimulusTaps = (onStimulus: (kind: StormStimulus) => void) => {
   // A DOM test file installs its window (and its `Response`) after the
   // preload ran, so the taps follow the globals of the running file.
   return () => {
-    tap(Reflect.get(globalThis, "Response"), BODY_READERS, "network");
-    tap(
-      Reflect.get(globalThis, "ReadableStreamDefaultReader"),
-      ["read"],
-      "stream",
-    );
+    tap(globalThis.Response, BODY_READERS, "network");
+    tap(globalThis.ReadableStreamDefaultReader, ["read"], "stream");
   };
 };
 
@@ -564,18 +560,31 @@ const captureInTest = async (
   return { commits: scope.commits, violations: scope.violations };
 };
 
+// The guard lives on the global object, so every module instance of this
+// file (the preload's, a test file's import) finds the same one.
+const installedGuard = (
+  target: object = globalThis,
+): DomStormGuard | undefined => {
+  const guard: unknown = Reflect.get(target, GUARD);
+  return isGuard(guard) ? guard : undefined;
+};
+
+const storeGuard = (guard: DomStormGuard, target: object = globalThis) => {
+  Reflect.set(target, GUARD, guard);
+};
+
 /**
  * Installs the guard: the commit hook (before any renderer loads), the
  * stimulus taps and the per-test state. Idempotent per process global.
  */
 export const installDomTestStormGuard = (): DomStormGuard => {
-  const existing: unknown = Reflect.get(globalThis, GUARD);
-  if (isGuard(existing)) {
+  const existing = installedGuard();
+  if (existing !== undefined) {
     return existing;
   }
   // Real scheduling, taken before a test can install fake timers (which
   // leave setImmediate alone): a turn is one setImmediate.
-  const realSetImmediate = globalThis.setImmediate.bind(globalThis);
+  const realSetImmediate = setImmediate;
   const runtime: Runtime = {
     current: undefined,
     settledTests: 0,
@@ -592,7 +601,7 @@ export const installDomTestStormGuard = (): DomStormGuard => {
     },
   };
 
-  const hook = installCommitHook(globalThis);
+  const hook = installCommitHook();
   hook.onRenderer((renderer) => {
     const shared = renderer.currentDispatcherRef;
     // The act queue is React's internal; a React that renamed it would turn
@@ -624,13 +633,8 @@ export const installDomTestStormGuard = (): DomStormGuard => {
     capture: async (run) => await captureInTest(runtime, run),
     settled: () => runtime.settledTests,
   };
-  Reflect.set(globalThis, GUARD, guard);
+  storeGuard(guard);
   return guard;
-};
-
-const installedGuard = (): DomStormGuard | undefined => {
-  const guard: unknown = Reflect.get(globalThis, GUARD);
-  return isGuard(guard) ? guard : undefined;
 };
 
 /**

@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "@stll/render-probe follows the repository's Result convention (scripts/result-boundary-globs.ts enables it for packages/render-probe/src), and its DOM-test storm check now fails a test through panic() and wraps its fallible calls in Result.try. That needs better-result, the catalog version every Result-convention package declares. It adds no other third-party dependency."
+}
