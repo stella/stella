@@ -151,4 +151,51 @@ describe("updateWorkspace", () => {
       response: { message: "Client not found" },
     });
   });
+
+  test("writes nothing when the body names no writable field", async () => {
+    const workspaceRow = {
+      id: "ws_test123",
+      name: "Workspace",
+      clientId: null,
+      reference: null,
+      billingReference: null,
+      billingNarrativeLanguage: null,
+      color: null,
+      documentNamingEnabled: false,
+      leadUserId: null,
+      storedVisibility: null,
+    };
+    let updateCount = 0;
+    const { safeDb, scopedDb } = createScopedDbMock({
+      execute: aggregateRecorder().tx.execute,
+      select: (fields?: Record<string, unknown>) =>
+        readsAuthority(fields)
+          ? authoritySelect
+          : { from: () => ({ where: async () => [workspaceRow] }) },
+      update: () => {
+        updateCount++;
+        return {
+          set: (values: Record<string, unknown>) => {
+            if (Object.keys(values).length === 0) {
+              throw new Error("No values to set");
+            }
+            return {
+              where: () => ({ returning: async () => [{ id: "ws_test123" }] }),
+            };
+          },
+        };
+      },
+    });
+
+    const result = await updateWorkspace.handler(
+      createContext({
+        body: { expectedClientId: null },
+        safeDb,
+        scopedDb,
+      }),
+    );
+
+    expect(result).toEqual({});
+    expect(updateCount).toBe(0);
+  });
 });
