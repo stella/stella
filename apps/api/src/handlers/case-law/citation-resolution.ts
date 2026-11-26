@@ -1035,7 +1035,19 @@ const drainArrivalsBeforeWalk = async (
   scopedDb: ScopedDb,
   limit: number,
 ): Promise<CitationResolutionCounts | null> => {
-  const drained = await Result.tryPromise({
+  const drained = await tryDrainArrivals(scopedDb, limit);
+  if (Result.isOk(drained)) {
+    return drained.value?.settled ?? null;
+  }
+  await reportWalkDrainFailure(drained.error);
+  // One arrival whose reopen keeps failing must not hold every arrival
+  // behind it: they are taken one at a time instead, and one that fails
+  // goes to the back of the queue to be tried again later.
+  return await drainArrivalsOneByOne(scopedDb, limit, null);
+};
+
+const tryDrainArrivals = async (scopedDb: ScopedDb, limit: number) =>
+  await Result.tryPromise({
     try: async () =>
       await tryCitationGraphTransaction(
         scopedDb,
@@ -1044,9 +1056,74 @@ const drainArrivalsBeforeWalk = async (
       ),
     catch: (cause) => cause,
   });
-  if (Result.isOk(drained)) {
-    return drained.value?.settled ?? null;
+
+const drainArrivalsOneByOne = async (
+  scopedDb: ScopedDb,
+  remaining: number,
+  settled: CitationResolutionCounts | null,
+): Promise<CitationResolutionCounts | null> => {
+  if (remaining === 0) {
+    return settled;
   }
+  const one = await tryDrainArrivals(scopedDb, 1);
+  if (Result.isOk(one)) {
+    // A held graph or an empty queue ends the turn's drain.
+    if (one.value === null || one.value.drained === 0) {
+      return settled;
+    }
+    const counts = one.value.settled;
+    return await drainArrivalsOneByOne(
+      scopedDb,
+      remaining - 1,
+      counts === null || settled === null
+        ? (counts ?? settled)
+        : addCitationCounts(settled, counts),
+    );
+  }
+  await reportWalkDrainFailure(one.error);
+  const moved = await Result.tryPromise({
+    try: async () =>
+      await tryCitationGraphTransaction(scopedDb, requeueOldestArrival),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(moved)) {
+    await reportWalkDrainFailure(moved.error);
+    return settled;
+  }
+  return moved.value === true
+    ? await drainArrivalsOneByOne(scopedDb, remaining - 1, settled)
+    : settled;
+};
+
+/**
+ * Move the oldest queued arrival to the back of the queue, unchanged: a
+ * reopen answers the corpus as it stands when it runs, so the order in which
+ * arrivals are taken does not change what they reopen.
+ */
+const requeueOldestArrival = async (
+  tx: CitationGraphTransaction,
+): Promise<boolean> => {
+  // audit: skip — derived public case-law citation queue, not a user action
+  const result: unknown = await tx.execute(sql`
+    WITH moved AS (
+      DELETE FROM ${caseLawCitationArrivals}
+       WHERE id = (
+         SELECT id FROM ${caseLawCitationArrivals} ORDER BY id LIMIT 1
+       )
+      RETURNING decision_id, identifier_type, match_key, jurisdiction,
+                decision_date
+    )
+    INSERT INTO ${caseLawCitationArrivals} (
+      decision_id, identifier_type, match_key, jurisdiction, decision_date
+    )
+    SELECT decision_id, identifier_type, match_key, jurisdiction, decision_date
+      FROM moved
+    RETURNING id
+  `);
+  return executedRows(result).length > 0;
+};
+
+const reportWalkDrainFailure = async (failure: unknown): Promise<void> => {
   // Loaded only to report: both read the runtime environment, and migrations,
   // which run without it, load this module.
   const [{ logger }, { captureError }] = await Promise.all([
@@ -1056,15 +1133,14 @@ const drainArrivalsBeforeWalk = async (
   logger.error(
     "case_law.citation_arrivals.walk_drain_failed",
     sanitizeErrorAttributesForOutput({
-      ...errorSystemFields(drained.error),
-      ...pgErrorFields(drained.error),
+      ...errorSystemFields(failure),
+      ...pgErrorFields(failure),
     }),
   );
   captureError(
-    drained.error,
+    failure,
     handlerErrorContext("citationResolution.walk.citation_arrivals"),
   );
-  return null;
 };
 
 const addCitationCounts = (

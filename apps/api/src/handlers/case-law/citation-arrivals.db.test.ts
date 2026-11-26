@@ -1060,8 +1060,9 @@ test("the standing walk takes arrivals a failed drain left behind, with no later
   await enqueue(arriving);
   // The write's own drain fails; nothing else is ever written.
   const failing = failingAfterDrain(waiting);
-  expect(await rejectionOf(drainCitationArrivals(failing))).toBeInstanceOf(
-    Error,
+  const rejected = await rejectionOf(drainCitationArrivals(failing));
+  expect(rejected instanceof Error ? rejected.message : rejected).toBe(
+    "the drain's transaction fails",
   );
   expect(await queued()).toBe(1);
   expect(await statusOf(waiting)).toBe(CITATION_RESOLUTION_STATUS.UNMATCHED);
@@ -1074,6 +1075,26 @@ test("the standing walk takes arrivals a failed drain left behind, with no later
   expect(await statusOf(waiting)).toBe(CITATION_RESOLUTION_STATUS.RESOLVED);
   // What the arrival settled is counted with the batch.
   expect(batch?.resolved).toBeGreaterThanOrEqual(1);
+});
+
+test("an arrival whose reopen keeps failing does not hold the arrivals behind it", async () => {
+  const { arriving, waiting } = await queueCorpus();
+  // Queued first, and never readable: every drain that takes it fails.
+  await db.execute(sql`
+    INSERT INTO case_law_citation_arrivals (
+      decision_id, identifier_type, match_key, jurisdiction
+    ) VALUES (${arriving.id}, 'not-an-identifier-type', 'poison', 'CZE')
+  `);
+  await enqueue(arriving);
+  expect(await queued()).toBe(2);
+
+  const scopedDb: ScopedDb = async (callback) =>
+    await db.transaction(async (tx) => await callback(asTestRaw(tx)));
+  expect(await tryResolveCitationBatch(scopedDb, { limit: 5 })).not.toBeNull();
+  // The arrival behind it was drained and settled; the failing one waits.
+  expect(await statusOf(waiting)).toBe(CITATION_RESOLUTION_STATUS.RESOLVED);
+  expect(await queued()).toBe(1);
+  await db.execute(sql`DELETE FROM case_law_citation_arrivals`);
 });
 
 test("an erased decision's arrivals are withdrawn with it and reopen nothing", async () => {

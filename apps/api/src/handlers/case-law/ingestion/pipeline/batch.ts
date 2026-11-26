@@ -817,19 +817,20 @@ export const applyDecisionBatch = async (
     // failing, counted as such: raising from a `finally` would replace
     // whatever stopped the loop and skip the failure rows below.
     settlePack({ tally, flushed: await pack.flush(), queued, context });
+    // Written unconditionally, so a halted batch still records the failures
+    // it most needs recorded; before the arrival drain, which may wait for
+    // the citation graph.
+    failureLedger = await recordIngestionFailures({
+      scopedDb,
+      failures: tally.failures,
+      adapterKey: context.adapterKey,
+    });
     // The citations the page's decisions answer, reopened and settled once
     // for the page rather than once per decision. The arrivals committed with
     // their rows, so a drain that fails leaves them for the next one.
     await drainCitationArrivalsAfterWrite(scopedDb, {
       step: "pipeline.applyDecisionBatch.citation_arrivals",
       attributes: { adapterKey: context.adapterKey },
-    });
-    // Written unconditionally, so a halted batch still records the failures
-    // it most needs recorded.
-    failureLedger = await recordIngestionFailures({
-      scopedDb,
-      failures: tally.failures,
-      adapterKey: context.adapterKey,
     });
   }
   if (failureLedger.type !== "written") {
