@@ -34,6 +34,10 @@ import {
   recordCorpusProjectionDeleteTx,
   settleCorpusProjectionCleanupTx,
 } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
+import {
+  readDeferredAppendStatesTx,
+  wakeDeferredAppendStatesBatchTx,
+} from "@/api/lib/legal-search/corpus-index-projection-deferred-wake";
 import { proveCorpusProjectionRevisionsPresent } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { advanceCorpusProjectionErasuresTx } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
 import {
@@ -257,27 +261,60 @@ const intentsOf = async (db: GatedTestDb, fixture: Fixture) =>
       ),
     );
 
-/** A transaction that runs `work`, then holds its locks until released. */
+type SuiteTransaction = Parameters<
+  Parameters<GatedTestDb["transaction"]>[0]
+>[0];
+
+/** The server process of the session `tx` runs on. */
+const backendPid = async (tx: SuiteTransaction): Promise<number> => {
+  const rows = await tx.execute<{ pid: number }>(
+    sql`SELECT pg_backend_pid() AS pid`,
+  );
+  return rows.at(0)?.pid ?? panic("No backend pid");
+};
+
+/**
+ * A transaction that runs `work`, then holds its locks until released. `pid`
+ * names its session, so an observer can tell what waits on it.
+ */
 const holding = <T>(
   db: GatedTestDb,
-  work: (
-    tx: Parameters<Parameters<GatedTestDb["transaction"]>[0]>[0],
-  ) => Promise<T>,
+  work: (tx: SuiteTransaction) => Promise<T>,
 ) => {
   const held = Promise.withResolvers<T>();
+  const pid = Promise.withResolvers<number>();
   const release = Promise.withResolvers<undefined>();
   const done = db.transaction(async (tx) => {
+    pid.resolve(await backendPid(tx));
     const value = await work(tx);
     held.resolve(value);
     await release.promise;
     return value;
   });
-  done.catch((error: unknown) => held.reject(error));
+  done.catch((error: unknown) => {
+    held.reject(error);
+    pid.reject(error);
+  });
   return {
     held: held.promise,
+    pid: pid.promise,
     release: () => release.resolve(undefined),
     done,
   };
+};
+
+/** `work` in a transaction of `db`, reporting its session's pid first. */
+const reporting = <T>(
+  db: GatedTestDb,
+  work: (tx: SuiteTransaction) => Promise<T>,
+) => {
+  const pid = Promise.withResolvers<number>();
+  const done = db.transaction(async (tx) => {
+    pid.resolve(await backendPid(tx));
+    return await work(tx);
+  });
+  done.catch((error: unknown) => pid.reject(error));
+  return { pid: pid.promise, done };
 };
 
 /** A statement that must finish while another session still holds its rows. */
@@ -287,19 +324,24 @@ const unblocked = async <T>(pending: Promise<T>, description: string) =>
     timeoutMs: UNBLOCKED_WITHIN_MS,
   });
 
-/** Resolves once some session of this database waits on a row lock. */
-const someoneWaitsOnALock = async (observer: GatedTestDb) =>
+/**
+ * Resolves once session `waiter` waits on a lock session `holder` holds:
+ * PostgreSQL's own account of who blocks whom, not any waiter.
+ */
+const waitsOn = async (
+  observer: GatedTestDb,
+  { waiter, holder }: { waiter: number; holder: number },
+) =>
   await waitFor(
     async () => {
-      const rows = await observer.execute<{ waiting: number }>(sql`
-        SELECT 1 AS waiting
-        FROM pg_stat_activity
-        WHERE datname = current_database()
-          AND wait_event_type = 'Lock'
-        LIMIT 1`);
-      return rows.at(0) === undefined ? undefined : true;
+      const rows = await observer.execute<{ blocked: boolean }>(sql`
+        SELECT ${holder}::int = ANY(pg_blocking_pids(${waiter}::int)) AS blocked`);
+      return rows.at(0)?.blocked === true ? true : undefined;
     },
-    { description: "a session to wait on a row lock", timeoutMs: 10_000 },
+    {
+      description: `session ${String(waiter)} to wait on session ${String(holder)}`,
+      timeoutMs: 10_000,
+    },
   );
 
 const cleanUp = async (db: GatedTestDb, fixture: Fixture): Promise<void> => {
@@ -452,20 +494,19 @@ if (!databaseUrl || !runPostgresTests) {
           );
           const leases = await reservingFirst.held;
           expect(leases).toHaveLength(2);
-          const settlingAfter = secondDb.transaction(async (tx) => {
+          const settlingAfter = reporting(secondDb, async (tx) => {
             await tx.execute(sql`SET LOCAL lock_timeout = '10s'`);
             return await settleCorpusProjectionCleanupTx(tx, { proof });
           });
-          // Settlement waits for the states the reservation holds.
-          expect(
-            await Promise.race([
-              settlingAfter.then(() => "settled" as const),
-              someoneWaitsOnALock(observerDb).then(() => "waiting" as const),
-            ]),
-          ).toBe("waiting");
+          // Settlement waits on the reservation's session, for the states
+          // it holds, and on nothing else.
+          await waitsOn(observerDb, {
+            waiter: await settlingAfter.pid,
+            holder: await reservingFirst.pid,
+          });
           reservingFirst.release();
           await reservingFirst.done;
-          expect(await settlingAfter).toBe(2);
+          expect(await settlingAfter.done).toBe(2);
           const intents = await intentsOf(firstDb, reserveFirst);
           expect(
             intents
@@ -481,6 +522,71 @@ if (!databaseUrl || !runPostgresTests) {
           ).toEqual(leases.map(({ intentId }) => intentId).toSorted());
         } finally {
           await cleanUp(firstDb, reserveFirst);
+        }
+      });
+    });
+
+    test("the deferred-state wake passes over a state a writer holds, and a rerun takes it", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db: firstDb } = openClient();
+        const { db: secondDb } = openClient();
+        const fixture = await seed(firstDb, 3);
+        try {
+          // As an earlier release left them: queued at a settlement bound.
+          await firstDb
+            .update(corpusIndexProjectionStates)
+            .set({ updatedAt: sql`now() + interval '7 days'` })
+            .where(
+              and(
+                eq(corpusIndexProjectionStates.generation, GENERATION),
+                inArray(
+                  corpusIndexProjectionStates.entityId,
+                  fixture.entityIds,
+                ),
+              ),
+            );
+          const target = {
+            family: "case_law" as const,
+            generation: GENERATION,
+            retrieval: {
+              type: "stored" as const,
+              field: "projection_revision" as const,
+            },
+          };
+          const owed = async () =>
+            await secondDb.transaction(
+              async (tx) => await readDeferredAppendStatesTx(tx, target),
+            );
+          expect((await owed()).count).toBe(3);
+          const [heldEntity] = fixture.entityIds;
+          const writer = holding(firstDb, async (tx) =>
+            tx.execute(sql`
+              SELECT entity_id
+              FROM corpus_index_projection_states
+              WHERE generation = ${GENERATION} AND entity_id = ${heldEntity ?? ""}
+              FOR UPDATE`),
+          );
+          await writer.held;
+          const woken = await unblocked(
+            secondDb.transaction(
+              async (tx) =>
+                await wakeDeferredAppendStatesBatchTx(tx, target, 10),
+            ),
+            "the wake to pass over the held state",
+          );
+          expect(woken).toBe(2);
+          expect((await owed()).count).toBe(1);
+          writer.release();
+          await writer.done;
+          expect(
+            await secondDb.transaction(
+              async (tx) =>
+                await wakeDeferredAppendStatesBatchTx(tx, target, 10),
+            ),
+          ).toBe(1);
+          expect((await owed()).count).toBe(0);
+        } finally {
+          await cleanUp(firstDb, fixture);
         }
       });
     });
@@ -578,19 +684,37 @@ if (!databaseUrl || !runPostgresTests) {
             }),
           );
           await proving.held;
-          const erasing = secondDb.transaction(async (tx) => {
-            await tx.execute(sql`SET LOCAL lock_timeout = '10s'`);
-            return await advanceCorpusProjectionErasuresTx(tx, {
-              family: "case_law",
-              generation: GENERATION,
-              scope: { type: "subjects", entityIds: fixture.entityIds },
-              limit: 1,
+          const erase = async () =>
+            await secondDb.transaction(async (tx) => {
+              await tx.execute(sql`SET LOCAL lock_timeout = '10s'`);
+              return await advanceCorpusProjectionErasuresTx(tx, {
+                family: "case_law",
+                generation: GENERATION,
+                scope: { type: "subjects", entityIds: fixture.entityIds },
+                limit: 1,
+              });
             });
+          // The erasure claim never waits: it passes over the state the proof
+          // holds, and claims nothing while the proof is open.
+          const whileHeld = await unblocked(
+            erase(),
+            "the erasure claim to pass over the held state",
+          );
+          expect(whileHeld).toMatchObject({
+            claimedCount: 0,
+            scheduledRevisions: [],
+            appliedEntityIds: [],
           });
           proving.release();
-          await proving.done;
-          const erased = await erasing;
+          // The proof found the desired state moved: the new revision goes to
+          // cleanup and the state never names it.
+          expect(await proving.done).toEqual([
+            expect.objectContaining({ intentId: lease.intentId }),
+          ]);
+          const erased = await erase();
           // Neither copy is served, and the erasure waits for both deletes.
+          expect(erased.claimedCount).toBe(1);
+          expect(erased.scheduledRevisions).toEqual([]);
           expect(erased.appliedEntityIds).toEqual([]);
           const intents = await intentsOf(firstDb, fixture);
           expect(intents.find(({ id }) => id === lease.intentId)?.status).toBe(

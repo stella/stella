@@ -10,6 +10,7 @@ import { panic, Result, TaggedError } from "better-result";
  *   bun run src/scripts/corpus-generation.ts seed --family case_law --generation case_law_v10 [--pages 1000]
  *   bun run src/scripts/corpus-generation.ts prove --family case_law --generation case_law_v10 [--hours 11] [--until-current] [--only-requested] [--concurrency 4]
  *   bun run src/scripts/corpus-generation.ts retire --family case_law --generation case_law_v8 [--defer-cleanup] [--actor <id> --reason <text> --apply]
+ *   bun run src/scripts/corpus-generation.ts wake-deferred --family case_law --generation case_law_v11 [--dry-run | --apply]
  *
  * `serve` runs the guarded flip (`corpus-index-generation-flip.ts`), the one
  * owner of the decision: phase 1 reads the engine and walks the parity
@@ -61,6 +62,14 @@ import { panic, Result, TaggedError } from "better-result";
  * engine indexes, then deletes its projection history page by page under
  * the database-load brake. Running it again on a retired generation resumes
  * the cleanup.
+ *
+ * `wake-deferred` moves to the present the projection states of a generation
+ * whose hits carry their revision that an earlier release queued at a retired
+ * revision's settlement bound (`corpus-index-projection-deferred-wake.ts`):
+ * exactly those the append walk would take but for that instant. A dry run
+ * (the default) prints how many and a digest of their ids; `--apply` wakes
+ * them in bounded batches that never wait on a writer's rows, then prints
+ * what it passed over, which a rerun takes.
  */
 import { eq } from "drizzle-orm";
 import { parseArgs } from "node:util";
@@ -138,8 +147,16 @@ import {
 import {
   type CorpusIndexManifest,
   corpusIndexManifestDigest,
+  corpusIndexRevisionRetrieval,
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import {
+  DEFERRED_WAKE_LOCK_TIMEOUT_MS,
+  type DeferredAppendStates,
+  type DeferredWakeTarget,
+  readDeferredAppendStatesTx,
+  wakeDeferredAppendStatesBatchTx,
+} from "@/api/lib/legal-search/corpus-index-projection-deferred-wake";
 import { CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS } from "@/api/lib/legal-search/corpus-index-route-proof-contract";
 import {
   type CorpusIndexRouteProofRun,
@@ -151,6 +168,7 @@ import {
   type CorpusIndexSeedingAdvance,
   readCorpusIndexRouteSeedingsTx,
 } from "@/api/lib/legal-search/corpus-index-route-seeding";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
@@ -218,6 +236,11 @@ Commands:
                          by page, until the hours are spent or, with
                          --until-current, every route is current. Resumable.
                          Stop it before a flip.
+  wake-deferred          Requeue at the present the projection states of a
+                         generation whose hits carry their revision that an
+                         earlier release queued at a retired revision's
+                         settlement bound. Never waits on a writer's rows;
+                         rerun to take what it passed over.
   retire                 Retire a building generation for good: no writer
                          projects it again, its engine indexes and its
                          projection history are deleted. Refused for the
@@ -225,7 +248,7 @@ Commands:
                          keep window, one a jurisdiction pointer names and
                          one a runner holds leases on. Resumable.
 
-Options (register, serve, parity, seed, prove, retire):
+Options (register, serve, parity, seed, prove, retire, wake-deferred):
   --family <family>      ${CORPUS_FAMILIES.join(" | ")}
   --generation <name>    A generation declared in code, e.g. case_law_v7.
   --apply                Perform the change. Omitted, the run only reports.
@@ -289,6 +312,9 @@ spent with a route not current, 6 paused by the database-load brake, 7 locks
 refused past 15 minutes (a flip holds the projection fence), 8 a route set
 aside (not attested, index missing or unknown documents), 9 a route failed
 repeatedly, 1 refused.
+Exit codes (wake-deferred): 0 nothing left owed (or, dry run, the count was
+read), 7 states held by a writer or a batch cap left owed (rerun), 14 busy (a
+lock, such as a flip's fence, refused within its timeout; rerun), 1 refused.
 Exit codes (retire): 0 retired and cleaned up, or with --defer-cleanup retired
 with its history left for a later run (or, dry run, nothing refuses it), 6 paused by the database-load brake (run it again to resume), 10
 registry, 11 a flip within the keep window, 12 a jurisdiction pointer, 13 a
@@ -411,6 +437,12 @@ type CorpusGenerationCommand =
       receipt: { actor: string; reason: string } | null;
       /** Leave the projection history for a later run. */
       deferCleanup: boolean;
+    }
+  | {
+      type: "wake-deferred";
+      target: DeclaredTarget;
+      wake: DeferredWakeTarget;
+      mode: Mode;
     };
 
 type GenerationRow = Pick<
@@ -455,6 +487,7 @@ const COMMAND_NAMES = [
   "seed",
   "prove",
   "retire",
+  "wake-deferred",
 ] as const;
 
 const usageError = (message: string) =>
@@ -712,7 +745,7 @@ const parseCorpusGenerationCommand = (
   );
   if (name === undefined) {
     return usageError(
-      "Name exactly one command: status, register, serve, parity, seed, prove or retire.",
+      "Name exactly one command: status, register, serve, parity, seed, prove, retire or wake-deferred.",
     );
   }
   if (values.apply === true && values["dry-run"] === true) {
@@ -790,6 +823,24 @@ const parseCorpusGenerationCommand = (
     }
     case "retire":
       return parseRetireCommand(target.value, mode, values);
+    case "wake-deferred": {
+      const retrieval = corpusIndexRevisionRetrieval(target.value.manifest);
+      if (retrieval.type !== "stored") {
+        return usageError(
+          `${target.value.family}/${target.value.generation} does not store its revision on its hits; its appends wait for an older revision's delete by design, so there is nothing to wake.`,
+        );
+      }
+      return Result.ok({
+        type: "wake-deferred",
+        target: target.value,
+        wake: {
+          family: target.value.family,
+          generation: target.value.generation,
+          retrieval,
+        },
+        mode,
+      });
+    }
     case "seed": {
       const pages = parseWholeNumber(
         values.pages,
@@ -2438,6 +2489,103 @@ const runRetire = async (
   return purged;
 };
 
+/** States one wake batch takes at most: a few hundred row locks and probes. */
+const WAKE_BATCH_STATES = 500;
+/** Batches one run takes at most; a larger backlog is finished by a rerun. */
+const WAKE_MAX_BATCHES = 60;
+
+const deferredLine = (
+  label: string,
+  { count, idsSha256 }: DeferredAppendStates,
+) => `${label}: ${String(count)} deferred state(s), ids sha256 ${idsSha256}`;
+
+const runWakeDeferred = async (
+  { withDatabase, write }: CommandContext,
+  {
+    target,
+    wake,
+    mode,
+  }: Extract<CorpusGenerationCommand, { type: "wake-deferred" }>,
+): Promise<Result<number, CorpusGenerationRefusal>> => {
+  write(`wake-deferred ${target.family}/${target.generation} (${mode})`);
+  write(declaredLine(target));
+  const before = await withDatabase(
+    ACCESS.read,
+    async (rootDb) =>
+      await withAggregateTransaction(
+        rootDb,
+        async (tx) => await readDeferredAppendStatesTx(tx, wake),
+      ),
+  );
+  if (before.isErr()) {
+    return Result.err(before.error);
+  }
+  write(deferredLine("owed", before.value));
+  if (mode === MODES.dryRun || before.value.count === 0) {
+    write(modeLine(mode, "applied: nothing owed"));
+    return Result.ok(0);
+  }
+  const applied = await withDatabase(ACCESS.write, async (rootDb) => {
+    let woken = 0;
+    for (let batch = 0; batch < WAKE_MAX_BATCHES; batch += 1) {
+      // db-await-in-loop: one bounded batch per transaction, each committed before the next
+      const step = await Result.tryPromise({
+        try: async () =>
+          await withAggregateTransaction(
+            rootDb,
+            async (tx) =>
+              await wakeDeferredAppendStatesBatchTx(
+                tx,
+                wake,
+                WAKE_BATCH_STATES,
+              ),
+          ),
+        catch: (cause) => cause,
+      });
+      if (step.isErr()) {
+        if (getPgErrorCode(step.error) === PG_ERROR.LOCK_NOT_AVAILABLE) {
+          return { woken, busy: true };
+        }
+        return panic("A deferred-state wake batch failed", step.error);
+      }
+      woken += step.value;
+      if (step.value < WAKE_BATCH_STATES) {
+        break;
+      }
+    }
+    return { woken, busy: false };
+  });
+  if (applied.isErr()) {
+    return Result.err(applied.error);
+  }
+  write(`applied: woke ${String(applied.value.woken)} state(s)`);
+  const after = await withDatabase(
+    ACCESS.read,
+    async (rootDb) =>
+      await withAggregateTransaction(
+        rootDb,
+        async (tx) => await readDeferredAppendStatesTx(tx, wake),
+      ),
+  );
+  if (after.isErr()) {
+    return Result.err(after.error);
+  }
+  write(deferredLine("left", after.value));
+  if (applied.value.busy) {
+    write(
+      `a lock stayed held past ${String(DEFERRED_WAKE_LOCK_TIMEOUT_MS)} ms (a flip holds the projection fence); rerun`,
+    );
+    return Result.ok(14);
+  }
+  if (after.value.count > 0) {
+    write(
+      "the states left were held by a writer when their batch ran, or past this run's batch cap; rerun",
+    );
+    return Result.ok(7);
+  }
+  return Result.ok(0);
+};
+
 type RunCorpusGenerationOptions = {
   args: readonly string[];
   withDatabase?: WithCorpusDatabase;
@@ -2509,6 +2657,8 @@ export const runCorpusGenerationCommand = async ({
         return await runProve(context, command.value);
       case "retire":
         return await runRetire(context, command.value);
+      case "wake-deferred":
+        return await runWakeDeferred(context, command.value);
       default:
         command.value satisfies never;
         return panic(`Unhandled command: ${String(command.value)}`);
