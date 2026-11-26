@@ -93,6 +93,7 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import {
+  isReadRefusal,
   readAbsent,
   type ReadOutcome,
   readOutcomeOfStatus,
@@ -3647,7 +3648,16 @@ const ecjUnreadVariant = (
 ): UnreadListedItem | undefined => {
   if (
     !(error instanceof AdapterFetchError) ||
-    error instanceof PublisherRateLimitRefusalError ||
+    error instanceof PublisherRateLimitRefusalError
+  ) {
+    return undefined;
+  }
+  const documentRefusal =
+    isReadRefusal(error.cause) && error.cause.scope === "document"
+      ? error.cause
+      : undefined;
+  if (
+    documentRefusal === undefined &&
     error.stopKind !== INGESTION_STOP_KIND.SOURCE_UNREACHABLE
   ) {
     return undefined;
@@ -3657,6 +3667,12 @@ const ecjUnreadVariant = (
     .find((row) => row !== undefined);
   if (listing === undefined) {
     return undefined;
+  }
+  if (documentRefusal !== undefined) {
+    return {
+      listing,
+      outcome: documentRefusal,
+    };
   }
   return {
     listing,
