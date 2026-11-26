@@ -19,12 +19,15 @@ type MemberBillingAccessCellProps = {
   memberId: string;
   role: OrganizationRoleName;
   billingAccess: boolean;
+  /** Whether the organization has time billing; the setting exists only then. */
+  timeBilling: boolean;
 };
 
 export const MemberBillingAccessCell = ({
   memberId,
   role,
   billingAccess,
+  timeBilling,
 }: MemberBillingAccessCellProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -52,6 +55,10 @@ export const MemberBillingAccessCell = ({
     }),
     onError: (error) => notifyUserError(error, t("errors.actionFailed")),
   });
+
+  if (!timeBilling) {
+    return null;
+  }
 
   if (roleGrant) {
     return (
