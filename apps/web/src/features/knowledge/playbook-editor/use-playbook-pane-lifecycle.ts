@@ -1,7 +1,7 @@
 import { useRef } from "react";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
+
 import { detached } from "@/lib/detached";
 
 import type { PlaybookSnapshot } from "./playbook-editor-sync.logic";

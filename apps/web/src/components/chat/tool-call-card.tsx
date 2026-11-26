@@ -25,6 +25,7 @@ import {
   CollapsibleTrigger,
 } from "@stll/ui/collapsible";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { ChevronRightIcon, CircleHelpIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { StatusMark } from "@stll/ui/status-mark";
@@ -72,7 +73,6 @@ import {
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { findInstalledSkillDisplayName } from "@/components/inspector/skill-display-name.logic";
 import Tooltip from "@/components/tooltip";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { usePresentationPrefs } from "@/lib/account/presentation-prefs/provider";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";

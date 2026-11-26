@@ -6,6 +6,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { ContextMenuSurface, EntityActions } from "@stll/ui/entity-actions";
 import { NewChatIcon, PanelRightIcon } from "@stll/ui/icons";
 import {
@@ -52,7 +53,6 @@ import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
 import { getInspectorView } from "@/components/inspector/view-registry";
 import Tooltip from "@/components/tooltip";
 import { useMainSkill } from "@/features/knowledge/use-main-skill";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";

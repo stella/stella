@@ -48,7 +48,7 @@ const { chatKeys } = await import("@/features/chat/chat-query-contract");
 const { useChatEditor } = await import("@/components/chat-editor-provider");
 const { toChatThreadId } = await import("@/lib/chat-thread-ref");
 const { EditorContent } = await import("@tiptap/react");
-const { useExternalSyncEffect } = await import("@/hooks/use-effect");
+const { useExternalSyncEffect } = await import("@stll/ui/effects");
 const { stellaToast } = await import("@stll/ui/toast");
 
 const actEnvironment: unknown = Reflect.get(

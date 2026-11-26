@@ -60,6 +60,7 @@ import type {
   FolioAIEditSeverity,
   FolioAIEditSnapshot,
 } from "@stll/folio-react";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { stellaToast } from "@stll/ui/toast";
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
@@ -173,8 +174,6 @@ import {
   useMakeSkillFromChat,
   useSaveDraftedSkill,
 } from "@/features/chat/use-make-skill-from-chat";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
@@ -1430,10 +1429,6 @@ const FileChatOverlayInner = ({
       };
     },
   );
-  // Active-file mode currently adds no approval blocks. Leave the context
-  // value absent until a real blocked tool exists.
-  const blockedApprovalTools = undefined;
-
   const getEditApplyMode =
     activeDocxEditModeState.type === "unavailable"
       ? undefined
@@ -1896,48 +1891,46 @@ const FileChatOverlayInner = ({
     await runFolioAgentCommentMutationTool(part);
   };
 
-  const handleApproveWithDocxUnlock = async (
-    approvalId: string,
-    toolName: ApprovalToolName,
-  ) => {
-    // folio-agents comment mutations are client-executed behind approval: once
-    // the user approves, run the operation against the live editor bridge and
-    // answer the tool call with its result. The auto-run tools (reads and
-    // `suggest_changes`) never reach here.
-    if (isFolioAgentCommentMutationToolName(toolName)) {
+  const handleApproveWithDocxUnlock = useLatestCallback(
+    async (approvalId: string, toolName: ApprovalToolName) => {
+      // folio-agents comment mutations are client-executed behind approval: once
+      // the user approves, run the operation against the live editor bridge and
+      // answer the tool call with its result. The auto-run tools (reads and
+      // `suggest_changes`) never reach here.
+      if (isFolioAgentCommentMutationToolName(toolName)) {
+        await approveAndRunFolioAgentCommentMutation({
+          approvalId,
+          approve: async () => await handleApprove(approvalId, toolName),
+          toolName,
+        });
+        return;
+      }
+
+      await handleApprove(approvalId, toolName);
+    },
+  );
+
+  const handleAllowInConversationWithFolioAgentCommentExecution =
+    useLatestCallback(
+      async (approvalId: string, toolName: ApprovalToolName) => {
+        await approveAndRunFolioAgentCommentMutation({
+          approvalId,
+          approve: async () =>
+            await handleAllowInConversation(approvalId, toolName),
+          toolName,
+        });
+      },
+    );
+
+  const handleAlwaysAllowWithFolioAgentCommentExecution = useLatestCallback(
+    async (approvalId: string, toolName: ApprovalToolName) => {
       await approveAndRunFolioAgentCommentMutation({
         approvalId,
-        approve: async () => await handleApprove(approvalId, toolName),
+        approve: async () => await handleAlwaysAllow(approvalId, toolName),
         toolName,
       });
-      return;
-    }
-
-    await handleApprove(approvalId, toolName);
-  };
-
-  const handleAllowInConversationWithFolioAgentCommentExecution = async (
-    approvalId: string,
-    toolName: ApprovalToolName,
-  ) => {
-    await approveAndRunFolioAgentCommentMutation({
-      approvalId,
-      approve: async () =>
-        await handleAllowInConversation(approvalId, toolName),
-      toolName,
-    });
-  };
-
-  const handleAlwaysAllowWithFolioAgentCommentExecution = async (
-    approvalId: string,
-    toolName: ApprovalToolName,
-  ) => {
-    await approveAndRunFolioAgentCommentMutation({
-      approvalId,
-      approve: async () => await handleAlwaysAllow(approvalId, toolName),
-      toolName,
-    });
-  };
+    },
+  );
 
   // Auto-run watcher for the client-executed, no-approval folio-agents tools:
   // the reads and the queue-only `suggest_changes`. Nothing else in the
@@ -2620,32 +2613,61 @@ const FileChatOverlayInner = ({
           );
         }
       : null;
+  // Bailed out of the React Compiler (scripts/react-compiler-bailouts.json),
+  // so the provider values are memoized by hand: a new object per render
+  // would re-render every consumer whenever this component renders.
+  const chatMatters = useMemo(
+    () => ({ createDocumentMattersView }),
+    [createDocumentMattersView],
+  );
+  const chatApproval = useMemo(
+    () => ({
+      activeOrganizationId,
+      approvalIdsAwaitedAtOpen,
+      browserGate,
+      alwaysApprovedTools,
+      conversationApprovedTools,
+      confirmStoredApprovalGrant,
+      handleAllowInConversation:
+        handleAllowInConversationWithFolioAgentCommentExecution,
+      handleAlwaysAllow: handleAlwaysAllowWithFolioAgentCommentExecution,
+      handleApprove: handleApproveWithDocxUnlock,
+      handleDeny,
+      handleApproveForRun,
+      handleRequestSecret,
+      continueRequestSecret,
+      handleConnectConnector,
+      continueConnectConnector,
+      resolveSecretTarget,
+      secretAvailabilityKey,
+      handleRetryAfterAuthorNameSet: resendLatestMessage,
+      // Active-file mode adds no approval blocks, so `blockedApprovalTools`
+      // stays absent until a real blocked tool exists.
+    }),
+    [
+      activeOrganizationId,
+      approvalIdsAwaitedAtOpen,
+      browserGate,
+      alwaysApprovedTools,
+      conversationApprovedTools,
+      confirmStoredApprovalGrant,
+      handleAllowInConversationWithFolioAgentCommentExecution,
+      handleAlwaysAllowWithFolioAgentCommentExecution,
+      handleApproveWithDocxUnlock,
+      handleDeny,
+      handleApproveForRun,
+      handleRequestSecret,
+      continueRequestSecret,
+      handleConnectConnector,
+      continueConnectConnector,
+      resolveSecretTarget,
+      secretAvailabilityKey,
+      resendLatestMessage,
+    ],
+  );
   return (
-    <ChatMattersContext value={{ createDocumentMattersView }}>
-      <ChatApprovalContext
-        value={{
-          activeOrganizationId,
-          approvalIdsAwaitedAtOpen,
-          browserGate,
-          alwaysApprovedTools,
-          conversationApprovedTools,
-          confirmStoredApprovalGrant,
-          handleAllowInConversation:
-            handleAllowInConversationWithFolioAgentCommentExecution,
-          handleAlwaysAllow: handleAlwaysAllowWithFolioAgentCommentExecution,
-          handleApprove: handleApproveWithDocxUnlock,
-          handleDeny,
-          handleApproveForRun,
-          handleRequestSecret,
-          continueRequestSecret,
-          handleConnectConnector,
-          continueConnectConnector,
-          resolveSecretTarget,
-          secretAvailabilityKey,
-          handleRetryAfterAuthorNameSet: resendLatestMessage,
-          blockedApprovalTools,
-        }}
-      >
+    <ChatMattersContext value={chatMatters}>
+      <ChatApprovalContext value={chatApproval}>
         {panelOpen && hasThreadContent && (
           <ChatThreadCard
             onCollapse={() => setPanelOpen(false)}

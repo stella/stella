@@ -25,6 +25,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CONTROL_SIZE } from "@stll/ui/control-size";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import {
   CheckIcon,
   ChevronRightIcon,
@@ -237,7 +238,6 @@ import { Switch } from "@/components/switch";
 import Tooltip from "@/components/tooltip";
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
 import { getWordEditAuthorName } from "@/features/chat/hooks/use-chat-user-context";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";

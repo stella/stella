@@ -4,12 +4,12 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
+import { useMountEffect } from "@stll/ui/effects";
 import { ClockIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools-types";
 import { chatThreadRecapOptions } from "@/features/chat/queries";
-import { useMountEffect } from "@/hooks/use-effect";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";

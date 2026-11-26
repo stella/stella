@@ -1,0 +1,5 @@
+{
+  "metric": "duplicate-token-blocks",
+  "delta": 2,
+  "reason": "The transcription run test and read-scaling case follow the translation run and similar-documents fixtures they mirror."
+}

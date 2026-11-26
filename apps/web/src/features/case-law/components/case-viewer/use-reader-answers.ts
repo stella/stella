@@ -10,8 +10,8 @@ import type {
   ReaderAnswerAnchor,
 } from "@stll/api-contract/reader-answers";
 import { Temporal } from "@stll/time";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getTranslator } from "@/i18n/translator";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";

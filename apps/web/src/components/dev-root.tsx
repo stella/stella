@@ -2,7 +2,8 @@ import { lazy, Suspense } from "react";
 
 import { useShallow } from "zustand/react/shallow";
 
-import { useMountEffect } from "@/hooks/use-effect";
+import { useMountEffect } from "@stll/ui/effects";
+
 import { installDevPerfBudget } from "@/lib/dev-perf-budget";
 import { useDevStore } from "@/lib/dev-store";
 

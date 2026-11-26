@@ -1,3 +1,5 @@
+import { useMountEffect } from "@stll/ui/effects";
+
 import {
   PdfSignPlacementControls,
   PdfSignPlacementPage,
@@ -7,7 +9,6 @@ import {
   attachPdfSignViewer,
   usePdfSignPlacementStore,
 } from "@/components/inspector/pdf-sign-placement-store";
-import { useMountEffect } from "@/hooks/use-effect";
 import { usePDFStore, usePDFStoreApi } from "@/lib/pdf/pdf-context";
 
 // The placement surface and controls, bound to the PDF viewer they sit in.

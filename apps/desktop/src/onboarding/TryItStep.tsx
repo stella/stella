@@ -38,7 +38,7 @@ import type { TryFeedback } from "./try-shortcut";
 const HINT_MS = 2600;
 
 /**
- * The last step: the user presses the real shortcut. Keycaps light up while
+ * Clipboard history: the user presses the real shortcut. Keycaps light up while
  * held and a wrong key is named, from ordinary key events while this window
  * is in front; no keystroke permission is involved. The press itself reaches
  * the native shortcut handler, which moves setup on.
@@ -196,11 +196,7 @@ export const TryItStep = ({ onBack, onContinue, snapshot }: StepProps) => {
       </div>
       <StepFooter
         onBack={onBack}
-        secondary={
-          <Button onClick={onContinue} variant="ghost">
-            {t("skip")}
-          </Button>
-        }
+        primary={<Button onClick={onContinue}>{t("continue")}</Button>}
         snapshot={snapshot}
       />
     </>

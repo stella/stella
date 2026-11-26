@@ -188,6 +188,7 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/outbound-actions/confirm.ts",
   "apps/api/src/handlers/outbound-actions/discard.ts",
   "apps/api/src/handlers/outbound-actions/read.ts",
+  "apps/api/src/handlers/recording-transcriptions/runs/create.ts",
   "apps/api/src/handlers/reports/exports/get.ts",
   "apps/api/src/handlers/reports/views/export.ts",
   "apps/api/src/handlers/seller-profiles/archive.ts",

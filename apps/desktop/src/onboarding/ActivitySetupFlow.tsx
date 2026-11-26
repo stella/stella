@@ -22,7 +22,8 @@ import type {
 } from "./activity-setup-steps";
 import { ActivitySetupScreenBody } from "./ActivitySetupScreens";
 import { moveFrom, shownScreen } from "./setup-screens";
-import { SetupStepper, Unread } from "./SetupScreenParts";
+import { Unread } from "./SetupScreenParts";
+import type { ScreenProgress } from "./StepFooter";
 import type { ActivitySetupControls } from "./use-activity-setup";
 
 /** The step's own actions, for the footer the step draws them in. */
@@ -33,6 +34,9 @@ type ActivitySetupActions = {
   /** Whether recording has started, paused or not. */
   recording: boolean;
   primary: ReactNode;
+  /** Where the screen on view is among the screens; none before they
+   *  load. */
+  screens: ScreenProgress | undefined;
   secondary: ReactNode;
 };
 
@@ -41,7 +45,7 @@ type ActivitySetupFlowProps = {
   drafts: BillingDraftSettingsControl;
   /** What leaving forward is called: Continue in the tour, Done after it. */
   finishLabel: string;
-  /** Names the steps above the title, such as "Activity". */
+  /** Names the screens, such as "Activity". */
   label: string;
   /** Before the first screen; absent where nothing comes before. */
   onLeaveBack?: (() => void) | undefined;
@@ -101,6 +105,7 @@ export const ActivitySetupFlow = ({
           onBack: onLeaveBack,
           primary: null,
           recording: false,
+          screens: undefined,
           secondary: (
             <Button onClick={onLeaveForward} variant="ghost">
               {skipLabel}
@@ -199,13 +204,6 @@ export const ActivitySetupFlow = ({
 
   return (
     <>
-      <SetupStepper
-        label={label}
-        names={screens.map((candidate) =>
-          t(`activitySetup.screens.${candidate}`),
-        )}
-        position={position}
-      />
       <div
         className="motion-safe:animate-swap-in flex min-h-0 flex-1 flex-col"
         data-activity-screen={screen}
@@ -261,6 +259,13 @@ export const ActivitySetupFlow = ({
           </Button>
         ),
         recording,
+        screens: {
+          label,
+          names: screens.map((candidate) =>
+            t(`activitySetup.screens.${candidate}`),
+          ),
+          position,
+        },
         secondary,
       })}
     </>

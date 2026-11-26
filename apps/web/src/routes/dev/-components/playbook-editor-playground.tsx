@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { QueryClientProvider } from "@tanstack/react-query";
 
+import { useMountEffect } from "@stll/ui/effects";
 import { ScrollArea } from "@stll/ui/scroll-area";
 
 import { PlaybookEditor } from "@/features/knowledge/playbook-editor/playbook-editor";
@@ -11,7 +12,6 @@ import {
   parkPlaybookPane,
 } from "@/features/knowledge/playbook-editor/playbook-pane-parking";
 import type { ParkedPlaybookPane } from "@/features/knowledge/playbook-editor/playbook-pane-parking";
-import { useMountEffect } from "@/hooks/use-effect";
 import type { api } from "@/lib/api";
 import { roleOptions } from "@/lib/auth-queries";
 import {

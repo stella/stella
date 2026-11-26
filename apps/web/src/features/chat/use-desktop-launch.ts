@@ -3,6 +3,8 @@ import { useSyncExternalStore } from "react";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { Result, TaggedError } from "better-result";
 
+import { useLatestCallback } from "@stll/ui/effects";
+
 import { getDesktopLaunch } from "@/features/chat/desktop-launch";
 import {
   type DesktopLaunchOutcome,
@@ -10,7 +12,6 @@ import {
   hasConnectedComputer,
 } from "@/features/chat/desktop-launch.logic";
 import { localRunnersOptions } from "@/features/chat/queries";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
 
 class ComputerReadError extends TaggedError("ComputerReadError")<{

@@ -16,6 +16,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { Label } from "@stll/ui/label";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -29,7 +30,6 @@ import {
   getCopyToMatterErrorKey,
   getCopyToMatterRootEntities,
 } from "@/components/workspaces/copy-to-matter-dialog.logic";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";

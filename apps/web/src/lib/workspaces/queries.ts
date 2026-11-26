@@ -198,22 +198,28 @@ export const workspacesRouteOptions = (
 export const workspacesNavigationOptions = (
   caller: WorkspaceNavigationCaller,
 ) =>
-  queryOptions({
-    queryKey: workspacesKeys.navigation(caller),
-    queryFn: async ({ signal }) => {
-      const page = await fetchWorkspaceNavigationPage({
-        signal,
-        statusScope: WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE,
-      });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: workspacesKeys.navigation(caller),
+      queryFn: async ({ signal }) => {
+        const page = await fetchWorkspaceNavigationPage({
+          signal,
+          statusScope: WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE,
+        });
 
-      rememberTimeBillingAccess(
-        caller.organizationId,
-        page.features.timeBilling,
-      );
-      return { workspaces: page.workspaces, features: page.features };
+        rememberTimeBillingAccess(
+          caller.organizationId,
+          page.features.timeBilling,
+        );
+        return { workspaces: page.workspaces, features: page.features };
+      },
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    }),
+    {
+      resources: [RESOURCE_TYPE.WORKSPACE],
+      scope: { type: "organization", organizationId: caller.organizationId },
     },
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-  });
+  );
 
 export const workspaceOptions = (workspaceId: string) =>
   resourceQueryOptions(

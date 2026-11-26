@@ -1,7 +1,8 @@
 import type { RefObject } from "react";
 
+import { useMountEffect } from "@stll/ui/effects";
+
 import { copyChatSelection } from "@/components/chat/chat-transcript-copy.logic";
-import { useMountEffect } from "@/hooks/use-effect";
 
 type ChatTranscriptCopyProps = {
   rootRef: RefObject<HTMLElement | null>;

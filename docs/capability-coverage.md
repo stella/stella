@@ -521,6 +521,13 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `rates.resolve` | read | stella:read | FEATURE_TIME_BILLING | curated tool `resolve_rate` |
 | `rates.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates update` |
 
+## recording-transcriptions
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `recording-transcriptions.runs.create` | write | stella:matters_write | — | generic invoke → `stella capability recording-transcriptions runs-create` |
+| `recording-transcriptions.runs.get` | read | stella:read | — | generic invoke → `stella capability recording-transcriptions runs-get` |
+
 ## reports
 
 | Capability | Access | Scope | Feature | Reachable via |

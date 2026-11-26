@@ -75,6 +75,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Authenticated confirmation of a user's prepared outbound actions is available on every deployment",
   ],
   [
+    "/v1/workspaces/:workspaceId/recording-transcriptions",
+    "Transcribing a recording in a matter enforces the dictation kill switch, matter access, document create permission, provider availability and usage admission on every deployment, as authenticated dictation does",
+  ],
+  [
     "/v1/saved-searches",
     "The caller's private saved searches support search on every deployment",
   ],

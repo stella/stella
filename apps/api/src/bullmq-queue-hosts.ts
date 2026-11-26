@@ -23,6 +23,7 @@ export const BULLMQ_QUEUE_HOSTS = {
   "legal-list-verification-runs": "api",
   "organization-data-exports": "api",
   "push-notifications": "api",
+  "recording-transcriptions": "api",
   "report-exports": "api",
   "style-set-package-cleanup": "api",
   "timer-activity-updates": "api",

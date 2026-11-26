@@ -8,13 +8,12 @@ import {
   readerBlockByAnchor,
 } from "@stll/decision-reader/reader-landing";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 
 import {
   heldAnchorTarget,
   type HeldDecisionAnchor,
 } from "@/features/case-law/decision-anchor-resolution.logic";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { revealEnclosingDisclosures } from "@/lib/platform/reveal-disclosures";
 
 import { decisionParagraphLanding } from "./decision-paragraph-landing.logic";

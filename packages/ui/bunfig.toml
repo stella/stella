@@ -3,5 +3,9 @@
 auto = "disable"
 
 [test]
-# Kills a test process whose event loop stops turning.
-preload = ["../../packages/scripts/src/test-event-loop-watchdog.ts"]
+preload = [
+  # Kills a test process whose event loop stops turning.
+  "../../packages/scripts/src/test-event-loop-watchdog.ts",
+  # Fails a test whose React tree renders in a loop.
+  "../../packages/render-probe/src/dom-test-preload.ts",
+]

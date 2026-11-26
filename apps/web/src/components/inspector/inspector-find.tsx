@@ -1,16 +1,20 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useLayoutSyncEffect,
+  useMountEffect,
+} from "@stll/ui/effects";
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { SEARCH_HIT_MARK, textMarkHighlightRule } from "@stll/ui/text-mark";
 
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFindSurface } from "@/lib/find-owner";
 import { revealEnclosingDisclosures } from "@/lib/platform/reveal-disclosures";
 
@@ -356,7 +360,7 @@ export const useInspectorFind = ({
     },
   );
 
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     applyFind({
       activeIndex,
       enabled,

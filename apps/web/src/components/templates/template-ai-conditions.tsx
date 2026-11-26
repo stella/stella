@@ -17,6 +17,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
@@ -33,8 +34,6 @@ import {
   readConditionOverrides,
 } from "@/components/templates/template-ai-conditions.logic";
 import type { ResolvedField } from "@/components/templates/template-discover-types";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { optionalReadonlyArray } from "@/lib/arrays";

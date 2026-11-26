@@ -61,9 +61,11 @@ export { default as indexes_apikey_personal_owner_keyset_idx } from "./online-mi
 export { default as indexes_audit_logs_org_people_created_id_idx } from "./online-migration-entries/indexes-audit-logs-org-people-created-id-idx";
 export { default as indexes_case_law_citations_doctrine_cited_idx } from "./online-migration-entries/indexes-case-law-citations-doctrine-cited-idx";
 export { default as indexes_case_law_citations_identifier_backfill_match_key_idx } from "./online-migration-entries/indexes-case-law-citations-identifier-backfill-match-key-idx";
+export { default as indexes_case_law_citations_identifier_match_key_pending_idx } from "./online-migration-entries/indexes-case-law-citations-identifier-match-key-pending-idx";
 export { default as indexes_case_law_citations_polarity_pending_idx } from "./online-migration-entries/indexes-case-law-citations-polarity-pending-idx";
 export { default as indexes_case_law_citations_reopenable_identifier_match_key_idx } from "./online-migration-entries/indexes-case-law-citations-reopenable-identifier-match-key-idx";
 export { default as indexes_case_law_citations_reopenable_match_key_idx } from "./online-migration-entries/indexes-case-law-citations-reopenable-match-key-idx";
+export { default as indexes_case_law_citations_reopenable_stored_match_key_idx } from "./online-migration-entries/indexes-case-law-citations-reopenable-stored-match-key-idx";
 export { default as indexes_case_law_court_date_published_index } from "./online-migration-entries/indexes-case-law-court-date-published-index";
 export { default as indexes_case_law_coverage_index } from "./online-migration-entries/indexes-case-law-coverage-index";
 export { default as indexes_case_law_decision_identifiers_match_key_idx } from "./online-migration-entries/indexes-case-law-decision-identifiers-match-key-idx";
@@ -191,6 +193,7 @@ export { default as repairs_chat_limit_reminder_on_reset_constraint_validations 
 export { default as repairs_chat_run_text_boundaries } from "./online-migration-entries/repairs-chat-run-text-boundaries";
 export { default as repairs_chat_turn_ordinal_backfill } from "./online-migration-entries/repairs-chat-turn-ordinal-backfill";
 export { default as repairs_chat_turns_handed_over_constraint_validations } from "./online-migration-entries/repairs-chat-turns-handed-over-constraint-validations";
+export { default as repairs_citation_identifier_match_key } from "./online-migration-entries/repairs-citation-identifier-match-key";
 export { default as repairs_citation_polarity_evidence } from "./online-migration-entries/repairs-citation-polarity-evidence";
 export { default as repairs_client_invoice_backfill } from "./online-migration-entries/repairs-client-invoice-backfill";
 export { default as repairs_client_invoice_constraint_validations } from "./online-migration-entries/repairs-client-invoice-constraint-validations";

@@ -15,8 +15,7 @@ import { useState } from "react";
 import type { RefObject } from "react";
 
 import type { DocxEditorRef, FolioAIBlock } from "@stll/folio-react";
-
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 /** Stable empty read: a fresh `[]` per render would re-run every consumer. */
 const NO_BLOCKS: readonly FolioAIBlock[] = [];

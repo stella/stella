@@ -9,10 +9,11 @@
  * Motion is left on, as a reader has it: a transition's phases are commits.
  */
 
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
 import { RENDER_COMMIT_COUNT_GLOBAL } from "../../src/lib/render-storm-canary";
 import { menuCommitBenches } from "../../src/routes/dev/-visual-metadata";
+import { test } from "../helpers/storm-watch-fixture";
 
 // A page without the counter (a production build, or the canary no longer
 // around the app) measures nothing, and every budget would pass on zero.

@@ -1,0 +1,3 @@
+{
+  "features": ["documents", "clipboard", "signing", "dictation", "activity"]
+}

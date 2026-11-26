@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ComponentProps } from "react";
 
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { RotateCcwIcon } from "@stll/ui/icons";
 
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
@@ -15,7 +16,6 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import type { SuggestedFollowupsProps } from "@/features/chat/components/suggested-followups";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { createPlaygroundChatApproval } from "@/routes/dev/-components/playground-chat-approval";
 
 import { CHAT_CITATIONS_CASSETTE } from "./chat-citations-cassette";

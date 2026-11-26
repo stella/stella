@@ -24,7 +24,7 @@ const { IntlProvider } = await import("use-intl");
 const { Menu, MenuTrigger, MenuPopup } = await import("@stll/ui/menu");
 const { ChatEditorProvider, useChatEditorManager } =
   await import("@/components/chat-editor-provider");
-const { useMountEffect } = await import("@/hooks/use-effect");
+const { useMountEffect } = await import("@stll/ui/effects");
 const { toSafeId } = await import("@/lib/safe-id");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { AuthenticatedUserProvider } =

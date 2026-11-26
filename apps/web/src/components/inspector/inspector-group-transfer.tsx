@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -14,12 +14,12 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { useIsMounted, useLatestCallback } from "@stll/ui/effects";
 
 import { openEntityFileFieldInInspector } from "@/components/chat/entity-open";
 import { planInspectorGroupTransfer } from "@/components/inspector/inspector-group-transfer.logic";
 import { getInspectorTabGroupId } from "@/components/inspector/inspector-groups.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -79,20 +79,13 @@ export const useInspectorGroupTransfer = (
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submittingRef = useRef(false);
-  const mountedRef = useRef(true);
+  const isMounted = useIsMounted();
   const getActiveScope = useLatestCallback(() => ({
     activeOrganizationId,
     userId,
   }));
-  useLayoutEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
   const isCurrentScope = (scope: TransferScope): boolean => {
-    if (!mountedRef.current) {
+    if (!isMounted()) {
       return false;
     }
     const currentScope = getActiveScope();
@@ -224,7 +217,7 @@ export const useInspectorGroupTransfer = (
       };
       if (!isCurrentScope(requestScope)) {
         submittingRef.current = false;
-        if (mountedRef.current) {
+        if (isMounted()) {
           setIsSubmitting(false);
           setPending(null);
         }
@@ -283,7 +276,7 @@ export const useInspectorGroupTransfer = (
     const copiedFieldId = copiedFile.fieldId;
     if (!isCurrentScope(requestScope)) {
       submittingRef.current = false;
-      if (mountedRef.current) {
+      if (isMounted()) {
         setIsSubmitting(false);
         setPending(null);
       }
@@ -323,7 +316,7 @@ export const useInspectorGroupTransfer = (
     }
     if (!isCurrentScope(requestScope)) {
       submittingRef.current = false;
-      if (mountedRef.current) {
+      if (isMounted()) {
         setIsSubmitting(false);
         setPending(null);
       }

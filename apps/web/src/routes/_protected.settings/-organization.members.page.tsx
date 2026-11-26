@@ -15,6 +15,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
+import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { roleOptions } from "@/lib/auth-queries";
 import {
@@ -99,6 +100,7 @@ export const MembersPage = () => {
 
   const removeMember = useRemoveMember();
   const cancelInvitation = useCancelInvitation();
+  const timeBilling = useTimeBillingPreviewEnabled();
   const inviteMember = useInviteMember();
 
   return (
@@ -198,6 +200,7 @@ export const MembersPage = () => {
                     memberId={member.id}
                     role={member.role}
                     billingAccess={member.billingAccess}
+                    timeBilling={timeBilling}
                   />
                 ),
                 joined: (

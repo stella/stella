@@ -7,6 +7,7 @@ import { matterChromeStyle } from "@stll/ui/matter-colors";
 import { E2E_API_ORIGIN } from "../helpers/api";
 import { findChromeDividerProblems } from "../helpers/chrome-divider";
 import { installContentSecurityPolicyCollector } from "../helpers/content-security-policy";
+import { newWatchedContext } from "../helpers/storm-watch-fixture";
 import { expect, test } from "../helpers/test";
 import {
   PLAYWRIGHT_EXPECT_TIMEOUT_1_SECOND_MS,
@@ -34,7 +35,7 @@ const organizationSchema = v.object({
 // install button) legitimately differ by session and are absent here, so
 // the text compared is exactly what the server sent.
 async function renderServerDocument(browser: Browser, html: string) {
-  const isolated = await browser.newContext();
+  const isolated = await newWatchedContext(browser);
   try {
     await isolated.route("**/*", async (route) => {
       await route.abort();

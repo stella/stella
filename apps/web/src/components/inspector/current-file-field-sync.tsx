@@ -1,6 +1,8 @@
-import { useLayoutEffect, useState } from "react";
+import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+
+import { useExternalSyncEffect, useLayoutSyncEffect } from "@stll/ui/effects";
 
 import {
   resolveFileFieldPropertyId,
@@ -12,7 +14,6 @@ import {
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
 import { useSelectedFileVersionMissing } from "@/components/inspector/versions-facet";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { APIError } from "@/lib/errors/api";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 
@@ -88,7 +89,7 @@ export const CurrentFileFieldSync = ({
     }
   }, [closeTab, hasNothingLeftToShow, tab.id]);
 
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     if (activeFileField !== undefined) {
       currentFileFieldIdsByProperty.set(
         activeFileField.propertyId,

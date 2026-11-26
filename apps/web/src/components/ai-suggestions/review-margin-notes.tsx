@@ -23,13 +23,12 @@ import { useTranslations } from "use-intl";
 import type { DocxEditorRef, FolioAIBlock } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { ChevronDownIcon, ChevronUpIcon } from "@stll/ui/icons";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { layoutMarginNotes } from "@/components/ai-suggestions/review-margin-notes.logic";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { TranslationKey } from "@/i18n/types";
 
 /** The least space between two notes, in px. Below this they read as one. */

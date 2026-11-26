@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 
 import type { AISuggestionPreset } from "@stll/folio-react";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { useIsMobile } from "@stll/ui/use-mobile";
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
@@ -22,7 +23,6 @@ import {
   lookupLegalDocumentChatThread,
   useLegalDocumentChatThreads,
 } from "@/features/chat/legal-document-chat-threads";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";

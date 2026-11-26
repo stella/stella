@@ -8,5 +8,5 @@ export const REACT_COMPILER_OPTIONS = {
 export const REACT_COMPILER_EXCLUDE = [
   /[/\\]node_modules[/\\]/u,
   // Sanctioned wrappers accept opaque callbacks and dependency arrays.
-  /[/\\]src[/\\]hooks[/\\]use-effect\.ts$/u,
+  /(?:^|[/\\])packages[/\\]ui[/\\]src[/\\]effects[/\\]/u,
 ];

@@ -98,6 +98,8 @@ const EXPECTED_SITES: Record<string, string> = {
     "serverBuiltFileEncryption()",
   "src/lib/flows/flow-executor.ts:createEntity:0":
     "serverBuiltFileEncryption()",
+  "src/lib/recording-transcription/run-queue.ts:createEntityFromBuffer:0":
+    "serverBuiltFileEncryption()",
   "src/lib/review-organization/seed.ts:createEntityFromBuffer:0":
     "serverBuiltFileEncryption()",
   "src/lib/uploads/entity-create.ts:fileContentWithMintedObject:0":

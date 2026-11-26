@@ -171,6 +171,11 @@ export const brandPersistedDocumentTranslationRunId = (
 ): SafeId<"documentTranslationRun"> =>
   toSafeId<"documentTranslationRun">(runId);
 
+export const brandPersistedRecordingTranscriptionRunId = (
+  runId: string,
+): SafeId<"recordingTranscriptionRun"> =>
+  toSafeId<"recordingTranscriptionRun">(runId);
+
 export const brandPersistedLegalListId = (
   listId: string,
 ): SafeId<"legalList"> => toSafeId<"legalList">(listId);

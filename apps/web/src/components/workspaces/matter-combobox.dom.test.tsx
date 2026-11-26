@@ -24,7 +24,6 @@ const { workspacesNavigationOptions } =
 const { groupedChatThreadsOptions } = await import("@/features/chat/queries");
 const { usePinnedStore } = await import("@/lib/pinned-store");
 const { resolveMatterColor } = await import("@stll/ui/matter-colors");
-const { RenderLoopGuard } = await import("@/testing/render-loop-guard");
 const { MatterCombobox } = await import("./matter-combobox");
 
 type MatterOption = Parameters<typeof MatterCombobox>[0]["value"];
@@ -178,15 +177,13 @@ const openCombobox = (
     );
   };
   const ui = testing.render(
-    <RenderLoopGuard>
-      <QueryClientProvider client={client}>
-        <IntlProvider locale="en" messages={messages} timeZone="UTC">
-          <Profiler id="matter-combobox" onRender={onCommit}>
-            <Host />
-          </Profiler>
-        </IntlProvider>
-      </QueryClientProvider>
-    </RenderLoopGuard>,
+    <QueryClientProvider client={client}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <Profiler id="matter-combobox" onRender={onCommit}>
+          <Host />
+        </Profiler>
+      </IntlProvider>
+    </QueryClientProvider>,
   );
   const input = ui.getByRole("combobox");
   if (!(input instanceof HTMLInputElement)) {

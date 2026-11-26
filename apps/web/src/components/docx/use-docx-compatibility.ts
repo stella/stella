@@ -1,8 +1,7 @@
 import { useState } from "react";
 
 import type { DocxCompatibility } from "@stll/folio-react";
-
-import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useLatestCallback } from "@stll/ui/effects";
 
 type UseDocxCompatibilityOptions = {
   /** The document the verdict belongs to; a verdict for another is stale. */

@@ -16,9 +16,10 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+import { useExternalSyncEffect } from "@stll/ui/effects";
+
 import { DocxBrowserEditor } from "@/components/docx/docx-browser-editor";
 import { InspectorPdfErrorFallback } from "@/components/inspector/inspector-pdf-error-fallback";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 import { DocxEditorActionBarOutlet } from "./docx-editor-action-bar";
 import {

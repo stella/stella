@@ -12,6 +12,7 @@ import {
 } from "@stll/folio-react";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useExternalSyncEffect, useMountEffect } from "@stll/ui/effects";
 import type { LucideIcon } from "@stll/ui/icons";
 import {
   AiActionIcon,
@@ -30,7 +31,6 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { BlockGestureKind } from "@/features/knowledge/views/templates/directive-kinds";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";

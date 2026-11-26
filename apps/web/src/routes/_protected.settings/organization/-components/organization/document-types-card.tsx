@@ -25,6 +25,7 @@ import {
   AlertDialogTitle,
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { EntityActions, EntityActionsButton } from "@stll/ui/entity-actions";
 import type { EntityAction } from "@stll/ui/entity-actions";
 import { Form } from "@stll/ui/form";
@@ -43,8 +44,6 @@ import {
   withDropAnnouncementData,
 } from "@/components/drag-and-drop-live-region.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useSingleFlight } from "@/hooks/use-single-flight";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";

@@ -110,14 +110,7 @@ export const DictationCustomWords = ({
         }
         id={ROW_ID}
         title={t("title")}
-      >
-        <span className="text-muted-foreground text-sm tabular-nums">
-          {t("count", {
-            count: words.length,
-            limit: MAX_TRANSCRIPTION_VOCABULARY_TERMS,
-          })}
-        </span>
-      </SettingsRow>
+      />
       <li className="px-4 py-2.5">
         <Form
           density="compact"
@@ -176,7 +169,7 @@ export const DictationCustomWords = ({
         </li>
       )}
       {words.length > 0 && (
-        <li className="px-4 pb-3">
+        <li className="flex flex-col gap-2 px-4 pb-3">
           <ul aria-label={t("group")} className="flex flex-wrap gap-1.5">
             {words.map((word) => (
               <li
@@ -198,6 +191,16 @@ export const DictationCustomWords = ({
               </li>
             ))}
           </ul>
+          {/* How full the list is: a quiet caption under the words. */}
+          <p
+            className="text-muted-foreground text-xs tabular-nums"
+            data-slot="custom-words-count"
+          >
+            {t("count", {
+              count: words.length,
+              limit: MAX_TRANSCRIPTION_VOCABULARY_TERMS,
+            })}
+          </p>
         </li>
       )}
     </SettingsSection>

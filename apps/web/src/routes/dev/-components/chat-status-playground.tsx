@@ -5,6 +5,7 @@ import {
   type ChatStepLedger,
 } from "@stll/api-contract/chat-step-ledger";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { RotateCcwIcon } from "@stll/ui/icons";
 
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
@@ -17,7 +18,6 @@ import type {
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { createPlaygroundChatApproval } from "@/routes/dev/-components/playground-chat-approval";
 
 const QUESTION = {

@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import {
   AiActionIcon,
   AlertTriangleIcon,
@@ -54,7 +55,6 @@ import { AIPromptInput } from "@/components/ai-prompt-input/ai-prompt-input";
 import { SKILL_CHIP_CATALOG } from "@/components/chat-editor-slash-items";
 import { FormulaEditor } from "@/components/conditions/formula-editor";
 import Tooltip from "@/components/tooltip";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";

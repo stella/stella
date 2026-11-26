@@ -561,14 +561,14 @@ const RESTRICTED_IMPORT_RULES = {
         "state in render, do the work in the event handler, fetch with " +
         "TanStack Query, or reset with `key`. For genuine external-system " +
         "sync use useMountEffect or useExternalSyncEffect from " +
-        "@/hooks/use-effect. See the convention: /conventions-use-effect.",
+        "@stll/ui/effects. See the convention: /conventions-use-effect.",
       modules: [packageWithSubpaths("react")],
       restriction: {
         type: "exports",
         names: new Set(["useEffect"]),
         hit: EXPORT_HIT.call,
       },
-      owners: ["apps/web/src/hooks/use-effect.ts"],
+      owners: ["packages/ui/src/effects/effects.ts"],
     },
   ],
   // A retention projection reads the publisher's stored raw and nothing a

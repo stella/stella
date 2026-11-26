@@ -1,6 +1,7 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 
 import { findChromeDividerProblems } from "../helpers/chrome-divider";
+import { test } from "../helpers/storm-watch-fixture";
 
 test.use({ storageState: { cookies: [], origins: [] } });
 

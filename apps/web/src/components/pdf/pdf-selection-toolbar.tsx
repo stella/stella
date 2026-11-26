@@ -8,6 +8,7 @@ import type {
   ReaderAnnotationStyle,
 } from "@stll/api-contract/legal-reader-annotations";
 import { Button } from "@stll/ui/button";
+import { useLatestCallback, useMountEffect } from "@stll/ui/effects";
 import { AddCommentIcon } from "@stll/ui/icons";
 
 import { composerText } from "@/components/chat-editor-source";
@@ -38,8 +39,6 @@ import {
   scrollMovesSelection,
   selectionToolbarAnchor,
 } from "@/components/selection-toolbar.logic";
-import { useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useMessageLocale } from "@/i18n/message-locale";
 
 /**

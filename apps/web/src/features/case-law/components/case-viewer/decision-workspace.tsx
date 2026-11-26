@@ -28,6 +28,11 @@ import {
 } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useMountEffect,
+} from "@stll/ui/effects";
 import { ScrollTextIcon, SparklesIcon, UserRoundIcon } from "@stll/ui/icons";
 import { InspectorRailIconButton } from "@stll/ui/inspector";
 import { Loader } from "@stll/ui/loader";
@@ -123,8 +128,6 @@ import type { PublicCaseLawDecision } from "@/features/case-law/public-decision"
 import { decisionCitationSummaryOptions } from "@/features/case-law/queries/citations";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useHeldDecisionAnchors } from "@/features/case-law/use-held-decision-anchors";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useReaderProvisionMode } from "@/hooks/use-reader-provision-mode";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";

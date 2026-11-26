@@ -32,6 +32,12 @@ import {
 import { UploadIcon } from "@stll/ui/icons";
 import "@stll/folio-react/editor.css";
 
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useMountEffect,
+} from "@stll/ui/effects";
+
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { shouldUseDocxBrowserEditor } from "@/components/docx/docx-browser-editor.logic";
 import { DocxEditorActionBar } from "@/components/docx/docx-editor-action-bar";
@@ -64,8 +70,6 @@ import { RouteDocumentTitle } from "@/components/route-document-title";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
 import { RecoverableViewerBoundary } from "@/components/viewer/recoverable-viewer-boundary";
 import { useSyncJustifications } from "@/components/workspaces/hooks/use-sync-justifications";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import { getAnalytics } from "@/lib/analytics/provider";

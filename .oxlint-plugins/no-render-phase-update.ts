@@ -1,5 +1,6 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import { EFFECTS_OWNER_DIRECTORY } from "./no-effect-state-write.ts";
 import rawBaselineCounts from "./no-render-phase-update-baseline.json" with { type: "json" };
 import {
   getPropertyName,
@@ -318,6 +319,10 @@ export default eslintCompatPlugin({
               options !== null &&
               Reflect.get(options, "census") === true;
             const file = repoRelativeFilename(context);
+            // `useKeyedState` owns the one keyed reset during render.
+            if (file.startsWith(EFFECTS_OWNER_DIRECTORY)) {
+              return;
+            }
             const baseline = census ? 0 : (baselineCounts[file] ?? 0);
             for (const finding of findings.slice(baseline)) {
               context.report(finding);
