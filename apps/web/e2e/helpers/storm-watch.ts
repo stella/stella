@@ -192,12 +192,18 @@ export type StormWatchPageCheck = PageCheck & {
  */
 export const stormWatchChecks = async (
   context: BrowserContext,
-  page: Page,
+  page: Page | null,
 ): Promise<StormWatchPageCheck[]> => {
   const forwarded =
     forwardedReports.get(context) ??
     new Map<Page, StormWatchViolationReport[]>();
-  const pages = [...new Set([page, ...context.pages(), ...forwarded.keys()])];
+  const pages = [
+    ...new Set([
+      ...(page === null ? [] : [page]),
+      ...context.pages(),
+      ...forwarded.keys(),
+    ]),
+  ];
   const checks: StormWatchPageCheck[] = [];
   for (const [index, checked] of pages.entries()) {
     const result = await checkPage(checked, () => forwarded.get(checked) ?? []);
@@ -211,7 +217,7 @@ export const stormWatchChecks = async (
 /** Record every page's result on the test; fail it in `enforce` mode. */
 export const checkStormWatch = async (
   context: BrowserContext,
-  page: Page,
+  page: Page | null,
   testInfo: TestInfo,
 ) => {
   const mode = stormWatchMode();

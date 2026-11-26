@@ -85,7 +85,7 @@ import {
   type SmokeWorld,
 } from "../helpers/smoke-route-defs";
 import { getSmokeWorlds } from "../helpers/smoke-world";
-import { test } from "../helpers/storm-watch-fixture";
+import { newWatchedContext, test } from "../helpers/storm-watch-fixture";
 import { createBrowserErrorCollector } from "../helpers/test";
 import { listTimeBillingRoutes } from "../helpers/time-billing-routes";
 import { measureLoadingGeometry } from "../helpers/time-loading-geometry";
@@ -1139,7 +1139,7 @@ const openCleanPage = async (
     | string
     | Awaited<ReturnType<APIRequestContext["storageState"]>> = STORAGE_STATE,
 ): Promise<{ context: BrowserContext; page: Page }> => {
-  const context = await browser.newContext({ storageState });
+  const context = await newWatchedContext(browser, { storageState });
   try {
     // Guards the clean start: the page must not inherit browser storage that
     // an earlier route wrote into a shared context.
@@ -1172,7 +1172,9 @@ let seededStorageKeysPromise: Promise<string[]> | null = null;
 // Read once from a context no page has ever used.
 const seededStorageKeys = async (browser: Browser): Promise<string[]> => {
   seededStorageKeysPromise ??= (async () => {
-    const pristine = await browser.newContext({ storageState: STORAGE_STATE });
+    const pristine = await newWatchedContext(browser, {
+      storageState: STORAGE_STATE,
+    });
     try {
       return storedKeys(await pristine.storageState());
     } finally {
