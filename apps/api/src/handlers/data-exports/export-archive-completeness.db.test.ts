@@ -153,6 +153,7 @@ const TABLE_CLASSIFICATIONS = {
   businessRegistryCredentials: FORMAT_SCOPE_EXCLUSION,
   caseLawAnalysisFailures: RESEARCH_CORPUS_EXCLUSION,
   caseLawBrowseFacetCounts: RESEARCH_CORPUS_EXCLUSION,
+  caseLawCitationArrivals: RESEARCH_CORPUS_EXCLUSION,
   caseLawCitationAuthoritySweep: RESEARCH_CORPUS_EXCLUSION,
   caseLawCitationDoctrineReviews: RESEARCH_CORPUS_EXCLUSION,
   caseLawCitationResolutionCensus: RESEARCH_CORPUS_EXCLUSION,

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { TemplateNumberingLevel } from "@/api/lib/templates/house-style/folio-contract";
 import {
   REFERENCE_FIELD_SWITCHES,
+  selectLabelField,
   selectReferenceField,
 } from "@/api/lib/templates/house-style/reference-fields";
 
@@ -193,4 +194,119 @@ describe("selectReferenceField in the template's scheme", () => {
     expect(reasonOf("%2.", [1])).toBe("unrenderable-level");
     expect(reasonOf("•", [1])).toBe("unrenderable-level");
   });
+});
+
+describe("selectLabelField", () => {
+  /** A citation of `label`: the field for the designator `designator`
+   *  found in `text`. */
+  const cite = (
+    text: string,
+    designator: string,
+    label: string,
+    levelText = "Čl. %1",
+    keepsSourceNumbers = false,
+  ) => {
+    const start = text.lastIndexOf(designator);
+    return selectLabelField({
+      text,
+      start,
+      end: start + designator.length,
+      levelText,
+      label,
+      keepsSourceNumbers,
+    });
+  };
+
+  test.each([
+    // citing text, designator, label, switches, field text
+    [
+      "podle čl. 3 této smlouvy",
+      "3",
+      "Čl. 3",
+      String.raw`\n \* lower \h`,
+      "čl. 3",
+    ],
+    ["Čl. 3 stanoví jinak.", "3", "Čl. 3", String.raw`\n \h`, "Čl. 3"],
+    [
+      "VIZ ČL. 12 SMLOUVY",
+      "12",
+      "Čl. 12",
+      String.raw`\n \* Upper \h`,
+      "ČL. 12",
+    ],
+    ["podle Čl. IV smlouvy", "IV", "Čl. IV", String.raw`\n \h`, "Čl. IV"],
+  ] as const)(
+    "%p citing %p of %p is the field %p",
+    (text, designator, label, instruction, expectedText) => {
+      expect(cite(text, designator, label).unwrap()).toEqual({
+        instruction,
+        expectedText,
+        start: text.indexOf(expectedText),
+        text: "kept",
+      });
+    },
+  );
+
+  test("the label's closing period is not part of the field's text", () => {
+    expect(
+      cite(
+        "gemäß Art. 3 dieses Vertrages",
+        "3",
+        "Art. 3.",
+        "Art. %1.",
+      ).unwrap(),
+    ).toMatchObject({ instruction: String.raw`\n \h`, expectedText: "Art. 3" });
+  });
+
+  test("under another numbering the field shows the new label in the citation's spelling", () => {
+    expect(cite("podle čl. 7 této smlouvy", "7", "Čl. 2").unwrap()).toEqual({
+      instruction: String.raw`\n \* lower \h`,
+      expectedText: "čl. 2",
+      start: 6,
+      text: "renumbered",
+    });
+  });
+
+  test("a label that prints more behind its number than a closing period has no such field", () => {
+    for (const [text, label, levelText] of [
+      // The citation's own "bis" would stay behind the field's.
+      ["podle čl. 3 bis této smlouvy", "Čl. 3 bis", "Čl. %1 bis"],
+      ["podle čl. 3 této smlouvy", "Čl. 3)", "Čl. %1)"],
+    ] as const) {
+      const field = cite(text, "3", label, levelText);
+      expect(field.isErr() && field.error.reason).toBe("designator-mismatch");
+    }
+  });
+
+  test("keeping the source's numbers, the field must print the cited number", () => {
+    const field = cite(
+      "podle čl. 7 této smlouvy",
+      "7",
+      "Čl. 2",
+      "Čl. %1",
+      true,
+    );
+    expect(field.isErr() && field.error.reason).toBe("designator-mismatch");
+    expect(
+      cite("podle čl. 2 této smlouvy", "2", "Čl. 2", "Čl. %1", true).isOk(),
+    ).toBe(true);
+  });
+
+  test.each([
+    // A lower-case format would print `čl. iv`.
+    ["podle čl. IV smlouvy", "IV", "Čl. IV", "case-not-reproducible"],
+    ["podle čL. 3 smlouvy", "3", "Čl. 3", "case-not-reproducible"],
+    // A no-break space where the label has a plain blank.
+    ["podle čl.\u00A03 smlouvy", "3", "Čl. 3", "blank-differs"],
+    // Other words than the label's, or the label's words inside a longer one.
+    ["podle článku 3 smlouvy", "3", "Čl. 3", "punctuated-words"],
+    ["viz 3 smlouvy", "3", "Čl. 3", "punctuated-words"],
+    ["podle pročl. 3 smlouvy", "3", "Čl. 3", "punctuated-words"],
+  ] as const)(
+    "%p citing %p of %p stays text: %s",
+    (text, designator, label, reason) => {
+      const field = cite(text, designator, label);
+      expect(field.isErr() && field.error.reason).toBe(reason);
+    },
+  );
 });

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 /**
  * Inspector chat tab — full-fat chat surface backed by the same
  * `/chat` endpoint, persistence layer, and `useChat` runtime as the
@@ -735,30 +735,57 @@ export const ChatTabPanel = ({
     },
   );
 
+  // Bailed out of the React Compiler (scripts/react-compiler-bailouts.json),
+  // so the provider values are memoized by hand: a new object per render
+  // would re-render every consumer whenever this component renders.
+  const chatMatters = useMemo(
+    () => ({ createDocumentMattersView }),
+    [createDocumentMattersView],
+  );
+  const chatApproval = useMemo(
+    () => ({
+      activeOrganizationId,
+      approvalIdsAwaitedAtOpen,
+      browserGate,
+      alwaysApprovedTools,
+      conversationApprovedTools,
+      confirmStoredApprovalGrant,
+      handleAllowInConversation,
+      handleAlwaysAllow,
+      handleApprove,
+      handleDeny,
+      handleApproveForRun,
+      handleRequestSecret,
+      continueRequestSecret,
+      handleConnectConnector,
+      continueConnectConnector,
+      resolveSecretTarget,
+      secretAvailabilityKey,
+    }),
+    [
+      activeOrganizationId,
+      approvalIdsAwaitedAtOpen,
+      browserGate,
+      alwaysApprovedTools,
+      conversationApprovedTools,
+      confirmStoredApprovalGrant,
+      handleAllowInConversation,
+      handleAlwaysAllow,
+      handleApprove,
+      handleDeny,
+      handleApproveForRun,
+      handleRequestSecret,
+      continueRequestSecret,
+      handleConnectConnector,
+      continueConnectConnector,
+      resolveSecretTarget,
+      secretAvailabilityKey,
+    ],
+  );
   return (
-    <ChatMattersContext value={{ createDocumentMattersView }}>
+    <ChatMattersContext value={chatMatters}>
       <AIUnavailableDialogTrigger />
-      <ChatApprovalContext
-        value={{
-          activeOrganizationId,
-          approvalIdsAwaitedAtOpen,
-          browserGate,
-          alwaysApprovedTools,
-          conversationApprovedTools,
-          confirmStoredApprovalGrant,
-          handleAllowInConversation,
-          handleAlwaysAllow,
-          handleApprove,
-          handleDeny,
-          handleApproveForRun,
-          handleRequestSecret,
-          continueRequestSecret,
-          handleConnectConnector,
-          continueConnectConnector,
-          resolveSecretTarget,
-          secretAvailabilityKey,
-        }}
-      >
+      <ChatApprovalContext value={chatApproval}>
         <ChatTabPanelChrome
           onClose={onClose}
           onLabelContextMenu={onLabelContextMenu}
