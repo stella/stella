@@ -151,6 +151,19 @@ describe("folioTemplatePlanEngine", () => {
     expect(formatted.note.counts.labelsConvertedToText).toBe(1);
   });
 
+  test("reads the highlight colours a document uses, whichever quote its XML writes", async () => {
+    const highlighted = await docx({
+      body: `<w:p><w:r><w:rPr><w:highlight w:val="yellow"/></w:rPr><w:t>One</w:t></w:r><w:r><w:rPr><w:highlight w:val='cyan'/></w:rPr><w:t>Two</w:t></w:r><w:r><w:rPr><w:highlight w:val="none"/></w:rPr><w:t>Three</w:t></w:r></w:p>`,
+      styles: "",
+      numbering: "",
+    });
+    expect(
+      (await folioTemplatePlanEngine.highlightColors(highlighted))
+        .unwrap()
+        .toSorted(),
+    ).toEqual(["cyan", "yellow"]);
+  });
+
   test("names the refusal of a document with tracked changes", async () => {
     const tracked = await docx({
       body: `<w:p><w:ins w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:t>Inserted.</w:t></w:r></w:ins></w:p>`,

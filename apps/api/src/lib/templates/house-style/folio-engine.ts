@@ -93,7 +93,9 @@ const STORY_PARTS = [
   "word/footnotes.xml",
   "word/endnotes.xml",
 ] as const;
-const HIGHLIGHT = /<w:highlight\b[^>]*\bw:val="(?<color>[A-Za-z]{1,20})"/gu;
+// XML allows either quote around an attribute value.
+const HIGHLIGHT =
+  /<w:highlight\b[^>]*\bw:val=(?<quote>["'])(?<color>[A-Za-z]{1,20})\k<quote>/gu;
 
 const readHighlightColors = async (docx: Uint8Array): Promise<string[]> => {
   const archive = await ZipArchive.read(docx);
