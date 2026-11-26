@@ -1,11 +1,11 @@
-import { lazy, Suspense, useLayoutEffect, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import type { ComponentType, ReactElement } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
 
-import { useMountEffect } from "@stll/ui/effects";
+import { useLayoutSyncEffect, useMountEffect } from "@stll/ui/effects";
 
 import { ProtectedPendingInspectorScopeContext } from "@/components/inspector/protected-pending-inspector-scope";
 import { useLeafRouteInspectorEntry } from "@/components/inspector/route-inspector-entry";
@@ -173,7 +173,7 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
       setShownVisitor(initialVisitor);
     }
   }
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     if (!publicKnowledge || visitor === null) {
       return undefined;
     }

@@ -608,13 +608,13 @@ const reopenMovedIdentityTx = async (
           ),
       ) === index,
   );
-  const announced = await announceDecisionIdentifiers(
+  await announceDecisionIdentifiers(
     tx,
     write,
     existing.id,
     affectedIdentifiers,
   );
-  await settleReopenedCitations(tx, [incoming, keyed, announced]);
+  await settleReopenedCitations(tx, [incoming, keyed]);
 };
 
 type FinishRefreshedRowOptions = {

@@ -200,16 +200,90 @@ describe("a ranked plan with no language to stem under", () => {
   });
 
   test("a scoped search asks its jurisdiction's languages, a language filter only its own", () => {
-    expect(leavesOf(planFor("loajality", "CZE"))).toEqual([
+    const own = [
       ...new Set([
         'decision_terms:"loajality"',
         `decision_terms:"${stemLegalTerm("loajality", "cs")}"`,
         `decision_terms:"${stemLegalTerm("loajality", "en")}"`,
       ]),
-    ]);
+    ];
+    const scoped = leavesOf(planFor("loajality", "CZE"));
+    expect(scoped.slice(0, own.length)).toEqual(own);
+    expect(scoped.at(-1)).toBe('"loajality"');
+    // English folds nothing, so its folded readings add no leaf.
     expect(leavesOf(planFor("abandoning", "EU", "en"))).toEqual([
       'decision_terms:"abandoning"',
       `decision_terms:"${stemLegalTerm("abandoning", "en")}"`,
+      '"abandoning"',
+    ]);
+  });
+});
+
+describe("a word typed without its diacritics", () => {
+  const planFor = (text: string, jurisdiction: string, language?: string) => {
+    const shaped = shapeOf({ text, jurisdiction });
+    const shape =
+      shaped.type === "ranked" ? shaped : panic("expected a ranked shape");
+    return planRankedSearch(shape, {
+      fields: caseLawCorpusQueryFields({
+        generation: "case_law_v11",
+        jurisdiction,
+        language,
+      }),
+      legalAlternatives: null,
+      filterClauses: [],
+    });
+  };
+
+  // What the index holds for `nájemního`: its stem, folded by the engine.
+  test("the index holds the accented word's stem, folded", () => {
+    expect(stemLegalTerm("nájemního", "cs")).toBe("nájemn");
+    expect(stemLegalTerm("najemniho", "cs")).toBe("najemnih");
+  });
+
+  test("asks the decision field, the headnote and the passages for that stem", () => {
+    const plan = planFor("najemniho smlouvy", "CZE");
+    const word = plan.words.at(0) ?? panic("expected the first word");
+    expect(word.leaves.decisionLeaves).toContain('decision_terms:"najemn"');
+    expect(word.leaves.boostedLeaves).toContain('headnote_stem:"najemn"');
+    expect(word.passageLeaves).toContain('text_stem:"najemn"');
+    // A word counts as held when any of its leaves matches.
+    expect(plan.wordQuery(0, "")).toContain('decision_terms:"najemn"');
+    expect(plan.allWordsQuery("")).toContain('decision_terms:"najemn"');
+  });
+
+  test("asks the opening passage's surface text for the form typed", () => {
+    const plan = planFor("najemniho", "CZE");
+    const word = plan.words.at(0) ?? panic("expected the first word");
+    expect(word.leaves.decisionLeaves).toContain('"najemniho"');
+    expect(word.passageLeaves).toContain('"najemniho"');
+  });
+
+  test.each([
+    ["dedickeho", "CZE", undefined, "dedick"],
+    ["bezduvodneho", "CZE", undefined, "bezduvodn"],
+    ["najomneho", "SVK", undefined, "najomn"],
+    ["indenizacao", "EU", "pt", "indeniz"],
+  ] as const)(
+    "%s reaches %s's folded stem",
+    (text, jurisdiction, language, stem) => {
+      const plan = planFor(text, jurisdiction, language);
+      expect(plan.words.at(0)?.leaves.decisionLeaves).toContain(
+        `decision_terms:"${stem}"`,
+      );
+    },
+  );
+
+  test("the same word typed with its diacritics keeps every leaf it had", () => {
+    const plan = planFor("nájemního", "CZE");
+    const leaves = plan.words.at(0)?.leaves.decisionLeaves ?? [];
+    expect(leaves).toEqual([
+      ...new Set([
+        'decision_terms:"nájemního"',
+        `decision_terms:"${stemLegalTerm("nájemního", "cs")}"`,
+        `decision_terms:"${stemLegalTerm("nájemního", "en")}"`,
+      ]),
+      '"nájemního"',
     ]);
   });
 });
@@ -235,7 +309,8 @@ describe("a decision whose decision field the projection cut", () => {
     expect(plan.partialQuery).toBe(
       "is_opening:true AND decision_terms_partial:true",
     );
-    // Under every language Czech decisions are declared in.
+    // Under every language Czech decisions are declared in. Typed with its
+    // diacritics, the word asks for its stems as written and nothing more.
     const leaves = [
       ...new Set([
         '"hypotéka"',
