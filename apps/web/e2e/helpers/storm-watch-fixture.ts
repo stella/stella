@@ -47,6 +47,11 @@ export const newWatchedContext = async (
   options?: BrowserContextOptions,
 ): Promise<BrowserContext> => {
   const context = await browser.newContext(options);
+  // Without JavaScript no React runs, so there is nothing to watch, and the
+  // page could not answer the watch's read.
+  if (options?.javaScriptEnabled === false) {
+    return context;
+  }
   await installStormWatch(context);
   const testInfo = test.info();
   const closeContext = context.close.bind(context);

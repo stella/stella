@@ -129,6 +129,25 @@ const unstimulatedReports = (
   ];
 };
 
+// A page that runs no script (a context with JavaScript disabled) never
+// answers an evaluation; past the quiescence wait plus this margin the read
+// gives up.
+const READ_MARGIN_MS = 5000;
+
+const withReadDeadline = async <T>(reading: Promise<T>): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error("The page did not answer the storm watch"));
+    }, DEFAULT_QUIESCENCE_LIMITS.timeoutMs + READ_MARGIN_MS);
+  });
+  try {
+    return await Promise.race([reading, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
 // An open page is read whole and must go quiet; a closed one only has the
 // reports it forwarded while it lived. Forwarded reports are read after the
 // wait, so one that arrives during it still counts.
@@ -140,13 +159,15 @@ const checkPage = async (
   const closed = page.isClosed();
   if (!closed) {
     try {
-      read = await page.evaluate(readStormWatch, {
-        global: STORM_WATCH_GLOBAL,
-        ...DEFAULT_QUIESCENCE_LIMITS,
-      });
+      read = await withReadDeadline(
+        page.evaluate(readStormWatch, {
+          global: STORM_WATCH_GLOBAL,
+          ...DEFAULT_QUIESCENCE_LIMITS,
+        }),
+      );
     } catch {
-      // The page navigated away or closed while the watch waited: its
-      // forwarded reports are all there is.
+      // The page navigated away or closed while the watch waited, or it runs
+      // no script to answer: its forwarded reports are all there is.
     }
   }
   const unstimulated = unstimulatedReports(
