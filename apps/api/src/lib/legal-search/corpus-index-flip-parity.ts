@@ -115,6 +115,7 @@ import {
 import { readJurisdictionServingGenerationsTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
   corpusIndexManifestIsPartial,
+  corpusIndexRevisionRetrieval,
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
@@ -342,6 +343,68 @@ const exemptAfter = (watermark: Temporal.Instant): SQL => {
 };
 
 /**
+ * The candidate's revisions whose delete may be in flight, by entity.
+ *
+ * - `query_only`: every such revision, in queue order up to the cap.
+ * - `stored`: readers are given only the revision a state names, so a
+ *   revision being deleted that its state no longer names, while it names a
+ *   newer applied revision, hides nothing and is left out
+ *   (`CORPUS_INDEX_INTENT_APPEND_GATE`); one walked entity counts once
+ *   against the cap however many of its revisions are being deleted. Such a
+ *   generation appends a replacement beside the old copy's delete, so those
+ *   deletes can outnumber the cap while every replacement is applied.
+ */
+const atRiskWalk = (
+  { family, candidate }: CorpusIndexFlipPair,
+  walkLimit: number,
+): SQL => {
+  const retrieval = corpusIndexRevisionRetrieval(
+    requireCorpusIndexManifest(family, candidate),
+  );
+  const unproven = sql`${generationOf(intents, family, candidate)}
+        AND ${corpusIndexProjectionRevisionDeleteIsUnproven(intents)}`;
+  const queueOrder = sql`coalesce(${intents.cleanupStartedAt}, ${intents.updatedAt})`;
+  switch (retrieval.type) {
+    case "query_only":
+      return sql`
+      SELECT ${intents.entityId} AS entity_id
+      FROM ${intents}
+      WHERE ${unproven}
+      ORDER BY ${queueOrder}, ${intents.id}
+      LIMIT ${walkLimit}
+    `;
+    case "stored":
+      return sql`
+      SELECT per_entity.entity_id
+      FROM (
+        SELECT DISTINCT ON (${intents.entityId})
+          ${intents.entityId} AS entity_id,
+          ${queueOrder} AS queued_at,
+          ${intents.id} AS revision_id
+        FROM ${intents}
+        WHERE ${unproven}
+          AND NOT EXISTS (
+            SELECT 1
+            FROM ${states} superseding
+            WHERE superseding.family = ${intents.family}
+              AND superseding.generation = ${intents.generation}
+              AND superseding.entity_id = ${intents.entityId}
+              AND superseding.applied_action = 'upsert'
+              AND superseding.applied_revision IS NOT NULL
+              AND superseding.applied_revision <> ${intents.id}
+          )
+        ORDER BY ${intents.entityId}, ${queueOrder}, ${intents.id}
+      ) AS per_entity
+      ORDER BY per_entity.queued_at, per_entity.revision_id
+      LIMIT ${walkLimit}
+    `;
+    default:
+      retrieval satisfies never;
+      return panic(`Unhandled revision retrieval: ${String(retrieval)}`);
+  }
+};
+
+/**
  * The candidate walks and their classification, one statement. Each walk
  * reads its partial index in the index's own order up to one row past the
  * cap, so `exact` is decided per walk; the classification probes both
@@ -378,14 +441,7 @@ export const corpusIndexFlipRegressionQuery = (
       ORDER BY ${states.entityId}
       LIMIT ${walkLimit}
     ),
-    at_risk_walk AS MATERIALIZED (
-      SELECT ${intents.entityId} AS entity_id
-      FROM ${intents}
-      WHERE ${generationOf(intents, family, candidate)}
-        AND ${corpusIndexProjectionRevisionDeleteIsUnproven(intents)}
-      ORDER BY coalesce(${intents.cleanupStartedAt}, ${intents.updatedAt}), ${intents.id}
-      LIMIT ${walkLimit}
-    ),
+    at_risk_walk AS MATERIALIZED (${atRiskWalk(pair, walkLimit)}),
     walked AS (
       SELECT entity_id FROM pending_walk
       UNION SELECT entity_id FROM blocked_walk

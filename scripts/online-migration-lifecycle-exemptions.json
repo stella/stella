@@ -1,3 +1,5 @@
 {
-  "entries": {}
+  "entries": {
+    "apps/api/src/db/online-migration-entries/repairs-corpus-projection-stored-revision-wake.ts": "The release that stops queueing stored-revision projection states at a settlement bound depends on the states an earlier release queued there being runnable when it serves; the repair is bounded, paced and idempotent, so it runs inside the deploy rather than after it."
+  }
 }

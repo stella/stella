@@ -4599,6 +4599,39 @@ export const corpusProjectionReservationQueue = (
     });
 };
 
+/**
+ * Requeue at the present the next `limit` projection states `where` selects:
+ * rows taken in key order, a row another transaction holds left for a later
+ * batch, so the statement never waits on a writer. Only `updated_at` is
+ * written. Returns one row per state woken.
+ */
+export const wakeCorpusProjectionStatesQuery = ({
+  where,
+  limit,
+}: {
+  where: SQL;
+  limit: number;
+}): SQL => sql`
+  WITH due AS (
+    SELECT ${corpusIndexProjectionStates.family} AS family,
+      ${corpusIndexProjectionStates.generation} AS generation,
+      ${corpusIndexProjectionStates.entityId} AS entity_id
+    FROM ${corpusIndexProjectionStates}
+    WHERE ${where}
+    ORDER BY ${corpusIndexProjectionStates.family},
+      ${corpusIndexProjectionStates.generation},
+      ${corpusIndexProjectionStates.entityId}
+    LIMIT ${limit}
+    FOR UPDATE OF ${corpusIndexProjectionStates} SKIP LOCKED
+  )
+  UPDATE ${corpusIndexProjectionStates}
+  SET updated_at = now()
+  FROM due
+  WHERE ${corpusIndexProjectionStates.family} = due.family
+    AND ${corpusIndexProjectionStates.generation} = due.generation
+    AND ${corpusIndexProjectionStates.entityId} = due.entity_id
+  RETURNING ${corpusIndexProjectionStates.entityId}`;
+
 type CorpusIndexGenerationKey = { family: CorpusFamily; generation: string };
 
 /**

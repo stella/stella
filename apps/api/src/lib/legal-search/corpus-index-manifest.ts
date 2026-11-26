@@ -459,6 +459,21 @@ export const corpusIndexRevisionRetrieval = (
     : { type: "query_only", field };
 };
 
+/**
+ * The generations this release compiled whose hits carry their projection
+ * revision. A generation the registry holds and this release does not know is
+ * not listed, so a caller acting only on these leaves it as it is.
+ */
+export const compiledStoredRevisionCorpusIndexGenerations = (): {
+  family: CorpusFamily;
+  generation: string;
+}[] =>
+  Object.values(CORPUS_INDEX_MANIFESTS).flatMap((manifest) =>
+    corpusIndexRevisionRetrieval(manifest).type === "stored"
+      ? [{ family: manifest.family, generation: manifest.generation }]
+      : [],
+  );
+
 /** The generation marker exists only on mappings that can filter its origin. */
 export const corpusIndexGenerationField = (
   manifest: CorpusIndexManifest,

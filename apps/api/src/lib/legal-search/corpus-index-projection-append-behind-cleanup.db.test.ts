@@ -35,7 +35,10 @@ import type {
   CorpusIndexDeleteSettlement,
   CorpusIndexSettlementSplit,
 } from "@/api/lib/legal-search/corpus-index-client";
-import { readCorpusIndexFlipParity } from "@/api/lib/legal-search/corpus-index-flip-parity";
+import {
+  CORPUS_INDEX_FLIP_WALK_CAP,
+  readCorpusIndexFlipParity,
+} from "@/api/lib/legal-search/corpus-index-flip-parity";
 import type { CorpusRevisionRetrieval } from "@/api/lib/legal-search/corpus-index-manifest";
 import { repairAppliedCorpusProjectionDriftTx } from "@/api/lib/legal-search/corpus-index-projection-census-store";
 import {
@@ -116,13 +119,23 @@ const revisionsIn = (query: string): string[] =>
  * applies only once their split matures, as Quickwit does.
  */
 const held = new Map<string, number>();
-const acceptedDeletes: string[][] = [];
+/** Every delete query the engine accepted, verbatim. */
+const acceptedDeletes: string[] = [];
 let splitsMature = false;
 let nextOpstamp = 1;
 
 const matureSplits = () => {
   splitsMature = true;
-  for (const revisions of acceptedDeletes) {
+  for (const query of acceptedDeletes) {
+    // Only an exact revision disjunction is applied; anything wider is a
+    // defect the assertions on `acceptedDeletes` name.
+    const revisions = revisionsIn(query);
+    if (
+      query !==
+      revisions.map((id) => `projection_revision:"${id}"`).join(" OR ")
+    ) {
+      return panic(`The engine was asked an unexpected delete: ${query}`);
+    }
     for (const deleted of revisions) {
       held.delete(deleted);
     }
@@ -150,7 +163,7 @@ const engine = {
       },
     }),
   deleteByQuery: async (_indexId: string, query: string) => {
-    acceptedDeletes.push(revisionsIn(query));
+    acceptedDeletes.push(query);
     const opstamp = nextOpstamp;
     nextOpstamp += 1;
     return Result.ok({ opstamp, createdAt: DELETE_TASK_CREATED_AT });
@@ -456,17 +469,17 @@ const appliedFields = ({
   appliedRevisionSettled,
 });
 
-const readParity = async () => {
+const readParity = async (pageSize = 8) => {
   const parity = await readCorpusIndexFlipParity({
     runInTransaction,
     family: "case_law",
     candidate: V10,
     exemptMinutes: 0,
-    coverage: { pageSize: 8, pageBudget: 100, resumeFrom: null },
+    coverage: { pageSize, pageBudget: 100, resumeFrom: null },
   });
   return Result.isOk(parity)
     ? parity.value.verdict
-    : panic(`Flip parity read failed: ${parity.error.message}`);
+    : panic(`Flip parity read failed: ${parity.error.message}`, parity.error);
 };
 
 const routeProofRows = async (generation: Generation) =>
@@ -523,7 +536,8 @@ test("a stored-revision generation appends beside an old revision whose delete w
   expect(await routeProofsRead(V10)).toBe("all_current");
 
   // The old delete settles later and takes only its own revision.
-  expect(acceptedDeletes).toEqual([[old]]);
+  // Exactly the old revision's term: no other field, no other revision.
+  expect(acceptedDeletes).toEqual([`projection_revision:"${old}"`]);
   matureSplits();
   expect(held.has(old)).toBe(false);
   expect(held.get(fresh)).toBe(1);
@@ -737,3 +751,115 @@ test("one append per entity and epoch: a second reservation beside the delete fi
       .orderBy(corpusIndexProjectionIntents.id),
   ).toEqual([{ id: old }, { id: revision(42) }]);
 });
+
+/**
+ * `count` decisions both generations show, each replaced in v10 beside the
+ * delete of its first revision: v7 names its one copy, v10 names its second
+ * and holds the first in `cleanup_committed`. Written in bulk through every
+ * guarded transition, so the database admits each row as the stores would.
+ */
+const seedReplacedBesideDeletes = async (count: number) => {
+  const first = 100_000;
+  const ids = (prefix: string) =>
+    `('0198e331-e578-7000-${prefix}-' || lpad(n::text, 12, '0'))::uuid`;
+  const entities = ids("8000");
+  const range = `generate_series(${first + 1}, ${first + count}) AS n`;
+  const revisionsOf = (prefix: string) =>
+    `(SELECT ${ids(prefix)} FROM ${range})`;
+  const statements = [
+    `SELECT set_config('${CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING}', 'off', true)`,
+    `INSERT INTO case_law_sources (id, adapter_key, name)
+     VALUES ('0198e331-e578-7000-b000-000000000001', 'overlap-fixture', 'Overlap fixture')`,
+    `INSERT INTO case_law_decisions
+       (id, source_id, case_number, court, country, language, content_hash,
+        projection_epoch)
+     SELECT ${entities}, '0198e331-e578-7000-b000-000000000001',
+       n::text || ' As 1/2026', 'Naczelny Sąd Administracyjny', 'POL', 'pl',
+       lpad(to_hex(n), 64, 'c'), 1
+     FROM ${range}`,
+  ];
+  for (const generation of [V7, V10] as const) {
+    statements.push(`INSERT INTO corpus_index_projection_states
+       (family, generation, entity_id, desired_action, desired_epoch,
+        desired_fingerprint, desired_index_id, updated_at)
+     SELECT 'case_law', '${generation}', ${entities}, 'upsert', 1,
+       '${fingerprint(1)}', '${routeOf(generation)}', '2026-08-25'
+     FROM ${range}`);
+  }
+  /** One revision per entity, carried from reserved to applied. */
+  const applyRevisions = (generation: Generation, prefix: string) => [
+    `INSERT INTO corpus_index_projection_intents
+       (id, family, generation, entity_id, epoch, fingerprint, index_id,
+        status, lease_token, lease_expires_at)
+     SELECT ${ids(prefix)}, 'case_law', '${generation}', ${entities}, 1,
+       '${fingerprint(1)}', '${routeOf(generation)}', 'reserved',
+       gen_random_uuid(), clock_timestamp() + interval '5 minutes'
+     FROM ${range}`,
+    `UPDATE corpus_index_projection_intents
+     SET status = 'append_started', append_started_at = '2026-08-26'
+     WHERE id IN ${revisionsOf(prefix)}`,
+    `UPDATE corpus_index_projection_intents
+     SET status = 'append_committed', append_committed_at = '2026-08-26',
+       expected_document_count = 1
+     WHERE id IN ${revisionsOf(prefix)}`,
+    `UPDATE corpus_index_projection_intents
+     SET status = 'applied', lease_token = NULL, lease_expires_at = NULL,
+       applied_at = '2026-08-26'
+     WHERE id IN ${revisionsOf(prefix)}`,
+  ];
+  const nameRevisions = (generation: Generation, prefix: string) =>
+    `UPDATE corpus_index_projection_states state
+     SET applied_action = 'upsert', applied_epoch = 1,
+       applied_revision = revision.id, applied_fingerprint = revision.fingerprint,
+       applied_index_id = revision.index_id, applied_at = '2026-08-26'
+     FROM corpus_index_projection_intents revision
+     WHERE revision.id IN ${revisionsOf(prefix)}
+       AND state.family = revision.family
+       AND state.generation = revision.generation
+       AND state.entity_id = revision.entity_id`;
+  statements.push(
+    ...applyRevisions(V7, "9007"),
+    nameRevisions(V7, "9007"),
+    // v10's first revision: applied, never named here, then retired.
+    ...applyRevisions(V10, "9a10"),
+    `UPDATE corpus_index_projection_intents
+     SET status = 'cleanup_pending', append_publish_barrier_at = '2026-08-26',
+       cleanup_not_before = '2026-08-26'
+     WHERE id IN ${revisionsOf("9a10")}`,
+    // Its replacement, at the same epoch, applied and named.
+    ...applyRevisions(V10, "9b10"),
+    nameRevisions(V10, "9b10"),
+    // The first revision's delete, issued and waiting on its split.
+    `UPDATE corpus_index_projection_intents
+     SET status = 'cleanup_started', cleanup_started_at = '2026-08-27',
+       cleanup_attempts = 1
+     WHERE id IN ${revisionsOf("9a10")}`,
+    `UPDATE corpus_index_projection_intents
+     SET status = 'cleanup_committed', delete_opstamp = 3,
+       delete_task_created_at = '2026-08-27'
+     WHERE id IN ${revisionsOf("9a10")}`,
+  );
+  await runInTransaction(async (tx) => {
+    for (const statement of statements) {
+      // db-await-in-loop: the fixture's transitions, in order
+      await tx.execute(sql.raw(statement));
+    }
+  });
+};
+
+// timeout: seeds a walk cap's worth of decisions through every guarded transition in PGlite.
+test("more deletes in flight than the parity walk's cap, each beside an applied replacement, still read as no regression", async () => {
+  const count = CORPUS_INDEX_FLIP_WALK_CAP + 1;
+  await seedReplacedBesideDeletes(count);
+  const deleting = await db
+    .select({ id: corpusIndexProjectionIntents.id })
+    .from(corpusIndexProjectionIntents)
+    .where(
+      and(
+        eq(corpusIndexProjectionIntents.generation, V10),
+        eq(corpusIndexProjectionIntents.status, "cleanup_committed"),
+      ),
+    );
+  expect(deleting.length).toBe(count);
+  expect(await readParity(5000)).toEqual({ type: "no_regression" });
+}, 120_000);
