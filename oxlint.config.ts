@@ -5182,6 +5182,9 @@ const config = defineConfig({
         // dependency arrays. Their call sites own dependency correctness, so
         // the compiler cannot analyze them as ordinary component hooks.
         ...reactCompilerRulesOff,
+        // They forward the caller's dependency array verbatim; exhaustive-deps
+        // checks every call site instead (`additionalHooks`).
+        "react/exhaustive-deps": "off",
       },
     },
     {

@@ -126,7 +126,6 @@ export const useObservedValue = <E extends Element, T extends Flat>(
           : { element, value: next },
       );
     });
-    // oxlint-disable-next-line react/exhaustive-deps -- re-subscribe on the element and the caller's deps; `observe` is read through `latestObserve`
   }, [element, ...deps]);
   // A slot from another element is ignored, never reset by a write.
   return slot.element === element && element !== null ? slot.value : fallback;
