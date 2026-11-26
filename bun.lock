@@ -1220,7 +1220,6 @@
         "better-result": "catalog:",
       },
       "devDependencies": {
-        "@stll/concurrency": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
       },
