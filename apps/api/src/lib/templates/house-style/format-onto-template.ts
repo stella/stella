@@ -31,6 +31,7 @@ import type {
   TemplatePlan,
   TemplatePlanEngine,
   TemplatePlanReport,
+  TrackedChangesView,
 } from "@/api/lib/templates/house-style/folio-contract";
 import { buildLabelIndex } from "@/api/lib/templates/house-style/label-index";
 import { buildTemplatePlan } from "@/api/lib/templates/house-style/plan-builder";
@@ -120,6 +121,9 @@ type FormatOptions = {
   profile?: TemplateProfile;
   mode: NumberingMode;
   resolveAmbiguities: AmbiguityResolver;
+  /** The view of a document with tracked changes to format. Left out,
+   *  every change is accepted and the note says so. */
+  trackedChanges?: TrackedChangesView;
 };
 
 type Formatted = {
@@ -250,6 +254,21 @@ const sum = (entries: readonly { count: number }[]): number =>
   entries.reduce((total, { count }) => total + count, 0);
 
 /**
+ * The manifest a document is formatted from. One that tracks changes is
+ * read again in the view the caller names; when nobody chooses, every
+ * change is accepted.
+ */
+const readView = async (
+  engine: TemplatePlanEngine,
+  source: Uint8Array,
+  asRead: DocxBlockManifest,
+  view: TrackedChangesView | undefined,
+): Promise<Result<DocxBlockManifest, TemplateEngineError>> =>
+  asRead.trackedChanges > 0
+    ? await engine.analyze(source, { trackedChanges: view ?? "accept" })
+    : Result.ok(asRead);
+
+/**
  * Formats `source` onto `template`. Returns the output with the plan that
  * produced it, the profile used, and the note data a formatting note is
  * written from.
@@ -261,6 +280,7 @@ export const formatOntoTemplate = async ({
   profile: confirmed,
   mode,
   resolveAmbiguities,
+  trackedChanges,
 }: FormatOptions): Promise<
   Result<
     Formatted,
@@ -283,7 +303,11 @@ export const formatOntoTemplate = async ({
   if (highlighted.isErr()) {
     return Result.err(highlighted.error);
   }
-  const manifest = analyzed.value;
+  const viewed = await readView(engine, source, analyzed.value, trackedChanges);
+  if (viewed.isErr()) {
+    return Result.err(viewed.error);
+  }
+  const manifest = viewed.value;
   const profile = confirmed ?? inferTemplateProfile(inspected.value);
   const issues = validateTemplateProfile(profile, inspected.value).filter(
     ({ severity }) => severity === "error",
@@ -353,6 +377,7 @@ export const formatOntoTemplate = async ({
       suspicions,
       exclusions,
       sourceHighlightColors: highlighted.value,
+      trackedChangesStated: trackedChanges !== undefined,
     });
     if (built.labelsNotKept.length > 0) {
       return Result.err(

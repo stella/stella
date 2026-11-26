@@ -247,6 +247,84 @@ describe("formatOntoTemplate", () => {
     ).toEqual([]);
   });
 
+  test("formats one view of a document with tracked changes and says which", async () => {
+    const tracked = {
+      insertions: 3,
+      deletions: 1,
+      moves: 0,
+      paragraphMarks: 1,
+      tableRows: 0,
+      formattingChanges: 2,
+      authors: ["First Author", "Second Author"],
+      first: "2026-01-05T10:00:00Z",
+      last: "2026-02-07T09:30:00Z",
+    };
+    const views: (string | undefined)[] = [];
+    const viewing = (): FakeEngine => {
+      const engine = fakeEngine(manifest, []);
+      return {
+        ...engine,
+        analyze: async (_docx, options) => {
+          views.push(options?.trackedChanges);
+          return await Promise.resolve(
+            Result.ok(
+              options?.trackedChanges === undefined
+                ? { ...manifest, trackedChanges: 5, revisions: tracked }
+                : {
+                    ...manifest,
+                    trackedChangesResolved: {
+                      view: options.trackedChanges,
+                      ...tracked,
+                    },
+                  },
+            ),
+          );
+        },
+      };
+    };
+    // Nobody chose: every change is accepted, and the note leads with it.
+    const byDefault = viewing();
+    const accepted = (await format(byDefault)).unwrap();
+    expect(views).toEqual([undefined, "accept"]);
+    expect(accepted.plan.trackedChanges).toBe("accept");
+    expect(accepted.note.items.at(0)).toEqual({
+      kind: "trackedChangesResolved",
+      view: "accept",
+      stated: false,
+      ...tracked,
+    });
+    // The caller's choice stands.
+    const rejected = (
+      await formatOntoTemplate({
+        engine: viewing(),
+        source: SOURCE,
+        template: TEMPLATE,
+        mode: "keepSource",
+        resolveAmbiguities: resolveAmbiguitiesByRule,
+        trackedChanges: "reject",
+      })
+    ).unwrap();
+    expect(rejected.plan.trackedChanges).toBe("reject");
+    expect(rejected.note.items.at(0)).toMatchObject({
+      view: "reject",
+      stated: true,
+    });
+    // A document that tracks nothing is read once and its plan names no view.
+    views.length = 0;
+    const plain = fakeEngine(manifest, []);
+    const untracked = (
+      await format({
+        ...plain,
+        analyze: async (_docx, options) => {
+          views.push(options?.trackedChanges);
+          return await Promise.resolve(Result.ok(manifest));
+        },
+      })
+    ).unwrap();
+    expect(views).toEqual([undefined]);
+    expect(untracked.plan.trackedChanges).toBeUndefined();
+  });
+
   test("a bullet whose mark reads as another character in the output is still kept", async () => {
     // The same bullet is another glyph in another font: the engine reports
     // the output's mark as it renders it.

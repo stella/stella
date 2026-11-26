@@ -86,7 +86,32 @@ export type DocxBlockManifest = {
   endnotes: { id: string; text: string }[];
   comments: number;
   trackedChanges: number;
+  /** What the document tracks, when it tracks anything and was read as it
+   *  stands. */
+  revisions?: TrackedChanges;
+  /** The view the manifest was read in and what was resolved for it:
+   *  every block, label and hash is that view's. */
+  trackedChangesResolved?: TrackedChanges & { view: TrackedChangesView };
   warnings: string[];
+};
+
+/** One of the two texts a document with tracked changes holds: with every
+ *  change accepted, or with every change rejected. */
+export type TrackedChangesView = "accept" | "reject";
+
+/** The tracked changes of a document's main story and notes, by kind. */
+export type TrackedChanges = {
+  insertions: number;
+  deletions: number;
+  moves: number;
+  /** Paragraph marks the view removes, each joining two paragraphs. */
+  paragraphMarks: number;
+  tableRows: number;
+  formattingChanges: number;
+  authors: string[];
+  /** The earliest and the latest date a change states, as written. */
+  first: string | null;
+  last: string | null;
 };
 
 /** One numbering level of a template, as the template inspection reports it. */
@@ -300,6 +325,9 @@ export type TemplatePlan = {
   /** The section the body ends with, when its page is another than the
    *  template's. */
   lastSection?: TemplatePlanSection;
+  /** The view of a source with tracked changes the plan is made for. The
+   *  output carries no revision. */
+  trackedChanges?: TrackedChangesView;
 };
 
 /** The part of the engine's report the plan is repaired and the formatting
@@ -380,8 +408,12 @@ type TemplateLayoutSignals = { pages: number };
 /** The DOCX engine behind this directory. Injected, so the rules here do
  *  not depend on the package release that carries it. */
 export type TemplatePlanEngine = {
+  /** With `trackedChanges`, the manifest of that view of a document with
+   *  tracked changes. An engine that cannot read a view answers as if none
+   *  was asked for. */
   analyze: (
     docx: Uint8Array,
+    options?: { trackedChanges?: TrackedChangesView },
   ) => Promise<Result<DocxBlockManifest, TemplateEngineError>>;
   inspect: (
     docx: Uint8Array,
@@ -510,6 +542,20 @@ const sectionSchema = v.strictObject({
   columns: v.pipe(v.number(), v.integer(), v.minValue(1)),
 });
 
+const count = v.pipe(v.number(), v.integer(), v.minValue(0));
+const REVISION_AUTHORS_MAX = 1000;
+const trackedChangesSchema = v.strictObject({
+  insertions: count,
+  deletions: count,
+  moves: count,
+  paragraphMarks: count,
+  tableRows: count,
+  formattingChanges: count,
+  authors: v.pipe(v.array(v.string()), v.maxLength(REVISION_AUTHORS_MAX)),
+  first: v.nullable(v.string()),
+  last: v.nullable(v.string()),
+});
+
 const manifestSchema = v.strictObject({
   sha256: v.string(),
   blocks: v.array(blockSchema),
@@ -521,6 +567,13 @@ const manifestSchema = v.strictObject({
   endnotes: v.array(noteSchema),
   comments: v.pipe(v.number(), v.integer(), v.minValue(0)),
   trackedChanges: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  revisions: v.exactOptional(trackedChangesSchema),
+  trackedChangesResolved: v.exactOptional(
+    v.strictObject({
+      ...trackedChangesSchema.entries,
+      view: v.picklist(["accept", "reject"]),
+    }),
+  ),
   warnings: v.array(v.string()),
 });
 

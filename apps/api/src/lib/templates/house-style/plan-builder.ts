@@ -30,6 +30,8 @@ import type {
   TemplatePlanReference,
   TemplatePlanSection,
   TemplatePlanSourceItem,
+  TrackedChanges,
+  TrackedChangesView,
 } from "@/api/lib/templates/house-style/folio-contract";
 import {
   buildLabelIndex,
@@ -150,6 +152,14 @@ type FormattingNoteItem =
    *  list. */
   | { kind: "labelConvertedToText"; blockId: string; reason: LabelKeptReason }
   | { kind: "roleWithoutStyle"; role: HouseStyleRole; blocks: number }
+  /** The source tracked changes and was formatted in one view of them: the
+   *  output carries no revision. `stated` is false when nobody chose and
+   *  every change was accepted. */
+  | ({
+      kind: "trackedChangesResolved";
+      view: TrackedChangesView;
+      stated: boolean;
+    } & TrackedChanges)
   /** `blocks` paragraphs numbered like articles are running text: they
    *  keep their numbers and are set as clauses, not as headings. */
   | { kind: "articlesSetAsText"; blocks: number }
@@ -298,6 +308,9 @@ type BuildOptions = {
   exclusions?: PlanExclusions;
   /** The highlight colours the source's own text carries. */
   sourceHighlightColors: readonly string[];
+  /** Whether the caller chose the view of the source's tracked changes;
+   *  the note says when nobody did. */
+  trackedChangesStated?: boolean;
 };
 
 /** A placed paragraph that would not show the label the source shows. */
@@ -1977,6 +1990,7 @@ export const buildTemplatePlan = ({
   suspicions = [],
   exclusions = NO_EXCLUSIONS,
   sourceHighlightColors,
+  trackedChangesStated = false,
 }: BuildOptions): BuiltPlan => {
   const { blocks } = manifest;
   const tableOf = new Map<string, string>();
@@ -2043,6 +2057,13 @@ export const buildTemplatePlan = ({
     labelRequests(context, body),
   );
   noteReadings(context, placed, references, suspicions);
+  if (manifest.trackedChangesResolved !== undefined) {
+    context.items.unshift({
+      kind: "trackedChangesResolved",
+      stated: trackedChangesStated,
+      ...manifest.trackedChangesResolved,
+    });
+  }
 
   const health = profile.health ?? NO_HEALTH;
   const drawn = {
@@ -2080,6 +2101,10 @@ export const buildTemplatePlan = ({
     version: 1,
     sourceSha256: manifest.sha256,
     templateSha256: profile.templateSha256,
+    // A manifest read in one view of tracked changes gives a plan for it.
+    ...(manifest.trackedChangesResolved === undefined
+      ? {}
+      : { trackedChanges: manifest.trackedChangesResolved.view }),
     body,
     omit: [...placed.omitted].map(([blockId, reason]) => ({ blockId, reason })),
     ...(patches.length === 0 ? {} : { numberingPatches: patches }),

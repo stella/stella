@@ -117,8 +117,14 @@ const readHighlightColors = async (docx: Uint8Array): Promise<string[]> => {
  * page counts are measured where a font-carrying layout is set up.
  */
 export const folioTemplatePlanEngine: TemplatePlanEngine = {
-  analyze: async (docx) => {
-    const analyzed = await analyzeDocxBlocks(docx);
+  analyze: async (docx, options) => {
+    // One view of a document with tracked changes, when the caller names
+    // it; without one the engine reads the document as it stands.
+    const view = options?.trackedChanges;
+    const analyzed = await analyzeDocxBlocks(
+      docx,
+      view === undefined ? {} : { trackedChanges: view },
+    );
     return analyzed.isErr()
       ? Result.err(refused(analyzed.error))
       : Result.ok({
