@@ -86,11 +86,11 @@ const SETTLE_TURNS = QUIET_TURNS * IDLE_TURNS;
 const CAPTURE_TURNS = 4 * SETTLE_TURNS;
 
 /**
- * Commits with no stimulus after which the guard gives up on unmounting the
- * loop and ends the process with the report, before the event-loop watchdog
- * kills it with only a file name.
+ * Commits after a violation, with no stimulus since, after which the guard
+ * gives up on unmounting the loop and ends the process with the report,
+ * before the event-loop watchdog kills it with only a file name.
  */
-const HANG_COMMITS = 20_000;
+const HANG_COMMITS = 5000;
 
 const REPORTED_COMPONENTS = 8;
 
@@ -137,6 +137,8 @@ type TestState = {
   snapshot: () => RenderSnapshot;
   commits: number;
   commitsSinceStimulus: number;
+  /** Commits since the first violation after the last stimulus, if one happened. */
+  commitsSinceViolation: number | undefined;
   lastStimulus: StormStimulus | "none";
   lastActQueue: unknown;
   /** Commits outside act() since the test started. */
@@ -253,6 +255,7 @@ const createTestState = (): TestState => {
     snapshot: probe.snapshot,
     commits: 0,
     commitsSinceStimulus: 0,
+    commitsSinceViolation: undefined,
     lastStimulus: "none",
     lastActQueue: null,
     outsideActCommits: 0,
@@ -272,6 +275,7 @@ const stimulate = (runtime: Runtime, state: TestState, kind: StormStimulus) => {
   state.ledger.onStimulus(runtime.clock(), kind);
   state.reset();
   state.commitsSinceStimulus = 0;
+  state.commitsSinceViolation = undefined;
   state.lastStimulus = kind;
   state.busyTurns = 0;
   state.idleTurns = 0;
@@ -280,6 +284,7 @@ const stimulate = (runtime: Runtime, state: TestState, kind: StormStimulus) => {
 };
 
 const record = (state: TestState, violation: DomStormViolation) => {
+  state.commitsSinceViolation ??= 0;
   (state.capture?.violations ?? state.violations).push(violation);
 };
 
@@ -424,8 +429,11 @@ const createCommitListener =
         state.restless.unmounted ||= unmounted;
       }
     }
-    if (state.commitsSinceStimulus > HANG_COMMITS) {
-      hang(state);
+    if (state.commitsSinceViolation !== undefined) {
+      state.commitsSinceViolation += 1;
+      if (state.commitsSinceViolation > HANG_COMMITS) {
+        hang(state);
+      }
     }
     // Naming components walks the fiber tree, so it starts only once the
     // bucket is half empty or the tree has kept committing for two turns,
@@ -498,8 +506,9 @@ const settleTest = async (runtime: Runtime) => {
     return;
   }
   state.settling = true;
-  const quiet =
-    state.commits === 0 || (await waitQuiet(runtime, state, SETTLE_TURNS));
+  // Even a test that has not committed yet waits: its first render may be
+  // queued for the next turn.
+  const quiet = await waitQuiet(runtime, state, SETTLE_TURNS);
   runtime.current = undefined;
   runtime.settledTests += 1;
   if (runtime.couplingError !== undefined) {
@@ -521,6 +530,7 @@ const resetAfterCapture = (state: TestState) => {
   state.ledger = newLedger();
   state.reset();
   state.commitsSinceStimulus = 0;
+  state.commitsSinceViolation = undefined;
   state.busyTurns = 0;
   state.idleTurns = 0;
   state.restless = undefined;

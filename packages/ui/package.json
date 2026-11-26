@@ -350,6 +350,7 @@
     "@playwright/test": "^1.65.1",
     "@stll/playwright-tools": "workspace:*",
     "@stll/property-testing": "workspace:*",
+    "@stll/render-probe": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
     "@tanstack/react-virtual": "^3.14.26",

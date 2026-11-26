@@ -105,6 +105,14 @@ export const installCommitHook = (target: object = globalThis): CommitHook => {
       committed(rendererId, root);
       previousCommit?.call(hook, rendererId, root, ...rest);
     };
+    // Renderers that loaded before this install are already in its map.
+    if (hook.renderers instanceof Map) {
+      for (const [id, internals] of hook.renderers) {
+        if (typeof id === "number") {
+          injected(id, internals);
+        }
+      }
+    }
   } else {
     const hookRenderers = new Map<number, unknown>();
     const hook: DevtoolsHook = {

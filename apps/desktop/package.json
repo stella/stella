@@ -50,6 +50,7 @@
     "@playwright/test": "^1.65.1",
     "@stll/agent-engine": "workspace:*",
     "@stll/property-testing": "workspace:*",
+    "@stll/render-probe": "workspace:*",
     "@stll/sha256": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
