@@ -25,5 +25,4 @@ import { composeRefs } from "../lib/utils";
 export const useComposedRefs = <T>(
   ...refs: (Ref<T> | undefined)[]
 ): ((node: T | null) => (() => void) | undefined) =>
-  // oxlint-disable-next-line react/exhaustive-deps -- the member refs are the dependencies: the callback changes exactly when one of them does
   useMemo(() => composeRefs(...refs), refs);

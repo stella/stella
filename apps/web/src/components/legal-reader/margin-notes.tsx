@@ -712,7 +712,6 @@ const AnalysisNote = ({
     <Button
       className={cn("block", position.className)}
       onBlur={() => onHover?.(false)}
-      // oxlint-disable-next-line require-contained-handler/require-contained-handler -- no portal-bearing descendants
       onClick={onJump}
       onFocus={containedHandler(null, () => onHover?.(true))}
       onMouseEnter={() => onHover?.(true)}
