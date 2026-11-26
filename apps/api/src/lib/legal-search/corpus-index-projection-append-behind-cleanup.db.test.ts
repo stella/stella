@@ -231,7 +231,10 @@ afterEach(async () => {
 });
 
 const subject = (n: number) =>
-  ({ type: "subjects", entityIds: [entityId(n)] }) as const;
+  ({
+    type: "subjects",
+    entityIds: [toSafeId<"caseLawDecision">(entityId(n))],
+  }) as const;
 
 /** A desired upsert the generation has not appended yet. */
 const desire = async (generation: Generation, n: number) =>
@@ -261,7 +264,7 @@ const reserve = async (
         scope: subject(n),
         limit: 8,
         leaseMs: 60_000,
-        testNow,
+        ...(testNow === undefined ? {} : { testNow }),
         newIntentId: () => id,
       }),
   );
@@ -272,7 +275,7 @@ const start = async (lease: CorpusProjectionIntentLease, testNow?: Date) =>
       await startCorpusProjectionAppendTx(tx, {
         intentId: lease.intentId,
         leaseToken: lease.leaseToken,
-        testNow,
+        ...(testNow === undefined ? {} : { testNow }),
       }),
   );
 
