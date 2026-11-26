@@ -20,12 +20,11 @@ import {
 } from "@stll/api-contract";
 import type { ReviewFlag } from "@stll/api-contract";
 import type { DocxEditorRef } from "@stll/folio-react";
-import { Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CONTROL_SIZE } from "@stll/ui/control-size";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { useExternalSyncEffect } from "@stll/ui/effects";
+import { useExternalSyncEffect, useNow } from "@stll/ui/effects";
 import {
   CheckIcon,
   ChevronRightIcon,
@@ -2645,24 +2644,14 @@ type ReviewProgressStateProps = {
 
 /**
  * How long the worker has been on this run, ticking once a second, or `null`
- * while it still sits queued. The clock is an external system — the wall — so
- * it is synchronized rather than derived.
+ * while it still sits queued. The wall clock is the shared `useNow` clock;
+ * the elapsed time is derived from it.
  */
 const useElapsedClock = (startedAt: string | null): number | null => {
-  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
-  useExternalSyncEffect(() => {
-    if (startedAt === null) {
-      setElapsedMs(null);
-      return undefined;
-    }
-    const startedAtMs = new Date(startedAt).getTime();
-    const tick = () =>
-      setElapsedMs(Temporal.Now.instant().epochMilliseconds - startedAtMs);
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [startedAt]);
-  return elapsedMs;
+  const now = useNow(1000);
+  return startedAt === null
+    ? null
+    : Math.max(0, now - new Date(startedAt).getTime());
 };
 
 const ReviewProgressState = ({

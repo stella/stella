@@ -14,7 +14,6 @@ const { panic } = await import("better-result");
 const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
-const { RenderLoopGuard } = await import("@/testing/render-loop-guard");
 const { MEMBER_CHOICE, MemberCombobox } = await import("./member-combobox");
 
 type MemberOption = Parameters<typeof MemberCombobox>[0]["members"][number];
@@ -89,15 +88,13 @@ const renderPicker = ({
     );
   };
   const ui = testing.render(
-    <RenderLoopGuard>
-      <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <FormattingProvider locale="en" timeZone="UTC">
-          <Profiler id="member-combobox" onRender={onCommit}>
-            <Host />
-          </Profiler>
-        </FormattingProvider>
-      </IntlProvider>
-    </RenderLoopGuard>,
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <FormattingProvider locale="en" timeZone="UTC">
+        <Profiler id="member-combobox" onRender={onCommit}>
+          <Host />
+        </Profiler>
+      </FormattingProvider>
+    </IntlProvider>,
   );
   const input = ui.getByRole("combobox", { name: "Member" });
   if (!(input instanceof HTMLInputElement)) {

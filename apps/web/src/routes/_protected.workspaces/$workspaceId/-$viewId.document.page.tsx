@@ -1,11 +1,4 @@
-import {
-  lazy,
-  Suspense,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { lazy, Suspense, useMemo, useRef, useState } from "react";
 
 import { dropTargetForExternal } from "@atlaskit/pragmatic-drag-and-drop/adapter/drop-target-for-external";
 import { containsFiles } from "@atlaskit/pragmatic-drag-and-drop/utils/contains-files";
@@ -35,6 +28,7 @@ import "@stll/folio-react/editor.css";
 import {
   useExternalSyncEffect,
   useLatestCallback,
+  useLayoutSyncEffect,
   useMountEffect,
 } from "@stll/ui/effects";
 
@@ -407,7 +401,7 @@ function RouteComponentInner({
     );
   }, [entityError, navigate, workspaceId]);
 
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     if (!justificationId || justificationPage === undefined) {
       setActiveJustification(null);
       return;
@@ -693,7 +687,8 @@ function RouteComponentInner({
       latestFileFieldForProperty.propertyId,
       latestFileFieldForProperty.id,
     );
-    setActiveFieldId(latestFileFieldForProperty.id);
+    // The route owns the field id: the navigation below remounts this page
+    // (keyed on the `field` param) on the newest version.
     useInspectorTabsStore
       .getState()
       .replaceFileFieldId(fieldId, latestFileFieldForProperty.id);

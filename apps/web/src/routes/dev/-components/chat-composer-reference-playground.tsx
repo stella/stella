@@ -3,7 +3,7 @@ import { useState } from "react";
 import type { JSONContent } from "@tiptap/core";
 
 import { Button } from "@stll/ui/button";
-import { useMountEffect } from "@stll/ui/effects";
+import { useHasMounted, useMountEffect } from "@stll/ui/effects";
 
 import {
   CHAT_SEND_KEPT,
@@ -145,7 +145,9 @@ const DraftComposer = ({ state, variant }: DraftComposerProps) => {
 
 /** Reference chips in a composer as narrow as a docked chat panel. */
 export const ChatComposerReferencePlayground = () => {
-  const [ready, setReady] = useState(false);
+  // False until the seeding below has run: the mount effects all finish
+  // before the render this latch causes.
+  const ready = useHasMounted();
   const [activations, setActivations] = useState(0);
   // Seed only the bench's threads before mounting the real editors.
   useMountEffect(() => {
@@ -157,7 +159,6 @@ export const ChatComposerReferencePlayground = () => {
         updatedAt: 0,
       });
     }
-    setReady(true);
     return () => {
       for (const state of Object.keys(DOCS)) {
         store.clearDraft(getChatThreadKey(threadRefFor(state)));

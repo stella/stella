@@ -20,7 +20,6 @@ import {
   useCallback,
   useEffect,
   useId,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -28,6 +27,7 @@ import {
 
 import { Temporal } from "temporal-polyfill/full";
 
+import { useLatest, useLayoutSyncEffect } from "../effects/effects";
 import { ChevronRightIcon as ChevronRight } from "../icons";
 import { DOCUMENT_PANEL_SAFE_BOTTOM } from "../lib/panel-inset";
 import { cn } from "../lib/utils";
@@ -529,8 +529,8 @@ export const OutlineRail = ({
   // depends on resolvePct directly, so ticks recompute when the resolver's
   // output changes (e.g. Folio's docSize); React Compiler keeps the adapters'
   // inline resolvers referentially stable between unrelated renders.
-  const resolvePctRef = useRef(resolvePct);
-  const onJumpRef = useRef(onJump);
+  const resolvePctRef = useLatest(resolvePct);
+  const onJumpRef = useLatest(onJump);
 
   const tree = useMemo(() => buildTree(items), [items]);
 
@@ -607,16 +607,10 @@ export const OutlineRail = ({
     setPctById(next);
   }, [items, scrollContainerRef, resolvePct]);
 
-  const recalcRef = useRef(recalc);
-  // Keep the latest onJump/resolvePct/recalc in refs so async consumers (scroll
-  // listener, ResizeObserver, click handlers) read the current values without
-  // re-subscribing. Assigning in a layout effect (rather than during render)
-  // keeps refs fresh every commit while staying render-pure.
-  useLayoutEffect(() => {
-    resolvePctRef.current = resolvePct;
-    onJumpRef.current = onJump;
-    recalcRef.current = recalc;
-  });
+  // Keep the latest recalc (like onJump and resolvePct above) in a ref so
+  // async consumers (scroll listener, ResizeObserver, click handlers) read the
+  // current one without re-subscribing.
+  const recalcRef = useLatest(recalc);
 
   useEffect(() => {
     recalc();
@@ -630,7 +624,7 @@ export const OutlineRail = ({
     const observer = new ResizeObserver(() => recalcRef.current());
     observer.observe(container);
     return () => observer.disconnect();
-  }, [scrollContainerRef]);
+  }, [recalcRef, scrollContainerRef]);
 
   // Derived active tracking (skipped when caller controls `activeId`).
   useEffect(() => {
@@ -672,7 +666,7 @@ export const OutlineRail = ({
       cancelAnimationFrame(raf);
       container.removeEventListener("scroll", onScroll);
     };
-  }, [activeId, items, scrollContainerRef]);
+  }, [activeId, items, resolvePctRef, scrollContainerRef]);
 
   const active = activeId === undefined ? derivedActive : activeId;
 
@@ -715,7 +709,7 @@ export const OutlineRail = ({
       }
       onJumpRef.current(id, container);
     },
-    [activeControlled, scrollContainerRef],
+    [activeControlled, onJumpRef, scrollContainerRef],
   );
 
   const toggleCollapse = useCallback(
@@ -758,7 +752,7 @@ export const OutlineRail = ({
   // keep it where it can be seen. `nearest` moves the panel only when the row
   // is actually out of view, and the derived (scroll-tracked) active row is
   // left alone: following the reader's own scrolling would fight them.
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     if (activeIndex === -1 || !panelOpen) {
       return;
     }

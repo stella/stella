@@ -7,9 +7,8 @@ import {
   caseLawDecisions,
 } from "@/api/db/schema";
 import type { Transaction } from "@/api/db/types";
+import { enqueueCitationArrivals } from "@/api/handlers/case-law/citation-arrivals";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
-import { reopenCitationsForDecisionIdentifiers } from "@/api/handlers/case-law/citation-resolution";
-import type { ReopenedCitations } from "@/api/handlers/case-law/citation-resolution";
 import type { ObservationShape } from "@/api/handlers/case-law/ingestion/pipeline/decision-existing";
 import type {
   DecisionIdentity,
@@ -72,23 +71,24 @@ type DecisionIdentifierLookup = Pick<
  * in both directions: it can satisfy citations that gave up on that key, and
  * it can make a key that had exactly one holder ambiguous, which retracts
  * edges drawn to the earlier holder. Neither is discoverable from the citing
- * side, so the standing walk would never revisit them; doing it here, in the
- * transaction that created the reason, is what keeps the graph honest.
+ * side, so the standing walk would never revisit them.
  *
  * Only when the identifier set is genuinely new to this row: a metadata
  * refresh under the same identities changes nothing about who can be cited.
  *
- * Returns what it reopened, for the write to settle once the decision's row
- * and identifiers are stored (`settleReopenedCitations`).
+ * The identifiers are enqueued in this write's transaction, so they commit
+ * with the row; the drain after the page (or after this decision, for a
+ * caller with one) reopens and settles what they answer
+ * (`citation-arrivals.ts`). Returns how many it enqueued.
  */
 export const announceDecisionIdentifiers = async (
   tx: CitationGraphTransaction<Transaction>,
   { result, persistedDecisionDate }: DecisionRowWrite,
   id: SafeId<"caseLawDecision">,
   identifiers: readonly DecisionIdentifierLookup[],
-): Promise<ReopenedCitations> => {
+): Promise<number> => {
   if (identifiers.length === 0) {
-    return { reopened: 0, citationIds: [] };
+    return 0;
   }
   if (!isCaseLawJurisdiction(result.country)) {
     // A stored country nobody declares a resolution policy for. Loud rather
@@ -97,9 +97,9 @@ export const announceDecisionIdentifiers = async (
     logger.error("case_law.citation_resolution.undeclared_jurisdiction", {
       jurisdiction: result.country,
     });
-    return { reopened: 0, citationIds: [] };
+    return 0;
   }
-  return await reopenCitationsForDecisionIdentifiers(tx, {
+  return await enqueueCitationArrivals(tx, {
     identifiers,
     decisionId: id,
     jurisdiction: result.country,

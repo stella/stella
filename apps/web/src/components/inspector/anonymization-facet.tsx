@@ -1,4 +1,4 @@
-import { lazy, Suspense, useLayoutEffect, useRef, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 /**
  * Inspector facet — workspace-scoped anonymization vocabulary.
  *
@@ -30,6 +30,7 @@ import {
 import {
   useExternalSyncEffect,
   useLatestCallback,
+  useLayoutSyncEffect,
   useMountEffect,
 } from "@stll/ui/effects";
 import { Form } from "@stll/ui/form";
@@ -214,6 +215,120 @@ type AnonymizationFacetProps = {
    * untriggerable label.
    */
   onOpenFullView?: () => void;
+};
+
+/**
+ * Which detected groups are open, and the reveal of a document click: on every
+ * doc-sourced selection bump for this document, the selection's group opens
+ * and its row scrolls into view with a brief outline flash.
+ */
+const useDetectedGroupExpansion = (
+  activeFieldId: string | null,
+  detectedGroups: readonly (readonly [string, unknown])[],
+) => {
+  const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const toggleGroup = (label: string) =>
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) {
+        next.delete(label);
+      } else {
+        next.add(label);
+      }
+      return next;
+    });
+
+  // Click in the document → highlight matching row here.
+  // Subscribe to the bridge store and, on every doc-sourced
+  // selection bump *for this document*, find the row by data
+  // attribute, scroll it into view, and run a brief outline
+  // flash. Sidebar-sourced selections (our own emits) are
+  // ignored to avoid loops; selections from other docs (cached
+  // tab panes) are ignored too.
+  const containerRef = useRef<HTMLDivElement>(null);
+  // Select primitives separately rather than returning a fresh
+  // `{ canonical, label, seq }` object from the selector. Zustand
+  // v5 uses referential equality on selector results, so an
+  // object literal would re-render on every store change and risk
+  // an infinite getSnapshot loop. Each primitive selector is
+  // stable across unrelated updates.
+  const docSelectionCanonical = useInspectorAnonymizationStore((s) =>
+    s.anonymizationSelection.source === "doc" &&
+    s.anonymizationSelection.fieldId === activeFieldId
+      ? s.anonymizationSelection.canonical
+      : null,
+  );
+  const docSelectionLabel = useInspectorAnonymizationStore((s) =>
+    s.anonymizationSelection.source === "doc" &&
+    s.anonymizationSelection.fieldId === activeFieldId
+      ? s.anonymizationSelection.label
+      : null,
+  );
+  const docSelectionSeq = useInspectorAnonymizationStore((s) =>
+    s.anonymizationSelection.source === "doc" &&
+    s.anonymizationSelection.fieldId === activeFieldId
+      ? s.anonymizationSelection.seq
+      : 0,
+  );
+  // Detected groups start collapsed; a doc click that lands on a detected
+  // canonical opens its group in the render that sees the click (seeded 0,
+  // the no-selection seq, so a selection waiting at mount counts too), and
+  // the layout effect below scrolls to the row in the same commit.
+  const [expandedForSeq, setExpandedForSeq] = useState(0);
+  if (expandedForSeq !== docSelectionSeq) {
+    setExpandedForSeq(docSelectionSeq);
+    setExpandedGroups((prev) =>
+      withDetectedGroupExpanded(prev, docSelectionLabel, detectedGroups),
+    );
+  }
+  useLayoutSyncEffect(() => {
+    if (!docSelectionCanonical) {
+      return;
+    }
+    const root = containerRef.current;
+    if (!root) {
+      return;
+    }
+    // `seq` is part of the dep array so repeated clicks of the
+    // same canonical re-fire the scroll + flash.
+    const selector = `[data-anonymization-canonical="${CSS.escape(docSelectionCanonical)}"]`;
+    const row = root.querySelector<HTMLElement>(selector);
+    if (!row) {
+      return;
+    }
+    row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    row.animate(
+      [
+        { boxShadow: "inset 0 0 0 2px var(--primary)" },
+        { boxShadow: "inset 0 0 0 2px transparent" },
+      ],
+      { duration: 600, easing: "ease-out" },
+    );
+  }, [docSelectionCanonical, docSelectionSeq]);
+  return { containerRef, expandedGroups, toggleGroup };
+};
+
+// The expanded set with the doc selection's group opened, or the same set when
+// there is nothing to open. Only the detected section is collapsible —
+// workspace term rows live above it and are always visible.
+const withDetectedGroupExpanded = (
+  expanded: ReadonlySet<string>,
+  label: string | null,
+  detectedGroups: readonly (readonly [string, unknown])[],
+): ReadonlySet<string> => {
+  if (
+    label === null ||
+    label.length === 0 ||
+    expanded.has(label) ||
+    !detectedGroups.some(([groupLabel]) => groupLabel === label)
+  ) {
+    return expanded;
+  }
+  const next = new Set(expanded);
+  next.add(label);
+  return next;
 };
 
 export const AnonymizationFacet = ({
@@ -648,101 +763,8 @@ export const AnonymizationFacet = ({
     }
     return [...groups.entries()].toSorted(([a], [b]) => compareText(a, b));
   })();
-  const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
-  const toggleGroup = (label: string) =>
-    setExpandedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(label)) {
-        next.delete(label);
-      } else {
-        next.add(label);
-      }
-      return next;
-    });
-
-  // Click in the document → highlight matching row here.
-  // Subscribe to the bridge store and, on every doc-sourced
-  // selection bump *for this document*, find the row by data
-  // attribute, scroll it into view, and run a brief outline
-  // flash. Sidebar-sourced selections (our own emits) are
-  // ignored to avoid loops; selections from other docs (cached
-  // tab panes) are ignored too.
-  const containerRef = useRef<HTMLDivElement>(null);
-  // Select primitives separately rather than returning a fresh
-  // `{ canonical, label, seq }` object from the selector. Zustand
-  // v5 uses referential equality on selector results, so an
-  // object literal would re-render on every store change and risk
-  // an infinite getSnapshot loop. Each primitive selector is
-  // stable across unrelated updates.
-  const docSelectionCanonical = useInspectorAnonymizationStore((s) =>
-    s.anonymizationSelection.source === "doc" &&
-    s.anonymizationSelection.fieldId === activeFieldId
-      ? s.anonymizationSelection.canonical
-      : null,
-  );
-  const docSelectionLabel = useInspectorAnonymizationStore((s) =>
-    s.anonymizationSelection.source === "doc" &&
-    s.anonymizationSelection.fieldId === activeFieldId
-      ? s.anonymizationSelection.label
-      : null,
-  );
-  const docSelectionSeq = useInspectorAnonymizationStore((s) =>
-    s.anonymizationSelection.source === "doc" &&
-    s.anonymizationSelection.fieldId === activeFieldId
-      ? s.anonymizationSelection.seq
-      : 0,
-  );
-  useLayoutEffect(() => {
-    if (!docSelectionCanonical) {
-      return;
-    }
-    // Detected groups start collapsed; if the doc click lands on
-    // a detected canonical whose group isn't open yet, expand it
-    // first. The effect re-runs after expandedGroups updates and
-    // proceeds to the scroll/flash branch below.
-    if (
-      docSelectionLabel &&
-      !expandedGroups.has(docSelectionLabel) &&
-      // Only the detected section is collapsible — workspace
-      // term rows live above it and are always visible.
-      detectedGroups.some(([label]) => label === docSelectionLabel)
-    ) {
-      // oxlint-disable-next-line react/set-state-in-effect -- external subscription: two-pass reaction to a doc-selection store bump; this commit expands the target group, the effect re-run then scrolls + flashes via DOM imperatives that depend on the expand having committed
-      setExpandedGroups((prev) => {
-        const next = new Set(prev);
-        next.add(docSelectionLabel);
-        return next;
-      });
-      return;
-    }
-    const root = containerRef.current;
-    if (!root) {
-      return;
-    }
-    // `seq` is part of the dep array so repeated clicks of the
-    // same canonical re-fire the scroll + flash.
-    const selector = `[data-anonymization-canonical="${CSS.escape(docSelectionCanonical)}"]`;
-    const row = root.querySelector<HTMLElement>(selector);
-    if (!row) {
-      return;
-    }
-    row.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    row.animate(
-      [
-        { boxShadow: "inset 0 0 0 2px var(--primary)" },
-        { boxShadow: "inset 0 0 0 2px transparent" },
-      ],
-      { duration: 600, easing: "ease-out" },
-    );
-  }, [
-    docSelectionCanonical,
-    docSelectionLabel,
-    docSelectionSeq,
-    expandedGroups,
-    detectedGroups,
-  ]);
+  const { containerRef, expandedGroups, toggleGroup } =
+    useDetectedGroupExpansion(activeFieldId, detectedGroups);
 
   const selectFromSidebar = (canonical: string, label: string) => {
     if (activeFieldId === null) {

@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { QueryClientProvider } from "@tanstack/react-query";
 
-import { useMountEffect } from "@stll/ui/effects";
+import { useHasMounted, useMountEffect } from "@stll/ui/effects";
 import { ScrollArea } from "@stll/ui/scroll-area";
 
 import { PlaybookEditor } from "@/features/knowledge/playbook-editor/playbook-editor";
@@ -48,7 +48,9 @@ export const PlaybookEditorPlayground = () => {
     });
     return queryClient;
   });
-  const [ready, setReady] = useState(false);
+  // False until the seeding below has run: the mount effects all finish
+  // before the render this latch causes.
+  const ready = useHasMounted();
 
   useMountEffect(() => {
     client.setQueryData(roleOptions.queryKey, "owner");
@@ -103,7 +105,6 @@ export const PlaybookEditorPlayground = () => {
         isTabOpen: () => true,
       });
     }
-    setReady(true);
     return () => {
       for (const state of playbookEditorStates) {
         discardParkedPlaybookPane(tabId(state));

@@ -21,12 +21,14 @@ import { isStrippableLabel } from "@/api/lib/templates/house-style/folio-contrac
 import type {
   DocxBlock,
   DocxBlockManifest,
+  DocxSection,
   TemplatePlan,
   TemplatePlanHighlight,
   TemplatePlanNestedParagraph,
   TemplatePlanNumbering,
   TemplatePlanNumberingPatch,
   TemplatePlanReference,
+  TemplatePlanSection,
   TemplatePlanSourceItem,
 } from "@/api/lib/templates/house-style/folio-contract";
 import { buildLabelIndex } from "@/api/lib/templates/house-style/label-index";
@@ -46,6 +48,7 @@ import type {
 } from "@/api/lib/templates/house-style/plan-numbering";
 import type { DetectedReference } from "@/api/lib/templates/house-style/reference-detector";
 import {
+  selectLabelField,
   selectReferenceField,
   showsBareNumber,
 } from "@/api/lib/templates/house-style/reference-fields";
@@ -93,8 +96,15 @@ type UnlinkedReason =
   | "designatorMismatch"
   /** The target's level prints words with punctuation (`Čl. 3`,
    *  `Příloha č. 2`); a field drops the words and keeps the punctuation,
-   *  so it would show `.2`. */
+   *  so it would show `.2`. And the citation does not print those words
+   *  itself (`článku 3`), so no field stands for word and number either. */
   | "punctuatedLevelWords"
+  /** The citation prints the label's words in a spelling no field gives
+   *  back: lower case in front of a roman number (`čl. IV`). */
+  | "caseNotReproducible"
+  /** The citation prints the label's words with another blank than the
+   *  label (a no-break space for a plain one); a field would change it. */
+  | "blankDiffers"
   /** The reference stands in the paragraph it names. */
   | "sameParagraph"
   /** The span cannot carry a field: it lies in a stripped label or in a
@@ -130,6 +140,34 @@ type FormattingNoteItem =
    *  list. */
   | { kind: "labelConvertedToText"; blockId: string; reason: LabelKeptReason }
   | { kind: "roleWithoutStyle"; role: HouseStyleRole; blocks: number }
+  /** The source starts a page in front of this block and the output does
+   *  not: a table cannot be told to start one. */
+  | { kind: "pageStartNotKept"; blockId: string; reason: "table" }
+  /** A section of the source ends after this block and the next one's
+   *  layout is not carried over: it begins on the same page (`continuous`,
+   *  `nextColumn`), or its page or its columns are other than the
+   *  document's first section has. A section that begins on a new page
+   *  still begins one. */
+  | {
+      kind: "sectionLayoutNotKept";
+      afterBlockId: string;
+      start: DocxSection["start"];
+      pageDiffers: boolean;
+      columns: number;
+    }
+  /** The output keeps the spacing of a justified line that ends in a
+   *  manual line break, which the template's settings would stretch to the
+   *  margin: because the source's settings kept it (`source`), or because
+   *  `blocks` paragraphs with such a break are justified here and were not
+   *  in the source, or got their break by being joined (`justifiedHere`).
+   *  The setting is the document's: `alreadyStretched` paragraphs showed
+   *  the stretched line in the source and lose it with the others. */
+  | {
+      kind: "lineBreakSpacingKept";
+      reason: "source" | "justifiedHere";
+      blocks: number;
+      alreadyStretched: number;
+    }
   | {
       kind: "templateBlocksKept";
       region: "keepBefore" | "contents";
@@ -146,6 +184,12 @@ export type FormattingNote = {
     numbered: number;
     /** Paragraphs whose automatic label is written as text. */
     labelsConvertedToText: number;
+    /** Paragraphs told to start a page, for a page the source started by a
+     *  break that is not placed. */
+    pageStarts: number;
+    /** Sections of the source that stay sections, for a page other than
+     *  the first section's. */
+    sectionsKept: number;
     numberingPatches: number;
     referencesLinked: number;
     referencesUnlinked: number;
@@ -176,6 +220,7 @@ export const NO_EXCLUSIONS: PlanExclusions = {
 
 /** A table whose cells the plan places as they are. */
 const NO_NESTED: readonly TemplatePlanNestedParagraph[] = [];
+const NO_SECTIONS: readonly DocxSection[] = [];
 
 const CLAUSE_ROLES = ["clause1", "clause2", "clause3"] as const;
 
@@ -243,6 +288,11 @@ type Context = {
   /** The table a cell paragraph sits in. */
   tableOf: ReadonlyMap<string, string>;
   topLevel: readonly DocxBlock[];
+  /** The source's sections; empty when the manifest does not report them. */
+  sections: readonly DocxSection[];
+  /** The sections of the source that stay sections: their last paragraph
+   *  and what the plan says of each, and the one the body ends with. */
+  keptSections: KeptSections;
   index: LabelIndex;
   profile: TemplateProfile;
   mode: NumberingMode;
@@ -254,6 +304,13 @@ type Context = {
   stylelessRoles: Map<HouseStyleRole, number>;
   items: FormattingNoteItem[];
 };
+
+type KeptSections = {
+  ends: ReadonlyMap<string, TemplatePlanSection>;
+  last: TemplatePlanSection | undefined;
+};
+
+const NO_KEPT_SECTIONS: KeptSections = { ends: new Map(), last: undefined };
 
 /** Every paragraph inside a table, cells of nested tables included. */
 const insideOf = (
@@ -377,6 +434,8 @@ type Placed = {
   /** The heading a joined title paragraph ends up in. */
   mergedInto: Map<string, string>;
   omitted: Map<string, "empty" | "sourceToc">;
+  /** Placed paragraphs that start a page. */
+  pageStarts: Set<string>;
 };
 
 const roleOf = (
@@ -396,14 +455,20 @@ const roleOf = (
  * Two tables with nothing between them are one table to a word processor,
  * and a document's last block has to be a paragraph.
  */
-const tableSeparators = (context: Context): Set<string> => {
+const tableSeparators = (
+  context: Context,
+  pageHolders: ReadonlySet<string>,
+): Set<string> => {
   const { topLevel, index } = context;
   const separators = new Set<string>();
   /** Whether only blank paragraphs came since the last table. */
   let afterTable = false;
   let firstBlank: string | null = null;
+  /** A blank paragraph of the gap stays anyway, to start the page: it
+   *  parts the tables, and one kept paragraph per gap is enough. */
+  let held = false;
   const keep = () => {
-    if (afterTable && firstBlank !== null) {
+    if (afterTable && firstBlank !== null && !held) {
       separators.add(firstBlank);
     }
   };
@@ -412,6 +477,7 @@ const tableSeparators = (context: Context): Set<string> => {
       keep();
       afterTable = true;
       firstBlank = null;
+      held = false;
       continue;
     }
     if (!afterTable || index.contentsBlockIds.has(block.id)) {
@@ -419,6 +485,7 @@ const tableSeparators = (context: Context): Set<string> => {
     }
     if (roleOf(context, block) === null && isBlankParagraph(block)) {
       firstBlank ??= block.id;
+      held ||= pageHolders.has(block.id);
       continue;
     }
     afterTable = false;
@@ -427,16 +494,305 @@ const tableSeparators = (context: Context): Set<string> => {
   return separators;
 };
 
+const NEW_PAGE_STARTS: ReadonlySet<DocxSection["start"]> = new Set([
+  "nextPage",
+  "evenPage",
+  "oddPage",
+]);
+
+/** The section that begins after `block`, when `block` ends one. */
+const sectionAfter = (
+  { sections }: Context,
+  block: DocxBlock,
+): DocxSection | undefined =>
+  block.endsSection === true
+    ? sections.find(({ index }) => index === block.sectionIndex + 1)
+    : undefined;
+
+/** Whether the block after `block` opens a section on a new page that
+ *  nothing else starts: a section that stays a section starts its own. */
+const endsPage = (context: Context, block: DocxBlock): boolean => {
+  const next = sectionAfter(context, block);
+  return (
+    next !== undefined &&
+    NEW_PAGE_STARTS.has(next.start) &&
+    !context.keptSections.ends.has(block.id)
+  );
+};
+
+/** Whether a paragraph that is left out starts a page by what it holds. */
+const breaksPage = ({ pageBreaks = 0, pageBreakBefore }: DocxBlock): boolean =>
+  pageBreaks > 0 || pageBreakBefore === true;
+
+/**
+ * The blank paragraphs that stay because the source starts a page in front
+ * of a table: a table cannot be told to start one, so the last blank
+ * paragraph in front of it stays and starts the page, by the break it holds
+ * or by being told to.
+ */
+const pageHoldersBeforeTables = (context: Context): Set<string> => {
+  const { topLevel, index } = context;
+  const holders = new Set<string>();
+  let pending = false;
+  let placedAny = false;
+  let lastBlank: string | null = null;
+  for (const block of topLevel) {
+    if (block.kind === "table") {
+      if (pending && placedAny && lastBlank !== null) {
+        holders.add(lastBlank);
+      }
+      pending = false;
+      placedAny = true;
+      lastBlank = null;
+    } else if (index.contentsBlockIds.has(block.id)) {
+      pending ||= breaksPage(block);
+    } else if (roleOf(context, block) === null && isBlankParagraph(block)) {
+      pending ||= breaksPage(block);
+      lastBlank = block.id;
+    } else {
+      pending = false;
+      placedAny = true;
+      lastBlank = null;
+    }
+    pending ||= endsPage(context, block);
+  }
+  return holders;
+};
+
+/**
+ * The blocks in front of which the source starts a page, by its facts
+ * alone and before anything is placed: a page break in a blank paragraph
+ * or in a line of the source's contents passes to the block after it, as
+ * does a section that ends on a new page.
+ */
+const pageStartsInSource = (context: Context): Set<string> => {
+  const starts = new Set<string>();
+  let pending = false;
+  for (const block of context.topLevel) {
+    const passesOn =
+      block.kind === "paragraph" &&
+      (isBlankParagraph(block) || context.index.contentsBlockIds.has(block.id));
+    if (passesOn) {
+      pending ||= breaksPage(block);
+    } else {
+      if (pending || block.pageBreakBefore === true) {
+        starts.add(block.id);
+      }
+      pending = false;
+    }
+    const next = sectionAfter(context, block);
+    pending ||= next !== undefined && NEW_PAGE_STARTS.has(next.start);
+  }
+  return starts;
+};
+
+/** Whether a section's page is another than the document's first has. */
+const pageDiffersFrom = (
+  base: DocxSection | undefined,
+  { orientation, size }: DocxSection,
+): boolean =>
+  base !== undefined &&
+  (base.orientation !== orientation ||
+    base.size.width !== size.width ||
+    base.size.height !== size.height);
+
+/** The page of a section for a plan, when it is another than the first
+ *  section's: `undefined` when it is the same, null when the section does
+ *  not state the size of its page. */
+const plannedPage = (
+  base: DocxSection | undefined,
+  section: DocxSection,
+): TemplatePlanSection["page"] | null => {
+  if (!pageDiffersFrom(base, section)) {
+    return undefined;
+  }
+  const { width, height } = section.size;
+  if (width === null || height === null) {
+    return null;
+  }
+  const { top, right, bottom, left } = section.margins;
+  return {
+    orientation: section.orientation,
+    width,
+    height,
+    ...(top === null || right === null || bottom === null || left === null
+      ? {}
+      : { margins: { top, right, bottom, left } }),
+  };
+};
+
+/** A section of a plan: the page when it is another, and an even or odd
+ *  start, which the default does not give. */
+const plannedSection = (
+  page: TemplatePlanSection["page"],
+  start: DocxSection["start"] | undefined,
+): TemplatePlanSection => ({
+  ...(page === undefined ? {} : { page }),
+  ...(start === "evenPage" || start === "oddPage" ? { start } : {}),
+});
+
+/**
+ * The sections of the source that stay sections in the output: those whose
+ * page is another than the first section's (a landscape annex), and their
+ * neighbours, which have to end where such a page begins. Every other
+ * section end becomes a page start, or nothing, so a section of the output
+ * can span several of the source: it begins as the first of them does. A
+ * section ends with the paragraph that ended it in the source; when one of
+ * those cannot carry it (it is a line of the source's contents, or joins
+ * its heading), no section is kept and the note lists what was lost.
+ */
+const sectionsToKeep = (context: Context): KeptSections => {
+  const { sections, topLevel, index, proposalById } = context;
+  const base = sections.at(0);
+  const differs = sections.map((section) => pageDiffersFrom(base, section));
+  if (!differs.includes(true)) {
+    return NO_KEPT_SECTIONS;
+  }
+  const ends = new Map<string, TemplatePlanSection>();
+  /** The source section the output section in progress began with. */
+  let opened = base;
+  for (const [position, section] of sections.entries()) {
+    const page = plannedPage(base, section);
+    if (page === null) {
+      return NO_KEPT_SECTIONS;
+    }
+    if (position === sections.length - 1) {
+      const last = plannedSection(page, opened?.start);
+      return { ends, last: Object.keys(last).length === 0 ? undefined : last };
+    }
+    if (!(differs[position] === true || differs[position + 1] === true)) {
+      continue;
+    }
+    const carrier = topLevel.find(
+      (block) =>
+        block.kind === "paragraph" &&
+        block.endsSection === true &&
+        block.sectionIndex === section.index,
+    );
+    if (
+      carrier === undefined ||
+      index.contentsBlockIds.has(carrier.id) ||
+      (proposalById.get(carrier.id)?.mergedIntoBlockId ?? null) !== null
+    ) {
+      return NO_KEPT_SECTIONS;
+    }
+    // The document's first section begins the document, whatever it says.
+    ends.set(
+      carrier.id,
+      plannedSection(page, ends.size === 0 ? undefined : opened?.start),
+    );
+    opened = sections[position + 1];
+  }
+  return NO_KEPT_SECTIONS;
+};
+
+/** Notes the section that begins after `block` when its layout does not
+ *  come along: it begins on the same page, or its page or columns are
+ *  other than the document's first section has. */
+const noteSectionAfter = (context: Context, block: DocxBlock): void => {
+  const next = sectionAfter(context, block);
+  if (next === undefined) {
+    return;
+  }
+  const base = context.sections.at(0);
+  // A section that stays a section keeps its page and its start.
+  const kept = context.keptSections.ends.has(block.id);
+  const pageDiffers = !kept && pageDiffersFrom(base, next);
+  if (
+    (!kept && !NEW_PAGE_STARTS.has(next.start)) ||
+    pageDiffers ||
+    next.columns !== (base?.columns ?? 1)
+  ) {
+    context.items.push({
+      kind: "sectionLayoutNotKept",
+      afterBlockId: block.id,
+      start: next.start,
+      pageDiffers,
+      columns: next.columns,
+    });
+  }
+};
+
+/**
+ * The placed paragraphs in front of which the source starts a page by
+ * something the plan does not place: a page break in a paragraph that is
+ * left out, the paragraph's own formatting, or a section that begins on a
+ * new page. A paragraph that is placed carries the breaks among its runs
+ * itself.
+ */
+const pageStartsOf = (
+  context: Context,
+  placed: Placed,
+  holders: ReadonlySet<string>,
+): Set<string> => {
+  const starts = new Set<string>();
+  /** A page start waits for the next block that is placed. */
+  let pending = false;
+  /** Nothing starts a page in front of the document's first block. */
+  let placedAny = false;
+  /** A kept blank paragraph starts the page in front of the table that
+   *  follows: every start between the two is that one. */
+  let held = false;
+  for (const block of context.topLevel) {
+    noteSectionAfter(context, block);
+    if (block.kind === "table") {
+      if (pending && placedAny) {
+        context.items.push({
+          kind: "pageStartNotKept",
+          blockId: block.id,
+          reason: "table",
+        });
+      }
+      pending = false;
+      placedAny = true;
+      held = false;
+      continue;
+    }
+    if (holders.has(block.id)) {
+      // It was kept because the page starts in front of the table, by a
+      // break before it, behind it or in the section it closes. With a
+      // break of its own among its runs it needs no telling.
+      if ((block.pageBreaks ?? 0) === 0) {
+        starts.add(block.id);
+      }
+      pending = false;
+      placedAny = true;
+      held = true;
+      continue;
+    }
+    if (placed.omitted.has(block.id)) {
+      pending ||= !held && breaksPage(block);
+    } else if (!placed.mergedInto.has(block.id)) {
+      if ((pending || block.pageBreakBefore === true) && placedAny) {
+        starts.add(block.id);
+      }
+      pending = false;
+      placedAny = true;
+      held = false;
+    }
+    pending ||= !held && endsPage(context, block);
+  }
+  return starts;
+};
+
 /** A placement for every paragraph that gets one, in document order. */
 const placeParagraphs = (context: Context): Placed => {
   const { topLevel, blockById, index, exclusions, proposalById } = context;
-  const separators = tableSeparators(context);
+  const pageHolders = pageHoldersBeforeTables(context);
+  // A blank paragraph that ends a section which stays one carries it.
+  const kept = new Set([
+    ...tableSeparators(context, pageHolders),
+    ...pageHolders,
+    ...context.keptSections.ends.keys(),
+  ]);
+  const startsPage = pageStartsInSource(context);
   const placed: Placed = {
     placements: [],
     placementById: new Map(),
     titleOf: new Map(),
     mergedInto: new Map(),
     omitted: new Map(),
+    pageStarts: new Set(),
   };
   /** The paragraph placed last at the top level; a table ends the run. */
   let lastPlaced: string | null = null;
@@ -457,7 +813,7 @@ const placeParagraphs = (context: Context): Placed => {
       continue;
     }
     const role = roleOf(context, block);
-    if (role === null && isBlankParagraph(block) && !separators.has(block.id)) {
+    if (role === null && isBlankParagraph(block) && !kept.has(block.id)) {
       placed.omitted.set(block.id, "empty");
       continue;
     }
@@ -466,7 +822,12 @@ const placeParagraphs = (context: Context): Placed => {
       head !== null &&
       lastPlaced === head &&
       !placed.titleOf.has(head) &&
-      !exclusions.merges.has(head)
+      !exclusions.merges.has(head) &&
+      // A title that starts a page is a line of its own: joined to its
+      // heading it would stay on the page before. So is one behind the end
+      // of a section that stays a section: it belongs to the next.
+      !startsPage.has(block.id) &&
+      !context.keptSections.ends.has(head)
     ) {
       placed.mergedInto.set(block.id, head);
       placed.titleOf.set(head, block);
@@ -486,6 +847,7 @@ const placeParagraphs = (context: Context): Placed => {
   for (const placement of placed.placements) {
     placed.placementById.set(placement.block.id, placement);
   }
+  placed.pageStarts = pageStartsOf(context, placed, pageHolders);
   return placed;
 };
 
@@ -635,6 +997,10 @@ type ParagraphItemOptions = {
   placement: Placement;
   title: DocxBlock | undefined;
   breaks: boolean;
+  /** Whether the paragraph starts a page. */
+  pageStart: boolean;
+  /** The section the paragraph is the last of, when it stays a section. */
+  endsSection: TemplatePlanSection | undefined;
 };
 
 /** A paragraph's item and, for a split heading, its title's bare item. */
@@ -643,6 +1009,8 @@ const paragraphItems = ({
   placement,
   title,
   breaks,
+  pageStart,
+  endsSection,
 }: ParagraphItemOptions): TemplatePlanSourceItem[] => {
   const { block } = placement;
   const stripped = stripOf(placement);
@@ -668,6 +1036,8 @@ const paragraphItems = ({
     ...stripped,
     ...asTextOf(block, numbering),
     ...(title === undefined ? {} : { mergeNext }),
+    ...(pageStart ? { pageBreakBefore: true } : {}),
+    ...(endsSection === undefined ? {} : { endsSection }),
   };
   return title === undefined
     ? [item]
@@ -744,11 +1114,112 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
       placement,
       title: titleOf.get(block.id),
       breaks,
+      pageStart: placed.pageStarts.has(block.id),
+      endsSection: context.keptSections.ends.get(block.id),
     });
     placedCount += paragraph.length;
     body.push(...paragraph);
   }
   return { body, placedCount, contentsKept };
+};
+
+const JUSTIFIED: ReadonlySet<string> = new Set(["both", "distribute"]);
+
+/** One paragraph of the output: the blocks it is made of, its style, and
+ *  whether a line break joins them. */
+type OutputParagraph = {
+  blockIds: string[];
+  styleId: string | undefined;
+  joinedByBreak: boolean;
+};
+
+/** The paragraphs a plan's body writes. A heading and the title joined to
+ *  it are one paragraph, in the heading's style. */
+const outputParagraphs = (body: TemplatePlan["body"]): OutputParagraph[] => {
+  const paragraphs: OutputParagraph[] = [];
+  let open: OutputParagraph | null = null;
+  for (const item of body) {
+    if (item.kind !== "source") {
+      open = null;
+      continue;
+    }
+    if (open === null) {
+      open = { blockIds: [], styleId: item.styleId, joinedByBreak: false };
+      paragraphs.push(open);
+    }
+    open.blockIds.push(item.blockId);
+    for (const { blockId, styleId } of item.nested ?? NO_NESTED) {
+      paragraphs.push({ blockIds: [blockId], styleId, joinedByBreak: false });
+    }
+    if (item.mergeNext === undefined) {
+      open = null;
+    } else {
+      open.joinedByBreak ||= item.mergeNext === "lineBreak";
+    }
+  }
+  return paragraphs;
+};
+
+/**
+ * Whether the output has to keep the spacing of justified lines that end in
+ * a manual line break, with the note that says why. A word processor
+ * stretches such a line to the margin unless the document's settings say
+ * otherwise, and the output's settings are the template's. The setting is
+ * switched on only where that changes how the document looked: its own
+ * settings had it, or a paragraph with such a break is justified by the
+ * template's style and was not justified before, or got the break by being
+ * joined to its heading. A manifest without these facts changes nothing.
+ *
+ * The setting is the whole document's. Where it is switched on for one
+ * paragraph, a paragraph that was justified with such a break in the source,
+ * and showed the stretched line there, loses the stretch too: one look for
+ * all such lines, and the one nobody sets on purpose goes. The note counts
+ * those paragraphs.
+ */
+const keepsLineBreakSpacing = (
+  { blockById, profile, items }: Context,
+  compat: DocxBlockManifest["compat"],
+  body: TemplatePlan["body"],
+): boolean => {
+  if (compat === undefined) {
+    return false;
+  }
+  const justifies = (styleId: string | undefined): boolean =>
+    JUSTIFIED.has(
+      (styleId === undefined
+        ? profile.defaultAlignment
+        : Object.values(profile.roles).find(
+            (target) => target?.styleId === styleId,
+          )?.alignment) ?? "",
+    );
+  let blocks = 0;
+  let alreadyStretched = 0;
+  for (const { blockIds, styleId, joinedByBreak } of outputParagraphs(body)) {
+    const broken = blockIds
+      .map((id) => blockById.get(id))
+      .filter((block) => block?.text.includes("\n") === true);
+    if (!justifies(styleId) || (!joinedByBreak && broken.length === 0)) {
+      continue;
+    }
+    const wasStretched =
+      !joinedByBreak &&
+      broken.every((block) => JUSTIFIED.has(block?.alignment ?? ""));
+    if (wasStretched) {
+      alreadyStretched += 1;
+    } else {
+      blocks += 1;
+    }
+  }
+  if (!compat.doNotExpandShiftReturn && blocks === 0) {
+    return false;
+  }
+  items.push({
+    kind: "lineBreakSpacingKept",
+    reason: compat.doNotExpandShiftReturn ? "source" : "justifiedHere",
+    blocks,
+    alreadyStretched: compat.doNotExpandShiftReturn ? 0 : alreadyStretched,
+  });
+  return true;
 };
 
 type Marks = {
@@ -766,16 +1237,61 @@ type MarkOptions = {
 
 type Designator = DetectedReference["designators"][number];
 
-type Field = Pick<TemplatePlanReference, "instruction" | "expectedText">;
+type Field = Pick<TemplatePlanReference, "instruction" | "expectedText"> & {
+  /** Where the field starts when it covers more than the designator. */
+  start?: number;
+};
+
+/** A citation: the block's text and the designator's span in it. */
+type Citation = { text: string; start: number; end: number };
+
+const LABEL_FIELD_REASONS = {
+  "case-not-reproducible": "caseNotReproducible",
+  "blank-differs": "blankDiffers",
+} as const;
+
+/**
+ * The field for a citation of a target whose level prints punctuated
+ * words: one field over word and number that prints the whole label, or
+ * why the citation stays text.
+ */
+const labelFieldOf = (
+  citation: Citation,
+  levelText: string,
+  label: string | null,
+  keepsSourceNumbers: boolean,
+): Field | UnlinkedReason => {
+  if (label === null) {
+    return "punctuatedLevelWords";
+  }
+  const field = selectLabelField({
+    ...citation,
+    levelText,
+    label,
+    keepsSourceNumbers,
+  });
+  if (field.isOk()) {
+    const { instruction, expectedText, start } = field.value;
+    return { instruction, expectedText, start };
+  }
+  const { reason } = field.error;
+  if (reason === "case-not-reproducible" || reason === "blank-differs") {
+    return LABEL_FIELD_REASONS[reason];
+  }
+  return reason === "designator-mismatch"
+    ? "designatorMismatch"
+    : "punctuatedLevelWords";
+};
 
 /** The field that stands for a designator citing `target`, or why none
  *  shows exactly what the reference prints. */
 const fieldOf = (
   { mode }: Context,
   levelsByList: ReadonlyMap<number, ListLevelFormat[]>,
-  designatorText: string,
-  { level, sourceLabel, counters }: Placement,
+  citation: Citation,
+  target: Placement,
 ): Field | UnlinkedReason => {
+  const { level, sourceLabel, counters } = target;
   const levels =
     level === null ? undefined : levelsByList.get(level.abstractNumId);
   const own = levels?.find(({ ilvl }) => ilvl === level?.ilvl);
@@ -785,7 +1301,7 @@ const fieldOf = (
   // Under the house scheme the field shows the template's number, which
   // may differ from the designator the sentence was written with.
   const field = selectReferenceField({
-    designatorText,
+    designatorText: citation.text.slice(citation.start, citation.end),
     levelText: own.lvlText,
     numbering:
       mode === "keepSource"
@@ -798,9 +1314,17 @@ const fieldOf = (
       expectedText: field.value.expectedText,
     };
   }
-  return field.error.reason === "punctuated-words"
-    ? "punctuatedLevelWords"
-    : "designatorMismatch";
+  if (field.error.reason !== "punctuated-words") {
+    return "designatorMismatch";
+  }
+  // No field shows the bare number of such a level; one over the
+  // citation's word and number shows the label the output prints.
+  return labelFieldOf(
+    citation,
+    own.lvlText,
+    mode === "keepSource" ? sourceLabel : plannedLabelOf(target, levelsByList),
+    mode === "keepSource",
+  );
 };
 
 /** The block a designator cites, or why it names none. */
@@ -947,16 +1471,25 @@ const markReferences = ({
     if (paragraphOf(reference.blockId) === paragraphOf(targetBlockId)) {
       return "sameParagraph";
     }
-    const text = blockById.get(reference.blockId)?.text.slice(start, end);
+    const text = blockById.get(reference.blockId)?.text;
     if (text === undefined) {
       return "notPlaceable";
     }
-    const field = fieldOf(context, levelsByList, text, target);
+    const field = fieldOf(context, levelsByList, { text, start, end }, target);
     if (typeof field === "string") {
       return field;
     }
-    return claim(reference.blockId, start, end)
-      ? { blockId: reference.blockId, start, end, targetBlockId, ...field }
+    const { instruction, expectedText } = field;
+    const from = field.start ?? start;
+    return claim(reference.blockId, from, end)
+      ? {
+          blockId: reference.blockId,
+          start: from,
+          end,
+          targetBlockId,
+          instruction,
+          expectedText,
+        }
       : "notPlaceable";
   };
   for (const reference of references) {
@@ -1207,6 +1740,8 @@ export const buildTemplatePlan = ({
     blockById: new Map(blocks.map((block) => [block.id, block])),
     tableOf,
     topLevel: blocks.filter(({ id }) => !tableOf.has(id)),
+    sections: manifest.sections ?? NO_SECTIONS,
+    keptSections: NO_KEPT_SECTIONS,
     index,
     profile,
     mode,
@@ -1223,6 +1758,7 @@ export const buildTemplatePlan = ({
     items: [],
   };
 
+  context.keptSections = sectionsToKeep(context);
   const placed = placeParagraphs(context);
   const { patches, levelsByList } = numberPlacements({
     placements: placed.placements,
@@ -1255,6 +1791,12 @@ export const buildTemplatePlan = ({
   );
   noteReadings(context, placed, references, suspicions);
 
+  const lineBreakSpacing = keepsLineBreakSpacing(
+    context,
+    manifest.compat,
+    body,
+  );
+
   const plan: TemplatePlan = {
     version: 1,
     sourceSha256: manifest.sha256,
@@ -1270,6 +1812,10 @@ export const buildTemplatePlan = ({
       // kept table of contents would show the template's sample entries.
       updateOnOpen: marks.references.length > 0 || contentsKept,
     },
+    ...(lineBreakSpacing ? { compat: { doNotExpandShiftReturn: true } } : {}),
+    ...(context.keptSections.last === undefined
+      ? {}
+      : { lastSection: context.keptSections.last }),
   };
   return {
     plan,
@@ -1280,6 +1826,10 @@ export const buildTemplatePlan = ({
         omitted: placed.omitted.size,
         numbered: placed.placements.filter(({ numbered }) => numbered).length,
         labelsConvertedToText,
+        pageStarts: placed.pageStarts.size,
+        sectionsKept:
+          context.keptSections.ends.size +
+          (context.keptSections.last === undefined ? 0 : 1),
         numberingPatches: patches.length,
         referencesLinked: marks.references.length,
         referencesUnlinked: context.items.filter(

@@ -2,7 +2,6 @@ import {
   createContext,
   use,
   useCallback,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -35,7 +34,11 @@ import {
 } from "@stll/api-contract/chat-send-intent";
 import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
 import { ChatComposerLinks } from "@stll/chat/link-editor";
-import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useLayoutSyncEffect,
+} from "@stll/ui/effects";
 import { openFilePicker as openBrowserFilePicker } from "@stll/ui/file-picker";
 
 import {
@@ -881,7 +884,7 @@ export const useChatEditor = ({
   markDraftStartedRef.current = markDraftStarted;
 
   const committedThreadKeyRef = useRef(threadKey);
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     messageHistoryIndexRef.current = null;
     if (committedThreadKeyRef.current !== threadKey) {
       // Authored marks are per-thread. Do not clear them when only sent history

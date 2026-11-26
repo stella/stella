@@ -192,12 +192,9 @@ const getDragEntityIds = (
 
 // -- Component --
 
-/** A reveal first scrolls the virtualized list to the row, then flashes the
- * row once it has mounted. */
-type RevealState =
-  | { type: "idle" }
-  | { type: "scrolling"; entityId: string; rowIndex: number }
-  | { type: "flashing"; entityId: string };
+/** A reveal scrolls the virtualized list to the row and flashes the row once
+ * it has mounted; the row clears it when the flash has run. */
+type RevealState = { entityId: string; rowIndex: number } | null;
 
 type FilesystemViewProps = {
   workspaceId: string;
@@ -588,11 +585,22 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   });
   const virtualRows = rowVirtualizer.getVirtualItems();
 
-  // Consume `reveal`: expand the path to the entity, scroll its row into
-  // view, flash it once it renders, and drop the param so reloads and
-  // back-navigation don't replay it.
-  const [revealState, setRevealState] = useState<RevealState>({
-    type: "idle",
+  // Consume `reveal`: drop the param so reloads and back-navigation don't
+  // replay it, then expand the path to the entity, scroll its row into view,
+  // and flash it once it renders.
+  const [revealState, setRevealState] = useState<RevealState>(null);
+  // Planned against the tree and expansion current when the param is gone.
+  const revealEntity = useLatestCallback((entityId: string) => {
+    const reveal = planFilesystemReveal({
+      ancestorIds: getAncestorIds(entityId),
+      entityId,
+      expandedIds,
+      roots: visibleNodes,
+    });
+    if (reveal) {
+      setExpandedIds(reveal.expandedIds);
+      setRevealState({ entityId, rowIndex: reveal.rowIndex });
+    }
   });
   // The param lingers until the replace-navigation lands; handle it once.
   const handledRevealRef = useRef<string | null>(null);
@@ -606,42 +614,25 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       return;
     }
     handledRevealRef.current = revealEntityId;
-    const reveal = planFilesystemReveal({
-      ancestorIds: getAncestorIds(revealEntityId),
-      entityId: revealEntityId,
-      expandedIds,
-      roots: visibleNodes,
-    });
-    if (reveal) {
-      setExpandedIds(reveal.expandedIds);
-      setRevealState({
-        type: "scrolling",
-        entityId: revealEntityId,
-        rowIndex: reveal.rowIndex,
-      });
-    }
+    const entityId = revealEntityId;
     detached(
       navigate({
         from: "/workspaces/$workspaceId/$viewId",
         search: (prev) => ({ ...prev, reveal: undefined }),
         replace: true,
+      }).then(() => {
+        revealEntity(entityId);
+        return undefined;
       }),
       "tree-view.clear-reveal",
     );
-  }, [
-    revealEntityId,
-    isTreeDataCurrent,
-    getAncestorIds,
-    expandedIds,
-    visibleNodes,
-    navigate,
-  ]);
+  }, [revealEntityId, isTreeDataCurrent, navigate, revealEntity]);
+  // Scroll once per reveal; the row flashes when it renders.
   useExternalSyncEffect(() => {
-    if (revealState.type !== "scrolling") {
+    if (revealState === null) {
       return;
     }
     rowVirtualizer.scrollToIndex(revealState.rowIndex, { align: "center" });
-    setRevealState({ type: "flashing", entityId: revealState.entityId });
   }, [revealState, rowVirtualizer]);
 
   const [isRootDropTarget, setIsRootDropTarget] = useState(false);
@@ -908,10 +899,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                       editingEntityId={editingEntityId}
                       expandedIds={expandedIds}
                       extraColumns={extraColumns}
-                      flash={
-                        revealState.type === "flashing" &&
-                        revealState.entityId === row.node.entityId
-                      }
+                      flash={revealState?.entityId === row.node.entityId}
                       folderStatistics={folderStatistics.get(row.node.entityId)}
                       getSelectedDragItems={getSelectedDragItems}
                       getSelectedEntities={getSelectedEntities}
@@ -919,7 +907,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                       gridTemplate={gridTemplate}
                       isFiltered={entityData.isFiltered}
                       node={row.node}
-                      onFlashed={() => setRevealState({ type: "idle" })}
+                      onFlashed={() => setRevealState(null)}
                       onNavigateToFolder={(folderId) => {
                         detached(
                           navigateToFolder(folderId),

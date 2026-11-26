@@ -33,12 +33,47 @@ export type DocxBlock = {
   /** Pictures, drawings and embedded objects anchored in the block; a block
    *  that holds one is not empty even without text. */
   inlineObjects?: number;
+  /** Page breaks among the paragraph's runs; a paragraph without text can
+   *  hold one. */
+  pageBreaks?: number;
+  /** The paragraph starts on a new page by its own formatting or its
+   *  style's. */
+  pageBreakBefore?: true;
+  /** The paragraph is the last of its section: the block after it opens
+   *  `sections[sectionIndex + 1]`. */
+  endsSection?: true;
+  /** The paragraph alignment in effect (`w:jc`): the paragraph's own, else
+   *  its style's. Absent when neither states one. */
+  alignment?: string;
   cells?: { row: number; col: number; blockIds: string[] }[];
+};
+
+/** One section of a document: how it begins after the one before it, and
+ *  its page, in twentieths of a point. */
+export type DocxSection = {
+  index: number;
+  start: "nextPage" | "evenPage" | "oddPage" | "nextColumn" | "continuous";
+  orientation: "portrait" | "landscape";
+  size: { width: number | null; height: number | null };
+  margins: {
+    top: number | null;
+    right: number | null;
+    bottom: number | null;
+    left: number | null;
+  };
+  columns: number;
 };
 
 export type DocxBlockManifest = {
   sha256: string;
   blocks: DocxBlock[];
+  /** The sections of the main story; a block names its own by
+   *  `sectionIndex`. Absent from a manifest read before sections were
+   *  reported. */
+  sections?: DocxSection[];
+  /** Compatibility settings of the document. Absent from a manifest read
+   *  before they were reported, as are the blocks' alignments. */
+  compat?: { doNotExpandShiftReturn: boolean };
   footnotes: { id: string; text: string }[];
   endnotes: { id: string; text: string }[];
   comments: number;
@@ -128,6 +163,20 @@ export type TemplatePlanNestedParagraph = {
   labelAsText?: boolean;
 };
 
+/** A section of the output with a page other than the template's, in
+ *  twentieths of a point. Everything else of it is the template's last
+ *  section. */
+export type TemplatePlanSection = {
+  page?: {
+    orientation: "portrait" | "landscape";
+    width: number;
+    height: number;
+    margins?: { top: number; right: number; bottom: number; left: number };
+  };
+  /** How it begins after the section before it; `nextPage` when left out. */
+  start?: "nextPage" | "evenPage" | "oddPage";
+};
+
 export type TemplatePlanSourceItem = {
   kind: "source";
   blockId: string;
@@ -145,6 +194,12 @@ export type TemplatePlanSourceItem = {
   labelAsText?: boolean;
   /** Joins the next plan item, a bare source paragraph, into this one. */
   mergeNext?: TemplatePlanMerge;
+  /** Starts the paragraph on a new page. Not for a table, nor for a block
+   *  that joins the paragraph before it. */
+  pageBreakBefore?: boolean;
+  /** The paragraph is the last of the section described. Not for a table,
+   *  nor for a block that joins the paragraph before it. */
+  endsSection?: TemplatePlanSection;
   /** Table only: the paragraph style of its cells. */
   cellStyleId?: string;
   /** Table only: placement of single paragraphs inside it. */
@@ -198,6 +253,12 @@ export type TemplatePlan = {
   references?: TemplatePlanReference[];
   highlights?: TemplatePlanHighlight[];
   fields?: { freezeKinds?: string[]; updateOnOpen?: boolean };
+  /** Compatibility settings switched on in the output's settings, which
+   *  are otherwise the template's. */
+  compat?: { doNotExpandShiftReturn?: boolean };
+  /** The section the body ends with, when its page is another than the
+   *  template's. */
+  lastSection?: TemplatePlanSection;
 };
 
 /** The part of the engine's report the plan is repaired and the formatting
@@ -368,6 +429,10 @@ const blockSchema = v.strictObject({
   inlineObjects: v.exactOptional(
     v.pipe(v.number(), v.integer(), v.minValue(0)),
   ),
+  pageBreaks: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+  pageBreakBefore: v.exactOptional(v.literal(true)),
+  endsSection: v.exactOptional(v.literal(true)),
+  alignment: v.exactOptional(v.string()),
   cells: v.exactOptional(
     v.array(
       v.strictObject({
@@ -381,9 +446,35 @@ const blockSchema = v.strictObject({
 
 const noteSchema = v.strictObject({ id: v.string(), text: v.string() });
 
+const twips = v.nullable(v.pipe(v.number(), v.integer()));
+
+const sectionSchema = v.strictObject({
+  index: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  start: v.picklist([
+    "nextPage",
+    "evenPage",
+    "oddPage",
+    "nextColumn",
+    "continuous",
+  ]),
+  orientation: v.picklist(["portrait", "landscape"]),
+  size: v.strictObject({ width: twips, height: twips }),
+  margins: v.strictObject({
+    top: twips,
+    right: twips,
+    bottom: twips,
+    left: twips,
+  }),
+  columns: v.pipe(v.number(), v.integer(), v.minValue(1)),
+});
+
 const manifestSchema = v.strictObject({
   sha256: v.string(),
   blocks: v.array(blockSchema),
+  sections: v.exactOptional(v.array(sectionSchema)),
+  compat: v.exactOptional(
+    v.strictObject({ doNotExpandShiftReturn: v.boolean() }),
+  ),
   footnotes: v.array(noteSchema),
   endnotes: v.array(noteSchema),
   comments: v.pipe(v.number(), v.integer(), v.minValue(0)),

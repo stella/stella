@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChatLink, hasBundledChatLinkIcon } from "@stll/chat/link";
 import type { ChatLinkIconSource } from "@stll/chat/link";
 import { getChatLinkSite, normalizeChatLink } from "@stll/chat/link-detection";
-import { useExternalSyncEffect } from "@stll/ui/effects";
+import { useIntersecting, useObjectUrl } from "@stll/ui/effects-dom";
 
 import { linkIconOptions } from "@/features/chat/link-icons";
 
@@ -26,7 +26,8 @@ export const ProxyChatLink = ({
 }: ProxyChatLinkProps) => {
   const hostname = normalizeChatLink(props.href)?.hostname ?? "";
   const site = getChatLinkSite(hostname) ?? "";
-  const [visible, setVisible] = useState(false);
+  const [element, setElement] = useState<HTMLSpanElement | null>(null);
+  const visible = useIntersecting(element);
   const { data: icon, isError } = useQuery({
     ...linkIconOptions(site),
     enabled:
@@ -42,38 +43,14 @@ export const ProxyChatLink = ({
     icon?.type === "icon"
       ? icon.blob
       : undefined;
-  const [localIcon, setLocalIcon] = useState<{
-    blob: Blob;
-    source: ChatLinkIconSource;
-  } | null>(null);
+  const iconUrl = useObjectUrl(blob);
 
-  const observeVisibility = (element: HTMLSpanElement | null) => {
-    if (!element || typeof IntersectionObserver === "undefined") {
-      return undefined;
-    }
-    const observer = new IntersectionObserver((entries) => {
-      const entry = entries.at(-1);
-      if (entry) {
-        setVisible(entry.isIntersecting);
-      }
-    });
-    observer.observe(element);
-    return () => observer.disconnect();
-  };
-
-  useExternalSyncEffect(() => {
-    if (!blob) {
-      return undefined;
-    }
-    const src = URL.createObjectURL(blob);
-    setLocalIcon({ blob, source: { type: "proxy", src } });
-    return () => URL.revokeObjectURL(src);
-  }, [blob]);
-
-  const iconSource =
-    !isError && localIcon?.blob === blob ? localIcon?.source : undefined;
+  const iconSource: ChatLinkIconSource | undefined =
+    !isError && iconUrl !== undefined
+      ? { type: "proxy", src: iconUrl }
+      : undefined;
   return (
-    <span ref={observeVisibility}>
+    <span ref={setElement}>
       <ChatLink {...props} iconSource={iconSource} />
     </span>
   );

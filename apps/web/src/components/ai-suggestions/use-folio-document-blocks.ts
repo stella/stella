@@ -11,11 +11,10 @@
  * findings' anchors, which the next run — not this read — reconciles.
  */
 
-import { useState } from "react";
 import type { RefObject } from "react";
 
 import type { DocxEditorRef, FolioAIBlock } from "@stll/folio-react";
-import { useExternalSyncEffect } from "@stll/ui/effects";
+import { useExternalSyncEffect, useKeyedState } from "@stll/ui/effects";
 
 /** Stable empty read: a fresh `[]` per render would re-run every consumer. */
 const NO_BLOCKS: readonly FolioAIBlock[] = [];
@@ -28,15 +27,26 @@ const NO_BLOCKS: readonly FolioAIBlock[] = [];
  */
 const SNAPSHOT_FRAME_BUDGET = 600;
 
+/** The part of the editor this read uses. */
+type BlockSource = Pick<DocxEditorRef, "ensureEditorView"> & {
+  createAIEditSnapshot: () => {
+    readonly blocks: readonly FolioAIBlock[];
+  } | null;
+};
+
 export const useFolioDocumentBlocks = (
-  editorRef: RefObject<DocxEditorRef | null>,
+  editorRef: RefObject<BlockSource | null>,
   enabled: boolean,
 ): readonly FolioAIBlock[] => {
-  const [blocks, setBlocks] = useState<readonly FolioAIBlock[]>(NO_BLOCKS);
+  // Held per `enabled`: switching off drops the read, and switching back on
+  // starts over from no blocks until the editor answers again.
+  const [blocks, setBlocks] = useKeyedState<readonly FolioAIBlock[]>(
+    enabled,
+    NO_BLOCKS,
+  );
 
   useExternalSyncEffect(() => {
     if (!enabled) {
-      setBlocks(NO_BLOCKS);
       return undefined;
     }
     let frame: number | null = null;
@@ -62,13 +72,15 @@ export const useFolioDocumentBlocks = (
         frame = requestAnimationFrame(read);
       }
     };
-    read();
+    // Asked from the first frame on: the editor answers outside this effect,
+    // like every later attempt.
+    frame = requestAnimationFrame(read);
     return () => {
       if (frame !== null) {
         cancelAnimationFrame(frame);
       }
     };
-  }, [editorRef, enabled]);
+  }, [editorRef, enabled, setBlocks]);
 
   return blocks;
 };

@@ -157,7 +157,9 @@ export const isBufferIntentWorkspaceUnavailableError = (error: unknown) =>
 
 class BufferIntentOwnershipError extends TaggedError(
   "BufferIntentOwnershipError",
-)<{ message: string }> {}
+)<{
+  message: string;
+}> {}
 
 type ActiveWorkspaceBufferIntentOptions = {
   tx: Transaction;
@@ -940,7 +942,7 @@ const reconcileStaleBufferIntentBatch = async ({
         !isBufferIntentPurpose(row.purpose) ||
         !isRecoverableBufferIntent(row.purposeData, row.purpose)
       ) {
-        return null;
+        return { type: "skip" } as const;
       }
       const objectKey = createFileKey({
         organizationId: row.organizationId,
@@ -965,28 +967,27 @@ const reconcileStaleBufferIntentBatch = async ({
         cleanup.map((value) => value ?? Result.ok(undefined)),
       );
       if (Result.isError(deleted)) {
-        if (signal?.aborted) {
-          return null;
+        if (!signal?.aborted) {
+          captureError(
+            deleted.error,
+            handlerErrorContext(
+              `bufferIntent.reconcilePendingCleanup.${row.purpose}`,
+              {
+                objectKey,
+                pendingUploadId: row.id,
+                stage: `buffer-${row.purpose}-intent-reconcile`,
+              },
+            ),
+          );
         }
-        captureError(
-          deleted.error,
-          handlerErrorContext(
-            `bufferIntent.reconcilePendingCleanup.${row.purpose}`,
-            {
-              objectKey,
-              pendingUploadId: row.id,
-              stage: `buffer-${row.purpose}-intent-reconcile`,
-            },
-          ),
-        );
-        return null;
+        return { type: "failed", error: deleted.error } as const;
       }
-      return row.id;
+      return { type: "cleaned", id: row.id } as const;
     }),
   );
   signal?.throwIfAborted();
-  const cleanedIds = cleanupResults.filter(
-    (id): id is SafeId<"pendingUpload"> => id !== null,
+  const cleanedIds = cleanupResults.flatMap((outcome) =>
+    outcome.type === "cleaned" ? [outcome.id] : [],
   );
   if (cleanedIds.length === 0) {
     return claimedResult.value.length;
@@ -1115,33 +1116,33 @@ export const reconcileBufferObjectCleanupIntents = async ({
       const deleted = Result.flatten(
         cleanup.map((value) => value ?? Result.ok(undefined)),
       );
-      if (Result.isError(deleted) && !signal?.aborted) {
-        captureError(
-          deleted.error,
-          handlerErrorContext("bufferIntent.reconcileObjectCleanup", {
-            pendingUploadId: row.id,
-            stage: "buffer-object-cleanup-reconcile",
-          }),
-        );
-      }
       if (Result.isError(deleted)) {
-        return null;
+        if (!signal?.aborted) {
+          captureError(
+            deleted.error,
+            handlerErrorContext("bufferIntent.reconcileObjectCleanup", {
+              pendingUploadId: row.id,
+              stage: "buffer-object-cleanup-reconcile",
+            }),
+          );
+        }
+        return { type: "failed", error: deleted.error } as const;
       }
       if (row.status === BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED) {
-        return row.id;
+        return { type: "retire", id: row.id } as const;
       }
       if (
         row.status === BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING &&
         row.attemptCount >= BUFFER_INTENT_RECOVERY_RETIRE_AFTER_ATTEMPTS
       ) {
-        return row.id;
+        return { type: "retire", id: row.id } as const;
       }
-      return null;
+      return { type: "keep" } as const;
     }),
   );
   signal?.throwIfAborted();
-  const retiredIds = cleanupResults.filter(
-    (id): id is SafeId<"pendingUpload"> => id !== null,
+  const retiredIds = cleanupResults.flatMap((outcome) =>
+    outcome.type === "retire" ? [outcome.id] : [],
   );
   if (retiredIds.length > 0) {
     const retired = await safeDb(async (tx) => {

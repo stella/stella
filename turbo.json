@@ -33,7 +33,14 @@
   "globalDependencies": [
     "patches/**",
     "scripts/bun-toolchain.gen.json",
-    "packages/scripts/src/test-event-loop-watchdog*.ts"
+    "packages/scripts/src/test-event-loop-watchdog*.ts",
+    // The DOM-test storm check, a preload the DOM-test workspaces load by
+    // path rather than as a dependency: the modules that decide whether a
+    // test passes (probe.ts only names the components in a failure).
+    "packages/render-probe/src/commit-hook.ts",
+    "packages/render-probe/src/dom-test-guard.ts",
+    "packages/render-probe/src/dom-test-preload.ts",
+    "packages/render-probe/src/storm-ledger.ts"
   ],
   "tasks": {
     "@stll/desktop#test:browser": {

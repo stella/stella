@@ -1561,6 +1561,9 @@
     "packages/render-probe": {
       "name": "@stll/render-probe",
       "version": "0.0.0",
+      "dependencies": {
+        "better-result": "catalog:",
+      },
       "devDependencies": {
         "@happy-dom/global-registrator": "21.0.4",
         "@stll/typescript-config": "workspace:*",
@@ -1817,7 +1820,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.90.0",
+      "version": "0.90.1",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
