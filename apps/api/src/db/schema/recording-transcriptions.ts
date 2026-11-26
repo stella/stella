@@ -11,7 +11,6 @@ import type { RecordingTranscriptionRunErrorCode } from "@stll/api-contract/reco
 import {
   entityFeatureGateChecks,
   entityFeatureGateColumns,
-  entityFeatureWorkspaceGateColumns,
 } from "../entity-feature-gate-columns";
 import {
   organization,
@@ -51,7 +50,6 @@ export const recordingTranscriptionRuns = p.pgTable(
   "recording_transcription_runs",
   {
     ...entityFeatureGateColumns(),
-    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"recordingTranscriptionRun">().primaryKey(),
     organizationId: safeOrganizationId("organization_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
@@ -92,6 +90,19 @@ export const recordingTranscriptionRuns = p.pgTable(
         table.createdAt.desc(),
         table.id.desc(),
       ),
+    // The feature gate looks runs up by their pinned version.
+    p
+      .index("recording_transcription_runs_workspace_version_idx")
+      .on(table.workspaceId, table.entityVersionId),
+    // The reconciler's sweeps read only queued or started runs.
+    p
+      .index("recording_transcription_runs_queued_idx")
+      .on(table.createdAt, table.id)
+      .where(sql`${table.status} = 'queued'`),
+    p
+      .index("recording_transcription_runs_started_idx")
+      .on(table.startedAt, table.id)
+      .where(sql`${table.status} IN ('transcribing', 'saving')`),
     p
       .uniqueIndex("recording_transcription_runs_active_document_uidx")
       .on(table.workspaceId, table.entityId, table.fileFieldId)

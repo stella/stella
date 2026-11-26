@@ -4,7 +4,6 @@ SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 -- Transcribe request, which saves its transcript next to the recording.
 CREATE TABLE "recording_transcription_runs" (
 	"entity_feature_gate" text DEFAULT 'pending' NOT NULL,
-	"entity_feature_workspace_ids" uuid[] DEFAULT '{}'::uuid[] NOT NULL,
 	"id" uuid PRIMARY KEY,
 	"organization_id" varchar(128) NOT NULL,
 	"workspace_id" uuid NOT NULL,
@@ -40,13 +39,15 @@ ALTER TABLE "recording_transcription_runs" ADD CONSTRAINT "recording_transcripti
 ALTER TABLE "recording_transcription_runs" ADD CONSTRAINT "recording_transcription_runs_entity_workspace_fk" FOREIGN KEY ("entity_id","workspace_id") REFERENCES "entities"("id","workspace_id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "recording_transcription_runs" ADD CONSTRAINT "recording_transcription_runs_version_fk" FOREIGN KEY ("entity_version_id","entity_id","workspace_id") REFERENCES "entity_versions"("id","entity_id","workspace_id") ON DELETE CASCADE;--> statement-breakpoint
 CREATE INDEX "recording_transcription_runs_document_created_idx" ON "recording_transcription_runs" ("workspace_id","entity_id","file_field_id","created_at" DESC NULLS LAST,"id" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "recording_transcription_runs_workspace_version_idx" ON "recording_transcription_runs" ("workspace_id","entity_version_id");--> statement-breakpoint
+CREATE INDEX "recording_transcription_runs_queued_idx" ON "recording_transcription_runs" ("created_at","id") WHERE "status" = 'queued';--> statement-breakpoint
+CREATE INDEX "recording_transcription_runs_started_idx" ON "recording_transcription_runs" ("started_at","id") WHERE "status" IN ('transcribing', 'saving');--> statement-breakpoint
 CREATE UNIQUE INDEX "recording_transcription_runs_active_document_uidx" ON "recording_transcription_runs" ("workspace_id","entity_id","file_field_id") WHERE "status" IN ('queued', 'transcribing', 'saving');--> statement-breakpoint
 CREATE INDEX "recording_transcription_runs_ef_entity_id_idx" ON "recording_transcription_runs" ("entity_id");--> statement-breakpoint
 ALTER TABLE "recording_transcription_runs" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "recording_transcription_runs" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "recording_transcription_runs" TO stella;--> statement-breakpoint
 CREATE POLICY "recording_transcription_runs_owner" ON "recording_transcription_runs" AS PERMISSIVE FOR ALL TO public USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.recording_transcription_runs'::regclass)) WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.recording_transcription_runs'::regclass));--> statement-breakpoint
-CREATE POLICY "workspace_entity_feature" ON "recording_transcription_runs" AS RESTRICTIVE FOR ALL TO "stella" USING (("recording_transcription_runs"."entity_feature_gate" = 'open' OR ("recording_transcription_runs"."entity_feature_gate" = 'legal-lists' AND (SELECT coalesce(nullif(current_setting('app.enabled_features', true), ''), '[]')::jsonb ? 'legal-lists'))) AND ("recording_transcription_runs"."entity_feature_workspace_ids" = '{}'::uuid[] OR "recording_transcription_runs"."entity_feature_workspace_ids" <@ (SELECT coalesce(nullif(current_setting('app.workspace_ids', true), '')::uuid[], '{}'::uuid[]) || coalesce(array_agg(authorized_workspace_id), '{}'::uuid[]) FROM public.stella_authorized_workspaces))) WITH CHECK (("recording_transcription_runs"."entity_feature_gate" = 'open' OR ("recording_transcription_runs"."entity_feature_gate" = 'legal-lists' AND (SELECT coalesce(nullif(current_setting('app.enabled_features', true), ''), '[]')::jsonb ? 'legal-lists'))) AND ("recording_transcription_runs"."entity_feature_workspace_ids" = '{}'::uuid[] OR "recording_transcription_runs"."entity_feature_workspace_ids" <@ (SELECT coalesce(nullif(current_setting('app.workspace_ids', true), '')::uuid[], '{}'::uuid[]) || coalesce(array_agg(authorized_workspace_id), '{}'::uuid[]) FROM public.stella_authorized_workspaces)));--> statement-breakpoint
 CREATE POLICY "recording_transcription_runs_workspace_select" ON "recording_transcription_runs" AS PERMISSIVE FOR SELECT TO "stella" USING ((
   CASE
   WHEN workspace_id = ANY(

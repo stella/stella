@@ -4,30 +4,29 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## recording_transcription_runs · `recordingTranscriptionRuns` · recording-transcriptions.ts:46 · rls
+## recording_transcription_runs · `recordingTranscriptionRuns` · recording-transcriptions.ts:49 · rls
 
 ```text
-recording_transcription_runs.{...entityFeatureGateColumns()}           spread                                recording-transcriptions.ts:49
-recording_transcription_runs.{...entityFeatureWorkspaceGateColumns()}  spread                                recording-transcriptions.ts:50
-recording_transcription_runs.id                                        pUuid               pk,not null       recording-transcriptions.ts:51
-recording_transcription_runs.organization_id                           safeOrganizationId  fk,not null       recording-transcriptions.ts:52
-recording_transcription_runs.workspace_id                              safeWorkspaceId     fk,not null       recording-transcriptions.ts:53
-recording_transcription_runs.entity_id                                 safeUuid            fk,not null       recording-transcriptions.ts:54
-recording_transcription_runs.file_field_id                             safeUuid            not null          recording-transcriptions.ts:55
-recording_transcription_runs.entity_version_id                         safeUuid            fk,not null       recording-transcriptions.ts:56
-recording_transcription_runs.source_file_id                            safeUuid            not null          recording-transcriptions.ts:57
-recording_transcription_runs.source_file_name                          varchar             not null          recording-transcriptions.ts:58
-recording_transcription_runs.source_mime_type                          varchar             not null          recording-transcriptions.ts:59
-recording_transcription_runs.status                                    text                default,not null  recording-transcriptions.ts:60
-recording_transcription_runs.error_code                                varchar             null              recording-transcriptions.ts:64
-recording_transcription_runs.duration_ms                               integer             null              recording-transcriptions.ts:67
-recording_transcription_runs.transcribed_ms                            integer             default,not null  recording-transcriptions.ts:68
-recording_transcription_runs.output_entity_id                          safeUuid            null              recording-transcriptions.ts:69
-recording_transcription_runs.output_field_id                           safeUuid            null              recording-transcriptions.ts:70
-recording_transcription_runs.output_file_name                          varchar             null              recording-transcriptions.ts:71
-recording_transcription_runs.requested_by                              text                fk,null           recording-transcriptions.ts:72
-recording_transcription_runs.model_ref                                 varchar             null              recording-transcriptions.ts:75
-recording_transcription_runs.created_at                                timestamptz         default,not null  recording-transcriptions.ts:76
-recording_transcription_runs.started_at                                timestamptz         null              recording-transcriptions.ts:77
-recording_transcription_runs.finished_at                               timestamptz         null              recording-transcriptions.ts:78
+recording_transcription_runs.{...entityFeatureGateColumns()}  spread                                recording-transcriptions.ts:52
+recording_transcription_runs.id                               pUuid               pk,not null       recording-transcriptions.ts:53
+recording_transcription_runs.organization_id                  safeOrganizationId  fk,not null       recording-transcriptions.ts:54
+recording_transcription_runs.workspace_id                     safeWorkspaceId     fk,not null       recording-transcriptions.ts:55
+recording_transcription_runs.entity_id                        safeUuid            fk,not null       recording-transcriptions.ts:56
+recording_transcription_runs.file_field_id                    safeUuid            not null          recording-transcriptions.ts:57
+recording_transcription_runs.entity_version_id                safeUuid            fk,not null       recording-transcriptions.ts:58
+recording_transcription_runs.source_file_id                   safeUuid            not null          recording-transcriptions.ts:59
+recording_transcription_runs.source_file_name                 varchar             not null          recording-transcriptions.ts:60
+recording_transcription_runs.source_mime_type                 varchar             not null          recording-transcriptions.ts:61
+recording_transcription_runs.status                           text                default,not null  recording-transcriptions.ts:62
+recording_transcription_runs.error_code                       varchar             null              recording-transcriptions.ts:66
+recording_transcription_runs.duration_ms                      integer             null              recording-transcriptions.ts:69
+recording_transcription_runs.transcribed_ms                   integer             default,not null  recording-transcriptions.ts:70
+recording_transcription_runs.output_entity_id                 safeUuid            null              recording-transcriptions.ts:71
+recording_transcription_runs.output_field_id                  safeUuid            null              recording-transcriptions.ts:72
+recording_transcription_runs.output_file_name                 varchar             null              recording-transcriptions.ts:73
+recording_transcription_runs.requested_by                     text                fk,null           recording-transcriptions.ts:74
+recording_transcription_runs.model_ref                        varchar             null              recording-transcriptions.ts:77
+recording_transcription_runs.created_at                       timestamptz         default,not null  recording-transcriptions.ts:78
+recording_transcription_runs.started_at                       timestamptz         null              recording-transcriptions.ts:79
+recording_transcription_runs.finished_at                      timestamptz         null              recording-transcriptions.ts:80
 ```
