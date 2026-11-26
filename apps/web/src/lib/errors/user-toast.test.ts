@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { stellaToast } from "@stll/ui/toast";
 
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -42,7 +41,9 @@ const userVisibleReports = (capture: {
 
 /** Let the detached rejection handler run. */
 const settle = async () => {
-  await sleep(0);
+  for (let i = 0; i < 4; i += 1) {
+    await Promise.resolve();
+  }
 };
 
 afterEach(() => {

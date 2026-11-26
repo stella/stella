@@ -3,7 +3,6 @@ import type { ReactElement } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -46,9 +45,6 @@ const frameKey = (organizationId: string) =>
 
 afterAll(async () => {
   testing.cleanup();
-  await testing.act(async () => {
-    await sleep(50);
-  });
   await unregisterDomEnvironment();
 });
 

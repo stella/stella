@@ -2,7 +2,6 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { parseTimeZoneId } from "@stll/time";
 
@@ -62,7 +61,6 @@ afterEach(() => {
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  await sleep(0);
   await unregisterDomEnvironment();
 });
 

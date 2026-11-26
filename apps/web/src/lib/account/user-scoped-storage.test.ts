@@ -4,7 +4,6 @@ import fc from "fast-check";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { assertProperty } from "@stll/property-testing";
 
 import { installUserScopedStorage } from "@/lib/account/install-user-scoped-storage";
@@ -320,7 +319,9 @@ describe("a persisted store across owners", () => {
   };
 
   const settle = async () => {
-    await sleep(0);
+    for (let i = 0; i < 4; i += 1) {
+      await Promise.resolve();
+    }
   };
 
   test("a visitor's state gives way to the signed-in user's saved one, untouched", async () => {

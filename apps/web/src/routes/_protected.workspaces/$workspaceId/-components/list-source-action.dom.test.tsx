@@ -14,7 +14,6 @@ import {
 
 import { LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH } from "@stll/api-contract/limits";
 import type { OrganizationRoleName } from "@stll/auth-model";
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { parseTimeZoneId } from "@stll/time";
 
@@ -341,7 +340,6 @@ afterEach(() => {
   requests.length = 0;
 });
 afterAll(async () => {
-  await act(async () => await sleep(50));
   fetchBoundary.mockRestore();
   await unregisterDomEnvironment();
 });
@@ -763,11 +761,11 @@ test("revoking the feature closes an open form without a create request", async 
       settings,
     );
   });
-  await act(async () => {
-    await sleep(50);
+  await waitFor(() => {
+    expect(
+      mounted.view.queryByRole("button", { name: english.common.save }) ===
+        null,
+    ).toBe(true);
   });
-  expect(
-    mounted.view.queryByRole("button", { name: english.common.save }),
-  ).toBeNull();
   expect(requests).toHaveLength(0);
 });

@@ -4,7 +4,9 @@ import {
   QueryObserver,
   queryOptions,
 } from "@tanstack/react-query";
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
+
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import type {
   DetailSeedGate,
@@ -65,6 +67,12 @@ describe("Playbook outline navigation", () => {
 });
 
 describe("Seeding the editor from the cached detail", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    restoreRealTimers();
+  });
   type Detail = { name: string };
   const { queryKey: key } = queryOptions({
     queryKey: ["playbook", "detail"],
@@ -78,7 +86,7 @@ describe("Seeding the editor from the cached detail", () => {
     queryClient.setQueryData(key, { name: "before save" });
     await queryClient.invalidateQueries({ queryKey: key });
     // Strictly later than the stale snapshot, as any real refetch is.
-    await Bun.sleep(2);
+    jest.advanceTimersByTime(10);
     return queryClient;
   };
 
@@ -177,7 +185,9 @@ describe("Seeding the editor from the cached detail", () => {
       const refetch = refetchOnMount(queryClient, async () => ({
         name: "after save",
       }));
-      await Bun.sleep(0);
+      for (let i = 0; i < 4; i += 1) {
+        await Promise.resolve();
+      }
 
       expect(queryClient.getQueryState(key)?.fetchStatus).toBe("paused");
       expect(seedOf(queryClient, gate)).toEqual({
@@ -238,7 +248,7 @@ describe("Seeding the editor from the cached detail", () => {
       expect(detailSeedGate(queryClient.getQueryState(key))).toEqual({
         type: "open",
       });
-      await Bun.sleep(2);
+      jest.advanceTimersByTime(10);
 
       // A rejected stale save: the editor refetches for the fresh token,
       // detached, and offers Reload.

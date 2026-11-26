@@ -1,7 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterAll, describe, expect, test } from "bun:test";
-
-import { sleep } from "@stll/concurrency/sleep";
+import { setImmediate as nextMacrotask } from "node:timers/promises";
 
 import {
   listenForSessionChange,
@@ -23,7 +22,9 @@ afterAll(() => {
 });
 
 const settle = async () => {
-  await sleep(20);
+  for (let i = 0; i < 4; i += 1) {
+    await nextMacrotask();
+  }
 };
 
 /** What another tab would receive on the channel. */
