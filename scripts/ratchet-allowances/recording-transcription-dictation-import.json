@@ -1,0 +1,5 @@
+{
+  "metric": "lib-to-handler-imports",
+  "delta": 1,
+  "reason": "The transcription worker reuses executeDictation per recording piece so model choice, BYOK keys, usage preflight and billing stay in one place."
+}

@@ -69,6 +69,7 @@ import {
   organizationDataExports,
   organizationSettings,
   outboundActions,
+  recordingTranscriptionRuns,
   savedSearches,
   savedTimeNarratives,
   searchHistoryEntries,
@@ -219,6 +220,7 @@ import readOutboundAction from "@/api/handlers/outbound-actions/read";
 import { prepareOutboundAction } from "@/api/handlers/outbound-actions/store";
 import getBillingArrangement from "@/api/handlers/rates/arrangement/get";
 import readRateEntries from "@/api/handlers/rates/entries/list";
+import readRecordingTranscriptionRun from "@/api/handlers/recording-transcriptions/runs/get";
 import listSavedSearches from "@/api/handlers/saved-searches/list";
 import listSavedTimeNarratives from "@/api/handlers/saved-time-narratives/list";
 import { prepareSearchHistoryRows } from "@/api/handlers/search-history/entries";
@@ -492,6 +494,12 @@ const documentTranslationRunB = toSafeId<"documentTranslationRun">(
 );
 const documentTranslationSourceFileB = toSafeId<"userFile">(
   "22222222-2222-4222-8222-222222222249",
+);
+const recordingTranscriptionRunB = toSafeId<"recordingTranscriptionRun">(
+  "22222222-2222-4222-8222-2222222222d0",
+);
+const recordingSourceFileB = toSafeId<"userFile">(
+  "22222222-2222-4222-8222-2222222222d1",
 );
 const workObligationEntityB = toSafeId<"entity">(
   "22222222-2222-4222-8222-222222222250",
@@ -1685,6 +1693,26 @@ const isolationCases: IsolationCase[] = [
     expectDenied: expectStatus(404),
     expectPositive: (result) =>
       expectTranslationRunIdEquals(result, documentTranslationRunB),
+  },
+  {
+    name: "recording transcription run read by id",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(readRecordingTranscriptionRun, workspaceA, {
+        params: {
+          workspaceId: testIds.wsA1,
+          runId: recordingTranscriptionRunB,
+        },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(readRecordingTranscriptionRun, workspaceB, {
+        params: {
+          workspaceId: testIds.wsB1,
+          runId: recordingTranscriptionRunB,
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expectTranslationRunIdEquals(result, recordingTranscriptionRunB),
   },
   {
     name: "credit note create against another tenant original",
@@ -4383,6 +4411,18 @@ testState.beforeAll(async () => {
     sourceLang: "auto",
     targetLang: "en",
     status: "completed",
+  });
+  await testDb.insert(recordingTranscriptionRuns).values({
+    id: recordingTranscriptionRunB,
+    organizationId: ids.orgB,
+    workspaceId: ids.wsB1,
+    entityId: ids.entityB1,
+    fileFieldId: ids.fieldB1,
+    entityVersionId: ids.entityVersionB1,
+    sourceFileId: recordingSourceFileB,
+    sourceFileName: "call.m4a",
+    sourceMimeType: "audio/mp4",
+    status: "queued",
   });
   await testDb.insert(entities).values({
     id: workObligationEntityB,
