@@ -1,6 +1,7 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 
 import { appShellNavigationLink } from "../helpers/app-shell";
+import { test } from "../helpers/storm-watch-fixture";
 
 test.use({ storageState: { cookies: [], origins: [] } });
 

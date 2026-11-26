@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 import type { APIRequestContext, BrowserContext, Page } from "@playwright/test";
 import * as v from "valibot";
 
@@ -20,6 +20,7 @@ import type { MarketingLocale } from "@stll/playwright-tools/marketing-locales";
 import { setFixedBrowserTime } from "@stll/ui/browser-clock";
 
 import { setPresentationPrefs } from "../helpers/presentation-prefs";
+import { test } from "../helpers/storm-watch-fixture";
 import {
   getMarketingAgentThreadId,
   settleMarketingAgentThread,

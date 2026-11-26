@@ -5,7 +5,7 @@ import type {
   Page,
   Request,
 } from "@playwright/test";
-import { expect, request as apiRequestFactory, test } from "@playwright/test";
+import { expect, request as apiRequestFactory } from "@playwright/test";
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -85,6 +85,7 @@ import {
   type SmokeWorld,
 } from "../helpers/smoke-route-defs";
 import { getSmokeWorlds } from "../helpers/smoke-world";
+import { test } from "../helpers/storm-watch-fixture";
 import { createBrowserErrorCollector } from "../helpers/test";
 import { listTimeBillingRoutes } from "../helpers/time-billing-routes";
 import { measureLoadingGeometry } from "../helpers/time-loading-geometry";
