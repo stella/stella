@@ -6,11 +6,6 @@ import type { JSONContent } from "@tiptap/react";
 import { describe, expect, test } from "bun:test";
 
 import { CLAUSE_NUMBERING_LEVEL_LIMITS } from "@stll/api-contract";
-import {
-  acceptAIEditRevision,
-  acceptAllChanges,
-  rejectAIEditRevision,
-} from "@stll/folio-core/prosemirror/commands/comments";
 import { assertNever } from "@stll/template-conditions";
 
 import type { ClauseParagraph } from "@/components/templates/clause-editor-types";
@@ -30,6 +25,11 @@ import {
 } from "./clause-ai-tracked-changes";
 import { CLAUSE_DIRECTIVE_NODE } from "./clause-directive-extension";
 import { clauseBodyToTipTap, tipTapToClauseBody } from "./clause-editor-tiptap";
+import {
+  acceptAIEditRevision,
+  acceptAllChanges,
+  rejectAIEditRevision,
+} from "./clause-tracked-change-commands";
 
 const trackedChangeSchema = new Schema({
   nodes: {

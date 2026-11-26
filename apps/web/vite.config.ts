@@ -757,7 +757,6 @@ export default defineConfig(({ mode, command }) => {
         "@stll/folio-core/ai-edits",
         "@stll/folio-core/docx/documentParser",
         "@stll/folio-core/docx/serializer/paragraphSerializer",
-        "@stll/folio-core/prosemirror/commands/comments",
         "@stll/folio-core/prosemirror/findReplaceSelection",
         "@stll/folio-core/utils/findReplace",
         "@streamdown/cjk",

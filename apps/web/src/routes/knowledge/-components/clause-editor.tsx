@@ -20,12 +20,6 @@ import type { Editor } from "@tiptap/react";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import {
-  acceptAIEditRevision,
-  acceptAllChanges,
-  rejectAIEditRevision,
-  rejectAllChanges,
-} from "@stll/folio-core/prosemirror/commands/comments";
 import { Button } from "@stll/ui/button";
 import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import {
@@ -74,6 +68,12 @@ import {
 import "./clause-editor.css";
 import { ClauseDirectiveNode } from "./clause-directive-extension";
 import { clauseBodyToTipTap, tipTapToClauseBody } from "./clause-editor-tiptap";
+import {
+  acceptAIEditRevision,
+  acceptAllChanges,
+  rejectAIEditRevision,
+  rejectAllChanges,
+} from "./clause-tracked-change-commands";
 import {
   DELETION_MARK,
   DeletionMark,
