@@ -161,6 +161,9 @@
             "location": "apps/desktop/src/activity/billing-draft-settings.ts#8"
           },
           {
+            "location": "apps/desktop/src/activity/matter-store-section.ts#6"
+          },
+          {
             "location": "apps/desktop/src/clipboard/clips-copy-routing.ts#1"
           },
           {
@@ -593,7 +596,7 @@
             "location": "apps/web/src/features/chat/answer-edit/use-chat-selection-events.ts#2"
           },
           {
-            "location": "apps/web/src/features/chat/browser-control/browser-approval-mode.ts#1"
+            "location": "apps/web/src/features/chat/browser-control/browser-approval-state.ts#1"
           },
           {
             "location": "apps/web/src/features/chat/browser-control/browser-extension-bridge.ts#1"
@@ -887,6 +890,12 @@
             "location": "packages/ui/src/components/button.shared.ts#12"
           },
           {
+            "location": "packages/ui/src/components/composer-frame.shared.ts#6"
+          },
+          {
+            "location": "packages/ui/src/components/composer-layout.ts#7"
+          },
+          {
             "location": "packages/ui/src/components/sheet.shared.ts#5"
           },
           {
@@ -941,6 +950,9 @@
             "location": "apps/desktop/src/activity/ActivityBrowserQuestion.tsx#2"
           },
           {
+            "location": "apps/desktop/src/activity/ActivityCalendarEvents.tsx#1"
+          },
+          {
             "location": "apps/desktop/src/activity/ActivityDayCalendar.tsx#1"
           },
           {
@@ -963,6 +975,9 @@
           },
           {
             "location": "apps/desktop/src/activity/MatterPicker.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/activity/MatterRulesSettings.tsx#1"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#10"
@@ -989,7 +1004,7 @@
             "location": "apps/desktop/src/mainview/AgentSubscriptionsSection.tsx#1"
           },
           {
-            "location": "apps/desktop/src/mainview/App.tsx#7"
+            "location": "apps/desktop/src/mainview/App.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/AppearanceSetting.tsx#1"
@@ -1074,6 +1089,9 @@
           },
           {
             "location": "apps/desktop/src/onboarding/ActivitySetupFlow.tsx#2"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/ActivitySetupScreens.tsx#1"
           },
           {
             "location": "apps/desktop/src/onboarding/ConnectStep.tsx#1"
@@ -1335,6 +1353,9 @@
           },
           {
             "location": "apps/mobile/src/components/loaded-tasks.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/local-run-request-card.tsx#1"
           },
           {
             "location": "apps/mobile/src/components/mailbox-messages.tsx#1"
@@ -1838,7 +1859,7 @@
             "location": "apps/web/src/components/chat/docked-chat-stack.tsx#2"
           },
           {
-            "location": "apps/web/src/components/chat/docked-composer.tsx#7"
+            "location": "apps/web/src/components/chat/docked-composer.tsx#8"
           },
           {
             "location": "apps/web/src/components/chat/generated-visual.tsx#1"
@@ -1851,6 +1872,9 @@
           },
           {
             "location": "apps/web/src/components/chat/local-run-question-card.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-run-request-notice.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/local-run-step-output.tsx#1"
@@ -2108,10 +2132,10 @@
             "location": "apps/web/src/components/inspector/anonymization-facet.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#1"
+            "location": "apps/web/src/components/inspector/audio-file-viewer.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#18"
+            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/compare-versions-panel.tsx#1"
@@ -2150,13 +2174,13 @@
             "location": "apps/web/src/components/inspector/file-tab-full-view.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-header.tsx#6"
+            "location": "apps/web/src/components/inspector/file-tab-header.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#9"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#8"
           },
           {
             "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#7"
@@ -3671,6 +3695,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/apps-group.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/account/connections/browser-sites-group.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/integrations-group.tsx#1"
           },
           {
@@ -3903,9 +3930,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.pending.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#1"
@@ -4430,6 +4454,9 @@
             "location": "apps/web/src/routes/dev/-components/sortable-head-playground.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/dev/-components/storm-watch-playground.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/dev/-components/table-chart-playground.tsx#1"
           },
           {
@@ -4526,13 +4553,13 @@
             "location": "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/skill-detail.pending.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/knowledge/-components/skill-editor.tsx#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/skill-export-menu.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/knowledge/-components/skill-monitor-panel.tsx#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/template-check-dialog.tsx#1"
@@ -5024,6 +5051,15 @@
             "location": "packages/ui/src/components/command.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/composer-frame.native.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/composer-frame.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/composer-frame.tsx#4"
+          },
+          {
             "location": "packages/ui/src/components/composer.tsx#3"
           },
           {
@@ -5100,6 +5136,9 @@
           },
           {
             "location": "packages/ui/src/components/fixtures/color-picker.fixture.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/fixtures/composer-frame.fixture.tsx#1"
           },
           {
             "location": "packages/ui/src/components/fixtures/court-filter.fixture.tsx#1"
@@ -6757,6 +6796,9 @@
             "location": "apps/desktop/src/activity/billing-draft-settings.ts#8"
           },
           {
+            "location": "apps/desktop/src/activity/matter-store-section.ts#6"
+          },
+          {
             "location": "apps/desktop/src/clipboard/clips-copy-routing.ts#1"
           },
           {
@@ -7189,7 +7231,7 @@
             "location": "apps/web/src/features/chat/answer-edit/use-chat-selection-events.ts#2"
           },
           {
-            "location": "apps/web/src/features/chat/browser-control/browser-approval-mode.ts#1"
+            "location": "apps/web/src/features/chat/browser-control/browser-approval-state.ts#1"
           },
           {
             "location": "apps/web/src/features/chat/browser-control/browser-extension-bridge.ts#1"
@@ -7483,6 +7525,12 @@
             "location": "packages/ui/src/components/button.shared.ts#12"
           },
           {
+            "location": "packages/ui/src/components/composer-frame.shared.ts#6"
+          },
+          {
+            "location": "packages/ui/src/components/composer-layout.ts#7"
+          },
+          {
             "location": "packages/ui/src/components/sheet.shared.ts#5"
           },
           {
@@ -7537,6 +7585,9 @@
             "location": "apps/desktop/src/activity/ActivityBrowserQuestion.tsx#2"
           },
           {
+            "location": "apps/desktop/src/activity/ActivityCalendarEvents.tsx#1"
+          },
+          {
             "location": "apps/desktop/src/activity/ActivityDayCalendar.tsx#1"
           },
           {
@@ -7559,6 +7610,9 @@
           },
           {
             "location": "apps/desktop/src/activity/MatterPicker.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/activity/MatterRulesSettings.tsx#1"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#10"
@@ -7585,7 +7639,7 @@
             "location": "apps/desktop/src/mainview/AgentSubscriptionsSection.tsx#1"
           },
           {
-            "location": "apps/desktop/src/mainview/App.tsx#7"
+            "location": "apps/desktop/src/mainview/App.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/AppearanceSetting.tsx#1"
@@ -7670,6 +7724,9 @@
           },
           {
             "location": "apps/desktop/src/onboarding/ActivitySetupFlow.tsx#2"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/ActivitySetupScreens.tsx#1"
           },
           {
             "location": "apps/desktop/src/onboarding/ConnectStep.tsx#1"
@@ -7931,6 +7988,9 @@
           },
           {
             "location": "apps/mobile/src/components/loaded-tasks.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/local-run-request-card.tsx#1"
           },
           {
             "location": "apps/mobile/src/components/mailbox-messages.tsx#1"
@@ -8434,7 +8494,7 @@
             "location": "apps/web/src/components/chat/docked-chat-stack.tsx#2"
           },
           {
-            "location": "apps/web/src/components/chat/docked-composer.tsx#7"
+            "location": "apps/web/src/components/chat/docked-composer.tsx#8"
           },
           {
             "location": "apps/web/src/components/chat/generated-visual.tsx#1"
@@ -8447,6 +8507,9 @@
           },
           {
             "location": "apps/web/src/components/chat/local-run-question-card.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-run-request-notice.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/local-run-step-output.tsx#1"
@@ -8704,10 +8767,10 @@
             "location": "apps/web/src/components/inspector/anonymization-facet.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#1"
+            "location": "apps/web/src/components/inspector/audio-file-viewer.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#18"
+            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/compare-versions-panel.tsx#1"
@@ -8746,13 +8809,13 @@
             "location": "apps/web/src/components/inspector/file-tab-full-view.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-header.tsx#6"
+            "location": "apps/web/src/components/inspector/file-tab-header.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#9"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#8"
           },
           {
             "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#7"
@@ -10267,6 +10330,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/apps-group.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/account/connections/browser-sites-group.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/integrations-group.tsx#1"
           },
           {
@@ -10499,9 +10565,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.pending.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#1"
@@ -11026,6 +11089,9 @@
             "location": "apps/web/src/routes/dev/-components/sortable-head-playground.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/dev/-components/storm-watch-playground.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/dev/-components/table-chart-playground.tsx#1"
           },
           {
@@ -11122,13 +11188,13 @@
             "location": "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/skill-detail.pending.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/knowledge/-components/skill-editor.tsx#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/skill-export-menu.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/knowledge/-components/skill-monitor-panel.tsx#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/template-check-dialog.tsx#1"
@@ -11620,6 +11686,15 @@
             "location": "packages/ui/src/components/command.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/composer-frame.native.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/composer-frame.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/composer-frame.tsx#4"
+          },
+          {
             "location": "packages/ui/src/components/composer.tsx#3"
           },
           {
@@ -11696,6 +11771,9 @@
           },
           {
             "location": "packages/ui/src/components/fixtures/color-picker.fixture.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/fixtures/composer-frame.fixture.tsx#1"
           },
           {
             "location": "packages/ui/src/components/fixtures/court-filter.fixture.tsx#1"
@@ -13395,6 +13473,9 @@
             "location": "packages/ui/src/components/fixtures/color-picker.fixture.tsx#2"
           },
           {
+            "location": "packages/ui/src/components/fixtures/composer-frame.fixture.tsx#2"
+          },
+          {
             "location": "packages/ui/src/components/fixtures/control-states.fixture.tsx#1"
           },
           {
@@ -13522,6 +13603,9 @@
           },
           {
             "location": "packages/ui/src/components/fixtures/color-picker.fixture.tsx#2"
+          },
+          {
+            "location": "packages/ui/src/components/fixtures/composer-frame.fixture.tsx#2"
           },
           {
             "location": "packages/ui/src/components/fixtures/control-states.fixture.tsx#1"
@@ -16151,10 +16235,13 @@
             "location": "apps/api/src/handlers/chat/chat-message-parts.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/chat/persisted-chat-types.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/chat/tanstack-chat-lifecycle.ts#10"
           },
           {
-            "location": "apps/api/src/handlers/chat/types.ts#2"
+            "location": "apps/api/src/handlers/chat/types.ts#1"
           },
           {
             "location": "apps/api/src/lib/chat/persisted-message-content.ts#2"
@@ -16991,6 +17078,9 @@
             "location": "apps/api/src/handlers/chat/loop-detector.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/chat/persisted-chat-types.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/chat/snapshot-reconciliation.ts#1"
           },
           {
@@ -17040,6 +17130,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/browser-control-tool.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/browser-site-notes-tools.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/business-registry-tools.ts#1"
@@ -17121,9 +17214,6 @@
           },
           {
             "location": "apps/api/src/handlers/chat/turns/resume.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/types.ts#1"
           },
           {
             "location": "apps/api/src/handlers/document-reviews/reference-positions.ts#1"
@@ -17375,7 +17465,10 @@
             "location": "packages/api-contract/src/desktop-runner.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/types.ts#8"
+            "location": "apps/api/src/handlers/chat/persisted-chat-types.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/types.ts#7"
           },
           {
             "location": "apps/api/src/lib/workflow/streaming-answer.ts#1"
@@ -17657,7 +17750,7 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-form.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#3"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#4"
@@ -17987,6 +18080,9 @@
             "location": "apps/web/src/components/auth/sign-in-code-delivery.ts#1"
           },
           {
+            "location": "apps/web/src/components/chat/cell-citation-open.ts#1"
+          },
+          {
             "location": "apps/web/src/components/chat/statute-open.ts#1"
           },
           {
@@ -18228,6 +18324,9 @@
           },
           {
             "location": "apps/web/src/features/chat/browser-control/browser-site-grants.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/chat/browser-control/browser-site-notes.ts#1"
           },
           {
             "location": "apps/web/src/features/chat/chat-limit-reminder.ts#1"
@@ -19121,6 +19220,9 @@
             "location": "apps/web/src/components/chat/request-secret-card.tsx#3"
           },
           {
+            "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#4"
           },
           {
@@ -19196,10 +19298,13 @@
             "location": "apps/web/src/components/inspector/asic-file-viewer.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/audio-file-viewer.tsx#3"
+          },
+          {
             "location": "apps/web/src/components/inspector/cades-file-viewer.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#24"
+            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#23"
           },
           {
             "location": "apps/web/src/components/inspector/compare-versions-panel.tsx#3"
@@ -19451,7 +19556,7 @@
             "location": "apps/web/src/components/workspaces/matter-combobox.tsx#3"
           },
           {
-            "location": "apps/web/src/components/workspaces/matter-context-menu.tsx#11"
+            "location": "apps/web/src/components/workspaces/matter-context-menu.tsx#3"
           },
           {
             "location": "apps/web/src/components/workspaces/matter-document-picker.tsx#3"
@@ -19596,6 +19701,9 @@
           },
           {
             "location": "apps/web/src/features/chat/components/proxy-chat-link.tsx#4"
+          },
+          {
+            "location": "apps/web/src/features/chat/desktop-feature-update.tsx#1"
           },
           {
             "location": "apps/web/src/features/chat/make-skill-review-dialog.tsx#3"
@@ -19772,7 +19880,7 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/apps-group.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/account/connections/browser-sites-group.tsx#1"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/connections/browser-sites-group.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/integrations-group.tsx#7"
@@ -19886,7 +19994,7 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/organization-instructions-card.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#8"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/prompt-caching-card.tsx#1"
@@ -20139,6 +20247,9 @@
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/skill-editor.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/knowledge/-components/skill-monitor-panel.tsx#3"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/template-check-dialog.tsx#4"
@@ -20411,6 +20522,9 @@
             "location": "apps/web/src/components/breadcrumbs/use-trail-ends-at-matter.ts#1"
           },
           {
+            "location": "apps/web/src/components/chat/cell-citation-open.ts#2"
+          },
+          {
             "location": "apps/web/src/components/chat/statute-open.ts#2"
           },
           {
@@ -20657,7 +20771,7 @@
             "location": "apps/web/src/components/chat/connect-connector-card.tsx#4"
           },
           {
-            "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#4"
+            "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#5"
           },
           {
             "location": "apps/web/src/components/create-organization-dialog.tsx#2"
@@ -20666,7 +20780,7 @@
             "location": "apps/web/src/components/feedback-dialog.tsx#3"
           },
           {
-            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#25"
+            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#24"
           },
           {
             "location": "apps/web/src/components/inspector/compare-versions-panel.tsx#4"
@@ -21147,6 +21261,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/list-toolbar.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization-danger-zone.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.ai.tsx#1"
@@ -22284,6 +22401,12 @@
             "location": "apps/desktop/src/activity/billing-draft-transport.ts#1"
           },
           {
+            "location": "apps/desktop/src/activity/matter-learning-store.ts#1"
+          },
+          {
+            "location": "apps/desktop/src/activity/matter-rules-store.ts#1"
+          },
+          {
             "location": "apps/desktop/src/clipboard/clipboard-settings.ts#1"
           },
           {
@@ -22314,6 +22437,9 @@
             "location": "apps/desktop/src/activity/ActivityApp.tsx#3"
           },
           {
+            "location": "apps/desktop/src/activity/ActivityCalendarEvents.tsx#3"
+          },
+          {
             "location": "apps/desktop/src/activity/ActivityDayCalendar.tsx#4"
           },
           {
@@ -22321,6 +22447,9 @@
           },
           {
             "location": "apps/desktop/src/activity/MatterPicker.tsx#3"
+          },
+          {
+            "location": "apps/desktop/src/activity/MatterRulesSettings.tsx#3"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#30"
@@ -22341,7 +22470,7 @@
             "location": "apps/desktop/src/mainview/AgentSubscriptionsSection.tsx#3"
           },
           {
-            "location": "apps/desktop/src/mainview/App.tsx#9"
+            "location": "apps/desktop/src/mainview/App.tsx#3"
           },
           {
             "location": "apps/desktop/src/mainview/AppearanceSetting.tsx#3"
@@ -22499,6 +22628,9 @@
         "occurrences": [
           {
             "location": "apps/desktop/src/activity/billing-draft-settings.ts#8"
+          },
+          {
+            "location": "apps/desktop/src/activity/matter-store-section.ts#6"
           },
           {
             "location": "apps/desktop/src/clipboard/clips-copy-routing.ts#1"
@@ -22933,7 +23065,7 @@
             "location": "apps/web/src/features/chat/answer-edit/use-chat-selection-events.ts#2"
           },
           {
-            "location": "apps/web/src/features/chat/browser-control/browser-approval-mode.ts#1"
+            "location": "apps/web/src/features/chat/browser-control/browser-approval-state.ts#1"
           },
           {
             "location": "apps/web/src/features/chat/browser-control/browser-extension-bridge.ts#1"
@@ -23227,6 +23359,12 @@
             "location": "packages/ui/src/components/button.shared.ts#12"
           },
           {
+            "location": "packages/ui/src/components/composer-frame.shared.ts#6"
+          },
+          {
+            "location": "packages/ui/src/components/composer-layout.ts#7"
+          },
+          {
             "location": "packages/ui/src/components/sheet.shared.ts#5"
           },
           {
@@ -23281,6 +23419,9 @@
             "location": "apps/desktop/src/activity/ActivityBrowserQuestion.tsx#2"
           },
           {
+            "location": "apps/desktop/src/activity/ActivityCalendarEvents.tsx#1"
+          },
+          {
             "location": "apps/desktop/src/activity/ActivityDayCalendar.tsx#1"
           },
           {
@@ -23303,6 +23444,9 @@
           },
           {
             "location": "apps/desktop/src/activity/MatterPicker.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/activity/MatterRulesSettings.tsx#1"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#10"
@@ -23329,7 +23473,7 @@
             "location": "apps/desktop/src/mainview/AgentSubscriptionsSection.tsx#1"
           },
           {
-            "location": "apps/desktop/src/mainview/App.tsx#7"
+            "location": "apps/desktop/src/mainview/App.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/AppearanceSetting.tsx#1"
@@ -23414,6 +23558,9 @@
           },
           {
             "location": "apps/desktop/src/onboarding/ActivitySetupFlow.tsx#2"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/ActivitySetupScreens.tsx#1"
           },
           {
             "location": "apps/desktop/src/onboarding/ConnectStep.tsx#1"
@@ -23675,6 +23822,9 @@
           },
           {
             "location": "apps/mobile/src/components/loaded-tasks.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/local-run-request-card.tsx#1"
           },
           {
             "location": "apps/mobile/src/components/mailbox-messages.tsx#1"
@@ -24178,7 +24328,7 @@
             "location": "apps/web/src/components/chat/docked-chat-stack.tsx#2"
           },
           {
-            "location": "apps/web/src/components/chat/docked-composer.tsx#7"
+            "location": "apps/web/src/components/chat/docked-composer.tsx#8"
           },
           {
             "location": "apps/web/src/components/chat/generated-visual.tsx#1"
@@ -24191,6 +24341,9 @@
           },
           {
             "location": "apps/web/src/components/chat/local-run-question-card.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-run-request-notice.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/local-run-step-output.tsx#1"
@@ -24448,10 +24601,10 @@
             "location": "apps/web/src/components/inspector/anonymization-facet.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#1"
+            "location": "apps/web/src/components/inspector/audio-file-viewer.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#18"
+            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/compare-versions-panel.tsx#1"
@@ -24490,13 +24643,13 @@
             "location": "apps/web/src/components/inspector/file-tab-full-view.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-header.tsx#6"
+            "location": "apps/web/src/components/inspector/file-tab-header.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#9"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#8"
           },
           {
             "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#7"
@@ -26011,6 +26164,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/apps-group.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/account/connections/browser-sites-group.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/integrations-group.tsx#1"
           },
           {
@@ -26243,9 +26399,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.pending.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#1"
@@ -26770,6 +26923,9 @@
             "location": "apps/web/src/routes/dev/-components/sortable-head-playground.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/dev/-components/storm-watch-playground.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/dev/-components/table-chart-playground.tsx#1"
           },
           {
@@ -26866,13 +27022,13 @@
             "location": "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/skill-detail.pending.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/knowledge/-components/skill-editor.tsx#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/skill-export-menu.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/knowledge/-components/skill-monitor-panel.tsx#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/template-check-dialog.tsx#1"
@@ -27364,6 +27520,15 @@
             "location": "packages/ui/src/components/command.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/composer-frame.native.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/composer-frame.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/composer-frame.tsx#4"
+          },
+          {
             "location": "packages/ui/src/components/composer.tsx#3"
           },
           {
@@ -27440,6 +27605,9 @@
           },
           {
             "location": "packages/ui/src/components/fixtures/color-picker.fixture.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/fixtures/composer-frame.fixture.tsx#1"
           },
           {
             "location": "packages/ui/src/components/fixtures/court-filter.fixture.tsx#1"
@@ -28856,6 +29024,9 @@
             "location": "apps/desktop/src/activity/billing-draft-settings.ts#8"
           },
           {
+            "location": "apps/desktop/src/activity/matter-store-section.ts#6"
+          },
+          {
             "location": "apps/desktop/src/clipboard/clips-copy-routing.ts#1"
           },
           {
@@ -29288,7 +29459,7 @@
             "location": "apps/web/src/features/chat/answer-edit/use-chat-selection-events.ts#2"
           },
           {
-            "location": "apps/web/src/features/chat/browser-control/browser-approval-mode.ts#1"
+            "location": "apps/web/src/features/chat/browser-control/browser-approval-state.ts#1"
           },
           {
             "location": "apps/web/src/features/chat/browser-control/browser-extension-bridge.ts#1"
@@ -29582,6 +29753,12 @@
             "location": "packages/ui/src/components/button.shared.ts#12"
           },
           {
+            "location": "packages/ui/src/components/composer-frame.shared.ts#6"
+          },
+          {
+            "location": "packages/ui/src/components/composer-layout.ts#7"
+          },
+          {
             "location": "packages/ui/src/components/sheet.shared.ts#5"
           },
           {
@@ -29636,6 +29813,9 @@
             "location": "apps/desktop/src/activity/ActivityBrowserQuestion.tsx#2"
           },
           {
+            "location": "apps/desktop/src/activity/ActivityCalendarEvents.tsx#1"
+          },
+          {
             "location": "apps/desktop/src/activity/ActivityDayCalendar.tsx#1"
           },
           {
@@ -29658,6 +29838,9 @@
           },
           {
             "location": "apps/desktop/src/activity/MatterPicker.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/activity/MatterRulesSettings.tsx#1"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#10"
@@ -29684,7 +29867,7 @@
             "location": "apps/desktop/src/mainview/AgentSubscriptionsSection.tsx#1"
           },
           {
-            "location": "apps/desktop/src/mainview/App.tsx#7"
+            "location": "apps/desktop/src/mainview/App.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/AppearanceSetting.tsx#1"
@@ -29769,6 +29952,9 @@
           },
           {
             "location": "apps/desktop/src/onboarding/ActivitySetupFlow.tsx#2"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/ActivitySetupScreens.tsx#1"
           },
           {
             "location": "apps/desktop/src/onboarding/ConnectStep.tsx#1"
@@ -30030,6 +30216,9 @@
           },
           {
             "location": "apps/mobile/src/components/loaded-tasks.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/local-run-request-card.tsx#1"
           },
           {
             "location": "apps/mobile/src/components/mailbox-messages.tsx#1"
@@ -30533,7 +30722,7 @@
             "location": "apps/web/src/components/chat/docked-chat-stack.tsx#2"
           },
           {
-            "location": "apps/web/src/components/chat/docked-composer.tsx#7"
+            "location": "apps/web/src/components/chat/docked-composer.tsx#8"
           },
           {
             "location": "apps/web/src/components/chat/generated-visual.tsx#1"
@@ -30546,6 +30735,9 @@
           },
           {
             "location": "apps/web/src/components/chat/local-run-question-card.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-run-request-notice.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/local-run-step-output.tsx#1"
@@ -30803,10 +30995,10 @@
             "location": "apps/web/src/components/inspector/anonymization-facet.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#1"
+            "location": "apps/web/src/components/inspector/audio-file-viewer.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#18"
+            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/compare-versions-panel.tsx#1"
@@ -30845,13 +31037,13 @@
             "location": "apps/web/src/components/inspector/file-tab-full-view.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-header.tsx#6"
+            "location": "apps/web/src/components/inspector/file-tab-header.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#9"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#8"
           },
           {
             "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#7"
@@ -32366,6 +32558,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/apps-group.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/account/connections/browser-sites-group.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/integrations-group.tsx#1"
           },
           {
@@ -32598,9 +32793,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.pending.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#1"
@@ -33125,6 +33317,9 @@
             "location": "apps/web/src/routes/dev/-components/sortable-head-playground.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/dev/-components/storm-watch-playground.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/dev/-components/table-chart-playground.tsx#1"
           },
           {
@@ -33221,13 +33416,13 @@
             "location": "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/skill-detail.pending.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/knowledge/-components/skill-editor.tsx#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/skill-export-menu.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/knowledge/-components/skill-monitor-panel.tsx#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/template-check-dialog.tsx#1"
@@ -33719,6 +33914,15 @@
             "location": "packages/ui/src/components/command.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/composer-frame.native.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/composer-frame.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/composer-frame.tsx#4"
+          },
+          {
             "location": "packages/ui/src/components/composer.tsx#3"
           },
           {
@@ -33795,6 +33999,9 @@
           },
           {
             "location": "packages/ui/src/components/fixtures/color-picker.fixture.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/fixtures/composer-frame.fixture.tsx#1"
           },
           {
             "location": "packages/ui/src/components/fixtures/court-filter.fixture.tsx#1"
@@ -34921,22 +35128,10 @@
             "location": "apps/api/src/db/root.ts#1"
           },
           {
-            "location": "apps/api/src/lib/auth/create-organization-in-transaction.ts#2"
-          },
-          {
-            "location": "apps/api/src/lib/auth/mcp-web-handoff-session.ts#3"
-          },
-          {
-            "location": "apps/api/src/lib/auth.ts#15"
-          },
-          {
-            "location": "apps/api/src/scripts/better-auth-sign-in-replay.ts#15"
-          },
-          {
-            "location": "apps/api/src/db/root.ts#1"
-          },
-          {
             "location": "apps/api/src/db/root.ts#2"
+          },
+          {
+            "location": "apps/api/src/db/root.ts#3"
           },
           {
             "location": "apps/api/src/lib/auth/agent-auth-user.ts#2"
@@ -35162,6 +35357,21 @@
           },
           {
             "location": "apps/api/src/db/root.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/auth/create-organization-in-transaction.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/auth/mcp-web-handoff-session.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/auth.ts#15"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-sign-in-replay.ts#15"
+          },
+          {
+            "location": "apps/api/src/db/root.ts#3"
           },
           {
             "location": "apps/api/src/lib/auth/auth-request-observability.ts#2"
@@ -35589,6 +35799,9 @@
             "location": "apps/api/scripts/lib/enumerate-checked-operations.ts#1"
           },
           {
+            "location": "apps/api/scripts/lib/enumerate-safe-handlers.ts#1"
+          },
+          {
             "location": "apps/api/scripts/lib/feature-access-declarations.ts#1"
           },
           {
@@ -35949,7 +36162,7 @@
             "location": "apps/api/src/db/pending-online-drain.ts#1"
           },
           {
-            "location": "apps/api/src/db/root.ts#3"
+            "location": "apps/api/src/db/root.ts#4"
           },
           {
             "location": "apps/api/src/db/safe-db-types.ts#1"
@@ -36360,7 +36573,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts#12"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-uohs.ts#6"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-uohs.ts#7"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-us-bench.ts#1"
@@ -36951,6 +37164,18 @@
             "location": "apps/api/src/handlers/chat/browse-web-agent.ts#13"
           },
           {
+            "location": "apps/api/src/handlers/chat/browser-downloads/chat-thread.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/browser-downloads/file-download.ts#22"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/browser-downloads/local-run.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/browser-downloads/own-chat.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/chat/browser-site-grants/create.ts#1"
           },
           {
@@ -36961,6 +37186,15 @@
           },
           {
             "location": "apps/api/src/handlers/chat/browser-site-grants/load.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/browser-site-notes/delete.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/browser-site-notes/list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/browser-site-notes/sites/delete.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/chat-command-receipts.ts#1"
@@ -37371,6 +37605,9 @@
             "location": "apps/api/src/handlers/chat/tools/auto-apply-suggest-changes-tools.ts#6"
           },
           {
+            "location": "apps/api/src/handlers/chat/tools/browser-site-notes-tools.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/chat/tools/business-registry-tools.ts#2"
           },
           {
@@ -37501,6 +37738,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/turns/adopt.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/turns/answer-request.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/turns/cancel.ts#1"
@@ -37707,6 +37947,9 @@
             "location": "apps/api/src/handlers/desktop-feature-access/read.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/desktop-presence/latest-release.ts#13"
+          },
+          {
             "location": "apps/api/src/handlers/desktop-presence/read.ts#1"
           },
           {
@@ -37749,6 +37992,9 @@
             "location": "apps/api/src/handlers/desktop-time-entries/billing-drafts.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/desktop-time-entries/calendar-events.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/desktop-time-entries/candidates.ts#1"
           },
           {
@@ -37759,6 +38005,9 @@
           },
           {
             "location": "apps/api/src/handlers/desktop-time-entries/matters.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/desktop-time-entries/resolve.ts#1"
           },
           {
             "location": "apps/api/src/handlers/dev/firm-knowledge-job-store.ts#1"
@@ -38172,7 +38421,7 @@
             "location": "apps/api/src/handlers/feedback/intake.ts#24"
           },
           {
-            "location": "apps/api/src/handlers/feedback/submit.ts#21"
+            "location": "apps/api/src/handlers/feedback/submit.ts#22"
           },
           {
             "location": "apps/api/src/handlers/fields/cell-metadata/update.ts#1"
@@ -39423,6 +39672,12 @@
             "location": "apps/api/src/handlers/skills/managed-skill.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/skills/monitor/get.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/monitor/monitor.logic.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/skills/proposals/create.ts#1"
           },
           {
@@ -39439,6 +39694,9 @@
           },
           {
             "location": "apps/api/src/handlers/skills/proposals/review.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/proposals/suggest-improvements/create.ts#1"
           },
           {
             "location": "apps/api/src/handlers/skills/proposals/update.ts#1"
@@ -40356,6 +40614,9 @@
             "location": "apps/api/src/lib/auth/microsoft365/calendar-client.ts#1"
           },
           {
+            "location": "apps/api/src/lib/auth/microsoft365/calendar-connection.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/auth/microsoft365/capabilities.ts#1"
           },
           {
@@ -40746,7 +41007,7 @@
             "location": "apps/api/src/lib/case-law/decision-type-filter-sql.ts#1"
           },
           {
-            "location": "apps/api/src/lib/case-law/decision-type-kind.ts#3"
+            "location": "apps/api/src/lib/case-law/decision-type-kind.ts#4"
           },
           {
             "location": "apps/api/src/lib/case-law/decision-work.ts#42"
@@ -40864,6 +41125,9 @@
           },
           {
             "location": "apps/api/src/lib/chat/artefact-provenance.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/chat/browser-site-notes/store.ts#1"
           },
           {
             "location": "apps/api/src/lib/chat/chat-request.ts#2"
@@ -41193,10 +41457,16 @@
             "location": "apps/api/src/lib/desktop-runner/gateway.ts#1"
           },
           {
+            "location": "apps/api/src/lib/desktop-runner/request-answers.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/desktop-runner/sealed-answers.ts#1"
           },
           {
             "location": "apps/api/src/lib/desktop-runner/session.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/desktop-runner/site-grants.ts#1"
           },
           {
             "location": "apps/api/src/lib/desktop-runner/step-content-answer.ts#1"
@@ -42204,10 +42474,10 @@
             "location": "apps/api/src/lib/legal-search/corpus-index-route-proof-runner.ts#37"
           },
           {
-            "location": "apps/api/src/lib/legal-search/corpus-index-route-proof-store.ts#37"
+            "location": "apps/api/src/lib/legal-search/corpus-index-route-proof-store.ts#48"
           },
           {
-            "location": "apps/api/src/lib/legal-search/corpus-index-route-proof.ts#29"
+            "location": "apps/api/src/lib/legal-search/corpus-index-route-proof.ts#32"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-route-seeding.ts#52"
@@ -43401,6 +43671,45 @@
             "location": "apps/api/src/lib/templates/fill-preview-logic.ts#7"
           },
           {
+            "location": "apps/api/src/lib/templates/house-style/ambiguity.ts#8"
+          },
+          {
+            "location": "apps/api/src/lib/templates/house-style/folio-contract.ts#6"
+          },
+          {
+            "location": "apps/api/src/lib/templates/house-style/format-onto-template.ts#18"
+          },
+          {
+            "location": "apps/api/src/lib/templates/house-style/label-index.ts#6"
+          },
+          {
+            "location": "apps/api/src/lib/templates/house-style/manifest.test-helpers.ts#4"
+          },
+          {
+            "location": "apps/api/src/lib/templates/house-style/plan-builder.ts#13"
+          },
+          {
+            "location": "apps/api/src/lib/templates/house-style/plan-numbering.ts#11"
+          },
+          {
+            "location": "apps/api/src/lib/templates/house-style/reference-chain.ts#6"
+          },
+          {
+            "location": "apps/api/src/lib/templates/house-style/reference-detector.ts#10"
+          },
+          {
+            "location": "apps/api/src/lib/templates/house-style/reference-fields.ts#10"
+          },
+          {
+            "location": "apps/api/src/lib/templates/house-style/reference-units.ts#5"
+          },
+          {
+            "location": "apps/api/src/lib/templates/house-style/role-proposer.ts#6"
+          },
+          {
+            "location": "apps/api/src/lib/templates/house-style/template-profile.ts#8"
+          },
+          {
             "location": "apps/api/src/lib/templates/lookup-formats/resolve-default.ts#1"
           },
           {
@@ -43459,6 +43768,9 @@
           },
           {
             "location": "apps/api/src/lib/uploads/entity-create.ts#21"
+          },
+          {
+            "location": "apps/api/src/lib/uploads/entity-create.ts#22"
           },
           {
             "location": "apps/api/src/lib/uploads/file-comparison/deliver-redline.ts#12"
@@ -43836,7 +44148,13 @@
             "location": "apps/api/src/mcp/server-core.ts#22"
           },
           {
+            "location": "apps/api/src/mcp/site-notes-tools.ts#1"
+          },
+          {
             "location": "apps/api/src/mcp/static-tool-definitions.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/stella-tools-case-law-helpers.ts#1"
           },
           {
             "location": "apps/api/src/mcp/stella-tools.ts#1"
@@ -44232,7 +44550,16 @@
             "location": "apps/desktop/scripts/build-pkcs11-helper.ts#1"
           },
           {
+            "location": "apps/desktop/src/activity/activity-calendar-events.ts#1"
+          },
+          {
             "location": "apps/desktop/src/activity/activity-calendar-logic.ts#1"
+          },
+          {
+            "location": "apps/desktop/src/activity/activity-logic.ts#1"
+          },
+          {
+            "location": "apps/desktop/src/activity/activity-outages.ts#1"
           },
           {
             "location": "apps/desktop/src/activity/billing-draft-logic.ts#1"
@@ -44242,6 +44569,15 @@
           },
           {
             "location": "apps/desktop/src/activity/billing-draft-transport.ts#2"
+          },
+          {
+            "location": "apps/desktop/src/activity/day-review-logic.ts#1"
+          },
+          {
+            "location": "apps/desktop/src/activity/matter-learning.ts#1"
+          },
+          {
+            "location": "apps/desktop/src/activity/matter-rule-label.ts#1"
           },
           {
             "location": "apps/desktop/src/activity/title-capture-logic.ts#1"
@@ -44607,6 +44943,9 @@
             "location": "apps/mobile/src/state/local-file.ts#1"
           },
           {
+            "location": "apps/mobile/src/state/local-run-notices.ts#1"
+          },
+          {
             "location": "apps/mobile/src/state/markdown.ts#13"
           },
           {
@@ -44857,6 +45196,9 @@
           },
           {
             "location": "apps/web/src/components/chat/case-law-open.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/cell-citation-open.ts#3"
           },
           {
             "location": "apps/web/src/components/chat/chat-app-link.logic.ts#1"
@@ -45360,13 +45702,19 @@
             "location": "apps/web/src/features/chat/answer-edit/markdown-format.logic.ts#1"
           },
           {
-            "location": "apps/web/src/features/chat/browser-control/browser-approval-mode.ts#3"
+            "location": "apps/web/src/features/chat/browser-control/browser-approval-state.ts#3"
           },
           {
             "location": "apps/web/src/features/chat/browser-control/browser-approval-summary.ts#1"
           },
           {
             "location": "apps/web/src/features/chat/browser-control/browser-client-tool.ts#2"
+          },
+          {
+            "location": "apps/web/src/features/chat/browser-control/browser-download-filing.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/chat/browser-control/browser-download-inbox.ts#1"
           },
           {
             "location": "apps/web/src/features/chat/browser-control/browser-extension-bridge.ts#3"
@@ -46236,6 +46584,9 @@
             "location": "packages/agent-engine/src/harness/codex/background.ts#1"
           },
           {
+            "location": "packages/agent-engine/src/harness/codex/errors.ts#1"
+          },
+          {
             "location": "packages/agent-engine/src/harness/codex/items.ts#1"
           },
           {
@@ -46350,6 +46701,9 @@
             "location": "packages/agent-engine/src/sidecar/browser/tools.ts#1"
           },
           {
+            "location": "packages/agent-engine/src/sidecar/browser-download-filing.ts#1"
+          },
+          {
             "location": "packages/agent-engine/src/sidecar/checkpoints.ts#2"
           },
           {
@@ -46440,6 +46794,12 @@
             "location": "packages/api-contract/src/chat-decision-passage-link.ts#17"
           },
           {
+            "location": "packages/api-contract/src/chat-local-run-notice.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/chat-local-run-request.ts#1"
+          },
+          {
             "location": "packages/api-contract/src/chat-local-run-step-output.ts#1"
           },
           {
@@ -46506,7 +46866,13 @@
             "location": "packages/api-contract/src/desktop-account-link.ts#1"
           },
           {
+            "location": "packages/api-contract/src/desktop-release.ts#1"
+          },
+          {
             "location": "packages/api-contract/src/desktop-runner.ts#3"
+          },
+          {
+            "location": "packages/api-contract/src/desktop-time-entries.ts#1"
           },
           {
             "location": "packages/api-contract/src/dictation-vocabulary.ts#1"
@@ -47982,7 +48348,7 @@
             "location": "scripts/generate-cloud-setup.ts#1"
           },
           {
-            "location": "scripts/generate-harness-releases.ts#31"
+            "location": "scripts/generate-harness-releases.ts#33"
           },
           {
             "location": "scripts/generate-main-heavy-infrastructure-steps.ts#1"
@@ -48165,9 +48531,6 @@
             "location": "scripts/rc-bailouts.ts#25"
           },
           {
-            "location": "scripts/render-phase-update-baseline.ts#11"
-          },
-          {
             "location": "scripts/resolve-promoted-release.ts#1"
           },
           {
@@ -48175,6 +48538,9 @@
           },
           {
             "location": "scripts/rule-census.ts#5"
+          },
+          {
+            "location": "scripts/rule-count-baseline.ts#9"
           },
           {
             "location": "scripts/run-custom-lint-tests.ts#1"
@@ -48261,6 +48627,9 @@
             "location": "apps/desktop/src/activity/ActivityApp.tsx#4"
           },
           {
+            "location": "apps/desktop/src/activity/ActivityCalendarEvents.tsx#4"
+          },
+          {
             "location": "apps/desktop/src/activity/ActivityCaptureDetails.tsx#1"
           },
           {
@@ -48297,10 +48666,19 @@
             "location": "apps/desktop/src/mainview/AgentSubscriptionsSection.tsx#4"
           },
           {
-            "location": "apps/desktop/src/mainview/App.tsx#10"
+            "location": "apps/desktop/src/mainview/AntigravityCard.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/App.tsx#4"
           },
           {
             "location": "apps/desktop/src/mainview/AppearanceSetting.tsx#4"
+          },
+          {
+            "location": "apps/desktop/src/mainview/ChatGptCard.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/ClaudeCodeCard.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/DictationCleanupPreferences.tsx#4"
@@ -48360,7 +48738,7 @@
             "location": "apps/desktop/src/onboarding/ActivitySetupFlow.tsx#4"
           },
           {
-            "location": "apps/desktop/src/onboarding/ActivitySetupScreens.tsx#1"
+            "location": "apps/desktop/src/onboarding/ActivitySetupScreens.tsx#3"
           },
           {
             "location": "apps/desktop/src/onboarding/ConnectStep.tsx#4"
@@ -48759,6 +49137,9 @@
             "location": "apps/web/src/components/chat/connect-connector-card.tsx#5"
           },
           {
+            "location": "apps/web/src/components/chat/context-notice.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/chat/docked-chat-stack.tsx#5"
           },
           {
@@ -48870,7 +49251,7 @@
             "location": "apps/web/src/components/inspector/anonymization-match-status.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#26"
+            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#25"
           },
           {
             "location": "apps/web/src/components/inspector/compare-versions-panel.tsx#5"
@@ -49443,7 +49824,7 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-seller-picker.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#9"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profiles-card.tsx#4"
@@ -49750,6 +50131,9 @@
           },
           {
             "location": "packages/ui/src/components/fixtures/color-picker.fixture.tsx#4"
+          },
+          {
+            "location": "packages/ui/src/components/fixtures/composer-frame.fixture.tsx#4"
           },
           {
             "location": "packages/ui/src/components/fixtures/control-states.fixture.tsx#3"
@@ -51325,7 +51709,7 @@
             "location": "apps/api/src/db/rls.ts#3"
           },
           {
-            "location": "apps/api/src/db/root.ts#4"
+            "location": "apps/api/src/db/root.ts#5"
           },
           {
             "location": "apps/api/src/db/safe-db.ts#2"
@@ -51359,6 +51743,9 @@
           },
           {
             "location": "apps/api/src/db/schema/chat-browser-site-grants.ts#1"
+          },
+          {
+            "location": "apps/api/src/db/schema/chat-browser-site-notes.ts#1"
           },
           {
             "location": "apps/api/src/db/schema/chat-limit-reminders.ts#1"
@@ -51955,6 +52342,9 @@
             "location": "apps/api/src/handlers/catalogue/list.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/chat/browser-downloads/own-chat.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/chat/browser-site-grants/create.ts#2"
           },
           {
@@ -52337,6 +52727,12 @@
           },
           {
             "location": "apps/api/src/handlers/desktop-time-entries/candidates.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/desktop-time-entries/matter-candidate-projection.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/desktop-time-entries/resolve.ts#2"
           },
           {
             "location": "apps/api/src/handlers/dev/public-law-connection.ts#2"
@@ -53200,6 +53596,9 @@
             "location": "apps/api/src/handlers/skills/managed-skill.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/skills/monitor/get.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/skills/proposals/delete.ts#2"
           },
           {
@@ -53213,6 +53612,9 @@
           },
           {
             "location": "apps/api/src/handlers/skills/proposals/review.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/proposals/suggest-improvements/create.ts#2"
           },
           {
             "location": "apps/api/src/handlers/skills/proposals/update.ts#2"
@@ -54244,6 +54646,9 @@
             "location": "apps/api/src/lib/chat/active-draft-context.ts#1"
           },
           {
+            "location": "apps/api/src/lib/chat/browser-site-notes/store.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/chat/data-scope.ts#2"
           },
           {
@@ -54517,10 +54922,10 @@
             "location": "apps/api/src/lib/desktop-runner/app-calls.ts#1"
           },
           {
-            "location": "apps/api/src/lib/desktop-runner/folder-restores.ts#16"
+            "location": "apps/api/src/lib/desktop-runner/folder-restores.ts#15"
           },
           {
-            "location": "apps/api/src/lib/desktop-runner/folder-restores.ts#17"
+            "location": "apps/api/src/lib/desktop-runner/folder-restores.ts#16"
           },
           {
             "location": "apps/api/src/lib/desktop-runner/step-contents.ts#3"
@@ -55063,7 +55468,7 @@
             "location": "apps/api/src/lib/legal-search/corpus-index-route-proof-runner.ts#38"
           },
           {
-            "location": "apps/api/src/lib/legal-search/corpus-index-route-proof-store.ts#38"
+            "location": "apps/api/src/lib/legal-search/corpus-index-route-proof-store.ts#49"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-route-seeding.ts#53"
@@ -55906,7 +56311,7 @@
             "location": "apps/api/src/lib/uploads/document-naming/queue.ts#1"
           },
           {
-            "location": "apps/api/src/lib/uploads/entity-create.ts#22"
+            "location": "apps/api/src/lib/uploads/entity-create.ts#23"
           },
           {
             "location": "apps/api/src/lib/uploads/exact-duplicates.ts#1"
@@ -56617,7 +57022,7 @@
             "location": "apps/api/src/lib/db/transitions.ts#23"
           },
           {
-            "location": "apps/api/src/lib/desktop-runner/folder-restores.ts#17"
+            "location": "apps/api/src/lib/desktop-runner/folder-restores.ts#16"
           },
           {
             "location": "apps/api/src/lib/document-processing-queue.ts#18"
@@ -59013,10 +59418,7 @@
             "location": "apps/api/src/handlers/legal-resolve/authorization.ts#2"
           },
           {
-            "location": "apps/api/src/lib/agent-auth-idjag.ts#9"
-          },
-          {
-            "location": "apps/api/src/lib/agent-auth-idjag.ts#10"
+            "location": "apps/api/src/lib/agent-auth-idjag.ts#3"
           },
           {
             "location": "apps/api/src/lib/auth/api-access-token.ts#20"
@@ -59406,7 +59808,7 @@
             "location": "apps/mobile/src/icons.gen.ts#125"
           },
           {
-            "location": "apps/mobile/src/icons.gen.ts#381"
+            "location": "apps/mobile/src/icons.gen.ts#382"
           },
           {
             "location": "packages/ui/src/components/matter-icon.native.tsx#1"
@@ -59440,7 +59842,7 @@
         },
         {
           "name": "ExportedModules",
-          "value": "lucide-react-native,DollarSignIcon,lucide-react-native/DollarSignIcon,ScissorsIcon,lucide-react-native/ScissorsIcon,AccessibilityIcon,lucide-react-native/AccessibilityIcon,ActivityIcon,lucide-react-native/ActivityIcon,AlarmClockIcon,lucide-react-native/AlarmClockIcon,AlertCircleIcon,lucide-react-native/AlertCircleIcon,AlertTriangleIcon,lucide-react-native/AlertTriangleIcon,AlignJustifyIcon,lucide-react-native/AlignJustifyIcon,AlignLeftIcon,lucide-react-native/AlignLeftIcon,ArchiveIcon,lucide-react-native/ArchiveIcon,ArchiveRestoreIcon,lucide-react-native/ArchiveRestoreIcon,ArrowDownIcon,lucide-react-native/ArrowDownIcon,ArrowLeftIcon,lucide-react-native/ArrowLeftIcon,ArrowRightIcon,lucide-react-native/ArrowRightIcon,ArrowUpDownIcon,lucide-react-native/ArrowUpDownIcon,ArrowUpIcon,lucide-react-native/ArrowUpIcon,AtSignIcon,lucide-react-native/AtSignIcon,BanIcon,lucide-react-native/BanIcon,BanknoteIcon,lucide-react-native/BanknoteIcon,BellIcon,lucide-react-native/BellIcon,BlocksIcon,lucide-react-native/BlocksIcon,BoldIcon,lucide-react-native/BoldIcon,BookOpenCheckIcon,lucide-react-native/BookOpenCheckIcon,BookTextIcon,lucide-react-native/BookTextIcon,BookmarkIcon,lucide-react-native/BookmarkIcon,BookmarkPlusIcon,lucide-react-native/BookmarkPlusIcon,BracesIcon,lucide-react-native/BracesIcon,BrainIcon,lucide-react-native/BrainIcon,Building2Icon,lucide-react-native/Building2Icon,BuildingIcon,lucide-react-native/BuildingIcon,CableIcon,lucide-react-native/CableIcon,CalendarClockIcon,lucide-react-native/CalendarClockIcon,CalendarIcon,lucide-react-native/CalendarIcon,ChartColumnIcon,lucide-react-native/ChartColumnIcon,ChartLineIcon,lucide-react-native/ChartLineIcon,ChartNoAxesColumnIcon,lucide-react-native/ChartNoAxesColumnIcon,ChartPieIcon,lucide-react-native/ChartPieIcon,ChartScatterIcon,lucide-react-native/ChartScatterIcon,CheckCheckIcon,lucide-react-native/CheckCheckIcon,CheckCircle2Icon,lucide-react-native/CheckCircle2Icon,CheckIcon,lucide-react-native/CheckIcon,ChevronDownIcon,lucide-react-native/ChevronDownIcon,ChevronLeftIcon,lucide-react-native/ChevronLeftIcon,ChevronRightIcon,lucide-react-native/ChevronRightIcon,ChevronUpIcon,lucide-react-native/ChevronUpIcon,ChevronsUpDownIcon,lucide-react-native/ChevronsUpDownIcon,CircleAlertIcon,lucide-react-native/CircleAlertIcon,CircleCheckIcon,lucide-react-native/CircleCheckIcon,CircleDashedIcon,lucide-react-native/CircleDashedIcon,CircleDotIcon,lucide-react-native/CircleDotIcon,CircleHelpIcon,lucide-react-native/CircleHelpIcon,CircleIcon,lucide-react-native/CircleIcon,CircleOffIcon,lucide-react-native/CircleOffIcon,CircleUserRoundIcon,lucide-react-native/CircleUserRoundIcon,ClipboardCheckIcon,lucide-react-native/ClipboardCheckIcon,ClipboardCopyIcon,lucide-react-native/ClipboardCopyIcon,ClipboardIcon,lucide-react-native/ClipboardIcon,ClipboardListIcon,lucide-react-native/ClipboardListIcon,Clock3Icon,lucide-react-native/Clock3Icon,ClockIcon,lucide-react-native/ClockIcon,CloudIcon,lucide-react-native/CloudIcon,CogIcon,lucide-react-native/CogIcon,Columns2Icon,lucide-react-native/Columns2Icon,Columns3Icon,lucide-react-native/Columns3Icon,CommandIcon,lucide-react-native/CommandIcon,CompassIcon,lucide-react-native/CompassIcon,CopyPlusIcon,lucide-react-native/CopyPlusIcon,CornerDownLeftIcon,lucide-react-native/CornerDownLeftIcon,CpuIcon,lucide-react-native/CpuIcon,CropIcon,lucide-react-native/CropIcon,DatabaseIcon,lucide-react-native/DatabaseIcon,DownloadIcon,lucide-react-native/DownloadIcon,EditIcon,lucide-react-native/EditIcon,EllipsisIcon,lucide-react-native/EllipsisIcon,EllipsisVerticalIcon,lucide-react-native/EllipsisVerticalIcon,EqualIcon,lucide-react-native/EqualIcon,ExternalLinkIcon,lucide-react-native/ExternalLinkIcon,EyeIcon,lucide-react-native/EyeIcon,EyeOffIcon,lucide-react-native/EyeOffIcon,FileBadgeIcon,lucide-react-native/FileBadgeIcon,FileCheckIcon,lucide-react-native/FileCheckIcon,FileCodeIcon,lucide-react-native/FileCodeIcon,FileDiffIcon,lucide-react-native/FileDiffIcon,FileDigitIcon,lucide-react-native/FileDigitIcon,FileDownIcon,lucide-react-native/FileDownIcon,FileIcon,lucide-react-native/FileIcon,FileImageIcon,lucide-react-native/FileImageIcon,FileOutputIcon,lucide-react-native/FileOutputIcon,FilePlus2Icon,lucide-react-native/FilePlus2Icon,FilePlusIcon,lucide-react-native/FilePlusIcon,FileQuestionIcon,lucide-react-native/FileQuestionIcon,FileSearchIcon,lucide-react-native/FileSearchIcon,FileSpreadsheetIcon,lucide-react-native/FileSpreadsheetIcon,FileTextIcon,lucide-react-native/FileTextIcon,FileUpIcon,lucide-react-native/FileUpIcon,FilterIcon,lucide-react-native/FilterIcon,FilterXIcon,lucide-react-native/FilterXIcon,FlagIcon,lucide-react-native/FlagIcon,FlaskConicalIcon,lucide-react-native/FlaskConicalIcon,FoldHorizontalIcon,lucide-react-native/FoldHorizontalIcon,FolderIcon,lucide-react-native/FolderIcon,FolderInputIcon,lucide-react-native/FolderInputIcon,FolderOpenIcon,lucide-react-native/FolderOpenIcon,FolderPlusIcon,lucide-react-native/FolderPlusIcon,FolderSyncIcon,lucide-react-native/FolderSyncIcon,FolderTreeIcon,lucide-react-native/FolderTreeIcon,FunctionSquareIcon,lucide-react-native/FunctionSquareIcon,GanttChartIcon,lucide-react-native/GanttChartIcon,GaugeIcon,lucide-react-native/GaugeIcon,GitBranchIcon,lucide-react-native/GitBranchIcon,GitCommitHorizontalIcon,lucide-react-native/GitCommitHorizontalIcon,GitPullRequestIcon,lucide-react-native/GitPullRequestIcon,GlobeIcon,lucide-react-native/GlobeIcon,GraduationCapIcon,lucide-react-native/GraduationCapIcon,GripVerticalIcon,lucide-react-native/GripVerticalIcon,HashIcon,lucide-react-native/HashIcon,Heading1Icon,lucide-react-native/Heading1Icon,Heading2Icon,lucide-react-native/Heading2Icon,Heading3Icon,lucide-react-native/Heading3Icon,HelpCircleIcon,lucide-react-native/HelpCircleIcon,HighlighterIcon,lucide-react-native/HighlighterIcon,HistoryIcon,lucide-react-native/HistoryIcon,ImageIcon,lucide-react-native/ImageIcon,ImageOffIcon,lucide-react-native/ImageOffIcon,InboxIcon,lucide-react-native/InboxIcon,InfoIcon,lucide-react-native/InfoIcon,ItalicIcon,lucide-react-native/ItalicIcon,KanbanIcon,lucide-react-native/KanbanIcon,KeyRoundIcon,lucide-react-native/KeyRoundIcon,KeyboardIcon,lucide-react-native/KeyboardIcon,LandmarkIcon,lucide-react-native/LandmarkIcon,LanguagesIcon,lucide-react-native/LanguagesIcon,LaptopIcon,lucide-react-native/LaptopIcon,LayersIcon,lucide-react-native/LayersIcon,LayoutDashboardIcon,lucide-react-native/LayoutDashboardIcon,LayoutGridIcon,lucide-react-native/LayoutGridIcon,LayoutTemplateIcon,lucide-react-native/LayoutTemplateIcon,LibraryBigIcon,lucide-react-native/LibraryBigIcon,LibraryIcon,lucide-react-native/LibraryIcon,Link2Icon,lucide-react-native/Link2Icon,LinkIcon,lucide-react-native/LinkIcon,ListChecksIcon,lucide-react-native/ListChecksIcon,ListFilterIcon,lucide-react-native/ListFilterIcon,ListIcon,lucide-react-native/ListIcon,ListMinusIcon,lucide-react-native/ListMinusIcon,ListOrderedIcon,lucide-react-native/ListOrderedIcon,ListTodoIcon,lucide-react-native/ListTodoIcon,ListTreeIcon,lucide-react-native/ListTreeIcon,ListXIcon,lucide-react-native/ListXIcon,LoaderCircleIcon,lucide-react-native/LoaderCircleIcon,LockIcon,lucide-react-native/LockIcon,LockKeyholeIcon,lucide-react-native/LockKeyholeIcon,LockOpenIcon,lucide-react-native/LockOpenIcon,LogOutIcon,lucide-react-native/LogOutIcon,MailIcon,lucide-react-native/MailIcon,Maximize2Icon,lucide-react-native/Maximize2Icon,MegaphoneIcon,lucide-react-native/MegaphoneIcon,MessageCircleQuestionIcon,lucide-react-native/MessageCircleQuestionIcon,MessageSquareIcon,lucide-react-native/MessageSquareIcon,MessageSquareTextIcon,lucide-react-native/MessageSquareTextIcon,MessageSquareWarningIcon,lucide-react-native/MessageSquareWarningIcon,MessagesSquareIcon,lucide-react-native/MessagesSquareIcon,Minimize2Icon,lucide-react-native/Minimize2Icon,MinusIcon,lucide-react-native/MinusIcon,MonitorIcon,lucide-react-native/MonitorIcon,MoonIcon,lucide-react-native/MoonIcon,MoreHorizontalIcon,lucide-react-native/MoreHorizontalIcon,PackageIcon,lucide-react-native/PackageIcon,PaletteIcon,lucide-react-native/PaletteIcon,PanelLeftIcon,lucide-react-native/PanelLeftIcon,PanelRightIcon,lucide-react-native/PanelRightIcon,PaperclipIcon,lucide-react-native/PaperclipIcon,PauseIcon,lucide-react-native/PauseIcon,PenIcon,lucide-react-native/PenIcon,PenLineIcon,lucide-react-native/PenLineIcon,PencilIcon,lucide-react-native/PencilIcon,PencilLineIcon,lucide-react-native/PencilLineIcon,PhoneIcon,lucide-react-native/PhoneIcon,PinIcon,lucide-react-native/PinIcon,PinOffIcon,lucide-react-native/PinOffIcon,PlayIcon,lucide-react-native/PlayIcon,PlugIcon,lucide-react-native/PlugIcon,PlusIcon,lucide-react-native/PlusIcon,PowerIcon,lucide-react-native/PowerIcon,PrinterIcon,lucide-react-native/PrinterIcon,QuoteIcon,lucide-react-native/QuoteIcon,Redo2Icon,lucide-react-native/Redo2Icon,RefreshCcwIcon,lucide-react-native/RefreshCcwIcon,RefreshCwIcon,lucide-react-native/RefreshCwIcon,RepeatIcon,lucide-react-native/RepeatIcon,RotateCcwIcon,lucide-react-native/RotateCcwIcon,RotateCwIcon,lucide-react-native/RotateCwIcon,RouteIcon,lucide-react-native/RouteIcon,Rows2Icon,lucide-react-native/Rows2Icon,Rows3Icon,lucide-react-native/Rows3Icon,SaveIcon,lucide-react-native/SaveIcon,ScanSearchIcon,lucide-react-native/ScanSearchIcon,ScanTextIcon,lucide-react-native/ScanTextIcon,ScrollTextIcon,lucide-react-native/ScrollTextIcon,SearchIcon,lucide-react-native/SearchIcon,SearchXIcon,lucide-react-native/SearchXIcon,SendIcon,lucide-react-native/SendIcon,ServerIcon,lucide-react-native/ServerIcon,Settings2Icon,lucide-react-native/Settings2Icon,ShapesIcon,lucide-react-native/ShapesIcon,ShieldAlertIcon,lucide-react-native/ShieldAlertIcon,ShieldCheckIcon,lucide-react-native/ShieldCheckIcon,ShieldIcon,lucide-react-native/ShieldIcon,SigmaIcon,lucide-react-native/SigmaIcon,SignatureIcon,lucide-react-native/SignatureIcon,SlashIcon,lucide-react-native/SlashIcon,SlidersHorizontalIcon,lucide-react-native/SlidersHorizontalIcon,SmartphoneIcon,lucide-react-native/SmartphoneIcon,SparklesIcon,lucide-react-native/SparklesIcon,SplitIcon,lucide-react-native/SplitIcon,SquareCheckIcon,lucide-react-native/SquareCheckIcon,SquareIcon,lucide-react-native/SquareIcon,SquareMinusIcon,lucide-react-native/SquareMinusIcon,SquarePenIcon,lucide-react-native/SquarePenIcon,StarIcon,lucide-react-native/StarIcon,StarOffIcon,lucide-react-native/StarOffIcon,StickyNoteIcon,lucide-react-native/StickyNoteIcon,StrikethroughIcon,lucide-react-native/StrikethroughIcon,SunIcon,lucide-react-native/SunIcon,TableIcon,lucide-react-native/TableIcon,TabletIcon,lucide-react-native/TabletIcon,TagIcon,lucide-react-native/TagIcon,TagsIcon,lucide-react-native/TagsIcon,TerminalIcon,lucide-react-native/TerminalIcon,TextIcon,lucide-react-native/TextIcon,TextQuoteIcon,lucide-react-native/TextQuoteIcon,ToggleLeftIcon,lucide-react-native/ToggleLeftIcon,Trash2Icon,lucide-react-native/Trash2Icon,TrashIcon,lucide-react-native/TrashIcon,TriangleAlertIcon,lucide-react-native/TriangleAlertIcon,UnderlineIcon,lucide-react-native/UnderlineIcon,Undo2Icon,lucide-react-native/Undo2Icon,UndoIcon,lucide-react-native/UndoIcon,UnfoldHorizontalIcon,lucide-react-native/UnfoldHorizontalIcon,UngroupIcon,lucide-react-native/UngroupIcon,UploadIcon,lucide-react-native/UploadIcon,UserCheckIcon,lucide-react-native/UserCheckIcon,UserIcon,lucide-react-native/UserIcon,UserPlusIcon,lucide-react-native/UserPlusIcon,UserRoundIcon,lucide-react-native/UserRoundIcon,UsersIcon,lucide-react-native/UsersIcon,VideoIcon,lucide-react-native/VideoIcon,WavesIcon,lucide-react-native/WavesIcon,WindIcon,lucide-react-native/WindIcon,WorkflowIcon,lucide-react-native/WorkflowIcon,WrapTextIcon,lucide-react-native/WrapTextIcon,WrenchIcon,lucide-react-native/WrenchIcon,XCircleIcon,lucide-react-native/XCircleIcon,XIcon,lucide-react-native/XIcon,XSquareIcon,lucide-react-native/XSquareIcon,ZapIcon,lucide-react-native/ZapIcon"
+          "value": "lucide-react-native,DollarSignIcon,lucide-react-native/DollarSignIcon,ScissorsIcon,lucide-react-native/ScissorsIcon,AccessibilityIcon,lucide-react-native/AccessibilityIcon,ActivityIcon,lucide-react-native/ActivityIcon,AlarmClockIcon,lucide-react-native/AlarmClockIcon,AlertCircleIcon,lucide-react-native/AlertCircleIcon,AlertTriangleIcon,lucide-react-native/AlertTriangleIcon,AlignJustifyIcon,lucide-react-native/AlignJustifyIcon,AlignLeftIcon,lucide-react-native/AlignLeftIcon,ArchiveIcon,lucide-react-native/ArchiveIcon,ArchiveRestoreIcon,lucide-react-native/ArchiveRestoreIcon,ArrowDownIcon,lucide-react-native/ArrowDownIcon,ArrowLeftIcon,lucide-react-native/ArrowLeftIcon,ArrowRightIcon,lucide-react-native/ArrowRightIcon,ArrowUpDownIcon,lucide-react-native/ArrowUpDownIcon,ArrowUpIcon,lucide-react-native/ArrowUpIcon,AtSignIcon,lucide-react-native/AtSignIcon,BanIcon,lucide-react-native/BanIcon,BanknoteIcon,lucide-react-native/BanknoteIcon,BellIcon,lucide-react-native/BellIcon,BlocksIcon,lucide-react-native/BlocksIcon,BoldIcon,lucide-react-native/BoldIcon,BookOpenCheckIcon,lucide-react-native/BookOpenCheckIcon,BookTextIcon,lucide-react-native/BookTextIcon,BookmarkIcon,lucide-react-native/BookmarkIcon,BookmarkPlusIcon,lucide-react-native/BookmarkPlusIcon,BracesIcon,lucide-react-native/BracesIcon,BrainIcon,lucide-react-native/BrainIcon,Building2Icon,lucide-react-native/Building2Icon,BuildingIcon,lucide-react-native/BuildingIcon,CableIcon,lucide-react-native/CableIcon,CalendarClockIcon,lucide-react-native/CalendarClockIcon,CalendarIcon,lucide-react-native/CalendarIcon,ChartColumnIcon,lucide-react-native/ChartColumnIcon,ChartLineIcon,lucide-react-native/ChartLineIcon,ChartNoAxesColumnIcon,lucide-react-native/ChartNoAxesColumnIcon,ChartPieIcon,lucide-react-native/ChartPieIcon,ChartScatterIcon,lucide-react-native/ChartScatterIcon,CheckCheckIcon,lucide-react-native/CheckCheckIcon,CheckCircle2Icon,lucide-react-native/CheckCircle2Icon,CheckIcon,lucide-react-native/CheckIcon,ChevronDownIcon,lucide-react-native/ChevronDownIcon,ChevronLeftIcon,lucide-react-native/ChevronLeftIcon,ChevronRightIcon,lucide-react-native/ChevronRightIcon,ChevronUpIcon,lucide-react-native/ChevronUpIcon,ChevronsUpDownIcon,lucide-react-native/ChevronsUpDownIcon,CircleAlertIcon,lucide-react-native/CircleAlertIcon,CircleCheckIcon,lucide-react-native/CircleCheckIcon,CircleDashedIcon,lucide-react-native/CircleDashedIcon,CircleDotIcon,lucide-react-native/CircleDotIcon,CircleHelpIcon,lucide-react-native/CircleHelpIcon,CircleIcon,lucide-react-native/CircleIcon,CircleOffIcon,lucide-react-native/CircleOffIcon,CircleUserRoundIcon,lucide-react-native/CircleUserRoundIcon,ClipboardCheckIcon,lucide-react-native/ClipboardCheckIcon,ClipboardCopyIcon,lucide-react-native/ClipboardCopyIcon,ClipboardIcon,lucide-react-native/ClipboardIcon,ClipboardListIcon,lucide-react-native/ClipboardListIcon,Clock3Icon,lucide-react-native/Clock3Icon,ClockIcon,lucide-react-native/ClockIcon,CloudIcon,lucide-react-native/CloudIcon,CogIcon,lucide-react-native/CogIcon,Columns2Icon,lucide-react-native/Columns2Icon,Columns3Icon,lucide-react-native/Columns3Icon,CommandIcon,lucide-react-native/CommandIcon,CompassIcon,lucide-react-native/CompassIcon,CopyPlusIcon,lucide-react-native/CopyPlusIcon,CornerDownLeftIcon,lucide-react-native/CornerDownLeftIcon,CpuIcon,lucide-react-native/CpuIcon,CropIcon,lucide-react-native/CropIcon,DatabaseIcon,lucide-react-native/DatabaseIcon,DownloadIcon,lucide-react-native/DownloadIcon,EditIcon,lucide-react-native/EditIcon,EllipsisIcon,lucide-react-native/EllipsisIcon,EllipsisVerticalIcon,lucide-react-native/EllipsisVerticalIcon,EqualIcon,lucide-react-native/EqualIcon,ExternalLinkIcon,lucide-react-native/ExternalLinkIcon,EyeIcon,lucide-react-native/EyeIcon,EyeOffIcon,lucide-react-native/EyeOffIcon,FileAudioIcon,lucide-react-native/FileAudioIcon,FileBadgeIcon,lucide-react-native/FileBadgeIcon,FileCheckIcon,lucide-react-native/FileCheckIcon,FileCodeIcon,lucide-react-native/FileCodeIcon,FileDiffIcon,lucide-react-native/FileDiffIcon,FileDigitIcon,lucide-react-native/FileDigitIcon,FileDownIcon,lucide-react-native/FileDownIcon,FileIcon,lucide-react-native/FileIcon,FileImageIcon,lucide-react-native/FileImageIcon,FileOutputIcon,lucide-react-native/FileOutputIcon,FilePlus2Icon,lucide-react-native/FilePlus2Icon,FilePlusIcon,lucide-react-native/FilePlusIcon,FileQuestionIcon,lucide-react-native/FileQuestionIcon,FileSearchIcon,lucide-react-native/FileSearchIcon,FileSpreadsheetIcon,lucide-react-native/FileSpreadsheetIcon,FileTextIcon,lucide-react-native/FileTextIcon,FileUpIcon,lucide-react-native/FileUpIcon,FilterIcon,lucide-react-native/FilterIcon,FilterXIcon,lucide-react-native/FilterXIcon,FlagIcon,lucide-react-native/FlagIcon,FlaskConicalIcon,lucide-react-native/FlaskConicalIcon,FoldHorizontalIcon,lucide-react-native/FoldHorizontalIcon,FolderIcon,lucide-react-native/FolderIcon,FolderInputIcon,lucide-react-native/FolderInputIcon,FolderOpenIcon,lucide-react-native/FolderOpenIcon,FolderPlusIcon,lucide-react-native/FolderPlusIcon,FolderSyncIcon,lucide-react-native/FolderSyncIcon,FolderTreeIcon,lucide-react-native/FolderTreeIcon,FunctionSquareIcon,lucide-react-native/FunctionSquareIcon,GanttChartIcon,lucide-react-native/GanttChartIcon,GaugeIcon,lucide-react-native/GaugeIcon,GitBranchIcon,lucide-react-native/GitBranchIcon,GitCommitHorizontalIcon,lucide-react-native/GitCommitHorizontalIcon,GitPullRequestIcon,lucide-react-native/GitPullRequestIcon,GlobeIcon,lucide-react-native/GlobeIcon,GraduationCapIcon,lucide-react-native/GraduationCapIcon,GripVerticalIcon,lucide-react-native/GripVerticalIcon,HashIcon,lucide-react-native/HashIcon,Heading1Icon,lucide-react-native/Heading1Icon,Heading2Icon,lucide-react-native/Heading2Icon,Heading3Icon,lucide-react-native/Heading3Icon,HelpCircleIcon,lucide-react-native/HelpCircleIcon,HighlighterIcon,lucide-react-native/HighlighterIcon,HistoryIcon,lucide-react-native/HistoryIcon,ImageIcon,lucide-react-native/ImageIcon,ImageOffIcon,lucide-react-native/ImageOffIcon,InboxIcon,lucide-react-native/InboxIcon,InfoIcon,lucide-react-native/InfoIcon,ItalicIcon,lucide-react-native/ItalicIcon,KanbanIcon,lucide-react-native/KanbanIcon,KeyRoundIcon,lucide-react-native/KeyRoundIcon,KeyboardIcon,lucide-react-native/KeyboardIcon,LandmarkIcon,lucide-react-native/LandmarkIcon,LanguagesIcon,lucide-react-native/LanguagesIcon,LaptopIcon,lucide-react-native/LaptopIcon,LayersIcon,lucide-react-native/LayersIcon,LayoutDashboardIcon,lucide-react-native/LayoutDashboardIcon,LayoutGridIcon,lucide-react-native/LayoutGridIcon,LayoutTemplateIcon,lucide-react-native/LayoutTemplateIcon,LibraryBigIcon,lucide-react-native/LibraryBigIcon,LibraryIcon,lucide-react-native/LibraryIcon,Link2Icon,lucide-react-native/Link2Icon,LinkIcon,lucide-react-native/LinkIcon,ListChecksIcon,lucide-react-native/ListChecksIcon,ListFilterIcon,lucide-react-native/ListFilterIcon,ListIcon,lucide-react-native/ListIcon,ListMinusIcon,lucide-react-native/ListMinusIcon,ListOrderedIcon,lucide-react-native/ListOrderedIcon,ListTodoIcon,lucide-react-native/ListTodoIcon,ListTreeIcon,lucide-react-native/ListTreeIcon,ListXIcon,lucide-react-native/ListXIcon,LoaderCircleIcon,lucide-react-native/LoaderCircleIcon,LockIcon,lucide-react-native/LockIcon,LockKeyholeIcon,lucide-react-native/LockKeyholeIcon,LockOpenIcon,lucide-react-native/LockOpenIcon,LogOutIcon,lucide-react-native/LogOutIcon,MailIcon,lucide-react-native/MailIcon,Maximize2Icon,lucide-react-native/Maximize2Icon,MegaphoneIcon,lucide-react-native/MegaphoneIcon,MessageCircleQuestionIcon,lucide-react-native/MessageCircleQuestionIcon,MessageSquareIcon,lucide-react-native/MessageSquareIcon,MessageSquareTextIcon,lucide-react-native/MessageSquareTextIcon,MessageSquareWarningIcon,lucide-react-native/MessageSquareWarningIcon,MessagesSquareIcon,lucide-react-native/MessagesSquareIcon,Minimize2Icon,lucide-react-native/Minimize2Icon,MinusIcon,lucide-react-native/MinusIcon,MonitorIcon,lucide-react-native/MonitorIcon,MoonIcon,lucide-react-native/MoonIcon,MoreHorizontalIcon,lucide-react-native/MoreHorizontalIcon,PackageIcon,lucide-react-native/PackageIcon,PaletteIcon,lucide-react-native/PaletteIcon,PanelLeftIcon,lucide-react-native/PanelLeftIcon,PanelRightIcon,lucide-react-native/PanelRightIcon,PaperclipIcon,lucide-react-native/PaperclipIcon,PauseIcon,lucide-react-native/PauseIcon,PenIcon,lucide-react-native/PenIcon,PenLineIcon,lucide-react-native/PenLineIcon,PencilIcon,lucide-react-native/PencilIcon,PencilLineIcon,lucide-react-native/PencilLineIcon,PhoneIcon,lucide-react-native/PhoneIcon,PinIcon,lucide-react-native/PinIcon,PinOffIcon,lucide-react-native/PinOffIcon,PlayIcon,lucide-react-native/PlayIcon,PlugIcon,lucide-react-native/PlugIcon,PlusIcon,lucide-react-native/PlusIcon,PowerIcon,lucide-react-native/PowerIcon,PrinterIcon,lucide-react-native/PrinterIcon,QuoteIcon,lucide-react-native/QuoteIcon,Redo2Icon,lucide-react-native/Redo2Icon,RefreshCcwIcon,lucide-react-native/RefreshCcwIcon,RefreshCwIcon,lucide-react-native/RefreshCwIcon,RepeatIcon,lucide-react-native/RepeatIcon,RotateCcwIcon,lucide-react-native/RotateCcwIcon,RotateCwIcon,lucide-react-native/RotateCwIcon,RouteIcon,lucide-react-native/RouteIcon,Rows2Icon,lucide-react-native/Rows2Icon,Rows3Icon,lucide-react-native/Rows3Icon,SaveIcon,lucide-react-native/SaveIcon,ScanSearchIcon,lucide-react-native/ScanSearchIcon,ScanTextIcon,lucide-react-native/ScanTextIcon,ScrollTextIcon,lucide-react-native/ScrollTextIcon,SearchIcon,lucide-react-native/SearchIcon,SearchXIcon,lucide-react-native/SearchXIcon,SendIcon,lucide-react-native/SendIcon,ServerIcon,lucide-react-native/ServerIcon,Settings2Icon,lucide-react-native/Settings2Icon,ShapesIcon,lucide-react-native/ShapesIcon,ShieldAlertIcon,lucide-react-native/ShieldAlertIcon,ShieldCheckIcon,lucide-react-native/ShieldCheckIcon,ShieldIcon,lucide-react-native/ShieldIcon,SigmaIcon,lucide-react-native/SigmaIcon,SignatureIcon,lucide-react-native/SignatureIcon,SlashIcon,lucide-react-native/SlashIcon,SlidersHorizontalIcon,lucide-react-native/SlidersHorizontalIcon,SmartphoneIcon,lucide-react-native/SmartphoneIcon,SparklesIcon,lucide-react-native/SparklesIcon,SplitIcon,lucide-react-native/SplitIcon,SquareCheckIcon,lucide-react-native/SquareCheckIcon,SquareIcon,lucide-react-native/SquareIcon,SquareMinusIcon,lucide-react-native/SquareMinusIcon,SquarePenIcon,lucide-react-native/SquarePenIcon,StarIcon,lucide-react-native/StarIcon,StarOffIcon,lucide-react-native/StarOffIcon,StickyNoteIcon,lucide-react-native/StickyNoteIcon,StrikethroughIcon,lucide-react-native/StrikethroughIcon,SunIcon,lucide-react-native/SunIcon,TableIcon,lucide-react-native/TableIcon,TabletIcon,lucide-react-native/TabletIcon,TagIcon,lucide-react-native/TagIcon,TagsIcon,lucide-react-native/TagsIcon,TerminalIcon,lucide-react-native/TerminalIcon,TextIcon,lucide-react-native/TextIcon,TextQuoteIcon,lucide-react-native/TextQuoteIcon,ToggleLeftIcon,lucide-react-native/ToggleLeftIcon,Trash2Icon,lucide-react-native/Trash2Icon,TrashIcon,lucide-react-native/TrashIcon,TriangleAlertIcon,lucide-react-native/TriangleAlertIcon,UnderlineIcon,lucide-react-native/UnderlineIcon,Undo2Icon,lucide-react-native/Undo2Icon,UndoIcon,lucide-react-native/UndoIcon,UnfoldHorizontalIcon,lucide-react-native/UnfoldHorizontalIcon,UngroupIcon,lucide-react-native/UngroupIcon,UploadIcon,lucide-react-native/UploadIcon,UserCheckIcon,lucide-react-native/UserCheckIcon,UserIcon,lucide-react-native/UserIcon,UserPlusIcon,lucide-react-native/UserPlusIcon,UserRoundIcon,lucide-react-native/UserRoundIcon,UsersIcon,lucide-react-native/UsersIcon,VideoIcon,lucide-react-native/VideoIcon,WavesIcon,lucide-react-native/WavesIcon,WindIcon,lucide-react-native/WindIcon,WorkflowIcon,lucide-react-native/WorkflowIcon,WrapTextIcon,lucide-react-native/WrapTextIcon,WrenchIcon,lucide-react-native/WrenchIcon,XCircleIcon,lucide-react-native/XCircleIcon,XIcon,lucide-react-native/XIcon,XSquareIcon,lucide-react-native/XSquareIcon,ZapIcon,lucide-react-native/ZapIcon"
         },
         {
           "name": "SrcFile",
@@ -59532,7 +59934,7 @@
             "location": "packages/ui/src/icons.ts#122"
           },
           {
-            "location": "packages/ui/src/icons.ts#378"
+            "location": "packages/ui/src/icons.ts#379"
           }
         ]
       },
@@ -59563,7 +59965,7 @@
         },
         {
           "name": "ExportedModules",
-          "value": "lucide-react-native,lucide-react,DollarSignIcon,lucide-react-native/DollarSignIcon,ScissorsIcon,lucide-react-native/ScissorsIcon,AccessibilityIcon,lucide-react-native/AccessibilityIcon,ActivityIcon,lucide-react-native/ActivityIcon,AlarmClockIcon,lucide-react-native/AlarmClockIcon,AlertCircleIcon,lucide-react-native/AlertCircleIcon,AlertTriangleIcon,lucide-react-native/AlertTriangleIcon,AlignJustifyIcon,lucide-react-native/AlignJustifyIcon,AlignLeftIcon,lucide-react-native/AlignLeftIcon,ArchiveIcon,lucide-react-native/ArchiveIcon,ArchiveRestoreIcon,lucide-react-native/ArchiveRestoreIcon,ArrowDownIcon,lucide-react-native/ArrowDownIcon,ArrowLeftIcon,lucide-react-native/ArrowLeftIcon,ArrowRightIcon,lucide-react-native/ArrowRightIcon,ArrowUpDownIcon,lucide-react-native/ArrowUpDownIcon,ArrowUpIcon,lucide-react-native/ArrowUpIcon,AtSignIcon,lucide-react-native/AtSignIcon,BanIcon,lucide-react-native/BanIcon,BanknoteIcon,lucide-react-native/BanknoteIcon,BellIcon,lucide-react-native/BellIcon,BlocksIcon,lucide-react-native/BlocksIcon,BoldIcon,lucide-react-native/BoldIcon,BookOpenCheckIcon,lucide-react-native/BookOpenCheckIcon,BookTextIcon,lucide-react-native/BookTextIcon,BookmarkIcon,lucide-react-native/BookmarkIcon,BookmarkPlusIcon,lucide-react-native/BookmarkPlusIcon,BracesIcon,lucide-react-native/BracesIcon,BrainIcon,lucide-react-native/BrainIcon,Building2Icon,lucide-react-native/Building2Icon,BuildingIcon,lucide-react-native/BuildingIcon,CableIcon,lucide-react-native/CableIcon,CalendarClockIcon,lucide-react-native/CalendarClockIcon,CalendarIcon,lucide-react-native/CalendarIcon,ChartColumnIcon,lucide-react-native/ChartColumnIcon,ChartLineIcon,lucide-react-native/ChartLineIcon,ChartNoAxesColumnIcon,lucide-react-native/ChartNoAxesColumnIcon,ChartPieIcon,lucide-react-native/ChartPieIcon,ChartScatterIcon,lucide-react-native/ChartScatterIcon,CheckCheckIcon,lucide-react-native/CheckCheckIcon,CheckCircle2Icon,lucide-react-native/CheckCircle2Icon,CheckIcon,lucide-react-native/CheckIcon,ChevronDownIcon,lucide-react-native/ChevronDownIcon,ChevronLeftIcon,lucide-react-native/ChevronLeftIcon,ChevronRightIcon,lucide-react-native/ChevronRightIcon,ChevronUpIcon,lucide-react-native/ChevronUpIcon,ChevronsUpDownIcon,lucide-react-native/ChevronsUpDownIcon,CircleAlertIcon,lucide-react-native/CircleAlertIcon,CircleCheckIcon,lucide-react-native/CircleCheckIcon,CircleDashedIcon,lucide-react-native/CircleDashedIcon,CircleDotIcon,lucide-react-native/CircleDotIcon,CircleHelpIcon,lucide-react-native/CircleHelpIcon,CircleIcon,lucide-react-native/CircleIcon,CircleOffIcon,lucide-react-native/CircleOffIcon,CircleUserRoundIcon,lucide-react-native/CircleUserRoundIcon,ClipboardCheckIcon,lucide-react-native/ClipboardCheckIcon,ClipboardCopyIcon,lucide-react-native/ClipboardCopyIcon,ClipboardIcon,lucide-react-native/ClipboardIcon,ClipboardListIcon,lucide-react-native/ClipboardListIcon,Clock3Icon,lucide-react-native/Clock3Icon,ClockIcon,lucide-react-native/ClockIcon,CloudIcon,lucide-react-native/CloudIcon,CogIcon,lucide-react-native/CogIcon,Columns2Icon,lucide-react-native/Columns2Icon,Columns3Icon,lucide-react-native/Columns3Icon,CommandIcon,lucide-react-native/CommandIcon,CompassIcon,lucide-react-native/CompassIcon,CopyPlusIcon,lucide-react-native/CopyPlusIcon,CornerDownLeftIcon,lucide-react-native/CornerDownLeftIcon,CpuIcon,lucide-react-native/CpuIcon,CropIcon,lucide-react-native/CropIcon,DatabaseIcon,lucide-react-native/DatabaseIcon,DownloadIcon,lucide-react-native/DownloadIcon,EditIcon,lucide-react-native/EditIcon,EllipsisIcon,lucide-react-native/EllipsisIcon,EllipsisVerticalIcon,lucide-react-native/EllipsisVerticalIcon,EqualIcon,lucide-react-native/EqualIcon,ExternalLinkIcon,lucide-react-native/ExternalLinkIcon,EyeIcon,lucide-react-native/EyeIcon,EyeOffIcon,lucide-react-native/EyeOffIcon,FileBadgeIcon,lucide-react-native/FileBadgeIcon,FileCheckIcon,lucide-react-native/FileCheckIcon,FileCodeIcon,lucide-react-native/FileCodeIcon,FileDiffIcon,lucide-react-native/FileDiffIcon,FileDigitIcon,lucide-react-native/FileDigitIcon,FileDownIcon,lucide-react-native/FileDownIcon,FileIcon,lucide-react-native/FileIcon,FileImageIcon,lucide-react-native/FileImageIcon,FileOutputIcon,lucide-react-native/FileOutputIcon,FilePlus2Icon,lucide-react-native/FilePlus2Icon,FilePlusIcon,lucide-react-native/FilePlusIcon,FileQuestionIcon,lucide-react-native/FileQuestionIcon,FileSearchIcon,lucide-react-native/FileSearchIcon,FileSpreadsheetIcon,lucide-react-native/FileSpreadsheetIcon,FileTextIcon,lucide-react-native/FileTextIcon,FileUpIcon,lucide-react-native/FileUpIcon,FilterIcon,lucide-react-native/FilterIcon,FilterXIcon,lucide-react-native/FilterXIcon,FlagIcon,lucide-react-native/FlagIcon,FlaskConicalIcon,lucide-react-native/FlaskConicalIcon,FoldHorizontalIcon,lucide-react-native/FoldHorizontalIcon,FolderIcon,lucide-react-native/FolderIcon,FolderInputIcon,lucide-react-native/FolderInputIcon,FolderOpenIcon,lucide-react-native/FolderOpenIcon,FolderPlusIcon,lucide-react-native/FolderPlusIcon,FolderSyncIcon,lucide-react-native/FolderSyncIcon,FolderTreeIcon,lucide-react-native/FolderTreeIcon,FunctionSquareIcon,lucide-react-native/FunctionSquareIcon,GanttChartIcon,lucide-react-native/GanttChartIcon,GaugeIcon,lucide-react-native/GaugeIcon,GitBranchIcon,lucide-react-native/GitBranchIcon,GitCommitHorizontalIcon,lucide-react-native/GitCommitHorizontalIcon,GitPullRequestIcon,lucide-react-native/GitPullRequestIcon,GlobeIcon,lucide-react-native/GlobeIcon,GraduationCapIcon,lucide-react-native/GraduationCapIcon,GripVerticalIcon,lucide-react-native/GripVerticalIcon,HashIcon,lucide-react-native/HashIcon,Heading1Icon,lucide-react-native/Heading1Icon,Heading2Icon,lucide-react-native/Heading2Icon,Heading3Icon,lucide-react-native/Heading3Icon,HelpCircleIcon,lucide-react-native/HelpCircleIcon,HighlighterIcon,lucide-react-native/HighlighterIcon,HistoryIcon,lucide-react-native/HistoryIcon,ImageIcon,lucide-react-native/ImageIcon,ImageOffIcon,lucide-react-native/ImageOffIcon,InboxIcon,lucide-react-native/InboxIcon,InfoIcon,lucide-react-native/InfoIcon,ItalicIcon,lucide-react-native/ItalicIcon,KanbanIcon,lucide-react-native/KanbanIcon,KeyRoundIcon,lucide-react-native/KeyRoundIcon,KeyboardIcon,lucide-react-native/KeyboardIcon,LandmarkIcon,lucide-react-native/LandmarkIcon,LanguagesIcon,lucide-react-native/LanguagesIcon,LaptopIcon,lucide-react-native/LaptopIcon,LayersIcon,lucide-react-native/LayersIcon,LayoutDashboardIcon,lucide-react-native/LayoutDashboardIcon,LayoutGridIcon,lucide-react-native/LayoutGridIcon,LayoutTemplateIcon,lucide-react-native/LayoutTemplateIcon,LibraryBigIcon,lucide-react-native/LibraryBigIcon,LibraryIcon,lucide-react-native/LibraryIcon,Link2Icon,lucide-react-native/Link2Icon,LinkIcon,lucide-react-native/LinkIcon,ListChecksIcon,lucide-react-native/ListChecksIcon,ListFilterIcon,lucide-react-native/ListFilterIcon,ListIcon,lucide-react-native/ListIcon,ListMinusIcon,lucide-react-native/ListMinusIcon,ListOrderedIcon,lucide-react-native/ListOrderedIcon,ListTodoIcon,lucide-react-native/ListTodoIcon,ListTreeIcon,lucide-react-native/ListTreeIcon,ListXIcon,lucide-react-native/ListXIcon,LoaderCircleIcon,lucide-react-native/LoaderCircleIcon,LockIcon,lucide-react-native/LockIcon,LockKeyholeIcon,lucide-react-native/LockKeyholeIcon,LockOpenIcon,lucide-react-native/LockOpenIcon,LogOutIcon,lucide-react-native/LogOutIcon,MailIcon,lucide-react-native/MailIcon,Maximize2Icon,lucide-react-native/Maximize2Icon,MegaphoneIcon,lucide-react-native/MegaphoneIcon,MessageCircleQuestionIcon,lucide-react-native/MessageCircleQuestionIcon,MessageSquareIcon,lucide-react-native/MessageSquareIcon,MessageSquareTextIcon,lucide-react-native/MessageSquareTextIcon,MessageSquareWarningIcon,lucide-react-native/MessageSquareWarningIcon,MessagesSquareIcon,lucide-react-native/MessagesSquareIcon,Minimize2Icon,lucide-react-native/Minimize2Icon,MinusIcon,lucide-react-native/MinusIcon,MonitorIcon,lucide-react-native/MonitorIcon,MoonIcon,lucide-react-native/MoonIcon,MoreHorizontalIcon,lucide-react-native/MoreHorizontalIcon,PackageIcon,lucide-react-native/PackageIcon,PaletteIcon,lucide-react-native/PaletteIcon,PanelLeftIcon,lucide-react-native/PanelLeftIcon,PanelRightIcon,lucide-react-native/PanelRightIcon,PaperclipIcon,lucide-react-native/PaperclipIcon,PauseIcon,lucide-react-native/PauseIcon,PenIcon,lucide-react-native/PenIcon,PenLineIcon,lucide-react-native/PenLineIcon,PencilIcon,lucide-react-native/PencilIcon,PencilLineIcon,lucide-react-native/PencilLineIcon,PhoneIcon,lucide-react-native/PhoneIcon,PinIcon,lucide-react-native/PinIcon,PinOffIcon,lucide-react-native/PinOffIcon,PlayIcon,lucide-react-native/PlayIcon,PlugIcon,lucide-react-native/PlugIcon,PlusIcon,lucide-react-native/PlusIcon,PowerIcon,lucide-react-native/PowerIcon,PrinterIcon,lucide-react-native/PrinterIcon,QuoteIcon,lucide-react-native/QuoteIcon,Redo2Icon,lucide-react-native/Redo2Icon,RefreshCcwIcon,lucide-react-native/RefreshCcwIcon,RefreshCwIcon,lucide-react-native/RefreshCwIcon,RepeatIcon,lucide-react-native/RepeatIcon,RotateCcwIcon,lucide-react-native/RotateCcwIcon,RotateCwIcon,lucide-react-native/RotateCwIcon,RouteIcon,lucide-react-native/RouteIcon,Rows2Icon,lucide-react-native/Rows2Icon,Rows3Icon,lucide-react-native/Rows3Icon,SaveIcon,lucide-react-native/SaveIcon,ScanSearchIcon,lucide-react-native/ScanSearchIcon,ScanTextIcon,lucide-react-native/ScanTextIcon,ScrollTextIcon,lucide-react-native/ScrollTextIcon,SearchIcon,lucide-react-native/SearchIcon,SearchXIcon,lucide-react-native/SearchXIcon,SendIcon,lucide-react-native/SendIcon,ServerIcon,lucide-react-native/ServerIcon,Settings2Icon,lucide-react-native/Settings2Icon,ShapesIcon,lucide-react-native/ShapesIcon,ShieldAlertIcon,lucide-react-native/ShieldAlertIcon,ShieldCheckIcon,lucide-react-native/ShieldCheckIcon,ShieldIcon,lucide-react-native/ShieldIcon,SigmaIcon,lucide-react-native/SigmaIcon,SignatureIcon,lucide-react-native/SignatureIcon,SlashIcon,lucide-react-native/SlashIcon,SlidersHorizontalIcon,lucide-react-native/SlidersHorizontalIcon,SmartphoneIcon,lucide-react-native/SmartphoneIcon,SparklesIcon,lucide-react-native/SparklesIcon,SplitIcon,lucide-react-native/SplitIcon,SquareCheckIcon,lucide-react-native/SquareCheckIcon,SquareIcon,lucide-react-native/SquareIcon,SquareMinusIcon,lucide-react-native/SquareMinusIcon,SquarePenIcon,lucide-react-native/SquarePenIcon,StarIcon,lucide-react-native/StarIcon,StarOffIcon,lucide-react-native/StarOffIcon,StickyNoteIcon,lucide-react-native/StickyNoteIcon,StrikethroughIcon,lucide-react-native/StrikethroughIcon,SunIcon,lucide-react-native/SunIcon,TableIcon,lucide-react-native/TableIcon,TabletIcon,lucide-react-native/TabletIcon,TagIcon,lucide-react-native/TagIcon,TagsIcon,lucide-react-native/TagsIcon,TerminalIcon,lucide-react-native/TerminalIcon,TextIcon,lucide-react-native/TextIcon,TextQuoteIcon,lucide-react-native/TextQuoteIcon,ToggleLeftIcon,lucide-react-native/ToggleLeftIcon,Trash2Icon,lucide-react-native/Trash2Icon,TrashIcon,lucide-react-native/TrashIcon,TriangleAlertIcon,lucide-react-native/TriangleAlertIcon,UnderlineIcon,lucide-react-native/UnderlineIcon,Undo2Icon,lucide-react-native/Undo2Icon,UndoIcon,lucide-react-native/UndoIcon,UnfoldHorizontalIcon,lucide-react-native/UnfoldHorizontalIcon,UngroupIcon,lucide-react-native/UngroupIcon,UploadIcon,lucide-react-native/UploadIcon,UserCheckIcon,lucide-react-native/UserCheckIcon,UserIcon,lucide-react-native/UserIcon,UserPlusIcon,lucide-react-native/UserPlusIcon,UserRoundIcon,lucide-react-native/UserRoundIcon,UsersIcon,lucide-react-native/UsersIcon,VideoIcon,lucide-react-native/VideoIcon,WavesIcon,lucide-react-native/WavesIcon,WindIcon,lucide-react-native/WindIcon,WorkflowIcon,lucide-react-native/WorkflowIcon,WrapTextIcon,lucide-react-native/WrapTextIcon,WrenchIcon,lucide-react-native/WrenchIcon,XCircleIcon,lucide-react-native/XCircleIcon,XIcon,lucide-react-native/XIcon,XSquareIcon,lucide-react-native/XSquareIcon,ZapIcon,lucide-react-native/ZapIcon,lucide-react/DollarSignIcon,lucide-react/ScissorsIcon,lucide-react/AccessibilityIcon,lucide-react/ActivityIcon,lucide-react/AlarmClockIcon,lucide-react/AlertCircleIcon,lucide-react/AlertTriangleIcon,lucide-react/AlignJustifyIcon,lucide-react/AlignLeftIcon,lucide-react/ArchiveIcon,lucide-react/ArchiveRestoreIcon,lucide-react/ArrowDownIcon,lucide-react/ArrowLeftIcon,lucide-react/ArrowRightIcon,lucide-react/ArrowUpDownIcon,lucide-react/ArrowUpIcon,lucide-react/AtSignIcon,lucide-react/BanIcon,lucide-react/BanknoteIcon,lucide-react/BellIcon,lucide-react/BlocksIcon,lucide-react/BoldIcon,lucide-react/BookOpenCheckIcon,lucide-react/BookTextIcon,lucide-react/BookmarkIcon,lucide-react/BookmarkPlusIcon,lucide-react/BracesIcon,lucide-react/BrainIcon,lucide-react/Building2Icon,lucide-react/BuildingIcon,lucide-react/CableIcon,lucide-react/CalendarClockIcon,lucide-react/CalendarIcon,lucide-react/ChartColumnIcon,lucide-react/ChartLineIcon,lucide-react/ChartNoAxesColumnIcon,lucide-react/ChartPieIcon,lucide-react/ChartScatterIcon,lucide-react/CheckCheckIcon,lucide-react/CheckCircle2Icon,lucide-react/CheckIcon,lucide-react/ChevronDownIcon,lucide-react/ChevronLeftIcon,lucide-react/ChevronRightIcon,lucide-react/ChevronUpIcon,lucide-react/ChevronsUpDownIcon,lucide-react/CircleAlertIcon,lucide-react/CircleCheckIcon,lucide-react/CircleDashedIcon,lucide-react/CircleDotIcon,lucide-react/CircleHelpIcon,lucide-react/CircleIcon,lucide-react/CircleOffIcon,lucide-react/CircleUserRoundIcon,lucide-react/ClipboardCheckIcon,lucide-react/ClipboardCopyIcon,lucide-react/ClipboardIcon,lucide-react/ClipboardListIcon,lucide-react/Clock3Icon,lucide-react/ClockIcon,lucide-react/CloudIcon,lucide-react/CogIcon,lucide-react/Columns2Icon,lucide-react/Columns3Icon,lucide-react/CommandIcon,lucide-react/CompassIcon,lucide-react/CopyPlusIcon,lucide-react/CornerDownLeftIcon,lucide-react/CpuIcon,lucide-react/CropIcon,lucide-react/DatabaseIcon,lucide-react/DownloadIcon,lucide-react/EditIcon,lucide-react/EllipsisIcon,lucide-react/EllipsisVerticalIcon,lucide-react/EqualIcon,lucide-react/ExternalLinkIcon,lucide-react/EyeIcon,lucide-react/EyeOffIcon,lucide-react/FileBadgeIcon,lucide-react/FileCheckIcon,lucide-react/FileCodeIcon,lucide-react/FileDiffIcon,lucide-react/FileDigitIcon,lucide-react/FileDownIcon,lucide-react/FileIcon,lucide-react/FileImageIcon,lucide-react/FileOutputIcon,lucide-react/FilePlus2Icon,lucide-react/FilePlusIcon,lucide-react/FileQuestionIcon,lucide-react/FileSearchIcon,lucide-react/FileSpreadsheetIcon,lucide-react/FileTextIcon,lucide-react/FileUpIcon,lucide-react/FilterIcon,lucide-react/FilterXIcon,lucide-react/FlagIcon,lucide-react/FlaskConicalIcon,lucide-react/FoldHorizontalIcon,lucide-react/FolderIcon,lucide-react/FolderInputIcon,lucide-react/FolderOpenIcon,lucide-react/FolderPlusIcon,lucide-react/FolderSyncIcon,lucide-react/FolderTreeIcon,lucide-react/FunctionSquareIcon,lucide-react/GanttChartIcon,lucide-react/GaugeIcon,lucide-react/GitBranchIcon,lucide-react/GitCommitHorizontalIcon,lucide-react/GitPullRequestIcon,lucide-react/GlobeIcon,lucide-react/GraduationCapIcon,lucide-react/GripVerticalIcon,lucide-react/HashIcon,lucide-react/Heading1Icon,lucide-react/Heading2Icon,lucide-react/Heading3Icon,lucide-react/HelpCircleIcon,lucide-react/HighlighterIcon,lucide-react/HistoryIcon,lucide-react/ImageIcon,lucide-react/ImageOffIcon,lucide-react/InboxIcon,lucide-react/InfoIcon,lucide-react/ItalicIcon,lucide-react/KanbanIcon,lucide-react/KeyRoundIcon,lucide-react/KeyboardIcon,lucide-react/LandmarkIcon,lucide-react/LanguagesIcon,lucide-react/LaptopIcon,lucide-react/LayersIcon,lucide-react/LayoutDashboardIcon,lucide-react/LayoutGridIcon,lucide-react/LayoutTemplateIcon,lucide-react/LibraryBigIcon,lucide-react/LibraryIcon,lucide-react/Link2Icon,lucide-react/LinkIcon,lucide-react/ListChecksIcon,lucide-react/ListFilterIcon,lucide-react/ListIcon,lucide-react/ListMinusIcon,lucide-react/ListOrderedIcon,lucide-react/ListTodoIcon,lucide-react/ListTreeIcon,lucide-react/ListXIcon,lucide-react/LoaderCircleIcon,lucide-react/LockIcon,lucide-react/LockKeyholeIcon,lucide-react/LockOpenIcon,lucide-react/LogOutIcon,lucide-react/MailIcon,lucide-react/Maximize2Icon,lucide-react/MegaphoneIcon,lucide-react/MessageCircleQuestionIcon,lucide-react/MessageSquareIcon,lucide-react/MessageSquareTextIcon,lucide-react/MessageSquareWarningIcon,lucide-react/MessagesSquareIcon,lucide-react/Minimize2Icon,lucide-react/MinusIcon,lucide-react/MonitorIcon,lucide-react/MoonIcon,lucide-react/MoreHorizontalIcon,lucide-react/PackageIcon,lucide-react/PaletteIcon,lucide-react/PanelLeftIcon,lucide-react/PanelRightIcon,lucide-react/PaperclipIcon,lucide-react/PauseIcon,lucide-react/PenIcon,lucide-react/PenLineIcon,lucide-react/PencilIcon,lucide-react/PencilLineIcon,lucide-react/PhoneIcon,lucide-react/PinIcon,lucide-react/PinOffIcon,lucide-react/PlayIcon,lucide-react/PlugIcon,lucide-react/PlusIcon,lucide-react/PowerIcon,lucide-react/PrinterIcon,lucide-react/QuoteIcon,lucide-react/Redo2Icon,lucide-react/RefreshCcwIcon,lucide-react/RefreshCwIcon,lucide-react/RepeatIcon,lucide-react/RotateCcwIcon,lucide-react/RotateCwIcon,lucide-react/RouteIcon,lucide-react/Rows2Icon,lucide-react/Rows3Icon,lucide-react/SaveIcon,lucide-react/ScanSearchIcon,lucide-react/ScanTextIcon,lucide-react/ScrollTextIcon,lucide-react/SearchIcon,lucide-react/SearchXIcon,lucide-react/SendIcon,lucide-react/ServerIcon,lucide-react/Settings2Icon,lucide-react/ShapesIcon,lucide-react/ShieldAlertIcon,lucide-react/ShieldCheckIcon,lucide-react/ShieldIcon,lucide-react/SigmaIcon,lucide-react/SignatureIcon,lucide-react/SlashIcon,lucide-react/SlidersHorizontalIcon,lucide-react/SmartphoneIcon,lucide-react/SparklesIcon,lucide-react/SplitIcon,lucide-react/SquareCheckIcon,lucide-react/SquareIcon,lucide-react/SquareMinusIcon,lucide-react/SquarePenIcon,lucide-react/StarIcon,lucide-react/StarOffIcon,lucide-react/StickyNoteIcon,lucide-react/StrikethroughIcon,lucide-react/SunIcon,lucide-react/TableIcon,lucide-react/TabletIcon,lucide-react/TagIcon,lucide-react/TagsIcon,lucide-react/TerminalIcon,lucide-react/TextIcon,lucide-react/TextQuoteIcon,lucide-react/ToggleLeftIcon,lucide-react/Trash2Icon,lucide-react/TrashIcon,lucide-react/TriangleAlertIcon,lucide-react/UnderlineIcon,lucide-react/Undo2Icon,lucide-react/UndoIcon,lucide-react/UnfoldHorizontalIcon,lucide-react/UngroupIcon,lucide-react/UploadIcon,lucide-react/UserCheckIcon,lucide-react/UserIcon,lucide-react/UserPlusIcon,lucide-react/UserRoundIcon,lucide-react/UsersIcon,lucide-react/VideoIcon,lucide-react/WavesIcon,lucide-react/WindIcon,lucide-react/WorkflowIcon,lucide-react/WrapTextIcon,lucide-react/WrenchIcon,lucide-react/XCircleIcon,lucide-react/XIcon,lucide-react/XSquareIcon,lucide-react/ZapIcon"
+          "value": "lucide-react-native,lucide-react,DollarSignIcon,lucide-react-native/DollarSignIcon,ScissorsIcon,lucide-react-native/ScissorsIcon,AccessibilityIcon,lucide-react-native/AccessibilityIcon,ActivityIcon,lucide-react-native/ActivityIcon,AlarmClockIcon,lucide-react-native/AlarmClockIcon,AlertCircleIcon,lucide-react-native/AlertCircleIcon,AlertTriangleIcon,lucide-react-native/AlertTriangleIcon,AlignJustifyIcon,lucide-react-native/AlignJustifyIcon,AlignLeftIcon,lucide-react-native/AlignLeftIcon,ArchiveIcon,lucide-react-native/ArchiveIcon,ArchiveRestoreIcon,lucide-react-native/ArchiveRestoreIcon,ArrowDownIcon,lucide-react-native/ArrowDownIcon,ArrowLeftIcon,lucide-react-native/ArrowLeftIcon,ArrowRightIcon,lucide-react-native/ArrowRightIcon,ArrowUpDownIcon,lucide-react-native/ArrowUpDownIcon,ArrowUpIcon,lucide-react-native/ArrowUpIcon,AtSignIcon,lucide-react-native/AtSignIcon,BanIcon,lucide-react-native/BanIcon,BanknoteIcon,lucide-react-native/BanknoteIcon,BellIcon,lucide-react-native/BellIcon,BlocksIcon,lucide-react-native/BlocksIcon,BoldIcon,lucide-react-native/BoldIcon,BookOpenCheckIcon,lucide-react-native/BookOpenCheckIcon,BookTextIcon,lucide-react-native/BookTextIcon,BookmarkIcon,lucide-react-native/BookmarkIcon,BookmarkPlusIcon,lucide-react-native/BookmarkPlusIcon,BracesIcon,lucide-react-native/BracesIcon,BrainIcon,lucide-react-native/BrainIcon,Building2Icon,lucide-react-native/Building2Icon,BuildingIcon,lucide-react-native/BuildingIcon,CableIcon,lucide-react-native/CableIcon,CalendarClockIcon,lucide-react-native/CalendarClockIcon,CalendarIcon,lucide-react-native/CalendarIcon,ChartColumnIcon,lucide-react-native/ChartColumnIcon,ChartLineIcon,lucide-react-native/ChartLineIcon,ChartNoAxesColumnIcon,lucide-react-native/ChartNoAxesColumnIcon,ChartPieIcon,lucide-react-native/ChartPieIcon,ChartScatterIcon,lucide-react-native/ChartScatterIcon,CheckCheckIcon,lucide-react-native/CheckCheckIcon,CheckCircle2Icon,lucide-react-native/CheckCircle2Icon,CheckIcon,lucide-react-native/CheckIcon,ChevronDownIcon,lucide-react-native/ChevronDownIcon,ChevronLeftIcon,lucide-react-native/ChevronLeftIcon,ChevronRightIcon,lucide-react-native/ChevronRightIcon,ChevronUpIcon,lucide-react-native/ChevronUpIcon,ChevronsUpDownIcon,lucide-react-native/ChevronsUpDownIcon,CircleAlertIcon,lucide-react-native/CircleAlertIcon,CircleCheckIcon,lucide-react-native/CircleCheckIcon,CircleDashedIcon,lucide-react-native/CircleDashedIcon,CircleDotIcon,lucide-react-native/CircleDotIcon,CircleHelpIcon,lucide-react-native/CircleHelpIcon,CircleIcon,lucide-react-native/CircleIcon,CircleOffIcon,lucide-react-native/CircleOffIcon,CircleUserRoundIcon,lucide-react-native/CircleUserRoundIcon,ClipboardCheckIcon,lucide-react-native/ClipboardCheckIcon,ClipboardCopyIcon,lucide-react-native/ClipboardCopyIcon,ClipboardIcon,lucide-react-native/ClipboardIcon,ClipboardListIcon,lucide-react-native/ClipboardListIcon,Clock3Icon,lucide-react-native/Clock3Icon,ClockIcon,lucide-react-native/ClockIcon,CloudIcon,lucide-react-native/CloudIcon,CogIcon,lucide-react-native/CogIcon,Columns2Icon,lucide-react-native/Columns2Icon,Columns3Icon,lucide-react-native/Columns3Icon,CommandIcon,lucide-react-native/CommandIcon,CompassIcon,lucide-react-native/CompassIcon,CopyPlusIcon,lucide-react-native/CopyPlusIcon,CornerDownLeftIcon,lucide-react-native/CornerDownLeftIcon,CpuIcon,lucide-react-native/CpuIcon,CropIcon,lucide-react-native/CropIcon,DatabaseIcon,lucide-react-native/DatabaseIcon,DownloadIcon,lucide-react-native/DownloadIcon,EditIcon,lucide-react-native/EditIcon,EllipsisIcon,lucide-react-native/EllipsisIcon,EllipsisVerticalIcon,lucide-react-native/EllipsisVerticalIcon,EqualIcon,lucide-react-native/EqualIcon,ExternalLinkIcon,lucide-react-native/ExternalLinkIcon,EyeIcon,lucide-react-native/EyeIcon,EyeOffIcon,lucide-react-native/EyeOffIcon,FileAudioIcon,lucide-react-native/FileAudioIcon,FileBadgeIcon,lucide-react-native/FileBadgeIcon,FileCheckIcon,lucide-react-native/FileCheckIcon,FileCodeIcon,lucide-react-native/FileCodeIcon,FileDiffIcon,lucide-react-native/FileDiffIcon,FileDigitIcon,lucide-react-native/FileDigitIcon,FileDownIcon,lucide-react-native/FileDownIcon,FileIcon,lucide-react-native/FileIcon,FileImageIcon,lucide-react-native/FileImageIcon,FileOutputIcon,lucide-react-native/FileOutputIcon,FilePlus2Icon,lucide-react-native/FilePlus2Icon,FilePlusIcon,lucide-react-native/FilePlusIcon,FileQuestionIcon,lucide-react-native/FileQuestionIcon,FileSearchIcon,lucide-react-native/FileSearchIcon,FileSpreadsheetIcon,lucide-react-native/FileSpreadsheetIcon,FileTextIcon,lucide-react-native/FileTextIcon,FileUpIcon,lucide-react-native/FileUpIcon,FilterIcon,lucide-react-native/FilterIcon,FilterXIcon,lucide-react-native/FilterXIcon,FlagIcon,lucide-react-native/FlagIcon,FlaskConicalIcon,lucide-react-native/FlaskConicalIcon,FoldHorizontalIcon,lucide-react-native/FoldHorizontalIcon,FolderIcon,lucide-react-native/FolderIcon,FolderInputIcon,lucide-react-native/FolderInputIcon,FolderOpenIcon,lucide-react-native/FolderOpenIcon,FolderPlusIcon,lucide-react-native/FolderPlusIcon,FolderSyncIcon,lucide-react-native/FolderSyncIcon,FolderTreeIcon,lucide-react-native/FolderTreeIcon,FunctionSquareIcon,lucide-react-native/FunctionSquareIcon,GanttChartIcon,lucide-react-native/GanttChartIcon,GaugeIcon,lucide-react-native/GaugeIcon,GitBranchIcon,lucide-react-native/GitBranchIcon,GitCommitHorizontalIcon,lucide-react-native/GitCommitHorizontalIcon,GitPullRequestIcon,lucide-react-native/GitPullRequestIcon,GlobeIcon,lucide-react-native/GlobeIcon,GraduationCapIcon,lucide-react-native/GraduationCapIcon,GripVerticalIcon,lucide-react-native/GripVerticalIcon,HashIcon,lucide-react-native/HashIcon,Heading1Icon,lucide-react-native/Heading1Icon,Heading2Icon,lucide-react-native/Heading2Icon,Heading3Icon,lucide-react-native/Heading3Icon,HelpCircleIcon,lucide-react-native/HelpCircleIcon,HighlighterIcon,lucide-react-native/HighlighterIcon,HistoryIcon,lucide-react-native/HistoryIcon,ImageIcon,lucide-react-native/ImageIcon,ImageOffIcon,lucide-react-native/ImageOffIcon,InboxIcon,lucide-react-native/InboxIcon,InfoIcon,lucide-react-native/InfoIcon,ItalicIcon,lucide-react-native/ItalicIcon,KanbanIcon,lucide-react-native/KanbanIcon,KeyRoundIcon,lucide-react-native/KeyRoundIcon,KeyboardIcon,lucide-react-native/KeyboardIcon,LandmarkIcon,lucide-react-native/LandmarkIcon,LanguagesIcon,lucide-react-native/LanguagesIcon,LaptopIcon,lucide-react-native/LaptopIcon,LayersIcon,lucide-react-native/LayersIcon,LayoutDashboardIcon,lucide-react-native/LayoutDashboardIcon,LayoutGridIcon,lucide-react-native/LayoutGridIcon,LayoutTemplateIcon,lucide-react-native/LayoutTemplateIcon,LibraryBigIcon,lucide-react-native/LibraryBigIcon,LibraryIcon,lucide-react-native/LibraryIcon,Link2Icon,lucide-react-native/Link2Icon,LinkIcon,lucide-react-native/LinkIcon,ListChecksIcon,lucide-react-native/ListChecksIcon,ListFilterIcon,lucide-react-native/ListFilterIcon,ListIcon,lucide-react-native/ListIcon,ListMinusIcon,lucide-react-native/ListMinusIcon,ListOrderedIcon,lucide-react-native/ListOrderedIcon,ListTodoIcon,lucide-react-native/ListTodoIcon,ListTreeIcon,lucide-react-native/ListTreeIcon,ListXIcon,lucide-react-native/ListXIcon,LoaderCircleIcon,lucide-react-native/LoaderCircleIcon,LockIcon,lucide-react-native/LockIcon,LockKeyholeIcon,lucide-react-native/LockKeyholeIcon,LockOpenIcon,lucide-react-native/LockOpenIcon,LogOutIcon,lucide-react-native/LogOutIcon,MailIcon,lucide-react-native/MailIcon,Maximize2Icon,lucide-react-native/Maximize2Icon,MegaphoneIcon,lucide-react-native/MegaphoneIcon,MessageCircleQuestionIcon,lucide-react-native/MessageCircleQuestionIcon,MessageSquareIcon,lucide-react-native/MessageSquareIcon,MessageSquareTextIcon,lucide-react-native/MessageSquareTextIcon,MessageSquareWarningIcon,lucide-react-native/MessageSquareWarningIcon,MessagesSquareIcon,lucide-react-native/MessagesSquareIcon,Minimize2Icon,lucide-react-native/Minimize2Icon,MinusIcon,lucide-react-native/MinusIcon,MonitorIcon,lucide-react-native/MonitorIcon,MoonIcon,lucide-react-native/MoonIcon,MoreHorizontalIcon,lucide-react-native/MoreHorizontalIcon,PackageIcon,lucide-react-native/PackageIcon,PaletteIcon,lucide-react-native/PaletteIcon,PanelLeftIcon,lucide-react-native/PanelLeftIcon,PanelRightIcon,lucide-react-native/PanelRightIcon,PaperclipIcon,lucide-react-native/PaperclipIcon,PauseIcon,lucide-react-native/PauseIcon,PenIcon,lucide-react-native/PenIcon,PenLineIcon,lucide-react-native/PenLineIcon,PencilIcon,lucide-react-native/PencilIcon,PencilLineIcon,lucide-react-native/PencilLineIcon,PhoneIcon,lucide-react-native/PhoneIcon,PinIcon,lucide-react-native/PinIcon,PinOffIcon,lucide-react-native/PinOffIcon,PlayIcon,lucide-react-native/PlayIcon,PlugIcon,lucide-react-native/PlugIcon,PlusIcon,lucide-react-native/PlusIcon,PowerIcon,lucide-react-native/PowerIcon,PrinterIcon,lucide-react-native/PrinterIcon,QuoteIcon,lucide-react-native/QuoteIcon,Redo2Icon,lucide-react-native/Redo2Icon,RefreshCcwIcon,lucide-react-native/RefreshCcwIcon,RefreshCwIcon,lucide-react-native/RefreshCwIcon,RepeatIcon,lucide-react-native/RepeatIcon,RotateCcwIcon,lucide-react-native/RotateCcwIcon,RotateCwIcon,lucide-react-native/RotateCwIcon,RouteIcon,lucide-react-native/RouteIcon,Rows2Icon,lucide-react-native/Rows2Icon,Rows3Icon,lucide-react-native/Rows3Icon,SaveIcon,lucide-react-native/SaveIcon,ScanSearchIcon,lucide-react-native/ScanSearchIcon,ScanTextIcon,lucide-react-native/ScanTextIcon,ScrollTextIcon,lucide-react-native/ScrollTextIcon,SearchIcon,lucide-react-native/SearchIcon,SearchXIcon,lucide-react-native/SearchXIcon,SendIcon,lucide-react-native/SendIcon,ServerIcon,lucide-react-native/ServerIcon,Settings2Icon,lucide-react-native/Settings2Icon,ShapesIcon,lucide-react-native/ShapesIcon,ShieldAlertIcon,lucide-react-native/ShieldAlertIcon,ShieldCheckIcon,lucide-react-native/ShieldCheckIcon,ShieldIcon,lucide-react-native/ShieldIcon,SigmaIcon,lucide-react-native/SigmaIcon,SignatureIcon,lucide-react-native/SignatureIcon,SlashIcon,lucide-react-native/SlashIcon,SlidersHorizontalIcon,lucide-react-native/SlidersHorizontalIcon,SmartphoneIcon,lucide-react-native/SmartphoneIcon,SparklesIcon,lucide-react-native/SparklesIcon,SplitIcon,lucide-react-native/SplitIcon,SquareCheckIcon,lucide-react-native/SquareCheckIcon,SquareIcon,lucide-react-native/SquareIcon,SquareMinusIcon,lucide-react-native/SquareMinusIcon,SquarePenIcon,lucide-react-native/SquarePenIcon,StarIcon,lucide-react-native/StarIcon,StarOffIcon,lucide-react-native/StarOffIcon,StickyNoteIcon,lucide-react-native/StickyNoteIcon,StrikethroughIcon,lucide-react-native/StrikethroughIcon,SunIcon,lucide-react-native/SunIcon,TableIcon,lucide-react-native/TableIcon,TabletIcon,lucide-react-native/TabletIcon,TagIcon,lucide-react-native/TagIcon,TagsIcon,lucide-react-native/TagsIcon,TerminalIcon,lucide-react-native/TerminalIcon,TextIcon,lucide-react-native/TextIcon,TextQuoteIcon,lucide-react-native/TextQuoteIcon,ToggleLeftIcon,lucide-react-native/ToggleLeftIcon,Trash2Icon,lucide-react-native/Trash2Icon,TrashIcon,lucide-react-native/TrashIcon,TriangleAlertIcon,lucide-react-native/TriangleAlertIcon,UnderlineIcon,lucide-react-native/UnderlineIcon,Undo2Icon,lucide-react-native/Undo2Icon,UndoIcon,lucide-react-native/UndoIcon,UnfoldHorizontalIcon,lucide-react-native/UnfoldHorizontalIcon,UngroupIcon,lucide-react-native/UngroupIcon,UploadIcon,lucide-react-native/UploadIcon,UserCheckIcon,lucide-react-native/UserCheckIcon,UserIcon,lucide-react-native/UserIcon,UserPlusIcon,lucide-react-native/UserPlusIcon,UserRoundIcon,lucide-react-native/UserRoundIcon,UsersIcon,lucide-react-native/UsersIcon,VideoIcon,lucide-react-native/VideoIcon,WavesIcon,lucide-react-native/WavesIcon,WindIcon,lucide-react-native/WindIcon,WorkflowIcon,lucide-react-native/WorkflowIcon,WrapTextIcon,lucide-react-native/WrapTextIcon,WrenchIcon,lucide-react-native/WrenchIcon,XCircleIcon,lucide-react-native/XCircleIcon,XIcon,lucide-react-native/XIcon,XSquareIcon,lucide-react-native/XSquareIcon,ZapIcon,lucide-react-native/ZapIcon,lucide-react/DollarSignIcon,lucide-react/ScissorsIcon,lucide-react/AccessibilityIcon,lucide-react/ActivityIcon,lucide-react/AlarmClockIcon,lucide-react/AlertCircleIcon,lucide-react/AlertTriangleIcon,lucide-react/AlignJustifyIcon,lucide-react/AlignLeftIcon,lucide-react/ArchiveIcon,lucide-react/ArchiveRestoreIcon,lucide-react/ArrowDownIcon,lucide-react/ArrowLeftIcon,lucide-react/ArrowRightIcon,lucide-react/ArrowUpDownIcon,lucide-react/ArrowUpIcon,lucide-react/AtSignIcon,lucide-react/BanIcon,lucide-react/BanknoteIcon,lucide-react/BellIcon,lucide-react/BlocksIcon,lucide-react/BoldIcon,lucide-react/BookOpenCheckIcon,lucide-react/BookTextIcon,lucide-react/BookmarkIcon,lucide-react/BookmarkPlusIcon,lucide-react/BracesIcon,lucide-react/BrainIcon,lucide-react/Building2Icon,lucide-react/BuildingIcon,lucide-react/CableIcon,lucide-react/CalendarClockIcon,lucide-react/CalendarIcon,lucide-react/ChartColumnIcon,lucide-react/ChartLineIcon,lucide-react/ChartNoAxesColumnIcon,lucide-react/ChartPieIcon,lucide-react/ChartScatterIcon,lucide-react/CheckCheckIcon,lucide-react/CheckCircle2Icon,lucide-react/CheckIcon,lucide-react/ChevronDownIcon,lucide-react/ChevronLeftIcon,lucide-react/ChevronRightIcon,lucide-react/ChevronUpIcon,lucide-react/ChevronsUpDownIcon,lucide-react/CircleAlertIcon,lucide-react/CircleCheckIcon,lucide-react/CircleDashedIcon,lucide-react/CircleDotIcon,lucide-react/CircleHelpIcon,lucide-react/CircleIcon,lucide-react/CircleOffIcon,lucide-react/CircleUserRoundIcon,lucide-react/ClipboardCheckIcon,lucide-react/ClipboardCopyIcon,lucide-react/ClipboardIcon,lucide-react/ClipboardListIcon,lucide-react/Clock3Icon,lucide-react/ClockIcon,lucide-react/CloudIcon,lucide-react/CogIcon,lucide-react/Columns2Icon,lucide-react/Columns3Icon,lucide-react/CommandIcon,lucide-react/CompassIcon,lucide-react/CopyPlusIcon,lucide-react/CornerDownLeftIcon,lucide-react/CpuIcon,lucide-react/CropIcon,lucide-react/DatabaseIcon,lucide-react/DownloadIcon,lucide-react/EditIcon,lucide-react/EllipsisIcon,lucide-react/EllipsisVerticalIcon,lucide-react/EqualIcon,lucide-react/ExternalLinkIcon,lucide-react/EyeIcon,lucide-react/EyeOffIcon,lucide-react/FileAudioIcon,lucide-react/FileBadgeIcon,lucide-react/FileCheckIcon,lucide-react/FileCodeIcon,lucide-react/FileDiffIcon,lucide-react/FileDigitIcon,lucide-react/FileDownIcon,lucide-react/FileIcon,lucide-react/FileImageIcon,lucide-react/FileOutputIcon,lucide-react/FilePlus2Icon,lucide-react/FilePlusIcon,lucide-react/FileQuestionIcon,lucide-react/FileSearchIcon,lucide-react/FileSpreadsheetIcon,lucide-react/FileTextIcon,lucide-react/FileUpIcon,lucide-react/FilterIcon,lucide-react/FilterXIcon,lucide-react/FlagIcon,lucide-react/FlaskConicalIcon,lucide-react/FoldHorizontalIcon,lucide-react/FolderIcon,lucide-react/FolderInputIcon,lucide-react/FolderOpenIcon,lucide-react/FolderPlusIcon,lucide-react/FolderSyncIcon,lucide-react/FolderTreeIcon,lucide-react/FunctionSquareIcon,lucide-react/GanttChartIcon,lucide-react/GaugeIcon,lucide-react/GitBranchIcon,lucide-react/GitCommitHorizontalIcon,lucide-react/GitPullRequestIcon,lucide-react/GlobeIcon,lucide-react/GraduationCapIcon,lucide-react/GripVerticalIcon,lucide-react/HashIcon,lucide-react/Heading1Icon,lucide-react/Heading2Icon,lucide-react/Heading3Icon,lucide-react/HelpCircleIcon,lucide-react/HighlighterIcon,lucide-react/HistoryIcon,lucide-react/ImageIcon,lucide-react/ImageOffIcon,lucide-react/InboxIcon,lucide-react/InfoIcon,lucide-react/ItalicIcon,lucide-react/KanbanIcon,lucide-react/KeyRoundIcon,lucide-react/KeyboardIcon,lucide-react/LandmarkIcon,lucide-react/LanguagesIcon,lucide-react/LaptopIcon,lucide-react/LayersIcon,lucide-react/LayoutDashboardIcon,lucide-react/LayoutGridIcon,lucide-react/LayoutTemplateIcon,lucide-react/LibraryBigIcon,lucide-react/LibraryIcon,lucide-react/Link2Icon,lucide-react/LinkIcon,lucide-react/ListChecksIcon,lucide-react/ListFilterIcon,lucide-react/ListIcon,lucide-react/ListMinusIcon,lucide-react/ListOrderedIcon,lucide-react/ListTodoIcon,lucide-react/ListTreeIcon,lucide-react/ListXIcon,lucide-react/LoaderCircleIcon,lucide-react/LockIcon,lucide-react/LockKeyholeIcon,lucide-react/LockOpenIcon,lucide-react/LogOutIcon,lucide-react/MailIcon,lucide-react/Maximize2Icon,lucide-react/MegaphoneIcon,lucide-react/MessageCircleQuestionIcon,lucide-react/MessageSquareIcon,lucide-react/MessageSquareTextIcon,lucide-react/MessageSquareWarningIcon,lucide-react/MessagesSquareIcon,lucide-react/Minimize2Icon,lucide-react/MinusIcon,lucide-react/MonitorIcon,lucide-react/MoonIcon,lucide-react/MoreHorizontalIcon,lucide-react/PackageIcon,lucide-react/PaletteIcon,lucide-react/PanelLeftIcon,lucide-react/PanelRightIcon,lucide-react/PaperclipIcon,lucide-react/PauseIcon,lucide-react/PenIcon,lucide-react/PenLineIcon,lucide-react/PencilIcon,lucide-react/PencilLineIcon,lucide-react/PhoneIcon,lucide-react/PinIcon,lucide-react/PinOffIcon,lucide-react/PlayIcon,lucide-react/PlugIcon,lucide-react/PlusIcon,lucide-react/PowerIcon,lucide-react/PrinterIcon,lucide-react/QuoteIcon,lucide-react/Redo2Icon,lucide-react/RefreshCcwIcon,lucide-react/RefreshCwIcon,lucide-react/RepeatIcon,lucide-react/RotateCcwIcon,lucide-react/RotateCwIcon,lucide-react/RouteIcon,lucide-react/Rows2Icon,lucide-react/Rows3Icon,lucide-react/SaveIcon,lucide-react/ScanSearchIcon,lucide-react/ScanTextIcon,lucide-react/ScrollTextIcon,lucide-react/SearchIcon,lucide-react/SearchXIcon,lucide-react/SendIcon,lucide-react/ServerIcon,lucide-react/Settings2Icon,lucide-react/ShapesIcon,lucide-react/ShieldAlertIcon,lucide-react/ShieldCheckIcon,lucide-react/ShieldIcon,lucide-react/SigmaIcon,lucide-react/SignatureIcon,lucide-react/SlashIcon,lucide-react/SlidersHorizontalIcon,lucide-react/SmartphoneIcon,lucide-react/SparklesIcon,lucide-react/SplitIcon,lucide-react/SquareCheckIcon,lucide-react/SquareIcon,lucide-react/SquareMinusIcon,lucide-react/SquarePenIcon,lucide-react/StarIcon,lucide-react/StarOffIcon,lucide-react/StickyNoteIcon,lucide-react/StrikethroughIcon,lucide-react/SunIcon,lucide-react/TableIcon,lucide-react/TabletIcon,lucide-react/TagIcon,lucide-react/TagsIcon,lucide-react/TerminalIcon,lucide-react/TextIcon,lucide-react/TextQuoteIcon,lucide-react/ToggleLeftIcon,lucide-react/Trash2Icon,lucide-react/TrashIcon,lucide-react/TriangleAlertIcon,lucide-react/UnderlineIcon,lucide-react/Undo2Icon,lucide-react/UndoIcon,lucide-react/UnfoldHorizontalIcon,lucide-react/UngroupIcon,lucide-react/UploadIcon,lucide-react/UserCheckIcon,lucide-react/UserIcon,lucide-react/UserPlusIcon,lucide-react/UserRoundIcon,lucide-react/UsersIcon,lucide-react/VideoIcon,lucide-react/WavesIcon,lucide-react/WindIcon,lucide-react/WorkflowIcon,lucide-react/WrapTextIcon,lucide-react/WrenchIcon,lucide-react/XCircleIcon,lucide-react/XIcon,lucide-react/XSquareIcon,lucide-react/ZapIcon"
         },
         {
           "name": "SrcFile",
@@ -61547,6 +61949,9 @@
             "location": "packages/ui/src/components/fixtures/color-picker.fixture.tsx#2"
           },
           {
+            "location": "packages/ui/src/components/fixtures/composer-frame.fixture.tsx#2"
+          },
+          {
             "location": "packages/ui/src/components/fixtures/control-states.fixture.tsx#1"
           },
           {
@@ -61674,6 +62079,9 @@
           },
           {
             "location": "packages/ui/src/components/fixtures/color-picker.fixture.tsx#2"
+          },
+          {
+            "location": "packages/ui/src/components/fixtures/composer-frame.fixture.tsx#2"
           },
           {
             "location": "packages/ui/src/components/fixtures/control-states.fixture.tsx#1"
@@ -62327,6 +62735,9 @@
             "location": "apps/mobile/src/components/loading-screen.tsx#1"
           },
           {
+            "location": "apps/mobile/src/components/local-run-request-card.tsx#3"
+          },
+          {
             "location": "apps/mobile/src/components/mailbox-messages.tsx#4"
           },
           {
@@ -62427,6 +62838,12 @@
           },
           {
             "location": "packages/ui/src/components/button.native.tsx#2"
+          },
+          {
+            "location": "packages/ui/src/components/composer-frame.native.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/composer-frame.native.tsx#4"
           },
           {
             "location": "packages/ui/src/components/input.native.tsx#1"
@@ -62533,6 +62950,9 @@
         "occurrences": [
           {
             "location": "apps/desktop/src/activity/billing-draft-settings.ts#8"
+          },
+          {
+            "location": "apps/desktop/src/activity/matter-store-section.ts#6"
           },
           {
             "location": "apps/desktop/src/clipboard/clips-copy-routing.ts#1"
@@ -62967,7 +63387,7 @@
             "location": "apps/web/src/features/chat/answer-edit/use-chat-selection-events.ts#2"
           },
           {
-            "location": "apps/web/src/features/chat/browser-control/browser-approval-mode.ts#1"
+            "location": "apps/web/src/features/chat/browser-control/browser-approval-state.ts#1"
           },
           {
             "location": "apps/web/src/features/chat/browser-control/browser-extension-bridge.ts#1"
@@ -63261,6 +63681,12 @@
             "location": "packages/ui/src/components/button.shared.ts#12"
           },
           {
+            "location": "packages/ui/src/components/composer-frame.shared.ts#6"
+          },
+          {
+            "location": "packages/ui/src/components/composer-layout.ts#7"
+          },
+          {
             "location": "packages/ui/src/components/sheet.shared.ts#5"
           },
           {
@@ -63315,6 +63741,9 @@
             "location": "apps/desktop/src/activity/ActivityBrowserQuestion.tsx#2"
           },
           {
+            "location": "apps/desktop/src/activity/ActivityCalendarEvents.tsx#1"
+          },
+          {
             "location": "apps/desktop/src/activity/ActivityDayCalendar.tsx#1"
           },
           {
@@ -63337,6 +63766,9 @@
           },
           {
             "location": "apps/desktop/src/activity/MatterPicker.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/activity/MatterRulesSettings.tsx#1"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#10"
@@ -63363,7 +63795,7 @@
             "location": "apps/desktop/src/mainview/AgentSubscriptionsSection.tsx#1"
           },
           {
-            "location": "apps/desktop/src/mainview/App.tsx#7"
+            "location": "apps/desktop/src/mainview/App.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/AppearanceSetting.tsx#1"
@@ -63448,6 +63880,9 @@
           },
           {
             "location": "apps/desktop/src/onboarding/ActivitySetupFlow.tsx#2"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/ActivitySetupScreens.tsx#1"
           },
           {
             "location": "apps/desktop/src/onboarding/ConnectStep.tsx#1"
@@ -63709,6 +64144,9 @@
           },
           {
             "location": "apps/mobile/src/components/loaded-tasks.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/local-run-request-card.tsx#1"
           },
           {
             "location": "apps/mobile/src/components/mailbox-messages.tsx#1"
@@ -64212,7 +64650,7 @@
             "location": "apps/web/src/components/chat/docked-chat-stack.tsx#2"
           },
           {
-            "location": "apps/web/src/components/chat/docked-composer.tsx#7"
+            "location": "apps/web/src/components/chat/docked-composer.tsx#8"
           },
           {
             "location": "apps/web/src/components/chat/generated-visual.tsx#1"
@@ -64225,6 +64663,9 @@
           },
           {
             "location": "apps/web/src/components/chat/local-run-question-card.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-run-request-notice.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/local-run-step-output.tsx#1"
@@ -64482,10 +64923,10 @@
             "location": "apps/web/src/components/inspector/anonymization-facet.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#1"
+            "location": "apps/web/src/components/inspector/audio-file-viewer.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#18"
+            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/compare-versions-panel.tsx#1"
@@ -64524,13 +64965,13 @@
             "location": "apps/web/src/components/inspector/file-tab-full-view.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-header.tsx#6"
+            "location": "apps/web/src/components/inspector/file-tab-header.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#9"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#8"
           },
           {
             "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#7"
@@ -66045,6 +66486,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/apps-group.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/account/connections/browser-sites-group.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/integrations-group.tsx#1"
           },
           {
@@ -66277,9 +66721,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.pending.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#1"
@@ -66804,6 +67245,9 @@
             "location": "apps/web/src/routes/dev/-components/sortable-head-playground.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/dev/-components/storm-watch-playground.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/dev/-components/table-chart-playground.tsx#1"
           },
           {
@@ -66900,13 +67344,13 @@
             "location": "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/skill-detail.pending.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/knowledge/-components/skill-editor.tsx#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/skill-export-menu.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/knowledge/-components/skill-monitor-panel.tsx#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/template-check-dialog.tsx#1"
@@ -67398,6 +67842,15 @@
             "location": "packages/ui/src/components/command.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/composer-frame.native.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/composer-frame.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/composer-frame.tsx#4"
+          },
+          {
             "location": "packages/ui/src/components/composer.tsx#3"
           },
           {
@@ -67474,6 +67927,9 @@
           },
           {
             "location": "packages/ui/src/components/fixtures/color-picker.fixture.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/fixtures/composer-frame.fixture.tsx#1"
           },
           {
             "location": "packages/ui/src/components/fixtures/court-filter.fixture.tsx#1"
@@ -68813,7 +69269,7 @@
             "location": "packages/agent-engine/src/harness/codex/adapter.ts#4"
           },
           {
-            "location": "packages/agent-engine/src/harness/codex/errors.ts#1"
+            "location": "packages/agent-engine/src/harness/codex/errors.ts#2"
           },
           {
             "location": "packages/agent-engine/src/harness/codex/turn.ts#2"
@@ -68993,7 +69449,7 @@
             "location": "packages/agent-engine/src/harness/codex/adapter.ts#4"
           },
           {
-            "location": "packages/agent-engine/src/harness/codex/errors.ts#1"
+            "location": "packages/agent-engine/src/harness/codex/errors.ts#2"
           },
           {
             "location": "packages/agent-engine/src/harness/codex/turn.ts#2"
@@ -70000,6 +70456,9 @@
         ],
         "occurrences": [
           {
+            "location": "apps/desktop/src/activity/matter-rule-label.ts#2"
+          },
+          {
             "location": "apps/desktop/src/activity/use-duration-label.ts#1"
           },
           {
@@ -70273,6 +70732,9 @@
             "location": "apps/desktop/src/activity/ActivityBrowserQuestion.tsx#4"
           },
           {
+            "location": "apps/desktop/src/activity/ActivityCalendarEvents.tsx#5"
+          },
+          {
             "location": "apps/desktop/src/activity/ActivityCaptureDetails.tsx#2"
           },
           {
@@ -70292,6 +70754,9 @@
           },
           {
             "location": "apps/desktop/src/activity/MatterPicker.tsx#4"
+          },
+          {
+            "location": "apps/desktop/src/activity/MatterRulesSettings.tsx#4"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#32"
@@ -70321,22 +70786,22 @@
             "location": "apps/desktop/src/dictation/DictationPreviewApp.tsx#5"
           },
           {
-            "location": "apps/desktop/src/mainview/AntigravityCard.tsx#1"
+            "location": "apps/desktop/src/mainview/AntigravityCard.tsx#2"
           },
           {
-            "location": "apps/desktop/src/mainview/App.tsx#11"
+            "location": "apps/desktop/src/mainview/App.tsx#5"
           },
           {
             "location": "apps/desktop/src/mainview/AppearanceSetting.tsx#5"
           },
           {
-            "location": "apps/desktop/src/mainview/ChatGptCard.tsx#1"
+            "location": "apps/desktop/src/mainview/ChatGptCard.tsx#2"
           },
           {
             "location": "apps/desktop/src/mainview/ChatGptPasteCallback.tsx#3"
           },
           {
-            "location": "apps/desktop/src/mainview/ClaudeCodeCard.tsx#1"
+            "location": "apps/desktop/src/mainview/ClaudeCodeCard.tsx#2"
           },
           {
             "location": "apps/desktop/src/mainview/ClipboardSettings.tsx#12"
@@ -70396,6 +70861,9 @@
             "location": "apps/desktop/src/mainview/ShortcutSetting.tsx#5"
           },
           {
+            "location": "apps/desktop/src/mainview/SignedInLine.tsx#1"
+          },
+          {
             "location": "apps/desktop/src/mainview/SigningDriverSection.tsx#5"
           },
           {
@@ -70411,7 +70879,7 @@
             "location": "apps/desktop/src/onboarding/ActivitySetupFlow.tsx#5"
           },
           {
-            "location": "apps/desktop/src/onboarding/ActivitySetupScreens.tsx#2"
+            "location": "apps/desktop/src/onboarding/ActivitySetupScreens.tsx#4"
           },
           {
             "location": "apps/desktop/src/onboarding/ActivityStep.tsx#1"
@@ -70673,6 +71141,9 @@
           },
           {
             "location": "apps/mobile/src/components/loaded-tasks.tsx#4"
+          },
+          {
+            "location": "apps/mobile/src/components/local-run-request-card.tsx#4"
           },
           {
             "location": "apps/mobile/src/components/mailbox-messages.tsx#5"
@@ -71026,7 +71497,7 @@
             "location": "apps/web/src/components/chat/connect-connector-card.tsx#6"
           },
           {
-            "location": "apps/web/src/components/chat/context-notice.tsx#1"
+            "location": "apps/web/src/components/chat/context-notice.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/create-document-draft-inspector-editor.tsx#5"
@@ -71035,7 +71506,7 @@
             "location": "apps/web/src/components/chat/create-document-draft-inspector-view.tsx#3"
           },
           {
-            "location": "apps/web/src/components/chat/docked-composer.tsx#9"
+            "location": "apps/web/src/components/chat/docked-composer.tsx#10"
           },
           {
             "location": "apps/web/src/components/chat/generated-visual.tsx#5"
@@ -71051,6 +71522,9 @@
           },
           {
             "location": "apps/web/src/components/chat/local-run-question-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/chat/local-run-request-notice.tsx#3"
           },
           {
             "location": "apps/web/src/components/chat/local-run-step-output.tsx#5"
@@ -71083,7 +71557,7 @@
             "location": "apps/web/src/components/chat/spawn-subagents-card.tsx#4"
           },
           {
-            "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#5"
+            "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#6"
           },
           {
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#6"
@@ -71230,10 +71704,13 @@
             "location": "apps/web/src/components/inspector/asic-file-viewer.tsx#2"
           },
           {
+            "location": "apps/web/src/components/inspector/audio-file-viewer.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/inspector/cades-file-viewer.tsx#2"
           },
           {
-            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#27"
+            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#26"
           },
           {
             "location": "apps/web/src/components/inspector/compare-versions-panel.tsx#6"
@@ -71272,10 +71749,10 @@
             "location": "apps/web/src/components/inspector/file-facets.tsx#2"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-header.tsx#8"
+            "location": "apps/web/src/components/inspector/file-tab-header.tsx#3"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#11"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#10"
           },
           {
             "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#10"
@@ -72133,6 +72610,9 @@
             "location": "apps/web/src/features/chat/components/suggested-followups.tsx#4"
           },
           {
+            "location": "apps/web/src/features/chat/desktop-feature-update.tsx#2"
+          },
+          {
             "location": "apps/web/src/features/chat/make-skill-review-dialog.tsx#4"
           },
           {
@@ -72526,7 +73006,7 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/browser-extension-group.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/account/connections/browser-sites-group.tsx#2"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/connections/browser-sites-group.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/connections/client-setup-groups.tsx#1"
@@ -72670,7 +73150,7 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/organization-instructions-card.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#10"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#8"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#5"
@@ -72715,7 +73195,7 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization-audit-archive.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization-danger-zone.tsx#4"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization-danger-zone.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/settings-leave-guard.tsx#1"
@@ -73109,6 +73589,9 @@
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/skill-export-menu.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/knowledge/-components/skill-monitor-panel.tsx#4"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/template-category-sidebar.tsx#1"
@@ -73619,6 +74102,9 @@
             "location": "apps/api/evals/lib/reader-explain-score.ts#2"
           },
           {
+            "location": "apps/api/evals/lib/site-notes-cases.ts#1"
+          },
+          {
             "location": "apps/api/evals/lib/verify-quote-cases.ts#4"
           },
           {
@@ -73629,6 +74115,9 @@
           },
           {
             "location": "apps/api/evals/recording-cleanup.ts#19"
+          },
+          {
+            "location": "apps/api/evals/site-notes-local.ts#12"
           },
           {
             "location": "apps/api/evals/template-authoring.ts#98"
@@ -73760,7 +74249,7 @@
             "location": "apps/api/src/db/online-migration-rehearsal-guard.ts#2"
           },
           {
-            "location": "apps/api/src/db/root.ts#5"
+            "location": "apps/api/src/db/root.ts#6"
           },
           {
             "location": "apps/api/src/db/schema-validators.ts#1"
@@ -73982,7 +74471,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns-sbirka.ts#45"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-uohs.ts#7"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-uohs.ts#8"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts#11"
@@ -74069,10 +74558,25 @@
             "location": "apps/api/src/handlers/chat/browse-web-agent.ts#14"
           },
           {
+            "location": "apps/api/src/handlers/chat/browser-downloads/chat-thread.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/browser-downloads/local-run.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/browser-downloads/own-chat.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/chat/browser-site-grants/create.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/browser-site-grants/delete.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/browser-site-notes/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/browser-site-notes/sites/delete.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/chat-command-receipts.ts#3"
@@ -74279,6 +74783,9 @@
             "location": "apps/api/src/handlers/chat/tools/boe-tools.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/chat/tools/browser-site-notes-tools.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/chat/tools/business-registry-tools.ts#3"
           },
           {
@@ -74349,6 +74856,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/turns/answer-request.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/turns/cancel.ts#2"
@@ -74546,7 +75056,7 @@
             "location": "apps/api/src/handlers/desktop-feature-access/read.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/desktop-presence/report.ts#2"
+            "location": "apps/api/src/handlers/desktop-presence/latest-release.ts#14"
           },
           {
             "location": "apps/api/src/handlers/desktop-registry/grant.ts#2"
@@ -75617,6 +76127,9 @@
             "location": "apps/api/src/handlers/skills/list.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/skills/monitor/get.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/skills/proposals/create.ts#2"
           },
           {
@@ -75633,6 +76146,9 @@
           },
           {
             "location": "apps/api/src/handlers/skills/proposals/review.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/proposals/suggest-improvements/create.ts#3"
           },
           {
             "location": "apps/api/src/handlers/skills/proposals/update.ts#3"
@@ -76139,6 +76655,9 @@
             "location": "apps/api/src/lib/agent-skills/draft-prompt.ts#1"
           },
           {
+            "location": "apps/api/src/lib/agent-skills/skill-read-audit.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/agent-skills/skill-tools.ts#4"
           },
           {
@@ -76442,6 +76961,9 @@
             "location": "apps/api/src/lib/desktop-runner/gateway.ts#2"
           },
           {
+            "location": "apps/api/src/lib/desktop-runner/request-answers.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/desktop-runner/sealed-answers.ts#2"
           },
           {
@@ -76469,7 +76991,7 @@
             "location": "apps/api/src/lib/document-review/reference-grade.ts#20"
           },
           {
-            "location": "apps/api/src/lib/document-source.ts#27"
+            "location": "apps/api/src/lib/document-source.ts#31"
           },
           {
             "location": "apps/api/src/lib/document-translation/ai.ts#1"
@@ -76871,6 +77393,12 @@
             "location": "apps/api/src/lib/template-clause-links.ts#4"
           },
           {
+            "location": "apps/api/src/lib/templates/house-style/folio-contract.ts#7"
+          },
+          {
+            "location": "apps/api/src/lib/templates/house-style/template-profile.ts#9"
+          },
+          {
             "location": "apps/api/src/lib/templates/suggest-template-fields.ts#1"
           },
           {
@@ -76962,6 +77490,9 @@
           },
           {
             "location": "apps/api/src/mcp/billing-tools.ts#4"
+          },
+          {
+            "location": "apps/api/src/mcp/capability-endpoint-types.ts#1"
           },
           {
             "location": "apps/api/src/mcp/capability-tools.ts#2"
@@ -77075,7 +77606,13 @@
             "location": "apps/api/src/mcp/research-admin-tools.ts#2"
           },
           {
+            "location": "apps/api/src/mcp/site-notes-tools.ts#2"
+          },
+          {
             "location": "apps/api/src/mcp/soft-law-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/stella-tools-case-law-helpers.ts#2"
           },
           {
             "location": "apps/api/src/mcp/stella-tools.ts#3"
@@ -77204,7 +77741,19 @@
             "location": "apps/collab/src/server.ts#12"
           },
           {
+            "location": "apps/desktop/src/activity/activity-calendar-events.ts#2"
+          },
+          {
             "location": "apps/desktop/src/activity/billing-draft-logic.ts#2"
+          },
+          {
+            "location": "apps/desktop/src/activity/matter-learning-store.ts#2"
+          },
+          {
+            "location": "apps/desktop/src/activity/matter-rules-store.ts#2"
+          },
+          {
+            "location": "apps/desktop/src/activity/matter-store-section.ts#8"
           },
           {
             "location": "apps/extension/scripts/publish-store.ts#2"
@@ -77492,13 +78041,10 @@
             "location": "apps/web/src/features/chat/answer-edit/answer-edit-selection.ts#1"
           },
           {
-            "location": "apps/web/src/features/chat/browser-control/browser-approval-mode.ts#4"
+            "location": "apps/web/src/features/chat/browser-control/browser-download-filing.ts#2"
           },
           {
             "location": "apps/web/src/features/chat/chat-local-run-limit.ts#2"
-          },
-          {
-            "location": "apps/web/src/features/chat/chat-runtime-registry.ts#3"
           },
           {
             "location": "apps/web/src/features/chat/chat-runtime.ts#12"
@@ -77780,6 +78326,9 @@
             "location": "packages/agent-engine/src/harness/codex/background.ts#2"
           },
           {
+            "location": "packages/agent-engine/src/harness/codex/errors.ts#3"
+          },
+          {
             "location": "packages/agent-engine/src/harness/codex/protocol.ts#1"
           },
           {
@@ -77822,6 +78371,9 @@
             "location": "packages/agent-engine/src/sidecar/browser/tools.ts#2"
           },
           {
+            "location": "packages/agent-engine/src/sidecar/browser-download-filing.ts#2"
+          },
+          {
             "location": "packages/agent-engine/src/sidecar/checkpoints.ts#21"
           },
           {
@@ -77855,7 +78407,13 @@
             "location": "packages/api-contract/src/browser-control.ts#2"
           },
           {
+            "location": "packages/api-contract/src/browser-downloads.ts#1"
+          },
+          {
             "location": "packages/api-contract/src/browser-site-grants.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/browser-site-notes.ts#1"
           },
           {
             "location": "packages/api-contract/src/cades.ts#1"
@@ -77912,7 +78470,13 @@
             "location": "packages/api-contract/src/chat-local-files-undo.ts#1"
           },
           {
+            "location": "packages/api-contract/src/chat-local-run-notice.ts#2"
+          },
+          {
             "location": "packages/api-contract/src/chat-local-run-question.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/chat-local-run-request.ts#2"
           },
           {
             "location": "packages/api-contract/src/chat-local-run-step-content.ts#1"
@@ -77984,7 +78548,7 @@
             "location": "packages/api-contract/src/desktop-runner.ts#4"
           },
           {
-            "location": "packages/api-contract/src/desktop-time-entries.ts#1"
+            "location": "packages/api-contract/src/desktop-time-entries.ts#2"
           },
           {
             "location": "packages/api-contract/src/dictation-learned-fixes.ts#1"
@@ -78446,7 +79010,7 @@
             "location": "scripts/generate-bun-toolchain.ts#3"
           },
           {
-            "location": "scripts/generate-harness-releases.ts#34"
+            "location": "scripts/generate-harness-releases.ts#36"
           },
           {
             "location": "scripts/generate-mobile-folio-fonts.ts#15"
@@ -78596,7 +79160,7 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-form.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#11"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.time.tsx#2"
@@ -79511,7 +80075,7 @@
             "location": "apps/web/src/components/docx/docx-editor-host.tsx#16"
           },
           {
-            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#28"
+            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#27"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-group-controls.tsx#7"
@@ -79649,7 +80213,7 @@
             "location": "apps/web/src/components/dev-sidebar-group.tsx#4"
           },
           {
-            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#28"
+            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#27"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-group-controls.tsx#7"

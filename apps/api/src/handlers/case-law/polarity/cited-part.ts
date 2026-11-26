@@ -1,3 +1,4 @@
+import { ownEntry } from "@stll/api-contract/own-key";
 import { escapeRegExp, normalizeUnicode } from "@stll/text-normalize";
 
 import {
@@ -14,9 +15,6 @@ const JUDGE_NAME = `${NAME_WORD}(?:\\s+${NAME_WORD}){0,3}`;
 const OPINION_KINDS = CITED_PARTS.filter(
   (part) => part !== CITED_PART.NOT_STATED,
 );
-
-/** Languages whose opinion vocabulary the classifier reads. */
-type CitedPartLanguage = "cs" | "sk" | "en";
 
 type OpinionKind = Exclude<CitedPart, "not-stated">;
 type OpinionRules = {
@@ -61,7 +59,10 @@ export const CITED_PART_RULES = {
     judge: `of\\s+(?:judge|justice)\\s+${JUDGE_NAME}\\s+`,
     possessive: "['’]s\\s+",
   },
-} as const satisfies Record<CitedPartLanguage, OpinionRules>;
+} as const satisfies Record<string, OpinionRules>;
+
+/** Languages whose opinion vocabulary the classifier reads. */
+export type CitedPartLanguage = keyof typeof CITED_PART_RULES;
 
 type CitedPartArgs = {
   contexts: readonly string[];
@@ -76,9 +77,7 @@ export const classifyCitedPart = ({
   citationText,
   language,
 }: CitedPartArgs): CitedPart => {
-  const rules = Object.entries(CITED_PART_RULES).find(
-    ([key]) => key === language,
-  )?.[1];
+  const rules = ownEntry(CITED_PART_RULES, language);
   if (rules === undefined || citationText.length === 0) {
     return CITED_PART.NOT_STATED;
   }

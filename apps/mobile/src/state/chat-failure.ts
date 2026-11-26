@@ -58,6 +58,8 @@ export const CHAT_FAILURE_KEYS = {
   local_runner_needs_login: "errorNeedsLogin",
   local_runner_limit_reached: "errorLimitReached",
   local_runner_unavailable: "errorUnavailable",
+  local_runner_lost: "errorLost",
+  local_runner_failed: "errorFailed",
   local_runner_turn_too_large: "refusalTooLarge",
   local_runner_not_reached: "errorNotReached",
   local_runner_relinked: "errorRelinked",

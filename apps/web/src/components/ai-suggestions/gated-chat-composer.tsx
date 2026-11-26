@@ -16,16 +16,14 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { ComposerFrame } from "@stll/ui/composer-frame";
 import { CircleUserRoundIcon } from "@stll/ui/icons";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { useFileChatPlaceholder } from "@/components/ai-suggestions/file-chat-placeholder";
 import type { FileChatPlaceholderSource } from "@/components/ai-suggestions/file-chat-placeholder";
 import { useRequireAccount } from "@/components/auth/use-require-account";
-import {
-  DockedComposer,
-  PromptBarShell,
-} from "@/components/chat/docked-composer";
+import { DockedComposer } from "@/components/chat/docked-composer";
 
 export const GatedChatComposer = (props: FileChatPlaceholderSource) => {
   const t = useTranslations();
@@ -35,33 +33,38 @@ export const GatedChatComposer = (props: FileChatPlaceholderSource) => {
   return (
     <DockedComposer
       bar={
-        <PromptBarShell
-          className="items-center gap-2 ps-3 pe-1.5"
+        <ComposerFrame
           data-slot="gated-chat-sign-in"
-        >
-          <TruncatedText className="text-foreground-muted flex-1 text-sm">
-            {sourceLabel === undefined ? (
-              t("chat.signInToChat")
-            ) : (
-              <>
-                {t("chat.signInToChatAbout")}{" "}
-                <BidiText as="span" className="text-foreground-label">
-                  {sourceLabel}
-                </BidiText>
-              </>
-            )}
-          </TruncatedText>
-          <Button
-            className="shrink-0"
-            onClick={() => {
-              ensureAccount();
-            }}
-            size="sm"
-          >
-            <CircleUserRoundIcon aria-hidden="true" className="size-3.5" />
-            {t("auth.signIn")}
-          </Button>
-        </PromptBarShell>
+          empty
+          ring="none"
+          stature="compact"
+          surface="document"
+          text={
+            <TruncatedText className="text-foreground-muted">
+              {sourceLabel === undefined ? (
+                t("chat.signInToChat")
+              ) : (
+                <>
+                  {t("chat.signInToChatAbout")}{" "}
+                  <BidiText as="span" className="text-foreground-label">
+                    {sourceLabel}
+                  </BidiText>
+                </>
+              )}
+            </TruncatedText>
+          }
+          trailing={
+            <Button
+              onClick={() => {
+                ensureAccount();
+              }}
+              size="sm"
+            >
+              <CircleUserRoundIcon aria-hidden="true" className="size-3.5" />
+              {t("auth.signIn")}
+            </Button>
+          }
+        />
       }
     />
   );

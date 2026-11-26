@@ -904,35 +904,50 @@ type FiniteHandlerGuard<TResult> = [Extract<TResult, Response>] extends [never]
   ? unknown
   : never;
 
+type MoneyCheckDepth = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+type PrevMoneyCheckDepth = [0, 0, 1, 2, 3, 4, 5, 6, 7];
+
+type NonMoneyLeaf =
+  | string
+  | number
+  | boolean
+  | bigint
+  | symbol
+  | null
+  | undefined
+  | Date
+  | Response
+  | ReadableStream
+  | Blob
+  | ArrayBuffer
+  | ArrayBufferView
+  | RegExp
+  | URL
+  | Headers
+  | Promise<unknown>
+  | ((...args: never[]) => unknown);
+
 /** Bounded recursion keeps the handler boundary from erasing monetary result types. */
-type ContainsMoney<T, Depth extends readonly unknown[] = []> = unknown extends T
+type ContainsMoney<T, Depth extends MoneyCheckDepth = 8> = unknown extends T
   ? false
-  : Depth["length"] extends 8
+  : Depth extends 0
     ? false
     : T extends CentsAmount | Money
       ? true
-      : T extends
-            | string
-            | number
-            | boolean
-            | bigint
-            | null
-            | undefined
-            | Date
-            | Response
+      : T extends NonMoneyLeaf
         ? false
         : T extends readonly (infer Item)[]
-          ? ContainsMoney<Item, [...Depth, unknown]>
+          ? ContainsMoney<Item, PrevMoneyCheckDepth[Depth]>
           : T extends object
             ? {
-                [K in keyof T]: ContainsMoney<T[K], [...Depth, unknown]>;
+                [K in keyof T]: ContainsMoney<T[K], PrevMoneyCheckDepth[Depth]>;
               }[keyof T]
             : false;
 
-type MoneyShapeMatches<T, Schema, Depth extends readonly unknown[] = []> =
+type MoneyShapeMatches<T, Schema, Depth extends MoneyCheckDepth = 8> =
   T extends HttpStatusResponse<infer _Code, infer Body>
     ? MoneyShapeMatches<Body, Schema, Depth>
-    : Depth["length"] extends 8
+    : Depth extends 0
       ? true
       : true extends ContainsMoney<T>
         ? Schema extends { readonly wrapped: infer Wrapped }
@@ -945,7 +960,11 @@ type MoneyShapeMatches<T, Schema, Depth extends readonly unknown[] = []> =
               : false
             : NonNullable<T> extends readonly (infer Item)[]
               ? Schema extends { readonly item: infer ItemSchema }
-                ? MoneyShapeMatches<Item, ItemSchema, [...Depth, unknown]>
+                ? MoneyShapeMatches<
+                    Item,
+                    ItemSchema,
+                    PrevMoneyCheckDepth[Depth]
+                  >
                 : false
               : Schema extends { readonly entries: infer Entries }
                 ? false extends {
@@ -956,7 +975,7 @@ type MoneyShapeMatches<T, Schema, Depth extends readonly unknown[] = []> =
                         ? MoneyShapeMatches<
                             NonNullable<T>[K],
                             Entries[K],
-                            [...Depth, unknown]
+                            PrevMoneyCheckDepth[Depth]
                           >
                         : false
                       : true;

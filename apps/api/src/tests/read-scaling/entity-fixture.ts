@@ -18,6 +18,7 @@ import {
   billingDraftUserSettings,
   billingGuidelineFiles,
   cellMetadata,
+  chatBrowserSiteNotes,
   contacts,
   desktopEditSessions,
   documentProcessingRuns,
@@ -28,6 +29,8 @@ import {
   fields,
   organizationSettings,
   properties,
+  timeEntries,
+  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { desktopDeviceProofReplays } from "@/api/db/schema/desktop-device-proof-replay";
@@ -108,12 +111,16 @@ export const prepareEntityReadScalingTables = async (db: GatedTestDb) =>
     auditLogs,
     organizationSettings,
     billingDraftUserSettings,
+    // The member's website notes, which read_site_notes scaling seeds.
+    chatBrowserSiteNotes,
     featureEnrolments,
     desktopDeviceProofReplays,
     contacts,
     agentSkills,
     agentSkillResources,
     billingGuidelineFiles,
+    timeEntries,
+    workspaceMembers,
   ]);
 
 export const seedEntityReadScaling = async (db: GatedTestDb, size: number) => {

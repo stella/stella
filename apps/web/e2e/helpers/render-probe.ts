@@ -25,7 +25,9 @@ const QUIET_MS = 500;
 const TIMEOUT_MS = 30_000;
 const READ_PROBE = { operation: "read" } satisfies BrowserProbeOperation;
 const RESET_PROBE = { operation: "reset" } satisfies BrowserProbeOperation;
-let bundle: Promise<string> | undefined;
+/** The scripts `scripts/render-probe-bundle.ts` builds for injection. */
+export type InjectedScript = "render-probe" | "storm-watch";
+const bundles = new Map<InjectedScript, Promise<string>>();
 
 type PageNetworkState = {
   pending: Set<Request>;
@@ -95,7 +97,7 @@ const trackContextNetwork = (context: BrowserContext) => {
 
 // Playwright's test workers use Node; the agent driver uses Bun. Keep the
 // bundler in Bun in both cases, with one cached build per caller process.
-const buildProbe = async (): Promise<string> =>
+const buildScript = async (script: InjectedScript): Promise<string> =>
   new Promise((resolve, reject) => {
     execFile(
       "bun",
@@ -103,13 +105,14 @@ const buildProbe = async (): Promise<string> =>
         fileURLToPath(
           new URL("../../scripts/render-probe-bundle.ts", import.meta.url),
         ),
+        script,
       ],
       { maxBuffer: 4 * 1024 * 1024, encoding: "utf-8" },
       (error, stdout, stderr) => {
         if (error !== null) {
           reject(
             new RenderProbeBundleError({
-              message: "Could not bundle the render probe",
+              message: `Could not bundle the ${script} script`,
               cause: error,
               stderr,
               exitCode: error.code,
@@ -122,11 +125,25 @@ const buildProbe = async (): Promise<string> =>
     );
   });
 
+/** One cached build per script and caller process. */
+export const injectedScript = async (
+  script: InjectedScript,
+): Promise<string> => {
+  const cached = bundles.get(script);
+  if (cached !== undefined) {
+    return await cached;
+  }
+  const built = buildScript(script);
+  bundles.set(script, built);
+  return await built;
+};
+
 /** Install before creating the first page, so React and Refresh see the hook. */
 export const installRenderProbe = async (context: BrowserContext) => {
   trackContextNetwork(context);
-  bundle ??= buildProbe();
-  await context.addInitScript({ content: await bundle });
+  await context.addInitScript({
+    content: await injectedScript("render-probe"),
+  });
 };
 
 /** The action must use real input and await any stream whose work it includes. */

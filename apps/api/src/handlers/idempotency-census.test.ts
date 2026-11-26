@@ -55,6 +55,14 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "DELETE /v1/chat/browser-site-notes/:noteId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/chat/browser-site-notes/sites": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   // Setting a limit reminder again is a no-op and cancelling one removes
   // whatever is set, so a repeat answers the current state.
   "DELETE /v1/chat/threads/:threadId/limit-reminder": {
@@ -483,6 +491,11 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "stream",
   },
+  // Filing the same bytes again names the document the matter already holds.
+  "POST /v1/chat/threads/:threadId/browser-downloads": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/chat/threads/:threadId/connectors/:toolCallId": {
     type: "non-replay",
     reason: "credential",
@@ -533,6 +546,11 @@ const ROOT_MUTATION_DISPOSITIONS = {
     reason: "stream",
   },
   "POST /v1/chat/threads/:threadId/turns/:turnId/steer": {
+    type: "non-replay",
+    reason: "stream",
+  },
+  // An answer is keyed by its request: a repeat replays its receipt.
+  "POST /v1/chat/threads/:threadId/turns/:turnId/requests/:requestId/answer": {
     type: "non-replay",
     reason: "stream",
   },

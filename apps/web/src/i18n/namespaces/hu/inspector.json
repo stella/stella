@@ -540,6 +540,7 @@
       "waitForMatches": "Várja meg az anonimizálási vizsgálat végét.",
       "workspaceTermsHeading": "Munkaterületi kifejezések ({count})"
     },
+    "audioUnplayable": "Ez a felvétel itt nem játszható le. Töltse le a meghallgatáshoz.",
     "closeAllTabs": "{count, plural, one {# lap} other {Mind a # lap}} bezárása",
     "closeOtherTabs": "{count, plural, one {# másik lap} other {# másik lap}} bezárása",
     "closeTab": "<bdi>{name}</bdi> bezárása",
@@ -623,6 +624,11 @@
     },
     "metadata": {
       "aiExtractedHeading": "AI által kinyerve",
+      "browserDownload": {
+        "downloaded": "Letöltve",
+        "file": "Fájl címe",
+        "page": "Letöltés helye"
+      },
       "documentProperties": {
         "empty": "Ez a fájl nem tartalmaz saját tulajdonságokat",
         "heading": "Fájl tulajdonságai",

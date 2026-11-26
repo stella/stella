@@ -1,6 +1,10 @@
+import fileChatThreadBrowserDownload from "@/api/handlers/chat/browser-downloads/chat-thread";
 import createBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/create";
 import deleteBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/delete";
 import listBrowserSiteGrants from "@/api/handlers/chat/browser-site-grants/list";
+import deleteBrowserSiteNote from "@/api/handlers/chat/browser-site-notes/delete";
+import listBrowserSiteNotes from "@/api/handlers/chat/browser-site-notes/list";
+import deleteBrowserSiteNotesSite from "@/api/handlers/chat/browser-site-notes/sites/delete";
 import getDecisionChatThread from "@/api/handlers/chat/decision-threads/get";
 import createMessageExport from "@/api/handlers/chat/export/create";
 import forkThread from "@/api/handlers/chat/fork/create";
@@ -60,6 +64,7 @@ import readChatToolGrantCoverage from "@/api/handlers/chat/tool-grants/coverage"
 import createChatToolGrant from "@/api/handlers/chat/tool-grants/create";
 import deleteChatToolGrant from "@/api/handlers/chat/tool-grants/delete";
 import listChatToolGrants from "@/api/handlers/chat/tool-grants/list";
+import answerTurnRequest from "@/api/handlers/chat/turns/answer-request";
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import steerTurn from "@/api/handlers/chat/turns/steer";
@@ -82,6 +87,9 @@ export const chatRoute = routes(
       POST: createBrowserSiteGrant,
     },
     "/browser-site-grants/:grantId": { DELETE: deleteBrowserSiteGrant },
+    "/browser-site-notes": { GET: listBrowserSiteNotes },
+    "/browser-site-notes/sites": { DELETE: deleteBrowserSiteNotesSite },
+    "/browser-site-notes/:noteId": { DELETE: deleteBrowserSiteNote },
     "/workspaces/:workspaceId/file-thread": {
       POST: resolveFileThread,
       GET: readFileThread,
@@ -132,6 +140,9 @@ export const chatRoute = routes(
     "/threads/:threadId/turns/:turnId/join": { GET: joinChatTurn },
     "/threads/:threadId/turns/:turnId/cancel": { POST: cancelTurn },
     "/threads/:threadId/turns/:turnId/steer": { POST: steerTurn },
+    "/threads/:threadId/turns/:turnId/requests/:requestId/answer": {
+      POST: answerTurnRequest,
+    },
     "/threads/:threadId/messages/:messageId/local-files/undo": {
       GET: readLocalFilesUndo,
       POST: undoLocalFiles,
@@ -155,6 +166,9 @@ export const chatRoute = routes(
     },
     "/threads/:threadId/queue/:messageId/send-now": {
       POST: sendQueuedChatMessageNow,
+    },
+    "/threads/:threadId/browser-downloads": {
+      POST: fileChatThreadBrowserDownload,
     },
     "/threads/:threadId/fork": { POST: forkThread },
     "/threads/:threadId/export": { POST: createMessageExport },

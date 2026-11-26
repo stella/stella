@@ -1,3 +1,4 @@
+// parser-output-unchanged: [cz-uohs] exports the printed decision-type set for the type census; parsing is unchanged.
 // parser-output-unchanged: adds an explicit exact-document recovery capability; standing crawl and stored replay outputs are unchanged.
 // parser-output-unchanged: A null list now reads as empty; records that parsed before keep their exact output.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
@@ -545,7 +546,7 @@ const LETTERHEAD_DATES = [
  * The decision's own title line in the letterhead ("ROZHODNUTÍ", "USNESENÍ",
  * "PŘÍKAZ"), as its type in Czech; undefined when the head prints none.
  */
-const PRINTED_DECISION_TYPES: ReadonlySet<string> = new Set([
+export const CZ_UOHS_PRINTED_DECISION_TYPES: ReadonlySet<string> = new Set([
   "ROZHODNUTÍ",
   "USNESENÍ",
   "PŘÍKAZ",
@@ -556,7 +557,9 @@ export const czUohsPrintedDecisionType = (text: string): string | undefined =>
     .slice(0, LETTERHEAD_SPAN)
     .split("\n")
     .map((line) => line.trim())
-    .find((line) => PRINTED_DECISION_TYPES.has(line.toLocaleUpperCase("cs")))
+    .find((line) =>
+      CZ_UOHS_PRINTED_DECISION_TYPES.has(line.toLocaleUpperCase("cs")),
+    )
     ?.toLocaleLowerCase("cs");
 
 /**

@@ -18,6 +18,12 @@
 //   const ICONS: Record<string, Icon> = { compliant: CheckIcon };  // flagged
 //   const ICONS = { ... } as const satisfies Record<string, Icon>; // flagged
 //   const ICONS = { ... } as const satisfies Record<Verdict, Icon>; // accepted
+//   // Source-of-truth registry: `keyof typeof REGISTRY` derives the union from
+//   // the object itself, while `satisfies Record<string, V>` validates values
+//   // without widening the keys (a `: Record<string, V>` annotation still widens
+//   // keys to `string` and stays flagged).
+//   const REGISTRY = { ... } as const satisfies Record<string, Def>; // accepted
+//   export type RegistryKey = keyof typeof REGISTRY;
 //
 // oxlint plugins see syntax, not types: whether the keys belong to a union in
 // scope is not checked. A map whose keys are an open set read off the wire
@@ -27,13 +33,15 @@
 // scripts/design-lint-baseline.json, and each count may only fall.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
-import type { ESTree } from "@oxlint/plugins";
+import type { ESTree, Variable } from "@oxlint/plugins";
 
 import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 import {
   filenameForContext,
   getCalleeName,
   isAstNode,
+  isIdentifierReference,
+  resolveVariable,
   staticStringValue,
   unwrapExpression,
 } from "./utils.ts";
@@ -121,20 +129,32 @@ const staticKeys = (node: AstNode): string[] | null => {
   return keys;
 };
 
+type TypedLiteralMatch = {
+  readonly literal: AstNode;
+  readonly name: string;
+  readonly viaAnnotation: boolean;
+};
+
 /**
  * The object literal a declarator binds, and whether a `Record<string, V>`
- * types it, read through `as const` and `satisfies`.
+ * types it by annotation (which widens keys to `string`) or only by `satisfies`
+ * (which preserves exact literal keys for `keyof typeof`).
  */
 const typedLiteral = (
   declarator: ESTree.VariableDeclarator,
-): AstNode | null => {
+): TypedLiteralMatch | null => {
   const id: unknown = declarator.id;
-  if (!isAstNode(id) || id.type !== "Identifier") {
+  if (
+    !isAstNode(id) ||
+    id.type !== "Identifier" ||
+    typeof id.name !== "string"
+  ) {
     return null;
   }
   const annotation: unknown = id.typeAnnotation;
-  let typed =
+  const viaAnnotation =
     isAstNode(annotation) && isStringKeyedRecord(annotation.typeAnnotation);
+  let viaSatisfies = false;
   let value: unknown = declarator.init;
   while (
     isAstNode(value) &&
@@ -144,13 +164,36 @@ const typedLiteral = (
       value.type === "TSSatisfiesExpression" &&
       isStringKeyedRecord(value.typeAnnotation)
     ) {
-      typed = true;
+      viaSatisfies = true;
     }
     value = value.expression;
   }
-  return typed && isAstNode(value) && value.type === "ObjectExpression"
-    ? value
+  return (viaAnnotation || viaSatisfies) &&
+    isAstNode(value) &&
+    value.type === "ObjectExpression"
+    ? { literal: value, name: id.name, viaAnnotation }
     : null;
+};
+
+/** If `node` is `keyof typeof <Ident>`, returns the `<Ident>` AST node. */
+const keyofTypeofTarget = (
+  node: unknown,
+): ESTree.IdentifierReference | null => {
+  if (
+    !isAstNode(node) ||
+    node.type !== "TSTypeOperator" ||
+    node.operator !== "keyof"
+  ) {
+    return null;
+  }
+  let inner: unknown = node.typeAnnotation;
+  while (isAstNode(inner) && inner.type === "TSParenthesizedType") {
+    inner = inner.typeAnnotation;
+  }
+  if (!isAstNode(inner) || inner.type !== "TSTypeQuery") {
+    return null;
+  }
+  return isIdentifierReference(inner.exprName) ? inner.exprName : null;
 };
 
 const isLiteralKey = (node: unknown): boolean => {
@@ -242,6 +285,93 @@ const isExportedDeclaration = (declarator: ESTree.VariableDeclarator) => {
   );
 };
 
+/** If `node` is a non-empty union of string literals, returns its literal set. */
+const stringLiteralUnionKeys = (node: unknown): ReadonlySet<string> | null => {
+  if (!isAstNode(node)) {
+    return null;
+  }
+  const members: unknown[] =
+    node.type === "TSUnionType" && Array.isArray(node.types)
+      ? node.types
+      : [node];
+  if (members.length === 0) {
+    return null;
+  }
+  const out = new Set<string>();
+  for (const member of members) {
+    if (
+      !isAstNode(member) ||
+      member.type !== "TSLiteralType" ||
+      !isAstNode(member.literal) ||
+      member.literal.type !== "Literal" ||
+      typeof member.literal.value !== "string"
+    ) {
+      return null;
+    }
+    out.add(member.literal.value);
+  }
+  return out;
+};
+
+/** If `type` is `Record<KeyIdent, V>` (optionally inside `Readonly<>`), returns `KeyIdent`. */
+const satisfiesRecordKeyRef = (
+  type: unknown,
+): ESTree.IdentifierReference | null => {
+  if (!isAstNode(type)) {
+    return null;
+  }
+  const name = typeReferenceName(type);
+  const args = typeArguments(type);
+  if (name !== null && RECORD_WRAPPERS.has(name) && args.length === 1) {
+    return satisfiesRecordKeyRef(args.at(0));
+  }
+  const key = args.at(0);
+  if (
+    name === "Record" &&
+    args.length === 2 &&
+    isAstNode(key) &&
+    key.type === "TSTypeReference" &&
+    isIdentifierReference(key.typeName)
+  ) {
+    return key.typeName;
+  }
+  return null;
+};
+
+/** If `declarator` is `const MAP = { ... } [as const] satisfies Record<KeyIdent, V>`, returns its key ref + static keys. */
+const satisfiesKeyRefLiteral = (
+  declarator: ESTree.VariableDeclarator,
+): {
+  readonly keyRef: ESTree.IdentifierReference;
+  readonly mapName: string;
+  readonly keys: readonly string[];
+} | null => {
+  const id: unknown = declarator.id;
+  if (!isIdentifierReference(id)) {
+    return null;
+  }
+  let keyRef: ESTree.IdentifierReference | null = null;
+  let value: unknown = declarator.init;
+  while (
+    isAstNode(value) &&
+    (value.type === "TSAsExpression" || value.type === "TSSatisfiesExpression")
+  ) {
+    if (value.type === "TSSatisfiesExpression") {
+      keyRef ??= satisfiesRecordKeyRef(value.typeAnnotation);
+    }
+    value = value.expression;
+  }
+  if (
+    keyRef === null ||
+    !isAstNode(value) ||
+    value.type !== "ObjectExpression"
+  ) {
+    return null;
+  }
+  const keys = staticKeys(value);
+  return keys === null ? null : { keyRef, mapName: id.name, keys };
+};
+
 export default eslintCompatPlugin({
   meta: { name: "exhaustive-union-map" },
   rules: {
@@ -251,27 +381,121 @@ export default eslintCompatPlugin({
         messages: {
           stringKeyedMap:
             "`{{name}}` maps a fixed set of keys but is typed Record<string, …>, so a member added to the union it covers compiles without an entry here. Key it by that union: `satisfies Record<Union, …>`.",
+          singleUseKeyUnion:
+            "`{{typeName}}` duplicates the keys of `{{mapName}}` in a single-use local union. Use `as const satisfies Record<string, …>` and derive `type … = keyof typeof {{mapName}}` instead.",
         },
       },
       createOnce(context) {
+        const keyofTargets = new Set<Variable>();
+        const candidates: {
+          readonly node: ESTree.VariableDeclarator;
+          readonly name: string;
+          readonly viaAnnotation: boolean;
+          readonly variables: readonly Variable[];
+        }[] = [];
+        const localStringUnions = new Map<
+          string,
+          {
+            readonly node: ESTree.TSTypeAliasDeclaration;
+            readonly keys: ReadonlySet<string>;
+          }
+        >();
+        const exportedTypeNames = new Set<string>();
+        const shadowedTypeNames = new Set<string>();
+        const typeRefCounts = new Map<string, number>();
+        const satisfiesKeyMaps: {
+          readonly typeName: string;
+          readonly mapName: string;
+          readonly keys: readonly string[];
+        }[] = [];
+
         return {
+          Program() {
+            keyofTargets.clear();
+            candidates.length = 0;
+            localStringUnions.clear();
+            exportedTypeNames.clear();
+            shadowedTypeNames.clear();
+            typeRefCounts.clear();
+            satisfiesKeyMaps.length = 0;
+          },
+          ExportSpecifier(node) {
+            const parent: unknown = node.parent;
+            if (
+              isAstNode(parent) &&
+              parent.type === "ExportNamedDeclaration" &&
+              parent.source === null &&
+              isIdentifierReference(node.local)
+            ) {
+              exportedTypeNames.add(node.local.name);
+            }
+          },
+          TSTypeAliasDeclaration(node) {
+            const parent: unknown = node.parent;
+            if (isAstNode(parent) && parent.type === "ExportNamedDeclaration") {
+              return;
+            }
+            const id: unknown = node.id;
+            if (!isIdentifierReference(id)) {
+              return;
+            }
+            if (!isAstNode(parent) || parent.type !== "Program") {
+              shadowedTypeNames.add(id.name);
+              return;
+            }
+            const keys = stringLiteralUnionKeys(node.typeAnnotation);
+            if (keys !== null) {
+              localStringUnions.set(id.name, { node, keys });
+            }
+          },
+          TSTypeReference(node) {
+            if (isIdentifierReference(node.typeName)) {
+              const name = node.typeName.name;
+              typeRefCounts.set(name, (typeRefCounts.get(name) ?? 0) + 1);
+            }
+          },
+          TSTypeOperator(node) {
+            const target = keyofTypeofTarget(node);
+            const variable =
+              target === null ? null : resolveVariable(context, target);
+            if (variable !== null) {
+              keyofTargets.add(variable);
+            }
+          },
           VariableDeclarator(node) {
             // A `let` table is filled as the program runs; its keys are open.
             const declaration: unknown = node.parent;
             if (!isAstNode(declaration) || declaration.kind !== "const") {
               return;
             }
-            const literal = typedLiteral(node);
-            const keys = literal === null ? null : staticKeys(literal);
-            if (keys === null) {
+            const declParent: unknown = declaration.parent;
+            const atModuleTop =
+              isAstNode(declParent) &&
+              (declParent.type === "Program" ||
+                (declParent.type === "ExportNamedDeclaration" &&
+                  isAstNode(declParent.parent) &&
+                  declParent.parent.type === "Program"));
+            const keyRefMatch = atModuleTop
+              ? satisfiesKeyRefLiteral(node)
+              : null;
+            if (keyRefMatch !== null) {
+              satisfiesKeyMaps.push({
+                typeName: keyRefMatch.keyRef.name,
+                mapName: keyRefMatch.mapName,
+                keys: keyRefMatch.keys,
+              });
+            }
+            const match = typedLiteral(node);
+            const keys = match === null ? null : staticKeys(match.literal);
+            if (match === null || keys === null) {
               return;
             }
             const exported = isExportedDeclaration(node);
+            const declaredVariables =
+              context.sourceCode.getDeclaredVariables(node);
             let lookedUp = false;
             let exportedByName = false;
-            for (const variable of context.sourceCode.getDeclaredVariables(
-              node,
-            )) {
+            for (const variable of declaredVariables) {
               for (const reference of variable.references) {
                 const use = lookupUse(reference.identifier);
                 lookedUp ||= use === "lookup";
@@ -285,36 +509,70 @@ export default eslintCompatPlugin({
             ) {
               return;
             }
-            // First-week rollout: only declarations on lines this change
-            // touched (scripts/guard-rollouts/exhaustive-union-map.json).
-            const start = context.sourceCode.getLocFromIndex(
-              node.range[0],
-            ).line;
-            const end = context.sourceCode.getLocFromIndex(
-              node.range[1] - 1,
-            ).line;
-            let enforced = false;
-            for (let line = start; line <= end && !enforced; line++) {
-              enforced = guardEnforcesLine({
-                guard: "exhaustive-union-map",
-                file: filenameForContext(context),
-                line,
+            candidates.push({
+              node,
+              name: match.name,
+              viaAnnotation: match.viaAnnotation,
+              variables: declaredVariables,
+            });
+          },
+          "Program:exit"() {
+            for (const { node, name, viaAnnotation, variables } of candidates) {
+              // Source-of-truth registry: `satisfies Record<string, V>` validates
+              // values while preserving literal keys for `keyof typeof <MAP>`.
+              if (
+                !viaAnnotation &&
+                variables.some((variable) => keyofTargets.has(variable))
+              ) {
+                continue;
+              }
+              // First-week rollout: only declarations on lines this change
+              // touched (scripts/guard-rollouts/exhaustive-union-map.json).
+              const start = context.sourceCode.getLocFromIndex(
+                node.range[0],
+              ).line;
+              const end = context.sourceCode.getLocFromIndex(
+                node.range[1] - 1,
+              ).line;
+              let enforced = false;
+              for (let line = start; line <= end && !enforced; line++) {
+                enforced = guardEnforcesLine({
+                  guard: "exhaustive-union-map",
+                  file: filenameForContext(context),
+                  line,
+                });
+              }
+              if (!enforced) {
+                continue;
+              }
+              context.report({
+                node,
+                messageId: "stringKeyedMap",
+                data: { name },
               });
             }
-            if (!enforced) {
-              return;
+            for (const { typeName, mapName, keys } of satisfiesKeyMaps) {
+              if (
+                exportedTypeNames.has(typeName) ||
+                shadowedTypeNames.has(typeName)
+              ) {
+                continue;
+              }
+              const union = localStringUnions.get(typeName);
+              if (
+                union === undefined ||
+                typeRefCounts.get(typeName) !== 1 ||
+                union.keys.size !== keys.length ||
+                !keys.every((k) => union.keys.has(k))
+              ) {
+                continue;
+              }
+              context.report({
+                node: union.node,
+                messageId: "singleUseKeyUnion",
+                data: { typeName, mapName },
+              });
             }
-            const id: unknown = node.id;
-            context.report({
-              node,
-              messageId: "stringKeyedMap",
-              data: {
-                name:
-                  isAstNode(id) && typeof id.name === "string"
-                    ? id.name
-                    : "map",
-              },
-            });
           },
         };
       },

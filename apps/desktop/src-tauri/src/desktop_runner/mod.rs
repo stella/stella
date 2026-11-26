@@ -242,6 +242,12 @@ impl DesktopRunnerControl {
     }
   }
 
+  /// Whether a local agent run on this computer has not finished yet; the
+  /// updater waits for it before relaunching.
+  pub(crate) fn has_running_run(&self) -> bool {
+    self.journal.has_running_run()
+  }
+
   /// The member linked or unlinked a folder; the host, once there is one,
   /// reports the list again.
   pub(crate) fn linked_folders_changed(&self) {
@@ -431,6 +437,36 @@ fn sign_in_changes() -> &'static tokio::sync::watch::Sender<u64> {
 /// again now rather than at the next periodic probe.
 pub(crate) fn harness_sign_in_changed() {
   sign_in_changes().send_modify(|count| *count = count.wrapping_add(1));
+}
+
+/// The member's Antigravity CLI of `version` for Settings, with its sign-in
+/// as the run probe found it: the last answer, or a probe run now on
+/// `refresh` or when the last one did not answer. One answer for Settings
+/// and every run.
+pub(crate) async fn antigravity_status(
+  app: &AppHandle,
+  version: String,
+  refresh: bool,
+) -> member_agents::AntigravityCliStatus {
+  let host = app
+    .try_state::<DesktopRunnerControl>()
+    .and_then(|control| control.host.get().cloned().flatten());
+  let report = match host {
+    None => None,
+    Some(host) => match host.report(Harness::Antigravity) {
+      Some(report)
+        if !refresh
+          && !matches!(
+            report,
+            crate::runner_protocol::HarnessReport::Unavailable(_)
+          ) =>
+      {
+        Some(report)
+      }
+      _ => host.probe_now(Harness::Antigravity).await,
+    },
+  };
+  member_agents::antigravity_sign_in(version, report.as_ref())
 }
 
 /// The CLIs the installer manages, and Codex on the user's ChatGPT plan when

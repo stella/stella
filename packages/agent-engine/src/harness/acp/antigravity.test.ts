@@ -15,7 +15,6 @@ import { Temporal } from "temporal-polyfill/full";
 import {
   ANTIGRAVITY,
   ANTIGRAVITY_CLI,
-  antigravityCliTokenPath,
   antigravityCommandOutlivesPrompt,
   antigravityDefinition,
   antigravityTokenPath,
@@ -125,12 +124,9 @@ describe("Antigravity over ACP", () => {
     ).toEqual({});
     expect(ANTIGRAVITY_CLI.removedEnvironment).not.toContain("GEMINI_HOME");
     expect(ANTIGRAVITY_CLI.removedEnvironment).toContain("GEMINI_API_KEY");
-    expect(antigravityCliTokenPath({ HOME: "/home/m" })).toBe(
-      "/home/m/.gemini/antigravity-cli/antigravity-oauth-token",
-    );
-    expect(
-      antigravityCliTokenPath({ GEMINI_HOME: "/g", HOME: "/home/m" }),
-    ).toBe("/g/antigravity-cli/antigravity-oauth-token");
+    // The CLI says itself whether it is signed in, every time it is asked.
+    expect(ANTIGRAVITY_CLI.storedSignIn).toBeNull();
+    expect(ANTIGRAVITY_CLI.probeCacheMs).toBe(0);
   });
 
   test("the CLI's version is read with --version, before it is started", async () => {
@@ -149,7 +145,7 @@ describe("Antigravity over ACP", () => {
 
   test("CLI probe session cleanup removes only our probe session from GEMINI_HOME", () => {
     const home = stateDir();
-    const state = path.join(home, "antigravity-acp");
+    const state = path.join(home, "antigravity-cli");
     const probeCwd = path.join(home, "probe-cwd");
     const otherCwd = path.join(home, "other-cwd");
     mkdirSync(probeCwd, { recursive: true });

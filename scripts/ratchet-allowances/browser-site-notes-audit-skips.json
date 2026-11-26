@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 2,
+  "reason": "Confirming a website note only moves its confirmation time when the agent followed it and it worked, and account deletion erases the notes under the deletion request's own audit like the other personal records; creating, replacing, removing and pruning notes are audited."
+}

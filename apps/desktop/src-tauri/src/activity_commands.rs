@@ -30,10 +30,12 @@ pub(crate) fn update<F: ActivityAccountFeature, E: From<String>>(
   let mut manager = state
     .lock()
     .map_err(|poisoned| E::from(lock_error(poisoned)))?;
-  caller.require_current(app).map_err(E::from)?;
+  caller.require_writable(app).map_err(E::from)?;
   manager.require_caller(caller).map_err(E::from)?;
   change(&mut manager)?;
+  let loaded = manager.loaded_choice();
   drop(manager);
+  crate::activity_capture::record_loaded_choice(loaded);
   activity::emit_changed(app);
   Ok(())
 }
@@ -70,6 +72,9 @@ pub fn activity_get_day(
   );
   drop(manager);
   snapshot.resolve_app_visuals();
+  if caller.account_binding().is_some() {
+    snapshot.add_capture(&app);
+  }
   Ok(snapshot)
 }
 

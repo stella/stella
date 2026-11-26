@@ -1,7 +1,10 @@
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { OpenAILogoIcon } from "@stll/ui/brand-icons";
 import { Button } from "@stll/ui/button";
+import { ListItemMedia } from "@stll/ui/list";
+import { SettingsRow } from "@stll/ui/settings";
 
 import type {
   ChatGptFailure,
@@ -9,12 +12,14 @@ import type {
   ChatGptStatus,
 } from "./chatgpt-status";
 import { ChatGptPasteCallback } from "./ChatGptPasteCallback";
+import { SignedInLine } from "./SignedInLine";
 
 /** The ChatGPT connection: its state, and what the user can do next. */
 export const ChatGptCard = ({
   status,
   install,
   notice,
+  target,
   onSignIn,
   onCancel,
   onComplete,
@@ -24,73 +29,30 @@ export const ChatGptCard = ({
   const t = useTranslations("agentSubscriptions");
   const offerNewAccount =
     status.state === "failed" && NEW_ACCOUNT_FAILURES.has(status.reason);
-  return (
-    <div className="space-y-3 px-4 py-3">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-2 text-sm font-medium">
-            <OpenAILogoIcon className="size-4 shrink-0" />
-            <span>{t("chatGpt")}</span>
-          </p>
-          <p className="text-muted-foreground mt-1 text-sm leading-relaxed text-pretty">
-            {t(statusMessage(status), {
-              email: status.state === "connected" ? (status.email ?? "") : "",
-            })}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {status.state === "signing_in" ? (
-            <Button onClick={onCancel} variant="outline">
-              {t("cancel")}
-            </Button>
-          ) : null}
-          {status.state === "connected" ? (
-            <Button onClick={onManageUsage} variant="link">
-              {t("manageUsage")}
-            </Button>
-          ) : null}
-          {status.sessionStored ? (
-            <Button onClick={onDisconnect} variant="outline">
-              {t("disconnect")}
-            </Button>
-          ) : null}
-          {offerNewAccount ? (
-            <Button
-              onClick={() => {
-                onSignIn({ newAccount: true });
-              }}
-              variant="outline"
-            >
-              {t("useDifferentAccount")}
-            </Button>
-          ) : null}
-          {status.state === "signing_in" ||
-          status.state === "connected" ? null : (
-            <Button
-              onClick={() => {
-                onSignIn({ newAccount: false });
-              }}
-            >
-              {t("continueWithChatGpt")}
-            </Button>
-          )}
-        </div>
+  const accounts =
+    status.state === "signing_in" || status.accounts.length === 0 ? null : (
+      <div className="flex flex-wrap gap-2">
+        {status.accounts.map((account) => (
+          <Button
+            key={account.id}
+            onClick={() => {
+              onSignIn({ account: account.id, newAccount: false });
+            }}
+            variant="outline"
+          >
+            {t("continueAs", { email: account.email })}
+          </Button>
+        ))}
       </div>
-      {status.state === "signing_in" || status.accounts.length === 0 ? null : (
-        <div className="flex flex-wrap justify-end gap-2">
-          {status.accounts.map((account) => (
-            <Button
-              key={account.id}
-              onClick={() => {
-                onSignIn({ account: account.id, newAccount: false });
-              }}
-              variant="outline"
-            >
-              {t("continueAs", { email: account.email })}
-            </Button>
-          ))}
-        </div>
-      )}
+    );
+  const hasFooter =
+    accounts !== null ||
+    status.state === "signing_in" ||
+    install !== null ||
+    notice !== null;
+  const footer = hasFooter ? (
+    <div className="flex flex-col gap-3">
+      {accounts}
       {status.state === "signing_in" ? (
         <ChatGptPasteCallback onComplete={onComplete} />
       ) : null}
@@ -104,7 +66,75 @@ export const ChatGptCard = ({
         </p>
       ) : null}
     </div>
+  ) : null;
+  return (
+    <SettingsRow
+      description={<ChatGptStatusLine status={status} />}
+      footer={footer}
+      media={
+        <ListItemMedia>
+          <OpenAILogoIcon />
+        </ListItemMedia>
+      }
+      target={target}
+      title={t("chatGpt")}
+    >
+      {status.state === "signing_in" ? (
+        <Button onClick={onCancel} variant="outline">
+          {t("cancel")}
+        </Button>
+      ) : null}
+      {status.state === "connected" ? (
+        <Button onClick={onManageUsage} variant="link">
+          {t("manageUsage")}
+        </Button>
+      ) : null}
+      {status.sessionStored ? (
+        <Button onClick={onDisconnect} variant="outline">
+          {t("signOut")}
+        </Button>
+      ) : null}
+      {offerNewAccount ? (
+        <Button
+          onClick={() => {
+            onSignIn({ newAccount: true });
+          }}
+          variant="outline"
+        >
+          {t("useDifferentAccount")}
+        </Button>
+      ) : null}
+      {status.state === "signing_in" || status.state === "connected" ? null : (
+        <Button
+          onClick={() => {
+            onSignIn({ newAccount: false });
+          }}
+        >
+          {t("signIn")}
+        </Button>
+      )}
+    </SettingsRow>
   );
+};
+
+/** One line: who is signed in, or why not. */
+const ChatGptStatusLine = ({ status }: { status: ChatGptStatus }) => {
+  const t = useTranslations("agentSubscriptions");
+  switch (status.state) {
+    case "connected":
+      return <SignedInLine email={status.email} />;
+    case "signed_out":
+      return t("notSignedIn");
+    case "signing_in":
+      return t("signingIn");
+    case "needs_reconnect":
+      return t("needsReconnect");
+    case "failed":
+      return t(FAILURE_MESSAGES[status.reason]);
+    default:
+      status satisfies never;
+      return panic("Unknown ChatGPT state");
+  }
 };
 
 export type ChatGptNotice =
@@ -115,6 +145,8 @@ type ChatGptCardProps = {
   /** The managed Codex CLI's install line; `null` while its status is unknown. */
   install: React.JSX.Element | null;
   notice: ChatGptNotice | null;
+  /** The name a settings link brings this row into view by. */
+  target: string;
   onSignIn: (request: ChatGptSignIn) => void;
   onCancel: () => void;
   onComplete: (url: string) => Promise<boolean>;
@@ -149,19 +181,3 @@ const NEW_ACCOUNT_FAILURES = new Set<ChatGptFailure>([
   "different_account",
   "client_rejected",
 ]);
-
-function statusMessage(status: ChatGptStatus) {
-  if (status.state === "failed") {
-    return FAILURE_MESSAGES[status.reason];
-  }
-  if (status.state === "connected") {
-    return status.email ? "connectedAs" : "connected";
-  }
-  if (status.state === "signing_in") {
-    return "signingIn";
-  }
-  if (status.state === "needs_reconnect") {
-    return "needsReconnect";
-  }
-  return "description";
-}

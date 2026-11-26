@@ -192,6 +192,7 @@ const readChatLimitResumeOnTx = async ({
       workspaceId: chatThreads.workspaceId,
       usedAnonymization: chatThreads.usedAnonymization,
       chatLocalRunTarget: chatThreads.chatLocalRunTarget,
+      chatCloudApprovals: chatThreads.chatCloudApprovals,
     })
     .from(chatThreads)
     .where(eq(chatThreads.id, threadId))
@@ -229,7 +230,7 @@ const readChatLimitResumeOnTx = async ({
   if (asked?.role !== "user") {
     return { type: "moot" };
   }
-  const runTarget = chatRunTargetOf(thread.chatLocalRunTarget);
+  const runTarget = chatRunTargetOf(thread);
   return {
     type: "due",
     workspaceId: thread.workspaceId,

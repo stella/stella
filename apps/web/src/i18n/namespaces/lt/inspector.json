@@ -540,6 +540,7 @@
       "waitForMatches": "Palaukite, kol baigsis nuasmeninimo patikra.",
       "workspaceTermsHeading": "Darbo srities terminai ({count})"
     },
+    "audioUnplayable": "Šio įrašo čia paleisti negalima. Atsisiųskite jį, kad išklausytumėte.",
     "closeAllTabs": "Uždaryti {count, plural, one {# kortelę} few {visas # korteles} many {# kortelės} other {visas # kortelių}}",
     "closeOtherTabs": "Uždaryti {count, plural, one {# kitą kortelę} few {# kitas korteles} many {# kitos kortelės} other {# kitų kortelių}}",
     "closeTab": "Uždaryti <bdi>{name}</bdi>",
@@ -623,6 +624,11 @@
     },
     "metadata": {
       "aiExtractedHeading": "Išgauta DI",
+      "browserDownload": {
+        "downloaded": "Atsisiųsta",
+        "file": "Failo adresas",
+        "page": "Atsisiųsta iš"
+      },
       "documentProperties": {
         "empty": "Šiame faile nėra jo paties ypatybių",
         "heading": "Failo ypatybės",

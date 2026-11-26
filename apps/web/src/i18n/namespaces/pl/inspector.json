@@ -540,6 +540,7 @@
       "waitForMatches": "Poczekaj na zakończenie analizy do anonimizacji.",
       "workspaceTermsHeading": "Terminy obszaru roboczego ({count})"
     },
+    "audioUnplayable": "Tego nagrania nie można tu odtworzyć. Pobierz je, aby go odsłuchać.",
     "closeAllTabs": "Zamknij {count, plural, one {# kartę} few {wszystkie # karty} many {wszystkie # kart} other {wszystkie # karty}}",
     "closeOtherTabs": "Zamknij {count, plural, one {# inną kartę} few {# inne karty} many {# innych kart} other {# innej karty}}",
     "closeTab": "Zamknij <bdi>{name}</bdi>",
@@ -623,6 +624,11 @@
     },
     "metadata": {
       "aiExtractedHeading": "Wyodrębnione przez AI",
+      "browserDownload": {
+        "downloaded": "Pobrano",
+        "file": "Adres pliku",
+        "page": "Pobrano z"
+      },
       "documentProperties": {
         "empty": "Ten plik nie zawiera własnych właściwości",
         "heading": "Właściwości pliku",

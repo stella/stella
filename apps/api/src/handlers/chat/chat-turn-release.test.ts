@@ -4,6 +4,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { HARNESS_QUESTION_TOOL, harnessSessionId } from "@stll/agent-engine";
+import { chatLocalRunRequestsOf } from "@stll/api-contract/chat-local-run-request";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
@@ -12,7 +13,9 @@ import {
   adoptedSource,
   createComputer,
   harnessChunks,
+  isAsk,
   localSource,
+  REQUEST_ID,
 } from "@/api/tests/helpers/fake-local-computer";
 
 import type { StreamChatFinishEvent } from "./stream-chat";
@@ -61,7 +64,10 @@ const question = {
   input: { questions: ["Which law governs the lease?"] },
 };
 
-/** A harness turn that asks the member a question and waits for the answer. */
+/**
+ * A harness turn that asks the member a question, takes the answer and
+ * drafts on.
+ */
 const questionTurnChunks = async () =>
   await harnessChunks([
     {
@@ -73,7 +79,7 @@ const questionTurnChunks = async () =>
     {
       type: "question.requested",
       request: {
-        requestId: "question-request",
+        requestId: REQUEST_ID,
         toolCall: question,
         questions: [
           {
@@ -92,6 +98,19 @@ const questionTurnChunks = async () =>
         answerWith: "response",
       },
     },
+    { type: "interaction.resolved", requestId: REQUEST_ID },
+    {
+      type: "tool.completed",
+      toolCall: question,
+      result: { content: "Czech", status: "succeeded" },
+    },
+    { type: "text.delta", messageId: "answer", delta: "Czech law governs." },
+    {
+      type: "text.completed",
+      messageId: "answer",
+      text: "Before drafting: Czech law governs.",
+    },
+    { type: "turn.completed", usage: null, boundary: null },
   ]);
 
 type Processed = {
@@ -287,38 +306,38 @@ describe("a local turn released mid-answer and adopted", () => {
 });
 
 describe("a local turn asked to release while the harness asks a question", () => {
-  test("awaits the member's answer from every cut", async () => {
+  test("hands the waiting question to the adopter from every cut, and stores the answer one task would have stored", async () => {
     const chunks = await questionTurnChunks();
     const whole = await uninterruptedAnswer(chunks);
-    expect(whole.stored.outcome).toEqual({
-      type: "awaiting-user",
-      interaction: {
-        type: "harness-question",
-        toolCallId: expect.any(String),
-      },
-    });
-    const interrupt = chunks.findIndex(
-      (chunk) => chunk.type === EventType.RUN_FINISHED,
-    );
+    // The turn never pauses on the question: it runs on and completes,
+    // and the page reads the question as answered beside it.
+    expect(whole.stored.outcome).toEqual({ type: "completed" });
+    expect(chatLocalRunRequestsOf(whole.page.metadata)).toMatchObject([
+      { requestId: REQUEST_ID, status: "resolved", ask: { kind: "question" } },
+    ]);
+    const interrupt = chunks.findIndex(isAsk);
     expect(interrupt).toBeGreaterThan(0);
-    // The last cut has read the question's whole input but not the
-    // interrupt that follows it: the turn is not released there, the read
-    // waits for the interrupt and the turn awaits the member on this task.
+    const finish = chunks.findIndex(
+      (chunk) => chunk.type === EventType.RUN_FINISHED && !isAsk(chunk),
+    );
+    expect(finish).toBeGreaterThan(interrupt);
+    // The question's whole input is read just before its interrupt: a read
+    // asked to release there waits for the interrupt, which hands the
+    // question to its request, then releases.
     expect(chunks[interrupt - 1]?.type).toBe(EventType.TOOL_CALL_END);
-    for (let cut = 0; cut <= interrupt; cut += 1) {
-      const read = await readAskedToRelease(chunks, cut);
-      if (read.released === undefined) {
-        expect({ cut, outcome: read.finished?.outcome }).toEqual({
-          cut,
-          outcome: whole.stored.outcome,
-        });
-        continue;
-      }
-      expect(cut).toBeLessThan(interrupt);
+    const waited = await releasedAnswer(chunks, interrupt);
+    expect(waited.readSeq).toBe(interrupt + 1);
+    expect(
+      chatLocalRunRequestsOf(pageAnswer(waited.emitted).metadata).map(
+        ({ status }) => status,
+      ),
+    ).toEqual(["pending"]);
+    for (let cut = 0; cut < finish; cut += 1) {
+      const released = await releasedAnswer(chunks, cut);
       const adopted = await adoptedAnswer({
         chunks,
-        readSeq: read.readSeq,
-        released: read.released,
+        readSeq: released.readSeq,
+        released: released.answer,
       });
       expect({ cut, outcome: adopted.stored.outcome }).toEqual({
         cut,
@@ -328,8 +347,17 @@ describe("a local turn asked to release while the harness asks a question", () =
         cut,
         parts: whole.stored.responseMessage.parts,
       });
+      // A page that read the released task's chunks, then the adopter's,
+      // shows the same answer and the same request as one task's.
+      const page = pageAnswer([...released.emitted, ...adopted.emitted]);
+      expect({ cut, parts: page.parts }).toEqual({
+        cut,
+        parts: whole.page.parts,
+      });
+      expect({ cut, requests: chatLocalRunRequestsOf(page.metadata) }).toEqual({
+        cut,
+        requests: chatLocalRunRequestsOf(whole.page.metadata),
+      });
     }
-    const last = await readAskedToRelease(chunks, interrupt);
-    expect(last.released).toBeUndefined();
   });
 });

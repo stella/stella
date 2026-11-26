@@ -1,24 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  DEFAULT_TIME_POLICY,
-  getTimePolicyViolation,
-  roundToBillingIncrement,
-} from "./billing-time";
+import { DEFAULT_TIME_POLICY, getTimePolicyViolation } from "./billing-time";
 
 describe("time policy", () => {
-  test("rounds every duration to the configured unit", () => {
-    for (const unit of [1, 2, 3, 4, 5, 6, 10, 12, 15, 20, 30, 60]) {
-      for (let minutes = 0; minutes <= 180; minutes++) {
-        const billed = roundToBillingIncrement(minutes, unit);
-        expect(billed % unit).toBe(0);
-        expect(billed).toBeGreaterThanOrEqual(minutes);
-        expect(billed).toBeLessThan(minutes + unit);
-      }
-    }
-    expect(roundToBillingIncrement(7, 15)).toBe(15);
-  });
-
   test("the edit window includes its cutoff and approvers can use older dates", () => {
     const input = {
       policy: DEFAULT_TIME_POLICY,

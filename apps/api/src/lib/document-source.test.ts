@@ -47,6 +47,28 @@ describe("documentSourceSchema", () => {
     expect(v.is(documentSourceSchema, { kind: "onedrive-write" })).toBe(false);
   });
 
+  test("accepts where a browser download came from, with or without its page", () => {
+    const downloaded = {
+      kind: "browser-download",
+      sourceUrl: "https://fixture-library.test/doc/1/file",
+      pageUrl: "https://fixture-library.test/doc/1",
+      downloadedAt: "2026-11-25T09:30:00.000Z",
+      contentHash: "a".repeat(64),
+    } as const;
+
+    expect(v.parse(documentSourceSchema, downloaded)).toEqual(downloaded);
+    expect(v.is(documentSourceSchema, { ...downloaded, pageUrl: null })).toBe(
+      true,
+    );
+    // The address and the digest are what the provenance is.
+    expect(v.is(documentSourceSchema, { ...downloaded, sourceUrl: "" })).toBe(
+      false,
+    );
+    expect(
+      v.is(documentSourceSchema, { ...downloaded, contentHash: "abc" }),
+    ).toBe(false);
+  });
+
   test("accepts provenance of a file imported from another system", () => {
     const imported = {
       kind: "import",

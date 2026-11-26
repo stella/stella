@@ -5,7 +5,6 @@ import { useTranslations } from "use-intl";
 
 import { ORGANIZATION_SLUG_RULES } from "@stll/auth-model";
 import { Button } from "@stll/ui/button";
-import { Checkbox } from "@stll/ui/checkbox";
 import {
   Dialog,
   DialogDescription,
@@ -18,6 +17,7 @@ import {
 import { Field, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
+import { Switch } from "@stll/ui/switch";
 
 import { api } from "@/lib/api";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
@@ -146,14 +146,15 @@ export const OrganizationSlugCard = ({
                 />
               </Field>
               <Field className="min-h-11 flex-row items-center gap-2">
-                <Checkbox
+                <Switch
                   checked={mode === "opaque"}
                   disabled={mutation.isPending}
+                  id="organization-slug-opaque"
                   onCheckedChange={(checked) => {
                     setMode(checked ? "opaque" : "explicit");
                   }}
                 />
-                <FieldLabel>
+                <FieldLabel htmlFor="organization-slug-opaque">
                   {t("settings.organization.slug.opaque")}
                 </FieldLabel>
               </Field>

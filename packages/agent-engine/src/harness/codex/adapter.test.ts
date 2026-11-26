@@ -68,6 +68,7 @@ import {
   type HarnessEvent,
   harnessSessionId,
 } from "../events";
+import { MEMBER_WAIT_CALL_TIMEOUT_SECONDS } from "../member-wait";
 import { packageCacheEnvironment } from "../package-cache";
 import { harnessEventsToChunks } from "../stream-chunks";
 import { createCodexHarnessAdapter } from "./adapter";
@@ -78,7 +79,12 @@ import {
   CODEX_SERVER_REQUESTS,
   InitializeResponseSchema,
 } from "./protocol";
-import { CODEX_APPROVAL_OPTIONS, type CodexCapacityRetry } from "./turn";
+import {
+  CODEX_APPROVAL_OPTIONS,
+  type CodexCapacityRetry,
+  CodexTurnSession,
+  interruptRetryTarget,
+} from "./turn";
 
 const FAKE_SERVER = path.join(
   import.meta.dir,
@@ -330,6 +336,37 @@ describe("Codex adapter over a stdio app-server", () => {
         context: { usedTokens: 150, windowTokens: FAKE_CONTEXT_WINDOW },
       },
       boundary: harnessBoundary("turn-1"),
+    });
+  });
+
+  test("registers the browser steps that may wait on the member as plain calls only, outside code mode, and the rest where scripts reach them", async () => {
+    const browser = {
+      serverName: "stella_browser",
+      url: "http://127.0.0.1:9/browser/run-1",
+      token: "browser-token",
+    };
+    const { received } = await run("tool_calls", { overrides: { browser } });
+    const threadStart = received().find(
+      ({ method }) => method === "thread/start",
+    );
+    const server = {
+      url: browser.url,
+      http_headers: { Authorization: `Bearer ${browser.token}` },
+      default_tools_approval_mode: "approve",
+      tool_timeout_sec: MEMBER_WAIT_CALL_TIMEOUT_SECONDS,
+    };
+    expect(threadStart?.params).toMatchObject({
+      config: {
+        "mcp_servers.stella_browser": {
+          ...server,
+          disabled_tools: ["open", "click", "type", "press_key", "select"],
+        },
+        "mcp_servers.stella_browser_direct": {
+          ...server,
+          enabled_tools: ["open", "click", "type", "press_key", "select"],
+          omit_tools_from: ["code_mode", "deferred"],
+        },
+      },
     });
   });
 
@@ -978,6 +1015,44 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(terminal(events)).toEqual({ type: "turn.interrupted" });
   });
 
+  test("an interrupt Codex refuses as too early is asked again, for the turn Codex names", async () => {
+    const interruptOn = async (event: HarnessEvent, turn: HarnessTurn) => {
+      if (event.type === "tool.started") {
+        await turn.interrupt();
+      }
+    };
+    for (const [scenario, turnIds] of [
+      ["interrupt_not_registered", ["turn-1", "turn-1"]],
+      ["interrupt_other_turn", ["turn-1", "turn-2"]],
+    ] as const) {
+      const { events, received } = await run(scenario, {
+        onEvent: interruptOn,
+      });
+      expect(
+        received()
+          .filter(({ method }) => method === "turn/interrupt")
+          .map(({ params }) => params),
+      ).toEqual(
+        turnIds.map((turnId) => ({ threadId: FAKE_THREAD_ID, turnId })),
+      );
+      expect(terminal(events)).toEqual({ type: "turn.interrupted" });
+    }
+  });
+
+  test("an interrupt refused for another reason is not asked again, and the turn still stops", async () => {
+    const { events, received } = await run("interrupt_refused", {
+      onEvent: async (event, turn) => {
+        if (event.type === "tool.started") {
+          await turn.interrupt();
+        }
+      },
+    });
+    expect(
+      received().filter(({ method }) => method === "turn/interrupt"),
+    ).toHaveLength(1);
+    expect(terminal(events)).toEqual({ type: "turn.interrupted" });
+  });
+
   test("a steer joins the running turn through turn/steer and is settled where the server took it", async () => {
     const inputId = crypto.randomUUID();
     const { events, received } = await run("steered", {
@@ -1092,6 +1167,27 @@ describe("Codex adapter over a stdio app-server", () => {
     );
     expect(prompt).toContain("Find the leases.");
     expect(prompt).toContain("Search both.");
+  });
+
+  test("a session another Codex process holds open fails the turn instead of starting a new thread", async () => {
+    const harness = harnessFor("resume_active_writer");
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir, {
+        continuation: {
+          type: "resume",
+          sessionId: harnessSessionId(FAKE_RESUMED_THREAD_ID),
+        },
+      }),
+    );
+    expect(Result.isError(started) && started.error.reason).toBe(
+      "start_rejected",
+    );
+    expect(Result.isError(started) && started.error.message).toContain(
+      "open in another Codex window",
+    );
+    expect(
+      harness.received().some(({ method }) => method === "thread/start"),
+    ).toBe(false);
   });
 
   test("the turn's images open turn/start as data URLs; a PDF stays the path the text names", async () => {
@@ -1340,8 +1436,8 @@ describe("Codex adapter over a stdio app-server", () => {
     });
     const limited = await run("usage_limit");
     expect(limited.events).toContainEqual({
-      type: "retrying",
-      message: "Reconnecting",
+      type: "notice",
+      notice: { kind: "retrying", attempt: 1, maxAttempts: null },
     });
     // A usage limit is the member's allowance, not the model's capacity: the
     // turn is not continued.
@@ -1404,6 +1500,31 @@ describe("Codex adapter over a stdio app-server", () => {
     });
     const theirs = await run("other_mcp_failed");
     expect(terminal(theirs.events)?.type).toBe("turn.completed");
+    expect(theirs.events.map(({ type }) => type)).not.toContain("notice");
+  });
+
+  test("config warnings and a browser server that did not start are notices without their text, and the turn runs on", async () => {
+    const { events } = await run("config_warning_browser_failed", {
+      overrides: {
+        browser: {
+          serverName: "stella_browser",
+          url: "http://127.0.0.1:9/browser/run-1",
+          token: "browser-token",
+        },
+      },
+    });
+    // Held until the turn began, then reported after its session; the
+    // warnings' own text (a path on the member's machine) is not carried.
+    expect(events.filter(({ type }) => type === "notice")).toEqual([
+      { type: "notice", notice: { kind: "config_warning" } },
+      { type: "notice", notice: { kind: "config_warning" } },
+      {
+        type: "notice",
+        notice: { kind: "capability_unavailable", capability: "browser" },
+      },
+    ]);
+    expect(JSON.stringify(events)).not.toContain("agent-settings");
+    expect(terminal(events)?.type).toBe("turn.completed");
   });
 
   /** Runs a scenario whose continuations record their delays. */
@@ -1429,8 +1550,8 @@ describe("Codex adapter over a stdio app-server", () => {
     const { events, delays, starts } =
       await runRecordingDelays("capacity_retry");
     expect(events).toContainEqual({
-      type: "retrying",
-      message: "Selected model is at capacity. Please try a different model.",
+      type: "notice",
+      notice: { kind: "retrying", attempt: 1, maxAttempts: 5 },
     });
     // The message completed before the failure stays in the thread; the
     // continuation writes only what follows it.
@@ -1453,7 +1574,13 @@ describe("Codex adapter over a stdio app-server", () => {
   test("a turn still at capacity after five continuations, each waiting twice as long up to the cap, fails as the model at capacity", async () => {
     const { events, delays, starts } =
       await runRecordingDelays("capacity_exhausted");
-    expect(events.filter(({ type }) => type === "retrying")).toHaveLength(5);
+    expect(
+      events.flatMap((event) =>
+        event.type === "notice" && event.notice.kind === "retrying"
+          ? [event.notice.attempt]
+          : [],
+      ),
+    ).toEqual([1, 2, 3, 4, 5]);
     expect(delays).toEqual([10, 20, 40, 50, 50]);
     expect(terminal(events)).toEqual({
       type: "turn.failed",
@@ -1469,7 +1596,7 @@ describe("Codex adapter over a stdio app-server", () => {
     const { events, delays, starts } = await runRecordingDelays(
       "capacity_mid_message",
     );
-    expect(events.map(({ type }) => type)).not.toContain("retrying");
+    expect(events.map(({ type }) => type)).not.toContain("notice");
     expect(delays).toEqual([]);
     expect(terminal(events)).toEqual({
       type: "turn.failed",
@@ -1495,7 +1622,7 @@ describe("Codex adapter over a stdio app-server", () => {
     }
     const turn = started.value;
     const collected = collect(turn, async (event) => {
-      if (event.type === "retrying") {
+      if (event.type === "notice") {
         await turn.interrupt();
       }
     });
@@ -2395,13 +2522,38 @@ describe("Codex background terminals after a turn", () => {
 
 /**
  * Checks against a real `codex` CLI when one is installed. Nothing here
- * signs in or sends a prompt: the handshake is `initialize` only, and the
- * protocol schema comes from `codex app-server generate-json-schema`, which
- * runs offline. Without a CLI the suite is skipped; the fake-server suites
- * above always run.
+ * signs in or reaches a model provider: the handshake is `initialize` only,
+ * the protocol schema comes from `codex app-server generate-json-schema`,
+ * which runs offline, and a turn runs against a model provider on
+ * 127.0.0.1 that never answers, with every other host behind a proxy that
+ * refuses. Without a CLI the suite is skipped; the fake-server suites above
+ * always run. CI installs the pinned CLI (`scripts/ci-harness-clis.sh`) and
+ * says so in `STELLA_REAL_HARNESS_CLIS`, which makes the suite required.
  */
 
 const codex = Bun.which("codex");
+
+const PINS_PATH = path.join(
+  import.meta.dir,
+  "../../../../../apps/desktop/src-tauri/harness/pins.json",
+);
+const installedForTests = process.env["STELLA_REAL_HARNESS_CLIS"] ?? "";
+
+describe.skipIf(!installedForTests.includes("codex@"))(
+  "the codex CLI CI installed",
+  () => {
+    test("is on PATH at the pinned version, so the installed-CLI suite runs", async () => {
+      const pins = v.parse(
+        v.looseObject({ codex: v.string() }),
+        await Bun.file(PINS_PATH).json(),
+      );
+      expect(installedForTests).toContain(`codex@${pins.codex}`);
+      expect(codex).not.toBeNull();
+      const version = Bun.spawnSync([codex ?? "", "--version"]);
+      expect(version.stdout.toString().trim()).toBe(`codex-cli ${pins.codex}`);
+    });
+  },
+);
 
 /** Client methods the adapter calls. */
 const CLIENT_METHODS = [
@@ -2609,6 +2761,279 @@ describe.skipIf(codex === null)("the installed codex CLI", () => {
     for (const { id } of CODEX_APPROVAL_OPTIONS) {
       expect(commandDecisions).toContain(id);
       expect(fileDecisions).toContain(id);
+    }
+  });
+
+  test("an interrupt sent as the turn starts stops it through turn/interrupt, in the words the retries read", async () => {
+    // The model provider: a local server that holds every request open, so
+    // the turn stays in progress until it is interrupted.
+    const provider = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch: () =>
+        new Response(new ReadableStream({ start: () => undefined }), {
+          headers: { "content-type": "text/event-stream" },
+        }),
+    });
+    const codexHome = path.join(root, "interrupt-home");
+    const workspaceDir = path.join(root, "interrupt-workspace");
+    mkdirSync(codexHome);
+    mkdirSync(workspaceDir);
+    writeFileSync(
+      path.join(codexHome, "config.toml"),
+      [
+        'model = "stella-stub"',
+        'model_provider = "stub"',
+        "[model_providers.stub]",
+        'name = "stub"',
+        `base_url = "http://127.0.0.1:${String(provider.port)}/v1"`,
+        'wire_api = "responses"',
+        "requires_openai_auth = false",
+      ].join("\n"),
+    );
+    const session = new CodexTurnSession({
+      gracePeriodMs: 5000,
+      detached: () => undefined,
+      stellaServer: "stella",
+      browserServers: new Set(),
+      capacityRetry: {
+        maxAttempts: 0,
+        baseDelayMs: 0,
+        maxDelayMs: 0,
+        sleep: async () => {
+          await Promise.resolve();
+        },
+      },
+      background: {
+        keep: async () => await Promise.resolve(null),
+        stopBackground: async () => {
+          await Promise.resolve();
+        },
+      },
+    });
+    /** How each native turn ended, as `turn/completed` reported it. */
+    const completions: unknown[] = [];
+    const started = startAppServer({
+      launch: { executable: codex ?? "", args: ["app-server"] },
+      protocolLog: PROTOCOL_LOG_OFF,
+      detached: createDetached((error) => {
+        backgroundErrors.push(error);
+      }),
+      deadlines: { requestMs: 30_000, terminateMs: 5000 },
+      cwd: workspaceDir,
+      env: {
+        PATH: process.env["PATH"] ?? "",
+        HOME: process.env["HOME"] ?? "",
+        CODEX_HOME: codexHome,
+        // Any host but the local provider is refused.
+        HTTPS_PROXY: "http://127.0.0.1:9",
+        HTTP_PROXY: "http://127.0.0.1:9",
+        NO_PROXY: "127.0.0.1,localhost",
+      },
+      handlers: {
+        ...session.handlers,
+        notification: (method, params) => {
+          if (method === "turn/completed") {
+            completions.push(params);
+          }
+          session.handlers.notification(method, params);
+        },
+      },
+    });
+    const server = Result.isOk(started)
+      ? started.value
+      : panic("the app-server did not start");
+    /** Every answer to `turn/interrupt`, in order. */
+    const interrupts: { ok: boolean; message: string | null }[] = [];
+    const client = {
+      ...server,
+      request: async (
+        ...args: Parameters<typeof server.request>
+      ): ReturnType<typeof server.request> => {
+        const answer = await server.request(...args);
+        if (args[0] === "turn/interrupt") {
+          interrupts.push({
+            ok: Result.isOk(answer),
+            message: Result.isError(answer) ? answer.error.message : null,
+          });
+        }
+        return answer;
+      },
+    };
+    try {
+      expect(
+        Result.isOk(
+          await client.request("initialize", {
+            clientInfo: { name: "stella", title: "stella", version: "0.0.0" },
+            capabilities: { experimentalApi: true, requestAttestation: false },
+          }),
+        ),
+      ).toBe(true);
+      client.notify("initialized");
+      const thread = await client.request("thread/start", {
+        cwd: workspaceDir,
+        approvalPolicy: "never",
+        sandbox: "read-only",
+      });
+      const threadId = v.parse(
+        v.object({ thread: v.object({ id: v.string() }) }),
+        Result.isOk(thread) ? thread.value : panic("thread/start failed"),
+      ).thread.id;
+
+      // With no turn at all, Codex says so in the words the retry reads.
+      const noTurn = await server.request("turn/interrupt", {
+        threadId,
+        turnId: "turn-none",
+      });
+      const noTurnMessage = Result.isError(noTurn)
+        ? noTurn.error.message
+        : panic("an interrupt without a turn was accepted");
+      expect(interruptRetryTarget(noTurnMessage, "turn-none")).toBe(
+        "turn-none",
+      );
+
+      const turnStarted = await client.request("turn/start", {
+        threadId,
+        input: [{ type: "text", text: "Find the leases.", text_elements: [] }],
+      });
+      const turnId = v.parse(
+        v.object({ turn: v.object({ id: v.string() }) }),
+        Result.isOk(turnStarted)
+          ? turnStarted.value
+          : panic("turn/start failed"),
+      ).turn.id;
+      session.attach(client);
+      // Interrupted at once, as for a turn Codex answers with a start time,
+      // before Codex reports the turn started.
+      session.begin({
+        threadId,
+        turnId,
+        startedAt: 1,
+        continuation: { type: "fresh" },
+      });
+      const turn = session.turn();
+      await turn.interrupt();
+      const events: HarnessEvent[] = [];
+      for await (const event of turn.events) {
+        events.push(event);
+      }
+      expect(events.at(-1)).toEqual({ type: "turn.interrupted" });
+      // Codex took the interrupt and ended the turn itself: the stop came
+      // through the protocol, not by ending the process.
+      expect(interrupts.at(-1)).toEqual({ ok: true, message: null });
+      expect(
+        interrupts
+          .slice(0, -1)
+          .every(
+            ({ message }) =>
+              message !== null &&
+              interruptRetryTarget(message, turnId) === turnId,
+          ),
+      ).toBe(true);
+      expect(completions).toContainEqual(
+        expect.objectContaining({
+          turn: expect.objectContaining({ id: turnId, status: "interrupted" }),
+        }),
+      );
+    } finally {
+      await server.kill();
+      await provider.stop(true);
+    }
+  });
+
+  test("an interrupt naming another turn than the running one names the running one", async () => {
+    const provider = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch: () =>
+        new Response(new ReadableStream({ start: () => undefined }), {
+          headers: { "content-type": "text/event-stream" },
+        }),
+    });
+    const codexHome = path.join(root, "mismatch-home");
+    const workspaceDir = path.join(root, "mismatch-workspace");
+    mkdirSync(codexHome);
+    mkdirSync(workspaceDir);
+    writeFileSync(
+      path.join(codexHome, "config.toml"),
+      [
+        'model = "stella-stub"',
+        'model_provider = "stub"',
+        "[model_providers.stub]",
+        'name = "stub"',
+        `base_url = "http://127.0.0.1:${String(provider.port)}/v1"`,
+        'wire_api = "responses"',
+        "requires_openai_auth = false",
+      ].join("\n"),
+    );
+    const turnStartedSignal = Promise.withResolvers<undefined>();
+    const started = startAppServer({
+      launch: { executable: codex ?? "", args: ["app-server"] },
+      protocolLog: PROTOCOL_LOG_OFF,
+      detached: createDetached((error) => {
+        backgroundErrors.push(error);
+      }),
+      deadlines: { requestMs: 30_000, terminateMs: 5000 },
+      cwd: workspaceDir,
+      env: {
+        PATH: process.env["PATH"] ?? "",
+        HOME: process.env["HOME"] ?? "",
+        CODEX_HOME: codexHome,
+        HTTPS_PROXY: "http://127.0.0.1:9",
+        HTTP_PROXY: "http://127.0.0.1:9",
+        NO_PROXY: "127.0.0.1,localhost",
+      },
+      handlers: {
+        notification: (method) => {
+          if (method === "turn/started") {
+            turnStartedSignal.resolve(undefined);
+          }
+        },
+        request: () => undefined,
+        violation: () => undefined,
+        exit: () => undefined,
+      },
+    });
+    const client = Result.isOk(started)
+      ? started.value
+      : panic("the app-server did not start");
+    try {
+      await client.request("initialize", {
+        clientInfo: { name: "stella", title: "stella", version: "0.0.0" },
+        capabilities: { experimentalApi: true, requestAttestation: false },
+      });
+      client.notify("initialized");
+      const thread = await client.request("thread/start", {
+        cwd: workspaceDir,
+        approvalPolicy: "never",
+        sandbox: "read-only",
+      });
+      const threadId = v.parse(
+        v.object({ thread: v.object({ id: v.string() }) }),
+        Result.isOk(thread) ? thread.value : panic("thread/start failed"),
+      ).thread.id;
+      const turnStarted = await client.request("turn/start", {
+        threadId,
+        input: [{ type: "text", text: "Find the leases.", text_elements: [] }],
+      });
+      const turnId = v.parse(
+        v.object({ turn: v.object({ id: v.string() }) }),
+        Result.isOk(turnStarted)
+          ? turnStarted.value
+          : panic("turn/start failed"),
+      ).turn.id;
+      await turnStartedSignal.promise;
+      const other = await client.request("turn/interrupt", {
+        threadId,
+        turnId: "turn-other",
+      });
+      const message = Result.isError(other)
+        ? other.error.message
+        : panic("an interrupt of another turn was accepted");
+      expect(interruptRetryTarget(message, "turn-other")).toBe(turnId);
+    } finally {
+      await client.kill();
+      await provider.stop(true);
     }
   });
 });

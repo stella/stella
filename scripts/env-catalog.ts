@@ -1609,6 +1609,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "FAKE_BROWSER_SCENARIO",
   // The browser the stella browser's end-to-end leg runs; unset skips it.
   "STELLA_BROWSER_E2E_EXECUTABLE",
+  // The pinned agent CLIs CI installed (scripts/ci-harness-clis.sh); set, the
+  // agent engine's installed-CLI suites are required instead of skipped.
+  "STELLA_REAL_HARNESS_CLIS",
   // The desktop's stand-in harness holder (a re-run of its own test binary)
   // takes its folder, socket and log file from the test that starts it.
   "STAND_IN_DIR",
@@ -2049,6 +2052,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_SEED_LOCALE",
   "STELLA_SEED_ORG_ID",
   "STELLA_SEED_USER_ID",
+  // The e2e storm watch: off, report (default) or enforce.
+  "STELLA_STORM_WATCH",
   "STELLA_TEST_LATEST_TAG",
   // Runner-owned migrated database cloned by isolated PostgreSQL suites.
   "STELLA_TEST_TEMPLATE_DATABASE",

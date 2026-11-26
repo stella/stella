@@ -573,20 +573,14 @@ export const useTemplateStudioSelectionGesture = ({
       capture: true,
       passive: true,
     });
-    const dismissOnContextPress = (event: PointerEvent) => {
-      if (event.button === 2 || (event.button === 0 && event.ctrlKey)) {
-        dismiss();
-      }
-    };
-    host?.addEventListener("pointerdown", dismissOnContextPress, {
+    host?.addEventListener("contextmenu", dismiss, {
       capture: true,
+      passive: true,
     });
     return () => {
       window.removeEventListener("keydown", onKeyDown);
       host?.removeEventListener("scroll", dismiss, { capture: true });
-      host?.removeEventListener("pointerdown", dismissOnContextPress, {
-        capture: true,
-      });
+      host?.removeEventListener("contextmenu", dismiss, { capture: true });
     };
   }, [gestureShown, hideGesture, overlayHostRef]);
 

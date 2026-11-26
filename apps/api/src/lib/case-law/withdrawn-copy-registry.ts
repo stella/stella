@@ -239,6 +239,7 @@ export const WITHDRAWN_COPY_REGISTRY = {
       "chatReasoningEffort",
       "chatRunTarget",
       "chatLocalRunTarget",
+      "chatCloudApprovals",
       "recapMessageId",
       "recapPromptVersion",
       "recapGeneratedAt",

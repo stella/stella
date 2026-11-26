@@ -19,7 +19,10 @@ import type {
 } from "@/api/lib/workflow/playbook-positions";
 
 /** Verdict tiers that count as a finding (a red flag) on the report. */
-export const RISK_VERDICT_TIERS = new Set(["deviation", "missing"]);
+export const RISK_VERDICT_TIERS: ReadonlySet<string> = new Set([
+  "deviation",
+  "missing",
+]);
 
 /** Severity order for "worst finding wins" (index = rank; lower is worse). */
 export const SEVERITY_ORDER = ["blocker", "high", "medium", "low"] as const;

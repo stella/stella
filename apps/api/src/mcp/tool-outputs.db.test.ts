@@ -144,6 +144,8 @@ const TOOL_COVERAGE = {
   delete_reader_annotation: excluded(
     "needs an annotation, which only create_reader_annotation (public corpus) makes",
   ),
+  save_site_notes: RUN,
+  read_site_notes: RUN,
   list_time_entries: RUN,
   save_time_entry: RUN,
   delete_time_entry: RUN,
@@ -368,6 +370,24 @@ const STEPS: readonly Step[] = [
     args: () => ({ capability: "properties.create" }),
   },
   { tool: "list_audit_log", args: () => ({}) },
+  {
+    tool: "save_site_notes",
+    args: () => ({
+      url: "https://research.example.org/search",
+      changes: [
+        {
+          type: "add",
+          kind: "works",
+          step: "search form",
+          text: "The advanced form filters by court and date.",
+        },
+      ],
+    }),
+  },
+  {
+    tool: "read_site_notes",
+    args: () => ({ url: "https://research.example.org/search" }),
+  },
   {
     tool: "delete_time_entry",
     args: (s) => ({

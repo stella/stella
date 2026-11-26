@@ -80,6 +80,12 @@ export const SOFT_LAW_ATTEMPT_STATES = [
   "rejected",
   "retryable",
 ] as const;
+type SoftLawAuthorityDefinition = {
+  domain:
+    "data-protection" | "competition" | "labour" | "tax" | "administrative";
+  jurisdiction: string;
+  name: string;
+};
 
 export const SOFT_LAW_AUTHORITIES = {
   "cz-uoou": {
@@ -393,7 +399,7 @@ export const SOFT_LAW_AUTHORITIES = {
     jurisdiction: "BEL",
     name: "Belgian Permanent P",
   },
-} as const;
+} as const satisfies Record<string, SoftLawAuthorityDefinition>;
 export type SoftLawAuthority = keyof typeof SOFT_LAW_AUTHORITIES;
 export type SoftLawStated<T> =
   { state: "stated"; value: T } | { state: "not_stated" };

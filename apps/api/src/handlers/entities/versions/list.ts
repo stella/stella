@@ -340,6 +340,14 @@ export const readVersionsHandler = async function* ({
         version.source?.kind === "import"
           ? importOriginOf(version.source)
           : null,
+      browserDownload:
+        version.source?.kind === "browser-download"
+          ? {
+              sourceUrl: version.source.sourceUrl,
+              pageUrl: version.source.pageUrl,
+              downloadedAt: version.source.downloadedAt,
+            }
+          : null,
       createdAt: version.createdAt.toISOString(),
       author: authorUser
         ? { id: authorUser.id, name: authorUser.name, image: authorUser.image }
@@ -365,7 +373,10 @@ const config = {
     "for older pages. Each version carries its number, stamp, label, " +
     "description, the words added and removed against its predecessor, its " +
     "author, the file attached to it, and, for a file imported from another " +
-    "system, its importOrigin (source, id, original dates and author); " +
+    "system, its importOrigin (source, id, original dates and author), and, " +
+    "for a file the member's browser downloaded for a chat, its " +
+    "browserDownload (the file's address, the page it came from when known, " +
+    "and when it arrived); " +
     "tombstoned versions are left out. " +
     "The response also names the entity's current version.",
   permissions: { workspace: ["read"] },

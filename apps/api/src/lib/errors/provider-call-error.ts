@@ -7,10 +7,10 @@ import {
   INCOMPLETE_STREAM_CODE,
   TRUNCATED_AT_OUTPUT_CEILING_CODE,
 } from "@/api/lib/chat/provider-stream-contract";
+import type { ResolvedTanStackTextModelInfo } from "@/api/lib/chat/tanstack-ai-model-info";
 import type { RedactedProviderDiagnostic } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
-import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 
 export const PROVIDER_CALL_ERROR_MESSAGE = "AI provider request failed";
 
@@ -48,7 +48,7 @@ export const providerCallErrorCode = (
 };
 
 type ProviderCallErrorOptions = {
-  model: Pick<ResolvedTanStackTextModel, "provider" | "keySource">;
+  model: Pick<ResolvedTanStackTextModelInfo, "provider" | "keySource">;
   status: HandlerErrorStatusCode;
   code?: ProviderCallErrorCode | AIFailureCode | undefined;
   kind: AIErrorKind;
@@ -81,6 +81,8 @@ export const PROVIDER_CALL_FAILURE_REASON = {
   local_runner_needs_login: "provider_credentials_rejected",
   local_runner_limit_reached: "quota_exhausted",
   local_runner_unavailable: "provider_unavailable",
+  local_runner_lost: "provider_unavailable",
+  local_runner_failed: "provider_unavailable",
   local_runner_turn_too_large: "request_invalid",
   turn_too_large: "usage_limited",
   local_runner_not_reached: "provider_unavailable",
@@ -105,8 +107,8 @@ export class ProviderCallError extends HandlerError {
   }
 
   declare code?: ProviderCallErrorCode | AIFailureCode | undefined;
-  readonly provider: ResolvedTanStackTextModel["provider"];
-  readonly keySource: ResolvedTanStackTextModel["keySource"];
+  readonly provider: ResolvedTanStackTextModelInfo["provider"];
+  readonly keySource: ResolvedTanStackTextModelInfo["keySource"];
   readonly providerStatus: number | undefined;
   readonly requestId: string | undefined;
   readonly kind: AIErrorKind;
@@ -168,7 +170,7 @@ export type ModelRunFinish = {
 };
 
 type ModelRunErrorOptions = {
-  model: Pick<ResolvedTanStackTextModel, "provider" | "keySource">;
+  model: Pick<ResolvedTanStackTextModelInfo, "provider" | "keySource">;
   /** The finish the run ended with, where one was observed. */
   finish?: ModelRunFinish | undefined;
 };
@@ -180,8 +182,8 @@ type ModelRunErrorOptions = {
  * fixed message and keeps no cause.
  */
 export class ModelRunError extends HandlerError {
-  readonly provider: ResolvedTanStackTextModel["provider"];
-  readonly keySource: ResolvedTanStackTextModel["keySource"];
+  readonly provider: ResolvedTanStackTextModelInfo["provider"];
+  readonly keySource: ResolvedTanStackTextModelInfo["keySource"];
   readonly finish: ModelRunFinish | undefined;
 
   constructor(

@@ -238,6 +238,7 @@ export const ACTIVITY_SETTINGS = {
   otherAccountHistoryDays: 2,
   captureDetails: true,
   detectCalls: true,
+  calendarSource: "off",
   appNameOnlyApps: [{ identifier: "com.example.mail", name: "Example Mail" }],
   detailsAccess: "ready",
   browserApps: [{ identifier: "com.example.browser", name: "Example Browser" }],

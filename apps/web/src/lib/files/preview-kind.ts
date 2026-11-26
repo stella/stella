@@ -1,4 +1,7 @@
-import { legalFileFormat } from "@stll/api-contract/document-format";
+import {
+  documentFormat,
+  legalFileFormat,
+} from "@stll/api-contract/document-format";
 import type { LegalFileFormatKind } from "@stll/api-contract/legal-file-formats";
 
 import {
@@ -18,7 +21,8 @@ type NativeFilePreviewKind =
   | LegalFileFormatKind
   | "email"
   | "markdown"
-  | "text";
+  | "text"
+  | "audio";
 
 /** A native preview works without a generated rendition. */
 export const nativeFilePreviewKind = (file: {
@@ -51,6 +55,9 @@ export const nativeFilePreviewKind = (file: {
   }
   if (isPlainTextFile(file)) {
     return "text";
+  }
+  if (documentFormat(file.mimeType, file.fileName).kind === "audio") {
+    return "audio";
   }
   return null;
 };

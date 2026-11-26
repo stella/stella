@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import {
   CHAT_LOCAL_RUN_REFUSAL,
+  CHAT_LOWEST_APPROVAL_CEILING,
   CHAT_RUN_TARGET_KIND,
   type ChatRunTarget,
   isApprovalModeWithin,
@@ -47,7 +48,7 @@ export type ResolveChatLocalRunOptions = {
   runTarget: ChatRunTarget | undefined;
   /** Whether the turn also asked for the agent sandbox. */
   agentSandboxRequested: boolean;
-  /** Whether the turn answers approvals of a paused run. */
+  /** Whether the turn resumes a paused run, which a local turn never is. */
   resumesPausedRun: boolean;
   featureAccessSnapshot: FeatureAccessSnapshot;
   userId: SafeId<"user">;
@@ -100,8 +101,8 @@ const refuse = (
  * Which computer takes the turn is decided once the turn is stored, as its
  * run starts (`routeLocalRun`): a computer that cannot take it ends the turn
  * as a failed turn the member reads on every client. The turn never falls
- * back to stella's own models. A resumed turn answers the run that paused, on
- * whichever computer holds it.
+ * back to stella's own models. A local turn is never resumed: its run's
+ * requests are answered beside it.
  */
 export const resolveChatLocalRun = async ({
   runTarget,
@@ -119,11 +120,29 @@ export const resolveChatLocalRun = async ({
 }: ResolveChatLocalRunOptions): Promise<
   Result<LocalChatRun | undefined, HandlerError | SafeDbError>
 > => {
-  if (
-    runTarget === undefined ||
-    runTarget.kind === CHAT_RUN_TARGET_KIND.cloud
-  ) {
+  if (runTarget === undefined) {
     return Result.ok(undefined);
+  }
+  if (runTarget.kind === CHAT_RUN_TARGET_KIND.cloud) {
+    // On stella's models the level decides what chat does in the member's
+    // browser; the organization's ceiling holds it as it holds a computer's.
+    // Every ceiling allows Ask and below, so only a higher level reads it.
+    if (
+      isApprovalModeWithin(runTarget.approvals, CHAT_LOWEST_APPROVAL_CEILING)
+    ) {
+      return Result.ok(undefined);
+    }
+    const cloudCeiling = await readApprovalCeiling();
+    if (cloudCeiling.isErr()) {
+      return Result.err(cloudCeiling.error);
+    }
+    return isApprovalModeWithin(runTarget.approvals, cloudCeiling.value)
+      ? Result.ok(undefined)
+      : refuse(
+          403,
+          CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit,
+          "Your organization does not let chat do that much without asking.",
+        );
   }
   if (agentSandboxRequested) {
     return refuse(
@@ -157,15 +176,15 @@ export const resolveChatLocalRun = async ({
     },
   };
   if (resumesPausedRun) {
-    return Result.ok(
-      createLocalChatRun(context, {
-        type: "resume",
-        harness: runTarget.harness,
-      }),
+    // A local turn never pauses: what its run asks is answered beside the
+    // running turn (`turns/answer-request.ts`), never by resuming it.
+    return refuse(
+      400,
+      CHAT_LOCAL_RUN_REFUSAL.conflictingRunMode,
+      "A run on your computer takes answers on the request it asked, not as a resumed turn.",
     );
   }
-  // The organization's ceiling holds whichever computer takes the turn. A
-  // resumed run was held to it when it started and keeps its mode.
+  // The organization's ceiling holds whichever computer takes the turn.
   const ceiling = await readApprovalCeiling();
   if (ceiling.isErr()) {
     return Result.err(ceiling.error);

@@ -12,7 +12,10 @@ import type {
   ApprovalToolName,
   ToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools-types";
-import type { ChatSendMessageOptions } from "@/features/chat/chat-runtime";
+import type {
+  ChatBrowserGate,
+  ChatSendMessageOptions,
+} from "@/features/chat/chat-runtime";
 
 export type NormalConnectionAction = "preserve" | "replace-with-receipt-only";
 
@@ -51,6 +54,13 @@ type ChatApprovalContextValue = {
    * only the user's click resumes tool work.
    */
   approvalIdsAwaitedAtOpen: ReadonlySet<string>;
+  /**
+   * What the chat's browser steps are decided by (`ChatRuntime.browserGate`):
+   * the chat, and each turn's permission level as it was sent. Absent on a
+   * surface without a chat runtime, whose steps are decided at the default
+   * level for a chat that has been on no website.
+   */
+  browserGate?: ChatBrowserGate | undefined;
   handleAllowInConversation: (
     id: string,
     toolName: ApprovalToolName,

@@ -75,14 +75,6 @@ import {
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { openMcpRead } from "@/api/mcp/write-tool-authority";
 
-type ResearchAdminToolName =
-  | "search_boe_legislation"
-  | "list_audit_log"
-  | "add_matter_member"
-  | "remove_matter_member"
-  | "update_organization_settings"
-  | "create_organization";
-
 /** Consolidated-law relation kinds accepted by search_boe_legislation `relation_type`. */
 const RELATION_TYPE_VALUES = [
   RELATION_TYPES.modifies,
@@ -1159,7 +1151,10 @@ export const RESEARCH_ADMIN_TOOL_HANDLERS = {
   remove_matter_member: handleRemoveMatterMemberTool,
   update_organization_settings: handleUpdateOrganizationSettingsTool,
   create_organization: handleCreateOrganizationTool,
-} satisfies Record<ResearchAdminToolName, McpToolHandler>;
+} satisfies Record<
+  (typeof RESEARCH_ADMIN_TOOL_DEFINITIONS)[number]["name"],
+  McpToolHandler
+>;
 
 export const RESEARCH_ADMIN_TOOL_SET = defineMcpToolSet(
   RESEARCH_ADMIN_TOOL_DEFINITIONS,

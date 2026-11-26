@@ -29,6 +29,7 @@ export const composerReferenceVariants = {
   "large-long": "large",
   "compact-short": "compact",
   "compact-token": "compact",
+  "compact-draft": "compact",
 } as const;
 
 export const composerReferenceStates = Object.keys(composerReferenceVariants);
@@ -63,54 +64,13 @@ export const menuCommitBenches = {
   many: "twenty-four rows",
 } as const;
 
-// Browser tests share the fixture census without importing the app graph.
-type VisualRegistryKey =
-  | "appeal-reviews"
-  | "mcp-reconnect"
-  | "task-metadata"
-  | "overview-stat-cards"
-  | "column-composer"
-  | "handoff-confirmation"
-  | "table-chart"
-  | "oauth-consent"
-  | "outcome-screen"
-  | "page-crop"
-  | "pdf-fit-width"
-  | "upload-rejections"
-  | "document-naming"
-  | "chat-long-paste"
-  | "chat-composer-reference"
-  | "chat-status"
-  | "chat-citation-chips"
-  | "button-label"
-  | "sortable-head"
-  | "menu-commits"
-  | "chat-continuation-error"
-  | "chat-citations"
-  | "chat-statute-citations"
-  | "chat-answer-footer"
-  | "chat-matter-reads"
-  | "chat-answer-typography"
-  | "chat-link-icons"
-  | "chat-follow-ups"
-  | "ask-user"
-  | "case-law-text-availability"
-  | "hungarian-decision"
-  | "reader-answers"
-  | "reader-selection"
-  | "answer-edit"
-  | "ui"
-  | "control-sizes"
-  | "inspector-pane"
-  | "inspector-phone-header"
-  | "playbook-editor"
-  | "provision-header"
-  | "shell-pending"
-  | "workspace-table"
-  | "public-law-toolbar"
-  | "chat-history-decision"
-  | "browser-extension-chip";
+/** Render loops kept on purpose, for the storm watch's own browser test. */
+export const stormWatchBenches = {
+  "frame-loop": "a component that re-renders itself every animation frame",
+  "slow-loop": "a component that re-renders itself every 120 ms",
+} as const;
 
+// Browser tests share the fixture census without importing the app graph.
 export const visualRegistry = {
   "appeal-reviews": {
     label: "Synthetic appeal review evidence",
@@ -144,6 +104,7 @@ export const visualRegistry = {
   "button-label": { label: "Button labels", layout: "plain" },
   "sortable-head": { label: "Sortable table heads", layout: "plain" },
   "menu-commits": { label: "Menu commits", layout: "plain" },
+  "storm-watch": { label: "Storm watch loops", layout: "plain" },
   "chat-continuation-error": {
     label: "Chat continuation recovery",
     layout: "plain",
@@ -187,7 +148,7 @@ export const visualRegistry = {
     label: "Browser extension chip",
     layout: "plain",
   },
-} as const satisfies Record<VisualRegistryKey, VisualEntry>;
+} as const satisfies Record<string, VisualEntry>;
 
 export type VisualName = keyof typeof visualRegistry;
 

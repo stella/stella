@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
+import type { DesktopRunnerRequestEvent } from "@stll/api-contract/chat-local-run-request";
 import type { ChatLocalRunSteerOutcome } from "@stll/api-contract/chat-run-target";
 import {
   CHAT_TURN_STEERING,
@@ -63,6 +64,8 @@ import {
   type InsertedCommand,
   insertRunCommand,
   type MemberRunner,
+  type QueuedSiteGrants,
+  queueRunSiteGrants,
   readChatRunForRequest,
   readChatRunSession,
   readConnectedRunners,
@@ -72,6 +75,8 @@ import {
   readRun,
   readRunInputText,
   readRunOutputFile,
+  readRunRequestAnswered,
+  readRunRequestClosure,
   readSteerableChatRun,
   readStoredRunEvents,
   readThreadBackgroundTasks,
@@ -80,6 +85,7 @@ import {
   type StoredRunEvent,
 } from "@/api/lib/desktop-runner/store";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { logger } from "@/api/lib/observability/logger";
 
 type ReadyHarnessReport = Extract<
   DesktopRunnerHarnessReport,
@@ -594,6 +600,73 @@ const queue = async (
   return Result.ok({ type: "queued" });
 };
 
+/**
+ * The `run.site_grants` a run is sent, checked as `queue` checks a command:
+ * a stored approval is an exact HTTPS origin, and the most a member keeps
+ * fits one frame, so a set that fails either was corrupted.
+ */
+const siteGrantsMessage = ({
+  runId,
+  revision,
+  origins,
+}: {
+  runId: string;
+  revision: string;
+  origins: readonly string[];
+}): object => {
+  const checked = v.safeParse(desktopRunnerServerMessageSchema, {
+    type: DESKTOP_RUNNER_SERVER_MESSAGE.runSiteGrants,
+    runId,
+    revision,
+    origins,
+  });
+  if (!checked.success) {
+    return panic(
+      invalid(DESKTOP_RUNNER_SERVER_MESSAGE.runSiteGrants, checked.issues)
+        .message,
+    );
+  }
+  return fitsOneFrame(checked.output)
+    ? checked.output
+    : panic("The member's website approvals outgrew one frame");
+};
+
+/**
+ * Send the member's website approvals, as they stand now, to every run of
+ * theirs still open on their computers, after a change to them: each run's
+ * browser steps follow the newest set while the run goes on. A computer that
+ * is away receives it when it reconnects. A run that holds as many commands
+ * as one run may is left out, and logged.
+ */
+const pushSiteGrants = async (
+  deps: ControlDeps,
+  { owner }: { owner: RunOwner },
+): Promise<Result<QueuedSiteGrants, DatabaseError>> => {
+  const pushed = await Result.tryPromise({
+    try: async () =>
+      await queueRunSiteGrants(deps.db, {
+        owner,
+        revision: Bun.randomUUIDv7(),
+        limits: deps.limits,
+        compose: siteGrantsMessage,
+      }),
+    catch: toDatabaseError,
+  });
+  if (pushed.isErr()) {
+    return pushed;
+  }
+  const { full, holders } = pushed.value;
+  if (full.length > 0) {
+    logger.warn("desktop_runner.site_grants_run_full", {
+      runs: full.length,
+    });
+  }
+  for (const holder of holders) {
+    deps.doorbell.ring(holder);
+  }
+  return pushed;
+};
+
 type MessageRestoreOptions = {
   owner: RunOwner;
   threadId: SafeId<"chatThread">;
@@ -777,6 +850,34 @@ const readSteeredText = async (
     catch: toDatabaseError,
   });
 
+/** What an answer reads of a run's requests (`request-answers.ts`). */
+const requestReads = (db: DesktopRunnerDb) => ({
+  /** The thread's run that asked request `requestId`. */
+  readChatRunForRequest: async (
+    options: Parameters<typeof readChatRunForRequest>[1],
+  ): Promise<Result<ChatRunForRequest | null, DatabaseError>> =>
+    await Result.tryPromise({
+      try: async () => await readChatRunForRequest(db, options),
+      catch: toDatabaseError,
+    }),
+  /** Whether an answer to request `requestId` of the run is queued. */
+  readRunRequestAnswered: async (
+    options: Parameters<typeof readRunRequestAnswered>[1],
+  ): Promise<Result<boolean, DatabaseError>> =>
+    await Result.tryPromise({
+      try: async () => await readRunRequestAnswered(db, options),
+      catch: toDatabaseError,
+    }),
+  /** How the run reported request `requestId` closed, if it did. */
+  readRunRequestClosure: async (
+    options: Parameters<typeof readRunRequestClosure>[1],
+  ): Promise<Result<DesktopRunnerRequestEvent | null, DatabaseError>> =>
+    await Result.tryPromise({
+      try: async () => await readRunRequestClosure(db, options),
+      catch: toDatabaseError,
+    }),
+});
+
 /**
  * What the rest of the API uses to run work on a member's computer: pick a
  * computer, queue commands for a run, read what the run produced. Commands are
@@ -876,6 +977,12 @@ export const createDesktopRunnerControl = ({
         requestId,
         answers,
       }),
+    /**
+     * Send the member's website approvals as they stand now to each of their
+     * open runs; call after a change to them committed.
+     */
+    pushSiteGrants: async (options: { owner: RunOwner }) =>
+      await pushSiteGrants(deps, options),
     /** Stop the current turn; the run stays open. */
     interruptRun: async ({ owner, runId }: RunOptions) =>
       await queue(deps, owner, {
@@ -971,14 +1078,7 @@ export const createDesktopRunnerControl = ({
         try: async () => await readChatRunSession(db, options),
         catch: toDatabaseError,
       }),
-    /** The thread's run that asked request `requestId`. */
-    readChatRunForRequest: async (
-      options: Parameters<typeof readChatRunForRequest>[1],
-    ): Promise<Result<ChatRunForRequest | null, DatabaseError>> =>
-      await Result.tryPromise({
-        try: async () => await readChatRunForRequest(db, options),
-        catch: toDatabaseError,
-      }),
+    ...requestReads(db),
     /** The run a handed-over chat turn reads on (`readHandedOverChatRun`). */
     readHandedOverChatRun: async (
       options: Parameters<typeof readHandedOverChatRun>[1],

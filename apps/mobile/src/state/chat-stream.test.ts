@@ -13,6 +13,10 @@ import {
   CHAT_CONTEXT_NOTICE_METADATA_KEY,
 } from "@stll/api-contract/chat-context-notice";
 import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
+import {
+  CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY,
+  type ChatLocalRunRequest,
+} from "@stll/api-contract/chat-local-run-request";
 import { CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY } from "@stll/api-contract/chat-local-run-tool";
 import { CHAT_SEND_QUEUES_INSTEAD_CODE } from "@stll/api-contract/chat-queue";
 import {
@@ -263,6 +267,117 @@ describe("whether the turn takes a message mid-turn", () => {
   });
 });
 
+describe("what the run on the person's computer asks", () => {
+  const CALL_ID = "local:run-1:item_cmd";
+  const approval = {
+    requestId: "00000000-0000-7000-8000-0000000000a1",
+    toolCallId: CALL_ID,
+    status: "pending",
+    ask: {
+      kind: "approval",
+      message: "Run the formatter over the draft",
+      reason: null,
+      toolName: "command_execution",
+      input: { command: "format draft.txt" },
+      approvalKind: null,
+      decisions: ["approve", "deny"],
+    },
+  } as const satisfies ChatLocalRunRequest;
+  const expired = {
+    ...approval,
+    status: "expired",
+    expiry: "run_finished",
+  } as const satisfies ChatLocalRunRequest;
+  /** The stream restating every request of the answer, as the API does. */
+  const restated = (...requests: ChatLocalRunRequest[]) => ({
+    type: "TEXT_MESSAGE_START",
+    messageId: ANSWER_ID,
+    role: "assistant",
+    metadata: { [CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY]: requests },
+  });
+  /** The events the answer is drawn from, as the phone reads them. */
+  const parsed = (events: readonly unknown[]): ChatEvent[] =>
+    events.flatMap((event) => parseChatEvent(JSON.stringify(event)) ?? []);
+  /** A run that asks about its step, then finishes without the answer. */
+  const asking = [
+    { type: "RUN_STARTED", runId: "run-1", threadId: THREAD_ID },
+    { type: "TEXT_MESSAGE_START", messageId: ANSWER_ID, role: "assistant" },
+    { type: "TEXT_MESSAGE_CONTENT", messageId: ANSWER_ID, delta: "Formatting" },
+    { type: "TEXT_MESSAGE_END", messageId: ANSWER_ID },
+    {
+      type: "TOOL_CALL_START",
+      toolCallId: CALL_ID,
+      toolCallName: "command_execution",
+    },
+  ];
+  const finishing = [
+    { type: "TEXT_MESSAGE_CONTENT", messageId: ANSWER_ID, delta: " Done." },
+    { type: "RUN_FINISHED", runId: "run-1", threadId: THREAD_ID },
+  ];
+
+  test("is restated on the answer without adding to what it says", () => {
+    const plain = reduce(parsed([...asking, ...finishing]));
+    const live = reduce(parsed([...asking, restated(approval)]));
+    expect(live.localRunRequests).toEqual([approval]);
+    expect(live.parts).toEqual(reduce(parsed(asking)).parts);
+
+    const ended = reduce(
+      parsed([
+        ...asking,
+        restated(approval),
+        ...finishing.slice(0, 1),
+        restated(expired),
+        ...finishing.slice(1),
+      ]),
+    );
+    // The last restatement is what the answer keeps, and nothing else moved.
+    expect(ended.localRunRequests).toEqual([expired]);
+    const withoutRequests: StreamedAnswer = { ...ended, localRunRequests: [] };
+    expect(withoutRequests).toEqual(plain);
+    expect(answerEntry(ended, "2026-10-20T10:00:00.000Z")).toEqual(
+      answerEntry(plain, "2026-10-20T10:00:00.000Z"),
+    );
+  });
+
+  test("a restatement that does not read names no request, and a start without one opens text", () => {
+    const live = reduce(parsed([...asking, restated(approval)]));
+    const unread = applyChatEvent(
+      live,
+      parsed([
+        {
+          type: "TEXT_MESSAGE_START",
+          messageId: ANSWER_ID,
+          role: "assistant",
+          metadata: {
+            [CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY]: [
+              { ...approval, status: "answered" },
+            ],
+          },
+        },
+      ])[0] ?? panic("Not read"),
+    );
+    expect(unread.localRunRequests).toEqual([]);
+    expect(unread.parts).toEqual(live.parts);
+
+    const opened = applyChatEvent(
+      live,
+      parsed([
+        {
+          type: "TEXT_MESSAGE_START",
+          messageId: ANSWER_ID,
+          role: "assistant",
+          metadata: {},
+        },
+      ])[0] ?? panic("Not read"),
+    );
+    expect(opened.parts).toEqual([
+      ...live.parts,
+      { type: "text", content: "" },
+    ]);
+    expect(opened.localRunRequests).toEqual([approval]);
+  });
+});
+
 describe("drawing an answer from its events", () => {
   const events = RUN_EVENTS.flatMap(
     (event) => parseChatEvent(JSON.stringify(event)) ?? [],
@@ -285,6 +400,8 @@ describe("drawing an answer from its events", () => {
       ],
       status: "finished",
       contextNotice: null,
+      localRunRequests: [],
+      localRunNotices: [],
     });
     expect(answerEntry(answer, "2026-10-20T10:00:00.000Z")).toEqual({
       id: ANSWER_ID,

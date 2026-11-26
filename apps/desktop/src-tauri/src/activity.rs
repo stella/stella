@@ -2,7 +2,8 @@
 //!
 //! Every five seconds, while the user has opted in and the feature is
 //! enabled, the sampler reads the foreground app identifier/name and idle
-//! time. Window titles and documents require a separate, default-off opt-in.
+//! time. Window titles and documents require a separate, default-off opt-in,
+//! and managed policy can keep them off whatever the user chose.
 //! Consecutive samples of one app merge into a segment; five idle minutes end
 //! it, and idle time is never recorded. Excluded apps are recorded as nothing.
 //! While a known call app holds the microphone (`activity_calls`), the time
@@ -46,8 +47,8 @@ const CHANGED_EVENT: &str = "activity-timeline-changed";
 const SAMPLE_INTERVAL: Duration = Duration::from_secs(5);
 /// A sample later than this after the previous one means the machine slept
 /// or the sampler stalled; the open segment ends at the last sample.
-const MAX_SAMPLE_GAP: Duration = Duration::from_secs(15);
-const IDLE_THRESHOLD: Duration = Duration::from_secs(5 * 60);
+pub(crate) const MAX_SAMPLE_GAP: Duration = Duration::from_secs(15);
+pub(crate) const IDLE_THRESHOLD: Duration = Duration::from_secs(5 * 60);
 const INPUT_TIMESTAMP_TOLERANCE: chrono::Duration = chrono::Duration::milliseconds(10);
 // Allow clock-read jitter, but end the mapping before a wall correction can
 // introduce synthetic activity into the current segment.
@@ -101,16 +102,32 @@ pub enum ActivityRecordingStatus {
   Paused,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Where the day review reads calendar events from, `Off` until the user
+/// turns it on. Events are shown beside the timeline, never recorded.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ActivityCalendarSource {
+  #[default]
+  Off,
+  /// The member's Microsoft 365 calendar, through the stella server's
+  /// connection.
+  Microsoft365,
+}
+
+/// New settings record nothing (recording `Off`) and, once started, app
+/// names only: every field's default.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActivitySettings {
   pub recording_status: ActivityRecordingStatus,
   pub retention: ActivityRetention,
   #[serde(default)]
   pub excluded_apps: Vec<AppExclusion>,
-  /// A new timeline records window titles and documents until the user turns
-  /// them off. Settings saved before details existed carry no consent, so a
-  /// missing field reads as off.
+  /// The user's own choice to record window titles and documents, off until
+  /// they choose it. A saved choice is kept as saved; settings saved before
+  /// details existed carry no consent, so a missing field reads as off. Read
+  /// it through [`ActivitySettings::records_details`], which applies managed
+  /// policy.
   #[serde(default)]
   pub capture_details: bool,
   #[serde(default)]
@@ -120,22 +137,24 @@ pub struct ActivitySettings {
   /// Calls are detected unless the user turned it off.
   #[serde(default)]
   pub ignore_calls: bool,
+  #[serde(default)]
+  pub calendar_source: ActivityCalendarSource,
   #[serde(flatten)]
   pub extra: BTreeMap<String, serde_json::Value>,
 }
 
-impl Default for ActivitySettings {
-  fn default() -> Self {
-    Self {
-      recording_status: ActivityRecordingStatus::default(),
-      retention: ActivityRetention::default(),
-      excluded_apps: Vec::new(),
-      capture_details: true,
-      app_name_only_apps: Vec::new(),
-      browser_title_apps: Vec::new(),
-      ignore_calls: false,
-      extra: BTreeMap::new(),
-    }
+impl ActivitySettings {
+  /// Whether new activity records window titles and documents: the user's
+  /// choice, which managed policy can only turn off.
+  pub fn records_details(&self) -> bool {
+    self.records_details_under(crate::managed_policy::current())
+  }
+
+  fn records_details_under(
+    &self,
+    policy: &crate::managed_policy::ManagedPolicy,
+  ) -> bool {
+    self.capture_details && !policy.activity_details_disabled
   }
 }
 
@@ -155,6 +174,94 @@ pub struct ActivitySegment {
   pub call: bool,
   pub start: DateTime<Utc>,
   pub end: DateTime<Utc>,
+}
+
+macro_rules! define_gap_kinds {
+  (
+    $(#[$display_meta:meta])* $display:ident { $($(#[$dv_meta:meta])* $dv:ident),+ $(,)? }
+    $(#[$end_meta:meta])* $end:ident { $($(#[$ev_meta:meta])* $ev:ident),+ $(,)? }
+  ) => {
+    $(#[$display_meta])*
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub enum $display { $($(#[$dv_meta])* $dv),+ }
+
+    impl $display {
+      #[cfg(test)]
+      const ALL: &'static [Self] = &[$(Self::$dv),+];
+    }
+
+    $(#[$end_meta])*
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub enum $end { $($(#[$ev_meta])* $ev),+ }
+
+    impl $end {
+      #[cfg(test)]
+      const ALL: &'static [Self] = &[$(Self::$ev),+];
+    }
+  };
+}
+
+define_gap_kinds! {
+  /// What the screen did while no input came. A later variant wins: one
+  /// lock or sleep anywhere in the stretch names all of it.
+  GapDisplay {
+    StayedOn,
+    Locked,
+    /// The display or the whole computer slept.
+    Slept,
+  }
+  /// What ended a stretch with no input.
+  GapEnd {
+    /// Input came again, or a call started.
+    Input,
+    /// Recording stopped, paused, or the clock was set back: the stretch
+    /// ends at the last sample that saw it.
+    Stop,
+    /// The local day ended; the rest belongs to the next day.
+    DayEnd,
+  }
+}
+
+/// A stretch with no input between recorded activity, kept so the member
+/// can say in review what it was. It holds times and the screen's state
+/// only; it is never counted as recorded time. Kept when it lasted at least
+/// [`MIN_GAP`] and at most [`MAX_GAP`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityGap {
+  pub start: DateTime<Utc>,
+  pub end: DateTime<Utc>,
+  pub ended_by: GapEnd,
+  pub display: GapDisplay,
+}
+
+/// A shorter stretch is a pause the idle threshold already ignores.
+const MIN_GAP: chrono::Duration = chrono::Duration::minutes(5);
+/// A longer stretch is time away, not a pause in work worth asking about.
+const MAX_GAP: chrono::Duration = chrono::Duration::hours(4);
+
+impl ActivityGap {
+  fn kept(&self) -> bool {
+    let length = self.end - self.start;
+    (MIN_GAP..=MAX_GAP).contains(&length)
+  }
+}
+
+/// The screen now, as a gap's display names it.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn screen_display() -> GapDisplay {
+  match stella_desktop_macos::screen_state() {
+    stella_desktop_macos::ScreenState::On => GapDisplay::StayedOn,
+    stella_desktop_macos::ScreenState::Locked => GapDisplay::Locked,
+    stella_desktop_macos::ScreenState::DisplayAsleep => GapDisplay::Slept,
+  }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn screen_display() -> GapDisplay {
+  GapDisplay::StayedOn
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -194,8 +301,9 @@ pub enum Observation {
     window_title: Option<String>,
     privacy: CapturedWindowPrivacy,
   },
-  /// No input for at least the idle threshold, for `idle` in total.
-  Idle { idle: Duration },
+  /// No input for at least the idle threshold, for `idle` in total, with
+  /// what the screen did meanwhile.
+  Idle { idle: Duration, display: GapDisplay },
   /// No attributable app, or one the user excluded.
   Unattributed,
 }
@@ -235,6 +343,8 @@ define_activity_details_access! {
     allow(dead_code, reason = "only platforms without window details report it")
   )]
   Unavailable,
+  /// Managed policy keeps details off, whatever the user chose.
+  Managed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -260,6 +370,14 @@ struct OpenSegment {
   idle_since: Option<DateTime<Utc>>,
   partition: DayPartition,
   privacy: CapturedWindowPrivacy,
+}
+
+/// A stretch with no input, while it lasts.
+struct OpenGap {
+  start: DateTime<Utc>,
+  last_seen: DateTime<Utc>,
+  display: GapDisplay,
+  partition: DayPartition,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -440,6 +558,7 @@ pub struct ActivityDaySnapshot {
   details_access: ActivityDetailsAccess,
   browser_title_apps: Vec<AppExclusion>,
   browser_apps: Vec<AppExclusion>,
+  calendar_source: ActivityCalendarSource,
   segments: Vec<ActivitySegment>,
   source_app_visuals: Vec<crate::foreground_app_visual::ClipboardSourceAppVisual>,
   /// A day whose file exists but cannot be read.
@@ -447,6 +566,34 @@ pub struct ActivityDaySnapshot {
   drafted_entries: Vec<ActivityDraftedEntry>,
   manual_assignments: Vec<ActivityManualAssignment>,
   pending_batch: Option<ActivityPendingBatch>,
+  /// Stretches of the day with no input between recorded activity.
+  gaps: Vec<ActivityGap>,
+  /// Stretches of the day the member wanted recorded and Activity could not
+  /// record.
+  outages: ActivityDayOutages,
+  /// Why Activity cannot record now; the history is then read-only.
+  stopped_reason: Option<crate::activity_capture::StopReason>,
+}
+
+/// A day's outages, or that their file could not be read.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum ActivityDayOutages {
+  Read {
+    outages: Vec<crate::activity_capture::CaptureOutage>,
+  },
+  Unreadable,
+}
+
+/// The instants a local day spans, `[start, end)`.
+pub(crate) fn local_day_span(date: NaiveDate) -> (DateTime<Utc>, DateTime<Utc>) {
+  let start = day_start(&Local, date);
+  let end = date
+    .checked_add_days(Days::new(1))
+    .map_or(start + chrono::Duration::days(1), |next| {
+      day_start(&Local, next)
+    });
+  (start, end)
 }
 
 #[derive(Deserialize)]
@@ -462,6 +609,13 @@ static PREVIEW_APPS: std::sync::LazyLock<Vec<PreviewApp>> =
   });
 
 impl ActivityDaySnapshot {
+  /// Adds why Activity cannot record now, while it cannot.
+  pub(crate) fn add_capture<R: Runtime>(&mut self, app: &AppHandle<R>) {
+    self.stopped_reason = match capture_binding(app) {
+      Some(_) => None,
+      None => crate::activity_capture::stopped().map(|stopped| stopped.reason),
+    };
+  }
   pub(crate) fn resolve_app_visuals(&mut self) {
     self.source_app_visuals = crate::foreground_app_visual::cached_app_visuals(
       self
@@ -513,6 +667,7 @@ pub struct ActivitySettingsSnapshot {
   details_access: ActivityDetailsAccess,
   browser_title_apps: Vec<AppExclusion>,
   browser_apps: Vec<AppExclusion>,
+  calendar_source: ActivityCalendarSource,
   /// The apps recorded on `date`, longest first.
   apps: Vec<AppExclusion>,
   source_app_visuals: Vec<crate::foreground_app_visual::ClipboardSourceAppVisual>,
@@ -542,13 +697,39 @@ pub struct TrayActivitySnapshot {
   pub now: Option<String>,
 }
 
+/// The tray's Activity entry.
+pub enum TrayActivity {
+  /// The feature is on; the day's projection once the store is loaded.
+  Live(Option<TrayActivitySnapshot>),
+  /// It cannot record for a member who turned it on.
+  Stopped(crate::activity_capture::ActivityStopped, StoppedHistory),
+}
+
+/// Whether a stopped Activity's history can be opened, read-only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StoppedHistory {
+  Readable,
+  /// No account is linked to read it for.
+  Unavailable,
+}
+
+impl TrayActivity {
+  /// The entry without the day's projection.
+  pub fn without_projection(self) -> Self {
+    match self {
+      Self::Live(_) => Self::Live(None),
+      Self::Stopped(stopped, history) => Self::Stopped(stopped, history),
+    }
+  }
+}
+
 struct DetailCaptureApp<'a> {
   identifier: &'a str,
   name: &'a str,
 }
 
 fn details_enabled(settings: &ActivitySettings, app: DetailCaptureApp<'_>) -> bool {
-  settings.capture_details
+  settings.records_details()
     && !is_excluded(&settings.app_name_only_apps, app.identifier)
     && (!crate::activity_details::is_browser(app.identifier, app.name)
       || is_excluded(&settings.browser_title_apps, app.identifier))
@@ -556,7 +737,7 @@ fn details_enabled(settings: &ActivitySettings, app: DetailCaptureApp<'_>) -> bo
 
 static MONOTONIC_EPOCH: OnceLock<Instant> = OnceLock::new();
 
-fn monotonic_now() -> Duration {
+pub(crate) fn monotonic_now() -> Duration {
   MONOTONIC_EPOCH.get_or_init(Instant::now).elapsed()
 }
 
@@ -575,10 +756,14 @@ pub struct ActivityManager {
   settings: ActivitySettings,
   persistence: ActivityPersistence,
   open: Option<OpenSegment>,
+  open_gap: Option<OpenGap>,
   /// Days written in this process, loaded from disk before the first write
   /// so a flush never drops what an earlier run stored.
   days: BTreeMap<NaiveDate, Vec<ActivitySegment>>,
   dirty: BTreeSet<NaiveDate>,
+  /// Gaps of the days a gap closed on in this process, loaded like `days`.
+  gaps: BTreeMap<NaiveDate, Vec<ActivityGap>>,
+  dirty_gaps: BTreeSet<NaiveDate>,
   drafted_entries: BTreeMap<NaiveDate, Vec<ActivityDraftedEntry>>,
   manual_assignments: BTreeMap<NaiveDate, Vec<ActivityManualAssignment>>,
   pending_batches: BTreeMap<NaiveDate, ActivityPendingBatch>,
@@ -606,8 +791,50 @@ pub fn is_enabled<R: Runtime>(app: &AppHandle<R>) -> bool {
       .is_some_and(|gates| gates.is_enabled(DesktopFeature::ActivityTimeline))
 }
 
+/// The account Activity may record for: the server enabled it, or it
+/// records on the account's confirmed grant while the server has not been
+/// reached. Server actions never follow this; they check [`is_enabled`].
+pub fn capture_binding<R: Runtime>(app: &AppHandle<R>) -> Option<(u64, String)> {
+  if !is_supported() {
+    return None;
+  }
+  crate::activity_capture::capture_binding(app)
+}
+
+/// The account whose recorded history the member may read: wherever
+/// Activity may record, and read-only while it is stopped for a member who
+/// turned it on.
+pub fn history_binding<R: Runtime>(app: &AppHandle<R>) -> Option<(u64, String)> {
+  if !is_supported() {
+    return None;
+  }
+  capture_binding(app).or_else(|| crate::activity_capture::stopped_binding(app))
+}
+
+/// Announces a change of what Activity may do; a window whose history is no
+/// longer readable closes.
+pub(crate) fn capture_changed(app: &AppHandle) {
+  if history_binding(app).is_none() {
+    crate::activity_window::close(app);
+  }
+  emit_changed(app);
+}
+
 fn store_root() -> Option<PathBuf> {
   dirs::data_dir().map(|dir| dir.join(APP_DATA_DIR_NAME).join(STORE_DIR_NAME))
+}
+
+/// The store of `namespace` under its existing key, for what Activity keeps
+/// while it cannot record; `None` without a key, which is never created here.
+pub(crate) fn keyed_store(namespace: &str) -> Option<ActivityStore> {
+  if local_store::debug_build_is_memory_only(DEBUG_PERSISTENCE_ENV) {
+    return None;
+  }
+  let root = store_root()?.join(namespace);
+  match keychain::get_local_data_key(LocalDataKey::ActivityTimeline(namespace)) {
+    Ok(LocalDataKeyLookup::Found(key)) => Some(ActivityStore::new(key, root)),
+    Ok(LocalDataKeyLookup::Missing) | Err(_) => None,
+  }
 }
 
 pub fn parse_date(raw: &str) -> Result<NaiveDate, String> {
@@ -780,8 +1007,11 @@ impl ActivityManager {
       settings: ActivitySettings::default(),
       persistence: ActivityPersistence::Initializing,
       open: None,
+      open_gap: None,
       days: BTreeMap::new(),
       dirty: BTreeSet::new(),
+      gaps: BTreeMap::new(),
+      dirty_gaps: BTreeSet::new(),
       drafted_entries: BTreeMap::new(),
       manual_assignments: BTreeMap::new(),
       pending_batches: BTreeMap::new(),
@@ -870,7 +1100,10 @@ impl ActivityManager {
     self.persistence = persistence;
     self.settings = settings;
     self.open = None;
+    self.open_gap = None;
     self.days.clear();
+    self.gaps.clear();
+    self.dirty_gaps.clear();
     self.drafted_entries.clear();
     self.manual_assignments.clear();
     self.pending_batches.clear();
@@ -919,6 +1152,20 @@ impl ActivityManager {
       return Ok(());
     }
     Err("activity account is unavailable".into())
+  }
+
+  /// The encrypted store, when history persists there. Matter learning
+  /// exists only in it: nothing is learned without it.
+  pub(crate) fn encrypted_store(&self) -> Option<&ActivityStore> {
+    match &self.persistence {
+      ActivityPersistence::Encrypted(store) => Some(store),
+      ActivityPersistence::Initializing
+      | ActivityPersistence::MemoryOnly
+      | ActivityPersistence::DeletionOnly(_)
+      | ActivityPersistence::KeyMissing(_)
+      | ActivityPersistence::Unreadable(_)
+      | ActivityPersistence::Incompatible(_) => None,
+    }
   }
 
   fn require_writable(&self) -> Result<(), String> {
@@ -979,11 +1226,45 @@ impl ActivityManager {
   }
 
   pub fn capture_details(&self) -> bool {
-    self.settings.capture_details
+    self.settings.records_details()
   }
 
   pub fn recording_status(&self) -> ActivityRecordingStatus {
     self.settings.recording_status
+  }
+
+  /// The loaded account and its member's recording choice. A store that
+  /// could not be read holds default settings, not the member's choice.
+  pub(crate) fn loaded_choice(&self) -> Option<crate::activity_capture::LoadedChoice> {
+    let persisted = match self.persistence {
+      ActivityPersistence::Encrypted(_) => true,
+      ActivityPersistence::MemoryOnly => false,
+      ActivityPersistence::Initializing
+      | ActivityPersistence::DeletionOnly(_)
+      | ActivityPersistence::KeyMissing(_)
+      | ActivityPersistence::Unreadable(_)
+      | ActivityPersistence::Incompatible(_) => return None,
+    };
+    Some(crate::activity_capture::LoadedChoice {
+      namespace: self.namespace.clone()?,
+      intent: self.settings.recording_status,
+      persisted,
+    })
+  }
+
+  pub fn calendar_source(&self) -> ActivityCalendarSource {
+    self.settings.calendar_source
+  }
+
+  pub fn set_calendar_source(
+    &mut self,
+    source: ActivityCalendarSource,
+  ) -> Result<(), String> {
+    self.require_writable()?;
+    if self.settings.calendar_source == source {
+      return Ok(());
+    }
+    self.update_settings(|settings| settings.calendar_source = source)
   }
 
   pub fn set_detect_calls(
@@ -1208,7 +1489,12 @@ impl ActivityManager {
           wall_elapsed.abs_diff(elapsed) > WALL_CLOCK_TOLERANCE
         })
       {
-        closed |= self.close_open_at_last_sample();
+        // Wall time passed without samples: the computer slept (the
+        // monotonic clock stops during sleep on macOS), as presence also
+        // concludes from such a jump. A clock set back ends the stretch.
+        let slept = wall_elapsed
+          .is_ok_and(|wall_elapsed| wall_elapsed + WALL_CLOCK_TOLERANCE >= elapsed);
+        closed |= self.sample_gap(slept);
       }
     }
     self.last_sample = Some((now, monotonic));
@@ -1247,6 +1533,7 @@ impl ActivityManager {
       }
       open.last_input = open.last_input.max(last_input);
     }
+    let input_returned = !matches!(observation, Observation::Idle { .. });
     // Day boundaries are pinned when opening; a changed zone cannot move an
     // already flushed prefix into another file.
     // Foreground attribution starts at this observation; input may precede
@@ -1263,13 +1550,42 @@ impl ActivityManager {
       }
       closed |= self.close_open(now.min(boundary));
     }
+    if let Some(gap) = self.open_gap.take_if(|gap| gap.partition != partition) {
+      let boundary = gap.partition.next_start;
+      let display = gap.display;
+      closed |= self.close_gap(gap, now.min(boundary), GapEnd::DayEnd);
+      // The stretch goes on in the new day.
+      if now >= boundary {
+        self.open_gap = Some(OpenGap {
+          start: boundary,
+          last_seen: now,
+          display,
+          partition: partition.clone(),
+        });
+      }
+    }
+    if input_returned && let Some(gap) = self.open_gap.take() {
+      closed |= self.close_gap(gap, last_input, GapEnd::Input);
+    }
     match observation {
-      Observation::Idle { idle } => {
+      Observation::Idle { idle, display } => {
         let idle_since = chrono::Duration::from_std(idle)
           .ok()
           .and_then(|idle| now.checked_sub_signed(idle))
           .unwrap_or(now);
         closed |= self.close_open(idle_since);
+        if let Some(gap) = self.open_gap.as_mut() {
+          gap.last_seen = now;
+          gap.display = gap.display.max(display);
+        } else {
+          let start = self.gap_start(idle_since, &partition);
+          self.open_gap = Some(OpenGap {
+            start,
+            last_seen: now,
+            display,
+            partition,
+          });
+        }
       }
       Observation::Unattributed => closed |= self.close_open(now),
       Observation::Call {
@@ -1391,6 +1707,130 @@ impl ActivityManager {
     closed
   }
 
+  /// Samples stopped for a while. Recorded activity ends at its last
+  /// sample. After a sleep the stretch without input goes on, starting
+  /// where input last came when activity was open; a clock set back ends it
+  /// at its last sample.
+  fn sample_gap(&mut self, slept: bool) -> bool {
+    let mut closed = false;
+    if slept {
+      match self.open_gap.as_mut() {
+        Some(gap) => gap.display = GapDisplay::Slept,
+        None => {
+          if let Some((since, last_seen, partition)) = self.open.as_ref().map(|open| {
+            (
+              open.last_input.min(open.last_seen),
+              open.last_seen,
+              open.partition.clone(),
+            )
+          }) {
+            self.open_gap = Some(OpenGap {
+              start: self.gap_start(since, &partition),
+              last_seen,
+              display: GapDisplay::Slept,
+              partition,
+            });
+          }
+        }
+      }
+    } else if let Some(gap) = self.open_gap.take() {
+      let last_seen = gap.last_seen;
+      closed |= self.close_gap(gap, last_seen, GapEnd::Stop);
+    }
+    closed | self.close_open_at_last_sample()
+  }
+
+  /// Where a stretch without input seen at `idle_since` starts: never
+  /// before its day or what the day already holds, recorded time (a call
+  /// records time without input) or a kept gap, including what an earlier
+  /// run stored.
+  fn gap_start(
+    &mut self,
+    idle_since: DateTime<Utc>,
+    partition: &DayPartition,
+  ) -> DateTime<Utc> {
+    let day_start = local_day_span(partition.date).0;
+    let recorded_until = self
+      .day_mut(partition.date)
+      .and_then(|day| day.last())
+      .map(|segment| segment.end);
+    let gaps_until = self
+      .gaps_mut(partition.date)
+      .and_then(|gaps| gaps.last())
+      .map(|gap| gap.end);
+    [recorded_until, gaps_until]
+      .into_iter()
+      .flatten()
+      .fold(idle_since.max(day_start), Ord::max)
+  }
+
+  /// Closes a stretch without input at `end`, keeping it when its length
+  /// is in the kept range. Returns whether it was kept.
+  fn close_gap(&mut self, gap: OpenGap, end: DateTime<Utc>, ended_by: GapEnd) -> bool {
+    let closed = ActivityGap {
+      start: gap.start,
+      end: end.min(gap.partition.next_start).max(gap.start),
+      ended_by,
+      display: gap.display,
+    };
+    if !closed.kept() {
+      return false;
+    }
+    let date = gap.partition.date;
+    let Some(gaps) = self.gaps_mut(date) else {
+      return false;
+    };
+    // A restart or a clock set back cannot overlap a kept gap.
+    if gaps
+      .iter()
+      .any(|kept| kept.start < closed.end && closed.start < kept.end)
+    {
+      return false;
+    }
+    let position = gaps.partition_point(|kept| kept.start < closed.start);
+    gaps.insert(position, closed);
+    self.dirty_gaps.insert(date);
+    true
+  }
+
+  /// The cached gaps of `date`, loading the file first. `None` when the
+  /// file exists but cannot be read: writing would overwrite it.
+  fn gaps_mut(&mut self, date: NaiveDate) -> Option<&mut Vec<ActivityGap>> {
+    if !self.gaps.contains_key(&date) {
+      let loaded = match &self.persistence {
+        ActivityPersistence::Encrypted(store) => match store.load_gaps(date) {
+          Ok(gaps) => gaps,
+          Err(_) => {
+            tracing::warn!("activity day is unreadable; a gap is not added to it");
+            return None;
+          }
+        },
+        _ => Vec::new(),
+      };
+      self.gaps.insert(date, loaded);
+    }
+    self.gaps.get_mut(&date)
+  }
+
+  /// The day's kept gaps; `Err` when its file cannot be read.
+  fn day_gaps(&self, date: NaiveDate) -> Result<Vec<ActivityGap>, String> {
+    if let Some(gaps) = self.gaps.get(&date) {
+      return Ok(gaps.clone());
+    }
+    match &self.persistence {
+      ActivityPersistence::Encrypted(store) => store.load_gaps(date),
+      ActivityPersistence::DeletionOnly(_)
+      | ActivityPersistence::KeyMissing(_)
+      | ActivityPersistence::Unreadable(_)
+      | ActivityPersistence::Incompatible(_) => {
+        Err("activity history is unreadable".into())
+      }
+      ActivityPersistence::Initializing | ActivityPersistence::MemoryOnly => {
+        Ok(Vec::new())
+      }
+    }
+  }
+
   fn close_open_at_last_sample(&mut self) -> bool {
     match self.open.as_ref().map(|open| open.last_seen) {
       Some(last_seen) => self.close_open(last_seen),
@@ -1493,6 +1933,7 @@ impl ActivityManager {
     let open_pieces = self.open_pieces();
     let ActivityPersistence::Encrypted(store) = &self.persistence else {
       self.dirty.clear();
+      self.dirty_gaps.clear();
       return Ok(());
     };
     let mut dates = self.dirty.clone();
@@ -1520,6 +1961,19 @@ impl ActivityManager {
     for date in written {
       self.dirty.remove(&date);
     }
+    for date in self.dirty_gaps.clone() {
+      let Some(gaps) = self.gaps.get(&date) else {
+        continue;
+      };
+      match store.save_gaps(date, gaps) {
+        Ok(()) => {
+          self.dirty_gaps.remove(&date);
+        }
+        Err(error) => {
+          failure.get_or_insert(error);
+        }
+      }
+    }
     failure.map_or(Ok(()), Err)
   }
 
@@ -1533,6 +1987,10 @@ impl ActivityManager {
   pub fn stop(&mut self, now: DateTime<Utc>) -> Result<(), String> {
     self.observation_generation = self.observation_generation.wrapping_add(1);
     self.close_open_at_last_sample();
+    if let Some(gap) = self.open_gap.take() {
+      let last_seen = gap.last_seen;
+      self.close_gap(gap, last_seen, GapEnd::Stop);
+    }
     self.flush(now)
   }
 
@@ -1570,6 +2028,12 @@ impl ActivityManager {
       .retain(|date, _| *date >= earliest || pending_dates.contains(date));
     self
       .dirty
+      .retain(|date| *date >= earliest || pending_dates.contains(date));
+    self
+      .gaps
+      .retain(|date, _| *date >= earliest || pending_dates.contains(date));
+    self
+      .dirty_gaps
       .retain(|date| *date >= earliest || pending_dates.contains(date));
     self
       .drafted_entries
@@ -1625,7 +2089,16 @@ impl ActivityManager {
     {
       self.open = None;
     }
+    if self
+      .open_gap
+      .as_ref()
+      .is_some_and(|gap| gap.partition.date == date)
+    {
+      self.open_gap = None;
+    }
     self.days.remove(&date);
+    self.gaps.remove(&date);
+    self.dirty_gaps.remove(&date);
     self.drafted_entries.remove(&date);
     self.manual_assignments.remove(&date);
     self.dirty.remove(&date);
@@ -1806,7 +2279,10 @@ impl ActivityManager {
     }
     self.observation_generation = self.observation_generation.wrapping_add(1);
     self.open = None;
+    self.open_gap = None;
     self.days.clear();
+    self.gaps.clear();
+    self.dirty_gaps.clear();
     self.drafted_entries.clear();
     self.manual_assignments.clear();
     self.dirty.clear();
@@ -2284,6 +2760,11 @@ impl ActivityManager {
         Ok(entries) => (entries, false),
         Err(_) => (Vec::new(), true),
       };
+    let (gaps, gaps_unreadable) = match self.day_gaps(date) {
+      Ok(gaps) => (gaps, false),
+      Err(_) => (Vec::new(), true),
+    };
+    let outages = self.day_outages(date);
     let bounds = self.history_bounds(date, today);
     let deletion_status = current_day_failure.unwrap_or(bounds.deletion_status);
     ActivityDaySnapshot {
@@ -2297,21 +2778,56 @@ impl ActivityManager {
       retention: self.settings.retention,
       excluded_apps: self.settings.excluded_apps.clone(),
       other_account_history_days,
-      capture_details: self.settings.capture_details,
+      capture_details: self.settings.records_details(),
       detect_calls: !self.settings.ignore_calls,
       app_name_only_apps: self.settings.app_name_only_apps.clone(),
       details_access,
       browser_title_apps: self.settings.browser_title_apps.clone(),
       browser_apps,
+      calendar_source: self.settings.calendar_source,
       source_app_visuals: Vec::new(),
       segments,
       unreadable: unreadable
         || draft_unreadable
         || assignments_unreadable
-        || pending_unreadable,
+        || pending_unreadable
+        || gaps_unreadable,
+      gaps,
       manual_assignments,
       pending_batch,
       drafted_entries,
+      outages,
+      stopped_reason: None,
+    }
+  }
+
+  /// The outages that overlap `date`, from the account's store.
+  fn day_outages(&self, date: NaiveDate) -> ActivityDayOutages {
+    match &self.persistence {
+      ActivityPersistence::Encrypted(store) => match store.load_outages() {
+        Ok(outages) => {
+          let (start, end) = local_day_span(date);
+          ActivityDayOutages::Read {
+            outages: outages
+              .into_iter()
+              .filter(|outage| outage.start < end && outage.end > start)
+              .collect(),
+          }
+        }
+        Err(_) => {
+          tracing::warn!("activity outages could not be read");
+          ActivityDayOutages::Unreadable
+        }
+      },
+      ActivityPersistence::Initializing | ActivityPersistence::MemoryOnly => {
+        ActivityDayOutages::Read {
+          outages: Vec::new(),
+        }
+      }
+      ActivityPersistence::DeletionOnly(_)
+      | ActivityPersistence::KeyMissing(_)
+      | ActivityPersistence::Unreadable(_)
+      | ActivityPersistence::Incompatible(_) => ActivityDayOutages::Unreadable,
     }
   }
 
@@ -2340,12 +2856,13 @@ impl ActivityManager {
       retention: self.settings.retention,
       excluded_apps: self.settings.excluded_apps.clone(),
       other_account_history_days,
-      capture_details: self.settings.capture_details,
+      capture_details: self.settings.records_details(),
       detect_calls: !self.settings.ignore_calls,
       app_name_only_apps: self.settings.app_name_only_apps.clone(),
       details_access,
       browser_title_apps: self.settings.browser_title_apps.clone(),
       browser_apps: self.browser_apps(&segments),
+      calendar_source: self.settings.calendar_source,
       apps: day_apps(&segments),
       source_app_visuals: Vec::new(),
     }
@@ -2358,7 +2875,7 @@ impl ActivityManager {
   ) -> ActivitySetupSnapshot {
     ActivitySetupSnapshot {
       recording_status: self.settings.recording_status,
-      capture_details: self.settings.capture_details,
+      capture_details: self.settings.records_details(),
       detect_calls: !self.settings.ignore_calls,
       details_access,
     }
@@ -2618,22 +3135,30 @@ pub(crate) fn refresh_tray(app: &AppHandle) {
   });
 }
 
-pub fn tray_snapshot(app: &AppHandle) -> Option<TrayActivitySnapshot> {
-  if !is_enabled(app) {
-    return None;
+/// The tray's Activity entry; `None` when there is nothing to show.
+pub fn tray_activity(app: &AppHandle) -> Option<TrayActivity> {
+  if capture_binding(app).is_some() {
+    return Some(TrayActivity::Live(tray_snapshot(app)));
   }
-  let gates = app.try_state::<FeatureGates>()?;
-  let binding = gates.account_binding(DesktopFeature::ActivityTimeline)?;
+  let stopped = crate::activity_capture::stopped()?;
+  Some(TrayActivity::Stopped(
+    stopped,
+    if history_binding(app).is_some() {
+      StoppedHistory::Readable
+    } else {
+      StoppedHistory::Unavailable
+    },
+  ))
+}
+
+fn tray_snapshot(app: &AppHandle) -> Option<TrayActivitySnapshot> {
+  let binding = capture_binding(app)?;
   let state = app.try_state::<ActivityAppState>()?;
   let manager = state.lock().ok()?;
   manager.require_account_binding(&binding).ok()?;
   let snapshot = manager.tray_snapshot(Utc::now())?;
   drop(manager);
-  if gates
-    .account_binding(DesktopFeature::ActivityTimeline)
-    .as_ref()
-    != Some(&binding)
-  {
+  if capture_binding(app).as_ref() != Some(&binding) {
     return None;
   }
   Some(snapshot)
@@ -2643,17 +3168,10 @@ pub fn set_recording_from_tray(
   app: &AppHandle,
   status: ActivityRecordingStatus,
 ) -> Result<(), String> {
-  if !is_enabled(app) {
-    return Err("activity timeline is unavailable".to_string());
-  }
   if status == ActivityRecordingStatus::Off {
     return Err("activity tray action is invalid".to_string());
   }
-  let gates = app
-    .try_state::<FeatureGates>()
-    .ok_or_else(|| "activity account is unavailable".to_string())?;
-  let binding = gates
-    .account_binding(DesktopFeature::ActivityTimeline)
+  let binding = capture_binding(app)
     .ok_or_else(|| "activity account is unavailable".to_string())?;
   let state = app
     .try_state::<ActivityAppState>()
@@ -2662,15 +3180,13 @@ pub fn set_recording_from_tray(
     .lock()
     .map_err(with_cause_logged("activity timeline is unavailable"))?;
   manager.require_account_binding(&binding)?;
-  if gates
-    .account_binding(DesktopFeature::ActivityTimeline)
-    .as_ref()
-    != Some(&binding)
-  {
+  if capture_binding(app).as_ref() != Some(&binding) {
     return Err("activity account is unavailable".to_string());
   }
   manager.set_recording_from_tray(status, Utc::now())?;
+  let loaded = manager.loaded_choice();
   drop(manager);
+  crate::activity_capture::record_loaded_choice(loaded);
   emit_changed(app);
   Ok(())
 }
@@ -2714,10 +3230,7 @@ fn initialize_account_with(
 /// Installs only the current account's namespace. A slow keychain lookup
 /// cannot publish a store after its account generation has been superseded.
 pub fn initialize(app: &AppHandle) {
-  let Some(gates) = app.try_state::<FeatureGates>() else {
-    return;
-  };
-  let Some(binding) = gates.account_binding(DesktopFeature::ActivityTimeline) else {
+  let Some(binding) = history_binding(app) else {
     return;
   };
   let Some(state) = app.try_state::<ActivityAppState>() else {
@@ -2734,12 +3247,7 @@ pub fn initialize(app: &AppHandle) {
     .name("stella-activity-init".to_string())
     .spawn(move || {
       if initialize_account_with(&state, binding, open_persistence, |binding| {
-        app.try_state::<FeatureGates>().is_some_and(|gates| {
-          gates
-            .account_binding(DesktopFeature::ActivityTimeline)
-            .as_ref()
-            == Some(binding)
-        })
+        history_binding(&app).as_ref() == Some(binding)
       }) {
         emit_changed(&app);
       }
@@ -2770,7 +3278,8 @@ fn disable_feature(state: &ActivityAppState, now: DateTime<Utc>) -> Result<(), S
 }
 
 /// Starts or stops the feature after the server decision changed. Turning
-/// it off stops sampling and closes the window; linked history still expires.
+/// it off stops sampling; linked history still expires. The window stays
+/// while the capture check keeps the history readable (`capture_changed`).
 pub fn apply_feature_gate(app: &AppHandle, enabled: bool) {
   if enabled {
     initialize(app);
@@ -2781,7 +3290,6 @@ pub fn apply_feature_gate(app: &AppHandle, enabled: bool) {
   {
     tracing::warn!("activity timeline could not be written when disabled");
   }
-  crate::activity_window::close(app);
   emit_changed(app);
 }
 
@@ -2801,7 +3309,10 @@ fn observe_now(
   settings: &ActivitySettings,
 ) -> Observation {
   if idle >= IDLE_THRESHOLD {
-    return Observation::Idle { idle };
+    return Observation::Idle {
+      idle,
+      display: screen_display(),
+    };
   }
   let Some(foreground) = foreground_app::current(app) else {
     return Observation::Unattributed;
@@ -2876,14 +3387,21 @@ fn call_observation(
   }
 }
 
+/// Whether Activity may record into the manager's loaded account now.
+fn capture_permitted(app: &AppHandle, manager: &ActivityManager) -> bool {
+  capture_binding(app)
+    .is_some_and(|binding| manager.require_account_binding(&binding).is_ok())
+}
+
 fn sample(app: &AppHandle, state: &ActivityAppState, calls: &mut CallDetector) {
-  let enabled = is_enabled(app);
   let (generation, settings) = {
     let Ok(mut manager) = state.lock() else {
       return;
     };
-    if !enabled || !manager.is_recording() {
-      if manager.open.is_some() && manager.stop(Utc::now()).is_err() {
+    if !capture_permitted(app, &manager) || !manager.is_recording() {
+      if (manager.open.is_some() || manager.open_gap.is_some())
+        && manager.stop(Utc::now()).is_err()
+      {
         tracing::warn!("activity timeline could not be written");
       }
       calls.reset();
@@ -2931,7 +3449,8 @@ fn sample(app: &AppHandle, state: &ActivityAppState, calls: &mut CallDetector) {
   let Ok(mut manager) = state.lock() else {
     return;
   };
-  if !manager.accepts_observation(generation, is_enabled(app)) {
+  let permitted = capture_permitted(app, &manager);
+  if !manager.accepts_observation(generation, permitted) {
     return;
   }
   let Some(idle) = idle else {
@@ -2944,7 +3463,7 @@ fn sample(app: &AppHandle, state: &ActivityAppState, calls: &mut CallDetector) {
   };
   let Some(closed) = manager.commit_observation(ObservationCommit {
     generation,
-    enabled: is_enabled(app),
+    enabled: permitted,
     now,
     monotonic,
     idle,
@@ -3001,8 +3520,13 @@ pub fn start(app: AppHandle, state: ActivityAppState) {
     .spawn(move || {
       let mut last_tray_refresh = Instant::now();
       let mut calls = CallDetector::default();
+      let mut capture = crate::activity_capture::CaptureMonitor::new(
+        crate::activity_capture::CaptureRecords::in_app_data(),
+      );
       loop {
         std::thread::sleep(SAMPLE_INTERVAL);
+        // The check decides what this sample may do, so it runs first.
+        capture.tick(&app, &state);
         sample(&app, &state, &mut calls);
         if last_tray_refresh.elapsed() >= TRAY_REFRESH_INTERVAL {
           refresh_tray(&app);
@@ -3056,11 +3580,265 @@ mod tests {
       ActivityPersistence::MemoryOnly,
       ActivitySettings {
         recording_status: ActivityRecordingStatus::Recording,
+        capture_details: true,
         ..ActivitySettings::default()
       },
       at(0),
     );
     manager
+  }
+
+  /// A seeded generator, so every run checks the same sequences.
+  struct SplitMix(u64);
+
+  impl SplitMix {
+    fn next(&mut self) -> u64 {
+      self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
+      let mut z = self.0;
+      z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+      z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+      z ^ (z >> 31)
+    }
+
+    fn below(&mut self, bound: u64) -> u64 {
+      self.next() % bound
+    }
+  }
+
+  #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+  enum ServerRead {
+    Enabled,
+    Denied,
+    CredentialRefused,
+    Unreached,
+  }
+
+  const CAPTURE_NAMESPACE: &str =
+    "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0";
+  /// Ten active minutes of five-second samples.
+  const QUIET_LIMIT: u32 = 120;
+
+  struct CaptureModel {
+    records: PathBuf,
+    expiry: DateTime<Utc>,
+    wall: DateTime<Utc>,
+    monotonic: Duration,
+    gates: FeatureGates,
+    monitor: crate::activity_capture::CaptureMonitor,
+    manager: ActivityManager,
+    loaded: Option<crate::activity_capture::LoadedChoice>,
+    /// An explicit refusal came after the last answer that enabled Activity.
+    refused: bool,
+    /// Active samples since the last one that recorded.
+    quiet: u32,
+  }
+
+  impl CaptureModel {
+    fn new(records: PathBuf) -> Self {
+      Self {
+        monitor: crate::activity_capture::CaptureMonitor::new(Some(
+          crate::activity_capture::CaptureRecords::at(records.clone()),
+        )),
+        records,
+        // Far past the virtual clock and the real one the gate also reads.
+        expiry: Utc::now() + chrono::Duration::days(3650),
+        wall: at(0),
+        monotonic: Duration::from_secs(1_000),
+        gates: FeatureGates::default(),
+        manager: ActivityManager::new(),
+        loaded: None,
+        refused: false,
+        quiet: 0,
+      }
+    }
+
+    fn read(&mut self, read: ServerRead) {
+      use crate::feature_gate::AccountDecision;
+      let decision = match read {
+        ServerRead::Enabled => AccountDecision::Answered {
+          namespace: CAPTURE_NAMESPACE.into(),
+          expires_at: self.expiry,
+          enabled: std::collections::HashSet::from([DesktopFeature::ActivityTimeline]),
+        },
+        ServerRead::Denied => AccountDecision::Answered {
+          namespace: CAPTURE_NAMESPACE.into(),
+          expires_at: self.expiry,
+          enabled: std::collections::HashSet::new(),
+        },
+        ServerRead::CredentialRefused => AccountDecision::ReconnectNeeded {
+          namespace: Some(CAPTURE_NAMESPACE.into()),
+        },
+        ServerRead::Unreached => AccountDecision::Unconfirmed {
+          namespace: CAPTURE_NAMESPACE.into(),
+          expires_at: self.expiry,
+        },
+      };
+      self
+        .gates
+        .install(self.gates.generation().unwrap(), decision)
+        .unwrap();
+      crate::activity_capture::record_decision(
+        &self.gates,
+        &crate::activity_capture::CaptureRecords::at(self.records.clone()),
+        self.wall,
+      )
+      .unwrap();
+      self.refused = match read {
+        ServerRead::Enabled => false,
+        ServerRead::Denied | ServerRead::CredentialRefused => true,
+        ServerRead::Unreached => self.refused,
+      };
+    }
+
+    /// A new process: nothing decided, no store open, and the first read
+    /// right away.
+    fn restart(&mut self, read: ServerRead) {
+      self.gates = FeatureGates::default();
+      self.monitor = crate::activity_capture::CaptureMonitor::new(Some(
+        crate::activity_capture::CaptureRecords::at(self.records.clone()),
+      ));
+      self.manager = ActivityManager::new();
+      self.loaded = None;
+      self.read(read);
+    }
+
+    /// One sampler iteration: check, then sample, as `start` runs them.
+    fn tick(&mut self, active: bool) {
+      self.monotonic += SAMPLE_INTERVAL;
+      self.wall += chrono::Duration::from_std(SAMPLE_INTERVAL).unwrap();
+      self.monitor.check(&crate::activity_capture::CheckInput {
+        now: self.wall,
+        monotonic: self.monotonic,
+        active,
+        access: self
+          .gates
+          .access_at(DesktopFeature::ActivityTimeline, self.wall),
+        binding: self.gates.local_binding(),
+        credential_expiry: self.gates.credential_expiry(),
+        loaded: self.loaded.clone(),
+      });
+      let binding = crate::activity_capture::capture_binding_in(
+        &self.gates,
+        self.monitor.published(),
+        self.wall,
+      );
+      if let Some(binding) = &binding
+        && self.manager.require_account_binding(binding).is_err()
+      {
+        self.manager.install_account(
+          binding.clone(),
+          ActivityPersistence::MemoryOnly,
+          ActivitySettings {
+            recording_status: ActivityRecordingStatus::Recording,
+            ..ActivitySettings::default()
+          },
+          self.wall,
+        );
+        self.loaded = Some(crate::activity_capture::LoadedChoice {
+          namespace: CAPTURE_NAMESPACE.into(),
+          intent: ActivityRecordingStatus::Recording,
+          persisted: true,
+        });
+      }
+      let permitted = binding
+        .is_some_and(|binding| self.manager.require_account_binding(&binding).is_ok());
+      assert!(!(self.refused && permitted), "recording after a refusal");
+      let idle = if active {
+        Duration::ZERO
+      } else {
+        IDLE_THRESHOLD + SAMPLE_INTERVAL
+      };
+      let committed = self.manager.commit_observation(ObservationCommit {
+        generation: self.manager.observation_generation,
+        enabled: permitted,
+        now: self.wall,
+        monotonic: self.monotonic,
+        idle,
+        observation: if active {
+          active_observation()
+        } else {
+          Observation::Idle {
+            idle,
+            display: GapDisplay::StayedOn,
+          }
+        },
+        partition: partition_in(&Local, self.wall),
+      });
+      assert!(
+        !(self.refused && committed.is_some()),
+        "a sample was committed after a refusal"
+      );
+      if !active {
+        return;
+      }
+      self.quiet = if committed.is_some() {
+        0
+      } else {
+        self.quiet + 1
+      };
+      if self.quiet >= QUIET_LIMIT {
+        assert!(self.monitor.is_stopped(), "a quiet stop is not shown");
+        assert!(
+          self.monitor.outage_covers(CAPTURE_NAMESPACE, self.wall),
+          "a quiet stop is not recorded as an outage"
+        );
+      }
+    }
+  }
+
+  fn active_observation() -> Observation {
+    active("app")
+  }
+
+  fn server_read(random: &mut SplitMix) -> ServerRead {
+    match random.below(4) {
+      0 => ServerRead::Enabled,
+      1 => ServerRead::Denied,
+      2 => ServerRead::CredentialRefused,
+      _ => ServerRead::Unreached,
+    }
+  }
+
+  #[test]
+  fn recording_intent_ends_in_a_segment_or_a_typed_outage_and_never_after_a_refusal() {
+    for seed in 0..48_u64 {
+      let records = std::env::temp_dir()
+        .join(format!("stella-capture-property-{}", uuid::Uuid::new_v4()));
+      let mut model = CaptureModel::new(records.clone());
+      let mut random = SplitMix(seed);
+      // The member turned recording on while Activity was enabled.
+      model.read(ServerRead::Enabled);
+      model.tick(true);
+      for _ in 0..300 {
+        match random.below(20) {
+          0 => model.read(server_read(&mut random)),
+          1 => model.restart(server_read(&mut random)),
+          2 => {
+            // The computer sleeps: both clocks move on, nothing samples.
+            let slept = Duration::from_secs(60 * (1 + random.below(120)));
+            model.monotonic += slept;
+            model.wall += chrono::Duration::from_std(slept).unwrap();
+          }
+          3 => {
+            let hours = i64::try_from(random.below(5)).unwrap() - 2;
+            model.wall += chrono::Duration::hours(hours);
+          }
+          _ => {
+            let active = random.below(10) != 0;
+            for _ in 0..(1 + random.below(60)) {
+              model.tick(active);
+            }
+          }
+        }
+      }
+      // However the sequence ended, a long enough stretch settles it.
+      for _ in 0..(QUIET_LIMIT + 1) {
+        model.tick(true);
+      }
+      if records.exists() {
+        std::fs::remove_dir_all(&records).unwrap();
+      }
+    }
   }
 
   fn segments(manager: &ActivityManager) -> Vec<(String, i64, i64)> {
@@ -3087,6 +3865,65 @@ mod tests {
         end: at(60).to_rfc3339(),
       }]],
     }
+  }
+
+  #[test]
+  fn new_settings_record_app_names_only() {
+    assert!(!ActivitySettings::default().capture_details);
+    let mut manager = ActivityManager::new();
+    manager.install(
+      ActivityPersistence::MemoryOnly,
+      ActivitySettings {
+        recording_status: ActivityRecordingStatus::Recording,
+        ..ActivitySettings::default()
+      },
+      at(0),
+    );
+    manager.observe(at(0), active_details("word"));
+    manager.observe(at(5), active_details("word"));
+    manager.stop(at(5)).unwrap();
+    let recorded: Vec<_> = manager.days.values().flatten().collect();
+    assert_eq!(recorded.len(), 1);
+    assert_eq!(recorded[0].window_title, None);
+    assert_eq!(recorded[0].document, None);
+  }
+
+  // The default changed after users saved their choice; a saved choice is
+  // read as saved, in either direction.
+  #[test]
+  fn a_saved_details_choice_is_kept() {
+    let saved = |capture: Option<bool>| {
+      let mut value = serde_json::to_value(ActivitySettings::default()).unwrap();
+      let fields = value.as_object_mut().unwrap();
+      match capture {
+        Some(capture) => fields.insert("captureDetails".into(), capture.into()),
+        None => fields.remove("captureDetails"),
+      };
+      serde_json::from_value::<ActivitySettings>(value)
+        .unwrap()
+        .capture_details
+    };
+    assert!(saved(Some(true)));
+    assert!(!saved(Some(false)));
+    assert!(!saved(None));
+  }
+
+  #[test]
+  fn managed_policy_keeps_details_off_without_changing_the_choice() {
+    let chosen = ActivitySettings {
+      capture_details: true,
+      ..ActivitySettings::default()
+    };
+    let open = crate::managed_policy::ManagedPolicy::default();
+    let managed = crate::managed_policy::ManagedPolicy {
+      activity_details_disabled: true,
+      ..crate::managed_policy::ManagedPolicy::default()
+    };
+    assert!(chosen.records_details_under(&open));
+    assert!(!chosen.records_details_under(&managed));
+    assert!(!ActivitySettings::default().records_details_under(&open));
+    assert!(!ActivitySettings::default().records_details_under(&managed));
+    assert!(chosen.capture_details);
   }
 
   #[test]
@@ -3424,6 +4261,7 @@ mod tests {
         "apps",
         "browserApps",
         "browserTitleApps",
+        "calendarSource",
         "captureDetails",
         "date",
         "deletionStatus",
@@ -4430,6 +5268,7 @@ mod tests {
       at(405),
       Observation::Idle {
         idle: Duration::from_secs(305),
+        display: GapDisplay::StayedOn,
       },
     );
 
@@ -4459,6 +5298,7 @@ mod tests {
       at(1),
       Observation::Idle {
         idle: Duration::from_secs(600),
+        display: GapDisplay::StayedOn,
       },
     );
     assert!(segments(&manager).is_empty());
@@ -6063,7 +6903,50 @@ mod tests {
       contract["recordingStatuses"],
       serde_json::Value::Array(statuses)
     );
+    let stop_reasons = crate::activity_capture::StopReason::ALL
+      .iter()
+      .map(|reason| {
+        let serde_json::Value::String(name) = serde_json::to_value(reason).unwrap()
+        else {
+          panic!("an activity stop reason must serialize as a string");
+        };
+        (name, serde_json::Value::Bool(true))
+      })
+      .collect::<serde_json::Map<_, _>>();
+    assert_eq!(
+      contract["stopReasons"],
+      serde_json::Value::Object(stop_reasons)
+    );
+    assert_eq!(contract["gapDisplays"], name_set(GapDisplay::ALL));
+    assert_eq!(contract["gapEnds"], name_set(GapEnd::ALL));
+    let calendar_sources = [
+      ActivityCalendarSource::Off,
+      ActivityCalendarSource::Microsoft365,
+    ]
+    .iter()
+    .map(|source| serde_json::to_value(source).unwrap())
+    .collect::<Vec<_>>();
+    assert_eq!(
+      contract["calendarSources"],
+      serde_json::Value::Array(calendar_sources)
+    );
     assert_eq!(contract["changedEvent"], CHANGED_EVENT);
+  }
+
+  /// The serialized names of `values`, as the contract's key sets list them.
+  fn name_set<T: Serialize>(values: &[T]) -> serde_json::Value {
+    serde_json::Value::Object(
+      values
+        .iter()
+        .map(|value| {
+          let serde_json::Value::String(name) = serde_json::to_value(value).unwrap()
+          else {
+            panic!("a contract value must serialize as a string");
+          };
+          (name, serde_json::Value::Bool(true))
+        })
+        .collect(),
+    )
   }
 
   /// The local stella AI approval is gone: drafting consent lives on the
@@ -6140,6 +7023,7 @@ mod tests {
       at(2470),
       Observation::Idle {
         idle: Duration::from_secs(2410),
+        display: GapDisplay::StayedOn,
       },
     );
     manager.stop(at(2470)).unwrap();
@@ -6244,5 +7128,547 @@ mod tests {
     assert!(manager.settings.ignore_calls);
     manager.set_detect_calls(true, at(75)).unwrap();
     assert!(!manager.settings.ignore_calls);
+  }
+
+  /// One sampler iteration at `now`, `idle` after the last input, with the
+  /// monotonic clock following the wall clock unless the test moves it.
+  fn sample_gap_at(
+    manager: &mut ActivityManager,
+    now: DateTime<Utc>,
+    monotonic: Duration,
+    idle: Duration,
+    observation: Observation,
+  ) {
+    manager.observe_at(now, monotonic, idle, observation, partition_in(&Local, now));
+  }
+
+  /// Drives samples every five seconds from `from` to `to` (seconds after
+  /// `at(0)`), input last seen at `last_input`; idle samples report
+  /// `display`.
+  fn idle_span(
+    manager: &mut ActivityManager,
+    span: (i64, i64),
+    last_input: i64,
+    display: impl Fn(i64) -> GapDisplay,
+  ) {
+    for second in (span.0..=span.1).step_by(5) {
+      let idle = Duration::from_secs(u64::try_from(second - last_input).unwrap());
+      let observation = if idle >= IDLE_THRESHOLD {
+        Observation::Idle {
+          idle,
+          display: display(second),
+        }
+      } else {
+        active("word")
+      };
+      sample_gap_at(manager, at(second), monotonic_at(second), idle, observation);
+    }
+  }
+
+  fn monotonic_at(second: i64) -> Duration {
+    Duration::from_secs(u64::try_from(100_000 + second).unwrap())
+  }
+
+  fn active_at(manager: &mut ActivityManager, second: i64) {
+    sample_gap_at(
+      manager,
+      at(second),
+      monotonic_at(second),
+      Duration::ZERO,
+      active("word"),
+    );
+  }
+
+  fn gaps(manager: &ActivityManager) -> Vec<(i64, i64, GapEnd, GapDisplay)> {
+    manager
+      .gaps
+      .values()
+      .flatten()
+      .map(|gap| {
+        (
+          (gap.start - at(0)).num_seconds(),
+          (gap.end - at(0)).num_seconds(),
+          gap.ended_by,
+          gap.display,
+        )
+      })
+      .collect()
+  }
+
+  #[test]
+  fn a_gap_is_kept_from_five_minutes_to_four_hours() {
+    assert_eq!(MIN_GAP.to_std().unwrap(), IDLE_THRESHOLD);
+    let gap = |seconds: i64| ActivityGap {
+      start: at(0),
+      end: at(seconds),
+      ended_by: GapEnd::Input,
+      display: GapDisplay::StayedOn,
+    };
+    assert!(!gap(4 * 60 + 59).kept());
+    assert!(gap(5 * 60).kept());
+    assert!(gap(4 * 60 * 60).kept());
+    assert!(!gap(4 * 60 * 60 + 1).kept());
+  }
+
+  #[test]
+  fn an_idle_stretch_is_kept_as_a_gap_between_recorded_activity() {
+    let mut manager = recording_manager();
+    for second in (0..=100).step_by(5) {
+      active_at(&mut manager, second);
+    }
+    idle_span(&mut manager, (105, 1200), 100, |_| GapDisplay::StayedOn);
+    active_at(&mut manager, 1205);
+    active_at(&mut manager, 1210);
+    manager.stop(at(1210)).unwrap();
+
+    assert_eq!(
+      segments(&manager),
+      [("word".into(), 0, 100), ("word".into(), 1205, 1210)]
+    );
+    assert_eq!(
+      gaps(&manager),
+      [(100, 1205, GapEnd::Input, GapDisplay::StayedOn)]
+    );
+  }
+
+  #[test]
+  fn a_sleep_shorter_than_five_minutes_leaves_no_gap() {
+    for (back_after, kept) in [(299, false), (300, true)] {
+      let mut manager = recording_manager();
+      for second in (0..=100).step_by(5) {
+        active_at(&mut manager, second);
+      }
+      // macOS stops the monotonic clock while asleep.
+      sample_gap_at(
+        &mut manager,
+        at(100 + back_after),
+        monotonic_at(105),
+        Duration::ZERO,
+        active("word"),
+      );
+      let expected = if kept {
+        vec![(100, 100 + back_after, GapEnd::Input, GapDisplay::Slept)]
+      } else {
+        Vec::new()
+      };
+      assert_eq!(gaps(&manager), expected, "back after {back_after} s");
+    }
+  }
+
+  #[test]
+  fn a_gap_over_four_hours_is_not_kept() {
+    for (away, kept) in [(4 * 60 * 60, true), (4 * 60 * 60 + 5, false)] {
+      let mut manager = recording_manager();
+      active_at(&mut manager, 0);
+      active_at(&mut manager, 5);
+      idle_span(&mut manager, (10, 5 + away - 5), 5, |_| {
+        GapDisplay::StayedOn
+      });
+      active_at(&mut manager, 5 + away);
+      assert_eq!(gaps(&manager).len(), usize::from(kept), "away {away} s");
+    }
+  }
+
+  #[test]
+  fn a_lock_or_a_sleep_names_the_whole_gap() {
+    let mut manager = recording_manager();
+    active_at(&mut manager, 0);
+    active_at(&mut manager, 5);
+    idle_span(&mut manager, (10, 900), 5, |second| {
+      if (600..700).contains(&second) {
+        GapDisplay::Locked
+      } else {
+        GapDisplay::StayedOn
+      }
+    });
+    active_at(&mut manager, 905);
+    // Locked for a while, then the display slept for an hour.
+    idle_span(&mut manager, (910, 1500), 905, |second| {
+      if second < 1300 {
+        GapDisplay::Locked
+      } else {
+        GapDisplay::StayedOn
+      }
+    });
+    sample_gap_at(
+      &mut manager,
+      at(5100),
+      monotonic_at(1505),
+      Duration::from_secs(5100 - 905),
+      Observation::Idle {
+        idle: Duration::from_secs(5100 - 905),
+        display: GapDisplay::StayedOn,
+      },
+    );
+    sample_gap_at(
+      &mut manager,
+      at(5105),
+      monotonic_at(1510),
+      Duration::ZERO,
+      active("word"),
+    );
+
+    assert_eq!(
+      gaps(&manager),
+      [
+        (5, 905, GapEnd::Input, GapDisplay::Locked),
+        (905, 5105, GapEnd::Input, GapDisplay::Slept),
+      ]
+    );
+  }
+
+  #[test]
+  fn a_stop_or_a_clock_set_back_ends_a_gap_at_its_last_sample() {
+    let mut manager = recording_manager();
+    active_at(&mut manager, 0);
+    active_at(&mut manager, 5);
+    idle_span(&mut manager, (10, 900), 5, |_| GapDisplay::StayedOn);
+    manager.stop(at(905)).unwrap();
+    assert_eq!(
+      gaps(&manager),
+      [(5, 900, GapEnd::Stop, GapDisplay::StayedOn)]
+    );
+
+    let mut manager = recording_manager();
+    active_at(&mut manager, 0);
+    active_at(&mut manager, 5);
+    idle_span(&mut manager, (10, 900), 5, |_| GapDisplay::StayedOn);
+    sample_gap_at(
+      &mut manager,
+      at(400),
+      monotonic_at(905),
+      Duration::ZERO,
+      active("word"),
+    );
+    assert_eq!(
+      gaps(&manager),
+      [(5, 900, GapEnd::Stop, GapDisplay::StayedOn)]
+    );
+  }
+
+  #[test]
+  fn a_call_without_input_is_never_inside_a_gap() {
+    let mut manager = recording_manager();
+    for second in (0..=60).step_by(5) {
+      active_at(&mut manager, second);
+    }
+    for second in (65..=1200).step_by(5) {
+      sample_gap_at(
+        &mut manager,
+        at(second),
+        monotonic_at(second),
+        Duration::ZERO,
+        call("teams", None),
+      );
+    }
+    // Input last came at 60 s, before the call.
+    idle_span(&mut manager, (1205, 1600), 60, |_| GapDisplay::StayedOn);
+    active_at(&mut manager, 1605);
+
+    assert_eq!(
+      gaps(&manager),
+      [(1200, 1605, GapEnd::Input, GapDisplay::StayedOn)]
+    );
+  }
+
+  #[test]
+  fn a_gap_across_midnight_is_split_between_the_days() {
+    let date = NaiveDate::from_ymd_opt(2026, 3, 10).unwrap();
+    let midnight = local_midnight(date.succ_opt().unwrap());
+    let offset = (midnight - at(0)).num_seconds();
+    let mut manager = recording_manager();
+    active_at(&mut manager, offset - 1200);
+    active_at(&mut manager, offset - 1195);
+    idle_span(
+      &mut manager,
+      (offset - 1190, offset + 600),
+      offset - 1195,
+      |_| GapDisplay::StayedOn,
+    );
+    active_at(&mut manager, offset + 605);
+
+    assert_eq!(
+      gaps(&manager),
+      [
+        (offset - 1195, offset, GapEnd::DayEnd, GapDisplay::StayedOn),
+        (offset, offset + 605, GapEnd::Input, GapDisplay::StayedOn),
+      ]
+    );
+    assert_eq!(
+      manager.gaps.keys().copied().collect::<Vec<_>>(),
+      [date, date.succ_opt().unwrap()]
+    );
+  }
+
+  #[test]
+  fn gaps_are_written_with_the_day_and_old_days_read_without_them() {
+    let root =
+      std::env::temp_dir().join(format!("stella-gaps-{}", uuid::Uuid::new_v4()));
+    let store = ActivityStore::new([7; 32], root.clone());
+    let date = local_date(at(0));
+    store
+      .save_day(
+        date,
+        &[ActivitySegment {
+          app_identifier: "word".into(),
+          app_name: "Word".into(),
+          window_title: None,
+          document: None,
+          matter_id: None,
+          call: false,
+          start: at(0),
+          end: at(5),
+        }],
+      )
+      .unwrap();
+    // A file written before gaps existed reads as having none.
+    assert!(store.load_gaps(date).unwrap().is_empty());
+
+    let mut manager = ActivityManager::new();
+    manager.install(
+      ActivityPersistence::Encrypted(store.clone()),
+      ActivitySettings {
+        recording_status: ActivityRecordingStatus::Recording,
+        ..ActivitySettings::default()
+      },
+      at(5),
+    );
+    active_at(&mut manager, 10);
+    active_at(&mut manager, 15);
+    idle_span(&mut manager, (20, 700), 15, |_| GapDisplay::Locked);
+    active_at(&mut manager, 705);
+    manager.stop(at(710)).unwrap();
+
+    let saved = store.load_gaps(date).unwrap();
+    assert_eq!(
+      saved,
+      [ActivityGap {
+        start: at(15),
+        end: at(705),
+        ended_by: GapEnd::Input,
+        display: GapDisplay::Locked,
+      }]
+    );
+    assert_eq!(store.load_day(date).unwrap().len(), 2);
+    std::fs::remove_dir_all(root).unwrap();
+  }
+
+  /// A recording manager on `store`, as a new process installs it.
+  fn restarted_on(store: &ActivityStore, now: DateTime<Utc>) -> ActivityManager {
+    let mut manager = ActivityManager::new();
+    manager.install(
+      ActivityPersistence::Encrypted(store.clone()),
+      ActivitySettings {
+        recording_status: ActivityRecordingStatus::Recording,
+        ..ActivitySettings::default()
+      },
+      now,
+    );
+    manager
+  }
+
+  #[test]
+  fn a_gap_after_a_restart_starts_after_the_call_an_earlier_run_recorded() {
+    let root =
+      std::env::temp_dir().join(format!("stella-gaps-{}", uuid::Uuid::new_v4()));
+    let store = ActivityStore::new([7; 32], root.clone());
+    let date = local_date(at(0));
+    let mut first = restarted_on(&store, at(0));
+    active_at(&mut first, 0);
+    for second in (5..=600).step_by(5) {
+      sample_gap_at(
+        &mut first,
+        at(second),
+        monotonic_at(second),
+        Duration::ZERO,
+        call("teams", None),
+      );
+    }
+    first.stop(at(600)).unwrap();
+    let call_end = store
+      .load_day(date)
+      .unwrap()
+      .iter()
+      .filter(|segment| segment.call)
+      .map(|segment| segment.end)
+      .max()
+      .unwrap();
+    assert_eq!(call_end, at(600));
+
+    // The app restarts while the computer stays idle; input last came
+    // before the call.
+    let mut restarted = restarted_on(&store, at(605));
+    idle_span(&mut restarted, (605, 1200), 0, |_| GapDisplay::StayedOn);
+    active_at(&mut restarted, 1205);
+    restarted.stop(at(1210)).unwrap();
+
+    assert_eq!(
+      store.load_gaps(date).unwrap(),
+      [ActivityGap {
+        start: call_end,
+        end: at(1205),
+        ended_by: GapEnd::Input,
+        display: GapDisplay::StayedOn,
+      }]
+    );
+    std::fs::remove_dir_all(root).unwrap();
+  }
+
+  #[test]
+  fn a_restart_never_records_inside_a_gap_an_earlier_run_kept() {
+    let root =
+      std::env::temp_dir().join(format!("stella-gaps-{}", uuid::Uuid::new_v4()));
+    let store = ActivityStore::new([7; 32], root.clone());
+    let date = local_date(at(0));
+    let mut first = restarted_on(&store, at(0));
+    for second in (0..=100).step_by(5) {
+      active_at(&mut first, second);
+    }
+    idle_span(&mut first, (105, 1200), 100, |_| GapDisplay::StayedOn);
+    first.stop(at(1200)).unwrap();
+    let kept = store.load_gaps(date).unwrap();
+    assert_eq!(
+      kept,
+      [ActivityGap {
+        start: at(100),
+        end: at(1200),
+        ended_by: GapEnd::Stop,
+        display: GapDisplay::StayedOn,
+      }]
+    );
+
+    // A new process whose clock was set back into the kept gap.
+    let mut restarted = restarted_on(&store, at(900));
+    for second in (900..=1000).step_by(5) {
+      active_at(&mut restarted, second);
+    }
+    restarted.stop(at(1000)).unwrap();
+    for segment in store.load_day(date).unwrap() {
+      assert!(
+        segment.end <= kept[0].start || segment.start >= kept[0].end,
+        "recorded time inside a kept gap"
+      );
+    }
+    std::fs::remove_dir_all(root).unwrap();
+  }
+
+  /// Whatever the samples, recorded time and gaps never overlap, every gap
+  /// is within the kept range and inside its day, and gaps never overlap
+  /// each other: what the member may attest is never recorded time.
+  #[test]
+  fn recorded_time_and_gaps_never_overlap() {
+    for seed in 0..64_u64 {
+      let mut random = SplitMix(seed);
+      let mut manager = recording_manager();
+      let mut wall = 0_i64;
+      let mut monotonic = 0_i64;
+      let mut last_input = 0_i64;
+      for _ in 0..400 {
+        match random.below(20) {
+          // Sleep: wall time passes, the monotonic clock barely moves.
+          0 => {
+            wall += i64::try_from(60 * (1 + random.below(300))).unwrap();
+            monotonic += 5;
+          }
+          // A clock set back.
+          1 => {
+            wall -= i64::try_from(1 + random.below(900)).unwrap();
+            monotonic += 5;
+          }
+          // Paused, then resumed at the next sample.
+          2 => {
+            manager.stop(at(wall)).unwrap();
+            continue;
+          }
+          _ => {
+            wall += 5;
+            monotonic += 5;
+          }
+        }
+        let observation = match random.below(10) {
+          0..=3 => {
+            last_input = wall;
+            active(if random.below(2) == 0 { "word" } else { "mail" })
+          }
+          4 => {
+            last_input = wall;
+            call("teams", None)
+          }
+          _ => {
+            let idle = wall - last_input;
+            if idle >= 300 {
+              Observation::Idle {
+                idle: Duration::from_secs(u64::try_from(idle).unwrap()),
+                display: GapDisplay::ALL[usize::try_from(random.below(3)).unwrap()],
+              }
+            } else {
+              active("word")
+            }
+          }
+        };
+        let idle =
+          Duration::from_secs(u64::try_from((wall - last_input).max(0)).unwrap());
+        let idle = match observation {
+          Observation::Call { .. } => Duration::ZERO,
+          _ => idle,
+        };
+        sample_gap_at(
+          &mut manager,
+          at(wall),
+          Duration::from_secs(u64::try_from(100_000 + monotonic).unwrap()),
+          idle,
+          observation,
+        );
+      }
+      manager.stop(at(wall)).unwrap();
+
+      for (date, day_gaps) in &manager.gaps {
+        let (day_start, day_end) = local_day_span(*date);
+        for pair in day_gaps.windows(2) {
+          assert!(pair[0].end <= pair[1].start, "seed {seed}: gaps overlap");
+        }
+        for gap in day_gaps {
+          assert!(gap.kept(), "seed {seed}: a gap outside the kept range");
+          assert!(
+            gap.start >= day_start && gap.end <= day_end,
+            "seed {seed}: a gap outside its day"
+          );
+          for segment in manager.days.get(date).into_iter().flatten() {
+            assert!(
+              segment.end <= gap.start || segment.start >= gap.end,
+              "seed {seed}: recorded time inside a gap"
+            );
+          }
+        }
+      }
+    }
+  }
+
+  #[test]
+  fn calendar_events_stay_off_until_the_user_turns_them_on() {
+    let settings: ActivitySettings = serde_json::from_value(serde_json::json!({
+      "recordingStatus": "recording",
+      "retention": "month",
+    }))
+    .unwrap();
+    assert_eq!(settings.calendar_source, ActivityCalendarSource::Off);
+    assert_eq!(
+      ActivitySettings::default().calendar_source,
+      ActivityCalendarSource::Off
+    );
+    let mut manager = recording_manager();
+    manager
+      .set_calendar_source(ActivityCalendarSource::Microsoft365)
+      .unwrap();
+    assert_eq!(
+      manager.calendar_source(),
+      ActivityCalendarSource::Microsoft365
+    );
+    let written = serde_json::to_value(&manager.settings).unwrap();
+    assert_eq!(written["calendarSource"], "microsoft365");
+    manager
+      .set_calendar_source(ActivityCalendarSource::Off)
+      .unwrap();
+    assert_eq!(manager.calendar_source(), ActivityCalendarSource::Off);
   }
 }

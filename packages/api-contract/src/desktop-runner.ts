@@ -16,7 +16,10 @@ import {
   desktopProtocolSchema,
   desktopVersionSchema,
 } from "./desktop-presence";
-import { desktopRunnerQuestionAnswersSchema } from "./desktop-runner-answers";
+import {
+  DESKTOP_RUNNER_APPROVAL_DECISIONS,
+  desktopRunnerQuestionAnswersSchema,
+} from "./desktop-runner-answers";
 
 /**
  * Wire contract for the outbound WebSocket a desktop runner holds to the API.
@@ -36,16 +39,15 @@ import { desktopRunnerQuestionAnswersSchema } from "./desktop-runner-answers";
  * closed value plus rejected ones; the desktop's serde types round-trip the
  * same file, so either side drifting fails its tests.
  */
-export const DESKTOP_RUNNER_PROTOCOL = { current: 2, minimum: 1 } as const;
+export const DESKTOP_RUNNER_PROTOCOL = { current: 3, minimum: 2 } as const;
 
 /**
- * The first protocol with `folder.restore` and `folder.restored`. A desktop
- * on an older one still runs turns, is never sent a restore, and an undo of
- * a turn it ran is refused as `desktop_update_required`. Once a desktop
- * release that speaks this protocol is published, `minimum` rises to it and
- * this boundary goes.
+ * The first protocol with `run.site_grants`. A desktop on an older one keeps
+ * the website approvals its runs started with and is never sent a change.
+ * Once a desktop release that speaks this protocol is published, `minimum`
+ * rises to it and this boundary goes.
  */
-export const DESKTOP_RUNNER_FOLDER_RESTORE_PROTOCOL = 2;
+export const DESKTOP_RUNNER_SITE_GRANTS_PROTOCOL = 3;
 
 /**
  * How many checkpoints a computer keeps per folder, newest first: the API
@@ -257,6 +259,7 @@ export const DESKTOP_RUNNER_SERVER_MESSAGE = {
   runInput: "run.input",
   runApproval: "run.approval",
   runAnswer: "run.answer",
+  runSiteGrants: "run.site_grants",
   runInterrupt: "run.interrupt",
   runCancel: "run.cancel",
   runToken: "run.token",
@@ -392,11 +395,7 @@ export const DESKTOP_RUNNER_APPROVAL_KINDS = [
   "tool",
 ] as const;
 
-export const DESKTOP_RUNNER_APPROVAL_DECISIONS = [
-  "approve",
-  "approve_for_session",
-  "deny",
-] as const;
+export { DESKTOP_RUNNER_APPROVAL_DECISIONS };
 
 export const DESKTOP_RUNNER_RUN_OUTCOMES = [
   "completed",
@@ -1096,6 +1095,18 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
     runId: runIdSchema,
     requestId: requestIdSchema,
     answers: desktopRunnerQuestionAnswersSchema,
+  }),
+  /**
+   * The member's website approvals as they stand now, for a run that is
+   * going: the whole set, never a change to it, so the newest `revision`
+   * the run receives is what holds. A website no longer in it is no longer
+   * allowed in the run, even where the member allowed it in the run itself.
+   */
+  v.object({
+    type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.runSiteGrants),
+    runId: runIdSchema,
+    revision: v.pipe(v.string(), v.uuid()),
+    origins: browserSiteGrantOriginsSchema,
   }),
   v.object({
     type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.runInterrupt),

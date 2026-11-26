@@ -170,8 +170,27 @@ const sanitizeContext = (
   return Object.keys(sanitized).length === 0 ? undefined : sanitized;
 };
 
-/** SHA-256 over the sanitized content: the dedupe identity of a report. */
+/** Who a fingerprint belongs to: the public intake, or one account in one firm. */
+export type FeedbackFingerprintReporter = {
+  via: "intake" | "mcp" | "web";
+  userId: string | null;
+  organizationId: string | null;
+};
+
+/**
+ * SHA-256 over the sanitized content and who filed it: the dedupe identity of
+ * a report. A resend by the same reporter matches; the same text from another
+ * account, firm or channel is a report of its own.
+ */
 export const feedbackFingerprint = (
   report: FeedbackReportInput,
   instance: string | undefined,
-): string => hashSha256Hex(JSON.stringify([report, instance ?? null]));
+  reporter: FeedbackFingerprintReporter,
+): string =>
+  hashSha256Hex(
+    JSON.stringify([
+      report,
+      instance ?? null,
+      [reporter.via, reporter.userId, reporter.organizationId],
+    ]),
+  );

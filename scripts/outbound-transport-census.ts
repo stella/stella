@@ -1022,6 +1022,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch"],
   },
   {
+    path: "packages/agent-engine/src/sidecar/browser-download-filing.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Posts a PDF the member's browser downloaded for a local run to the configured stella API origin with the run's agent token, under a bounded deadline and refusing redirects.",
+    transports: ["global:fetch"],
+  },
+  {
     path: "packages/agent-engine/src/sidecar/outputs.ts",
     class: "operator-configured-infrastructure",
     reason:
@@ -1259,6 +1266,11 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
     reason: "Direct service boundary for desktop registry requests.",
   },
   {
+    path: "apps/api/src/handlers/desktop-time-entries/calendar-events.ts",
+    reason:
+      "Authenticated desktop boundary for the member's delegated calendar read in the Activity day review.",
+  },
+  {
     path: "apps/api/src/handlers/entities/pdf-signing-certificate.ts",
     reason: "Issues request authority for the PDF certificate request.",
   },
@@ -1327,6 +1339,11 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
   {
     path: "apps/api/src/handlers/mcp-connectors/probe-connector.ts",
     reason: "Issues request authority for the connector probe route.",
+  },
+  {
+    path: "apps/api/src/handlers/desktop-presence/report.ts",
+    reason:
+      "Desktop presence boundary reading the newest release from the desktop updater's public feed on the downloads CDN.",
   },
   {
     path: "apps/api/src/handlers/mobile-updates/read.ts",

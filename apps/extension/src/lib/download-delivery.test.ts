@@ -34,6 +34,7 @@ afterEach(() => {
   setShownPdfReader({
     read: async () => ({ reason: "interrupted", type: "refused" }),
     release: async () => undefined,
+    slice: async () => null,
   });
   setDeliveryTimer(() => () => undefined);
   if (originalChrome) {
@@ -206,6 +207,8 @@ const installFakeChrome = (holder: Holder) => {
     release: async (downloadUrl) => {
       reader.releases.push(downloadUrl);
     },
+    // A desktop chat's save never slices what the reader kept.
+    slice: async () => null,
   });
   return {
     chromeDownloads,
@@ -320,7 +323,7 @@ describe("a download from chat's tab", () => {
     );
   });
 
-  test("under the web connection the same PDF is stopped and nobody is told", async () => {
+  test("under a web connection that ran no command the same PDF is stopped and nobody is told", async () => {
     const { events, items, reports } = installFakeChrome({ type: "web" });
     await loadDownloadScope();
     const download = fileDownload(902, {

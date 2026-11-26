@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  CHAT_LOCAL_RUN_APPROVAL_CEILINGS,
   CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS,
   CHAT_LOCAL_RUN_HARNESSES,
   type ChatLocalHarnessReadiness,
@@ -8,6 +9,7 @@ import {
   type ChatLocalRunnerReadiness,
   type ChatLocalRunReadiness,
 } from "@stll/api-contract/chat-run-target";
+import { DESKTOP_RUNNER_APPROVAL_MODES } from "@stll/api-contract/desktop-runner";
 
 import {
   CHAT_LOCAL_HARNESS_NAMES,
@@ -20,6 +22,7 @@ import {
   localRunTargetFor,
   localRunTargetState,
   permissionView,
+  runTargetNeedsCeiling,
   runTargetValue,
   sameRunTarget,
   withRunFolder,
@@ -43,6 +46,7 @@ const runner = (
   linkedFolders: ChatLocalRunnerReadiness["linkedFolders"] = [],
 ): ChatLocalRunnerReadiness => ({
   desktopId: Bun.randomUUIDv7(),
+  appVersion: "0.9.91",
   connected,
   lastSeenAt: "2026-11-03T10:00:00.000Z",
   harnesses,
@@ -56,7 +60,9 @@ const stateOf = (
 
 describe("the Run on choices", () => {
   test("a member without the feature is offered no Run on choice at all", () => {
-    expect(chatLocalHarnessOptions({ status: "hidden" })).toBeNull();
+    expect(
+      chatLocalHarnessOptions({ status: "hidden", maxApprovals: "full_auto" }),
+    ).toBeNull();
     expect(chatLocalHarnessOptions(undefined)).toBeNull();
   });
 
@@ -187,10 +193,25 @@ const READY_CLAUDE: Extract<ChatLocalHarnessOption, { state: "ready" }> = {
 const CLAUDE = { ...LOCAL, harness: "claude-code", model: "sonnet" } as const;
 
 describe("the permission choice", () => {
-  test("is offered only for a local target whose harness is ready", () => {
-    expect(
-      permissionView({ kind: "cloud" }, [READY_CLAUDE], NO_LIMIT),
-    ).toBeNull();
+  test("on stella's models every level is offered, held to the organization's ceiling", () => {
+    for (const ceiling of CHAT_LOCAL_RUN_APPROVAL_CEILINGS) {
+      expect(
+        permissionView({ kind: "cloud", approvals: "ask" }, [], ceiling),
+      ).toEqual({
+        type: "choice",
+        modes: DESKTOP_RUNNER_APPROVAL_MODES.map((mode) => ({
+          mode,
+          availability:
+            DESKTOP_RUNNER_APPROVAL_MODES.indexOf(mode) <=
+            DESKTOP_RUNNER_APPROVAL_MODES.indexOf(ceiling)
+              ? "available"
+              : "organization",
+        })),
+      });
+    }
+  });
+
+  test("on a computer it is offered only for a harness that is ready", () => {
     expect(
       permissionView(
         CLAUDE,
@@ -270,7 +291,10 @@ describe("the permission choice", () => {
       model: "opus",
       approvals: "ask",
     });
-    expect(pick({ kind: "cloud" })).toEqual({ ...CLAUDE, model: "opus" });
+    expect(pick({ kind: "cloud", approvals: "ask" })).toEqual({
+      ...CLAUDE,
+      model: "opus",
+    });
   });
 
   test("a picked model never carries a mode above the organization's limit", () => {
@@ -322,7 +346,7 @@ describe("the reasoning effort choice", () => {
         reasoningEffort: null,
       });
     }
-    expect(pick({ kind: "cloud" }, "sonnet")).toEqual(CLAUDE);
+    expect(pick({ kind: "cloud", approvals: "ask" }, "sonnet")).toEqual(CLAUDE);
   });
 
   test("a different effort is a different target, under the same model", () => {
@@ -336,7 +360,7 @@ describe("the reasoning effort choice", () => {
 describe("the selected run target", () => {
   test("cloud and each local model have distinct menu values", () => {
     const values = [
-      runTargetValue({ kind: "cloud" }),
+      runTargetValue({ kind: "cloud", approvals: "ask" }),
       runTargetValue({ ...LOCAL, harness: "codex", model: "a" }),
       runTargetValue({ ...LOCAL, harness: "claude-code", model: "a" }),
       runTargetValue({ ...LOCAL, harness: "codex", model: "b" }),
@@ -349,11 +373,16 @@ describe("the selected run target", () => {
     expect(runTargetValue(auto)).toBe(runTargetValue(LOCAL));
     expect(sameRunTarget(auto, LOCAL)).toBe(false);
     expect(sameRunTarget(LOCAL, { ...LOCAL })).toBe(true);
-    expect(sameRunTarget({ kind: "cloud" }, LOCAL)).toBe(false);
+    expect(sameRunTarget({ kind: "cloud", approvals: "ask" }, LOCAL)).toBe(
+      false,
+    );
   });
 
   test("a thread without a stored target runs in the cloud", () => {
-    expect(effectiveRunTarget(undefined)).toEqual({ kind: "cloud" });
+    expect(effectiveRunTarget(undefined)).toEqual({
+      kind: "cloud",
+      approvals: "ask",
+    });
   });
 
   test("a thread whose mode is now above the organization's limit runs its next turn in the highest allowed mode", () => {
@@ -393,11 +422,34 @@ describe("the selected run target", () => {
     // Within the limit, or before the limit is known, the stored mode stands.
     expect(effectiveRunTarget(stored, readiness(NO_LIMIT))).toBe(stored);
     expect(effectiveRunTarget(stored, undefined)).toBe(stored);
-    expect(effectiveRunTarget({ kind: "cloud" }, readiness("ask"))).toEqual({
-      kind: "cloud",
-    });
+    // stella's models are held to the same ceiling, whether or not the
+    // member runs turns on a computer.
+    for (const known of [
+      readiness("auto"),
+      { status: "hidden", maxApprovals: "auto" } as const,
+    ]) {
+      expect(
+        effectiveRunTarget({ kind: "cloud", approvals: "full_auto" }, known),
+      ).toEqual({ kind: "cloud", approvals: "auto" });
+      expect(
+        effectiveRunTarget({ kind: "cloud", approvals: "plan" }, known),
+      ).toEqual({ kind: "cloud", approvals: "plan" });
+    }
+    expect(
+      effectiveRunTarget({ kind: "cloud", approvals: "full_auto" }, undefined),
+    ).toEqual({ kind: "cloud", approvals: "full_auto" });
+    // Only a level above the lowest ceiling needs it read first.
+    expect(
+      DESKTOP_RUNNER_APPROVAL_MODES.map((approvals) =>
+        runTargetNeedsCeiling({ kind: "cloud", approvals }),
+      ),
+    ).toEqual([false, false, true, true]);
+    expect(runTargetNeedsCeiling(LOCAL)).toBe(true);
+    expect(runTargetNeedsCeiling(undefined)).toBe(false);
     expect(localRunMaxApprovals(readiness("auto"))).toBe("auto");
-    expect(localRunMaxApprovals({ status: "hidden" })).toBe(NO_LIMIT);
+    expect(
+      localRunMaxApprovals({ status: "hidden", maxApprovals: "full_auto" }),
+    ).toBe(NO_LIMIT);
   });
 
   test("the composer names a local model as the harness reports it, and only then", () => {
@@ -429,7 +481,12 @@ describe("the selected run target", () => {
         target,
       ),
     ).toBeNull();
-    expect(localRunModelLabel({ status: "hidden" }, target)).toBeNull();
+    expect(
+      localRunModelLabel(
+        { status: "hidden", maxApprovals: "full_auto" },
+        target,
+      ),
+    ).toBeNull();
     expect(localRunModelLabel(undefined, target)).toBeNull();
   });
 });
@@ -475,7 +532,12 @@ describe("whether the chosen computer can take a turn now", () => {
   });
 
   test("a member who may not run turns on a computer is told so", () => {
-    expect(localRunTargetState({ status: "hidden" }, CODEX)).toEqual({
+    expect(
+      localRunTargetState(
+        { status: "hidden", maxApprovals: "full_auto" },
+        CODEX,
+      ),
+    ).toEqual({
       type: "not_allowed",
     });
   });

@@ -23,6 +23,7 @@ import { LEGISLATION_TOOL_SET } from "@/api/mcp/legislation-tools";
 import { MATTER_TOOL_SET } from "@/api/mcp/matter-tools";
 import { READER_ANNOTATION_TOOL_SET } from "@/api/mcp/reader-annotation-tools";
 import { RESEARCH_ADMIN_TOOL_SET } from "@/api/mcp/research-admin-tools";
+import { SITE_NOTES_TOOL_SET } from "@/api/mcp/site-notes-tools";
 import { SOFT_LAW_TOOL_SET } from "@/api/mcp/soft-law-tools";
 import { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-names";
 import type { McpToolName } from "@/api/mcp/static-tool-names";
@@ -64,6 +65,7 @@ type DefaultMcpToolSets = readonly [
   typeof MATTER_TOOL_SET,
   typeof KNOWLEDGE_TOOL_SET,
   typeof READER_ANNOTATION_TOOL_SET,
+  typeof SITE_NOTES_TOOL_SET,
   typeof BILLING_TOOL_SET,
   typeof RESEARCH_ADMIN_TOOL_SET,
   typeof FEEDBACK_TOOL_SET,
@@ -85,6 +87,7 @@ export const DEFAULT_MCP_TOOL_SETS: DefaultMcpToolSets = [
   MATTER_TOOL_SET,
   KNOWLEDGE_TOOL_SET,
   READER_ANNOTATION_TOOL_SET,
+  SITE_NOTES_TOOL_SET,
   BILLING_TOOL_SET,
   RESEARCH_ADMIN_TOOL_SET,
   FEEDBACK_TOOL_SET,
@@ -115,6 +118,7 @@ export const DEFAULT_MCP_TOOL_DEFINITIONS: readonly RegisteredMcpToolDefinition[
     ...MATTER_TOOL_SET.definitions,
     ...KNOWLEDGE_TOOL_SET.definitions,
     ...READER_ANNOTATION_TOOL_SET.definitions,
+    ...SITE_NOTES_TOOL_SET.definitions,
     ...BILLING_TOOL_SET.definitions,
     ...RESEARCH_ADMIN_TOOL_SET.definitions,
     ...FEEDBACK_TOOL_SET.definitions,
@@ -476,26 +480,30 @@ export const LAW_MCP_TOOL_DEFINITIONS = scopeDefinitionsToSurface([
  * a new audience states its projection here rather than inheriting another
  * one's by falling through a conditional.
  */
-const MCP_TOOL_DEFINITIONS_BY_MODE = {
+const MCP_TOOL_DEFINITIONS_BY_MODE: Readonly<
+  Record<McpMode, readonly McpToolDefinition[]>
+> = {
   advanced: DEFAULT_MCP_TOOL_DEFINITIONS,
   default: PURPOSE_BUILT_MCP_TOOL_DEFINITIONS,
   anonymized: ANONYMIZED_MCP_TOOL_DEFINITIONS,
   documents: DOCUMENTS_MCP_TOOL_DEFINITIONS,
   law: LAW_MCP_TOOL_DEFINITIONS,
-} as const satisfies Record<McpMode, readonly McpToolDefinition[]>;
+};
 
 const toToolDefinitionMap = (definitions: readonly McpToolDefinition[]) =>
   new Map<string, McpToolDefinition>(
     definitions.map((tool) => [tool.name, tool]),
   );
 
-const MCP_TOOL_DEFINITION_MAPS = {
+const MCP_TOOL_DEFINITION_MAPS: Readonly<
+  Record<McpMode, ReadonlyMap<string, McpToolDefinition>>
+> = {
   advanced: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.advanced),
   default: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.default),
   anonymized: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.anonymized),
   documents: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.documents),
   law: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.law),
-} satisfies Record<McpMode, Map<string, McpToolDefinition>>;
+};
 
 /**
  * Each tool's runtime contract, with the schema it advertises: a write tool's

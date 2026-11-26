@@ -36,3 +36,24 @@ export type McpSession = {
    */
   memberId?: string;
 };
+
+/** Which kind of credential opened a session, for telemetry and reporting. */
+export type McpCredentialType = NonNullable<McpSession["credential"]>["type"];
+
+export const admittedOAuthCredential = Symbol("admittedOAuthCredential");
+
+export type OAuthCredential = Extract<
+  NonNullable<McpSession["credential"]>,
+  { type: "oauth_client" }
+>;
+
+export type AdmittedOAuthCredential = OAuthCredential & {
+  readonly [admittedOAuthCredential]: true;
+  readonly registrationId: string | null;
+};
+
+export type AdmittedMcpSession = Omit<McpSession, "credential"> & {
+  credential?:
+    | Exclude<NonNullable<McpSession["credential"]>, OAuthCredential>
+    | AdmittedOAuthCredential;
+};

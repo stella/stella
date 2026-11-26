@@ -14,6 +14,15 @@ import {
 } from "@stll/api-contract/agent-harness";
 import { AI_FAILURE_CODES } from "@stll/api-contract/ai-errors";
 import {
+  type ChatLocalRunNotice,
+  DESKTOP_RUNNER_NOTICE_EVENT,
+  withChatLocalRunNotice,
+} from "@stll/api-contract/chat-local-run-notice";
+import {
+  DESKTOP_RUNNER_REQUEST_EVENT,
+  type DesktopRunnerRequestEvent,
+} from "@stll/api-contract/chat-local-run-request";
+import {
   CHAT_LOCAL_RUN_INTERRUPT_REASONS,
   CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY,
   chatLocalRunApprovalReason,
@@ -37,6 +46,8 @@ import {
   type HarnessApprovalRequest,
   type HarnessEvent,
   type HarnessFailure,
+  type HarnessInteractionClosed,
+  type HarnessNotice,
   type HarnessQuestionRequest,
   type HarnessToolCall,
   type HarnessToolResult,
@@ -52,10 +63,14 @@ import { shownToolInput, shownToolResult } from "./tool-parts";
  * ends, and the native session id rides a `<harness>.session-id` CUSTOM
  * event. A local and a cloud turn therefore fold into the same message.
  *
- * A pending approval or blocking question pauses the run the AG-UI way:
- * `RUN_FINISHED` with an `interrupt` outcome naming the tool call. The harness
- * keeps waiting meanwhile; whatever it does after the answer arrives in a new
- * run segment on the same stream.
+ * A pending approval or blocking question is announced the AG-UI way:
+ * `RUN_FINISHED` with an `interrupt` outcome naming the tool call, which
+ * closes a run segment. It does not end the turn: the harness may go on
+ * while the request waits (other steps, its final answer), and whatever it
+ * does next arrives in a new segment on the same stream. The mapper owns
+ * the request until it closes: an answer or a withdrawal reports its end
+ * (`DESKTOP_RUNNER_REQUEST_EVENT`), and the turn's end closes every request
+ * still open, so none outlives its run.
  */
 
 /** CUSTOM event reporting how the turn's context was established. */
@@ -135,6 +150,85 @@ const INTERRUPTED_RESULT_CONTENT = JSON.stringify({ status: "interrupted" });
 
 type TextState = { text: string; emitted: number; ended: boolean };
 
+/** What a request's end reports, beside its id. */
+type DesktopRunnerRequestClosed = DistributiveOmit<
+  DesktopRunnerRequestEvent,
+  "requestId"
+>;
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
+  ? Omit<T, K>
+  : never;
+
+/** How a request the harness closed while its turn went on ends. */
+const REQUEST_CLOSED = {
+  answered: { status: "resolved" },
+  stopped: { status: "cancelled" },
+  withdrawn: { status: "expired", expiry: "withdrawn" },
+} as const satisfies Record<
+  HarnessInteractionClosed,
+  DesktopRunnerRequestClosed
+>;
+
+/** How the turn's end closes a request still open. */
+const REQUEST_CLOSED_BY_END = {
+  completed: { status: "expired", expiry: "run_finished" },
+  interrupted: { status: "cancelled" },
+  failed: { status: "expired", expiry: "run_failed" },
+} as const satisfies Record<string, DesktopRunnerRequestClosed>;
+
+/**
+ * How each event bears on a retry still under way: the harness made progress
+ * (`recovered`), the turn ended without (`ended`), or it says nothing about
+ * it (`null`). A model's answer, reasoning, step or request is progress; so
+ * is the turn completing.
+ */
+const RETRY_SETTLED_BY = {
+  "session.started": null,
+  "text.delta": "recovered",
+  "text.completed": "recovered",
+  "reasoning.completed": "recovered",
+  "tool.started": "recovered",
+  "tool.completed": "recovered",
+  "approval.requested": "recovered",
+  "question.requested": "recovered",
+  "interaction.resolved": null,
+  notice: null,
+  "input.settled": null,
+  "model.rerouted": null,
+  "turn.completed": "recovered",
+  "turn.interrupted": "ended",
+  "turn.failed": "ended",
+} as const satisfies Record<HarnessEvent["type"], "recovered" | "ended" | null>;
+
+/** A count the chat can show: a whole number of attempts within its bound. */
+const shownAttempt = (count: number | null): number | null =>
+  count !== null && Number.isSafeInteger(count) && count >= 1 && count <= 1000
+    ? count
+    : null;
+
+/** A harness notice as the chat keeps it; a retry starts out under way. */
+const chatNotice = (notice: HarnessNotice): ChatLocalRunNotice => {
+  switch (notice.kind) {
+    case "retrying":
+      return {
+        kind: "retrying",
+        status: "retrying",
+        attempt: shownAttempt(notice.attempt),
+        maxAttempts: shownAttempt(notice.maxAttempts),
+      };
+    case "config_warning":
+      return { kind: "config_warning" };
+    case "capability_unavailable":
+      return {
+        kind: "capability_unavailable",
+        capability: notice.capability,
+      };
+    default:
+      notice satisfies never;
+      return panic("Unhandled harness notice");
+  }
+};
+
 class ChunkMapper {
   private readonly out: AdapterYieldChunk[] = [];
   private segment = 0;
@@ -145,6 +239,13 @@ class ChunkMapper {
   /** Opened tool calls that still have no result. */
   private readonly unresolved = new Set<string>();
   private readonly texts = new Map<string, TextState>();
+  /** Requests announced and not closed yet: the member may still answer. */
+  private readonly openRequests = new Set<string>();
+  /**
+   * The notices reported so far, one per condition
+   * (`withChatLocalRunNotice`): a repeat is not reported again.
+   */
+  private notices: readonly ChatLocalRunNotice[] = [];
 
   private readonly context: HarnessChunkContext;
   /** The model the turn runs on: the one asked for until a reroute. */
@@ -165,8 +266,10 @@ class ChunkMapper {
   /** A stream that ends without a terminal event broke the adapter contract. */
   finish(): AdapterYieldChunk[] {
     if (!this.terminated) {
+      this.settleRetry("ended");
       this.ensureSegment();
       this.terminate(
+        REQUEST_CLOSED_BY_END.failed,
         this.runError({
           type: "protocol_violation",
           message: "The harness event stream ended before the turn finished.",
@@ -177,6 +280,10 @@ class ChunkMapper {
   }
 
   private apply(event: HarnessEvent) {
+    const settled = RETRY_SETTLED_BY[event.type];
+    if (settled !== null) {
+      this.settleRetry(settled);
+    }
     switch (event.type) {
       case "session.started":
         this.ensureSegment();
@@ -222,9 +329,15 @@ class ChunkMapper {
         this.model = event.model;
         return;
       case "interaction.resolved":
-      case "retrying":
-        // The harness continues on its own; its next output opens a new
-        // segment. A transient retry leaves nothing to persist.
+        this.closeRequest(
+          event.requestId,
+          event.decision === undefined
+            ? REQUEST_CLOSED[event.closed ?? "answered"]
+            : { status: "resolved", decision: event.decision },
+        );
+        break;
+      case "notice":
+        this.notice(chatNotice(event.notice));
         return;
       case "input.settled":
         // Where the turn took (or refused) a steering message. It names the
@@ -245,6 +358,7 @@ class ChunkMapper {
           event.usage?.context ?? null;
         this.ensureSegment();
         this.terminate(
+          REQUEST_CLOSED_BY_END.completed,
           this.runFinished({
             finishReason: "stop",
             ...(event.usage === null
@@ -262,6 +376,7 @@ class ChunkMapper {
       case "turn.interrupted":
         this.ensureSegment();
         this.terminate(
+          REQUEST_CLOSED_BY_END.interrupted,
           this.runFinished({
             finishReason: "stop",
             outcome: { type: "cancelled" },
@@ -270,7 +385,10 @@ class ChunkMapper {
         return;
       case "turn.failed":
         this.ensureSegment();
-        this.terminate(this.runError(event.failure));
+        this.terminate(
+          REQUEST_CLOSED_BY_END.failed,
+          this.runError(event.failure),
+        );
         return;
       default:
         event satisfies never;
@@ -498,6 +616,7 @@ class ChunkMapper {
   private pauseForApproval(request: HarnessApprovalRequest) {
     this.ensureSegment();
     this.openToolCall(request.toolCall);
+    this.openRequests.add(request.requestId);
     this.closeSegment(
       this.runFinished({
         finishReason: "tool_calls",
@@ -540,6 +659,7 @@ class ChunkMapper {
       );
       return;
     }
+    this.openRequests.add(request.requestId);
     this.closeSegment(
       this.runFinished({
         finishReason: "tool_calls",
@@ -563,9 +683,55 @@ class ChunkMapper {
     );
   }
 
-  private terminate(chunk: AdapterYieldChunk) {
+  /** Report `notice`, unless it repeats what was already reported. */
+  private notice(notice: ChatLocalRunNotice) {
+    const next = withChatLocalRunNotice(this.notices, notice);
+    if (next === null) {
+      return;
+    }
+    this.notices = next;
+    this.ensureSegment();
+    this.push({
+      type: EventType.CUSTOM,
+      name: DESKTOP_RUNNER_NOTICE_EVENT,
+      value: notice,
+    });
+  }
+
+  /** A retry still under way ends as `status`; nothing when none is. */
+  private settleRetry(status: "recovered" | "ended") {
+    const retry = this.notices.find(
+      (notice) => notice.kind === "retrying" && notice.status === "retrying",
+    );
+    if (retry?.kind === "retrying") {
+      this.notice({ ...retry, status });
+    }
+  }
+
+  /** Report that request `requestId` closed; nothing for one never open. */
+  private closeRequest(requestId: string, closed: DesktopRunnerRequestClosed) {
+    if (!this.openRequests.delete(requestId)) {
+      return;
+    }
+    this.ensureSegment();
+    this.push({
+      type: EventType.CUSTOM,
+      name: DESKTOP_RUNNER_REQUEST_EVENT,
+      value: { requestId, ...closed } satisfies DesktopRunnerRequestEvent,
+    });
+  }
+
+  private terminate(
+    closed: DesktopRunnerRequestClosed,
+    chunk: AdapterYieldChunk,
+  ) {
     for (const messageId of this.texts.keys()) {
       this.endText(messageId);
+    }
+    // The turn's end closes every request still open: the run no longer
+    // waits for any answer.
+    for (const requestId of [...this.openRequests]) {
+      this.closeRequest(requestId, closed);
     }
     // Pair every open tool call before the run ends, as the cloud engine does.
     for (const toolCallId of [...this.unresolved]) {

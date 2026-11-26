@@ -125,8 +125,10 @@
       "aiOutputInvalid": "Tehisintellekti vastus oli ootamatus vormingus. Proovige uuesti.",
       "aiOutputModerated": "Tehisintellekti teenusepakkuja modereeris väljundit. Sõnastage taotlus ümber või valige teine mudel.",
       "aiUnknown": "Tehisintellekti taotlus nurjus. Proovige uuesti.",
+      "errorFailed": "Teie arvutis töötav agent lõpetas selle vastuse põhjust nimetamata. Proovige uuesti.",
       "errorFolderUnavailable": "Selle vestlusega seotud kaust pole teie arvutis saadaval. Kontrollige seda stella desktopis ja saatke see siis uuesti.",
       "errorLimitReached": "Teie arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Proovige uuesti, kui limiit lähtestub.",
+      "errorLost": "Teie arvuti võttis selle vastuse vastu ja lõpetas siis reageerimise. Veenduge, et stella desktop on avatud ja ühendatud, ning proovige uuesti.",
       "errorNeedsLogin": "Teie arvutis töötav programmeerimisagent vajab uuesti sisselogimist. Logige sisse stella desktopi kaudu ja proovige uuesti.",
       "errorNotReached": "Teie arvuti ei võtnud seda vastust vastu. Veenduge, et stella desktop on avatud ja ühendatud, ning proovige uuesti.",
       "errorRelinked": "stella desktop seoti teie arvutis uuesti, seega see vastus peatus. Saatke see uuesti.",
@@ -173,6 +175,13 @@
       "limitReminderScheduled": "Teavitame teid alates {time}.",
       "limitResumeContinue": "Jätka automaatselt, kui limiit lähtestub",
       "limitResumeScheduled": "Jätkub automaatselt alates {time}.",
+      "notices": {
+        "browserUnavailable": "Selle sõnumi jaoks ei õnnestunud brauserit käivitada, seega töötas agent ilma selleta.",
+        "configWarning": "Teie arvutis töötav programmeerimisagent hoiatas oma seadete pärast ja jätkas tööd. Kui miski tundub vale, kontrollige tema seadeid selles arvutis.",
+        "recovered": "Mudel vastas jälle pärast seda, kui teie arvutis töötav programmeerimisagent uuesti proovis.",
+        "retrying": "Mudel ei vasta. Teie arvutis töötav programmeerimisagent proovib uuesti.",
+        "retryingAttempt": "Mudel ei vasta. Teie arvutis töötav programmeerimisagent proovib uuesti ({attempt, number}. katse {maxAttempts, number}-st)."
+      },
       "output": {
         "arriving": "Saabub endiselt arvutist, kus see samm käivitati",
         "command": "Väljund",
@@ -191,6 +200,13 @@
       },
       "patternInPath": "{pattern} asukohas {path}",
       "ranOnModel": "Töötas mudelil {model}",
+      "request": {
+        "cancelled": "Vastamata: see vastus peatati.",
+        "runFailed": "Vastamata: agent lõpetas enne seda sammu veaga.",
+        "runFinished": "Pole vaja: agent lõpetas ilma selle sammuta.",
+        "runLost": "Vastamata: teie arvuti lõpetas selle vastuse töötlemise.",
+        "withdrawn": "Pole enam vaja: agent jätkas ilma selle sammuta."
+      },
       "sessionNotResumed": "Teie arvutis töötav programmeerimisagent ei saanud pooleli jäänud kohast edasi minna, seega jätkas ta selle vestluse sõnumite põhjal.",
       "status": {
         "failed": "Ebaõnnestus",
@@ -372,6 +388,7 @@
       "read_comments": "Kommentaaride lugemine",
       "read_document": "Dokumendi lugemine",
       "read_section": "Jaotise lugemine",
+      "read_site_notes": "Veebisaidi märkmete lugemine",
       "read_story": "Dokumendi osa lugemine",
       "remember": "Mällu salvestamine",
       "remove_matter_member": "Eemalda toimiku liige",
@@ -388,6 +405,7 @@
       "save_document": "Salvesta dokument",
       "save_matter": "Salvesta toimik",
       "save_playbook": "Salvesta playbook",
+      "save_site_notes": "Veebisaidi märkmete uuendamine",
       "save_skill_package": "Salvesta oskus",
       "save_task": "Salvesta ülesanne",
       "save_template": "Salvesta mall",

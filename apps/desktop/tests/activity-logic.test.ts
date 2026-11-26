@@ -4,14 +4,16 @@ import { Temporal } from "@stll/time";
 
 import contract from "../fixtures/activity-contract.json" with { type: "json" };
 import {
+  apportionWhole,
   appTotals,
   documentName,
-  roundedTenthsOfHour,
+  recordedMinutes,
   shiftDate,
   timedSegments,
   totalDurationMs,
 } from "../src/activity/activity-logic";
 import {
+  ACTIVITY_CALENDAR_SOURCES,
   ACTIVITY_CHANGED_EVENT,
   ACTIVITY_DETAILS_ACCESS,
   ACTIVITY_RECORDING_STATUSES,
@@ -40,6 +42,7 @@ describe("activity contract", () => {
       ...ACTIVITY_RECORDING_STATUSES,
     ]);
     expect(contract.detailsAccess).toEqual([...ACTIVITY_DETAILS_ACCESS]);
+    expect(contract.calendarSources).toEqual([...ACTIVITY_CALENDAR_SOURCES]);
     expect(contract.maxMetadataBytes).toBe(MAX_ACTIVITY_METADATA_BYTES);
     expect(contract.changedEvent).toBe(ACTIVITY_CHANGED_EVENT);
   });
@@ -57,6 +60,7 @@ describe("activity contract", () => {
       otherAccountHistoryDays: 0,
       captureDetails: false,
       detectCalls: true,
+      calendarSource: "off",
       appNameOnlyApps: [],
       browserApps: [],
       sourceAppVisuals: [],
@@ -68,6 +72,9 @@ describe("activity contract", () => {
       segments: [segment("word", 0, 5)],
       today: "2026-03-10",
       unreadable: false,
+      gaps: [],
+      outages: { status: "read", outages: [] },
+      stoppedReason: null,
     };
     expect(isActivityDaySnapshot(snapshot)).toBe(true);
     expect(isActivityDaySnapshot({ ...snapshot, latestDate: undefined })).toBe(
@@ -127,6 +134,14 @@ describe("activity contract", () => {
     expect(isActivityDaySnapshot({ ...snapshot, detectCalls: undefined })).toBe(
       false,
     );
+    for (const calendarSource of [undefined, "google", true]) {
+      expect(isActivityDaySnapshot({ ...snapshot, calendarSource })).toBe(
+        false,
+      );
+    }
+    expect(
+      isActivityDaySnapshot({ ...snapshot, calendarSource: "microsoft365" }),
+    ).toBe(true);
     expect(
       isActivityDaySnapshot({
         ...snapshot,
@@ -176,6 +191,60 @@ describe("activity contract", () => {
     expect(
       isActivityDaySnapshot({ ...snapshot, segments: [{ appName: "x" }] }),
     ).toBe(false);
+    for (const reason of Object.keys(contract.stopReasons)) {
+      expect(
+        isActivityDaySnapshot({
+          ...snapshot,
+          stoppedReason: reason,
+          outages: {
+            status: "read",
+            outages: [{ start: at(0), end: at(5), reason }],
+          },
+        }),
+      ).toBe(true);
+    }
+    expect(
+      isActivityDaySnapshot({
+        ...snapshot,
+        outages: { status: "unreadable" },
+      }),
+    ).toBe(true);
+    for (const display of Object.keys(contract.gapDisplays)) {
+      for (const endedBy of Object.keys(contract.gapEnds)) {
+        expect(
+          isActivityDaySnapshot({
+            ...snapshot,
+            gaps: [{ start: at(5), end: at(20), endedBy, display }],
+          }),
+        ).toBe(true);
+      }
+    }
+    for (const invalid of [
+      { gaps: undefined },
+      { gaps: [{ start: at(5), end: at(20), endedBy: "input" }] },
+      {
+        gaps: [
+          {
+            start: at(5),
+            end: at(20),
+            endedBy: "__proto__",
+            display: "locked",
+          },
+        ],
+      },
+      { stoppedReason: "unknown" },
+      { stoppedReason: undefined },
+      { outages: [] },
+      { outages: { status: "read" } },
+      {
+        outages: {
+          status: "read",
+          outages: [{ start: at(0), end: at(5), reason: "__proto__" }],
+        },
+      },
+    ]) {
+      expect(isActivityDaySnapshot({ ...snapshot, ...invalid })).toBe(false);
+    }
   });
 
   test("a settings snapshot is validated before use", () => {
@@ -191,6 +260,7 @@ describe("activity contract", () => {
       otherAccountHistoryDays: 0,
       captureDetails: false,
       detectCalls: true,
+      calendarSource: "off",
       appNameOnlyApps: [],
       detailsAccess: "disabled",
       browserApps: [],
@@ -255,16 +325,21 @@ describe("activity day logic", () => {
     expect(documentName("C:\\private\\folder\\memo.docx")).toBe("memo.docx");
   });
 
-  test("durations round up to whole six-minute increments", () => {
-    expect(roundedTenthsOfHour(0)).toBe(0);
-    expect(roundedTenthsOfHour(1)).toBe(1);
-    expect(roundedTenthsOfHour(6 * MINUTE)).toBe(1);
-    expect(roundedTenthsOfHour(6 * MINUTE + 1)).toBe(2);
-    for (let minutes = 1; minutes <= 600; minutes += 1) {
-      const tenths = roundedTenthsOfHour(minutes * MINUTE);
-      expect(tenths * 6).toBeGreaterThanOrEqual(minutes);
-      expect((tenths - 1) * 6).toBeLessThan(minutes);
-    }
+  test("recorded durations become whole minutes that never exceed the recorded total", () => {
+    // A glance of five seconds claims nothing on its own.
+    expect(recordedMinutes([5000])).toEqual([0]);
+    expect(recordedMinutes([31 * MINUTE + 30_000])).toEqual([31]);
+    // 31.6 + 10.5 minutes hold 42 whole minutes; the larger remainder takes
+    // the one the rounded-down values leave over.
+    expect(recordedMinutes([1_896_000, 630_000])).toEqual([32, 10]);
+    expect(recordedMinutes([])).toEqual([]);
+  });
+
+  test("apportioning keeps a fixed total and refuses one outside the values' range", () => {
+    expect(apportionWhole([0.5, 0.5, 0.5], 2)).toEqual([1, 1, 0]);
+    expect(apportionWhole([1.2, 2.9], 4)).toEqual([1, 3]);
+    expect(() => apportionWhole([1.2, 2.9], 6)).toThrow("outside the values");
+    expect(() => apportionWhole([1.2, 2.9], 2)).toThrow("outside the values");
   });
 
   test("calendar dates shift across month and year boundaries", () => {

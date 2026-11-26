@@ -53,6 +53,25 @@ pub use windows_idle_sleep::{
   IdleSleepAssertion, on_battery_power, prevent_idle_sleep,
 };
 
+/// Whether the screen could be read while no input came.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScreenState {
+  On,
+  Locked,
+  /// The display slept or was turned off.
+  DisplayAsleep,
+}
+
+#[cfg(target_os = "macos")]
+mod screen_state;
+#[cfg(target_os = "macos")]
+pub use screen_state::screen_state;
+
+#[cfg(target_os = "windows")]
+mod windows_screen_state;
+#[cfg(target_os = "windows")]
+pub use windows_screen_state::screen_state;
+
 #[cfg(target_os = "macos")]
 mod managed_preferences;
 #[cfg(target_os = "macos")]

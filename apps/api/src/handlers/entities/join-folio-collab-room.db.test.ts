@@ -27,6 +27,7 @@ import {
   entities,
   entityVersions,
   fields,
+  folioCollabContributions,
   folioCollabPublications,
   folioCollabRooms,
   folioCollabRoomTokens,
@@ -60,6 +61,7 @@ import {
   loadFolioCollabSnapshot,
   readFolioCollabSeedDocx,
   storeFolioCollabSnapshot,
+  touchFolioCollabRoom,
 } from "@/api/lib/folio-collab-rooms";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
@@ -613,6 +615,44 @@ describe("folio collaboration room seed generation CAS", () => {
       expectedClaimedAt: touchedAt,
       userId: ids.userA1,
     });
+  });
+
+  test("a heartbeat records only a participant who may edit as a contributor", async () => {
+    const roomId = await insertRoom({ generation: 1, seedState: "seeded" });
+    const scopedDb = asTestRaw<
+      Parameters<typeof touchFolioCollabRoom>[0]["scopedDb"]
+    >(
+      async <T>(run: (tx: TestDatabaseTransaction) => Promise<T>) =>
+        await scopedQuery([ids.wsA1], ids.orgA, run, ids.userA1),
+    );
+    const heartbeat = async (canEdit: boolean) =>
+      await touchFolioCollabRoom({
+        canEdit,
+        entityId: ids.entityA1,
+        fileName: "contract.docx",
+        generation: 1,
+        organizationId: ids.orgA,
+        propertyId: ids.filePropertyA1,
+        roomId,
+        scopedDb,
+        sourceSessionExpiresAt: null,
+        tokenExpiresAt: new Date(testClock.now() + 60_000),
+        tokenId: createSafeId<"folioCollabRoomToken">(),
+        userId: ids.userA1,
+        userName: "Participant",
+        workspaceId: ids.wsA1,
+      });
+    const contributors = async () =>
+      await testDb
+        .select({ userId: folioCollabContributions.userId })
+        .from(folioCollabContributions)
+        .where(eq(folioCollabContributions.roomId, roomId));
+
+    expect(await heartbeat(false)).toMatchObject({ status: "active" });
+    expect(await contributors()).toEqual([]);
+
+    expect(await heartbeat(true)).toMatchObject({ status: "active" });
+    expect(await contributors()).toEqual([{ userId: ids.userA1 }]);
   });
 
   test.each([

@@ -23,6 +23,10 @@ import {
   DECISION_TYPE_KINDS,
 } from "@stll/api-contract/case-law-decision-types";
 
+import {
+  CZ_UOHS_PRINTED_DECISION_TYPES,
+  czUohsPrintedDecisionType,
+} from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import inventory from "@/api/lib/case-law/decision-type-inventory.json" with { type: "json" };
 import { decisionTypeKey } from "@/api/lib/case-law/decision-type-key";
 import {
@@ -203,4 +207,21 @@ test("the Czech acknowledgment-judgment code is a judgment in every stored casin
   for (const stated of ["rozs.uzn", "ROZS.UZN", "Rozs.Uzn"]) {
     expect(decisionTypeKind(stated)).toBe("judgment");
   }
+});
+
+test("every title the competition authority prints is a stated type with a kind", () => {
+  // The adapter stores the printed title lowercased; each must be in the
+  // inventory and must not fall into `other`.
+  const czechSpellings = new Set([
+    ...inventory.jurisdictions.CZE,
+    ...inventory.adapterVocabulary.CZE,
+  ]);
+  for (const printed of CZ_UOHS_PRINTED_DECISION_TYPES) {
+    const stated = czUohsPrintedDecisionType(`ÚOHS\n${printed}\n`);
+    expect(stated).toBe(printed.toLocaleLowerCase("cs"));
+    expect(czechSpellings.has(stated ?? "")).toBe(true);
+    expect(decisionTypeKind(stated)).not.toBe(DECISION_TYPE_KIND_OTHER);
+  }
+  expect(decisionTypeKind("příkaz")).toBe("decision");
+  expect(decisionTypeKind("PŘÍKAZ")).toBe("decision");
 });

@@ -125,8 +125,10 @@
       "aiOutputInvalid": "Odpowiedź AI miała nieoczekiwany format. Spróbuj ponownie.",
       "aiOutputModerated": "Dostawca AI objął odpowiedź moderacją. Przeformułuj żądanie lub wybierz inny model.",
       "aiUnknown": "Żądanie AI nie powiodło się. Spróbuj ponownie.",
+      "errorFailed": "Agent na Twoim komputerze zakończył tę odpowiedź bez podania przyczyny. Spróbuj ponownie.",
       "errorFolderUnavailable": "Folder powiązany z tym czatem jest niedostępny na Twoim komputerze. Sprawdź go w stella desktop, a potem wyślij to ponownie.",
       "errorLimitReached": "Agent programistyczny na Twoim komputerze osiągnął limit użycia. Spróbuj ponownie po odnowieniu limitu.",
+      "errorLost": "Twój komputer przejął tę odpowiedź, a potem przestał odpowiadać. Upewnij się, że stella desktop jest otwarty i połączony, i spróbuj ponownie.",
       "errorNeedsLogin": "Agent programistyczny na Twoim komputerze wymaga ponownego zalogowania. Zaloguj się w stella desktop i spróbuj ponownie.",
       "errorNotReached": "Twój komputer nie przejął tej odpowiedzi. Upewnij się, że stella desktop jest otwarty i połączony, i spróbuj ponownie.",
       "errorRelinked": "stella desktop został ponownie połączony na Twoim komputerze, więc ta odpowiedź została zatrzymana. Wyślij ją ponownie.",
@@ -173,6 +175,13 @@
       "limitReminderScheduled": "Powiadomimy Cię po {time}.",
       "limitResumeContinue": "Kontynuuj automatycznie po odnowieniu",
       "limitResumeScheduled": "Wznowimy automatycznie po {time}.",
+      "notices": {
+        "browserUnavailable": "Nie udało się uruchomić przeglądarki dla tej wiadomości, więc agent pracował bez niej.",
+        "configWarning": "Agent programistyczny na Twoim komputerze ostrzegł o problemie we własnych ustawieniach i kontynuował pracę. Jeśli coś wygląda nie tak, sprawdź jego ustawienia na tym komputerze.",
+        "recovered": "Model znów odpowiedział, gdy agent programistyczny na Twoim komputerze spróbował ponownie.",
+        "retrying": "Model nie odpowiada. Agent programistyczny na Twoim komputerze próbuje ponownie.",
+        "retryingAttempt": "Model nie odpowiada. Agent programistyczny na Twoim komputerze próbuje ponownie (próba {attempt, number} z {maxAttempts, number})."
+      },
       "output": {
         "arriving": "Wciąż napływa z komputera, na którym uruchomiono ten krok",
         "command": "Wynik",
@@ -191,6 +200,13 @@
       },
       "patternInPath": "{pattern} w {path}",
       "ranOnModel": "Wykonano na modelu {model}",
+      "request": {
+        "cancelled": "Bez odpowiedzi: ta odpowiedź została zatrzymana.",
+        "runFailed": "Bez odpowiedzi: agent zakończył pracę z błędem przed tym krokiem.",
+        "runFinished": "Niepotrzebne: agent skończył bez tego kroku.",
+        "runLost": "Bez odpowiedzi: Twój komputer przestał przetwarzać tę odpowiedź.",
+        "withdrawn": "Już niepotrzebne: agent kontynuował bez tego kroku."
+      },
       "sessionNotResumed": "Agent programistyczny na Twoim komputerze nie mógł wznowić pracy tam, gdzie skończył, dlatego kontynuował na podstawie wiadomości z tego czatu.",
       "status": {
         "failed": "Niepowodzenie",
@@ -372,6 +388,7 @@
       "read_comments": "Odczytywanie komentarzy",
       "read_document": "Odczytywanie dokumentu",
       "read_section": "Odczytywanie sekcji",
+      "read_site_notes": "Odczytywanie notatek o witrynie",
       "read_story": "Odczytywanie części dokumentu",
       "remember": "Zapamiętywanie",
       "remove_matter_member": "Usuń członka sprawy",
@@ -388,6 +405,7 @@
       "save_document": "Zapisz dokument",
       "save_matter": "Zapisz sprawę",
       "save_playbook": "Zapisz playbook",
+      "save_site_notes": "Aktualizowanie notatek o witrynie",
       "save_skill_package": "Zapisz umiejętność",
       "save_task": "Zapisz zadanie",
       "save_template": "Zapisz szablon",

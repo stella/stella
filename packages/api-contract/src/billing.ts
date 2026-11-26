@@ -18,6 +18,16 @@ type MissingTimeEntryActivityGroup = Exclude<
 >;
 true satisfies MissingTimeEntryActivityGroup extends never ? true : never;
 
+/**
+ * Billed minutes for worked minutes under the organization's minimum billing
+ * unit: every commenced unit bills in full. The one rounding rule the server
+ * stores and the desktop previews.
+ */
+export const roundToBillingIncrement = (
+  minutes: number,
+  minimumUnitMinutes: number,
+): number => Math.ceil(minutes / minimumUnitMinutes) * minimumUnitMinutes;
+
 /** ISO 4217 code for an entry whose financial value has not been configured. */
 export const UNPRICED_TIME_ENTRY_CURRENCY = "XXX";
 

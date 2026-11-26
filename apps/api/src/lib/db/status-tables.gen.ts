@@ -363,11 +363,12 @@ export const ENUM_COLUMNS = {
   case_law_statute_citation_counts: ["target_type"],
   case_law_statute_citation_memberships: ["target_type"],
   cell_metadata: ["entity_feature_gate"],
+  chat_browser_site_notes: ["kind"],
   chat_content_v3_backfill_receipts: ["outcome", "source"],
   chat_limit_reminders: ["on_reset"],
   chat_queue_holds: ["reason"],
   chat_secrets: ["decision"],
-  chat_threads: ["chat_reasoning_effort"],
+  chat_threads: ["chat_cloud_approvals", "chat_reasoning_effort"],
   chat_tool_grants: ["scope"],
   chat_turns: [
     "cancellation_reason",

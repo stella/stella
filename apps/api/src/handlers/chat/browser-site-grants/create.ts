@@ -17,6 +17,7 @@ import { lockChatOwnerStoredContentTransitionOnTx } from "@/api/lib/chat/thread-
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
+import { pushSiteGrantsToRuns } from "@/api/lib/desktop-runner/site-grants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
 
@@ -133,6 +134,10 @@ const createBrowserSiteGrant = createSafeRootHandler(
         return Result.ok({ created: true, id: inserted.id, origin });
       }),
     );
+    // Committed: the member's runs that are going take it from here on.
+    if (stored.isOk() && stored.value.created) {
+      pushSiteGrantsToRuns({ organizationId, userId: user.id });
+    }
 
     return stored;
   },

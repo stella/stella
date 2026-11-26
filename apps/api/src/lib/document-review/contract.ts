@@ -95,3 +95,20 @@ export type ReferenceImpact = (typeof REFERENCE_IMPACTS)[number];
 // How much a difference matters is a property of the position, not of the
 // comparison: `PositionSeverity` on the position the finding answers is the
 // one severity a reader sees.
+
+// A folio block citation's navigable payload. Kept in the dependency-light
+// contract module so persisted review findings (`run-contract.ts`) and delta /
+// fix helpers do not pull in the AI extraction engine (`review-extract.ts`).
+export type DocxFolioCitation = {
+  blockId: string;
+  text: string;
+};
+
+/**
+ * The one-click redline a finding carries, derived from its delta.
+ * Matches the folio editor's AI-edit op vocabulary (`packages/folio` ai-edits/types.ts).
+ */
+export type GroundedReviewFix =
+  | { kind: "replaceInBlock"; blockId: string; find: string; replace: string }
+  | { kind: "replaceBlock"; blockId: string; text: string }
+  | { kind: "insertAfterBlock"; blockId: string; text: string };

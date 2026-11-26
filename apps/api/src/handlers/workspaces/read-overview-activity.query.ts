@@ -22,6 +22,7 @@ import type {
   MatterActivityCategory,
   MatterActivityFilters,
 } from "@stll/api-contract/matter-activity";
+import { ownEntry } from "@stll/api-contract/own-key";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDbError } from "@/api/db/safe-db-types";
@@ -82,31 +83,6 @@ const contactSnapshotAuditLogs = alias(
 
 type ActivityCategory = Exclude<MatterActivityCategory, "all">;
 
-type TaskAuditField =
-  | "agendaKind"
-  | "allDay"
-  | "attendees"
-  | "availability"
-  | "dueDate"
-  | "endAt"
-  | "listItemType"
-  | "location"
-  | "name"
-  | "occurredAt"
-  | "onlineMeetingUrl"
-  | "organizer"
-  | "priority"
-  | "recurrence"
-  | "remindAt"
-  | "sensitivity"
-  | "sortOrder"
-  | "startAt"
-  | "status"
-  | "timeZone";
-
-type EntityAuditField = "name" | "parentId";
-type FieldAuditField = "content";
-
 export type ActivityChangedField =
   | "dueDate"
   | "name"
@@ -139,16 +115,16 @@ const TASK_ACTIVITY_FIELD_MAP = {
   startAt: "schedule",
   status: "status",
   timeZone: "schedule",
-} as const satisfies Record<TaskAuditField, ActivityChangedField>;
+} as const satisfies Record<string, ActivityChangedField>;
 
 const ENTITY_ACTIVITY_FIELD_MAP = {
   name: "name",
   parentId: "parentFolder",
-} as const satisfies Record<EntityAuditField, ActivityChangedField>;
+} as const satisfies Record<string, ActivityChangedField>;
 
 const FIELD_ACTIVITY_FIELD_MAP = {
   content: "property",
-} as const satisfies Record<FieldAuditField, ActivityChangedField>;
+} as const satisfies Record<string, ActivityChangedField>;
 
 const mappedChangeKeys = (
   changes: Record<string, unknown> | null,
@@ -159,9 +135,7 @@ const mappedChangeKeys = (
   }
   const changedFields: ActivityChangedField[] = [];
   for (const key of Object.keys(changes)) {
-    const field = Object.entries(mapping).find(
-      ([auditKey]) => auditKey === key,
-    )?.[1];
+    const field = ownEntry(mapping, key);
     if (field !== undefined && !changedFields.includes(field)) {
       changedFields.push(field);
     }

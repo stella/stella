@@ -538,7 +538,7 @@ export const DELETED_MCP_CONNECTION_CREDENTIAL_FIELDS = {
   expiresAt: mcpUserConnections.expiresAt,
   oauthResourceUrl: mcpUserConnections.resourceUrl,
   oauthAuthorizationServerUrl: mcpUserConnections.authorizationServerUrl,
-};
+} satisfies Record<string, unknown>;
 
 export type DeletedMcpConnectionCredentials = Pick<
   RawConnectionRow,

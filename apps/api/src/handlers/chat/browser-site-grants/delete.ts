@@ -9,6 +9,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { pushSiteGrantsToRuns } from "@/api/lib/desktop-runner/site-grants";
 
 const config = {
   contract: "patch",
@@ -64,6 +65,13 @@ const deleteBrowserSiteGrant = createSafeRootHandler(
         return rows;
       }),
     );
+    // Committed: the member's runs that are going no longer allow it.
+    if (deleted.length > 0) {
+      pushSiteGrantsToRuns({
+        organizationId: session.activeOrganizationId,
+        userId: user.id,
+      });
+    }
     return Result.ok({ deleted: deleted.length > 0 });
   },
 );

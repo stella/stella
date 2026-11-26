@@ -1,27 +1,37 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import * as fc from "fast-check";
 
-import type { DesktopTimeEntryMatterCandidate } from "@stll/api-contract/desktop-time-entries";
+import type {
+  DesktopMatterResolution,
+  DesktopTimeEntryMatterCandidate,
+} from "@stll/api-contract/desktop-time-entries";
+import { assertProperty } from "@stll/property-testing";
 
 import { timedSegments, totalDurationMs } from "../src/activity/activity-logic";
 import {
   cleanSharedContext,
   matchDay,
+  recordedMatterIds,
+  unresolvedMatterIds,
   withoutAppSuffix,
 } from "../src/activity/day-review-logic";
+import { EMPTY_MATTER_LEARNING } from "../src/activity/matter-learning";
 
-const candidates = [
-  {
-    id: "a",
-    name: "Alpha dispute",
-    reference: "A-101",
-    color: null,
-    clientName: "Common client",
-    signals: {
-      lastWorkedAt: null,
-      newlyAssignedAt: null,
-      upcomingDeadline: null,
-    },
+const ALPHA = {
+  id: "a",
+  name: "Alpha dispute",
+  reference: "A-101",
+  color: null,
+  clientName: "Common client",
+  signals: {
+    lastWorkedAt: null,
+    newlyAssignedAt: null,
+    upcomingDeadline: null,
   },
+} satisfies DesktopTimeEntryMatterCandidate;
+const candidates = [
+  ALPHA,
   {
     id: "b",
     name: "Beta dispute",
@@ -35,6 +45,13 @@ const candidates = [
     },
   },
 ] satisfies DesktopTimeEntryMatterCandidate[];
+const MATTER_IDS = [
+  "00000000-0000-4000-8000-000000000001",
+  "00000000-0000-4000-8000-000000000002",
+  "00000000-0000-4000-8000-000000000003",
+] as const;
+/** The review runs a day after the fixtures; nothing here is learned. */
+const NOW_MS = Date.UTC(2026, 9, 10);
 const at = (seconds: number) =>
   new Date(Date.UTC(2026, 9, 9, 9, 0, seconds)).toISOString();
 const segment = (
@@ -57,6 +74,9 @@ const review = (
   matchDay({
     segments: timedSegments(segments),
     candidates,
+    resolved: [],
+    learning: EMPTY_MATTER_LEARNING,
+    nowMs: NOW_MS,
     captureDetails,
     manualAssignments: [],
     draftedEntries: [],
@@ -72,29 +92,213 @@ describe("local matter day review", () => {
       expect(result.segments.at(0)?.matterId).toBe("outside-shortlist");
       expect(result.segments.at(0)?.matter).toBeNull();
       expect(result.segments.at(0)?.confidence).toBe("unmatched");
+      expect(result.segments.at(0)?.recordedMatter).toBe("unresolved");
     }
   });
 
-  test("aggregates disconnected short segments per matter without adding away time", () => {
-    const result = review([
-      segment(0, 30, "A-101"),
-      segment(30, 60, "B-202"),
-      segment(3600, 3630, "A-101"),
+  test("a recorded matter off the shortlist matches once resolved, and an inaccessible one is unavailable", () => {
+    const outside = {
+      ...ALPHA,
+      id: "outside",
+      name: "Outside matter",
+      reference: "O-1",
+    };
+    const result = matchDay({
+      segments: timedSegments([
+        segment(0, 30, "A-101", "outside"),
+        segment(30, 60, "A-101", "lost"),
+      ]),
+      candidates,
+      resolved: [
+        { type: "accessible", matter: outside },
+        { type: "inaccessible", id: "lost" },
+      ],
+      learning: EMPTY_MATTER_LEARNING,
+      nowMs: NOW_MS,
+      captureDetails: true,
+      manualAssignments: [],
+      draftedEntries: [],
+    });
+    expect(
+      result.segments.map(({ matter, confidence, recordedMatter }) => [
+        matter?.id,
+        confidence,
+        recordedMatter,
+      ]),
+    ).toEqual([
+      ["outside", "strong", "open"],
+      [undefined, "unmatched", "unavailable"],
+    ]);
+  });
+
+  test("only recorded matter ids no read answered for are asked for, each once", () => {
+    const ids = recordedMatterIds({
+      segments: [
+        { matterId: MATTER_IDS[2] },
+        { matterId: null },
+        {},
+        { matterId: MATTER_IDS[1] },
+      ],
+      manualAssignments: [
+        { start: at(0), end: at(1), matterId: MATTER_IDS[0] },
+        { start: at(1), end: at(2), matterId: MATTER_IDS[2] },
+        { start: at(2), end: at(3), matterId: "not-a-matter-id" },
+      ],
+    });
+    expect(ids).toEqual([
+      MATTER_IDS[2],
+      MATTER_IDS[1],
+      MATTER_IDS[0],
+      "not-a-matter-id",
     ]);
     expect(
-      result.groups.map(({ id, durationMs, roundedTenths }) => ({
+      unresolvedMatterIds({
+        ids,
+        candidates: [{ ...ALPHA, id: MATTER_IDS[0] }],
+        resolved: [{ type: "inaccessible", id: MATTER_IDS[1] }],
+      }),
+    ).toEqual([MATTER_IDS[2]]);
+  });
+
+  test("aggregates disconnected segments per matter without adding away time", () => {
+    const result = review([
+      segment(0, 90, "A-101"),
+      segment(90, 240, "B-202"),
+      segment(3600, 3690, "A-101"),
+    ]);
+    expect(
+      result.groups.map(({ id, durationMs, workedMinutes }) => ({
         id,
         durationMs,
-        roundedTenths,
+        workedMinutes,
       })),
     ).toEqual([
-      { id: "a", durationMs: 60_000, roundedTenths: 1 },
-      { id: "b", durationMs: 30_000, roundedTenths: 1 },
+      { id: "a", durationMs: 180_000, workedMinutes: 3 },
+      { id: "b", durationMs: 150_000, workedMinutes: 2 },
     ]);
     expect(
       result.groups.reduce((sum, group) => sum + group.durationMs, 0),
-    ).toBe(90_000);
+    ).toBe(330_000);
   });
+
+  test("a matter recorded under two minutes is a brief touch, not a suggestion", () => {
+    const result = review([segment(0, 5, "A-101"), segment(5, 300, "B-202")]);
+    expect(
+      result.groups.map(({ id, workedMinutes }) => [id, workedMinutes]),
+    ).toEqual([["b", 4]]);
+    expect(
+      result.briefTouches.map(({ id, durationMs, workedMinutes }) => [
+        id,
+        durationMs,
+        workedMinutes,
+      ]),
+    ).toEqual([["a", 5000, 1]]);
+  });
+
+  test("unclaimed time between two stretches of one matter is offered, never counted", () => {
+    const result = review([
+      segment(0, 120, "A-101"),
+      segment(120, 170, "Inbox"),
+      segment(170, 300, "A-101"),
+    ]);
+    const alpha = result.groups.find(({ id }) => id === "a");
+    expect(alpha?.durationMs).toBe(250_000);
+    expect(alpha?.slivers.map(({ startMs, endMs }) => endMs - startMs)).toEqual(
+      [50_000],
+    );
+  });
+
+  test("another matter's time, or time recorded with a matter not offered, is never a sliver", () => {
+    for (const between of [
+      segment(120, 170, "B-202"),
+      segment(120, 170, "Inbox", "outside-shortlist"),
+    ]) {
+      const result = review([
+        segment(0, 120, "A-101"),
+        between,
+        segment(170, 300, "A-101"),
+      ]);
+      expect(result.groups.find(({ id }) => id === "a")?.slivers).toEqual([]);
+    }
+  });
+
+  test("unclaimed time of two minutes or more is no sliver", () => {
+    const result = review([
+      segment(0, 120, "A-101"),
+      segment(120, 240, "Inbox"),
+      segment(240, 360, "A-101"),
+    ]);
+    expect(result.groups.find(({ id }) => id === "a")?.slivers).toEqual([]);
+  });
+
+  test("taking slivers in after another matter's entry never claims more than was recorded", () => {
+    const segments = timedSegments([
+      segment(0, 156, "A-101"),
+      segment(156, 234, "B-202"),
+      segment(234, 240, "Inbox"),
+      segment(240, 318, "B-202"),
+    ]);
+    type Options = Parameters<typeof matchDay>[0];
+    const day = (
+      manualAssignments: Options["manualAssignments"],
+      draftedEntries: Options["draftedEntries"],
+    ) =>
+      matchDay({
+        segments,
+        candidates,
+        resolved: [],
+        learning: EMPTY_MATTER_LEARNING,
+        nowMs: NOW_MS,
+        captureDetails: true,
+        manualAssignments,
+        draftedEntries,
+      });
+    const alpha =
+      day([], []).groups.find(({ id }) => id === "a") ??
+      panic("Alpha is suggested");
+    // Alpha's entry is created first, at the minutes it then claimed.
+    const created = alpha.ranges.map((range) => ({
+      ...range,
+      entryId: "alpha-entry",
+    }));
+    const beta = day([], created).groups.find(({ id }) => id === "b");
+    const included = (beta?.slivers ?? []).map(({ startMs, endMs }) => ({
+      start: new Date(startMs).toISOString(),
+      end: new Date(endMs).toISOString(),
+      matterId: "b",
+    }));
+    const after = day(included, created);
+    const matterMs = after.segments
+      .filter(({ matter }) => matter !== null)
+      .reduce((sum, { endMs, startMs }) => sum + endMs - startMs, 0);
+    const suggestedMinutes = after.groups.reduce(
+      (sum, { workedMinutes }) => sum + workedMinutes,
+      0,
+    );
+    expect(
+      (alpha.workedMinutes + suggestedMinutes) * 60_000,
+    ).toBeLessThanOrEqual(matterMs);
+  });
+
+  test("an entry's rest under a minute is no brief touch; a minute or more adds rounded down", () => {
+    const touches = (end: number) =>
+      matchDay({
+        segments: timedSegments([
+          segment(0, end, "A-101"),
+          segment(end, end + 300, "B-202"),
+        ]),
+        candidates,
+        resolved: [],
+        learning: EMPTY_MATTER_LEARNING,
+        nowMs: NOW_MS,
+        captureDetails: true,
+        manualAssignments: [],
+        draftedEntries: [{ start: at(0), end: at(120), entryId: "alpha" }],
+      }).briefTouches.map(({ id, workedMinutes }) => [id, workedMinutes]);
+    expect(touches(125)).toEqual([]);
+    expect(touches(200)).toEqual([["a", 1]]);
+  });
+
   test("session identity outranks tokens, and metadata only matches after consent", () => {
     const segments = [segment(0, 30, "B-202", "a"), segment(30, 60, "B-202")];
     expect(
@@ -125,17 +329,21 @@ describe("local matter day review", () => {
       expect(review([segment(0, 30, title)]).groups.at(0)?.matter).toBeNull();
     }
     expect(
-      review([segment(0, 30, "Ａ－１０１")]).groups.at(0)?.matter?.id,
+      review([segment(0, 30, "Ａ－１０１")]).segments.at(0)?.matter?.id,
     ).toBe("a");
-    expect(review([segment(0, 30, "B-202")]).groups).toEqual(
-      matchDay({
-        segments: timedSegments([segment(0, 30, "B-202")]),
-        candidates: candidates.toReversed(),
-        captureDetails: true,
-        manualAssignments: [],
-        draftedEntries: [],
-      }).groups,
-    );
+    const { groups, briefTouches } = review([segment(0, 30, "B-202")]);
+    const reversed = matchDay({
+      segments: timedSegments([segment(0, 30, "B-202")]),
+      candidates: candidates.toReversed(),
+      resolved: [],
+      learning: EMPTY_MATTER_LEARNING,
+      nowMs: NOW_MS,
+      captureDetails: true,
+      manualAssignments: [],
+      draftedEntries: [],
+    });
+    expect(groups).toEqual(reversed.groups);
+    expect(briefTouches).toEqual(reversed.briefTouches);
   });
   test("distinctive whole name and client tokens match partial evidence without resolving ambiguity", () => {
     const matters = candidates.map((candidate) => ({
@@ -163,6 +371,9 @@ describe("local matter day review", () => {
         const result = matchDay({
           segments: timedSegments([segment(0, 30, title)]),
           candidates: ordered,
+          resolved: [],
+          learning: EMPTY_MATTER_LEARNING,
+          nowMs: NOW_MS,
           captureDetails: true,
           manualAssignments: [],
           draftedEntries: [],
@@ -174,6 +385,9 @@ describe("local matter day review", () => {
           segment(0, 30, "Riverside Meadow Northbank Southbank", "b"),
         ]),
         candidates: ordered,
+        resolved: [],
+        learning: EMPTY_MATTER_LEARNING,
+        nowMs: NOW_MS,
         captureDetails: true,
         manualAssignments: [],
         draftedEntries: [],
@@ -188,6 +402,9 @@ describe("local matter day review", () => {
       const result = matchDay({
         segments: original,
         candidates,
+        resolved: [],
+        learning: EMPTY_MATTER_LEARNING,
+        nowMs: NOW_MS,
         captureDetails: true,
         manualAssignments: [
           { start: at(boundary), end: at(60), matterId: "b" },
@@ -205,6 +422,9 @@ describe("local matter day review", () => {
     const result = matchDay({
       segments: timedSegments([segment(0, 60, "A-101", "a")]),
       candidates,
+      resolved: [{ type: "inaccessible", id: "removed" }],
+      learning: EMPTY_MATTER_LEARNING,
+      nowMs: NOW_MS,
       captureDetails: true,
       manualAssignments: [
         { start: at(0), end: at(60), matterId: "b" },
@@ -212,11 +432,135 @@ describe("local matter day review", () => {
       ],
       draftedEntries: [],
     });
-    expect(result.segments.map(({ matter }) => matter?.id)).toEqual([
-      "b",
-      undefined,
-      "b",
+    expect(
+      result.segments.map(({ matter, recordedMatter }) => [
+        matter?.id,
+        recordedMatter,
+      ]),
+    ).toEqual([
+      ["b", "open"],
+      [undefined, "unavailable"],
+      ["b", "open"],
     ]);
+  });
+
+  test("no suggestion ever names a matter outside the accessible set of the same read", () => {
+    const pool = ["a", "b", "c", "d", "e"].map((id, index) => ({
+      ...ALPHA,
+      id,
+      name: `${id.toUpperCase()}lpha matter ${String(index)}`,
+      reference: `${id.toUpperCase()}-${String(index)}0${String(index)}`,
+      clientName: `Client ${id}`,
+    }));
+    /** Where each pooled matter stands in one read. */
+    const standing = fc.constantFrom(
+      "shortlisted",
+      "resolved",
+      "inaccessible",
+      "unanswered",
+    );
+    const pooledId = fc.constantFrom(...pool.map(({ id }) => id), "unknown");
+    const windowTitle = fc
+      .array(
+        fc.oneof(
+          fc.constantFrom(
+            ...pool.flatMap(({ name, reference, clientName }) => [
+              name,
+              reference,
+              clientName,
+            ]),
+          ),
+          fc.constantFrom("draft", "notes", "Re:"),
+        ),
+        { maxLength: 3 },
+      )
+      .map((parts) => parts.join(" "));
+    const recorded = fc.record({
+      start: fc.integer({ min: 0, max: 50 }),
+      length: fc.integer({ min: 1, max: 10 }),
+      matterId: fc.option(pooledId, { nil: null }),
+      title: windowTitle,
+    });
+    assertProperty(
+      "no suggestion ever names a matter outside the accessible set of the same read",
+      fc.property(
+        fc.array(standing, { minLength: pool.length, maxLength: pool.length }),
+        fc.array(recorded, { maxLength: 8 }),
+        fc.array(
+          fc.record({
+            start: fc.integer({ min: 0, max: 50 }),
+            length: fc.integer({ min: 1, max: 20 }),
+            matterId: pooledId,
+          }),
+          { maxLength: 3 },
+        ),
+        fc.boolean(),
+        (standings, recordedSegments, assignments, captureDetails) => {
+          const shortlist = pool.filter(
+            (_, index) => standings[index] === "shortlisted",
+          );
+          const resolved = pool.flatMap(
+            (matter, index): DesktopMatterResolution[] => {
+              const matterStanding = standings.at(index) ?? "unanswered";
+              switch (matterStanding) {
+                case "resolved":
+                  return [{ type: "accessible", matter }];
+                case "inaccessible":
+                  return [{ type: "inaccessible", id: matter.id }];
+                case "shortlisted":
+                case "unanswered":
+                  return [];
+                default:
+                  matterStanding satisfies never;
+                  return [];
+              }
+            },
+          );
+          const open = new Map(
+            [
+              ...shortlist,
+              ...resolved.flatMap((resolution) =>
+                resolution.type === "accessible" ? [resolution.matter] : [],
+              ),
+            ].map((matter) => [matter.id, matter]),
+          );
+          const result = matchDay({
+            segments: timedSegments(
+              recordedSegments.map(({ start, length, matterId, title }) =>
+                segment(start, start + length, title, matterId),
+              ),
+            ),
+            candidates: shortlist,
+            resolved,
+            learning: EMPTY_MATTER_LEARNING,
+            nowMs: NOW_MS,
+            captureDetails,
+            manualAssignments: assignments.map(
+              ({ start, length, matterId }) => ({
+                start: at(start),
+                end: at(start + length),
+                matterId,
+              }),
+            ),
+            draftedEntries: [],
+          });
+          for (const { matter, recordedMatter } of [
+            ...result.segments,
+            ...result.groups.map((group) => ({
+              matter: group.matter,
+              recordedMatter: "none",
+            })),
+          ]) {
+            if (matter !== null) {
+              expect(open.get(matter.id)).toBe(matter);
+            }
+            if (recordedMatter === "unavailable") {
+              expect(matter).toBeNull();
+            }
+          }
+        },
+      ),
+    );
   });
 });
 
@@ -310,6 +654,9 @@ describe("window title evidence", () => {
         window(50, 55, chrome, "Google Chrome"),
       ]),
       candidates,
+      resolved: [],
+      learning: EMPTY_MATTER_LEARNING,
+      nowMs: NOW_MS,
       captureDetails: true,
       manualAssignments: [],
       draftedEntries: [],

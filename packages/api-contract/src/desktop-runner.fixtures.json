@@ -1,8 +1,8 @@
 {
   "vocabulary": {
     "protocol": {
-      "current": 2,
-      "minimum": 1
+      "current": 3,
+      "minimum": 2
     },
     "maxFrameBytes": 4194304,
     "runLimits": {
@@ -173,6 +173,7 @@
       "run.input",
       "run.approval",
       "run.answer",
+      "run.site_grants",
       "run.interrupt",
       "run.cancel",
       "run.token",
@@ -767,6 +768,21 @@
         }
       },
       {
+        "type": "run.site_grants",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "revision": "0192f3a0-6b1c-7d2e-8f30-0000000000c3",
+        "origins": [
+          "https://fixture-library.test",
+          "https://records.fixture-court.test:8443"
+        ]
+      },
+      {
+        "type": "run.site_grants",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "revision": "0192f3a0-6b1c-7d2e-8f30-0000000000c4",
+        "origins": []
+      },
+      {
         "type": "run.interrupt",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001"
       },
@@ -1308,7 +1324,12 @@
           "inputId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
           "message": {
             "role": "user",
-            "content": [{ "type": "text", "content": "Also check the annex." }]
+            "content": [
+              {
+                "type": "text",
+                "content": "Also check the annex."
+              }
+            ]
           }
         }
       },
@@ -1318,7 +1339,10 @@
           "type": "run.input",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "inputId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
-          "message": { "role": "user", "content": "" }
+          "message": {
+            "role": "user",
+            "content": ""
+          }
         }
       },
       {
@@ -1768,6 +1792,23 @@
           "folderId": "../outside",
           "linkedFolderId": null,
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001"
+        }
+      },
+      {
+        "name": "run.site_grants without a revision",
+        "message": {
+          "type": "run.site_grants",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "origins": ["https://fixture-library.test"]
+        }
+      },
+      {
+        "name": "run.site_grants with a revision that is not a UUID",
+        "message": {
+          "type": "run.site_grants",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "revision": "latest",
+          "origins": ["https://fixture-library.test"]
         }
       }
     ]

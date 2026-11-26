@@ -9,13 +9,15 @@ import type {
   SearchPaginationOutcome,
 } from "@stll/api-contract/search";
 
-import type { AccountAccess } from "@/api/lib/api-handlers";
+import type { AccountAccess } from "@/api/lib/auth/account-access";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
 import type { WindowedReadSurface } from "@/api/lib/files/windowed-read-surface";
 import type {
   MCP_ADVANCED_RESOURCE_SCOPES,
-  MCP_ALL_RESOURCE_SCOPES,
+  McpReadClass,
+  McpToolInputSchema,
+  ToolScope,
 } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
@@ -34,16 +36,7 @@ import type {
  */
 export type JsonSchema = JsonSchemaType;
 
-/**
- * Every MCP tool accepts one named-argument object, never a scalar root. Wire
- * projections rebuild and validate the enumerable JSON recursively, so only
- * JSON fields enter the protocol payload.
- */
-export type McpToolInputSchema = {
-  type: "object";
-  properties?: Record<string, unknown>;
-  [key: string]: unknown;
-};
+export type { McpReadClass, McpToolInputSchema, ToolScope };
 
 /**
  * Stella-owned tools always return an object as structured content. The source
@@ -70,8 +63,6 @@ export type RuntimeMcpToolOutputContract = Omit<
   McpToolOutputContract<never>,
   "handlerDataType"
 >;
-
-export type ToolScope = (typeof MCP_ALL_RESOURCE_SCOPES)[number];
 
 /**
  * Closed set of reasons a tool is kept off the anonymized surface. No
@@ -162,8 +153,6 @@ export type McpToolAnnotationReasons = Readonly<{
   openWorldHint: string;
   readOnlyHint: string;
 }>;
-
-export type McpReadClass = "tenant" | "public" | "both";
 
 type McpReadClassResolver = (
   args: unknown,

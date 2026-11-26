@@ -540,6 +540,7 @@
       "waitForMatches": "Uzgaidiet, līdz beidzas anonimizācijas pārbaude.",
       "workspaceTermsHeading": "Darba telpas termini ({count})"
     },
+    "audioUnplayable": "Šo ierakstu šeit nevar atskaņot. Lejupielādējiet to, lai noklausītos.",
     "closeAllTabs": "Aizvērt {count, plural, zero {visas # cilnes} one {# cilni} other {visas # cilnes}}",
     "closeOtherTabs": "Aizvērt {count, plural, zero {# citu cilņu} one {# citu cilni} other {# citas cilnes}}",
     "closeTab": "Aizvērt <bdi>{name}</bdi>",
@@ -623,6 +624,11 @@
     },
     "metadata": {
       "aiExtractedHeading": "Iegūts ar AI",
+      "browserDownload": {
+        "downloaded": "Lejupielādēts",
+        "file": "Faila adrese",
+        "page": "Lejupielādēts no"
+      },
       "documentProperties": {
         "empty": "Šajā failā nav paša faila rekvizītu",
         "heading": "Faila rekvizīti",

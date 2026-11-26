@@ -48,12 +48,16 @@ const SITE_OPTIONS: readonly HarnessApprovalOption[] = [
 /**
  * What the member is asked, in the harness's words: the kind of step, the
  * key or option, the element's role and accessible name, and the page's
- * address. Never text read from the page beyond the element's name. Chat
- * shows the question in the member's language from the call's `asked`.
+ * address; for opening a page, its address. Never text read from the page
+ * beyond the element's name. Chat shows the question in the member's
+ * language from the call's `asked`, or the address `open` keeps.
  */
 const approvalReason = (asked: BrowserApprovalRequest): string => {
-  const element = `the ${asked.role} "${asked.name}" on ${asked.url}`;
   const reason = (() => {
+    if (asked.action === "open") {
+      return `Open ${asked.url}`;
+    }
+    const element = `the ${asked.role} "${asked.name}" on ${asked.url}`;
     switch (asked.action) {
       case "click":
         return `Click ${element}`;
@@ -71,19 +75,31 @@ const approvalReason = (asked: BrowserApprovalRequest): string => {
   return chatLocalRunShownText(reason, CHAT_LOCAL_RUN_TOOL_LIMITS.approval);
 };
 
-/** The approval's call, as chat keeps it: the step and what it is about. */
+/**
+ * The approval's call, as chat keeps it: the step, what it is about, and
+ * why the member is asked.
+ */
 const approvalCall = (asked: BrowserApprovalRequest) => {
+  const { reason: why } = asked;
+  if (asked.action === "open") {
+    return { action: asked.action, url: asked.url, why };
+  }
   const about = { name: asked.name, role: asked.role, url: asked.url };
   switch (asked.action) {
     case "click":
     case "type":
-      return { action: asked.action, asked: about };
+      return { action: asked.action, asked: about, why };
     case "press_key":
-      return { action: asked.action, asked: { ...about, key: asked.key } };
+      return {
+        action: asked.action,
+        asked: { ...about, key: asked.key },
+        why,
+      };
     case "select":
       return {
         action: asked.action,
         asked: { ...about, option: asked.option },
+        why,
       };
     default:
       asked satisfies never;
@@ -100,12 +116,21 @@ const approvalCall = (asked: BrowserApprovalRequest) => {
  * chat never shows a step done that did not happen. The events go into the
  * run's stream beside the harness's, through `withEvents`.
  */
+/** What the id of every question these approvals ask starts with. */
+const BROWSER_STEP_REQUEST = "browser-step-";
+
+/** A question still waiting, with what settles it and the step it asks about. */
+type PendingQuestion = {
+  readonly asked: BrowserApprovalRequest;
+  readonly settle: (decision: ApprovalDecision) => void;
+};
+
 export const createActionApprovals = () => {
   const side = createEventQueue<HarnessEvent>();
-  const pending = new Map<string, (decision: ApprovalDecision) => void>();
+  const pending = new Map<string, PendingQuestion>();
 
   const request: ApproveAction = async (asked) => {
-    const requestId = `browser-step-${crypto.randomUUID()}`;
+    const requestId = `${BROWSER_STEP_REQUEST}${crypto.randomUUID()}`;
     const toolCall = nativeToolCall(requestId, {
       name: HARNESS_TOOL_NAMES.browser,
       input: approvalCall(asked),
@@ -141,7 +166,7 @@ export const createActionApprovals = () => {
         settle(APPROVAL_DECISION.deny);
       }
     };
-    pending.set(requestId, settle);
+    pending.set(requestId, { asked, settle });
     side.push({
       type: "approval.requested",
       request: {
@@ -180,27 +205,65 @@ export const createActionApprovals = () => {
 
   /** Settles every open question as declined: the run is ending. */
   const declineAll = () => {
-    for (const [requestId, settle] of pending) {
+    for (const [requestId, { settle }] of pending) {
       pending.delete(requestId);
       settle(APPROVAL_DECISION.deny);
+    }
+  };
+
+  /**
+   * Settles as approved every open question whose step the run's gate now
+   * runs without asking, as it stands: after the member always allowed a
+   * website, here or in chat, the other steps waiting on that website go
+   * on. A question the gate still asks, for another website or for a reason
+   * no website approval answers (a sign-in, a field that may hold a secret,
+   * a level that asks about every such step), keeps waiting. `taken` runs
+   * for each before its end is reported, with the id it was asked under.
+   */
+  const settleAllowed = (taken: (requestId: string) => void) => {
+    for (const [requestId, { asked, settle }] of pending) {
+      if (asked.allowedNow()) {
+        pending.delete(requestId);
+        taken(requestId);
+        settle(APPROVAL_DECISION.approve);
+      }
     }
   };
 
   return {
     request,
     /**
+     * Whether `requestId` is one of these questions, open or closed: a late
+     * answer to one withdrawn never reaches the harness, which never asked.
+     */
+    asked: (requestId: string): boolean =>
+      requestId.startsWith(BROWSER_STEP_REQUEST),
+    /**
      * Answers the question `requestId` (the id it was asked under); false
      * when it is not one of these, so the harness's own approvals go on.
+     * An answer that always allows the step's website adds it to the run's
+     * approvals before the step goes on; `settleAllowed` then lets the
+     * other questions it answers go on too.
      */
-    answer: (requestId: string, decision: ApprovalDecision): boolean => {
-      const settle = pending.get(requestId);
-      if (settle === undefined) {
+    answer: (
+      requestId: string,
+      decision: ApprovalDecision,
+      /** Runs before the question's end is reported: the answer reached it. */
+      taken: () => void = () => undefined,
+    ): boolean => {
+      const question = pending.get(requestId);
+      if (question === undefined) {
         return false;
       }
       pending.delete(requestId);
-      settle(decision);
+      if (decision === SESSION_APPROVAL) {
+        question.asked.allowSite?.();
+      }
+      taken();
+      question.settle(decision);
       return true;
     },
+    settleAllowed,
     declineAll,
     /**
      * The harness's events with these questions' events beside them, in

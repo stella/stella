@@ -9,6 +9,7 @@ import { cn } from "../lib/utils";
 import {
   SWITCH_ROOT_CLASS_NAME,
   SWITCH_ROOT_SIZE_CLASS_NAME,
+  SWITCH_THUMB_CLASS_NAME,
   type SwitchSize,
 } from "./toggle-classes";
 import { renderTooltipTrigger } from "./tooltip-trigger-helper";
@@ -49,7 +50,7 @@ const Switch = ({
     >
       <SwitchPrimitive.Thumb
         className={cn(
-          "bg-background pointer-events-none block rounded-full shadow-xs transition-transform",
+          SWITCH_THUMB_CLASS_NAME,
           SWITCH_THUMB_SIZE_CLASS_NAME[size],
         )}
         data-slot="switch-thumb"

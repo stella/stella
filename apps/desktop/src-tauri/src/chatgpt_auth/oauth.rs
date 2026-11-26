@@ -460,7 +460,7 @@ fn callback_page(page: &CallbackPage, scheme: OutcomeScheme) -> String {
     },
     OutcomeMark {
       name: "button",
-      value: t("agentSubscriptions.continueWithChatGpt"),
+      value: t("agentSubscriptions.signIn"),
       kind: OutcomeMarkKind::ButtonLabel,
     },
   ];
@@ -575,7 +575,7 @@ mod tests {
     for label in [
       "AI&#32;and&#32;agents",
       "AI&#32;subscriptions",
-      "Continue&#32;with&#32;ChatGPT",
+      "Sign&#32;in",
     ] {
       assert!(html.contains(&format!(">{label}</bdi>")), "{label}");
     }

@@ -10,6 +10,7 @@ import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runne
 
 import { LOCAL_BROWSER_MCP_SERVER_NAME } from "../../harness/tool-parts";
 import type { StellaSandboxMcpBinding } from "../../sandbox";
+import type { FileBrowserDownload } from "../browser-download-filing";
 import type { BrowserBridge } from "./bridge";
 import { createDownloadInbox, type TakenDownloads } from "./download-inbox";
 import type { HostRouter } from "./host-router";
@@ -80,7 +81,8 @@ type BrowserMcpRun = {
   approvals: DesktopRunnerApprovalMode;
   /**
    * The websites the member always allows browser steps on: those stored
-   * when the run started, and those the member allowed in this run since.
+   * when the run started, and those the member allowed in this run since,
+   * changed in place as the member's approvals in chat change.
    */
   siteGrants: Set<string>;
   /** Asks the run's member to allow one browser step. */
@@ -89,6 +91,8 @@ type BrowserMcpRun = {
   stopped: AbortSignal;
   /** The run's folder: a PDF its chat's tab downloads is saved there. */
   workspaceDir: string;
+  /** Files each saved download with stella; absent where the run files nothing. */
+  fileDownload?: FileBrowserDownload | undefined;
 };
 
 /** What a run's browser steps are held to: its level and approvals, and who answers. */
@@ -312,11 +316,12 @@ type LocalBrowserSession = ReturnType<typeof createLocalBrowserSession>;
 const downloadInboxFor = (
   source: LocalBrowserMcpOptions["downloads"],
   runOf: (threadId: string) => BrowserMcpRun | null,
+  pageOf: (threadId: string) => string | null,
 ) => {
   if (source === null) {
     return null;
   }
-  const inbox = createDownloadInbox({ home: source.home, runOf });
+  const inbox = createDownloadInbox({ home: source.home, pageOf, runOf });
   source.onDownload(inbox.arrive);
   return inbox;
 };
@@ -329,24 +334,73 @@ const NOTHING_DOWNLOADED: TakenDownloads = {
   shownSaving: false,
 };
 
+/**
+ * What one call hands out of the chat's downloads: those since its last
+ * result, waiting a moment for the ones the call started (`since`), and
+ * for `wait_for_downloads` every one still saving for the run, whenever
+ * it began.
+ */
+const callDownloads = (
+  inbox: ReturnType<typeof createDownloadInbox> | null,
+  {
+    held,
+    signal,
+    since,
+  }: { held: BrowserMcpRun; signal: AbortSignal; since: number },
+) => ({
+  downloads: async (shownAddress: string | null): Promise<TakenDownloads> =>
+    inbox === null
+      ? NOTHING_DOWNLOADED
+      : await inbox.take(held, { shownAddress, signal, since }),
+  waitForDownloads: async (waitMs: number): Promise<TakenDownloads> =>
+    inbox === null
+      ? NOTHING_DOWNLOADED
+      : await inbox.take(held, {
+          shownAddress: null,
+          signal,
+          since: 0,
+          waitMs,
+        }),
+});
+
 /** What the chat's tools need to know of the browser its pages are in. */
 const chatBrowser = (browser: HostRouter, threadId: string) => ({
   acts: browser.actsFor(threadId),
   browserMoves: () => browser.browserMoves(threadId),
 });
 
-/** A chat's page state, kept while any run of the chat is held. */
-const sessionFor = (
-  sessions: Map<string, LocalBrowserSession>,
-  threadId: string,
-) => {
-  const existing = sessions.get(threadId);
-  if (existing !== undefined) {
-    return existing;
-  }
-  const created = createLocalBrowserSession();
-  sessions.set(threadId, created);
-  return created;
+/**
+ * Each chat's page state, kept while any run of the chat is held. The
+ * websites a chat has been on stay for the sidecar's life: a later run of
+ * the chat opens them without asking.
+ */
+const createChatSessions = () => {
+  const sessions = new Map<string, LocalBrowserSession>();
+  const visited = new Map<string, Set<string>>();
+  return {
+    of: (threadId: string): LocalBrowserSession => {
+      const existing = sessions.get(threadId);
+      if (existing !== undefined) {
+        return existing;
+      }
+      const chatVisited = visited.get(threadId) ?? new Set<string>();
+      visited.set(threadId, chatVisited);
+      const created = createLocalBrowserSession(chatVisited);
+      sessions.set(threadId, created);
+      return created;
+    },
+    /** The address of the page the chat last read, while it has a session. */
+    pageOf: (threadId: string): string | null =>
+      sessions.get(threadId)?.page() ?? null,
+    /** The chat's last run ended: its page state goes, its visits stay. */
+    drop: (threadId: string): void => {
+      sessions.delete(threadId);
+    },
+    clear: (): void => {
+      sessions.clear();
+      visited.clear();
+    },
+  };
 };
 
 type LocalBrowserMcpOptions = {
@@ -371,8 +425,12 @@ export const startLocalBrowserMcp = ({
   version,
 }: LocalBrowserMcpOptions): LocalBrowserMcp => {
   const endpoints = createEndpoints(browser.releaseChat);
-  const sessions = new Map<string, LocalBrowserSession>();
-  const downloads = downloadInboxFor(downloadSource, endpoints.runOf);
+  const sessions = createChatSessions();
+  const downloads = downloadInboxFor(
+    downloadSource,
+    endpoints.runOf,
+    sessions.pageOf,
+  );
   const listener = { host: "" };
 
   const answer = async (
@@ -433,13 +491,10 @@ export const startLocalBrowserMcp = ({
         const result = await whileCalling(
           { id, requestSignal, serving },
           async (signal) =>
-            await sessionFor(sessions, held.threadId).call(name, input, {
+            await sessions.of(held.threadId).call(name, input, {
               ...chatBrowser(browser, held.threadId),
               ...runApprovals(held),
-              downloads: async (shownAddress) =>
-                downloads === null
-                  ? NOTHING_DOWNLOADED
-                  : await downloads.take(held, { shownAddress, signal, since }),
+              ...callDownloads(downloads, { held, signal, since }),
               signal,
               send: async (command, observedTab) =>
                 await browser.request(
@@ -539,7 +594,7 @@ export const startLocalBrowserMcp = ({
     browser.cancel({ controllerId: ended.held.threadId, turnId: runId });
     downloads?.forgetRun(runId);
     if (!endpoints.servesThread(ended.held.threadId)) {
-      sessions.delete(ended.held.threadId);
+      sessions.drop(ended.held.threadId);
     }
     return ended.key;
   };

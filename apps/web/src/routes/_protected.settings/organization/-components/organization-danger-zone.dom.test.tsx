@@ -13,6 +13,8 @@ const { cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
 const { focusManager, QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
+const { createMemoryHistory, createRootRoute, createRouter, RouterProvider } =
+  await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { OrganizationDangerZone } = await import("./organization-danger-zone");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
@@ -94,20 +96,31 @@ const mount = (
       .queryKey,
     auditArchive,
   );
+  const rootRoute = createRootRoute({
+    component: () => (
+      <OrganizationDangerZone
+        organizationId="organization-fixture"
+        organizationName="Novak Legal"
+        isOwner={isOwner}
+        onSuccess={async () => {
+          completed += 1;
+          await afterSuccess?.();
+        }}
+      />
+    ),
+  });
+  const router = createRouter({
+    routeTree: rootRoute,
+    history: createMemoryHistory({
+      initialEntries: ["/settings/organization/general"],
+    }),
+  });
   render(
     <QueryClientProvider client={client}>
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
         <FormattingProvider locale="en" timeZone="UTC">
           <AuthenticatedUserProvider user={user}>
-            <OrganizationDangerZone
-              organizationId="organization-fixture"
-              organizationName="Novak Legal"
-              isOwner={isOwner}
-              onSuccess={async () => {
-                completed += 1;
-                await afterSuccess?.();
-              }}
-            />
+            <RouterProvider router={router} />
           </AuthenticatedUserProvider>
         </FormattingProvider>
       </IntlProvider>
@@ -142,8 +155,20 @@ test("the last-owner leave refusal explains the refusal and keeps membership", a
   );
   const completed = mount();
   fireEvent.click(
-    screen.getByRole("button", { name: messages.admin.leaveOrganization }),
+    await screen.findByRole("button", {
+      name: messages.admin.leaveOrganization,
+    }),
   );
+  expect(requests).toHaveLength(0);
+  const leaveDialog = await screen.findByRole("alertdialog");
+  const confirmLeave = within(leaveDialog).getByRole("button", {
+    name: messages.admin.leaveOrganization,
+  });
+  expect(confirmLeave.getAttribute("aria-disabled")).toBe("true");
+  fireEvent.change(within(leaveDialog).getByRole("textbox"), {
+    target: { value: "Novak Legal" },
+  });
+  fireEvent.click(confirmLeave);
   await waitFor(() =>
     expect(screen.getByRole("alert").textContent).toContain(
       messages.admin.leaveRefusedOnlyOwner,
@@ -164,7 +189,9 @@ test("renewing-subscription deletion stays open and offers plan and usage recove
   const requests = refuse("organization_subscription_renews", explanation);
   const completed = mount();
   fireEvent.click(
-    screen.getByRole("button", { name: messages.admin.deleteOrganization }),
+    await screen.findByRole("button", {
+      name: messages.admin.deleteOrganization,
+    }),
   );
   const dialog = await screen.findByRole("alertdialog");
   const confirm = within(dialog).getByRole("button", {
@@ -196,10 +223,12 @@ test("renewing-subscription deletion stays open and offers plan and usage recove
   expect(completed()).toBe(0);
 });
 
-test("administrators can leave but cannot open organization deletion", () => {
+test("administrators can leave but cannot open organization deletion", async () => {
   mount(false);
   expect(
-    screen.getByRole("button", { name: messages.admin.leaveOrganization }),
+    await screen.findByRole("button", {
+      name: messages.admin.leaveOrganization,
+    }),
   ).toBeDefined();
   expect(
     screen.queryByRole("button", { name: messages.admin.deleteOrganization }),
@@ -215,10 +244,20 @@ test("successful leave remains completed when destination refresh fails", async 
   const completed = mount(true, async () => {
     throw new Error("Destination refresh failed");
   });
-  const leave = screen.getByRole("button", {
+  const leave = await screen.findByRole("button", {
     name: messages.admin.leaveOrganization,
   });
   fireEvent.click(leave);
+  expect(requests).toBe(0);
+  const leaveDialog = await screen.findByRole("alertdialog");
+  const confirmLeave = within(leaveDialog).getByRole("button", {
+    name: messages.admin.leaveOrganization,
+  });
+  expect(confirmLeave.getAttribute("aria-disabled")).toBe("true");
+  fireEvent.change(within(leaveDialog).getByRole("textbox"), {
+    target: { value: "Novak Legal" },
+  });
+  fireEvent.click(confirmLeave);
   await waitFor(() =>
     expect(
       screen.getByText(messages.admin.organizationLeft).getAttribute("role"),
@@ -233,9 +272,15 @@ test("successful leave remains completed when destination refresh fails", async 
 const deleteButton = () =>
   screen.getByRole("button", { name: messages.admin.deleteOrganization });
 
+/** The delete action once the section has rendered under the router. */
+const findDeleteButton = async () =>
+  await screen.findByRole("button", {
+    name: messages.admin.deleteOrganization,
+  });
+
 /** Opens the deletion confirmation and returns its dialog. */
 const openDeletion = async () => {
-  fireEvent.click(deleteButton());
+  fireEvent.click(await findDeleteButton());
   return await screen.findByRole("alertdialog");
 };
 
@@ -252,7 +297,7 @@ test("deletion stays open without an archive, and the owner can still request on
     },
   );
   mount(true, undefined, null);
-  expect(deleteButton().getAttribute("aria-disabled")).toBeNull();
+  expect((await findDeleteButton()).getAttribute("aria-disabled")).toBeNull();
 
   fireEvent.click(
     screen.getByRole("button", { name: messages.admin.auditArchiveRequest }),
@@ -289,7 +334,7 @@ test("the confirmation recommends the archive only while none is current", async
 
 test("an outdated archive offers a new export and the confirmation recommends it", async () => {
   mount(true, undefined, { ...CURRENT_ARCHIVE, coversCurrentTrail: false });
-  expect(screen.getByRole("status").textContent).toBe(
+  expect((await screen.findByRole("status")).textContent).toBe(
     messages.admin.auditArchiveOutdated,
   );
   expect(
@@ -309,7 +354,7 @@ test("an archive the owner has not downloaded is recommended, not required", asy
     ...CURRENT_ARCHIVE,
     downloaded: false,
   });
-  expect(screen.getByRole("status").textContent).toBe(
+  expect((await screen.findByRole("status")).textContent).toBe(
     messages.admin.auditArchiveDownloadFirst,
   );
   globalThis.fetch = Object.assign(
@@ -349,6 +394,7 @@ test("returning to the page rereads a failed archive another session replaced", 
     Response.json({ latest: CURRENT_ARCHIVE }),
   );
   mount(true, undefined, { id: CURRENT_ARCHIVE.id, status: "failed" });
+  await findDeleteButton();
 
   returnToPage();
 
@@ -370,6 +416,7 @@ test("a failed archive refresh says so and the confirmation recommends a new arc
     ),
   );
   mount();
+  await findDeleteButton();
 
   returnToPage();
 

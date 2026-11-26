@@ -534,15 +534,6 @@ const VersionItem = ({
       ? { added: version.diffWordsAdded, removed: version.diffWordsRemoved }
       : null;
 
-  const handleContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault();
-    const x = e.clientX;
-    const y = e.clientY;
-    setContextAnchor({
-      getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
-    });
-  };
-
   return (
     <div key={version.id}>
       {showPhaseDivider && <div className="border-border my-1 border-t" />}
@@ -596,7 +587,7 @@ const VersionItem = ({
             );
           }
         }}
-        onContextMenu={handleContextMenu}
+        onOpenContextMenu={({ anchor }) => setContextAnchor(anchor)}
       />
 
       <Menu

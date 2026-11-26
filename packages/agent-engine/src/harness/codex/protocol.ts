@@ -380,6 +380,15 @@ export const CODEX_NOTIFICATIONS = {
     error: v.nullish(v.string()),
   }),
   "account/rateLimits/updated": v.object({ rateLimits: RateLimitsSchema }),
+  /**
+   * Codex could not use part of its configuration and runs on without it.
+   * Sent by the process, not a turn; only the fact is reported, never its
+   * text, which names the member's settings and files.
+   */
+  configWarning: v.object({
+    summary: v.string(),
+    details: v.nullish(v.string()),
+  }),
 } as const;
 export type CodexNotificationMethod = keyof typeof CODEX_NOTIFICATIONS;
 

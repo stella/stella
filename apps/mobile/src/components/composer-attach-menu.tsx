@@ -27,7 +27,7 @@ export const ComposerAttachMenu = ({
   return (
     <Button
       accessibilityLabel={t("attachFile")}
-      className="border-border mb-[3px] size-9 rounded-full"
+      className="border-border size-9 rounded-full"
       onPress={onAttachFile}
       size={COMPOSER_CONTROL_BUTTON_SIZE}
       variant="secondary"

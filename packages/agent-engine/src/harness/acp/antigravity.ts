@@ -272,18 +272,27 @@ const normalizedPathKey = (target: string): string => {
 };
 
 /**
- * Removes a throwaway probe session from `<home>/antigravity-acp` without
+ * The folder under an Antigravity home where an agent keeps its sessions:
+ * the release's ACP server in `antigravity-acp`, the CLI (`agy acp`
+ * included) in `antigravity-cli`.
+ */
+type AntigravityStateFolder = "antigravity-acp" | "antigravity-cli";
+
+/**
+ * Removes a throwaway probe session from `<home>/<stateFolder>` without
  * following symlinks. When `verifyCwd` is set (for the member's own CLI
  * home), `.meta` — if present — must match `cwd` so another session is never
  * touched.
  */
 const discardFromAntigravityHome = ({
   homeDir,
+  stateFolder,
   sessionId,
   cwd,
   verifyCwd,
 }: {
   homeDir: string;
+  stateFolder: AntigravityStateFolder;
   sessionId: string;
   cwd: string;
   verifyCwd: boolean;
@@ -291,7 +300,7 @@ const discardFromAntigravityHome = ({
   if (!SAFE_SESSION_ID.test(sessionId)) {
     return;
   }
-  const state = path.join(homeDir, "antigravity-acp");
+  const state = path.join(homeDir, stateFolder);
   const stateStat = Result.try(() => lstatSync(state));
   if (
     Result.isError(stateStat) ||
@@ -392,6 +401,7 @@ export const ANTIGRAVITY: AcpAgentDefinition = {
   discardSession: ({ configDir, sessionId, cwd }: AcpDiscardSessionContext) => {
     discardFromAntigravityHome({
       homeDir: configDir,
+      stateFolder: "antigravity-acp",
       sessionId,
       cwd,
       verifyCwd: false,
@@ -433,21 +443,18 @@ const antigravityCliHome = (
     ".gemini",
   );
 
-/** Where the member's own Antigravity CLI keeps its sign-in. */
-export const antigravityCliTokenPath = (
-  environment: Readonly<Record<string, string | undefined>>,
-) =>
-  path.join(
-    antigravityCliHome(environment),
-    "antigravity-cli",
-    "antigravity-oauth-token",
-  );
-
 /**
  * The Antigravity CLI the member installed (`agy`), which serves ACP as
  * `agy acp` from 1.5.0. It is the member's own: it runs with their own
- * Antigravity home and sign-in, which they make in the CLI itself; stella
- * keeps only its own state (the probe's answer) in its state directory.
+ * Antigravity home and sign-in, which they make in the CLI itself.
+ *
+ * Where the CLI keeps that sign-in is its own business (the system
+ * keychain, from 1.5), so stella never looks for it: the CLI signs itself
+ * in when it starts and answers `session/new` with "authentication
+ * required" while it has no sign-in. That answer is the probe's, and so
+ * what Settings shows and what every run starts on. The CLI starts in a
+ * fraction of a second, so its answer is never kept: a sign-in or sign-out
+ * in the CLI shows at the next probe.
  */
 export const ANTIGRAVITY_CLI: AcpAgentDefinition = {
   ...ANTIGRAVITY,
@@ -457,13 +464,11 @@ export const ANTIGRAVITY_CLI: AcpAgentDefinition = {
   removedEnvironment: GOOGLE_ENVIRONMENT.filter(
     (name) => name !== "GEMINI_HOME",
   ),
-  storedSignIn: {
-    methodId: ANTIGRAVITY_SIGN_IN_METHOD,
-    signedIn: (_configDir, environment) =>
-      existsSync(antigravityCliTokenPath(environment)),
-  },
+  // Never `authenticate`: asked of a signed-in CLI it starts a new sign-in.
+  storedSignIn: null,
   ownTempDir: false,
-  // Remove throwaway probe sessions from the member's own Antigravity home.
+  probeCacheMs: 0,
+  // Remove throwaway probe sessions from the member's own CLI history.
   discardSession: ({
     sessionId,
     environment,
@@ -471,6 +476,7 @@ export const ANTIGRAVITY_CLI: AcpAgentDefinition = {
   }: AcpDiscardSessionContext) => {
     discardFromAntigravityHome({
       homeDir: antigravityCliHome(environment),
+      stateFolder: "antigravity-cli",
       sessionId,
       cwd,
       verifyCwd: true,

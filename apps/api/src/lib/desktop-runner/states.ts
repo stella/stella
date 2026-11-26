@@ -115,12 +115,15 @@ true satisfies Same<
 /**
  * Server commands kept until the run ends and replayed on every reconnect.
  * `run.token` is absent: a token is minted when it is sent and never stored.
+ * Each `run.site_grants` restates the member's whole set; the computer tells
+ * a revoke from the set before it, so every one stays queued, in order.
  */
 export const DESKTOP_RUNNER_COMMAND_KINDS = [
   "run.start",
   "run.input",
   "run.approval",
   "run.answer",
+  "run.site_grants",
   "run.interrupt",
   "run.cancel",
 ] as const;

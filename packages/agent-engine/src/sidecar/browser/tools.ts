@@ -20,9 +20,11 @@ import {
   browserDocumentAddress,
   type BrowserObservedTab,
 } from "@stll/api-contract/browser-control";
+import { browserSiteGrantOrigin } from "@stll/api-contract/browser-site-grants";
 import {
   BROWSER_STEP_GATE,
   type BrowserReportedPage,
+  type BrowserStepAskReason,
   decideBrowserStep,
 } from "@stll/api-contract/browser-step-gate";
 import {
@@ -34,7 +36,7 @@ import {
 import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
 
 import { browserBridgeError } from "./bridge";
-import type { TakenDownloads } from "./download-inbox";
+import { MAX_DOWNLOAD_WAIT_MS, type TakenDownloads } from "./download-inbox";
 import {
   BROWSER_DOWNLOADS_FOLDER,
   type BrowserDownloadOutcome,
@@ -57,6 +59,16 @@ import {
  * as MCP results and nowhere else. A chat turn keeps only the kind of step
  * and what the member was asked to allow (`chat-local-run-tool`).
  */
+
+/** The one tool that never reaches a browser: it waits for downloads. */
+const WAIT_FOR_DOWNLOADS = "wait_for_downloads";
+
+/** A tool that becomes a command for the chat's browser. */
+type PageAction = Exclude<ChatLocalRunBrowserAction, typeof WAIT_FOR_DOWNLOADS>;
+
+/** How long `wait_for_downloads` waits unless told, and at most. */
+const DEFAULT_DOWNLOAD_WAIT_SECONDS = 30;
+const MAX_DOWNLOAD_WAIT_SECONDS = MAX_DOWNLOAD_WAIT_MS / 1000;
 
 /** A cursor as the agent passes it back; the extension checks the rest. */
 const CURSOR_INPUT = v.pipe(
@@ -114,9 +126,19 @@ const INPUT_SCHEMAS = {
   switch_tab: v.object({
     tabId: v.pipe(v.number(), v.integer(), v.minValue(0)),
   }),
+  wait_for_downloads: v.object({
+    seconds: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(MAX_DOWNLOAD_WAIT_SECONDS),
+      ),
+    ),
+  }),
 } as const satisfies Record<ChatLocalRunBrowserAction, v.GenericSchema>;
 
-const DOWNLOADS_NOTE = `A PDF the page downloads is saved into your working folder under ${BROWSER_DOWNLOADS_FOLDER}/; this result lists it under downloads with its path (relative to your working folder), size and source address, so you can read and cite it with your own file tools. One still saving is counted under savingDownloads and listed by a later result. Other files are not saved, and a refused download says why.`;
+const DOWNLOADS_NOTE = `A PDF the page downloads is saved into your working folder under ${BROWSER_DOWNLOADS_FOLDER}/; this result lists it under downloads with its path (relative to your working folder), size, SHA-256, the address it was fetched from (sourceUrl), the page it came from (pageUrl; null when it is not known, or the file came from another site) and when it arrived (downloadedAt), so you can read and cite it with your own file tools. The same file downloaded again is not saved twice: duplicate true names the copy already there. stella also files each saved PDF (filed): into the chat's matter as a document (status document, with its documentId and name; duplicate true when the matter already held the same file), or with the chat when it is in no matter (status chat_file); not_filed says why it is in your working folder only, and unconfirmed that stella's answer did not arrive, so it may be filed as well. One still saving is counted under savingDownloads; call wait_for_downloads to wait for it. Other files are not saved, and a refused download says why.`;
 
 const PDF_NOTE = `A PDF the tab shows (document: "pdf") cannot be read as a page and has no text here: it is saved once into ${BROWSER_DOWNLOADS_FOLDER}/ and file gives its path, or why it was not saved, or that it is still saving (call snapshot again for the path). Read the saved file with your own file tools and cite the PDF by its address (url).`;
 
@@ -153,7 +175,7 @@ const UNTRUSTED_AND_CITING =
 /** `tools/list` as the agent sees it; each schema mirrors `INPUT_SCHEMAS`. */
 const TOOL_DEFINITIONS = {
   open: {
-    description: `Open a public HTTPS page in the browser this chat uses, in the chat's tab (a new tab the first time), and read it. With newTab true it opens in a new tab of this chat instead, which the tools then work in; the chat keeps at most ${String(BROWSER_CONTROL_LIMITS.tabs)} tabs. Returns the page as snapshot does. A page that asks for a sign-in returns needs_member: ask the member to sign in in the browser window that shows it, then call snapshot. ${PDF_NOTE} ${DOWNLOADS_NOTE}`,
+    description: `Open a public HTTPS page in the browser this chat uses, in the chat's tab (a new tab the first time), and read it. With newTab true it opens in a new tab of this chat instead, which the tools then work in; the chat keeps at most ${String(BROWSER_CONTROL_LIMITS.tabs)} tabs. Returns the page as snapshot does. In Ask mode, opening a website this chat has not opened or read yet asks the member first, unless they always allow it. A page that asks for a sign-in returns needs_member: ask the member to sign in in the browser window that shows it, then call snapshot. ${PDF_NOTE} ${DOWNLOADS_NOTE}`,
     inputSchema: {
       type: "object",
       properties: {
@@ -271,6 +293,19 @@ const TOOL_DEFINITIONS = {
         tabId: { type: "integer", minimum: 0 },
       },
       required: ["tabId"],
+    },
+  },
+  wait_for_downloads: {
+    description: `Wait for this chat's downloads that are still saving (a result counted them under savingDownloads), then list every download that arrived since the last result, as other results do. Waits until none is saving or for seconds (default ${String(DEFAULT_DOWNLOAD_WAIT_SECONDS)}, at most ${String(MAX_DOWNLOAD_WAIT_SECONDS)}); status still_saving says some are still running, so call it again or tell the member. It reads no page and never asks the member. ${DOWNLOADS_NOTE}`,
+    inputSchema: {
+      type: "object",
+      properties: {
+        seconds: {
+          type: "integer",
+          minimum: 1,
+          maximum: MAX_DOWNLOAD_WAIT_SECONDS,
+        },
+      },
     },
   },
 } as const satisfies Record<
@@ -612,13 +647,21 @@ type BrowserApprovalStep =
   | { action: "select"; option: string };
 
 /** What the member is asked to allow: the step, the element and the page. */
-type BrowserApprovalQuestion = BrowserApprovalStep & {
+type BrowserElementQuestion = BrowserApprovalStep & {
   /** The element's role and accessible name, as the page reads them. */
   role: string;
   name: string;
   /** The page's address. */
   url: string;
 };
+
+/**
+ * Opening a page on a website the chat has not been on: the address the
+ * agent wrote, which is what the member allows.
+ */
+type BrowserOpenQuestion = { action: "open"; url: string };
+
+type BrowserApprovalQuestion = BrowserElementQuestion | BrowserOpenQuestion;
 
 /** A browser step that changes the page, as the member is asked about it. */
 export type BrowserApprovalRequest = BrowserApprovalQuestion & {
@@ -628,8 +671,25 @@ export type BrowserApprovalRequest = BrowserApprovalQuestion & {
    * when that page cannot hold an approval.
    */
   site: string | null;
+  /**
+   * Why the shared gate asks: chat says so on the card, and offers to
+   * always allow `site` only when the run does not allow it yet.
+   */
+  reason: BrowserStepAskReason;
   /** Aborts when the agent's call ends; the question is then withdrawn. */
   signal: AbortSignal;
+  /**
+   * Always allows `site` in the run from now on: what an answer that
+   * always allows the website does, before the step goes on. Null when
+   * `site` is.
+   */
+  allowSite: (() => void) | null;
+  /**
+   * Whether the gate now runs this step without asking, by the run's
+   * website approvals, the websites the chat has been on and the tab's page
+   * as they are now: an approval given since may answer the question.
+   */
+  allowedNow: () => boolean;
 };
 
 /** The member's answer, and how the approved step's outcome is reported. */
@@ -644,9 +704,9 @@ export type ApproveAction = (
 ) => Promise<ApprovalTicket>;
 
 /** What the member is asked about `command`: the step, the element and the page. */
-const approvalQuestion = (
+const elementQuestion = (
   command: BrowserControlElementCommand,
-): BrowserApprovalQuestion => {
+): BrowserElementQuestion => {
   const about = {
     name: command.target.name,
     role: command.target.role,
@@ -671,6 +731,19 @@ const approvalQuestion = (
 const isElementCommand = (
   command: BrowserControlCommand,
 ): command is BrowserControlElementCommand => "target" in command;
+
+/** What the member is asked about a step the gate asks about. */
+const approvalQuestion = (
+  command: BrowserControlCommand,
+): BrowserApprovalQuestion => {
+  if (command.action === BROWSER_CONTROL_ACTION.open) {
+    return { action: "open", url: command.url };
+  }
+  if (!isElementCommand(command)) {
+    return panic("Only opening a page or a step on an element asks the member");
+  }
+  return elementQuestion(command);
+};
 
 /** The page the chat last read, as the browser reported it, for the gate. */
 const reportedPage = (seen: PageSeen | null): BrowserReportedPage | null =>
@@ -767,8 +840,10 @@ type LocalBrowserCallContext = {
   /** The run's approval mode: which steps wait for the member. */
   approvals: DesktopRunnerApprovalMode;
   /**
-   * The websites the member always allows steps on, by exact origin; an
-   * answer that always allows a website adds it for the rest of the run.
+   * The websites the member always allows steps on, by exact origin, as the
+   * run holds them now: an answer that always allows a website adds it, and
+   * the member's changes in chat reach it while the run goes on. Read at
+   * every step, never copied.
    */
   siteGrants: Set<string>;
   approve: ApproveAction;
@@ -778,6 +853,11 @@ type LocalBrowserCallContext = {
    * document the result shows, also what became of its own save.
    */
   downloads: (shownAddress: string | null) => Promise<TakenDownloads>;
+  /**
+   * The chat's downloads as `downloads` hands them out, once every one
+   * still saving for the run settled or `waitMs` ran out.
+   */
+  waitForDownloads: (waitMs: number) => Promise<TakenDownloads>;
   /** Aborts when the agent's call ends. */
   signal: AbortSignal;
   /**
@@ -865,33 +945,50 @@ type GatedStep =
   | { type: "runs"; ticket: ApprovalTicket | null }
   | { type: "answered"; result: LocalBrowserToolResult };
 
+/** What the chat's browser last reported for its tab, as the gate reads it. */
+type GateTab = {
+  page: BrowserReportedPage | null;
+  signIn: boolean;
+};
+
 /**
  * Runs `step` through the shared browser gate (`decideBrowserStep`), asking
  * the member when it says so. An answer that always allows the step's
- * website adds it to the run's approvals: the website the gate named, which
- * is the page the chat last read, as the browser reported it.
+ * website adds it to the run's approvals (`allowSite`): the website the gate
+ * named, which is the page the chat last read, as the browser reported it.
+ * While the question waits, `allowedNow` asks the gate again with the run's
+ * approvals, the visited websites and the tab as they are then.
  */
 const gateStep = async (
   step: BrowserControlCommand,
   {
     approvals,
     approve,
-    page,
-    signIn,
     signal,
     siteGrants,
+    tab,
+    visited,
   }: Pick<
     LocalBrowserCallContext,
     "approvals" | "approve" | "signal" | "siteGrants"
-  > & { page: BrowserReportedPage | null; signIn: boolean },
+  > & {
+    /** The tab as the browser reported it last, read at each call. */
+    tab: () => GateTab;
+    visited: ReadonlySet<string>;
+  },
 ): Promise<GatedStep> => {
-  const decision = decideBrowserStep({
-    command: step,
-    grantedOrigins: siteGrants,
-    level: approvals,
-    reportedPage: page,
-    signIn,
-  });
+  const decide = () => {
+    const { page, signIn } = tab();
+    return decideBrowserStep({
+      command: step,
+      grantedOrigins: siteGrants,
+      level: approvals,
+      reportedPage: page,
+      signIn,
+      visitedOrigins: visited,
+    });
+  };
+  const decision = decide();
   switch (decision.type) {
     case BROWSER_STEP_GATE.run:
       return { type: "runs", ticket: null };
@@ -900,22 +997,22 @@ const gateStep = async (
     case BROWSER_STEP_GATE.needsMember:
       return { type: "answered", result: signInPendingResult() };
     case BROWSER_STEP_GATE.ask: {
-      if (!isElementCommand(step)) {
-        return panic("Only a step on an element asks the member");
-      }
+      const { site } = decision;
       const ticket = await approve({
         ...approvalQuestion(step),
+        reason: decision.reason,
         signal,
-        site: decision.site,
+        site,
+        allowSite:
+          site === null
+            ? null
+            : () => {
+                siteGrants.add(site);
+              },
+        allowedNow: () => decide().type === BROWSER_STEP_GATE.run,
       });
       if (ticket.decision === APPROVAL_DECISION.deny) {
         return { type: "answered", result: declinedResult() };
-      }
-      if (
-        ticket.decision === APPROVAL_DECISION.approveSite &&
-        decision.site !== null
-      ) {
-        siteGrants.add(decision.site);
       }
       return { type: "runs", ticket };
     }
@@ -1079,23 +1176,88 @@ const COMMAND_BUILDERS = {
       : built({ action: BROWSER_CONTROL_ACTION.switchTab, tabId, url });
   },
 } as const satisfies Record<
-  ChatLocalRunBrowserAction,
+  PageAction,
   (input: unknown, seen: PageSeen | null) => BuiltCommand
 >;
 
-/** One chat's browser tools. */
-export const createLocalBrowserSession = () => {
+/** What `wait_for_downloads` says beside the downloads it lists. */
+const waitedMessage = ({ downloads, saving }: TakenDownloads): string => {
+  if (saving > 0) {
+    return `${String(saving)} download${saving === 1 ? " is" : "s are"} still saving: call wait_for_downloads again, or tell the member.`;
+  }
+  return downloads.length === 0
+    ? "No download of this chat is saving, and none arrived since the last result."
+    : "Every download of this chat has arrived.";
+};
+
+/** What `wait_for_downloads` answers: the downloads, and whether any still runs. */
+const waitedResult = (taken: TakenDownloads): LocalBrowserToolResult =>
+  textResult(
+    {
+      status: taken.saving === 0 ? "settled" : "still_saving",
+      ...(taken.downloads.length === 0 ? {} : { downloads: taken.downloads }),
+      ...(taken.saving === 0 ? {} : { savingDownloads: taken.saving }),
+      message: waitedMessage(taken),
+    },
+    false,
+  );
+
+/** Waits for the chat's downloads; never reaches the browser. */
+const waitForDownloads = async (
+  input: unknown,
+  wait: LocalBrowserCallContext["waitForDownloads"],
+): Promise<LocalBrowserToolResult> => {
+  const parsed = v.safeParse(INPUT_SCHEMAS.wait_for_downloads, input ?? {});
+  if (!parsed.success) {
+    return localBrowserToolResult(
+      browserBridgeError(
+        BROWSER_CONTROL_ERROR_CODE.invalidCommand,
+        `wait_for_downloads takes { seconds? }: whole seconds from 1 to ${String(MAX_DOWNLOAD_WAIT_SECONDS)}.`,
+      ),
+      NO_DOWNLOADS,
+      null,
+    );
+  }
+  const seconds = parsed.output.seconds ?? DEFAULT_DOWNLOAD_WAIT_SECONDS;
+  return waitedResult(await wait(seconds * 1000));
+};
+
+/**
+ * Adds the website of a page the browser reported for the chat to the
+ * websites the chat has been on: the page's own address, never one the
+ * agent wrote.
+ */
+const recordVisit = (
+  visited: Set<string>,
+  result: BrowserControlResult | null,
+): void => {
+  if (result?.status !== "success") {
+    return;
+  }
+  const origin = browserSiteGrantOrigin(result.snapshot.url);
+  if (origin !== null) {
+    visited.add(origin);
+  }
+};
+
+/**
+ * One chat's browser tools. `visited` holds the websites the chat has been
+ * on (`decideBrowserStep`'s `visitedOrigins`); it outlives a run, so a later
+ * turn of the chat opens them without asking, as a chat on stella's models
+ * does.
+ */
+export const createLocalBrowserSession = (visited = new Set<string>()) => {
   let seen: PageSeen | null = null;
   // The browser's latest answer handed the tab's page to the member for a
   // sign-in, and no page was read since: steps on it go to the member.
   let signIn = false;
 
-  const command = (
-    tool: ChatLocalRunBrowserAction,
-    input: unknown,
-  ): BuiltCommand => COMMAND_BUILDERS[tool](input, seen);
+  const command = (tool: PageAction, input: unknown): BuiltCommand =>
+    COMMAND_BUILDERS[tool](input, seen);
 
   return {
+    /** The address of the page the chat last read; null before any. */
+    page: (): string | null => seen?.page.url ?? null,
     call: async (
       tool: ChatLocalRunBrowserAction,
       input: unknown,
@@ -1108,8 +1270,12 @@ export const createLocalBrowserSession = () => {
         send,
         signal,
         siteGrants,
+        waitForDownloads: wait,
       }: LocalBrowserCallContext,
     ): Promise<LocalBrowserToolResult> => {
+      if (tool === WAIT_FOR_DOWNLOADS) {
+        return await waitForDownloads(input, wait);
+      }
       const next = command(tool, input);
       if (next.type === "refused") {
         return next.result;
@@ -1122,10 +1288,10 @@ export const createLocalBrowserSession = () => {
       const gated = await gateStep(step, {
         approvals,
         approve,
-        page: reportedPage(seen),
-        signIn,
         signal,
         siteGrants,
+        tab: () => ({ page: reportedPage(seen), signIn }),
+        visited,
       });
       if (gated.type === "answered") {
         return gated.result;
@@ -1167,6 +1333,7 @@ export const createLocalBrowserSession = () => {
                   },
                 ),
               );
+        recordVisit(visited, returned);
         // The agent sees neither page, so no element id of either stays
         // valid: an id counts only once a read the agent saw listed it, and
         // a snapshot comes first. The tab's record and the document the
@@ -1189,6 +1356,7 @@ export const createLocalBrowserSession = () => {
       }
       if (result.status === "success") {
         seen = seenAfter(seen, result.snapshot, wentBack);
+        recordVisit(visited, result);
       }
       const shownAddress =
         result.status === "success" &&

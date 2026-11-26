@@ -43,7 +43,10 @@ import type {
   ResolvedTiers,
 } from "@/api/lib/workflow/playbook-positions";
 import { evaluateGatingCondition } from "@/api/lib/workflow/utils";
-import type { VerdictTier } from "@/api/lib/workflow/verdict-tiers";
+import type {
+  ExtractedAskValue,
+  VerdictTier,
+} from "@/api/lib/workflow/verdict-tiers";
 
 // ── Presence of the ASK value ─────────────────────────
 type PresenceState = "present" | "absent" | "missing";
@@ -148,7 +151,7 @@ export const CUT_DOCUMENT_RATIONALE =
 
 /** The ASK value a finding records: the raw value and the prose rendering of
  *  it. Null when the cell holds no answer (or a placeholder). */
-export type ExtractedAskValue = { value: string; text: string };
+export type { ExtractedAskValue };
 
 // Flatten the ASK field into the value a finding carries. Exported so the
 // files-table path and the single-doc review record the same extracted value

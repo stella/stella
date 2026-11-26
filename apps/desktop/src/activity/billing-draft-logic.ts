@@ -13,7 +13,6 @@ import type {
   DesktopBillingDraftRequest,
   DesktopBillingDraftResponse,
   DesktopBillingDraftReview,
-  DesktopBillingDraftSettingsResponse,
 } from "@stll/api-contract/desktop-billing-drafts";
 import type {
   DesktopTimeEntryBatch,
@@ -57,7 +56,7 @@ const boundedNames = (names: readonly string[]) =>
   );
 
 type CardDraftEntryOptions = {
-  suggestion: Pick<DayReviewGroup, "apps" | "segments" | "roundedTenths">;
+  suggestion: Pick<DayReviewGroup, "apps" | "segments" | "workedMinutes">;
   matterId: string;
   date: string;
   timezone: string;
@@ -82,7 +81,7 @@ export const cardDraftEntry = ({
     date,
     timezone,
     durationMinutes: Math.min(
-      Math.max(suggestion.roundedTenths * 6, 1),
+      Math.max(suggestion.workedMinutes, 1),
       DESKTOP_BILLING_DRAFT_LIMITS.durationMinutes,
     ),
     appNames: boundedNames(suggestion.apps.map(({ name }) => name)),
@@ -544,17 +543,21 @@ export const structureItems = ({
   }));
 };
 
+/** Who decides drafting on this computer (`DraftPolicy` in
+ * billing_draft_settings.rs): the account's settings, or managed policy,
+ * which turned it off and reports the mode as off. */
+export const DRAFT_POLICIES = ["account", "managedOff"] as const;
+export type DraftPolicy = (typeof DRAFT_POLICIES)[number];
+
 const scopedSettingsSchema = v.strictObject({
   scopeKey: v.pipe(v.string(), v.minLength(1)),
   settings: desktopBillingDraftSettingsResponseSchema,
+  policy: v.picklist(DRAFT_POLICIES),
 });
 
-/** A settings answer from the native boundary: the server's settings and the
- * account they belong to. */
-export type ScopedDraftSettings = {
-  scopeKey: string;
-  settings: DesktopBillingDraftSettingsResponse;
-};
+/** A settings answer from the native boundary: the server's settings, the
+ * account they belong to, and who decides drafting on this computer. */
+export type ScopedDraftSettings = v.InferOutput<typeof scopedSettingsSchema>;
 
 export const scopedDraftSettingsFrom = (
   value: unknown,

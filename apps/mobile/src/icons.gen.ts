@@ -201,6 +201,7 @@ export {
   ExternalLinkIcon,
   EyeIcon,
   EyeOffIcon,
+  FileAudioIcon,
   FileBadgeIcon,
   FileCheckIcon,
   FileCodeIcon,

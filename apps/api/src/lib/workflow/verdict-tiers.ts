@@ -49,3 +49,5 @@ export const buildVerdictContent = (): PropertyContent => ({
   })),
   fallback: null,
 });
+
+export type ExtractedAskValue = { value: string; text: string };

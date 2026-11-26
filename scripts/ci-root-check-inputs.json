@@ -199,6 +199,17 @@
       ".oxlint-plugins/no-failure-as-empty*",
       "scripts/failure-as-empty-baseline.ts"
     ],
+    "React state-write baselines": [
+      "apps/**/*.{ts,tsx}",
+      "packages/**/*.{ts,tsx}",
+      ".oxlint-plugins/no-render-phase-update*",
+      ".oxlint-plugins/no-effect-state-write*",
+      "oxlint.config.ts",
+      "scripts/rule-count-baseline.ts",
+      "scripts/rule-census.ts",
+      "scripts/render-phase-update-baseline.ts",
+      "scripts/effect-state-write-baseline.ts"
+    ],
     "Oxlint override union guard": [
       "apps/api/src/lib/db/status-tables.gen.ts",
       "apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",

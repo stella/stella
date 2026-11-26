@@ -355,3 +355,44 @@ describe.serial("no-computed-key-record-assignment", () => {
     ).toEqual([4, 7]);
   });
 });
+
+test("allows reads guarded by a local Object.hasOwn type predicate or compound || early return", async () => {
+  expect(
+    await lint([
+      "const TABLE: Record<string, number> = { a: 1, b: 2 };",
+      "const isKnown = (k: string): k is keyof typeof TABLE => Object.hasOwn(TABLE, k);",
+      "export const readPredicate = (key: string) => (isKnown(key) ? TABLE[key] : 0);",
+      "export const readEarlyReturn = (key: string, flag: boolean) => {",
+      "  if (!isKnown(key) || !flag) {",
+      "    return 0;",
+      "  }",
+      "  return TABLE[key];",
+      "};",
+    ]),
+  ).toEqual([]);
+});
+
+test("terminates on recursive predicates and rejects reassigned predicate bindings", async () => {
+  expect(
+    await lint([
+      "const TABLE: Record<string, number> = { a: 1 };",
+      "const loop = (k: string): boolean => loop(k);",
+      "let check = (k: string): boolean => Object.hasOwn(TABLE, k);",
+      "check = () => true;",
+      "export const a = (key: string) => (loop(key) ? TABLE[key] : 0);",
+      "export const b = (key: string) => (check(key) ? TABLE[key] : 0);",
+    ]),
+  ).toEqual([5, 6]);
+});
+
+test("rejects async and generator predicates as own-key guards", async () => {
+  expect(
+    await lint([
+      "const TABLE: Record<string, number> = { a: 1 };",
+      "const asyncCheck = async (k: string) => Object.hasOwn(TABLE, k);",
+      "function* genCheck(k: string) { return Object.hasOwn(TABLE, k); }",
+      "export const a = (key: string) => (asyncCheck(key) ? TABLE[key] : 0);",
+      "export const b = (key: string) => (genCheck(key) ? TABLE[key] : 0);",
+    ]),
+  ).toEqual([4, 5]);
+});

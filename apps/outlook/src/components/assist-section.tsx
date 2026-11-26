@@ -3,16 +3,8 @@ import { useState } from "react";
 import { OUTLOOK_AI_INTENT_MAX_CHARS } from "@stll/api-contract/outlook-ai";
 import { Button } from "@stll/ui/components/button";
 import { Textarea } from "@stll/ui/components/textarea";
-import {
-  COMPOSER_BOX_CLASS,
-  COMPOSER_BOX_FOCUS_CLASS,
-  COMPOSER_LARGE_ACTION_ROW_CLASS,
-  COMPOSER_LARGE_TEXT_WELL_CLASS,
-  COMPOSER_LEADING_GROUP_CLASS,
-  COMPOSER_TEXT_CLASS,
-} from "@stll/ui/composer";
+import { ComposerFrame } from "@stll/ui/composer-frame";
 import { AiActionIcon, ArrowUpIcon, InfoIcon } from "@stll/ui/icons";
-import { cn } from "@stll/ui/lib/utils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 
 import { AssistTurnView } from "@/components/assist-turn";
@@ -96,34 +88,9 @@ export const AssistSection = ({
       }
       title={t("assistTitle")}
     >
-      <div className={cn(COMPOSER_BOX_CLASS, COMPOSER_BOX_FOCUS_CLASS)}>
-        <div className={COMPOSER_LARGE_TEXT_WELL_CLASS}>
-          <Textarea
-            aria-label={t("askLabel")}
-            className={cn(
-              COMPOSER_TEXT_CLASS,
-              // The composer's three-line editor, on the field inside.
-              "block w-full [&_textarea]:max-h-48 [&_textarea]:min-h-15 [&_textarea]:resize-none [&_textarea]:px-0",
-            )}
-            maxLength={OUTLOOK_AI_INTENT_MAX_CHARS}
-            onChange={(event) => setText(event.currentTarget.value)}
-            onKeyDown={(event) => {
-              if (
-                event.key === "Enter" &&
-                !event.shiftKey &&
-                !event.nativeEvent.isComposing
-              ) {
-                event.preventDefault();
-                submit("answer");
-              }
-            }}
-            placeholder={t("askPlaceholder")}
-            unstyled
-            value={text}
-          />
-        </div>
-        <div className={COMPOSER_LARGE_ACTION_ROW_CLASS}>
-          <div className={cn(COMPOSER_LEADING_GROUP_CLASS, "me-auto")}>
+      <ComposerFrame
+        leading={
+          <>
             <Button
               disabled={!hasBody}
               disabledReason={t("noBodyToSummarize")}
@@ -137,7 +104,32 @@ export const AssistSection = ({
               <AiActionIcon />
               {t("draftReply")}
             </Button>
-          </div>
+          </>
+        }
+        ring="focus"
+        stature="large"
+        text={
+          <Textarea
+            appearance="composer"
+            aria-label={t("askLabel")}
+            maxLength={OUTLOOK_AI_INTENT_MAX_CHARS}
+            onChange={(event) => setText(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (
+                event.key === "Enter" &&
+                !event.shiftKey &&
+                !event.nativeEvent.isComposing
+              ) {
+                event.preventDefault();
+                submit("answer");
+              }
+            }}
+            placeholder={t("askPlaceholder")}
+            rows={1}
+            value={text}
+          />
+        }
+        trailing={
           <Button
             aria-label={t("ask")}
             disabled={typed.length === 0}
@@ -148,8 +140,8 @@ export const AssistSection = ({
           >
             <ArrowUpIcon />
           </Button>
-        </div>
-      </div>
+        }
+      />
       <p className="text-muted-foreground text-2xs truncate px-1">
         {matter
           ? t.rich("groundedIn", {

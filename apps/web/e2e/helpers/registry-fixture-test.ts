@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 
+import { findControlsOverText } from "./control-over-text";
 import { findEscapedText } from "./escaped-text";
 import { expect, waitForStableGeometry } from "./stable-geometry";
 
@@ -29,6 +30,10 @@ export const expectRegisteredVisualFixture = async (
       message: `${name} must keep every text inside its box`,
     })
     .toEqual([]);
+  expect(
+    await findControlsOverText(section),
+    `${name} must keep every control off a textbox's text`,
+  ).toEqual([]);
   if (name === "mcp-reconnect") {
     // Require the real notice, including the approval-only connection,
     // rather than accepting an empty fixture wrapper.

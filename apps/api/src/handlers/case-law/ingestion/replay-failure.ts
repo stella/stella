@@ -1,5 +1,7 @@
 import { TaggedError } from "better-result";
 
+import type { SafeId } from "@/api/lib/branded-types";
+import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { getPgDriverErrorCode, getPgErrorCode } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -111,4 +113,37 @@ export const classifyReplayFailure = (cause: unknown): ReplayFailure => {
     current = current["cause"];
   }
   return replayFailure("unexpected");
+};
+
+export const REPLAY_ROW_OUTCOME = {
+  /** The replay applied a changed re-parsed payload. */
+  APPLIED: "applied",
+  /** Re-parsing reproduced the output; its input proof may still be recorded. */
+  UNCHANGED: "unchanged",
+  /** Dry run: the re-parse differs from what is stored. */
+  WOULD_APPLY: "would-apply",
+  /** The adapter could not rebuild a result from this payload. */
+  REJECTED: "rejected",
+  /** The row names a stored payload that object storage does not hold. */
+  MISSING_PAYLOAD: "missing-payload",
+  /** The pipeline reported a retryable failure; the walk holds here. */
+  RETRYABLE: "retryable",
+  /** The row held a document the re-parse says is not one; it is gone. */
+  WITHDRAWN: "withdrawn",
+  /** A corpus object outlived its delete, so the row kept its document. */
+  WITHDRAW_INCOMPLETE: "withdraw-incomplete",
+  /** Dry run: the row holds a document the re-parse says is not one. */
+  WOULD_WITHDRAW: "would-withdraw",
+} as const;
+
+export type ReplayRowOutcome =
+  (typeof REPLAY_ROW_OUTCOME)[keyof typeof REPLAY_ROW_OUTCOME];
+
+export type BackgroundReplaySource = {
+  id: SafeId<"caseLawSource">;
+  adapterKey: AdapterKey;
+  currentParserVersion: number;
+  dailyBudget: number;
+  mode: "enrolled" | "dry-run";
+  rowsBehind: number;
 };

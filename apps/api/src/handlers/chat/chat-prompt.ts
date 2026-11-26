@@ -131,6 +131,8 @@ import { formatDecisionForPrompt } from "@/api/lib/case-law/analysis-prompt";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
+import { browserSiteNotesPromptSection } from "@/api/lib/chat/browser-site-notes/agent-surface";
+import { listNotedBrowserOrigins } from "@/api/lib/chat/browser-site-notes/store";
 import {
   chatCacheStablePrefixSchema,
   chatOrganizationPromptLayerSchema,
@@ -141,7 +143,10 @@ import type {
   ChatSafePromptLayers,
 } from "@/api/lib/chat/chat-prompt-layers";
 import { buildOrganizationAIInstructionsPrompt } from "@/api/lib/chat/organization-ai-instructions";
-import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import {
+  CHAT_CELL_CITATION_REF_PREFIX,
+  type ChatRefRegistry,
+} from "@/api/lib/chat/ref-registry";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 import {
@@ -1219,6 +1224,37 @@ const buildActiveCorpusSections = async (
     return Result.ok({ decisionSection, statuteSection });
   });
 
+/**
+ * The websites the member keeps research notes for, named only when a turn
+ * can browse and some exist: on stella's models when the browser tool is
+ * offered, and on the member's computer, whose agent reaches the notes over
+ * the stella MCP server.
+ */
+const buildSiteNotesSection = async (
+  promptTarget: ChatPromptTarget,
+  browserExtension: TurnBrowserExtension,
+  safeDb: SafeDb,
+  {
+    organizationId,
+    userId,
+  }: {
+    organizationId: SafeId<"organization"> | undefined;
+    userId: SafeId<"user"> | undefined;
+  },
+): Promise<Result<string, SafeDbError>> => {
+  const browses =
+    promptTarget.type === "local_run" ||
+    browserExtensionPolicy(browserExtension).toolOffered;
+  if (!browses || organizationId === undefined || userId === undefined) {
+    return Result.ok("");
+  }
+  const origins = await listNotedBrowserOrigins({
+    owner: { organizationId, userId },
+    safeDb,
+  });
+  return origins.map(browserSiteNotesPromptSection);
+};
+
 export const buildChatSystemPromptParts = async ({
   browserExtension = DEFAULT_BROWSER_EXTENSION,
   caseLawDb = caseLawPublicReadDb,
@@ -1400,6 +1436,12 @@ export const buildChatSystemPromptParts = async ({
 
     const appendedUntrusted = [
       browserExtensionPromptLine(browserExtension),
+      yield* Result.await(
+        buildSiteNotesSection(promptTarget, browserExtension, safeDb, {
+          organizationId,
+          userId,
+        }),
+      ),
       decisionSection.prompt,
       statuteSection,
       externalSection,
@@ -1798,7 +1840,7 @@ const buildWorkspaceContextSections = ({
       )
       .join(", ");
     sections.push(
-      `Extracted properties on this matter (its tabular-review columns): ${propertyList}. EXTRACTED DATA FIRST: when the question is answerable from an extracted property (clause presence, parties, dates, amounts, statuses), read those field values across the matter's documents — read tools return fields keyed by propertyRef — instead of searching document content; the extracted values are the human-reviewed source of truth. Use content search only when no extracted property covers the question.`,
+      `Extracted properties on this matter (its tabular-review columns): ${propertyList}. EXTRACTED DATA FIRST: when the question is answerable from an extracted property (clause presence, parties, dates, amounts, statuses), read those field values across the matter's documents — read tools return fields keyed by propertyRef — instead of searching document content; the extracted values are the human-reviewed source of truth. Use content search only when no extracted property covers the question. CITE THE CELL: when you state an extracted value, link it to its review cell as [Document name · Property name](${CHAT_CELL_CITATION_REF_PREFIX}ent_N:prop_N), with the document's entityRef and the property's propertyRef copied verbatim from the tool output.`,
     );
   }
   return sections;

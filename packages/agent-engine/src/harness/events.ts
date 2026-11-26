@@ -8,6 +8,7 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import type { ChatLocalRunNoticeCapability } from "@stll/api-contract/chat-local-run-notice";
 import { chatLocalRunApprovalMessage } from "@stll/api-contract/chat-local-run-tool";
 import type { ChatLocalRunQuestion } from "@stll/api-contract/chat-run-target";
 import {
@@ -256,6 +257,26 @@ export type HarnessFailure =
    *  stella's tools; the turn does not run without them. */
   | { type: "tools_unavailable"; message: string };
 
+/**
+ * What the harness says about its turn that is neither output nor a failure:
+ * the turn goes on. A notice names the condition only, never the harness's
+ * own text, so nothing from the member's machine (a path, a setting) rides
+ * it (`@stll/api-contract/chat-local-run-notice`).
+ *
+ * - `retrying`: a model request failed and the harness retries it on its
+ *   own; the attempt and its bound where the harness counts them.
+ * - `config_warning`: the harness warned about its own configuration.
+ * - `capability_unavailable`: a capability the turn was offered could not
+ *   be started, so the agent works without it.
+ */
+export type HarnessNotice =
+  | { kind: "retrying"; attempt: number | null; maxAttempts: number | null }
+  | { kind: "config_warning" }
+  | {
+      kind: "capability_unavailable";
+      capability: ChatLocalRunNoticeCapability;
+    };
+
 export type HarnessEvent =
   | {
       type: "session.started";
@@ -273,10 +294,20 @@ export type HarnessEvent =
     }
   | { type: "approval.requested"; request: HarnessApprovalRequest }
   | { type: "question.requested"; request: HarnessQuestionRequest }
-  /** A pending approval or blocking question was answered or withdrawn. */
-  | { type: "interaction.resolved"; requestId: string }
-  /** A transient provider error the harness is retrying on its own. */
-  | { type: "retrying"; message: string }
+  /**
+   * A pending approval or blocking question was answered or withdrawn.
+   * `closed` says how, where the sidecar knows (`sidecar/host`): an adapter
+   * leaves it unset, which reads as answered.
+   */
+  | {
+      type: "interaction.resolved";
+      requestId: string;
+      closed?: HarnessInteractionClosed;
+      /** The decision an answered approval gave, where the sidecar knows it. */
+      decision?: DesktopRunnerApprovalDecision;
+    }
+  /** Something the member should know while the turn goes on. */
+  | { type: "notice"; notice: HarnessNotice }
   /**
    * What became of a message the turn was steered with (`HarnessTurn.steer`),
    * at the point where the harness took it or refused it.
@@ -300,6 +331,13 @@ export type HarnessEvent =
     }
   | { type: "turn.interrupted" }
   | { type: "turn.failed"; failure: HarnessFailure };
+
+/**
+ * How a pending request closed: the member's answer reached the harness,
+ * the member's stop ended it, or the harness withdrew it while its turn
+ * went on (a call that ended, a subagent that settled).
+ */
+export type HarnessInteractionClosed = "answered" | "stopped" | "withdrawn";
 
 /**
  * The runner protocol's outcome for each failure. Interrupted turns report

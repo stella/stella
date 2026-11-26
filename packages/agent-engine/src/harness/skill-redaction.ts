@@ -242,8 +242,6 @@ const createRedactor = (scope: SkillPathScope) => {
             })),
           },
         };
-      case "retrying":
-        return { ...event, message: text(event.message) };
       case "turn.failed":
         return {
           ...event,
@@ -267,6 +265,7 @@ const createRedactor = (scope: SkillPathScope) => {
       case "reasoning.completed":
       case "interaction.resolved":
       case "input.settled":
+      case "notice":
       case "model.rerouted":
       case "turn.completed":
       case "turn.interrupted":

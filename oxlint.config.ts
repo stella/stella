@@ -722,6 +722,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("field-parts-inside-field.fixture.tsx", [
     "field-parts-inside-field/field-parts-inside-field",
   ]),
+  fixtureRuleOverride("composer-attachments-in-frame.fixture.tsx", [
+    "composer-attachments-in-frame/composer-attachments-in-frame",
+  ]),
   fixtureRuleOverride("no-dom-node-poll-assertion.fixture.tsx", [
     "no-dom-node-poll-assertion/no-dom-node-poll-assertion",
   ]),
@@ -865,6 +868,12 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("exhaustive-union-map.fixture.ts", [
     "exhaustive-union-map/exhaustive-union-map",
+  ]),
+  fixtureRuleOverride("no-identity-wrapper.fixture.ts", [
+    "no-identity-wrapper/no-identity-wrapper",
+  ]),
+  fixtureRuleOverride("require-readonly-exported-collection.fixture.ts", [
+    "require-readonly-exported-collection/require-readonly-exported-collection",
   ]),
   fixtureRuleOverride("no-hand-rolled-execute-rows.fixture.ts", [
     "no-hand-rolled-execute-rows/no-hand-rolled-execute-rows",
@@ -2259,6 +2268,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-strict-route-read-in-chrome.ts",
     "./.oxlint-plugins/no-route-context-in-panel-tabs.ts",
     "./.oxlint-plugins/no-render-phase-update.ts",
+    "./.oxlint-plugins/no-effect-state-write.ts",
     "./.oxlint-plugins/require-schema-form-options.ts",
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-loader-prefetch.ts",
@@ -2389,6 +2399,8 @@ const config = defineConfig({
     "./.oxlint-plugins/no-unbounded-response-body.ts",
     "./.oxlint-plugins/no-computed-key-record-assignment.ts",
     "./.oxlint-plugins/exhaustive-union-map.ts",
+    "./.oxlint-plugins/no-identity-wrapper.ts",
+    "./.oxlint-plugins/require-readonly-exported-collection.ts",
     "./.oxlint-plugins/no-dynamic-key-in-operator.ts",
     "./.oxlint-plugins/no-truncated-timestamp-comparison.ts",
     "./.oxlint-plugins/no-chat-turn-time-order.ts",
@@ -2412,6 +2424,9 @@ const config = defineConfig({
     "./.oxlint-plugins/no-centered-scroll-column.ts",
     "./.oxlint-plugins/inspector-header-title.ts",
     "./.oxlint-plugins/no-raw-overflow-scroll.ts",
+    "./.oxlint-plugins/no-control-beside-textbox.ts",
+    "./.oxlint-plugins/composer-attachments-in-frame.ts",
+    "./.oxlint-plugins/no-adhoc-textbox-growth.ts",
     "./.oxlint-plugins/radius-scale.ts",
     "./.oxlint-plugins/no-raw-context-menu.ts",
     "./.oxlint-plugins/no-hover-only-reveal.ts",
@@ -2524,6 +2539,17 @@ const config = defineConfig({
       ],
       rules: {
         "no-render-phase-update/no-render-phase-update": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-effect-state-write.fixture.tsx",
+        ...NO_RENDER_PHASE_UPDATE_GOVERNED_PATHS.map(
+          (directory) => `${directory}/**/*.{ts,tsx}`,
+        ),
+      ],
+      rules: {
+        "no-effect-state-write/no-effect-state-write": "error",
       },
     },
     {
@@ -7106,6 +7132,21 @@ const config = defineConfig({
       },
     },
     {
+      // Pass-through identity wrappers and exported mutable Map/Set singletons
+      // belong out of product source.
+      files: ["apps/web/src/**/*.{ts,tsx}", "apps/api/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/tests/**",
+        "**/__tests__/**",
+      ],
+      rules: {
+        "no-identity-wrapper/no-identity-wrapper": "error",
+        "require-readonly-exported-collection/require-readonly-exported-collection":
+          "error",
+      },
+    },
+    {
       // `execute` answers in the driver's shape (rows, or PGlite's `{ rows }`),
       // so rows are read through the one reader that handles both and panics
       // on a third. Tests read PGlite results directly, knowing the driver.
@@ -8067,6 +8108,85 @@ const config = defineConfig({
       ],
       rules: {
         "no-raw-overflow-scroll/no-raw-overflow-scroll": "error",
+      },
+    },
+    {
+      // A multi-line textbox never shares a row with its controls, nor sits
+      // under a control positioned over it: `ComposerFrame` lays a composer
+      // out, the text over a control row once it needs a second line.
+      files: [
+        "apps/web/src/**/*.tsx",
+        "apps/desktop/src/**/*.tsx",
+        "apps/outlook/src/**/*.tsx",
+        "packages/ui/src/**/*.tsx",
+        "packages/workspace-ui/src/**/*.tsx",
+        "packages/markdown-editor/src/**/*.tsx",
+        "packages/mcp-apps/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-control-beside-textbox.fixture.tsx",
+      ],
+      excludeFiles: ["**/*.{test,spec}.tsx", "**/__tests__/**"],
+      rules: {
+        "no-control-beside-textbox/no-control-beside-textbox": "error",
+      },
+    },
+    {
+      // The same rule over React Native markup, read by React Native's
+      // layout: a `View` is a column unless it says `flex-row`, so `flex`
+      // alone is not a row there. The native `ComposerFrame` lays a phone
+      // composer out.
+      files: [
+        "apps/mobile/src/**/*.tsx",
+        "packages/ui/src/**/*.native.tsx",
+        ".oxlint-plugins/__fixtures__/no-control-beside-textbox-native.fixture.tsx",
+      ],
+      excludeFiles: ["**/*.{test,spec}.tsx", "**/__tests__/**"],
+      rules: {
+        "no-control-beside-textbox/no-control-beside-textbox": [
+          "error",
+          { layout: "native" },
+        ],
+      },
+    },
+    {
+      // A composer's draft attachments sit in `ComposerFrame`'s `attachments`
+      // slot: inside the box, above the text, outside its scroll region, the
+      // same on every composer. Tests mount the chips bare to drive them.
+      files: [
+        "apps/web/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/composer-attachments-in-frame.fixture.tsx",
+      ],
+      excludeFiles: ["**/*.{test,spec}.tsx", "**/__tests__/**"],
+      rules: {
+        "composer-attachments-in-frame/composer-attachments-in-frame": "error",
+      },
+    },
+    {
+      // A textbox's growth and scroll cap come from its primitive:
+      // `ComposerFrame` caps a composer's text in its own scroll region and
+      // `Textarea` grows a field to `maxRows`; on a phone the native
+      // `ComposerFrame` caps the composer. Tests assert on class strings
+      // rather than rendering a textbox.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "apps/desktop/src/**/*.{ts,tsx}",
+        "apps/outlook/src/**/*.{ts,tsx}",
+        "apps/extension/src/**/*.{ts,tsx}",
+        "packages/ui/src/**/*.{ts,tsx}",
+        "packages/workspace-ui/src/**/*.{ts,tsx}",
+        "packages/markdown-editor/src/**/*.{ts,tsx}",
+        "packages/mcp-apps/src/**/*.{ts,tsx}",
+        "apps/mobile/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-adhoc-textbox-growth.fixture.tsx",
+      ],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        // The owner: `fieldSizing` and `maxRows` are its props, and it sets
+        // the field-sizing and the row cap they name.
+        "packages/ui/src/components/textarea.tsx",
+      ],
+      rules: {
+        "no-adhoc-textbox-growth/no-adhoc-textbox-growth": "error",
       },
     },
     {

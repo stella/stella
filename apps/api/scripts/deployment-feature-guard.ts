@@ -211,6 +211,14 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
   ],
   [
+    "/v1/desktop/matter-candidates/resolve",
+    "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
+  ],
+  [
+    "/v1/desktop/calendar-events",
+    "The desktop Activity day review enforces the caller's activity feature decision on every deployment and answers turned off unless the deployment's Microsoft 365 flag and the organization's calendar policy allow the read; nothing is stored",
+  ],
+  [
     "/v1/desktop/matters",
     "Desktop matter search enforces the caller's activity or dictation feature decision and matter access on every deployment",
   ],
@@ -227,8 +235,16 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "A member's own pins on their chats are set on every deployment that serves chat",
   ],
   [
+    "/v1/chat/threads/:threadId/browser-downloads",
+    "A member's own chat files what their paired browser extension downloaded for it on every deployment that serves chat; the document write owner decides each matter write",
+  ],
+  [
     "/v1/chat/browser-site-grants",
     "A member's standing website approvals for chat's browser actions are listed, added and removed on every deployment that serves chat; the browser tool itself needs the member's paired extension",
+  ],
+  [
+    "/v1/chat/browser-site-notes",
+    "A member's research notes about websites are listed and removed on every deployment that serves chat; the agent writes them only while it browses",
   ],
   [
     "/v1/chat/local-runners",
@@ -302,6 +318,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/chat/threads/:threadId/turns/:turnId/steer",
     "Steering a turn is mounted on every deployment and reaches only a run the member's local-agents feature let start; any other turn answers unavailable",
+  ],
+  [
+    "/v1/chat/threads/:threadId/turns/:turnId/requests/:requestId/answer",
+    "Answering a turn's request is mounted on every deployment and reaches only a run the member's local-agents feature let start; any other request answers not found",
   ],
   [
     "/v1/me/push-devices",

@@ -71,6 +71,13 @@ export const useEntityRowHost = ({
     const tab = s.tabs.find((candidate) => candidate.id === s.activeId);
     return tab?.type === "pdf" ? (tab.propertyId ?? null) : null;
   });
+  const activeJustificationFieldId = useInspectorTabsStore((s) => {
+    if (!s.activeId) {
+      return null;
+    }
+    const tab = s.tabs.find((candidate) => candidate.id === s.activeId);
+    return tab?.type === "pdf" ? (tab.justificationFieldId ?? null) : null;
+  });
   const activeTaskId = useInspectorTabsStore((s) => {
     if (!s.activeId) {
       return null;
@@ -84,6 +91,7 @@ export const useEntityRowHost = ({
       <DraggableRow
         {...input}
         activeEntityId={activeEntityId}
+        activeJustificationFieldId={activeJustificationFieldId}
         activePropertyId={activePropertyId}
         activeTaskId={activeTaskId}
         editingEntityId={editingEntityId}

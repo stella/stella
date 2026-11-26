@@ -34,12 +34,14 @@ const refreshFolioCollabToken = createSafeTokenHandler(
       if (!tokenRefresh) {
         return null;
       }
-      await recordFolioCollabContribution({
-        roomId: value.roomId,
-        tx,
-        userId: value.userId,
-        workspaceId: value.workspaceId,
-      });
+      if (value.canEdit) {
+        await recordFolioCollabContribution({
+          roomId: value.roomId,
+          tx,
+          userId: value.userId,
+          workspaceId: value.workspaceId,
+        });
+      }
       return tokenRefresh;
     });
 

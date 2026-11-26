@@ -52,9 +52,19 @@ export default {
           "Reads the member's computers and harness reports for the chat composer.",
       },
       {
+        path: "apps/api/src/lib/desktop-runner/site-grants.ts",
+        reason:
+          "Sends the member's website approvals, after a change to them, to their runs still going through the control.",
+      },
+      {
         path: "apps/api/src/handlers/chat/turns/steer.ts",
         reason:
           "Queues a message for the open run of the member's running chat turn through the control.",
+      },
+      {
+        path: "apps/api/src/handlers/chat/turns/answer-request.ts",
+        reason:
+          "Hands the member's answer to what the open run of their running chat turn asked, through the control.",
       },
       {
         path: "apps/api/src/handlers/chat/local-folder-approval.ts",

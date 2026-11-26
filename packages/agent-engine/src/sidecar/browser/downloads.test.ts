@@ -19,6 +19,7 @@ import {
   BROWSER_DOWNLOAD_STAGING_FOLDER,
   type BrowserDownload,
 } from "@stll/api-contract/browser-control";
+import { sha256Hex } from "@stll/sha256/node";
 
 import {
   BROWSER_DOWNLOADS_FOLDER,
@@ -28,6 +29,9 @@ import {
 } from "./downloads";
 
 const PDF = "%PDF-1.7\n1 0 obj << /Type /Catalog >> endobj\n%%EOF\n";
+
+/** A PDF of its own bytes: no other `pdfNumbered` holds the same. */
+const pdfNumbered = (n: number) => `${PDF}% ${String(n)}\n`;
 const SOURCE_URL = "https://fixture-library.test/doc/1/file";
 
 const roots: string[] = [];
@@ -98,7 +102,9 @@ describe("a PDF a chat's tab downloaded", () => {
 
     expect(outcome).toEqual({
       bytes: Buffer.byteLength(PDF),
+      duplicate: false,
       path: "Downloads/Decision 1.pdf",
+      sha256: sha256Hex(PDF),
       sourceUrl: SOURCE_URL,
       status: "saved",
     });
@@ -116,8 +122,8 @@ describe("a PDF a chat's tab downloaded", () => {
     mkdirSync(downloads);
     writeFileSync(path.join(downloads, "Decision 1.pdf"), "the member's notes");
 
-    const second = await receive(saved(stage(PDF)), workspaceDir);
-    const third = await receive(saved(stage(PDF)), workspaceDir);
+    const second = await receive(saved(stage(pdfNumbered(2))), workspaceDir);
+    const third = await receive(saved(stage(pdfNumbered(3))), workspaceDir);
 
     expect([second, third].map((outcome) => outcome.status)).toEqual([
       "saved",
@@ -135,15 +141,18 @@ describe("a PDF a chat's tab downloaded", () => {
 
   test("a suggested name never steers the file outside the downloads folder", async () => {
     const { root, stage, workspaceDir } = folders();
-    for (const suggested of [
+    for (const [index, suggested] of [
       "../../escaped.pdf",
       "..\\..\\escaped.pdf",
       `${root}/escaped.pdf`,
       "..",
       ".hidden.pdf",
-    ]) {
+    ].entries()) {
       // await-in-loop: one name at a time, so the outcomes stay apart.
-      const outcome = await receive(saved(stage(PDF), suggested), workspaceDir);
+      const outcome = await receive(
+        saved(stage(pdfNumbered(index)), suggested),
+        workspaceDir,
+      );
       expect(outcome.status).toBe("saved");
     }
 
@@ -453,5 +462,81 @@ describe("the name a download is saved under", () => {
     const stem = downloadFileStem(`${"č".repeat(300)}.pdf`);
     expect(Buffer.byteLength(stem)).toBeLessThanOrEqual(200);
     expect(stem).toBe("č".repeat(100));
+  });
+});
+
+describe("the same file downloaded again", () => {
+  test("is not saved twice: the outcome names the copy already there", async () => {
+    const { stage, workspaceDir } = folders();
+    const first = await receive(saved(stage(PDF)), workspaceDir);
+    const againStaged = stage(PDF);
+
+    const again = await receive(
+      saved(againStaged, "Decision 1 (final).pdf"),
+      workspaceDir,
+    );
+
+    expect(first).toMatchObject({ duplicate: false, status: "saved" });
+    expect(again).toEqual({
+      bytes: Buffer.byteLength(PDF),
+      duplicate: true,
+      path: "Downloads/Decision 1.pdf",
+      sha256: sha256Hex(PDF),
+      sourceUrl: SOURCE_URL,
+      status: "saved",
+    });
+    expect(savedFiles(workspaceDir)).toEqual(["Decision 1.pdf"]);
+    // The staged copy goes all the same.
+    expect(existsSync(againStaged)).toBe(false);
+  });
+
+  test("arriving twice at once keeps one copy, and one outcome names it as the other's", async () => {
+    const { stage, workspaceDir } = folders();
+
+    const outcomes = await Promise.all([
+      receive(saved(stage(PDF), "First.pdf"), workspaceDir),
+      receive(saved(stage(PDF), "Second.pdf"), workspaceDir),
+    ]);
+
+    expect(savedFiles(workspaceDir)).toEqual(["First.pdf"]);
+    expect(outcomes).toMatchObject([
+      { duplicate: false, path: "Downloads/First.pdf" },
+      { duplicate: true, path: "Downloads/First.pdf" },
+    ]);
+  });
+
+  test("other bytes of the same size are another file", async () => {
+    const { stage, workspaceDir } = folders();
+    await receive(saved(stage(pdfNumbered(1))), workspaceDir);
+
+    const other = await receive(saved(stage(pdfNumbered(2))), workspaceDir);
+
+    expect(other).toMatchObject({
+      duplicate: false,
+      path: "Downloads/Decision 1 (2).pdf",
+    });
+    expect(savedFiles(workspaceDir)).toEqual([
+      "Decision 1 (2).pdf",
+      "Decision 1.pdf",
+    ]);
+  });
+
+  test("a link in the downloads folder to the same bytes elsewhere is no copy of it", async () => {
+    const { root, stage, workspaceDir } = folders();
+    const elsewhere = path.join(root, "member-file.pdf");
+    writeFileSync(elsewhere, PDF);
+    mkdirSync(path.join(workspaceDir, BROWSER_DOWNLOADS_FOLDER));
+    symlinkSync(
+      elsewhere,
+      path.join(workspaceDir, BROWSER_DOWNLOADS_FOLDER, "Linked.pdf"),
+    );
+
+    const outcome = await receive(saved(stage(PDF)), workspaceDir);
+
+    expect(outcome).toMatchObject({
+      duplicate: false,
+      path: "Downloads/Decision 1.pdf",
+    });
+    expect(readFileSync(elsewhere, "utf-8")).toBe(PDF);
   });
 });

@@ -10,6 +10,7 @@ import {
   type BrowserControlSnapshot,
   type BrowserObservedTab,
 } from "@stll/api-contract/browser-control";
+import type { BrowserStepAskReason } from "@stll/api-contract/browser-step-gate";
 import {
   CHAT_LOCAL_RUN_BROWSER_ACTIONS,
   CHAT_LOCAL_RUN_NEEDS_MEMBER,
@@ -134,7 +135,7 @@ const found = (): BrowserControlResult => ({
 
 /** A question the member was asked, each kind with its own fields. */
 type AskedStep<Request = BrowserApprovalRequest> = Request extends unknown
-  ? Omit<Request, "signal" | "site">
+  ? Omit<Request, "allowSite" | "allowedNow" | "reason" | "signal" | "site">
   : never;
 
 type Sent = {
@@ -173,18 +174,31 @@ const recorder = (
   const asked: AskedStep[] = [];
   /** The website each question offered to always allow. */
   const offeredSites: (string | null)[] = [];
+  /** Why the gate asked each question. */
+  const reasons: BrowserStepAskReason[] = [];
   const finished: string[] = [];
+  /** How long each `wait_for_downloads` asked the inbox to wait. */
+  const waits: number[] = [];
   const context = {
     acts: true,
     approvals,
     siteGrants,
     approve: async ({
+      allowSite,
+      allowedNow: _allowedNow,
+      reason,
       signal: _signal,
       site,
       ...request
     }: BrowserApprovalRequest) => {
       asked.push(request);
       offeredSites.push(site);
+      reasons.push(reason);
+      // As the run's approvals answer it: always allowing the website adds
+      // it before the step goes on.
+      if (decision === APPROVAL_DECISION.approveSite) {
+        allowSite?.();
+      }
       return {
         decision,
         finish: (status: string) => {
@@ -203,6 +217,15 @@ const recorder = (
           shownAddress === null ? null : (shownSaves.get(shownAddress) ?? null),
       };
     },
+    waitForDownloads: async (waitMs: number) => {
+      waits.push(waitMs);
+      return await Promise.resolve({
+        downloads: downloads.splice(0),
+        saving,
+        shownSaving: false,
+        shown: null,
+      });
+    },
     send: async (
       command: BrowserControlCommand,
       observedTab: BrowserObservedTab | null,
@@ -218,11 +241,17 @@ const recorder = (
     downloads,
     finished,
     offeredSites,
+    reasons,
     send: context.send,
     sent,
     shownAddresses,
+    waits,
   };
 };
+
+/** What a saved download in these results carries beyond its path. */
+const SAVED_SHA256 = "0".repeat(64);
+const ARRIVED_AT = "2026-11-25T09:30:00Z";
 
 const parsed = (result: { content: { text: string }[] }): unknown =>
   JSON.parse(result.content.at(0)?.text ?? "null");
@@ -288,12 +317,17 @@ describe("the local browser tools", () => {
       path: "Downloads/Decision 1.pdf",
       sourceUrl: "https://fixture-library.test/doc/1/file",
       status: "saved",
+      duplicate: false,
+      sha256: SAVED_SHA256,
+      pageUrl: null,
+      downloadedAt: ARRIVED_AT,
     };
     const refused: BrowserDownloadOutcome = {
       message: "The download is not a PDF; only PDFs are saved.",
       reason: "not_pdf",
       sourceUrl: "https://fixture-library.test/doc/1/other",
       status: "refused",
+      pageUrl: null,
     };
     const browser = recorder([page("r-1"), page("r-2"), page("r-3")]);
     await session.call("snapshot", {}, browser.context);
@@ -308,6 +342,81 @@ describe("the local browser tools", () => {
     expect(parsed(again)).not.toHaveProperty("downloads");
   });
 
+  test("wait_for_downloads waits for the chat's downloads without reaching the browser", async () => {
+    const session = createLocalBrowserSession();
+    const saved: BrowserDownloadOutcome = {
+      bytes: 2048,
+      path: "Downloads/Decision 1.pdf",
+      sourceUrl: "https://fixture-library.test/doc/1/file",
+      status: "saved",
+      duplicate: false,
+      sha256: SAVED_SHA256,
+      pageUrl: "https://fixture-library.test/doc/1",
+      downloadedAt: ARRIVED_AT,
+    };
+    const browser = recorder([], { downloads: [saved] });
+
+    const waited = await session.call(
+      "wait_for_downloads",
+      {},
+      browser.context,
+    );
+
+    expect(parsed(waited)).toEqual({
+      downloads: [saved],
+      message: "Every download of this chat has arrived.",
+      status: "settled",
+    });
+    expect(browser.waits).toEqual([30_000]);
+    expect(browser.sent).toEqual([]);
+  });
+
+  test("wait_for_downloads says which are still saving when its wait runs out", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([], { saving: 2 });
+
+    const waited = await session.call(
+      "wait_for_downloads",
+      { seconds: 5 },
+      browser.context,
+    );
+
+    expect(parsed(waited)).toEqual({
+      message:
+        "2 downloads are still saving: call wait_for_downloads again, or tell the member.",
+      savingDownloads: 2,
+      status: "still_saving",
+    });
+    expect(browser.waits).toEqual([5000]);
+  });
+
+  test("wait_for_downloads refuses a wait outside its bounds and waits for nothing", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([]);
+
+    for (const seconds of [0, 46, 1.5]) {
+      // await-in-loop: one call at a time, as the agent makes them.
+      const refused = await session.call(
+        "wait_for_downloads",
+        { seconds },
+        browser.context,
+      );
+      expect(refused.isError).toBe(true);
+      expect(parsed(refused)).toMatchObject({ code: "invalid-command" });
+    }
+    expect(browser.waits).toEqual([]);
+  });
+
+  test("the session knows the page the chat last read, for where a download came from", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([page("r-1")]);
+    expect(session.page()).toBeNull();
+
+    await session.call("snapshot", {}, browser.context);
+
+    expect(session.page()).toBe(SEARCH_URL);
+  });
+
   test("a find result carries the downloads that arrived meanwhile", async () => {
     const session = createLocalBrowserSession();
     const saved: BrowserDownloadOutcome = {
@@ -315,6 +424,10 @@ describe("the local browser tools", () => {
       path: "Downloads/decision.pdf",
       sourceUrl: "https://fixture-library.test/file",
       status: "saved",
+      duplicate: false,
+      sha256: SAVED_SHA256,
+      pageUrl: null,
+      downloadedAt: ARRIVED_AT,
     };
     const browser = recorder([found()], { downloads: [saved] });
     const result = await session.call(
@@ -335,6 +448,10 @@ describe("the local browser tools", () => {
       path: "Downloads/download.pdf",
       sourceUrl: "https://fixture-library.test/file",
       status: "saved",
+      duplicate: false,
+      sha256: SAVED_SHA256,
+      pageUrl: null,
+      downloadedAt: ARRIVED_AT,
     };
     const browser = recorder(
       [
@@ -629,6 +746,10 @@ describe("a tab showing a PDF", () => {
     path: "Downloads/Judgment 42.pdf",
     sourceUrl: PDF_ADDRESS,
     status: "saved",
+    duplicate: false,
+    sha256: SAVED_SHA256,
+    pageUrl: null,
+    downloadedAt: ARRIVED_AT,
   };
 
   test("an open that lands on a PDF says so, reads no text and gives the saved path", async () => {
@@ -638,6 +759,10 @@ describe("a tab showing a PDF", () => {
       path: "Downloads/annex.pdf",
       sourceUrl: "https://fixture-library.test/annex",
       status: "saved",
+      duplicate: false,
+      sha256: SAVED_SHA256,
+      pageUrl: null,
+      downloadedAt: ARRIVED_AT,
     };
     const browser = recorder([pdfPage("r-1"), pdfPage("r-2")], {
       downloads: [saved, other],
@@ -677,6 +802,7 @@ describe("a tab showing a PDF", () => {
       reason: "interrupted",
       sourceUrl: PDF_ADDRESS,
       status: "refused",
+      pageUrl: null,
     };
     const browser = recorder([pdfPage("r-1")], {
       downloads: [refused],
@@ -1708,6 +1834,16 @@ describe("website approvals on the member's computer", () => {
         gate === "ask" ? [step] : [],
       );
       expect(browser.offeredSites).toEqual(gate === "ask" ? [SITE] : []);
+      // A field that may hold a secret asks whatever the run allows.
+      expect(browser.reasons).toEqual(
+        gate === "ask"
+          ? [
+              step === "type" && !valueReported
+                ? "possible_secret"
+                : "site_not_allowed",
+            ]
+          : [],
+      );
       expect(browser.sent).toHaveLength(gate === "refuse" ? 1 : 2);
       expect(result.isError).toBe(gate === "refuse");
     },
@@ -1724,12 +1860,83 @@ describe("website approvals on the member's computer", () => {
     await session.call("click", INPUTS.click, browser.context);
     await session.call("select", INPUTS.select, browser.context);
     expect(browser.asked.map(({ action }) => action)).toEqual(["click"]);
+    // The run did not allow the website: the one question chat answers by
+    // the member's stored approval, or offers to always allow it.
+    expect(browser.reasons).toEqual(["site_not_allowed"]);
     expect([...siteGrants]).toEqual([SITE]);
     expect(browser.sent.map(({ command }) => command.action)).toEqual([
       "snapshot",
       "click",
       "select",
     ]);
+  });
+
+  test("a step waiting on a website goes on once the run allows it, and one held back for a secret keeps waiting", async () => {
+    const session = createLocalBrowserSession();
+    const siteGrants = new Set<string>();
+    const browser = recorder([fieldPage("r-1", false)], {
+      approvals: "ask",
+      siteGrants,
+    });
+    const questions: BrowserApprovalRequest[] = [];
+    const answers: ((decision: "approve" | "deny") => void)[] = [];
+    const context = {
+      ...browser.context,
+      approve: async (request: BrowserApprovalRequest) => {
+        questions.push(request);
+        const { promise, resolve } = Promise.withResolvers<
+          "approve" | "deny"
+        >();
+        answers.push(resolve);
+        return {
+          decision: await promise,
+          finish: () => undefined,
+        };
+      },
+    };
+    await session.call("snapshot", {}, context);
+    const clicking = session.call("click", INPUTS.click, context);
+    const typing = session.call("type", INPUTS.type, context);
+    await Promise.resolve();
+    expect(questions.map(({ reason }) => reason)).toEqual([
+      "site_not_allowed",
+      "possible_secret",
+    ]);
+    expect(questions.map(({ allowedNow }) => allowedNow())).toEqual([
+      false,
+      false,
+    ]);
+    // The member always allows the website in chat while both wait.
+    siteGrants.add(SITE);
+    expect(questions.map(({ allowedNow }) => allowedNow())).toEqual([
+      true,
+      false,
+    ]);
+    // Gone again: the click would wait once more.
+    siteGrants.delete(SITE);
+    expect(questions[0]?.allowedNow()).toBe(false);
+    questions[0]?.allowSite?.();
+    expect([...siteGrants]).toEqual([SITE]);
+    for (const answer of answers) {
+      answer("deny");
+    }
+    await Promise.all([clicking, typing]);
+  });
+
+  test("on an allowed website, a click after Enter changed the page names the new read and runs without asking", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder(
+      [formPage("r-1"), formPage("r-2"), formPage("r-3")],
+      { approvals: "ask", siteGrants: new Set([SITE]) },
+    );
+    await session.call("snapshot", {}, browser.context);
+    await session.call("press_key", INPUTS.press_key, browser.context);
+    await session.call("click", INPUTS.click, browser.context);
+    expect(browser.asked).toEqual([]);
+    expect(browser.sent.at(-1)?.command).toMatchObject({
+      action: "click",
+      page: { revision: "r-2", url: SEARCH_URL },
+    });
   });
 
   test("a website approval never lifts a sign-in hand-over", async () => {
@@ -1744,5 +1951,117 @@ describe("website approvals on the member's computer", () => {
     expect(browser.asked).toEqual([]);
     expect(parsed(held)).toMatchObject({ status: CHAT_LOCAL_RUN_NEEDS_MEMBER });
     expect(browser.sent).toHaveLength(2);
+  });
+});
+
+describe("opening a website on Ask", () => {
+  const SITE = "https://fixture-library.test";
+  const OTHER = "https://other-library.test/search?q=notice";
+  const open = (url: string) => ({ url });
+
+  test("a website the chat has not been on asks first, by its own address; one it has been on opens at once", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder(
+      [page("r-1"), pageAt("r-2", DECISION_URL), pageAt("r-3", OTHER)],
+      { approvals: "ask" },
+    );
+    await session.call("open", open(SEARCH_URL), browser.context);
+    await session.call("open", open(DECISION_URL), browser.context);
+    await session.call("open", open(OTHER), browser.context);
+    expect(browser.asked).toEqual([
+      { action: "open", url: SEARCH_URL },
+      { action: "open", url: OTHER },
+    ]);
+    expect(browser.offeredSites).toEqual([SITE, "https://other-library.test"]);
+    expect(browser.sent.map(({ command }) => command.action)).toEqual([
+      "open",
+      "open",
+      "open",
+    ]);
+  });
+
+  test("a declined open never reaches the browser, and the website stays new", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([], {
+      approvals: "ask",
+      decision: APPROVAL_DECISION.deny,
+    });
+    const declined = await session.call("open", open(OTHER), browser.context);
+    expect(parsed(declined)).toMatchObject({ status: "declined" });
+    await session.call("open", open(OTHER), browser.context);
+    expect(browser.asked).toHaveLength(2);
+    expect(browser.sent).toEqual([]);
+  });
+
+  test("a website the member always allows opens without asking, and always allowing one keeps it for the run", async () => {
+    const session = createLocalBrowserSession();
+    const siteGrants = new Set<string>();
+    const browser = recorder([page("r-1"), pageAt("r-2", OTHER)], {
+      approvals: "ask",
+      decision: APPROVAL_DECISION.approveSite,
+      siteGrants,
+    });
+    await session.call("open", open(SEARCH_URL), browser.context);
+    expect([...siteGrants]).toEqual([SITE]);
+    const granted = recorder([pageAt("r-3", OTHER)], {
+      approvals: "ask",
+      siteGrants: new Set(["https://other-library.test"]),
+    });
+    await createLocalBrowserSession().call(
+      "open",
+      open(OTHER),
+      granted.context,
+    );
+    expect(granted.asked).toEqual([]);
+    expect(granted.sent).toHaveLength(1);
+    expect(browser.asked).toHaveLength(1);
+  });
+
+  test("a later run of the chat opens the websites an earlier run was on", async () => {
+    const visited = new Set<string>();
+    const first = recorder([page("r-1")], { approvals: "ask" });
+    await createLocalBrowserSession(visited).call(
+      "open",
+      open(SEARCH_URL),
+      first.context,
+    );
+    const later = recorder([pageAt("r-2", DECISION_URL)], { approvals: "ask" });
+    await createLocalBrowserSession(visited).call(
+      "open",
+      open(DECISION_URL),
+      later.context,
+    );
+    expect(first.asked).toHaveLength(1);
+    expect(later.asked).toEqual([]);
+  });
+
+  test("Auto, Full auto and Plan open a new website without asking", async () => {
+    for (const approvals of ["auto", "full_auto", "plan"] as const) {
+      const browser = recorder([pageAt("r-1", OTHER)], { approvals });
+      await createLocalBrowserSession().call(
+        "open",
+        open(OTHER),
+        browser.context,
+      );
+      expect({ approvals, asked: browser.asked }).toEqual({
+        approvals,
+        asked: [],
+      });
+    }
+  });
+
+  test("a page reached by a redirect counts as the website it landed on", async () => {
+    const session = createLocalBrowserSession();
+    // Opening the search page lands on the other library.
+    const browser = recorder([pageAt("r-1", OTHER), pageAt("r-2", OTHER)], {
+      approvals: "ask",
+    });
+    await session.call("open", open(SEARCH_URL), browser.context);
+    await session.call(
+      "open",
+      open("https://other-library.test/doc/2"),
+      browser.context,
+    );
+    expect(browser.asked).toEqual([{ action: "open", url: SEARCH_URL }]);
   });
 });

@@ -24,8 +24,11 @@ import committedWeights from "../../mcp-connect-tool-weights.json" with { type: 
 // flag, and that an annex reads by its number (241 characters).
 // search_case_law says strict needs every word but not adjacency, which
 // holds on every serving generation (37).
+// Research website notes add read_site_notes and save_site_notes (3,701
+// characters together) for coding agents that browse on the member's
+// computer.
 // These measured limits include that shape; lower them as tools shrink.
-const TOTAL_CONNECT_CHAR_BUDGET = 140_778;
+const TOTAL_CONNECT_CHAR_BUDGET = 144_479;
 const PER_TOOL_CONNECT_CHAR_CAP = 8179;
 
 describe("MCP connect-time tool budget", () => {

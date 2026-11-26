@@ -8,6 +8,16 @@ import {
 } from "@stll/api-contract/chat-context-notice";
 import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import {
+  type ChatLocalRunNotice,
+  chatLocalRunNoticesOf,
+  isChatLocalRunNoticeShown,
+} from "@stll/api-contract/chat-local-run-notice";
+import {
+  chatLocalRunRequestsOf,
+  type LocalRunRequestUnanswered,
+  unansweredLocalRunRequest,
+} from "@stll/api-contract/chat-local-run-request";
+import {
   CHAT_RUN_TARGET_KIND,
   chatLocalRunReroutedModel,
   type ChatRunTarget,
@@ -142,6 +152,16 @@ export type ChatEntry = {
    */
   readonly ranOnModel?: string;
   /**
+   * Why steps the run on the person's computer asked about went on without
+   * their answer, once per reason; absent when none did.
+   */
+  readonly unansweredRequests?: readonly LocalRunRequestUnanswered[];
+  /**
+   * What the run on the person's computer said about itself and still has
+   * to say, each notice in its latest state; absent when nothing.
+   */
+  readonly localRunNotices?: readonly ChatLocalRunNotice[];
+  /**
    * A stored message of the person's: its parts as the thread stores them,
    * which an edit sends back. Absent on an answer and on a message still
    * being sent from here.
@@ -209,6 +229,32 @@ export type ChatMessagesPage = {
 type StoredMessage = v.InferOutput<typeof messageSchema>;
 
 /**
+ * Why requests a message's run asked went on without the person's answer,
+ * once per reason, as the web's notice says it. A request still pending
+ * says nothing: its run may still take the answer.
+ */
+const localRunRequestsUnanswered = (
+  metadata: unknown,
+): readonly LocalRunRequestUnanswered[] => [
+  ...new Set(
+    chatLocalRunRequestsOf(metadata).flatMap(
+      (request) => unansweredLocalRunRequest(request, true) ?? [],
+    ),
+  ),
+];
+
+/**
+ * The notices an answer shows, as a `ChatEntry` field: a retry that ended
+ * with its turn says nothing beside the turn's own failure or stop.
+ */
+export const shownLocalRunNotices = (
+  notices: readonly ChatLocalRunNotice[],
+): Pick<ChatEntry, "localRunNotices"> => {
+  const shown = notices.filter(isChatLocalRunNoticeShown);
+  return shown.length === 0 ? {} : { localRunNotices: shown };
+};
+
+/**
  * What a phone can show of one stored message. System messages and messages
  * with nothing to draw are left out; a failed answer always draws, as the
  * reason it failed.
@@ -234,6 +280,10 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
     message.role === "assistant"
       ? chatLocalRunReroutedModel(message.metadata)
       : null;
+  const unansweredRequests =
+    message.role === "assistant"
+      ? localRunRequestsUnanswered(message.metadata)
+      : [];
   if (
     text === "" &&
     blocks.length === 0 &&
@@ -258,6 +308,10 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
     ...(failure === undefined ? {} : { failure }),
     ...(limitResetsAt === undefined ? {} : { limitResetsAt }),
     ...(ranOnModel === null ? {} : { ranOnModel }),
+    ...(unansweredRequests.length === 0 ? {} : { unansweredRequests }),
+    ...(message.role === "assistant"
+      ? shownLocalRunNotices(chatLocalRunNoticesOf(message.metadata))
+      : {}),
     ...(message.role === "user" ? { parts: message.parts } : {}),
   };
 };

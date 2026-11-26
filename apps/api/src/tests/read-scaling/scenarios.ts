@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { listOrgSsoProvidersForMember } from "@/api/db/root";
 import { readMemberOrganizationSsoProviders } from "@/api/handlers/auth/routes";
 import { readBillingDraftSettings } from "@/api/handlers/desktop-time-entries/billing-draft-settings";
+import resolveDesktopMatters from "@/api/handlers/desktop-time-entries/resolve";
 import readFilesystemTree from "@/api/handlers/entities/filesystem-tree/get";
 import readEntities from "@/api/handlers/entities/list";
 import readVersions from "@/api/handlers/entities/versions/list";
@@ -19,6 +20,7 @@ import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { measureDesktopBillingDraftSettings } from "@/api/tests/read-scaling/desktop-billing-drafts";
+import { measureDesktopMatterResolve } from "@/api/tests/read-scaling/desktop-matter-resolve";
 import type { seedEntityReadScaling } from "@/api/tests/read-scaling/entity-fixture";
 import { measureReadFilesystemTree } from "@/api/tests/read-scaling/filesystem-tree";
 import {
@@ -102,6 +104,12 @@ export const readScalingScenarios = [
     expectedRows: 1,
     definition: readBillingDraftSettings,
     measure: measureDesktopBillingDraftSettings,
+  },
+  {
+    name: "desktop matter resolve",
+    expectedRows: 10,
+    definition: resolveDesktopMatters,
+    measure: measureDesktopMatterResolve,
   },
   {
     name: "organization billing draft configuration",

@@ -10,10 +10,10 @@
 import { panic } from "better-result";
 
 import type {
+  DocxFolioCitation,
   ReferenceImpact,
   ReviewPerspective,
 } from "@/api/lib/document-review/contract";
-import type { DocxFolioCitation } from "@/api/lib/document-review/review-extract";
 import type { PositionTermKind } from "@/api/lib/workflow/playbook-position-facets";
 
 /**

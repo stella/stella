@@ -285,7 +285,12 @@ export class HarnessTurnLifecycle<TClient extends HarnessTurnProcess> {
    * stalled; anything else the harness does in between is progress.
    */
   private watchRetries(event: HarnessEvent) {
-    if (event.type === "retrying") {
+    if (event.type === "notice" && event.notice.kind !== "retrying") {
+      // A config warning or a missing capability says nothing about the
+      // retry: neither progress nor a new attempt.
+      return;
+    }
+    if (event.type === "notice") {
       this.retryStall ??= setTimeout(() => {
         this.retryStall = null;
         this.emit({
@@ -331,9 +336,12 @@ export class HarnessTurnLifecycle<TClient extends HarnessTurnProcess> {
       case "interaction.resolved":
         this.waitingOnMember.delete(event.requestId);
         break;
-      case "retrying":
-        this.clearSilence();
-        return;
+      case "notice":
+        if (event.notice.kind === "retrying") {
+          this.clearSilence();
+          return;
+        }
+        break;
       // Output and bookkeeping: progress, nothing more.
       case "session.started":
       case "text.delta":

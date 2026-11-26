@@ -21,6 +21,12 @@ import {
 import * as v from "valibot";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
+import { BROWSER_SITE_GRANTS_MAX } from "@stll/api-contract/browser-site-grants";
+import {
+  DESKTOP_RUNNER_REQUEST_EVENT,
+  type DesktopRunnerRequestEvent,
+  desktopRunnerRequestEventSchema,
+} from "@stll/api-contract/chat-local-run-request";
 import {
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
   DESKTOP_RUNNER_HARNESS_STATE,
@@ -39,6 +45,7 @@ import {
 } from "@stll/api-contract/desktop-runner";
 
 import {
+  chatBrowserSiteGrants,
   chatMessageRevisions,
   chatMessages,
   chatThreads,
@@ -1985,6 +1992,21 @@ export const insertAssignedRun = async (
     };
   });
 
+/**
+ * The one write that queues commands a caller checked: a repeat of a key
+ * is skipped. The ids of the rows written.
+ */
+const insertCommandRows = async (
+  tx: Pick<Transaction, "insert">,
+  rows: (typeof desktopRunnerCommands.$inferInsert)[],
+) =>
+  // audit: skip - runner socket bookkeeping; the run's caller audits the work
+  await tx
+    .insert(desktopRunnerCommands)
+    .values(rows)
+    .onConflictDoNothing()
+    .returning({ id: desktopRunnerCommands.id });
+
 type InsertCommandOptions = {
   owner: RunOwner;
   runId: string;
@@ -2106,17 +2128,14 @@ export const insertRunCommand = async (
         return { type: "not_requested" };
       }
     }
-    // audit: skip - runner socket bookkeeping; the run's caller audits the work
-    const inserted = await tx
-      .insert(desktopRunnerCommands)
-      .values({
+    const inserted = await insertCommandRows(tx, [
+      {
         runId,
         kind: options.kind,
         commandKey: options.commandKey,
         payload: options.payload,
-      })
-      .onConflictDoNothing()
-      .returning({ id: desktopRunnerCommands.id });
+      },
+    ]);
     if (inserted.length === 0) {
       return { type: "duplicate" };
     }
@@ -2126,6 +2145,161 @@ export const insertRunCommand = async (
         run.connection === "connected"
           ? { sessionId: run.sessionId, instanceId: run.instanceId }
           : null,
+    };
+  });
+
+/** Most open runs one account holds: each computer's held runs, at most. */
+const MAX_OPEN_RUNS_PER_ACCOUNT = (
+  limits: Pick<DesktopRunnerLimits, "maxRunnersPerAccount">,
+) => limits.maxRunnersPerAccount * MAX_HELD_RUNS;
+
+type QueueSiteGrantsOptions = {
+  owner: RunOwner;
+  /** The id the queued set is sent under, the same for every run. */
+  revision: string;
+  limits: Pick<
+    DesktopRunnerLimits,
+    "maxCommandsPerRun" | "maxRunnersPerAccount"
+  >;
+  /**
+   * The message each run is sent, checked before it is queued: the
+   * contract's shape, and one frame's size.
+   */
+  compose: (message: {
+    runId: string;
+    revision: string;
+    origins: readonly string[];
+  }) => object;
+};
+
+export type QueuedSiteGrants = {
+  /** The member's website approvals as queued, by origin. */
+  readonly origins: readonly string[];
+  /** Runs the set was queued for, after the sets queued for them before. */
+  readonly queued: readonly string[];
+  /** Open runs that hold as many commands as one run may: sent nothing. */
+  readonly full: readonly string[];
+  /** The open sockets holding the runs it was queued for, once each. */
+  readonly holders: readonly RunHolder[];
+};
+
+/**
+ * Queue the member's website approvals, read as they stand now, for every
+ * run of `owner` that is still open, after the sets queued for it before.
+ * Every set stays queued: the computer takes each in order and tells what a
+ * set no longer holds from the one before it, so a revoke reaches the run
+ * even when the computer was away for the change before it. Taken under the
+ * member's approvals lock, so of two changes the one that reads last queues
+ * last, and the set every run ends with is the stored one. A run that holds
+ * as many commands as one run may is left out and reported.
+ */
+export const queueRunSiteGrants = async (
+  db: DesktopRunnerDb,
+  { owner, revision, limits, compose }: QueueSiteGrantsOptions,
+): Promise<QueuedSiteGrants> =>
+  await withAggregateTransaction(db, async (tx) => {
+    const id = {
+      organizationId: owner.organizationId,
+      userId: owner.userId,
+    };
+    await withAggregateLock({ aggregate: "chatToolGrants", id, tx });
+    await withAggregateLock({ aggregate: "desktopRunnerCapacity", id, tx });
+    const stored = await readBounded(
+      tx
+        .select({ origin: chatBrowserSiteGrants.origin })
+        .from(chatBrowserSiteGrants)
+        .where(
+          and(
+            eq(chatBrowserSiteGrants.organizationId, owner.organizationId),
+            eq(chatBrowserSiteGrants.userId, owner.userId),
+          ),
+        )
+        .orderBy(asc(chatBrowserSiteGrants.origin)),
+      BROWSER_SITE_GRANTS_MAX,
+    );
+    // Creation refuses past the cap under the same lock.
+    if (stored.type === "overflow") {
+      return panic("Stored browser site grants exceed their per-user cap");
+    }
+    const origins = stored.rows.map(({ origin }) => origin);
+    const open = await readBounded(
+      tx
+        .select({
+          runId: runs.runId,
+          sessionId: runner.sessionId,
+          instanceId: runner.instanceId,
+          connection: runner.connection,
+        })
+        .from(runs)
+        .innerJoin(
+          runner,
+          and(
+            eq(runner.userId, runs.userId),
+            eq(runner.organizationId, runs.organizationId),
+            eq(runner.desktopId, runs.desktopId),
+            eq(runner.deviceJkt, runs.deviceJkt),
+          ),
+        )
+        .where(
+          and(
+            eq(runs.userId, owner.userId),
+            eq(runs.organizationId, owner.organizationId),
+            inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
+          ),
+        )
+        .orderBy(asc(runs.runId)),
+      MAX_OPEN_RUNS_PER_ACCOUNT(limits),
+    );
+    // Each computer holds at most its held runs, and an account at most its
+    // computers.
+    if (open.type === "overflow") {
+      return panic("An account holds more open runs than its computers may");
+    }
+    if (open.rows.length === 0) {
+      return { origins, queued: [], full: [], holders: [] };
+    }
+    const runIds = open.rows.map(({ runId }) => runId);
+    const counts = new Map(
+      (
+        await tx
+          .select({
+            runId: desktopRunnerCommands.runId,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(desktopRunnerCommands)
+          .where(inArray(desktopRunnerCommands.runId, runIds))
+          .groupBy(desktopRunnerCommands.runId)
+      ).map(({ runId, count }) => [runId, count]),
+    );
+    const roomy = open.rows.filter(
+      ({ runId }) => (counts.get(runId) ?? 0) < limits.maxCommandsPerRun,
+    );
+    const roomyIds = new Set(roomy.map(({ runId }) => runId));
+    if (roomy.length > 0) {
+      await insertCommandRows(
+        tx,
+        roomy.map(({ runId }) => ({
+          runId,
+          kind: "run.site_grants" as const,
+          commandKey: revision,
+          payload: compose({ runId, revision, origins }),
+        })),
+      );
+    }
+    const holders = new Map<string, RunHolder>();
+    for (const run of roomy) {
+      if (run.connection === "connected") {
+        holders.set(run.sessionId, {
+          sessionId: run.sessionId,
+          instanceId: run.instanceId,
+        });
+      }
+    }
+    return {
+      origins,
+      queued: roomy.map(({ runId }) => runId),
+      full: runIds.filter((runId) => !roomyIds.has(runId)),
+      holders: [...holders.values()],
     };
   });
 
@@ -2327,6 +2501,8 @@ type MemberRunnersOptions = { owner: RunOwner; limit: number };
 
 export type MemberRunner = {
   readonly desktopId: string;
+  /** The stella desktop release its last hello named. */
+  readonly appVersion: string;
   readonly connected: boolean;
   readonly lastSeenAt: Date;
   readonly harnesses: readonly DesktopRunnerHarnessReport[];
@@ -2347,6 +2523,7 @@ export const readMemberRunners = async (
   const rows = await db
     .select({
       desktopId: runner.desktopId,
+      appVersion: runner.appVersion,
       connection: runner.connection,
       lastSeenAt: runner.lastSeenAt,
       harnesses: runner.harnesses,
@@ -2378,6 +2555,7 @@ export const readMemberRunners = async (
   }
   return [...byInstallation.values()].map((row) => ({
     desktopId: row.desktopId,
+    appVersion: row.appVersion,
     connected: row.connection === "connected",
     lastSeenAt: row.lastSeenAt,
     harnesses: storedHarnessReports(row.harnesses),
@@ -2588,6 +2766,7 @@ export type ChatRunForRequest = {
   readonly runId: string;
   readonly harness: AgentHarness;
   readonly state: DesktopRunnerRunState;
+  readonly outcome: (typeof runs.$inferSelect)["outcome"];
   /** Where the chat turn stopped reading the run. */
   readonly chatReadSeq: number;
   /** The stored message that asked: an approval request or a question's pause. */
@@ -2611,6 +2790,7 @@ export const readChatRunForRequest = async (
         runId: runs.runId,
         harness: runs.harness,
         state: runs.state,
+        outcome: runs.outcome,
         chatReadSeq: runs.chatReadSeq,
         askedBy: desktopRunnerEvents.type,
         request: desktopRunnerEvents.message,
@@ -2633,6 +2813,80 @@ export const readChatRunForRequest = async (
       )
       .limit(1)
   ).at(0) ?? null;
+
+/**
+ * How run `runId` reported request `requestId` closed
+ * (`DESKTOP_RUNNER_REQUEST_EVENT`), or `null` while it reported nothing:
+ * the request is open as far as the run said. The run is read only for its
+ * owner, as the request was.
+ */
+export const readRunRequestClosure = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  {
+    owner,
+    runId,
+    requestId,
+  }: { owner: RunOwner; runId: string; requestId: string },
+): Promise<DesktopRunnerRequestEvent | null> => {
+  const [closure] = await db
+    .select({ message: desktopRunnerEvents.message })
+    .from(desktopRunnerEvents)
+    .innerJoin(runs, eq(runs.runId, desktopRunnerEvents.runId))
+    .where(
+      and(
+        eq(desktopRunnerEvents.runId, runId),
+        eq(runs.userId, owner.userId),
+        eq(runs.organizationId, owner.organizationId),
+        eq(desktopRunnerEvents.type, DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent),
+        sql`${desktopRunnerEvents.message} -> 'chunk' ->> 'name' = ${DESKTOP_RUNNER_REQUEST_EVENT}`,
+        sql`${desktopRunnerEvents.message} -> 'chunk' -> 'value' ->> 'requestId' = ${requestId}`,
+      ),
+    )
+    .orderBy(asc(desktopRunnerEvents.seq))
+    .limit(1);
+  if (closure === undefined) {
+    return null;
+  }
+  const parsed = v.safeParse(
+    v.object({
+      chunk: v.object({ value: desktopRunnerRequestEventSchema }),
+    }),
+    closure.message,
+  );
+  return parsed.success ? parsed.output.chunk.value : null;
+};
+
+/**
+ * Whether an answer to request `requestId` of run `runId` is queued: an
+ * approval's decision or a question's answers, keyed by the request.
+ */
+export const readRunRequestAnswered = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  {
+    owner,
+    runId,
+    requestId,
+  }: { owner: RunOwner; runId: string; requestId: string },
+): Promise<boolean> => {
+  const [answer] = await db
+    .select({ id: desktopRunnerCommands.id })
+    .from(desktopRunnerCommands)
+    .innerJoin(runs, eq(runs.runId, desktopRunnerCommands.runId))
+    .where(
+      and(
+        eq(desktopRunnerCommands.runId, runId),
+        eq(runs.userId, owner.userId),
+        eq(runs.organizationId, owner.organizationId),
+        inArray(desktopRunnerCommands.kind, [
+          DESKTOP_RUNNER_SERVER_MESSAGE.runApproval,
+          DESKTOP_RUNNER_SERVER_MESSAGE.runAnswer,
+        ]),
+        eq(desktopRunnerCommands.commandKey, requestId),
+      ),
+    )
+    .limit(1);
+  return answer !== undefined;
+};
 
 export type ChatTurnRunOptions = { owner: RunOwner; chat: ChatRunBinding };
 

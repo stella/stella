@@ -3,7 +3,9 @@
  * Regenerates `apps/desktop/src-tauri/harness/releases.gen.json`, the
  * per-platform download table of the agent CLIs and tools Stella Desktop
  * installs, from the versions pinned in
- * `apps/desktop/src-tauri/harness/pins.json`.
+ * `apps/desktop/src-tauri/harness/pins.json`, and beside it
+ * `ci-clis.gen.json`, the static Linux Codex binaries the agent engine's
+ * installed-CLI tests run in CI (`scripts/ci-harness-clis.sh`).
  *
  * - Codex: the `codex-package-<target>.tar.gz` asset of the OpenAI GitHub
  *   release, with the SHA-256 digest and byte size GitHub reports for it.
@@ -42,6 +44,7 @@ const REPO_ROOT = path.join(import.meta.dir, "..");
 const HARNESS_DIR = path.join(REPO_ROOT, "apps/desktop/src-tauri/harness");
 const PINS_PATH = path.join(HARNESS_DIR, "pins.json");
 const TABLE_PATH = path.join(HARNESS_DIR, "releases.gen.json");
+const CI_TABLE_PATH = path.join(HARNESS_DIR, "ci-clis.gen.json");
 
 const CODEX_REPOSITORY = "openai/codex";
 const NPM_REGISTRY = "https://registry.npmjs.org";
@@ -167,7 +170,19 @@ const requireUrl = (url: string, prefix: string): string =>
 const integrityHex = (integrity: string): string =>
   Buffer.from(integrity.slice("sha512-".length), "base64").toString("hex");
 
-const codexRelease = async (version: string): Promise<Release> => {
+/**
+ * A zstd-compressed static Linux binary of Codex, for the agent engine's
+ * installed-CLI tests in CI (scripts/ci-harness-clis.sh).
+ */
+type CiAsset = { url: string; sha256: string };
+type CiRelease = {
+  version: string;
+  assets: { "linux-x64": CiAsset; "linux-arm64": CiAsset };
+};
+
+const codexRelease = async (
+  version: string,
+): Promise<{ release: Release; ci: CiRelease }> => {
   const tag = `rust-v${version}`;
   const token = process.env["GITHUB_TOKEN"];
   const release = v.parse(
@@ -195,7 +210,26 @@ const codexRelease = async (version: string): Promise<Release> => {
       executable: `bin/codex${exe}`,
     };
   };
-  return { version, assets: byPlatform(asset) };
+  const ciAsset = (target: string): CiAsset => {
+    const name = `codex-${target}.zst`;
+    const found =
+      release.assets.find((candidate) => candidate.name === name) ??
+      panic(`${tag} has no ${name}`);
+    return {
+      url: requireUrl(found.browser_download_url, downloads),
+      sha256: found.digest.slice("sha256:".length),
+    };
+  };
+  return {
+    release: { version, assets: byPlatform(asset) },
+    ci: {
+      version,
+      assets: {
+        "linux-x64": ciAsset("x86_64-unknown-linux-musl"),
+        "linux-arm64": ciAsset("aarch64-unknown-linux-musl"),
+      },
+    },
+  };
 };
 
 /** An npm package's tarball as an asset, by the registry's own metadata. */
@@ -300,7 +334,7 @@ const main = async (): Promise<number> => {
   ]);
   const table = {
     pins,
-    harnesses: { codex, "claude-code": claudeCode },
+    harnesses: { codex: codex.release, "claude-code": claudeCode },
     tools: { bun },
   };
   return await writeOrCheckArtifacts(
@@ -309,6 +343,13 @@ const main = async (): Promise<number> => {
         path: TABLE_PATH,
         contents: await formattedLikeRepository(
           `${JSON.stringify(table, null, 2)}\n`,
+          "json",
+        ),
+      },
+      {
+        path: CI_TABLE_PATH,
+        contents: await formattedLikeRepository(
+          `${JSON.stringify({ codex: codex.ci }, null, 2)}\n`,
           "json",
         ),
       },

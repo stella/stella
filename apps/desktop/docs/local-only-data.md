@@ -209,6 +209,21 @@ the user's own earlier entries it followed. A withdrawal applies in the window
 at once and is sent again until the server confirms it. Drafts, titles and
 earlier entries are never logged.
 
+## Calendar events in the day review
+
+Calendar events are off until the user turns on "Show calendar events in
+the day review" in the Settings window's Activity tab. While it is on, the
+activity window asks `calendar_day_events` for the day it shows, once per day
+it opens; nothing is read in the background and nothing read is written to the
+day file. `calendar_read` sends only that date and the time zone to the stella
+server, which reads the member's own Microsoft 365 calendar through the
+connection the member made in stella and returns each event's title, start,
+end, all-day flag and the member's own answer. The server drops events marked
+anything but normal (private, personal, confidential), declined and cancelled
+ones, and never reads attendees, organizer, location or body. The window draws
+events beside recorded time and counts none of them; where a recorded call
+overlaps an event, the call is the record and the event only names it.
+
 ## Confirmed draft time entries
 
 The activity window can create a draft time entry only after the user accepts

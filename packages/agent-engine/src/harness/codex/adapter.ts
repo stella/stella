@@ -26,6 +26,7 @@ import {
 import { type HarnessContinuation, sessionHoldsHistory } from "../events";
 import { packageCacheEnvironment } from "../package-cache";
 import { redactingSkillPaths } from "../skill-redaction";
+import { directOnlyServerName } from "../tool-parts";
 import { toolPathEnvironment } from "../tool-path";
 import { buildTurnPrompt } from "../transcript-handoff";
 import { settlesWithin } from "../turn-lifecycle";
@@ -36,7 +37,7 @@ import {
   startAppServer,
 } from "./app-server-client";
 import { CodexProcess, type CodexProcessSettings } from "./background";
-import { usageLimitResetsAt } from "./errors";
+import { readableCodexMessage, usageLimitResetsAt } from "./errors";
 import {
   CODEX_CLIENT_INFO,
   CODEX_OPT_OUT_NOTIFICATIONS,
@@ -478,6 +479,15 @@ const turnSession = (
     gracePeriodMs: options.gracePeriodMs,
     detached: createDetached(options.onBackgroundError),
     stellaServer: input.mcp.serverName,
+    // The browser is registered twice (`browserServers` in `thread.ts`);
+    // either one failing leaves the turn without it.
+    browserServers:
+      input.browser === null
+        ? new Set()
+        : new Set([
+            input.browser.serverName,
+            directOnlyServerName(input.browser.serverName),
+          ]),
     capacityRetry: options.capacityRetry ?? DEFAULT_CAPACITY_RETRY,
     background: appServer.turnBackground,
   });
@@ -523,7 +533,7 @@ const beginTurn = async ({
       new HarnessStartError({
         reason: "start_rejected",
         message: Result.isError(started)
-          ? started.error.message
+          ? readableCodexMessage(started.error.message)
           : "The harness answered turn/start with an unexpected shape.",
       }),
     );

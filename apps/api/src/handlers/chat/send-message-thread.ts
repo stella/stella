@@ -8,6 +8,7 @@ import {
   type ChatLocalRunTarget,
   type ChatRunTarget,
 } from "@stll/api-contract/chat-run-target";
+import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { chatMessages, chatThreads } from "@/api/db/schema";
@@ -108,6 +109,7 @@ export const readThreadValidationState = async ({
           columns: {
             activeSkill: true,
             chatLocalRunTarget: true,
+            chatCloudApprovals: true,
             contextMatterIds: true,
             dataWorkspaceIds: true,
             subjectDecisionId: true,
@@ -190,7 +192,7 @@ export const readThreadValidationState = async ({
               content: persistedMessage.content,
               role: persistedMessage.role,
             },
-      runTarget: chatRunTargetOf(thread.chatLocalRunTarget),
+      runTarget: chatRunTargetOf(thread),
       threadNames,
       webSearchEnabled: thread.webSearchEnabled,
     });
@@ -214,8 +216,9 @@ type ChatThreadRecord = {
   webSearchEnabled: boolean;
   chatModel: string | null;
   chatReasoningEffort: ReasoningEffort | null;
-  /** The stored run target (`storedChatRunTarget`); null runs in the cloud. */
+  /** The stored run target's columns (`storedChatRunTarget`). */
   chatLocalRunTarget: ChatLocalRunTarget | null;
+  chatCloudApprovals: DesktopRunnerApprovalMode | null;
   messages: {
     id: SafeId<"chatMessage">;
     role: ChatMessage["role"];
@@ -386,6 +389,7 @@ const loadThreadAttempt = async ({
       chatModel: string | null;
       chatReasoningEffort: ReasoningEffort | null;
       chatLocalRunTarget: ChatLocalRunTarget | null;
+      chatCloudApprovals: DesktopRunnerApprovalMode | null;
       rollbackToken: string | null;
     };
 
@@ -424,6 +428,7 @@ const loadThreadAttempt = async ({
             chatModel: true,
             chatReasoningEffort: true,
             chatLocalRunTarget: true,
+            chatCloudApprovals: true,
             rollbackToken: true,
           },
         }),
@@ -462,6 +467,7 @@ const loadThreadAttempt = async ({
           chatModel: existing.chatModel,
           chatReasoningEffort: existing.chatReasoningEffort,
           chatLocalRunTarget: existing.chatLocalRunTarget,
+          chatCloudApprovals: existing.chatCloudApprovals,
           messages: [],
           historySnapshot: EMPTY_CHAT_HISTORY_SNAPSHOT,
         },
@@ -691,6 +697,7 @@ const loadThreadAttempt = async ({
         chatModel: null,
         chatReasoningEffort: null,
         chatLocalRunTarget: null,
+        chatCloudApprovals: null,
         messages: [],
         historySnapshot: EMPTY_CHAT_HISTORY_SNAPSHOT,
       },

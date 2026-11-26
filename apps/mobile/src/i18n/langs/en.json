@@ -125,8 +125,10 @@
       "aiOutputInvalid": "The AI answer had an unexpected format. Try again.",
       "aiOutputModerated": "The AI provider moderated the output. Rephrase the request or choose another model.",
       "aiUnknown": "The AI request failed. Try again.",
+      "errorFailed": "The agent on your computer ended this turn without saying why. Try again.",
       "errorFolderUnavailable": "The folder linked to this chat is not available on your computer. Check it in stella desktop, then send this again.",
       "errorLimitReached": "The coding agent on your computer reached its usage limit. Try again once the limit resets.",
+      "errorLost": "Your computer took this turn and then stopped answering. Make sure stella desktop is open and connected, then try again.",
       "errorNeedsLogin": "The coding agent on your computer needs you to sign in again. Sign in through stella desktop, then try again.",
       "errorNotReached": "Your computer did not pick up this turn. Make sure stella desktop is open and connected, then try again.",
       "errorRelinked": "stella desktop was linked again on your computer, so this turn stopped. Send it again.",
@@ -173,6 +175,13 @@
       "limitReminderScheduled": "We will notify you after {time}.",
       "limitResumeContinue": "Continue automatically when it resets",
       "limitResumeScheduled": "Continues automatically at {time}.",
+      "notices": {
+        "browserUnavailable": "The browser could not be started for this message, so the agent worked without it.",
+        "configWarning": "The coding agent on your computer warned about its own settings and carried on. If something looks off, check its settings on that computer.",
+        "recovered": "The model responded again after the coding agent on your computer retried.",
+        "retrying": "The model is not responding. The coding agent on your computer is trying again.",
+        "retryingAttempt": "The model is not responding. The coding agent on your computer is trying again (attempt {attempt, number} of {maxAttempts, number})."
+      },
       "output": {
         "arriving": "Still arriving from the computer that ran this step",
         "command": "Output",
@@ -191,6 +200,13 @@
       },
       "patternInPath": "{pattern} in {path}",
       "ranOnModel": "Ran on {model}",
+      "request": {
+        "cancelled": "Not answered: this turn was stopped.",
+        "runFailed": "Not answered: the agent stopped with an error before this step.",
+        "runFinished": "Not needed: the agent finished without this step.",
+        "runLost": "Not answered: your computer stopped running this turn.",
+        "withdrawn": "No longer needed: the agent went on without this step."
+      },
       "sessionNotResumed": "The coding agent on your computer could not pick up where it left off, so it continued from the messages in this chat.",
       "status": {
         "failed": "Failed",
@@ -372,6 +388,7 @@
       "read_comments": "Reading comments",
       "read_document": "Reading document",
       "read_section": "Reading a section",
+      "read_site_notes": "Reading website notes",
       "read_story": "Reading a document part",
       "remember": "Remembering",
       "remove_matter_member": "Remove matter member",
@@ -388,6 +405,7 @@
       "save_document": "Save document",
       "save_matter": "Save matter",
       "save_playbook": "Save playbook",
+      "save_site_notes": "Updating website notes",
       "save_skill_package": "Save skill",
       "save_task": "Save task",
       "save_template": "Save template",

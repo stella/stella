@@ -6,6 +6,7 @@ import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   CITED_PART_RULES,
+  type CitedPartLanguage,
   classifyCitedPart,
 } from "@/api/handlers/case-law/polarity/cited-part";
 
@@ -48,7 +49,7 @@ const LANGUAGES = {
     ambiguous: ["odlišné stanovisko", "osobitné stanovisko"],
   },
 } as const satisfies Record<
-  keyof typeof CITED_PART_RULES,
+  CitedPartLanguage,
   {
     opinions: readonly {
       cue: string;

@@ -5,6 +5,7 @@ import type {
   ChatLocalRunReadiness,
   ChatRunTarget,
 } from "@stll/api-contract/chat-run-target";
+import { CHAT_SEND_INTENT } from "@stll/api-contract/chat-send-intent";
 import { createTestClock, deferred } from "@stll/test-kit";
 
 import {
@@ -284,6 +285,7 @@ describe("whether a turn needs the desktop opened", () => {
   };
   const runner = (connected: boolean) => ({
     desktopId: "0192f3a0-6b1c-7d2e-8f30-000000000001",
+    appVersion: "0.9.91",
     connected,
     lastSeenAt: "2026-11-12T10:00:00.000Z",
     harnesses: [],
@@ -306,10 +308,40 @@ describe("whether a turn needs the desktop opened", () => {
       enabled([runner(false), runner(true)]),
       false,
     ],
-    ["the turn runs in the cloud", { kind: "cloud" }, enabled([]), false],
-    ["the member may not run turns there", local, { status: "hidden" }, false],
+    [
+      "the turn runs in the cloud",
+      { kind: "cloud", approvals: "ask" },
+      enabled([]),
+      false,
+    ],
+    [
+      "the member may not run turns there",
+      local,
+      { status: "hidden", maxApprovals: "full_auto" },
+      false,
+    ],
     ["the computers are not read yet", local, undefined, false],
   ] as const)("%s", (_case, target, readiness, expected) => {
-    expect(needsDesktopLaunch(target, readiness)).toBe(expected);
+    const start = { type: "send", intent: CHAT_SEND_INTENT.start } as const;
+    expect(needsDesktopLaunch({ cause: start, target, readiness })).toBe(
+      expected,
+    );
+    expect(
+      needsDesktopLaunch({ cause: { type: "pick" }, target, readiness }),
+    ).toBe(expected);
   });
+
+  // Every send intent, so a new one has to say whether it starts a run.
+  test.each(Object.values(CHAT_SEND_INTENT))(
+    "a send that would %s opens it only when it starts a turn",
+    (intent) => {
+      expect(
+        needsDesktopLaunch({
+          cause: { type: "send", intent },
+          target: local,
+          readiness: enabled([runner(false)]),
+        }),
+      ).toBe(intent === CHAT_SEND_INTENT.start);
+    },
+  );
 });

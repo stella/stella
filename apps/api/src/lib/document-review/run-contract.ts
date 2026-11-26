@@ -17,7 +17,7 @@ import type { ReadsExactly } from "@stll/api-contract/review-decision";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ConstantMap } from "@/api/lib/constant-map";
 import type { ReviewPerspective } from "@/api/lib/document-review/contract";
-import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
+import type { ReviewFinding } from "@/api/lib/document-review/review-finding-types";
 import type {
   PlaybookPositions,
   PlaybookScope,

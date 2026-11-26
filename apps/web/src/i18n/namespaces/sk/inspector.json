@@ -540,6 +540,7 @@
       "waitForMatches": "Počkajte na dokončenie kontroly na anonymizáciu.",
       "workspaceTermsHeading": "Výrazy pracovného priestoru ({count})"
     },
+    "audioUnplayable": "Tento záznam sa tu nedá prehrať. Stiahnite si ho a vypočujte.",
     "closeAllTabs": "Zavrieť {count, plural, one {# kartu} few {všetky # karty} many {# karty} other {všetkých # kariet}}",
     "closeOtherTabs": "Zavrieť {count, plural, one {# ďalšiu kartu} few {# ďalšie karty} many {# ďalšej karty} other {# ďalších kariet}}",
     "closeTab": "Zavrieť <bdi>{name}</bdi>",
@@ -623,6 +624,11 @@
     },
     "metadata": {
       "aiExtractedHeading": "Vyťažené AI",
+      "browserDownload": {
+        "downloaded": "Stiahnuté",
+        "file": "Adresa súboru",
+        "page": "Stiahnuté z"
+      },
       "documentProperties": {
         "empty": "Tento súbor neobsahuje žiadne vlastné vlastnosti",
         "heading": "Vlastnosti súboru",

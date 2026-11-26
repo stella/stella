@@ -540,6 +540,7 @@
       "waitForMatches": "Wait for the anonymization scan to finish.",
       "workspaceTermsHeading": "Workspace terms ({count})"
     },
+    "audioUnplayable": "This recording can't be played here. Download it to listen.",
     "closeAllTabs": "Close {count, plural, one {# tab} other {all # tabs}}",
     "closeOtherTabs": "Close {count, plural, one {# other tab} other {# other tabs}}",
     "closeTab": "Close <bdi>{name}</bdi>",
@@ -623,6 +624,11 @@
     },
     "metadata": {
       "aiExtractedHeading": "Extracted by AI",
+      "browserDownload": {
+        "downloaded": "Downloaded",
+        "file": "File address",
+        "page": "Downloaded from"
+      },
       "documentProperties": {
         "empty": "This file records no properties of its own",
         "heading": "File properties",

@@ -46,6 +46,8 @@ export type RecoveryStatus = "pending" | "available";
 
 export type RecoveryTarget = "account" | "unassigned";
 
+export type RelaunchBlocker = "edit_sessions" | "agent_runs";
+
 export type SessionSnapshot = { baseVersionNumber: number, entityId: string, fileType: DesktopEditFileType, fileName: string, filePath: string, id: string, lastError: string | null, lastCheckpointAt: string | null, pendingFinalize: boolean, propertyId: string, status: SessionStatus, takeoverDetected: boolean, workspaceId: string, };
 
 export type SessionStatus = "opening" | "ready" | "syncing" | "finalizing" | "error";
@@ -54,6 +56,6 @@ export type TrustedSelfHostConnection = { apiBaseUrl: string, trustedAt: string,
 
 export type UpdaterSnapshot = { revision: number, state: UpdaterState, };
 
-export type UpdaterState = { "status": "idle" } | { "status": "checking" } | { "status": "up_to_date" } | { "status": "available", version: string, } | { "status": "downloading", version: string, receivedBytes: number, totalBytes: number | null, } | { "status": "installing", version: string, } | { "status": "deferred", version: string, } | { "status": "failed", during: UpdaterStep, } | { "status": "managed" };
+export type UpdaterState = { "status": "idle" } | { "status": "checking" } | { "status": "up_to_date" } | { "status": "available", version: string, } | { "status": "downloading", version: string, receivedBytes: number, totalBytes: number | null, } | { "status": "installing", version: string, } | { "status": "deferred", version: string, until: RelaunchBlocker, } | { "status": "failed", during: UpdaterStep, } | { "status": "managed" };
 
 export type UpdaterStep = "check" | "install";

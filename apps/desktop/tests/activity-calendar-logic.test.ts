@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as fc from "fast-check";
 
@@ -16,6 +17,7 @@ import {
   manualSuggestion,
   matchedSuggestions,
   nextSuggestion,
+  rangeBreakdown,
   segmentTitles,
   shortSegmentThresholdMs,
   suggestionPieces,
@@ -28,10 +30,12 @@ import {
 } from "../src/activity/activity-calendar-logic";
 import { timedSegments } from "../src/activity/activity-logic";
 import type { ActivitySegment } from "../src/activity/activity-types";
-import { matchDay } from "../src/activity/day-review-logic";
+import { BRIEF_MS, matchDay } from "../src/activity/day-review-logic";
+import { EMPTY_MATTER_LEARNING } from "../src/activity/matter-learning";
 
 const MINUTE = 60_000;
 const DAY_START = Date.UTC(2026, 9, 9, 8, 0);
+const NOW_MS = Date.UTC(2026, 9, 10);
 const at = (minute: number) =>
   new Date(DAY_START + minute * MINUTE).toISOString();
 const ms = (minute: number) => DAY_START + minute * MINUTE;
@@ -94,6 +98,9 @@ const day = (
   matchDay({
     segments: timedSegments(segments),
     candidates: [LEASE, SERVICES],
+    resolved: [],
+    learning: EMPTY_MATTER_LEARNING,
+    nowMs: NOW_MS,
     captureDetails: true,
     manualAssignments: [],
     draftedEntries,
@@ -592,6 +599,174 @@ describe("an activity block's stated time", () => {
   });
 });
 
+describe("worked minutes", () => {
+  const generatedSegment = fc.record({
+    gapMinutes: fc.oneof(
+      fc.constant(0),
+      fc.double({ max: 6, min: 0, noNaN: true }),
+    ),
+    // Glances of seconds next to longer work, so brief touches and slivers
+    // both occur.
+    lengthMinutes: fc.oneof(
+      fc.double({ max: 3, min: 1 / 12, noNaN: true }),
+      fc.double({ max: 45, min: 1 / 12, noNaN: true }),
+    ),
+    app: fc.constantFrom("editor", "browser", "mail"),
+    matterId: fc.constantFrom("lease", "services", "elsewhere", undefined),
+  });
+  type Range = { endMs: number; startMs: number };
+  const overlapMs = (left: Range, right: Range) =>
+    Math.max(
+      0,
+      Math.min(left.endMs, right.endMs) - Math.max(left.startMs, right.startMs),
+    );
+  const rangesOf = (ranges: readonly { start: string; end: string }[]) =>
+    ranges.map(({ start, end }) => ({
+      endMs: Temporal.Instant.from(end).epochMilliseconds,
+      startMs: Temporal.Instant.from(start).epochMilliseconds,
+    }));
+
+  test(
+    "suggestions never claim more than was recorded, each is its own segments' time, and no instant is in two entries",
+    () => {
+      assertProperty(
+        "suggestions never claim more than was recorded, each is its own segments' time, and no instant is in two entries",
+        fc.property(
+          fc.array(generatedSegment, { maxLength: 40, minLength: 1 }),
+          fc.array(
+            fc.tuple(
+              fc.integer({ min: 0, max: 600 }),
+              fc.integer({ min: 1, max: 30 }),
+            ),
+            { maxLength: 3 },
+          ),
+          fc.boolean(),
+          (parts, draftedSpans, includeSlivers) => {
+            let minute = 0;
+            const generated = parts.map(
+              ({ app, gapMinutes, lengthMinutes, matterId }) => {
+                minute += gapMinutes;
+                const part = segment({
+                  app,
+                  from: minute,
+                  matterId,
+                  title: "Inbox",
+                  to: minute + lengthMinutes,
+                });
+                minute += lengthMinutes;
+                return part;
+              },
+            );
+            const draftedEntries = draftedSpans.map(
+              ([from, length], index) => ({
+                start: at(from),
+                end: at(from + length),
+                entryId: `entry-${String(index)}`,
+              }),
+            );
+            type Options = Parameters<typeof matchDay>[0];
+            const review = (
+              manualAssignments: Options["manualAssignments"],
+              entries: Options["draftedEntries"] = draftedEntries,
+            ) =>
+              matchDay({
+                segments: timedSegments(generated),
+                candidates: [LEASE, SERVICES],
+                resolved: [],
+                learning: EMPTY_MATTER_LEARNING,
+                nowMs: NOW_MS,
+                captureDetails: true,
+                manualAssignments,
+                draftedEntries: entries,
+              });
+            const first = review([]);
+            // Taking in every offered sliver is the member's choice; the
+            // invariants hold after it too.
+            const assignments = includeSlivers
+              ? matchedSuggestions(first.groups, new Set()).flatMap(
+                  ({ matter: owner, slivers }) =>
+                    slivers.map(({ startMs, endMs }) => ({
+                      start: new Date(startMs).toISOString(),
+                      end: new Date(endMs).toISOString(),
+                      matterId: owner?.id ?? panic("A suggestion has a matter"),
+                    })),
+                )
+              : [];
+            const result = review(assignments);
+            const suggestions = matchedSuggestions(result.groups, new Set());
+            // Creating entries one suggestion at a time: what they claimed
+            // and what is still suggested never exceed the time the day
+            // recorded on its matters.
+            const matterMs = result.segments
+              .filter(({ matter: owner }) => owner !== null)
+              .reduce((sum, { endMs, startMs }) => sum + endMs - startMs, 0);
+            const entries = [...draftedEntries];
+            let current = suggestions;
+            let acceptedMinutes = 0;
+            for (let step = 0; ; step++) {
+              const suggestedMinutes = current.reduce(
+                (sum, suggestion) => sum + suggestion.workedMinutes,
+                0,
+              );
+              expect(
+                (acceptedMinutes + suggestedMinutes) * MINUTE,
+              ).toBeLessThanOrEqual(matterMs);
+              const next = current.at(0);
+              if (next === undefined) {
+                break;
+              }
+              acceptedMinutes += next.workedMinutes;
+              entries.push(
+                ...next.ranges.map((range) => ({
+                  ...range,
+                  entryId: `accepted-${String(step)}`,
+                })),
+              );
+              current = matchedSuggestions(
+                review(assignments, entries).groups,
+                new Set(),
+              );
+            }
+            const drafted = rangesOf(draftedEntries);
+            const claimed: Range[] = [];
+            for (const suggestion of suggestions) {
+              const ownMs = suggestion.segments.reduce(
+                (sum, { endMs, startMs }) => sum + endMs - startMs,
+                0,
+              );
+              expect(suggestion.durationMs).toBe(ownMs);
+              expect(
+                Math.abs(suggestion.workedMinutes * MINUTE - ownMs),
+              ).toBeLessThan(MINUTE);
+              expect(ownMs).toBeGreaterThanOrEqual(
+                suggestion.confidence === "manual" ? 0 : BRIEF_MS,
+              );
+              expect(
+                suggestionPieces(suggestion).reduce(
+                  (sum, { minutes }) => sum + minutes,
+                  0,
+                ),
+              ).toBe(suggestion.workedMinutes);
+              for (const sliver of suggestion.slivers) {
+                expect(sliver.matter).toBeNull();
+                expect(sliver.matterId).toBeNull();
+                expect(sliver.drafted).toBe(false);
+              }
+              for (const range of rangesOf(suggestion.ranges)) {
+                for (const taken of [...claimed, ...drafted]) {
+                  expect(overlapMs(range, taken)).toBe(0);
+                }
+              }
+              claimed.push(...rangesOf(suggestion.ranges));
+            }
+          },
+        ),
+      );
+    },
+    propertyTestTimeout(10_000),
+  );
+});
+
 describe("calendar hours", () => {
   const options = { date: "2026-10-09", timeZone: "UTC" };
   test("the working day stays visible and grows to whole hours around activity", () => {
@@ -706,16 +881,16 @@ describe("suggestions", () => {
       endMs: ms(15),
       id: "manual:picked",
       matter: { id: "lease" },
-      roundedTenths: 2,
       startMs: ms(3),
       type: "manual",
+      workedMinutes: 12,
     });
     expect(instantPairs(manual.ranges)).toEqual([[ms(3), ms(15)]]);
     // The recorded part is the evidence, never more than the range holds.
     expect(
       manual.segments.map(({ startMs, endMs }) => [startMs, endMs]),
     ).toEqual([[ms(3), ms(8)]]);
-    // Ten minutes bill as two tenths, yet the entry still covers ten minutes.
+    // The entry claims the range's own minutes; billing rounds on the server.
     const tenMinutes = manualSuggestion({
       drafted: [],
       id: "manual:ten",
@@ -723,7 +898,7 @@ describe("suggestions", () => {
       segments,
     });
     expect(tenMinutes.durationMs).toBe(10 * MINUTE);
-    expect(tenMinutes.roundedTenths).toBe(2);
+    expect(tenMinutes.workedMinutes).toBe(10);
     expect(instantPairs(tenMinutes.ranges)).toEqual([[ms(5), ms(15)]]);
 
     const unrecorded = manualSuggestion({
@@ -735,8 +910,8 @@ describe("suggestions", () => {
     expect(unrecorded).toMatchObject({
       durationMs: 15 * MINUTE,
       matter: null,
-      roundedTenths: 3,
       segments: [],
+      workedMinutes: 15,
       startMs: ms(200),
       endMs: ms(215),
     });
@@ -761,7 +936,7 @@ describe("suggestions", () => {
     });
     expect(manual.matter?.id).toBe("lease");
     expect(manual.durationMs).toBe(40 * MINUTE);
-    expect(manual.roundedTenths).toBe(7);
+    expect(manual.workedMinutes).toBe(40);
     expect(instantPairs(manual.ranges)).toEqual([
       [ms(10), ms(40)],
       [ms(50), ms(60)],
@@ -778,7 +953,7 @@ describe("suggestions", () => {
     expect(covered).toMatchObject({
       durationMs: 0,
       ranges: [],
-      roundedTenths: 0,
+      workedMinutes: 0,
     });
   });
 
@@ -793,9 +968,71 @@ describe("suggestions", () => {
       durationMs: 0,
       endMs: ms(30),
       ranges: [],
-      roundedTenths: 0,
       segments: [],
       startMs: ms(30),
+      workedMinutes: 0,
+    });
+  });
+
+  test("a selected range shows where its minutes were recorded before it is confirmed", () => {
+    const { segments } = day([
+      segment({ from: 0, to: 31, matterId: "lease" }),
+      segment({ from: 31, to: 37, matterId: "services" }),
+      segment({ from: 37, to: 40 }),
+    ]);
+    // 08:00 to 08:45: 31 on the lease, 6 on services, 3 with no matter and
+    // 5 not recorded.
+    const manual = manualSuggestion({
+      drafted: [],
+      id: "manual:breakdown",
+      range: { startMs: ms(0), endMs: ms(45) },
+      segments,
+    });
+    const minutes = (matterId: string | null) =>
+      Object.fromEntries(
+        Object.entries(rangeBreakdown(manual, matterId)).map(
+          ([kind, { minutes: whole }]) => [kind, whole],
+        ),
+      );
+    expect(minutes("lease")).toEqual({
+      noMatter: 3,
+      notRecorded: 5,
+      onMatter: 31,
+      onOtherMatters: 6,
+    });
+    // With another matter chosen, the lease's time is another matter's.
+    expect(minutes("services")).toEqual({
+      noMatter: 3,
+      notRecorded: 5,
+      onMatter: 6,
+      onOtherMatters: 31,
+    });
+    expect(minutes(null)).toEqual({
+      noMatter: 3,
+      notRecorded: 5,
+      onMatter: 0,
+      onOtherMatters: 37,
+    });
+  });
+
+  test("a kind recorded for under a minute keeps its exact time in the breakdown", () => {
+    const { segments } = day([
+      segment({ from: 0, to: 40 / 60, matterId: "lease" }),
+      segment({ from: 40 / 60, to: 1, matterId: "services" }),
+    ]);
+    const breakdown = rangeBreakdown(
+      manualSuggestion({
+        drafted: [],
+        id: "manual:short",
+        range: { startMs: ms(0), endMs: ms(1) },
+        segments,
+      }),
+      "lease",
+    );
+    expect(breakdown.onMatter).toEqual({ durationMs: 40_000, minutes: 1 });
+    expect(breakdown.onOtherMatters).toEqual({
+      durationMs: 20_000,
+      minutes: 0,
     });
   });
 
@@ -1052,7 +1289,7 @@ describe("suggestion pieces", () => {
     return suggestion;
   };
 
-  test("each piece counts its own recorded time, and the card's summary states the billed tenths once", () => {
+  test("each piece counts its own recorded time, and the card's summary states the worked minutes once", () => {
     const suggestion = onlySuggestion([
       segment({ from: 0, to: 30, matterId: "lease", title: "Lease draft" }),
       // A two-minute pause keeps one piece but is not time worked.
@@ -1066,8 +1303,9 @@ describe("suggestion pieces", () => {
     ]);
     expect(suggestionSummary(suggestion)).toEqual({
       count: 2,
-      tenths: suggestion.roundedTenths,
+      source: "matched",
       type: "pieces",
+      workedMinutes: 106,
     });
   });
 
@@ -1077,9 +1315,10 @@ describe("suggestion pieces", () => {
     ]);
     expect(suggestionSummary(suggestion)).toEqual({
       endMs: ms(55),
+      source: "matched",
       startMs: ms(10),
-      tenths: 8,
       type: "range",
+      workedMinutes: 45,
     });
   });
 
@@ -1106,11 +1345,17 @@ describe("suggestion pieces", () => {
         "pieces round together: their minutes add up to the rounded total and each is within a minute of its time",
         fc.property(
           // Seconds worked in each piece; pieces sit ten minutes apart, so
-          // each is its own.
-          fc.array(fc.integer({ min: 1, max: 90 * 60 }), {
-            minLength: 1,
-            maxLength: 8,
-          }),
+          // each is its own. Under two minutes in all is a brief touch.
+          fc
+            .array(fc.integer({ min: 1, max: 90 * 60 }), {
+              minLength: 1,
+              maxLength: 8,
+            })
+            .filter(
+              (seconds) =>
+                seconds.reduce((sum, value) => sum + value, 0) * 1000 >=
+                BRIEF_MS + 1000,
+            ),
           (seconds) => {
             let from = 0;
             const segments = seconds.map((length) => {
@@ -1123,11 +1368,15 @@ describe("suggestion pieces", () => {
               from += length / 60 + 10;
               return piece;
             });
-            const pieces = suggestionPieces(onlySuggestion(segments));
+            const suggestion = onlySuggestion(segments);
+            const pieces = suggestionPieces(suggestion);
             expect(pieces).toHaveLength(seconds.length);
-            const totalSeconds = seconds.reduce((sum, value) => sum + value, 0);
+            // The day's only suggestion claims its whole recorded minutes.
+            expect(suggestion.workedMinutes).toBe(
+              Math.floor(suggestion.durationMs / MINUTE),
+            );
             expect(pieces.reduce((sum, { minutes }) => sum + minutes, 0)).toBe(
-              Math.round(totalSeconds / 60),
+              suggestion.workedMinutes,
             );
             for (const [index, piece] of pieces.entries()) {
               expect(
@@ -1226,7 +1475,7 @@ describe("a selected range set to the minute", () => {
       segments: [],
     });
     expect(entry.durationMs).toBe(12 * MINUTE);
-    expect(entry.roundedTenths * 6).toBe(12);
+    expect(entry.workedMinutes).toBe(12);
   });
 
   test("a new start moves the range and keeps its length", () => {

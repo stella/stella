@@ -1,0 +1,19 @@
+{
+  "id": "no-effect-state-write",
+  "rules": ["no-effect-state-write/no-effect-state-write"],
+  "type": "changed-lines",
+  "expiresAt": "2026-12-02T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-effect-state-write/no-effect-state-write",
+    "apps",
+    "packages"
+  ]
+}

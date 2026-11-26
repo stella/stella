@@ -540,6 +540,7 @@
       "waitForMatches": "Počkejte na dokončení kontroly pro anonymizaci.",
       "workspaceTermsHeading": "Slovníček pro anonymizaci ({count})"
     },
+    "audioUnplayable": "Tento záznam zde nelze přehrát. Stáhněte si ho a poslechněte.",
     "closeAllTabs": "Zavřít {count, plural, one {# kartu} few {všechny # karty} many {# karty} other {všech # karet}}",
     "closeOtherTabs": "Zavřít {count, plural, one {# další kartu} few {# další karty} many {# další karty} other {# dalších karet}}",
     "closeTab": "Zavřít <bdi>{name}</bdi>",
@@ -623,6 +624,11 @@
     },
     "metadata": {
       "aiExtractedHeading": "Vytěženo AI",
+      "browserDownload": {
+        "downloaded": "Staženo",
+        "file": "Adresa souboru",
+        "page": "Staženo z"
+      },
       "documentProperties": {
         "empty": "Tento soubor neobsahuje žádné vlastní vlastnosti",
         "heading": "Vlastnosti souboru",

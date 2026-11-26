@@ -11,11 +11,17 @@ import {
 } from "../adapter";
 import type { HarnessContinuation } from "../events";
 import {
+  BROWSER_TOOLS_THAT_MAY_ASK,
+  MEMBER_WAIT_CALL_TIMEOUT_SECONDS,
+} from "../member-wait";
+import {
   loadableSkillFolders,
   realPathOf,
   realSkillFile,
 } from "../skill-folders";
+import { directOnlyServerName } from "../tool-parts";
 import type { AppServerClient } from "./app-server-client";
+import { readableCodexMessage } from "./errors";
 import { SkillsListResponseSchema, ThreadResponseSchema } from "./protocol";
 
 /**
@@ -24,7 +30,8 @@ import { SkillsListResponseSchema, ThreadResponseSchema } from "./protocol";
  * read metadata only (stella holds the transcript) and unarchive an archived
  * session first. When the session cannot be reopened, a new thread starts
  * and the outcome says why, so the turn falls back to the portable
- * transcript visibly.
+ * transcript visibly; a session another Codex process holds open fails the
+ * turn instead.
  */
 
 const SANDBOX_MODE = {
@@ -94,14 +101,18 @@ const WEB_SEARCH_MODE = {
 >;
 /** A dotted config key carries the name, so it must stay a bare TOML key. */
 const MCP_SERVER_NAME = /^[A-Za-z0-9_-]+$/u;
-/** How long a browser tool call may wait, the member's approval included. */
-const BROWSER_TOOL_TIMEOUT_SECONDS = 3600;
 
 /** The skills Codex installs with itself; none comes from a member's files. */
 const SYSTEM_SKILL_SCOPE = "system";
 
 const ARCHIVED = /\barchived\b|\bunarchive\b/iu;
 const SESSION_MISSING = /no rollout found|not found/iu;
+/**
+ * Another Codex process (the Codex app, the command line, an editor) holds
+ * the thread open and with it the only right to write it, until it unloads
+ * the thread.
+ */
+const ACTIVE_WRITER = /\bthread \S+ already has an active writer\b/u;
 
 const skillsRefused = (message: string) =>
   new HarnessStartError({ reason: "start_rejected", message });
@@ -187,6 +198,35 @@ const establishSkills = async (
   ]);
 };
 
+/**
+ * The browser tools, registered twice. Code mode runs a tool as a nested
+ * call of a script and yields the script while the call waits, so a step
+ * waiting on the member would go on after the model wrote its answer. The
+ * steps that may ask (`BROWSER_TOOLS_THAT_MAY_ASK`) are therefore offered
+ * only as plain calls, from a direct-only registration that code mode and
+ * tool search never see; the rest stay scriptable. A step the member must
+ * allow waits for the answer (`MEMBER_WAIT_CALL_TIMEOUT_SECONDS`).
+ */
+const browserServers = (browser: NonNullable<HarnessTurnInput["browser"]>) => {
+  const server = {
+    url: browser.url,
+    http_headers: { Authorization: `Bearer ${browser.token}` },
+    default_tools_approval_mode: "approve",
+    tool_timeout_sec: MEMBER_WAIT_CALL_TIMEOUT_SECONDS,
+  };
+  return {
+    [`mcp_servers.${browser.serverName}`]: {
+      ...server,
+      disabled_tools: BROWSER_TOOLS_THAT_MAY_ASK,
+    },
+    [`mcp_servers.${directOnlyServerName(browser.serverName)}`]: {
+      ...server,
+      enabled_tools: BROWSER_TOOLS_THAT_MAY_ASK,
+      omit_tools_from: ["code_mode", "deferred"],
+    },
+  };
+};
+
 const threadParams = (
   input: HarnessTurnInput,
   disabledSkills: readonly string[],
@@ -247,17 +287,7 @@ const threadParams = (
       },
       // The extension holds the browser to its own policy: the origin
       // policy, containment, budgets and the sign-in handoff.
-      ...(input.browser === null
-        ? {}
-        : {
-            [`mcp_servers.${input.browser.serverName}`]: {
-              url: input.browser.url,
-              http_headers: { Authorization: `Bearer ${input.browser.token}` },
-              default_tools_approval_mode: "approve",
-              // A step the member must allow waits for the member's answer.
-              tool_timeout_sec: BROWSER_TOOL_TIMEOUT_SECONDS,
-            },
-          }),
+      ...(input.browser === null ? {} : browserServers(input.browser)),
     },
   };
 };
@@ -284,7 +314,7 @@ const startThread = async (
       new HarnessStartError({
         reason: "start_rejected",
         message: Result.isError(started)
-          ? started.error.message
+          ? readableCodexMessage(started.error.message)
           : "The harness answered thread/start with an unexpected shape.",
       }),
     );
@@ -306,7 +336,8 @@ type Reopening = {
  * Reopen a stored thread: resume it, or fork it into a new one. Both load
  * the thread from its rollout with this turn's settings, never the stored
  * ones, and an archived thread is unarchived first. A refusal starts a new
- * thread and says why, so the turn falls back to the transcript visibly.
+ * thread and says why, so the turn falls back to the transcript visibly,
+ * except for a thread another Codex process holds open.
  */
 const reopenThread = async (
   client: AppServerClient,
@@ -349,12 +380,23 @@ const reopenThread = async (
       }),
     );
   }
+  // The session is intact, only open elsewhere: a new thread would leave it
+  // behind for a copy.
+  if (ACTIVE_WRITER.test(reopened.error.message)) {
+    return Result.err(
+      new HarnessStartError({
+        reason: "start_rejected",
+        message:
+          "This Codex session is open in another Codex window (the Codex app, the command line or an editor). Close it there, then send the message again.",
+      }),
+    );
+  }
   return startThread(client, params, {
     type: "resume_unavailable",
     reason: SESSION_MISSING.test(reopened.error.message)
       ? "session_not_found"
       : "resume_rejected",
-    message: reopened.error.message,
+    message: readableCodexMessage(reopened.error.message),
   });
 };
 

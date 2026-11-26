@@ -4,7 +4,8 @@
     "disabled",
     "ready",
     "accessibilityRequired",
-    "unavailable"
+    "unavailable",
+    "managed"
   ],
   "changedEvent": "activity-timeline-changed",
   "deletionStatuses": {
@@ -29,5 +30,26 @@
     7,
     30,
     90
-  ]
+  ],
+  "calendarSources": [
+    "off",
+    "microsoft365"
+  ],
+  "stopReasons": {
+    "reconnectNeeded": true,
+    "notAvailable": true,
+    "blockedByPolicy": true,
+    "signedOut": true,
+    "notConfirmed": true
+  },
+  "gapDisplays": {
+    "stayedOn": true,
+    "locked": true,
+    "slept": true
+  },
+  "gapEnds": {
+    "input": true,
+    "stop": true,
+    "dayEnd": true
+  }
 }

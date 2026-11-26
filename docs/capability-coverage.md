@@ -835,9 +835,9 @@ mechanics, and similar), not gaps in coverage.
 | account_lifecycle | 6 |
 | agent_autonomy_ceiling | 1 |
 | assistant_chat | 28 |
-| auth_plumbing | 50 |
+| auth_plumbing | 52 |
 | billing_ui | 1 |
-| chat_thread_ui | 31 |
+| chat_thread_ui | 34 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 27 |
@@ -850,9 +850,9 @@ mechanics, and similar), not gaps in coverage.
 | organization_export | 2 |
 | provider_secret | 49 |
 | public_indexing | 13 |
-| realtime_stream | 10 |
+| realtime_stream | 11 |
 | search_ui | 23 |
 | session_token_exchange | 23 |
 | ui_navigation_state | 14 |
-| upload_mechanics | 36 |
+| upload_mechanics | 38 |
 | url_preview | 2 |

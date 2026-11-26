@@ -3,6 +3,7 @@ import type { Page } from "@playwright/test";
 
 import type {
   DesktopMatter,
+  DesktopMatterCandidatesResponse,
   DesktopTimeEntryMatterCandidate,
 } from "@stll/api-contract/desktop-time-entries";
 import { setFixedBrowserTime } from "@stll/ui/browser-clock";
@@ -41,6 +42,7 @@ const SNAPSHOT = {
   otherAccountHistoryDays: 0,
   captureDetails: false,
   detectCalls: true,
+  calendarSource: "off",
   appNameOnlyApps: [],
   browserApps: [],
   sourceAppVisuals: [],
@@ -60,6 +62,9 @@ const SNAPSHOT = {
   ],
   today: "2026-10-07",
   unreadable: false,
+  gaps: [],
+  outages: { status: "read", outages: [] },
+  stoppedReason: null,
 } satisfies ActivityDaySnapshot;
 
 const PENDING_BATCH = {
@@ -250,6 +255,7 @@ const installNativeBoundary = async ({
       let draftPreference = draftingFixture.preference ?? null;
       let draftRevision = 1;
       const scopedDraftSettings = () => ({
+        policy: "account",
         scopeKey: '["org_fixture","user_fixture"]',
         settings: {
           revision: `revision-${String(draftRevision)}`,
@@ -282,6 +288,19 @@ const installNativeBoundary = async ({
             date: args["date"] ?? activitySnapshot.date,
           };
         },
+        // No matter rules or learning yet; a save advances nothing the
+        // tests read back.
+        activity_get_matter_learning: () => ({
+          type: "stored",
+          revision: 0,
+          learning: { rules: [], learned: [], tallies: [] },
+        }),
+        activity_save_matter_learning: () => ({ type: "saved", revision: 1 }),
+        activity_get_matter_rules: () => ({
+          type: "stored",
+          revision: 0,
+          rules: [],
+        }),
         // The native settings read: the day's settings and deletion state
         // with the names of its apps, longest first, never its segments.
         activity_get_settings: (args) => {
@@ -318,6 +337,7 @@ const installNativeBoundary = async ({
             otherAccountHistoryDays: day.otherAccountHistoryDays,
             captureDetails: day.captureDetails,
             detectCalls: day.detectCalls,
+            calendarSource: day.calendarSource,
             appNameOnlyApps: day.appNameOnlyApps,
             detailsAccess: day.detailsAccess,
             browserApps: day.browserApps,
@@ -613,30 +633,38 @@ const installNativeBoundary = async ({
             });
             await held.promise;
           }
-          return [
-            {
-              id: "matter-1",
-              name: "Example matter",
-              color: "--option-emerald",
-            },
-            { id: "matter-2", name: "Second matter", color: "--option-violet" },
-            { id: "matter-3", name: "Third matter", color: null },
-            { id: "matter-4", name: "Fourth matter", color: null },
-          ].map(
-            ({ id, name, color }, index) =>
-              ({
-                id,
-                name,
-                reference: `M-00${String(index + 1)}`,
-                color,
-                clientName: "Example client",
-                signals: {
-                  lastWorkedAt: "2026-10-06",
-                  newlyAssignedAt: null,
-                  upcomingDeadline: null,
-                },
-              }) satisfies DesktopTimeEntryMatterCandidate,
-          );
+          return {
+            matters: [
+              {
+                id: "matter-1",
+                name: "Example matter",
+                color: "--option-emerald",
+              },
+              {
+                id: "matter-2",
+                name: "Second matter",
+                color: "--option-violet",
+              },
+              { id: "matter-3", name: "Third matter", color: null },
+              { id: "matter-4", name: "Fourth matter", color: null },
+            ].map(
+              ({ id, name, color }, index) =>
+                ({
+                  id,
+                  name,
+                  reference: `M-00${String(index + 1)}`,
+                  color,
+                  clientName: "Example client",
+                  signals: {
+                    lastWorkedAt: "2026-10-06",
+                    newlyAssignedAt: null,
+                    upcomingDeadline: null,
+                  },
+                }) satisfies DesktopTimeEntryMatterCandidate,
+            ),
+            // Tenths of an hour, as many firms bill.
+            timeMinimumUnitMinutes: 6,
+          } satisfies DesktopMatterCandidatesResponse;
         },
         time_entry_submit_batch_confirmed: async (args) => {
           batchAttempts += 1;
@@ -928,7 +956,7 @@ test("only Accept sends the edited billing fields and the suggestion becomes a d
         .replace("\\{matter\\}", "Example matter")
         .replace("\\{range\\}", ".+")
         .replace("\\{duration\\}", "30 min")
-        .replace("\\{hours\\}", "0\\.5")}$`,
+        .replace("\\{total\\}", "30 min")}$`,
       "u",
     ),
   );

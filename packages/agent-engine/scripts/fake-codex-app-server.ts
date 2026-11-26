@@ -1156,6 +1156,41 @@ export const FAKE_SCENARIOS = {
     { expect: "turn/interrupt", result: {} },
     completed("interrupted"),
   ],
+  /** The first interrupt lands before Codex registered the turn. */
+  interrupt_not_registered: [
+    ...freshTurn(),
+    item("started", command("call-long", "inProgress")),
+    {
+      expect: "turn/interrupt",
+      error: { code: -32_600, message: "no active turn to interrupt" },
+    },
+    { expect: "turn/interrupt", result: {} },
+    completed("interrupted"),
+  ],
+  /** Codex runs another turn of the process than the one first named. */
+  interrupt_other_turn: [
+    ...freshTurn(),
+    item("started", command("call-long", "inProgress")),
+    {
+      expect: "turn/interrupt",
+      error: {
+        code: -32_600,
+        message: "expected active turn id turn-1 but found turn-2",
+      },
+    },
+    { expect: "turn/interrupt", result: {} },
+    completed("interrupted"),
+  ],
+  /** An interrupt refused for any other reason. */
+  interrupt_refused: [
+    ...freshTurn(),
+    item("started", command("call-long", "inProgress")),
+    {
+      expect: "turn/interrupt",
+      error: { code: -32_600, message: "thread not loaded" },
+    },
+    { sleep: 5000 },
+  ],
   /** A read and a command on the skill folder `FAKE_SKILL_PATH` names. */
   reads_skill: [
     ...freshTurn(),
@@ -1199,6 +1234,16 @@ export const FAKE_SCENARIOS = {
     { expect: "thread/start", result: { thread: { id: FAKE_THREAD_ID } } },
     ...startTurn(),
     completed(),
+  ],
+  resume_active_writer: [
+    ...handshake(),
+    {
+      expect: "thread/resume",
+      error: {
+        code: -32_600,
+        message: `thread ${FAKE_RESUMED_THREAD_ID} already has an active writer`,
+      },
+    },
   ],
   resume_ok: [
     ...handshake(),
@@ -1346,6 +1391,38 @@ export const FAKE_SCENARIOS = {
       },
     },
     { sleep: 5000 },
+  ],
+  /**
+   * Codex warns twice about its configuration as it starts, then the
+   * browser's direct-call server fails to start; the turn runs on.
+   */
+  config_warning_browser_failed: [
+    ...handshake(),
+    {
+      notify: "configWarning",
+      params: {
+        summary:
+          "Unknown key `model_reasoning` in /opt/agent-settings/settings.toml",
+        details: "line 4, column 1",
+      },
+    },
+    {
+      notify: "configWarning",
+      params: { summary: "Ignoring profile `work`", details: null },
+    },
+    { expect: "thread/start", result: { thread: { id: FAKE_THREAD_ID } } },
+    ...startTurn(),
+    {
+      notify: "mcpServer/startupStatus/updated",
+      params: {
+        name: "stella_browser_direct",
+        status: "failed",
+        error: "connection refused",
+        failureReason: null,
+        threadId: FAKE_THREAD_ID,
+      },
+    },
+    completed(),
   ],
   /** A member's own MCP server fails; the turn runs on. */
   other_mcp_failed: [

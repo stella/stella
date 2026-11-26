@@ -102,6 +102,9 @@
       --color-sidebar-ring: #a1a1a1;
       --color-success: #00bb7f;
       --color-success-foreground: #007956;
+      --color-switch-thumb: #fff;
+      --color-switch-track: #8a8a8a;
+      --color-switch-track-checked: #009767;
       --color-warning: #f99c00;
       --color-warning-foreground: #b75000;
     }
@@ -198,6 +201,9 @@
       --color-sidebar-ring: #a1a1a1;
       --color-success: #00bb7f;
       --color-success-foreground: #00d294;
+      --color-switch-thumb: #fff;
+      --color-switch-track: #737373;
+      --color-switch-track-checked: #009767;
       --color-warning: #f99c00;
       --color-warning-foreground: #fcbb00;
     }

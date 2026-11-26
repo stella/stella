@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 
 import type { PermissionInput } from "@stll/permissions";
 
-import type { AccountAccess } from "@/api/lib/api-handlers";
+import type { AccountAccess } from "@/api/lib/auth/account-access";
 import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";

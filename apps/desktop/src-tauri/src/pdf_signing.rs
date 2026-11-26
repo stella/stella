@@ -810,6 +810,7 @@ pub async fn redeem_and_sign(
   app_handle: AppHandle,
   api_base_url: String,
   handoff_token: String,
+  handoff: &crate::updater::HandoffReservation<'static>,
 ) -> Result<(), crate::handoff::Stop> {
   // The handoff token travels in the request body; a redirect would replay it
   // to another origin, so handoff requests never follow one.
@@ -821,8 +822,8 @@ pub async fn redeem_and_sign(
 
   let (redeemed, account) =
     crate::handoff::redeem::<RedeemResponse>(crate::handoff::RedeemOptions {
-      manager: &manager,
       app: &app_handle,
+      handoff,
       target: crate::handoff::Target::PdfSigning,
       api_base_url: &api_base_url,
       token: &handoff_token,

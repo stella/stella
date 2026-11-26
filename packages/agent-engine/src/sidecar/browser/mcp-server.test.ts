@@ -4,9 +4,11 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
+  truncateSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -14,16 +16,19 @@ import path from "node:path";
 import * as v from "valibot";
 
 import {
+  BROWSER_CONTROL_CONTENT_TRUST,
   BROWSER_CONTROL_ERROR_CODE,
+  BROWSER_CONTROL_LIMITS,
   BROWSER_CONTROL_PROTOCOL_VERSION,
   BROWSER_DOWNLOAD_STAGING_FOLDER,
   BROWSER_EXTENSION_ID,
   STELLA_DESKTOP_NATIVE_HOST,
 } from "@stll/api-contract/browser-control";
+import { sha256Hex } from "@stll/sha256/node";
 
 import type { BrowserBridge, BrowserBridgeDownload } from "./bridge";
 import { createHostRouter, extensionHost } from "./host-router";
-import { localBrowserResult } from "./local-result";
+import { type LocalBrowserResult, localBrowserResult } from "./local-result";
 import { startLocalBrowserMcp } from "./mcp-server";
 import { installNativeHost } from "./native-host-manifest";
 import { APPROVAL_DECISION } from "./tools";
@@ -171,6 +176,7 @@ describe("the local browser MCP endpoint", () => {
       "select",
       "go_back",
       "switch_tab",
+      "wait_for_downloads",
     ]);
 
     const called = await rpc(binding, {
@@ -573,5 +579,270 @@ describe("registering the host with Chrome", () => {
         type: "installed",
       }),
     );
+  });
+});
+
+describe("a chat's downloads, end to end on this computer", () => {
+  const SEARCH_PAGE = "https://fixture-library.test/search?q=notice";
+  const FILE_URL = "https://fixture-library.test/doc/1/file";
+
+  /** A page the extension read, at `url`. */
+  const pageAt = (url: string) =>
+    localBrowserResult({
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      snapshot: {
+        contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
+        elements: [],
+        elementsLeftOut: false,
+        facts: { meta: [] },
+        revision: "r-1",
+        tabId: 7,
+        tabs: [],
+        text: "Results",
+        title: "Fixture library",
+        url,
+        window: { cursor: "r1.d2luZG93", fromPercent: 0, toPercent: 100 },
+      },
+      status: "success",
+    });
+
+  const SIGN_IN = localBrowserResult({
+    code: BROWSER_CONTROL_ERROR_CODE.needsMember,
+    message: "This page asks for a sign-in.",
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    status: "error",
+  });
+
+  /**
+   * A member's computer: a home folder with Chrome's staging folder, a
+   * chat's folder, and an extension whose answers and downloads the test
+   * scripts (`during` runs while a command is in the browser).
+   */
+  const computer = () => {
+    const home = mkdtempSync(path.join(tmpdir(), "stella-browser-dl-e2e-"));
+    cleanups.push(() => {
+      rmSync(home, { force: true, recursive: true });
+    });
+    const workspaceDir = path.join(home, "chat");
+    const staging = path.join(
+      home,
+      "Downloads",
+      BROWSER_DOWNLOAD_STAGING_FOLDER,
+    );
+    mkdirSync(workspaceDir);
+    mkdirSync(staging, { recursive: true });
+    const fake = fakeBridge();
+    const answers: LocalBrowserResult[] = [];
+    const script: { during: () => void } = { during: () => undefined };
+    const bridge: BrowserBridge = {
+      ...fake.bridge,
+      request: async (request) => {
+        fake.requests.push(request);
+        script.during();
+        script.during = () => undefined;
+        return answers.shift() ?? SIGN_IN;
+      },
+    };
+    const { mcp } = start({ ...fake, bridge }, home);
+    const binding = mcp.register({
+      accountOrigin: "https://api.example-stella.com",
+      approvals: "auto",
+      siteGrants: new Set<string>(),
+      approve,
+      runId: "run-1",
+      stopped: NEVER_STOPPED,
+      threadId: "thread-1",
+      workspaceDir,
+    });
+    /** Chrome saving `content` into the staging folder: its path. */
+    const stage = (content: string) => {
+      const staged = path.join(staging, `${crypto.randomUUID()}.pdf`);
+      writeFileSync(staged, content);
+      return staged;
+    };
+    const started = (deliveryId: string) => {
+      fake.reportDownload({
+        controllerId: "thread-1",
+        deliveryId,
+        shownDocument: null,
+        type: "started",
+      });
+    };
+    const settledSaved = (deliveryId: string, staged: string) => {
+      fake.reportDownload({
+        controllerId: "thread-1",
+        deliveryId,
+        download: {
+          bytes: statSync(staged).size,
+          mime: "application/pdf",
+          outcome: "saved",
+          path: staged,
+          sourceUrl: FILE_URL,
+          suggestedName: "Decision 1.pdf",
+        },
+        shownDocument: null,
+        type: "settled",
+      });
+    };
+    const call = async (name: string, args: unknown) =>
+      await toolResult(
+        await rpc(binding, {
+          id: crypto.randomUUID(),
+          jsonrpc: "2.0",
+          method: "tools/call",
+          params: { arguments: args, name },
+        }),
+      );
+    return {
+      answers,
+      call,
+      script,
+      settledSaved,
+      stage,
+      started,
+      workspaceDir,
+    };
+  };
+
+  const toolResult = async (response: Response) => {
+    const { result } = v.parse(
+      v.object({
+        result: v.object({
+          content: v.tuple([v.object({ text: v.string() })]),
+          isError: v.boolean(),
+        }),
+      }),
+      await response.json(),
+    );
+    return {
+      isError: result.isError,
+      value: JSON.parse(result.content[0].text) as unknown,
+    };
+  };
+
+  const PDF = "%PDF-1.7\nfixture\n%%EOF\n";
+  const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/u;
+
+  test("a download from a page that then asks for a sign-in rides along with that answer, with the page it came from", async () => {
+    const pc = computer();
+    pc.answers.push(pageAt(SEARCH_PAGE));
+    await pc.call("open", { url: SEARCH_PAGE });
+
+    // The next step starts a download, and the page it lands on needs the
+    // member to sign in.
+    const staged = pc.stage(PDF);
+    pc.script.during = () => {
+      const deliveryId = crypto.randomUUID();
+      pc.started(deliveryId);
+      pc.settledSaved(deliveryId, staged);
+    };
+    const gated = await pc.call("open", {
+      url: "https://fixture-library.test/doc/1",
+    });
+
+    expect(gated.isError).toBe(true);
+    expect(gated.value).toMatchObject({
+      downloads: [
+        {
+          duplicate: false,
+          pageUrl: SEARCH_PAGE,
+          path: "Downloads/Decision 1.pdf",
+          sha256: sha256Hex(PDF),
+          sourceUrl: FILE_URL,
+          status: "saved",
+        },
+      ],
+      status: "needs_member",
+    });
+    expect(gated.value).toHaveProperty(
+      "downloads.0.downloadedAt",
+      expect.stringMatching(ISO_INSTANT),
+    );
+    expect(
+      readFileSync(path.join(pc.workspaceDir, "Downloads", "Decision 1.pdf"), {
+        encoding: "utf-8",
+      }),
+    ).toBe(PDF);
+  });
+
+  // timeout: the step's own result waits DOWNLOAD_SETTLE_WAIT_MS (3 s) and a
+  // one-second wait_for_downloads runs out, both on the system clock.
+  test(
+    "a download that finishes after its step returned is handed over by wait_for_downloads",
+    async () => {
+      const pc = computer();
+      pc.answers.push(pageAt(SEARCH_PAGE), pageAt(SEARCH_PAGE));
+      await pc.call("open", { url: SEARCH_PAGE });
+      const deliveryId = crypto.randomUUID();
+      pc.script.during = () => {
+        pc.started(deliveryId);
+      };
+
+      // The step waits its moment, then returns with the download counted.
+      const step = await pc.call("snapshot", {});
+      expect(step.value).toMatchObject({ savingDownloads: 1 });
+      expect(step.value).not.toHaveProperty("downloads");
+
+      // A wait while Chrome is still saving it says so when it runs out.
+      expect(
+        (await pc.call("wait_for_downloads", { seconds: 1 })).value,
+      ).toEqual({
+        message:
+          "1 download is still saving: call wait_for_downloads again, or tell the member.",
+        savingDownloads: 1,
+        status: "still_saving",
+      });
+
+      const waiting = pc.call("wait_for_downloads", { seconds: 20 });
+      // Chrome finishes it once the step has returned.
+      pc.settledSaved(deliveryId, pc.stage(PDF));
+
+      expect((await waiting).value).toMatchObject({
+        downloads: [{ pageUrl: SEARCH_PAGE, path: "Downloads/Decision 1.pdf" }],
+        status: "settled",
+      });
+    },
+    { timeout: 15_000 },
+  );
+
+  test("the same file downloaded twice is kept once, and the second names the first", async () => {
+    const pc = computer();
+    pc.settledSaved(crypto.randomUUID(), pc.stage(PDF));
+    pc.settledSaved(crypto.randomUUID(), pc.stage(PDF));
+
+    const waited = await pc.call("wait_for_downloads", {});
+
+    expect(waited.value).toMatchObject({
+      downloads: [
+        { duplicate: false, path: "Downloads/Decision 1.pdf" },
+        { duplicate: true, path: "Downloads/Decision 1.pdf" },
+      ],
+    });
+    expect(readdirSync(path.join(pc.workspaceDir, "Downloads"))).toEqual([
+      "Decision 1.pdf",
+    ]);
+  });
+
+  test("a file over the size limit is refused with a reason the agent can relay, and nothing is kept", async () => {
+    const pc = computer();
+    const staged = pc.stage(PDF);
+    // Sparse: no disk is used for the size.
+    truncateSync(staged, BROWSER_CONTROL_LIMITS.downloadBytes + 1);
+    pc.settledSaved(crypto.randomUUID(), staged);
+
+    const waited = await pc.call("wait_for_downloads", {});
+
+    expect(waited.value).toMatchObject({
+      downloads: [
+        {
+          message: expect.stringContaining("larger than 100 MiB"),
+          reason: "too_large",
+          sourceUrl: FILE_URL,
+          status: "refused",
+        },
+      ],
+    });
+    expect(existsSync(staged)).toBe(false);
+    expect(existsSync(path.join(pc.workspaceDir, "Downloads"))).toBe(false);
   });
 });

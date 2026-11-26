@@ -164,11 +164,19 @@ const FlowEditorLoader = ({
   onSaved: () => void;
 }) => {
   const t = useTranslations();
-  const detailQuery = useQuery(flowDetailOptions(organizationId, flowId));
+  // The draft keeps the version it starts from, so it starts from a read
+  // made for this editor rather than from whatever the cache holds.
+  const detailQuery = useQuery({
+    ...flowDetailOptions(organizationId, flowId),
+    refetchOnMount: "always",
+  });
   const detailView = queryView(detailQuery);
   useQueryViewError(detailView, "FlowEditorLoader:detail");
+  const view = detailQuery.isFetchedAfterMount
+    ? detailView
+    : ({ type: "pending" } as const);
 
-  switch (detailView.type) {
+  switch (view.type) {
     case "pending":
       return (
         <div className="flex flex-1 items-center justify-center p-8">
@@ -188,14 +196,14 @@ const FlowEditorLoader = ({
       return (
         <FlowEditorForm
           flowId={flowId}
-          initialSnapshot={detailView.items}
+          initialSnapshot={view.items}
           onBack={onBack}
           onSaved={onSaved}
           organizationId={organizationId}
         />
       );
     default:
-      detailView satisfies never;
+      view satisfies never;
       return panic("Unhandled workflow detail state");
   }
 };

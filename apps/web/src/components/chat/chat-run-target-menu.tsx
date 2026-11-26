@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { type ComponentType, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
-  CHAT_CLOUD_RUN_TARGET,
   CHAT_RUN_TARGET_KIND,
   type ChatLocalRunHarness,
   type ChatRunTarget,
@@ -13,8 +12,20 @@ import {
   isDesktopSetUpHarness,
 } from "@stll/api-contract/chat-run-target";
 import { desktopAgentSettingsUrl } from "@stll/api-contract/desktop-account-link";
-import { DESKTOP_RUNNER_LINKED_FOLDER_STATE } from "@stll/api-contract/desktop-runner";
+import {
+  DESKTOP_RUNNER_LINKED_FOLDER_STATE,
+  type DesktopRunnerApprovalMode,
+} from "@stll/api-contract/desktop-runner";
 import { BidiText } from "@stll/ui/bidi-text";
+import {
+  ChevronRightIcon,
+  ClipboardListIcon,
+  CloudIcon,
+  LaptopIcon,
+  MessageCircleQuestionIcon,
+  ShieldCheckIcon,
+  ZapIcon,
+} from "@stll/ui/icons";
 import {
   MenuGroup,
   MenuGroupLabel,
@@ -24,6 +35,7 @@ import {
   MenuSeparator,
 } from "@stll/ui/menu";
 import { TruncatedText } from "@stll/ui/truncated-text";
+import { cn } from "@stll/ui/utils";
 
 import { LocalHarnessIcon } from "@/components/ai-provider-icons";
 import {
@@ -34,6 +46,8 @@ import {
   chatLocalFolderOptions,
   type ChatLocalHarnessOption,
   chatLocalHarnessOptionsFor,
+  CLOUD_PERMISSION_KEYS,
+  cloudRunTargetWithin,
   defaultHarnessModel,
   LOCAL_RUN_PERMISSION_KEYS,
   type LocalRunFolderProblem,
@@ -41,6 +55,7 @@ import {
   localRunTargetFor,
   type LocalRunTargetState,
   type PermissionAvailability,
+  type PermissionView,
   permissionView,
   runFolderValue,
   runOnPlaceValue,
@@ -409,11 +424,11 @@ type ChatRunTargetMenuProps = {
 };
 
 /**
- * The where chip's menu: the cloud, or the member's computer with each
+ * The where chip's menu: the cloud or the member's computer, side by side;
+ * on the computer, how much the agent may do before it asks, then each
  * coding agent on it and whether it can take a turn (a ready one is picked
- * with its recommended model; one that is not says what to do), the folder
- * its turns work in, and then how much that agent may do before it asks.
- * The model is the model chip's.
+ * with its recommended model; one that is not says what to do), and the
+ * folder its turns work in. The model is the model chip's.
  */
 export const ChatRunTargetMenu = ({
   activeOrganizationId,
@@ -446,6 +461,33 @@ export const ChatRunTargetMenu = ({
   };
   const maxApprovals = localRunMaxApprovals(readiness);
   const permissions = permissionView(selected, options, maxApprovals);
+  const permissionKeys =
+    selected.kind === CHAT_RUN_TARGET_KIND.cloud
+      ? CLOUD_PERMISSION_KEYS
+      : LOCAL_RUN_PERMISSION_KEYS;
+  const onComputer = selected.kind === CHAT_RUN_TARGET_KIND.local;
+  // Moving to the computer picks its first ready agent on its recommended
+  // model and keeps the menu open, so the member can change the agent, the
+  // folder or the permissions next. With no agent ready, the agents' rows
+  // below say what to set up.
+  const showComputer = () => {
+    if (onComputer) {
+      return;
+    }
+    const ready = options.find(
+      (option): option is ReadyHarnessOption => option.state === "ready",
+    );
+    if (ready !== undefined) {
+      choose(
+        localRunTargetFor({
+          selected,
+          option: ready,
+          model: defaultHarnessModel(ready).id,
+          maxApprovals,
+        }),
+      );
+    }
+  };
 
   return (
     <>
@@ -457,103 +499,153 @@ export const ChatRunTargetMenu = ({
           <MenuSeparator />
         </>
       )}
-      <MenuRadioGroup value={runOnPlaceValue(selected)}>
-        {/* Picking a place or an agent is the choice the menu exists for,
-            so it closes; a permission pick keeps it open for another. */}
-        <MenuRadioItem
-          closeOnClick
-          onClick={() => choose(CHAT_CLOUD_RUN_TARGET)}
-          value={CHAT_RUN_TARGET_KIND.cloud}
-        >
-          <PlaceLabel
-            description={t("chat.runOn.cloudDescription")}
-            title={t("chat.runOn.cloud")}
-          />
-        </MenuRadioItem>
-        <MenuSeparator />
+      <MenuRadioGroup
+        value={
+          onComputer ? CHAT_RUN_TARGET_KIND.local : CHAT_RUN_TARGET_KIND.cloud
+        }
+      >
         {/* The label names its group, so it lives inside it. */}
-        <MenuGroupLabel>{t("chat.runOn.yourComputer")}</MenuGroupLabel>
-        <p className="text-muted-foreground text-2xs px-2 pb-1.5 text-pretty">
-          {t("chat.runOn.yourComputerDescription")}
-        </p>
-        {runnersView.type === "error" && (
-          <ReadinessRetry retry={runnersView.retry} />
-        )}
-        {options.map((option) => {
-          const name = CHAT_LOCAL_HARNESS_NAMES[option.harness];
-          if (option.state === "offline") {
-            return (
-              <OfflineHarnessItem
-                activeOrganizationId={activeOrganizationId}
-                harness={option.harness}
-                hint={hint(option) ?? ""}
-                key={option.harness}
-                name={name}
-              />
-            );
-          }
-          if (option.state === "limit_until") {
-            return (
-              <MenuItem disabled key={option.harness}>
-                <PlaceLabel description={hint(option) ?? ""} title={name} />
-              </MenuItem>
-            );
-          }
-          if (option.state !== "ready") {
-            const { harness } = option;
-            if (!isDesktopSetUpHarness(harness)) {
-              // Set up outside stella desktop: there is nothing to open.
-              return (
-                <MenuItem disabled key={harness}>
-                  <span className="flex min-w-0 items-start gap-2">
-                    <LocalHarnessIcon
-                      className="mt-1 size-4 shrink-0"
-                      harness={harness}
-                    />
-                    <PlaceLabel description={hint(option) ?? ""} title={name} />
-                  </span>
-                </MenuItem>
-              );
+        <MenuGroupLabel>{t("chat.runOn.where")}</MenuGroupLabel>
+        <div className={cn(SEGMENTS_CLASS_NAME, "grid-cols-2")}>
+          <MenuRadioItem
+            appearance="segment"
+            closeOnClick
+            onClick={() =>
+              choose(cloudRunTargetWithin(selected.approvals, maxApprovals))
             }
-            return (
-              <DesktopSetupHarnessItem
-                hint={hint(option) ?? ""}
-                key={option.harness}
-                name={name}
-                option={{ harness, state: option.state }}
-              />
-            );
-          }
-          // The agent keeps the chat's model when it is the one chosen.
-          const target =
-            selected.kind === "local" && selected.harness === option.harness
-              ? selected
-              : localRunTargetFor({
-                  selected,
-                  option,
-                  model: defaultHarnessModel(option).id,
-                  maxApprovals,
-                });
-          return (
-            <MenuRadioItem
-              closeOnClick
-              key={option.harness}
-              onClick={() => choose(target)}
-              value={runOnPlaceValue(target)}
-            >
-              <span className="flex min-w-0 items-center gap-2">
-                <LocalHarnessIcon
-                  className="size-4 shrink-0"
-                  harness={option.harness}
-                />
-                <TruncatedText render={<BidiText as="span" />}>
-                  {name}
-                </TruncatedText>
-              </span>
-            </MenuRadioItem>
-          );
-        })}
+            value={CHAT_RUN_TARGET_KIND.cloud}
+          >
+            <CloudIcon aria-hidden="true" />
+            {t("chat.runOn.cloud")}
+          </MenuRadioItem>
+          <MenuRadioItem
+            appearance="segment"
+            closeOnClick={false}
+            onClick={showComputer}
+            value={CHAT_RUN_TARGET_KIND.local}
+          >
+            <LaptopIcon aria-hidden="true" />
+            {t("chat.runOn.yourComputer")}
+          </MenuRadioItem>
+        </div>
+        <p className="text-muted-foreground text-2xs px-2 pt-1.5 pb-1 text-pretty">
+          {onComputer
+            ? t("chat.runOn.yourComputerDescription")
+            : t("chat.runOn.cloudDescription")}
+        </p>
       </MenuRadioGroup>
+      {permissions?.type === "fixed" && (
+        <>
+          <MenuSeparator />
+          <MenuGroup>
+            <MenuGroupLabel>{t("chat.localRun.permissions")}</MenuGroupLabel>
+            <p className="text-muted-foreground text-2xs px-2 pb-1.5 text-pretty">
+              {t(FIXED_PERMISSION_KEY[permissions.harness])}
+            </p>
+          </MenuGroup>
+        </>
+      )}
+      {permissions?.type === "choice" && (
+        <PermissionChoice
+          hint={
+            selected.kind === CHAT_RUN_TARGET_KIND.cloud
+              ? t("chat.runOn.cloudPermissionsHint")
+              : null
+          }
+          keys={permissionKeys}
+          modes={permissions.modes}
+          onChoose={(mode) => choose({ ...selected, approvals: mode })}
+          selected={selected.approvals}
+        />
+      )}
+      {(options.length > 0 || runnersView.type === "error") && (
+        <>
+          <MenuSeparator />
+          <MenuRadioGroup value={runOnPlaceValue(selected)}>
+            <MenuGroupLabel>{t("chat.runOn.agent")}</MenuGroupLabel>
+            {runnersView.type === "error" && (
+              <ReadinessRetry retry={runnersView.retry} />
+            )}
+            {options.map((option) => {
+              const name = CHAT_LOCAL_HARNESS_NAMES[option.harness];
+              if (option.state === "offline") {
+                return (
+                  <OfflineHarnessItem
+                    activeOrganizationId={activeOrganizationId}
+                    harness={option.harness}
+                    hint={hint(option) ?? ""}
+                    key={option.harness}
+                    name={name}
+                  />
+                );
+              }
+              if (option.state === "limit_until") {
+                return (
+                  <MenuItem disabled key={option.harness}>
+                    <PlaceLabel description={hint(option) ?? ""} title={name} />
+                  </MenuItem>
+                );
+              }
+              if (option.state !== "ready") {
+                const { harness } = option;
+                if (!isDesktopSetUpHarness(harness)) {
+                  // Set up outside stella desktop: there is nothing to open.
+                  return (
+                    <MenuItem disabled key={harness}>
+                      <span className="flex min-w-0 items-start gap-2">
+                        <LocalHarnessIcon
+                          className="mt-1 size-4 shrink-0"
+                          harness={harness}
+                        />
+                        <PlaceLabel
+                          description={hint(option) ?? ""}
+                          title={name}
+                        />
+                      </span>
+                    </MenuItem>
+                  );
+                }
+                return (
+                  <DesktopSetupHarnessItem
+                    hint={hint(option) ?? ""}
+                    key={option.harness}
+                    name={name}
+                    option={{ harness, state: option.state }}
+                  />
+                );
+              }
+              // The agent keeps the chat's model when it is the one chosen.
+              const target =
+                selected.kind === "local" && selected.harness === option.harness
+                  ? selected
+                  : localRunTargetFor({
+                      selected,
+                      option,
+                      model: defaultHarnessModel(option).id,
+                      maxApprovals,
+                    });
+              return (
+                <MenuRadioItem
+                  closeOnClick
+                  key={option.harness}
+                  onClick={() => choose(target)}
+                  value={runOnPlaceValue(target)}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <LocalHarnessIcon
+                      className="size-4 shrink-0"
+                      harness={option.harness}
+                    />
+                    <TruncatedText render={<BidiText as="span" />}>
+                      {name}
+                    </TruncatedText>
+                  </span>
+                </MenuRadioItem>
+              );
+            })}
+          </MenuRadioGroup>
+        </>
+      )}
       {selected.kind === "local" && (
         <>
           <MenuSeparator />
@@ -578,42 +670,118 @@ export const ChatRunTargetMenu = ({
           </MenuRadioGroup>
         </>
       )}
-      {permissions?.type === "fixed" && (
-        <>
-          <MenuSeparator />
-          <MenuGroup>
-            <MenuGroupLabel>{t("chat.localRun.permissions")}</MenuGroupLabel>
-            <p className="text-muted-foreground text-2xs px-2 pb-1.5 text-pretty">
-              {t(FIXED_PERMISSION_KEY[permissions.harness])}
-            </p>
-          </MenuGroup>
-        </>
-      )}
-      {selected.kind === "local" && permissions?.type === "choice" && (
-        <>
-          <MenuSeparator />
-          <MenuRadioGroup value={selected.approvals}>
-            <MenuGroupLabel>{t("chat.localRun.permissions")}</MenuGroupLabel>
-            {permissions.modes.map(({ mode, availability }) => (
+    </>
+  );
+};
+
+type ReadyHarnessOption = Extract<ChatLocalHarnessOption, { state: "ready" }>;
+
+/** A row of choices laid out as one segmented control. */
+const SEGMENTS_CLASS_NAME = "bg-muted mx-2 grid gap-1 rounded-md p-1";
+
+/** Each permission mode's mark in the row, from the most cautious. */
+const PERMISSION_ICON = {
+  plan: ClipboardListIcon,
+  ask: MessageCircleQuestionIcon,
+  auto: ShieldCheckIcon,
+  full_auto: ZapIcon,
+} as const satisfies Record<
+  DesktopRunnerApprovalMode,
+  ComponentType<{ className?: string }>
+>;
+
+/**
+ * How much the agent may do before it asks: the modes in one row from the
+ * most cautious to the most independent, with the chosen mode's name and
+ * what it lets the agent do under the row. A mode that cannot be chosen says
+ * why in its name and once under the row. A pick keeps the menu open.
+ */
+const PermissionChoice = ({
+  hint,
+  keys,
+  modes,
+  selected,
+  onChoose,
+}: {
+  /** What the levels decide, said under the group's label; `null` for none. */
+  hint: string | null;
+  keys: typeof LOCAL_RUN_PERMISSION_KEYS | typeof CLOUD_PERMISSION_KEYS;
+  modes: Extract<PermissionView, { type: "choice" }>["modes"];
+  selected: DesktopRunnerApprovalMode;
+  onChoose: (mode: DesktopRunnerApprovalMode) => void;
+}) => {
+  const t = useTranslations();
+  const named = modes.map(({ mode, availability }) => {
+    const label = t(keys[mode].label);
+    return {
+      mode,
+      available: availability === "available",
+      name:
+        availability === "available"
+          ? label
+          : t("chat.localRun.selectionStateLabel", {
+              selection: label,
+              state: t(UNAVAILABLE_PERMISSION_KEY[availability]),
+            }),
+    };
+  });
+  return (
+    <>
+      <MenuSeparator />
+      <MenuRadioGroup value={selected}>
+        <MenuGroupLabel>{t("chat.localRun.permissions")}</MenuGroupLabel>
+        {hint !== null && (
+          <p className="text-muted-foreground text-2xs px-2 pb-1.5 text-pretty">
+            {hint}
+          </p>
+        )}
+        <div className={cn(SEGMENTS_CLASS_NAME, "grid-cols-4")}>
+          {named.map(({ mode, available, name }) => {
+            const Icon = PERMISSION_ICON[mode];
+            return (
               <MenuRadioItem
-                disabled={availability !== "available"}
+                aria-label={name}
+                appearance="segment"
+                closeOnClick={false}
+                disabled={!available}
                 key={mode}
-                onClick={() => choose({ ...selected, approvals: mode })}
+                onClick={() => onChoose(mode)}
                 value={mode}
               >
-                <PlaceLabel
-                  description={
-                    availability === "available"
-                      ? t(LOCAL_RUN_PERMISSION_KEYS[mode].description)
-                      : t(UNAVAILABLE_PERMISSION_KEY[availability])
-                  }
-                  title={t(LOCAL_RUN_PERMISSION_KEYS[mode].label)}
-                />
+                <Icon aria-hidden="true" />
               </MenuRadioItem>
-            ))}
-          </MenuRadioGroup>
-        </>
-      )}
+            );
+          })}
+        </div>
+        {/* The row's order, from asking most to asking least. */}
+        <div
+          aria-hidden="true"
+          className="text-muted-foreground text-2xs flex items-center gap-2 px-3 pt-1"
+        >
+          <span>{t("chat.localRun.permissionScaleLow")}</span>
+          <span className="flex flex-1 items-center">
+            <span className="bg-border h-px flex-1" />
+            <ChevronRightIcon className="text-border -ms-1.5 size-3 rtl:rotate-180" />
+          </span>
+          <span>{t("chat.localRun.permissionScaleHigh")}</span>
+        </div>
+        <p className="flex flex-col px-2 pt-1.5 pb-1">
+          <span>{t(keys[selected].label)}</span>
+          <span className="text-muted-foreground text-2xs text-pretty">
+            {t(keys[selected].description)}
+          </span>
+        </p>
+        {named
+          .filter(({ available }) => !available)
+          .map(({ mode, name }) => (
+            <p
+              className="text-muted-foreground text-2xs px-2 pb-1 text-pretty"
+              key={mode}
+            >
+              {name}
+            </p>
+          ))}
+      </MenuRadioGroup>
     </>
   );
 };

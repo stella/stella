@@ -540,6 +540,7 @@
       "waitForMatches": "Oodake anonüümimiskontrolli lõppu.",
       "workspaceTermsHeading": "Tööruumi terminid ({count})"
     },
+    "audioUnplayable": "Seda salvestist ei saa siin esitada. Laadige see kuulamiseks alla.",
     "closeAllTabs": "Sulge {count, plural, one {# vaheleht} other {kõik # vahelehte}}",
     "closeOtherTabs": "Sulge {count, plural, one {# teine vaheleht} other {# teist vahelehte}}",
     "closeTab": "Sulge <bdi>{name}</bdi>",
@@ -623,6 +624,11 @@
     },
     "metadata": {
       "aiExtractedHeading": "Tehisintellekti eraldatud",
+      "browserDownload": {
+        "downloaded": "Alla laaditud",
+        "file": "Faili aadress",
+        "page": "Alla laaditud lehelt"
+      },
       "documentProperties": {
         "empty": "See fail ei sisalda oma atribuute",
         "heading": "Faili atribuudid",

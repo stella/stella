@@ -38,7 +38,7 @@
               "runId": "run-recorded-1",
               "sendMode": "rawOverride",
               "browserExtension": {
-                "protocolVersion": 8,
+                "protocolVersion": 9,
                 "status": "unsupported-browser"
               },
               "message": {
@@ -105,7 +105,7 @@
               "runId": "run-recorded-1",
               "sendMode": "rawOverride",
               "browserExtension": {
-                "protocolVersion": 8,
+                "protocolVersion": 9,
                 "status": "unsupported-browser"
               },
               "message": {
@@ -181,7 +181,7 @@
               "runId": "run-recorded-2",
               "sendMode": "rawOverride",
               "browserExtension": {
-                "protocolVersion": 8,
+                "protocolVersion": 9,
                 "status": "unsupported-browser"
               },
               "message": {

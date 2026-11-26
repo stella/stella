@@ -4,7 +4,6 @@ import {
   asc,
   desc,
   eq,
-  gte,
   inArray,
   isNull,
   ne,
@@ -28,7 +27,6 @@ import {
 import {
   DESKTOP_RUNNER_CHECKPOINT_EVENT,
   DESKTOP_RUNNER_CHECKPOINTS_KEPT,
-  DESKTOP_RUNNER_FOLDER_RESTORE_PROTOCOL,
   type DesktopRunnerFolderRestoreOutcome,
 } from "@stll/api-contract/desktop-runner";
 
@@ -438,7 +436,6 @@ const assessUndo = async (
       deviceJkt: runner.deviceJkt,
       sessionId: runner.sessionId,
       instanceId: runner.instanceId,
-      protocol: runner.protocol,
     })
     .from(runner)
     .where(
@@ -459,14 +456,6 @@ const assessUndo = async (
       type: "refused",
       targetRunId: target.runId,
       reason: "desktop_offline",
-    };
-  }
-  // A desktop app from before restores runs turns, but is never sent one.
-  if (online.protocol < DESKTOP_RUNNER_FOLDER_RESTORE_PROTOCOL) {
-    return {
-      type: "refused",
-      targetRunId: target.runId,
-      reason: "desktop_update_required",
     };
   }
   return {
@@ -790,7 +779,7 @@ export const claimFolderRestores = async (
     db,
     async (tx): Promise<FolderRestoreToSend[]> => {
       const [current] = await tx
-        .select({ protocol: runner.protocol })
+        .select({ sessionId: runner.sessionId })
         .from(runner)
         .where(
           and(
@@ -802,12 +791,8 @@ export const claimFolderRestores = async (
           ),
         )
         .limit(1);
-      // Only the computer's current socket sends restores, and only one that
-      // speaks them; an older desktop keeps its restores until it updates.
-      if (
-        current === undefined ||
-        current.protocol < DESKTOP_RUNNER_FOLDER_RESTORE_PROTOCOL
-      ) {
+      // Only the computer's current socket sends restores.
+      if (current === undefined) {
         return [];
       }
       const stale = await tx
@@ -1022,7 +1007,6 @@ export const readSessionsWithQueuedFolderRestores = async (
         and(
           eq(runner.instanceId, instanceId),
           eq(runner.connection, "connected"),
-          gte(runner.protocol, DESKTOP_RUNNER_FOLDER_RESTORE_PROTOCOL),
           sql`exists (
             select 1 from ${restores}
             where ${restores.userId} = ${runner.userId}

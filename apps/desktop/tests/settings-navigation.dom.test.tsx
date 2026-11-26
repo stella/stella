@@ -253,36 +253,6 @@ test("the native side opens a page by its id", async () => {
   ).toContain(APP_STATE.update.currentVersion);
 });
 
-test("the tray's update check opens About and answers there", async () => {
-  const { commands, findByText, nav } = await renderApp({});
-
-  await act(async () => {
-    await emit("activate-tab", { tab: "about", focus: "update-check" });
-  });
-
-  expect(currentEntries(nav)).toEqual([{ current: "page", name: pages.about }]);
-  expect(
-    await findByText(defaultMessages.settings.updates.upToDate),
-  ).toBeTruthy();
-  expect(commands.filter((command) => command === "check_for_updates")).toEqual(
-    ["check_for_updates"],
-  );
-});
-
-test("a window opened for the update check runs it once", async () => {
-  window.location.hash = "#about/update-check";
-  const { commands, findByText, nav } = await renderApp({});
-
-  expect(currentEntries(nav)).toEqual([{ current: "page", name: pages.about }]);
-  expect(
-    await findByText(defaultMessages.settings.updates.upToDate),
-  ).toBeTruthy();
-  expect(commands.filter((command) => command === "check_for_updates")).toEqual(
-    ["check_for_updates"],
-  );
-  expect(window.location.hash).toBe("#about");
-});
-
 test("About never names a preview build while the version loads", async () => {
   const { entry, queryByText } = await renderApp({ snapshot: "pending" });
 
@@ -299,7 +269,7 @@ test("a link to a coding agent opens AI and agents and brings its card into view
   const scrolled: string[] = [];
   const original = HTMLElement.prototype.scrollIntoView;
   HTMLElement.prototype.scrollIntoView = function scrollIntoView() {
-    scrolled.push(this.dataset["agentSettings"] ?? "");
+    scrolled.push(this.dataset["settingsTarget"] ?? "");
   };
   try {
     const { findByText, nav } = await renderApp({});
@@ -318,11 +288,11 @@ test("a link to a coding agent opens AI and agents and brings its card into view
           "Claude Code",
         ),
       )
-    ).closest<HTMLElement>("[data-agent-settings]");
+    ).closest<HTMLElement>("[data-settings-target]");
     await waitFor(() => {
       expect(document.activeElement).toBe(card);
     });
-    expect(scrolled.filter(Boolean)).toEqual(["claude-code"]);
+    expect(scrolled.filter(Boolean)).toEqual(["agents-claude-code"]);
   } finally {
     HTMLElement.prototype.scrollIntoView = original;
   }
@@ -341,7 +311,7 @@ test("a focus sent with any other page is ignored", async () => {
   await act(async () => {
     await drainReactScheduler();
   });
-  expect(document.activeElement?.closest("[data-agent-settings]")).toBeNull();
+  expect(document.activeElement?.closest("[data-settings-target]")).toBeNull();
 });
 
 test("an unknown page id keeps the open page", async () => {
@@ -376,5 +346,5 @@ test("leaving AI and agents drops a link's focus before its card shows", async (
   expect(currentEntries(nav)).toEqual([
     { current: "page", name: pages.agents },
   ]);
-  expect(document.activeElement?.closest("[data-agent-settings]")).toBeNull();
+  expect(document.activeElement?.closest("[data-settings-target]")).toBeNull();
 });

@@ -11,6 +11,19 @@ import {
 } from "@stll/api-contract/chat-command";
 import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import {
+  CHAT_LOCAL_RUN_NOTICES_METADATA_KEY,
+  type ChatLocalRunNotice,
+  chatLocalRunNoticesOf,
+} from "@stll/api-contract/chat-local-run-notice";
+import {
+  CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY,
+  type ChatLocalRunRequest,
+  type ChatLocalRunRequestAnswer,
+  type ChatLocalRunRequestAnswerOutcome,
+  chatLocalRunRequestAnswerOutcomeSchema,
+  chatLocalRunRequestsOf,
+} from "@stll/api-contract/chat-local-run-request";
+import {
   CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY,
   chatLocalRunParentCallId,
   isChatLocalRunToolName,
@@ -45,7 +58,7 @@ import { answerBlocks, messageText } from "@/state/chat-answer";
 import { attachmentParts } from "@/state/chat-attachments";
 import type { ReadyFile } from "@/state/chat-attachments";
 import { streamedTurnFailure } from "@/state/chat-failure";
-import { contextNoticeIn } from "@/state/chat-messages";
+import { contextNoticeIn, shownLocalRunNotices } from "@/state/chat-messages";
 import type { ChatEntry, ChatRetry } from "@/state/chat-messages";
 import type { LocalRunTarget } from "@/state/chat-pending-input";
 
@@ -244,6 +257,17 @@ export type StreamedAnswer = {
   readonly parts: readonly StreamedPart[];
   readonly status: AnswerStatus;
   readonly contextNotice: ChatContextNotice | null;
+  /**
+   * What the run on the person's computer asked them, each in its latest
+   * state, as the stream restates it on the answer's metadata: it waits
+   * beside the running turn, which the card answers while it streams.
+   */
+  readonly localRunRequests: readonly ChatLocalRunRequest[];
+  /**
+   * What the run on the person's computer said about itself, each notice in
+   * its latest state, as the stream restates it on the answer's metadata.
+   */
+  readonly localRunNotices: readonly ChatLocalRunNotice[];
   /** Why the run failed, once its error event said. */
   readonly failure?: AIErrorKind;
 };
@@ -253,7 +277,27 @@ export const EMPTY_ANSWER: StreamedAnswer = {
   parts: [],
   status: "streaming",
   contextNotice: null,
+  localRunRequests: [],
+  localRunNotices: [],
 };
+
+/**
+ * A start that only restates what the run asked: the server's own, never
+ * the start of text.
+ */
+const restatesRequests = (metadata: unknown) =>
+  typeof metadata === "object" &&
+  metadata !== null &&
+  CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY in metadata;
+
+/**
+ * A start that only restates what the run said about itself: the server's
+ * own, never the start of text.
+ */
+const restatesNotices = (metadata: unknown) =>
+  typeof metadata === "object" &&
+  metadata !== null &&
+  CHAT_LOCAL_RUN_NOTICES_METADATA_KEY in metadata;
 
 /** The answer's notice as an event's metadata changes it, or as it was. */
 const noticeAfter = (
@@ -304,6 +348,18 @@ export const applyChatEvent = (
 ): StreamedAnswer => {
   switch (event.type) {
     case "TEXT_MESSAGE_START": {
+      if (restatesRequests(event.metadata)) {
+        return {
+          ...answer,
+          localRunRequests: chatLocalRunRequestsOf(event.metadata),
+        };
+      }
+      if (restatesNotices(event.metadata)) {
+        return {
+          ...answer,
+          localRunNotices: chatLocalRunNoticesOf(event.metadata),
+        };
+      }
       return {
         ...answer,
         messageId: answer.messageId ?? event.messageId,
@@ -468,6 +524,7 @@ export const answerEntry = (
   // The stored answer names its drafts once the thread is read again.
   drafts: [],
   contextNotice: answer.contextNotice,
+  ...shownLocalRunNotices(answer.localRunNotices),
 });
 
 /**
@@ -1295,6 +1352,43 @@ export const probeChatTurn = async ({
   });
 
 const steerAnswerSchema = v.object({ steer: chatLocalRunSteerOutcomeSchema });
+
+const requestAnswerSchema = v.object({
+  outcome: chatLocalRunRequestAnswerOutcomeSchema,
+});
+
+/**
+ * Answers what the run of a turn running on the person's computer asked,
+ * beside the turn: `answered` once it is on its way (the turn's stream then
+ * says the run took it), or why it could not reach the run.
+ */
+export const answerChatTurnRequest = async ({
+  answer,
+  fetch,
+  requestId,
+  source,
+  threadId,
+  turnId,
+}: {
+  readonly answer: ChatLocalRunRequestAnswer;
+  readonly fetch: Fetch;
+  readonly requestId: string;
+  readonly source: AccessTokenSource;
+  readonly threadId: string;
+  readonly turnId: string;
+}): Promise<Result<ChatLocalRunRequestAnswerOutcome, ApiError>> =>
+  await Result.gen(async function* () {
+    const answered = yield* Result.await(
+      requestApi({
+        fetch,
+        path: `${turnPath(threadId, turnId)}/requests/${requestId}/answer`,
+        body: { answer },
+        schema: requestAnswerSchema,
+        source,
+      }),
+    );
+    return Result.ok(answered.outcome);
+  });
 
 /**
  * Hands a message to a turn running on the person's computer, without

@@ -104,6 +104,7 @@ export const readEditableMessageOnTx = async ({
       chatReasoningEffort: row.thread.chatReasoningEffort,
       chatRunTarget: row.thread.chatRunTarget,
       chatLocalRunTarget: row.thread.chatLocalRunTarget,
+      chatCloudApprovals: row.thread.chatCloudApprovals,
       recapText: row.thread.recapText,
       recapMessageId: row.thread.recapMessageId,
       recapPromptVersion: row.thread.recapPromptVersion,

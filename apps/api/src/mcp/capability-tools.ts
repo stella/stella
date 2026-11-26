@@ -10,18 +10,15 @@ import {
   MCP_CAPABILITY_EXECUTORS,
   type McpCapabilityExecutor,
 } from "@stll/api-contract/mcp-capability-executors";
-import type { PermissionInput } from "@stll/permissions";
 
-import type { RouteAccess, RouteDefinition } from "@/api/http/route";
+import type { RouteAccess } from "@/api/http/route";
 import { HttpStatusResponse } from "@/api/http/status";
 import { captureError } from "@/api/lib/analytics/capture";
-import type { AccountAccess } from "@/api/lib/api-handlers";
 import {
   admitsWorkspaceStatus,
   type WorkspaceStatusAccess,
 } from "@/api/lib/auth/accessible-workspace";
 import { hasAccountCapabilityAuthority } from "@/api/lib/auth/account-export-policy";
-import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import {
@@ -58,7 +55,10 @@ import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { advertisedSchemas } from "@/api/mcp/advertised-schema";
 import { capabilityHandlerContext } from "@/api/mcp/capability-context";
-import type { CapabilityHandlerContext } from "@/api/mcp/capability-context";
+import type {
+  EndpointConfig,
+  EndpointDefinition,
+} from "@/api/mcp/capability-endpoint-types";
 import { isCapabilityFeatureEnabled } from "@/api/mcp/capability-feature";
 import { consumeInvokeCapabilityRateLimit } from "@/api/mcp/capability-rate-limit";
 import { CONTEXT_FIDELITY_WAIVERS } from "@/api/mcp/capability-waivers";
@@ -422,31 +422,6 @@ const renderTransport = (transport: CapabilityTransport): RenderedTransport => {
 };
 
 // --- Live handler resolution -------------------------------------------------
-
-/**
- * The slice of a capability endpoint's live config the capability executors
- * read. Its input schemas are the route's own valibot schemas, and
- * `permissions` is the handler's `PermissionInput` literal; both are built by
- * the handler graph. The guard below narrows to this shape at the module
- * boundary.
- */
-type EndpointConfig = {
-  idempotency?: { type: "replay" };
-  featureAccess?: FeatureAccessRequirement;
-  mcp?: unknown;
-  body?: v.GenericSchema;
-  params?: v.GenericSchema;
-  query?: v.GenericSchema;
-  permissions?: PermissionInput;
-  accountAccess?: AccountAccess;
-  workspaceStatus?: WorkspaceStatusAccess;
-};
-
-/** A capability's route definition, with the handler core the executors call. */
-type EndpointDefinition = Omit<RouteDefinition, "config"> & {
-  readonly config: RouteDefinition["config"] & EndpointConfig;
-  readonly handler: (ctx: CapabilityHandlerContext) => Promise<unknown>;
-};
 
 const ROUTE_ACCESS: ReadonlySet<unknown> = new Set<RouteAccess>([
   "public",

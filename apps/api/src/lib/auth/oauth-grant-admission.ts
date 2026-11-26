@@ -16,7 +16,13 @@ import {
   McpAuthenticationError,
   McpTokenVerificationError,
 } from "@/api/mcp/errors";
-import type { McpSession } from "@/api/mcp/session";
+import {
+  type AdmittedMcpSession,
+  type AdmittedOAuthCredential,
+  admittedOAuthCredential,
+  type McpSession,
+  type OAuthCredential,
+} from "@/api/mcp/session";
 
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) &&
@@ -156,20 +162,7 @@ export const classifyMcpTokenVerificationError = (
 
 const OAUTH_REVOCATION_CLOCK_SKEW_SECONDS = 5;
 
-const admittedOAuthCredential = Symbol("admittedOAuthCredential");
-type OAuthCredential = Extract<
-  NonNullable<McpSession["credential"]>,
-  { type: "oauth_client" }
->;
-export type AdmittedOAuthCredential = OAuthCredential & {
-  readonly [admittedOAuthCredential]: true;
-  readonly registrationId: string | null;
-};
-export type AdmittedMcpSession = Omit<McpSession, "credential"> & {
-  credential?:
-    | Exclude<NonNullable<McpSession["credential"]>, OAuthCredential>
-    | AdmittedOAuthCredential;
-};
+export type { AdmittedMcpSession, AdmittedOAuthCredential };
 
 type AdmitOAuthCredentialOptions = {
   credential: OAuthCredential;

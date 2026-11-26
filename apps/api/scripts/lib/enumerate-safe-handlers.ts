@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import path from "node:path";
 
 import { compareCodeUnit } from "@stll/collation";
@@ -29,6 +30,7 @@ import {
   SAFE_HANDLER_FACTORY_NAMES,
 } from "../../src/lib/safe-handler-factories";
 import type { McpReadClass } from "../../src/mcp/tool-types";
+import { relativePathWithin } from "./repo-relative-path";
 
 // Repo root resolved from this file's location so identifiers are stable
 // regardless of the process working directory. This file sits at
@@ -97,16 +99,16 @@ export type ParsedExposure =
   | { type: "pending" }
   | { type: "invalid"; raw: unknown };
 
-/** Repo-relative identifier for an endpoint module (stable across machines). */
+/**
+ * Repo-relative, `/`-separated identifier for an endpoint module, the same on
+ * every platform and machine. A module outside the repo has no identifier.
+ */
 export const toEndpointIdentifier = (
   absPath: string,
   repoRoot: string,
-): string => {
-  const normalizedRoot = repoRoot.endsWith("/") ? repoRoot : `${repoRoot}/`;
-  return absPath.startsWith(normalizedRoot)
-    ? absPath.slice(normalizedRoot.length)
-    : absPath;
-};
+): string =>
+  relativePathWithin({ root: repoRoot, file: absPath }) ??
+  panic(`safe-handler discovery: module is outside the repo root: ${absPath}`);
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);

@@ -99,6 +99,7 @@ import {
   replaceControlledTab,
 } from "../lib/tab-executor";
 import { trustedStellaOriginFromUrl } from "../lib/trusted-origin";
+import { rememberWebDownloadTarget } from "../lib/web-download-target";
 
 /**
  * Every web command, cancel, popup change and tab loss goes through this
@@ -313,13 +314,20 @@ const runControlledCommand = async ({
       );
 };
 
+/** The stella tab a web command came from, as Chrome names its sender. */
+type CommandSender = {
+  url: string;
+  tabId: number;
+  documentId: string | null;
+};
+
 const runCommand = async (
   message: CommandRequest,
-  senderUrl: string,
+  sender: CommandSender,
 ): Promise<BrowserControlResult> =>
   await runControlledCommand({
     admit: async () => {
-      const controller = await controllerForSender(senderUrl);
+      const controller = await controllerForSender(sender.url);
       if (controller?.controllerId !== message.controllerId) {
         return refused(
           BROWSER_CONTROL_ERROR_CODE.staleController,
@@ -333,12 +341,21 @@ const runCommand = async (
         controllerId: controller.controllerId,
         transport: CONTROL_TRANSPORT.web,
       });
-      return admission === CONTROL_ADMISSION.holds
-        ? ADMITTED
-        : refused(
-            BROWSER_CONTROL_ERROR_CODE.staleController,
-            "stella desktop is using the browser now. Connect stella again from the extension popup to take it back.",
-          );
+      if (admission !== CONTROL_ADMISSION.holds) {
+        return refused(
+          BROWSER_CONTROL_ERROR_CODE.staleController,
+          "stella desktop is using the browser now. Connect stella again from the extension popup to take it back.",
+        );
+      }
+      // A download chat's tabs make from now on goes to this stella tab,
+      // for this command's chat turn.
+      await rememberWebDownloadTarget({
+        controllerId: controller.controllerId,
+        documentId: sender.documentId,
+        tabId: sender.tabId,
+        turnId: message.turnId,
+      });
+      return ADMITTED;
     },
     command: message.command,
     controllerId: message.controllerId,
@@ -471,7 +488,13 @@ const handleWebMessage = (
   // Admitted synchronously, before any await, so a cancel the page sends
   // right after this command always finds it.
   const result =
-    message.type === "command" ? runCommand(message, senderUrl) : null;
+    message.type === "command"
+      ? runCommand(message, {
+          documentId: sender.documentId ?? null,
+          tabId: senderTabId,
+          url: senderUrl,
+        })
+      : null;
 
   const respond = async (): Promise<BrowserExtensionResponse> => {
     if (result === null) {

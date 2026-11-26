@@ -1,7 +1,4 @@
-import type {
-  DesktopMatter,
-  DesktopTimeEntryBatch,
-} from "@stll/api-contract/desktop-time-entries";
+import type { DesktopTimeEntryBatch } from "@stll/api-contract/desktop-time-entries";
 
 import activityContract from "../../fixtures/activity-contract.json" with { type: "json" };
 import {
@@ -39,8 +36,14 @@ export const ACTIVITY_DETAILS_ACCESS = [
   "ready",
   "accessibilityRequired",
   "unavailable",
+  // Managed policy keeps details off, whatever the user chose.
+  "managed",
 ] as const;
 export type ActivityDetailsAccess = (typeof ACTIVITY_DETAILS_ACCESS)[number];
+
+/** Where the day review reads calendar events from; `off` reads nothing. */
+export const ACTIVITY_CALENDAR_SOURCES = ["off", "microsoft365"] as const;
+export type ActivityCalendarSource = (typeof ACTIVITY_CALENDAR_SOURCES)[number];
 
 export type ActivitySegment = {
   appIdentifier: string;
@@ -60,15 +63,49 @@ export type ActivityAppExclusion = {
   name: string;
 };
 
+/** A range filed under a matter by id. The matter's name is read under the
+ * member's current access, never from local history. */
 export type ActivityManualAssignment = {
   start: string;
   end: string;
   matterId: string;
-  matter?: DesktopMatter & { clientName: string | null };
 };
 
 export type ActivityDeletionStatus =
   keyof typeof activityContract.deletionStatuses;
+
+/** Why Activity cannot record. */
+export type ActivityStopReason = keyof typeof activityContract.stopReasons;
+
+const isActivityStopReason = (value: unknown): value is ActivityStopReason =>
+  typeof value === "string" &&
+  Object.hasOwn(activityContract.stopReasons, value);
+
+/** A stretch the member wanted recorded and Activity could not record. */
+type ActivityOutage = {
+  /** RFC 3339 instants. */
+  start: string;
+  end: string;
+  reason: ActivityStopReason;
+};
+
+export type ActivityDayOutages =
+  { status: "read"; outages: ActivityOutage[] } | { status: "unreadable" };
+
+/** What the screen did while no input came. */
+export type ActivityGapDisplay = keyof typeof activityContract.gapDisplays;
+/** What ended a stretch with no input. */
+export type ActivityGapEnd = keyof typeof activityContract.gapEnds;
+
+/** A stretch with no input between recorded activity: times and the
+ * screen's state only, never counted as recorded time. */
+export type ActivityGap = {
+  /** RFC 3339 instants. */
+  start: string;
+  end: string;
+  endedBy: ActivityGapEnd;
+  display: ActivityGapDisplay;
+};
 
 /** The detail-capture choices both activity views show. */
 export type ActivityCaptureSettings = {
@@ -96,6 +133,7 @@ export type ActivitySettingsSnapshot = ActivityCaptureSettings & {
   retention: ActivityRetention;
   excludedApps: ActivityAppExclusion[];
   detectCalls: boolean;
+  calendarSource: ActivityCalendarSource;
   otherAccountHistoryDays: number;
   apps: ActivityAppExclusion[];
 };
@@ -120,6 +158,7 @@ export type ActivityDaySnapshot = {
   detailsAccess: ActivityDetailsAccess;
   browserApps: ActivityAppExclusion[];
   browserTitleApps: ActivityAppExclusion[];
+  calendarSource: ActivityCalendarSource;
   otherAccountHistoryDays: number;
   persistence: ActivityPersistenceStatus;
   recordingStatus: ActivityRecordingStatus;
@@ -128,6 +167,10 @@ export type ActivityDaySnapshot = {
   sourceAppVisuals: ClipboardSourceAppVisual[];
   today: string;
   unreadable: boolean;
+  gaps: ActivityGap[];
+  outages: ActivityDayOutages;
+  /** Set while Activity cannot record; the history is then read-only. */
+  stoppedReason: ActivityStopReason | null;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -140,35 +183,8 @@ const isRange = (value: unknown): value is { start: string; end: string } => {
   const { start, end } = value;
   return typeof start === "string" && typeof end === "string";
 };
-const isAssignedMatter = (
-  value: unknown,
-): value is DesktopMatter & { clientName: string | null } => {
-  if (!isRecord(value)) {
-    return false;
-  }
-  const { id, name, reference, color, clientName } = value;
-  return (
-    typeof id === "string" &&
-    typeof name === "string" &&
-    (reference === null || typeof reference === "string") &&
-    (color === null || typeof color === "string") &&
-    (clientName === null || typeof clientName === "string")
-  );
-};
-const isAssignment = (value: unknown): value is ActivityManualAssignment => {
-  if (!isRecord(value)) {
-    return false;
-  }
-  const { matterId, matter } = value;
-  if (!isRange(value)) {
-    return false;
-  }
-  return (
-    typeof matterId === "string" &&
-    (matter === undefined ||
-      (isAssignedMatter(matter) && matter.id === matterId))
-  );
-};
+const isAssignment = (value: unknown): value is ActivityManualAssignment =>
+  isRecord(value) && typeof value["matterId"] === "string" && isRange(value);
 const isPendingEntry = (
   value: unknown,
 ): value is DesktopTimeEntryBatch["entries"][number] => {
@@ -321,6 +337,7 @@ const isSettingsState = (value: Record<string, unknown>) => {
     persistence,
     retention,
     excludedApps,
+    calendarSource,
   } = value;
   return (
     typeof date === "string" &&
@@ -337,8 +354,46 @@ const isSettingsState = (value: Record<string, unknown>) => {
     otherAccountHistoryDays >= 0 &&
     isOneOf(ACTIVITY_PERSISTENCE_STATUSES, persistence) &&
     isOneOf(ACTIVITY_RETENTIONS, retention) &&
+    isOneOf(ACTIVITY_CALENDAR_SOURCES, calendarSource) &&
     Array.isArray(excludedApps) &&
     excludedApps.every(isExclusion)
+  );
+};
+
+const isOutage = (value: unknown): value is ActivityOutage => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const { reason } = value;
+  return isRange(value) && isActivityStopReason(reason);
+};
+
+const isDayOutages = (value: unknown): value is ActivityDayOutages => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const { status, outages } = value;
+  switch (status) {
+    case "read":
+      return Array.isArray(outages) && outages.every(isOutage);
+    case "unreadable":
+      return true;
+    default:
+      return false;
+  }
+};
+
+const isGap = (value: unknown): value is ActivityGap => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const { endedBy, display } = value;
+  return (
+    isRange(value) &&
+    typeof endedBy === "string" &&
+    Object.hasOwn(activityContract.gapEnds, endedBy) &&
+    typeof display === "string" &&
+    Object.hasOwn(activityContract.gapDisplays, display)
   );
 };
 
@@ -348,14 +403,25 @@ export const isActivityDaySnapshot = (
   if (!isRecord(value)) {
     return false;
   }
-  const { unreadable, recordingStatus, segments } = value;
+  const {
+    unreadable,
+    recordingStatus,
+    segments,
+    gaps,
+    outages,
+    stoppedReason,
+  } = value;
   return (
     isSettingsState(value) &&
     typeof unreadable === "boolean" &&
     isReviewState(value) &&
     isOneOf(ACTIVITY_RECORDING_STATUSES, recordingStatus) &&
     Array.isArray(segments) &&
-    segments.every(isSegment)
+    segments.every(isSegment) &&
+    Array.isArray(gaps) &&
+    gaps.every(isGap) &&
+    isDayOutages(outages) &&
+    (stoppedReason === null || isActivityStopReason(stoppedReason))
   );
 };
 

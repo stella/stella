@@ -81,6 +81,7 @@ export const WRITE_TOOL_REALTIME = {
     noResourceSetUpdates("The capability's own handler announces"),
   ],
   submit_feedback: NO_ROUTE_REALTIME,
+  save_site_notes: NO_ROUTE_REALTIME,
   mint_web_handoff: NO_ROUTE_REALTIME,
 } as const satisfies Record<McpWriteToolName, readonly ResourceSetRealtime[]>;
 

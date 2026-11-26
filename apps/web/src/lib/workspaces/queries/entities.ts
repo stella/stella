@@ -416,19 +416,30 @@ export const useEntitiesOptions = (key: EntitiesOptionsInput) =>
   entitiesOptions(useDeferredValue(key));
 
 export const entityOptions = (workspaceId: string, entityId: string) =>
-  queryOptions({
-    queryKey: entitiesKeys.detail(workspaceId, entityId),
-    retry: shouldRetryAPIRequest,
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-    queryFn: async ({ signal }) => {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .entity({ entityId: toSafeId<"entity">(entityId) })
-        .get({ fetch: { signal } });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: entitiesKeys.detail(workspaceId, entityId),
+      retry: shouldRetryAPIRequest,
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+      queryFn: async ({ signal }) => {
+        const response = await api
+          .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .entity({ entityId: toSafeId<"entity">(entityId) })
+          .get({ fetch: { signal } });
 
-      return unwrapApiResponse(response);
+        return unwrapApiResponse(response);
+      },
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.ENTITY_VERSION,
+        RESOURCE_TYPE.FIELD,
+        RESOURCE_TYPE.FLOW_RUN,
+      ],
+      scope: { type: "workspace", workspaceId },
     },
-  });
+  );
 
 export const entitySummariesOptions = (workspaceId: string) =>
   queryOptions({

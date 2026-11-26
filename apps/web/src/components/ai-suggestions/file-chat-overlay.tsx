@@ -1538,6 +1538,7 @@ const FileChatOverlayInner = ({
     loadOlder,
     loadOlderError,
     approvalIdsAwaitedAtOpen,
+    browserGate,
     workAwaitedAtOpen,
     continuePausedTurn,
     resendLatestMessage,
@@ -2625,6 +2626,7 @@ const FileChatOverlayInner = ({
         value={{
           activeOrganizationId,
           approvalIdsAwaitedAtOpen,
+          browserGate,
           alwaysApprovedTools,
           conversationApprovedTools,
           confirmStoredApprovalGrant,

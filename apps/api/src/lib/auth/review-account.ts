@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 
 import { env } from "@/api/env";
-import type { AccountAccess } from "@/api/lib/api-handlers";
+import type { AccountAccess } from "@/api/lib/auth/account-access";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import {
   checkReviewAccountAccess,

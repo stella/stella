@@ -97,6 +97,16 @@ const ROW_DEPTH_CLASS = {
 } as const satisfies Record<SettingsRowDepth, string>;
 
 /**
+ * Where a row's footer starts when the row has media: at its title's edge,
+ * past the 32px tile and the row's 12px gap, so every line of the row's
+ * text shares one start edge.
+ */
+const FOOTER_PAST_MEDIA_CLASS = {
+  nested: "ps-21",
+  top: "ps-15",
+} as const satisfies Record<SettingsRowDepth, string>;
+
+/**
  * What a press on the row's text does. `label`: the text is the label of
  * the control whose id is `settingsRowIds(id).control` (a switch or a
  * checkbox), so a press on it flips the control. The text, not the whole
@@ -127,6 +137,12 @@ type SettingsRowProps = SettingsRowInteraction & {
   depth?: SettingsRowDepth | undefined;
   /** Shown dimmed: its control is disabled until something else allows it. */
   disabled?: boolean | undefined;
+  /**
+   * The name a settings link uses to bring this row into view: set as
+   * `data-settings-target`, the row can take focus from script, and it is
+   * marked while `data-highlighted` is set on it.
+   */
+  target?: string | undefined;
 };
 
 /** One option: media, title and secondary line, then its control. */
@@ -139,6 +155,7 @@ const SettingsRow = (props: SettingsRowProps) => {
     footer,
     id,
     media,
+    target,
     title,
   } = props;
   const ids = id === undefined ? undefined : settingsRowIds(id);
@@ -172,9 +189,11 @@ const SettingsRow = (props: SettingsRowProps) => {
   );
   return (
     <li
-      className="flex min-w-0 flex-col"
+      className="data-highlighted:bg-muted flex min-w-0 flex-col outline-none"
       data-disabled={disabled ? "" : undefined}
+      data-settings-target={target}
       data-slot="settings-row"
+      tabIndex={target === undefined ? undefined : -1}
     >
       <div
         className={cn(
@@ -208,7 +227,14 @@ const SettingsRow = (props: SettingsRowProps) => {
         )}
       </div>
       {rendersSomething(footer) && (
-        <div className={cn("pe-4 pb-3 empty:hidden", ROW_DEPTH_CLASS[depth])}>
+        <div
+          className={cn(
+            "pe-4 pb-3 empty:hidden",
+            rendersSomething(media)
+              ? FOOTER_PAST_MEDIA_CLASS[depth]
+              : ROW_DEPTH_CLASS[depth],
+          )}
+        >
           {footer}
         </div>
       )}

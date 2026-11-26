@@ -15,7 +15,7 @@ import {
   apiOAuthResourceUrl,
 } from "@stll/api-contract/api-oauth-resource";
 
-import type { ToolScope } from "@/api/mcp/tool-types";
+import type { ToolScope } from "@/api/mcp/constants";
 
 /**
  * Least-privilege remote-host surface for document workflows. Hosted clients

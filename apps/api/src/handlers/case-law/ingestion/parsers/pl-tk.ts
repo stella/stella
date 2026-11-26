@@ -69,7 +69,7 @@ const POLISH_MONTHS = {
   października: 10,
   listopada: 11,
   grudnia: 12,
-} as const;
+} as const satisfies Record<string, number>;
 
 const isPolishMonth = (value: string): value is keyof typeof POLISH_MONTHS =>
   Object.hasOwn(POLISH_MONTHS, value);

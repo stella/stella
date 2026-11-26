@@ -13,8 +13,9 @@ import type {
 } from "@stll/ui/day-calendar.logic";
 
 import {
+  apportionWhole,
   appTotals,
-  roundedTenthsOfHour,
+  MINUTE_MS,
   totalDurationMs,
 } from "./activity-logic";
 import type { AppTotal } from "./activity-logic";
@@ -23,13 +24,10 @@ import {
   cleanSharedContext,
   leadingMatter,
   matterShare,
+  SUGGESTION_RUN_GAP_MS,
   withoutAppSuffix,
 } from "./day-review-logic";
 import type { DayReviewGroup, MatchedSegment } from "./day-review-logic";
-
-const MINUTE_MS = 60_000;
-/** Idle gaps up to this long keep one suggestion's time in one block. */
-const SUGGESTION_RUN_GAP_MS = 5 * MINUTE_MS;
 
 /** Working hours the calendar always shows. */
 const DEFAULT_HOURS = { endHour: 18, startHour: 8 } as const;
@@ -84,6 +82,10 @@ export const shortSegmentThresholdMs = (granularity: DayCalendarGranularity) =>
 
 /** Pauses up to this long do not split one topic's block. */
 export const TOPIC_BRIDGE_GAP_MS = 2 * MINUTE_MS;
+
+/** The one topic of all time filed under matters the member can no longer
+ * open: it never names them, nor tells them apart. */
+export const UNAVAILABLE_MATTER_TOPIC = "matter-unavailable";
 
 /**
  * One topic's stretch of the day in the Activity column: a matter's time, or,
@@ -246,6 +248,9 @@ export const activityBlocks = (
   const topicOf = (segment: MatchedSegment) => {
     if (segment.matter !== null) {
       return `matter:${segment.matter.id}`;
+    }
+    if (segment.recordedMatter === "unavailable") {
+      return UNAVAILABLE_MATTER_TOPIC;
     }
     if (segment.call) {
       return `call:${segment.appIdentifier}`;
@@ -540,7 +545,7 @@ export type ActivitySuggestion = DayReviewGroup & {
   startMs: number;
 } & ({ type: "matched" } | { matterBasis: RangeMatterBasis; type: "manual" });
 
-const toSuggestion = (group: DayReviewGroup): ActivitySuggestion => {
+export const toSuggestion = (group: DayReviewGroup): ActivitySuggestion => {
   const runs = contiguousRuns(group.segments);
   return {
     ...group,
@@ -551,33 +556,10 @@ const toSuggestion = (group: DayReviewGroup): ActivitySuggestion => {
   };
 };
 
-/** Whole numbers that add up to the rounded sum of `values`: each value is
- * rounded down, then the largest remainders take the minutes left over. */
-const roundedTogether = (values: readonly number[]): number[] => {
-  const floors = values.map((value) => Math.floor(value));
-  let left =
-    Math.round(values.reduce((sum, value) => sum + value, 0)) -
-    floors.reduce((sum, value) => sum + value, 0);
-  const byRemainder = values
-    .map((value, index) => ({ index, remainder: value - Math.floor(value) }))
-    .sort(
-      (first, second) =>
-        second.remainder - first.remainder || first.index - second.index,
-    );
-  for (const { index } of byRemainder) {
-    if (left <= 0) {
-      break;
-    }
-    floors[index] = (floors[index] ?? 0) + 1;
-    left -= 1;
-  }
-  return floors;
-};
-
 /** One dashed piece of a suggestion in the Time entries column. */
 export type SuggestionPiece = DayCalendarRange & {
   /** The piece's own time in whole minutes. Pieces round together, so
-   * their minutes add up to the suggestion's rounded recorded minutes. */
+   * their minutes add up to the minutes the suggestion claims. */
   minutes: number;
 };
 
@@ -604,8 +586,9 @@ export const suggestionPieces = (
           0,
         ),
   );
-  const minutes = roundedTogether(
+  const minutes = apportionWhole(
     durations.map((durationMs) => durationMs / MINUTE_MS),
+    suggestion.workedMinutes,
   );
   return suggestion.runs.map((run, index) => ({
     endMs: run.endMs,
@@ -615,9 +598,12 @@ export const suggestionPieces = (
 };
 
 /** What a suggestion card's header says about its time: the range for a
- * suggestion in one piece, else how many pieces; with the tenths of an hour
- * the entry bills, its one duration. */
-export type SuggestionSummary = { tenths: number } & (
+ * suggestion in one piece, else how many pieces; with the minutes the entry
+ * claims and whether they were recorded or selected. */
+export type SuggestionSummary = {
+  source: ActivitySuggestion["type"];
+  workedMinutes: number;
+} & (
   | { endMs: number; startMs: number; type: "range" }
   | { count: number; type: "pieces" }
 );
@@ -625,15 +611,22 @@ export type SuggestionSummary = { tenths: number } & (
 export const suggestionSummary = (
   suggestion: ActivitySuggestion,
 ): SuggestionSummary => {
-  const tenths = suggestion.roundedTenths;
+  const { workedMinutes } = suggestion;
+  const source = suggestion.type;
   if (suggestion.runs.length > 1) {
-    return { count: suggestion.runs.length, tenths, type: "pieces" };
+    return {
+      count: suggestion.runs.length,
+      source,
+      type: "pieces",
+      workedMinutes,
+    };
   }
   return {
     endMs: suggestion.endMs,
+    source,
     startMs: suggestion.startMs,
-    tenths,
     type: "range",
+    workedMinutes,
   };
 };
 
@@ -724,6 +717,7 @@ export const manualSuggestion = ({
   return {
     apps: appTotals(clipped),
     confidence: "manual",
+    reason: { type: "none" },
     durationMs,
     // The card and the selection show the range as the user set it.
     endMs: Math.max(range.startMs, range.endMs),
@@ -735,11 +729,59 @@ export const manualSuggestion = ({
       start: Temporal.Instant.fromEpochMilliseconds(startMs).toString(),
       end: Temporal.Instant.fromEpochMilliseconds(endMs).toString(),
     })),
-    roundedTenths: roundedTenthsOfHour(durationMs),
     runs: parts,
     segments: clipped,
+    slivers: [],
     startMs: range.startMs,
     type: "manual",
+    workedMinutes: Math.floor(durationMs / MINUTE_MS),
+  };
+};
+
+/** Where a selected range's time was recorded: each kind's exact time,
+ * which decides whether it is shown, and its whole minutes, which add up to
+ * the minutes the entry claims. With no matter chosen, every matter's time
+ * is another matter's. */
+export type RangeBreakdown = Record<
+  "onMatter" | "onOtherMatters" | "noMatter" | "notRecorded",
+  { durationMs: number; minutes: number }
+>;
+
+export const rangeBreakdown = (
+  suggestion: Extract<ActivitySuggestion, { type: "manual" }>,
+  matterId: string | null,
+): RangeBreakdown => {
+  let onMatterMs = 0;
+  let onOtherMattersMs = 0;
+  let noMatterMs = 0;
+  for (const segment of suggestion.segments) {
+    const durationMs = segment.endMs - segment.startMs;
+    // Time recorded with a matter the review did not offer is still that
+    // matter's.
+    const recordedMatterId = segment.matter?.id ?? segment.matterId;
+    if (recordedMatterId === null) {
+      noMatterMs += durationMs;
+    } else if (recordedMatterId === matterId) {
+      onMatterMs += durationMs;
+    } else {
+      onOtherMattersMs += durationMs;
+    }
+  }
+  const notRecordedMs = Math.max(
+    0,
+    suggestion.durationMs - onMatterMs - onOtherMattersMs - noMatterMs,
+  );
+  const exact = [onMatterMs, onOtherMattersMs, noMatterMs, notRecordedMs];
+  const [onMatter = 0, onOtherMatters = 0, noMatter = 0, notRecorded = 0] =
+    apportionWhole(
+      exact.map((durationMs) => durationMs / MINUTE_MS),
+      suggestion.workedMinutes,
+    );
+  return {
+    onMatter: { durationMs: onMatterMs, minutes: onMatter },
+    onOtherMatters: { durationMs: onOtherMattersMs, minutes: onOtherMatters },
+    noMatter: { durationMs: noMatterMs, minutes: noMatter },
+    notRecorded: { durationMs: notRecordedMs, minutes: notRecorded },
   };
 };
 

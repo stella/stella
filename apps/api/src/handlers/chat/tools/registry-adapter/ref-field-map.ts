@@ -189,6 +189,10 @@ export const READ_TOOL_REF_FIELD_MAP = {
   // through its own UI instead.
   prepare_feedback: { chatProjectable: false },
 
+  // Chat reads a website's notes through its own tool beside the browser
+  // tool (`browser-site-notes-tools.ts`), which carries the same name.
+  read_site_notes: { chatProjectable: false },
+
   // --- Matters / contacts / content -----------------------------------------
   list_matters: {
     chatProjectable: true,
@@ -646,6 +650,9 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
   // Sends a report out of the workspace after a human approves it. The in-app
   // chat has its own feedback UI, so the tool stays off that surface.
   submit_feedback: { chatProjectable: false },
+  // Chat keeps website notes through its own tool beside the browser tool
+  // (`browser-site-notes-tools.ts`), which carries the same name.
+  save_site_notes: { chatProjectable: false },
   // Organization creation authority is independent of the current chat matter.
   create_organization: { chatProjectable: false },
 } as const satisfies Record<RegistryWriteToolName, RegistryRefFieldMapEntry>;

@@ -1,3 +1,5 @@
+import { ownEntry } from "@stll/api-contract/own-key";
+
 import { courtListenerValidationPolicy } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/validation-policy";
 import {
   RETENTION_UNPARSED_REASON,
@@ -122,7 +124,5 @@ export const sourceRetentionForAdapter = (
   policy: Object.hasOwn(RETENTION_POLICY_BY_KEY, adapterKey)
     ? (RETENTION_POLICY_BY_KEY[adapterKey] ?? UNREGISTERED_SOURCE)
     : UNREGISTERED_SOURCE,
-  sourcePolicy: Object.entries(SOURCE_POLICIES).find(
-    ([key]) => key === adapterKey,
-  )?.[1],
+  sourcePolicy: ownEntry(SOURCE_POLICIES, adapterKey),
 });

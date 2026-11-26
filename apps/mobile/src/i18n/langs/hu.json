@@ -125,8 +125,10 @@
       "aiOutputInvalid": "Az AI válasza váratlan formátumú volt. Próbálja újra.",
       "aiOutputModerated": "Az AI-szolgáltató moderálta a kimenetet. Fogalmazza át a kérést, vagy válasszon másik modellt.",
       "aiUnknown": "Az AI-kérés sikertelen volt. Próbálja újra.",
+      "errorFailed": "A számítógépén futó ügynök indoklás nélkül befejezte ezt a választ. Próbálja újra.",
       "errorFolderUnavailable": "A csevegéshez csatolt mappa nem érhető el a számítógépén. Ellenőrizze a stella desktopban, majd küldje el újra.",
       "errorLimitReached": "A számítógépén futó kódoló ügynök elérte a használati korlátját. Próbálja újra, amint a korlát visszaáll.",
+      "errorLost": "A számítógépe átvette ezt a választ, majd nem reagált tovább. Ellenőrizze, hogy a stella desktop meg van nyitva és csatlakozik, majd próbálja újra.",
       "errorNeedsLogin": "A számítógépén futó kódoló ügynök újbóli bejelentkezést kér. Jelentkezzen be a stella desktopban, majd próbálja újra.",
       "errorNotReached": "A számítógépe nem vette át ezt a választ. Ellenőrizze, hogy a stella desktop meg van nyitva és csatlakozik, majd próbálja újra.",
       "errorRelinked": "A stella desktop újra lett kapcsolva a számítógépén, ezért ez a válasz leállt. Küldje el újra.",
@@ -173,6 +175,13 @@
       "limitReminderScheduled": "{time} után értesítjük.",
       "limitResumeContinue": "Automatikus folytatás, amikor visszaáll",
       "limitResumeScheduled": "{time} után automatikusan folytatódik.",
+      "notices": {
+        "browserUnavailable": "A böngészőt nem sikerült elindítani ehhez az üzenethez, ezért az ügynök nélküle dolgozott.",
+        "configWarning": "A számítógépén futó kódoló ügynök figyelmeztetett a saját beállításaira, majd folytatta a munkát. Ha valami nem stimmel, ellenőrizze a beállításait azon a számítógépen.",
+        "recovered": "A modell ismét válaszolt, miután a számítógépén futó kódoló ügynök újra próbálkozott.",
+        "retrying": "A modell nem válaszol. A számítógépén futó kódoló ügynök újra próbálkozik.",
+        "retryingAttempt": "A modell nem válaszol. A számítógépén futó kódoló ügynök újra próbálkozik ({attempt, number}/{maxAttempts, number}. próbálkozás)."
+      },
       "output": {
         "arriving": "Még érkezik arról a számítógépről, amelyen a lépés futott",
         "command": "Kimenet",
@@ -191,6 +200,13 @@
       },
       "patternInPath": "{pattern} itt: {path}",
       "ranOnModel": "Ezen a modellen futott: {model}",
+      "request": {
+        "cancelled": "Nincs válasz: ez a válasz le lett állítva.",
+        "runFailed": "Nincs válasz: az ügynök hibával leállt e lépés előtt.",
+        "runFinished": "Nincs rá szükség: az ügynök e lépés nélkül végzett.",
+        "runLost": "Nincs válasz: a számítógépe leállította ennek a válasznak a feldolgozását.",
+        "withdrawn": "Már nincs rá szükség: az ügynök e lépés nélkül folytatta."
+      },
       "sessionNotResumed": "A számítógépén futó kódoló ügynök nem tudta onnan folytatni, ahol abbahagyta, ezért a csevegés üzeneteiből dolgozott tovább.",
       "status": {
         "failed": "Sikertelen",
@@ -372,6 +388,7 @@
       "read_comments": "Megjegyzések olvasása",
       "read_document": "Dokumentum olvasása",
       "read_section": "Szakasz olvasása",
+      "read_site_notes": "Webhelyjegyzetek olvasása",
       "read_story": "Dokumentumrész olvasása",
       "remember": "Mentés a memóriába",
       "remove_matter_member": "Ügytag eltávolítása",
@@ -388,6 +405,7 @@
       "save_document": "Dokumentum mentése",
       "save_matter": "Ügy mentése",
       "save_playbook": "Playbook mentése",
+      "save_site_notes": "Webhelyjegyzetek frissítése",
       "save_skill_package": "Készség mentése",
       "save_task": "Feladat mentése",
       "save_template": "Sablon mentése",

@@ -40,6 +40,7 @@ import {
   caseLawResearchColumns,
   caseLawSources,
   chatBrowserSiteGrants,
+  chatBrowserSiteNotes,
   chatLimitReminders,
   chatMessageRevisions,
   chatMessages,
@@ -86,9 +87,13 @@ import { env } from "@/api/env";
 import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
 import { createLookupResearchAnswers } from "@/api/handlers/case-law/research/answers-lookup";
+import fileChatThreadBrowserDownload from "@/api/handlers/chat/browser-downloads/chat-thread";
 import createBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/create";
 import deleteBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/delete";
 import listBrowserSiteGrants from "@/api/handlers/chat/browser-site-grants/list";
+import deleteBrowserSiteNote from "@/api/handlers/chat/browser-site-notes/delete";
+import listBrowserSiteNotes from "@/api/handlers/chat/browser-site-notes/list";
+import deleteBrowserSiteNotesSite from "@/api/handlers/chat/browser-site-notes/sites/delete";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import getDecisionChatThread from "@/api/handlers/chat/decision-threads/get";
 import exportChatMessage from "@/api/handlers/chat/export/create";
@@ -150,6 +155,7 @@ import createChatToolGrant from "@/api/handlers/chat/tool-grants/create";
 import deleteChatToolGrant from "@/api/handlers/chat/tool-grants/delete";
 import listChatToolGrants from "@/api/handlers/chat/tool-grants/list";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
+import answerChatTurnRequest from "@/api/handlers/chat/turns/answer-request";
 import cancelChatTurn from "@/api/handlers/chat/turns/cancel";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import steerChatTurn from "@/api/handlers/chat/turns/steer";
@@ -678,6 +684,18 @@ const browserSiteGrantB = toSafeId<"chatBrowserSiteGrant">(
 const browserSiteGrantDeleteB = toSafeId<"chatBrowserSiteGrant">(
   "22222222-2222-4222-8222-222222222312",
 );
+// Website notes of user A1 in organization B: one listed, one the delete case
+// removes, and a website the per-website delete case clears.
+const browserSiteNoteB = toSafeId<"chatBrowserSiteNote">(
+  "22222222-2222-4222-8222-222222222313",
+);
+const browserSiteNoteDeleteB = toSafeId<"chatBrowserSiteNote">(
+  "22222222-2222-4222-8222-222222222314",
+);
+const browserSiteNoteSiteB = toSafeId<"chatBrowserSiteNote">(
+  "22222222-2222-4222-8222-222222222315",
+);
+const BROWSER_SITE_NOTES_SITE_B = "https://noted-in-b.example";
 const chatThreadTitleB = "Chat thread B";
 const chatRenameFromA = "Renamed from organization A";
 /** Thread B's stored model, so a foreign "auto" selection is observable. */
@@ -783,6 +801,13 @@ const chatSendRequest = (threadId: SafeId<"chatThread">, messageId: string) => {
   };
 };
 
+/** A downloaded file's form whose bytes are not a PDF's, so nothing is stored. */
+const browserDownloadProbe = () => ({
+  downloadedAt: "2026-11-25T09:30:00.000Z",
+  file: new File([new TextEncoder().encode("<html>probe</html>")], "probe.pdf"),
+  sourceUrl: "https://fixture-library.test/doc/1/file",
+});
+
 /** The owner's view of a chat thread, read past RLS after a handler ran. */
 const readChatThreadRow = async (threadId: SafeId<"chatThread">) =>
   (
@@ -850,6 +875,14 @@ const browserSiteGrantExists = async (
       .select({ id: chatBrowserSiteGrants.id })
       .from(chatBrowserSiteGrants)
       .where(eq(chatBrowserSiteGrants.id, grantId))
+  ).length > 0;
+
+const browserSiteNoteExists = async (noteId: SafeId<"chatBrowserSiteNote">) =>
+  (
+    await testDb
+      .select({ id: chatBrowserSiteNotes.id })
+      .from(chatBrowserSiteNotes)
+      .where(eq(chatBrowserSiteNotes.id, noteId))
   ).length > 0;
 
 const countChatMessages = async (threadId: SafeId<"chatThread">) =>
@@ -2905,6 +2938,56 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) => expect(result).toEqual({ deleted: true }),
   },
   {
+    // The same person's website notes in another firm stay with that firm.
+    name: "browser site note list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listBrowserSiteNotes, workspaceA, {}),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listBrowserSiteNotes, sameUserWorkspaceB, {}),
+    expectDenied: (result) =>
+      expect(JSON.stringify(result)).not.toContain(browserSiteNoteB),
+    expectPositive: (result) =>
+      expect(JSON.stringify(result)).toContain(browserSiteNoteB),
+  },
+  {
+    name: "browser site note delete",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(deleteBrowserSiteNote, workspaceA, {
+        params: { noteId: browserSiteNoteDeleteB },
+      }),
+      exists: await browserSiteNoteExists(browserSiteNoteDeleteB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(deleteBrowserSiteNote, sameUserWorkspaceB, {
+        params: { noteId: browserSiteNoteDeleteB },
+      }),
+    expectDenied: (result) => {
+      expect(recordField(result, "response")).toEqual({ deleted: false });
+      expect(recordField(result, "exists")).toBe(true);
+    },
+    expectPositive: (result) => expect(result).toEqual({ deleted: true }),
+  },
+  {
+    // Clearing a website's notes in one firm leaves the same person's notes
+    // for that website in another.
+    name: "browser site notes site delete",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(deleteBrowserSiteNotesSite, workspaceA, {
+        query: { url: BROWSER_SITE_NOTES_SITE_B },
+      }),
+      exists: await browserSiteNoteExists(browserSiteNoteSiteB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(deleteBrowserSiteNotesSite, sameUserWorkspaceB, {
+        query: { url: BROWSER_SITE_NOTES_SITE_B },
+      }),
+    expectDenied: (result) => {
+      expect(recordField(result, "response")).toEqual({ deleted: 0 });
+      expect(recordField(result, "exists")).toBe(true);
+    },
+    expectPositive: (result) => expect(result).toEqual({ deleted: 1 }),
+  },
+  {
     name: "chat thread rename",
     runAAgainstB: async ({ workspaceA }) => ({
       response: await runHandler(renameChatThread, workspaceA, {
@@ -2976,6 +3059,24 @@ const isolationCases: IsolationCase[] = [
     },
     expectPositive: (result) =>
       expect(result).toEqual({ pinState: "unpinned" }),
+  },
+  {
+    // The chat row names where a download is filed: another firm's chat is
+    // never found, so nothing is read from the file. The owner's own chat
+    // is found, and its file then reaches the PDF check.
+    name: "chat thread browser download",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(fileChatThreadBrowserDownload, workspaceA, {
+        body: browserDownloadProbe(),
+        params: { threadId: chatThreadB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(fileChatThreadBrowserDownload, sameUserWorkspaceB, {
+        body: browserDownloadProbe(),
+        params: { threadId: chatThreadB },
+      }),
+    expectDenied: (result) => expect(getStatusCode(result)).toBe(404),
+    expectPositive: (result) => expect(getStatusCode(result)).toBe(422),
   },
   {
     // An upsert: a thread id the caller cannot see must neither be updated
@@ -3156,6 +3257,37 @@ const isolationCases: IsolationCase[] = [
       expect(result).toEqual({
         steer: { type: "refused", reason: "turn_not_running" },
       });
+    },
+  },
+  {
+    // B's turn has no run yet, so its own answer finds the turn but no
+    // request; A's never finds the turn at all.
+    name: "chat turn request answer",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(answerChatTurnRequest, workspaceA, {
+        params: {
+          threadId: chatTurnThreadB,
+          turnId: chatTurnB,
+          requestId: CHAT_TURN_REQUEST_ID,
+        },
+        body: { answer: { type: "approval", decision: "approve" } },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(answerChatTurnRequest, sameUserWorkspaceB, {
+        params: {
+          threadId: chatTurnThreadB,
+          turnId: chatTurnB,
+          requestId: CHAT_TURN_REQUEST_ID,
+        },
+        body: { answer: { type: "approval", decision: "approve" } },
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+      expect(JSON.stringify(result)).toContain("Chat turn not found");
+    },
+    expectPositive: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+      expect(JSON.stringify(result)).toContain("Chat turn request not found");
     },
   },
   {
@@ -4565,6 +4697,35 @@ testState.beforeAll(async () => {
       origin: "https://example.org",
     },
   ]);
+  await testDb.insert(chatBrowserSiteNotes).values([
+    {
+      id: browserSiteNoteB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      origin: "https://example.com",
+      kind: "works",
+      step: "search form",
+      text: "The advanced form filters by court.",
+    },
+    {
+      id: browserSiteNoteDeleteB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      origin: "https://example.com",
+      kind: "failed",
+      step: "quick search",
+      text: "The quick box ignores dates.",
+    },
+    {
+      id: browserSiteNoteSiteB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      origin: BROWSER_SITE_NOTES_SITE_B,
+      kind: "works",
+      step: "paging",
+      text: "Use the Next link.",
+    },
+  ]);
 });
 
 describe("cross-tenant handler isolation", () => {
@@ -5054,6 +5215,9 @@ const getPageItems = (result: unknown): Record<string, unknown>[] => {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
+
+/** A request no run of the turn asked: the handler finds the turn, not it. */
+const CHAT_TURN_REQUEST_ID = "0198c0de-0000-7000-8000-0000000000c1";
 
 testState.beforeAll(() => {
   testState.setConfig("FEATURE_TIME_BILLING", true);

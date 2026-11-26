@@ -52,8 +52,6 @@ import {
 } from "@/api/mcp/valibot-tool-definition";
 import { openMcpRead } from "@/api/mcp/write-tool-authority";
 
-type SoftLawToolName = "search_guidance" | "read_guidance";
-
 const SEARCH_GUIDANCE_TOOL = "search_guidance";
 const READ_GUIDANCE_TOOL = "read_guidance";
 
@@ -284,7 +282,10 @@ const handleReadGuidanceTool: TypedMcpToolHandler<
 export const SOFT_LAW_TOOL_HANDLERS = {
   search_guidance: handleSearchGuidanceTool,
   read_guidance: handleReadGuidanceTool,
-} satisfies Record<SoftLawToolName, McpToolHandler>;
+} satisfies Record<
+  (typeof SOFT_LAW_TOOL_DEFINITIONS)[number]["name"],
+  McpToolHandler
+>;
 
 export const SOFT_LAW_TOOL_SET = defineMcpToolSet(
   SOFT_LAW_TOOL_DEFINITIONS,

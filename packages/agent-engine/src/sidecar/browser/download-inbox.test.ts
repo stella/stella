@@ -1,10 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
 import type { BrowserDownload } from "@stll/api-contract/browser-control";
+import { waitFor } from "@stll/test-kit";
 
-import { createDownloadInbox, DOWNLOAD_SETTLE_WAIT_MS } from "./download-inbox";
+import {
+  createDownloadInbox,
+  DOWNLOAD_SETTLE_WAIT_MS,
+  MAX_DOWNLOAD_WAIT_MS,
+} from "./download-inbox";
+import type { ReceivedDownload } from "./downloads";
 
 const PDF_ADDRESS = "https://fixture-library.test/decisions/42/file";
+const ANNEX_ADDRESS = "https://fixture-library.test/decisions/42/annex";
 const RUN = {
   runId: "run-1",
   threadId: "thread-1",
@@ -21,6 +28,7 @@ const stopped = (sourceUrl: string): BrowserDownload => ({
 
 const REFUSED_INTERRUPTED = {
   message: "Chrome could not finish the download.",
+  pageUrl: null,
   reason: "interrupted",
   status: "refused",
 } as const;
@@ -53,10 +61,14 @@ const manualClock = () => {
   };
 };
 
-const inboxWith = (clock: ReturnType<typeof manualClock>["clock"]) =>
+const inboxWith = (
+  clock: ReturnType<typeof manualClock>["clock"],
+  pageOf: (threadId: string) => string | null = () => null,
+) =>
   createDownloadInbox({
     clock,
     home: "/unused-home",
+    pageOf,
     runOf: (threadId) => (threadId === RUN.threadId ? RUN : null),
   });
 
@@ -213,7 +225,11 @@ describe("a document the tab shows", () => {
       signal: NOT_STOPPED,
       since: inbox.mark(),
     });
-    const outcome = { ...REFUSED_INTERRUPTED, sourceUrl: FETCHED };
+    const outcome = {
+      ...REFUSED_INTERRUPTED,
+      pageUrl: PDF_ADDRESS,
+      sourceUrl: FETCHED,
+    };
     expect(first.shown).toEqual(outcome);
     // The same entry as in the list, so a result can leave it out there.
     expect(first.downloads.some((entry) => entry === first.shown)).toBe(true);
@@ -252,11 +268,14 @@ describe("a document the tab shows", () => {
     createDownloadInbox({
       clock: manualClock().clock,
       home: "/unused-home",
+      pageOf: () => null,
       receive: async (download) =>
         download.outcome === "saved"
           ? {
               bytes: download.bytes,
+              duplicate: false,
               path: "Downloads/Judgment 42.pdf",
+              sha256: "0".repeat(64),
               sourceUrl: download.sourceUrl,
               status: "saved",
             }
@@ -368,11 +387,14 @@ describe("downloads and the runs of a chat", () => {
     const inbox = createDownloadInbox({
       clock: manualClock().clock,
       home: "/unused-home",
+      pageOf: () => null,
       receive: async (download, { workspaceDir }) => {
         hooks.onSave(download.sourceUrl);
         return await Promise.resolve({
           bytes: 10,
+          duplicate: false,
           path: `${workspaceDir}/Downloads/file.pdf`,
+          sha256: "0".repeat(64),
           sourceUrl: download.sourceUrl,
           status: "saved" as const,
         });
@@ -458,5 +480,430 @@ describe("downloads and the runs of a chat", () => {
     expect(await take(inbox, RUN)).toMatchObject({ saving: 1 });
     inbox.forgetRun(RUN.runId);
     expect(await take(inbox, RUN)).toMatchObject({ saving: 0 });
+  });
+});
+
+describe("where a download came from", () => {
+  const SEARCH_PAGE = "https://fixture-library.test/search?q=notice";
+  const DECISION_PAGE = "https://fixture-library.test/decisions/42";
+
+  test("a page's download comes from the page the chat was on as it started", async () => {
+    const page = { current: DECISION_PAGE };
+    const inbox = inboxWith(manualClock().clock, () => page.current);
+    inbox.arrive(started("d-1"));
+    // The click that started it moved the chat on before it settled.
+    page.current = SEARCH_PAGE;
+    inbox.arrive(settled("d-1"));
+
+    const taken = await inbox.take(RUN, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: inbox.mark(),
+    });
+    expect(taken.downloads).toEqual([
+      {
+        ...REFUSED_INTERRUPTED,
+        pageUrl: DECISION_PAGE,
+        sourceUrl: PDF_ADDRESS,
+      },
+    ]);
+  });
+
+  test("one started before the chat read any page keeps no page, whatever the chat reads before it settles", async () => {
+    const page: { current: string | null } = { current: null };
+    const inbox = inboxWith(manualClock().clock, () => page.current);
+    inbox.arrive(started("d-1"));
+    page.current = DECISION_PAGE;
+    inbox.arrive(settled("d-1"));
+
+    const taken = await inbox.take(RUN, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: inbox.mark(),
+    });
+    expect(taken.downloads).toMatchObject([{ pageUrl: null }]);
+  });
+
+  test("a file from another site than the page the chat read has no page", async () => {
+    const inbox = inboxWith(manualClock().clock, () => DECISION_PAGE);
+    for (const [deliveryId, sourceUrl] of [
+      ["d-1", "https://other-site.test/file.pdf"],
+      ["d-2", "blob:https://other-site.test/1c9e0f1e"],
+      ["d-3", "data:application/pdf;base64,JVBERi0="],
+    ] as const) {
+      inbox.arrive(started(deliveryId));
+      inbox.arrive(settled(deliveryId, sourceUrl));
+    }
+
+    const taken = await inbox.take(RUN, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: inbox.mark(),
+    });
+    expect(taken.downloads.map(({ pageUrl }) => pageUrl)).toEqual([
+      null,
+      null,
+      null,
+    ]);
+  });
+
+  test("one stopped before it started comes from the page the chat is on at its report", async () => {
+    const inbox = inboxWith(manualClock().clock, () => SEARCH_PAGE);
+    inbox.arrive(settled("d-1"));
+
+    const taken = await inbox.take(RUN, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: inbox.mark(),
+    });
+    expect(taken.downloads).toMatchObject([{ pageUrl: SEARCH_PAGE }]);
+  });
+
+  test("a shown PDF's save comes from the PDF itself, whatever page the chat read", async () => {
+    const inbox = inboxWith(manualClock().clock, () => SEARCH_PAGE);
+    inbox.arrive(started("d-1", RUN.threadId, `${PDF_ADDRESS}#page=2`));
+    inbox.arrive(settled("d-1", PDF_ADDRESS, PDF_ADDRESS));
+
+    const taken = await inbox.take(RUN, {
+      shownAddress: PDF_ADDRESS,
+      signal: NOT_STOPPED,
+      since: inbox.mark(),
+    });
+    expect(taken.shown).toMatchObject({ pageUrl: PDF_ADDRESS });
+  });
+
+  test("a saved one carries when it arrived", async () => {
+    const time = manualClock();
+    const inbox = createDownloadInbox({
+      clock: time.clock,
+      home: "/unused-home",
+      pageOf: () => DECISION_PAGE,
+      receive: async (download) =>
+        await Promise.resolve({
+          bytes: 10,
+          duplicate: false,
+          path: "Downloads/Judgment 42.pdf",
+          sha256: "a".repeat(64),
+          sourceUrl: download.sourceUrl,
+          status: "saved" as const,
+        }),
+      runOf: () => RUN,
+    });
+    time.state.time = Date.UTC(2026, 10, 25, 9, 30);
+    inbox.arrive(settled("d-1"));
+
+    const taken = await inbox.take(RUN, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: inbox.mark(),
+    });
+    expect(taken.downloads).toEqual([
+      {
+        bytes: 10,
+        downloadedAt: "2026-11-25T09:30:00Z",
+        duplicate: false,
+        pageUrl: DECISION_PAGE,
+        path: "Downloads/Judgment 42.pdf",
+        sha256: "a".repeat(64),
+        sourceUrl: PDF_ADDRESS,
+        status: "saved",
+      },
+    ]);
+  });
+});
+
+describe("filing a saved download with stella", () => {
+  test("a saved one is filed with where it came from, and a refused one is not", async () => {
+    const filings: unknown[] = [];
+    const run = {
+      ...RUN,
+      fileDownload: async (download: unknown) => {
+        filings.push(download);
+        return await Promise.resolve({
+          documentId: "doc-1",
+          duplicate: false,
+          matterId: "matter-1",
+          name: "Judgment 42.pdf",
+          status: "document" as const,
+        });
+      },
+    };
+    const time = manualClock();
+    time.state.time = Date.UTC(2026, 10, 25, 9, 30);
+    const inbox = createDownloadInbox({
+      clock: time.clock,
+      home: "/unused-home",
+      pageOf: () => "https://fixture-library.test/decisions/42",
+      receive: async (download) =>
+        download.suggestedName === "saved"
+          ? {
+              bytes: 10,
+              duplicate: false,
+              path: "Downloads/Judgment 42.pdf",
+              sha256: "a".repeat(64),
+              sourceUrl: download.sourceUrl,
+              status: "saved" as const,
+            }
+          : {
+              message: "Chrome could not finish the download.",
+              reason: "interrupted" as const,
+              sourceUrl: download.sourceUrl,
+              status: "refused" as const,
+            },
+      runOf: () => run,
+    });
+    inbox.arrive({
+      ...settled("d-1"),
+      download: { ...stopped(PDF_ADDRESS), suggestedName: "saved" },
+    });
+    inbox.arrive(settled("d-2"));
+
+    const taken = await inbox.take(run, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: inbox.mark(),
+    });
+
+    expect(taken.downloads).toMatchObject([
+      {
+        filed: { documentId: "doc-1", status: "document" },
+        status: "saved",
+      },
+      { status: "refused" },
+    ]);
+    expect(taken.downloads.at(1)).not.toHaveProperty("filed");
+    expect(filings).toEqual([
+      {
+        origin: {
+          downloadedAt: "2026-11-25T09:30:00Z",
+          pageUrl: "https://fixture-library.test/decisions/42",
+          sourceUrl: PDF_ADDRESS,
+        },
+        path: "Downloads/Judgment 42.pdf",
+        sha256: "a".repeat(64),
+      },
+    ]);
+  });
+
+  test("a download a Plan run's step started is never filed, even when a later run saves it", async () => {
+    const filings: unknown[] = [];
+    const fileDownload = async (download: unknown) => {
+      filings.push(download);
+      return await Promise.resolve({
+        documentId: "doc-1",
+        duplicate: false,
+        matterId: "matter-1",
+        name: "Judgment 42.pdf",
+        status: "document" as const,
+      });
+    };
+    const planRun = { ...RUN, approvals: "plan" as const, fileDownload };
+    const autoRun = {
+      ...RUN,
+      approvals: "auto" as const,
+      fileDownload,
+      runId: "run-2",
+    };
+    const held: { run: typeof planRun | typeof autoRun } = { run: planRun };
+    const inbox = createDownloadInbox({
+      clock: manualClock().clock,
+      home: "/unused-home",
+      pageOf: () => null,
+      receive: async (download) =>
+        await Promise.resolve({
+          bytes: 10,
+          duplicate: false,
+          path: "Downloads/Judgment 42.pdf",
+          sha256: "a".repeat(64),
+          sourceUrl: download.sourceUrl,
+          status: "saved" as const,
+        }),
+      runOf: () => held.run,
+    });
+    inbox.arrive(started("d-plan"));
+    // The Plan run ends while Chrome is still saving; a later run is held
+    // when the download settles.
+    inbox.forgetRun(planRun.runId);
+    held.run = autoRun;
+    inbox.arrive({
+      ...settled("d-plan"),
+      download: { ...stopped(PDF_ADDRESS), suggestedName: "saved" },
+    });
+    inbox.arrive(started("d-auto"));
+    inbox.arrive({
+      ...settled("d-auto"),
+      download: { ...stopped(ANNEX_ADDRESS), suggestedName: "saved" },
+    });
+
+    const taken = await inbox.take(autoRun, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: inbox.mark(),
+    });
+
+    expect(taken.downloads).toMatchObject([
+      {
+        filed: {
+          message:
+            "In Plan mode stella files nothing into the matter. The file is in your working folder only.",
+          status: "not_filed",
+        },
+        sourceUrl: PDF_ADDRESS,
+      },
+      { filed: { status: "document" }, sourceUrl: ANNEX_ADDRESS },
+    ]);
+    expect(filings).toMatchObject([{ origin: { sourceUrl: ANNEX_ADDRESS } }]);
+  });
+});
+
+describe("a result's bound covers the save as well", () => {
+  /** An inbox whose saves finish only when the test says so. */
+  const slowInbox = (time: ReturnType<typeof manualClock>) => {
+    const saves: PromiseWithResolvers<ReceivedDownload>[] = [];
+    const inbox = createDownloadInbox({
+      clock: time.clock,
+      home: "/unused-home",
+      pageOf: () => null,
+      receive: async () => {
+        const save = Promise.withResolvers<ReceivedDownload>();
+        saves.push(save);
+        return await save.promise;
+      },
+      runOf: () => RUN,
+    });
+    return { inbox, saves };
+  };
+
+  const SAVED: ReceivedDownload = {
+    bytes: 10,
+    duplicate: false,
+    path: "Downloads/Judgment 42.pdf",
+    sha256: "a".repeat(64),
+    sourceUrl: PDF_ADDRESS,
+    status: "saved",
+  };
+
+  test("a save still running when the bound runs out is counted as saving, then listed by a later result", async () => {
+    const time = manualClock();
+    const { inbox, saves } = slowInbox(time);
+    inbox.arrive(settled("d-1"));
+
+    const first = inbox.take(RUN, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: inbox.mark(),
+    });
+    // The save gets the result's bound, and no more.
+    expect(
+      await waitFor(
+        () => (time.pending().length > 0 ? time.pending() : undefined),
+        { description: "the result to wait for the save" },
+      ),
+    ).toEqual([DOWNLOAD_SETTLE_WAIT_MS]);
+    time.runOut();
+    expect(await first).toMatchObject({ downloads: [], saving: 1 });
+
+    saves.at(0)?.resolve(SAVED);
+    const later = await inbox.take(RUN, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: inbox.mark(),
+    });
+    expect(later).toMatchObject({
+      downloads: [{ path: SAVED.path, status: "saved" }],
+      saving: 0,
+    });
+  });
+
+  test("a wait that is stopped returns at once, and the save stays held", async () => {
+    const time = manualClock();
+    const { inbox } = slowInbox(time);
+    inbox.arrive(settled("d-1"));
+    const stop = new AbortController();
+
+    const taking = inbox.take(RUN, {
+      shownAddress: null,
+      signal: stop.signal,
+      since: 0,
+      waitMs: MAX_DOWNLOAD_WAIT_MS,
+    });
+    stop.abort();
+
+    expect(await taking).toMatchObject({ downloads: [], saving: 1 });
+    expect(time.pending()).toEqual([]);
+  });
+});
+
+describe("waiting for downloads after the step returned", () => {
+  test("a download still saving after its step's result is waited for and handed out once it settles", async () => {
+    const time = manualClock();
+    const inbox = inboxWith(time.clock);
+    const since = inbox.mark();
+    inbox.arrive(started("d-1"));
+
+    // The click's own result gives up after the settle wait.
+    const step = inbox.take(RUN, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since,
+    });
+    time.runOut();
+    expect(await step).toMatchObject({ downloads: [], saving: 1 });
+
+    // A later wait counts every download still saving, whenever it began.
+    const waiting = inbox.take(RUN, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: 0,
+      waitMs: MAX_DOWNLOAD_WAIT_MS,
+    });
+    expect(time.pending()).toEqual([MAX_DOWNLOAD_WAIT_MS]);
+    inbox.arrive(settled("d-1"));
+
+    expect(await waiting).toEqual({
+      downloads: [{ ...REFUSED_INTERRUPTED, sourceUrl: PDF_ADDRESS }],
+      saving: 0,
+      shown: null,
+      shownSaving: false,
+    });
+    expect(time.pending()).toEqual([]);
+  });
+
+  test("a wait that runs out says how many are still saving", async () => {
+    const time = manualClock();
+    const inbox = inboxWith(time.clock);
+    inbox.arrive(started("d-1"));
+    inbox.arrive(started("d-2"));
+
+    const waiting = inbox.take(RUN, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: 0,
+      waitMs: 5000,
+    });
+    inbox.arrive(settled("d-1"));
+    // One settled; the wait goes on for the other.
+    expect(time.pending()).toEqual([5000]);
+    time.runOut();
+
+    expect(await waiting).toMatchObject({
+      downloads: [{ status: "refused" }],
+      saving: 1,
+    });
+  });
+
+  test("another chat's downloads are never waited for", async () => {
+    const time = manualClock();
+    const inbox = inboxWith(time.clock);
+    inbox.arrive(started("d-1", "thread-2"));
+
+    const waited = await inbox.take(RUN, {
+      shownAddress: null,
+      signal: NOT_STOPPED,
+      since: 0,
+      waitMs: MAX_DOWNLOAD_WAIT_MS,
+    });
+    expect(waited).toMatchObject({ downloads: [], saving: 0 });
+    expect(time.pending()).toEqual([]);
   });
 });

@@ -125,8 +125,10 @@
       "aiOutputInvalid": "A resposta da IA tinha um formato inesperado. Tente novamente.",
       "aiOutputModerated": "O provedor de IA moderou a resposta. Reformule a solicitação ou escolha outro modelo.",
       "aiUnknown": "A solicitação de IA falhou. Tente novamente.",
+      "errorFailed": "O agente no seu computador encerrou esta resposta sem dizer o motivo. Tente de novo.",
       "errorFolderUnavailable": "A pasta vinculada a este chat não está disponível no seu computador. Verifique-a no stella desktop e envie isto de novo.",
       "errorLimitReached": "O agente de programação do seu computador atingiu o limite de uso. Tente de novo quando o limite for renovado.",
+      "errorLost": "Seu computador assumiu esta resposta e depois parou de responder. Verifique se o stella desktop está aberto e conectado e tente de novo.",
       "errorNeedsLogin": "O agente de programação do seu computador precisa que você entre novamente. Entre pelo stella desktop e tente de novo.",
       "errorNotReached": "Seu computador não assumiu esta resposta. Verifique se o stella desktop está aberto e conectado e tente de novo.",
       "errorRelinked": "O stella desktop foi vinculado de novo no seu computador, então esta resposta parou. Envie-a de novo.",
@@ -173,6 +175,13 @@
       "limitReminderScheduled": "Avisaremos você a partir de {time}.",
       "limitResumeContinue": "Continuar automaticamente quando for renovado",
       "limitResumeScheduled": "Continuará automaticamente a partir de {time}.",
+      "notices": {
+        "browserUnavailable": "Não foi possível abrir o navegador para esta mensagem, então o agente trabalhou sem ele.",
+        "configWarning": "O agente de programação do seu computador avisou sobre um problema nas próprias configurações e continuou. Se algo parecer estranho, confira as configurações dele nesse computador.",
+        "recovered": "O modelo voltou a responder depois que o agente de programação do seu computador tentou de novo.",
+        "retrying": "O modelo não está respondendo. O agente de programação do seu computador está tentando de novo.",
+        "retryingAttempt": "O modelo não está respondendo. O agente de programação do seu computador está tentando de novo (tentativa {attempt, number} de {maxAttempts, number})."
+      },
       "output": {
         "arriving": "Ainda chegando do computador que executou esta etapa",
         "command": "Saída",
@@ -191,6 +200,13 @@
       },
       "patternInPath": "{pattern} em {path}",
       "ranOnModel": "Executado com {model}",
+      "request": {
+        "cancelled": "Sem resposta: esta resposta foi interrompida.",
+        "runFailed": "Sem resposta: o agente parou com um erro antes desta etapa.",
+        "runFinished": "Não é necessário: o agente terminou sem esta etapa.",
+        "runLost": "Sem resposta: seu computador parou de processar esta resposta.",
+        "withdrawn": "Não é mais necessário: o agente continuou sem esta etapa."
+      },
       "sessionNotResumed": "O agente de programação do seu computador não conseguiu retomar de onde parou, então continuou a partir das mensagens deste chat.",
       "status": {
         "failed": "Falhou",
@@ -372,6 +388,7 @@
       "read_comments": "Lendo comentários",
       "read_document": "Lendo documento",
       "read_section": "Lendo uma seção",
+      "read_site_notes": "Lendo notas do site",
       "read_story": "Lendo uma parte do documento",
       "remember": "Salvando na memória",
       "remove_matter_member": "Remover membro do caso",
@@ -388,6 +405,7 @@
       "save_document": "Salvar documento",
       "save_matter": "Salvar caso",
       "save_playbook": "Salvar playbook",
+      "save_site_notes": "Atualizando notas do site",
       "save_skill_package": "Salvar habilidade",
       "save_task": "Salvar tarefa",
       "save_template": "Salvar modelo",

@@ -29,7 +29,7 @@ export const ComposerAttachMenu = ({
   const t = useTranslations("chat");
 
   return (
-    <View className="mb-[3px] size-9 items-center justify-center rounded-full">
+    <View className="size-9 items-center justify-center rounded-full">
       <Host style={styles.glassHost}>
         <Menu
           label={

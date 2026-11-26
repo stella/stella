@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-import { TaggedError } from "better-result";
+import { panic, TaggedError } from "better-result";
 
 import {
   BROWSER_CONTROL_ERROR_CODE,
@@ -24,10 +24,11 @@ import {
 import { createUuid } from "@/lib/uuid";
 
 import {
-  observeBrowserPage,
+  browserApprovalPairing,
+  observeBrowserResult,
   resetBrowserApproval,
-  toBrowserObservedPage,
-} from "./browser-approval-mode";
+} from "./browser-approval-state";
+import { browserDownloadInbox } from "./browser-download-filing";
 import { latestBrowserExtensionAnnouncement } from "./browser-extension-announcement";
 import type { BrowserCommandRun } from "./browser-tool-execution";
 
@@ -74,6 +75,12 @@ const BROWSER_EXTENSION_STATES = {
 
 type PendingRequest = {
   command: BrowserControlCommand;
+  /**
+   * The browser gate's pairing the request was sent under
+   * (`browserApprovalPairing`): its answer tells the gate nothing once the
+   * pairing changed.
+   */
+  pairing: number;
   /** Ends the wait when chat stops the command. */
   detach: () => void;
   resolve: (result: BrowserControlResult) => void;
@@ -218,6 +225,26 @@ const handleExtensionMessage = (data: unknown): void => {
   }
 
   const runtime = getBridgeRuntime();
+  switch (response.type) {
+    case "download-started":
+    case "download-chunk":
+    case "download-end":
+      // Only the paired connection's downloads, and only for a chat turn
+      // this tab ran a command for (`browser-download-inbox`).
+      if (
+        runtime.controllerId !== null &&
+        response.controllerId === runtime.controllerId
+      ) {
+        browserDownloadInbox.receive(response);
+      }
+      return;
+    case "pong":
+    case "command-result":
+      break;
+    default:
+      response satisfies never;
+      return panic("Unhandled browser extension response");
+  }
   if (response.type === "pong") {
     markAnnounced(runtime);
     runtime.extensionProtocolVersion = null;
@@ -250,10 +277,10 @@ const handleExtensionMessage = (data: unknown): void => {
       controlledTabId: tabId,
       controllerId: runtime.identity?.controllerId ?? runtime.controllerId,
     };
-    // Website approvals judge the next command by this report, never by a
-    // URL the model wrote.
-    observeBrowserPage(toBrowserObservedPage(response.result.snapshot));
   }
+  // The browser gate judges the next command by this report, never by a URL
+  // the model wrote, and never by an answer from an earlier pairing.
+  observeBrowserResult(response.result, pending.pairing);
   pending.resolve(response.result);
 };
 
@@ -313,7 +340,7 @@ export const mountBrowserExtensionBridge = (): (() => void) => {
     }
     runtime.pendingRequests.clear();
     bridgeRuntime = null;
-    observeBrowserPage(null);
+    resetBrowserApproval();
     notifyConnectionListeners();
   };
 };
@@ -515,6 +542,7 @@ export const executeBrowserExtensionCommand = async (
     runtime.pendingRequests.set(requestId, {
       command,
       detach: () => signal.removeEventListener("abort", onStop),
+      pairing: browserApprovalPairing(),
       resolve,
       timeout,
     });

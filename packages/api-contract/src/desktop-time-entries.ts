@@ -1,6 +1,9 @@
+import { Result } from "better-result";
 import * as v from "valibot";
 
-import { apiDateSchema } from "./api-date";
+import { Temporal } from "@stll/time";
+
+import { API_STORABLE_INSTANT_CHECK, apiDateSchema } from "./api-date";
 import { TIME_ENTRY_ACTIVITY_GROUPS } from "./billing";
 
 export const desktopMatterSchema = v.strictObject({
@@ -63,10 +66,63 @@ export const desktopMatterCandidatesResponseSchema = v.strictObject({
     v.array(desktopMatterCandidateSchema),
     v.maxLength(DESKTOP_ACTIVITY_REVIEW_LIMIT),
   ),
+  /** The organization's minimum billing unit, a divisor of an hour; the
+   * review shows what an entry bills under it before it is created. */
+  timeMinimumUnitMinutes: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(1),
+    v.maxValue(60),
+    v.check((minutes) => 60 % minutes === 0),
+  ),
 });
 export type DesktopMatterCandidatesResponse = v.InferOutput<
   typeof desktopMatterCandidatesResponseSchema
 >;
+
+const desktopMatterIdSchema = v.pipe(v.string(), v.maxLength(36), v.uuid());
+
+/** Whether a matter the day's records name is one the member can open. */
+export const DESKTOP_MATTER_ACCESS = ["accessible", "inaccessible"] as const;
+
+/** Matters named by id: one `id` parameter per matter, each answered once,
+ * in the order asked. */
+export const desktopMatterResolveQuerySchema = v.strictObject({
+  id: v.union([
+    desktopMatterIdSchema,
+    v.pipe(
+      v.array(desktopMatterIdSchema),
+      v.minLength(1),
+      v.maxLength(DESKTOP_ACTIVITY_REVIEW_LIMIT),
+      v.check(
+        (ids) => new Set(ids).size === ids.length,
+        "Each matter is named once",
+      ),
+    ),
+  ]),
+});
+export const isDesktopMatterId = (id: string) =>
+  v.is(desktopMatterIdSchema, id);
+
+const desktopMatterResolutionSchema = v.variant("type", [
+  v.strictObject({
+    type: v.literal(DESKTOP_MATTER_ACCESS[0]),
+    matter: desktopMatterCandidateSchema,
+  }),
+  v.strictObject({
+    type: v.literal(DESKTOP_MATTER_ACCESS[1]),
+    id: desktopMatterIdSchema,
+  }),
+]);
+export type DesktopMatterResolution = v.InferOutput<
+  typeof desktopMatterResolutionSchema
+>;
+export const desktopMatterResolveResponseSchema = v.strictObject({
+  matters: v.pipe(
+    v.array(desktopMatterResolutionSchema),
+    v.maxLength(DESKTOP_ACTIVITY_REVIEW_LIMIT),
+  ),
+});
 
 export const desktopTimeEntryBatchItemSchema = v.strictObject({
   matterId: v.pipe(v.string(), v.uuid()),
@@ -132,4 +188,89 @@ export const desktopTimeEntryBatchStatusSchema = v.variant("type", [
 ]);
 export type DesktopTimeEntryBatchStatus = v.InferOutput<
   typeof desktopTimeEntryBatchStatusSchema
+>;
+
+/** Calendar events the Activity day review shows beside recorded time. */
+export const DESKTOP_CALENDAR_EVENTS_LIMIT = 100;
+export const DESKTOP_CALENDAR_TITLE_MAX_LENGTH = 256;
+
+const isTimeZoneId = (zone: string) =>
+  Result.isOk(
+    Result.try(() =>
+      Temporal.PlainDate.from("2000-01-01").toZonedDateTime({ timeZone: zone }),
+    ),
+  );
+
+export const desktopCalendarEventsQuerySchema = v.strictObject({
+  date: apiDateSchema,
+  timeZone: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(64),
+    v.check(isTimeZoneId, "Expected an IANA time zone"),
+  ),
+});
+
+/** The member's own answer to an event; declined events are never sent. */
+export const DESKTOP_CALENDAR_RESPONSES = [
+  "organizer",
+  "accepted",
+  "tentative",
+  "notAnswered",
+] as const;
+export type DesktopCalendarResponse =
+  (typeof DESKTOP_CALENDAR_RESPONSES)[number];
+
+const calendarTitleSchema = v.pipe(
+  v.string(),
+  v.maxLength(DESKTOP_CALENDAR_TITLE_MAX_LENGTH),
+);
+const calendarInstantSchema = v.pipe(
+  v.string(),
+  v.maxLength(64),
+  v.isoTimestamp(),
+  API_STORABLE_INSTANT_CHECK,
+);
+
+export const desktopCalendarEventSchema = v.variant("timing", [
+  v.strictObject({
+    timing: v.literal("timed"),
+    title: calendarTitleSchema,
+    start: calendarInstantSchema,
+    end: calendarInstantSchema,
+    response: v.picklist(DESKTOP_CALENDAR_RESPONSES),
+  }),
+  v.strictObject({
+    timing: v.literal("allDay"),
+    title: calendarTitleSchema,
+    response: v.picklist(DESKTOP_CALENDAR_RESPONSES),
+  }),
+]);
+export type DesktopCalendarEvent = v.InferOutput<
+  typeof desktopCalendarEventSchema
+>;
+
+/**
+ * One day of the member's own calendar, or why it cannot be read:
+ * `turnedOff` when the deployment or the organization does not allow
+ * calendar reads, `notConnected` when the member has no Microsoft 365
+ * connection, `needsReconnect` when the connection lacks calendar access or
+ * must be renewed.
+ */
+export const desktopCalendarEventsResponseSchema = v.variant("status", [
+  v.strictObject({
+    status: v.literal("ready"),
+    events: v.pipe(
+      v.array(desktopCalendarEventSchema),
+      v.maxLength(DESKTOP_CALENDAR_EVENTS_LIMIT),
+    ),
+    /** More events exist than the limit read. */
+    truncated: v.boolean(),
+  }),
+  v.strictObject({ status: v.literal("turnedOff") }),
+  v.strictObject({ status: v.literal("notConnected") }),
+  v.strictObject({ status: v.literal("needsReconnect") }),
+]);
+export type DesktopCalendarEventsResponse = v.InferOutput<
+  typeof desktopCalendarEventsResponseSchema
 >;

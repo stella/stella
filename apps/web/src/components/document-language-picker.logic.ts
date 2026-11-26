@@ -13,14 +13,9 @@ import { createSearchQueryMatcher } from "@stll/text-normalize/search-query-matc
 const DEFAULT_TARGET_LANG: DocumentTranslationTargetLanguageCode = "EN-GB";
 
 /** UI locales whose code differs from the document-language code. */
-type MappedLocaleCode = "en";
-
 const LOCALE_TO_LANGUAGE = {
   en: "EN-GB",
-} as const satisfies Record<
-  MappedLocaleCode,
-  DocumentTranslationTargetLanguageCode
->;
+} as const satisfies Record<string, DocumentTranslationTargetLanguageCode>;
 
 const isMappedLocale = (
   locale: string,

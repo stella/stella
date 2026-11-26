@@ -181,6 +181,10 @@ export const ENUM_COLUMN_ROLES = {
   cell_metadata: {
     entity_feature_gate: ATTRIBUTE,
   },
+  // What a site note records; a replacement may change it either way.
+  chat_browser_site_notes: {
+    kind: ATTRIBUTE,
+  },
   chat_content_v3_backfill_receipts: {
     outcome: ATTRIBUTE,
     source: ATTRIBUTE,
@@ -197,6 +201,7 @@ export const ENUM_COLUMN_ROLES = {
     decision: ATTRIBUTE,
   },
   chat_threads: {
+    chat_cloud_approvals: ATTRIBUTE,
     chat_reasoning_effort: ATTRIBUTE,
   },
   chat_tool_grants: {

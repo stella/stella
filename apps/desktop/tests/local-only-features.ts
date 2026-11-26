@@ -70,12 +70,20 @@ export const LOCAL_ONLY_FEATURES = [
     commandOwners: [
       { module: "src/activity_commands.rs", prefixes: ["activity_"] },
       { module: "src/time_entry_commands.rs", prefixes: ["time_entry_"] },
+      // The member's matter rules and learned weights, this window only.
+      {
+        module: "src/activity_matter_learning.rs",
+        prefixes: ["activity_"],
+      },
       // The one command that sends a selected entry out for a stella AI
       // draft, only with the user's consent on the server.
       {
         module: "src/billing_draft_commands.rs",
         prefixes: ["billing_draft_create_"],
       },
+      // The day's calendar events, read only while the user has turned them
+      // on, for the day the window shows.
+      { module: "src/calendar_commands.rs", prefixes: ["calendar_"] },
     ],
     id: "activity",
     telemetry: "fixedCodes",
@@ -88,15 +96,18 @@ export const LOCAL_ONLY_FEATURES = [
     windowModules: {
       "src-tauri/capabilities/activity.json": [
         "src/activity/ActivityApp.tsx",
+        "src/activity/ActivityCalendarEvents.tsx",
         "src/activity/ActivityCaptureDetails.tsx",
         "src/activity/ActivityDayCalendar.tsx",
         "src/activity/ActivitySuggestionCard.tsx",
         "src/activity/MatterPicker.tsx",
+        "src/activity/activity-calendar-events.ts",
         "src/activity/activity-calendar-logic.ts",
         "src/activity/billing-draft-logic.ts",
         "src/activity/billing-draft-settings.ts",
         "src/activity/billing-draft-transport.ts",
         "src/activity/day-review-logic.ts",
+        "src/activity/matter-learning-store.ts",
       ],
     },
     windows: ["activity"],
@@ -107,6 +118,12 @@ export const LOCAL_ONLY_FEATURES = [
     callerType: "ActivitySettingsCaller",
     commandOwners: [
       { module: "src/activity_settings.rs", prefixes: ["activity_"] },
+      // The rules alone, and the matters they name under current access.
+      { module: "src/activity_matter_rules.rs", prefixes: ["activity_"] },
+      {
+        module: "src/time_entry_settings_commands.rs",
+        prefixes: ["time_entry_resolve_rule_"],
+      },
     ],
     id: "activity_settings",
     telemetry: "fixedCodes",
@@ -116,6 +133,8 @@ export const LOCAL_ONLY_FEATURES = [
         "src/activity/ActivitySettings.tsx",
         "src/activity/ActivityCaptureDetails.tsx",
         "src/activity/billing-draft-settings.ts",
+        "src/activity/MatterRulesSettings.tsx",
+        "src/activity/matter-rules-store.ts",
       ],
     },
     windows: ["activity", "main"],
@@ -169,8 +188,13 @@ export const isFeatureModule = (
   file === `${feature.id}.rs` ||
   (file.startsWith(`${feature.id}_`) && file.endsWith(".rs"));
 
-/** Network owners accepting explicit confirmation, never recorded activity. */
-export const CONFIRMED_ENTRY_NETWORK_MODULES = [
+/**
+ * Network owners the activity window reaches. They send what the user
+ * confirmed or asked for (an entry, a draft request, a day to read calendar
+ * events for), never recorded activity.
+ */
+export const ACTIVITY_NETWORK_MODULES = [
   "time_entry_submit.rs",
   "billing_draft_submit.rs",
+  "calendar_read.rs",
 ] as const;

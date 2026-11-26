@@ -1,13 +1,15 @@
-import type { RunAgentResumeItem } from "@tanstack/ai";
 import { EventType } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { AI_FAILURE_CODES } from "@stll/api-contract/ai-errors";
+import { chatLocalRunRequestAnswerSchema } from "@stll/api-contract/chat-local-run-request";
 import {
+  CHAT_CLOUD_RUN_TARGET,
   CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS,
   CHAT_LOCAL_RUN_REFUSAL,
+  chatCloudRunTarget,
   type ChatRunTarget,
   chatRunTargetSchema,
 } from "@stll/api-contract/chat-run-target";
@@ -18,7 +20,6 @@ import {
   DESKTOP_RUNNER_REASONING_EFFORTS,
 } from "@stll/api-contract/desktop-runner";
 
-import { approvalDecisionOf } from "@/api/handlers/chat/local-run-chunks";
 import {
   resolveChatLocalRun,
   type ResolveChatLocalRunOptions,
@@ -26,6 +27,7 @@ import {
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   chatRunTargetOf,
+  NO_STORED_CHAT_RUN_TARGET,
   sameChatRunTarget,
   storedChatRunTarget,
   turnRunTarget,
@@ -291,7 +293,7 @@ describe("a turn in a folder linked on the member's computer", () => {
 
 describe("a send for the member's computer, before anything is stored", () => {
   test("a turn without a local target stays on stella's own path", async () => {
-    for (const runTarget of ["none", { kind: "cloud" }] as const) {
+    for (const runTarget of ["none", CHAT_CLOUD_RUN_TARGET] as const) {
       const { resolved, picks } = await resolve({ runTarget, granted: false });
       expect(resolved.isOk() && resolved.value).toBeUndefined();
       expect(picks).toEqual([]);
@@ -328,9 +330,9 @@ describe("a send for the member's computer, before anything is stored", () => {
     }
   });
 
-  test("a resumed turn answers its paused run wherever it is, without rereading the ceiling", async () => {
+  test("a resume of a turn on the member's computer is refused: its run's requests are answered beside the turn", async () => {
     let ceilingReads = 0;
-    const { resolved, picks } = await resolve({
+    const { resolved, picks, starts } = await resolve({
       resumesPausedRun: true,
       picked: { type: "no_computer" },
       runTarget: { ...LOCAL, approvals: "full_auto" },
@@ -339,9 +341,50 @@ describe("a send for the member's computer, before anything is stored", () => {
         return await Promise.resolve(Result.ok("ask"));
       },
     });
-    expect(resolved.isOk() && resolved.value?.harness).toBe("codex");
+    expect(refusalCodeOf(resolved)).toBe(
+      CHAT_LOCAL_RUN_REFUSAL.conflictingRunMode,
+    );
+    expect(
+      resolved.isErr() && HandlerError.is(resolved.error)
+        ? resolved.error.status
+        : null,
+    ).toBe(400);
     expect(picks).toEqual([]);
+    expect(starts).toEqual([]);
     expect(ceilingReads).toBe(0);
+  });
+
+  test("a turn on stella's models is held to the same ceiling", async () => {
+    const CEILINGS = ["ask", "auto", "full_auto"] as const;
+    for (const ceiling of CEILINGS) {
+      for (const approvals of DESKTOP_RUNNER_APPROVAL_MODES) {
+        let ceilingReads = 0;
+        const { resolved, picks } = await resolve({
+          runTarget: chatCloudRunTarget(approvals),
+          granted: false,
+          readApprovalCeiling: async () => {
+            ceilingReads += 1;
+            return await Promise.resolve(Result.ok(ceiling));
+          },
+        });
+        const within =
+          DESKTOP_RUNNER_APPROVAL_MODES.indexOf(approvals) <=
+          DESKTOP_RUNNER_APPROVAL_MODES.indexOf(ceiling);
+        expect({ ceiling, approvals, code: refusalCodeOf(resolved) }).toEqual({
+          ceiling,
+          approvals,
+          code: within ? null : CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit,
+        });
+        expect(resolved.isOk() ? resolved.value : "refused").toBe(
+          within ? undefined : "refused",
+        );
+        // Plan and Ask fit every ceiling, so only a higher level reads it.
+        expect(ceilingReads).toBe(
+          approvals === "plan" || approvals === "ask" ? 0 : 1,
+        );
+        expect(picks).toEqual([]);
+      }
+    }
   });
 
   test("a new turn's run carries the member's website approvals as stored when it starts", async () => {
@@ -355,7 +398,7 @@ describe("a send for the member's computer, before anything is stored", () => {
     ]);
   });
 
-  test("a resumed turn's run keeps the approvals it started with, without rereading them", async () => {
+  test("a refused resume reads no website approvals", async () => {
     let reads = 0;
     const { resolved } = await resolve({
       resumesPausedRun: true,
@@ -364,7 +407,9 @@ describe("a send for the member's computer, before anything is stored", () => {
         return await Promise.resolve(Result.ok([]));
       },
     });
-    expect(resolved.isOk()).toBe(true);
+    expect(refusalCodeOf(resolved)).toBe(
+      CHAT_LOCAL_RUN_REFUSAL.conflictingRunMode,
+    );
     expect(reads).toBe(0);
   });
 
@@ -541,53 +586,31 @@ describe("an accepted turn whose computer cannot take it", () => {
   });
 });
 
-describe("answering a paused run's approval", () => {
-  const answers = [
-    [{ interruptId: "r", status: "resolved", payload: true }, "approve"],
-    [{ interruptId: "r", status: "resolved", payload: false }, "deny"],
-    [
-      { interruptId: "r", status: "resolved", payload: { approved: true } },
-      "approve",
-    ],
-    [
-      {
-        interruptId: "r",
-        status: "resolved",
-        payload: { approved: true, scope: "session" },
-      },
-      "approve_for_session",
-    ],
-    [
-      {
-        interruptId: "r",
-        status: "resolved",
-        payload: { approved: false, scope: "session" },
-      },
-      "deny",
-    ],
-    [{ interruptId: "r", status: "resolved", payload: "yes" }, "deny"],
-    [{ interruptId: "r", status: "resolved" }, "deny"],
-    [{ interruptId: "r", status: "cancelled" }, "deny"],
-  ] as const satisfies readonly (readonly [
-    RunAgentResumeItem,
-    (typeof DESKTOP_RUNNER_APPROVAL_DECISIONS)[number],
-  ])[];
-
-  test("each chat answer maps to one runner decision, and anything unclear denies", () => {
-    for (const [item, decision] of answers) {
-      expect(approvalDecisionOf(item)).toBe(decision);
+describe("answering a run's approval beside its turn", () => {
+  test("each runner decision is an answer the member can send, and nothing else is", () => {
+    for (const decision of DESKTOP_RUNNER_APPROVAL_DECISIONS) {
+      expect(
+        v.parse(chatLocalRunRequestAnswerSchema, {
+          type: "approval",
+          decision,
+        }),
+      ).toEqual({ type: "approval", decision });
     }
-  });
-
-  test("every runner decision is reachable from a chat answer", () => {
-    expect(new Set(answers.map(([, decision]) => decision)).size).toBe(
-      DESKTOP_RUNNER_APPROVAL_DECISIONS.length,
-    );
+    for (const unclear of [
+      { type: "approval", decision: "yes" },
+      { type: "approval", decision: true },
+      { type: "approval" },
+      { approved: true },
+    ]) {
+      expect(
+        v.safeParse(chatLocalRunRequestAnswerSchema, unclear).success,
+      ).toBe(false);
+    }
   });
 });
 
 describe("a thread's stored run target", () => {
-  test("a local target survives the thread column and cloud stores nothing", () => {
+  test("a target survives the thread columns, and the default cloud level stores nothing", () => {
     for (const approvals of DESKTOP_RUNNER_APPROVAL_MODES) {
       const target: ChatRunTarget = { ...LOCAL, approvals };
       expect(chatRunTargetOf(storedChatRunTarget(target))).toEqual(target);
@@ -596,17 +619,31 @@ describe("a thread's stored run target", () => {
       const target: ChatRunTarget = { ...LOCAL, reasoningEffort };
       expect(chatRunTargetOf(storedChatRunTarget(target))).toEqual(target);
     }
-    expect(storedChatRunTarget({ kind: "cloud" })).toBeNull();
-    expect(chatRunTargetOf(null)).toEqual({ kind: "cloud" });
+    for (const approvals of DESKTOP_RUNNER_APPROVAL_MODES) {
+      const target = chatCloudRunTarget(approvals);
+      expect(chatRunTargetOf(storedChatRunTarget(target))).toEqual(target);
+    }
+    expect(storedChatRunTarget(CHAT_CLOUD_RUN_TARGET)).toEqual({
+      chatLocalRunTarget: null,
+      chatCloudApprovals: null,
+    });
+    expect(chatRunTargetOf(NO_STORED_CHAT_RUN_TARGET)).toEqual(
+      CHAT_CLOUD_RUN_TARGET,
+    );
   });
 
   test("a send keeps the stored target only when it runs the same way", () => {
     expect(
       sameChatRunTarget(LOCAL, chatRunTargetOf(storedChatRunTarget(LOCAL))),
     ).toBe(true);
-    expect(sameChatRunTarget({ kind: "cloud" }, { kind: "cloud" })).toBe(true);
+    expect(
+      sameChatRunTarget(CHAT_CLOUD_RUN_TARGET, CHAT_CLOUD_RUN_TARGET),
+    ).toBe(true);
+    expect(
+      sameChatRunTarget(CHAT_CLOUD_RUN_TARGET, chatCloudRunTarget("full_auto")),
+    ).toBe(false);
     for (const other of [
-      { kind: "cloud" },
+      CHAT_CLOUD_RUN_TARGET,
       { ...LOCAL, model: `${MODEL}-mini` },
       { ...LOCAL, approvals: "full_auto" },
       { ...LOCAL, reasoningEffort: "high" },
@@ -617,7 +654,7 @@ describe("a thread's stored run target", () => {
   });
 
   test("a turn runs where its send names, else where its thread runs", () => {
-    const targets = [{ kind: "cloud" }, LOCAL] satisfies ChatRunTarget[];
+    const targets = [CHAT_CLOUD_RUN_TARGET, LOCAL] satisfies ChatRunTarget[];
     for (const thread of targets) {
       for (const requested of targets) {
         for (const agentSandboxRequested of [false, true]) {
@@ -640,7 +677,7 @@ describe("a thread's stored run target", () => {
           requested: undefined,
           thread,
         }),
-      ).toEqual({ kind: "cloud" });
+      ).toEqual(CHAT_CLOUD_RUN_TARGET);
     }
   });
 
@@ -653,7 +690,18 @@ describe("a thread's stored run target", () => {
       "codex::gpt-5-codex",
       {},
     ]) {
-      expect(chatRunTargetOf(stored)).toEqual({ kind: "cloud" });
+      expect(
+        chatRunTargetOf({
+          chatLocalRunTarget: stored,
+          chatCloudApprovals: null,
+        }),
+      ).toEqual(CHAT_CLOUD_RUN_TARGET);
+      expect(
+        chatRunTargetOf({
+          chatLocalRunTarget: null,
+          chatCloudApprovals: stored,
+        }),
+      ).toEqual(CHAT_CLOUD_RUN_TARGET);
     }
   });
 

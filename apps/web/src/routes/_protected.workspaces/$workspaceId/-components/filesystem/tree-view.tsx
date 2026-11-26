@@ -26,7 +26,11 @@ import {
   BreadcrumbSeparator,
 } from "@stll/ui/breadcrumb";
 import { Button } from "@stll/ui/button";
-import { EntityActions } from "@stll/ui/entity-actions";
+import {
+  ContextMenuSurface,
+  type ContextMenuSurfaceOpenEvent,
+  EntityActions,
+} from "@stll/ui/entity-actions";
 import { getFileSizeDisplay } from "@stll/ui/file-size";
 import {
   ArrowDownIcon,
@@ -36,7 +40,6 @@ import {
 } from "@stll/ui/icons";
 import { MiddleTruncate } from "@stll/ui/middle-truncate";
 import { TruncatedText } from "@stll/ui/truncated-text";
-import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 import { RecordFieldValue } from "@stll/workspace-ui/field-value";
 
@@ -508,20 +511,8 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     });
   };
 
-  const handleBgContextMenu = (e: React.MouseEvent) => {
-    // An object that owns this right-click, such as a column header, keeps it.
-    if (
-      e.target instanceof Element &&
-      e.target.closest("[data-context-menu-target]") !== null
-    ) {
-      return;
-    }
-    e.preventDefault();
-    const x = e.clientX;
-    const y = e.clientY;
-    setBgContextAnchor({
-      getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
-    });
+  const handleBgContextMenu = ({ anchor }: ContextMenuSurfaceOpenEvent) => {
+    setBgContextAnchor(anchor);
   };
 
   const handleFolderCreated = (entityId: string) => {
@@ -731,279 +722,281 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   }
 
   return (
-    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- layout container; click-empty-to-deselect is a mouse convenience, keyboard deselect is the Escape hotkey
-    <div
-      className={FILESYSTEM_VIEW_CLASS}
-      onClick={(e) => {
-        // Clear selection when clicking empty background
-        // (not inside a row).
-        if (
-          e.target instanceof HTMLElement &&
-          !e.target.closest("[data-entity-row]")
-        ) {
-          clearSelection();
-        }
-      }}
-      onContextMenu={handleBgContextMenu}
-    >
-      <div className={FILESYSTEM_BREADCRUMB_ROW_CLASS}>
-        <div className="min-w-0">
-          {currentFolderId && (
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem>
-                  <Button
-                    aria-label={t("workspaces.copyToMatter.rootFolder")}
-                    onClick={() => {
-                      detached(
-                        navigateToFolder(),
-                        "tree-view.navigate-to-folder",
-                      );
-                    }}
-                    size="inline"
-                    tooltip={t("workspaces.copyToMatter.rootFolder")}
-                    variant="muted"
-                  >
-                    <EntityKindIcon className="size-3.5" kind="folder" />
-                  </Button>
-                </BreadcrumbItem>
-                {breadcrumbs.map((crumb, i) => {
-                  const isLast = i === breadcrumbs.length - 1;
-                  const isEditingCrumb = isLast && editingEntityId === crumb.id;
-                  return (
-                    <Fragment key={crumb.id}>
-                      <BreadcrumbSeparator />
-                      <BreadcrumbItem>
-                        {(() => {
-                          if (isEditingCrumb) {
-                            return (
-                              <InlineEdit
-                                onCancel={() => setEditingEntityId(null)}
-                                onChange={setBreadcrumbEditValue}
-                                onCommit={() => {
-                                  const trimmed = breadcrumbEditValue.trim();
-                                  setEditingEntityId(null);
-                                  if (trimmed && trimmed !== crumb.name) {
-                                    renameEntity.mutate({
-                                      workspaceId,
-                                      entityId: crumb.id,
-                                      name: trimmed,
-                                    });
-                                  }
-                                }}
-                                value={breadcrumbEditValue}
-                              />
-                            );
-                          }
-                          if (isLast) {
+    <ContextMenuSurface onOpenContextMenu={handleBgContextMenu}>
+      {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- layout container; click-empty-to-deselect is a mouse convenience, keyboard deselect is the Escape hotkey */}
+      <div
+        className={FILESYSTEM_VIEW_CLASS}
+        onClick={(e) => {
+          // Clear selection when clicking empty background
+          // (not inside a row).
+          if (
+            e.target instanceof HTMLElement &&
+            !e.target.closest("[data-entity-row]")
+          ) {
+            clearSelection();
+          }
+        }}
+      >
+        <div className={FILESYSTEM_BREADCRUMB_ROW_CLASS}>
+          <div className="min-w-0">
+            {currentFolderId && (
+              <Breadcrumb>
+                <BreadcrumbList>
+                  <BreadcrumbItem>
+                    <Button
+                      aria-label={t("workspaces.copyToMatter.rootFolder")}
+                      onClick={() => {
+                        detached(
+                          navigateToFolder(),
+                          "tree-view.navigate-to-folder",
+                        );
+                      }}
+                      size="inline"
+                      tooltip={t("workspaces.copyToMatter.rootFolder")}
+                      variant="muted"
+                    >
+                      <EntityKindIcon className="size-3.5" kind="folder" />
+                    </Button>
+                  </BreadcrumbItem>
+                  {breadcrumbs.map((crumb, i) => {
+                    const isLast = i === breadcrumbs.length - 1;
+                    const isEditingCrumb =
+                      isLast && editingEntityId === crumb.id;
+                    return (
+                      <Fragment key={crumb.id}>
+                        <BreadcrumbSeparator />
+                        <BreadcrumbItem>
+                          {(() => {
+                            if (isEditingCrumb) {
+                              return (
+                                <InlineEdit
+                                  onCancel={() => setEditingEntityId(null)}
+                                  onChange={setBreadcrumbEditValue}
+                                  onCommit={() => {
+                                    const trimmed = breadcrumbEditValue.trim();
+                                    setEditingEntityId(null);
+                                    if (trimmed && trimmed !== crumb.name) {
+                                      renameEntity.mutate({
+                                        workspaceId,
+                                        entityId: crumb.id,
+                                        name: trimmed,
+                                      });
+                                    }
+                                  }}
+                                  value={breadcrumbEditValue}
+                                />
+                              );
+                            }
+                            if (isLast) {
+                              return (
+                                <Button
+                                  onClick={() => {
+                                    detached(
+                                      navigateToFolder(),
+                                      "tree-view.navigate-to-folder",
+                                    );
+                                  }}
+                                  onDoubleClick={(e) => {
+                                    e.stopPropagation();
+                                    setBreadcrumbEditValue(crumb.name);
+                                    setEditingEntityId(crumb.id);
+                                  }}
+                                  size="inline"
+                                  variant="link"
+                                >
+                                  <span className="text-xs font-medium whitespace-pre">
+                                    {crumb.name}
+                                  </span>
+                                </Button>
+                              );
+                            }
                             return (
                               <Button
                                 onClick={() => {
                                   detached(
-                                    navigateToFolder(),
+                                    navigateToFolder(crumb.id),
                                     "tree-view.navigate-to-folder",
                                   );
                                 }}
-                                onDoubleClick={(e) => {
-                                  e.stopPropagation();
-                                  setBreadcrumbEditValue(crumb.name);
-                                  setEditingEntityId(crumb.id);
-                                }}
                                 size="inline"
-                                variant="link"
+                                variant="muted"
                               >
-                                <span className="text-xs font-medium whitespace-pre">
-                                  {crumb.name}
-                                </span>
+                                <span className="text-xs">{crumb.name}</span>
                               </Button>
                             );
-                          }
-                          return (
-                            <Button
-                              onClick={() => {
-                                detached(
-                                  navigateToFolder(crumb.id),
-                                  "tree-view.navigate-to-folder",
-                                );
-                              }}
-                              size="inline"
-                              variant="muted"
-                            >
-                              <span className="text-xs">{crumb.name}</span>
-                            </Button>
-                          );
-                        })()}
-                      </BreadcrumbItem>
-                    </Fragment>
-                  );
-                })}
-              </BreadcrumbList>
-            </Breadcrumb>
-          )}
+                          })()}
+                        </BreadcrumbItem>
+                      </Fragment>
+                    );
+                  })}
+                </BreadcrumbList>
+              </Breadcrumb>
+            )}
+          </div>
         </div>
-      </div>
-      <div
-        className={cn(
-          "text-muted-foreground mt-1 flex items-center gap-2 rounded-sm border border-dashed px-3 py-1.5 text-xs",
-          isDragActive ? "visible" : "hidden",
-          isRootDropTarget
-            ? "border-primary bg-primary/10 text-foreground"
-            : "border-muted-foreground/30",
-        )}
-        ref={rootBarRef}
-      >
-        <EntityKindIcon className="size-3.5" kind="folder" />
-        {t("workspaces.filesystem.moveToRoot")}
-      </div>
-      <div className={FILESYSTEM_SCROLL_CLASS} ref={rowsViewportRef}>
-        <div className={FILESYSTEM_CONTENT_CLASS}>
-          <div
-            className={FILESYSTEM_COLUMN_HEADER_CLASS}
-            style={{ gridTemplateColumns: gridTemplate }}
-          >
-            <ColumnHeaderCell
-              activeSort={primarySort}
-              currentWidth={columnWidths[NAME_COL_ID]}
-              label={t("common.name")}
-              onResize={(width) => setColumnWidth(NAME_COL_ID, width)}
-              onSort={handleSortColumn}
-              propertyId={getInternalPropertyId("name")}
-            />
-            {extraColumns.map((col) => (
+        <div
+          className={cn(
+            "text-muted-foreground mt-1 flex items-center gap-2 rounded-sm border border-dashed px-3 py-1.5 text-xs",
+            isDragActive ? "visible" : "hidden",
+            isRootDropTarget
+              ? "border-primary bg-primary/10 text-foreground"
+              : "border-muted-foreground/30",
+          )}
+          ref={rootBarRef}
+        >
+          <EntityKindIcon className="size-3.5" kind="folder" />
+          {t("workspaces.filesystem.moveToRoot")}
+        </div>
+        <div className={FILESYSTEM_SCROLL_CLASS} ref={rowsViewportRef}>
+          <div className={FILESYSTEM_CONTENT_CLASS}>
+            <div
+              className={FILESYSTEM_COLUMN_HEADER_CLASS}
+              style={{ gridTemplateColumns: gridTemplate }}
+            >
               <ColumnHeaderCell
                 activeSort={primarySort}
-                align="end"
-                // Unset, a drag starts from the width the column has yielded
-                // to, not from its default.
-                currentWidth={columnWidths[col.id]}
-                key={col.id}
-                label={col.label}
-                onHide={() => handleHideColumn(col.id)}
-                onResize={(width) => setColumnWidth(col.id, width)}
+                currentWidth={columnWidths[NAME_COL_ID]}
+                label={t("common.name")}
+                onResize={(width) => setColumnWidth(NAME_COL_ID, width)}
                 onSort={handleSortColumn}
-                propertyId={col.id}
+                propertyId={getInternalPropertyId("name")}
               />
-            ))}
-            <span />
-          </div>
-          <div
-            className={FILESYSTEM_ROWS_CLASS}
-            style={{ height: rowVirtualizer.getTotalSize() }}
-          >
-            {virtualRows.map((virtualRow) => {
-              const row = flattenedRows.at(virtualRow.index);
-              if (!row) {
-                return null;
-              }
+              {extraColumns.map((col) => (
+                <ColumnHeaderCell
+                  activeSort={primarySort}
+                  align="end"
+                  // Unset, a drag starts from the width the column has yielded
+                  // to, not from its default.
+                  currentWidth={columnWidths[col.id]}
+                  key={col.id}
+                  label={col.label}
+                  onHide={() => handleHideColumn(col.id)}
+                  onResize={(width) => setColumnWidth(col.id, width)}
+                  onSort={handleSortColumn}
+                  propertyId={col.id}
+                />
+              ))}
+              <span />
+            </div>
+            <div
+              className={FILESYSTEM_ROWS_CLASS}
+              style={{ height: rowVirtualizer.getTotalSize() }}
+            >
+              {virtualRows.map((virtualRow) => {
+                const row = flattenedRows.at(virtualRow.index);
+                if (!row) {
+                  return null;
+                }
 
-              return (
-                <div
-                  className="absolute inset-x-0 top-0 w-full"
-                  data-index={virtualRow.index}
-                  key={row.node.entityId}
-                  style={{
-                    height: virtualRow.size,
-                    transform: `translateY(${virtualRow.start}px)`,
-                  }}
-                >
-                  <FilesystemRow
-                    ancestorIds={row.ancestorIds}
-                    currentFolderId={currentFolderId}
-                    depth={row.depth}
-                    editingEntityId={editingEntityId}
-                    expandedIds={expandedIds}
-                    extraColumns={extraColumns}
-                    flash={
-                      revealState.type === "flashing" &&
-                      revealState.entityId === row.node.entityId
-                    }
-                    folderStatistics={folderStatistics.get(row.node.entityId)}
-                    getSelectedDragItems={getSelectedDragItems}
-                    getSelectedEntities={getSelectedEntities}
-                    getAncestorIds={getAncestorIds}
-                    gridTemplate={gridTemplate}
-                    isFiltered={entityData.isFiltered}
-                    node={row.node}
-                    onFlashed={() => setRevealState({ type: "idle" })}
-                    onNavigateToFolder={(folderId) => {
-                      detached(
-                        navigateToFolder(folderId),
-                        "tree-view.navigate-to-folder",
-                      );
+                return (
+                  <div
+                    className="absolute inset-x-0 top-0 w-full"
+                    data-index={virtualRow.index}
+                    key={row.node.entityId}
+                    style={{
+                      height: virtualRow.size,
+                      transform: `translateY(${virtualRow.start}px)`,
                     }}
-                    onRename={(entityId, name, { onError, onSuccess }) => {
-                      renameEntity.mutate(
-                        { workspaceId, entityId, name },
-                        {
-                          onError,
-                          onSuccess: () => {
-                            queryClient.setQueryData(
-                              filesystemEntitiesOptions(filesystemQueryInput)
-                                .queryKey,
-                              (current) => {
-                                if (!current) {
-                                  return current;
-                                }
-                                return {
-                                  ...current,
-                                  entities: current.entities.map((entity) =>
-                                    entity.entityId === entityId
-                                      ? { ...entity, name }
-                                      : entity,
-                                  ),
-                                };
-                              },
-                            );
-                            onSuccess();
+                  >
+                    <FilesystemRow
+                      ancestorIds={row.ancestorIds}
+                      currentFolderId={currentFolderId}
+                      depth={row.depth}
+                      editingEntityId={editingEntityId}
+                      expandedIds={expandedIds}
+                      extraColumns={extraColumns}
+                      flash={
+                        revealState.type === "flashing" &&
+                        revealState.entityId === row.node.entityId
+                      }
+                      folderStatistics={folderStatistics.get(row.node.entityId)}
+                      getSelectedDragItems={getSelectedDragItems}
+                      getSelectedEntities={getSelectedEntities}
+                      getAncestorIds={getAncestorIds}
+                      gridTemplate={gridTemplate}
+                      isFiltered={entityData.isFiltered}
+                      node={row.node}
+                      onFlashed={() => setRevealState({ type: "idle" })}
+                      onNavigateToFolder={(folderId) => {
+                        detached(
+                          navigateToFolder(folderId),
+                          "tree-view.navigate-to-folder",
+                        );
+                      }}
+                      onRename={(entityId, name, { onError, onSuccess }) => {
+                        renameEntity.mutate(
+                          { workspaceId, entityId, name },
+                          {
+                            onError,
+                            onSuccess: () => {
+                              queryClient.setQueryData(
+                                filesystemEntitiesOptions(filesystemQueryInput)
+                                  .queryKey,
+                                (current) => {
+                                  if (!current) {
+                                    return current;
+                                  }
+                                  return {
+                                    ...current,
+                                    entities: current.entities.map((entity) =>
+                                      entity.entityId === entityId
+                                        ? { ...entity, name }
+                                        : entity,
+                                    ),
+                                  };
+                                },
+                              );
+                              onSuccess();
+                            },
                           },
-                        },
-                      );
-                    }}
-                    onClearSelection={clearSelection}
-                    onSelect={handleSelect}
-                    onStartEditing={setEditingEntityId}
-                    onSubfolderCreated={handleSubfolderCreated}
-                    onToggleFolder={toggleFolder}
-                    selectedIds={selectedIds}
-                    workspaceId={workspaceId}
-                  />
-                </div>
-              );
-            })}
+                        );
+                      }}
+                      onClearSelection={clearSelection}
+                      onSelect={handleSelect}
+                      onStartEditing={setEditingEntityId}
+                      onSubfolderCreated={handleSubfolderCreated}
+                      onToggleFolder={toggleFolder}
+                      selectedIds={selectedIds}
+                      workspaceId={workspaceId}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
-      </div>
-      <div className={FILESYSTEM_FOOTER_CLASS}>
+        <div className={FILESYSTEM_FOOTER_CLASS}>
+          <AddEntityMenu
+            onFolderCreated={setEditingEntityId}
+            parentId={currentFolderId}
+            showTaskOption={false}
+            workspaceId={workspaceId}
+          />
+        </div>
+        {/* Background right-click context menu (same items as "+") */}
         <AddEntityMenu
-          onFolderCreated={setEditingEntityId}
+          anchor={bgContextAnchor}
+          onFolderCreated={handleFolderCreated}
+          onOpenChange={(o) => {
+            if (!o) {
+              setBgContextAnchor(null);
+            }
+          }}
+          open={isBgContextOpen}
           parentId={currentFolderId}
           showTaskOption={false}
+          render={
+            <Button
+              aria-label={t("common.add")}
+              className="sr-only"
+              tabIndex={-1}
+              variant="plain"
+            />
+          }
           workspaceId={workspaceId}
         />
       </div>
-      {/* Background right-click context menu (same items as "+") */}
-      <AddEntityMenu
-        anchor={bgContextAnchor}
-        onFolderCreated={handleFolderCreated}
-        onOpenChange={(o) => {
-          if (!o) {
-            setBgContextAnchor(null);
-          }
-        }}
-        open={isBgContextOpen}
-        parentId={currentFolderId}
-        showTaskOption={false}
-        render={
-          <Button
-            aria-label={t("common.add")}
-            className="sr-only"
-            tabIndex={-1}
-            variant="plain"
-          />
-        }
-        workspaceId={workspaceId}
-      />
-    </div>
+    </ContextMenuSurface>
   );
 };
 
@@ -1258,21 +1251,15 @@ export const FilesystemRow = ({
   const getBulkSelectedEntities = () =>
     isBulkSelected ? getSelectedEntities(selectedIds) : undefined;
 
-  const handleContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleContextMenu = ({ anchor }: ContextMenuSurfaceOpenEvent) => {
     // If right-clicking an unselected item, select only it.
     if (!isSelected) {
       onSelect(node.entityId, { meta: false, shift: false });
     }
     setBulkEntities(getBulkSelectedEntities());
-    const x = e.clientX;
-    const y = e.clientY;
     setMenuState({
       type: "context",
-      anchor: {
-        getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
-      },
+      anchor,
     });
   };
 
@@ -1719,17 +1706,17 @@ export const FilesystemRow = ({
 
   return (
     <>
-      <div
-        className="group/row relative h-full"
-        data-entity-row
-        onContextMenu={containedEventHandler(handleContextMenu)}
-        ref={rowRef}
-      >
-        <div className={gridCls} style={{ gridTemplateColumns: gridTemplate }}>
-          {contentControl}
-          {rowActionsNode}
+      <ContextMenuSurface onOpenContextMenu={handleContextMenu}>
+        <div className="group/row relative h-full" data-entity-row ref={rowRef}>
+          <div
+            className={gridCls}
+            style={{ gridTemplateColumns: gridTemplate }}
+          >
+            {contentControl}
+            {rowActionsNode}
+          </div>
         </div>
-      </div>
+      </ContextMenuSurface>
       {pendingDrop && <VersionOrNewFileDialog {...pendingDrop} />}
     </>
   );

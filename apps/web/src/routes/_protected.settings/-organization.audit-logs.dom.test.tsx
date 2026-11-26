@@ -1,6 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { AUDIT_RESOURCE_TYPE } from "@stll/api-contract/audit-log";
 import type { AuditResource } from "@stll/api-contract/audit-log";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
@@ -9,6 +10,8 @@ import messages from "@/i18n/langs/en.json";
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { cleanup, render } = await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
+const { resolveAuditResourceTypeFilter } =
+  await import("./-organization.audit-logs.logic");
 const { AuditActionSentence, AuditResourceLabel } =
   await import("./-organization.audit-logs.page");
 
@@ -81,4 +84,25 @@ test("a deleted resource without a name says deleted once", () => {
 
   expect(view.getByTestId("sentence").textContent).toBe("Deleted contact.");
   expect(view.getByText("deleted contact")).not.toBeNull();
+});
+
+test("resource type filter translates matter and localized labels to internal resource types", () => {
+  expect(resolveAuditResourceTypeFilter("matter")).toBe(
+    AUDIT_RESOURCE_TYPE.WORKSPACE,
+  );
+  expect(resolveAuditResourceTypeFilter("  Matter  ")).toBe(
+    AUDIT_RESOURCE_TYPE.WORKSPACE,
+  );
+  expect(
+    resolveAuditResourceTypeFilter("spis", (resourceType) =>
+      resourceType === AUDIT_RESOURCE_TYPE.WORKSPACE ? "spis" : resourceType,
+    ),
+  ).toBe(AUDIT_RESOURCE_TYPE.WORKSPACE);
+  expect(resolveAuditResourceTypeFilter("workspace")).toBe(
+    AUDIT_RESOURCE_TYPE.WORKSPACE,
+  );
+  expect(resolveAuditResourceTypeFilter("contact")).toBe(
+    AUDIT_RESOURCE_TYPE.CONTACT,
+  );
+  expect(resolveAuditResourceTypeFilter("   ")).toBeUndefined();
 });

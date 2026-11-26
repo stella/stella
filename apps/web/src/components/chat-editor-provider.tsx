@@ -176,13 +176,11 @@ export type ChatSend = (
   draft: ChatInputDraft,
 ) => Promise<ChatSendOutcome> | ChatSendOutcome;
 
-type ChatMentionSourceKind = "context" | "files" | "caseLaw";
-
 export const CHAT_MENTION_SOURCE_LABELS = {
   context: "chat.composerMenu.context",
   files: "common.files",
   caseLaw: "common.caseLaw",
-} as const satisfies Record<ChatMentionSourceKind, TranslationKey>;
+} as const satisfies Record<string, TranslationKey>;
 
 type ChatMentionSourceLabelKey =
   (typeof CHAT_MENTION_SOURCE_LABELS)[keyof typeof CHAT_MENTION_SOURCE_LABELS];
@@ -1203,10 +1201,11 @@ export const useChatEditor = ({
       // would fall back to LTR on the empty doc and strand the caret left.
       ...(state.doc.textContent.length > 0 ? { dir: "auto" } : {}),
       class:
-        // `overflow-y-auto` makes the x axis scrollable too, so nothing may
-        // be wider than the editor: long tokens break anywhere, and a
-        // reference chip clamps itself to the line (`InlinePill`).
-        "field-sizing-content max-h-48 min-h-10 overflow-y-auto text-sm wrap-anywhere focus-visible:outline-none",
+        // The editor is as tall as its text: the `ComposerFrame` it renders
+        // in caps the height and scrolls it. Nothing may be wider than the
+        // editor: long tokens break anywhere, and a reference chip clamps
+        // itself to the line (`InlinePill`).
+        "text-sm wrap-anywhere focus-visible:outline-none",
     }),
     handleKeyDown: (view, event) => {
       if (handleMessageHistoryKeyDown(view.state, event)) {

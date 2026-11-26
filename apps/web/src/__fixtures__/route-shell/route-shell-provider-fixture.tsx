@@ -1,9 +1,13 @@
-import type { ComponentType, LazyExoticComponent } from "react";
+import type {
+  ComponentProps,
+  ComponentType,
+  LazyExoticComponent,
+} from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { plugin } from "bun";
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, expect, mock, test } from "bun:test";
 import * as v from "valibot";
 
 import { runInRequest } from "@stll/start-runtime/test-request";
@@ -37,7 +41,10 @@ import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { sessionOptions } from "@/lib/auth-query-options";
 import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
-import { APP_FRAME_SCOPE, matchedAppFrameScope } from "@/routes/-app-frame-scope";
+import {
+  APP_FRAME_SCOPE,
+  matchedAppFrameScope,
+} from "@/routes/-app-frame-scope";
 import { isLegacyAdminRouteId } from "@/routes/-organization-settings-route";
 import { withTestServerIsomorphicHalf } from "@/testing/isomorphic-half";
 
@@ -250,10 +257,9 @@ const installFixtureNetwork = () => {
   const requests: string[] = [];
   const state: {
     audience: FixtureAudience;
-    response?: (request: Request) =>
-      | Response
-      | undefined
-      | Promise<Response | undefined>;
+    response?: (
+      request: Request,
+    ) => Response | undefined | Promise<Response | undefined>;
   } = {
     audience: FIXTURE_AUDIENCE.anonymous,
   };
@@ -345,9 +351,7 @@ const installFixtureNetwork = () => {
         return customResponse;
       }
       if (pathname === "/api/auth/get-session") {
-        return Response.json(
-          state.audience === "member" ? authSession : null,
-        );
+        return Response.json(state.audience === "member" ? authSession : null);
       }
       if (pathname === "/api/auth/organization/get-active-member-role") {
         return Response.json({ role: "owner" });
@@ -426,6 +430,7 @@ const installFixtureNetwork = () => {
             model: null,
             olderCursor: null,
             reasoningEffort: null,
+            runTarget: { kind: "cloud", approvals: "ask" },
             threadExists: false,
             threadRevision: null,
             usedAnonymization: false,
@@ -446,7 +451,7 @@ const installFixtureNetwork = () => {
       }
       // The composer's where chip: this member runs no turns on a computer.
       if (pathname === "/v1/chat/local-runners") {
-        return Response.json({ status: "hidden" });
+        return Response.json({ status: "hidden", maxApprovals: "full_auto" });
       }
       if (pathname === "/v1/chat/skill-availability") {
         return Response.json({
@@ -649,7 +654,8 @@ const loadFixtureRuntime = async (
     const state = useI18nStore.getState();
     await state.loadMessages(state.lang);
   };
-  const { useFormatter, useFormattingLocale } = await import("@/i18n/formatting-context");
+  const { useFormatter, useFormattingLocale } =
+    await import("@/i18n/formatting-context");
   const { useRouteErrorLifecycle } =
     await import("@/lib/analytics/route-error-lifecycle-context");
   const { ApiVersionMismatchReporter } =
@@ -933,7 +939,7 @@ const declareCensus = (fixture: FixtureRuntime) => {
       ).toEqual(uiLeaves.map(({ id }) => id).toSorted(compareRouteIds));
       expect(selectedLeaves.length).toBeGreaterThan(0);
       expect(
-        Object.keys(publicRouteExceptions).filter(
+        [...publicRouteExceptions.keys()].filter(
           (id) =>
             !uiLeaves.some(
               (route) =>
@@ -980,7 +986,7 @@ const declareLeafCases = (fixture: FixtureRuntime) => {
     const protectedLeaf = ancestors(route).some(
       ({ id }) => id === "/_protected",
     );
-    const exception = publicRouteExceptions[route.id];
+    const exception = publicRouteExceptions.get(route.id);
     if (exception !== undefined) {
       if (protectedLeaf || exception.trim().length === 0) {
         panic(`Invalid public route exception: ${route.id}`);
@@ -994,7 +1000,7 @@ const declareLeafCases = (fixture: FixtureRuntime) => {
       ? [FIXTURE_AUDIENCE.member]
       : Object.values(FIXTURE_AUDIENCE)) {
       const caseId = `${route.id}:${caseAudience}`;
-      const caseException = publicRouteExceptions[caseId];
+      const caseException = publicRouteExceptions.get(caseId);
       if (caseException !== undefined) {
         if (protectedLeaf || caseException.trim().length === 0) {
           panic(`Invalid public route exception: ${caseId}`);
@@ -1200,6 +1206,49 @@ const declareLawCases = async (fixture: FixtureRuntime) => {
       await import("@/components/inspector/inspector-tabs-store");
     const { INSPECTOR_PANE_INTENT } =
       await import("@/components/inspector/inspector-store-types");
+    const { use } = await import("react");
+    /**
+     * A member's chrome on the law page reads AI availability from two lazy
+     * chunks, the search dialog and the session inspector, and defers each
+     * read until its component has mounted. On a slow first load the chunks
+     * resolve after the page is on screen, outside `act`. The test holds both
+     * until it is waiting, so it always runs in that order, and it waits for
+     * each request it expects rather than for an idle query client, which is
+     * just as idle before a deferred read starts. Without a hold the real
+     * components render unchanged.
+     */
+    const memberChromeHold: { until: Promise<undefined> | null } = {
+      until: null,
+    };
+    const useMemberChromeHold = () => {
+      if (memberChromeHold.until !== null) {
+        use(memberChromeHold.until);
+      }
+    };
+    const searchDialog = await import("@/components/search-dialog");
+    const RealSearchDialog = searchDialog.SearchDialog;
+    const HeldSearchDialog = (
+      props: ComponentProps<typeof RealSearchDialog>,
+    ) => {
+      useMemberChromeHold();
+      return <RealSearchDialog {...props} />;
+    };
+    await mock.module("@/components/search-dialog", () => ({
+      ...searchDialog,
+      SearchDialog: HeldSearchDialog,
+    }));
+    const sessionInspector = await import(
+      "@/components/public-session-inspector"
+    );
+    const RealSessionInspector = sessionInspector.PublicSessionInspector;
+    const HeldSessionInspector = () => {
+      useMemberChromeHold();
+      return <RealSessionInspector />;
+    };
+    await mock.module("@/components/public-session-inspector", () => ({
+      ...sessionInspector,
+      PublicSessionInspector: HeldSessionInspector,
+    }));
     const viewType = "test-route-shell-provider-probe";
     const InspectorMemberProbe = () => {
       const member = useAuthenticatedUser();
@@ -1273,6 +1322,8 @@ const declareLawCases = async (fixture: FixtureRuntime) => {
             staticData: { ...lawLayout.options.staticData, providerScopes: [] },
           });
         }
+        const chromeHeld = Promise.withResolvers<undefined>();
+        memberChromeHold.until = chromeHeld.promise;
         useInspectorTabsStore.getState().openView({
           type: viewType,
           id: "test-route-shell-provider-tab",
@@ -1293,6 +1344,11 @@ const declareLawCases = async (fixture: FixtureRuntime) => {
               },
             });
           });
+          // The held chrome has read nothing yet: the order is forced.
+          expect(requests).not.toContain(
+            "/v1/organization-settings/ai-availability",
+          );
+          chromeHeld.resolve(undefined);
           if (scenario === "undeclared") {
             await waitFor(() =>
               expect(
@@ -1325,17 +1381,32 @@ const declareLawCases = async (fixture: FixtureRuntime) => {
                   ?.textContent,
               ).toBe(JSON.stringify(expected)),
             );
+            // A member's chrome reads AI availability once it has mounted;
+            // nothing reads it for a visitor, who has no session.
+            const expectedRequests = [
+              "/v1/case/decisions/latest",
+              ...(state.audience === "member"
+                ? ["/v1/organization-settings/ai-availability"]
+                : []),
+            ];
+            await waitFor(() =>
+              expect(
+                expectedRequests.filter((path) => !requests.includes(path)),
+              ).toEqual([]),
+            );
             await waitFor(() => expect(queryClient.isFetching()).toBe(0));
             expect(caughtErrors).toEqual([]);
-            expect(requests).toContain("/v1/case/decisions/latest");
-            expect(
-              requests.includes("/v1/organization-settings/ai-availability"),
-            ).toBe(state.audience === "member");
+            if (state.audience !== "member") {
+              expect(requests).not.toContain(
+                "/v1/organization-settings/ai-availability",
+              );
+            }
           }
           expect(unexpectedRequests).toEqual([]);
         } finally {
           lawLeaf.update(originalLeafOptions);
           lawLayout.update(originalLayoutOptions);
+          memberChromeHold.until = null;
           useInspectorTabsStore.setState(originalTabs, true);
           await act(async () => {
             await queryClient.cancelQueries();
@@ -1362,13 +1433,17 @@ const declareProfessionalUseCases = (fixture: FixtureRuntime) => {
       expect(
         router.state.matches.find((match) => match.routeId === "/dev")?.status,
       ).toBe("success");
-      expect(queryClient.getQueryState(sessionOptions.queryKey)).toBeUndefined();
       expect(
-        fixture.requests.slice(requestsBeforeLoad).filter(
-          (request) =>
-            request.startsWith("/api/auth/") ||
-            request === "/v1/me/professional-use",
-        ),
+        queryClient.getQueryState(sessionOptions.queryKey),
+      ).toBeUndefined();
+      expect(
+        fixture.requests
+          .slice(requestsBeforeLoad)
+          .filter(
+            (request) =>
+              request.startsWith("/api/auth/") ||
+              request === "/v1/me/professional-use",
+          ),
       ).toEqual([]);
     } finally {
       await queryClient.cancelQueries();
@@ -1394,7 +1469,8 @@ const declareProfessionalUseCases = (fixture: FixtureRuntime) => {
     fixture.unexpectedRequests.length = 0;
     caseRoute.update({
       component: CasePage,
-      beforeLoad: () => authFixtureBeforeLoadData(caseRoute.id, fixture.user.email),
+      beforeLoad: () =>
+        authFixtureBeforeLoadData(caseRoute.id, fixture.user.email),
       loader: () => publicFixtureLoaderData(caseRoute.id),
     });
     await fixture.initializeI18n();
@@ -1497,16 +1573,20 @@ const declareProfessionalUseCases = (fixture: FixtureRuntime) => {
         FIXTURE_AUDIENCE.anonymous,
         status,
       );
-      const serverEnvironment = Object.getOwnPropertyDescriptor(import.meta.env, "SSR");
+      const serverEnvironment = Object.getOwnPropertyDescriptor(
+        import.meta.env,
+        "SSR",
+      );
       const requestsBeforeSsr = fixture.requests.length;
       try {
         Object.assign(import.meta.env, { SSR: true });
         await runInRequest(
           async () =>
-            await withRequestI18n(async () =>
-              await withTestServerIsomorphicHalf(async () =>
-                await router.load(),
-              ),
+            await withRequestI18n(
+              async () =>
+                await withTestServerIsomorphicHalf(
+                  async () => await router.load(),
+                ),
             ),
           new Request(new URL(path, window.location.origin)),
         );
@@ -1616,7 +1696,7 @@ export const declareRouteShellProviderFixture = async (
     expect([...exercised].toSorted()).toEqual(expectedCases.toSorted());
     if (suite === "leaf-shells") {
       expect([...usedExceptions].toSorted()).toEqual(
-        Object.keys(publicRouteExceptions)
+        [...publicRouteExceptions.keys()]
           .filter((id) =>
             selectedLeaves.some(
               (route) =>

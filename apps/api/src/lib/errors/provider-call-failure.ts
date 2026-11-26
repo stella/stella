@@ -5,6 +5,7 @@ import {
   providerFailureFacts,
   providerStatusCode,
 } from "@/api/lib/ai-error";
+import type { ResolvedTanStackTextModelInfo } from "@/api/lib/chat/tanstack-ai-model-info";
 import {
   PROVIDER_CALL_ERROR_MESSAGE,
   ProviderCallError,
@@ -15,7 +16,6 @@ import { PROVIDER_TRANSPORT_CODES } from "@/api/lib/errors/provider-retry-eviden
 import { createProviderDiagnostic } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
-import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { isRecord } from "@/api/lib/type-guards";
 
 export const providerRequestIdFrom = (
@@ -152,7 +152,7 @@ export const providerFailureKind = (evidence: unknown): AIErrorKind => {
 };
 
 type CreateProviderCallErrorOptions = {
-  model: Pick<ResolvedTanStackTextModel, "provider" | "keySource">;
+  model: Pick<ResolvedTanStackTextModelInfo, "provider" | "keySource">;
   evidence: unknown;
   status: HandlerErrorStatusCode;
   code?: string | undefined;

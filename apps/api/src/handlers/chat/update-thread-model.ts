@@ -3,10 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import * as v from "valibot";
 
 import { CHAT_THREAD_PLACEHOLDER_TITLE } from "@stll/api-contract";
-import {
-  type ChatLocalRunTarget,
-  chatRunTargetSchema,
-} from "@stll/api-contract/chat-run-target";
+import { chatRunTargetSchema } from "@stll/api-contract/chat-run-target";
 
 import { defaultDatabaseRetry } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
@@ -55,12 +52,25 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
+type StoredRunTargetColumns = ReturnType<typeof storedChatRunTarget>;
+
 /** The audit change of a run target the request set; none when it left it. */
 const runTargetChange = (
-  stored: ChatLocalRunTarget | null,
-  next: ChatLocalRunTarget | null | undefined,
+  stored: StoredRunTargetColumns,
+  next: StoredRunTargetColumns | undefined,
 ) =>
-  next === undefined ? {} : { chatLocalRunTarget: { old: stored, new: next } };
+  next === undefined
+    ? {}
+    : {
+        chatLocalRunTarget: {
+          old: stored.chatLocalRunTarget,
+          new: next.chatLocalRunTarget,
+        },
+        chatCloudApprovals: {
+          old: stored.chatCloudApprovals,
+          new: next.chatCloudApprovals,
+        },
+      };
 
 const updateThreadModel = createSafeRootHandler(
   config,
@@ -81,8 +91,7 @@ const updateThreadModel = createSafeRootHandler(
       body.runTarget === undefined
         ? undefined
         : storedChatRunTarget(body.runTarget);
-    const runTargetSet =
-      runTarget === undefined ? {} : { chatLocalRunTarget: runTarget };
+    const runTargetSet = runTarget ?? {};
     if (model === null && reasoningEffort !== null) {
       return Result.err(
         new HandlerError({
@@ -135,6 +144,7 @@ const updateThreadModel = createSafeRootHandler(
             chatModel: chatThreads.chatModel,
             chatReasoningEffort: chatThreads.chatReasoningEffort,
             chatLocalRunTarget: chatThreads.chatLocalRunTarget,
+            chatCloudApprovals: chatThreads.chatCloudApprovals,
           })
           .from(chatThreads)
           .where(threadPredicate())
@@ -164,7 +174,7 @@ const updateThreadModel = createSafeRootHandler(
                 old: existing.chatReasoningEffort,
                 new: reasoningEffort,
               },
-              ...runTargetChange(existing.chatLocalRunTarget, runTarget),
+              ...runTargetChange(existing, runTarget),
             },
           });
 
@@ -188,7 +198,7 @@ const updateThreadModel = createSafeRootHandler(
             dataWorkspaceIds,
             chatModel: model,
             chatReasoningEffort: reasoningEffort,
-            chatLocalRunTarget: runTarget ?? null,
+            ...runTargetSet,
           })
           .onConflictDoNothing()
           .returning({ id: chatThreads.id });
@@ -206,7 +216,8 @@ const updateThreadModel = createSafeRootHandler(
                 new: {
                   chatModel: model,
                   chatReasoningEffort: reasoningEffort,
-                  chatLocalRunTarget: runTarget ?? null,
+                  chatLocalRunTarget: runTarget?.chatLocalRunTarget ?? null,
+                  chatCloudApprovals: runTarget?.chatCloudApprovals ?? null,
                 },
               },
             },
@@ -221,6 +232,7 @@ const updateThreadModel = createSafeRootHandler(
             chatModel: chatThreads.chatModel,
             chatReasoningEffort: chatThreads.chatReasoningEffort,
             chatLocalRunTarget: chatThreads.chatLocalRunTarget,
+            chatCloudApprovals: chatThreads.chatCloudApprovals,
           })
           .from(chatThreads)
           .where(threadPredicate())
@@ -253,7 +265,7 @@ const updateThreadModel = createSafeRootHandler(
               old: racedExisting.chatReasoningEffort,
               new: reasoningEffort,
             },
-            ...runTargetChange(racedExisting.chatLocalRunTarget, runTarget),
+            ...runTargetChange(racedExisting, runTarget),
           },
         });
 

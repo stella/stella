@@ -45,6 +45,7 @@ import {
 import { appTotals, calendarDate, shiftDate } from "./activity-logic";
 import type { TimedSegment } from "./activity-logic";
 import { DELETION_ONLY_NOTICE } from "./activity-notices";
+import { STOP_REASON_KEYS } from "./activity-outages";
 import {
   ACTIVITY_CHANGED_EVENT,
   isActivityDaySnapshot,
@@ -506,13 +507,21 @@ const DayContent = ({
   onReviewStatusChange,
 }: DayContentProps) => {
   const t = useTranslations("activity");
-  // One notice at a time: without Accessibility no title is recorded, so a
-  // question about a browser's titles waits until access is fixed.
-  const notice = titlesNeedAccessibility(snapshot) ? (
-    <TitlesAccessStrip onCommand={onCommand} />
-  ) : (
-    browserQuestion
-  );
+  // One notice at a time: a stop comes first, since nothing else can change
+  // while it lasts; without Accessibility no title is recorded, so a question
+  // about a browser's titles waits until access is fixed.
+  let notice: React.ReactNode = browserQuestion;
+  if (snapshot.stoppedReason !== null) {
+    notice = (
+      <p role="status" className="bg-muted rounded-lg px-3 py-2 text-sm">
+        {t("stoppedNotice", {
+          reason: t(STOP_REASON_KEYS[snapshot.stoppedReason]),
+        })}
+      </p>
+    );
+  } else if (titlesNeedAccessibility(snapshot)) {
+    notice = <TitlesAccessStrip onCommand={onCommand} />;
+  }
   if (snapshot.unreadable && !reviewVisible) {
     return (
       <>

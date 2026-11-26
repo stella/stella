@@ -411,14 +411,11 @@ const CODE_ERROR_KEYS = {
   [SAVED_SEARCH_NOT_FOUND_ERROR_CODE]: STATUS_ERROR_KEYS.notFound,
 } as const satisfies Record<string, TranslationKey>;
 
-type UsageRejectionReason =
-  "entitlement_inactive" | "no_entitlement" | "usage_limit_exceeded";
-
 const USAGE_REJECTION_REASON_KEYS = {
   entitlement_inactive: CODE_ERROR_KEYS.usage_limit_exceeded,
   no_entitlement: CODE_ERROR_KEYS.usage_limit_exceeded,
   usage_limit_exceeded: CODE_ERROR_KEYS.usage_limit_exceeded,
-} as const satisfies Record<UsageRejectionReason, TranslationKey>;
+} as const satisfies Record<string, TranslationKey>;
 
 const isKnownErrorCode = (code: string): code is keyof typeof CODE_ERROR_KEYS =>
   Object.hasOwn(CODE_ERROR_KEYS, code);
@@ -432,9 +429,7 @@ const isUsageRejectionReason = (
  * per-item result of a batch), or `undefined` when the code has no message.
  */
 export const apiCodeMessage = (code: string): string | undefined =>
-  Object.hasOwn(CODE_ERROR_KEYS, code) && isKnownErrorCode(code)
-    ? translateError(CODE_ERROR_KEYS[code])
-    : undefined;
+  isKnownErrorCode(code) ? translateError(CODE_ERROR_KEYS[code]) : undefined;
 
 /** The message for the first field a rejected request named. */
 const validationIssueMessage = (issue: ApiValidationIssue): string => {
@@ -593,7 +588,6 @@ const localizeAPIError = ({ code, details, status }: LocalizeAPIErrorInput) => {
   }
   if (
     code &&
-    Object.hasOwn(CODE_ERROR_KEYS, code) &&
     isKnownErrorCode(code) &&
     !(code === API_VALIDATION_ERROR_CODE && !isClientErrorStatus(status))
   ) {

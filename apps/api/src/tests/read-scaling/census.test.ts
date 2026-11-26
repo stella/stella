@@ -24,6 +24,7 @@ import {
 import { chatActiveRunsScalingScenario } from "./chat-active-runs";
 import { chatBackgroundTasksScalingScenario } from "./chat-background-tasks";
 import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
+import { browserSiteNotesScalingScenario } from "./chat-browser-site-notes";
 import { chatLimitReminderScalingScenario } from "./chat-limit-reminder";
 import { chatLocalFilesUndoScalingScenario } from "./chat-local-files-undo";
 import { chatLocalRunStepContentScalingScenario } from "./chat-local-run-step-content";
@@ -48,6 +49,7 @@ import { dataExportReadScalingScenarios } from "./data-exports";
 import { decisionAnchorRedirectsScalingScenario } from "./decision-anchor-redirects";
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
+import { desktopCalendarEventsScalingScenario } from "./desktop-calendar-events";
 import { desktopRunnerUpgradeScalingScenario } from "./desktop-runner-upgrade";
 import {
   desktopDictationCleanupModelsScalingScenario,
@@ -144,6 +146,7 @@ const measuredApiScenarios = [
   browseCourtsScalingScenario,
   accountExportDownloadScalingScenario,
   desktopRunnerUpgradeScalingScenario,
+  desktopCalendarEventsScalingScenario,
   chatLocalRunnersScalingScenario,
   chatLocalFilesUndoScalingScenario,
   chatBackgroundTasksScalingScenario,
@@ -154,6 +157,7 @@ const measuredApiScenarios = [
   chatQueueReadScalingScenario,
   chatQueuedMessageReadScalingScenario,
   browserSiteGrantsScalingScenario,
+  browserSiteNotesScalingScenario,
   conflictCheckListScalingScenario,
   conflictCheckReadScalingScenario,
   chatMcpAppBundleScalingScenario,

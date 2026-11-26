@@ -37,10 +37,10 @@ type UploadPurposeGate = {
  * together: a new upload capability that reaches `authorizeUploadPurpose`
  * without an entry here would run its purpose gate on the member role alone.
  */
-export const UPLOAD_PURPOSE_GATE_BY_CAPABILITY = new Map<
+export const UPLOAD_PURPOSE_GATE_BY_CAPABILITY: ReadonlyMap<
   string,
   UploadPurposeGate
->([
+> = new Map<string, UploadPurposeGate>([
   ["uploads.create", { source: "body", consent: "purpose" }],
   ["uploads.update", { source: "pendingUpload", consent: "purpose" }],
   ["uploads.delete", { source: "pendingUpload", consent: "domain" }],

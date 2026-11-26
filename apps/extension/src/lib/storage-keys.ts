@@ -10,5 +10,8 @@ export const BROWSER_RECENT_NAVIGATIONS_STORAGE_KEY =
 export const BROWSER_STELLA_TABS_STORAGE_KEY = "browserStellaTabs";
 export const BROWSER_DESKTOP_LINK_STORAGE_KEY = "browserDesktopLink";
 export const BROWSER_CONTROL_OWNER_STORAGE_KEY = "browserControlOwner";
+/** The stella tab and chat turn of the web connection's last command: its downloads go there. */
+export const BROWSER_WEB_DOWNLOAD_TARGET_STORAGE_KEY =
+  "browserWebDownloadTarget";
 /** Shown PDFs a desktop chat run already had saved, so each is saved once. */
 export const BROWSER_SHOWN_PDF_SAVES_STORAGE_KEY = "browserShownPdfSaves";

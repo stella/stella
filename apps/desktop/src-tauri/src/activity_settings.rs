@@ -10,9 +10,9 @@ use tauri::{AppHandle, State};
 
 use crate::{
   activity::{
-    self, ActivityAppDetailCapture, ActivityAppState, ActivityDeletionError,
-    ActivityDeletionRecovery, ActivityHistoryDisposition, ActivityOtherHistoryRecovery,
-    ActivityRetention, ActivitySettingsSnapshot,
+    self, ActivityAppDetailCapture, ActivityAppState, ActivityCalendarSource,
+    ActivityDeletionError, ActivityDeletionRecovery, ActivityHistoryDisposition,
+    ActivityOtherHistoryRecovery, ActivityRetention, ActivitySettingsSnapshot,
   },
   activity_commands::{lock_error, update},
   activity_details,
@@ -52,6 +52,19 @@ pub fn activity_get_settings(
   drop(manager);
   snapshot.resolve_app_visuals();
   Ok(snapshot)
+}
+
+/// Where the day review reads calendar events from; `off` stops every read.
+#[tauri::command]
+pub fn activity_set_calendar_source(
+  caller: ActivitySettingsCaller,
+  app: AppHandle,
+  state: State<'_, ActivityAppState>,
+  source: ActivityCalendarSource,
+) -> Result<(), String> {
+  update(&app, &state, &caller, |manager| {
+    manager.set_calendar_source(source)
+  })
 }
 
 #[tauri::command]

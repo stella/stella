@@ -28,6 +28,7 @@ import { matterRequiredResult } from "@/api/mcp/matter-requirement";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
 import { READER_ANNOTATION_TOOL_HANDLERS } from "@/api/mcp/reader-annotation-tools";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
+import { SITE_NOTES_TOOL_HANDLERS } from "@/api/mcp/site-notes-tools";
 import {
   getStaticMcpToolDefinition,
   getStaticMcpToolOutputContract,
@@ -108,6 +109,9 @@ export const REGISTRY_WRITE_TOOL_HANDLERS = {
   // Non-projectable (`chatProjectable: false`): chat files feedback through
   // its own UI. Wired only to keep this map exhaustive.
   submit_feedback: FEEDBACK_TOOL_HANDLERS.submit_feedback,
+  // Non-projectable: chat keeps website notes through its own tool beside
+  // the browser tool.
+  save_site_notes: SITE_NOTES_TOOL_HANDLERS.save_site_notes,
   // Account-level creation is intentionally excluded from chat projection.
   create_organization: RESEARCH_ADMIN_TOOL_HANDLERS.create_organization,
 } satisfies Record<RegistryWriteToolName, McpToolHandler>;

@@ -211,6 +211,8 @@ describe("browser controller connection", () => {
         "browserControlledTab",
         "browserExecutionReceipts",
         "browserCommandBudget",
+        // Its downloads no longer go to any stella tab.
+        "browserWebDownloadTarget",
       ],
       "browserContainedTabs",
     ]);

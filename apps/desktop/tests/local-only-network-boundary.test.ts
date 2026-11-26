@@ -3,7 +3,7 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
-  CONFIRMED_ENTRY_NETWORK_MODULES,
+  ACTIVITY_NETWORK_MODULES,
   isFeatureModule,
   LOCAL_ONLY_FEATURES,
   LOCAL_ONLY_GATE_MODULES,
@@ -121,8 +121,8 @@ describe("local-only network boundary", () => {
     }
   });
 
-  test("confirmed-entry network owners cannot access recorded data", async () => {
-    for (const file of CONFIRMED_ENTRY_NETWORK_MODULES) {
+  test("activity network owners cannot access recorded data", async () => {
+    for (const file of ACTIVITY_NETWORK_MODULES) {
       const source = await readNative(file);
       for (const feature of LOCAL_ONLY_FEATURES) {
         expect(source, file).not.toMatch(featureDataReference(feature.id));

@@ -188,6 +188,8 @@ export const AI_ERROR_KIND_SHAPES = {
   local_runner_needs_login: LOCAL_RUNNER_REPORTED,
   local_runner_limit_reached: LOCAL_RUNNER_REPORTED,
   local_runner_unavailable: LOCAL_RUNNER_REPORTED,
+  local_runner_lost: LOCAL_RUNNER_REPORTED,
+  local_runner_failed: LOCAL_RUNNER_REPORTED,
   local_runner_turn_too_large: LOCAL_RUNNER_REPORTED,
   turn_too_large: {
     notAShape:

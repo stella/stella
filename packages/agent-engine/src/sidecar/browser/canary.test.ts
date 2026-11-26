@@ -214,13 +214,16 @@ const browse = async (
 };
 
 /**
- * The steps the member is asked about, by approval mode: the agent clicks
- * the search button and a result, and types into a search field and into
- * a note field. Plan is read-only and refuses those steps, so this journey
- * does not apply to it; the browser tools' own tests cover it.
+ * The steps the member is asked about, by approval mode: the agent opens the
+ * library and its account page, clicks the search button and a result, and
+ * types into a search field and into a note field. The library is served
+ * over plain HTTP, which names no website the chat can have been on, so on
+ * Ask both opens ask. Plan is read-only and refuses the steps on the page,
+ * so this journey does not apply to it; the browser tools' own tests cover
+ * it.
  */
 const ASKED = {
-  ask: ["click", "click", "type"],
+  ask: ["open", "click", "click", "type", "open"],
   auto: ["type"],
   full_auto: [],
 } as const satisfies Record<
@@ -278,14 +281,18 @@ describe.each(
     ).toMatchObject(
       ASKED[approvals].map((action) => ({
         name: "local_browser",
-        input: {
-          action,
-          asked: {
-            name: expect.any(String),
-            role: expect.any(String),
-            url: expect.stringContaining(library.origin),
-          },
-        },
+        // Opening is asked about by the address it opens.
+        input:
+          action === "open"
+            ? { action, url: expect.stringContaining(library.origin) }
+            : {
+                action,
+                asked: {
+                  name: expect.any(String),
+                  role: expect.any(String),
+                  url: expect.stringContaining(library.origin),
+                },
+              },
       })),
     );
     expect(

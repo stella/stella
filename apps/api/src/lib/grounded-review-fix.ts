@@ -11,15 +11,15 @@
 
 import { panic } from "better-result";
 
+import type {
+  DocxFolioCitation,
+  GroundedReviewFix,
+} from "@/api/lib/document-review/contract";
 import type { ReviewDelta } from "@/api/lib/document-review/review-delta";
-import type { DocxFolioCitation } from "@/api/lib/document-review/review-extract";
 import { foreignLanguageOf } from "@/api/lib/document-review/target-language";
 import type { ReviewTargetLanguage } from "@/api/lib/document-review/target-language";
 
-export type GroundedReviewFix =
-  | { kind: "replaceInBlock"; blockId: string; find: string; replace: string }
-  | { kind: "replaceBlock"; blockId: string; text: string }
-  | { kind: "insertAfterBlock"; blockId: string; text: string };
+export type { GroundedReviewFix };
 
 type BuildGroundedReviewFixArgs = {
   delta: ReviewDelta;

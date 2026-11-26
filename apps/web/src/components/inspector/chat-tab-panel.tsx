@@ -15,7 +15,6 @@ import { useCallback, useRef, useState } from "react";
  *   - render `ChatThreadMessages` for the transcript
  *   - render the shared `PromptBar` for the composer
  */
-import type { MouseEvent } from "react";
 
 import {
   useQuery,
@@ -28,7 +27,12 @@ import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import {
+  CHAT_MEMBER_SEND_ACTION,
+  CHAT_SEND_INTENT,
+} from "@stll/api-contract/chat-send-intent";
 import { Button } from "@stll/ui/button";
+import type { ContextMenuSurfaceOpenEvent } from "@stll/ui/entity-actions";
 import { Maximize2Icon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -147,7 +151,7 @@ import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 type ChatTabPanelProps = {
   tab: ChatTab;
   onClose: () => void;
-  onLabelContextMenu: (event: MouseEvent<HTMLElement>) => void;
+  onLabelContextMenu: (details: ContextMenuSurfaceOpenEvent) => void;
 };
 
 const chatTabThreadRef = (tab: ChatTab): ChatThreadRef =>
@@ -296,9 +300,11 @@ export const ChatTabPanel = ({
     isLoadingOlder,
     loadOlderError,
     approvalIdsAwaitedAtOpen,
+    browserGate,
     continuePausedTurn,
     resendLatestMessage,
     sendMessage,
+    sendIntentOf,
     queue,
     stop,
     stopPending,
@@ -675,7 +681,9 @@ export const ChatTabPanel = ({
       // their computer opens stella desktop when none is connected. A queued
       // question sent on mount is no gesture, so it never opens it.
       if (!handledReserved) {
-        composerModels.openDesktopForSend();
+        composerModels.openDesktopForSend(
+          sendIntentOf(CHAT_MEMBER_SEND_ACTION.send),
+        );
         return await handlePromptSubmit({ prompt, files });
       }
 
@@ -683,7 +691,8 @@ export const ChatTabPanel = ({
       if (newThreadMessage === undefined) {
         return CHAT_SEND_SENT;
       }
-      composerModels.openDesktopForSend();
+      // `/new` with a message starts a new thread's turn.
+      composerModels.openDesktopForSend(CHAT_SEND_INTENT.start);
       if (!(await ensureAIAvailable())) {
         return CHAT_SEND_KEPT;
       }
@@ -730,6 +739,7 @@ export const ChatTabPanel = ({
         value={{
           activeOrganizationId,
           approvalIdsAwaitedAtOpen,
+          browserGate,
           alwaysApprovedTools,
           conversationApprovedTools,
           confirmStoredApprovalGrant,
@@ -811,7 +821,9 @@ export const ChatTabPanel = ({
                       );
                       detached(
                         editorController.submit(async (draft) => {
-                          composerModels.openDesktopForSend();
+                          composerModels.openDesktopForSend(
+                            sendIntentOf(CHAT_MEMBER_SEND_ACTION.send),
+                          );
                           if (!(await ensureAIAvailable())) {
                             return CHAT_SEND_KEPT;
                           }
@@ -1010,7 +1022,7 @@ const noop = () => {
 type ChatTabPanelChromeProps = {
   tab: ChatTab;
   onClose: () => void;
-  onLabelContextMenu: (event: MouseEvent<HTMLElement>) => void;
+  onLabelContextMenu: (details: ContextMenuSurfaceOpenEvent) => void;
   onStartRename: () => void;
   rename: {
     active: boolean;

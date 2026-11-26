@@ -35,6 +35,7 @@ import {
   caseLawAnalysisWriterReadPolicies,
   caseLawIngestionOnlyPolicies,
   chatBrowserSiteGrantPolicies,
+  chatBrowserSiteNotePolicies,
   chatCommandReceiptPolicies,
   chatLimitReminderPolicies,
   chatMessagePolicies,
@@ -104,7 +105,7 @@ import type {
   ChatCompactionSummary,
   ChatMessageRole,
   PersistedChatMessageContent,
-} from "@/api/handlers/chat/types";
+} from "@/api/handlers/chat/persisted-chat-types";
 import type { ClauseMetadata } from "@/api/handlers/clauses/metadata";
 import type { TemplateRecipeDefinition } from "@/api/handlers/template-recipes/definition";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -592,6 +593,7 @@ export {
   outboundActionPolicies,
   chatLimitReminderPolicies,
   chatBrowserSiteGrantPolicies,
+  chatBrowserSiteNotePolicies,
   chatToolGrantPolicies,
   sharepointConnectionPolicies,
   sharepointOAuthStatePolicies,

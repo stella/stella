@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 
 import {
   sha256Base64Url as hashSha256Base64Url,
@@ -694,7 +694,6 @@ type PendingPollRow = {
   clientSecretSink: string;
   authorizationCode: string | null;
   expiresAt: Date;
-  lastPolledAt: Date | null;
   pollIntervalSeconds: number;
 };
 
@@ -717,7 +716,6 @@ export const pollClaimGrant = async (
       clientSecretSink: agentRegistration.clientSecretSink,
       authorizationCode: agentRegistration.authorizationCode,
       expiresAt: agentRegistration.expiresAt,
-      lastPolledAt: agentRegistration.lastPolledAt,
       pollIntervalSeconds: agentRegistration.pollIntervalSeconds,
     })
     .from(agentRegistration)
@@ -743,18 +741,30 @@ export const pollClaimGrant = async (
     return Result.err(new AgentTokenError("expired_token"));
   }
 
-  if (
-    registration.lastPolledAt &&
-    now.getTime() - registration.lastPolledAt.getTime() <
-      registration.pollIntervalSeconds * 1000
-  ) {
-    return Result.err(new AgentTokenError("slow_down"));
-  }
-
-  await rootDb
+  // The interval is checked in the update that records the poll, so of
+  // concurrent polls with the same claim token exactly one is admitted.
+  const pollCutoff = new Date(
+    now.getTime() - registration.pollIntervalSeconds * 1000,
+  );
+  const polled = await rootDb
     .update(agentRegistration)
     .set({ lastPolledAt: now })
-    .where(eq(agentRegistration.id, registration.id));
+    .where(
+      and(
+        eq(agentRegistration.id, registration.id),
+        or(
+          isNull(agentRegistration.lastPolledAt),
+          lte(
+            agentRegistration.lastPolledAt,
+            sql`${pollCutoff.toISOString()}::timestamptz`,
+          ),
+        ),
+      ),
+    )
+    .returning({ id: agentRegistration.id });
+  if (polled.length === 0) {
+    return Result.err(new AgentTokenError("slow_down"));
+  }
 
   if (registration.status === "pending" || !registration.authorizationCode) {
     return Result.err(new AgentTokenError("authorization_pending"));
@@ -773,7 +783,6 @@ const narrowPollRow = (
         clientSecretSink: string;
         authorizationCode: string | null;
         expiresAt: Date;
-        lastPolledAt: Date | null;
         pollIntervalSeconds: number;
       }
     | undefined,
@@ -822,10 +831,21 @@ const exchangeClaimedCode = async (
     return Result.err(new AgentTokenError("invalid_grant"));
   }
 
-  await rootDb
+  // Clear the code only while it still holds the value read above, so of
+  // concurrent polls exactly one exchanges it.
+  const consumed = await rootDb
     .update(agentRegistration)
     .set({ authorizationCode: null })
-    .where(eq(agentRegistration.id, registration.id));
+    .where(
+      and(
+        eq(agentRegistration.id, registration.id),
+        eq(agentRegistration.authorizationCode, code),
+      ),
+    )
+    .returning({ id: agentRegistration.id });
+  if (consumed.length === 0) {
+    return Result.err(new AgentTokenError("invalid_grant"));
+  }
 
   const resource = getMcpResourceUrl(
     getResourceModeForType(toRegistrationType(registration.registrationType)),

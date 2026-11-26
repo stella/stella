@@ -22,6 +22,8 @@
 //   `.ProseMirror` through a descendant (`_`) or child (`>`) combinator
 //   (`[&_pre]`, `[&>table]`, `[&_.ProseMirror]`, `[&_pre_code]`): the scroller
 //   lands on markup a renderer emits, which no wrapper component can reach.
+//   A cap that makes a textbox scroll is still rejected, by
+//   `no-adhoc-textbox-growth`: its scroll region belongs to `ComposerFrame`.
 //
 // Analysis boundary: this reads class strings, not the DOM. Every string
 // literal and template chunk in a scoped file is tokenized, so a utility in a

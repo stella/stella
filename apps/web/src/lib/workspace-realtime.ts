@@ -573,6 +573,28 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.MCP_CONNECTOR],
   },
+  // The member removes research notes the agent kept about a website, one
+  // by one or a whole website's; the Settings list refreshes.
+  removeBrowserSiteNote: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/chat/browser-site-notes/:noteId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.USER],
+  },
+  removeBrowserSiteNotesForSite: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/chat/browser-site-notes/sites",
+      },
+    ],
+    resources: [RESOURCE_TYPE.USER],
+  },
   // The member lets chat turns work in a folder linked on their computer;
   // the computers' report, which lists the folder's approval, refreshes.
   approveLocalFolder: {
@@ -837,11 +859,22 @@ const invalidateAfterResourceMutation = async ({
       scope,
       mutation,
       owner,
-    }).map(({ queryKey, ...context }): ResourceQueryInvalidation => ({
-      queryKey,
-      ...context,
-      match: context.match ?? "prefix",
-    }));
+    })
+      .filter(
+        ({ queryKey }) =>
+          scope.type !== "workspace" ||
+          scope.changedEntityId === undefined ||
+          !isOtherEntityQueryKey(
+            queryKey,
+            scope.workspaceId,
+            scope.changedEntityId,
+          ),
+      )
+      .map(({ queryKey, ...context }): ResourceQueryInvalidation => ({
+        queryKey,
+        ...context,
+        match: context.match ?? "prefix",
+      }));
   if (scope.type === "workspace") {
     for (const resource of resources) {
       for (const policyScope of RESOURCE_REALTIME_QUERY_POLICY[resource]) {
@@ -1250,6 +1283,18 @@ const getChangedEntityInvalidations = (
   { queryKey: entitiesKeys.all(workspaceId), match: "entity-collections" },
   { queryKey: entitiesKeys.detail(workspaceId, entityId), match: "prefix" },
 ];
+
+/** Whether a key reads one entity of the matter other than the changed one:
+ *  a registered reader there stays fresh, as the changed-entity
+ *  invalidations above leave it. */
+const isOtherEntityQueryKey = (
+  queryKey: QueryKey,
+  workspaceId: string,
+  changedEntityId: string,
+): boolean =>
+  partialMatchKey(queryKey, entitiesKeys.all(workspaceId)) &&
+  !isEntityCollectionQueryKey(queryKey) &&
+  !partialMatchKey(queryKey, entitiesKeys.detail(workspaceId, changedEntityId));
 
 const getResourceTypeInvalidationActions = (
   resourceType: ResourceType,

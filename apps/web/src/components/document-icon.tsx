@@ -5,6 +5,7 @@ import { panic } from "better-result";
 import { documentFormat } from "@stll/api-contract/document-format";
 import { DocumentMark, isDocumentMarkKind } from "@stll/ui/document-mark";
 import {
+  FileAudioIcon as FileAudio,
   FileIcon as File,
   FileImageIcon as FileImage,
   FileTextIcon as FileText,
@@ -77,6 +78,8 @@ export const DocumentIcon = ({
   switch (kind) {
     case "image":
       return <FileImage className={className} />;
+    case "audio":
+      return <FileAudio className={className} />;
     case "email":
       return <MailIcon className={className} />;
     case "text":

@@ -146,6 +146,22 @@ describe("documentFormat", () => {
     }
   });
 
+  test("names recordings by media type or extension, and any audio type as audio", () => {
+    expect(documentFormat("audio/mpeg", "hearing.mp3")).toEqual({
+      kind: "audio",
+      mark: "audio",
+      label: "MP3",
+    });
+    expect(kindOf("application/octet-stream", "call.m4a")).toBe("audio");
+    expect(kindOf(null, "memo.ogg")).toBe("audio");
+    expect(kindOf("audio/x-wav", "witness")).toBe("audio");
+    expect(documentFormat("audio/flac", "deposition.flac")).toEqual({
+      kind: "audio",
+      mark: "audio",
+      label: "FLAC",
+    });
+  });
+
   test("names an unlisted image or text type by its family", () => {
     expect(documentFormat("image/avif", "picture.avif")).toEqual({
       kind: "image",

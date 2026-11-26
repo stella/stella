@@ -4,6 +4,7 @@ import {
   buildVersionedApiUrl,
   PREVIEW_UNAVAILABLE_ERROR_CODE,
 } from "@stll/api-contract";
+import { documentFormat } from "@stll/api-contract/document-format";
 import {
   type FilePart,
   filePartInlineBytes,
@@ -179,9 +180,11 @@ const resolveFileDelivery = ({
     };
   }
 
+  // A recording plays from its original; it has no rendition to show.
   if (
     purpose === "native-display" &&
-    !isNativelyRenderableMimeType(content.mimeType)
+    !isNativelyRenderableMimeType(content.mimeType) &&
+    documentFormat(content.mimeType).kind !== "audio"
   ) {
     return { type: "preview-unavailable" };
   }

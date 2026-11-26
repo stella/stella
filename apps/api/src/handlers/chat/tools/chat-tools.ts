@@ -28,6 +28,7 @@ import type { AuthorizedToolWorkspaceIds } from "@/api/handlers/chat/tools/autho
 import { createAutoApplySuggestChangesTools } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
 import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
 import { createBrowserControlTool } from "@/api/handlers/chat/tools/browser-control-tool";
+import { createBrowserSiteNotesTools } from "@/api/handlers/chat/tools/browser-site-notes-tools";
 import { createBusinessRegistryTools } from "@/api/handlers/chat/tools/business-registry-tools";
 import { createChatHistoryTools } from "@/api/handlers/chat/tools/chat-history-tools";
 import { auditChatToolExecutions } from "@/api/handlers/chat/tools/chat-tool-execution-audit";
@@ -348,6 +349,7 @@ type BusinessRegistryTools = ReturnType<typeof createBusinessRegistryTools>;
 type CounterpartyCheckTools = ReturnType<typeof createCounterpartyCheckTools>;
 type BoeTools = ReturnType<typeof createBoeTools>;
 type BrowserControlTools = ReturnType<typeof createBrowserControlTool>;
+type BrowserSiteNotesTools = ReturnType<typeof createBrowserSiteNotesTools>;
 type InfosoudTools = ReturnType<typeof createInfosoudTools>;
 /**
  * `suggest_changes` is one tool name with two registrations: the manual,
@@ -418,6 +420,7 @@ type BuiltInChatTools = ReturnType<typeof createCalendarTools> &
   CounterpartyCheckTools &
   BoeTools &
   BrowserControlTools &
+  BrowserSiteNotesTools &
   InfosoudTools &
   WorkspaceTools &
   SuggestChangesTools &
@@ -1018,6 +1021,42 @@ const createConnectorToolsForTurn = ({
   return createConnectorTools({ safeDb, organizationId, userId });
 };
 
+/**
+ * Chat's browser tool, when the member's browser offers it, and the website
+ * notes that travel with it: read before browsing a website, kept current
+ * after. A stored notes call validates in any later turn.
+ */
+const browserToolsForTurn = ({
+  browserExtension,
+  forValidation,
+  organizationId,
+  recordAuditEvent,
+  safeDb,
+  userId,
+}: Pick<
+  GetChatToolsProps,
+  | "browserExtension"
+  | "organizationId"
+  | "recordAuditEvent"
+  | "safeDb"
+  | "userId"
+> & { forValidation: boolean }) => {
+  const offered =
+    browserExtension !== undefined &&
+    browserExtensionPolicy(browserExtension).toolOffered;
+  return {
+    browserControlTools: offered ? createBrowserControlTool() : {},
+    browserSiteNotesTools:
+      (offered || forValidation) && recordAuditEvent !== undefined
+        ? createBrowserSiteNotesTools({
+            owner: { organizationId, userId },
+            recordAuditEvent,
+            safeDb,
+          })
+        : {},
+  };
+};
+
 const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {
     featureAccessSnapshot,
@@ -1221,11 +1260,14 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const { boeTools, infosoudTools } = nativeSourceTools(
     disabledNativeToolSlugs,
   );
-  const browserControlTools =
-    browserExtension !== undefined &&
-    browserExtensionPolicy(browserExtension).toolOffered
-      ? createBrowserControlTool()
-      : {};
+  const { browserControlTools, browserSiteNotesTools } = browserToolsForTurn({
+    browserExtension,
+    forValidation,
+    organizationId,
+    recordAuditEvent,
+    safeDb,
+    userId,
+  });
   const { webSearchProvider, urlFetcher } = webSearchProviders;
   // The `webSearchProvider !== null` re-check narrows the type for
   // createWebSearchTools; it is implied by `webResearchAvailable`.
@@ -1553,6 +1595,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...counterpartyCheckTools,
       ...boeTools,
       ...browserControlTools,
+      ...browserSiteNotesTools,
       ...infosoudTools,
       ...workspaceTools,
       ...templateTools,

@@ -175,6 +175,45 @@ const pixelsAt = (minutesFromStart: number, granularity: 15 | 30 | 60) =>
   (minutesFromStart / granularity) * DAY_CALENDAR_SLOT_HEIGHT_PX[granularity];
 
 describe("DayCalendar", () => {
+  test("a narrow lane of scheduled blocks draws outlines beside the record", async () => {
+    const { cleanup, container } = await renderCalendar({
+      columns: [
+        activityColumn,
+        {
+          blocks: [
+            {
+              accessibleLabel: "Hearing, 10:00–11:00",
+              endMs: at(11),
+              id: "calendar:0",
+              kind: "scheduled",
+              startMs: at(10),
+              title: "Hearing",
+              tone: { type: "neutral" },
+            },
+          ],
+          id: "calendar",
+          label: "Calendar",
+          rangeSelection: { type: "disabled" },
+          type: "blocks",
+          width: "narrow",
+        },
+        entriesColumn,
+      ],
+    });
+    const grid = container.querySelector<HTMLElement>(
+      '[data-slot="day-calendar"]',
+    );
+    expect(grid?.style.gridTemplateColumns).toBe(
+      "4rem minmax(0, 1fr) minmax(0, 0.6fr) minmax(0, 1fr)",
+    );
+    const block = container.querySelector<HTMLElement>(
+      '[data-block-id="calendar:0"]',
+    );
+    expect(block?.dataset["kind"]).toBe("scheduled");
+    expect(block?.style.backgroundColor).toBe("transparent");
+    await cleanup();
+  });
+
   test("a drag selects a snapped range in the dragged column", async () => {
     const { cleanup, container, selected } = await renderCalendar();
     const surface = surfaceOf(container, "activity");

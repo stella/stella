@@ -8,10 +8,14 @@ import { BROWSER_CONTROL_LIMITS } from "./browser-control";
  * for `https://example.com` covers neither `https://www.example.com` nor
  * `http://example.com` nor `https://example.com:8443`.
  *
- * The grant never lifts the API's approval gate for `use-browser`; the
- * user's own browser applies it when it answers an approval card, checking
- * the controlled tab's page as the extension reported it, never a URL the
- * model supplied for the page it acts on.
+ * A grant turns a browser step the chat's permission level would ask about
+ * into one that runs, on a computer and on stella's models alike
+ * (`browser-step-gate.ts`): a step on a page only when the page is the
+ * granted origin as the browser itself last reported it, never a URL the
+ * model supplied; opening a page when the address it opens is on the
+ * granted origin. It never lifts Plan or a sign-in, and never the API's
+ * approval gate for `use-browser`: the user's own browser applies it when it
+ * answers an approval card.
  */
 export const BROWSER_SITE_GRANTS_MAX = 100;
 

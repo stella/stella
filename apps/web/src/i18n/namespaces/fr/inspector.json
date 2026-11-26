@@ -540,6 +540,7 @@
       "waitForMatches": "Attendez la fin de l’analyse d’anonymisation.",
       "workspaceTermsHeading": "Termes de l’espace de travail ({count})"
     },
+    "audioUnplayable": "Cet enregistrement ne peut pas être lu ici. Téléchargez-le pour l'écouter.",
     "closeAllTabs": "Fermer {count, plural, one {# onglet} many {les # onglets} other {les # onglets}}",
     "closeOtherTabs": "Fermer {count, plural, one {l’autre onglet} many {les # autres onglets} other {les # autres onglets}}",
     "closeTab": "Fermer <bdi>{name}</bdi>",
@@ -623,6 +624,11 @@
     },
     "metadata": {
       "aiExtractedHeading": "Extrait par l’IA",
+      "browserDownload": {
+        "downloaded": "Téléchargé",
+        "file": "Adresse du fichier",
+        "page": "Téléchargé depuis"
+      },
       "documentProperties": {
         "empty": "Ce fichier ne contient aucune propriété propre",
         "heading": "Propriétés du fichier",

@@ -62,8 +62,8 @@ use crate::local_linked_folders::LinkedFolderRefusal;
 use crate::runner_protocol::{
   FolderRestore, FolderRestoreOutcome, Harness, HarnessCapability, HarnessReport,
   HarnessUnavailableReason, JsonObject, LinkedFolderReport, MAX_FRAME_BYTES,
-  MissingHarness, RejectReason, RunAnswer, RunApproval, RunInput, RunOutcome, RunStart,
-  RunTokenRefresh, UnavailableHarness,
+  MissingHarness, RejectReason, RunAnswer, RunApproval, RunInput, RunOutcome,
+  RunSiteGrants, RunStart, RunTokenRefresh, UnavailableHarness,
 };
 
 const LOG_TARGET: &str = "desktop_runner::host";
@@ -595,6 +595,14 @@ async fn pump(
       break outcome;
     }
   };
+  // How the run ended, beside the release of its hold: a run that ends while
+  // the member still has a question open closes it (the holder reports it),
+  // and this line says when and why the computer let the run go.
+  tracing::info!(
+    target: LOG_TARGET,
+    outcome = outcome.wire_name(),
+    "a run ended; its hold is released"
+  );
   locked(&shared.runs).remove(&run_id);
   locked(&shared.grants).remove(&run_id);
   drop(lease);
@@ -860,7 +868,7 @@ async fn refresh_reports(shared: Arc<Shared>, sidecar: HarnessSidecar) {
   loop {
     let mut recheck = false;
     for &harness in Harness::ALL {
-      recheck |= probe(&shared, &sidecar, harness).await == Probed::KeptReady;
+      recheck |= probe(&shared, &sidecar, harness).await.cache == Probed::KeptReady;
     }
     let held = Arc::clone(&shared);
     let removal = tokio::task::spawn_blocking(move || {
@@ -894,16 +902,25 @@ enum Probed {
   KeptReady,
 }
 
-async fn probe(shared: &Shared, sidecar: &HarnessSidecar, harness: Harness) -> Probed {
+/// A probe's result: what it did to the cached report, and what it found
+/// itself, which differs from the cache when a kept report stands.
+struct ProbeResult {
+  cache: Probed,
+  found: HarnessReport,
+}
+
+async fn probe(
+  shared: &Shared,
+  sidecar: &HarnessSidecar,
+  harness: Harness,
+) -> ProbeResult {
   let Some(installed) = shared.harnesses.installed(harness) else {
-    shared.store(
-      harness,
-      Cached::new(
-        HarnessReport::NotInstalled(MissingHarness { id: harness }),
-        None,
-      ),
-    );
-    return Probed::Stored;
+    let found = HarnessReport::NotInstalled(MissingHarness { id: harness });
+    shared.store(harness, Cached::new(found.clone(), None));
+    return ProbeResult {
+      cache: Probed::Stored,
+      found,
+    };
   };
   let credentials = shared.harnesses.credentials(harness).await;
   let request_id = Uuid::new_v4().to_string();
@@ -932,10 +949,16 @@ async fn probe(shared: &Shared, sidecar: &HarnessSidecar, harness: Harness) -> P
         && shared.keep_ready_once(harness, credentials.as_ref())
       {
         tracing::info!(target: LOG_TARGET, "a ready harness failed one probe; checking again soon");
-        return Probed::KeptReady;
+        return ProbeResult {
+          cache: Probed::KeptReady,
+          found: report,
+        };
       }
-      shared.store(harness, Cached::new(report, credentials));
-      Probed::Stored
+      shared.store(harness, Cached::new(report.clone(), credentials));
+      ProbeResult {
+        cache: Probed::Stored,
+        found: report,
+      }
     }
     // The last report stands until a probe answers again. An installed
     // harness that has none yet is unavailable, never missing.
@@ -944,7 +967,10 @@ async fn probe(shared: &Shared, sidecar: &HarnessSidecar, harness: Harness) -> P
       if shared.cached(harness).is_none() {
         shared.store(harness, Cached::new(probe_pending(harness), credentials));
       }
-      Probed::Stored
+      ProbeResult {
+        cache: Probed::Stored,
+        found: probe_pending(harness),
+      }
     }
   }
 }
@@ -1290,6 +1316,10 @@ impl HarnessHost for SidecarHarnessHost {
     self.forward("answer", |sidecar| sidecar.answer(answer))
   }
 
+  fn site_grants(&self, grants: RunSiteGrants) -> Forwarded {
+    self.forward("site grants", |sidecar| sidecar.site_grants(grants))
+  }
+
   fn interrupt(&self, run_id: &str) -> Forwarded {
     self.forward("interrupt", |sidecar| sidecar.interrupt(run_id))
   }
@@ -1416,6 +1446,21 @@ impl HarnessReports for SidecarHarnessHost {
 }
 
 impl SidecarHarnessHost {
+  /// The harness's report as the last probe left it; `None` before the
+  /// first probe answered.
+  pub(crate) fn report(&self, harness: Harness) -> Option<HarnessReport> {
+    self.shared.cached(harness).map(|cached| cached.report)
+  }
+
+  /// Probe the harness now and answer what this probe found. The cache
+  /// takes it as the regular probe does, which may keep a ready report
+  /// through one failure; the answer never does. `None` while no supervisor
+  /// runs (the runner has not connected yet).
+  pub(crate) async fn probe_now(&self, harness: Harness) -> Option<HarnessReport> {
+    let sidecar = self.shared.sidecar()?;
+    Some(probe(&self.shared, &sidecar, harness).await.found)
+  }
+
   /// The member linked or unlinked a folder: look at the list again now.
   pub(crate) fn linked_folders_changed(&self) {
     self.shared.linked_folders_changed.notify_one();

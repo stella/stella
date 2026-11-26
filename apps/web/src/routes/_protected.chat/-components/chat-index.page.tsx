@@ -11,6 +11,7 @@ import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { CHAT_SEND_INTENT } from "@stll/api-contract/chat-send-intent";
 import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -470,7 +471,8 @@ export function ChatIndexPage() {
     // Inside the member's send gesture, before any await: a turn for
     // their computer opens stella desktop when none is connected.
     if (!handledReserved || newThreadMessages.length > 0) {
-      composerModels.openDesktopForSend();
+      // A new chat has no turn running: every message here starts one.
+      composerModels.openDesktopForSend(CHAT_SEND_INTENT.start);
     }
     if (handledReserved) {
       const newThreadMessage = newThreadMessages.at(0);

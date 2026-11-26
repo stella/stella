@@ -26,3 +26,11 @@ export const labelFor = (value: string): string | null =>
 export const tierLabel = (value: Tier): string => TIER_LABELS[value];
 
 export const isKnownTier = Object.hasOwn(TIER_LABELS, tier);
+
+// expect-clean: exhaustive-union-map/exhaustive-union-map
+export const REGISTRY = {
+  alpha: { label: "Alpha" },
+  beta: { label: "Beta" },
+} as const satisfies Record<string, { readonly label: string }>;
+
+export type RegistryKey = keyof typeof REGISTRY;

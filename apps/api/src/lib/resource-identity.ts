@@ -115,6 +115,8 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   chatToolGrant: { type: "non_resource", reason: "policy" },
   // A stored browser site approval: the caller's own standing policy.
   chatBrowserSiteGrant: { type: "non_resource", reason: "policy" },
+  // The agent's own notes about a website's mechanics, never matter content.
+  chatBrowserSiteNote: { type: "non_resource", reason: "workflow" },
   fileChatThread: { type: "non_resource", reason: "association" },
   templateChatThread: { type: "non_resource", reason: "association" },
   templateDeletionCleanupRequest: { type: "non_resource", reason: "job" },

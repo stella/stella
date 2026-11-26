@@ -242,6 +242,17 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       command: ["annotation", "delete"],
       scope: "knowledge_write",
     },
+    // Read before a browser step on one website: an agent's lookup that a
+    // command line, which browses nothing, has no use for.
+    read_site_notes: {
+      command: ["site-notes", "read"],
+      excluded: true,
+      scope: "read",
+    },
+    save_site_notes: {
+      command: ["site-notes", "save"],
+      scope: "knowledge_write",
+    },
 
     search_across_matters: {
       command: ["search", "matters"],

@@ -12,6 +12,7 @@ import {
 } from "@stll/api-contract/chat-local-run-step-content";
 import { desktopVersionSchema } from "@stll/api-contract/desktop-presence";
 import type {
+  DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_RUN_OUTCOMES,
   DesktopRunnerCheckpointEvent,
 } from "@stll/api-contract/desktop-runner";
@@ -62,6 +63,10 @@ import { harnessEventsToChunks } from "../harness/stream-chunks";
 import { harnessTranscriptSchema } from "../harness/transcript-handoff";
 import type { ProtocolLog } from "../protocol-log";
 import { copyAttachments } from "./attachments";
+import {
+  browserDownloadFiler,
+  keepLocalInPlan,
+} from "./browser-download-filing";
 import {
   type ActionApprovals,
   createActionApprovals,
@@ -296,6 +301,11 @@ const RUN_STOP = {
 
 type RunStop = (typeof RUN_STOP)[keyof typeof RUN_STOP];
 
+type ApprovalDecision = (typeof DESKTOP_RUNNER_APPROVAL_DECISIONS)[number];
+
+/** How a question the run's approvals let go on reads once it closes. */
+const APPROVED = "approve" satisfies ApprovalDecision;
+
 type HeldRun = {
   /** The run's folder, resolved: no restore touches it while the run is held. */
   readonly workspaceDir: string;
@@ -311,6 +321,11 @@ type HeldRun = {
    * approvals and blocking questions.
    */
   requests: Map<string, string>;
+  /**
+   * The runner request ids the member's answer was handed over for, with
+   * the decision an approval's answer gave (`null` for a question's).
+   */
+  answered: Map<string, ApprovalDecision | null>;
   /** The run's `outputs/` folder when it started; `null` until it opened. */
   outputs: OutputSnapshot | null;
   /** Cut by a stop, so sharing a stopped run's files ends at once. */
@@ -319,6 +334,24 @@ type HeldRun = {
   checkpoint: DesktopRunnerCheckpointEvent | null;
   /** The browser tools' questions to the member about their steps. */
   readonly approvals: ActionApprovals;
+  /**
+   * The websites the run's browser steps run on without asking, by exact
+   * origin: the member's approvals, and those the member allowed in this
+   * run. The browser tools hold this very set, so a change reaches their
+   * next step.
+   */
+  readonly siteGrants: Set<string>;
+  /**
+   * The member's approvals as the run last received them (`run.start`,
+   * then each `run.site_grants`): what a newer set no longer holds leaves
+   * `siteGrants`.
+   */
+  memberSiteGrants: ReadonlySet<string>;
+  /**
+   * The revision of the newest `run.site_grants` the run took; `null` while
+   * it has only those of `run.start`. Revisions are time-ordered UUIDs.
+   */
+  siteGrantsRevision: string | null;
   /** Cut by a stop, so the run's browser steps end with it, not with the turn. */
   readonly browserStop: AbortController;
   /**
@@ -535,6 +568,89 @@ const runnerRequestIdOf = (
     }
   }
   return nativeId;
+};
+
+/**
+ * A closed request of `run` under its runner id, saying how it closed:
+ * answered when the member's answer reached it, stopped when the run's turn
+ * was stopped first, else withdrawn by the harness while the turn went on.
+ */
+const resolvedInteraction = (
+  run: Pick<HeldRun, "answered" | "requests" | "stop">,
+  event: Extract<HarnessEvent, { type: "interaction.resolved" }>,
+): HarnessEvent => {
+  const requestId = runnerRequestIdOf(run.requests, event.requestId);
+  // A browser question the run's approvals let go on before it was
+  // relabelled is recorded under its own id.
+  const decision = run.answered.has(requestId)
+    ? run.answered.get(requestId)
+    : run.answered.get(event.requestId);
+  if (decision === undefined) {
+    return {
+      ...event,
+      requestId,
+      closed: run.stop === RUN_STOP.none ? "withdrawn" : "stopped",
+    };
+  }
+  return {
+    ...event,
+    requestId,
+    closed: "answered",
+    ...(decision === null ? {} : { decision }),
+  };
+};
+
+/**
+ * Settles the run's waiting browser questions its gate now runs without
+ * asking, each recorded as approved under its runner id (the harness's own
+ * id while the question is not relabelled yet), so its close reads as the
+ * answer that let it go on.
+ */
+const settleAllowedSteps = (
+  run: Pick<HeldRun, "answered" | "approvals" | "requests">,
+) => {
+  run.approvals.settleAllowed((nativeId) => {
+    run.answered.set(runnerRequestIdOf(run.requests, nativeId), APPROVED);
+  });
+};
+
+/**
+ * Takes the member's approvals as they stand now into the run: a website
+ * the member no longer allows leaves the run's set, even where the member
+ * allowed it in this run too, a new one joins it, and a website allowed only
+ * in this run stays. The browser tools' own set changes, then the questions
+ * the new set answers go on.
+ */
+const updateSiteGrants = (
+  run: Pick<
+    HeldRun,
+    | "answered"
+    | "approvals"
+    | "memberSiteGrants"
+    | "requests"
+    | "siteGrants"
+    | "siteGrantsRevision"
+  >,
+  { origins, revision }: { origins: readonly string[]; revision: string },
+) => {
+  // A set sent again, or one older than the newest the run took, changes
+  // nothing: a website revoked since then stays revoked.
+  const ordered = revision.toLowerCase();
+  if (run.siteGrantsRevision !== null && ordered <= run.siteGrantsRevision) {
+    return;
+  }
+  run.siteGrantsRevision = ordered;
+  const next = new Set(origins);
+  for (const origin of run.memberSiteGrants) {
+    if (!next.has(origin)) {
+      run.siteGrants.delete(origin);
+    }
+  }
+  for (const origin of next) {
+    run.siteGrants.add(origin);
+  }
+  run.memberSiteGrants = next;
+  settleAllowedSteps(run);
 };
 
 /** The event stream for a run that ends before its harness starts. */
@@ -779,17 +895,32 @@ export class SidecarHost {
         this.withRun(message, (run) => {
           // A browser tool's question about one of its steps is answered here.
           const native = run.requests.get(message.requestId);
-          if (
-            native !== undefined &&
-            run.approvals.answer(native, message.decision)
-          ) {
+          if (native !== undefined && run.approvals.asked(native)) {
+            // A question withdrawn before its answer came keeps reading as
+            // withdrawn: the answer records nothing and reaches nothing.
+            const answered = run.approvals.answer(
+              native,
+              message.decision,
+              () => {
+                run.answered.set(message.requestId, message.decision);
+              },
+            );
+            // Always allowing a website lets its other waiting steps go on.
+            if (answered) {
+              settleAllowedSteps(run);
+            }
             return;
           }
-          this.respond(run, message.requestId, (requestId) => ({
-            type: "approval",
-            requestId,
-            decision: message.decision,
-          }));
+          this.respond(
+            run,
+            message.requestId,
+            (requestId) => ({
+              type: "approval",
+              requestId,
+              decision: message.decision,
+            }),
+            message.decision,
+          );
         });
         return;
       case "run.answer":
@@ -799,6 +930,11 @@ export class SidecarHost {
             requestId,
             answers: message.answers,
           }));
+        });
+        return;
+      case "run.site_grants":
+        this.withRun(message, (run) => {
+          updateSiteGrants(run, message);
         });
         return;
       case "run.interrupt":
@@ -998,10 +1134,14 @@ export class SidecarHost {
       stop: this.stopping ? RUN_STOP.cancel : RUN_STOP.none,
       stopCopying: new AbortController(),
       requests: new Map(),
+      answered: new Map(),
       outputs: null,
       outputSharing: new AbortController(),
       checkpoint: null,
       approvals: createActionApprovals(),
+      siteGrants: new Set(message.policy.browserSiteGrants),
+      memberSiteGrants: new Set(message.policy.browserSiteGrants),
+      siteGrantsRevision: null,
       browserStop: new AbortController(),
       live: null,
       launch: null,
@@ -1234,6 +1374,7 @@ export class SidecarHost {
     run: HeldRun,
     requestId: string,
     response: (nativeId: string) => HarnessInteractionResponse,
+    decision: ApprovalDecision | null = null,
   ) {
     const native = run.requests.get(requestId);
     if (native === undefined || run.turn === null) {
@@ -1241,12 +1382,23 @@ export class SidecarHost {
       return;
     }
     const turn = run.turn;
+    // Marked before the harness hears it: the harness may close the
+    // request the moment it takes the answer. An earlier answer's mark
+    // stands; a repeat never rewrites the decision that reached it.
+    const marks = !run.answered.has(requestId);
+    if (marks) {
+      run.answered.set(requestId, decision);
+    }
     const answer = async () => {
       const answered = await turn.respond(response(native));
       if (Result.isError(answered)) {
         this.options.log(
           `the harness refused a response: ${answered.error.reason}`,
         );
+        // Refused: the request closes as the harness says, not answered.
+        if (marks) {
+          run.answered.delete(requestId);
+        }
       }
     };
     this.detached(answer(), "sidecar.respond");
@@ -1419,7 +1571,7 @@ export class SidecarHost {
     // it, or ends it.
     const taken = run.live;
     run.live = null;
-    const browser = this.browserFor(message, run, taken, config.apiOrigin);
+    const browser = this.browserFor(message, run, taken, config);
     const started = await adapter.value.startTurn({
       runId: message.runId,
       threadId: message.threadId,
@@ -1455,22 +1607,37 @@ export class SidecarHost {
     message: SidecarRunStart,
     run: HeldRun,
     taken: LiveFolder | null,
-    /** The account the run started for: its browser stays that account's. */
-    accountOrigin: string,
+    /**
+     * The account the run started for: its browser stays that account's,
+     * and what it downloads is filed with that account's stella.
+     */
+    { apiOrigin, proxy }: Pick<Config, "apiOrigin" | "proxy">,
   ) {
     const browser = this.options.browser;
     if (browser === null) {
       return null;
     }
+    const { runId } = message;
     const browserRun = {
-      accountOrigin,
-      runId: message.runId,
+      accountOrigin: apiOrigin,
+      runId,
       threadId: message.threadId,
       approvals: message.policy.approvals,
-      siteGrants: new Set(message.policy.browserSiteGrants),
+      siteGrants: run.siteGrants,
       approve: run.approvals.request,
       stopped: run.browserStop.signal,
       workspaceDir: message.workspaceDir,
+      // Plan changes nothing outside the run's folder: no download is filed.
+      fileDownload:
+        message.policy.approvals === "plan"
+          ? keepLocalInPlan
+          : browserDownloadFiler({
+              apiOrigin,
+              runId,
+              stopped: run.browserStop.signal,
+              token: () => proxy.tokenOf(runId),
+              workspaceDir: message.workspaceDir,
+            }),
     };
     if (taken === null) {
       return browser.register(browserRun);
@@ -1597,10 +1764,7 @@ export class SidecarHost {
             break;
           }
           case "interaction.resolved":
-            yield {
-              ...event,
-              requestId: runnerRequestIdOf(run.requests, event.requestId),
-            };
+            yield resolvedInteraction(run, event);
             break;
           case "turn.completed":
             outcome.value = "completed";
@@ -1629,7 +1793,7 @@ export class SidecarHost {
           case "text.completed":
           case "reasoning.completed":
           case "tool.started":
-          case "retrying":
+          case "notice":
           case "input.settled":
           case "model.rerouted":
             yield event;

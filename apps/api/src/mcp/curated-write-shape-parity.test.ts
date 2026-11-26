@@ -96,6 +96,10 @@ const CURATED_WRITE_CAPABILITIES = {
     noCapabilityReason:
       "This native tool owns organization jurisdiction settings.",
   },
+  save_site_notes: {
+    noCapabilityReason:
+      "This native tool owns the agent's website notes; Settings only lists and removes them.",
+  },
   submit_feedback: {
     noCapabilityReason:
       "This native tool submits feedback to an external service.",

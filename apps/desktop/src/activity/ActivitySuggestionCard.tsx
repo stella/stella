@@ -21,6 +21,7 @@ import {
 } from "@stll/ui/collapsible";
 import { CopyButton } from "@stll/ui/copy-button";
 import type { DayCalendarRange } from "@stll/ui/day-calendar.logic";
+import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { Form } from "@stll/ui/form";
 import { AiActionIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
@@ -40,6 +41,7 @@ import type { ShortcutKeys } from "../shared/shortcut-keys";
 import {
   appRows,
   hasWindowTitles,
+  rangeBreakdown,
   titleRows,
   wallClockTime,
   withMovedEdge,
@@ -47,18 +49,21 @@ import {
 import type {
   ActivitySuggestion,
   EvidenceRow,
+  RangeBreakdown,
   RangeEdge,
   RangeMatterBasis,
 } from "./activity-calendar-logic";
-import { calendarDate } from "./activity-logic";
+import { appTotals, calendarDate } from "./activity-logic";
 import type { ActivityDaySnapshot } from "./activity-types";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import { DRAFT_FAILURE_RECOVERY } from "./billing-draft-logic";
 import type { CardDraft, DraftFailureKind } from "./billing-draft-logic";
 import type { DraftConsentStatus } from "./billing-draft-transport";
+import type { MatchedSegment } from "./day-review-logic";
 import { DraftConsent } from "./DraftConsent";
+import { useMatchReasonLabel } from "./matter-rule-label";
 import { MatterPicker } from "./MatterPicker";
-import { useDurationLabel } from "./use-duration-label";
+import { useDurationLabel, useMinutesLabel } from "./use-duration-label";
 
 /** The editable fields of one suggestion. `written` counts stella AI
  * descriptions, so each new one fades in. */
@@ -142,6 +147,8 @@ type ActivitySuggestionCardProps = {
   /** Creates the entries the proposed split or move makes. */
   onAcceptStructure: () => void;
   onReject: () => void;
+  /** Takes the suggestion's slivers into its entry. */
+  onIncludeSlivers: () => void;
   onClose: () => void;
   onCopy: () => Promise<boolean>;
 };
@@ -201,6 +208,7 @@ export const ActivitySuggestionCard = ({
   onAccept,
   onAcceptStructure,
   onReject,
+  onIncludeSlivers,
   onClose,
   onCopy,
 }: ActivitySuggestionCardProps) => {
@@ -241,7 +249,7 @@ export const ActivitySuggestionCard = ({
     if (edit.narrative.trim().length === 0) {
       return t("writeDescription");
     }
-    return suggestion.roundedTenths > 0 ? undefined : t("entryNeedsDuration");
+    return suggestion.workedMinutes > 0 ? undefined : t("entryNeedsDuration");
   })();
   const acceptable = acceptDisabledReason === undefined;
   const shortcutLabel = (keys: ShortcutKeys) =>
@@ -340,6 +348,12 @@ export const ActivitySuggestionCard = ({
               times={times}
             />
           ) : null}
+          {suggestion.type === "manual" ? (
+            <RangeBreakdownList
+              breakdown={rangeBreakdown(suggestion, edit.matter?.id ?? null)}
+              hasMatter={edit.matter !== null}
+            />
+          ) : null}
           {suggestion.segments.length === 0 ? (
             <p className="text-muted-foreground text-xs">{t("rangeEmpty")}</p>
           ) : null}
@@ -367,6 +381,14 @@ export const ActivitySuggestionCard = ({
           {edit.matter === null ? (
             <RangeMatterNote suggestion={suggestion} />
           ) : null}
+          {edit.matter !== null && edit.matter.id === suggestion.matter?.id ? (
+            <MatchReasonNote suggestion={suggestion} />
+          ) : null}
+          <Slivers
+            editingDisabledReason={editingDisabledReason}
+            onInclude={onIncludeSlivers}
+            slivers={suggestion.slivers}
+          />
           {titlesNotice !== null && !hasWindowTitles(suggestion) ? (
             // The description falls back to app names without titles; say
             // why next to it, where the gap shows.
@@ -478,7 +500,7 @@ export const ActivitySuggestionCard = ({
 /**
  * The start and end of a selected range, to the minute, in the locale's own
  * clock. The exact time the entry covers sits below them; the header keeps
- * the hours it bills, which round up to a tenth.
+ * the minutes it claims and what they bill under the firm's minimum unit.
  */
 const SelectedRangeFields = ({
   durationMs,
@@ -553,6 +575,108 @@ const RangeMatterNote = ({
   const note = RANGE_MATTER_NOTES[suggestion.matterBasis];
   return note === null ? null : (
     <p className="text-muted-foreground text-xs text-pretty">{t(note)}</p>
+  );
+};
+
+/** Why the review suggests the card's matter, while the card keeps it. */
+const MatchReasonNote = ({
+  suggestion,
+}: {
+  suggestion: ActivitySuggestion;
+}) => {
+  const reasonLabel = useMatchReasonLabel();
+  const label = reasonLabel(suggestion.reason);
+  return label === null ? null : (
+    <p className="text-muted-foreground text-xs text-pretty">
+      <bdi>{label}</bdi>
+    </p>
+  );
+};
+
+/** What a selected range claims, by where its time was recorded, so the
+ * member sees another matter's or unrecorded time before confirming. */
+const RangeBreakdownList = ({
+  breakdown,
+  hasMatter,
+}: {
+  breakdown: RangeBreakdown;
+  hasMatter: boolean;
+}) => {
+  const t = useTranslations("activity");
+  const minutesLabel = useMinutesLabel();
+  const rows = [
+    { key: "onMatter", label: t("rangeOnThisMatter") },
+    {
+      key: "onOtherMatters",
+      label: hasMatter ? t("rangeOnOtherMatters") : t("rangeOnMatters"),
+    },
+    { key: "noMatter", label: t("rangeNoMatter") },
+    { key: "notRecorded", label: t("rangeNotRecorded") },
+  ] as const satisfies readonly { key: keyof RangeBreakdown; label: string }[];
+  // Decided on exact time, so a kind under a minute still shows; time all
+  // of one kind is the duration the card already states.
+  const shown = rows.filter(({ key }) => breakdown[key].durationMs > 0);
+  if (shown.length < 2) {
+    return null;
+  }
+  return (
+    <DetailsGrid
+      aria-label={t("rangeBreakdown")}
+      data-activity-range-breakdown=""
+      variant="list"
+    >
+      {shown.map(({ key, label }) => (
+        <DetailsItem key={key} label={label}>
+          <span className="tabular-nums">
+            {minutesLabel(breakdown[key].minutes)}
+          </span>
+        </DetailsItem>
+      ))}
+    </DetailsGrid>
+  );
+};
+
+/** Time no matter claimed between two of this matter's own stretches:
+ * named with its apps, and counted only once the member includes it. */
+const Slivers = ({
+  editingDisabledReason,
+  onInclude,
+  slivers,
+}: {
+  editingDisabledReason: string | undefined;
+  onInclude: () => void;
+  slivers: readonly MatchedSegment[];
+}) => {
+  const t = useTranslations("activity");
+  const format = useFormatter();
+  const durationLabel = useDurationLabel();
+  if (slivers.length === 0) {
+    return null;
+  }
+  const apps = format.list(
+    appTotals(slivers).map(({ durationMs, name }) =>
+      t("sliverApp", { app: name, duration: durationLabel(durationMs) }),
+    ),
+    { type: "unit" },
+  );
+  return (
+    <div
+      className="flex flex-wrap items-center gap-2 text-xs"
+      data-activity-slivers=""
+    >
+      <p className="text-muted-foreground min-w-0 flex-1 text-pretty">
+        {t("sliversNote", { apps })}
+      </p>
+      <Button
+        disabled={editingDisabledReason !== undefined}
+        disabledReason={editingDisabledReason}
+        onClick={onInclude}
+        size="xs"
+        variant="outline"
+      >
+        {t("includeSlivers")}
+      </Button>
+    </div>
   );
 };
 

@@ -41,6 +41,7 @@ import {
 import type { AppServerClient, AppServerHandlers } from "./app-server-client";
 import {
   classifyTurnFailure,
+  isAuthFailure,
   isCapacityFailure,
   isPlanUsageLimit,
   mergeRateLimits,
@@ -156,6 +157,28 @@ const questionsFromParams = (questions: QuestionParams): HarnessQuestion[] =>
     };
   });
 
+/** The waits before each new interrupt request Codex refused as too early. */
+const INTERRUPT_RETRY_DELAYS_MS = [25, 50, 100, 200, 400] as const;
+/** Codex has not registered the turn as interruptible yet, or it ended. */
+const NO_ACTIVE_TURN = /no active turn to interrupt/u;
+/** Codex runs another turn of this process than the one named. */
+const ACTIVE_TURN_MISMATCH = /expected active turn id (\S+) but found (\S+)/u;
+
+/**
+ * The turn to ask again to interrupt after Codex refused `turnId` with
+ * `message`, or `null` when the refusal is not one asking again can fix.
+ */
+export const interruptRetryTarget = (
+  message: string,
+  turnId: string,
+): string | null => {
+  const mismatch = ACTIVE_TURN_MISMATCH.exec(message);
+  if (mismatch !== null) {
+    return mismatch[1] === turnId ? (mismatch[2] ?? null) : null;
+  }
+  return NO_ACTIVE_TURN.test(message) ? turnId : null;
+};
+
 const ZERO_USAGE: HarnessUsage = {
   inputTokens: 0,
   cachedInputTokens: 0,
@@ -259,6 +282,8 @@ type CodexTurnSessionOptions = {
   detached: Detached;
   /** The server name the turn registered the stella MCP binding under. */
   stellaServer: string;
+  /** The server names of the turn's browser binding; none without one. */
+  browserServers: ReadonlySet<string>;
   capacityRetry: CodexCapacityRetry;
   /** The process's background work at the turn's end. */
   background: HarnessTurnBackground<AppServerClient>;
@@ -316,11 +341,18 @@ export class CodexTurnSession {
   /** Plan updates reported so far in this turn. */
   private planUpdates = 0;
   private capacityRetries = 0;
+  /**
+   * Retries Codex announced since the turn last reported anything else:
+   * the attempt a retry notice names. Codex states its count only in its
+   * display text, which is not read.
+   */
+  private reconnects = 0;
   /** Messages whose text streamed in part and whose item has not completed. */
   private readonly openMessages = new Set<string>();
 
   private readonly lifecycle: HarnessTurnLifecycle<AppServerClient>;
   private readonly stellaServer: string;
+  private readonly browserServers: ReadonlySet<string>;
   private readonly capacityRetry: CodexCapacityRetry;
   private readonly detached: Detached;
 
@@ -328,6 +360,7 @@ export class CodexTurnSession {
     gracePeriodMs,
     detached,
     stellaServer,
+    browserServers,
     capacityRetry,
     background,
   }: CodexTurnSessionOptions) {
@@ -338,6 +371,7 @@ export class CodexTurnSession {
       background,
     });
     this.stellaServer = stellaServer;
+    this.browserServers = browserServers;
     this.capacityRetry = capacityRetry;
     this.detached = detached;
   }
@@ -473,6 +507,9 @@ export class CodexTurnSession {
   }
 
   private emit(event: HarnessEvent) {
+    if (event.type !== "notice") {
+      this.reconnects = 0;
+    }
     this.lifecycle.emit(event);
   }
 
@@ -528,8 +565,22 @@ export class CodexTurnSession {
         if (parsed === null || parsed.turnId !== this.turnId) {
           return;
         }
+        // A refused credential does not heal by retrying: Codex would replay
+        // its reconnect schedule, then fail the same way.
+        if (parsed.willRetry && !isAuthFailure(parsed.error)) {
+          this.reconnects += 1;
+          this.emit({
+            type: "notice",
+            notice: {
+              kind: "retrying",
+              attempt: this.reconnects,
+              maxAttempts: null,
+            },
+          });
+          return;
+        }
         if (parsed.willRetry) {
-          this.emit({ type: "retrying", message: parsed.error.message });
+          this.failWith(parsed.error);
           return;
         }
         this.lastError = parsed.error;
@@ -554,13 +605,13 @@ export class CodexTurnSession {
       }
       case "mcpServer/startupStatus/updated": {
         const parsed = this.parse(CODEX_NOTIFICATIONS[method], params, method);
-        // Only stella's own server is the turn's to fail on; a member's
+        if (parsed?.status !== "failed") {
+          return;
+        }
+        // Only stella's own server is the turn's to fail on; without the
+        // browser the turn goes on, and the member is told. A member's
         // other servers are theirs.
-        if (
-          parsed !== null &&
-          parsed.name === this.stellaServer &&
-          parsed.status === "failed"
-        ) {
+        if (parsed.name === this.stellaServer) {
           this.emit({
             type: "turn.failed",
             failure: {
@@ -569,9 +620,21 @@ export class CodexTurnSession {
                 "The harness could not connect to the stella MCP server.",
             },
           });
+        } else if (this.browserServers.has(parsed.name)) {
+          this.emit({
+            type: "notice",
+            notice: { kind: "capability_unavailable", capability: "browser" },
+          });
         }
         return;
       }
+      case "configWarning":
+        // The warning's own text names the member's settings and files: the
+        // chat says only that there was one.
+        if (this.parse(CODEX_NOTIFICATIONS[method], params, method) !== null) {
+          this.emit({ type: "notice", notice: { kind: "config_warning" } });
+        }
+        return;
       case "model/rerouted": {
         const parsed = this.parse(CODEX_NOTIFICATIONS[method], params, method);
         if (parsed !== null && parsed.turnId === this.turnId) {
@@ -705,8 +768,12 @@ export class CodexTurnSession {
     this.turnId = null;
     this.lastError = null;
     this.emit({
-      type: "retrying",
-      message: error?.message ?? "The model is at capacity.",
+      type: "notice",
+      notice: {
+        kind: "retrying",
+        attempt: this.capacityRetries,
+        maxAttempts,
+      },
     });
     this.detached(this.continueAfter(delayMs, error), "codex-turn.continue");
     return true;
@@ -1401,11 +1468,46 @@ export class CodexTurnSession {
         // nothing to ask, so the turn ends as interrupted at once.
         return false;
       }
+      return this.requestInterrupt(client, this.turnId);
+    });
+  }
+
+  /**
+   * Ask Codex to stop the turn. Right after a turn starts, Codex can answer
+   * that no turn is active until it registers the turn, or name another turn
+   * it now runs in this process; both are asked again, a few times, while
+   * this turn is still the session's own. Whether Codex took the request.
+   */
+  private async requestInterrupt(
+    client: AppServerClient,
+    ownTurnId: string,
+  ): Promise<boolean> {
+    let turnId = ownTurnId;
+    for (const delayMs of [...INTERRUPT_RETRY_DELAYS_MS, null]) {
       const requested = await client.request("turn/interrupt", {
         threadId: this.threadId,
-        turnId: this.turnId,
+        turnId,
       });
-      return Result.isOk(requested);
-    });
+      if (Result.isOk(requested)) {
+        return true;
+      }
+      if (delayMs === null || requested.error.reason !== "rejected") {
+        return false;
+      }
+      const next = interruptRetryTarget(requested.error.message, turnId);
+      if (next === null) {
+        return false;
+      }
+      await Bun.sleep(delayMs);
+      if (this.lifecycle.ended) {
+        // The turn ended meanwhile: nothing is left to stop.
+        return true;
+      }
+      if (this.turnId !== ownTurnId) {
+        return false;
+      }
+      turnId = next;
+    }
+    return false;
   }
 }

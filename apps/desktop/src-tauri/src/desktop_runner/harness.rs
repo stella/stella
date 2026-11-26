@@ -11,7 +11,8 @@ use super::journal::{Recorded, SharedJournal};
 use crate::runner_protocol::{
   ApprovalKind, DesktopMessage, FolderRestore, FolderRestoreOutcome, FolderRestored,
   Harness, HarnessReport, JsonObject, LinkedFolderReport, MissingHarness, RejectReason,
-  RunAnswer, RunApproval, RunInput, RunOutcome, RunStart, RunTokenRefresh,
+  RunAnswer, RunApproval, RunInput, RunOutcome, RunSiteGrants, RunStart,
+  RunTokenRefresh,
 };
 
 /// A run command the host could not take (its harness holder is busy or
@@ -68,6 +69,8 @@ pub(crate) trait HarnessHost: Send + Sync + 'static {
   fn approval(&self, approval: RunApproval) -> Forwarded;
   /// Answers to a blocking question the run asked.
   fn answer(&self, answer: RunAnswer) -> Forwarded;
+  /// The member's website approvals as they stand now; the newest holds.
+  fn site_grants(&self, grants: RunSiteGrants) -> Forwarded;
   fn interrupt(&self, run_id: &str) -> Forwarded;
   fn cancel(&self, run_id: &str) -> Forwarded;
   /// A newer MCP token for the run; an older one never follows it. One the
@@ -210,6 +213,9 @@ impl HarnessHost for UnavailableHarnessHost {
     Err(NotForwarded)
   }
   fn answer(&self, _answer: RunAnswer) -> Forwarded {
+    Err(NotForwarded)
+  }
+  fn site_grants(&self, _grants: RunSiteGrants) -> Forwarded {
     Err(NotForwarded)
   }
   fn interrupt(&self, _run_id: &str) -> Forwarded {

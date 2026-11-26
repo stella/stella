@@ -125,8 +125,10 @@
       "aiOutputInvalid": "Die KI-Antwort hatte ein unerwartetes Format. Versuchen Sie es erneut.",
       "aiOutputModerated": "Der KI-Anbieter hat die Ausgabe moderiert. Formulieren Sie die Anfrage um oder wählen Sie ein anderes Modell.",
       "aiUnknown": "Die KI-Anfrage ist fehlgeschlagen. Versuchen Sie es erneut.",
+      "errorFailed": "Der Agent auf Ihrem Computer hat diese Antwort ohne Angabe von Gründen beendet. Versuchen Sie es erneut.",
       "errorFolderUnavailable": "Der mit diesem Chat verknüpfte Ordner ist auf Ihrem Computer nicht verfügbar. Prüfen Sie ihn in stella desktop und senden Sie dies dann erneut.",
       "errorLimitReached": "Der Coding-Agent auf Ihrem Computer hat sein Nutzungslimit erreicht. Versuchen Sie es erneut, sobald das Limit zurückgesetzt ist.",
+      "errorLost": "Ihr Computer hat diese Antwort übernommen und danach nicht mehr reagiert. Stellen Sie sicher, dass stella desktop geöffnet und verbunden ist, und versuchen Sie es erneut.",
       "errorNeedsLogin": "Der Coding-Agent auf Ihrem Computer verlangt eine erneute Anmeldung. Melden Sie sich über stella desktop an und versuchen Sie es dann erneut.",
       "errorNotReached": "Ihr Computer hat diese Antwort nicht übernommen. Stellen Sie sicher, dass stella desktop geöffnet und verbunden ist, und versuchen Sie es erneut.",
       "errorRelinked": "stella desktop wurde auf Ihrem Computer neu verknüpft, daher wurde diese Antwort angehalten. Senden Sie sie erneut.",
@@ -173,6 +175,13 @@
       "limitReminderScheduled": "Wir benachrichtigen Sie ab {time}.",
       "limitResumeContinue": "Automatisch fortsetzen, sobald es zurückgesetzt ist",
       "limitResumeScheduled": "Wird ab {time} automatisch fortgesetzt.",
+      "notices": {
+        "browserUnavailable": "Der Browser konnte für diese Nachricht nicht gestartet werden. Der Agent hat daher ohne ihn gearbeitet.",
+        "configWarning": "Der Coding-Agent auf Ihrem Computer hat vor seinen eigenen Einstellungen gewarnt und weitergearbeitet. Wenn Ihnen etwas seltsam vorkommt, prüfen Sie seine Einstellungen auf diesem Computer.",
+        "recovered": "Das Modell hat wieder geantwortet, nachdem der Coding-Agent auf Ihrem Computer es erneut versucht hat.",
+        "retrying": "Das Modell antwortet nicht. Der Coding-Agent auf Ihrem Computer versucht es erneut.",
+        "retryingAttempt": "Das Modell antwortet nicht. Der Coding-Agent auf Ihrem Computer versucht es erneut (Versuch {attempt, number} von {maxAttempts, number})."
+      },
       "output": {
         "arriving": "Wird noch vom Computer übertragen, auf dem der Schritt lief",
         "command": "Ausgabe",
@@ -191,6 +200,13 @@
       },
       "patternInPath": "{pattern} unter {path}",
       "ranOnModel": "Ausgeführt mit {model}",
+      "request": {
+        "cancelled": "Nicht beantwortet: Diese Antwort wurde angehalten.",
+        "runFailed": "Nicht beantwortet: Der Agent wurde vor diesem Schritt mit einem Fehler beendet.",
+        "runFinished": "Nicht nötig: Der Agent ist ohne diesen Schritt fertig geworden.",
+        "runLost": "Nicht beantwortet: Ihr Computer hat die Bearbeitung dieser Antwort beendet.",
+        "withdrawn": "Nicht mehr nötig: Der Agent hat ohne diesen Schritt weitergearbeitet."
+      },
       "sessionNotResumed": "Der Coding-Agent auf Ihrem Computer konnte nicht dort weitermachen, wo er aufgehört hatte. Er hat daher anhand der Nachrichten in diesem Chat weitergearbeitet.",
       "status": {
         "failed": "Fehlgeschlagen",
@@ -372,6 +388,7 @@
       "read_comments": "Kommentare lesen",
       "read_document": "Dokument lesen",
       "read_section": "Abschnitt lesen",
+      "read_site_notes": "Website-Notizen lesen",
       "read_story": "Dokumentteil lesen",
       "remember": "Erinnerung speichern",
       "remove_matter_member": "Aktenmitglied entfernen",
@@ -388,6 +405,7 @@
       "save_document": "Dokument speichern",
       "save_matter": "Akte speichern",
       "save_playbook": "Playbook speichern",
+      "save_site_notes": "Website-Notizen aktualisieren",
       "save_skill_package": "Skill speichern",
       "save_task": "Aufgabe speichern",
       "save_template": "Vorlage speichern",

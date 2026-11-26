@@ -11,7 +11,8 @@
   "exports": {
     ".": "./src/probe.ts",
     "./install": "./src/install.ts",
-    "./report": "./src/report.ts"
+    "./report": "./src/report.ts",
+    "./storm-ledger": "./src/storm-ledger.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",

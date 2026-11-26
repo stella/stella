@@ -125,8 +125,10 @@
       "aiOutputInvalid": "La réponse de l’IA avait un format inattendu. Réessayez.",
       "aiOutputModerated": "Le fournisseur d’IA a modéré la réponse. Reformulez la demande ou choisissez un autre modèle.",
       "aiUnknown": "La requête d’IA a échoué. Réessayez.",
+      "errorFailed": "L’agent de votre ordinateur a mis fin à cette réponse sans en donner la raison. Réessayez.",
       "errorFolderUnavailable": "Le dossier lié à cette conversation n’est pas disponible sur votre ordinateur. Vérifiez-le dans stella desktop, puis renvoyez ceci.",
       "errorLimitReached": "L’agent de code de votre ordinateur a atteint sa limite d’utilisation. Réessayez une fois la limite réinitialisée.",
+      "errorLost": "Votre ordinateur a pris en charge cette réponse, puis a cessé de répondre. Vérifiez que stella desktop est ouvert et connecté, puis réessayez.",
       "errorNeedsLogin": "L’agent de code de votre ordinateur vous demande de vous reconnecter. Connectez-vous depuis stella desktop, puis réessayez.",
       "errorNotReached": "Votre ordinateur n'a pas pris en charge cette réponse. Vérifiez que stella desktop est ouvert et connecté, puis réessayez.",
       "errorRelinked": "stella desktop a été associé à nouveau sur votre ordinateur, cette réponse s'est donc arrêtée. Renvoyez-la.",
@@ -173,6 +175,13 @@
       "limitReminderScheduled": "Nous vous préviendrons à partir du {time}.",
       "limitResumeContinue": "Continuer automatiquement une fois réinitialisée",
       "limitResumeScheduled": "Reprendra automatiquement à partir du {time}.",
+      "notices": {
+        "browserUnavailable": "Le navigateur n’a pas pu être lancé pour ce message : l’agent a donc travaillé sans lui.",
+        "configWarning": "L’agent de code de votre ordinateur a signalé un problème dans ses propres réglages et a poursuivi. Si quelque chose vous semble anormal, vérifiez ses réglages sur cet ordinateur.",
+        "recovered": "Le modèle a de nouveau répondu après une nouvelle tentative de l’agent de code de votre ordinateur.",
+        "retrying": "Le modèle ne répond pas. L’agent de code de votre ordinateur fait une nouvelle tentative.",
+        "retryingAttempt": "Le modèle ne répond pas. L’agent de code de votre ordinateur fait une nouvelle tentative (tentative {attempt, number} sur {maxAttempts, number})."
+      },
       "output": {
         "arriving": "Toujours en cours de réception depuis l’ordinateur qui a exécuté cette étape",
         "command": "Résultat",
@@ -191,6 +200,13 @@
       },
       "patternInPath": "{pattern} dans {path}",
       "ranOnModel": "Exécuté avec {model}",
+      "request": {
+        "cancelled": "Sans réponse : cette réponse a été arrêtée.",
+        "runFailed": "Sans réponse : l’agent s’est arrêté sur une erreur avant cette étape.",
+        "runFinished": "Inutile : l’agent a terminé sans cette étape.",
+        "runLost": "Sans réponse : votre ordinateur a cessé de traiter cette réponse.",
+        "withdrawn": "Plus nécessaire : l’agent a continué sans cette étape."
+      },
       "sessionNotResumed": "L’agent de code de votre ordinateur n’a pas pu reprendre là où il s’était arrêté : il a donc poursuivi à partir des messages de cette conversation.",
       "status": {
         "failed": "Échec",
@@ -372,6 +388,7 @@
       "read_comments": "Lecture des commentaires",
       "read_document": "Lecture du document",
       "read_section": "Lecture d'une section",
+      "read_site_notes": "Lecture des notes du site web",
       "read_story": "Lecture d'une partie du document",
       "remember": "Mémorisation",
       "remove_matter_member": "Retirer un membre du dossier",
@@ -388,6 +405,7 @@
       "save_document": "Enregistrer le document",
       "save_matter": "Enregistrer le dossier",
       "save_playbook": "Enregistrer le playbook",
+      "save_site_notes": "Mise à jour des notes du site web",
       "save_skill_package": "Enregistrer la compétence",
       "save_task": "Enregistrer la tâche",
       "save_template": "Enregistrer le modèle",

@@ -77,4 +77,48 @@ describe("SettingsRow", () => {
     expect(markup).not.toContain("<label");
     expect(markup).not.toContain("settings-row-control");
   });
+
+  test("a row with media starts its footer on its title's edge, past the tile", () => {
+    const footerOf = (markup: string) =>
+      /<\/div><div class="(?<footer>[^"]+)"><span>Version 2/u.exec(markup)
+        ?.groups?.["footer"];
+    const tile = <span className="size-8" data-slot="list-item-media" />;
+    const withMedia = renderToStaticMarkup(
+      <SettingsRow
+        footer={<span>Version 2</span>}
+        media={tile}
+        title="Codex"
+      />,
+    );
+    const nested = renderToStaticMarkup(
+      <SettingsRow
+        depth="nested"
+        footer={<span>Version 2</span>}
+        media={tile}
+        title="Codex"
+      />,
+    );
+    const plain = renderToStaticMarkup(
+      <SettingsRow footer={<span>Version 2</span>} title="Codex" />,
+    );
+
+    // The row's own inset (ps-4, ps-10) plus the 32px tile and 12px gap.
+    expect(footerOf(withMedia)).toContain("ps-15");
+    expect(footerOf(nested)).toContain("ps-21");
+    expect(footerOf(plain)).toContain("ps-4");
+    expect(footerOf(plain)).not.toContain("ps-15");
+  });
+
+  test("a row a settings link names can take focus and be marked", () => {
+    const targeted = renderToStaticMarkup(
+      <SettingsRow target="agents-codex" title="Codex" />,
+    );
+    const plain = renderToStaticMarkup(<SettingsRow title="Codex" />);
+
+    expect(targeted).toContain('data-settings-target="agents-codex"');
+    expect(targeted).toContain('tabindex="-1"');
+    expect(targeted).toContain("data-highlighted:bg-muted");
+    expect(plain).not.toContain("data-settings-target");
+    expect(plain).not.toContain("tabindex");
+  });
 });

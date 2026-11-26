@@ -15,16 +15,12 @@ import {
   calendarFreeBusyInputSchema,
   listCalendarEvents,
 } from "@/api/lib/auth/microsoft365/calendar-client";
-import {
-  capabilityEnabled,
-  grantedCapabilities,
-} from "@/api/lib/auth/microsoft365/capabilities";
+import { readCalendarConnection } from "@/api/lib/auth/microsoft365/calendar-connection";
 import { ensureSharepointAccessToken } from "@/api/lib/auth/microsoft365/graph-token";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { ChatToolError, HandlerError } from "@/api/lib/errors/tagged-errors";
-import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 import { fenceExternalMcpToolResult } from "./external-mcp-tool-result-fence";
 import { toTanStackToolSchema } from "./tanstack-tool-schema";
@@ -41,36 +37,12 @@ type CalendarContext = {
 // The same gate runs at discovery and again after approval, so revocation
 // between registration and execution stops the outbound read.
 const loadCalendarConnection = async (
-  { safeDb, organizationId, userId }: CalendarContext,
+  context: CalendarContext,
   deploymentEnabled = isDeploymentFeatureEnabled,
-) => {
-  if (!deploymentEnabled("FEATURE_SHAREPOINT")) {
-    return Result.ok(null);
-  }
-  return await safeDb(async (tx) => {
-    const policy = await tx.query.organizationSettings.findFirst({
-      where: { organizationId: { eq: organizationId } },
-      columns: {
-        sharepointConnectionEnabled: true,
-        microsoft365CalendarReadEnabled: true,
-      },
-    });
-    if (!capabilityEnabled(policy, "calendar.read")) {
-      return null;
-    }
-    const connection = await tx.query.sharepointConnections.findFirst({
-      where: { organizationId: { eq: organizationId }, userId: { eq: userId } },
-    });
-    if (
-      !connection ||
-      connection.status !== "connected" ||
-      !grantedCapabilities(connection.scope).includes("calendar.read")
-    ) {
-      return null;
-    }
-    return { ...connection, userId: brandPersistedUserId(connection.userId) };
-  });
-};
+) =>
+  (await readCalendarConnection(context, deploymentEnabled)).map((state) =>
+    state.type === "connected" ? state.connection : null,
+  );
 
 const accessFailureKind = (error: unknown) => {
   if (!HandlerError.is(error)) {

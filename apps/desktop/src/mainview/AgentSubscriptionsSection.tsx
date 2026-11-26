@@ -3,12 +3,11 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
 
-import { Separator } from "@stll/ui/separator";
-
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { isAntigravityStatus } from "./antigravity-status";
 import type { AntigravityStatus } from "./antigravity-status";
 import { AntigravityCard } from "./AntigravityCard";
+import type { AntigravityCheck } from "./AntigravityCard";
 import {
   CHATGPT_AUTH_CHANGED_EVENT,
   chatGptCommandError,
@@ -77,6 +76,8 @@ export const AgentSubscriptionsSection = ({
   const [antigravity, setAntigravity] = useState<AntigravityStatus | null>(
     null,
   );
+  const [antigravityCheck, setAntigravityCheck] =
+    useState<AntigravityCheck>("idle");
   const [claudeCodeFailed, setClaudeCodeFailed] = useState(false);
 
   const antigravityRequestSeq = useRef(0);
@@ -104,20 +105,28 @@ export const AgentSubscriptionsSection = ({
     };
   }, []);
 
+  /**
+   * Asks the CLI again (the native side probes it now) and shows the answer,
+   * or that it could not be asked; the check shows as running until then.
+   */
   const refreshAntigravity = () => {
     antigravityRequestSeq.current += 1;
     const seq = antigravityRequestSeq.current;
+    setAntigravityCheck("checking");
     void Result.tryPromise(async () =>
       invoke<unknown>("antigravity_get_status", { refresh: true }),
     ).then((result) => {
       if (
-        antigravityMounted.current &&
-        antigravityRequestSeq.current === seq &&
-        Result.isOk(result) &&
-        isAntigravityStatus(result.value)
+        !antigravityMounted.current ||
+        antigravityRequestSeq.current !== seq
       ) {
-        setAntigravity(result.value);
+        return undefined;
       }
+      const answered = Result.isOk(result) ? result.value : null;
+      setAntigravity((shown) =>
+        isAntigravityStatus(answered) ? answered : checkFailed(shown),
+      );
+      setAntigravityCheck("checked");
       return undefined;
     });
   };
@@ -222,20 +231,6 @@ export const AgentSubscriptionsSection = ({
     return null;
   }
 
-  /** A card that a link can scroll to and mark. */
-  const focusTarget = (
-    target: AgentSettingsFocus,
-    content: React.JSX.Element,
-  ) => (
-    <div
-      className="data-highlighted:bg-muted outline-none"
-      data-agent-settings={target}
-      tabIndex={-1}
-    >
-      {content}
-    </div>
-  );
-
   /** The CLI's install line; a refused command shows the card's notice. */
   const installLine = (
     harness: ManagedHarness,
@@ -275,6 +270,7 @@ export const AgentSubscriptionsSection = ({
   const chatGptCard =
     chatGpt === null ? null : (
       <ChatGptCard
+        target={settingsTarget("codex")}
         install={installLine("codex", "Codex", () => {
           setNotice("actionFailed");
         })}
@@ -324,6 +320,7 @@ export const AgentSubscriptionsSection = ({
     claudeCode === null ? null : (
       <ClaudeCodeCard
         actionFailed={claudeCodeFailed}
+        target={settingsTarget("claude-code")}
         install={installLine("claude-code", "Claude Code", () => {
           setClaudeCodeFailed(true);
         })}
@@ -346,23 +343,42 @@ export const AgentSubscriptionsSection = ({
 
   const antigravityCard =
     antigravity === null ? null : (
-      <AntigravityCard onCheckAgain={refreshAntigravity} status={antigravity} />
+      <AntigravityCard
+        check={antigravityCheck}
+        onCheckAgain={refreshAntigravity}
+        status={antigravity}
+      />
     );
 
+  // One row per subscription, each the same shape (`SettingsRow`): the
+  // mark in its own column, then the name, status and footer on one edge.
   return renderGroup(
-    focusTarget(
-      "agents",
-      <>
-        {chatGptCard ? focusTarget("codex", chatGptCard) : null}
-        {chatGptCard && claudeCodeCard ? <Separator /> : null}
-        {claudeCodeCard ? focusTarget("claude-code", claudeCodeCard) : null}
-        {(chatGptCard || claudeCodeCard) && antigravityCard ? (
-          <Separator />
-        ) : null}
+    <div
+      className="data-highlighted:bg-muted outline-none"
+      data-settings-target={settingsTarget("agents")}
+      tabIndex={-1}
+    >
+      <ul className="divide-border flex flex-col divide-y">
+        {chatGptCard}
+        {claudeCodeCard}
         {antigravityCard}
-      </>,
-    ),
+      </ul>
+    </div>,
   );
+};
+
+/** The `data-settings-target` a settings link to `focus` brings into view. */
+const settingsTarget = (focus: AgentSettingsFocus) =>
+  focus === "agents" ? "agents" : `agents-${focus}`;
+
+/** A failed check keeps what is installed, and says the sign-in is unknown. */
+const checkFailed = (
+  shown: AntigravityStatus | null,
+): AntigravityStatus | null => {
+  if (shown === null || shown.state === "not_installed") {
+    return shown;
+  }
+  return { state: "unchecked", version: shown.version, reason: "check_failed" };
 };
 
 /**
@@ -387,7 +403,7 @@ const useFocusRequest = ({
       return;
     }
     const target = document.querySelector<HTMLElement>(
-      `[data-agent-settings="${focus}"]`,
+      `[data-settings-target="${settingsTarget(focus)}"]`,
     );
     if (target === null) {
       return;

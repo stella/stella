@@ -71,8 +71,9 @@ use protocol::{
 use crate::runner_protocol::{
   Ack, ApprovalKind, ApprovalMode, Harness, HarnessModel, HarnessReport,
   HarnessUnavailableReason, JsonObject, LimitedHarness, ReadyHarness, ReasoningEffort,
-  RejectReason, RunAnswer, RunApproval, RunInput, RunOutcome, RunRef, RunTokenRefresh,
-  SignedOutHarness, UnavailableHarness, UnsupportedHarness,
+  RejectReason, RunAnswer, RunApproval, RunInput, RunOutcome, RunRef, RunSiteGrants,
+  RunTokenRefresh, SignedOutHarness, SiteGrantsRevision, UnavailableHarness,
+  UnsupportedHarness,
 };
 
 const LOG_TARGET: &str = "harness_sidecar";
@@ -311,6 +312,13 @@ enum Control {
     run_id: String,
     line: HostLine,
   },
+  /// A run's website approvals: kept, newest only, and handed again to a
+  /// holder that reconnects.
+  SiteGrants {
+    run_id: String,
+    revision: SiteGrantsRevision,
+    line: HostLine,
+  },
   Ack(Ack),
   WatchProcesses(mpsc::Sender<HarnessProcess>),
   WatchBackground(mpsc::UnboundedSender<BackgroundTasks>),
@@ -359,6 +367,7 @@ impl HarnessSidecar {
         runs: HashMap::new(),
         probes: HashMap::new(),
         restores: HashMap::new(),
+        site_grants: HashMap::new(),
         processes: None,
         background: None,
         background_counts: HashMap::new(),
@@ -488,6 +497,21 @@ impl HarnessSidecar {
   /// Answers to a blocking question the run asked.
   pub(crate) fn answer(&self, answer: RunAnswer) -> Result<(), SidecarUnavailable> {
     self.forward(answer.run_id.clone(), &HostMessage::RunAnswer(answer))
+  }
+
+  /// The member's website approvals as they stand now.
+  pub(crate) fn site_grants(
+    &self,
+    grants: RunSiteGrants,
+  ) -> Result<(), SidecarUnavailable> {
+    let run_id = grants.run_id.clone();
+    let revision = grants.revision;
+    let line = HostLine::encode(&HostMessage::RunSiteGrants(grants))?;
+    self.control(Control::SiteGrants {
+      run_id,
+      revision,
+      line,
+    })
   }
 
   pub(crate) fn interrupt(&self, run_id: &str) -> Result<(), SidecarUnavailable> {
@@ -940,6 +964,12 @@ struct Run {
   claim: Option<Claim>,
 }
 
+/// The newest website approval set of a run, as its holder is sent it.
+struct KeptSiteGrants {
+  revision: SiteGrantsRevision,
+  line: HostLine,
+}
+
 /// A folder restore sent to a holder and not answered yet.
 struct PendingRestore {
   holder: PathBuf,
@@ -963,6 +993,10 @@ struct Supervisor {
   /// connection: the holder may still be writing the folder, so it is asked
   /// again on the next connection and fails only once the holder is gone.
   restores: HashMap<String, PendingRestore>,
+  /// The newest website approval set of each run, by run id: a write to its
+  /// holder may be lost with the connection, and a run that goes on after a
+  /// reconnect must still have it.
+  site_grants: HashMap<String, KeptSiteGrants>,
   /// Where reported harness processes go.
   processes: Option<mpsc::Sender<HarnessProcess>>,
   /// Where background task counts go.
@@ -1004,6 +1038,9 @@ impl Supervisor {
           }
           Some(Control::Forward { run_id, line }) => {
             self.forward(&run_id, &line).await;
+          }
+          Some(Control::SiteGrants { run_id, revision, line }) => {
+            self.site_grants(run_id, revision, line).await;
           }
           Some(Control::Ack(ack)) => self.ack(ack).await,
           Some(Control::WatchProcesses(reports)) => self.processes = Some(reports),
@@ -1218,6 +1255,7 @@ impl Supervisor {
       Ok(opened) => {
         self.attach(dir.clone(), opened, LinkRole::Current);
         self.resend_restores(&dir).await;
+        self.resend_site_grants(&dir).await;
         return Some(dir);
       }
       Err(OpenError::Incompatible) => {
@@ -1247,6 +1285,7 @@ impl Supervisor {
           );
           self.attach(dir.clone(), opened, LinkRole::Current);
           self.resend_restores(&dir).await;
+          self.resend_site_grants(&dir).await;
           return Some(dir);
         }
         Err(OpenError::Incompatible | OpenError::NoEndpoint) => return None,
@@ -1385,6 +1424,54 @@ impl Supervisor {
     }
   }
 
+  /// Keep the newest website approvals of a run and hand them to its holder;
+  /// an older set than the one kept goes nowhere.
+  async fn site_grants(
+    &mut self,
+    run_id: String,
+    revision: SiteGrantsRevision,
+    line: HostLine,
+  ) {
+    let runs = &self.runs;
+    self.site_grants.retain(|kept, _| runs.contains_key(kept));
+    if self
+      .site_grants
+      .get(&run_id)
+      .is_some_and(|kept| kept.revision >= revision)
+    {
+      return;
+    }
+    self.site_grants.insert(
+      run_id.clone(),
+      KeptSiteGrants {
+        revision,
+        line: line.clone(),
+      },
+    );
+    self.forward(&run_id, &line).await;
+  }
+
+  /// Hand a holder that connected again the newest website approvals of the
+  /// runs it holds: the last write may have been lost with the connection.
+  async fn resend_site_grants(&mut self, dir: &Path) {
+    let runs = &self.runs;
+    self.site_grants.retain(|kept, _| runs.contains_key(kept));
+    let lines: Vec<HostLine> = self
+      .site_grants
+      .iter()
+      .filter(|(run_id, _)| {
+        self
+          .runs
+          .get(run_id.as_str())
+          .is_some_and(|run| run.holder == dir)
+      })
+      .map(|(_, kept)| kept.line.clone())
+      .collect();
+    for line in lines {
+      self.write_line(dir, &line).await;
+    }
+  }
+
   async fn forward(&mut self, run_id: &str, line: &HostLine) {
     let Some(run) = self.runs.get(run_id) else {
       tracing::warn!(target: LOG_TARGET, "a command named a run no holder holds");
@@ -1488,6 +1575,7 @@ impl Supervisor {
             self.write(dir, &HostMessage::Drain).await;
           }
           self.resend_restores(dir).await;
+          self.resend_site_grants(dir).await;
           return;
         }
         Err(OpenError::Gone) => {

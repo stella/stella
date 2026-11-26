@@ -51,7 +51,6 @@ import type {
   ModelTask,
   ReasoningEffort,
   ResolvedReasoningEffort,
-  TanStackAIProvider,
 } from "@stll/ai-catalog";
 import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 import type { ModelDefaultCandidate } from "@stll/ai-catalog/model-defaults-ledger";
@@ -92,6 +91,10 @@ import {
 } from "@/api/lib/chat/provider-data-policy";
 import { withProviderImageInput } from "@/api/lib/chat/provider-image-input";
 import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
+import type {
+  ResolvedTanStackTextModelInfo,
+  TanStackTextProvider,
+} from "@/api/lib/chat/tanstack-ai-model-info";
 import { validateDataUrl } from "@/api/lib/data-url";
 import {
   markProviderAdapterError,
@@ -149,7 +152,7 @@ export type { AIProvider, BYOKProvider, ModelTask };
 
 type TanStackTextAdapterFactory = (modelId: string) => AnyTextAdapter;
 
-export type TanStackTextProvider = TanStackAIProvider;
+export type { ResolvedTanStackTextModelInfo, TanStackTextProvider };
 
 const INSTANCE_PROVIDER_PREFERENCE = [
   "openrouter",
@@ -264,11 +267,6 @@ export type ResolvedTanStackTextModel = {
     TProvider in TanStackTextProvider
   ]: ResolvedTanStackTextModelForProvider<TProvider>;
 }[TanStackTextProvider];
-
-export type ResolvedTanStackTextModelInfo = Pick<
-  ResolvedTanStackTextModel,
-  "keySource" | "modelId" | "provider" | "region"
-> & { availability: "available" | "unavailable" };
 
 /**
  * The model identity as a run records it: provider and model in one string, so

@@ -7,13 +7,15 @@ import type { OnlineRepair } from "./online-migration-connection";
  * The command kind, event request and chat turn interaction checks migration
  * 20261104201500_desktop_runner_question_answers widens to accept the
  * `run.answer` command, a question's request id on its event, and a turn
- * waiting on a harness question, re-added NOT VALID.
+ * waiting on a harness question, re-added NOT VALID. Migration
+ * 20261125120000_desktop_runner_site_grants widens the command kind check
+ * again for `run.site_grants`, NOT VALID once more.
  */
 export const DESKTOP_RUNNER_QUESTION_ANSWERS_CONSTRAINTS = [
   {
     tableName: "desktop_runner_commands",
     constraintName: "desktop_runner_commands_kind_check",
-    introducedBy: "20261104201500_desktop_runner_question_answers",
+    introducedBy: "20261125120000_desktop_runner_site_grants",
   },
   {
     tableName: "desktop_runner_events",

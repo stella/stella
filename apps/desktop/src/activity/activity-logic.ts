@@ -1,10 +1,10 @@
+import { panic } from "better-result";
+
 import { Temporal } from "@stll/time";
 
 import type { ActivitySegment } from "./activity-types";
 
-const MINUTE_MS = 60_000;
-/** Durations round up to a tenth of an hour. */
-const ENTRY_INCREMENT_MS = 6 * MINUTE_MS;
+export const MINUTE_MS = 60_000;
 
 export type TimedSegment = {
   appIdentifier: string;
@@ -79,8 +79,45 @@ export const appTotals = (segments: readonly TimedSegment[]): AppTotal[] => {
   );
 };
 
-export const roundedTenthsOfHour = (durationMs: number) =>
-  Math.ceil(Math.max(0, durationMs) / ENTRY_INCREMENT_MS);
+/** Whole numbers, one per value, that add up to `total`: each value is
+ * rounded down, then the largest remainders take what is left, earlier
+ * values first on a tie. `total` lies between the values' rounded-down sum
+ * and that sum plus one per value. */
+export const apportionWhole = (
+  values: readonly number[],
+  total: number,
+): number[] => {
+  const floors = values.map((value) => Math.floor(value));
+  let left = total - floors.reduce((sum, value) => sum + value, 0);
+  if (!Number.isInteger(total) || left < 0 || left > values.length) {
+    return panic("Apportioned total is outside the values' rounding range");
+  }
+  const byRemainder = values
+    .map((value, index) => ({ index, remainder: value - Math.floor(value) }))
+    .sort(
+      (first, second) =>
+        second.remainder - first.remainder || first.index - second.index,
+    );
+  for (const { index } of byRemainder) {
+    if (left <= 0) {
+      break;
+    }
+    floors[index] = (floors[index] ?? 0) + 1;
+    left -= 1;
+  }
+  return floors;
+};
+
+/** Whole minutes for each recorded duration, together never more than the
+ * minutes recorded in all of them: each rounds down, and the minutes the
+ * total still holds go to the largest remainders. */
+export const recordedMinutes = (durationsMs: readonly number[]): number[] =>
+  apportionWhole(
+    durationsMs.map((durationMs) => durationMs / MINUTE_MS),
+    Math.floor(
+      durationsMs.reduce((sum, durationMs) => sum + durationMs, 0) / MINUTE_MS,
+    ),
+  );
 
 /** A `YYYY-MM-DD` calendar date moved by whole days. */
 export const shiftDate = (date: string, days: number) =>

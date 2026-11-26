@@ -98,7 +98,7 @@ const ARCHIVE_REFUSAL = {
         "so the file cannot be inspected",
     },
   },
-} as const;
+} as const satisfies Record<string, Match>;
 
 type Refusal = keyof typeof ARCHIVE_REFUSAL;
 
