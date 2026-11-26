@@ -409,18 +409,6 @@ const createCommitListener =
       watchTurns(runtime, state);
     }
     const found = state.ledger.onCommit(runtime.clock(), runtime.turn);
-    // Naming components walks the fiber tree, so it starts only once the
-    // bucket is half empty or the tree has kept committing for two turns,
-    // which no ordinary test reaches. The walk only names components;
-    // counting does not depend on it.
-    if (
-      state.busyTurns >= 2 ||
-      state.ledger.headroom() < DOM_STORM_LIMITS.bucketCapacity / 2
-    ) {
-      Result.try(() => {
-        state.walk(root);
-      });
-    }
     if (found.length > 0) {
       const components = topComponents(state.snapshot());
       record(state, {
@@ -438,6 +426,16 @@ const createCommitListener =
     }
     if (state.commitsSinceStimulus > HANG_COMMITS) {
       hang(state);
+    }
+    // Naming components walks the fiber tree, so it starts only once the
+    // bucket is half empty or the tree has kept committing for two turns,
+    // which no ordinary test reaches. It runs last: the walk only names
+    // components, and nothing above depends on it.
+    if (
+      state.busyTurns >= 2 ||
+      state.ledger.headroom() < DOM_STORM_LIMITS.bucketCapacity / 2
+    ) {
+      state.walk(root);
     }
   };
 
