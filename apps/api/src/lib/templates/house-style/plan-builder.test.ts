@@ -1034,6 +1034,81 @@ describe("buildTemplatePlan, a template with text effects that show nothing", ()
   });
 });
 
+describe("buildTemplatePlan, a level the template sets apart from its siblings", () => {
+  const manifest = manifestOf([
+    "SMLOUVA",
+    "Článek I. Předmět",
+    numbered("1.1.", "První ujednání."),
+    numbered("1.1.1.", "Podrobnost prvního ujednání."),
+    numbered("1.1.1.1.", "Podrobnost podrobnosti."),
+  ]);
+  const apart = {
+    ...PROFILE,
+    health: [
+      {
+        kind: "levelSetApart",
+        role: "clause2",
+        styleId: "Clause2",
+        bold: true,
+        size: 24,
+        insteadStyleId: "Clause1",
+      },
+    ],
+  } satisfies typeof PROFILE;
+  const placedAs = (profile: typeof PROFILE, start: string) => {
+    const item = itemOf(
+      build(manifest, "houseScheme", { profile }).plan,
+      manifest,
+      start,
+    );
+    return { styleId: item?.styleId, ilvl: item?.numbering?.ilvl };
+  };
+
+  test("its paragraphs take the sibling's style on their own level, and the note says so", () => {
+    // The template's own placement, for comparison.
+    expect(placedAs(PROFILE, "Podrobnost prvního")).toEqual({
+      styleId: "Clause2",
+      ilvl: 2,
+    });
+    expect(placedAs(apart, "Podrobnost prvního")).toEqual({
+      styleId: "Clause1",
+      ilvl: 2,
+    });
+    // A deeper level that borrows the style borrows the sibling's too.
+    expect(placedAs(apart, "Podrobnost podrobnosti").styleId).toBe("Clause1");
+    expect(placedAs(apart, "První ujednání")).toEqual({
+      styleId: "Clause1",
+      ilvl: 1,
+    });
+    expect(
+      build(manifest, "keepSource", { profile: apart }).note.items.filter(
+        ({ kind }) => kind === "levelStyleEvened",
+      ),
+    ).toEqual([
+      {
+        kind: "levelStyleEvened",
+        role: "clause2",
+        styleId: "Clause2",
+        insteadStyleId: "Clause1",
+        blocks: 1,
+      },
+    ]);
+  });
+
+  test("a profile that keeps the template's looks keeps the style", () => {
+    const kept = {
+      ...apart,
+      levelLooks: "asTemplate",
+    } satisfies typeof PROFILE;
+    expect(placedAs(kept, "Podrobnost prvního").styleId).toBe("Clause2");
+    expect(
+      build(manifest, "keepSource", { profile: kept }).note.items.some(
+        ({ kind }) => kind === "levelStyleEvened",
+      ),
+    ).toBe(false);
+  });
+});
+
 describe("buildTemplatePlan, what is left unlinked", () => {
   const manifest = czechContract(
     "Viz čl. XX této smlouvy a čl. II odst. 2 této smlouvy.",

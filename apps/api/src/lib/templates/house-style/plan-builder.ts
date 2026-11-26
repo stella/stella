@@ -62,6 +62,7 @@ import type {
   HouseStyleRole,
   RoleProposal,
 } from "@/api/lib/templates/house-style/role-proposer";
+import { LEVEL_ROLES } from "@/api/lib/templates/house-style/template-profile";
 import type {
   ProfileRoleTarget,
   TemplateHealthFinding,
@@ -174,6 +175,17 @@ type FormattingNoteItem =
    *  picture; the output is written without them, so numbers and text are
    *  text. The template's own findings are in its profile. */
   | { kind: "invisibleEffectsRemoved"; levels: number; styles: number }
+  /** The template's style for a numbered level sets it apart from its
+   *  sibling levels (bold, or another size). `blocks` paragraphs of the
+   *  role were placed in the sibling's style instead, on their own level of
+   *  the list. */
+  | {
+      kind: "levelStyleEvened";
+      role: HouseStyleRole;
+      styleId: string;
+      insteadStyleId: string;
+      blocks: number;
+    }
   | {
       kind: "templateBlocksKept";
       region: "keepBefore" | "contents";
@@ -335,19 +347,51 @@ const insideOf = (
             : [inner, ...insideOf(inner, blockById)];
         });
 
+/**
+ * The style a level the template sets apart from its siblings is placed
+ * in: the sibling's, unless the profile keeps the template's looks.
+ */
+const evenedStyle = (
+  { profile }: Context,
+  role: HouseStyleRole,
+  own: ProfileRoleTarget,
+): ProfileRoleTarget => {
+  if (profile.levelLooks === "asTemplate") {
+    return own;
+  }
+  const finding = (profile.health ?? NO_HEALTH).find(
+    (candidate) =>
+      candidate.kind === "levelSetApart" &&
+      candidate.role === role &&
+      candidate.styleId === own.styleId,
+  );
+  if (finding?.kind !== "levelSetApart") {
+    return own;
+  }
+  const sibling = LEVEL_ROLES.map((level) => profile.roles[level]).find(
+    (target) => target?.styleId === finding.insteadStyleId,
+  );
+  return {
+    ...own,
+    styleId: finding.insteadStyleId,
+    alignment: sibling?.alignment ?? own.alignment,
+  };
+};
+
 const styleTarget = (
-  { profile, stylelessRoles }: Context,
+  context: Context,
   role: HouseStyleRole,
 ): ProfileRoleTarget | null => {
+  const { profile, stylelessRoles } = context;
   const own = profile.roles[role];
   if (own !== null) {
-    return own;
+    return evenedStyle(context, role, own);
   }
   stylelessRoles.set(role, (stylelessRoles.get(role) ?? 0) + 1);
   for (const fallback of STYLE_FALLBACK[role]) {
     const target = profile.roles[fallback];
     if (target !== null) {
-      return target;
+      return evenedStyle(context, fallback, target);
     }
   }
   return null;
@@ -1799,13 +1843,30 @@ export const buildTemplatePlan = ({
   noteReadings(context, placed, references, suspicions);
 
   const health = profile.health ?? NO_HEALTH;
-  if (health.length > 0) {
-    context.items.push({
-      kind: "invisibleEffectsRemoved",
-      levels: health.filter(({ kind }) => kind === "numberDrawnAsPicture")
-        .length,
-      styles: health.filter(({ kind }) => kind === "textDrawnAsPicture").length,
-    });
+  const drawn = {
+    levels: health.filter(({ kind }) => kind === "numberDrawnAsPicture").length,
+    styles: health.filter(({ kind }) => kind === "textDrawnAsPicture").length,
+  };
+  if (drawn.levels > 0 || drawn.styles > 0) {
+    context.items.push({ kind: "invisibleEffectsRemoved", ...drawn });
+  }
+  for (const finding of health) {
+    const evened =
+      finding.kind === "levelSetApart" && profile.levelLooks !== "asTemplate"
+        ? placed.placements.filter(
+            ({ role, styleId }) =>
+              role === finding.role && styleId === finding.insteadStyleId,
+          ).length
+        : 0;
+    if (finding.kind === "levelSetApart" && evened > 0) {
+      context.items.push({
+        kind: "levelStyleEvened",
+        role: finding.role,
+        styleId: finding.styleId,
+        insteadStyleId: finding.insteadStyleId,
+        blocks: evened,
+      });
+    }
   }
   const lineBreakSpacing = keepsLineBreakSpacing(
     context,

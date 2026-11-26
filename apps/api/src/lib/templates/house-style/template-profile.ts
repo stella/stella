@@ -56,10 +56,41 @@ type HeadingJoin = "sameLine" | "lineBreak";
  * that shows nothing. A word processor draws such text as a picture: in an
  * exported document the number or the text cannot be found, copied or read
  * aloud. Clearing the 3-D format on the level or style mends it.
+ *
+ * `levelSetApart`: the style of a numbered level states bold, or a font
+ * size, that the styles of the other levels and of the body text do not.
+ * Under plain siblings every paragraph of that level reads as a heading.
+ * The output places the role in `insteadStyleId`, the style of the nearest
+ * level that looks like the rest, on the level's own place in the list, so
+ * number and indent stay; a profile with `levelLooks: "asTemplate"` keeps
+ * the template's style. Giving the style the look of its siblings mends it.
  */
 export type TemplateHealthFinding =
   | { kind: "numberDrawnAsPicture"; abstractNumId: number; ilvl: number }
-  | { kind: "textDrawnAsPicture"; styleId: string | null };
+  | { kind: "textDrawnAsPicture"; styleId: string | null }
+  | {
+      kind: "levelSetApart";
+      role: LevelRole;
+      styleId: string;
+      bold: boolean;
+      /** In half-points; null when the style and the defaults state none. */
+      size: number | null;
+      insteadStyleId: string;
+    };
+
+/** The roles of the numbered levels of a provision, outermost first. */
+export const LEVEL_ROLES = [
+  "clause1",
+  "clause2",
+  "clause3",
+  "letter",
+  "roman",
+] as const satisfies readonly HouseStyleRole[];
+
+type LevelRole = (typeof LEVEL_ROLES)[number];
+
+/** Where the items of a list begin among the level roles. */
+const ITEM_DEPTH = LEVEL_ROLES.indexOf("letter");
 
 export type TemplateProfile = {
   version: 1;
@@ -106,6 +137,10 @@ export type TemplateProfile = {
   /** What the template could have mended at its source. Absent from a
    *  profile inferred before the template was read for it. */
   health?: TemplateHealthFinding[];
+  /** What becomes of a level the template sets apart from its siblings
+   *  (`levelSetApart`): `even`, the default, places it in a sibling's
+   *  style; `asTemplate` keeps the style the template gives it. */
+  levelLooks?: "even" | "asTemplate";
   confidence: number;
 };
 
@@ -790,10 +825,96 @@ const STRUCTURAL_ROLES = [
  *  profile stays readable, and so many say the same thing anyway. */
 const HEALTH_FINDINGS_MAX = 2000;
 
+type Look = { bold: boolean; size: number | null };
+
+const sameLook = (left: Look, right: Look): boolean =>
+  left.bold === right.bold && left.size === right.size;
+
+/**
+ * The numbered levels whose style looks other than the levels around it:
+ * bold, or in another size. The look the levels are held to is the one most
+ * of their styles and the body's share; without such a look, or without
+ * the styles' looks in the inspection, nothing is found.
+ */
+const levelsSetApart = (
+  { styles }: TemplateInspection,
+  roles: TemplateProfile["roles"],
+): TemplateHealthFinding[] => {
+  const lookOf = (styleId: string | undefined): Look | null => {
+    const style = styles.find((candidate) => candidate.styleId === styleId);
+    if (style === undefined || style.bold === undefined) {
+      return null;
+    }
+    return { bold: style.bold, size: style.size ?? null };
+  };
+  const levels = LEVEL_ROLES.flatMap((role, depth) => {
+    const styleId = roles[role]?.styleId;
+    const look = lookOf(styleId);
+    return styleId === undefined || look === null
+      ? []
+      : [{ role, depth, styleId, look }];
+  });
+  const body = lookOf(roles.body?.styleId);
+  const looksByStyle = new Map(
+    levels.map(({ styleId, look }) => [styleId, look]),
+  );
+  if (roles.body !== null && body !== null) {
+    looksByStyle.set(roles.body.styleId, body);
+  }
+  const shared = [...looksByStyle.values()]
+    .map((look) => ({
+      look,
+      styles: [...looksByStyle.values()].filter((other) =>
+        sameLook(look, other),
+      ).length,
+    }))
+    .toSorted((left, right) => right.styles - left.styles);
+  const [most, next] = shared;
+  if (
+    most === undefined ||
+    most.styles < 2 ||
+    (next !== undefined &&
+      !sameLook(most.look, next.look) &&
+      next.styles === most.styles)
+  ) {
+    return [];
+  }
+  const even = levels.filter(({ look }) => sameLook(look, most.look));
+  return levels.flatMap(({ role, depth, styleId, look }) => {
+    if (sameLook(look, most.look)) {
+      return [];
+    }
+    // A level of its own kind first (a clause for a clause, an item for
+    // an item), then the nearest, the outer one of two.
+    const otherKind = (other: number): number =>
+      Number(other < ITEM_DEPTH !== depth < ITEM_DEPTH);
+    const instead = even.toSorted(
+      (left, right) =>
+        otherKind(left.depth) - otherKind(right.depth) ||
+        Math.abs(left.depth - depth) - Math.abs(right.depth - depth) ||
+        left.depth - right.depth,
+    )[0];
+    return instead === undefined
+      ? []
+      : [
+          {
+            kind: "levelSetApart" as const,
+            role,
+            styleId,
+            bold: look.bold,
+            size: look.size,
+            insteadStyleId: instead.styleId,
+          },
+        ];
+  });
+};
+
 /** The template's findings, each once, in the order the template has them. */
-const inferHealth = ({
-  invisibleEffects = [],
-}: TemplateInspection): TemplateHealthFinding[] => {
+const inferHealth = (
+  inspection: TemplateInspection,
+  roles: TemplateProfile["roles"],
+): TemplateHealthFinding[] => {
+  const { invisibleEffects = [] } = inspection;
   const findings = new Map<string, TemplateHealthFinding>();
   for (const { effect, owner } of invisibleEffects) {
     // Of the effects that show nothing only the 3-D scene changes how the
@@ -816,6 +937,11 @@ const inferHealth = ({
         kind: "textDrawnAsPicture",
         styleId,
       });
+    }
+  }
+  for (const finding of levelsSetApart(inspection, roles)) {
+    if (finding.kind === "levelSetApart") {
+      findings.set(`apart ${finding.role}`, finding);
     }
   }
   return [...findings.values()].slice(0, HEALTH_FINDINGS_MAX);
@@ -929,7 +1055,7 @@ export const inferTemplateProfile = (
       inspection.styles.find(
         ({ type, isDefault }) => type === "paragraph" && isDefault,
       )?.alignment ?? null,
-    health: inferHealth(inspection),
+    health: inferHealth(inspection, roles),
     // A template without sample text shows no role in use, and one whose
     // body runs in columns is not filled by column yet.
     confidence:
@@ -981,6 +1107,19 @@ export const validateTemplateProfile = (
       abstractNumId,
     ]),
   );
+  // A level set apart is placed in the style its finding names.
+  for (const finding of profile.health ?? []) {
+    if (
+      finding.kind === "levelSetApart" &&
+      !facts.has(finding.insteadStyleId)
+    ) {
+      issues.push({
+        severity: "error",
+        code: "unknownStyle",
+        role: finding.role,
+      });
+    }
+  }
   const levelUsers = new Map<string, HouseStyleRole>();
   for (const role of HOUSE_STYLE_ROLES) {
     const roleTarget = profile.roles[role];
@@ -1185,11 +1324,20 @@ const profileSchema = v.strictObject({
             kind: v.literal("textDrawnAsPicture"),
             styleId: v.nullable(textSchema),
           }),
+          v.strictObject({
+            kind: v.literal("levelSetApart"),
+            role: v.picklist(LEVEL_ROLES),
+            styleId: textSchema,
+            bold: v.boolean(),
+            size: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1))),
+            insteadStyleId: textSchema,
+          }),
         ]),
       ),
       v.maxLength(HEALTH_FINDINGS_MAX),
     ),
   ),
+  levelLooks: v.exactOptional(v.picklist(["even", "asTemplate"])),
   confidence: confidenceSchema,
 });
 
