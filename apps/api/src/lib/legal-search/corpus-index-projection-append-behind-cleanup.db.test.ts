@@ -50,6 +50,7 @@ import {
   settleCorpusProjectionCleanupTx,
 } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
 import {
+  CORPUS_INDEX_APPEND_MAX_DELETING_REVISIONS,
   CORPUS_INDEX_INTENT_APPEND_GATE,
   CORPUS_INDEX_INTENT_STATUSES,
   type CorpusIndexIntentStatus,
@@ -59,7 +60,7 @@ import {
   proveCorpusProjectionRevisionsPresent,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { advanceCorpusProjectionErasuresTx } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
-import { corpusIndexProjectionIntentHoldsAppend } from "@/api/lib/legal-search/corpus-index-projection-sql";
+import { corpusIndexProjectionAppendGateIsClear } from "@/api/lib/legal-search/corpus-index-projection-sql";
 import {
   abandonCorpusProjectionAppendTx,
   type CorpusProjectionIntentLease,
@@ -283,19 +284,22 @@ const loseAppend = async (
   generation: Generation,
   n: number,
   id: ProjectionIntentId,
+  /** Minutes after the first attempt this one runs, past its backoff. */
+  laterByMinutes = 0,
 ) => {
-  const [lease] = await reserve(generation, n, id, attemptedAt);
+  const at = new Date(attemptedAt.getTime() + laterByMinutes * 60_000);
+  const [lease] = await reserve(generation, n, id, at);
   if (lease === undefined) {
-    return panic("Expected the first attempt to be reserved");
+    return panic("Expected the attempt to be reserved");
   }
-  expect(await start(lease, attemptedAt)).toBe("started");
+  expect(await start(lease, at)).toBe("started");
   expect(
     await runInTransaction(
       async (tx) =>
         await abandonCorpusProjectionAppendTx(tx, {
           intentId: lease.intentId,
           leaseToken: lease.leaseToken,
-          testNow: attemptedAt,
+          testNow: at,
           errorMessage: "append response was lost",
         }),
     ),
@@ -691,13 +695,15 @@ test("the reservation gate holds back exactly what the contract says, for any mi
             statuses.map((status) => sql`(${status}::text)`),
             sql`, `,
           )}`;
-    const { rows } = await db.execute<{ held: boolean }>(
-      sql`SELECT EXISTS (
-        SELECT 1 FROM (${values}) AS other (status)
-        WHERE ${corpusIndexProjectionIntentHoldsAppend(sql`other.status`, retrieval)}
-      ) AS held`,
+    const { rows } = await db.execute<{ clear: boolean }>(
+      sql`SELECT ${corpusIndexProjectionAppendGateIsClear({
+        retrieval,
+        others: (condition) => sql`
+          SELECT 1 FROM (${values}) AS other (status)
+          WHERE ${condition(sql`other.status`)}`,
+      })} AS clear`,
     );
-    return rows.at(0)?.held ?? panic("The gate probe returned no row");
+    return !(rows.at(0)?.clear ?? panic("The gate probe returned no row"));
   };
   const stored: CorpusRevisionRetrieval = {
     type: "stored",
@@ -717,7 +723,12 @@ test("the reservation gate holds back exactly what the contract says, for any mi
         const gate = statuses.map(
           (status) => CORPUS_INDEX_INTENT_APPEND_GATE[status],
         );
-        expect(await gateHolds(statuses, stored)).toBe(gate.includes("holds"));
+        // At most one revision being deleted may sit beside a new append.
+        expect(await gateHolds(statuses, stored)).toBe(
+          gate.includes("holds") ||
+            gate.filter((disposition) => disposition === "deleting").length >
+              CORPUS_INDEX_APPEND_MAX_DELETING_REVISIONS,
+        );
         expect(await gateHolds(statuses, queryOnly)).toBe(
           gate.some((disposition) => disposition !== "quiescent"),
         );
@@ -863,3 +874,23 @@ test("more deletes in flight than the parity walk's cap, each beside an applied 
   expect(deleting.length).toBe(count);
   expect(await readParity(5000)).toEqual({ type: "no_regression" });
 }, 120_000);
+
+test("a second revision being deleted holds the append back until one of them settles", async () => {
+  await fixture.seedShown(V7, 8);
+  await desire(V10, 8);
+  // Two lost attempts: the second runs beside the first one's delete.
+  await loseAppend(V10, 8, revision(51));
+  await loseAppend(V10, 8, revision(52), 5);
+  expect(await statusOf(revision(51))).toBe("cleanup_pending");
+  expect(await statusOf(revision(52))).toBe("cleanup_pending");
+  // Two older copies may be searchable; a third attempt waits.
+  expect(await reserve(V10, 8, revision(53))).toEqual([]);
+
+  await issueDelete(V10, 8, revision(51));
+  matureSplits();
+  expect(await settlementTurn(V10)).toEqual(["settled"]);
+  expect(await statusOf(revision(51))).toBe("settled");
+  // One left being deleted: the append runs beside it.
+  const [lease] = await reserve(V10, 8, revision(53));
+  expect(lease?.intentId).toBe(revision(53));
+});

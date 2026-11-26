@@ -116,7 +116,8 @@ export const CORPUS_INDEX_LAUNCH_BLOCKING_INTENT_STATUSES =
  *   not name, so a census still has to decide it), or it waits for an
  *   operator (`cleanup_stalled`). The new append waits.
  * - `deleting`: an exact delete of that revision is queued, issued or
- *   awaiting settlement. The delete names its revision
+ *   awaiting settlement; at most `CORPUS_INDEX_APPEND_MAX_DELETING_REVISIONS`
+ *   of them at once. The delete names its revision
  *   (`corpusProjectionRevisionsQuery`), so it never reaches another one. A
  *   generation whose hits carry their revision
  *   (`corpusIndexRevisionRetrieval` is `stored`) shows readers only the copy
@@ -144,6 +145,13 @@ export const CORPUS_INDEX_INTENT_APPEND_GATE = {
   CorpusIndexIntentStatus,
   "holds" | "deleting" | "quiescent"
 >;
+
+/**
+ * How many revisions being deleted a stored-revision append may run beside:
+ * one, so the index never holds two older copies of an entity beside the one
+ * readers are given. A second one waiting holds the append back as before.
+ */
+export const CORPUS_INDEX_APPEND_MAX_DELETING_REVISIONS = 1;
 
 /** Revisions whose exact delete a stored-revision append may run beside. */
 export const CORPUS_INDEX_DELETING_INTENT_STATUSES =

@@ -1,8 +1,9 @@
 import { panic } from "better-result";
-import { sql, type SQLWrapper } from "drizzle-orm";
+import { type SQL, sql, type SQLWrapper } from "drizzle-orm";
 
 import type { CorpusRevisionRetrieval } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
+  CORPUS_INDEX_APPEND_MAX_DELETING_REVISIONS,
   CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES,
   CORPUS_INDEX_DELETING_INTENT_STATUSES,
   CORPUS_INDEX_OUTSTANDING_INDEX_QUIESCENT_STATUSES,
@@ -282,8 +283,8 @@ export const corpusIndexProjectionIntentIsOutstanding = (status: SQLWrapper) =>
 
 /**
  * One source of truth for "this other revision holds back a new append of its
- * entity" (`CORPUS_INDEX_INTENT_APPEND_GATE`), shared by the append queue and
- * the operator's unpark. Under `query_only` retrieval it is the outstanding
+ * entity" (`CORPUS_INDEX_INTENT_APPEND_GATE`), read through
+ * `corpusIndexProjectionAppendGateIsClear`. Under `query_only` retrieval it is the outstanding
  * predicate itself. Under `stored` retrieval a revision whose exact delete is
  * in flight is left out as well; the list it excludes still contains every
  * status the outstanding partial index leaves out, so the index keeps
@@ -301,6 +302,46 @@ export const corpusIndexProjectionIntentHoldsAppend = (
         ...CORPUS_INDEX_QUIESCENT_INTENT_STATUSES,
         ...CORPUS_INDEX_DELETING_INTENT_STATUSES,
       ])})`;
+    default:
+      retrieval satisfies never;
+      return panic(`Unhandled revision retrieval: ${String(retrieval)}`);
+  }
+};
+
+/** A revision whose exact delete is queued, issued or awaiting settlement. */
+export const corpusIndexProjectionIntentIsDeleting = (status: SQLWrapper) =>
+  sql`${status} IN (${sqlLiteralValues(CORPUS_INDEX_DELETING_INTENT_STATUSES)})`;
+
+/**
+ * One source of truth for "nothing holds back a new append of this entity",
+ * shared by the append queue, the operator's unpark and the deferred-state
+ * wake. `others(condition)` is a subquery selecting the entity's other
+ * revisions whose status meets `condition`, correlated by the caller.
+ *
+ * - `query_only`: no other revision is outstanding.
+ * - `stored`: none holds the append (`corpusIndexProjectionIntentHoldsAppend`),
+ *   and at most `CORPUS_INDEX_APPEND_MAX_DELETING_REVISIONS` is being
+ *   deleted, so the index never holds more than one older copy beside the
+ *   one readers are given.
+ */
+export const corpusIndexProjectionAppendGateIsClear = ({
+  others,
+  retrieval,
+}: {
+  others: (condition: (status: SQLWrapper) => SQL) => SQL;
+  retrieval: CorpusRevisionRetrieval;
+}): SQL => {
+  switch (retrieval.type) {
+    case "query_only":
+      return sql`NOT EXISTS (${others(corpusIndexProjectionIntentIsOutstanding)})`;
+    case "stored":
+      return sql`(
+        NOT EXISTS (${others((status) => corpusIndexProjectionIntentHoldsAppend(status, retrieval))})
+        AND (
+          SELECT count(*)
+          FROM (${others(corpusIndexProjectionIntentIsDeleting)} LIMIT ${sql.raw(String(CORPUS_INDEX_APPEND_MAX_DELETING_REVISIONS + 1))}) AS deleting
+        ) <= ${sql.raw(String(CORPUS_INDEX_APPEND_MAX_DELETING_REVISIONS))}
+      )`;
     default:
       retrieval satisfies never;
       return panic(`Unhandled revision retrieval: ${String(retrieval)}`);

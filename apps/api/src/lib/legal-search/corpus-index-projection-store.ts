@@ -23,6 +23,7 @@ import {
 import type { Transaction } from "@/api/db/types";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import {
+  corpusProjectionAppendGateIsClear,
   corpusProjectionReservationQueue,
   type CorpusProjectionReservationQueueKey,
   lockCorpusProjectionAcceptedRows,
@@ -74,10 +75,7 @@ import {
   entityIdsForCorpusProjectionWorkScope,
   indexIdForCorpusProjectionWorkScope,
 } from "@/api/lib/legal-search/corpus-index-projection-scope";
-import {
-  corpusIndexProjectionIntentHoldsAppend,
-  corpusIndexProjectionProducesAppend,
-} from "@/api/lib/legal-search/corpus-index-projection-sql";
+import { corpusIndexProjectionProducesAppend } from "@/api/lib/legal-search/corpus-index-projection-sql";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 export const CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE =
@@ -1588,8 +1586,8 @@ export type CorpusProjectionAppendUnparkResult =
 
 /**
  * Unpark one blocked entity once no other revision holds its append back
- * (`corpusIndexProjectionIntentHoldsAppend`, the reservation queue's own
- * gate); retain singleton retry.
+ * (`corpusProjectionAppendGateIsClear`, the reservation queue's own gate);
+ * retain singleton retry.
  */
 export const unparkCorpusProjectionAppendTx = async (
   tx: Transaction,
@@ -1622,22 +1620,21 @@ export const unparkCorpusProjectionAppendTx = async (
   if (state?.workStatus !== "blocked") {
     return "not_blocked";
   }
-  const outstanding = await tx
-    .select({ id: corpusIndexProjectionIntents.id })
-    .from(corpusIndexProjectionIntents)
+  const clear = await tx
+    .select({ entityId: corpusIndexProjectionStates.entityId })
+    .from(corpusIndexProjectionStates)
     .where(
       and(
-        eq(corpusIndexProjectionIntents.family, family),
-        eq(corpusIndexProjectionIntents.generation, generation),
-        eq(corpusIndexProjectionIntents.entityId, entityId),
-        corpusIndexProjectionIntentHoldsAppend(
-          corpusIndexProjectionIntents.status,
+        eq(corpusIndexProjectionStates.family, family),
+        eq(corpusIndexProjectionStates.generation, generation),
+        eq(corpusIndexProjectionStates.entityId, entityId),
+        corpusProjectionAppendGateIsClear(
           corpusIndexRevisionRetrieval(manifest),
         ),
       ),
     )
     .limit(1);
-  if (outstanding.length > 0) {
+  if (clear.length === 0) {
     return "cleanup_pending";
   }
   await tx

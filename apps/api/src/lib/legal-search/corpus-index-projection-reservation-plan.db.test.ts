@@ -338,7 +338,9 @@ test("the reservation queue reads outstanding revisions, not revision history", 
   expect(intentProbe(stored)).toContain(
     "corpus_index_projection_intents_outstanding_idx",
   );
-  expect(intentProbe(stored)).not.toContain("Rows Removed by Filter");
+  // Both probes, the holding revisions and the count of those being deleted,
+  // read only the entity's outstanding revisions.
+  expect(intentProbe(stored)).not.toMatch(/Rows Removed by Filter: [1-9]/u);
   // What remains is the in-flight prefix ahead of the reserved batch, not
   // anything either table accumulates.
   expect(deep.buffers / deep.reservedRows).toBeLessThanOrEqual(25);

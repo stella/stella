@@ -88,9 +88,9 @@ import {
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import type { CorpusRevisionRetrieval } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
+  corpusIndexProjectionAppendGateIsClear,
   corpusIndexProjectionAppendIsUnblocked,
   corpusIndexProjectionCleanupIsDue,
-  corpusIndexProjectionIntentHoldsAppend,
   corpusIndexProjectionNeedsWork,
 } from "@/api/lib/legal-search/corpus-index-projection-sql";
 import { LIMITS } from "@/api/lib/limits";
@@ -4456,20 +4456,71 @@ const appendIsUnblocked = corpusIndexProjectionAppendIsUnblocked(
 );
 
 /**
- * No other revision of the entity holds its append back
- * (`CORPUS_INDEX_INTENT_APPEND_GATE`): under `stored` retrieval a revision
- * whose exact delete is in flight does not, under `query_only` every
- * outstanding one does.
+ * No other revision of the state's entity holds its append back
+ * (`corpusIndexProjectionAppendGateIsClear`), correlated to
+ * `corpus_index_projection_states`.
  */
-const noRevisionHoldsAppend = (retrieval: CorpusRevisionRetrieval) =>
-  sql`NOT EXISTS (
+export const corpusProjectionAppendGateIsClear = (
+  retrieval: CorpusRevisionRetrieval,
+): SQL =>
+  corpusIndexProjectionAppendGateIsClear({
+    retrieval,
+    others: (condition) => sql`
       SELECT 1
       FROM ${corpusIndexProjectionIntents} outstanding
       WHERE outstanding.family = ${corpusIndexProjectionStates.family}
         AND outstanding.generation = ${corpusIndexProjectionStates.generation}
         AND outstanding.entity_id = ${corpusIndexProjectionStates.entityId}
-        AND ${corpusIndexProjectionIntentHoldsAppend(sql`outstanding.status`, retrieval)}
-    )`;
+        AND ${condition(sql`outstanding.status`)}`,
+  });
+
+/**
+ * A state the append walk takes once its queue instant comes: an upsert that
+ * needs work, names no live copy, and has nothing holding its append back.
+ * The walk's own predicate; the deferred-state wake reads the same one.
+ */
+const appendWalkTakes = (retrieval: CorpusRevisionRetrieval) =>
+  and(
+    eq(corpusIndexProjectionStates.desiredAction, "upsert"),
+    inArray(corpusIndexProjectionStates.workStatus, [
+      "eligible",
+      "retry_scheduled",
+      "repair_scheduled",
+    ]),
+    pendingDesiredState,
+    appendIsUnblocked,
+    corpusProjectionAppendGateIsClear(retrieval),
+  );
+
+/**
+ * States of an active generation (building or serving, as the walk reads)
+ * that the walk would take but that a settlement bound queued for later:
+ * no failure backoff, `updated_at` after the transaction's `now()`. Only a
+ * caller that knows the generation stores its revision may wake them.
+ */
+export const corpusProjectionDeferredAppendStates = ({
+  family,
+  generation,
+  retrieval,
+}: {
+  family: CorpusFamily;
+  generation: string;
+  retrieval: CorpusRevisionRetrieval;
+}): SQL =>
+  and(
+    eq(corpusIndexProjectionStates.family, family),
+    eq(corpusIndexProjectionStates.generation, generation),
+    sql`EXISTS (
+      SELECT 1
+      FROM ${corpusIndexGenerations} registered
+      WHERE registered.family = ${corpusIndexProjectionStates.family}
+        AND registered.generation = ${corpusIndexProjectionStates.generation}
+        AND registered.status IN ('building', 'serving')
+    )`,
+    isNull(corpusIndexProjectionStates.retryNotBefore),
+    sql`${corpusIndexProjectionStates.updatedAt} > now()`,
+    appendWalkTakes(retrieval),
+  ) ?? panic("The deferred-state predicate is empty");
 
 type CorpusProjectionReservationQueueOptions = {
   family: CorpusFamily;
@@ -4567,12 +4618,6 @@ export const corpusProjectionReservationQueue = (
           : notInArray(corpusIndexProjectionStates.desiredIndexId, [
               ...excludedIndexIds,
             ]),
-        eq(corpusIndexProjectionStates.desiredAction, "upsert"),
-        inArray(corpusIndexProjectionStates.workStatus, [
-          "eligible",
-          "retry_scheduled",
-          "repair_scheduled",
-        ]),
         skipEntityIds.length === 0
           ? undefined
           : notInArray(corpusIndexProjectionStates.entityId, [
@@ -4586,9 +4631,7 @@ export const corpusProjectionReservationQueue = (
           : sql`(${runnableAt}, ${corpusIndexProjectionStates.entityId}) > (${after.runnableAt}::timestamptz, ${after.entityId})`,
         lte(runnableAt, eligibilityAt),
         inArray(corpusIndexGenerations.status, ["building", "serving"]),
-        pendingDesiredState,
-        appendIsUnblocked,
-        noRevisionHoldsAppend(revisionRetrieval),
+        appendWalkTakes(revisionRetrieval),
       ),
     )
     .orderBy(asc(runnableAt), asc(corpusIndexProjectionStates.entityId))
