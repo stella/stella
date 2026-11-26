@@ -223,6 +223,36 @@ describe("proposeBlockRoles", () => {
     });
   });
 
+  test("a centred marking right above the title does not take the title's place", () => {
+    const manifest = manifestOf([
+      "Confidential",
+      "AGREEMENT IN PRINCIPLE",
+      "Alfa s.r.o., se sídlem Dlouhá 1, Praha, IČO: 00000001",
+      "Článek I.\nPředmět",
+      "1.1\tProdávající dodá zboží.",
+    ]);
+    const [marking] = manifest.blocks;
+    if (marking !== undefined) {
+      marking.alignment = "center";
+    }
+    const roles = rolesOf(manifest);
+    expect(roles["AGREEMENT IN PRINCIPLE"]).toBe("title");
+    expect(roles["Confidential"]).toBe("body");
+    // A centred title in ordinary case stays the title when no line shaped
+    // as one stands under it.
+    const plain = manifestOf([
+      "Smlouva o dílo",
+      "Alfa s.r.o., se sídlem Dlouhá 1, Praha, IČO: 00000001",
+      "Článek I.\nPředmět",
+      "1.1\tProdávající dodá zboží.",
+    ]);
+    const [title] = plain.blocks;
+    if (title !== undefined) {
+      title.alignment = "center";
+    }
+    expect(rolesOf(plain)["Smlouva o dílo"]).toBe("title");
+  });
+
   test("in a letter or a memo a line that is merely centred does not take the title's place", () => {
     const manifest = manifestOf([
       "Confidential",

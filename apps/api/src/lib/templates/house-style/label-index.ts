@@ -1063,7 +1063,11 @@ const joinSpacedNumbers = (
       continue;
     }
     const column = columnOf.get(block.id) ?? null;
-    const counting = countings.get(column) ?? { article: null, run: [] };
+    // A column counts under the heading that spans the columns above it.
+    const counting = countings.get(column) ?? {
+      article: countings.get(null)?.article ?? null,
+      run: [],
+    };
     countings.set(column, counting);
     const spaced = readSpacedNumber(block, raw, position);
     if (spaced !== null && raw.shape.path?.at(0) === counting.article) {
@@ -1072,8 +1076,11 @@ const joinSpacedNumbers = (
     }
     const headed = headedNumber(raw);
     if (headed !== null || raw.shape.keyword !== null) {
-      close(counting);
-      counting.article = headed;
+      // A heading outside the columns heads every column from there on.
+      for (const under of column === null ? countings.values() : [counting]) {
+        close(under);
+        under.article = headed;
+      }
     }
   }
   for (const counting of countings.values()) {
