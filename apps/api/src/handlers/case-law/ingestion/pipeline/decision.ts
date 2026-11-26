@@ -36,6 +36,10 @@ import {
   parkIngestionFailureTx,
 } from "@/api/handlers/case-law/ingestion/pipeline/failure-evidence-persistence";
 import {
+  type GraphTurn,
+  takeGraphTurnAlone,
+} from "@/api/handlers/case-law/ingestion/pipeline/graph-turns";
+import {
   attachToHeldDecision,
   stageOwnCollectionPart,
 } from "@/api/handlers/case-law/ingestion/pipeline/held-decision-attachment";
@@ -165,6 +169,21 @@ const storedInputMatchesDecision = (
       return panic("Unhandled decision input provenance");
   }
 };
+
+/**
+ * The row write, once the decision's graph turn comes. A turn can come long
+ * after it was asked for: a stop raised while waiting ends the attempt
+ * before it takes the graph lock.
+ */
+const writeRowInTurn = async (
+  graphTurn: GraphTurn,
+  scopedDb: ScopedDb,
+  write: DecisionRowWrite,
+) =>
+  await graphTurn(async () => {
+    write.signal?.throwIfAborted();
+    return await writeDecisionRowWithSlug(scopedDb, write);
+  });
 
 const provenanceDecisionId = (
   input: ProcessDecisionAttemptOptions["inputProvenance"],
@@ -382,6 +401,7 @@ const runDecisionAttempt = async (
     corpus,
     corpusBatch,
     polarityRules,
+    graphTurn = takeGraphTurnAlone,
     signal,
     s3Policy,
   }: ProcessDecisionAttemptOptions,
@@ -536,7 +556,7 @@ const runDecisionAttempt = async (
         rawWrites,
         judges,
       };
-      const rowWrite = await writeDecisionRowWithSlug(scopedDb, write);
+      const rowWrite = await writeRowInTurn(graphTurn, scopedDb, write);
       if (Result.isError(rowWrite)) {
         return Result.err(rowWrite.error);
       }
