@@ -16,7 +16,7 @@ import { createPortal } from "react-dom";
 
 import { create } from "zustand";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { docxEditorHostKey } from "./docx-editor-host.logic";
 import type { DocxEditorDocument } from "./docx-editor-host.logic";

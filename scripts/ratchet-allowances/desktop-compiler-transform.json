@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "apps/desktop declares oxc-transform-react, the optional peer @vitejs/plugin-react loads for its React Compiler option, as apps/web does, so the desktop build resolves the compiler without relying on another workspace's install."
+}

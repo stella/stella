@@ -14,6 +14,7 @@ import {
   setPresentationPrefs,
 } from "../helpers/presentation-prefs";
 import { createProfileTestSession } from "../helpers/profile-session";
+import { newWatchedContext } from "../helpers/storm-watch-fixture";
 import { expect, test } from "../helpers/test";
 
 const sessionLocale = async (page: Page) => {
@@ -89,7 +90,7 @@ test("profile language and collapsed sidebar render in the first HTML response",
     );
 
     const storageState = await page.context().storageState();
-    const serverContext = await browser.newContext({
+    const serverContext = await newWatchedContext(browser, {
       baseURL: webBaseURL,
       javaScriptEnabled: false,
       storageState,
@@ -219,7 +220,7 @@ for (const sidebarOpen of [false, true]) {
       patch: { sidebarOpen },
     });
     // Without JavaScript the page stays the server's paint.
-    const serverContext = await browser.newContext({
+    const serverContext = await newWatchedContext(browser, {
       baseURL: webBaseURL,
       javaScriptEnabled: false,
       storageState: await page.context().storageState(),
@@ -244,7 +245,7 @@ test("a fresh visitor renders the preferred browser catalogue and explicit prefe
   baseURL,
 }) => {
   const webBaseURL = baseURL ?? "http://localhost:3000";
-  const context = await browser.newContext({
+  const context = await newWatchedContext(browser, {
     baseURL: webBaseURL,
     storageState: { cookies: [], origins: [] },
     extraHTTPHeaders: { "Accept-Language": "en;q=0.2,cs-CZ;q=0.9" },
@@ -280,7 +281,7 @@ test("a member who never picked a language sees the browser's Czech after sign-i
   baseURL,
 }) => {
   const webBaseURL = baseURL ?? "http://localhost:3000";
-  const context = await browser.newContext({
+  const context = await newWatchedContext(browser, {
     baseURL: webBaseURL,
     locale: "cs-CZ",
     storageState: { cookies: [], origins: [] },
@@ -316,7 +317,7 @@ for (const { language, sundayBasedWeekStart } of [
     browser,
     baseURL,
   }) => {
-    const context = await browser.newContext({
+    const context = await newWatchedContext(browser, {
       baseURL: baseURL ?? "http://localhost:3000",
       locale: language,
       storageState: { cookies: [], origins: [] },

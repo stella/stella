@@ -12,6 +12,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { PlusIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { useIsMobile } from "@stll/ui/use-mobile";
@@ -29,7 +30,6 @@ import {
 } from "@/features/knowledge/member/member-knowledge";
 import { openPendingPlaybookPane } from "@/features/knowledge/playbook-editor/open-pending-playbook-pane";
 import { PlaybooksPageView } from "@/features/knowledge/views/playbooks/playbooks-page-view";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { roleOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";

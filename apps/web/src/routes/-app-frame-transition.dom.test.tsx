@@ -17,7 +17,7 @@ const { QueryClient, QueryClientProvider, hashKey, useQuery, useQueryClient } =
   await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
 const { rootKeys, sessionOptions } = await import("@/lib/auth-queries");
-const { useMountEffect } = await import("@/hooks/use-effect");
+const { useMountEffect } = await import("@stll/ui/effects");
 const { memberKnowledgeKeys } = await import("@/lib/knowledge/knowledge-cache");
 const { installSessionCacheGuard, settleAuthTransition } =
   await import("@/lib/session-cache-guard");

@@ -11,6 +11,7 @@ import {
 import { useTranslations } from "use-intl";
 
 import { Avatar, AvatarFallback } from "@stll/ui/avatar";
+import { useHasMounted } from "@stll/ui/effects";
 import { CircleUserRoundIcon, PanelLeftIcon } from "@stll/ui/icons";
 import { InspectorRailIconButton } from "@stll/ui/inspector";
 import { matterChromeStyle } from "@stll/ui/matter-colors";
@@ -44,7 +45,6 @@ import {
 import { StellaWordmark } from "@/components/stella-wordmark";
 import Tooltip from "@/components/tooltip";
 import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav";
-import { useHasMounted } from "@/hooks/use-chrome-query";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { usePublicShellInboxEntryEnabled } from "@/hooks/use-inbox-preview";

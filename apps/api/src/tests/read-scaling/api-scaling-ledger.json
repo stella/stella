@@ -2975,6 +2975,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/workspaces/:workspaceId/recording-transcriptions/runs",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "POST /v1/workspaces/:workspaceId/duplicate",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },

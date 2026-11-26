@@ -6,12 +6,12 @@ import { useTranslations } from "use-intl";
 import { refiledStamp } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { useMountEffect } from "@stll/ui/effects";
 import { LoaderState } from "@stll/ui/loader";
 import { MattersNavIcon } from "@stll/ui/matter-icon";
 import { stellaToast } from "@stll/ui/toast";
 
 import { getEntityDocumentRoute } from "@/components/search-dialog.logic";
-import { useMountEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 

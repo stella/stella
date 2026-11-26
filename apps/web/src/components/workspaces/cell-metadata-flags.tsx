@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from "react";
+import { useRef } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useDebouncedCallback } from "use-debounce";
@@ -8,6 +8,7 @@ import { isReviewFlag, REVIEW_FLAG } from "@stll/api-contract";
 import type { ReviewFlag } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { useLayoutSyncEffect, useMountEffect } from "@stll/ui/effects";
 import {
   CheckCircle2Icon,
   LockIcon,
@@ -35,7 +36,6 @@ import {
   cellOverrideKey,
   useCellMetadataOverridesStore,
 } from "@/components/workspaces/cell-metadata-overrides-store";
-import { useMountEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
@@ -487,7 +487,7 @@ export const useCellMetadataFlags = ({
   const currentManualFlags = override?.manualFlags ?? metadataManualFlags;
   const isLocked = override?.locked ?? serverLocked;
 
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     const store = useCellMetadataOverridesStore.getState();
     const latestOverride = store.overrides[key];
     if (latestOverride === undefined) {
@@ -531,7 +531,7 @@ export const useCellMetadataFlags = ({
   // Once the server-side metadata catches up with what we last sent,
   // drop the in-flight base so the next flush diffs against the
   // server again.
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     if (
       lastSentRef.current !== null &&
       haveSameFlags(lastSentRef.current, metadataManualFlags)

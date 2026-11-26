@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 
 import { sleep } from "@stll/concurrency/sleep";
 import { Temporal } from "@stll/time";
+import { useMountEffect } from "@stll/ui/effects";
 import { stellaToast } from "@stll/ui/toast";
 
 import {
@@ -27,7 +28,6 @@ import type {
   GuideTour,
   GuideTourId,
 } from "@/features/guides/guide-types";
-import { useMountEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";

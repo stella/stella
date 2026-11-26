@@ -15,6 +15,7 @@ import { CHAT_SEND_INTENT } from "@stll/api-contract/chat-send-intent";
 import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { NewChatIcon, PinIcon, PlusIcon } from "@stll/ui/icons";
 import {
   LANDING_ROW_CLASS,
@@ -73,8 +74,6 @@ import {
 } from "@/features/chat/queries";
 import type { ChatHistoryItem } from "@/features/chat/queries";
 import { TeamAvatars } from "@/features/workspaces/team-avatars";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";

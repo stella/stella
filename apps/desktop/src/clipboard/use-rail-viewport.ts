@@ -1,4 +1,4 @@
-import { useCallback, useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 type RailViewport = {
   /** Distance scrolled from the rail's inline start. An RTL rail reports a
@@ -29,21 +29,18 @@ type RailViewportHandle = {
 export const useRailViewport = (): RailViewportHandle => {
   const [node, setNode] = useState<HTMLDivElement | null>(null);
 
-  const subscribe = useCallback(
-    (onChange: () => void) => {
-      if (!node) {
-        return () => undefined;
-      }
-      node.addEventListener("scroll", onChange, { passive: true });
-      const observer = new ResizeObserver(onChange);
-      observer.observe(node);
-      return () => {
-        node.removeEventListener("scroll", onChange);
-        observer.disconnect();
-      };
-    },
-    [node],
-  );
+  const subscribe = (onChange: () => void) => {
+    if (!node) {
+      return () => undefined;
+    }
+    node.addEventListener("scroll", onChange, { passive: true });
+    const observer = new ResizeObserver(onChange);
+    observer.observe(node);
+    return () => {
+      node.removeEventListener("scroll", onChange);
+      observer.disconnect();
+    };
+  };
 
   const scrollOffset = useSyncExternalStore(subscribe, () =>
     node ? Math.abs(node.scrollLeft) : 0,

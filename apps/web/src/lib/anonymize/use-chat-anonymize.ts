@@ -5,8 +5,8 @@ import type { Editor } from "@tiptap/react";
 import { useDebounce } from "use-debounce";
 
 import type { ChatAnonPair } from "@stll/anonymize-chat";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
 import { readChatDraftText } from "@/lib/anonymize/use-chat-anonymize.logic";
 import { queryView } from "@/lib/query-view.logic";

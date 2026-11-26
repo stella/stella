@@ -40,6 +40,7 @@ import {
   DESIGN_SYSTEM_CONSUMER_FILES,
   PRODUCT_FRONTEND_FILES,
   REACT_NATIVE_CONSUMER_FILES,
+  REACT_SURFACE_FILES_BEYOND_PRODUCT,
 } from "./scripts/product-frontend-files.ts";
 import { PROVIDER_CLIENT_MODULES } from "./scripts/provider-client-modules.ts";
 import reactCompilerBailouts from "./scripts/react-compiler-bailouts.json" with { type: "json" };
@@ -667,6 +668,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-constructed-fetch-object.fixture.ts", [
     "no-constructed-fetch-object/no-constructed-fetch-object",
   ]),
+  fixtureRuleOverride("no-constructed-context-value.fixture.tsx", [
+    "no-constructed-context-value/no-constructed-context-value",
+  ]),
   fixtureRuleOverride("no-ad-hoc-text-mark.fixture.tsx", [
     "no-ad-hoc-text-mark/no-ad-hoc-text-mark",
   ]),
@@ -969,6 +973,18 @@ const productUiFiles = [
 const productUiComponentFiles = productUiFiles.map((glob) =>
   glob.replace("*.{ts,tsx}", "*.tsx"),
 );
+
+// The functions the React Compiler bails out of, by file: the keys of
+// scripts/react-compiler-bailouts.json read `<file>::<function>`.
+const reactCompilerBailoutFunctions = new Map<string, string[]>();
+for (const key of Object.keys(reactCompilerBailouts)) {
+  const separator = key.indexOf("::");
+  const file = key.slice(0, separator);
+  reactCompilerBailoutFunctions.set(file, [
+    ...(reactCompilerBailoutFunctions.get(file) ?? []),
+    key.slice(separator + 2),
+  ]);
+}
 
 const browserSurfaceFiles = [
   "apps/web/src/**/*.{ts,tsx}",
@@ -1766,7 +1782,7 @@ const config = defineConfig({
     // useMountEffect is deliberately dependency-less and stays unregistered.
     "react/exhaustive-deps": [
       "error",
-      { additionalHooks: "(useExternalSyncEffect)" },
+      { additionalHooks: "(useExternalSyncEffect|useLayoutSyncEffect)" },
     ],
     // Ultracite configures only named components as arrows, leaving Oxlint's
     // function-expression default for memo callbacks in conflict with
@@ -2099,8 +2115,10 @@ const config = defineConfig({
     // Arrow components take their name from the binding.
     "react/display-name": "off",
 
-    // React Compiler memoizes context values in apps/web; the remaining
-    // hits are genuinely reactive values with no static part to hoist.
+    // The React Compiler memoizes context values where it compiles, and this
+    // built-in misses the React 19 `<XContext value>` form for an imported
+    // context. no-constructed-context-value covers the code the compiler does
+    // not reach.
     "react/jsx-no-constructed-context-values": "off",
   },
   ignorePatterns: [
@@ -2224,6 +2242,7 @@ const config = defineConfig({
     "./.oxlint-plugins/one-statement-time-per-row-write.ts",
     "./.oxlint-plugins/no-optional-chain-null-compare.ts",
     "./.oxlint-plugins/no-constructed-fetch-object.ts",
+    "./.oxlint-plugins/no-constructed-context-value.ts",
     "./.oxlint-plugins/no-hand-built-date-range-filter.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
     "./.oxlint-plugins/no-unowned-icon.ts",
@@ -3679,11 +3698,11 @@ const config = defineConfig({
       // prefer-nullish-coalescing: wants every `if (x === null) x = ...`
       // rewritten as `??=`, the exact syntax that costs the memoization.
       //
-      // Resolution: keep the `if` spelling where the compiler runs, which is
-      // apps/web/src alone; everything else keeps the stricter rule. Options are
-      // restated in full because oxlint resolves overrides by replacement, not
-      // merge.
-      files: ["apps/web/src/**/*.{ts,tsx}"],
+      // Resolution: keep the `if` spelling in the apps the compiler builds with
+      // the repo's options (web and desktop); everything else keeps the
+      // stricter rule. Options are restated in full because oxlint resolves
+      // overrides by replacement, not merge.
+      files: ["apps/web/src/**/*.{ts,tsx}", "apps/desktop/src/**/*.{ts,tsx}"],
       rules: {
         "typescript/prefer-nullish-coalescing": [
           "error",
@@ -5176,22 +5195,24 @@ const config = defineConfig({
       },
     },
     {
-      files: ["apps/web/src/hooks/use-effect.ts"],
+      files: ["packages/ui/src/effects/**"],
       rules: {
         // These generic wrappers intentionally accept opaque callbacks and
         // dependency arrays. Their call sites own dependency correctness, so
         // the compiler cannot analyze them as ordinary component hooks.
         ...reactCompilerRulesOff,
+        // They forward the caller's dependency array verbatim; exhaustive-deps
+        // checks every call site instead (`additionalHooks`).
+        "react/exhaustive-deps": "off",
       },
     },
     {
       // The React Compiler memoizes every function it compiles. A file holding
       // a function it skips keeps its manual memoization until the bailout is
       // fixed; `scripts/rc-bailouts.ts --check` guards those functions.
-      files: ["apps/web/src/**/*.{ts,tsx}"],
+      files: ["apps/web/src/**/*.{ts,tsx}", "apps/desktop/src/**/*.{ts,tsx}"],
       excludeFiles: [
         "apps/web/src/**/*.{test,spec}.{ts,tsx}",
-        "apps/web/src/hooks/use-effect.ts",
         ...new Set(
           Object.keys(reactCompilerBailouts).map((key) =>
             key.slice(0, key.indexOf("::")),
@@ -5199,6 +5220,36 @@ const config = defineConfig({
         ),
       ],
       rules: { "no-manual-memo/no-manual-memo": "error" },
+    },
+    // A function the compiler bails out of memoizes nothing, so a context
+    // value built in it is new on every render. Each file with a bailout gets
+    // the check inside the functions the baseline lists.
+    ...[...reactCompilerBailoutFunctions].map(
+      ([file, functions]): OxlintOverride => ({
+        files: [file],
+        rules: {
+          "no-constructed-context-value/no-constructed-context-value": [
+            "error",
+            { functions },
+          ],
+        },
+      }),
+    ),
+    {
+      // Sources that render uncompiled somewhere they ship: the landing,
+      // Outlook and playground apps, and the shared packages, which also
+      // render there and in their own tests. Their context values must keep
+      // their identity by hand.
+      files: [
+        "packages/*/src/**/*.tsx",
+        "apps/landing/src/**/*.tsx",
+        "apps/outlook/src/**/*.tsx",
+        "apps/playground/src/**/*.tsx",
+      ],
+      excludeFiles: ["**/*.{test,spec}.tsx", "**/__tests__/**"],
+      rules: {
+        "no-constructed-context-value/no-constructed-context-value": "error",
+      },
     },
     {
       files: [...PRODUCT_FRONTEND_FILES],
@@ -5290,6 +5341,17 @@ const config = defineConfig({
       },
     },
     {
+      // The render-loop rules the product frontend holds, on every other React
+      // surface: a fresh Zustand selector result, an unstable external-store
+      // snapshot and a ref mirrored during render loop the same way there.
+      files: [...REACT_SURFACE_FILES_BEYOND_PRODUCT],
+      rules: {
+        "no-ref-mirror/no-ref-mirror": "error",
+        "require-use-shallow/require-use-shallow": "error",
+        "require-stable-snapshot/require-stable-snapshot": "error",
+      },
+    },
+    {
       files: [...PRODUCT_FRONTEND_FILES, "apps/desktop/src/**/*.{ts,tsx}"],
       excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
       rules: {
@@ -5315,19 +5377,20 @@ const config = defineConfig({
       },
     },
     {
-      // Sources the React Compiler compiles: the web and MCP app bundles
-      // with the workspace packages they import, and the Expo app. The
-      // compiler skips a `use*` function that calls no hook.
+      // Sources the React Compiler compiles: the web, desktop and MCP app
+      // bundles with the workspace packages they import, and the Expo app.
+      // The compiler skips a `use*` function that calls no hook.
       files: [
         ...PRODUCT_FRONTEND_FILES,
         "packages/*/src/**/*.{ts,tsx}",
+        "apps/desktop/src/**/*.{ts,tsx}",
         "apps/mobile/src/**/*.{ts,tsx}",
       ],
       excludeFiles: [
         "**/*.{test,spec}.{ts,tsx}",
         "**/__tests__/**",
         // The compiler's own exclusion (REACT_COMPILER_EXCLUDE).
-        "**/src/hooks/use-effect.ts",
+        "packages/ui/src/effects/**",
       ],
       rules: {
         "no-hookless-use-function/no-hookless-use-function": "error",

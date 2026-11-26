@@ -20,6 +20,7 @@ import { Separator } from "@stll/ui/separator";
 import "@stll/folio-react/editor.css";
 
 import "./peek-docx.css";
+import { useExternalSyncEffect, useMountEffect } from "@stll/ui/effects";
 import { cn, composeRefs } from "@stll/ui/utils";
 
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
@@ -54,7 +55,6 @@ import {
 } from "@/components/pdf/peek/peek-pdf-print";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { DefaultPendingComponent } from "@/components/route-components";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";

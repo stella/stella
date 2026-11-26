@@ -2,11 +2,10 @@ import { useRef } from "react";
 import type { RefObject } from "react";
 
 import type { DocxEditorRef } from "@stll/folio-react";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 
 import { useActiveDocxStore } from "@/components/ai-suggestions/active-docx-store";
 import type { ActiveDocxRegistrationToken } from "@/components/ai-suggestions/active-docx-store";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 
 import type { DocxEditModeResult } from "./docx-browser-editor.logic";
 

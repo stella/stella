@@ -341,8 +341,10 @@ if (!databaseUrl || !runPostgresTests) {
         ).unwrap();
 
         // If the sequence ever changes, the injection no longer lands in
-        // the window and this test would pass without exercising it.
-        expect(transactions).toBe(4);
+        // the window and this test would pass without exercising it. The
+        // fifth is the citation-arrival drain's read of an empty queue,
+        // after the write.
+        expect(transactions).toBe(5);
 
         const row = await readDecision(id);
         expect(row?.fulltext).toBe(STORED_TEXT);

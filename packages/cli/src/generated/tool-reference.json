@@ -2890,6 +2890,20 @@
   },
   {
     "access": "write",
+    "command": ["capability", "recording-transcriptions", "runs-create"],
+    "description": "Start a background transcription of a recording in the matter and save the transcript as a new document beside it.",
+    "name": "capability:recording-transcriptions.runs.create",
+    "title": "recording-transcriptions.runs.create"
+  },
+  {
+    "access": "read",
+    "command": ["capability", "recording-transcriptions", "runs-get"],
+    "description": "Read a recording transcription run and its progress.",
+    "name": "capability:recording-transcriptions.runs.get",
+    "title": "recording-transcriptions.runs.get"
+  },
+  {
+    "access": "write",
     "command": ["capability", "reports", "builtins-clone"],
     "description": "Copy one built-in report template into the organization so it can be edited in Template Studio and picked like any other template. Pass the built-in's key. The clone keeps the built-in's fill manifest verbatim, so it fills identically, and its name gains a (copy) suffix when a template of that name already exists.",
     "name": "capability:reports.builtins.clone",

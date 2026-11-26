@@ -4,9 +4,8 @@ import type { Cell, Row, XlsxSelectionState } from "@silurus/ooxml/xlsx";
 import { panic } from "better-result";
 
 import type { OfficeCitationLocator } from "@stll/api-contract";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
 import { ClientOperationError } from "@/lib/errors/client";
 

@@ -1,6 +1,7 @@
 import { useRef } from "react";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@stll/ui/effects";
+
 import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { NotApiErrorEnvelope } from "@/lib/analytics/types";

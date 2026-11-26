@@ -4,9 +4,9 @@ import type { RefObject } from "react";
 import { panic } from "better-result";
 
 import { fitWidthZoom } from "@stll/folio-core/paged-layout/fitWidthZoom";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { DOCX_PAGE_WIDTH } from "@/components/docx/docx-page.logic";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 // Target the typical Word text area (page minus ~1-inch margins on
 // each side at 96 DPI). Fitting to this rather than the full 816px

@@ -1,5 +1,6 @@
-import { useLayoutEffect, useState } from "react";
+import { useState } from "react";
 
+import { useObservedValue } from "../effects/dom";
 import { resolveInlineOverflow } from "../lib/inline-overflow";
 
 /**
@@ -56,8 +57,8 @@ type UseInlineOverflowOptions = {
  * active item changes, or the items change order: swapping two items keeps
  * the measuring row's size, which no observer reports.
  *
- * The first count is taken in a layout effect, in the same task that commits
- * the row: a `ResizeObserver` reports only at the browser's next rendering
+ * The first count is taken before paint (`useObservedValue` subscribes in a
+ * layout effect), in the same task that commits the row: a `ResizeObserver` reports only at the browser's next rendering
  * update, and until that count lands the row would hold every item, the last
  * ones clipped, for a paint or any script that reads the layout to see.
  */
@@ -69,57 +70,59 @@ export const useInlineOverflow = ({
   const order = itemKeys.join(KEY_SEPARATOR);
   const [container, setContainer] = useState<HTMLElement | null>(null);
   const [measure, setMeasure] = useState<HTMLElement | null>(null);
-  const [visibleCount, setVisibleCount] = useState(itemCount);
-  const [measured, setMeasured] = useState(false);
+  // How many items fit, once the row has been measured; `null` until then.
+  const measuredCount = useObservedValue<HTMLElement, number | null>(
+    container,
+    (row, emit) => {
+      if (measure === null) {
+        return () => undefined;
+      }
 
-  useLayoutEffect(() => {
-    if (!container || !measure) {
-      return undefined;
-    }
+      const keys = order === "" ? [] : order.split(KEY_SEPARATOR);
 
-    const keys = order === "" ? [] : order.split(KEY_SEPARATOR);
+      const recompute = () => {
+        const copies = Array.from(
+          measure.querySelectorAll(`[${INLINE_OVERFLOW_ITEM_ATTRIBUTE}]`),
+          (copy) => ({
+            key: copy.getAttribute(INLINE_OVERFLOW_ITEM_ATTRIBUTE),
+            box: copy.getBoundingClientRect(),
+          }),
+        );
+        const boxByKey = new Map(copies.map(({ key, box }) => [key, box]));
+        const trigger = measure.querySelector(
+          `[${INLINE_OVERFLOW_TRIGGER_ATTRIBUTE}]`,
+        );
 
-    const recompute = () => {
-      const copies = Array.from(
-        measure.querySelectorAll(`[${INLINE_OVERFLOW_ITEM_ATTRIBUTE}]`),
-        (copy) => ({
-          key: copy.getAttribute(INLINE_OVERFLOW_ITEM_ATTRIBUTE),
-          box: copy.getBoundingClientRect(),
-        }),
-      );
-      const boxByKey = new Map(copies.map(({ key, box }) => [key, box]));
-      const trigger = measure.querySelector(
-        `[${INLINE_OVERFLOW_TRIGGER_ATTRIBUTE}]`,
-      );
+        emit(
+          resolveInlineOverflow({
+            activeIndex,
+            availableWidth: row.getBoundingClientRect().width,
+            gap: itemGap(copies.map(({ box }) => box)),
+            itemWidths: keys.map((key) => boxByKey.get(key)?.width ?? 0),
+            triggerWidth: trigger?.getBoundingClientRect().width ?? 0,
+          }).visibleCount,
+        );
+      };
 
-      setVisibleCount(
-        resolveInlineOverflow({
-          activeIndex,
-          availableWidth: container.getBoundingClientRect().width,
-          gap: itemGap(copies.map(({ box }) => box)),
-          itemWidths: keys.map((key) => boxByKey.get(key)?.width ?? 0),
-          triggerWidth: trigger?.getBoundingClientRect().width ?? 0,
-        }).visibleCount,
-      );
-      setMeasured(true);
-    };
-
-    recompute();
-    // Later changes (a docked pane narrows the row, a web font or a rename
-    // widens the copy) arrive through the observer.
-    const observer = new ResizeObserver(recompute);
-    observer.observe(container);
-    observer.observe(measure);
-    return () => observer.disconnect();
-  }, [activeIndex, container, measure, order]);
+      recompute();
+      // Later changes (a docked pane narrows the row, a web font or a rename
+      // widens the copy) arrive through the observer.
+      const observer = new ResizeObserver(recompute);
+      observer.observe(row);
+      observer.observe(measure);
+      return () => observer.disconnect();
+    },
+    [activeIndex, measure, order],
+    null,
+  );
 
   return {
     /** The measured row, once mounted. */
     container,
     containerRef: setContainer,
     /** Whether the row has been measured; until then every item shows. */
-    measured,
+    measured: measuredCount !== null,
     measureRef: setMeasure,
-    visibleCount: Math.min(visibleCount, itemCount),
+    visibleCount: Math.min(measuredCount ?? itemCount, itemCount),
   };
 };

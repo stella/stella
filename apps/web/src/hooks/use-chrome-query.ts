@@ -1,5 +1,3 @@
-import { useState } from "react";
-
 import { useQuery } from "@tanstack/react-query";
 import type {
   DefaultError,
@@ -8,21 +6,7 @@ import type {
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import { useMountEffect } from "@/hooks/use-effect";
-
-/**
- * Returns `false` on the first render and flips to `true` after mount. The
- * single mounted-gate primitive shared by `useChromeQuery` and by chrome hooks
- * that aren't `useQuery` (e.g. `useInfiniteQuery`, `useQueries`), which compose
- * `enabled: useHasMounted() && ...` manually.
- */
-export const useHasMounted = (): boolean => {
-  const [m, setM] = useState(false);
-  useMountEffect(() => {
-    setM(true);
-  });
-  return m;
-};
+import { useHasMounted } from "@stll/ui/effects";
 
 /**
  * `useQuery` for persistent chrome (the layout shell, sidebar, inspector) that

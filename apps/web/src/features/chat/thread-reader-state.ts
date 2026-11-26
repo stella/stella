@@ -13,11 +13,11 @@ import type {
   ChatThreadPinState,
   ChatThreadReadState,
 } from "@stll/api-contract/chat";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import type { ChatThreadRef } from "@/features/chat/chat-thread-ref-types";
 import { groupedChatThreadsOptions } from "@/features/chat/queries";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { WebApiRoutes } from "@/lib/api";

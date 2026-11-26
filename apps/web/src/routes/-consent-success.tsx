@@ -1,11 +1,11 @@
 import { useTranslations } from "use-intl";
 
+import { useMountEffect } from "@stll/ui/effects";
 import { OutcomeScreen } from "@stll/ui/outcome-screen";
 import type { OutcomeDetail } from "@stll/ui/outcome-screen";
 
 import { ConsentClientMark } from "@/components/oauth-consent/client-identity";
 import type { ConsentClientIdentity } from "@/components/oauth-consent/client-identity.logic";
-import { useMountEffect } from "@/hooks/use-effect";
 import { toOAuthScopeDisplayEntries } from "@/lib/oauth-scopes";
 import { pageTitleLiteral } from "@/lib/page-title";
 

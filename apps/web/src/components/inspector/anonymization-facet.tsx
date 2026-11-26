@@ -27,6 +27,11 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useMountEffect,
+} from "@stll/ui/effects";
 import { Form } from "@stll/ui/form";
 import {
   ChevronDownIcon as ChevronDown,
@@ -56,8 +61,6 @@ import {
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";

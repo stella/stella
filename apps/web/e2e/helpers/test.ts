@@ -1,7 +1,14 @@
-import { expect, test as base } from "@playwright/test";
+import { expect } from "@playwright/test";
 import type { ConsoleMessage, Page } from "@playwright/test";
 
-import { checkStormWatch, installStormWatch } from "./storm-watch";
+import { RENDER_STORM_CANARY_TAG } from "../../src/lib/render-storm-canary";
+import { test as base } from "./storm-watch-fixture";
+
+// Every message the dev render-storm canary logs carries its tag. Such an
+// entry fails the spec whatever it tolerates or expects: storms are the
+// storm watch's to judge, and no spec may excuse one.
+const isRenderStormEntry = (entry: string) =>
+  entry.includes(`[${RENDER_STORM_CANARY_TAG}]`);
 
 export type BrowserErrorCollector = {
   entries: () => string[];
@@ -40,8 +47,6 @@ type ToleratedBrowserError = {
 
 type BrowserErrorFixtures = {
   browserErrors: BrowserErrorCollector;
-  /** Every test's pages must not storm, and must go quiet at its end. */
-  stormWatch: undefined;
 };
 
 // Transport-layer connection drops the browser reports as console errors.
@@ -131,6 +136,7 @@ export const createBrowserErrorCollector = (
       const tolerated = toleratedPatterns.splice(0);
       const unmatched = collected.filter(
         (entry) =>
+          isRenderStormEntry(entry) ||
           ![...patterns, ...tolerated].some((pattern) => pattern.test(entry)),
       );
       const unobserved = patterns.filter(
@@ -191,18 +197,6 @@ export const createBrowserErrorCollector = (
 };
 
 export const test = base.extend<BrowserErrorFixtures>({
-  // The watch must be in the context before its first page loads the app.
-  context: async ({ context }, runFixture) => {
-    await installStormWatch(context);
-    await runFixture(context);
-  },
-  stormWatch: [
-    async ({ context, page }, runFixture, testInfo) => {
-      await runFixture(undefined);
-      await checkStormWatch(context, page, testInfo);
-    },
-    { auto: true },
-  ],
   browserErrors: [
     async ({ page }, runFixture) => {
       const browserErrors = createBrowserErrorCollector();

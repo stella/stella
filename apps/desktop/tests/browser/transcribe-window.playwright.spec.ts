@@ -47,7 +47,7 @@ type Variant = {
 
 /** The page flag that keeps snapshot reads failing. */
 const SNAPSHOT_FAILS = "__TRANSCRIBE_SNAPSHOT_FAILS__";
-/** The page function that lets held cleanup and save requests answer. */
+/** The page function that lets held cleanup and save requests, and every later one, answer. */
 const RELEASE_CLEANUP = "__TRANSCRIBE_RELEASE_CLEANUP__";
 /** Where the page keeps the bytes of the last Word document saved. */
 const SAVED_DOCX = "__TRANSCRIBE_SAVED_DOCX__";
@@ -95,7 +95,11 @@ const open = async (
       let starts = 0;
       let cleanups = 0;
       const held: (() => void)[] = [];
+      // Releasing also lets every later request answer at once: a test may
+      // release before the held request has reached this stand-in.
+      let released = false;
       Reflect.set(window, releaseCleanup, () => {
+        released = true;
         for (const release of held.splice(0)) {
           release();
         }
@@ -135,7 +139,7 @@ const open = async (
         // formatted, with an instruction for whoever files it.
         transcribe_clean_up: async ({ request }) => {
           cleanups += 1;
-          if (cleanupHeld === true) {
+          if (cleanupHeld === true && !released) {
             await new Promise<void>((resolve) => {
               held.push(resolve);
             });
@@ -171,7 +175,7 @@ const open = async (
             sentBytes: 1_250_000,
             totalBytes: 2_500_000,
           });
-          if (saveHeld === true) {
+          if (saveHeld === true && !released) {
             await new Promise<void>((resolve) => {
               held.push(resolve);
             });

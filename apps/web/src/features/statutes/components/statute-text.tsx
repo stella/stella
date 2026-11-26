@@ -25,6 +25,7 @@ import { buildFulltextParagraphBlocks } from "@stll/legal-ast/case-law-reader";
 import type { Block } from "@stll/legal-ast/document-ast";
 import type { StatuteAnchorScheme } from "@stll/legal-ast/statute-anchor-scheme";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { cn } from "@stll/ui/utils";
 
@@ -36,7 +37,6 @@ import {
 } from "@/features/statutes/components/statute-text.pending";
 import { createProvisionViewTab } from "@/features/statutes/provision-inspector.logic";
 import type { StatuteMasthead as StatuteMastheadData } from "@/features/statutes/statute-reader-blocks";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 /**
  * What a provision's incoming citations are filed under: the work's own

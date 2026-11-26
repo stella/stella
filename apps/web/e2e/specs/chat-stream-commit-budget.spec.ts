@@ -14,9 +14,9 @@ import {
 // `mockAiMarker`, read by apps/api/src/dev/mock-ai-stream-kinds.ts), and the
 // page's commit rate while the response streams stays within the kind's
 // budget. The dev-only render-storm canary counts every commit of the app
-// (`RENDER_COMMIT_COUNT_GLOBAL`) and fails any spec on a sustained storm
-// through the `browserErrors` fixture. A production build has neither, so
-// there the spec does not run. A subagent's run and its status steps stream
+// (`RENDER_COMMIT_COUNT_GLOBAL`); a production build has no counter, so
+// there the spec does not run. Storms themselves are the storm watch's
+// (apps/web/e2e/helpers/storm-watch.ts), on every spec. A subagent's run and its status steps stream
 // inside the server's tool call, so the page sees none of their deltas.
 
 const KINDS = Object.keys(STREAM_CHUNK_COMMIT_BUDGET).filter(

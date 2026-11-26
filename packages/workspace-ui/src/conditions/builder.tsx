@@ -1,4 +1,4 @@
-import { createContext, use } from "react";
+import { createContext, use, useMemo } from "react";
 import type { ReactNode } from "react";
 
 import { panic } from "better-result";
@@ -179,15 +179,18 @@ export const ConditionBuilder = ({
   capabilities,
   labels,
   locale,
-}: ConditionBuilderProps) => (
-  <BuilderContext value={{ labels, locale }}>
-    <ConditionBuilderTree
-      capabilities={capabilities}
-      onChange={onChange}
-      value={value}
-    />
-  </BuilderContext>
-);
+}: ConditionBuilderProps) => {
+  const builder = useMemo(() => ({ labels, locale }), [labels, locale]);
+  return (
+    <BuilderContext value={builder}>
+      <ConditionBuilderTree
+        capabilities={capabilities}
+        onChange={onChange}
+        value={value}
+      />
+    </BuilderContext>
+  );
+};
 
 type ConditionBuilderTreeProps = Omit<
   ConditionBuilderProps,

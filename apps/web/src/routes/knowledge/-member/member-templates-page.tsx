@@ -3,6 +3,8 @@ import { useState } from "react";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { useExternalSyncEffect } from "@stll/ui/effects";
+
 import { LeaveConfirmDialog } from "@/features/knowledge/leave-confirm-dialog";
 import {
   memberKnowledgeActions,
@@ -11,7 +13,6 @@ import {
 import { KnowledgeStatusMessage } from "@/features/knowledge/views/knowledge-status-message";
 import { StyleSetPickerDialog } from "@/features/style-sets/style-set-picker-dialog";
 import type { StyleSelection } from "@/features/style-sets/style-set-picker-dialog";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";

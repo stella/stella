@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -11,6 +10,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
 
 import type { DesktopBillingDraftEffectiveMode } from "@stll/api-contract/desktop-billing-drafts";
+import { useLayoutSyncEffect } from "@stll/ui/effects";
 
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
@@ -143,12 +143,13 @@ export const useBillingDraftSettings = (
       preference: loaded.preference,
     };
   })();
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     if (!enabled) {
       consent.invalidate();
     }
   }, [enabled, consent]);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const setConsent = useCallback(
     async (value: "granted" | "revoked") => {
       const scopeKey = consent.captureScope();
@@ -212,6 +213,7 @@ export const useBillingDraftSettings = (
     [consent],
   );
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const reload = useCallback(() => {
     const current = ++request.current;
     consent.invalidate();
@@ -264,47 +266,44 @@ export const useBillingDraftSettings = (
     };
   }, [reload, consent]);
 
-  const setPreference = useCallback(
-    async (preference: string | null) => {
-      const scopeKey = consent.captureScope();
-      if (scopeKey === null) {
-        return false;
-      }
-      const startedAt = request.current;
-      const stillCurrent = () =>
-        consent.ownsScope(scopeKey) && startedAt === request.current;
-      const save = async () => {
-        const result = await Result.tryPromise(async () => {
-          const next = await writeAtCurrentRevision(
-            scopeKey,
-            stillCurrent,
-            async (revision) =>
-              invoke<unknown>("billing_draft_set_preference", {
-                scopeKey,
-                revision,
-                preference,
-              }),
-          );
-          if (next === null) {
-            return false;
-          }
-          setLoaded(loadedFrom(next));
-          return true;
-        });
-        if (result.isErr() || !result.value) {
-          reportFailure(
-            DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
-            DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
-            result.isErr() ? result.error : undefined,
-          );
+  const setPreference = async (preference: string | null) => {
+    const scopeKey = consent.captureScope();
+    if (scopeKey === null) {
+      return false;
+    }
+    const startedAt = request.current;
+    const stillCurrent = () =>
+      consent.ownsScope(scopeKey) && startedAt === request.current;
+    const save = async () => {
+      const result = await Result.tryPromise(async () => {
+        const next = await writeAtCurrentRevision(
+          scopeKey,
+          stillCurrent,
+          async (revision) =>
+            invoke<unknown>("billing_draft_set_preference", {
+              scopeKey,
+              revision,
+              preference,
+            }),
+        );
+        if (next === null) {
           return false;
         }
+        setLoaded(loadedFrom(next));
         return true;
-      };
-      return await consent.enqueue(scopeKey, save);
-    },
-    [consent],
-  );
+      });
+      if (result.isErr() || !result.value) {
+        reportFailure(
+          DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
+          DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+          result.isErr() ? result.error : undefined,
+        );
+        return false;
+      }
+      return true;
+    };
+    return await consent.enqueue(scopeKey, save);
+  };
 
   return { settings, consent, reload, setConsent, setPreference };
 };

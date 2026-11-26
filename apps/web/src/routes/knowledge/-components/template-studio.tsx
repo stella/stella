@@ -1,12 +1,4 @@
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { lazy, Suspense, useCallback, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
@@ -36,8 +28,13 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import type { BlockGestureKind } from "@/features/knowledge/views/templates/directive-kinds";
 import "@stll/folio-react/editor.css";
 
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
+import {
+  useExternalSyncEffect,
+  useLatest,
+  useLatestCallback,
+  useMountEffect,
+} from "@stll/ui/effects";
+
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -367,57 +364,7 @@ export const TemplateStudioPage = ({
     editorRef.current?.ensureEditorView({ focus: false });
   }, []);
 
-  // The document actions render in the Studio's inspector tab (its top row),
-  // not in a page toolbar — register them + the UI state they reflect. The ref
-  // indirection keeps the registered closures stable while handlers re-create
-  // per render.
-  const actionsRef = useRef<StudioActions | null>(null);
-  const setActions = useTemplateStudioStore((s) => s.setActions);
   const patchUi = useTemplateStudioStore((s) => s.patchUi);
-  useMountEffect(() => {
-    setActions({
-      toggleDirectives: () => actionsRef.current?.toggleDirectives(),
-      insertField: () => actionsRef.current?.insertField(),
-      insertCondition: () => actionsRef.current?.insertCondition(),
-      insertLoop: () => actionsRef.current?.insertLoop(),
-      insertClause: () => actionsRef.current?.insertClause(),
-      insertClauseSlot: (slotName) =>
-        actionsRef.current?.insertClauseSlot(slotName),
-      insertText: (text) => actionsRef.current?.insertText(text),
-      isCaretInLoop: () => actionsRef.current?.isCaretInLoop() ?? false,
-      makeField: () => actionsRef.current?.makeField(),
-      save: async () => (await actionsRef.current?.save()) ?? false,
-      renameFieldPath: (oldPath, newPath) =>
-        actionsRef.current?.renameFieldPath(oldPath, newPath) ?? false,
-      renameClauseSlot: (oldSlot, newSlot) =>
-        actionsRef.current?.renameClauseSlot(oldSlot, newSlot) ?? false,
-      rewriteConditionExpr: (next) =>
-        actionsRef.current?.rewriteConditionExpr(next) ?? false,
-      wrapFieldInCondition: (path) =>
-        actionsRef.current?.wrapFieldInCondition(path) ?? false,
-      rewriteFieldConditionExpr: (path, next) =>
-        actionsRef.current?.rewriteFieldConditionExpr(path, next) ?? false,
-      unwrapFieldCondition: (path) =>
-        actionsRef.current?.unwrapFieldCondition(path) ?? false,
-      deselect: () => actionsRef.current?.deselect(),
-      focusAdjacentField: (direction) =>
-        actionsRef.current?.focusAdjacentField(direction),
-      focusField: (path) => actionsRef.current?.focusField(path),
-      focusPosition: (pos) => actionsRef.current?.focusPosition(pos),
-      focusEditor: () => actionsRef.current?.focusEditor() ?? null,
-      setFillPreview: (values) => actionsRef.current?.setFillPreview(values),
-      insertExistingField: (path, formatKey) =>
-        actionsRef.current?.insertExistingField(path, formatKey),
-      insertExistingCondition: (expr) =>
-        actionsRef.current?.insertExistingCondition(expr),
-      deleteField: (path) => actionsRef.current?.deleteField(path),
-      insertRecipe: (definition) =>
-        actionsRef.current?.insertRecipe(definition),
-      setFieldRepeatable: (path, repeatable) =>
-        actionsRef.current?.setFieldRepeatable(path, repeatable) ?? false,
-    });
-    return () => setActions(null);
-  });
   useExternalSyncEffect(() => {
     patchUi({ metaLabel });
   }, [patchUi, metaLabel]);
@@ -1529,9 +1476,10 @@ export const TemplateStudioPage = ({
     return result !== null;
   };
 
-  // The studio store registry (mounted once above) holds stable trampolines
-  // that dereference actionsRef at call time, so this per-render handler set
-  // is pushed into it after commit rather than during render.
+  // The studio store registry (registered just below) holds stable
+  // trampolines that dereference actionsRef at call time, so this per-render
+  // handler set reaches them through `useLatest`, after commit rather than
+  // during render.
   const actions: StudioActions = {
     toggleDirectives: () => setShowDirectives((visible) => !visible),
     deleteField: (path) => {
@@ -1817,8 +1765,55 @@ export const TemplateStudioPage = ({
       setSelected(null);
     },
   };
-  useLayoutEffect(() => {
-    actionsRef.current = actions;
+  const actionsRef = useLatest<StudioActions | null>(actions);
+  // The document actions render in the Studio's inspector tab (its top row),
+  // not in a page toolbar — register them (the UI state they reflect is
+  // patched above). The ref indirection keeps the registered closures stable
+  // while handlers re-create per render.
+  const setActions = useTemplateStudioStore((s) => s.setActions);
+  useMountEffect(() => {
+    setActions({
+      toggleDirectives: () => actionsRef.current?.toggleDirectives(),
+      insertField: () => actionsRef.current?.insertField(),
+      insertCondition: () => actionsRef.current?.insertCondition(),
+      insertLoop: () => actionsRef.current?.insertLoop(),
+      insertClause: () => actionsRef.current?.insertClause(),
+      insertClauseSlot: (slotName) =>
+        actionsRef.current?.insertClauseSlot(slotName),
+      insertText: (text) => actionsRef.current?.insertText(text),
+      isCaretInLoop: () => actionsRef.current?.isCaretInLoop() ?? false,
+      makeField: () => actionsRef.current?.makeField(),
+      save: async () => (await actionsRef.current?.save()) ?? false,
+      renameFieldPath: (oldPath, newPath) =>
+        actionsRef.current?.renameFieldPath(oldPath, newPath) ?? false,
+      renameClauseSlot: (oldSlot, newSlot) =>
+        actionsRef.current?.renameClauseSlot(oldSlot, newSlot) ?? false,
+      rewriteConditionExpr: (next) =>
+        actionsRef.current?.rewriteConditionExpr(next) ?? false,
+      wrapFieldInCondition: (path) =>
+        actionsRef.current?.wrapFieldInCondition(path) ?? false,
+      rewriteFieldConditionExpr: (path, next) =>
+        actionsRef.current?.rewriteFieldConditionExpr(path, next) ?? false,
+      unwrapFieldCondition: (path) =>
+        actionsRef.current?.unwrapFieldCondition(path) ?? false,
+      deselect: () => actionsRef.current?.deselect(),
+      focusAdjacentField: (direction) =>
+        actionsRef.current?.focusAdjacentField(direction),
+      focusField: (path) => actionsRef.current?.focusField(path),
+      focusPosition: (pos) => actionsRef.current?.focusPosition(pos),
+      focusEditor: () => actionsRef.current?.focusEditor() ?? null,
+      setFillPreview: (values) => actionsRef.current?.setFillPreview(values),
+      insertExistingField: (path, formatKey) =>
+        actionsRef.current?.insertExistingField(path, formatKey),
+      insertExistingCondition: (expr) =>
+        actionsRef.current?.insertExistingCondition(expr),
+      deleteField: (path) => actionsRef.current?.deleteField(path),
+      insertRecipe: (definition) =>
+        actionsRef.current?.insertRecipe(definition),
+      setFieldRepeatable: (path, repeatable) =>
+        actionsRef.current?.setFieldRepeatable(path, repeatable) ?? false,
+    });
+    return () => setActions(null);
   });
 
   if (isError) {

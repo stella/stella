@@ -171,6 +171,8 @@
     "Release marketing provenance warning": ["**"],
     "Rust format": ["apps/desktop/src-tauri/**"],
     "React Compiler bailout guard": [
+      "@stll/desktop",
+      "@stll/mobile",
       "@stll/web",
       "@stll/workspace-ui",
       "@stll/ui",

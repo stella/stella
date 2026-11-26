@@ -18,9 +18,9 @@ import {
 // The storm watch: every page the shared fixture opens counts its React
 // commits against their outside causes (./storm-watch-browser.ts), on
 // development and production builds alike. At the end of each test the page
-// must also go quiet. `report` (the default while the limits are
-// calibrated) records the result on the test; `enforce` fails the test;
-// `off` skips the watch.
+// must also go quiet. `enforce` (the default) fails the test; `report`
+// only records the result on it, for calibrating the limits; `off` skips the
+// watch. The result is recorded on every test either way.
 type StormWatchMode = "off" | "report" | "enforce";
 
 class RenderStormError extends TaggedError("RenderStormError")<{
@@ -29,7 +29,7 @@ class RenderStormError extends TaggedError("RenderStormError")<{
 
 const stormWatchMode = (): StormWatchMode => {
   const requested = e2eEnv.stormWatch;
-  return requested === "off" || requested === "enforce" ? requested : "report";
+  return requested === "off" || requested === "report" ? requested : "enforce";
 };
 
 /** The annotation type calibration reads from Playwright's JSON report. */
@@ -129,6 +129,25 @@ const unstimulatedReports = (
   ];
 };
 
+// A page that runs no script (a context with JavaScript disabled) never
+// answers an evaluation; past the quiescence wait plus this margin the read
+// gives up.
+const READ_MARGIN_MS = 5000;
+
+const withReadDeadline = async <T>(reading: Promise<T>): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error("The page did not answer the storm watch"));
+    }, DEFAULT_QUIESCENCE_LIMITS.timeoutMs + READ_MARGIN_MS);
+  });
+  try {
+    return await Promise.race([reading, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
 // An open page is read whole and must go quiet; a closed one only has the
 // reports it forwarded while it lived. Forwarded reports are read after the
 // wait, so one that arrives during it still counts.
@@ -140,13 +159,15 @@ const checkPage = async (
   const closed = page.isClosed();
   if (!closed) {
     try {
-      read = await page.evaluate(readStormWatch, {
-        global: STORM_WATCH_GLOBAL,
-        ...DEFAULT_QUIESCENCE_LIMITS,
-      });
+      read = await withReadDeadline(
+        page.evaluate(readStormWatch, {
+          global: STORM_WATCH_GLOBAL,
+          ...DEFAULT_QUIESCENCE_LIMITS,
+        }),
+      );
     } catch {
-      // The page navigated away or closed while the watch waited: its
-      // forwarded reports are all there is.
+      // The page navigated away or closed while the watch waited, or it runs
+      // no script to answer: its forwarded reports are all there is.
     }
   }
   const unstimulated = unstimulatedReports(
@@ -192,12 +213,18 @@ export type StormWatchPageCheck = PageCheck & {
  */
 export const stormWatchChecks = async (
   context: BrowserContext,
-  page: Page,
+  page: Page | null,
 ): Promise<StormWatchPageCheck[]> => {
   const forwarded =
     forwardedReports.get(context) ??
     new Map<Page, StormWatchViolationReport[]>();
-  const pages = [...new Set([page, ...context.pages(), ...forwarded.keys()])];
+  const pages = [
+    ...new Set([
+      ...(page === null ? [] : [page]),
+      ...context.pages(),
+      ...forwarded.keys(),
+    ]),
+  ];
   const checks: StormWatchPageCheck[] = [];
   for (const [index, checked] of pages.entries()) {
     const result = await checkPage(checked, () => forwarded.get(checked) ?? []);
@@ -211,7 +238,7 @@ export const stormWatchChecks = async (
 /** Record every page's result on the test; fail it in `enforce` mode. */
 export const checkStormWatch = async (
   context: BrowserContext,
-  page: Page,
+  page: Page | null,
   testInfo: TestInfo,
 ) => {
   const mode = stormWatchMode();

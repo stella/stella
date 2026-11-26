@@ -10,6 +10,7 @@ import * as v from "valibot";
 
 import { apiDelete, apiGet, apiStatus, E2E_API_ORIGIN } from "../helpers/api";
 import { signInWithEmailOtp } from "../helpers/sign-in";
+import { newWatchedContext } from "../helpers/storm-watch-fixture";
 import { expect, test } from "../helpers/test";
 import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
@@ -263,7 +264,7 @@ test("a team skill is authored, used in chat, read by members, and removed", asy
 
     // 3. A member opens the team skill read-only: no enable control, and no
     //    field accepts edits.
-    const memberContext = await browser.newContext({
+    const memberContext = await newWatchedContext(browser, {
       baseURL: WEB_BASE_URL,
       storageState: await memberApi.storageState(),
     });

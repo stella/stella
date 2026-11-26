@@ -6,74 +6,21 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { Label } from "@stll/ui/label";
 import { ScrollArea } from "@stll/ui/scroll-area";
-import { Step, Steps } from "@stll/ui/steps";
 import { Switch } from "@stll/ui/switch";
-import { TruncatedText } from "@stll/ui/truncated-text";
-import { cn } from "@stll/ui/utils";
 
 /**
  * The pieces every one-choice-per-screen setup step is built from, so
- * Dictation and Activity look and read alike: the stepper above the title,
- * the title with one plain line, the screen's cards, a switch card, choice
- * cards, facts, and the line that offers to read again.
+ * Dictation and Activity look and read like the rest of setup: the title
+ * with one plain line, the screen's cards, a switch card, choice cards,
+ * facts, and the line that offers to read again. Where a screen is among
+ * the others shows in the footer's dots (`StepFooter`).
  */
 
-/** Grid columns for each number of screens, written out for Tailwind. */
-const COLUMNS: Record<number, string> = {
-  2: "grid-cols-2",
-  3: "grid-cols-3",
-  4: "grid-cols-4",
-  5: "grid-cols-5",
-};
-
-const stepStatus = (index: number, position: number) => {
-  if (index < position) {
-    return "completed";
-  }
-  return index === position ? "current" : "upcoming";
-};
-
-/** Where the step is among its screens: a short bar per screen with its
- *  name, the current one in full ink. */
-export const SetupStepper = ({
-  label,
-  names,
-  position,
-}: {
-  label: string;
-  /** Each screen's name, in order. */
-  names: readonly string[];
-  position: number;
-}) => {
-  const t = useTranslations("onboarding");
-  return (
-    <nav aria-label={label} className="mb-4">
-      <p className="text-muted-foreground mb-1.5 text-xs font-medium">
-        {label}
-        <span className="sr-only">
-          {" "}
-          {t("progress", { current: position + 1, total: names.length })}
-        </span>
-      </p>
-      <Steps
-        className={cn("list-none ps-0", COLUMNS[names.length])}
-        markerStyle="none"
-        variant="progress"
-      >
-        {names.map((name, index) => (
-          <Step
-            aria-current={index === position ? "step" : undefined}
-            className="min-w-0 ps-0 text-xs"
-            key={name}
-            status={stepStatus(index, position)}
-          >
-            <TruncatedText>{name}</TruncatedText>
-          </Step>
-        ))}
-      </Steps>
-    </nav>
-  );
-};
+/** Above the title of a setup opened on its own after the tour, such as
+ *  "New: dictation": what arrived. */
+export const IntroductionLabel = ({ children }: { children: ReactNode }) => (
+  <p className="text-muted-foreground mb-1.5 text-xs font-medium">{children}</p>
+);
 
 export const ScreenHeader = ({
   body,
@@ -90,10 +37,16 @@ export const ScreenHeader = ({
   </>
 );
 
-/** The screen's cards, scrolling inside the window when they outgrow it. */
+/**
+ * The screen's cards, scrolling inside the window when they outgrow it.
+ * The scroll clips at its edges, and a card draws its edge, its shadow and
+ * its focus ring outside its box: the cards sit one inset in from every
+ * edge, and the area reaches out by as much, so they line up with the title
+ * and still show whole.
+ */
 export const ScreenContent = ({ children }: { children: ReactNode }) => (
-  <ScrollArea axis="vertical" className="mt-4">
-    <div className="flex flex-col gap-3 pb-1">{children}</div>
+  <ScrollArea axis="vertical" className="-mx-1 mt-3">
+    <div className="flex flex-col gap-3 p-1">{children}</div>
   </ScrollArea>
 );
 

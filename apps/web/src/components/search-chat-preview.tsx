@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 
 import type { PluggableList } from "unified";
 
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { SEARCH_HIT_MARK, textMarkClass } from "@stll/ui/text-mark";
 
 import {
@@ -14,7 +15,6 @@ import {
   rehypeSearchMatches,
 } from "@/components/chat/rehype-search-matches";
 import { SearchMatchControls } from "@/components/search-match-controls";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import {
   getAdjacentSearchMatchIndex,
   getCenteredSearchMatchScrollTop,

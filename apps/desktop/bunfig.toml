@@ -8,4 +8,6 @@ preload = [
   "../../packages/scripts/src/test-event-loop-watchdog.ts",
   # Fails a test whose React tree renders in a loop.
   "../../packages/render-probe/src/dom-test-preload.ts",
+  # Tests run components with the same memoization as the Vite build.
+  "../../packages/scripts/src/react-compiler-test-preload.ts",
 ]

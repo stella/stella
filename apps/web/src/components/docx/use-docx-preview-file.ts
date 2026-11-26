@@ -2,11 +2,12 @@ import type { RefObject } from "react";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
+import { useExternalSyncEffect } from "@stll/ui/effects";
+
 import {
   readDocxDocument,
   writeDocxDocument,
 } from "@/components/docx/docx-document-cache";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { fileOptions } from "@/lib/files/queries";
 
 import { selectPreviewFile } from "./docx-browser-editor.logic";

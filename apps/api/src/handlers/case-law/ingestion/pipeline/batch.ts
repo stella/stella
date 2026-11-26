@@ -4,6 +4,10 @@ import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
+  CITATION_ARRIVAL_DRAIN_OWNER,
+  drainCitationArrivalsAfterWrite,
+} from "@/api/handlers/case-law/citation-arrivals";
+import {
   CASE_LAW_BATCH_FAILURE,
   CaseLawBatchApplyError,
   prepareCaseLawIngestionBatch,
@@ -16,6 +20,7 @@ import type {
   RejectedCaseLawIngestionRecord,
 } from "@/api/handlers/case-law/ingestion/pipeline/batch-types";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import { planDecisionOrdering } from "@/api/handlers/case-law/ingestion/pipeline/decision-ordering";
 import { CASE_LAW_CORPUS_DEPENDENCIES } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import {
@@ -26,6 +31,8 @@ import {
   type IngestionFailureRow,
   writeIngestionFailureRowsTx,
 } from "@/api/handlers/case-law/ingestion/pipeline/failure-evidence-persistence";
+import { createGraphTurns } from "@/api/handlers/case-law/ingestion/pipeline/graph-turns";
+import { streamKeyedInOrder } from "@/api/handlers/case-law/ingestion/pipeline/keyed-stream";
 import {
   PROCESS_DECISION_RETRY_REASON,
   PROCESS_DECISION_STATUS,
@@ -474,6 +481,65 @@ type DecisionBatchObservation = {
   observedAt: Date;
 };
 
+/** One record's answer, as the batch folds it in record order. */
+type RecordAttempt =
+  | { type: "rejected"; record: RejectedCaseLawIngestionRecord }
+  | {
+      type: "processed";
+      input: IngestionResult;
+      recordIdentity: string | undefined;
+      processed: Result<ProcessResult, unknown>;
+      /** The signal had fired by the time the decision returned. */
+      aborted: boolean;
+    };
+
+type FoldRecordAttemptOptions = {
+  tally: BatchTally;
+  attempt: RecordAttempt;
+  sourceId: SafeId<"caseLawSource">;
+  context: BatchLogContext;
+  observation: DecisionBatchObservation;
+};
+
+/** Fold one record's answer into the tally; a stop is returned. */
+const foldRecordAttempt = ({
+  tally,
+  attempt,
+  sourceId,
+  context,
+  observation,
+}: FoldRecordAttemptOptions): DecisionBatchHalt | null => {
+  switch (attempt.type) {
+    case "rejected":
+      return rejectSourceRecord({
+        tally,
+        record: attempt.record,
+        sourceId,
+        observation,
+      });
+    case "processed": {
+      if (attempt.aborted) {
+        return { type: "aborted" };
+      }
+      const { processed, input, recordIdentity } = attempt;
+      return Result.isError(processed)
+        ? rejectDecision({
+            tally,
+            error: processed.error,
+            input,
+            recordIdentity,
+            sourceId,
+            context,
+            observation,
+          })
+        : settleDecision(tally, processed.value);
+    }
+    default:
+      attempt satisfies never;
+      return panic(`Unhandled record attempt: ${String(attempt)}`);
+  }
+};
+
 type ApplyDecisionBatchOptions = {
   batch: AdmittedDecisions;
   sourceId: SafeId<"caseLawSource">;
@@ -486,15 +552,123 @@ type ApplyDecisionBatchOptions = {
   /** Rows this batch may write before it stops, where the caller caps them. */
   insertLimit?: number | undefined;
   signal?: AbortSignal | undefined;
+  /** Most decisions written at once; {@link DECISION_BATCH_CONCURRENCY} by default. */
+  concurrency?: number | undefined;
 };
 
 /**
- * Apply decisions under one observation: each goes through `processDecision`
- * in order, their payloads join one pack flushed once they are processed,
- * and their failures are written to the ledger in one insert. A retryable
- * outcome, a database timeout, a run of rejections, the insert limit or the
- * signal stops the batch; the pack and the ledger are still written for
- * what it reached.
+ * Most decisions of one batch written at once. A decision spends most of its
+ * time on object storage and on transactions outside the citation graph
+ * lock; the graph transactions still run one at a time, and the batch's
+ * decisions take their turn for it in the process (`createGraphTurns`)
+ * rather than on a pooled connection.
+ */
+const DECISION_BATCH_CONCURRENCY = 16;
+
+/**
+ * Why a batch left records unstarted: its insert limit, then the signal, in
+ * the order the serial batch checked them before each record.
+ */
+const unstartedStop = ({
+  tally,
+  insertLimit,
+  signal,
+}: {
+  tally: BatchTally;
+  insertLimit: number | undefined;
+  signal: AbortSignal | undefined;
+}): DecisionBatchHalt => {
+  if (insertLimit !== undefined && tally.inserted >= insertLimit) {
+    return { type: "insert-limit" };
+  }
+  if (signal?.aborted === true) {
+    return { type: "aborted" };
+  }
+  return panic("A batch stopped short of its last record unasked");
+};
+
+type BatchOrdering = {
+  limit: number;
+  keysOf: (
+    record: CaseLawIngestionBatchRecord,
+    index: number,
+  ) => readonly string[];
+};
+
+const SERIAL_ORDERING: BatchOrdering = { limit: 1, keysOf: () => [] };
+
+type BatchOrderingOptions = {
+  records: readonly CaseLawIngestionBatchRecord[];
+  sourceId: SafeId<"caseLawSource">;
+  scopedDb: ScopedDb;
+  resolveSourceContract: SourceContractResolver;
+  concurrency: number;
+};
+
+/**
+ * How the batch's records may overlap. A source whose records enrich
+ * decisions another source holds is written one record at a time: what its
+ * records meet is the host's, which nothing the record states keys. So is a
+ * batch whose source contract does not resolve (each record then fails on
+ * it as the serial batch did), and one whose reach into stored decisions
+ * cannot be read or is too wide to split on.
+ */
+const batchOrdering = async ({
+  records,
+  sourceId,
+  scopedDb,
+  resolveSourceContract,
+  concurrency,
+}: BatchOrderingOptions): Promise<BatchOrdering> => {
+  // A record alone has nothing to overlap with, and needs no read to say so.
+  if (concurrency <= 1 || records.length <= 1) {
+    return SERIAL_ORDERING;
+  }
+  const contract = await Result.tryPromise({
+    try: async () => await resolveSourceContract(sourceId),
+    catch: (cause) => cause,
+  });
+  if (
+    Result.isError(contract) ||
+    contract.value.heldDecisionAttachment !== null
+  ) {
+    return SERIAL_ORDERING;
+  }
+  const planned = await Result.tryPromise({
+    try: async () =>
+      await planDecisionOrdering({
+        records,
+        sourceId,
+        contract: contract.value,
+        scopedDb,
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(planned) || planned.value === null) {
+    return SERIAL_ORDERING;
+  }
+  const keys = planned.value;
+  return {
+    limit: concurrency,
+    keysOf: (_record, index) =>
+      keys[index] ?? panic("A batch record lost its ordering key"),
+  };
+};
+
+/**
+ * Apply decisions under one observation. Each goes through `processDecision`:
+ * decisions that can reach no common row (by identity, docket, ECLI or a
+ * stored decision they both name, see `planDecisionOrdering`) are written
+ * concurrently, the others in batch order, and every answer is
+ * folded in batch order, so the tally, the ledger and where the batch stops
+ * read as a serial batch's. Their payloads join one pack flushed once they
+ * are processed, and their failures are written to the ledger in one insert.
+ *
+ * A retryable outcome, a database timeout, a run of rejections, the insert
+ * limit or the signal stops the batch: nothing starts after it, what is
+ * running finishes, and the pack and the ledger are still written for what
+ * it reached. A record past the stop that had already written its row is
+ * reported unreached, and applying the batch again finds it unchanged.
  */
 export const applyDecisionBatch = async (
   {
@@ -508,6 +682,7 @@ export const applyDecisionBatch = async (
     context,
     insertLimit,
     signal,
+    concurrency = DECISION_BATCH_CONCURRENCY,
   }: ApplyDecisionBatchOptions,
   resolveSourceContract: SourceContractResolver = createSourceContractResolver(
     scopedDb,
@@ -529,8 +704,7 @@ export const applyDecisionBatch = async (
   // Which record queued each decision's payloads, so every one is checked
   // against the pack's answer rather than only those the pack returned.
   const queued = new Map<SafeId<"caseLawDecision">, number[]>();
-  let current = 0;
-  const corpusBatch: CorpusPackBatch = {
+  const corpusBatchFor = (index: number): CorpusPackBatch => ({
     enqueue: (entry) => {
       const enqueued = pack.enqueue(entry);
       if (enqueued.isErr()) {
@@ -538,38 +712,49 @@ export const applyDecisionBatch = async (
       }
       const indexes = queued.get(entry.decisionId);
       if (indexes === undefined) {
-        queued.set(entry.decisionId, [current]);
+        queued.set(entry.decisionId, [index]);
       } else {
-        indexes.push(current);
+        indexes.push(index);
       }
       return enqueued;
     },
     flush: pack.flush,
-  };
-  let halt: DecisionBatchHalt | null = null;
-  let failureLedger: FailureLedgerWrite;
-  try {
-    for (const [index, record] of batchRecords.entries()) {
-      if (insertLimit !== undefined && tally.inserted >= insertLimit) {
-        halt = { type: "insert-limit" };
-        break;
-      }
-      if (signal?.aborted) {
-        halt = { type: "aborted" };
-        break;
-      }
-      current = index;
+  });
+  const ordering = await batchOrdering({
+    records: batchRecords,
+    sourceId,
+    scopedDb,
+    resolveSourceContract,
+    concurrency,
+  });
+  const graphTurn = createGraphTurns();
+  // Started records not yet folded may each still insert a row, so the
+  // insert limit counts them until their answer is in.
+  let started = 0;
+  let folded = 0;
+  const attempts = streamKeyedInOrder<
+    CaseLawIngestionBatchRecord,
+    RecordAttempt
+  >({
+    items: batchRecords,
+    limit: ordering.limit,
+    keysOf: ordering.keysOf,
+    admits: () =>
+      signal?.aborted !== true &&
+      // Written one at a time, a record starts only once the one before it
+      // is folded, so a stop on that one leaves it unstarted, as the serial
+      // batch did.
+      (ordering.limit > 1 || started === folded) &&
+      (insertLimit === undefined ||
+        tally.inserted + started - tally.settlements.length < insertLimit),
+    operation: async (record, index) => {
+      started++;
       if (record.type === "rejected") {
-        halt = rejectSourceRecord({ tally, record, sourceId, observation });
-        if (halt !== null) {
-          break;
-        }
-        continue;
+        return { type: "rejected", record };
       }
       const { decision: input, recordIdentity } = record;
       const attempt = await Result.tryPromise({
         try: async () =>
-          // db-await-in-loop: per-decision ingest pipeline: identity locks, corpus write, upsert, citations, ordered per observation
           await processDecision(
             {
               input,
@@ -580,35 +765,46 @@ export const applyDecisionBatch = async (
               observationOrder: observation.order,
               refresh,
               corpus,
-              corpusBatch,
+              corpusBatch: corpusBatchFor(index),
               polarityRules,
+              graphTurn,
+              citationArrivals: CITATION_ARRIVAL_DRAIN_OWNER.PAGE,
               ...(signal === undefined ? {} : { signal }),
             },
             resolveSourceContract,
           ),
         catch: (cause) => cause,
       });
-      const processed = attempt.andThen((outcome) => outcome);
-      // A caller cancellation leaves the record for replay. An operation's
-      // error without that signal remains a decision failure.
-      if (signal?.aborted) {
-        halt = { type: "aborted" };
-        break;
-      }
-      halt = Result.isError(processed)
-        ? rejectDecision({
-            tally,
-            error: processed.error,
-            input,
-            recordIdentity,
-            sourceId,
-            context,
-            observation,
-          })
-        : settleDecision(tally, processed.value);
+      return {
+        type: "processed",
+        input,
+        recordIdentity,
+        processed: attempt.andThen((outcome) => outcome),
+        // A caller cancellation leaves the record for replay. An operation's
+        // error without that signal remains a decision failure.
+        aborted: signal?.aborted === true,
+      };
+    },
+  });
+  let halt: DecisionBatchHalt | null = null;
+  let failureLedger: FailureLedgerWrite;
+  try {
+    for await (const { value: attempt } of attempts) {
+      halt = foldRecordAttempt({
+        tally,
+        attempt,
+        sourceId,
+        context,
+        observation,
+      });
+      folded++;
       if (halt !== null) {
         break;
       }
+    }
+    if (halt === null && tally.settlements.length < batchRecords.length) {
+      // The stream stopped starting records before the last one.
+      halt = unstartedStop({ tally, insertLimit, signal });
     }
   } finally {
     // Drain queued payloads independently of the admission signal.
@@ -620,13 +816,21 @@ export const applyDecisionBatch = async (
     // A flush that fails outright is the whole batch's corpus write
     // failing, counted as such: raising from a `finally` would replace
     // whatever stopped the loop and skip the failure rows below.
-    settlePack({ tally, flushed: await corpusBatch.flush(), queued, context });
+    settlePack({ tally, flushed: await pack.flush(), queued, context });
     // Written unconditionally, so a halted batch still records the failures
-    // it most needs recorded.
+    // it most needs recorded; before the arrival drain, which may wait for
+    // the citation graph.
     failureLedger = await recordIngestionFailures({
       scopedDb,
       failures: tally.failures,
       adapterKey: context.adapterKey,
+    });
+    // The citations the page's decisions answer, reopened and settled once
+    // for the page rather than once per decision. The arrivals committed with
+    // their rows, so a drain that fails leaves them for the next one.
+    await drainCitationArrivalsAfterWrite(scopedDb, {
+      step: "pipeline.applyDecisionBatch.citation_arrivals",
+      attributes: { adapterKey: context.adapterKey },
     });
   }
   if (failureLedger.type !== "written") {

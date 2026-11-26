@@ -91,6 +91,7 @@ import { playbookRunsRoute } from "@/api/handlers/playbooks/run-route";
 import { propertiesRoute } from "@/api/handlers/properties/routes";
 import { publicKnowledgeRoute } from "@/api/handlers/public-knowledge/routes";
 import { ratesRoute } from "@/api/handlers/rates/routes";
+import { recordingTranscriptionsRoute } from "@/api/handlers/recording-transcriptions/routes";
 import { reportsRoute } from "@/api/handlers/reports/routes";
 import { publicSanctionsRoute } from "@/api/handlers/sanctions/public-routes";
 import { savedSearchesRoute } from "@/api/handlers/saved-searches/routes";
@@ -233,6 +234,7 @@ export const apiRoutes = mount([
       documentReviewsRoute,
       documentReviewPassagesRoute,
       documentTranslationsRoute,
+      recordingTranscriptionsRoute,
       documentsRoute,
       bilingualTranslationsRoute,
       reportsRoute,

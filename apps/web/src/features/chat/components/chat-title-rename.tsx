@@ -4,6 +4,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { useLatestCallback, useMountEffect } from "@stll/ui/effects";
 import { AiActionIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { TruncatedText } from "@stll/ui/truncated-text";
@@ -13,9 +14,7 @@ import { InlineEdit } from "@/components/inline-edit";
 import { useRenameChatThread } from "@/features/chat/hooks/use-rename-chat-thread";
 import { useSuggestChatThreadTitle } from "@/features/chat/hooks/use-suggest-chat-thread-title";
 import { useChatRenameCommandStore } from "@/features/chat/lib/chat-rename-command-store";
-import { useMountEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";

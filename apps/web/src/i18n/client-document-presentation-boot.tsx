@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import { useMountEffect } from "@/hooks/use-effect";
+import { useMountEffect } from "@stll/ui/effects";
+
 import { loadClientDocumentPresentation } from "@/i18n/document-presentation";
 import { getTranslator } from "@/i18n/translator";
 import { detachedUserAction } from "@/lib/errors/user-toast";

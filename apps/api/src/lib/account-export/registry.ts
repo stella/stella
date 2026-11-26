@@ -202,6 +202,10 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,
   },
+  recording_transcription_runs: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,
+  },
   docx_suggestions: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,

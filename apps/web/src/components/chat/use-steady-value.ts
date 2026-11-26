@@ -1,8 +1,7 @@
 import { useState } from "react";
 
 import { Temporal } from "@stll/time";
-
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 const nowMs = () => Temporal.Now.instant().epochMilliseconds;
 

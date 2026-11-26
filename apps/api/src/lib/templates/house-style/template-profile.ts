@@ -154,6 +154,14 @@ type StyleFacts = {
   samples: readonly DocxBlock[];
 };
 
+/** Whether a list level prints a label: a number or a mark. A level in the
+ *  format `none`, or with an empty level text, counts and shows nothing. */
+const printsLabel = ({
+  numFmt,
+  lvlText,
+}: Pick<ProfileListLevel, "numFmt" | "lvlText">): boolean =>
+  numFmt !== "none" && lvlText.trim() !== "";
+
 const target = (
   { style, level }: StyleFacts,
   confidence: number,
@@ -161,7 +169,9 @@ const target = (
 ): ProfileRoleTarget => ({
   styleId: style.styleId,
   alignment: style.alignment,
-  numbering: level,
+  // A level that prints nothing numbers nothing: the style keeps its role
+  // and its place in the outline, without a list.
+  numbering: level !== null && printsLabel(level) ? level : null,
   confidence,
   evidence,
 });
@@ -233,7 +243,16 @@ const collectStyleFacts = ({
     }));
 };
 
-/** The list most numbered styles are bound to: the template's outline. */
+/** Sample paragraphs counted when two outlines are ranked. */
+const SAMPLES_RANKED_MAX = 999;
+
+/**
+ * The template's outline: of the lists with styles on two levels or more,
+ * the one its sample text is written in. A template often carries further
+ * lists with as many levels (schedules, a second language) that its sample
+ * body never uses. Among lists used alike, the one with more levels, then
+ * the one with more sample paragraphs.
+ */
 const mainListOf = (facts: readonly StyleFacts[]): StyleFacts[] => {
   const byAbstract = Map.groupBy(
     facts.filter(({ level }) => level !== null),
@@ -244,8 +263,10 @@ const mainListOf = (facts: readonly StyleFacts[]): StyleFacts[] => {
   for (const group of byAbstract.values()) {
     const levels = new Set(group.map(({ level }) => level?.ilvl)).size;
     const samples = group.reduce((sum, fact) => sum + fact.samples.length, 0);
-    // Levels first; the sample text breaks a tie between two outlines.
-    const score = levels * 1000 + samples;
+    const score =
+      (samples > 0 ? 1_000_000 : 0) +
+      levels * 1000 +
+      Math.min(samples, SAMPLES_RANKED_MAX);
     if (levels >= 2 && score > bestScore) {
       best = group;
       bestScore = score;
@@ -266,15 +287,58 @@ type OutlineRoles = Partial<
   >
 >;
 
-/** Reads the outline: counted levels are the heading and the clauses under
- *  it, the lettered level the letter items, the roman level below the
- *  points. */
-const readOutline = (outline: readonly StyleFacts[]): OutlineRoles => {
+/**
+ * The clause depths among counted levels: levels in a row, the first one
+ * directly under the heading. `1.1.` stands directly under `1.`, `1.1.1.`
+ * directly under that; a counted level further down the list, past a
+ * lettered or roman one, is not the next clause depth. `printing` are the
+ * levels of the outline that print a label, in order: a level that prints
+ * nothing does not part two depths.
+ */
+const clauseChain = (
+  counted: readonly StyleFacts[],
+  printing: readonly number[],
+  heading: StyleFacts | null,
+): StyleFacts[] => {
+  const positionOf = (fact: StyleFacts | undefined): number | undefined =>
+    fact?.level === null || fact === undefined
+      ? undefined
+      : printing.indexOf(fact.level.ilvl);
+  const chain: StyleFacts[] = [];
+  let above = heading === null ? undefined : positionOf(heading);
+  for (const fact of counted) {
+    const position = positionOf(fact);
+    if (above !== undefined && position !== above + 1) {
+      break;
+    }
+    chain.push(fact);
+    above = position;
+  }
+  return chain;
+};
+
+/** Sorts the outline's levels: the lettered and roman ones to their roles,
+ *  a top level without a label to the heading, the counted ones in order. */
+const sortOutline = (
+  outline: readonly StyleFacts[],
+): { roles: OutlineRoles; counted: StyleFacts[]; printing: number[] } => {
   const roles: OutlineRoles = {};
   const counted: StyleFacts[] = [];
+  const printing = new Set<number>();
   for (const fact of outline) {
     const numFmt = fact.level?.numFmt ?? "";
     const top = fact.level?.ilvl === 0;
+    if (fact.level !== null && !printsLabel(fact.level)) {
+      // The top level of the outline is its heading also when it prints
+      // no number; a level below that prints nothing is no depth of it.
+      if (top) {
+        roles.articleHeading ??= target(fact, CONFIDENCE.level, "listLevel");
+      }
+      continue;
+    }
+    if (fact.level !== null) {
+      printing.add(fact.level.ilvl);
+    }
     if (isLetterFormat(numFmt) && !top) {
       roles.letter ??= target(fact, CONFIDENCE.nameAndLevel, "listLevel");
     } else if (isRomanFormat(numFmt) && !top) {
@@ -288,6 +352,18 @@ const readOutline = (outline: readonly StyleFacts[]): OutlineRoles => {
       counted.push(fact);
     }
   }
+  return {
+    roles,
+    counted,
+    printing: [...printing].toSorted((left, right) => left - right),
+  };
+};
+
+/** Reads the outline: counted levels are the heading and the clauses under
+ *  it, the lettered level the letter items, the roman level below the
+ *  points. */
+const readOutline = (outline: readonly StyleFacts[]): OutlineRoles => {
+  const { roles, counted, printing } = sortOutline(outline);
   const first = counted.at(0);
   if (first === undefined) {
     return roles;
@@ -297,7 +373,8 @@ const readOutline = (outline: readonly StyleFacts[]): OutlineRoles => {
   // A level named a paragraph and printing a bare number is a clause; the
   // template then heads its sections outside this list, or not at all.
   const headsArticles =
-    words || NAME.heading.test(name) || !NAME.paragraph.test(name);
+    roles.articleHeading === undefined &&
+    (words || NAME.heading.test(name) || !NAME.paragraph.test(name));
   const clauses = headsArticles ? counted.slice(1) : counted;
   if (headsArticles) {
     roles.articleHeading = target(
@@ -309,9 +386,11 @@ const readOutline = (outline: readonly StyleFacts[]): OutlineRoles => {
       "listLevel",
     );
   }
-  const [first1, first2, first3] = clauses.map((fact) =>
-    target(fact, CONFIDENCE.nameAndLevel, "listLevel"),
-  );
+  const [first1, first2, first3] = clauseChain(
+    clauses,
+    printing,
+    headsArticles ? first : null,
+  ).map((fact) => target(fact, CONFIDENCE.nameAndLevel, "listLevel"));
   if (first1 !== undefined) {
     roles.clause1 = first1;
   }

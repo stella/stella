@@ -19,7 +19,7 @@ const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { organizationSettingsOptions } =
   await import("@/queries/organization-settings");
-const { useExternalSyncEffect } = await import("@/hooks/use-effect");
+const { useExternalSyncEffect } = await import("@stll/ui/effects");
 const { useDocxCitationCheck } = await import("./use-docx-citation-check");
 
 const ORGANIZATION_ID = "citation-org";

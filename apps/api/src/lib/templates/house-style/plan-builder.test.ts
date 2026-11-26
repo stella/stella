@@ -444,6 +444,67 @@ describe("buildTemplatePlan, automatic labels no list prints", () => {
   });
 });
 
+describe("buildTemplatePlan, citations of a level that prints punctuated words", () => {
+  // Articles `Čl. 1` to `Čl. 6`: a number-only field would show `.2`.
+  const fieldsOf = (citing: string) => {
+    const manifest = czechDecimalContract(citing);
+    const { plan, note } = build(manifest);
+    const blockId = blockIdOf(manifest, citing);
+    return {
+      citing,
+      references: (plan.references ?? []).filter(
+        (reference) => reference.blockId === blockId,
+      ),
+      unlinked: note.items.filter(
+        (item) => item.kind === "referenceUnlinked" && item.blockId === blockId,
+      ),
+    };
+  };
+
+  test("one field stands for word and number, in the citation's spelling", () => {
+    const { citing, references, unlinked } = fieldsOf(
+      "Podle čl. 3 této smlouvy platí čl. 2.1 obdobně.",
+    );
+    expect(
+      references.map(({ start, end, instruction, expectedText }) => ({
+        cited: citing.slice(start, end),
+        instruction,
+        expectedText,
+      })),
+    ).toEqual([
+      {
+        cited: "čl. 3",
+        instruction: String.raw`\n \* lower \h`,
+        expectedText: "čl. 3",
+      },
+      { cited: "2.1", instruction: String.raw`\n \h`, expectedText: "2.1" },
+    ]);
+    expect(unlinked).toEqual([]);
+  });
+
+  test("a citation at the start of a sentence needs no letter-case format", () => {
+    const { references } = fieldsOf("Čl. 3 této smlouvy se použije obdobně.");
+    expect(references).toEqual([
+      expect.objectContaining({
+        start: 0,
+        instruction: String.raw`\n \h`,
+        expectedText: "Čl. 3",
+      }),
+    ]);
+  });
+
+  test("other words, or another blank, leave the citation as text with the reason", () => {
+    expect(fieldsOf("Podle článku 3 této smlouvy.")).toMatchObject({
+      references: [],
+      unlinked: [expect.objectContaining({ reason: "punctuatedLevelWords" })],
+    });
+    expect(fieldsOf("Podle čl.\u00A03 této smlouvy.")).toMatchObject({
+      references: [],
+      unlinked: [expect.objectContaining({ reason: "blankDiffers" })],
+    });
+  });
+});
+
 describe("buildTemplatePlan, what is left unlinked", () => {
   const manifest = czechContract(
     "Viz čl. XX této smlouvy a čl. II odst. 2 této smlouvy.",
@@ -644,6 +705,68 @@ describe("buildTemplatePlan, tables and omissions", () => {
       blockId: "t0",
       hash: "ht0",
     });
+  });
+
+  test("a blank paragraph stays where it parts two tables or closes the document after one", () => {
+    const table = (id: string) =>
+      inColumns(1, ["položka"]).blocks.map((block) => ({
+        ...block,
+        id: `${id}${block.id}`,
+        hash: `h${id}`,
+        ...(block.kind === "table"
+          ? {
+              cells: (block.cells ?? []).map((cell) => ({
+                ...cell,
+                blockIds: cell.blockIds.map((blockId) => `${id}${blockId}`),
+              })),
+            }
+          : {}),
+      }));
+    const paragraphs = manifestOf(["SMLOUVA", "", "", "Text.", "", "", ""]);
+    const [title, blankA, blankB, text, blankC, blankD, blankE] =
+      paragraphs.blocks;
+    if (
+      title === undefined ||
+      blankA === undefined ||
+      blankB === undefined ||
+      text === undefined ||
+      blankC === undefined ||
+      blankD === undefined ||
+      blankE === undefined
+    ) {
+      throw new Error("fixture");
+    }
+    const blocks = [
+      title,
+      // In front of a table nothing has to stay.
+      blankA,
+      ...table("a"),
+      // Text parts these two tables: the blank one may go.
+      blankB,
+      text,
+      ...table("b"),
+      // Only blank paragraphs part these two: the first stays.
+      blankC,
+      blankD,
+      ...table("c"),
+      // And the document may not end in a table.
+      blankE,
+    ];
+    const { plan } = build({ ...paragraphs, blocks });
+    expect(plan.omit).toEqual([
+      { blockId: blankA.id, reason: "empty" },
+      { blockId: blankB.id, reason: "empty" },
+      { blockId: blankD.id, reason: "empty" },
+    ]);
+    expect(sourceItems(plan).map(({ blockId }) => blockId)).toEqual([
+      title.id,
+      "at0",
+      text.id,
+      "bt0",
+      blankC.id,
+      "ct0",
+      blankE.id,
+    ]);
   });
 
   test("a template's kept front blocks and empty contents field stand where the template has them", () => {
