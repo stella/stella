@@ -451,37 +451,65 @@ const tableSeparators = (context: Context): Set<string> => {
   return separators;
 };
 
-/**
- * The blank paragraphs that stay because a table follows the page break
- * they hold. In front of a paragraph the break becomes that paragraph's
- * page start; a table cannot be told to start a page.
- */
-const pageBreaksBeforeTables = (context: Context): Set<string> => {
-  const { topLevel, index } = context;
-  const holders = new Set<string>();
-  let holder: string | null = null;
-  for (const block of topLevel) {
-    if (block.kind === "table") {
-      if (holder !== null) {
-        holders.add(holder);
-      }
-      holder = null;
-    } else if (index.contentsBlockIds.has(block.id)) {
-      // Left out with the source's contents; a break in front passes on.
-    } else if (roleOf(context, block) === null && isBlankParagraph(block)) {
-      holder = (block.pageBreaks ?? 0) > 0 ? block.id : holder;
-    } else {
-      holder = null;
-    }
-  }
-  return holders;
-};
-
 const NEW_PAGE_STARTS: ReadonlySet<DocxSection["start"]> = new Set([
   "nextPage",
   "evenPage",
   "oddPage",
 ]);
+
+/** The section that begins after `block`, when `block` ends one. */
+const sectionAfter = (
+  { sections }: Context,
+  block: DocxBlock,
+): DocxSection | undefined =>
+  block.endsSection === true
+    ? sections.find(({ index }) => index === block.sectionIndex + 1)
+    : undefined;
+
+/** Whether the block after `block` opens a section on a new page. */
+const endsPage = (context: Context, block: DocxBlock): boolean => {
+  const next = sectionAfter(context, block);
+  return next !== undefined && NEW_PAGE_STARTS.has(next.start);
+};
+
+/** Whether a paragraph that is left out starts a page by what it holds. */
+const breaksPage = ({ pageBreaks = 0, pageBreakBefore }: DocxBlock): boolean =>
+  pageBreaks > 0 || pageBreakBefore === true;
+
+/**
+ * The blank paragraphs that stay because the source starts a page in front
+ * of a table: a table cannot be told to start one, so the last blank
+ * paragraph in front of it stays and starts the page, by the break it holds
+ * or by being told to.
+ */
+const pageHoldersBeforeTables = (context: Context): Set<string> => {
+  const { topLevel, index } = context;
+  const holders = new Set<string>();
+  let pending = false;
+  let placedAny = false;
+  let lastBlank: string | null = null;
+  for (const block of topLevel) {
+    if (block.kind === "table") {
+      if (pending && placedAny && lastBlank !== null) {
+        holders.add(lastBlank);
+      }
+      pending = false;
+      placedAny = true;
+      lastBlank = null;
+    } else if (index.contentsBlockIds.has(block.id)) {
+      pending ||= breaksPage(block);
+    } else if (roleOf(context, block) === null && isBlankParagraph(block)) {
+      pending ||= breaksPage(block);
+      lastBlank = block.id;
+    } else {
+      pending = false;
+      placedAny = true;
+      lastBlank = null;
+    }
+    pending ||= endsPage(context, block);
+  }
+  return holders;
+};
 
 /** Whether a section's page is another than the document's first has. */
 const pageDiffersFrom = (
@@ -493,27 +521,22 @@ const pageDiffersFrom = (
     base.size.width !== size.width ||
     base.size.height !== size.height);
 
-/**
- * What the end of a section after `block` means for the block that follows:
- * whether the next section begins on a new page, with a note where its
- * layout does not come along.
- */
-const sectionEndStartsPage = (
-  { sections, items }: Context,
-  block: DocxBlock,
-): boolean => {
-  const next =
-    block.endsSection === true
-      ? sections.find(({ index }) => index === block.sectionIndex + 1)
-      : undefined;
+/** Notes the section that begins after `block` when its layout does not
+ *  come along: it begins on the same page, or its page or columns are
+ *  other than the document's first section has. */
+const noteSectionAfter = (context: Context, block: DocxBlock): void => {
+  const next = sectionAfter(context, block);
   if (next === undefined) {
-    return false;
+    return;
   }
-  const base = sections.at(0);
-  const startsPage = NEW_PAGE_STARTS.has(next.start);
+  const base = context.sections.at(0);
   const pageDiffers = pageDiffersFrom(base, next);
-  if (!startsPage || pageDiffers || next.columns !== (base?.columns ?? 1)) {
-    items.push({
+  if (
+    !NEW_PAGE_STARTS.has(next.start) ||
+    pageDiffers ||
+    next.columns !== (base?.columns ?? 1)
+  ) {
+    context.items.push({
       kind: "sectionLayoutNotKept",
       afterBlockId: block.id,
       start: next.start,
@@ -521,7 +544,6 @@ const sectionEndStartsPage = (
       columns: next.columns,
     });
   }
-  return startsPage;
 };
 
 /**
@@ -531,13 +553,18 @@ const sectionEndStartsPage = (
  * new page. A paragraph that is placed carries the breaks among its runs
  * itself.
  */
-const pageStartsOf = (context: Context, placed: Placed): Set<string> => {
+const pageStartsOf = (
+  context: Context,
+  placed: Placed,
+  holders: ReadonlySet<string>,
+): Set<string> => {
   const starts = new Set<string>();
   /** A page start waits for the next block that is placed. */
   let pending = false;
   /** Nothing starts a page in front of the document's first block. */
   let placedAny = false;
   for (const block of context.topLevel) {
+    noteSectionAfter(context, block);
     if (block.kind === "table") {
       if (pending && placedAny) {
         context.items.push({
@@ -548,8 +575,18 @@ const pageStartsOf = (context: Context, placed: Placed): Set<string> => {
       }
       pending = false;
       placedAny = true;
+    } else if (holders.has(block.id)) {
+      // The page starts with this paragraph, also where the section it
+      // closes ends in front of the table. With a break of its own among
+      // its runs it needs no telling.
+      if ((block.pageBreaks ?? 0) === 0) {
+        starts.add(block.id);
+      }
+      pending = false;
+      placedAny = true;
+      continue;
     } else if (placed.omitted.has(block.id)) {
-      pending ||= (block.pageBreaks ?? 0) > 0 || block.pageBreakBefore === true;
+      pending ||= breaksPage(block);
     } else if (!placed.mergedInto.has(block.id)) {
       if ((pending || block.pageBreakBefore === true) && placedAny) {
         starts.add(block.id);
@@ -557,7 +594,7 @@ const pageStartsOf = (context: Context, placed: Placed): Set<string> => {
       pending = false;
       placedAny = true;
     }
-    pending = sectionEndStartsPage(context, block) || pending;
+    pending ||= endsPage(context, block);
   }
   return starts;
 };
@@ -565,10 +602,8 @@ const pageStartsOf = (context: Context, placed: Placed): Set<string> => {
 /** A placement for every paragraph that gets one, in document order. */
 const placeParagraphs = (context: Context): Placed => {
   const { topLevel, blockById, index, exclusions, proposalById } = context;
-  const kept = new Set([
-    ...tableSeparators(context),
-    ...pageBreaksBeforeTables(context),
-  ]);
+  const pageHolders = pageHoldersBeforeTables(context);
+  const kept = new Set([...tableSeparators(context), ...pageHolders]);
   const placed: Placed = {
     placements: [],
     placementById: new Map(),
@@ -625,7 +660,7 @@ const placeParagraphs = (context: Context): Placed => {
   for (const placement of placed.placements) {
     placed.placementById.set(placement.block.id, placement);
   }
-  placed.pageStarts = pageStartsOf(context, placed);
+  placed.pageStarts = pageStartsOf(context, placed, pageHolders);
   return placed;
 };
 

@@ -550,13 +550,35 @@ describe("buildTemplatePlan, pages the source starts", () => {
     expect(starts(plan)).toEqual(["p3"]);
     expect(notes(note, "pageStartNotKept")).toEqual([]);
 
-    // A page the source starts by formatting alone cannot be kept there.
-    const formatted = build({
+    // A section that begins on a new page with a table: the blank
+    // paragraph that closes the section before stays and starts the page.
+    const sections = [section(0, "nextPage"), section(1, "nextPage")];
+    const closing = withFacts(["SMLOUVA", "Text.", ""], {
+      2: { endsSection: true },
+    }).blocks.at(2);
+    const sectioned = build({
+      ...paragraphs,
+      blocks: [
+        title,
+        text,
+        ...(closing === undefined ? [] : [closing]),
+        ...cells,
+      ],
+      sections,
+    });
+    expect(sectioned.plan.omit).toEqual([]);
+    expect(starts(sectioned.plan)).toEqual(["p2"]);
+    expect(notes(sectioned.note, "pageStartNotKept")).toEqual([]);
+
+    // Without a blank paragraph in front of the table nothing can start
+    // the page, and the note says so.
+    const bare = build({
       ...paragraphs,
       blocks: [title, { ...text, endsSection: true }, ...cells],
-      sections: [section(0, "nextPage"), section(1, "nextPage")],
+      sections,
     });
-    expect(notes(formatted.note, "pageStartNotKept")).toEqual([
+    expect(starts(bare.plan)).toEqual([]);
+    expect(notes(bare.note, "pageStartNotKept")).toEqual([
       { kind: "pageStartNotKept", blockId: table?.id, reason: "table" },
     ]);
   });
