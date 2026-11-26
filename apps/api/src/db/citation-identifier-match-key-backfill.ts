@@ -27,6 +27,7 @@ import {
   citationIdentifierMatchKeyPendingSql,
   citationIdentifierMatchKeySql,
 } from "@/api/handlers/case-law/citation-identifier-match-key";
+import { citationMatchKeyRepairPickSql } from "@/api/lib/db/aggregate-lock";
 import { isRecord } from "@/api/lib/type-guards";
 
 import {
@@ -63,18 +64,28 @@ const STORED_KEY = render(citationIdentifierMatchKeySql(COLUMNS));
  * One batch. `$1` is the batch size and, after the first batch, `$2` the last
  * id of the previous one; the relation is a parameter only so a test can run
  * the statement against another table. Both forms walk the pending index in
- * id order and stop at the batch size.
+ * id order and stop at the batch size. With `skipLocked`, a row a writer holds
+ * is passed over rather than waited for, so one busy citation never stalls
+ * the walk (`citationMatchKeyRepairPickSql`); the pass comes back for it.
  */
 export const citationMatchKeyBatchSql = (
   relation: string,
-  { after }: { after: boolean },
+  { after, skipLocked = false }: { after: boolean; skipLocked?: boolean },
 ): string => `
   WITH picked AS MATERIALIZED (
-    SELECT id
+    ${
+      skipLocked
+        ? citationMatchKeyRepairPickSql({
+            relation,
+            pending: CITATION_MATCH_KEY_PENDING,
+            after,
+          })
+        : `SELECT id
       FROM ${relation}
      WHERE ${CITATION_MATCH_KEY_PENDING}${after ? "\n       AND id > $2::uuid" : ""}
      ORDER BY id
-     LIMIT $1
+     LIMIT $1`
+    }
   ),
   keyed AS (
     UPDATE ${relation} AS citation
@@ -117,25 +128,31 @@ const createCitationIdentifierMatchKeyBackfill = ({
       reason: "citations stored before their match key await it",
       batchSize,
       batch: async ({ tx, size, cursor }) => {
-        const { lastId, picked, keyed } = decodeBatch(
-          (cursor === null
-            ? await tx.query(
-                citationMatchKeyBatchSql('public."case_law_citations"', {
-                  after: false,
-                }),
-                [size],
+        const run = async (form: { after: boolean; skipLocked: boolean }) =>
+          decodeBatch(
+            (
+              await tx.query(
+                citationMatchKeyBatchSql('public."case_law_citations"', form),
+                form.after ? [size, cursor] : [size],
               )
-            : await tx.query(
-                citationMatchKeyBatchSql('public."case_law_citations"', {
-                  after: true,
-                }),
-                [size, cursor],
-              )
-          ).at(0),
-        );
-        return picked === 0 || lastId === null
+            ).at(0),
+          );
+        // Rows writers hold are passed over, so the walk keeps moving.
+        const free = await run({ after: cursor !== null, skipLocked: true });
+        if (free.picked > 0 && free.lastId !== null) {
+          return { cursor: free.lastId, done: false, value: free.keyed };
+        }
+        // The end of a walk that may have passed rows over: start again.
+        if (cursor !== null) {
+          return { cursor: null, done: false, value: 0 };
+        }
+        // Only held rows are left: wait for them, under the batch's lock
+        // timeout. A wait lost there leaves this pass's checkpoint pending
+        // for the next run, never a row keyed wrong.
+        const held = await run({ after: false, skipLocked: false });
+        return held.picked === 0 || held.lastId === null
           ? { cursor: null, done: true, value: 0 }
-          : { cursor: lastId, done: false, value: keyed };
+          : { cursor: null, done: false, value: held.keyed };
       },
     },
     options,
