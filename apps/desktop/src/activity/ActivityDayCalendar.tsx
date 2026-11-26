@@ -2468,6 +2468,7 @@ function useRecordedElsewhere(
     type: "loading",
   });
   const dayEntriesRequest = useRef(0);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const refresh = useCallback(() => {
     const request = ++dayEntriesRequest.current;
     invoke<DesktopDayEntriesResponse>("time_entry_day_entries", { date })
