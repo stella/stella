@@ -190,6 +190,108 @@ describe("validateTemplateProfile", () => {
     }
   });
 
+  const listStyle = (styleId: string, numId: number, ilvl: number) => ({
+    styleId,
+    name: styleId,
+    type: "paragraph" as const,
+    basedOn: "Normal",
+    numPr: { numId, ilvl },
+    outlineLvl: null,
+    alignment: null,
+    isDefault: false,
+  });
+  const listLevel = (
+    ilvl: number,
+    numFmt: string,
+    lvlText: string,
+    pStyle: string | null,
+  ) => ({
+    ilvl,
+    numFmt,
+    lvlText,
+    start: 1,
+    pStyle,
+    indent: { left: null, hanging: null, firstLine: null },
+  });
+
+  test("the outline is the list the sample text is written in, not the one with most levels", () => {
+    const template = contractTemplate();
+    // A schedule list with seven styled levels that the sample never uses.
+    template.numbering.abstractNums.push({
+      abstractNumId: 9,
+      levels: [
+        listLevel(0, "none", "", "SchTitle"),
+        listLevel(1, "none", "", "SchSubtitle"),
+        listLevel(2, "decimal", "%3.", "SchNumber1"),
+        listLevel(3, "decimal", "%3.%4", "SchNumber2"),
+        listLevel(4, "lowerLetter", "(%5)", "SchNumber3"),
+        listLevel(5, "lowerRoman", "(%6)", "SchNumber4"),
+        listLevel(6, "decimal", "(%7)", "SchNumber5"),
+      ],
+    });
+    template.numbering.nums.push({ numId: 30, abstractNumId: 9 });
+    template.styles.push(
+      listStyle("SchTitle", 30, 0),
+      listStyle("SchSubtitle", 30, 1),
+      listStyle("SchNumber1", 30, 2),
+      listStyle("SchNumber2", 30, 3),
+      listStyle("SchNumber3", 30, 4),
+      listStyle("SchNumber4", 30, 5),
+      listStyle("SchNumber5", 30, 6),
+    );
+    const { roles } = inferTemplateProfile(template);
+    expect(roles.articleHeading).toMatchObject({ styleId: "Article" });
+    expect(roles.clause1).toMatchObject({ styleId: "Clause1" });
+    expect(roles.letter).toMatchObject({ styleId: "Letter" });
+  });
+
+  test("a level that prints nothing binds no role", () => {
+    const template = contractTemplate();
+    const outline = template.numbering.abstractNums.at(-1);
+    const top = outline?.levels.at(0);
+    if (top !== undefined) {
+      top.numFmt = "none";
+      top.lvlText = "";
+    }
+    const { roles } = inferTemplateProfile(template);
+    const numbered = Object.values(roles).flatMap((role) =>
+      role?.numbering ? [role.numbering] : [],
+    );
+    expect(numbered.length).toBeGreaterThan(0);
+    expect(numbered.filter(({ numFmt }) => numFmt === "none")).toEqual([]);
+    // The article style keeps its role, without a list.
+    expect(
+      Object.values(roles).filter((role) => role?.styleId === "Article"),
+    ).toEqual([expect.objectContaining({ numbering: null })]);
+  });
+
+  test("clause depths are levels in a row: a counted level further down is not the next depth", () => {
+    const template = contractTemplate();
+    const outline = template.numbering.abstractNums.at(-1);
+    // `1.`, `1.1.`, `1.1.1.`, then a lettered and a roman level, then two
+    // counted levels that name every counter above them.
+    outline?.levels.splice(
+      6,
+      2,
+      listLevel(6, "decimal", "%1.%2.%3.%4.%5.%6.%7", "Deep7"),
+      listLevel(7, "decimal", "%1.%2.%3.%4.%5.%6.%7.%8", "Deep8"),
+    );
+    template.styles.push(listStyle("Deep7", 18, 6), listStyle("Deep8", 18, 7));
+    const { roles } = inferTemplateProfile(template);
+    expect(roles.clause1?.numbering).toMatchObject({ ilvl: 1 });
+    expect(roles.clause2?.numbering).toMatchObject({ ilvl: 2 });
+    expect(roles.clause3).toBeNull();
+    // Without the middle depth the chain ends at the first clause level.
+    outline?.levels.splice(2, 1);
+    const shallow = inferTemplateProfile({
+      ...template,
+      styles: template.styles.filter(({ styleId }) => styleId !== "Clause2"),
+    });
+    expect(shallow.roles.clause1?.numbering).toMatchObject({ ilvl: 1 });
+    expect(shallow.roles.clause2).toBeNull();
+    expect(shallow.roles.clause3).toBeNull();
+  });
+
   test("two styles on one level of the outline do not shift the clause depths", () => {
     const template = contractTemplate();
     template.styles.push({

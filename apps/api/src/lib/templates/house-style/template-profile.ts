@@ -145,6 +145,14 @@ const CONFIDENCE = {
   fallback: 0.3,
 } as const;
 
+/** Whether a list level prints a label: a number or a mark. A level in the
+ *  format `none`, or with an empty level text, counts and shows nothing. */
+const printsLabel = ({
+  numFmt,
+  lvlText,
+}: Pick<ProfileListLevel, "numFmt" | "lvlText">): boolean =>
+  numFmt !== "none" && lvlText.trim() !== "";
+
 const NO_BLOCKS: readonly DocxBlock[] = [];
 
 type StyleFacts = {
@@ -204,7 +212,13 @@ const collectStyleFacts = ({
         : levelsByAbstract
             .get(abstractNumId)
             ?.find(({ ilvl }) => ilvl === numPr.ilvl);
-    if (abstractNumId === undefined || level === undefined) {
+    // A level that prints nothing numbers nothing: a style bound to one is
+    // a style without a list.
+    if (
+      abstractNumId === undefined ||
+      level === undefined ||
+      !printsLabel(level)
+    ) {
       return null;
     }
     return {
@@ -233,7 +247,16 @@ const collectStyleFacts = ({
     }));
 };
 
-/** The list most numbered styles are bound to: the template's outline. */
+/** Sample paragraphs counted when two outlines are ranked. */
+const SAMPLES_RANKED_MAX = 999;
+
+/**
+ * The template's outline: of the lists with styles on two levels or more,
+ * the one its sample text is written in. A template often carries further
+ * lists with as many levels (schedules, a second language) that its sample
+ * body never uses. Among lists used alike, the one with more levels, then
+ * the one with more sample paragraphs.
+ */
 const mainListOf = (facts: readonly StyleFacts[]): StyleFacts[] => {
   const byAbstract = Map.groupBy(
     facts.filter(({ level }) => level !== null),
@@ -244,8 +267,10 @@ const mainListOf = (facts: readonly StyleFacts[]): StyleFacts[] => {
   for (const group of byAbstract.values()) {
     const levels = new Set(group.map(({ level }) => level?.ilvl)).size;
     const samples = group.reduce((sum, fact) => sum + fact.samples.length, 0);
-    // Levels first; the sample text breaks a tie between two outlines.
-    const score = levels * 1000 + samples;
+    const score =
+      (samples > 0 ? 1_000_000 : 0) +
+      levels * 1000 +
+      Math.min(samples, SAMPLES_RANKED_MAX);
     if (levels >= 2 && score > bestScore) {
       best = group;
       bestScore = score;
@@ -265,6 +290,24 @@ type OutlineRoles = Partial<
     ProfileRoleTarget
   >
 >;
+
+/**
+ * The clause depths among counted levels: levels in a row. `1.1.` stands
+ * directly under `1.`, `1.1.1.` directly under that; a counted level
+ * further down the list, past the lettered and roman ones, is not the next
+ * clause depth.
+ */
+const clauseChain = (counted: readonly StyleFacts[]): StyleFacts[] => {
+  const chain: StyleFacts[] = [];
+  for (const fact of counted) {
+    const above = chain.at(-1)?.level?.ilvl;
+    if (above !== undefined && fact.level?.ilvl !== above + 1) {
+      break;
+    }
+    chain.push(fact);
+  }
+  return chain;
+};
 
 /** Reads the outline: counted levels are the heading and the clauses under
  *  it, the lettered level the letter items, the roman level below the
@@ -309,7 +352,7 @@ const readOutline = (outline: readonly StyleFacts[]): OutlineRoles => {
       "listLevel",
     );
   }
-  const [first1, first2, first3] = clauses.map((fact) =>
+  const [first1, first2, first3] = clauseChain(clauses).map((fact) =>
     target(fact, CONFIDENCE.nameAndLevel, "listLevel"),
   );
   if (first1 !== undefined) {
@@ -366,10 +409,13 @@ const inferRoles = (
   const outside = facts.filter(({ style }) => !inOutline.has(style.styleId));
   const fromOutline = readOutline(outline);
 
+  // A heading style is in a list or in the document outline. One bound to
+  // a level that prints nothing is still the heading style, without a list.
   const namedHeading = byName(
     outside,
     NAME.heading,
-    ({ level, style }) => level !== null || style.outlineLvl !== null,
+    ({ level, style }) =>
+      level !== null || style.outlineLvl !== null || style.numPr !== null,
   );
   const articleHeading =
     fromOutline.articleHeading ??
