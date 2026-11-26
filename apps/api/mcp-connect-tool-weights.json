@@ -456,10 +456,10 @@
     {
       "name": "reformat_into_template",
       "nameChars": 22,
-      "descriptionChars": 607,
+      "descriptionChars": 612,
       "inputSchemaChars": 832,
-      "totalChars": 1461,
-      "estimatedTokens": 557
+      "totalChars": 1466,
+      "estimatedTokens": 558
     },
     {
       "name": "remove_matter_member",
@@ -687,7 +687,7 @@
     }
   ],
   "totals": {
-    "characters": 145920,
-    "estimatedTokens": 57921
+    "characters": 145925,
+    "estimatedTokens": 57922
   }
 }
