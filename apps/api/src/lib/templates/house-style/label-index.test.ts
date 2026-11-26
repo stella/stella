@@ -124,12 +124,24 @@ describe("buildLabelIndex", () => {
       "1. ledna 2030 nabývá smlouva účinnosti.",
       "24. Juni 2021 mit gemeinsamen Bestimmungen für die Fonds.",
       "1. January 2030 is the effective date.",
+      "24.\tJuni 2021 mit gemeinsamen Bestimmungen.",
+      "3.\tMärz",
       "Článek 5 této smlouvy se použije obdobně.",
       "Příloha č. 1 této smlouvy obsahuje ceník.",
       "V Praze dne 1. 1. 2030",
       "a. s. je akciová společnost.",
     ]);
     expect(keysOf(manifest)).toEqual(["article I", "clause I/1"]);
+  });
+
+  test("a heading that opens with a month's name is a label, behind a blank or a tab", () => {
+    const manifest = manifestOf([
+      "1.\tMay Deliveries",
+      "Text of the first article.",
+      "2. March Report",
+      "Text of the second article.",
+    ]);
+    expect(keysOf(manifest)).toHaveLength(2);
   });
 
   test("the dotted scheme: bare numbers head the articles", () => {
