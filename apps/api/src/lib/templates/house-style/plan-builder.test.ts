@@ -646,6 +646,68 @@ describe("buildTemplatePlan, tables and omissions", () => {
     });
   });
 
+  test("a blank paragraph stays where it parts two tables or closes the document after one", () => {
+    const table = (id: string) =>
+      inColumns(1, ["položka"]).blocks.map((block) => ({
+        ...block,
+        id: `${id}${block.id}`,
+        hash: `h${id}`,
+        ...(block.kind === "table"
+          ? {
+              cells: (block.cells ?? []).map((cell) => ({
+                ...cell,
+                blockIds: cell.blockIds.map((blockId) => `${id}${blockId}`),
+              })),
+            }
+          : {}),
+      }));
+    const paragraphs = manifestOf(["SMLOUVA", "", "", "Text.", "", "", ""]);
+    const [title, blankA, blankB, text, blankC, blankD, blankE] =
+      paragraphs.blocks;
+    if (
+      title === undefined ||
+      blankA === undefined ||
+      blankB === undefined ||
+      text === undefined ||
+      blankC === undefined ||
+      blankD === undefined ||
+      blankE === undefined
+    ) {
+      throw new Error("fixture");
+    }
+    const blocks = [
+      title,
+      // In front of a table nothing has to stay.
+      blankA,
+      ...table("a"),
+      // Text parts these two tables: the blank one may go.
+      blankB,
+      text,
+      ...table("b"),
+      // Only blank paragraphs part these two: the first stays.
+      blankC,
+      blankD,
+      ...table("c"),
+      // And the document may not end in a table.
+      blankE,
+    ];
+    const { plan } = build({ ...paragraphs, blocks });
+    expect(plan.omit).toEqual([
+      { blockId: blankA.id, reason: "empty" },
+      { blockId: blankB.id, reason: "empty" },
+      { blockId: blankD.id, reason: "empty" },
+    ]);
+    expect(sourceItems(plan).map(({ blockId }) => blockId)).toEqual([
+      title.id,
+      "at0",
+      text.id,
+      "bt0",
+      blankC.id,
+      "ct0",
+      blankE.id,
+    ]);
+  });
+
   test("a template's kept front blocks and empty contents field stand where the template has them", () => {
     const profile = inferTemplateProfile(
       contractTemplate({ contents: "empty" }),
