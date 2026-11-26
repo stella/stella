@@ -10,6 +10,7 @@ import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
+  beforeAll,
   beforeEach,
   describe,
   expect,
@@ -32,6 +33,7 @@ import * as entityWriter from "@/api/lib/entities/create-from-buffer";
 import { createFileKey } from "@/api/lib/files/utils";
 import { processRecordingTranscriptionRun } from "@/api/lib/recording-transcription/run-queue";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
+import type { RootRunActor } from "@/api/lib/root-scoped-db";
 import { brandPersistedRecordingTranscriptionRunId } from "@/api/lib/safe-id-boundaries";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -46,49 +48,66 @@ import { toneWav } from "./tone-wav.test-helper";
 
 const BUCKET = process.env["S3_BUCKET"] ?? "stella";
 
-const { testDb, ids } = await getRlsFixture();
-const database = asTestRaw<RlsDatabase<Transaction>>(testDb);
+type RlsFixture = Awaited<ReturnType<typeof getRlsFixture>>;
+type OrganizationMember = typeof member.$inferSelect;
+type MatterMember = typeof workspaceMembers.$inferSelect;
+
 const fakeS3 = startFakeS3();
-
-const originalOrganizationMember = (
-  await testDb
-    .select()
-    .from(member)
-    .where(eq(member.id, ids.memberA1org))
-    .limit(1)
-).at(0);
-// Leaving the organization also ends every matter membership in it, so the
-// restore covers all of them, not only the one a test removes directly.
-const originalMatterMembers = await testDb.query.workspaceMembers.findMany({
-  where: {
-    userId: { eq: ids.userA1 },
-    workspaceId: { in: [ids.wsA1, ids.wsA2] },
-  },
-});
-if (!originalOrganizationMember || originalMatterMembers.length === 0) {
-  panic("Transcription run fixture is incomplete");
-}
-// The fixture's file row is a DOCX; the run pins the file, and the reader
-// knows a recording by its bytes and the run's file name.
-const sourceKey = createFileKey({
-  organizationId: ids.orgA,
-  workspaceId: ids.wsA1,
-  fileId: ids.fileObjectA1,
-  mimeType: DOCX_MIME_TYPE,
-});
-fakeS3.put(BUCKET, sourceKey, toneWav(30), DOCX_MIME_TYPE);
-
 const runId = createSafeId<"recordingTranscriptionRun">();
-const actor = createRootRunActor(
-  {
+
+let testDb: RlsFixture["testDb"];
+let ids: RlsFixture["ids"];
+let originalOrganizationMember: OrganizationMember;
+let originalMatterMembers: MatterMember[];
+let sourceKey: string;
+let actor: RootRunActor<"recordingTranscriptionRun">;
+
+beforeAll(async () => {
+  ({ testDb, ids } = await getRlsFixture());
+  const database = asTestRaw<RlsDatabase<Transaction>>(testDb);
+
+  const organizationMember = (
+    await testDb
+      .select()
+      .from(member)
+      .where(eq(member.id, ids.memberA1org))
+      .limit(1)
+  ).at(0);
+  // Leaving the organization also ends every matter membership in it, so the
+  // restore covers all of them, not only the one a test removes directly.
+  originalMatterMembers = await testDb.query.workspaceMembers.findMany({
+    where: {
+      userId: { eq: ids.userA1 },
+      workspaceId: { in: [ids.wsA1, ids.wsA2] },
+    },
+  });
+  if (!organizationMember || originalMatterMembers.length === 0) {
+    panic("Transcription run fixture is incomplete");
+  }
+  originalOrganizationMember = organizationMember;
+
+  // The fixture's file row is a DOCX; the run pins the file, and the reader
+  // knows a recording by its bytes and the run's file name.
+  sourceKey = createFileKey({
     organizationId: ids.orgA,
     workspaceId: ids.wsA1,
-    userId: ids.userA1,
-    runId,
-  },
-  brandPersistedRecordingTranscriptionRunId,
-  database,
-);
+    fileId: ids.fileObjectA1,
+    mimeType: DOCX_MIME_TYPE,
+  });
+  fakeS3.put(BUCKET, sourceKey, toneWav(30), DOCX_MIME_TYPE);
+
+  actor = createRootRunActor(
+    {
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      runId,
+    },
+    brandPersistedRecordingTranscriptionRunId,
+    database,
+  );
+});
+
 const outputEntityId = createSafeId<"entity">();
 
 type SpyOn<T extends object, K extends keyof T> = ReturnType<
