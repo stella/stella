@@ -1,4 +1,4 @@
-// parser-output-unchanged: [pl-kis, pl-ncourt] shared capped-body reader; parsed payloads are unchanged.
+// parser-output-unchanged: shared capped-body reader; parsed payloads are unchanged.
 import { Result } from "better-result";
 
 import { BodyByteLimitError } from "@stll/fetch/body-reader";
