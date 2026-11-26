@@ -242,7 +242,15 @@ jobs:
               for (let poll = 0; ; poll += 1) {
                 for (const id of runs) {
                   if (done.has(id)) continue;
-                  const { data: run } = await github.rest.actions.getWorkflowRun({ owner, repo, run_id: id });
+                  // A run dispatched moments ago can read as 404 until it is
+                  // visible; it is polled again like one still in progress.
+                  let run;
+                  try {
+                    ({ data: run } = await github.rest.actions.getWorkflowRun({ owner, repo, run_id: id }));
+                  } catch (error) {
+                    if (error.status !== 404) throw error;
+                    continue;
+                  }
                   if (run.status === 'completed') done.set(id, run);
                 }
                 if (done.size === runs.length || poll >= polls) return done;
