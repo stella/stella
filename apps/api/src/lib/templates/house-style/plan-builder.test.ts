@@ -534,7 +534,7 @@ describe("buildTemplatePlan, pages the source starts", () => {
     ) {
       throw new Error("fixture");
     }
-    const table = cells.at(0);
+    const tableId = cells.at(0)?.id ?? "";
     const { plan, note } = build({
       ...paragraphs,
       blocks: [title, text, blank, ...cells, last],
@@ -544,7 +544,7 @@ describe("buildTemplatePlan, pages the source starts", () => {
       "p0",
       "p1",
       "p2",
-      table?.id,
+      tableId,
       "p3",
     ]);
     expect(starts(plan)).toEqual(["p3"]);
@@ -579,7 +579,7 @@ describe("buildTemplatePlan, pages the source starts", () => {
     });
     expect(starts(bare.plan)).toEqual([]);
     expect(notes(bare.note, "pageStartNotKept")).toEqual([
-      { kind: "pageStartNotKept", blockId: table?.id, reason: "table" },
+      { kind: "pageStartNotKept", blockId: tableId, reason: "table" },
     ]);
   });
 
