@@ -203,6 +203,7 @@ const CONFIDENCE = {
 } as const;
 
 const NO_BLOCKS: readonly DocxBlock[] = [];
+const NO_FINDINGS: readonly TemplateHealthFinding[] = [];
 
 type StyleFacts = {
   style: TemplateStyle;
@@ -889,7 +890,7 @@ const levelsSetApart = (
     // A level of its own kind first (a clause for a clause, an item for
     // an item), then the nearest, the outer one of two.
     const otherKind = (other: number): number =>
-      Number(other < ITEM_DEPTH !== depth < ITEM_DEPTH);
+      other < ITEM_DEPTH === depth < ITEM_DEPTH ? 0 : 1;
     const instead = even.toSorted(
       (left, right) =>
         otherKind(left.depth) - otherKind(right.depth) ||
@@ -1110,7 +1111,7 @@ export const validateTemplateProfile = (
     ]),
   );
   // A level set apart is placed in the style its finding names.
-  for (const finding of profile.health ?? []) {
+  for (const finding of profile.health ?? NO_FINDINGS) {
     if (
       finding.kind === "levelSetApart" &&
       !facts.has(finding.insteadStyleId)
