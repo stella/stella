@@ -32,12 +32,41 @@ export type DocxBlock = {
   /** Pictures, drawings and embedded objects anchored in the block; a block
    *  that holds one is not empty even without text. */
   inlineObjects?: number;
+  /** Page breaks among the paragraph's runs; a paragraph without text can
+   *  hold one. */
+  pageBreaks?: number;
+  /** The paragraph starts on a new page by its own formatting or its
+   *  style's. */
+  pageBreakBefore?: true;
+  /** The paragraph is the last of its section: the block after it opens
+   *  `sections[sectionIndex + 1]`. */
+  endsSection?: true;
   cells?: { row: number; col: number; blockIds: string[] }[];
+};
+
+/** One section of a document: how it begins after the one before it, and
+ *  its page, in twentieths of a point. */
+export type DocxSection = {
+  index: number;
+  start: "nextPage" | "evenPage" | "oddPage" | "nextColumn" | "continuous";
+  orientation: "portrait" | "landscape";
+  size: { width: number | null; height: number | null };
+  margins: {
+    top: number | null;
+    right: number | null;
+    bottom: number | null;
+    left: number | null;
+  };
+  columns: number;
 };
 
 export type DocxBlockManifest = {
   sha256: string;
   blocks: DocxBlock[];
+  /** The sections of the main story; a block names its own by
+   *  `sectionIndex`. Absent from a manifest read before sections were
+   *  reported. */
+  sections?: DocxSection[];
   footnotes: { id: string; text: string }[];
   endnotes: { id: string; text: string }[];
   comments: number;
@@ -144,6 +173,9 @@ export type TemplatePlanSourceItem = {
   labelAsText?: boolean;
   /** Joins the next plan item, a bare source paragraph, into this one. */
   mergeNext?: TemplatePlanMerge;
+  /** Starts the paragraph on a new page. Not for a table, nor for a block
+   *  that joins the paragraph before it. */
+  pageBreakBefore?: boolean;
   /** Table only: the paragraph style of its cells. */
   cellStyleId?: string;
   /** Table only: placement of single paragraphs inside it. */
@@ -367,6 +399,9 @@ const blockSchema = v.strictObject({
   inlineObjects: v.exactOptional(
     v.pipe(v.number(), v.integer(), v.minValue(0)),
   ),
+  pageBreaks: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+  pageBreakBefore: v.exactOptional(v.literal(true)),
+  endsSection: v.exactOptional(v.literal(true)),
   cells: v.exactOptional(
     v.array(
       v.strictObject({
@@ -380,9 +415,32 @@ const blockSchema = v.strictObject({
 
 const noteSchema = v.strictObject({ id: v.string(), text: v.string() });
 
+const twips = v.nullable(v.pipe(v.number(), v.integer()));
+
+const sectionSchema = v.strictObject({
+  index: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  start: v.picklist([
+    "nextPage",
+    "evenPage",
+    "oddPage",
+    "nextColumn",
+    "continuous",
+  ]),
+  orientation: v.picklist(["portrait", "landscape"]),
+  size: v.strictObject({ width: twips, height: twips }),
+  margins: v.strictObject({
+    top: twips,
+    right: twips,
+    bottom: twips,
+    left: twips,
+  }),
+  columns: v.pipe(v.number(), v.integer(), v.minValue(1)),
+});
+
 const manifestSchema = v.strictObject({
   sha256: v.string(),
   blocks: v.array(blockSchema),
+  sections: v.exactOptional(v.array(sectionSchema)),
   footnotes: v.array(noteSchema),
   endnotes: v.array(noteSchema),
   comments: v.pipe(v.number(), v.integer(), v.minValue(0)),

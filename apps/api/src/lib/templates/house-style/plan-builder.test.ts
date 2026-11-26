@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import type {
+  DocxBlock,
   DocxBlockManifest,
+  DocxSection,
   TemplatePlan,
   TemplatePlanSourceItem,
 } from "@/api/lib/templates/house-style/folio-contract";
@@ -441,6 +443,166 @@ describe("buildTemplatePlan, automatic labels no list prints", () => {
         expect(build(contract, mode).labelsNotKept).toEqual([]);
       }
     }
+  });
+});
+
+describe("buildTemplatePlan, pages the source starts", () => {
+  /** A manifest of paragraphs with the break facts given by position. */
+  const withFacts = (
+    texts: readonly string[],
+    facts: Readonly<Record<number, Partial<DocxBlock>>>,
+    sections?: DocxSection[],
+  ): DocxBlockManifest => {
+    const manifest = manifestOf(texts);
+    return {
+      ...manifest,
+      blocks: manifest.blocks.map((block, position) => ({
+        ...block,
+        ...facts[position],
+      })),
+      ...(sections === undefined ? {} : { sections }),
+    };
+  };
+  const section = (
+    index: number,
+    start: DocxSection["start"],
+    orientation: DocxSection["orientation"] = "portrait",
+  ): DocxSection => ({
+    index,
+    start,
+    orientation,
+    size:
+      orientation === "portrait"
+        ? { width: 11_906, height: 16_838 }
+        : { width: 16_838, height: 11_906 },
+    margins: { top: 1417, right: 1417, bottom: 1417, left: 1417 },
+    columns: 1,
+  });
+  const starts = (plan: TemplatePlan): string[] =>
+    sourceItems(plan)
+      .filter(({ pageBreakBefore }) => pageBreakBefore === true)
+      .map(({ blockId }) => blockId);
+  const notes = (
+    note: ReturnType<typeof build>["note"],
+    kind: "pageStartNotKept" | "sectionLayoutNotKept",
+  ) => note.items.filter((item) => item.kind === kind);
+
+  test("a page break in a blank paragraph that is left out starts the next paragraph's page", () => {
+    const { plan, note } = build(
+      withFacts(["SMLOUVA", "Text.", "", "Příloha č. 1", "Seznam."], {
+        2: { pageBreaks: 1 },
+      }),
+    );
+    expect(plan.omit).toEqual([{ blockId: "p2", reason: "empty" }]);
+    expect(starts(plan)).toEqual(["p3"]);
+    expect(note.counts.pageStarts).toBe(1);
+  });
+
+  test("a paragraph's own page start is carried, except on the document's first block", () => {
+    const { plan } = build(
+      withFacts(["SMLOUVA", "Text.", "Příloha č. 1", "Seznam."], {
+        0: { pageBreakBefore: true },
+        2: { pageBreakBefore: true },
+      }),
+    );
+    expect(starts(plan)).toEqual(["p2"]);
+  });
+
+  test("in front of a table the blank paragraph stays with its break", () => {
+    const cells = inColumns(1, ["položka"]).blocks.map((block) => ({
+      ...block,
+      id: `c${block.id}`,
+      ...(block.cells === undefined
+        ? {}
+        : {
+            cells: block.cells.map((cell) => ({
+              ...cell,
+              blockIds: cell.blockIds.map((id) => `c${id}`),
+            })),
+          }),
+    }));
+    const paragraphs = withFacts(["SMLOUVA", "Text.", "", "Závěr."], {
+      2: { pageBreaks: 1 },
+      3: { pageBreakBefore: true },
+    });
+    const [title, text, blank, last] = paragraphs.blocks;
+    if (
+      title === undefined ||
+      text === undefined ||
+      blank === undefined ||
+      last === undefined
+    ) {
+      throw new Error("fixture");
+    }
+    const table = cells.at(0);
+    const { plan, note } = build({
+      ...paragraphs,
+      blocks: [title, text, blank, ...cells, last],
+    });
+    expect(plan.omit).toEqual([]);
+    expect(sourceItems(plan).map(({ blockId }) => blockId)).toEqual([
+      "p0",
+      "p1",
+      "p2",
+      table?.id,
+      "p3",
+    ]);
+    expect(starts(plan)).toEqual(["p3"]);
+    expect(notes(note, "pageStartNotKept")).toEqual([]);
+
+    // A page the source starts by formatting alone cannot be kept there.
+    const formatted = build({
+      ...paragraphs,
+      blocks: [title, { ...text, endsSection: true }, ...cells],
+      sections: [section(0, "nextPage"), section(1, "nextPage")],
+    });
+    expect(notes(formatted.note, "pageStartNotKept")).toEqual([
+      { kind: "pageStartNotKept", blockId: table?.id, reason: "table" },
+    ]);
+  });
+
+  test("a section that begins on a new page begins one; its layout is noted when it is another", () => {
+    const { plan, note } = build(
+      withFacts(
+        ["SMLOUVA", "Text.", "Příloha č. 1", "Tabulka.", "Dodatek.", "Konec."],
+        {
+          1: { endsSection: true },
+          2: { sectionIndex: 1 },
+          3: { sectionIndex: 1, endsSection: true },
+          4: { sectionIndex: 2, endsSection: true },
+          5: { sectionIndex: 3 },
+        },
+        [
+          section(0, "nextPage"),
+          section(1, "nextPage", "landscape"),
+          section(2, "oddPage"),
+          section(3, "continuous"),
+        ],
+      ),
+    );
+    expect(starts(plan)).toEqual(["p2", "p4"]);
+    expect(notes(note, "sectionLayoutNotKept")).toEqual([
+      {
+        kind: "sectionLayoutNotKept",
+        afterBlockId: "p1",
+        start: "nextPage",
+        pageDiffers: true,
+        columns: 1,
+      },
+      {
+        kind: "sectionLayoutNotKept",
+        afterBlockId: "p4",
+        start: "continuous",
+        pageDiffers: false,
+        columns: 1,
+      },
+    ]);
+  });
+
+  test("a manifest without break facts starts no page", () => {
+    const { plan, note } = build(czechContract("Text."));
+    expect(starts(plan)).toEqual([]);
+    expect(note.counts.pageStarts).toBe(0);
   });
 });
 
