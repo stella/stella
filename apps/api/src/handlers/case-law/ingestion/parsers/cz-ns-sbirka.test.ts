@@ -155,7 +155,11 @@ describe("the collection's text", () => {
       );
       lines.set(postId, texts);
       for (const text of texts) {
-        expect({ postId, text, raw: /[\t\r]| {2}|\n\n|^\s|\s$/u.test(text) }).toEqual({
+        expect({
+          postId,
+          text,
+          raw: /[\t\r]| {2}|\n\n|^\s|\s$/u.test(text),
+        }).toEqual({
           postId,
           text,
           raw: false,

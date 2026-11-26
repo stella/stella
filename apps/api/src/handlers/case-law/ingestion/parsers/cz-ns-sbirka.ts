@@ -50,8 +50,8 @@ import {
   walkInlines,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
-import { collapseHtmlWhitespace } from "@/api/lib/legal-search/document-builders/html-whitespace";
 import type { CzNsReportEdition } from "@/api/lib/legal-search/cz-ns-collection-entry";
+import { collapseHtmlWhitespace } from "@/api/lib/legal-search/document-builders/html-whitespace";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 
