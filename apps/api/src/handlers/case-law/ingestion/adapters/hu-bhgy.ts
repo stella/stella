@@ -408,6 +408,7 @@ const search = async ({
 
   const body = await readPublisherText(target.toString(), {
     fetchStage: "listing",
+    refusalScope: "source",
     adapterKey: ADAPTER_KEYS.HU_BHGY,
     signal,
     timeoutMs: ADAPTER_TIMEOUT.LIST,

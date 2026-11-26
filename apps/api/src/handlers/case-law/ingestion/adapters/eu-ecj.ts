@@ -656,6 +656,7 @@ const queryDecisions = async ({
 
   const outcome = await readPublisherText(SPARQL_URL, {
     fetchStage: "listing",
+    refusalScope: "source",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     retryPolicy: "publisher-backoff",
     method: "POST",
@@ -670,6 +671,21 @@ const queryDecisions = async ({
   });
 
   if (outcome.type !== "present") {
+    if (
+      outcome.type === "unavailable" &&
+      outcome.cause.kind === "thrown" &&
+      outcome.cause.error instanceof AdapterFetchError
+    ) {
+      return await Promise.reject(
+        new AdapterFetchError({
+          message: `CJEU SPARQL error: ${outcome.cause.error.message}`,
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          cursor: dateFrom,
+          cause: outcome.cause.error.cause ?? outcome.cause.error,
+          stopKind: outcome.cause.error.stopKind,
+        }),
+      );
+    }
     return await Promise.reject(
       unreadPublisherError({
         outcome,
@@ -3674,14 +3690,19 @@ const ecjUnreadVariant = (
       outcome: documentRefusal,
     };
   }
+  const status =
+    error.httpStatus ??
+    (error.cause instanceof AdapterFetchError
+      ? error.cause.httpStatus
+      : undefined);
   return {
     listing,
     outcome:
-      error.httpStatus === undefined
+      status === undefined
         ? { type: "unavailable", cause: { kind: "thrown", error } }
         : {
             type: "unavailable",
-            cause: { kind: "status", status: error.httpStatus },
+            cause: { kind: "status", status },
           },
   };
 };
@@ -3729,15 +3750,16 @@ const crawlEcjVariants = async ({
   signal,
 }: CrawlEcjVariantsOptions): Promise<EcjCrawledVariants> => {
   const decisions: IngestionResult[] = [];
+  const collectedUnread: UnreadListedItem[] = [];
   let itemBuildFailures = 0;
   let settledThrough: string | undefined;
   const crawled = (
     complete: boolean,
-    unreadItems: UnreadListedItem[] = [],
+    extraUnread: UnreadListedItem[] = [],
   ): EcjCrawledVariants => ({
     type: "settled",
     decisions,
-    unreadItems,
+    unreadItems: [...collectedUnread, ...extraUnread],
     itemBuildFailures,
     settledThrough,
     complete,
@@ -3768,6 +3790,10 @@ const crawlEcjVariants = async ({
         return { type: "failed", error: attempted.error };
       }
       settledThrough = variant.key;
+      if (unread.outcome.type === "refused") {
+        collectedUnread.push(unread);
+        continue;
+      }
       return crawled(false, [unread]);
     }
     const built = attempted.value;

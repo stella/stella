@@ -1046,7 +1046,11 @@ const fetchDetail = async (
   });
   if (Result.isError(read)) {
     if (signal?.aborted) {
-      return await Promise.reject(read.error);
+      return await Promise.reject(
+        read.error instanceof Error
+          ? read.error
+          : new Error(String(read.error)),
+      );
     }
     if (
       read.error instanceof AdapterFetchError &&

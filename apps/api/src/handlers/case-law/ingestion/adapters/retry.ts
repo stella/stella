@@ -130,10 +130,12 @@ export const fetchPublisher = async (
   ) {
     const retryAfter = response.headers.get("Retry-After");
     // parser-output-unchanged: ignore body cancel errors on refused responses so the HTTP refusal status still surfaces; served responses and parsed decisions are unchanged.
-    await Result.tryPromise({
-      try: async () => await response.body?.cancel(),
-      catch: (cause: unknown) => cause,
-    });
+    (
+      await Result.tryPromise({
+        try: async () => await response.body?.cancel(),
+        catch: (cause: unknown) => cause,
+      })
+    ).unwrapOr(undefined);
     throw new AdapterFetchError({
       message: `Publisher request refused: ${response.status}`,
       stopKind: INGESTION_STOP_KIND.PUBLISHER_REFUSAL,

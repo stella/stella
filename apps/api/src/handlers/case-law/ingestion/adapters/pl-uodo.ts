@@ -987,6 +987,7 @@ const search = async ({
   const url = target.toString();
   const outcome = await readPublisherBytes(url, {
     fetchStage: "listing",
+    refusalScope: "source",
     adapterKey: ADAPTER_KEYS.PL_UODO,
     signal,
     timeoutMs: ADAPTER_TIMEOUT.LIST,
