@@ -33,6 +33,7 @@ export const HOUSE_STYLE_ROLES = [
   "signature",
   "annexList",
   "annexHeading",
+  "heading",
   "body",
 ] as const;
 
@@ -68,6 +69,7 @@ const CONFIDENCE = {
   signatureByPosition: 0.6,
   continuation: 0.7,
   underHeading: 0.5,
+  sectionHeading: 0.65,
   bullet: 0.35,
   annexBody: 0.4,
   plain: 0.5,
@@ -384,6 +386,10 @@ const readFrontMatter = (
     );
   }
   if (position >= zones.preamble) {
+    // The line that heads the preamble is a heading, not a recital.
+    if (isSectionHeading(block)) {
+      return sectionHeading();
+    }
     return reading("recital", CONFIDENCE.preamble, {
       role: "body",
       confidence: CONFIDENCE.alternative,
@@ -437,6 +443,31 @@ const isTypedArticleHeading = (block: DocxBlock): boolean => {
   );
 };
 
+/**
+ * Whether a paragraph without a number heads a part of the document: a
+ * short line that is no sentence and that the source sets as a heading or
+ * centres (`Preambule`, `Definice`, `Závěrečná ustanovení` over unnumbered
+ * text). A line in brackets names something for the text that follows.
+ */
+const isSectionHeading = (block: DocxBlock): boolean => {
+  const line = block.text.trim();
+  return (
+    printedLabel(block) === null &&
+    (block.outlineLevel !== null || block.alignment === "center") &&
+    line.length <= TITLE_MAX &&
+    /\p{L}{2}/u.test(line) &&
+    !/[.;:,]$/u.test(line) &&
+    !/^\(.*\)$/su.test(line) &&
+    !SIGNATURE_MARKER.test(line)
+  );
+};
+
+const sectionHeading = (): Reading =>
+  reading("heading", CONFIDENCE.sectionHeading, {
+    role: "continuation",
+    confidence: CONFIDENCE.alternative,
+  });
+
 const readUnlabelled = (
   block: DocxBlock,
   position: number,
@@ -450,7 +481,9 @@ const readUnlabelled = (
     });
   }
   if (position >= zones.firstAnnexHeading) {
-    return reading("body", CONFIDENCE.annexBody);
+    return isSectionHeading(block)
+      ? sectionHeading()
+      : reading("body", CONFIDENCE.annexBody);
   }
   if (position >= zones.signature) {
     return SIGNATURE_MARKER.test(block.text)
@@ -473,6 +506,9 @@ const readUnlabelled = (
           role: "letter",
           confidence: CONFIDENCE.alternative,
         });
+  }
+  if (isSectionHeading(block)) {
+    return sectionHeading();
   }
   const context = index.contextByBlockId.get(block.id);
   const inProvision =

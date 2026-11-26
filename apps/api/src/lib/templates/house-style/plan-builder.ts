@@ -345,6 +345,9 @@ const STYLE_FALLBACK = {
   signature: ["body"],
   annexList: ["body"],
   annexHeading: ["title", "body"],
+  // A template without a style for headings that carry no number sets them
+  // as text, kept with what they head.
+  heading: ["continuation", "body"],
   body: [],
 } as const satisfies Record<HouseStyleRole, readonly HouseStyleRole[]>;
 
@@ -1523,7 +1526,12 @@ const headsNext = (
   ) {
     return false;
   }
-  if (block.outlineLevel !== null && !/[.:]$/u.test(text)) {
+  // A heading without a number may be set in a text style, where the
+  // template has none for it.
+  if (
+    role === "heading" ||
+    (block.outlineLevel !== null && !/[.:]$/u.test(text))
+  ) {
     return true;
   }
   const own = PROVISION_DEPTH[role];

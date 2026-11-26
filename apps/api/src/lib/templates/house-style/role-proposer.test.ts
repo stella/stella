@@ -114,6 +114,41 @@ describe("proposeBlockRoles", () => {
     });
   });
 
+  test("a short line without a number that the source centres or sets as a heading heads a part", () => {
+    const manifest = manifestOf([
+      "SMLOUVA O DÍLO",
+      "Alfa s.r.o., se sídlem Dlouhá 1, Praha, IČO: 00000001",
+      "Beta a.s., se sídlem Krátká 2, Brno, IČO: 00000002",
+      "Preambule a účel smlouvy",
+      "Strany uzavírají tuto smlouvu.",
+      "Článek I.\nPředmět",
+      "1.1\tZhotovitel provede dílo.",
+      "Zvláštní ujednání",
+      "Strany se dohodly na dalších podmínkách.",
+      "(dále jen „Podmínky“)",
+      "Dílo bude předáno do konce roku.",
+      "Bez čísla a bez zarovnání",
+    ]);
+    const centred = new Set([
+      "Preambule a účel smlouvy",
+      "Zvláštní ujednání",
+      "(dále jen „Podmínky“)",
+      "Dílo bude předáno do konce roku.",
+    ]);
+    for (const block of manifest.blocks) {
+      if (centred.has(block.text)) {
+        block.alignment = "center";
+      }
+    }
+    const roles = rolesOf(manifest);
+    expect(roles["Preambule a účel smlouvy"]).toBe("heading");
+    expect(roles["Zvláštní ujednání"]).toBe("heading");
+    // A line in brackets, a sentence, a line the source does not set apart.
+    expect(roles["(dále jen „Podmínky“)"]).toBe("continuation");
+    expect(roles["Dílo bude předáno do konce r"]).toBe("continuation");
+    expect(roles["Bez čísla a bez zarovnání"]).toBe("continuation");
+  });
+
   test("a bullet whose mark is a letter is a bullet", () => {
     const manifest = manifestOf([
       "SMLOUVA",

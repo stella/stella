@@ -246,6 +246,48 @@ describe("buildTemplatePlan, a number typed with a blank between its parts", () 
   });
 });
 
+describe("buildTemplatePlan, headings without a number", () => {
+  const manifest = manifestOf([
+    "SMLOUVA",
+    "Článek I.\nPrvní",
+    "1.1\tText ustanovení.",
+    "Zvláštní ujednání",
+    "Strany se dohodly na dalších podmínkách plnění.",
+  ]);
+  const heading = manifest.blocks.find(({ text }) =>
+    text.startsWith("Zvláštní"),
+  );
+  if (heading !== undefined) {
+    heading.alignment = "center";
+  }
+
+  test("take the template's style for them", () => {
+    const body = PROFILE.roles.body;
+    if (body === null) {
+      throw new Error("fixture");
+    }
+    const { plan } = build(manifest, "keepSource", {
+      profile: {
+        ...PROFILE,
+        roles: { ...PROFILE.roles, heading: { ...body, styleId: "Preamble" } },
+      },
+    });
+    expect(itemOf(plan, manifest, "Zvláštní")).toMatchObject({
+      styleId: "Preamble",
+      numbering: null,
+      keepNext: true,
+    });
+  });
+
+  test("are text kept with what they head where the template has no such style", () => {
+    const { plan } = build(manifest);
+    expect(itemOf(plan, manifest, "Zvláštní")).toMatchObject({
+      styleId: "Indent",
+      keepNext: true,
+    });
+  });
+});
+
 describe("buildTemplatePlan, annexes a field numbers", () => {
   test("the heading keeps its text and its field, in the annex style and in no list", () => {
     const fielded = manifestOf([
