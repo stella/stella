@@ -2569,6 +2569,10 @@ const config = defineConfig({
           (directory) => `${directory}/**/*.{ts,tsx}`,
         ),
       ],
+      // Tests drive React on purpose, including the nested update a test of
+      // the render-storm canary must cause; the DOM-test storm check holds
+      // them instead.
+      excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
       rules: {
         "no-effect-state-write/no-effect-state-write": "error",
       },
@@ -5365,6 +5369,21 @@ const config = defineConfig({
         "require-matter-option-label/require-matter-option-label": "error",
         "security-guards/no-unsanitized-href": "error",
         "stella-toast/stella-toast": "error",
+      },
+    },
+    {
+      // Raw useEffect, banned in the product frontend, is banned on every
+      // other React surface too: effects go through the sanctioned wrappers in
+      // @stll/ui/effects. Tests drive React directly and stay outside it.
+      files: [...REACT_SURFACE_FILES_BEYOND_PRODUCT],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "**/fixtures/**",
+        "**/*.fixture.{ts,tsx}",
+      ],
+      rules: {
+        "no-raw-use-effect/no-raw-use-effect": "error",
       },
     },
     {

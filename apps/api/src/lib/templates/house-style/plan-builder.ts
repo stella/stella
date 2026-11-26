@@ -36,7 +36,10 @@ import {
   isRunningText,
   printedLabel,
 } from "@/api/lib/templates/house-style/label-index";
-import type { LabelIndex } from "@/api/lib/templates/house-style/label-index";
+import type {
+  LabelEntry,
+  LabelIndex,
+} from "@/api/lib/templates/house-style/label-index";
 import {
   numberPlacements,
   ordinalOf,
@@ -66,7 +69,9 @@ import type {
   HouseStyleRole,
   RoleProposal,
 } from "@/api/lib/templates/house-style/role-proposer";
+import { LEVEL_ROLES } from "@/api/lib/templates/house-style/template-profile";
 import type {
+  ProfileListLevel,
   ProfileRoleTarget,
   TemplateHealthFinding,
   TemplateProfile,
@@ -145,9 +150,8 @@ type FormattingNoteItem =
    *  list. */
   | { kind: "labelConvertedToText"; blockId: string; reason: LabelKeptReason }
   | { kind: "roleWithoutStyle"; role: HouseStyleRole; blocks: number }
-  /** The document numbers running text like articles. `blocks` such
-   *  paragraphs keep their numbers and are set as clauses, not as
-   *  headings. */
+  /** `blocks` paragraphs numbered like articles are running text: they
+   *  keep their numbers and are set as clauses, not as headings. */
   | { kind: "articlesSetAsText"; blocks: number }
   /** The source starts a page in front of this block and the output does
    *  not: a table cannot be told to start one. */
@@ -186,6 +190,17 @@ type FormattingNoteItem =
    *  picture; the output is written without them, so numbers and text are
    *  text. The template's own findings are in its profile. */
   | { kind: "invisibleEffectsRemoved"; levels: number; styles: number }
+  /** The template's style for a numbered level sets it apart from its
+   *  sibling levels (bold, or another size). `blocks` paragraphs of the
+   *  role were placed in the sibling's style instead, on their own level of
+   *  the list. */
+  | {
+      kind: "levelStyleEvened";
+      role: HouseStyleRole;
+      styleId: string;
+      insteadStyleId: string;
+      blocks: number;
+    }
   | {
       kind: "templateBlocksKept";
       region: "keepBefore" | "contents";
@@ -321,10 +336,6 @@ type Context = {
   outline: OutlineLevels;
   /** Blocks placed under a role the template has no style for. */
   stylelessRoles: Map<HouseStyleRole, number>;
-  /** The document numbers its paragraphs at the level of articles: most of
-   *  what reads as an article heading is running text. Such a document
-   *  has clauses where another has headings. */
-  articlesRunOn: boolean;
   items: FormattingNoteItem[];
 };
 
@@ -351,46 +362,79 @@ const insideOf = (
             : [inner, ...insideOf(inner, blockById)];
         });
 
+/**
+ * The style a level the template sets apart from its siblings is placed
+ * in: the sibling's, unless the profile keeps the template's looks.
+ */
+const evenedStyle = (
+  { profile }: Context,
+  role: HouseStyleRole,
+  own: ProfileRoleTarget,
+): ProfileRoleTarget => {
+  if (profile.levelLooks === "asTemplate") {
+    return own;
+  }
+  const finding = (profile.health ?? NO_HEALTH).find(
+    (candidate) =>
+      candidate.kind === "levelSetApart" &&
+      candidate.role === role &&
+      candidate.styleId === own.styleId,
+  );
+  if (finding?.kind !== "levelSetApart") {
+    return own;
+  }
+  const sibling = LEVEL_ROLES.map((level) => profile.roles[level]).find(
+    (target) => target?.styleId === finding.insteadStyleId,
+  );
+  return {
+    ...own,
+    styleId: finding.insteadStyleId,
+    alignment: sibling?.alignment ?? own.alignment,
+  };
+};
+
 const styleTarget = (
-  { profile, stylelessRoles }: Context,
+  context: Context,
   role: HouseStyleRole,
 ): ProfileRoleTarget | null => {
+  const { profile, stylelessRoles } = context;
   const own = profile.roles[role];
   if (own !== null) {
-    return own;
+    return evenedStyle(context, role, own);
   }
   stylelessRoles.set(role, (stylelessRoles.get(role) ?? 0) + 1);
   for (const fallback of STYLE_FALLBACK[role]) {
     const target = profile.roles[fallback];
     if (target !== null) {
-      return target;
+      return evenedStyle(context, fallback, target);
     }
   }
   return null;
 };
 
 /**
- * Whether most of what the document numbers like articles is running text:
- * paragraphs `1.` to `11.` of an agreement without headings. A heading
- * whose title stands in the next paragraph is one.
+ * The level a role without one of its own stands beside: the level of the
+ * role whose style it borrows. A bullet borrows the style of unnumbered
+ * text, which has no level; it hangs where the template's lettered items
+ * do, from the start of the text they belong to.
  */
-const articlesRunOn = (context: Context): boolean => {
-  const { topLevel, index } = context;
-  const articles = topLevel.flatMap((block) => {
-    const entry = index.entryByBlockId.get(block.id);
-    return block.kind === "paragraph" &&
-      entry !== undefined &&
-      roleOf(context, block) === "articleHeading"
-      ? [{ block, entry }]
-      : [];
-  });
-  const running = articles.filter(
-    ({ block, entry }) =>
-      entry.titleBlockId === null &&
-      isRunningText(block.text.slice(entry.manualLength)),
-  );
-  return running.length > articles.length / 2;
-};
+const borrowedLevelOf = (
+  profile: TemplateProfile,
+  target: ProfileRoleTarget | null,
+  bulleted: boolean,
+): ProfileListLevel | null =>
+  target?.numbering ??
+  (bulleted ? (profile.roles.letter?.numbering ?? null) : null);
+
+/**
+ * Whether a paragraph numbered like an article is running text and no
+ * heading: clause `1.` of an agreement without headings, a numbered
+ * paragraph of a schedule. A heading whose title stands in the next
+ * paragraph is one.
+ */
+const runsOn = (block: DocxBlock, entry: LabelEntry | null): boolean =>
+  entry?.titleBlockId === null &&
+  isRunningText(block.text.slice(entry.manualLength));
 
 /** One paragraph's style and what it asks of the numbering. */
 const placementOf = (
@@ -405,7 +449,7 @@ const placementOf = (
   // Running text numbered like an article keeps the article's level, and
   // with it its number, and reads as the clause it is.
   const styleRole =
-    role === "articleHeading" && context.articlesRunOn ? "clause1" : role;
+    role === "articleHeading" && runsOn(block, entry) ? "clause1" : role;
   const target =
     entry === null && ownLevel !== null && NUMBERED_ONLY.has(role)
       ? styleTarget(context, "body")
@@ -418,6 +462,8 @@ const placementOf = (
     entry,
     styleId: target?.styleId ?? null,
     level: entry === null && !bulleted ? null : ownLevel,
+    borrowedLevel:
+      ownLevel === null ? borrowedLevelOf(profile, target, bulleted) : null,
     sourceLabel: null,
     pattern: null,
     ordinal: null,
@@ -843,6 +889,49 @@ const pageStartsOf = (
   return starts;
 };
 
+/** Where the text of a placed paragraph starts, from the left margin. */
+const textStartOf = (
+  { profile }: Context,
+  { entry, level, borrowedLevel, role }: Placement,
+): number => {
+  const numberedAt = level ?? borrowedLevel;
+  if (entry !== null && numberedAt !== null) {
+    return numberedAt.indent.left ?? 0;
+  }
+  // Unnumbered text of a provision stands under the text of its clause.
+  return role === "continuation"
+    ? (profile.roles.clause1?.numbering?.indent.left ?? 0)
+    : 0;
+};
+
+/**
+ * A bullet that borrows its level hangs from the paragraph its list
+ * belongs to: its mark stands where that paragraph's text starts, its text
+ * one hanging step further.
+ */
+const hangBullet = (
+  context: Context,
+  bullet: Placement,
+  lead: Placement | null,
+): void => {
+  const beside = bullet.borrowedLevel;
+  if (beside === null || bullet.pattern?.numFmt !== "bullet" || lead === null) {
+    return;
+  }
+  const step = beside.indent.hanging ?? beside.indent.left ?? 0;
+  if (step <= 0) {
+    return;
+  }
+  bullet.borrowedLevel = {
+    ...beside,
+    indent: {
+      left: textStartOf(context, lead) + step,
+      hanging: step,
+      firstLine: null,
+    },
+  };
+};
+
 const HEADING_TEXT_MAX = 160;
 
 /**
@@ -931,9 +1020,12 @@ const placeParagraphs = (context: Context): Placed => {
   };
   /** The paragraph placed last at the top level; a table ends the run. */
   let lastPlaced: string | null = null;
+  /** The paragraph in front of a list of bullets. */
+  let lead: Placement | null = null;
   for (const block of topLevel) {
     if (block.kind === "table") {
       lastPlaced = null;
+      lead = null;
       for (const inner of insideOf(block, blockById)) {
         const role = inner.kind === "paragraph" ? roleOf(context, inner) : null;
         // A cell paragraph without a reading is placed with its table.
@@ -981,6 +1073,11 @@ const placeParagraphs = (context: Context): Placed => {
       placement.numbered = false;
       placement.level = null;
       placement.keptReason = null;
+    }
+    if (placement.pattern?.numFmt === "bullet") {
+      hangBullet(context, placement, lead);
+    } else {
+      lead = placement;
     }
     placed.placements.push(placement);
     lastPlaced = block.id;
@@ -1677,7 +1774,7 @@ const markReferences = ({
 /** Labels that stay text or are lost, suspected references and roles the
  *  template has no style for. */
 const noteReadings = (
-  { items, stylelessRoles, articlesRunOn: articlesRunOnFlag }: Context,
+  { items, stylelessRoles }: Context,
   { placements }: Placed,
   references: readonly DetectedReference[],
   suspicions: readonly ReferenceSuspicion[],
@@ -1724,9 +1821,10 @@ const noteReadings = (
   for (const [role, count] of stylelessRoles) {
     items.push({ kind: "roleWithoutStyle", role, blocks: count });
   }
-  const asText = articlesRunOnFlag
-    ? placements.filter(({ role }) => role === "articleHeading").length
-    : 0;
+  const asText = placements.filter(
+    ({ role, block, entry }) =>
+      role === "articleHeading" && runsOn(block, entry),
+  ).length;
   if (asText > 0) {
     items.push({ kind: "articlesSetAsText", blocks: asText });
   }
@@ -1907,11 +2005,9 @@ export const buildTemplatePlan = ({
       ),
     },
     stylelessRoles: new Map(),
-    articlesRunOn: false,
     items: [],
   };
 
-  context.articlesRunOn = articlesRunOn(context);
   context.keptSections = sectionsToKeep(context);
   const placed = placeParagraphs(context);
   const { patches, levelsByList } = numberPlacements({
@@ -1946,13 +2042,30 @@ export const buildTemplatePlan = ({
   noteReadings(context, placed, references, suspicions);
 
   const health = profile.health ?? NO_HEALTH;
-  if (health.length > 0) {
-    context.items.push({
-      kind: "invisibleEffectsRemoved",
-      levels: health.filter(({ kind }) => kind === "numberDrawnAsPicture")
-        .length,
-      styles: health.filter(({ kind }) => kind === "textDrawnAsPicture").length,
-    });
+  const drawn = {
+    levels: health.filter(({ kind }) => kind === "numberDrawnAsPicture").length,
+    styles: health.filter(({ kind }) => kind === "textDrawnAsPicture").length,
+  };
+  if (drawn.levels > 0 || drawn.styles > 0) {
+    context.items.push({ kind: "invisibleEffectsRemoved", ...drawn });
+  }
+  for (const finding of health) {
+    const evened =
+      finding.kind === "levelSetApart" && profile.levelLooks !== "asTemplate"
+        ? placed.placements.filter(
+            ({ role, styleId }) =>
+              role === finding.role && styleId === finding.insteadStyleId,
+          ).length
+        : 0;
+    if (finding.kind === "levelSetApart" && evened > 0) {
+      context.items.push({
+        kind: "levelStyleEvened",
+        role: finding.role,
+        styleId: finding.styleId,
+        insteadStyleId: finding.insteadStyleId,
+        blocks: evened,
+      });
+    }
   }
   const lineBreakSpacing = keepsLineBreakSpacing(
     context,

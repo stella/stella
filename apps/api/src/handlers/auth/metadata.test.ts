@@ -7,6 +7,7 @@ import {
   getAgentAuthManifestUrl,
   getAgentAuthUrl,
 } from "@/api/agent-auth/constants";
+import { authorizationServerMetadataResponseSchema } from "@/api/handlers/auth/read-authorization-server-metadata";
 import {
   authCapabilitiesRoute,
   authMetadataRoute,
@@ -70,7 +71,7 @@ describe("OAuth authorization server metadata", () => {
           events_supported: v.array(v.string()),
         }),
       }),
-      await response.json(),
+      v.parse(authorizationServerMetadataResponseSchema, await response.json()),
     );
 
     expect(body.issuer).toBe(getAuthIssuerUrl());

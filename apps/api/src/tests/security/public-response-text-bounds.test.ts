@@ -27,6 +27,10 @@ const hasStringBound = (schema: SchemaNode): boolean =>
   (typeof schema["maxLength"] === "number" &&
     Number.isFinite(schema["maxLength"]) &&
     schema["maxLength"] >= 0) ||
+  (schema["format"] === "binary" &&
+    typeof schema["x-maxBytes"] === "number" &&
+    Number.isFinite(schema["x-maxBytes"]) &&
+    schema["x-maxBytes"] >= 0) ||
   typeof schema["const"] === "string" ||
   (Array.isArray(schema["enum"]) &&
     schema["enum"].every((value: unknown) => typeof value === "string"));
@@ -638,5 +642,11 @@ describe("anonymous response text bounds", () => {
       "fixture.nullable",
       "fixture.tuple[0]",
     ]);
+  });
+  test("binary blob responses require a finite maxSize byte cap", () => {
+    expect(unboundedStringFields(rendered(v.blob()), "200")).toEqual(["200"]);
+    expect(
+      unboundedStringFields(rendered(v.pipe(v.blob(), v.maxSize(1024))), "200"),
+    ).toEqual([]);
   });
 });

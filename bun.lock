@@ -986,7 +986,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.6.16",
+      "version": "0.6.17",
       "dependencies": {
         "@ag-ui/core": "1.0.5",
         "@stll/ai-catalog": "workspace:^",
@@ -1198,7 +1198,7 @@
     },
     "packages/docx-utils": {
       "name": "@stll/docx-utils",
-      "version": "0.3.3",
+      "version": "0.3.4",
       "dependencies": {
         "@stll/docx-core": "catalog:",
         "better-result": "catalog:",
@@ -1819,7 +1819,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.90.1",
+      "version": "0.91.0",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1919,7 +1919,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.24.6",
+      "version": "0.24.7",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",

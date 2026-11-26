@@ -1,5 +1,13 @@
 # @stll/workspace-ui
 
+## 0.24.7
+
+### Patch Changes
+
+- [#9590](https://github.com/stella/stella/pull/9590) [`5e02bfe`](https://github.com/stella/stella/commit/5e02bfe1c4aa353db824f6d26a46b1e01fc344d2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The view switcher reaches React effects and its stable drag callbacks through the `@stll/ui/effects` wrappers. Behaviour is unchanged.
+- Updated dependencies [[`3762bf8`](https://github.com/stella/stella/commit/3762bf8c0652749952f215af3e86010237338984), [`2c8afcc`](https://github.com/stella/stella/commit/2c8afccef1e41d1829a69a75575615329137f564), [`8b35843`](https://github.com/stella/stella/commit/8b3584382e97b6a3c4c80436f849d42eb9384740), [`98bdc5c`](https://github.com/stella/stella/commit/98bdc5c5baa038b6f1bcdfca24e38038f4bee0e5), [`7655d51`](https://github.com/stella/stella/commit/7655d51a49597eecd510b5b212ce8ab8bc88cc61)]:
+  - @stll/ui@0.91.0
+
 ## 0.24.6
 
 ### Patch Changes

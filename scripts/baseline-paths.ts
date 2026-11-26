@@ -73,10 +73,6 @@ export const BASELINE_PATHS = {
   testSubjectReachability: "scripts/test-subject-reachability-baseline.json",
   /** scripts/sql-perf-baseline.ts */
   sqlPerf: ".oxlint-plugins/sql-perf-baseline.json",
-  /** scripts/render-phase-update-baseline.ts */
-  renderPhaseUpdate: ".oxlint-plugins/no-render-phase-update-baseline.json",
-  /** scripts/effect-state-write-baseline.ts */
-  effectStateWrite: ".oxlint-plugins/no-effect-state-write-baseline.json",
   /** apps/api/scripts/mcp-surface-baseline.ts */
   mcpSurface: "apps/api/mcp-surface-baseline.json",
   /** apps/api/scripts/deployment-feature-guard.ts */

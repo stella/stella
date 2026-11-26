@@ -1,0 +1,1 @@
+bun test packages/scripts/src/dev-runner.test.ts packages/scripts/src/process-shutdown.test.ts packages/scripts/src/process-memory.test.ts packages/scripts/src/windows-process-ownership.test.ts packages/scripts/src/process-spawn.test.ts scripts/ci-install.test.ts
