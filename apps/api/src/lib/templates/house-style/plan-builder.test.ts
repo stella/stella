@@ -697,7 +697,7 @@ describe("buildTemplatePlan, pages the source starts", () => {
           .map(({ blockId }) => blockId)
           .filter((id) => id === "p1" || id === "p2"),
       ).toEqual([expected.kept]);
-      expect(starts(plan)).toEqual(expected.starts);
+      expect(starts(plan)).toEqual([...expected.starts]);
     }
   });
 
