@@ -1571,7 +1571,7 @@ export const installPgliteCitationIdentifierMatchKey = async (
   const statements = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
-      "20261125150000_case_law_citation_match_key",
+      "20261126120000_case_law_citation_match_key",
       "migration.sql",
     ),
   ).filter((statement) => {

@@ -1,7 +1,7 @@
 /**
  * Citations stored before `identifier_match_key` existed get their key here,
  * the online repair behind migration
- * 20261125150000_case_law_citation_match_key.
+ * 20261126120000_case_law_citation_match_key.
  *
  * The key is written from the same fold the trigger applies
  * (`citationIdentifierMatchKeySql`), and the write names the column, so the

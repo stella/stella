@@ -10,7 +10,7 @@
  * equality probe on a plain column.
  *
  * One owner: the trigger `case_law_citations_identifier_match_key` (migration
- * `20261125150000_case_law_citation_match_key`) sets the key on every insert
+ * `20261126120000_case_law_citation_match_key`) sets the key on every insert
  * and on every update that names either input or the key itself, from the
  * same fold `caseNumberMatchKeySql` renders. Rows stored before the column
  * get it from the online repair `citation-identifier-match-key`; until then a
@@ -31,7 +31,7 @@ export const CITATION_IDENTIFIER_MATCH_KEY_FUNCTION =
   "case_law_citations_identifier_match_key";
 
 export const CITATION_IDENTIFIER_MATCH_KEY_MIGRATION =
-  "20261125150000_case_law_citation_match_key";
+  "20261126120000_case_law_citation_match_key";
 
 type CitationKeyColumns = {
   normalizedIdentifierValue: SQLWrapper;
