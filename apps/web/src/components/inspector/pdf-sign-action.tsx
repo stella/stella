@@ -1,7 +1,8 @@
-import { useLayoutEffect, useRef } from "react";
+import { useRef } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { useLayoutSyncEffect, useMountLayoutEffect } from "@stll/ui/effects";
 import { SignatureIcon } from "@stll/ui/icons";
 import { ToolbarIconAction } from "@stll/ui/toolbar-icon-action";
 
@@ -85,7 +86,7 @@ export const usePdfSignFlow = (
   const signing = useDesktopPdfSign({ connectDesktop: gate.connect });
   const sessionRef = useRef<SigningAuthority | null>(null);
   const activeIdentityRef = useRef(activeIdentity);
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     activeIdentityRef.current = activeIdentity;
     const session = sessionRef.current;
     if (session !== null && !acceptsIdentity(session, activeIdentity)) {
@@ -94,18 +95,15 @@ export const usePdfSignFlow = (
       endSessionPlacement(session);
     }
   }, [activeIdentity]);
-  useLayoutEffect(
-    () => () => {
-      activeIdentityRef.current = undefined;
-      const ownedSession = sessionRef.current;
-      if (ownedSession !== null) {
-        ownedSession.cancelled = true;
-        sessionRef.current = null;
-        endSessionPlacement(ownedSession);
-      }
-    },
-    [],
-  );
+  useMountLayoutEffect(() => () => {
+    activeIdentityRef.current = undefined;
+    const ownedSession = sessionRef.current;
+    if (ownedSession !== null) {
+      ownedSession.cancelled = true;
+      sessionRef.current = null;
+      endSessionPlacement(ownedSession);
+    }
+  });
   const run = (perform: () => void) => {
     if (signing.isSigning) {
       signing.notifyAlreadySigning();

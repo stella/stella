@@ -54,6 +54,7 @@ import {
   installPgliteChatTurnOrdinal,
   installPgliteChatTurnRunIdLookup,
   installPgliteCitationDoctrineRls,
+  installPgliteCitationIdentifierMatchKey,
   installPgliteConflictCheckRoutines,
   installPgliteCorpusIndexGenerationRetire,
   installPgliteCorpusIndexSeedingLifecycle,
@@ -557,6 +558,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_decision_fallback_identities",
       "case_law_decision_supplements",
       "case_law_held_decision_attachments",
+      "case_law_citation_arrivals",
       "case_law_ingestion_failure_evidence",
       "case_law_search_document_preview_passages",
       "case_law_citation_resolution_census",
@@ -1000,6 +1002,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteCaseLawObservationFence(db);
   await installPgliteCaseLawParsedSourceInvalidation(db);
   await installPgliteCaseLawContentChangedAt(db);
+  await installPgliteCitationIdentifierMatchKey(db);
   await installPgliteCaseLawSitemapChanges(db);
   await installPgliteCaseLawRankingSignalChanges(db);
   await installPgliteCorpusProjectionDeleteTasks(db);

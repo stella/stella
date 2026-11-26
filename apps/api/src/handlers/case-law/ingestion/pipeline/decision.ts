@@ -2,6 +2,10 @@ import { panic, Result } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
+  CITATION_ARRIVAL_DRAIN_OWNER,
+  drainCitationArrivalsAfterWrite,
+} from "@/api/handlers/case-law/citation-arrivals";
+import {
   absorbComposedSupplementRows,
   SUPPLEMENT_ABSORB_FAILED,
 } from "@/api/handlers/case-law/ingestion/pipeline/composed-supplements";
@@ -669,6 +673,7 @@ const processDecisionFromInput = async (
     judges = CASE_LAW_JUDGE_DEPENDENCIES,
     sourceFingerprintFromStoredRaw:
       readStoredFingerprint = readSourceFingerprintFromStoredRaw,
+    citationArrivals = CITATION_ARRIVAL_DRAIN_OWNER.DECISION,
     ...options
   }: ProcessDecisionOptions & {
     inputProvenance: ProcessDecisionAttemptOptions["inputProvenance"];
@@ -697,6 +702,15 @@ const processDecisionFromInput = async (
     corpus,
     judges,
   });
+  if (citationArrivals === CITATION_ARRIVAL_DRAIN_OWNER.DECISION) {
+    // Whatever the outcome: a write that committed enqueued its arrivals,
+    // and the queue is empty otherwise, which the drain reads without the
+    // graph lock.
+    await drainCitationArrivalsAfterWrite(options.scopedDb, {
+      step: "pipeline.processDecision.citation_arrivals",
+      attributes: { sourceId: options.sourceId },
+    });
+  }
   if (
     Result.isError(attempted) &&
     attempted.error instanceof IngestionFailureEvidenceError &&

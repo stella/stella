@@ -1,8 +1,9 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { useIsMounted, useLatest } from "@stll/ui/effects";
 import { stellaToast } from "@stll/ui/toast";
 
 import type {
@@ -88,21 +89,12 @@ export const useReaderAnnotationHistory = ({
     inFlight: new Set<Promise<unknown>>(),
     queue: Promise.resolve(),
   });
-  const latest = useRef({ identity: currentScope, writes });
   // Async writes must see the committed scope before passive effects run.
-  useLayoutEffect(() => {
-    latest.current = { identity: currentScope, writes };
-  });
-  const mounted = useRef(true);
-  useLayoutEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
+  const latest = useLatest({ identity: currentScope, writes });
+  const isMounted = useIsMounted();
 
   const isActive = (identity: typeof currentScope) =>
-    mounted.current && latest.current.identity === identity;
+    isMounted() && latest.current.identity === identity;
 
   const current = () => {
     if (!isActive(currentScope)) {

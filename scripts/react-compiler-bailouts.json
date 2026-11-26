@@ -22,7 +22,7 @@
     ]
   },
   "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx::FileChatOverlayInner": {
-    "memos": 2,
+    "memos": 4,
     "reasons": [
       "Cannot access refs during render",
       "Logical assignment operators (||=, &&=, ??=) are not yet supported"
@@ -78,7 +78,7 @@
     "reasons": ["(BuildHIR::lowerExpression) Handle Import expressions"]
   },
   "apps/web/src/components/inspector/chat-tab-panel.tsx::ChatTabPanel": {
-    "memos": 1,
+    "memos": 3,
     "reasons": [
       "`try`/`finally` without `catch` is not supported by React Compiler"
     ]
@@ -280,7 +280,7 @@
     ]
   },
   "apps/web/src/routes/knowledge/-components/template-studio-chat.tsx::TemplateStudioChatInner": {
-    "memos": 1,
+    "memos": 3,
     "reasons": [
       "Cannot access refs during render",
       "Logical assignment operators (||=, &&=, ??=) are not yet supported"

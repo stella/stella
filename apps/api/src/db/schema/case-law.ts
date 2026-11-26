@@ -43,6 +43,7 @@ import {
 } from "@/api/db/case-law-sitemap-indexes";
 import { CITATION_AUTHORITY_SWEEP_SCOPES } from "@/api/handlers/case-law/citation-authority-sweep-scope";
 import { CITATION_DECISION_TYPE_HINTS } from "@/api/handlers/case-law/citation-decision-type-hint";
+import { citationIdentifierMatchKeyPendingSql } from "@/api/handlers/case-law/citation-identifier-match-key";
 import { CITATION_KINDS } from "@/api/handlers/case-law/citation-kind-values";
 import {
   CITATION_AMBIGUITY_SHAPES,
@@ -2796,6 +2797,18 @@ export const caseLawCitations = p.pgTable(
       length: DECISION_IDENTIFIER_MAX_LENGTH,
     }),
     /**
+     * The match key of the citation's effective identifier
+     * (`normalizedIdentifierValue`, else `citationKey`), as
+     * `caseNumberMatchKey` folds it; null when the row has neither. Written
+     * only by the `case_law_citations_identifier_match_key` trigger (see
+     * `citation-identifier-match-key.ts`), so an arriving identifier finds the
+     * citations it answers by an index probe instead of folding every
+     * candidate. Rows stored before the column wait for the online repair.
+     */
+    identifierMatchKey: p.varchar("identifier_match_key", {
+      length: DECISION_IDENTIFIER_MAX_LENGTH,
+    }),
+    /**
      * Whether this citation invokes authority or names the case's own
      * procedural history. Only `precedent` belongs in the citation graph:
      * the judgment under review is not an endorsement of it.
@@ -2988,6 +3001,29 @@ export const caseLawCitations = p.pgTable(
         ),
       )
       .where(citationReopenableByKeySql(t.resolutionStatus)),
+    // The reverse direction by stored match key: the reopenable citations an
+    // arriving identifier can answer, by an equality probe on the key the
+    // trigger stored. See `citation-arrivals.ts`.
+    p
+      .index("case_law_citations_reopenable_stored_match_key_idx")
+      .on(
+        effectiveCitationIdentifierTypeSql(t.identifierType),
+        t.identifierMatchKey,
+      )
+      .where(citationReopenableByKeySql(t.resolutionStatus)),
+    // The rows stored before the key existed, in id order: the online repair
+    // walks it and empties it, and a reopen reads it to know whether any row
+    // still has to be matched by its folded columns.
+    p
+      .index("case_law_citations_identifier_match_key_pending_idx")
+      .on(t.id)
+      .where(
+        citationIdentifierMatchKeyPendingSql({
+          identifierMatchKey: t.identifierMatchKey,
+          normalizedIdentifierValue: t.normalizedIdentifierValue,
+          citationKey: t.citationKey,
+        }),
+      ),
     p
       .index("case_law_citations_identifier_backfill_match_key_idx")
       .on(
@@ -3062,6 +3098,41 @@ export const caseLawCitations = p.pgTable(
     ...publicCaseLawReaderPolicies(),
     ...caseLawAnalysisReaderPolicies(),
     ...corpusSampleReaderPolicies(),
+  ],
+);
+
+/**
+ * Identifiers a decision write stored, waiting for the citation graph to
+ * reopen the citations they can answer differently (`citation-arrivals.ts`).
+ * The write enqueues them in its own transaction and a drain consumes them in
+ * a later one, so an arrival survives anything between the two. The key is
+ * already folded by `caseNumberMatchKey`. A queue, not a record: a drained row
+ * is deleted.
+ */
+export const caseLawCitationArrivals = p.pgTable(
+  "case_law_citation_arrivals",
+  {
+    id: p.bigint({ mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    decisionId: safeUuid<"caseLawDecision">("decision_id")
+      .notNull()
+      .references(() => caseLawDecisions.id, { onDelete: "cascade" }),
+    identifierType: p
+      .varchar("identifier_type", { length: 32 })
+      .$type<DecisionIdentifierType>()
+      .notNull(),
+    /** The arriving identifier's value under `caseNumberMatchKey`. */
+    matchKey: p
+      .varchar("match_key", { length: DECISION_IDENTIFIER_MAX_LENGTH })
+      .notNull(),
+    /** The arriving decision's country, which decides whose citations it can answer. */
+    jurisdiction: p.varchar({ length: 3 }).notNull(),
+    /** The arriving decision's date; a citation older than it was never about it. */
+    decisionDate: p.date("decision_date"),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.index("case_law_citation_arrivals_decision_idx").on(t.decisionId),
+    ...caseLawIngestionOnlyPolicies(),
   ],
 );
 

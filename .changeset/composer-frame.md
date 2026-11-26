@@ -1,5 +1,0 @@
----
-"@stll/ui": minor
----
-
-Add `ComposerFrame` (`@stll/ui/composer-frame`): the one composer box, which owns its layout. A compact composer is one bar while its text fits a line, then the text across the box over a control row once it needs a second line, and back to the bar only when the draft is empty; a large one is always text over the control row. The text grows to 320px and then scrolls in its own region, with the scroll area's edge scrollbar and fades, outside the controls and the attachments. The layout tokens (`COMPOSER_COMPACT_ROW_CLASS`, `COMPOSER_COMPACT_TEXT_CELL_CLASS`, `COMPOSER_LARGE_TEXT_WELL_CLASS`, `COMPOSER_LARGE_EDITOR_CLASS`, `COMPOSER_LARGE_ACTION_ROW_CLASS`, `COMPOSER_LEADING_GROUP_CLASS`, `COMPOSER_PLACEHOLDER_CLASS`, `COMPOSER_BOX_FOCUS_CLASS`, `COMPOSER_BOX_ANONYMIZED_CLASS`) and `ComposerPlaceholder` are no longer exported; `@stll/ui/composer` no longer re-exports `COMPOSER_BOX_CLASS`. `DOC_FLOAT_SURFACE_CLASS` moves to `@stll/ui/composer-tokens`. `Textarea`'s `composer` appearance no longer sets a height floor: the frame does.

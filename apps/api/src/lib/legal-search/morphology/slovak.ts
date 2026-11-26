@@ -77,6 +77,8 @@
 
 import { panic } from "better-result";
 
+import { foldLatinLetters } from "@/api/lib/legal-search/morphology/latin-fold";
+
 /**
  * Which Slovak suffix table to run.
  *
@@ -116,16 +118,47 @@ const FINAL_VOWELS = {
 /** Final chars that trigger palatalisation instead of a plain truncation. */
 const PALATALISING_FINALS = ["e", "i", "í"] as const;
 
-const endsWith = (
-  chars: readonly string[],
-  length: number,
-  suffix: string,
-): boolean => {
+/**
+ * How the term and the tables are spelled. `accented` is the algorithm as
+ * written. `folded` runs it over a term typed without diacritics, with every
+ * letter it compares against folded the same way, so `rozhodnutiho` loses
+ * `iho` exactly as `rozhodnutího` loses `ího` (see `stem.ts`'s query stems).
+ */
+type SlovakSpelling = "accented" | "folded";
+
+/** The term's UTF-16 code units, and how the tables are read against them. */
+type Letters = {
+  readonly units: string[];
+  readonly spelling: SlovakSpelling;
+  readonly reading: SlovakFoldedReading;
+};
+
+/**
+ * How a folded term's unaccented letters are read, as for the Snowball
+ * stemmers' `FoldedCollision`: `plain` takes them as written, `accented` lets
+ * any of them have lost a diacritic. The one rule that tells them apart is the
+ * superlative prefix: `naj` is stripped only when it is unaccented, and a
+ * folded `naj` may be `náj` (`najomneho` is `nájomného`, whose stem keeps it).
+ */
+export type SlovakFoldedReading = "plain" | "accented";
+
+const spelled = (
+  chars: Letters,
+  letter: string | undefined,
+): string | undefined =>
+  letter === undefined || chars.spelling === "accented"
+    ? letter
+    : foldLatinLetters(letter);
+
+const endsWith = (chars: Letters, length: number, suffix: string): boolean => {
   if (suffix.length > length) {
     return false;
   }
   for (let offset = 0; offset < suffix.length; offset++) {
-    if (chars[length - suffix.length + offset] !== suffix[offset]) {
+    if (
+      chars.units[length - suffix.length + offset] !==
+      spelled(chars, suffix[offset])
+    ) {
       return false;
     }
   }
@@ -133,7 +166,7 @@ const endsWith = (
 };
 
 const startsWith = (
-  chars: readonly string[],
+  chars: Letters,
   length: number,
   prefix: string,
 ): boolean => {
@@ -141,7 +174,7 @@ const startsWith = (
     return false;
   }
   for (let offset = 0; offset < prefix.length; offset++) {
-    if (chars[offset] !== prefix[offset]) {
+    if (chars.units[offset] !== spelled(chars, prefix[offset])) {
       return false;
     }
   }
@@ -150,26 +183,37 @@ const startsWith = (
 
 /** Lucene's `StemmerUtil.deleteN`: shift `count` chars out at `position`. */
 const deleteN = (
-  chars: string[],
+  chars: Letters,
   position: number,
   length: number,
   count: number,
 ): number => {
-  chars.copyWithin(position, position + count, length);
+  chars.units.copyWithin(position, position + count, length);
   return length - count;
 };
 
-const at = (chars: readonly string[], index: number): string =>
-  chars[index] ?? panic(`Slovak stemmer read past the buffer at ${index}`);
+const at = (chars: Letters, index: number): string =>
+  chars.units[index] ??
+  panic(`Slovak stemmer read past the buffer at ${index}`);
 
-const set = (chars: string[], index: number, value: string) => {
-  if (index < 0 || index >= chars.length) {
-    panic(`Slovak stemmer wrote past the buffer at ${index}`);
-  }
-  chars[index] = value;
+/** Whether the char at `index` is one of `letters`, as the tables spell them. */
+const isOneOf = (
+  chars: Letters,
+  index: number,
+  letters: readonly string[],
+): boolean => {
+  const letter = at(chars, index);
+  return letters.some((candidate) => spelled(chars, candidate) === letter);
 };
 
-const palatalize = (chars: string[], length: number): number => {
+const set = (chars: Letters, index: number, value: string) => {
+  if (index < 0 || index >= chars.units.length) {
+    panic(`Slovak stemmer wrote past the buffer at ${index}`);
+  }
+  chars.units[index] = value;
+};
+
+const palatalize = (chars: Letters, length: number): number => {
   if (
     endsWith(chars, length, "ci") ||
     endsWith(chars, length, "ce") ||
@@ -211,7 +255,7 @@ const palatalize = (chars: string[], length: number): number => {
  * The endings `extended` reads before upstream's tables, or null when none
  * applies. `-iach` and `-iam` keep their `i` for the soft-stem pass.
  */
-const removeExtendedCase = (chars: string[], length: number): number | null => {
+const removeExtendedCase = (chars: Letters, length: number): number | null => {
   if (length > 6 && endsWith(chars, length, "iach")) {
     return length - 3;
   }
@@ -243,7 +287,7 @@ const removeExtendedCase = (chars: string[], length: number): number | null => {
 };
 
 const removeCase = (
-  chars: string[],
+  chars: Letters,
   length: number,
   variant: SlovakStemmerVariant,
 ): number => {
@@ -320,12 +364,10 @@ const removeCase = (
   }
 
   if (length > 3) {
-    const final = at(chars, length - 1);
-    if (PALATALISING_FINALS.some((candidate) => candidate === final)) {
+    if (isOneOf(chars, length - 1, PALATALISING_FINALS)) {
       return palatalize(chars, length);
     }
-    const strippable: readonly string[] = FINAL_VOWELS[variant];
-    if (strippable.includes(final)) {
+    if (isOneOf(chars, length - 1, FINAL_VOWELS[variant])) {
       return length - 1;
     }
   }
@@ -338,10 +380,7 @@ const removeCase = (
  * `rozhodnutia` (`rozhodnuti`) meets `rozhodnutí` (`rozhodnut`). Five
  * characters or more, so no stem ends shorter than four.
  */
-const removeSoftStemVowel = (
-  chars: readonly string[],
-  length: number,
-): number =>
+const removeSoftStemVowel = (chars: Letters, length: number): number =>
   length > 4 && at(chars, length - 1) === "i" ? length - 1 : length;
 
 /**
@@ -352,7 +391,7 @@ const removeSoftStemVowel = (
  * `problémom`) meets it there. Five characters or more, as in the soft-stem
  * pass, so `krém` keeps its stem whole in every case.
  */
-const removeHardStemEm = (chars: readonly string[], length: number): number =>
+const removeHardStemEm = (chars: Letters, length: number): number =>
   length > 4 && endsWith(chars, length, "ém") ? length - 2 : length;
 
 /**
@@ -369,7 +408,7 @@ const MIN_POSSESSIVE_OV_LENGTH = {
 } as const satisfies Record<SlovakStemmerVariant, number>;
 
 const removePossessives = (
-  chars: string[],
+  chars: Letters,
   length: number,
   variant: SlovakStemmerVariant,
 ): number => {
@@ -386,7 +425,10 @@ const removePossessives = (
   return length;
 };
 
-const removePrefixes = (chars: string[], length: number): number => {
+const removePrefixes = (chars: Letters, length: number): number => {
+  if (chars.reading === "accented") {
+    return length;
+  }
   if (length > 5 && startsWith(chars, length, "naj")) {
     return deleteN(chars, 0, length, 3);
   }
@@ -396,11 +438,17 @@ const removePrefixes = (chars: string[], length: number): number => {
 const stemSlovakVariant = (
   term: string,
   variant: SlovakStemmerVariant,
+  spelling: SlovakSpelling = "accented",
+  reading: SlovakFoldedReading = "plain",
 ): string => {
   // Java's char[] is UTF-16 code units; split("") matches that, whereas
   // Array.from would split by code point and change surrogate handling.
-  const chars = term.split("");
-  let length = chars.length;
+  const chars: Letters = {
+    units: (spelling === "folded" ? foldLatinLetters(term) : term).split(""),
+    spelling,
+    reading,
+  };
+  let length = chars.units.length;
   length = removeCase(chars, length, variant);
   if (variant === "extended") {
     length = removeSoftStemVowel(chars, length);
@@ -411,7 +459,7 @@ const stemSlovakVariant = (
     length = removeHardStemEm(chars, length);
   }
   length = removePrefixes(chars, length);
-  return chars.slice(0, length).join("");
+  return chars.units.slice(0, length).join("");
 };
 
 /**
@@ -433,3 +481,14 @@ export const stemSlovak = (term: string): string =>
  */
 export const stemSlovakUpstream = (term: string): string =>
   stemSlovakVariant(term, "faithful");
+
+/**
+ * Stem a Slovak term typed without its diacritics: {@link stemSlovak} with
+ * the term and every suffix it compares against folded, so the stem is the
+ * folded form of the one the accented word gets. Query side only; the corpus
+ * is stemmed accented. Same preconditions.
+ */
+export const stemSlovakFolded = (
+  term: string,
+  reading: SlovakFoldedReading,
+): string => stemSlovakVariant(term, "extended", "folded", reading);
