@@ -1,11 +1,12 @@
 import "@stll/folio-react/standalone.css";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { IntlProvider } from "use-intl";
 
 import { DocxEditor } from "@stll/folio-react";
 import { getFolioMessages } from "@stll/folio-react/messages";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 // A real Word .docx (Y Combinator's post-money SAFE, published free to use) so
 // the hero opens on a genuine, richly-formatted legal document rather than a
@@ -46,7 +47,7 @@ export const EditorLiveDemo = () => {
   // Bumped by the retry button to re-run the load effect.
   const [attempt, setAttempt] = useState(0);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     let cancelled = false;
     const load = async () => {
       try {
