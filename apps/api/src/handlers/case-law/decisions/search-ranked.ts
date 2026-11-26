@@ -79,7 +79,7 @@ import {
  */
 
 /** The arm a request without `strict` ranks with; the evaluation may move it. */
-const CASE_LAW_RANKED_DEFAULT_ARM: DecisionRankingArm = "any";
+const CASE_LAW_RANKED_DEFAULT_ARM: DecisionRankingArm = "half";
 
 /** Weight of a word in the publisher's keywords or headnote over the text. */
 const CASE_LAW_RANKED_PUBLISHER_BOOST = 2;
