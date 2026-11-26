@@ -3,9 +3,11 @@
  * activity window (`matter-learning-store.ts`) and Settings
  * (`matter-rules-store.ts`) each bind to their own commands.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import * as v from "valibot";
+
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import type { DESKTOP_TELEMETRY_WINDOWS } from "../telemetry/desktop-telemetry";
@@ -108,7 +110,7 @@ export function useStoredSection<T>(binding: StoreBinding<T>) {
       report(binding.window, DESKTOP_TELEMETRY_OPERATIONS.activityRead, error);
     });
   }, [binding.window, reload]);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     reloadReported();
     return subscribeDesktopEvent({
       event: ACTIVITY_CHANGED_EVENT,

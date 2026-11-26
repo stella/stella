@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { StellaAppIcon } from "../shared/StellaAppIcon";
@@ -26,7 +27,7 @@ export const ConnectStep = ({ onBack, onContinue, snapshot }: StepProps) => {
   const [failed, setFailed] = useState(false);
   const [account, setAccount] = useState<LinkedAccount | null>(null);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!snapshot.linked) {
       return undefined;
     }

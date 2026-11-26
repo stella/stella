@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslations } from "use-intl";
@@ -8,6 +8,7 @@ import type {
   DesktopTimeEntryMatterCandidate,
 } from "@stll/api-contract/desktop-time-entries";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -34,7 +35,7 @@ export const MatterPicker = ({
     | { type: "failed"; query: string }
     | { type: "ready"; query: string; matters: DesktopMatter[] }
   >({ type: "idle" });
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (disabled || !open || !query.trim()) {
       return undefined;
     }

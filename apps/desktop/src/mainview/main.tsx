@@ -1,4 +1,4 @@
-import { lazy, StrictMode, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, StrictMode, Suspense, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { Root as ReactRoot } from "react-dom/client";
 
@@ -6,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { panic } from "better-result";
 
+import { useExternalSyncEffect, useMountEffect } from "@stll/ui/effects";
 import { TooltipProvider } from "@stll/ui/tooltip";
 
 import ClipboardApp from "../clipboard/ClipboardApp";
@@ -75,7 +76,7 @@ const Root = () => {
   const [language, setLanguage] = useState(initialLanguage);
   const [messages, setMessages] = useState<DesktopMessages>(defaultMessages);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     applyDocumentLanguage(language);
   }, [language]);
 
@@ -84,7 +85,7 @@ const Root = () => {
   // result must not roll it back.
   const languageEvents = useRef(0);
 
-  useEffect(() => {
+  useMountEffect(() => {
     const eventsAtStart = languageEvents.current;
     void synchronizeDesktopLanguage()
       .then((desktopLanguage) => {
@@ -101,9 +102,9 @@ const Root = () => {
           window: telemetryWindow,
         });
       });
-  }, []);
+  });
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     let disposed = false;
     void loadMessages(language).then((nextMessages) => {
       if (!disposed) {
@@ -117,25 +118,23 @@ const Root = () => {
     };
   }, [language]);
 
-  useEffect(
-    () =>
-      subscribeDesktopEvent<{ language: string }>({
-        event: DESKTOP_LANGUAGE_CHANGED_EVENT,
-        handler: ({ payload }) => {
-          if (isSupportedLanguage(payload.language)) {
-            languageEvents.current += 1;
-            setLanguage(payload.language);
-          }
-        },
-        onError: () => {
-          reportDesktopError({
-            code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
-            operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
-            window: telemetryWindow,
-          });
-        },
-      }),
-    [],
+  useMountEffect(() =>
+    subscribeDesktopEvent<{ language: string }>({
+      event: DESKTOP_LANGUAGE_CHANGED_EVENT,
+      handler: ({ payload }) => {
+        if (isSupportedLanguage(payload.language)) {
+          languageEvents.current += 1;
+          setLanguage(payload.language);
+        }
+      },
+      onError: () => {
+        reportDesktopError({
+          code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
+          operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
+          window: telemetryWindow,
+        });
+      },
+    }),
   );
 
   const windowLabel = getCurrentWindow().label;
