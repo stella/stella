@@ -466,6 +466,23 @@ describe("buildLabelIndex", () => {
     }
   });
 
+  test("the caption of the source's contents goes with its lines", () => {
+    const manifest = manifestOf([
+      "AGREEMENT",
+      "Table of Contents",
+      "",
+      { text: "1. Scope\t2", styleName: "toc 1" },
+      { text: "2. Price\t3", styleName: "toc 1" },
+      "Contents of the delivery are listed below.",
+      "Contents",
+      { ...heading("Scope"), label: "1." },
+    ]);
+    const { contentsBlockIds } = buildLabelIndex(manifest);
+    // The caption in front of the lines; not a sentence that opens with the
+    // word, nor the word alone where no contents follow.
+    expect([...contentsBlockIds]).toEqual(["p3", "p1", "p4"]);
+  });
+
   test("an annex named in front of the first article is not the annex", () => {
     const manifest = manifestOf([
       "GUIDANCE",

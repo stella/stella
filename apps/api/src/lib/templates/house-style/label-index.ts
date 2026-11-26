@@ -97,6 +97,10 @@ const DEICTIC_START =
 const ANNEX_LIST_INTRO =
   /(?:příloh|annex|schedule|appendi|exhibit|anlage|anhang|anhänge)[^.]{0,80}:[ \u00A0]*$/iu;
 
+/** A line that heads a table of contents and says nothing else. */
+const CONTENTS_CAPTION =
+  /^(?:obsah|contents?|table of contents?|inhalt|inhaltsverzeichnis)[ \u00A0]*:?$/iu;
+
 /** Whether the block is a line of the source's table of contents. */
 const isContentsBlock = ({
   styleName,
@@ -1132,10 +1136,22 @@ export const buildLabelIndex = ({
   const entries: LabelEntry[] = [];
   const contextByBlockId = new Map<string, BlockContext>();
   const contentsBlockIds = new Set<string>();
+  /** The last paragraph with text in front of the row, while it may be the
+   *  caption of the contents that follow. */
+  let caption: DocxBlock | null = null;
   for (const row of rows) {
     const { block } = row;
     if (block.kind === "paragraph" && isContentsBlock(block)) {
       contentsBlockIds.add(block.id);
+      // The caption goes with the lines it heads: alone it heads nothing.
+      if (caption !== null && CONTENTS_CAPTION.test(caption.text.trim())) {
+        contentsBlockIds.add(caption.id);
+      }
+      caption = null;
+    } else if (block.kind !== "paragraph") {
+      caption = null;
+    } else if (block.text.trim() !== "") {
+      caption = block;
     }
     const walk = walkOf(block);
     const entry = isLabelled(row) ? classify(walk, row) : null;
