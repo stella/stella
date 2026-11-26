@@ -113,6 +113,15 @@ export type TemplateStyle = {
   /** The paragraph alignment the style states (`w:jc`), inheritance
    *  resolved; null when none is stated. */
   alignment: string | null;
+  /** Whether the style sets its text in bold, inheritance and the
+   *  document's defaults resolved. Absent, like `size`, from an inspection
+   *  read before the look was reported. */
+  bold?: boolean;
+  /** The font size the style gives its text, in half-points, inheritance
+   *  and the document's defaults resolved; null when none states one. */
+  size?: number | null;
+  /** Whether the style keeps its paragraph with the next one. */
+  keepNext?: boolean;
   isDefault: boolean;
 };
 

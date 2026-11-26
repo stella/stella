@@ -1,14 +1,10 @@
 {
   "comment": "Current read-fault exceptions: adapters whose fixture drives no publisher read, and stage x fault pairs whose failed read builds a different decision. New rows fail, rows that no longer occur must be removed, and scripts/failure-as-empty-baseline.ts rejects added rows. Regenerate with READ_FAULT_BASELINE=write bun run test src/handlers/case-law/ingestion/adapters/read-fault-guard.test.ts (from apps/api).",
   "rows": {
-    "eu-ecj::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
-    "hu-bhgy::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
-    "pl-courts::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
     "pl-kio::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
     "pl-kis::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
     "pl-ncourt::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
     "pl-tk::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
-    "pl-uodo::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.",
     "pl-uokik::undriven": "The enrolled fixture assembles the decision from served payloads; no publisher read is driven."
   }
 }
