@@ -39,6 +39,7 @@ ALTER TABLE "recording_transcription_runs" ADD CONSTRAINT "recording_transcripti
 ALTER TABLE "recording_transcription_runs" ADD CONSTRAINT "recording_transcription_runs_entity_workspace_fk" FOREIGN KEY ("entity_id","workspace_id") REFERENCES "entities"("id","workspace_id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "recording_transcription_runs" ADD CONSTRAINT "recording_transcription_runs_version_fk" FOREIGN KEY ("entity_version_id","entity_id","workspace_id") REFERENCES "entity_versions"("id","entity_id","workspace_id") ON DELETE CASCADE;--> statement-breakpoint
 CREATE INDEX "recording_transcription_runs_document_created_idx" ON "recording_transcription_runs" ("workspace_id","entity_id","file_field_id","created_at" DESC NULLS LAST,"id" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "recording_transcription_runs_organization_idx" ON "recording_transcription_runs" ("organization_id");--> statement-breakpoint
 CREATE INDEX "recording_transcription_runs_workspace_version_idx" ON "recording_transcription_runs" ("workspace_id","entity_version_id");--> statement-breakpoint
 CREATE INDEX "recording_transcription_runs_queued_idx" ON "recording_transcription_runs" ("created_at","id") WHERE "status" = 'queued';--> statement-breakpoint
 CREATE INDEX "recording_transcription_runs_started_idx" ON "recording_transcription_runs" ("started_at","id") WHERE "status" IN ('transcribing', 'saving');--> statement-breakpoint

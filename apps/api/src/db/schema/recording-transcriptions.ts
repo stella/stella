@@ -90,6 +90,10 @@ export const recordingTranscriptionRuns = p.pgTable(
         table.createdAt.desc(),
         table.id.desc(),
       ),
+    // Deleting an organization cascades to its runs.
+    p
+      .index("recording_transcription_runs_organization_idx")
+      .on(table.organizationId),
     // The feature gate looks runs up by their pinned version.
     p
       .index("recording_transcription_runs_workspace_version_idx")
