@@ -10,6 +10,7 @@ import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
   useExternalSyncEffect,
+  useKeyedState,
   useLatestCallback,
   useLayoutSyncEffect,
 } from "@stll/ui/effects";
@@ -219,19 +220,12 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
 
   // Current viewport date (month/week navigation state)
   const [viewDate, setViewDate] = useState(appToday);
-  const [storedMonthWindowStart, setMonthWindowStart] = useState(() =>
-    getCenteredMonthWindowStart(appToday()),
+  // The window of months the month mode renders. Switching modes starts it
+  // over around the month in view, which may have moved in another mode;
+  // within month mode only anchored shifts and jumps move it.
+  const [monthWindowStart, setMonthWindowStart] = useKeyedState(mode, () =>
+    getCenteredMonthWindowStart(startOfUTCMonth(viewDate)),
   );
-  // In month mode the window always holds the month in view, also right
-  // after a switch into month mode or a jump made in another mode; the
-  // adjustment is idempotent, so it is applied where the window is read.
-  const monthWindowStart =
-    mode === "month"
-      ? getMonthWindowStartContaining(
-          storedMonthWindowStart,
-          startOfUTCMonth(viewDate),
-        )
-      : storedMonthWindowStart;
   const monthScrollRef = useRef<HTMLDivElement>(null);
   const monthAnchorRefs = useRef<Map<string, HTMLElement> | null>(null);
   monthAnchorRefs.current ??= new Map();
@@ -429,7 +423,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     }
 
     isShiftingMonthWindow.current = true;
-    setMonthWindowStart(addUTCMonths(monthWindowStart, amount));
+    setMonthWindowStart((start) => addUTCMonths(start, amount));
   };
 
   const handleMonthScroll = (event: UIEvent<HTMLDivElement>) => {
@@ -452,8 +446,8 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     pendingScrollMonthKey.current = targetKey;
     setViewDate(target);
 
-    setMonthWindowStart(
-      getMonthWindowStartContaining(monthWindowStart, target),
+    setMonthWindowStart((start) =>
+      getMonthWindowStartContaining(start, target),
     );
 
     const element = monthAnchorRefs.current?.get(targetKey);

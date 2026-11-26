@@ -164,6 +164,9 @@ export const ExistingFileOrganizerDialog = ({
   onOpenChange,
   suggestMatter = false,
 }: ExistingFileOrganizerDialogProps) => {
+  // An apply keeps running after it closes the dialog, so its guard lives
+  // here: reopening the dialog cannot start a second one alongside it.
+  const applyOnce = useSingleFlight();
   // AI results outlive one opening: reopening the dialog on the same files
   // shows them again without another call.
   const [cachedSuggestions, setCachedSuggestions] =
@@ -179,6 +182,7 @@ export const ExistingFileOrganizerDialog = ({
             start over on each opening (from the cached AI result for these
             files, or the local suggestions), and again when the files change. */}
         <ExistingFileOrganizerBody
+          applyOnce={applyOnce}
           cachedSuggestions={cachedSuggestions}
           existingFolders={existingFolders}
           files={files}
@@ -200,6 +204,7 @@ export const ExistingFileOrganizerDialog = ({
 };
 
 type ExistingFileOrganizerBodyProps = {
+  applyOnce: ReturnType<typeof useSingleFlight>;
   workspaceId: string;
   files: ExistingOrganizerFile[];
   existingFolders: ExistingImportFolder[];
@@ -216,6 +221,7 @@ type ExistingFileOrganizerBodyProps = {
 };
 
 const ExistingFileOrganizerBody = ({
+  applyOnce,
   workspaceId,
   files,
   existingFolders,
@@ -234,7 +240,6 @@ const ExistingFileOrganizerBody = ({
   const { activeOrganizationId } = useAuthenticatedUser();
   const createContact = useCreateContact();
   const updateWorkspace = useUpdateWorkspace();
-  const applyOnce = useSingleFlight();
   const isMounted = useIsMounted();
   // The AI result for these files when one is cached, else the local ones.
   const cachedForFiles =

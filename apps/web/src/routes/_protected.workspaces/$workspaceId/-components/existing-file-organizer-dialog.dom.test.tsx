@@ -68,13 +68,16 @@ const Providers = ({
   </IntlProvider>
 );
 
-const serveSuggestions = (respond: () => Response) => {
+const serveSuggestions = (
+  respond: (path: string) => Response | Promise<Response>,
+) => {
   const calls: string[] = [];
   globalThis.fetch = Object.assign(
     async (input: string | URL | Request, init?: RequestInit) => {
       const request = new Request(input, init);
-      calls.push(new URL(request.url).pathname);
-      return respond();
+      const path = new URL(request.url).pathname;
+      calls.push(path);
+      return await respond(path);
     },
     { preconnect: originalFetch.preconnect },
   );
@@ -181,4 +184,78 @@ test("a failed AI call keeps offering a retry", async () => {
       (button) => button.textContent === messages.common.retry,
     ),
   ).toBe(true);
+});
+
+test("reopening the dialog while an apply is running cannot start a second one", async () => {
+  const writes = Promise.withResolvers<Response>();
+  const calls = serveSuggestions(async (path) =>
+    path.endsWith("organize-suggestions")
+      ? Response.json({
+          suggestions: [
+            {
+              entityId,
+              folderPath: "Reviewed",
+              suggestedName: "reviewed.docx",
+              detectedDate: null,
+              documentType: "agreement",
+            },
+          ],
+          deleteFolders: [],
+        })
+      : await writes.promise,
+  );
+  const { setOpen } = mountDialog();
+  const generate = await waitFor(() => {
+    const button = generateButton();
+    expect(button).toBeDefined();
+    return button;
+  });
+  if (!generate) {
+    throw new Error("Expected the generate button");
+  }
+  fireEvent.click(generate);
+  await waitFor(() => {
+    expect(document.body.innerHTML).toContain("reviewed.docx");
+  });
+  const writeCalls = () =>
+    calls.filter((path) => !path.endsWith("organize-suggestions"));
+  const applyButton = () =>
+    [...document.body.querySelectorAll("button")].find(
+      (button) =>
+        button.textContent === messages.workspaces.importOrganizer.apply,
+    );
+  const first = await waitFor(() => {
+    const button = applyButton();
+    expect(button).toBeDefined();
+    return button;
+  });
+  if (!first) {
+    throw new Error("Expected the apply button");
+  }
+  fireEvent.click(first);
+  await waitFor(() => expect(writeCalls().length).toBeGreaterThan(0));
+  const started = writeCalls().length;
+
+  setOpen(false);
+  await waitFor(() => {
+    expect(document.body.innerHTML).not.toContain("reviewed.docx");
+  });
+  setOpen(true);
+  const second = await waitFor(() => {
+    const button = applyButton();
+    expect(button).toBeDefined();
+    return button;
+  });
+  if (!second) {
+    throw new Error("Expected the apply button after reopening");
+  }
+  fireEvent.click(second);
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(writeCalls()).toHaveLength(started);
+  await act(async () => {
+    writes.resolve(Response.json({ entityId }));
+    await Promise.resolve();
+  });
 });
