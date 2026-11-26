@@ -2417,6 +2417,36 @@ describe("buildTemplatePlan, a heading's title over two paragraphs", () => {
   });
 });
 
+describe("buildTemplatePlan, a typed article behind the document's numbered ones", () => {
+  test("a mention in front of the numbered articles does not take a later typed article with it", () => {
+    const article = (label: string, text: string) => ({
+      ...numbered(label, text, 1),
+      styleName: "heading 1",
+      outlineLevel: 0,
+    });
+    const manifest = manifestOf([
+      "AGREEMENT",
+      // A summary names the second article.
+      { text: "Article 2 Term", styleName: "heading 5", outlineLevel: 4 },
+      "The term is summarised here.",
+      article("1.", "Definitions"),
+      numbered("1.1", "In this agreement the following terms apply.", 1),
+      article("2.", "Term"),
+      numbered("2.1", "The agreement runs for one year.", 1),
+      // The third article is typed, and is the document's own.
+      { text: "Article 3 Notices", styleName: "heading 1", outlineLevel: 0 },
+      "Notices are given in writing.",
+    ]);
+    const index = buildLabelIndex(manifest);
+    expect(
+      index.entryByBlockId.get(blockIdOf(manifest, "Article 3 Notices")),
+    ).toMatchObject({ level: "article", origin: "manual" });
+    expect(
+      index.entryByBlockId.has(blockIdOf(manifest, "Article 2 Term")),
+    ).toBe(false);
+  });
+});
+
 describe("buildTemplatePlan, an article heading the index does not count", () => {
   test("a heading that opens with an article's name is set as a heading and keeps its typed label", () => {
     const article = (label: string, text: string) => ({

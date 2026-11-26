@@ -636,10 +636,21 @@ const articleMentionPositions = (
   labelled: readonly LabelledRow[],
 ): Set<number> => {
   const mentions = new Set<number>();
+  const scheme = numberedScheme(labelled);
   /** The ordinal of the typed article heading read last, when it was one
    *  of these. */
   let counted: number | null = null;
   for (const row of labelled) {
+    // An article of the document's own numbering ends such a run: a typed
+    // heading behind it counts on from nothing.
+    if (
+      row.raw.origin === "auto" &&
+      row.block.outlineLevel !== null &&
+      (isNamedArticle(row) || headsArticle(scheme, row))
+    ) {
+      counted = null;
+      continue;
+    }
     if (row.raw.origin !== "manual" || !isNamedArticle(row)) {
       continue;
     }
