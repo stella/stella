@@ -429,26 +429,6 @@
     "owner": "collab",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/desktop/tests/desktop-events.test.ts": {
-    "count": 1,
-    "owner": "desktop",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/extension/src/lib/download-guard.test.ts": {
-    "count": 3,
-    "owner": "extension",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/extension/src/lib/download-scope.test.ts": {
-    "count": 1,
-    "owner": "extension",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/extension/src/lib/tab-containment.test.ts": {
-    "count": 2,
-    "owner": "extension",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/extension/src/lib/tab-executor.test.ts": {
     "count": 3,
     "owner": "extension",
@@ -774,11 +754,6 @@
     "owner": "agent-engine",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "packages/business-registries/src/ares/client.test.ts": {
-    "count": 1,
-    "owner": "business-registries",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "packages/cli/src/auth/loopback-listener.test.ts": {
     "count": 1,
     "owner": "cli",
@@ -807,11 +782,6 @@
   "packages/concurrency/src/sleep.test.ts": {
     "count": 3,
     "owner": "concurrency",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/errors/src/detached.test.ts": {
-    "count": 1,
-    "owner": "errors",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "packages/legal-atlas/src/document-stage-observer.test.ts": {

@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
-
 import {
   downloadNoticeMessage,
   holdDownloadForJudgement,
@@ -12,6 +10,12 @@ import {
   setDownloadScope,
   takeDownloadNotices,
 } from "./download-guard";
+
+const flushMicrotasks = async () => {
+  for (let i = 0; i < 8; i += 1) {
+    await Promise.resolve();
+  }
+};
 
 /** The time every judgement here is made at. */
 const NOW = 1_794_300_000_000;
@@ -174,7 +178,7 @@ describe("holding a download for its judgement", () => {
         }
       });
       // The frame lookup is still running: nothing may be suggested yet.
-      await sleep(20);
+      await flushMicrotasks();
       expect(events).toEqual([]);
 
       releaseFrames();
@@ -453,7 +457,7 @@ describe("recording and taking download notices", () => {
       for (const release of waiting.splice(0)) {
         release();
       }
-      await sleep(5);
+      await flushMicrotasks();
     };
     return { releaseReads, stored };
   };
@@ -468,7 +472,7 @@ describe("recording and taking download notices", () => {
       return undefined;
     });
     // Both updates are started before any read is let through.
-    await sleep(5);
+    await flushMicrotasks();
     for (let round = 0; round < 10; round += 1) {
       if (progress.done) {
         break;
