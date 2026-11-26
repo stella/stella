@@ -6,6 +6,11 @@
 // closing period and is the one switch whose result does not depend on where
 // the field stands. `\t` drops the words of a level text (`Čl. %1`), which
 // the source already has in front of the designator.
+//
+// `\t` keeps the punctuation of the words it drops, so a level like `Čl. %1`
+// has no field that shows the bare number. There the field stands for word
+// and number together: `\n` prints the whole label, and a letter-case
+// format gives it the citation's spelling (`čl. 3` for the label `Čl. 3`).
 
 import { panic, Result, TaggedError } from "better-result";
 
@@ -64,7 +69,14 @@ type ReferenceFieldErrorReason =
   | "unrenderable-level"
   /** The words of the level text carry punctuation, which the field would
    *  show in front of the number. */
-  | "punctuated-words";
+  | "punctuated-words"
+  /** The citation spells the label's words in a letter case no format
+   *  gives back, or a format would change the case of its numeral too. */
+  | "case-not-reproducible"
+  /** The blank between the citation's word and number is not the level
+   *  text's: the field would replace a no-break space by a plain one, or
+   *  the other way round. */
+  | "blank-differs";
 
 class ReferenceFieldError extends TaggedError("ReferenceFieldError")<{
   message: string;
@@ -217,4 +229,99 @@ export const selectReferenceField = ({
       return panic("Unhandled numbering");
     }
   }
+};
+
+type LabelFieldRequest = {
+  /** Text of the block the citation stands in. */
+  text: string;
+  /** Span of the designator in it. */
+  start: number;
+  end: number;
+  /** Level text of the level that numbers the target in the output. */
+  levelText: string;
+  /** The label the target prints in the output. */
+  label: string;
+};
+
+type LabelField = ReferenceField & {
+  /** Where the field starts: at the citation's word, in front of the
+   *  designator. */
+  start: number;
+};
+
+const CASE_FORMATS = [
+  { switches: "", apply: (text: string): string => text },
+  {
+    switches: String.raw`\* lower `,
+    apply: (text: string): string => text.toLowerCase(),
+  },
+  {
+    switches: String.raw`\* Upper `,
+    apply: (text: string): string => text.toUpperCase(),
+  },
+  {
+    switches: String.raw`\* FirstCap `,
+    apply: (text: string): string =>
+      text.charAt(0).toUpperCase() + text.slice(1),
+  },
+] as const;
+
+const BLANK = /[ \u00A0]/gu;
+const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+
+/**
+ * The field that stands for a citation's word and number together, for a
+ * target whose level prints words a number-only field cannot drop cleanly:
+ * `čl. 3` citing the paragraph labelled `Čl. 3`. The field prints the whole
+ * label, in the letter case the citation spells the word in.
+ *
+ * It fits only where the citation uses the label's own words: `článku 3`
+ * stays text. A letter-case format changes the whole result, so a
+ * lower-case citation of a roman number (`čl. IV`) stays text too, and so
+ * does a citation whose blank is not the level text's.
+ */
+export const selectLabelField = ({
+  text,
+  start,
+  end,
+  levelText,
+  label,
+}: LabelFieldRequest): Result<LabelField, ReferenceFieldError> => {
+  const shown = withoutClosingPeriods(label.trim());
+  const words = levelText.slice(0, Math.max(0, levelText.indexOf("%")));
+  if (!WORDS.test(words) || !shown.startsWith(words)) {
+    return fail("unrenderable-level", "The label does not start with words");
+  }
+  const numeral = shown.slice(words.length);
+  const wordStart = start - words.length;
+  const cited = wordStart < 0 ? "" : text.slice(wordStart, start);
+  const before = wordStart <= 0 ? "" : text.charAt(wordStart - 1);
+  if (
+    cited.replaceAll(BLANK, " ").toLowerCase() !==
+      words.replaceAll(BLANK, " ").toLowerCase() ||
+    LETTER_OR_DIGIT.test(before)
+  ) {
+    return fail(
+      "punctuated-words",
+      "The citation does not print the label's words",
+    );
+  }
+  if (cited.toLowerCase() !== words.toLowerCase()) {
+    return fail("blank-differs", "The citation's blank is not the label's");
+  }
+  const format = CASE_FORMATS.find(({ apply }) => apply(words) === cited);
+  // The format applies to the whole result: it must leave the number as
+  // the label prints it.
+  if (format === undefined || format.apply(shown) !== `${cited}${numeral}`) {
+    return fail(
+      "case-not-reproducible",
+      "No letter-case format prints the citation's spelling",
+    );
+  }
+  return Result.ok({
+    instruction: String.raw`\n ${format.switches}\h`,
+    expectedText: `${cited}${numeral}`,
+    start: wordStart,
+    text: text.slice(start, end) === numeral ? "kept" : "renumbered",
+  });
 };
