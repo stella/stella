@@ -17,13 +17,16 @@ import {
   scopeItemId,
   targetItemId,
 } from "@/api/lib/templates/house-style/ambiguity";
+import { closeNumberParts } from "@/api/lib/templates/house-style/designators";
 import { isStrippableLabel } from "@/api/lib/templates/house-style/folio-contract";
 import type {
   DocxBlock,
   DocxBlockManifest,
   DocxSection,
   TemplatePlan,
+  TemplatePlanAlignment,
   TemplatePlanHighlight,
+  TemplatePlanIndent,
   TemplatePlanNestedParagraph,
   TemplatePlanNumbering,
   TemplatePlanNumberingPatch,
@@ -43,6 +46,7 @@ import type {
   LabelIndex,
 } from "@/api/lib/templates/house-style/label-index";
 import {
+  levelsInLanguage,
   numberPlacements,
   ordinalOf,
   patternOf,
@@ -54,6 +58,7 @@ import type {
   NumberingMode,
   OutlineLevels,
   Placement,
+  PlanLanguages,
 } from "@/api/lib/templates/house-style/plan-numbering";
 import type { DetectedReference } from "@/api/lib/templates/house-style/reference-detector";
 import {
@@ -66,6 +71,7 @@ import {
   HOUSE_STYLE_ROLES,
   isBlankParagraph,
   isBulleted,
+  isSetAsTitle,
 } from "@/api/lib/templates/house-style/role-proposer";
 import type {
   HouseStyleRole,
@@ -104,6 +110,10 @@ type UnlinkedReason =
   | "undecidedScope"
   /** The target keeps its typed label, or has none a field could show. */
   | "targetNotNumbered"
+  /** The target is an annex whose number is typed text: no field can keep
+   *  a reference to it current (a bookmark around typed digits goes stale
+   *  without a sign when a digit is typed at its end). */
+  | "annexTyped"
   /** The field would show another text than the source prints. */
   | "designatorMismatch"
   /** The target's level prints words with punctuation (`Čl. 3`,
@@ -123,7 +133,7 @@ type UnlinkedReason =
    *  block the plan does not place, or the engine refused it. */
   | "notPlaceable";
 
-type FormattingNoteItem =
+export type FormattingNoteItem =
   | {
       kind: "referenceUnlinked";
       blockId: string;
@@ -170,6 +180,17 @@ type FormattingNoteItem =
    *  it heads. The output starts it in front of the heading (`blockId`):
    *  a heading does not end a page. */
   | { kind: "pageStartMoved"; blockId: string; fromBlockId: string }
+  /** The source starts a page in front of this block and the output does
+   *  not. `opensNoPart`: the block opens no part of the document (a title
+   *  page, an article, an annex, the signatures, a section), so the start
+   *  was there to fit the source's pages and would leave a page part empty.
+   *  `templateFlowsOn`: the start stood between the front matter and the
+   *  first article, where the template's own sample runs on. */
+  | {
+      kind: "pageStartDropped";
+      blockId: string;
+      reason: "opensNoPart" | "templateFlowsOn";
+    }
   /** A section of the source ends after this block and the next one's
    *  layout is not carried over: it begins on the same page (`continuous`,
    *  `nextColumn`), or its page or its columns are other than the
@@ -210,6 +231,46 @@ type FormattingNoteItem =
       styleId: string;
       insteadStyleId: string;
       blocks: number;
+    }
+  /** `blocks` lines that head the paragraph after them without being set
+   *  as headings (a provision that is only a title, a heading of the source
+   *  placed as text) stay on the page of that paragraph. */
+  | { kind: "linesKeptWithNext"; blocks: number }
+  /** `blocks` paragraphs whose number is text hang like the paragraphs the
+   *  list numbers on their level: the number stands out, the text is
+   *  aligned under itself. */
+  | { kind: "textLabelsHung"; blocks: number }
+  /** `blocks` headings the source breaks behind their number are set on
+   *  one line, as the template sets its headings: the line break went with
+   *  the typed number. */
+  | { kind: "headingBreaksDropped"; blocks: number }
+  /** `blocks` lines of the parties (`IČO:`, a tab, the value) got one tab
+   *  stop behind the widest label of their block, so the values start at
+   *  one position. The text is as it was. */
+  | { kind: "partyLinesAligned"; blocks: number }
+  /** `blocks` lines without a number that the source sets under the text
+   *  of a numbered item stand under that item's text here too, not at the
+   *  indent of unnumbered text. */
+  | { kind: "continuationsIndented"; blocks: number }
+  /** `blocks` lines keep the alignment the source sets them in: short
+   *  centred or right-aligned lines in front of the first article, and the
+   *  text of table cells. The template's text styles set every line at the
+   *  left. */
+  | { kind: "alignmentsKept"; blocks: number }
+  /** `blocks` paragraphs whose number the source types with a blank
+   *  between its parts (`1. 1.`) are numbered by the list, which prints the
+   *  number closed up (`1.1.`). */
+  | { kind: "numberPartsClosed"; blocks: number }
+  /** The template is in other languages (`template`) than the document
+   *  (`document`). The document's own numbers and words stay; `labelLevels`
+   *  levels of the template's own scheme print their label word in the
+   *  document's language. What the template itself prints (a footer) is
+   *  the template's. */
+  | {
+      kind: "templateLanguageDiffers";
+      document: string;
+      template: string[];
+      labelLevels: number;
     }
   | {
       kind: "templateBlocksKept";
@@ -311,6 +372,9 @@ type BuildOptions = {
   /** Whether the caller chose the view of the source's tracked changes;
    *  the note says when nobody did. */
   trackedChangesStated?: boolean;
+  /** The languages of the document and of the template, when the caller
+   *  knows them. */
+  languages?: PlanLanguages;
 };
 
 /** A placed paragraph that would not show the label the source shows. */
@@ -449,6 +513,18 @@ const runsOn = (block: DocxBlock, entry: LabelEntry | null): boolean =>
   entry?.titleBlockId === null &&
   isRunningText(block.text.slice(entry.manualLength));
 
+/** What a level must print for a bullet to keep its mark: the mark, and
+ *  the text face it is a character of. */
+const bulletPatternOf = (
+  { numbering }: DocxBlock,
+  mark: string,
+): NonNullable<Placement["pattern"]> => {
+  const font = numbering?.bulletFont;
+  return font === undefined
+    ? { numFmt: "bullet", lvlText: mark }
+    : { numFmt: "bullet", lvlText: mark, font };
+};
+
 /** One paragraph's style and what it asks of the numbering. */
 const placementOf = (
   context: Context,
@@ -496,12 +572,20 @@ const placementOf = (
     // or on a spare one.
     if (bulleted) {
       placement.sourceLabel = mark;
-      placement.pattern = { numFmt: "bullet", lvlText: mark };
+      placement.pattern = bulletPatternOf(block, mark);
       placement.numbered = true;
     }
     return placement;
   }
   const lead = block.text.length - block.text.trimStart().length;
+  // A number a field in the text counts goes with the text: the paragraph
+  // keeps its name and the field, and joins no list.
+  if (entry.origin === "field") {
+    placement.sourceLabel = block.text.slice(lead, entry.manualLength).trim();
+    placement.level = null;
+    placement.keptReason = "noListLevel";
+    return placement;
+  }
   const sourceLabel =
     entry.origin === "auto"
       ? mark
@@ -545,6 +629,14 @@ type Placed = {
   omitted: Map<string, "empty" | "sourceToc">;
   /** Placed paragraphs that start a page. */
   pageStarts: Set<string>;
+  /** Placed paragraphs that stay on the page of the one after them. */
+  keptWithNext: Set<string>;
+  /** The tab stops placed paragraphs get of their own. */
+  tabStops: Map<string, number[]>;
+  /** Where the lines of a paragraph set under an item start. */
+  itemIndents: Map<string, number>;
+  /** The alignment placed paragraphs keep from the source. */
+  alignments: Map<string, TemplatePlanAlignment>;
 };
 
 const roleOf = (
@@ -902,14 +994,156 @@ const pageStartsOf = (
   return starts;
 };
 
-/** Where the text of a placed paragraph starts, from the left margin. */
-const textStartOf = (
+/** The roles that open a part of the document on a page of its own. */
+const PAGE_OPENING_ROLES: ReadonlySet<HouseStyleRole> = new Set([
+  "title",
+  "articleHeading",
+  "annexHeading",
+]);
+
+const FRONT_MATTER_ROLES: ReadonlySet<HouseStyleRole> = new Set([
+  "title",
+  "party",
+]);
+
+/** Whether a paragraph may begin a page because of what it is. */
+const opensPage = (
+  { role, block }: Placement,
+  before: Placement | null,
+): boolean =>
+  PAGE_OPENING_ROLES.has(role) ||
+  isSetAsTitle(block) ||
+  (role === "signature" && before?.role !== "signature") ||
+  (before !== null &&
+    FRONT_MATTER_ROLES.has(before.role) &&
+    !FRONT_MATTER_ROLES.has(role));
+
+/** A page of the source with less text than this was cut short on
+ *  purpose (a title page, a page of signatures): its end is no accident
+ *  of the source's pagination. A full page of a contract holds three to
+ *  four times as much. */
+const SHORT_PAGE_CHARS = 1200;
+
+/**
+ * Keeps a page start only where a part of the document begins: in front
+ * of a title, an article or an annex, in front of the signatures, behind
+ * the title page, behind a page the source cut short, and where a section
+ * of the source begins on a new page. A start anywhere else was set to
+ * fit the source's pages; in the template's type and margins it would
+ * leave a page part empty. It is dropped and the note names the block. A
+ * blank paragraph kept to start the page in front of a table is not
+ * touched.
+ */
+const dropLoosePageStarts = (
+  context: Context,
+  placed: Placed,
+  holders: ReadonlySet<string>,
+): void => {
+  let before: Placement | null = null;
+  let sectionBegins = false;
+  /** The text of the source since its last page start. */
+  let pageChars = 0;
+  /** Whether the first article is still to come. */
+  let frontMatter = context.profile.frontMatterEndsPage === false;
+  for (const block of context.topLevel) {
+    const placement =
+      block.kind === "table" ? undefined : placed.placementById.get(block.id);
+    const starts = placed.pageStarts.has(block.id);
+    const droppable =
+      placement !== undefined &&
+      starts &&
+      !holders.has(block.id) &&
+      !sectionBegins;
+    // Between the front matter and the first article the template decides:
+    // where its own sample runs on, so does the document.
+    const flowsOn =
+      placement !== undefined &&
+      frontMatter &&
+      (placement.role === "articleHeading" ||
+        (before !== null &&
+          FRONT_MATTER_ROLES.has(before.role) &&
+          !FRONT_MATTER_ROLES.has(placement.role)));
+    if (droppable && placement !== undefined && flowsOn) {
+      placed.pageStarts.delete(block.id);
+      context.items.push({
+        kind: "pageStartDropped",
+        blockId: block.id,
+        reason: "templateFlowsOn",
+      });
+    } else if (
+      droppable &&
+      placement !== undefined &&
+      pageChars >= SHORT_PAGE_CHARS &&
+      !opensPage(placement, before)
+    ) {
+      placed.pageStarts.delete(block.id);
+      context.items.push({
+        kind: "pageStartDropped",
+        blockId: block.id,
+        reason: "opensNoPart",
+      });
+    }
+    frontMatter &&= placement?.role !== "articleHeading";
+    pageChars = starts || (block.pageBreaks ?? 0) > 0 ? 0 : pageChars;
+    pageChars += [block, ...insideOf(block, context.blockById)].reduce(
+      (sum, { text }) => sum + text.trim().length,
+      0,
+    );
+    if (placement === undefined) {
+      before = block.kind === "table" ? null : before;
+      sectionBegins ||= endsPage(context, block);
+    } else {
+      before = placement;
+      sectionBegins = endsPage(context, block);
+    }
+  }
+};
+
+/** The roles whose paragraphs a list numbers level by level. */
+const HANGING_ROLES: ReadonlySet<HouseStyleRole> = new Set([
+  ...LEVEL_ROLES,
+  "recital",
+]);
+
+/**
+ * The indent of a paragraph whose number is text: the one its level gives
+ * the paragraphs it numbers, so the number stands where theirs do and the
+ * text is aligned under itself. Null for a paragraph without a label, for
+ * a heading, and where the level states no hanging indent.
+ */
+const hangOf = (
   { profile }: Context,
-  { entry, level, borrowedLevel, role }: Placement,
-): number => {
+  { block, entry, level, borrowedLevel, role }: Placement,
+): TemplatePlanIndent | null => {
+  const labelled = entry !== null || shownLabelOf(block) !== null;
+  const provision =
+    HANGING_ROLES.has(role) ||
+    (role === "articleHeading" && runsOn(block, entry));
+  if (!labelled || !provision) {
+    return null;
+  }
+  const beside =
+    level ?? borrowedLevel ?? profile.roles[role]?.numbering ?? null;
+  const left = beside?.indent.left ?? null;
+  const hanging = beside?.indent.hanging ?? null;
+  return left === null || hanging === null || hanging <= 0
+    ? null
+    : { left, hanging };
+};
+
+/** Where the text of a placed paragraph starts, from the left margin. */
+const textStartOf = (context: Context, placement: Placement): number => {
+  const { profile } = context;
+  const { entry, level, borrowedLevel, role, pattern } = placement;
   const numberedAt = level ?? borrowedLevel;
-  if (entry !== null && numberedAt !== null) {
+  // A bullet has no entry of its own: its text starts where its level's.
+  if ((entry !== null || pattern?.numFmt === "bullet") && numberedAt !== null) {
     return numberedAt.indent.left ?? 0;
+  }
+  // A number written as text hangs as a list's would.
+  const hang = hangOf(context, placement);
+  if (hang?.left !== undefined) {
+    return hang.left;
   }
   // Unnumbered text of a provision stands under the text of its clause.
   return role === "continuation"
@@ -1012,6 +1246,321 @@ const keepHeadingsWithBody = (context: Context, placed: Placed): void => {
   }
 };
 
+/** A line of a label, tabs and a value: `IČO:`, a tab, the number. */
+const LABELLED_LINE = /^(?<label>[^\t\n]{1,40})(?<tabs>\t+)\S/u;
+/** The same outside the parties' block, where only a label that ends in a
+ *  colon tells such a line from text with a tab in it. */
+const COLON_LABEL = /:[ \u00A0]*$/u;
+/** The width of an average character, as a share of the font's size. */
+const CHARACTER_WIDTH = 0.55;
+/** The size text is taken to have where the template states none, in
+ *  half-points. */
+const TEXT_SIZE = 22;
+/** The space between the widest label and the values, in twentieths of a
+ *  point. */
+const LABEL_GAP = 170;
+/** A second and a third tab the source typed end one point behind the
+ *  first, so a line with several tabs starts its value with the others. */
+const TAB_STEP = 20;
+const TAB_STOPS_MAX = 3;
+
+type LabelledLine = { blockId: string; labelEnd: number; tabs: number };
+
+/** Where a party line's label ends, from the left margin, and how many
+ *  tabs follow it; null for a line without the shape or a style whose
+ *  indent is not known. */
+const labelledLine = (
+  { profile }: Context,
+  { block, styleId, role, numbered }: Placement,
+): LabelledLine | null => {
+  const read = LABELLED_LINE.exec(block.text)?.groups;
+  const parts =
+    read !== undefined &&
+    !numbered &&
+    block.label === null &&
+    (role === "party" || COLON_LABEL.test(read["label"] ?? ""))
+      ? read
+      : undefined;
+  const style = Object.values(profile.roles).find(
+    (target) => target?.styleId === styleId,
+  );
+  const indentLeft = style?.indentLeft;
+  if (parts === undefined || indentLeft === undefined) {
+    return null;
+  }
+  const width =
+    (parts["label"] ?? "").length *
+    (style?.size ?? TEXT_SIZE) *
+    10 *
+    CHARACTER_WIDTH;
+  return {
+    blockId: block.id,
+    labelEnd: (indentLeft ?? 0) + Math.ceil(width),
+    tabs: (parts["tabs"] ?? "").length,
+  };
+};
+
+/**
+ * Gives the lines of a label, a tab and a value one tab stop behind the
+ * widest label of their block: the details of the parties, and such lines
+ * anywhere else. The template's style for them has no stop of its own, so
+ * a tab ends at the next default stop and every value starts where its
+ * label happens to end. A block is the paragraphs in one style that follow
+ * each other; a table, a paragraph a list numbers and another style end
+ * it. The text stays as it is.
+ */
+const alignPartyLines = (context: Context, placed: Placed): void => {
+  let run: LabelledLine[] = [];
+  let style: string | null = null;
+  const close = (): void => {
+    if (run.length >= 2) {
+      const first =
+        Math.max(...run.map(({ labelEnd }) => labelEnd)) + LABEL_GAP;
+      const count = Math.min(
+        Math.max(...run.map(({ tabs }) => tabs)),
+        TAB_STOPS_MAX,
+      );
+      const stops = Array.from(
+        { length: count },
+        (_, index) => first + index * TAB_STEP,
+      );
+      for (const { blockId } of run) {
+        placed.tabStops.set(blockId, stops);
+      }
+    }
+    run = [];
+  };
+  for (const block of context.topLevel) {
+    const placement =
+      block.kind === "table" ? undefined : placed.placementById.get(block.id);
+    if (placement === undefined) {
+      // A paragraph that is left out parts nothing; a table does.
+      if (block.kind === "table") {
+        close();
+      }
+      continue;
+    }
+    if (
+      placement.styleId !== style ||
+      placement.numbered ||
+      block.label !== null
+    ) {
+      close();
+      style = placement.styleId;
+    }
+    const line = labelledLine(context, placement);
+    if (line !== null) {
+      run.push(line);
+    }
+  }
+  close();
+};
+
+/** How far left of an item's text a line may start and still stand under
+ *  it: a millimetre, in twentieths of a point. */
+const UNDER_ITEM_TOLERANCE = 60;
+
+const ITEM_ROLES: ReadonlySet<HouseStyleRole> = new Set([
+  ...LEVEL_ROLES,
+  "recital",
+  "bullet",
+]);
+
+const UNNUMBERED_ROLES: ReadonlySet<HouseStyleRole> = new Set([
+  "continuation",
+  "body",
+  "annexList",
+]);
+
+/** Whether a placed paragraph shows a number or a mark a list prints, or
+ *  one that is to be: a typed label that stays typed is text of its line
+ *  (`Příloha č. 1 – Ceník` in a list of annexes). */
+const showsLabel = ({ entry, block, numbered }: Placement): boolean =>
+  (entry !== null && numbered) || shownLabelOf(block) !== null;
+
+/** Whether a line can have others set under its text. */
+const leadsLines = ({ role, pattern }: Placement): boolean =>
+  ITEM_ROLES.has(role) || pattern?.numFmt === "bullet";
+
+/**
+ * Whether the source sets an unnumbered line under the text of the item in
+ * front of it: its first line starts where the item's text does, or
+ * further in.
+ */
+const standsUnder = (line: Placement, item: Placement): boolean => {
+  const own = line.block.indent;
+  const above = item.block.indent;
+  return (
+    own !== undefined &&
+    above !== undefined &&
+    above.left > 0 &&
+    // A line that hangs a mark of its own in front (a box, a dash) starts
+    // at that mark.
+    own.left + own.firstLine >= above.left - UNDER_ITEM_TOLERANCE
+  );
+};
+
+/**
+ * Sets the unnumbered lines that continue a numbered item under that
+ * item's text: the address lines under `(i)`, a second paragraph of a
+ * lettered point. The template's style for unnumbered text has one indent,
+ * made for text under a clause; under a deeper item it would stand left of
+ * the text it belongs to. A table, a heading and a paragraph the source
+ * sets further out end the item.
+ */
+const indentContinuations = (context: Context, placed: Placed): void => {
+  let item: Placement | null = null;
+  for (const block of context.topLevel) {
+    const placement =
+      block.kind === "table" ? undefined : placed.placementById.get(block.id);
+    if (placement === undefined) {
+      item = block.kind === "table" ? null : item;
+      continue;
+    }
+    if (showsLabel(placement)) {
+      item = leadsLines(placement) ? placement : null;
+      continue;
+    }
+    if (
+      item !== null &&
+      UNNUMBERED_ROLES.has(placement.role) &&
+      standsUnder(placement, item)
+    ) {
+      placed.itemIndents.set(block.id, textStartOf(context, item));
+    } else {
+      item = null;
+    }
+  }
+};
+
+/** The longest line that keeps the alignment the source sets it in. */
+const SET_LINE_MAX = 160;
+
+/** Roles of running text in front of the provisions. */
+const FRONT_TEXT_ROLES: ReadonlySet<HouseStyleRole> = new Set([
+  "body",
+  "continuation",
+  "party",
+]);
+
+/** The alignment a source paragraph is set apart by, or undefined. */
+const setApartOf = ({
+  alignment,
+}: DocxBlock): TemplatePlanAlignment | undefined =>
+  alignment === "center" || alignment === "right" ? alignment : undefined;
+
+/**
+ * Keeps short lines in front of the first article where the source sets
+ * them: centred (the line in brackets under the title, an `a` between two
+ * parties) or at the right margin (`- dále jen „Strana 1“ -`). The text
+ * styles of a template set every line at the left; these lines are laid
+ * out by hand in the firm's own documents too. A document without article
+ * headings has no such front matter and keeps its styles' alignment.
+ */
+const alignFrontLines = (context: Context, placed: Placed): void => {
+  const firstArticle = placed.placements.find(
+    ({ role }) => role === "articleHeading",
+  );
+  if (firstArticle === undefined) {
+    return;
+  }
+  for (const block of context.topLevel) {
+    if (block.index >= firstArticle.block.index) {
+      return;
+    }
+    const placement =
+      block.kind === "table" ? undefined : placed.placementById.get(block.id);
+    const alignment = setApartOf(block);
+    if (
+      placement !== undefined &&
+      alignment !== undefined &&
+      FRONT_TEXT_ROLES.has(placement.role) &&
+      !showsLabel(placement) &&
+      block.text.trim().length <= SET_LINE_MAX &&
+      !block.text.includes("\t")
+    ) {
+      placed.alignments.set(block.id, alignment);
+    }
+  }
+};
+
+const TITLE_LINE_MAX = 80;
+
+/** How deep a provision stands; a role outside the provisions has none. */
+const PROVISION_DEPTH: Partial<Record<HouseStyleRole, number>> = {
+  articleHeading: 0,
+  clause1: 1,
+  clause2: 2,
+  clause3: 3,
+  letter: 4,
+  roman: 5,
+  bullet: 6,
+};
+
+/**
+ * Whether a line heads the paragraph after it without being set as a
+ * heading: a provision that is one short line in front of the provisions
+ * under it (`2. Implementation plan` in front of `2.1`), or a heading of
+ * the source placed as text. A heading's own style keeps a heading with
+ * its text; these lines have a text style, which does not.
+ */
+const headsNext = (
+  placed: Placed,
+  line: Placement,
+  next: Placement,
+): boolean => {
+  const { role, block, entry } = line;
+  const heading =
+    role === "articleHeading"
+      ? headsText(placed, line)
+      : role === "annexHeading" || role === "title";
+  const text = block.text.slice(entry?.manualLength ?? 0).trim();
+  if (
+    heading ||
+    text === "" ||
+    text.length > TITLE_LINE_MAX ||
+    !/^[\p{Lu}\p{N}§]/u.test(text) ||
+    /[;,]$/u.test(text)
+  ) {
+    return false;
+  }
+  if (block.outlineLevel !== null && !/[.:]$/u.test(text)) {
+    return true;
+  }
+  const own = PROVISION_DEPTH[role];
+  const under = PROVISION_DEPTH[next.role];
+  return (
+    entry !== null && own !== undefined && under !== undefined && under > own
+  );
+};
+
+/**
+ * The lines that stay on the page of the paragraph after them. Not a line
+ * in front of a table or of a page start, nor the last of a section.
+ */
+const keepLinesWithBody = (context: Context, placed: Placed): void => {
+  let line: Placement | null = null;
+  for (const block of context.topLevel) {
+    if (block.kind === "table") {
+      line = null;
+      continue;
+    }
+    const next = placed.placementById.get(block.id);
+    if (next === undefined) {
+      continue;
+    }
+    if (
+      line !== null &&
+      !placed.pageStarts.has(block.id) &&
+      !context.keptSections.ends.has(line.block.id) &&
+      headsNext(placed, line, next)
+    ) {
+      placed.keptWithNext.add(line.block.id);
+    }
+    line = next;
+  }
+};
+
 /** A placement for every paragraph that gets one, in document order. */
 const placeParagraphs = (context: Context): Placed => {
   const { topLevel, blockById, index, exclusions, proposalById } = context;
@@ -1030,6 +1579,10 @@ const placeParagraphs = (context: Context): Placed => {
     mergedInto: new Map(),
     omitted: new Map(),
     pageStarts: new Set(),
+    keptWithNext: new Set(),
+    tabStops: new Map(),
+    itemIndents: new Map(),
+    alignments: new Map(),
   };
   /** The paragraph placed last at the top level; a table ends the run. */
   let lastPlaced: string | null = null;
@@ -1100,6 +1653,11 @@ const placeParagraphs = (context: Context): Placed => {
   }
   placed.pageStarts = pageStartsOf(context, placed, pageHolders);
   keepHeadingsWithBody(context, placed);
+  dropLoosePageStarts(context, placed, pageHolders);
+  keepLinesWithBody(context, placed);
+  alignPartyLines(context, placed);
+  indentContinuations(context, placed);
+  alignFrontLines(context, placed);
   return placed;
 };
 
@@ -1143,14 +1701,43 @@ const stripOf = ({
     ? { stripLabel: sourceLabel }
     : {};
 
+/** A line break right behind a label, with the blank in front of it. */
+const BREAK_BEHIND_LABEL = /^[ \t\u00A0]*\n/u;
+
 /**
- * Whether the document breaks its headings after the number. A heading
- * typed in one paragraph with a line break after its number cannot lose
- * that break; where the document writes its headings so, a heading split
- * over two paragraphs joins the same way, and otherwise it joins as the
- * template's sample heading reads.
+ * Whether a heading's line break behind its number goes with the stripped
+ * number: the template sets number and title on one line, and the template
+ * wins over the author's break.
  */
-const breaksHeadings = ({ placements, titleOf }: Placed): boolean => {
+const dropsLabelBreak = (
+  profile: TemplateProfile,
+  placement: Placement,
+): boolean => {
+  const { role, block, entry } = placement;
+  const join =
+    role === "annexHeading" ? profile.headings.annex : profile.headings.article;
+  return (
+    (role === "articleHeading" || role === "annexHeading") &&
+    join === "sameLine" &&
+    stripOf(placement).stripLabel !== undefined &&
+    BREAK_BEHIND_LABEL.test(block.text.slice(entry?.manualLength ?? 0))
+  );
+};
+
+/**
+ * Whether the document breaks its headings after the number, where the
+ * template leaves that to the document: a heading split over two
+ * paragraphs then joins the way the document's other headings read. Where
+ * the template's sample heading sets number and title on one line, every
+ * heading does.
+ */
+const breaksHeadings = (
+  { headings: { article } }: TemplateProfile,
+  { placements, titleOf }: Placed,
+): boolean => {
+  if (article === "sameLine") {
+    return false;
+  }
   const headings = placements.filter(
     ({ role, entry }) => role === "articleHeading" && entry !== null,
   );
@@ -1195,8 +1782,16 @@ const settleBrokenHeadings = (
     heading.alignment === "center" &&
     ((left !== null && left !== 0) || (hanging !== null && hanging !== 0)) &&
     onLevel.some(
-      ({ block }) =>
-        block.text.includes("\n") || (breaks && titleOf.has(block.id)),
+      (placement) =>
+        // A break that goes with the stripped number breaks nothing.
+        placement.block.text
+          .slice(placement.entry?.manualLength ?? 0)
+          .replace(
+            dropsLabelBreak(profile, placement) ? BREAK_BEHIND_LABEL : /^$/u,
+            "",
+          )
+          .includes("\n") ||
+        (breaks && titleOf.has(placement.block.id)),
     );
   if (onLevel.length === 0 || (!breaks && !offCentre)) {
     return;
@@ -1217,27 +1812,54 @@ const settleBrokenHeadings = (
   }
 };
 
+/**
+ * The style of a cell paragraph. A line of the parties laid out in a table
+ * has its place by its cell: the indent the template gives such a line on
+ * the page would only narrow the column, so it takes the plain text style.
+ */
+const cellStyleOf = (
+  { profile }: Context,
+  { role, styleId }: Placement,
+): string | null =>
+  role === "party" ? (profile.roles.body?.styleId ?? styleId) : styleId;
+
 const tableItem = (
-  { blockById }: Context,
+  context: Context,
   { placementById }: Placed,
   table: DocxBlock,
 ): TemplatePlanSourceItem => {
+  const { blockById } = context;
   const nested: TemplatePlanNestedParagraph[] = [];
   for (const inner of insideOf(table, blockById)) {
     const placement = placementById.get(inner.id);
     if (placement !== undefined) {
       const numbering = numberingOf(placement);
+      const styleId = cellStyleOf(context, placement);
       nested.push({
         blockId: inner.id,
-        ...(placement.styleId === null ? {} : { styleId: placement.styleId }),
+        ...(styleId === null ? {} : { styleId }),
         numbering,
         ...stripOf(placement),
         ...asTextOf(inner, numbering),
       });
-    } else if (inner.kind === "paragraph" && shownLabelOf(inner) !== null) {
-      // A cell paragraph placed with its table joins no list of the
-      // template; the number it shows goes with it as text.
-      nested.push({ blockId: inner.id, numbering: null, labelAsText: true });
+    } else if (inner.kind === "paragraph") {
+      // A cell paragraph placed with its table takes the style the
+      // template writes its tables in. It joins no list of the template;
+      // a number it shows goes with it as text.
+      // Where its text stands in the cell is the table's own layout: a
+      // centred row that heads a group, an amount at the right.
+      const styleId = context.profile.tableText?.styleId;
+      const labelled = shownLabelOf(inner) !== null;
+      const alignment =
+        inner.text.trim() === "" ? undefined : setApartOf(inner);
+      if (styleId !== undefined || labelled || alignment !== undefined) {
+        nested.push({
+          blockId: inner.id,
+          ...(styleId === undefined ? {} : { styleId }),
+          ...(labelled ? { numbering: null, labelAsText: true } : {}),
+          ...(alignment === undefined ? {} : { alignment }),
+        });
+      }
     }
   }
   return {
@@ -1255,19 +1877,32 @@ type ParagraphItemOptions = {
   breaks: boolean;
   /** Whether the paragraph starts a page. */
   pageStart: boolean;
+  /** Whether the paragraph stays on the page of the one after it. */
+  keepNext: boolean;
+  /** The tab stops the paragraph gets of its own. */
+  tabStops: readonly number[] | undefined;
+  /** Where the paragraph's lines start under the item it continues. */
+  itemIndent: number | undefined;
+  /** The alignment the paragraph keeps from the source. */
+  alignment: TemplatePlanAlignment | undefined;
   /** The section the paragraph is the last of, when it stays a section. */
   endsSection: TemplatePlanSection | undefined;
 };
 
 /** A paragraph's item and, for a split heading, its title's bare item. */
 const paragraphItems = ({
-  context: { profile },
+  context,
   placement,
   title,
   breaks,
   pageStart,
+  keepNext,
+  tabStops,
+  itemIndent,
+  alignment,
   endsSection,
 }: ParagraphItemOptions): TemplatePlanSourceItem[] => {
+  const { profile } = context;
   const { block } = placement;
   const stripped = stripOf(placement);
   const sampleJoin =
@@ -1283,6 +1918,9 @@ const paragraphItems = ({
     mergeNext = allLabel ? "none" : "space";
   }
   const numbering = numberingOf(placement);
+  // A number no list prints is text in front of the paragraph.
+  const hang = numbering === null ? hangOf(context, placement) : null;
+  const under = itemIndent === undefined ? null : { left: itemIndent };
   const item: TemplatePlanSourceItem = {
     kind: "source",
     blockId: block.id,
@@ -1290,10 +1928,16 @@ const paragraphItems = ({
     ...(placement.styleId === null ? {} : { styleId: placement.styleId }),
     numbering,
     ...stripped,
+    ...(dropsLabelBreak(profile, placement) ? { stripLabelBreak: true } : {}),
     ...asTextOf(block, numbering),
     ...(title === undefined ? {} : { mergeNext }),
     ...(pageStart ? { pageBreakBefore: true } : {}),
     ...(endsSection === undefined ? {} : { endsSection }),
+    ...(keepNext ? { keepNext: true } : {}),
+    ...(hang === null ? {} : { indent: hang }),
+    ...(hang === null && under !== null ? { indent: under } : {}),
+    ...(tabStops === undefined ? {} : { tabStops: [...tabStops] }),
+    ...(alignment === undefined ? {} : { alignment }),
   };
   return title === undefined
     ? [item]
@@ -1371,6 +2015,10 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
       title: titleOf.get(block.id),
       breaks,
       pageStart: placed.pageStarts.has(block.id),
+      keepNext: placed.keptWithNext.has(block.id),
+      tabStops: placed.tabStops.get(block.id),
+      itemIndent: placed.itemIndents.get(block.id),
+      alignment: placed.alignments.get(block.id),
       endsSection: context.keptSections.ends.get(block.id),
     });
     placedCount += paragraph.length;
@@ -1538,6 +2186,12 @@ const labelFieldOf = (
     ? "designatorMismatch"
     : "punctuatedLevelWords";
 };
+
+/** Whether a reference's target is an annex that keeps its typed number. */
+const typedAnnex = (target: Placement | undefined): boolean =>
+  target?.entry?.level === "annex" &&
+  target.entry.origin !== "auto" &&
+  !target.numbered;
 
 /** The field that stands for a designator citing `target`, or why none
  *  shows exactly what the reference prints. */
@@ -1722,7 +2376,7 @@ const markReferences = ({
       !target.numbered ||
       exclusions.targets.has(targetBlockId)
     ) {
-      return "targetNotNumbered";
+      return typedAnnex(target) ? "annexTyped" : "targetNotNumbered";
     }
     const paragraphOf = (blockId: string): string =>
       mergedInto.get(blockId) ?? blockId;
@@ -1942,7 +2596,8 @@ const checkLabels = ({
       }
     } else if (
       request.labelAsText ||
-      (context.mode === "keepSource" && planned?.trim() !== source)
+      (context.mode === "keepSource" &&
+        planned?.trim() !== closeNumberParts(source))
     ) {
       issues.push({ blockId, kind: "differs" });
     }
@@ -1979,6 +2634,87 @@ const noteConvertedLabels = (
  * that says what was linked, what was left as text and why. Pure: the same
  * readings give the same plan.
  */
+/**
+ * Where the template is in another language than the document: the label
+ * words of the template's own scheme go into the document's language, and
+ * the note says what language each is in.
+ */
+const noteLanguages = (
+  { items, mode }: Context,
+  languages: PlanLanguages | undefined,
+  numbering: Pick<
+    Parameters<typeof levelsInLanguage>[0],
+    "patches" | "levelsByList"
+  >,
+): void => {
+  if (
+    languages === undefined ||
+    languages.template.includes(languages.document)
+  ) {
+    return;
+  }
+  items.push({
+    kind: "templateLanguageDiffers",
+    document: languages.document,
+    template: [...languages.template],
+    labelLevels:
+      mode === "houseScheme"
+        ? levelsInLanguage({ languages, ...numbering })
+        : 0,
+  });
+};
+
+/** Says how many paragraphs were kept with the next and how many hang. */
+const noteParagraphOptions = (
+  { items }: Context,
+  { keptWithNext, tabStops, itemIndents }: Placed,
+  body: TemplatePlan["body"],
+): void => {
+  if (itemIndents.size > 0) {
+    items.push({ kind: "continuationsIndented", blocks: itemIndents.size });
+  }
+  if (keptWithNext.size > 0) {
+    items.push({ kind: "linesKeptWithNext", blocks: keptWithNext.size });
+  }
+  const hung = body.filter(
+    (item) => item.kind === "source" && item.indent?.hanging !== undefined,
+  ).length;
+  if (hung > 0) {
+    items.push({ kind: "textLabelsHung", blocks: hung });
+  }
+  if (tabStops.size > 0) {
+    items.push({ kind: "partyLinesAligned", blocks: tabStops.size });
+  }
+  let aligned = 0;
+  for (const item of body) {
+    if (item.kind === "source") {
+      aligned +=
+        (item.alignment === undefined ? 0 : 1) +
+        (item.nested ?? NO_NESTED).filter(
+          (nested) => nested.alignment !== undefined,
+        ).length;
+    }
+  }
+  if (aligned > 0) {
+    items.push({ kind: "alignmentsKept", blocks: aligned });
+  }
+  const closed = body.filter(
+    (item) =>
+      item.kind === "source" &&
+      item.stripLabel !== undefined &&
+      item.stripLabel !== closeNumberParts(item.stripLabel),
+  ).length;
+  if (closed > 0) {
+    items.push({ kind: "numberPartsClosed", blocks: closed });
+  }
+  const joined = body.filter(
+    (item) => item.kind === "source" && item.stripLabelBreak === true,
+  ).length;
+  if (joined > 0) {
+    items.push({ kind: "headingBreaksDropped", blocks: joined });
+  }
+};
+
 export const buildTemplatePlan = ({
   manifest,
   profile,
@@ -1991,6 +2727,7 @@ export const buildTemplatePlan = ({
   exclusions = NO_EXCLUSIONS,
   sourceHighlightColors,
   trackedChangesStated = false,
+  languages,
 }: BuildOptions): BuiltPlan => {
   const { blocks } = manifest;
   const tableOf = new Map<string, string>();
@@ -2032,7 +2769,8 @@ export const buildTemplatePlan = ({
     spareLevels: profile.spareLevels,
     markLevels: profile.markLevels,
   });
-  const breaks = breaksHeadings(placed);
+  noteLanguages(context, languages, { patches, levelsByList });
+  const breaks = breaksHeadings(profile, placed);
   settleBrokenHeadings(context, placed, patches, breaks);
   const { body, placedCount, contentsKept } = buildBody(
     context,
@@ -2091,6 +2829,7 @@ export const buildTemplatePlan = ({
       });
     }
   }
+  noteParagraphOptions(context, placed, body);
   const lineBreakSpacing = keepsLineBreakSpacing(
     context,
     manifest.compat,

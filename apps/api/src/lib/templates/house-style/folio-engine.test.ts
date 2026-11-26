@@ -251,6 +251,20 @@ describe("folioTemplatePlanEngine", () => {
     ).toEqual(["cyan", "yellow"]);
   });
 
+  test("names the refusal of a file that is no document", async () => {
+    const result = await formatOntoTemplate({
+      engine: folioTemplatePlanEngine,
+      source: new TextEncoder().encode("not a package"),
+      template: await template(),
+      mode: "keepSource",
+      resolveAmbiguities: resolveAmbiguitiesByRule,
+    });
+    expect(result.isErr() && result.error).toMatchObject({
+      _tag: "TemplateEngineError",
+      reason: "archive-unreadable",
+    });
+  });
+
   test("formats one view of a document with tracked changes: accepted unless the caller asks for the rejected one", async () => {
     const tracked = await docx({
       body: `<w:p><w:r><w:t xml:space="preserve">Kept </w:t></w:r><w:ins w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:t>inserted</w:t></w:r></w:ins><w:del w:id="2" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:delText>deleted</w:delText></w:r></w:del><w:r><w:t>.</w:t></w:r></w:p>`,

@@ -26,7 +26,10 @@ export type LabelEntry = {
   /** Position in `manifest.blocks`. */
   position: number;
   level: LabelLevel;
-  origin: "auto" | "manual";
+  /** Who prints the label: a list (`auto`), the text itself (`manual`), or
+   *  a field in the text that numbers itself (`field`), whose number no
+   *  text holds. */
+  origin: LabelOrigin;
   shape: LabelShape;
   /** Length of a typed label and the blanks after it at the start of the
    *  block's text; 0 for an automatic label. */
@@ -130,8 +133,10 @@ export const isRunningText = (text: string): boolean => {
   );
 };
 
+export type LabelOrigin = "auto" | "manual" | "field";
+
 type RawLabel = {
-  origin: "auto" | "manual";
+  origin: LabelOrigin;
   shape: LabelShape;
   manualLength: number;
   /** The block's text after the label. */
@@ -252,6 +257,40 @@ export const printedLabel = ({
   label,
 }: Pick<DocxBlock, "label">): string | null =>
   label === null || label.trim() === "" ? null : label;
+
+/** What stands in front of the number of an annex a field counts: the
+ *  annex's name, with the word for "number" some write behind it. */
+const FIELD_ANNEX_LEAD =
+  /^[ \u00A0]*(?:příloha|annex|schedule|appendix|exhibit|anlage|anhang)(?:[ \u00A0]+(?:č\.|no\.|nr\.))?[ \u00A0]*$/iu;
+
+/**
+ * The label of an annex heading whose number a field counts (`Příloha č.
+ * <n> Název`): the text holds the name alone, so the number is the one the
+ * heading has among the document's headings of this kind.
+ */
+const readFieldLabel = (block: DocxBlock, ordinal: number): RawLabel | null => {
+  const at = block.selfNumbers?.at(0);
+  if (block.kind !== "paragraph" || at === undefined) {
+    return null;
+  }
+  const lead = block.text.slice(0, at);
+  if (!FIELD_ANNEX_LEAD.test(lead)) {
+    return null;
+  }
+  const shape = parseLabelShape(`${lead.trim()} ${String(ordinal)}`);
+  if (shape?.keyword !== "annex") {
+    return null;
+  }
+  const after = block.text.slice(at);
+  const blank = BLANK.exec(after)?.[0] ?? "";
+  return {
+    origin: "field",
+    shape,
+    manualLength: at + blank.length,
+    remainder: after.slice(blank.length),
+    separated: true,
+  };
+};
 
 const readLabel = (block: DocxBlock): RawLabel | null => {
   // A bullet's mark is no designator, even when it is a letter (a font's
@@ -403,7 +442,7 @@ const isUpperCase = ({ shape }: RawLabel): boolean =>
 const isNamedArticle = ({ block, raw, family }: LabelledRow): boolean => {
   const { keyword } = raw.shape;
   if (keyword === "article" || keyword === "sectionSign") {
-    return raw.origin === "auto" || isHeadingRemainder(raw.remainder);
+    return raw.origin !== "manual" || isHeadingRemainder(raw.remainder);
   }
   const counted = family === "roman" && isUpperCase(raw) && keyword === null;
   if (!counted || !raw.shape.period) {
@@ -898,11 +937,142 @@ const parallelColumns = (
     : new Map<string, number>();
 };
 
+/** The second part of a number typed apart from its first: `1. 1. Text`
+ *  behind the label `1.`. */
+const SPACED_SECOND = /^(?<second>\d{1,3})\.(?<blank>[ \t\u00A0]+)(?=\S)/u;
+/** What a provision's text opens with; a year or a month's name does not. */
+const OPENS_TEXT = /^[\p{Lu}„“"‚'([]/u;
+
+type SpacedNumber = { position: number; second: number; joined: RawLabel };
+
+/** A typed `1.` whose text goes on with a second number and a provision's
+ *  text: read as one number, should its run prove it. */
+const readSpacedNumber = (
+  block: DocxBlock,
+  raw: RawLabel,
+  position: number,
+): SpacedNumber | null => {
+  const { shape } = raw;
+  const first = shape.path?.length === 1 ? shape.path.at(0) : undefined;
+  const match = SPACED_SECOND.exec(raw.remainder);
+  const second = Number.parseInt(match?.groups?.["second"] ?? "", 10);
+  if (
+    raw.origin !== "manual" ||
+    shape.keyword !== null ||
+    shape.numeral !== "decimal" ||
+    !shape.period ||
+    shape.open !== "" ||
+    shape.close !== "" ||
+    first === undefined ||
+    match === null ||
+    !Number.isInteger(second)
+  ) {
+    return null;
+  }
+  const rest = raw.remainder.slice(match[0].length);
+  const lead = BLANK.exec(block.text)?.[0].length ?? 0;
+  const between = raw.manualLength - lead - shape.length;
+  const literal = block.text.slice(
+    lead,
+    raw.manualLength + String(second).length + 1,
+  );
+  const whole = parseLabelShape(`${String(first)}.${String(second)}.`);
+  // Blanks only part the two numbers: a tab sets a label off from text.
+  if (
+    whole === null ||
+    !OPENS_TEXT.test(rest) ||
+    !/^[ \u00A0]+$/u.test(
+      block.text.slice(lead + shape.length, lead + shape.length + between),
+    )
+  ) {
+    return null;
+  }
+  const blank = match.groups?.["blank"] ?? "";
+  return {
+    position,
+    second,
+    joined: {
+      origin: "manual",
+      shape: { ...whole, length: literal.length },
+      manualLength: lead + literal.length + blank.length,
+      remainder: rest,
+      separated: blank.includes("\t"),
+    },
+  };
+};
+
+/** The number of the article a row heads, as far as a row tells before the
+ *  entries are nested: a single number, or an article's name and number. */
+const headedNumber = ({ shape }: RawLabel): number | null => {
+  if (shape.numeral !== "decimal") {
+    return null;
+  }
+  if (shape.keyword === "article" || shape.keyword === "sectionSign") {
+    return countedOrdinal(shape.core);
+  }
+  return shape.keyword === null && shape.path?.length === 1
+    ? (shape.path.at(0) ?? null)
+    : null;
+};
+
+/**
+ * Reads `1. 1.`, `1. 2.` under article 1 as `1.1.`, `1.2.`: a number typed
+ * with a blank between its parts. Only a run proves it: the first number is
+ * the number of the article above, and the second numbers count 1, 2, 3
+ * without a gap over two paragraphs or more. One such paragraph alone, a
+ * day and a month (`1. 1. 2026`), a number in front of a word in lower case
+ * stay what they were read as.
+ */
+const joinSpacedNumbers = (
+  blocks: readonly DocxBlock[],
+  raws: (RawLabel | null)[],
+): void => {
+  let article: number | null = null;
+  let run: SpacedNumber[] = [];
+  const close = () => {
+    const counted = run.every(({ second }, at) => second === at + 1);
+    if (run.length > 1 && counted) {
+      for (const { position, joined } of run) {
+        raws[position] = joined;
+      }
+    }
+    run = [];
+  };
+  for (const [position, raw] of raws.entries()) {
+    const block = blocks[position];
+    if (raw === null || raw === undefined || block === undefined) {
+      continue;
+    }
+    const spaced = readSpacedNumber(block, raw, position);
+    if (spaced !== null && raw.shape.path?.at(0) === article) {
+      run.push(spaced);
+      continue;
+    }
+    const headed = headedNumber(raw);
+    if (headed !== null || raw.shape.keyword !== null) {
+      close();
+      article = headed;
+    }
+  }
+  close();
+};
+
 /** Reads every paragraph's label and nests the entries. */
 export const buildLabelIndex = ({
   blocks,
 }: Pick<DocxBlockManifest, "blocks">): LabelIndex => {
-  const raws = blocks.map(readLabel);
+  // An annex a field numbers is counted here: its text holds no number.
+  let fieldAnnexes = 0;
+  const raws = blocks.map((block) => {
+    const read = readLabel(block);
+    if (read !== null) {
+      return read;
+    }
+    const counted = readFieldLabel(block, fieldAnnexes + 1);
+    fieldAnnexes += counted === null ? 0 : 1;
+    return counted;
+  });
+  joinSpacedNumbers(blocks, raws);
   const families = resolveFamilies(blocks, raws);
   const rows = blocks.map((block, position): Row => ({
     block,

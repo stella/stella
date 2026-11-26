@@ -206,6 +206,13 @@ export const parseLabelShape = (text: string): LabelShape | null => {
   };
 };
 
+/**
+ * A label with the blanks taken out that stand between the parts of a
+ * number: `1. 1.` reads `1.1.`. Any other label is returned as it is.
+ */
+export const closeNumberParts = (label: string): string =>
+  label.replaceAll(/(?<=\d\.)[ \u00A0]+(?=\d)/gu, "");
+
 /** A roman or decimal designator's ordinal: `XI` and `11` are both 11. */
 export const countedOrdinal = (core: string): number | null =>
   digitsValue(core) ?? parseRomanNumeral(core);

@@ -24,8 +24,13 @@ import type {
   TemplateEngineRefusal,
   TemplatePlanEngine,
 } from "@/api/lib/templates/house-style/folio-contract";
-import { formatOntoTemplate } from "@/api/lib/templates/house-style/format-onto-template";
-import type { FormattingNote } from "@/api/lib/templates/house-style/plan-builder";
+import {
+  formatOntoTemplate,
+  TemplateLabelsNotKeptError,
+  TemplateProfileRejectedError,
+} from "@/api/lib/templates/house-style/format-onto-template";
+import type { Formatted } from "@/api/lib/templates/house-style/format-onto-template";
+import type { FormattingNoteItem } from "@/api/lib/templates/house-style/plan-builder";
 import type { NumberingMode } from "@/api/lib/templates/house-style/plan-numbering";
 import {
   HOUSE_STYLE_TEMPLATE_TAG,
@@ -84,12 +89,15 @@ const refusalCodeOf = (reason: TemplateEngineRefusal): ReformatRefusalCode => {
     case "label-not-writable":
       return "label_not_writable";
     // Requests the library repairs by taking them back; one still refused
-    // after that, or any other refusal, means no verified output exists.
+    // after that, an output that did not hold up against the plan, a file
+    // the engine cannot open, or any other refusal: no verified output.
     case "strip-label-mismatch":
     case "merge-invalid":
     case "reference-span-invalid":
     case "reference-target-unplaced":
     case "highlight-span-invalid":
+    case "verification-failed":
+    case "archive-unreadable":
     case "other":
       return "verification_failed";
     default: {
@@ -164,7 +172,7 @@ export type ReformatNote = {
   templateHealth: ReformatTemplateHealth[];
 };
 
-type NoteSource = FormattingNote["items"][number];
+type NoteSource = FormattingNoteItem;
 
 /** The note items this layer words. The formatter grows its note; a kind it
  *  adds reaches the caller as `other` with its name until it is read here. */
@@ -346,15 +354,16 @@ export const reformatDocxOntoTemplate = async ({
 }: ReformatOptions): Promise<
   Result<{ docx: Uint8Array; note: ReformatNote }, ReformatRefusedError>
 > => {
-  // The engine reads the source once; its blocks give the note the words a
-  // person finds each place by.
-  let manifest: DocxBlockManifest | undefined;
+  // A formatted document comes back with the source as it was read. A
+  // refusal does not, so the last reading is kept for the words a person
+  // finds a refused place by.
+  let lastRead: DocxBlockManifest | undefined;
   const recording: TemplatePlanEngine = {
     ...engine,
-    analyze: async (docx) => {
-      const analyzed = await engine.analyze(docx);
+    analyze: async (docx, options) => {
+      const analyzed = await engine.analyze(docx, options);
       if (analyzed.isOk()) {
-        manifest = analyzed.value;
+        lastRead = analyzed.value;
       }
       return analyzed;
     },
@@ -368,8 +377,9 @@ export const reformatDocxOntoTemplate = async ({
       ? resolveAmbiguitiesByRule
       : leaveDecisionsOpen,
   });
+  const read = formatted.isOk() ? formatted.value.manifest : lastRead;
   const blocks = new Map(
-    arrayOrEmpty(manifest?.blocks).map((block) => [block.id, block]),
+    arrayOrEmpty(read?.blocks).map((block) => [block.id, block]),
   );
 
   if (formatted.isErr()) {
@@ -390,40 +400,35 @@ export const reformatDocxOntoTemplate = async ({
           : excerptOf(`${block.label ?? ""} ${block.text}`, LABEL_EXCERPT_MAX);
       return text === "" ? { blockId } : { blockId, text };
     };
-    switch (error._tag) {
-      case "TemplateEngineError": {
-        const code = refusalCodeOf(error.reason);
-        return refuse(
-          code,
-          error.blockId === undefined
-            ? []
-            : [{ ...withText(error.blockId), reason: error.reason }],
-        );
-      }
-      case "TemplateLabelsNotKeptError":
-        return refuse(
-          "labels_not_kept",
-          error.issues.map(({ blockId, kind }) => ({
-            ...withText(blockId),
-            reason: kind,
-          })),
-        );
-      case "TemplateProfileRejectedError":
-        return refuse(
-          "template_profile_rejected",
-          error.issues.map(({ code, blockId }) => ({
-            ...(blockId === undefined ? {} : { blockId }),
-            reason: code,
-          })),
-        );
-      default: {
-        error satisfies never;
-        return panic("Unhandled reformat error");
-      }
+    if (error instanceof TemplateLabelsNotKeptError) {
+      return refuse(
+        "labels_not_kept",
+        error.issues.map(({ blockId, kind }) => ({
+          ...withText(blockId),
+          reason: kind,
+        })),
+      );
     }
+    if (error instanceof TemplateProfileRejectedError) {
+      return refuse(
+        "template_profile_rejected",
+        error.issues.map(({ code, blockId }) => ({
+          ...(blockId === undefined ? {} : { blockId }),
+          reason: code,
+        })),
+      );
+    }
+    // What is left is the engine's own refusal, by its reason.
+    return refuse(
+      refusalCodeOf(error.reason),
+      error.blockId === undefined
+        ? []
+        : [{ ...withText(error.blockId), reason: error.reason }],
+    );
   }
 
-  const { docx, note, outcome, profile } = formatted.value;
+  const done: Formatted = formatted.value;
+  const { docx, note, outcome, profile } = done;
   const items = note.items.map((item) => noteItemOf(item, blocks));
   return Result.ok({
     docx,

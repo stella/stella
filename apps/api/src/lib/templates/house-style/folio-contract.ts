@@ -24,13 +24,16 @@ export type DocxBlock = {
    *  the paragraph is not auto-numbered. Never part of `text`. */
   label: string | null;
   /** `bullet`: the level prints a bullet, so the label is a mark,
-   *  whatever character stands for it, and no designator. Absent from a
-   *  manifest read before it was reported. */
+   *  whatever character stands for it, and no designator. `bulletFont`:
+   *  the text face the mark is a character of; in another face it is
+   *  another shape. Both absent from a manifest read before they were
+   *  reported. */
   numbering: {
     numId: number;
     ilvl: number;
     abstractNumId: number;
     bullet?: true;
+    bulletFont?: string;
   } | null;
   styleId: string | null;
   styleName: string | null;
@@ -44,6 +47,9 @@ export type DocxBlock = {
   /** Page breaks among the paragraph's runs; a paragraph without text can
    *  hold one. */
   pageBreaks?: number;
+  /** Offsets in `text` at which the paragraph holds a field that numbers
+   *  itself: the number it prints is in no text. Absent without one. */
+  selfNumbers?: number[];
   /** The paragraph starts on a new page by its own formatting or its
    *  style's. */
   pageBreakBefore?: true;
@@ -53,6 +59,11 @@ export type DocxBlock = {
   /** The paragraph alignment in effect (`w:jc`): the paragraph's own, else
    *  its style's. Absent when neither states one. */
   alignment?: string;
+  /** The indent in effect, in twentieths of a point: where the
+   *  paragraph's lines start, and what its first line adds to that
+   *  (negative for a hanging indent). Absent when nothing states one, and
+   *  from a manifest read before it was reported. */
+  indent?: { left: number; firstLine: number };
   cells?: { row: number; col: number; blockIds: string[] }[];
 };
 
@@ -155,6 +166,10 @@ export type TemplateStyle = {
   size?: number | null;
   /** Whether the style keeps its paragraph with the next one. */
   keepNext?: boolean;
+  /** The left indent the style gives its paragraphs, in twentieths of a
+   *  point; null when none states one. Absent from an inspection read
+   *  before it was reported. */
+  indentLeft?: number | null;
   isDefault: boolean;
 };
 
@@ -220,6 +235,9 @@ export type TemplatePlanNumbering = {
 
 type TemplatePlanMerge = "lineBreak" | "space" | "none";
 
+/** How a paragraph's lines are set between the margins. */
+export type TemplatePlanAlignment = "left" | "center" | "right" | "both";
+
 export type TemplatePlanNestedParagraph = {
   blockId: string;
   styleId?: string;
@@ -227,6 +245,8 @@ export type TemplatePlanNestedParagraph = {
   stripLabel?: string;
   /** As on a source item. */
   labelAsText?: boolean;
+  /** As on a source item. */
+  alignment?: TemplatePlanAlignment;
 };
 
 /** A section of the output with a page other than the template's, in
@@ -243,6 +263,13 @@ export type TemplatePlanSection = {
   start?: "nextPage" | "evenPage" | "oddPage";
 };
 
+/** A paragraph indent a plan states; a side left out stays as it is. */
+export type TemplatePlanIndent = {
+  left?: number;
+  hanging?: number;
+  firstLine?: number;
+};
+
 export type TemplatePlanSourceItem = {
   kind: "source";
   blockId: string;
@@ -252,6 +279,11 @@ export type TemplatePlanSourceItem = {
   numbering?: TemplatePlanNumbering | null;
   /** Literal manual label at the start of the block's text, removed. */
   stripLabel?: string;
+  /** With `stripLabel`: a line break behind the label goes with it. For a
+   *  heading the source breaks behind its number where the template sets
+   *  number and title on one line. An engine that does not know the option
+   *  leaves the break in the paragraph. */
+  stripLabelBreak?: boolean;
   /** Writes the block's automatic label as text in front of its text, for
    *  a label no list of the template prints. The paragraph it leads joins
    *  no list. The engine writes only a label that reads the same wherever
@@ -266,6 +298,20 @@ export type TemplatePlanSourceItem = {
   /** The paragraph is the last of the section described. Not for a table,
    *  nor for a block that joins the paragraph before it. */
   endsSection?: TemplatePlanSection;
+  /** Keeps the paragraph on the page of the one after it. An engine that
+   *  does not know the option writes the paragraph without it. */
+  keepNext?: boolean;
+  /** The paragraph's own indent, over its style's and its list level's,
+   *  in twentieths of a point. As `keepNext`, it is left out by an engine
+   *  that does not know it. */
+  indent?: TemplatePlanIndent;
+  /** The paragraph's own left tab stops, in twentieths of a point from
+   *  the left margin, ascending. As `keepNext`, left out by an engine that
+   *  does not know them. */
+  tabStops?: number[];
+  /** The paragraph's own alignment, over its style's. As `keepNext`, left
+   *  out by an engine that does not know it. */
+  alignment?: TemplatePlanAlignment;
   /** Table only: the paragraph style of its cells. */
   cellStyleId?: string;
   /** Table only: placement of single paragraphs inside it. */
@@ -304,6 +350,9 @@ export type TemplatePlanNumberingPatch = {
   lvlText?: string;
   /** What follows the label. */
   suff?: "tab" | "space" | "nothing";
+  /** The face the level's label is set in: for a bullet whose mark is a
+   *  character of a text face. */
+  font?: string;
   /** The level's paragraph indent, in twentieths of a point; a value left
    *  out keeps what the level states. */
   indent?: { left?: number; hanging?: number; firstLine?: number };
@@ -381,6 +430,10 @@ export type TemplateEngineRefusal =
   | "highlight-span-invalid"
   | "tracked-changes"
   | "unsupported-content"
+  /** The source or the template is no package the engine can open. */
+  | "archive-unreadable"
+  /** The output was written and did not hold up against the plan. */
+  | "verification-failed"
   | "other";
 
 export class TemplateEngineError extends TaggedError("TemplateEngineError")<{
@@ -446,11 +499,14 @@ const MANUAL_LABEL_BULLET = /^[-\u2013\u2014\u2022\u00B7\u25AA\u25E6*]$/u;
 const MANUAL_LABEL_ROMAN =
   /^(?=.)M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})$/iu;
 const MANUAL_LABEL_END = /^[ \t\u00A0\n]$/u;
+/** A number of several parts typed with blanks between them: `1. 1.`. */
+const MANUAL_LABEL_SPACED_NUMBER = /^\d{1,3}\.(?:[ \u00A0]+\d{1,3}\.){1,3}$/u;
 
 /**
  * Whether the engine will strip `label` from the start of `text`: up to
  * three words and one designator (a number, a roman numeral or a letter with
- * its punctuation) or a single bullet, ending where a word would. The engine
+ * its punctuation), a single bullet, or a number whose parts stand apart
+ * (`1. 1.`), ending where a word would. The engine
  * refuses any other strip, so a label that fails here stays in the text.
  */
 export const isStrippableLabel = (label: string, text: string): boolean => {
@@ -465,7 +521,10 @@ export const isStrippableLabel = (label: string, text: string): boolean => {
   ) {
     return false;
   }
-  if (MANUAL_LABEL_BULLET.test(label)) {
+  if (
+    MANUAL_LABEL_BULLET.test(label) ||
+    MANUAL_LABEL_SPACED_NUMBER.test(label)
+  ) {
     return true;
   }
   const tokens = label.split(/[ \u00A0]/u);
@@ -486,6 +545,7 @@ const blockNumberingSchema = v.strictObject({
   ilvl: v.pipe(v.number(), v.integer(), v.minValue(0)),
   abstractNumId: v.pipe(v.number(), v.integer()),
   bullet: v.exactOptional(v.literal(true)),
+  bulletFont: v.exactOptional(v.pipe(v.string(), v.minLength(1))),
 });
 
 const blockSchema = v.strictObject({
@@ -504,9 +564,18 @@ const blockSchema = v.strictObject({
     v.pipe(v.number(), v.integer(), v.minValue(0)),
   ),
   pageBreaks: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+  selfNumbers: v.exactOptional(
+    v.array(v.pipe(v.number(), v.integer(), v.minValue(0))),
+  ),
   pageBreakBefore: v.exactOptional(v.literal(true)),
   endsSection: v.exactOptional(v.literal(true)),
   alignment: v.exactOptional(v.string()),
+  indent: v.exactOptional(
+    v.strictObject({
+      left: v.pipe(v.number(), v.integer()),
+      firstLine: v.pipe(v.number(), v.integer()),
+    }),
+  ),
   cells: v.exactOptional(
     v.array(
       v.strictObject({

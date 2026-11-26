@@ -56,6 +56,22 @@ describe("inferTemplateProfile", () => {
     expect(roles.bullet).toBeNull();
     expect(annex).toEqual({ numbering: "field" });
     expect(headings).toEqual({ article: "sameLine", annex: "lineBreak" });
+    // The sample runs from its front matter into its first article; a
+    // sample with a page break in between starts a page there.
+    const template = contractTemplate();
+    expect(inferTemplateProfile(template).frontMatterEndsPage).toBe(false);
+    const article = template.blocks.findIndex(
+      ({ styleId }) => styleId === roles.articleHeading?.styleId,
+    );
+    expect(article).toBeGreaterThan(0);
+    expect(
+      inferTemplateProfile({
+        ...template,
+        blocks: template.blocks.map((block, position) =>
+          position === article ? { ...block, pageBreakBefore: true } : block,
+        ),
+      }).frontMatterEndsPage,
+    ).toBe(true);
   });
 
   test("a contents field that shows sample entries is not kept", () => {
@@ -508,6 +524,121 @@ describe("validateTemplateProfile", () => {
       code: "unknownStyle",
       role: "clause2",
     });
+  });
+
+  test("reads the style the template writes its tables in, by its name and its samples", () => {
+    const template = contractTemplate();
+    expect(inferTemplateProfile(template).tableText).toBeUndefined();
+    const cell = template.blocks.find(({ id }) => id === "p15");
+    const body = template.styles.find(({ isDefault }) => isDefault);
+    if (cell === undefined || body === undefined) {
+      throw new Error("fixture");
+    }
+    const tableText = {
+      ...body,
+      styleId: "TableText",
+      name: "Text in a table",
+      isDefault: false,
+    };
+    const inCells = {
+      ...template,
+      styles: [...template.styles, tableText],
+      blocks: template.blocks.map((block) =>
+        block.id === "p15"
+          ? { ...block, styleId: "TableText", styleName: "Text in a table" }
+          : block,
+      ),
+    };
+    expect(inferTemplateProfile(inCells).tableText).toEqual({
+      styleId: "TableText",
+    });
+    // A style of that name the sample also writes outside a table is not it.
+    const outside = {
+      ...inCells,
+      blocks: inCells.blocks.map((block) =>
+        block.id === "p16"
+          ? { ...block, styleId: "TableText", styleName: "Text in a table" }
+          : block,
+      ),
+    };
+    expect(inferTemplateProfile(outside).tableText).toBeUndefined();
+    expect(
+      validateTemplateProfile(
+        { ...inferTemplateProfile(template), tableText: { styleId: "Gone" } },
+        template,
+      ).map(({ code }) => code),
+    ).toContain("unknownStyle");
+  });
+
+  test("a list whose styles are named for annexes is not the outline, however many samples it has", () => {
+    const template = contractTemplate();
+    const own = inferTemplateProfile(template).roles;
+    const sample = template.blocks.find(
+      ({ styleId }) => styleId === own.clause1?.styleId,
+    );
+    // As many styled levels as the outline has.
+    const levels = template.numbering.abstractNums
+      .find(
+        ({ abstractNumId }) =>
+          abstractNumId === own.articleHeading?.numbering?.abstractNumId,
+      )
+      ?.levels.filter(({ pStyle }) => pStyle !== null);
+    if (sample === undefined || levels === undefined) {
+      throw new Error("the fixture has a clause sample and an outline");
+    }
+    const annexStyle = (styleId: string, name: string, ilvl: number) => ({
+      styleId,
+      name,
+      type: "paragraph" as const,
+      basedOn: null,
+      numPr: { numId: 40, ilvl },
+      outlineLvl: null,
+      alignment: null,
+      isDefault: false,
+    });
+    // A report: a short body and long annexes in a list of their own with
+    // as many levels.
+    const report = {
+      ...template,
+      styles: [
+        ...template.styles,
+        ...levels.map(({ ilvl }) =>
+          annexStyle(
+            `AnnexL${String(ilvl)}`,
+            `Clause annex ${String(ilvl)}`,
+            ilvl,
+          ),
+        ),
+      ],
+      numbering: {
+        abstractNums: [
+          ...template.numbering.abstractNums,
+          {
+            abstractNumId: 12,
+            levels: levels.map((level) => ({
+              ...level,
+              pStyle: `AnnexL${String(level.ilvl)}`,
+            })),
+          },
+        ],
+        nums: [...template.numbering.nums, { numId: 40, abstractNumId: 12 }],
+      },
+      blocks: [
+        ...template.blocks,
+        ...Array.from({ length: 40 }, (_, position) => ({
+          ...sample,
+          id: `x${String(position)}`,
+          index: template.blocks.length + position,
+          styleId: "AnnexL1",
+          styleName: "Clause annex 1",
+          label: `1.${String(position + 1)}`,
+          numbering: { numId: 40, ilvl: 1, abstractNumId: 12 },
+        })),
+      ],
+    };
+    const { roles } = inferTemplateProfile(report);
+    expect(roles.articleHeading?.styleId).toBe(own.articleHeading?.styleId);
+    expect(roles.clause1?.styleId).toBe(own.clause1?.styleId);
   });
 
   test("lists the deeper levels of another list of the template for marks", () => {
