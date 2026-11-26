@@ -14,37 +14,37 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1077,
+    line: 1118,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1417,
+    line: 1458,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1818,
+    line: 1859,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1864,
+    line: 1905,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1903,
+    line: 1944,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1938,
+    line: 1979,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1988,
+    line: 2029,
     kind: "pending",
   },
   {

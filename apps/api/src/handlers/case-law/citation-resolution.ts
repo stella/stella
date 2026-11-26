@@ -83,7 +83,7 @@
  * to one outcome, rule and target. A rule changed here changes there.
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -95,6 +95,7 @@ import {
   DECISION_STATED_SHEET_MAX_DIGITS,
 } from "@stll/api-contract/decision-query-intent";
 import type { DecisionSheetSource } from "@stll/api-contract/decision-query-intent";
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 
@@ -138,6 +139,7 @@ import {
   PROCEDURAL_DECISION_TYPES,
   unsettledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   caseNumberKeyAmongSql,
@@ -146,6 +148,10 @@ import {
 } from "@/api/lib/case-law/case-number-match-key";
 import { languageGroupWorkKeySql } from "@/api/lib/case-law/decision-work";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { errorSystemFields } from "@/api/lib/errors/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { logger } from "@/api/lib/observability/logger";
+import { pgErrorFields } from "@/api/lib/pg-error";
 import {
   brandPersistedCaseLawCitationId,
   brandPersistedCaseLawDecisionId,
@@ -1002,25 +1008,60 @@ export const resolveCitationBatch = async (
 export const tryResolveCitationBatch = async (
   scopedDb: ScopedDb,
   { limit }: { limit: number },
-): Promise<CitationResolutionBatch | null> =>
-  await tryCitationGraphTransaction(scopedDb, async (tx) => {
-    // Arrivals a write's own drain left behind (it failed, or the page
-    // queued more than one drain takes) are taken here first, so no arrival
-    // waits on a later decision write to be reopened. Bounded by the batch.
-    const arrivals = await drainCitationArrivalsIn(tx, {
-      limit,
-      settleCeiling: limit,
-    });
+): Promise<CitationResolutionBatch | null> => {
+  const arrivals = await drainArrivalsBeforeWalk(scopedDb, limit);
+  const batch = await tryCitationGraphTransaction(scopedDb, async (tx) => {
     const after = await readCitationResolutionCursor(tx);
-    const batch = await resolveCitationBatchIn(tx, { limit, after });
+    const walked = await resolveCitationBatchIn(tx, { limit, after });
     await writeCitationResolutionCursor(
       tx,
-      batch.scanned === 0 ? null : batch.cursor,
+      walked.scanned === 0 ? null : walked.cursor,
     );
-    return arrivals.settled === null
-      ? batch
-      : { ...addCitationCounts(batch, arrivals.settled), cursor: batch.cursor };
+    return walked;
   });
+  return batch === null || arrivals === null
+    ? batch
+    : { ...addCitationCounts(batch, arrivals), cursor: batch.cursor };
+};
+
+/**
+ * Arrivals a write's own drain left behind (it failed, or the page queued
+ * more than one drain takes), taken before each batch so no arrival waits on
+ * a later decision write to be reopened. Bounded by the batch.
+ *
+ * In a transaction of its own: a drain that fails rolls back whole, leaving
+ * its arrivals queued, and is reported every turn it fails, while the walk
+ * goes on settling the rest of the corpus. A held graph skips it this turn.
+ */
+const drainArrivalsBeforeWalk = async (
+  scopedDb: ScopedDb,
+  limit: number,
+): Promise<CitationResolutionCounts | null> => {
+  const drained = await Result.tryPromise({
+    try: async () =>
+      await tryCitationGraphTransaction(
+        scopedDb,
+        async (tx) =>
+          await drainCitationArrivalsIn(tx, { limit, settleCeiling: limit }),
+      ),
+    catch: (cause) => cause,
+  });
+  if (Result.isOk(drained)) {
+    return drained.value?.settled ?? null;
+  }
+  logger.error(
+    "case_law.citation_arrivals.walk_drain_failed",
+    sanitizeErrorAttributesForOutput({
+      ...errorSystemFields(drained.error),
+      ...pgErrorFields(drained.error),
+    }),
+  );
+  captureError(
+    drained.error,
+    handlerErrorContext("citationResolution.walk.citation_arrivals"),
+  );
+  return null;
+};
 
 const addCitationCounts = (
   a: CitationResolutionCounts,

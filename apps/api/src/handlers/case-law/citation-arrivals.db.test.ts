@@ -990,6 +990,35 @@ const enqueue = async (decision: StoredDecision) =>
       }),
   );
 
+type DrainTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * A runner whose queue probe commits and whose locked drain fails only after
+ * it has taken the arrival and settled what it reopened, as seen inside that
+ * transaction, so the rollback undoes real progress.
+ */
+const failingAfterDrain = (waiting: SafeId<"caseLawCitation">) => {
+  let transactions = 0;
+  return async <T>(run: (tx: DrainTransaction) => Promise<T>): Promise<T> =>
+    await db.transaction(async (tx) => {
+      transactions += 1;
+      const value = await run(tx);
+      if (transactions === 1) {
+        return value;
+      }
+      const left = await tx
+        .select({ id: caseLawCitationArrivals.id })
+        .from(caseLawCitationArrivals);
+      expect(left).toHaveLength(0);
+      const settled = await tx
+        .select({ status: caseLawCitations.resolutionStatus })
+        .from(caseLawCitations)
+        .where(eq(caseLawCitations.id, waiting));
+      expect(settled.at(0)?.status).toBe(CITATION_RESOLUTION_STATUS.RESOLVED);
+      throw new Error("the drain's transaction fails");
+    });
+};
+
 test("an enqueued arrival is drained once, in the transaction that settles what it reopened", async () => {
   const { arriving, waiting } = await queueCorpus();
   expect(await enqueue(arriving)).toBe(1);
@@ -1012,15 +1041,7 @@ test("an enqueued arrival is drained once, in the transaction that settles what 
 test("a drain that does not commit leaves its arrivals for the next one", async () => {
   const { arriving, waiting } = await queueCorpus();
   await enqueue(arriving);
-  const failing = async <T>(
-    run: (
-      tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
-    ) => Promise<T>,
-  ): Promise<T> =>
-    await db.transaction(async (tx) => {
-      await run(tx);
-      throw new Error("the drain's transaction fails");
-    });
+  const failing = failingAfterDrain(waiting);
   const rejected = await rejectionOf(drainCitationArrivals(failing));
   expect(rejected instanceof Error ? rejected.message : rejected).toBe(
     "the drain's transaction fails",
@@ -1038,15 +1059,7 @@ test("the standing walk takes arrivals a failed drain left behind, with no later
   const { arriving, waiting } = await queueCorpus();
   await enqueue(arriving);
   // The write's own drain fails; nothing else is ever written.
-  const failing = async <T>(
-    run: (
-      tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
-    ) => Promise<T>,
-  ): Promise<T> =>
-    await db.transaction(async (tx) => {
-      await run(tx);
-      throw new Error("the drain's transaction fails");
-    });
+  const failing = failingAfterDrain(waiting);
   expect(await rejectionOf(drainCitationArrivals(failing))).toBeInstanceOf(
     Error,
   );
