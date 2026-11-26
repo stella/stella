@@ -108,7 +108,7 @@ type ReformatNoteItem = {
    *  the start of the paragraph. */
   text?: string;
   /** A block the note points to: the provision a suspected citation more
-   *  likely means. */
+   *  likely means, or the block the source started a page in front of. */
   targetBlockId?: string;
   count?: number;
   highlighted?: boolean;
@@ -227,6 +227,12 @@ const noteItemOf = (
         kind: "page_start_not_kept",
         blockId: item.blockId,
         reason: item.reason,
+      };
+    case "pageStartMoved":
+      return {
+        kind: "page_start_moved",
+        blockId: item.blockId,
+        targetBlockId: item.fromBlockId,
       };
     case "sectionLayoutNotKept":
       return {

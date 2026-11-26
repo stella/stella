@@ -28,6 +28,7 @@ export const REFORMAT_NOTE_ITEM_KINDS = [
   "role_without_style",
   "articles_set_as_text",
   "page_start_not_kept",
+  "page_start_moved",
   "section_layout_not_kept",
   "line_break_spacing_kept",
   "invisible_effects_removed",
