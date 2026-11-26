@@ -97,7 +97,7 @@ test("an exact named subset retains manifest order", () => {
   );
 });
 
-test("checkBudgetP95Seconds falls back to budget minutes when a check has no measured samples", () => {
+test("checkBudgetP95Seconds caps unmeasured check weights so timeout ceilings do not skew partitions", () => {
   const budgets = {
     "ci-checks-policy": {},
     "ci-checks-rest": {
@@ -120,7 +120,7 @@ test("checkBudgetP95Seconds falls back to budget minutes when a check has no mea
   };
   expect(checkBudgetP95Seconds(budgets, "ci-checks-rest", "Measured")).toBe(42);
   expect(checkBudgetP95Seconds(budgets, "ci-checks-rest", "Unmeasured")).toBe(
-    1200,
+    60,
   );
   expect(checkBudgetP95Seconds(budgets, "ci-checks-rest", "Missing")).toBe(60);
 });
