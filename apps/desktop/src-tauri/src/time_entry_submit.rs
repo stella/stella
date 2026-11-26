@@ -140,6 +140,26 @@ struct ResolveResponse {
   matters: Vec<MatterResolution>,
 }
 
+/// One of the member's own entries on a work date: its matter and minutes,
+/// never a time of day.
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DayEntry {
+  id: String,
+  matter_id: String,
+  duration_minutes: u32,
+}
+
+/// The member's own client entries on one work date, from any device or the
+/// web; the review tells its own apart by the entry ids it drafted.
+#[derive(Deserialize, Serialize)]
+pub struct DayEntriesResponse {
+  entries: Vec<DayEntry>,
+}
+
+/// The API contract's `DESKTOP_DAY_ENTRIES_LIMIT`.
+const DAY_ENTRIES_LIMIT: usize = 500;
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreatedEntry {
@@ -300,6 +320,35 @@ pub async fn resolve_matters(
     return Err(FAILURE.to_string());
   }
   Ok(result.matters)
+}
+
+/// `date` is a local calendar date the caller has parsed.
+pub async fn day_entries(
+  account: &AccountRequest,
+  date: &str,
+) -> Result<DayEntriesResponse, String> {
+  let body = response_body(crate::http_client::device_proof_request(
+    client()?
+      .get(format!("{}/v1/desktop/day-entries", account.api_base_url))
+      .query(&[("date", date)]),
+    &account.device_key,
+    Some(&account.credential.key),
+    None,
+  )?)
+  .await?;
+  let result: DayEntriesResponse =
+    serde_json::from_slice(&body).map_err(json_cause_logged(FAILURE))?;
+  if result.entries.len() > DAY_ENTRIES_LIMIT
+    || result.entries.iter().any(|entry| {
+      entry.id.is_empty()
+        || entry.id.len() > 200
+        || entry.matter_id.is_empty()
+        || entry.matter_id.len() > 200
+    })
+  {
+    return Err(FAILURE.to_string());
+  }
+  Ok(result)
 }
 
 // The API contract's narrative limits (`desktop-time-entries.ts`). Its
@@ -525,6 +574,12 @@ mod tests {
             assert_eq!(uri.query(), Some(&*format!("id={RESOLVED_ID}")));
             serde_json::json!({"matters": [{"type": "inaccessible", "id": RESOLVED_ID}]})
           }
+          "/v1/desktop/day-entries" => {
+            assert_eq!(uri.query(), Some("date=2026-10-07"));
+            serde_json::json!({
+              "entries": [{"id": "entry", "matterId": "matter", "durationMinutes": 90}],
+            })
+          }
           _ => panic!("Unexpected matter lookup route"),
         };
         received.fetch_add(1, Ordering::SeqCst);
@@ -545,8 +600,11 @@ mod tests {
       resolved.as_slice(),
       [MatterResolution::Inaccessible { id }] if id == RESOLVED_ID
     ));
+    let day = day_entries(&account, "2026-10-07").await.unwrap();
+    assert_eq!(day.entries.len(), 1);
+    assert_eq!(day.entries[0].duration_minutes, 90);
     drop(account);
-    assert_eq!(requests.load(Ordering::SeqCst), 3);
+    assert_eq!(requests.load(Ordering::SeqCst), 4);
     server.abort();
   }
 
