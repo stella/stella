@@ -1541,9 +1541,7 @@ const roleTargetSchema = v.nullable(
     styleId: idSchema,
     alignment: v.nullable(textSchema),
     numbering: v.nullable(listLevelSchema),
-    indentLeft: v.exactOptional(
-      v.nullable(v.pipe(v.number(), v.integer(), v.minValue(0))),
-    ),
+    indentLeft: v.exactOptional(twipsSchema),
     size: v.exactOptional(v.nullable(v.pipe(v.number(), v.minValue(1)))),
     confidence: confidenceSchema,
     evidence: v.pipe(

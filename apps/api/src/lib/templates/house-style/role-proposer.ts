@@ -417,6 +417,14 @@ const readFrontMatter = (
           confidence: CONFIDENCE.alternative,
         });
   }
+  // The line that announces the parties is text of the page however it is
+  // set: centred or in capitals, it is still no line of the title.
+  if (PARTY_INTRO.test(block.text.trim())) {
+    return reading("body", CONFIDENCE.plain, {
+      role: "title",
+      confidence: CONFIDENCE.weakAlternative,
+    });
+  }
   // Between the title and the parties a line belongs to the title when it
   // is set like one: centred, or in capitals. Anything else there is text
   // (a note on how to fill the form in, a sentence that opens the deed).

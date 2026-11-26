@@ -168,6 +168,28 @@ describe("proposeBlockRoles", () => {
     expect(roles["Beta a.s., se sídlem Krátká "]).toBe("party");
   });
 
+  test("the line that announces the parties is no line of the title, centred or in capitals", () => {
+    const lines = (intro: string) => [
+      "PURCHASE AGREEMENT",
+      intro,
+      "Alfa Ltd, with its registered office at 1 Long Street, London, company number 00000001",
+      "and",
+      "Beta Ltd, with its registered office at 2 Short Street, Leeds, company number 00000002",
+      "Article 1\nSubject",
+      "1.1\tThe seller delivers the goods.",
+    ];
+    const centred = manifestOf(lines("between:"));
+    for (const block of centred.blocks) {
+      if (block.text === "between:") {
+        block.alignment = "center";
+      }
+    }
+    expect(rolesOf(centred)["between:"]).toBe("body");
+    expect(rolesOf(manifestOf(lines("BY AND BETWEEN")))["BY AND BETWEEN"]).toBe(
+      "body",
+    );
+  });
+
   test("a bullet whose mark is a letter is a bullet", () => {
     const manifest = manifestOf([
       "SMLOUVA",

@@ -138,6 +138,16 @@ describe("inferTemplateProfile", () => {
       parseTemplateProfile({ ...profile, roles: before }).unwrap().roles
         .heading,
     ).toBeNull();
+    // A style may reach into the margin: its indent is read back as it is.
+    const { body } = profile.roles;
+    if (body === null) {
+      throw new Error("The contract template has a body style.");
+    }
+    const outdented = {
+      ...profile,
+      roles: { ...profile.roles, body: { ...body, indentLeft: -360 } },
+    };
+    expect(parseTemplateProfile(outdented).unwrap()).toEqual(outdented);
   });
 
   test("reads the cells of a kept letterhead: the addressee's sample lines, the date, the file number", () => {
