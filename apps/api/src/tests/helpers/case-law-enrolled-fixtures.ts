@@ -20,8 +20,13 @@ import { panic, Result } from "better-result";
  * restores it before returning.
  */
 import { readFileSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import nodePath from "node:path";
 
+import { ZipArchive } from "@stll/docx-core/zip";
 import { load } from "@stll/html";
+import { createSha256 } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
@@ -38,10 +43,7 @@ import {
   buildAtRisDecision,
 } from "@/api/handlers/case-law/ingestion/adapters/at-courts";
 import type { AtRisSourceDefinition } from "@/api/handlers/case-law/ingestion/adapters/at-courts";
-import {
-  assembleAtFindokDecision,
-  parseFindokManifest,
-} from "@/api/handlers/case-law/ingestion/adapters/at-findok";
+import { createAtFindokAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-findok";
 import { AT_LVWG_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-lvwg";
 import {
   AT_RIS_APPLICATIONS,
@@ -96,12 +98,12 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
 import { assemblePlNcourtDecision as uncheckedAssemblePlNcourtDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
 import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
-import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import {
-  assemblePlSnDecision,
-  normalizePlSnDetail,
-  readPlSnEnvelope,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
+  huggingFaceShardSource,
+  PL_NSA_SNAPSHOT,
+  readPlNsaRows,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
+import { buildPlSnDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
 import {
   assemblePlTkDecision,
   plTkRawPartsOf,
@@ -1009,21 +1011,10 @@ const PL_SN_DETAIL_PAYLOAD = JSON.stringify({
 });
 
 /**
- * The detail payload the inventory reads, as the inner record the adapter
- * hands its own normalizer.
- */
-const plSnDetailRecord = (): Record<string, unknown> => {
-  const payload: unknown = JSON.parse(PL_SN_DETAIL_PAYLOAD);
-  const inner = readPlSnEnvelope(payload);
-  return isRecord(inner) ? inner : panic("the pl-sn fixture states no detail");
-};
-
-/**
- * Built from the payloads directly rather than through the adapter's fetch
- * path. What these guards certify is the mapping from a stated field to the
- * row, and driving a stubbed transport to reach it only added this publisher's
- * one-second request gate to every run. The field inventory needs no PDF;
- * the raw-capture guard supplies one to exercise document retention as well.
+ * Driven through `buildPlSnDecision` with stubbed transport so the read-fault
+ * guard exercises the proxy's detail and document reads. The field inventory
+ * needs no PDF; the raw-capture guard supplies one to exercise document
+ * retention as well.
  */
 export const plSnFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
   buildDecision: async () => {
@@ -1031,33 +1022,46 @@ export const plSnFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
       documentUrl === undefined
         ? undefined
         : new Uint8Array(await Bun.file(documentUrl).arrayBuffer());
-    const built = await assemblePlSnDecision({
-      item: { ...PL_SN_LISTING_ROW },
-      detail: normalizePlSnDetail(plSnDetailRecord()),
-      documentBytes,
-      rawParts: {
-        listing: JSON.stringify(PL_SN_LISTING_ROW),
-        detail: PL_SN_DETAIL_PAYLOAD,
-        ...(documentBytes === undefined
-          ? {}
-          : {
-              document: JSON.stringify({
-                success: true,
-                data: [
-                  {
-                    success: true,
-                    data: {
-                      raw: Buffer.from(documentBytes).toBase64(),
-                    },
-                  },
-                ],
-              }),
-            }),
-      },
+    const documentPayload = JSON.stringify({
+      success: true,
+      data: [
+        {
+          success: true,
+          data:
+            documentBytes === undefined
+              ? {}
+              : {
+                  raw: Buffer.from(documentBytes).toBase64(),
+                },
+        },
+      ],
     });
-    return built.type === "unkeyable"
-      ? panic("pl-sn fixture did not build")
-      : built.decision;
+    return await withTestFetch(
+      asFetchMock(async (input: string | URL | Request) => {
+        const rawUrl = input instanceof Request ? input.url : String(input);
+        const task = new URL(rawUrl).searchParams.get("task");
+        const body =
+          task === "OrzeczeniePlikPdf" ? documentPayload : PL_SN_DETAIL_PAYLOAD;
+        return await Promise.resolve(
+          new Response(body, {
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }),
+      async () => {
+        const built = await buildPlSnDecision({
+          cursor: "2026-06:0",
+          item: { ...PL_SN_LISTING_ROW },
+          listingRaw: JSON.stringify(PL_SN_LISTING_ROW),
+        });
+        if (Result.isError(built)) {
+          return await Promise.reject(built.error);
+        }
+        return built.value.type === "unkeyable"
+          ? panic("pl-sn fixture did not build")
+          : built.value.decision;
+      },
+    );
   },
 });
 
@@ -2424,19 +2428,42 @@ export const atFindokFixture = (): EnrolledAdapterFixture => ({
     ),
   },
   buildDecision: async () => {
-    const manifest = parseFindokManifest("bfg", AT_FINDOK_MANIFEST);
-    const item = manifest.items.at(0);
-    if (item === undefined) {
-      panic("the at-findok fixture manifest states no row");
-    }
-    return await Promise.resolve(
-      assembleAtFindokDecision(
-        { collection: "bfg", item },
-        {
-          documentXml: AT_FINDOK_DECISION_XML,
-          headnoteXml: AT_FINDOK_HEADNOTE_XML,
-        },
-      ),
+    const zip = new ZipArchive();
+    zip.set(
+      `Gesamt/${AT_FINDOK_STAMM_NR}.Entscheidungstext.xml`,
+      AT_FINDOK_DECISION_XML,
+    );
+    zip.set(
+      `Gesamt/${AT_FINDOK_STAMM_NR}.Rechtssaetze.xml`,
+      AT_FINDOK_HEADNOTE_XML,
+    );
+    const archiveBytes = await zip.generate({ compression: "store" });
+    const manifestBytes = Bun.gzipSync(AT_FINDOK_MANIFEST);
+    return await withTestFetch(
+      asFetchMock(async (input: string | URL | Request) => {
+        const rawUrl = input instanceof Request ? input.url : String(input);
+        if (rawUrl.includes("bestandsliste-")) {
+          return await Promise.resolve(new Response(manifestBytes));
+        }
+        return await Promise.resolve(new Response(archiveBytes));
+      }),
+      async () => {
+        const adapter = createAtFindokAdapter({
+          now: () => new Date("2026-09-18T00:00:00Z"),
+          sleep: async () => {
+            await Promise.resolve();
+          },
+        });
+        const page = await adapter.fetchPage(null, {});
+        if (page.isErr()) {
+          return await Promise.reject(page.error);
+        }
+        const decision = page.value.decisions.at(0);
+        if (decision === undefined) {
+          return panic("the at-findok fixture manifest states no row");
+        }
+        return decision;
+      },
     );
   },
 });
@@ -2700,46 +2727,156 @@ export const plTkFixture = (): EnrolledAdapterFixture => ({
 // ── PL NSA fixture ───────────────────────────────────────
 
 /** Rows recorded from the dataset, each with its shard and row. */
-const PL_NSA_ROWS = new URL(
-  "../../handlers/case-law/ingestion/adapters/__fixtures__/pl-nsa-rows.json",
+const PL_NSA_PARQUET = new URL(
+  "../../handlers/case-law/ingestion/adapters/__fixtures__/pl-nsa-rows.parquet",
   import.meta.url,
 );
 
+/** Row index of `nsa-wyrok-thesis-collection` in `pl-nsa-rows.parquet`. */
+const PL_NSA_FIXTURE_ROW_INDEX = 2;
+const PL_NSA_FIXTURE_TOTAL_ROWS = 28;
+
 /**
- * A recorded NSA judgment with its thesis, publication and cited provisions,
- * plus the two columns no recorded row fills — a gloss note and a dissenting
- * opinion — in the form the dataset prints them, so every column the source
- * states is stated here.
+ * One judgment from the pinned `JuDDGES/pl-nsa` dataset, downloaded through
+ * `huggingFaceShardSource` with stubbed transport so the read-fault guard
+ * drives both the repository redirect (`HEAD`) and ranged shard read (`GET`).
+ * The two columns no recorded row fills — a gloss note and a dissenting
+ * opinion — are overlaid in the form the dataset prints them so every column
+ * the source states is exercised.
  */
 export const plNsaFixture = (
-  documentUrl = PL_NSA_ROWS,
+  documentUrl = PL_NSA_PARQUET,
 ): EnrolledAdapterFixture => ({
   buildDecision: async () => {
-    const recorded: unknown = await Bun.file(documentUrl).json();
-    const entry = isUnknownArray(recorded)
-      ? recorded.find(
-          (candidate: unknown) =>
-            isRecord(candidate) &&
-            candidate["case"] === "nsa-wyrok-thesis-collection",
-        )
-      : undefined;
-    const values: unknown = isRecord(entry) ? entry["values"] : undefined;
-    if (!isRecord(values)) {
-      return panic("the pl-nsa fixture holds no recorded NSA judgment");
+    if (documentUrl.pathname.endsWith(".json")) {
+      const recorded: unknown = await Bun.file(documentUrl).json();
+      const entry = isUnknownArray(recorded)
+        ? recorded.find(
+            (candidate: unknown) =>
+              isRecord(candidate) &&
+              candidate["case"] === "nsa-wyrok-thesis-collection",
+          )
+        : undefined;
+      const values: unknown = isRecord(entry) ? entry["values"] : undefined;
+      if (!isRecord(values)) {
+        return panic("the pl-nsa fixture holds no recorded NSA judgment");
+      }
+      const shard =
+        PL_NSA_SNAPSHOT.shards[0] ?? panic("the pinned revision has no shard");
+      const built = assemblePlNsaDecision({
+        source: {
+          ...values,
+          glosa_information: ["Glosa aprobująca, OSP 2014 z. 5, poz. 51"],
+          dissenting_opinion:
+            "Nie zgadzam się z rozstrzygnięciem i jego uzasadnieniem.",
+        },
+        position: { shard, row: 93 },
+        snapshot: PL_NSA_SNAPSHOT,
+      });
+      return built.decision;
     }
-    const shard =
-      PL_NSA_SNAPSHOT.shards[0] ?? panic("the pinned revision has no shard");
-    const built = assemblePlNsaDecision({
-      source: {
-        ...values,
-        glosa_information: ["Glosa aprobująca, OSP 2014 z. 5, poz. 51"],
-        dissenting_opinion:
-          "Nie zgadzam się z rozstrzygnięciem i jego uzasadnieniem.",
-      },
-      position: { shard, row: 93 },
-      snapshot: PL_NSA_SNAPSHOT,
-    });
-    return built.decision;
+    const parquetBytes = new Uint8Array(
+      await Bun.file(documentUrl).arrayBuffer(),
+    );
+    const fixtureShard = {
+      index: 0,
+      path: "data/train-00000-of-00046.parquet",
+      bytes: parquetBytes.byteLength,
+      sha256: createSha256().update(parquetBytes).digest("hex"),
+      rows: PL_NSA_FIXTURE_TOTAL_ROWS,
+    };
+    const fixtureSnapshot = {
+      ...PL_NSA_SNAPSHOT,
+      shards: [fixtureShard],
+    };
+    const directory = await mkdtemp(nodePath.join(tmpdir(), "pl-nsa-fixture-"));
+    try {
+      return await withTestFetch(
+        asFetchMock(
+          async (input: string | URL | Request, init?: RequestInit) => {
+            const url = input instanceof Request ? input.url : String(input);
+            if (
+              init?.method === "HEAD" &&
+              url.startsWith("https://huggingface.co/datasets/")
+            ) {
+              return await Promise.resolve(
+                new Response(null, {
+                  status: 302,
+                  headers: {
+                    location: "https://cdn.hf.co/pl-nsa-fixture-shard",
+                  },
+                }),
+              );
+            }
+            if (url !== "https://cdn.hf.co/pl-nsa-fixture-shard") {
+              return await Promise.resolve(new Response(null, { status: 404 }));
+            }
+            const range = new Headers(init?.headers).get("range") ?? "";
+            const [start, end] = range
+              .replace("bytes=", "")
+              .split("-")
+              .map(Number);
+            return await Promise.resolve(
+              new Response(parquetBytes.slice(start, (end ?? 0) + 1), {
+                status: 206,
+              }),
+            );
+          },
+        ),
+        async () => {
+          const source = huggingFaceShardSource({
+            snapshot: fixtureSnapshot,
+            cacheDirectory: directory,
+          });
+          const file = await source.local(fixtureShard);
+          if (Result.isError(file)) {
+            return await Promise.reject(file.error);
+          }
+          const rows = await readPlNsaRows({
+            file: file.value,
+            expectedRows: fixtureShard.rows,
+            rowStart: PL_NSA_FIXTURE_ROW_INDEX,
+            rowEnd: PL_NSA_FIXTURE_ROW_INDEX + 1,
+          });
+          if (Result.isError(rows)) {
+            return await Promise.reject(rows.error);
+          }
+          const values = rows.value.at(0);
+          if (values === undefined) {
+            return panic("the pl-nsa fixture holds no recorded NSA judgment");
+          }
+          const shard =
+            PL_NSA_SNAPSHOT.shards[0] ??
+            panic("the pinned revision has no shard");
+          const built = assemblePlNsaDecision({
+            source: {
+              ...values,
+              // Parquet timestamps decode as UTC Date instances; restore the
+              // Warsaw-offset ISO strings from the recorded row so the stored
+              // raw envelope matches the canonical replay fingerprint.
+              judgment_date: "2013-04-04T00:00:00+02:00",
+              submission_date: "2012-07-17T00:00:00+02:00",
+              related_docket_numbers: [
+                {
+                  judgment_id: "/doc/8466864ADB",
+                  docket_number: "I SA/Wa 1427/11",
+                  judgment_date: "2012-03-08T00:00:00+01:00",
+                  judgment_type: "Wyrok WSA w Warszawie",
+                },
+              ],
+              glosa_information: ["Glosa aprobująca, OSP 2014 z. 5, poz. 51"],
+              dissenting_opinion:
+                "Nie zgadzam się z rozstrzygnięciem i jego uzasadnieniem.",
+            },
+            position: { shard, row: 93 },
+            snapshot: PL_NSA_SNAPSHOT,
+          });
+          return built.decision;
+        },
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   },
 });
 
