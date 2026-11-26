@@ -7470,7 +7470,7 @@
         }
       ]
     },
-    "./effects/dom": {
+    "./effects-dom": {
       "type": "module",
       "file": "./src/effects/dom.d.ts",
       "exports": [

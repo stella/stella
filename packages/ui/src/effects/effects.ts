@@ -56,7 +56,7 @@ export const useExternalSyncEffect = (
  * before the browser paints (scroll anchoring, zoom, a class toggle, an
  * animated value, registering with a registry other layout effects read).
  * Never React state: a value measured from the DOM goes through
- * `useLayoutMeasurement` (`@stll/ui/effects/dom`).
+ * `useLayoutMeasurement` (`@stll/ui/effects-dom`).
  */
 export const useLayoutSyncEffect = (
   effect: EffectCallback,

@@ -314,7 +314,7 @@ When a screen needs a look the components lack, add it once here and in
 | Fixed-height text area in a row or cell                            | `Textarea fieldSizing="fixed"`                                                                                                                                                                                |
 | Number with a unit; stepping number                                | `NumberInput suffix`; it reads as a spin button with its bounds                                                                                                                                               |
 | Screen a finished flow ends on (connected, signed in, declined)    | `OutcomeScreen` (`tone`, `counterpart`, `details`), with `OutcomeScreenFace` while loading                                                                                                                    |
-| Effect, latest value, mount state, state reset on a key            | `@stll/ui/effects`: `useMountEffect`, `useExternalSyncEffect`, `useLayoutSyncEffect`, `useKeyedState`; DOM-observed state: `@stll/ui/effects/dom` (`useLayoutMeasurement`, `useIntersecting`, `useObjectUrl`) |
+| Effect, latest value, mount state, state reset on a key            | `@stll/ui/effects`: `useMountEffect`, `useExternalSyncEffect`, `useLayoutSyncEffect`, `useKeyedState`; DOM-observed state: `@stll/ui/effects-dom` (`useLayoutMeasurement`, `useIntersecting`, `useObjectUrl`) |
 | A small control renders small type itself; do not add `text-xs` to |
 | a `sm` button, select, or input.                                   |
 

@@ -1156,7 +1156,7 @@
       "useMountLayoutEffect",
       "useNow"
     ],
-    "./effects/dom": [
+    "./effects-dom": [
       "createOscillationBreaker",
       "flatEqual",
       "useElementSize",
