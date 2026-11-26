@@ -18,7 +18,6 @@ import {
   type ReactNode,
   type RefObject,
   useCallback,
-  useEffect,
   useId,
   useMemo,
   useRef,
@@ -28,7 +27,12 @@ import {
 import { Temporal } from "temporal-polyfill/full";
 
 import { useObservedValue } from "../effects/dom";
-import { useLatest, useLayoutSyncEffect } from "../effects/effects";
+import {
+  useExternalSyncEffect,
+  useLatest,
+  useLayoutSyncEffect,
+  useMountEffect,
+} from "../effects/effects";
 import { ChevronRightIcon as ChevronRight } from "../icons";
 import { DOCUMENT_PANEL_SAFE_BOTTOM } from "../lib/panel-inset";
 import { cn } from "../lib/utils";
@@ -628,7 +632,7 @@ export const OutlineRail = ({
     Object.hasOwn(pctById, id) ? pctById[id] : undefined;
 
   // Derived active tracking (skipped when caller controls `activeId`).
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (activeId !== undefined) {
       return undefined;
     }
@@ -812,17 +816,14 @@ export const OutlineRail = ({
     setFocusWithin(false);
   }, []);
 
-  useEffect(
-    () => () => {
-      if (closeTimer.current !== null) {
-        clearTimeout(closeTimer.current);
-      }
-      if (openTimer.current !== null) {
-        clearTimeout(openTimer.current);
-      }
-    },
-    [],
-  );
+  useMountEffect(() => () => {
+    if (closeTimer.current !== null) {
+      clearTimeout(closeTimer.current);
+    }
+    if (openTimer.current !== null) {
+      clearTimeout(openTimer.current);
+    }
+  });
 
   const visibleTicks = items.flatMap((item) => {
     const pct = tickPct(item.id);

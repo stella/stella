@@ -16,9 +16,9 @@
 "use client";
 
 import type * as React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
-import { useLatest } from "../effects/effects";
+import { useLatest, useMountEffect } from "../effects/effects";
 import { containedHandler } from "../hooks/use-contained-handler";
 import { cn } from "../lib/utils";
 
@@ -333,7 +333,7 @@ const InteractiveArea = ({
     win.addEventListener(endType, handleEnd);
   };
 
-  useEffect(() => detachListeners, []);
+  useMountEffect(() => detachListeners);
 
   const handleStart = (e: React.MouseEvent | React.TouchEvent) => {
     const el = container.current;
