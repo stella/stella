@@ -390,9 +390,47 @@ const roleOf = (
   return proposalById.get(block.id)?.role ?? null;
 };
 
+/**
+ * The blank paragraphs that stay: the first one after a table that only
+ * blank paragraphs part from the next table or from the document's end.
+ * Two tables with nothing between them are one table to a word processor,
+ * and a document's last block has to be a paragraph.
+ */
+const tableSeparators = (context: Context): Set<string> => {
+  const { topLevel, index } = context;
+  const separators = new Set<string>();
+  /** Whether only blank paragraphs came since the last table. */
+  let afterTable = false;
+  let firstBlank: string | null = null;
+  const keep = () => {
+    if (afterTable && firstBlank !== null) {
+      separators.add(firstBlank);
+    }
+  };
+  for (const block of topLevel) {
+    if (block.kind === "table") {
+      keep();
+      afterTable = true;
+      firstBlank = null;
+      continue;
+    }
+    if (!afterTable || index.contentsBlockIds.has(block.id)) {
+      continue;
+    }
+    if (roleOf(context, block) === null && isBlankParagraph(block)) {
+      firstBlank ??= block.id;
+      continue;
+    }
+    afterTable = false;
+  }
+  keep();
+  return separators;
+};
+
 /** A placement for every paragraph that gets one, in document order. */
 const placeParagraphs = (context: Context): Placed => {
   const { topLevel, blockById, index, exclusions, proposalById } = context;
+  const separators = tableSeparators(context);
   const placed: Placed = {
     placements: [],
     placementById: new Map(),
@@ -419,7 +457,7 @@ const placeParagraphs = (context: Context): Placed => {
       continue;
     }
     const role = roleOf(context, block);
-    if (role === null && isBlankParagraph(block)) {
+    if (role === null && isBlankParagraph(block) && !separators.has(block.id)) {
       placed.omitted.set(block.id, "empty");
       continue;
     }
