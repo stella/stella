@@ -1,7 +1,14 @@
 import { expect, test as base } from "@playwright/test";
 import type { ConsoleMessage, Page } from "@playwright/test";
 
+import { RENDER_STORM_CANARY_TAG } from "../../src/lib/render-storm-canary";
 import { checkStormWatch, installStormWatch } from "./storm-watch";
+
+// Every message the dev render-storm canary logs carries its tag. Such an
+// entry fails the spec whatever it tolerates or expects: storms are the
+// storm watch's to judge, and no spec may excuse one.
+const isRenderStormEntry = (entry: string) =>
+  entry.includes(`[${RENDER_STORM_CANARY_TAG}]`);
 
 export type BrowserErrorCollector = {
   entries: () => string[];
@@ -131,6 +138,7 @@ export const createBrowserErrorCollector = (
       const tolerated = toleratedPatterns.splice(0);
       const unmatched = collected.filter(
         (entry) =>
+          isRenderStormEntry(entry) ||
           ![...patterns, ...tolerated].some((pattern) => pattern.test(entry)),
       );
       const unobserved = patterns.filter(

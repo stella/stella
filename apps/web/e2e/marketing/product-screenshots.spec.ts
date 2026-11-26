@@ -448,8 +448,12 @@ const captureLocale = async ({
           "aria-label",
           expect.stringContaining(scenario.caseNumber),
         );
+        // The transcript's own viewport: the composer and message content
+        // carry scroll areas of their own.
         await inspectorChat
-          .locator('[data-slot="scroll-area-viewport"]')
+          .locator(
+            '[data-slot="conversation-scroll-area"] > [data-slot="scroll-area-viewport"]',
+          )
           .evaluate((element) => {
             element.scrollTop = 0;
           });

@@ -34,3 +34,22 @@ export const DESIGN_SYSTEM_CONSUMER_FILES = [
 export const REACT_NATIVE_CONSUMER_FILES = [
   "apps/mobile/src/**/*.{ts,tsx}",
 ] as const;
+
+/**
+ * React sources outside the product frontend: the desktop, landing, Outlook
+ * and playground shells, the shared component packages and the Expo app.
+ * The render-loop rules that hold the product frontend hold these too
+ * (oxlint.config.ts).
+ */
+export const REACT_SURFACE_FILES_BEYOND_PRODUCT = [
+  "apps/desktop/src/**/*.{ts,tsx}",
+  "apps/landing/src/**/*.{ts,tsx}",
+  "apps/mobile/src/**/*.{ts,tsx}",
+  "apps/outlook/src/**/*.{ts,tsx}",
+  "apps/playground/src/**/*.{ts,tsx}",
+  "packages/chat/src/**/*.{ts,tsx}",
+  "packages/decision-reader/src/**/*.{ts,tsx}",
+  "packages/markdown-editor/src/**/*.{ts,tsx}",
+  "packages/ui/src/**/*.{ts,tsx}",
+  "packages/workspace-ui/src/**/*.{ts,tsx}",
+] as const;

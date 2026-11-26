@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
@@ -41,7 +41,7 @@ export const ShortcutSetting = () => {
   const layout = useKeyboardLayout();
   const [recording, setRecording] = useState(false);
   const [notice, setNotice] = useState<ResetNotice>({ type: "none" });
-  const stopRecording = useCallback(() => setRecording(false), []);
+  const stopRecording = () => setRecording(false);
 
   if (!snapshot) {
     return null;

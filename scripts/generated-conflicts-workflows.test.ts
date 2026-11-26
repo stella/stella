@@ -520,10 +520,12 @@ describe("dispatch follows each resolve run to its publish", () => {
     conclusion,
   });
   const running: Run = { status: "in_progress", conclusion: null };
+  // A run the API does not return yet: the read answers 404.
+  const notVisible = "not-visible";
   type Scenario = {
     resolves: number[];
     // States each run reports on successive polls; the last one repeats.
-    polls: Map<number, Run[]>;
+    polls: Map<number, (Run | typeof notVisible)[]>;
     // Resolve runs that uploaded a resolution.
     uploaded: Set<number>;
     // Where each publish run's id comes from.
@@ -584,10 +586,14 @@ describe("dispatch follows each resolve run to its publish", () => {
               const states = input.polls.get(id) ?? [running];
               const polled = reads.get(id) ?? 0;
               reads.set(id, polled + 1);
+              const state = states[Math.min(polled, states.length - 1)];
+              if (state === notVisible) {
+                throw Object.assign(new Error("Not Found"), { status: 404 });
+              }
               return {
                 data: {
                   html_url: `run/${String(id)}`,
-                  ...states[Math.min(polled, states.length - 1)],
+                  ...state,
                 },
               };
             },
@@ -710,6 +716,23 @@ describe("dispatch follows each resolve run to its publish", () => {
     const result = await followFor(input);
     expect(result.failures).toEqual([]);
     expect(result.warnings).toHaveLength(1);
+  });
+
+  test("a run not yet readable is polled again until it finishes", async () => {
+    const input = scenario();
+    input.polls.set(1, [notVisible, running, done("success")]);
+    const result = await followFor(input);
+    expect(result.failures).toEqual([]);
+    expect(result.dispatches.map((request) => request["inputs"])).toEqual([
+      { resolve_run_id: "1" },
+      { resolve_run_id: "2" },
+    ]);
+  });
+
+  test("a run never readable is reported as unfinished", async () => {
+    const input = scenario();
+    input.polls.set(2, [notVisible]);
+    expect((await followFor(input)).failures).toHaveLength(1);
   });
 
   test("a run that uploaded no resolution starts no publish", async () => {

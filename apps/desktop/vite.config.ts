@@ -3,6 +3,11 @@ import react from "@vitejs/plugin-react";
 import path from "node:path";
 import { defineConfig } from "vite";
 
+import {
+  REACT_COMPILER_EXCLUDE,
+  REACT_COMPILER_OPTIONS,
+} from "@stll/scripts/src/react-compiler-options";
+
 const DESKTOP_ROOT = path.resolve(import.meta.dirname, "src/mainview");
 const FONT_FILE = /\.(?:woff2?|ttf|otf|eot)$/u;
 const DESKTOP_VIEW_PORT = Number(
@@ -11,7 +16,15 @@ const DESKTOP_VIEW_PORT = Number(
 
 export default defineConfig({
   base: "./",
-  plugins: [tailwindcss(), react()],
+  plugins: [
+    tailwindcss(),
+    // The same React Compiler build as the web app, so the shared components
+    // run with the memoization they are written for.
+    react({
+      compiler: REACT_COMPILER_OPTIONS,
+      exclude: REACT_COMPILER_EXCLUDE,
+    }),
+  ],
   root: DESKTOP_ROOT,
   build: {
     // The windows' CSP takes fonts only from the app itself (font-src falls

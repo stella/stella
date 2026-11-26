@@ -68,6 +68,7 @@ export const useAppliedDesktopAppearance = (
   // side is newer; the read must not roll it back.
   const changes = useRef(0);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const adopt = useCallback((next: DesktopAppearance) => {
     changes.current += 1;
     cacheAppearance(next);

@@ -5,7 +5,7 @@ import type {
 } from "@stll/render-probe/storm-ledger";
 
 /** Where the page exposes the storm watch to the test driver. */
-export const STORM_WATCH_GLOBAL = "__STLL_STORM_WATCH__";
+export { STORM_WATCH_GLOBAL } from "../../src/lib/render-storm-canary";
 
 /** The function the test binds into each page to receive reports live. */
 export const STORM_WATCH_BINDING = "__STLL_STORM_WATCH_REPORT__";

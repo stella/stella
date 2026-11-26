@@ -1678,30 +1678,27 @@ const ClipboardApp = () => {
   const timelineRailRef = useRef<HTMLDivElement>(null);
   const { railRef: observeTimelineRail, viewport: railViewport } =
     useRailViewport();
-  const attachTimelineRail = useCallback(
-    (node: HTMLDivElement | null) => {
-      timelineRailRef.current = node;
-      observeTimelineRail(node);
-      const stopFading = fadeScrollEdges(node);
-      // A returned cleanup replaces React's detach call with `null`.
-      return () => {
-        stopFading?.();
-        timelineRailRef.current = null;
-        observeTimelineRail(null);
-      };
-    },
-    [observeTimelineRail],
-  );
+  const attachTimelineRail = (node: HTMLDivElement | null) => {
+    timelineRailRef.current = node;
+    observeTimelineRail(node);
+    const stopFading = fadeScrollEdges(node);
+    // A returned cleanup replaces React's detach call with `null`.
+    return () => {
+      stopFading?.();
+      timelineRailRef.current = null;
+      observeTimelineRail(null);
+    };
+  };
   // Initial focus belongs to the window attaching, not to every commit: an
   // inline ref reruns on each render and would pull focus off the body
   // whenever an unrelated render (a deferred filter catching up) lands.
-  const attachTimeline = useCallback((node: HTMLDivElement | null) => {
+  const attachTimeline = (node: HTMLDivElement | null) => {
     timelineRef.current = node;
     focusTimeline(node);
     return () => {
       timelineRef.current = null;
     };
-  }, []);
+  };
   const railPointerRef = useRef<ClipboardPointerPosition | null>(null);
   const contextMenuTriggerRef = useRef<HTMLElement>(null);
   const selectionBarRef = useRef<HTMLDivElement>(null);
@@ -2142,6 +2139,7 @@ const ClipboardApp = () => {
     emptyStateTitle = t("groupEmpty");
   }
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const applySnapshotCommand = useCallback(
     (
       command: string,
@@ -2189,6 +2187,7 @@ const ClipboardApp = () => {
 
   /** Applies the settings a settings command answers with; the change event
    *  it sends brings the clips it touched. */
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const applySettingsCommand = useCallback(
     (
       command: Promise<ClipboardSettingsSnapshot | null>,

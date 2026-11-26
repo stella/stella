@@ -143,9 +143,8 @@ test("a streamed tool input does not re-render the page per delta", async ({
   await page.getByRole("button", { name: "Send message" }).click();
 
   // The whole input arrived: the compiled draft opens in the inspector and
-  // the continuation answers. A page that commits once per delta trips the
-  // render-storm canary (apps/web/src/lib/render-storm-canary.ts), whose
-  // console.error fails this test through the `browserErrors` fixture.
+  // the continuation answers. A page that commits once per delta exceeds the
+  // tool-input commit budget that chat-stream-commit-budget.spec.ts holds.
   await expect(
     page.getByRole("textbox", { name: /chat about or edit Mutual NDA/iu }),
   ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });

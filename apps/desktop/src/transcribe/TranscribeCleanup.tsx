@@ -114,6 +114,7 @@ export const useRecordingCleanup = ({
   const [started, setStarted] = useState(autoStart);
   const sending = useRef<string | null>(null);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const run = useCallback(
     async (
       index: number,
@@ -165,25 +166,22 @@ export const useRecordingCleanup = ({
     void run(index, part, previous);
   }, [finished, job, paragraphs, parts, run, started]);
 
-  const retry = useCallback(
-    (index: number) => {
-      const part = parts[index];
-      // One request at a time: a retry waits until the running part ends.
-      if (
-        part?.status !== "failed" ||
-        parts.some((entry) => entry.status === "running")
-      ) {
-        return;
-      }
-      setParts((current) =>
-        current.map((entry, at) =>
-          at === index ? { ...entry, status: "running" } : entry,
-        ),
-      );
-      void run(index, part, previousMarkdown(parts, index));
-    },
-    [parts, run],
-  );
+  const retry = (index: number) => {
+    const part = parts[index];
+    // One request at a time: a retry waits until the running part ends.
+    if (
+      part?.status !== "failed" ||
+      parts.some((entry) => entry.status === "running")
+    ) {
+      return;
+    }
+    setParts((current) =>
+      current.map((entry, at) =>
+        at === index ? { ...entry, status: "running" } : entry,
+      ),
+    );
+    void run(index, part, previousMarkdown(parts, index));
+  };
 
   const done = parts.flatMap((part) =>
     part.result === null ? [] : [part.result],
@@ -536,10 +534,10 @@ export const useCopyFormat = (): [CopyFormat, (next: CopyFormat) => void] => {
       ? "plain"
       : "formatted";
   });
-  const choose = useCallback((next: CopyFormat) => {
+  const choose = (next: CopyFormat) => {
     setFormat(next);
     rememberCopyFormat(next);
-  }, []);
+  };
   return [format, choose];
 };
 

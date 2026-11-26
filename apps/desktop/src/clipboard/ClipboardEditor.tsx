@@ -582,6 +582,9 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
   const editorRef = useRef<HTMLDivElement>(null);
   // React applies `autoFocus` to form controls only, so the clip text, a
   // contenteditable, takes focus when each open mounts it.
+  // The React Compiler leaves this ref callback uncached; a new one each
+  // render would re-attach and pull focus back from the name field.
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const attachEditor = useCallback((node: HTMLDivElement | null) => {
     editorRef.current = node;
     node?.focus({ preventScroll: true });
