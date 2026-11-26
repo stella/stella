@@ -2392,7 +2392,8 @@ if (!databaseUrl || !runPostgresTests) {
         })
       ).unwrap();
 
-      expect(transactions).toBe(4);
+      // The fifth is the citation-arrival drain's read of an empty queue.
+      expect(transactions).toBe(5);
       expect(outcome).toEqual({
         status: "retryable",
         inserted: false,
@@ -2451,7 +2452,8 @@ if (!databaseUrl || !runPostgresTests) {
         })
       ).unwrap();
 
-      expect(transactions).toBe(4);
+      // The fifth is the citation-arrival drain's read of an empty queue.
+      expect(transactions).toBe(5);
       expect(outcome).toEqual({
         status: "retryable",
         inserted: false,

@@ -1,4 +1,5 @@
 import type { ScopedDb } from "@/api/db/safe-db-types";
+import type { CitationArrivalDrainOwner } from "@/api/handlers/case-law/citation-arrivals";
 import type {
   CaseLawCorpusDependencies,
   CaseLawJudgeDependencies,
@@ -208,6 +209,13 @@ export type ProcessDecisionOptions = Omit<
 > & {
   /** Defaults to `WHEN_SOURCE_CHANGED`, which is what a crawl wants. */
   refresh?: DecisionRefresh;
+  /**
+   * Who drains the citation arrivals the decision's write enqueues
+   * (`citation-arrivals.ts`). A caller processing a page passes `PAGE` and
+   * drains once when the page is done; a caller with a single decision omits
+   * it and the decision drains after its own write.
+   */
+  citationArrivals?: CitationArrivalDrainOwner | undefined;
   corpus?: CaseLawCorpusDependencies;
   judges?: CaseLawJudgeDependencies;
   /** Test seam for the external raw-object store. */

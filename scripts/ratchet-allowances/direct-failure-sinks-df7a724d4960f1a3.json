@@ -1,0 +1,6 @@
+{
+  "metric": "direct-failure-sinks",
+  "file": "apps/api/src/handlers/case-law/citation-arrivals.ts",
+  "delta": 2,
+  "reason": "A citation-arrival drain that follows an already committed decision write reports its failure (one log record, one captured error) instead of raising it: the write stands and its arrivals stay queued for the next drain or the standing citation walk."
+}

@@ -18,7 +18,6 @@ import {
 import type { Transaction } from "@/api/db/types";
 import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
-import { settleReopenedCitations } from "@/api/handlers/case-law/citation-resolution";
 import { refreshHostDecisionIdentifiersTx } from "@/api/handlers/case-law/decision-identifier-claims-persistence";
 import {
   CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS,
@@ -206,10 +205,9 @@ const finishInsertedRowTx = async (
   await writeDecisionJudges(tx, write, insertedId);
 
   // The row and its identifiers are stored, so the citations that were
-  // waiting for this decision are answered here rather than by the walk.
-  await settleReopenedCitations(tx, [
-    await announceDecisionIdentifiers(tx, write, insertedId, identifierRows),
-  ]);
+  // waiting for this decision are answered by the drain after this write
+  // rather than by the walk.
+  await announceDecisionIdentifiers(tx, write, insertedId, identifierRows);
 
   switch (citations.disposition) {
     case "annotation-only":

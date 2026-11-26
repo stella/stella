@@ -1,9 +1,10 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { Animated, Image, View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useLayoutSyncEffect } from "@stll/ui/effects";
 import { Text } from "@stll/ui/text";
 
 import { GripVerticalIcon, MinusIcon, RotateCwIcon } from "@/icons.gen";
@@ -53,7 +54,7 @@ export const ScanPageList = ({
   // The dragged row drops into its new place in the same render that ends
   // the drag; its offset goes after that render, so it never flashes back
   // to where it started.
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     if (drag === null) {
       offset.setValue(0);
     }
@@ -317,7 +318,7 @@ const ScanPageRow = ({
  */
 function useShift(shift: number, dragging: boolean): Animated.Value {
   const [value] = useState(() => new Animated.Value(shift));
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     if (dragging) {
       Animated.timing(value, {
         duration: 160,

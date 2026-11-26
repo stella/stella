@@ -1,4 +1,4 @@
-import { createContext, use } from "react";
+import { createContext, use, useCallback } from "react";
 import type { ComponentProps } from "react";
 
 import type { ViewProps } from "react-native";
@@ -28,9 +28,9 @@ export const Sheet = ({
   onOpenChange,
   open = false,
 }: SheetContract) => {
-  const close = () => {
+  const close = useCallback(() => {
     onOpenChange?.(false);
-  };
+  }, [onOpenChange]);
   return (
     <Modal
       animationType="slide"

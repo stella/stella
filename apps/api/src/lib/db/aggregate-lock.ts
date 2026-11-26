@@ -158,6 +158,33 @@ export const querySearchHistoryCountryRepairBatch = async ({
   );
 };
 
+type CitationMatchKeyRepairPickOptions = {
+  /** The citations relation, quoted. */
+  relation: string;
+  /** The repair's pending predicate over that relation. */
+  pending: string;
+  /** Continue after the id bound as `$2`. */
+  after: boolean;
+};
+
+/**
+ * The citation match-key repair's pick: up to `$1` pending citations in id
+ * order, locked through the batch's update, passing over any a writer holds
+ * so one busy citation never stalls the walk. The repair returns for the rows
+ * it passed over.
+ */
+export const citationMatchKeyRepairPickSql = ({
+  relation,
+  pending,
+  after,
+}: CitationMatchKeyRepairPickOptions): string =>
+  `SELECT id
+      FROM ${relation}
+     WHERE ${pending}${after ? "\n       AND id > $2::uuid" : ""}
+     ORDER BY id
+     LIMIT $1
+       FOR UPDATE SKIP LOCKED`;
+
 /** Native online repairs serialize a maintenance checkpoint inside their batch transaction. */
 export const lockBackfillCheckpoint = async (
   connection: Pick<OnlineMigrationConnection, "query">,
