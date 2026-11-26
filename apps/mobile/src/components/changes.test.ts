@@ -7,13 +7,11 @@ const SOURCE_ROOT = path.join(import.meta.dir, "..");
 /**
  * Where a raw change count may be read. A list keyed on it remounts on every
  * change, so its spinner flashes over the list and its state resets; lists
- * reload in place through `useRevisedLoad` instead. The Live Activity sync
+ * reload in place through `useRevisedLoad`, which the change event itself
+ * drives, instead. The Live Activity sync
  * renders nothing, so remounting it shows nothing.
  */
-const RAW_REVISION_READERS = new Set([
-  "components/changes.tsx",
-  "components/timer-activity-sync.tsx",
-]);
+const RAW_REVISION_READERS = new Set(["components/timer-activity-sync.tsx"]);
 
 const sources = (dir: string): string[] =>
   readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

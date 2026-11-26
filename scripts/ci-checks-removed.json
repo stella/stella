@@ -134,5 +134,9 @@
   {
     "name": "Startup bundle ledger",
     "reason": "The startup bundle ledger it guarded is deleted: page code at startup and extra cold-load hops now fail the web-build startup gates outright, so no exception list is left to keep from growing."
+  },
+  {
+    "name": "React state-write baselines",
+    "reason": "The baselines it held shrink-only are empty and deleted: no-effect-state-write and no-render-phase-update now report every finding, so no count is left to keep from growing."
   }
 ]
