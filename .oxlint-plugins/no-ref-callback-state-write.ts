@@ -316,11 +316,15 @@ const reportRefWrites = (scope: FileScope, refSites, writers) => {
       if (setter === null) {
         scope.context.report({ node: fn, messageId: "refWritesState" });
       } else {
+        // Only an expression is replaced by the setter: a function
+        // declaration names a binding its other references still use.
         scope.context.report({
           node: fn,
           messageId: "passSetter",
           data: { setter },
-          fix: (fixer) => fixer.replaceText(fn, setter),
+          ...(FUNCTION_VALUES.has(fn.type) && {
+            fix: (fixer) => fixer.replaceText(fn, setter),
+          }),
         });
       }
     }

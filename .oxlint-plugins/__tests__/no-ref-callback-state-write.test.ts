@@ -100,3 +100,11 @@ test("fixes a wrapper that only forwards the node to a setter", async () => {
     ].join("\n"),
   );
 });
+
+test("reports a forwarding function declaration without deleting it", async () => {
+  const source =
+    "function A() { const [el, setEl] = useState(null); function attach(node) { setEl(node); } return <div ref={attach} />; }";
+  const result = await runSingleRule(RULE, source, { ...TSX, fix: true });
+  expect(result.source).toBe(source);
+  expect(result.lines).toEqual([1]);
+});
