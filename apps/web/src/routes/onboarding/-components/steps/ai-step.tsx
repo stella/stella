@@ -3,7 +3,11 @@ import { useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { useLatest, useMountLayoutEffect } from "@stll/ui/effects";
+import {
+  useIsMounted,
+  useLatest,
+  useMountLayoutEffect,
+} from "@stll/ui/effects";
 import { Form } from "@stll/ui/form";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -71,6 +75,9 @@ export const AIStep = ({
   // A save settles after an await, against whatever providers are committed
   // by then.
   const latestProviders = useLatest(providers);
+  // A save that settles after the step has gone (Skip, Back) must not bring
+  // its provider back into the wizard's preview.
+  const isMounted = useIsMounted();
   // The preview follows the providers and their row states: it is reported
   // where either changes, never from an effect watching them.
   const commitRowStates = (
@@ -79,6 +86,9 @@ export const AIStep = ({
   ) => {
     rowStatesRef.current = next;
     setRowStates(next);
+    if (!isMounted()) {
+      return;
+    }
     onPreviewChange?.(
       createProviderPreview(nextProviders ?? latestProviders.current, next),
     );
