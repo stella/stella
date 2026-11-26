@@ -56,11 +56,6 @@ const EXPECTED_REGISTRY_RESOLVED = [
   "@stll/stdnum-linux-x64-gnu",
   "@stll/stdnum-wasm",
   "@stll/stdnum-win32-x64-msvc",
-  // @stll/folio-core 0.70 declares ^0.6.6, which the 0.7.0 workspace does not
-  // satisfy, so folio gets the registry 0.6.6. Folio reads only the marker
-  // scanner and field paths, which 0.7.0 leaves as they were (it changes
-  // `evaluateCondition` alone). Remove once folio-core's range admits 0.7.
-  "@stll/template-conditions",
   "@stll/test-kit",
   "@stll/text-search",
   "@stll/time",
