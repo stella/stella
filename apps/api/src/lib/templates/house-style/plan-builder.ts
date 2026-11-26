@@ -800,6 +800,27 @@ const pageStartsOf = (
   return starts;
 };
 
+const HEADING_TEXT_MAX = 160;
+
+/**
+ * Whether a paragraph read as an article's heading is one on the page: a
+ * label with a title, not a numbered paragraph of running text (clause
+ * `1.` of an agreement without headings).
+ */
+const headsText = (
+  { titleOf }: Placed,
+  { role, block, entry }: Placement,
+): boolean => {
+  if (role !== "articleHeading") {
+    return false;
+  }
+  const text = block.text.slice(entry?.manualLength ?? 0).trim();
+  return (
+    titleOf.has(block.id) ||
+    (text.length <= HEADING_TEXT_MAX && !/[.;:,]$/u.test(text))
+  );
+};
+
 /**
  * Moves a page start that falls between an article's heading and the block
  * it heads in front of the heading: a heading does not end a page. Several
@@ -834,7 +855,7 @@ const keepHeadingsWithBody = (context: Context, placed: Placed): void => {
         fromBlockId: block.id,
       });
     }
-    if (placement.role === "articleHeading") {
+    if (headsText(placed, placement)) {
       if (headings.length === 0) {
         placedBeforeHeadings = placedBefore;
       }

@@ -519,6 +519,23 @@ describe("buildTemplatePlan, pages the source starts", () => {
     expect(note.counts.pageStarts).toBe(1);
   });
 
+  test("a page start behind running text numbered like an article stays where it is", () => {
+    const { plan, note } = build(
+      withFacts(
+        [
+          "SMLOUVA",
+          "1.\tStrany se dohodly, že veškeré informace, které si předají, zůstanou důvěrné po dobu pěti let.",
+          "Příloha č. 1",
+        ],
+        { 2: { pageBreakBefore: true } },
+      ),
+    );
+    expect(starts(plan)).toEqual(["p2"]);
+    expect(note.items.some(({ kind }) => kind === "pageStartMoved")).toBe(
+      false,
+    );
+  });
+
   test("a paragraph's own page start is carried, except on the document's first block", () => {
     const { plan } = build(
       withFacts(["SMLOUVA", "Text.", "Příloha č. 1", "Seznam."], {
