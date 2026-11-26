@@ -35,11 +35,20 @@ import {
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
+// parser-output-unchanged: publisher reads now route through typed readPublisher/readPublisherText; served payloads and parsed decisions are unchanged.
+import {
+  type PublisherReadInit,
+  readBodyText,
+  readPublisher,
+  readPublisherText,
+  unreadPublisherError,
+  type UnreadPublisherOutcome,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-response-limit";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 import {
-  fetchPublisher,
   PublisherRateLimitRefusalError,
+  rethrowCycleStop,
 } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   adapterCatch,
@@ -83,6 +92,15 @@ import {
   splitStoredDecisionTextMetadata,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import {
+  isReadRefusal,
+  readAbsent,
+  type ReadOutcome,
+  readOutcomeOfStatus,
+  readPresent,
+  readRefused,
+  readUnavailable,
+} from "@/api/lib/errors/read-outcome";
 import {
   AdapterFetchError,
   TelemetryError,
@@ -157,18 +175,52 @@ const readEcjResponseBytes = async (
   return bytes;
 };
 
-const readEcjResponseText = async (
-  response: Response,
-  subject: string,
-): Promise<string> =>
-  new TextDecoder("utf-8", { fatal: true }).decode(
-    await readEcjResponseBytes(response, subject),
-  );
+type EcjCustomFetch = (
+  url: string,
+  init: PublisherReadInit,
+) => Promise<Response>;
 
-const readEcjResponseJson = async (
-  response: Response,
-  subject: string,
-): Promise<unknown> => JSON.parse(await readEcjResponseText(response, subject));
+/** Adapt a test-injected fetch into a typed `ReadOutcome`. */
+const readCustomResponse = async (
+  fetchRequest: EcjCustomFetch,
+  url: string,
+  init: PublisherReadInit,
+): Promise<ReadOutcome<Response>> => {
+  const fetched = await Result.tryPromise({
+    try: async () => await fetchRequest(url, init),
+    catch: (error: unknown) => error,
+  });
+  if (Result.isError(fetched)) {
+    rethrowCycleStop(fetched.error, init.signal ?? undefined);
+    return readUnavailable({ kind: "thrown", error: fetched.error });
+  }
+  const response = fetched.value;
+  const outcome = readOutcomeOfStatus(
+    response.status,
+    init.refusalScope ?? "document",
+    response.headers.get("Retry-After"),
+  );
+  switch (outcome.type) {
+    case "present":
+      return readPresent(response);
+    case "absent":
+      await response.body?.cancel();
+      return readAbsent(outcome.evidence);
+    case "refused":
+      await response.body?.cancel();
+      return readRefused({
+        status: outcome.status,
+        scope: outcome.scope,
+        cause: outcome.cause,
+      });
+    case "unavailable":
+      await response.body?.cancel();
+      return readUnavailable(outcome.cause);
+    default:
+      outcome satisfies never;
+      return panic(`Unhandled read outcome: ${String(outcome)}`);
+  }
+};
 
 /**
  * European Court of Justice (CJEU) adapter.
@@ -602,8 +654,9 @@ const queryDecisions = async ({
 
   const query = buildListingQuery({ dateFrom, dateTo, celexFilter });
 
-  const response = await fetchPublisher(SPARQL_URL, {
+  const outcome = await readPublisherText(SPARQL_URL, {
     fetchStage: "listing",
+    refusalScope: "source",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     retryPolicy: "publisher-backoff",
     method: "POST",
@@ -617,23 +670,41 @@ const queryDecisions = async ({
     body: new URLSearchParams({ query }).toString(),
   });
 
-  if (!response.ok) {
-    throw new AdapterFetchError({
-      message: `CJEU SPARQL error: ${response.status}`,
-      adapterKey: ADAPTER_KEYS.EU_ECJ,
-      cursor: dateFrom,
-      httpStatus: response.status,
-    });
+  if (outcome.type !== "present") {
+    if (
+      outcome.type === "unavailable" &&
+      outcome.cause.kind === "thrown" &&
+      outcome.cause.error instanceof AdapterFetchError
+    ) {
+      return await Promise.reject(
+        new AdapterFetchError({
+          message: `CJEU SPARQL error: ${outcome.cause.error.message}`,
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          cursor: dateFrom,
+          cause: outcome.cause.error.cause ?? outcome.cause.error,
+          stopKind: outcome.cause.error.stopKind,
+        }),
+      );
+    }
+    return await Promise.reject(
+      unreadPublisherError({
+        outcome,
+        message: "CJEU SPARQL error",
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        cursor: dateFrom,
+      }),
+    );
   }
 
-  const json = await readEcjResponseJson(response, "SPARQL");
+  const json: unknown = JSON.parse(outcome.value);
   if (!isSparqlResponse(json)) {
-    throw new AdapterFetchError({
-      message: "CJEU SPARQL returned an invalid payload",
-      adapterKey: ADAPTER_KEYS.EU_ECJ,
-      cursor: dateFrom,
-      httpStatus: response.status,
-    });
+    return await Promise.reject(
+      new AdapterFetchError({
+        message: "CJEU SPARQL returned an invalid payload",
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        cursor: dateFrom,
+      }),
+    );
   }
   const bindings = json.results.bindings;
 
@@ -925,7 +996,7 @@ const isRetryableStatus = (status: number): boolean =>
 type ManifestationRead =
   | { type: "document"; html: string; url: string }
   | { type: "address-exhausted"; status: number }
-  | { type: "fetch-failed"; status: number };
+  | { type: "fetch-failed"; outcome: UnreadPublisherOutcome };
 
 type ReadDocumentOptions = {
   /** The manifestation or one of its items, under {@link CELLAR_CONTENT_BASE}. */
@@ -955,7 +1026,7 @@ const readDocumentResponse = async ({
   signal,
 }: ReadDocumentOptions): Promise<ManifestationRead> => {
   const url = `${CELLAR_CONTENT_BASE}/${resource}`;
-  const response = await fetchPublisher(url, {
+  const outcome = await readPublisher(url, {
     fetchStage: "document",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     retryPolicy: "publisher-backoff",
@@ -967,16 +1038,28 @@ const readDocumentResponse = async ({
     },
   });
 
-  if (!response.ok) {
-    return ADDRESS_EXHAUSTED_STATUSES.some(
-      (status) => status === response.status,
-    )
-      ? { type: "address-exhausted", status: response.status }
-      : { type: "fetch-failed", status: response.status };
+  if (outcome.type === "absent") {
+    return {
+      type: "address-exhausted",
+      status: outcome.evidence === "http-410" ? 410 : 404,
+    };
+  }
+  if (outcome.type !== "present") {
+    if (outcome.type === "unavailable" && outcome.cause.kind === "status") {
+      const failedStatus = outcome.cause.status;
+      if (
+        ADDRESS_EXHAUSTED_STATUSES.some((status) => status === failedStatus)
+      ) {
+        return { type: "address-exhausted", status: failedStatus };
+      }
+    }
+    return { type: "fetch-failed", outcome };
   }
 
+  const response = outcome.value;
   const mediaType = mediaTypeOf(response.headers.get("content-type") ?? "");
   if (!DOCUMENT_MEDIA_TYPES.some((type) => type === mediaType)) {
+    await response.body?.cancel();
     logger.warn("case_law.ingestion.manifestation_not_a_document", {
       adapterKey: ADAPTER_KEYS.EU_ECJ,
       celex,
@@ -987,9 +1070,12 @@ const readDocumentResponse = async ({
     return { type: "address-exhausted", status: response.status };
   }
 
-  const html = await readEcjResponseText(response, "document");
-  return html.length > MIN_DOCUMENT_LENGTH
-    ? { type: "document", html, url }
+  const body = await readBodyText(outcome, signal);
+  if (body.type !== "present") {
+    return { type: "fetch-failed", outcome: body };
+  }
+  return body.value.length > MIN_DOCUMENT_LENGTH
+    ? { type: "document", html: body.value, url }
     : { type: "address-exhausted", status: response.status };
 };
 
@@ -1006,7 +1092,7 @@ type ManifestationDocument = { html: string; url: string };
 type ManifestationLookup =
   | ({ type: "document" } & ManifestationDocument)
   | { type: "exhausted"; statuses: number[] }
-  | { type: "failed"; status: number };
+  | { type: "failed"; outcome: UnreadPublisherOutcome };
 
 type ReadFirstServedOptions = {
   addresses: ManifestationAddress[];
@@ -1048,7 +1134,7 @@ const readFirstServedAddress = async ({
     return { type: "document", html: read.html, url: read.url };
   }
   if (read.type === "fetch-failed") {
-    return { type: "failed", status: read.status };
+    return { type: "failed", outcome: read.outcome };
   }
 
   statuses.push(read.status);
@@ -1113,24 +1199,28 @@ const fetchManifestation = async ({
     case "document":
       return Result.ok({ html: lookup.html, url: lookup.url });
     case "failed":
-      if (!isRetryableStatus(lookup.status)) {
+      if (
+        lookup.outcome.type === "unavailable" &&
+        lookup.outcome.cause.kind === "status" &&
+        !isRetryableStatus(lookup.outcome.cause.status)
+      ) {
         // A deterministic bad document request must not pin the crawl's
         // date cursor and prevent every later decision from being fetched.
         logger.warn("case_law.ingestion.manifestation_rejected", {
           adapterKey: ADAPTER_KEYS.EU_ECJ,
           celex,
           language: lang,
-          httpStatus: lookup.status,
+          httpStatus: lookup.outcome.cause.status,
           url: contentUrl,
         });
         return Result.ok(undefined);
       }
       return Result.err(
-        new AdapterFetchError({
-          message: `CJEU document request failed: ${lookup.status}`,
+        unreadPublisherError({
+          outcome: lookup.outcome,
+          message: "CJEU document request failed",
           adapterKey: ADAPTER_KEYS.EU_ECJ,
           cursor: null,
-          httpStatus: lookup.status,
         }),
       );
     case "exhausted":
@@ -2144,10 +2234,7 @@ type EcjFormexRefreshOutcome =
 type RefreshEcjStoredFormexOptions = {
   stored: StoredRawReparseInput;
   signal: AbortSignal;
-  fetchFormex?: (
-    url: string,
-    init: Parameters<typeof fetchPublisher>[1],
-  ) => Promise<Response>;
+  fetchFormex?: EcjCustomFetch;
 };
 
 // parser-output-unchanged: refreshes stored source bytes; parsing the resulting decision is unchanged.
@@ -2254,7 +2341,7 @@ type FetchNoticeOptions = {
   celex: string;
   languageUri: string;
   signal: AbortSignal;
-  fetch?: typeof fetchPublisher;
+  fetch?: EcjCustomFetch;
 };
 
 /**
@@ -2274,7 +2361,7 @@ export const fetchNotice = async ({
   celex,
   languageUri,
   signal,
-  fetch: fetchRequest = fetchPublisher,
+  fetch: fetchRequest,
 }: FetchNoticeOptions): Promise<Result<EcjNoticeRead, AdapterFetchError>> => {
   const cellarLanguage = languageUri.startsWith(CELLAR_LANGUAGE_PREFIX)
     ? languageUri.slice(CELLAR_LANGUAGE_PREFIX.length).toLowerCase()
@@ -2282,42 +2369,84 @@ export const fetchNotice = async ({
   if (cellarLanguage === undefined) {
     return panic("Expected a Cellar language URI for a branch notice");
   }
-  const response = await fetchRequest(`${CELLAR_CELEX_PREFIX}${celex}`, {
+  const noticeUrl = `${CELLAR_CELEX_PREFIX}${celex}`;
+  const noticeInit: PublisherReadInit = {
     fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     retryPolicy: "publisher-backoff",
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    refusalScope: "part",
     headers: {
       Accept: BRANCH_NOTICE_MEDIA_TYPE,
       "Accept-Language": cellarLanguage,
       "User-Agent": INGESTION_USER_AGENT,
     },
-  });
-  if (response.status === 404 || response.status === 410) {
-    return Result.ok({ type: "not-published", status: response.status });
+  };
+  const outcome =
+    fetchRequest === undefined
+      ? await readPublisher(noticeUrl, noticeInit)
+      : await readCustomResponse(fetchRequest, noticeUrl, noticeInit);
+  switch (outcome.type) {
+    case "absent":
+      return Result.ok({
+        type: "not-published",
+        status: outcome.evidence === "http-410" ? 410 : 404,
+      });
+    case "refused":
+      logger.warn("case_law.ingestion.notice_unavailable", {
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        httpStatus: outcome.status,
+        celex,
+      });
+      return Result.ok({ type: "refused", status: outcome.status });
+    case "unavailable":
+      if (
+        outcome.cause.kind === "status" &&
+        !isRetryableStatus(outcome.cause.status)
+      ) {
+        logger.warn("case_law.ingestion.notice_unavailable", {
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          httpStatus: outcome.cause.status,
+          celex,
+        });
+        return Result.ok({ type: "refused", status: outcome.cause.status });
+      }
+      return Result.err(
+        outcome.cause.kind === "status"
+          ? new AdapterFetchError({
+              message: `Cellar notice HTTP ${outcome.cause.status} for ${celex}`,
+              adapterKey: ADAPTER_KEYS.EU_ECJ,
+              cursor: null,
+              httpStatus: outcome.cause.status,
+            })
+          : unreadPublisherError({
+              outcome,
+              message: `Cellar notice unread for ${celex}`,
+              adapterKey: ADAPTER_KEYS.EU_ECJ,
+              cursor: null,
+            }),
+      );
+    case "present":
+      break;
+    default:
+      outcome satisfies never;
+      return panic(`Unhandled read outcome: ${String(outcome)}`);
   }
-  if (!response.ok && !isRetryableStatus(response.status)) {
-    logger.warn("case_law.ingestion.notice_unavailable", {
-      adapterKey: ADAPTER_KEYS.EU_ECJ,
-      httpStatus: response.status,
-      celex,
-    });
-    return Result.ok({ type: "refused", status: response.status });
-  }
-  if (!response.ok) {
+  const body = await readBodyText(outcome, signal);
+  if (body.type !== "present") {
     return Result.err(
-      new AdapterFetchError({
-        message: `Cellar notice HTTP ${response.status} for ${celex}`,
+      unreadPublisherError({
+        outcome: body,
+        message: `Cellar notice body unread for ${celex}`,
         adapterKey: ADAPTER_KEYS.EU_ECJ,
         cursor: null,
-        httpStatus: response.status,
       }),
     );
   }
   return Result.ok({
     type: "present",
-    xml: await readEcjResponseText(response, "Cellar notice"),
+    xml: body.value,
   });
 };
 
@@ -2342,10 +2471,7 @@ type EcjFormexRead =
 const fetchFormex = async (
   manifestations: readonly EcjNoticeManifestation[],
   signal: AbortSignal,
-  fetchRequest: (
-    url: string,
-    init: Parameters<typeof fetchPublisher>[1],
-  ) => Promise<Response> = fetchPublisher,
+  fetchRequest?: EcjCustomFetch,
 ): Promise<Result<EcjFormexRead, AdapterFetchError>> => {
   const manifestation = manifestations.find(
     (candidate) => candidate.type === FORMEX_MANIFESTATION_TYPE,
@@ -2366,48 +2492,93 @@ const fetchFormex = async (
     });
     return Result.ok({ type: "not-located" });
   }
-  const response = await fetchRequest(contentUrl.value, {
+  const formexInit: PublisherReadInit = {
     fetchStage: "document",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     retryPolicy: "publisher-backoff",
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    refusalScope: "part",
     headers: {
       Accept: `${FORMEX_MEDIA_TYPE}, ${ZIP_MEDIA_TYPE}`,
       "User-Agent": INGESTION_USER_AGENT,
     },
-  });
-  if (response.status === 404 || response.status === 410) {
-    return Result.ok({ type: "gone" });
-  }
-  if (!response.ok) {
-    logger.warn("case_law.ingestion.formex_unavailable", {
-      adapterKey: ADAPTER_KEYS.EU_ECJ,
-      httpStatus: response.status,
-      url: contentUrl.value,
-    });
-    if (isRetryableStatus(response.status)) {
+  };
+  const outcome =
+    fetchRequest === undefined
+      ? await readPublisher(contentUrl.value, formexInit)
+      : await readCustomResponse(fetchRequest, contentUrl.value, formexInit);
+  switch (outcome.type) {
+    case "absent":
+      return Result.ok({ type: "gone" });
+    case "refused":
+      logger.warn("case_law.ingestion.formex_unavailable", {
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        httpStatus: outcome.status,
+        url: contentUrl.value,
+      });
+      return Result.ok({ type: "refused", status: outcome.status });
+    case "unavailable":
+      if (
+        outcome.cause.kind === "status" &&
+        !isRetryableStatus(outcome.cause.status)
+      ) {
+        logger.warn("case_law.ingestion.formex_unavailable", {
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          httpStatus: outcome.cause.status,
+          url: contentUrl.value,
+        });
+        return Result.ok({ type: "refused", status: outcome.cause.status });
+      }
       return Result.err(
-        new AdapterFetchError({
-          message: `Cellar Formex HTTP ${response.status}`,
+        unreadPublisherError({
+          outcome,
+          message: "Cellar Formex unread",
           adapterKey: ADAPTER_KEYS.EU_ECJ,
           cursor: null,
-          httpStatus: response.status,
         }),
       );
-    }
-    return Result.ok({ type: "refused", status: response.status });
+    case "present":
+      break;
+    default:
+      outcome satisfies never;
+      return panic(`Unhandled read outcome: ${String(outcome)}`);
   }
+  const response = outcome.value;
   if (
     mediaTypeOf(response.headers.get("content-type") ?? "") !== ZIP_MEDIA_TYPE
   ) {
+    const body = await readBodyText(outcome, signal);
+    if (body.type !== "present") {
+      return Result.err(
+        unreadPublisherError({
+          outcome: body,
+          message: "Cellar Formex XML unread",
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          cursor: null,
+        }),
+      );
+    }
     return Result.ok({
       type: "fetched",
-      formex: await readEcjResponseText(response, "Formex XML"),
+      formex: body.value,
       formexOriginalZip: undefined,
     });
   }
   const bytes = await readEcjResponseBytes(response, "Formex ZIP");
+  if (bytes.length === 0) {
+    return Result.err(
+      unreadPublisherError({
+        outcome: {
+          type: "unavailable",
+          cause: { kind: "empty-body", status: response.status },
+        },
+        message: "Cellar Formex ZIP unread",
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        cursor: null,
+      }),
+    );
+  }
   const buffer = new Uint8Array(bytes).buffer;
   return Result.ok({
     type: "fetched",
@@ -3493,7 +3664,16 @@ const ecjUnreadVariant = (
 ): UnreadListedItem | undefined => {
   if (
     !(error instanceof AdapterFetchError) ||
-    error instanceof PublisherRateLimitRefusalError ||
+    error instanceof PublisherRateLimitRefusalError
+  ) {
+    return undefined;
+  }
+  const documentRefusal =
+    isReadRefusal(error.cause) && error.cause.scope === "document"
+      ? error.cause
+      : undefined;
+  if (
+    documentRefusal === undefined &&
     error.stopKind !== INGESTION_STOP_KIND.SOURCE_UNREACHABLE
   ) {
     return undefined;
@@ -3504,14 +3684,25 @@ const ecjUnreadVariant = (
   if (listing === undefined) {
     return undefined;
   }
+  if (documentRefusal !== undefined) {
+    return {
+      listing,
+      outcome: documentRefusal,
+    };
+  }
+  const status =
+    error.httpStatus ??
+    (error.cause instanceof AdapterFetchError
+      ? error.cause.httpStatus
+      : undefined);
   return {
     listing,
     outcome:
-      error.httpStatus === undefined
+      status === undefined
         ? { type: "unavailable", cause: { kind: "thrown", error } }
         : {
             type: "unavailable",
-            cause: { kind: "status", status: error.httpStatus },
+            cause: { kind: "status", status },
           },
   };
 };
@@ -3559,15 +3750,16 @@ const crawlEcjVariants = async ({
   signal,
 }: CrawlEcjVariantsOptions): Promise<EcjCrawledVariants> => {
   const decisions: IngestionResult[] = [];
+  const collectedUnread: UnreadListedItem[] = [];
   let itemBuildFailures = 0;
   let settledThrough: string | undefined;
   const crawled = (
     complete: boolean,
-    unreadItems: UnreadListedItem[] = [],
+    extraUnread: UnreadListedItem[] = [],
   ): EcjCrawledVariants => ({
     type: "settled",
     decisions,
-    unreadItems,
+    unreadItems: [...collectedUnread, ...extraUnread],
     itemBuildFailures,
     settledThrough,
     complete,
@@ -3598,25 +3790,29 @@ const crawlEcjVariants = async ({
         return { type: "failed", error: attempted.error };
       }
       settledThrough = variant.key;
-      return crawled(false, [unread]);
+      if (unread.outcome.type !== "refused") {
+        return crawled(false, [unread]);
+      }
+      collectedUnread.push(unread);
+    } else {
+      const built = attempted.value;
+      if (
+        built.type === "built" &&
+        built.value === undefined &&
+        budgetSpent(signal)
+      ) {
+        // A build the budget cut short can come back empty without having
+        // tried every manifestation, which is not the variant yielding nothing.
+        return crawled(false);
+      }
+      if (built.type === "item_build_failed") {
+        itemBuildFailures++;
+        decisions.push(built.decision);
+      } else if (built.value !== undefined) {
+        decisions.push(built.value);
+      }
+      settledThrough = variant.key;
     }
-    const built = attempted.value;
-    if (
-      built.type === "built" &&
-      built.value === undefined &&
-      budgetSpent(signal)
-    ) {
-      // A build the budget cut short can come back empty without having
-      // tried every manifestation, which is not the variant yielding nothing.
-      return crawled(false);
-    }
-    if (built.type === "item_build_failed") {
-      itemBuildFailures++;
-      decisions.push(built.decision);
-    } else if (built.value !== undefined) {
-      decisions.push(built.value);
-    }
-    settledThrough = variant.key;
   }
   return crawled(true);
 };
@@ -3873,7 +4069,7 @@ export const euEcjAdapter = defineSourceAdapter({
    */
   async getTotalCount(signal) {
     try {
-      const response = await fetchPublisher(SPARQL_URL, {
+      const outcome = await readPublisherText(SPARQL_URL, {
         fetchStage: "listing",
         adapterKey: ADAPTER_KEYS.EU_ECJ,
         retryPolicy: "publisher-backoff",
@@ -3887,12 +4083,12 @@ export const euEcjAdapter = defineSourceAdapter({
         },
         body: new URLSearchParams({ query: ECJ_TOTAL_COUNT_QUERY }).toString(),
       });
-      if (!response.ok) {
-        return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
+      if (outcome.type !== "present") {
+        return outcome.type === "unavailable" && outcome.cause.kind === "thrown"
+          ? { type: "probe-failed", errorTag: errorTag(outcome.cause.error) }
+          : sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
-      const total = sumEcjTotalCount(
-        await readEcjResponseJson(response, "SPARQL total count"),
-      );
+      const total = sumEcjTotalCount(JSON.parse(outcome.value));
       if (total === undefined) {
         return sourceTotalProbeFailed(
           SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
