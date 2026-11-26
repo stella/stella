@@ -6,10 +6,14 @@
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": [
+    "./src/dom-test-preload.ts",
     "./src/install.ts"
   ],
   "exports": {
     ".": "./src/probe.ts",
+    "./commit-hook": "./src/commit-hook.ts",
+    "./dom-test": "./src/dom-test-guard.ts",
+    "./dom-test-preload": "./src/dom-test-preload.ts",
     "./install": "./src/install.ts",
     "./report": "./src/report.ts",
     "./storm-ledger": "./src/storm-ledger.ts"
@@ -20,6 +24,9 @@
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun scripts/lint.ts packages/render-probe",
     "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/render-probe"
+  },
+  "dependencies": {
+    "better-result": "catalog:"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "21.0.4",
