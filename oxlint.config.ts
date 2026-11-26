@@ -40,6 +40,7 @@ import {
   DESIGN_SYSTEM_CONSUMER_FILES,
   PRODUCT_FRONTEND_FILES,
   REACT_NATIVE_CONSUMER_FILES,
+  REACT_SURFACE_FILES_BEYOND_PRODUCT,
 } from "./scripts/product-frontend-files.ts";
 import { PROVIDER_CLIENT_MODULES } from "./scripts/provider-client-modules.ts";
 import reactCompilerBailouts from "./scripts/react-compiler-bailouts.json" with { type: "json" };
@@ -5287,6 +5288,17 @@ const config = defineConfig({
         "require-matter-option-label/require-matter-option-label": "error",
         "security-guards/no-unsanitized-href": "error",
         "stella-toast/stella-toast": "error",
+      },
+    },
+    {
+      // The render-loop rules the product frontend holds, on every other React
+      // surface: a fresh Zustand selector result, an unstable external-store
+      // snapshot and a ref mirrored during render loop the same way there.
+      files: [...REACT_SURFACE_FILES_BEYOND_PRODUCT],
+      rules: {
+        "no-ref-mirror/no-ref-mirror": "error",
+        "require-use-shallow/require-use-shallow": "error",
+        "require-stable-snapshot/require-stable-snapshot": "error",
       },
     },
     {
