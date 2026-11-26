@@ -49,13 +49,18 @@ afterEach(() => {
   restoreRealTimers();
 });
 
+const RETRY: HarnessEvent = {
+  type: "notice",
+  notice: { kind: "retrying", attempt: 1, maxAttempts: 5 },
+};
+
 describe("a turn whose harness keeps retrying the provider", () => {
   test("ends as stalled when nothing else happens for the window", async () => {
     jest.useFakeTimers();
     const { lifecycle, events, done } = lifecycleWith(30_000);
-    lifecycle.emit({ type: "retrying", message: "Reconnecting" });
+    lifecycle.emit(RETRY);
     jest.advanceTimersByTime(20_000);
-    lifecycle.emit({ type: "retrying", message: "Reconnecting" });
+    lifecycle.emit(RETRY);
     jest.advanceTimersByTime(10_000);
     await done;
     expect(events.at(-1)).toEqual({
@@ -70,17 +75,41 @@ describe("a turn whose harness keeps retrying the provider", () => {
   test("keeps going when the harness makes progress after a retry", async () => {
     jest.useFakeTimers();
     const { lifecycle, events, done } = lifecycleWith(30_000);
-    lifecycle.emit({ type: "retrying", message: "Reconnecting" });
+    lifecycle.emit(RETRY);
     lifecycle.emit({ type: "text.delta", messageId: "m", delta: "Back" });
     // Past the window, which the progress disarmed.
     jest.advanceTimersByTime(60_000);
     lifecycle.emit({ type: "turn.completed", usage: null, boundary: null });
     await done;
     expect(events.map(({ type }) => type)).toEqual([
-      "retrying",
+      "notice",
       "text.delta",
       "turn.completed",
     ]);
+  });
+
+  test("a config warning during a retry is no progress, and no retry of its own", async () => {
+    jest.useFakeTimers();
+    const { lifecycle, events, done } = lifecycleWith(30_000);
+    lifecycle.emit(RETRY);
+    jest.advanceTimersByTime(20_000);
+    lifecycle.emit({ type: "notice", notice: { kind: "config_warning" } });
+    jest.advanceTimersByTime(10_000);
+    await done;
+    expect(events.at(-1)).toMatchObject({
+      type: "turn.failed",
+      failure: { type: "retry_stalled" },
+    });
+  });
+
+  test("a config warning alone arms no retry window", async () => {
+    jest.useFakeTimers();
+    const { lifecycle, events, done } = lifecycleWith(30_000);
+    lifecycle.emit({ type: "notice", notice: { kind: "config_warning" } });
+    jest.advanceTimersByTime(40_000);
+    lifecycle.emit({ type: "turn.completed", usage: null, boundary: null });
+    await done;
+    expect(events.at(-1)?.type).toBe("turn.completed");
   });
 });
 
@@ -189,11 +218,11 @@ describe("a turn whose model request goes unanswered", () => {
       SILENCE_MS,
     );
     lifecycle.heard();
-    lifecycle.emit({ type: "retrying", message: "Reconnecting" });
+    lifecycle.emit(RETRY);
     jest.advanceTimersByTime(3 * SILENCE_MS);
     await done;
     // The retry window, longer than the silence one, ended the turn.
-    expect(events.map(({ type }) => type)).toEqual(["retrying", "turn.failed"]);
+    expect(events.map(({ type }) => type)).toEqual(["notice", "turn.failed"]);
     expect(events.at(-1)).toMatchObject({
       failure: { type: "retry_stalled" },
     });

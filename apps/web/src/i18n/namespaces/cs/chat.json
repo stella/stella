@@ -473,6 +473,13 @@
       "limitReminderScheduled": "Upozorníme vás po {time}.",
       "limitResumeContinue": "Pokračovat automaticky, až se obnoví",
       "limitResumeScheduled": "Automaticky pokračuje po {time}.",
+      "notices": {
+        "browserUnavailable": "Prohlížeč se pro tuto zprávu nepodařilo spustit, agent proto pracoval bez něj.",
+        "configWarning": "Programovací agent ve vašem počítači upozornil na problém ve svém nastavení a pokračoval dál. Pokud vám něco nesedí, zkontrolujte jeho nastavení v tom počítači.",
+        "recovered": "Model znovu odpověděl poté, co to programovací agent ve vašem počítači zkusil znovu.",
+        "retrying": "Model neodpovídá. Programovací agent ve vašem počítači to zkouší znovu.",
+        "retryingAttempt": "Model neodpovídá. Programovací agent ve vašem počítači to zkouší znovu ({attempt, number}. pokus z {maxAttempts, number})."
+      },
       "permissionAboveLimit": "Vaše organizace to nepovoluje",
       "permissionAskDescription": "Soubory ve složce chatu upravuje sám; na vše ostatní se zeptá.",
       "permissionAutoDescription": "Co považuje za bezpečné, udělá sám; na zbytek se zeptá.",

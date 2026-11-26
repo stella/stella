@@ -737,7 +737,9 @@ const LiveTurnView = ({
       {turn.question === undefined ? null : (
         <ChatMessage entry={turn.question} uploading={uploading} />
       )}
-      {answer.blocks.length === 0 ? null : (
+      {/* A run that retries before it writes anything still says so. */}
+      {answer.blocks.length === 0 &&
+      answer.localRunNotices === undefined ? null : (
         <ChatMessage entry={answer} live={status === "streaming"} />
       )}
       {status === "streaming" ? (

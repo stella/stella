@@ -117,6 +117,7 @@ const eventsOf = async (
     gracePeriodMs: 10,
     detached: () => undefined,
     stellaServer: "stella",
+    browserServers: new Set(["stella_browser"]),
     capacityRetry: {
       maxAttempts: 0,
       baseDelayMs: 0,
@@ -314,19 +315,84 @@ describe("errors Codex says it will retry", () => {
     const events = await eventsOf((notify) => {
       notify("error", retrying(message));
     });
-    expect(events.map(({ type }) => type)).not.toContain("retrying");
+    expect(events.map(({ type }) => type)).not.toContain("notice");
     expect(events.at(-1)).toEqual({
       type: "turn.failed",
       failure: { type: "auth_required", message },
     });
   });
 
-  test("any other error is a retry, and the turn goes on", async () => {
+  test("any other error is a retry, counted until the turn makes progress, and the turn goes on", async () => {
     const events = await eventsOf((notify) => {
+      notify(
+        "error",
+        retrying("Reconnecting... 1/5 (stream disconnected before completion)"),
+      );
       notify("error", retrying("Reconnecting... 2/5"));
+      notify("item/agentMessage/delta", {
+        threadId: MAIN_THREAD,
+        turnId: MAIN_TURN,
+        itemId: "m-1",
+        delta: "Back.",
+      });
+      notify("error", retrying("stream error: connection reset"));
     });
-    expect(events.filter(({ type }) => type === "retrying")).toEqual([
-      { type: "retrying", message: "Reconnecting... 2/5" },
+    const attempt = (count: number): HarnessEvent => ({
+      type: "notice",
+      notice: { kind: "retrying", attempt: count, maxAttempts: null },
+    });
+    expect(events.filter(({ type }) => type === "notice")).toEqual([
+      attempt(1),
+      attempt(2),
+      // A retry after progress is a new one.
+      attempt(1),
+    ]);
+    // The provider's own text is not part of the notice.
+    expect(JSON.stringify(events)).not.toContain("stream disconnected");
+    expect(events.at(-1)?.type).toBe("turn.completed");
+  });
+});
+
+describe("what Codex says about the turn's setup", () => {
+  const startupStatus = (name: string, status: string) => ({
+    name,
+    status,
+    error: "connection refused",
+  });
+
+  test("a configuration warning is a notice without its text", async () => {
+    const events = await eventsOf((notify) => {
+      notify("configWarning", {
+        summary: "Unknown key in /opt/agent-settings/settings.toml",
+        details: "line 3",
+      });
+    });
+    expect(events.filter(({ type }) => type === "notice")).toEqual([
+      { type: "notice", notice: { kind: "config_warning" } },
+    ]);
+    expect(JSON.stringify(events)).not.toContain("agent-settings");
+  });
+
+  test("the browser server failing to start is a notice, and the turn goes on", async () => {
+    const events = await eventsOf((notify) => {
+      notify(
+        "mcpServer/startupStatus/updated",
+        startupStatus("stella_browser", "starting"),
+      );
+      notify(
+        "mcpServer/startupStatus/updated",
+        startupStatus("stella_browser", "failed"),
+      );
+      notify(
+        "mcpServer/startupStatus/updated",
+        startupStatus("their-notes", "failed"),
+      );
+    });
+    expect(events.filter(({ type }) => type === "notice")).toEqual([
+      {
+        type: "notice",
+        notice: { kind: "capability_unavailable", capability: "browser" },
+      },
     ]);
     expect(events.at(-1)?.type).toBe("turn.completed");
   });

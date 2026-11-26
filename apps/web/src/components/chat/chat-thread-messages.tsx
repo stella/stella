@@ -165,8 +165,10 @@ import { ConnectConnectorCard } from "@/components/chat/connect-connector-card";
 import {
   ContextNotice,
   LocalRunFilesNotSharedNotice,
+  LocalRunNotices,
 } from "@/components/chat/context-notice";
 import { LocalRunLimitReminder } from "@/components/chat/local-run-limit-reminder";
+import { shownLocalRunNotices } from "@/components/chat/local-run-notices.logic";
 import { LocalRunQuestionCard } from "@/components/chat/local-run-question-card";
 import { localRunQuestionCallId } from "@/components/chat/local-run-question.logic";
 import { LocalRunRequestNotice } from "@/components/chat/local-run-request-notice";
@@ -2412,7 +2414,9 @@ const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
 /** A message without metadata carries no notice of its own. */
 const carriesAnswerNotice = (message: ChatUIMessage): boolean =>
   message.metadata?.contextNotice !== undefined ||
-  message.metadata?.localRunFilesNotShared !== undefined;
+  message.metadata?.localRunFilesNotShared !== undefined ||
+  // Only an earlier answer is asked, whose turn no longer runs.
+  shownLocalRunNotices(message.metadata, false).length > 0;
 
 const hasVisibleAssistantParts = (parts: readonly ChatUIPart[]): boolean =>
   toAssistantPartRenderEntries(parts).some((entry) => {
@@ -3029,6 +3033,10 @@ const AssistantMessageParts = (props: AssistantMessagePartsProps) => {
           </AssistantProcessGroup>
         );
       })}
+      <LocalRunNotices
+        isTurnActive={isTurnActive}
+        metadata={message.metadata}
+      />
       <MessageAttachments parts={message.parts.filter(isChatAttachmentPart)} />
       <LocalRunFilesNotSharedNotice metadata={message.metadata} />
       <WebSearchSources parts={message.parts} />

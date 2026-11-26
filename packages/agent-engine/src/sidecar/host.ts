@@ -1793,7 +1793,7 @@ export class SidecarHost {
           case "text.completed":
           case "reasoning.completed":
           case "tool.started":
-          case "retrying":
+          case "notice":
           case "input.settled":
           case "model.rerouted":
             yield event;

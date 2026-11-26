@@ -6,6 +6,7 @@ import {
   AGENT_HARNESSES,
   harnessSessionIdEvent,
 } from "@stll/api-contract/agent-harness";
+import { DESKTOP_RUNNER_NOTICE_EVENT } from "@stll/api-contract/chat-local-run-notice";
 import { CHAT_LOCAL_RUN_TOOL_NAMES } from "@stll/api-contract/chat-local-run-tool";
 import {
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
@@ -1176,6 +1177,7 @@ const SIDECAR_CHUNK = object({
     DESKTOP_RUNNER_CHECKPOINT_EVENT,
     DESKTOP_RUNNER_OUTPUT_EVENT,
     DESKTOP_RUNNER_INPUT_EVENT,
+    DESKTOP_RUNNER_NOTICE_EVENT,
     HARNESS_CONTINUATION_EVENT,
     ...AGENT_HARNESSES.map(harnessSessionIdEvent),
   ]),

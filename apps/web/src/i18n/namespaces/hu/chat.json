@@ -473,6 +473,13 @@
       "limitReminderScheduled": "{time} után értesítjük.",
       "limitResumeContinue": "Automatikus folytatás, amikor visszaáll",
       "limitResumeScheduled": "{time} után automatikusan folytatódik.",
+      "notices": {
+        "browserUnavailable": "A böngészőt nem sikerült elindítani ehhez az üzenethez, ezért az ügynök nélküle dolgozott.",
+        "configWarning": "A számítógépén futó kódoló ügynök figyelmeztetett a saját beállításaira, majd folytatta a munkát. Ha valami nem stimmel, ellenőrizze a beállításait azon a számítógépen.",
+        "recovered": "A modell ismét válaszolt, miután a számítógépén futó kódoló ügynök újra próbálkozott.",
+        "retrying": "A modell nem válaszol. A számítógépén futó kódoló ügynök újra próbálkozik.",
+        "retryingAttempt": "A modell nem válaszol. A számítógépén futó kódoló ügynök újra próbálkozik ({attempt, number}/{maxAttempts, number}. próbálkozás)."
+      },
       "permissionAboveLimit": "A szervezete nem engedélyezi",
       "permissionAskDescription": "A csevegés mappájában lévő fájlokat magától szerkeszti; minden más előtt rákérdez.",
       "permissionAutoDescription": "Amit biztonságosnak ítél, magától elvégzi; a többire rákérdez.",

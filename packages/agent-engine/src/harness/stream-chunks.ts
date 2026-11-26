@@ -14,6 +14,11 @@ import {
 } from "@stll/api-contract/agent-harness";
 import { AI_FAILURE_CODES } from "@stll/api-contract/ai-errors";
 import {
+  type ChatLocalRunNotice,
+  DESKTOP_RUNNER_NOTICE_EVENT,
+  withChatLocalRunNotice,
+} from "@stll/api-contract/chat-local-run-notice";
+import {
   DESKTOP_RUNNER_REQUEST_EVENT,
   type DesktopRunnerRequestEvent,
 } from "@stll/api-contract/chat-local-run-request";
@@ -42,6 +47,7 @@ import {
   type HarnessEvent,
   type HarnessFailure,
   type HarnessInteractionClosed,
+  type HarnessNotice,
   type HarnessQuestionRequest,
   type HarnessToolCall,
   type HarnessToolResult,
@@ -170,6 +176,59 @@ const REQUEST_CLOSED_BY_END = {
   failed: { status: "expired", expiry: "run_failed" },
 } as const satisfies Record<string, DesktopRunnerRequestClosed>;
 
+/**
+ * How each event bears on a retry still under way: the harness made progress
+ * (`recovered`), the turn ended without (`ended`), or it says nothing about
+ * it (`null`). A model's answer, reasoning, step or request is progress; so
+ * is the turn completing.
+ */
+const RETRY_SETTLED_BY = {
+  "session.started": null,
+  "text.delta": "recovered",
+  "text.completed": "recovered",
+  "reasoning.completed": "recovered",
+  "tool.started": "recovered",
+  "tool.completed": "recovered",
+  "approval.requested": "recovered",
+  "question.requested": "recovered",
+  "interaction.resolved": null,
+  notice: null,
+  "input.settled": null,
+  "model.rerouted": null,
+  "turn.completed": "recovered",
+  "turn.interrupted": "ended",
+  "turn.failed": "ended",
+} as const satisfies Record<HarnessEvent["type"], "recovered" | "ended" | null>;
+
+/** A count the chat can show: a whole number of attempts within its bound. */
+const shownAttempt = (count: number | null): number | null =>
+  count !== null && Number.isSafeInteger(count) && count >= 1 && count <= 1000
+    ? count
+    : null;
+
+/** A harness notice as the chat keeps it; a retry starts out under way. */
+const chatNotice = (notice: HarnessNotice): ChatLocalRunNotice => {
+  switch (notice.kind) {
+    case "retrying":
+      return {
+        kind: "retrying",
+        status: "retrying",
+        attempt: shownAttempt(notice.attempt),
+        maxAttempts: shownAttempt(notice.maxAttempts),
+      };
+    case "config_warning":
+      return { kind: "config_warning" };
+    case "capability_unavailable":
+      return {
+        kind: "capability_unavailable",
+        capability: notice.capability,
+      };
+    default:
+      notice satisfies never;
+      return panic("Unhandled harness notice");
+  }
+};
+
 class ChunkMapper {
   private readonly out: AdapterYieldChunk[] = [];
   private segment = 0;
@@ -182,6 +241,11 @@ class ChunkMapper {
   private readonly texts = new Map<string, TextState>();
   /** Requests announced and not closed yet: the member may still answer. */
   private readonly openRequests = new Set<string>();
+  /**
+   * The notices reported so far, one per condition
+   * (`withChatLocalRunNotice`): a repeat is not reported again.
+   */
+  private notices: readonly ChatLocalRunNotice[] = [];
 
   private readonly context: HarnessChunkContext;
   /** The model the turn runs on: the one asked for until a reroute. */
@@ -202,6 +266,7 @@ class ChunkMapper {
   /** A stream that ends without a terminal event broke the adapter contract. */
   finish(): AdapterYieldChunk[] {
     if (!this.terminated) {
+      this.settleRetry("ended");
       this.ensureSegment();
       this.terminate(
         REQUEST_CLOSED_BY_END.failed,
@@ -215,6 +280,10 @@ class ChunkMapper {
   }
 
   private apply(event: HarnessEvent) {
+    const settled = RETRY_SETTLED_BY[event.type];
+    if (settled !== null) {
+      this.settleRetry(settled);
+    }
     switch (event.type) {
       case "session.started":
         this.ensureSegment();
@@ -267,9 +336,8 @@ class ChunkMapper {
             : { status: "resolved", decision: event.decision },
         );
         break;
-      case "retrying":
-        // The harness continues on its own; its next output opens a new
-        // segment. A transient retry leaves nothing to persist.
+      case "notice":
+        this.notice(chatNotice(event.notice));
         return;
       case "input.settled":
         // Where the turn took (or refused) a steering message. It names the
@@ -613,6 +681,31 @@ class ChunkMapper {
         },
       }),
     );
+  }
+
+  /** Report `notice`, unless it repeats what was already reported. */
+  private notice(notice: ChatLocalRunNotice) {
+    const next = withChatLocalRunNotice(this.notices, notice);
+    if (next === null) {
+      return;
+    }
+    this.notices = next;
+    this.ensureSegment();
+    this.push({
+      type: EventType.CUSTOM,
+      name: DESKTOP_RUNNER_NOTICE_EVENT,
+      value: notice,
+    });
+  }
+
+  /** A retry still under way ends as `status`; nothing when none is. */
+  private settleRetry(status: "recovered" | "ended") {
+    const retry = this.notices.find(
+      (notice) => notice.kind === "retrying" && notice.status === "retrying",
+    );
+    if (retry?.kind === "retrying") {
+      this.notice({ ...retry, status });
+    }
   }
 
   /** Report that request `requestId` closed; nothing for one never open. */

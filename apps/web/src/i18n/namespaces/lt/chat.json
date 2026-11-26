@@ -473,6 +473,13 @@
       "limitReminderScheduled": "Pranešime jums po {time}.",
       "limitResumeContinue": "Tęsti automatiškai, kai atsinaujins",
       "limitResumeScheduled": "Automatiškai tęsis po {time}.",
+      "notices": {
+        "browserUnavailable": "Šiai žinutei nepavyko paleisti naršyklės, todėl agentas dirbo be jos.",
+        "configWarning": "Programavimo agentas jūsų kompiuteryje įspėjo apie savo nustatymus ir tęsė darbą. Jei kas nors atrodo ne taip, patikrinkite jo nustatymus tame kompiuteryje.",
+        "recovered": "Modelis vėl atsakė, kai programavimo agentas jūsų kompiuteryje pabandė dar kartą.",
+        "retrying": "Modelis neatsako. Programavimo agentas jūsų kompiuteryje bando dar kartą.",
+        "retryingAttempt": "Modelis neatsako. Programavimo agentas jūsų kompiuteryje bando dar kartą (bandymas {attempt, number} iš {maxAttempts, number})."
+      },
       "permissionAboveLimit": "Jūsų organizacija to neleidžia",
       "permissionAskDescription": "Pokalbio aplanko failus redaguoja pats; dėl visko kito klausia.",
       "permissionAutoDescription": "Tai, ką laiko saugiu, atlieka pats; dėl kito klausia.",

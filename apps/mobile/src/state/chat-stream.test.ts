@@ -401,6 +401,7 @@ describe("drawing an answer from its events", () => {
       status: "finished",
       contextNotice: null,
       localRunRequests: [],
+      localRunNotices: [],
     });
     expect(answerEntry(answer, "2026-10-20T10:00:00.000Z")).toEqual({
       id: ANSWER_ID,

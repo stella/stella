@@ -473,6 +473,13 @@
       "limitReminderScheduled": "Avisaremos você a partir de {time}.",
       "limitResumeContinue": "Continuar automaticamente quando for renovado",
       "limitResumeScheduled": "Continuará automaticamente a partir de {time}.",
+      "notices": {
+        "browserUnavailable": "Não foi possível abrir o navegador para esta mensagem, então o agente trabalhou sem ele.",
+        "configWarning": "O agente de programação do seu computador avisou sobre um problema nas próprias configurações e continuou. Se algo parecer estranho, confira as configurações dele nesse computador.",
+        "recovered": "O modelo voltou a responder depois que o agente de programação do seu computador tentou de novo.",
+        "retrying": "O modelo não está respondendo. O agente de programação do seu computador está tentando de novo.",
+        "retryingAttempt": "O modelo não está respondendo. O agente de programação do seu computador está tentando de novo (tentativa {attempt, number} de {maxAttempts, number})."
+      },
       "permissionAboveLimit": "Não permitido pela sua organização",
       "permissionAskDescription": "Edita sozinho os arquivos da pasta do chat; pergunta antes de qualquer outra coisa.",
       "permissionAutoDescription": "Faz sozinho o que julga seguro; pergunta sobre o resto.",

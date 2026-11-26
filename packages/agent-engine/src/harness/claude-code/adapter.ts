@@ -1073,13 +1073,18 @@ const sendTurn = ({
   /** The browser server the turn asked for runs in the process. */
   browserServed: boolean;
 }) => {
-  session.begin({ sessionId, continuation });
   // The turn's instructions offer the browser; without its server the agent
-  // is told, so it says so rather than reaching for tools it lacks.
-  const told =
-    input.browser !== null && !browserServed
-      ? `${BROWSER_UNAVAILABLE_NOTE}\n\n${prompt}`
-      : prompt;
+  // is told, so it says so rather than reaching for tools it lacks, and the
+  // member sees it in the answer.
+  const browserUnavailable = input.browser !== null && !browserServed;
+  session.begin({
+    sessionId,
+    continuation,
+    unavailable: browserUnavailable ? ["browser"] : [],
+  });
+  const told = browserUnavailable
+    ? `${BROWSER_UNAVAILABLE_NOTE}\n\n${prompt}`
+    : prompt;
   // By its uuid, the turn knows its prompt in work the CLI started itself.
   const uuid = crypto.randomUUID();
   session.promptWritten(uuid);

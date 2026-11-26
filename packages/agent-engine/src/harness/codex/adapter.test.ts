@@ -1436,8 +1436,8 @@ describe("Codex adapter over a stdio app-server", () => {
     });
     const limited = await run("usage_limit");
     expect(limited.events).toContainEqual({
-      type: "retrying",
-      message: "Reconnecting",
+      type: "notice",
+      notice: { kind: "retrying", attempt: 1, maxAttempts: null },
     });
     // A usage limit is the member's allowance, not the model's capacity: the
     // turn is not continued.
@@ -1500,6 +1500,31 @@ describe("Codex adapter over a stdio app-server", () => {
     });
     const theirs = await run("other_mcp_failed");
     expect(terminal(theirs.events)?.type).toBe("turn.completed");
+    expect(theirs.events.map(({ type }) => type)).not.toContain("notice");
+  });
+
+  test("config warnings and a browser server that did not start are notices without their text, and the turn runs on", async () => {
+    const { events } = await run("config_warning_browser_failed", {
+      overrides: {
+        browser: {
+          serverName: "stella_browser",
+          url: "http://127.0.0.1:9/browser/run-1",
+          token: "browser-token",
+        },
+      },
+    });
+    // Held until the turn began, then reported after its session; the
+    // warnings' own text (a path on the member's machine) is not carried.
+    expect(events.filter(({ type }) => type === "notice")).toEqual([
+      { type: "notice", notice: { kind: "config_warning" } },
+      { type: "notice", notice: { kind: "config_warning" } },
+      {
+        type: "notice",
+        notice: { kind: "capability_unavailable", capability: "browser" },
+      },
+    ]);
+    expect(JSON.stringify(events)).not.toContain("agent-settings");
+    expect(terminal(events)?.type).toBe("turn.completed");
   });
 
   /** Runs a scenario whose continuations record their delays. */
@@ -1525,8 +1550,8 @@ describe("Codex adapter over a stdio app-server", () => {
     const { events, delays, starts } =
       await runRecordingDelays("capacity_retry");
     expect(events).toContainEqual({
-      type: "retrying",
-      message: "Selected model is at capacity. Please try a different model.",
+      type: "notice",
+      notice: { kind: "retrying", attempt: 1, maxAttempts: 5 },
     });
     // The message completed before the failure stays in the thread; the
     // continuation writes only what follows it.
@@ -1549,7 +1574,13 @@ describe("Codex adapter over a stdio app-server", () => {
   test("a turn still at capacity after five continuations, each waiting twice as long up to the cap, fails as the model at capacity", async () => {
     const { events, delays, starts } =
       await runRecordingDelays("capacity_exhausted");
-    expect(events.filter(({ type }) => type === "retrying")).toHaveLength(5);
+    expect(
+      events.flatMap((event) =>
+        event.type === "notice" && event.notice.kind === "retrying"
+          ? [event.notice.attempt]
+          : [],
+      ),
+    ).toEqual([1, 2, 3, 4, 5]);
     expect(delays).toEqual([10, 20, 40, 50, 50]);
     expect(terminal(events)).toEqual({
       type: "turn.failed",
@@ -1565,7 +1596,7 @@ describe("Codex adapter over a stdio app-server", () => {
     const { events, delays, starts } = await runRecordingDelays(
       "capacity_mid_message",
     );
-    expect(events.map(({ type }) => type)).not.toContain("retrying");
+    expect(events.map(({ type }) => type)).not.toContain("notice");
     expect(delays).toEqual([]);
     expect(terminal(events)).toEqual({
       type: "turn.failed",
@@ -1591,7 +1622,7 @@ describe("Codex adapter over a stdio app-server", () => {
     }
     const turn = started.value;
     const collected = collect(turn, async (event) => {
-      if (event.type === "retrying") {
+      if (event.type === "notice") {
         await turn.interrupt();
       }
     });
@@ -2764,6 +2795,7 @@ describe.skipIf(codex === null)("the installed codex CLI", () => {
       gracePeriodMs: 5000,
       detached: () => undefined,
       stellaServer: "stella",
+      browserServers: new Set(),
       capacityRetry: {
         maxAttempts: 0,
         baseDelayMs: 0,

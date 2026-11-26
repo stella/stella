@@ -36,6 +36,11 @@ import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
 import { BROWSER_CONTROL_TOOL_NAME } from "@stll/api-contract/browser-control";
 import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import {
+  CHAT_LOCAL_RUN_NOTICES_METADATA_KEY,
+  chatLocalRunNoticesOf,
+  endedChatLocalRunNotices,
+} from "@stll/api-contract/chat-local-run-notice";
+import {
   CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY,
   chatLocalRunRequestsOf,
 } from "@stll/api-contract/chat-local-run-request";
@@ -4255,10 +4260,7 @@ const processTurnForPersistence = ({
       return convertedMessage === null
         ? null
         : attachRestorationMetadata({
-            message: attachLocalRunRequests(
-              attachLocalRunFilesNotShared(convertedMessage, streamed),
-              streamed,
-            ),
+            message: withLocalRunAnswerMetadata(convertedMessage, streamed),
             restorationPairs,
           });
     },
@@ -5778,6 +5780,48 @@ const attachLocalRunRequests = (
         },
       };
 };
+
+/**
+ * The answer with what its local run said about itself, each notice in its
+ * latest state, as the stream restated it
+ * (`CHAT_LOCAL_RUN_NOTICES_METADATA_KEY`): a reloaded answer shows the same
+ * notices as the live one did. The answer is captured where its stream
+ * ends, so a retry still under way ended with it: a stop or a cut ends the
+ * read before the run settles it.
+ */
+const attachLocalRunNotices = (
+  message: ChatMessage,
+  streamed: UIMessage,
+): ChatMessage => {
+  const streamedNotices = chatLocalRunNoticesOf(streamed.metadata);
+  const notices = endedChatLocalRunNotices(streamedNotices) ?? streamedNotices;
+  return notices.length === 0
+    ? message
+    : {
+        ...message,
+        metadata: {
+          ...message.metadata,
+          [CHAT_LOCAL_RUN_NOTICES_METADATA_KEY]: [...notices],
+        },
+      };
+};
+
+/**
+ * The stored answer with what the stream said about its local run and the
+ * stored answer keeps: the files it could not share, what it asked the
+ * member and what it said about itself, each as the stream last restated it.
+ */
+export const withLocalRunAnswerMetadata = (
+  message: ChatMessage,
+  streamed: UIMessage,
+): ChatMessage =>
+  attachLocalRunNotices(
+    attachLocalRunRequests(
+      attachLocalRunFilesNotShared(message, streamed),
+      streamed,
+    ),
+    streamed,
+  );
 
 const attachRestorationMetadata = ({
   message,

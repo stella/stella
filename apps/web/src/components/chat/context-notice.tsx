@@ -1,6 +1,14 @@
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import {
+  type ChatLocalRunNotice,
+  type ChatLocalRunNoticeCapability,
+  chatLocalRunNoticeKey,
+} from "@stll/api-contract/chat-local-run-notice";
+
 import type { ChatMessageMetadata } from "@/components/chat/chat-ui-tools-types";
+import { shownLocalRunNotices } from "@/components/chat/local-run-notices.logic";
 import type { TranslationKey } from "@/i18n/types";
 
 type AnswerContextNotice = NonNullable<ChatMessageMetadata["contextNotice"]>;
@@ -54,5 +62,95 @@ export const LocalRunFilesNotSharedNotice = ({
         fileNames: fileNames.join(", "),
       })}
     </p>
+  );
+};
+
+/** What each capability the run went without reads as. */
+const CAPABILITY_UNAVAILABLE_KEYS = {
+  browser: "chat.localRun.notices.browserUnavailable",
+} as const satisfies Record<ChatLocalRunNoticeCapability, TranslationKey>;
+
+/** One notice in the member's words; `null` for one with nothing to say. */
+const useNoticeText = () => {
+  const t = useTranslations();
+  return (notice: ChatLocalRunNotice): string | null => {
+    switch (notice.kind) {
+      case "retrying":
+        switch (notice.status) {
+          case "retrying":
+            return notice.attempt === null || notice.maxAttempts === null
+              ? t("chat.localRun.notices.retrying")
+              : t("chat.localRun.notices.retryingAttempt", {
+                  attempt: notice.attempt,
+                  maxAttempts: notice.maxAttempts,
+                });
+          case "recovered":
+            return t("chat.localRun.notices.recovered");
+          case "ended":
+            // The turn's own failure or stop says what became of it.
+            return null;
+          default:
+            notice.status satisfies never;
+            return panic("Unknown retry status");
+        }
+      case "config_warning":
+        return t("chat.localRun.notices.configWarning");
+      case "capability_unavailable":
+        return t(CAPABILITY_UNAVAILABLE_KEYS[notice.capability]);
+      default:
+        notice satisfies never;
+        return panic("Unknown local run notice");
+    }
+  };
+};
+
+/**
+ * What the answer's local run said about itself while it went on: a retry of
+ * the model, a warning about the agent's settings, a capability it went
+ * without. Quiet lines, not errors: the server keeps each one updated on the
+ * answer (one line per condition; a retry that recovers reads as recovered,
+ * one that ended with its turn reads as nothing), so the answer reads the
+ * same live and after reload. Once the turn is no longer running, a retry
+ * the stream left under way (a stop cut it off) reads as ended, as the
+ * stored answer has it.
+ *
+ * The polite live region is mounted with the answer, empty, so the first
+ * notice is announced as a change; it lays out nothing, and the visible
+ * lines beside it are not read a second time.
+ */
+export const LocalRunNotices = ({
+  isTurnActive,
+  metadata,
+}: {
+  isTurnActive: boolean;
+  metadata: ChatMessageMetadata | undefined;
+}) => {
+  const text = useNoticeText();
+  const lines = shownLocalRunNotices(metadata, isTurnActive).flatMap(
+    (notice) => {
+      const shown = text(notice);
+      return shown === null
+        ? []
+        : [{ key: chatLocalRunNoticeKey(notice), text: shown }];
+    },
+  );
+  return (
+    <>
+      <span aria-live="polite" className="sr-only" role="status">
+        {lines.map((line) => line.text).join(" ")}
+      </span>
+      {lines.length === 0 ? null : (
+        <div aria-hidden="true">
+          {lines.map((line) => (
+            <p
+              className="text-muted-foreground max-w-xl py-1 text-xs"
+              key={line.key}
+            >
+              {line.text}
+            </p>
+          ))}
+        </div>
+      )}
+    </>
   );
 };

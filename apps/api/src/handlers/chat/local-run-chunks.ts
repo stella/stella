@@ -22,6 +22,14 @@ import {
 } from "@stll/api-contract/chat";
 import { RUN_OUTPUT_FILE_EXTENSIONS } from "@stll/api-contract/chat-file-types";
 import {
+  CHAT_LOCAL_RUN_NOTICES_METADATA_KEY,
+  type ChatLocalRunNotice,
+  chatLocalRunNoticeSchema,
+  DESKTOP_RUNNER_NOTICE_EVENT,
+  endedChatLocalRunNotices,
+  withChatLocalRunNotice,
+} from "@stll/api-contract/chat-local-run-notice";
+import {
   CHAT_LOCAL_RUN_MAX_REQUESTS,
   CHAT_LOCAL_RUN_REQUESTS_METADATA_KEY,
   type ChatLocalRunRequest,
@@ -1087,6 +1095,60 @@ const createRunRequests = (rewrite: RewriteContext) => {
 type RunRequests = ReturnType<typeof createRunRequests>;
 
 /**
+ * What the run said about itself, as one read of it knows: each notice in
+ * its latest state, one per condition (`withChatLocalRunNotice`), so a
+ * repeat or a desktop sending more shows nothing new. Each change restates
+ * the whole list on the answer's metadata
+ * (`CHAT_LOCAL_RUN_NOTICES_METADATA_KEY`), which the stored answer keeps.
+ */
+const createRunNotices = (rewrite: RewriteContext) => {
+  let notices: readonly ChatLocalRunNotice[] = [];
+  const restated = (
+    next: readonly ChatLocalRunNotice[] | null,
+  ): PublicStreamChunk[] => {
+    if (next === null) {
+      return [];
+    }
+    notices = next;
+    return [
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: rewrite.runnerRunId,
+        role: "assistant",
+        timestamp: nowMs(),
+        metadata: { [CHAT_LOCAL_RUN_NOTICES_METADATA_KEY]: [...notices] },
+      },
+    ];
+  };
+  return {
+    /**
+     * What the run reported, if `chunk` is a notice: the restated list
+     * (empty when nothing changed or the notice does not read), else `null`.
+     */
+    report: (chunk: PublicStreamChunk): PublicStreamChunk[] | null => {
+      if (
+        chunk.type !== EventType.CUSTOM ||
+        chunk.name !== DESKTOP_RUNNER_NOTICE_EVENT
+      ) {
+        return null;
+      }
+      const notice = v.safeParse(chatLocalRunNoticeSchema, chunk.value);
+      return notice.success
+        ? restated(withChatLocalRunNotice(notices, notice.output))
+        : [];
+    },
+    /**
+     * The run ended: a retry still under way ends with it. Its computer
+     * settles the retry itself, so this holds only for a run that ended
+     * without saying so.
+     */
+    end: (): PublicStreamChunk[] => restated(endedChatLocalRunNotices(notices)),
+  };
+};
+
+type RunNotices = ReturnType<typeof createRunNotices>;
+
+/**
  * Why a failed run ended the turn: the outcome's own failure, else the
  * harness's error. Only a limit failure says when the limit resets.
  */
@@ -1728,8 +1790,8 @@ const createRunApps = (context: LocalRunContext, runnerRunId: string) => {
 /**
  * What a read of a run had built when it stopped at a position: the calls it
  * saw open, whether the harness finished and with which error, the files and
- * steers it reported, the app calls still waiting for a result, and what the
- * run asked the member.
+ * steers it reported, the app calls still waiting for a result, what the
+ * run asked the member and what it said about itself.
  *
  * An adopted read also starts as one whose run start went out: the task that
  * released the turn sent it before it handed the turn over.
@@ -1741,6 +1803,7 @@ type AdoptedRead = {
   runReports: ReturnType<typeof createRunReports>;
   runApps: ReturnType<typeof createRunApps>;
   runRequests: RunRequests;
+  runNotices: RunNotices;
 };
 
 /**
@@ -1769,6 +1832,7 @@ const foldAdoptedRead = async ({
     runReports: createRunReports(context, rewrite),
     runApps: createRunApps(context, runnerRunId),
     runRequests: createRunRequests(rewrite),
+    runNotices: createRunNotices(rewrite),
   };
   let after = 0;
   while (after < throughSeq) {
@@ -1801,6 +1865,9 @@ const foldAdoptedRead = async ({
         if (closed !== "malformed") {
           read.runRequests.close(closed.requestId, closed);
         }
+        continue;
+      }
+      if (read.runNotices.report(message.chunk) !== null) {
         continue;
       }
       if ((await read.runReports(message.chunk)) !== null) {
@@ -1933,6 +2000,7 @@ const readStartOf = (
         runReports: createRunReports(context, rewrite),
         runApps: createRunApps(context, rewrite.runnerRunId),
         runRequests: createRunRequests(rewrite),
+        runNotices: createRunNotices(rewrite),
         told: "connected",
       }
     : {
@@ -1942,6 +2010,7 @@ const readStartOf = (
         runReports: adopted.runReports,
         runApps: adopted.runApps,
         runRequests: adopted.runRequests,
+        runNotices: adopted.runNotices,
         told: null,
       };
 
@@ -2118,7 +2187,8 @@ function* afterStart(
 /**
  * The chunks that end a read once the run's own end was read: what the run
  * left asked closes by how it ended (its computer closes every request, so
- * this holds only for one that ended without saying so), then the finish.
+ * this holds only for one that ended without saying so), a retry still under
+ * way ends, then the finish.
  */
 const endedRunChunks = ({
   ending,
@@ -2126,16 +2196,19 @@ const endedRunChunks = ({
   harnessError,
   rewrite,
   runRequests,
+  runNotices,
 }: {
   ending: StoredOutcome;
   finishSent: boolean;
   harnessError: HarnessError | null;
   rewrite: RewriteContext;
   runRequests: RunRequests;
+  runNotices: RunNotices;
 }): PublicStreamChunk[] => {
   logger.info("chat.local_run.ended", { runId: rewrite.runnerRunId, ending });
   return [
     ...runRequests.closeAll(REQUEST_CLOSED_BY_OUTCOME[ending]),
+    ...runNotices.end(),
     ...finishedRunChunks({
       outcome: ending,
       finishSent,
@@ -2144,6 +2217,18 @@ const endedRunChunks = ({
     }),
   ];
 };
+
+/**
+ * The chunks a read that ends without the run's own end leaves: every
+ * request still open is lost, and a retry still under way ends with it.
+ */
+const lostRunChunks = (
+  runRequests: RunRequests,
+  runNotices: RunNotices,
+): PublicStreamChunk[] => [
+  ...runRequests.closeAll(REQUEST_LOST),
+  ...runNotices.end(),
+];
 
 async function* readRunChunks({
   context,
@@ -2171,12 +2256,12 @@ async function* readRunChunks({
     threadId: context.chatThreadId,
   });
   const computer = computerStatusChunks(start, initial.told);
-  const { runApps, runReports, runRequests } = initial;
+  const { runApps, runReports, runRequests, runNotices } = initial;
   /**
    * The read ends without the run's own end: what the run asked can no
    * longer be answered, and the member reads it so before the failure.
    */
-  const lost = () => afterStart(start, runRequests.closeAll(REQUEST_LOST));
+  const lost = () => afterStart(start, lostRunChunks(runRequests, runNotices));
   const fail = function* (code: LocalRunFailure): Generator<PublicStreamChunk> {
     logger.info("chat.local_run.ended", { runId: runnerRunId, ending: code });
     yield* lost();
@@ -2249,9 +2334,12 @@ async function* readRunChunks({
             if (announcedAwaitedSteps(message.chunk) !== null) {
               continue;
             }
-            const requestReport = runRequests.report(message.chunk);
-            if (requestReport !== null) {
-              yield* afterStart(start, requestReport);
+            // What the run reports about its requests or about itself.
+            const runReport =
+              runRequests.report(message.chunk) ??
+              runNotices.report(message.chunk);
+            if (runReport !== null) {
+              yield* afterStart(start, runReport);
               continue;
             }
             const reported = await runReports(message.chunk);
@@ -2313,6 +2401,7 @@ async function* readRunChunks({
                 harnessError,
                 rewrite,
                 runRequests,
+                runNotices,
               }),
             );
             return;

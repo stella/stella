@@ -12,6 +12,7 @@ import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission
 import type { ChatTurnTiming } from "@stll/api-contract/chat";
 import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import type { ChatLocalFilesUndone } from "@stll/api-contract/chat-local-files-undo";
+import type { ChatLocalRunNotice } from "@stll/api-contract/chat-local-run-notice";
 import type { ChatLocalRunRequest } from "@stll/api-contract/chat-local-run-request";
 import type {
   ChatLocalRunContext,
@@ -167,6 +168,11 @@ export type ChatMessageMetadata = {
    * its latest state (`chat-local-run-request.ts`). Incoming client
    * metadata deliberately does not accept this field. */
   localRunRequests?: ChatLocalRunRequest[] | undefined;
+  /** Server-owned: what the answer's local run said about itself while it
+   * went on (a retry, a configuration warning, a capability it went
+   * without), each in its latest state (`chat-local-run-notice.ts`).
+   * Incoming client metadata deliberately does not accept this field. */
+  localRunNotices?: ChatLocalRunNotice[] | undefined;
   docxEditPreferences?:
     | {
         docxEditRepresentation?: "tracked-changes" | "direct" | undefined;
