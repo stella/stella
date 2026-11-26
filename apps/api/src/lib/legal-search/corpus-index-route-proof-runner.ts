@@ -717,11 +717,16 @@ const turn = async (
 const work = async (walk: Walk): Promise<void> => {
   const { now, budget } = walk.options;
   while (walk.stop === null) {
-    if (now() >= budget.endsAt || walk.pages >= budget.pages) {
+    // A page another worker reserved may still be handed back (its route
+    // found current), so the page budget is spent only once none is held.
+    const pagesSpent = walk.pages >= budget.pages;
+    if (now() >= budget.endsAt || (pagesSpent && walk.busy.size === 0)) {
       walk.stop = { type: "budget_spent" };
       return;
     }
-    const taken = takeRoute(walk);
+    const taken = pagesSpent
+      ? ({ type: "wait", ms: IDLE_POLL_MS } as const)
+      : takeRoute(walk);
     if (taken.type === "none") {
       walk.stop = { type: "nothing_to_walk" };
       return;
