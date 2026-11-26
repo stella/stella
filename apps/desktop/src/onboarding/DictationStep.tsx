@@ -28,6 +28,7 @@ export const DictationStep = ({ onBack, onContinue, snapshot }: StepProps) => {
         <StepFooter
           onBack={actions.onBack}
           primary={actions.primary}
+          screens={actions.screens}
           secondary={actions.secondary}
           snapshot={snapshot}
         />

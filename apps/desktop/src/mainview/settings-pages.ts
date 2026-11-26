@@ -1,17 +1,19 @@
 import type { AgentSettingsFocus } from "./AgentSubscriptionsSection";
 
 /**
- * The Settings window's pages, in sidebar order. Each id is also the
+ * The Settings window's pages, in sidebar order. The pages of the
+ * features keep the order every surface lists the features in
+ * (`src/shared/desktop-features.ts`). Each id is also the
  * window's URL hash and the `tab` the native side sends with
  * `activate-tab` (`PreferencesTab` in `src-tauri/src/lib.rs`). A window the
  * native side opens for a view starts at `#tab` or `#tab/focus`.
  */
 export const SETTINGS_PAGES = [
   "general",
-  "dictation",
   "clipboard",
-  "agents",
   "signing",
+  "dictation",
+  "agents",
   "activity",
   "notifications",
   "permissions",

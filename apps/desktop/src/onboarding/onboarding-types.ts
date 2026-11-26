@@ -7,10 +7,10 @@ export const ONBOARDING_STEPS = [
   "welcome",
   "connect",
   "howItWorks",
-  "activity",
   "permissions",
   "tryIt",
   "dictation",
+  "activity",
   "done",
 ] as const;
 

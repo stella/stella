@@ -76,7 +76,6 @@ export const DictationInputFix = () => {
             return;
           });
         }}
-        size="sm"
         variant="outline"
       >
         {t(action)}

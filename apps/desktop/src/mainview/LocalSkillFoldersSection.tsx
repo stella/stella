@@ -71,7 +71,6 @@ export const LocalSkillFoldersSection = ({
               },
             );
           }}
-          size="sm"
           variant="outline"
         >
           {t("add")}
@@ -103,7 +102,6 @@ export const LocalSkillFoldersSection = ({
                 invoke("local_skill_folders_remove", { path }),
               );
             }}
-            size="sm"
             variant="ghost"
           >
             {t("remove")}

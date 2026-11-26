@@ -510,6 +510,29 @@ fn activity_binding(app: &AppHandle) -> Option<(u64, String)> {
     .account_binding(crate::feature_gate::DesktopFeature::ActivityTimeline)
 }
 
+/// The features the menu has an entry for, in the one order every surface
+/// lists the features in (`fixtures/desktop-feature-order.json`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TrayFeature {
+  Clipboard,
+  Dictation,
+  Activity,
+}
+
+impl TrayFeature {
+  const ORDER: [Self; 3] = [Self::Clipboard, Self::Dictation, Self::Activity];
+
+  /// The feature's name in `fixtures/desktop-feature-order.json`.
+  #[cfg(test)]
+  const fn name(self) -> &'static str {
+    match self {
+      Self::Clipboard => "clipboard",
+      Self::Dictation => "dictation",
+      Self::Activity => "activity",
+    }
+  }
+}
+
 fn build_tray_menu_with_activity(
   app: &AppHandle,
   snapshot: &AppSnapshot,
@@ -556,22 +579,32 @@ fn build_tray_menu_with_activity(
   }
 
   let clipboard_enabled = !crate::managed_policy::current().clipboard_disabled;
-  if clipboard_enabled {
-    builder = builder.item(
-      &MenuItemBuilder::with_id(OPEN_CLIPBOARD_ACTION, t("clipboard.title"))
-        .build(app)?,
-    );
-  }
-  if let Some(activity) = activity {
-    builder = builder.item(&build_activity_menu(app, activity)?);
-  }
   let dictation = dictation_menu(
     crate::dictation::tray_state(app),
     KeyNames::CURRENT,
     active_locale(),
   );
-  if let Some(dictation) = &dictation {
-    builder = builder.item(&build_dictation_menu(app, dictation)?);
+  for feature in TrayFeature::ORDER {
+    match feature {
+      TrayFeature::Clipboard => {
+        if clipboard_enabled {
+          builder = builder.item(
+            &MenuItemBuilder::with_id(OPEN_CLIPBOARD_ACTION, t("clipboard.title"))
+              .build(app)?,
+          );
+        }
+      }
+      TrayFeature::Dictation => {
+        if let Some(dictation) = &dictation {
+          builder = builder.item(&build_dictation_menu(app, dictation)?);
+        }
+      }
+      TrayFeature::Activity => {
+        if let Some(activity) = activity {
+          builder = builder.item(&build_activity_menu(app, activity)?);
+        }
+      }
+    }
   }
   if clipboard_enabled || activity.is_some() || dictation.is_some() {
     builder = builder.separator();
@@ -870,11 +903,35 @@ pub enum MenuAction {
 #[cfg(test)]
 mod tests {
   use super::*;
+
   use crate::dictation_hold_key::HoldChoice;
   use crate::types::{
     DesktopEditFileType, DesktopNotificationPreferences, DesktopUpdateSnapshot,
     SessionStatus,
   };
+
+  #[test]
+  fn menu_features_follow_the_one_feature_order() {
+    let contract: serde_json::Value =
+      serde_json::from_str(include_str!("../../fixtures/desktop-feature-order.json"))
+        .unwrap();
+    let order = contract["features"]
+      .as_array()
+      .unwrap()
+      .iter()
+      .map(|feature| feature.as_str().unwrap())
+      .collect::<Vec<_>>();
+    let positions = TrayFeature::ORDER
+      .iter()
+      .map(|feature| order.iter().position(|known| *known == feature.name()))
+      .collect::<Option<Vec<_>>>()
+      .expect("every menu feature names a feature in the contract");
+    assert!(
+      positions.windows(2).all(|pair| pair[0] < pair[1]),
+      "{:?} are not in the order of {order:?}",
+      TrayFeature::ORDER
+    );
+  }
 
   fn init_i18n() {
     crate::i18n::init_en();

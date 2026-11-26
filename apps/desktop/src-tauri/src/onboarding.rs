@@ -34,24 +34,43 @@ pub enum Step {
   Welcome,
   Connect,
   HowItWorks,
-  Activity,
   Permissions,
   TryIt,
   Dictation,
+  Activity,
   Done,
 }
 
 impl Step {
+  /// The tour's order. The steps that set up one feature (Try it for
+  /// clipboard history, Dictation, Activity) come in the one order every
+  /// surface lists the features in, `fixtures/desktop-feature-order.json`.
   pub const ALL: [Self; 8] = [
     Self::Welcome,
     Self::Connect,
     Self::HowItWorks,
-    Self::Activity,
     Self::Permissions,
     Self::TryIt,
     Self::Dictation,
+    Self::Activity,
     Self::Done,
   ];
+
+  /// The feature this step sets up, by its name in
+  /// `fixtures/desktop-feature-order.json`.
+  #[cfg(test)]
+  const fn feature(self) -> Option<&'static str> {
+    match self {
+      Self::TryIt => Some("clipboard"),
+      Self::Dictation => Some("dictation"),
+      Self::Activity => Some("activity"),
+      Self::Welcome
+      | Self::Connect
+      | Self::HowItWorks
+      | Self::Permissions
+      | Self::Done => None,
+    }
+  }
 }
 
 /// What decides which steps appear.
@@ -954,8 +973,21 @@ mod tests {
   fn after_try_it(context: FlowContext) -> Step {
     if context.dictation_available {
       Step::Dictation
+    } else if context.activity_available {
+      Step::Activity
     } else {
       Step::Done
+    }
+  }
+
+  /// The feature step Done follows when clipboard history is on.
+  fn last_feature_step(context: FlowContext) -> Step {
+    if context.activity_available {
+      Step::Activity
+    } else if context.dictation_available {
+      Step::Dictation
+    } else {
+      Step::TryIt
     }
   }
   const INPUTS: [Input; 3] = [Input::Continue, Input::Back, Input::ShortcutPressed];
@@ -976,19 +1008,14 @@ mod tests {
   }
 
   #[test]
-  fn done_is_reached_only_through_try_it_or_dictation_after_it() {
+  fn done_is_reached_only_through_the_last_feature_step() {
     for context in CONTEXTS {
       for walk in walks(8) {
         let mut step = Step::Welcome;
         for input in walk {
           let next = next_step(step, input, context);
           if next == Step::Done && step != Step::Done {
-            let expected = if context.dictation_available {
-              Step::Dictation
-            } else {
-              Step::TryIt
-            };
-            assert_eq!(step, expected, "{context:?}");
+            assert_eq!(step, last_feature_step(context), "{context:?}");
           }
           step = next;
         }
@@ -1114,12 +1141,12 @@ mod tests {
           assert_ne!(step, Step::TryIt, "{context:?}");
         }
       }
-      let before_done = if context.dictation_available {
+      let before_done = if context.activity_available {
+        Step::Activity
+      } else if context.dictation_available {
         Step::Dictation
       } else if context.has_permission_rows {
         Step::Permissions
-      } else if context.activity_available {
-        Step::Activity
       } else {
         Step::HowItWorks
       };
@@ -1243,22 +1270,33 @@ mod tests {
   }
 
   #[test]
-  fn activity_is_explained_after_how_it_works_and_before_permissions() {
-    for context in CONTEXTS
+  fn feature_steps_follow_the_one_feature_order() {
+    let contract: serde_json::Value =
+      serde_json::from_str(include_str!("../../fixtures/desktop-feature-order.json"))
+        .unwrap();
+    let order = contract["features"]
+      .as_array()
+      .unwrap()
+      .iter()
+      .map(|feature| feature.as_str().unwrap())
+      .collect::<Vec<_>>();
+    let steps = Step::ALL
       .into_iter()
-      .filter(|context| context.activity_available)
-    {
-      let steps = visible_steps(context, Step::Welcome);
-      let position = |step: Step| steps.iter().position(|s| *s == step);
-      assert_eq!(
-        position(Step::Activity),
-        position(Step::HowItWorks).map(|index| index + 1)
-      );
-    }
+      .filter_map(Step::feature)
+      .collect::<Vec<_>>();
+    let positions = steps
+      .iter()
+      .map(|feature| order.iter().position(|known| known == feature))
+      .collect::<Option<Vec<_>>>()
+      .expect("every feature step names a feature in the contract");
+    assert!(
+      positions.windows(2).all(|pair| pair[0] < pair[1]),
+      "{steps:?} are not in the order of {order:?}"
+    );
   }
 
   #[test]
-  fn dictation_is_offered_after_try_it_and_right_before_done() {
+  fn dictation_is_offered_right_after_try_it() {
     for context in CONTEXTS
       .into_iter()
       .filter(|context| context.dictation_available)
@@ -1269,7 +1307,16 @@ mod tests {
         position(Step::Dictation),
         position(Step::TryIt).map(|index| index + 1)
       );
-      assert_eq!(last_before_done(context), Step::Dictation);
+    }
+  }
+
+  #[test]
+  fn activity_is_offered_last_right_before_done() {
+    for context in CONTEXTS
+      .into_iter()
+      .filter(|context| context.activity_available)
+    {
+      assert_eq!(last_before_done(context), Step::Activity);
     }
   }
 

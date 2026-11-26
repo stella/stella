@@ -188,6 +188,28 @@ test("the sidebar names every page in order and marks only the open one as curre
   expect(window.location.hash).toBe("#permissions");
 });
 
+test("the account above the pages opens General, where the account is", async () => {
+  const { container, entry, getByRole, nav } = await renderApp({});
+
+  await act(async () => {
+    fireEvent.click(entry(pages.about));
+  });
+  expect(currentEntries(nav)).toEqual([{ current: "page", name: pages.about }]);
+
+  const account = container.querySelector<HTMLButtonElement>(
+    "button[data-sidebar-account]",
+  );
+  expect(account).not.toBeNull();
+  await act(async () => {
+    account?.click();
+  });
+
+  expect(currentEntries(nav)).toEqual([
+    { current: "page", name: pages.general },
+  ]);
+  expect(getByRole("heading", { level: 1 }).textContent).toBe(pages.general);
+});
+
 test("every page is reachable from the keyboard", async () => {
   const { entry } = await renderApp({});
 
