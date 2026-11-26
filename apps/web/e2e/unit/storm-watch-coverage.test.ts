@@ -2,8 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { repoRelativePath } from "@stll/portable-path";
-
 import { guardEnforcesLine } from "../../../../scripts/guard-rollouts.ts";
 
 // Every browser spec runs under the storm watch: it takes `test` from the
@@ -16,7 +14,8 @@ import { guardEnforcesLine } from "../../../../scripts/guard-rollouts.ts";
 // Registered in scripts/guard-rollouts: enforced on changed lines first.
 const GUARD = "storm-watch-coverage";
 const E2E_ROOT = path.resolve(import.meta.dir, "..");
-const REPO_ROOT = path.resolve(E2E_ROOT, "../../..");
+/** Where E2E_ROOT sits in the repository, for repository-relative names. */
+const E2E_IN_REPO = "apps/web/e2e";
 
 /** Specs that may use Playwright's own `test` and contexts, and why. */
 const UNWATCHED_SPECS: Readonly<Record<string, string>> = {
@@ -58,7 +57,7 @@ describe("storm watch coverage", () => {
       .filter((spec) => !Object.hasOwn(UNWATCHED_SPECS, spec))
       .flatMap((spec) => {
         const source = read(spec);
-        const file = repoRelativePath(REPO_ROOT, path.join(E2E_ROOT, spec));
+        const file = `${E2E_IN_REPO}/${spec}`;
         return UNWATCHED_USES.flatMap(({ pattern, fix }) =>
           [...source.matchAll(new RegExp(pattern.source, "gu"))].map(
             (match) => ({ file, line: lineOf(source, match.index), fix }),
