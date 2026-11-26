@@ -642,12 +642,18 @@ const harnessFor = <C extends RealtimeChannel>(channel: C): ChannelHarness<C> =>
  * audience is one synchronous pass after the batch reauthorization, so a frame
  * meant for a stream is already queued when the audience has read theirs.
  */
+const flushMicrotasks = async (): Promise<void> => {
+  for (let turn = 0; turn < 20; turn += 1) {
+    await Promise.resolve();
+  }
+};
+
 const pendingDelivery = async (reader: {
   read: () => PromiseLike<{ done: boolean }>;
 }): Promise<Delivery> =>
   await Promise.race([
     reader.read().then(({ done }): Delivery => (done ? "closed" : "frame")),
-    Bun.sleep(0).then((): Delivery => "silent"),
+    flushMicrotasks().then((): Delivery => "silent"),
   ]);
 
 const isSseFrameEncode = ([input]: unknown[]): boolean =>

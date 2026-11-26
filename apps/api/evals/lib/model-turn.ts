@@ -41,8 +41,8 @@ export type RunEvalModelTurnOptions = {
   setTimer?: (
     callback: () => void,
     ms: number,
-  ) => ReturnType<typeof setTimeout>;
-  clearTimer?: (handle: ReturnType<typeof setTimeout>) => void;
+  ) => ReturnType<typeof setTimeout> | number;
+  clearTimer?: (handle: ReturnType<typeof setTimeout> | number) => void;
 };
 
 /**
@@ -56,7 +56,7 @@ export const runEvalModelTurn = async ({
   timeoutMs,
   onChunk,
   setTimer = setTimeout,
-  clearTimer = clearTimeout,
+  clearTimer = (handle) => clearTimeout(handle),
 }: RunEvalModelTurnOptions): Promise<EvalModelTurnResult> => {
   const start = performance.now();
   const abortController = new AbortController();

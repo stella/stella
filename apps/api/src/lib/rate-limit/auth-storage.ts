@@ -52,9 +52,11 @@ export type AuthRateLimitRedisClient = {
   ) => Promise<unknown>;
 };
 
+type CommandTimerHandle = ReturnType<typeof setTimeout> | number;
+
 type CommandTimer = {
-  set: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
-  clear: (timeoutId: ReturnType<typeof setTimeout>) => void;
+  set: (callback: () => void, delayMs: number) => CommandTimerHandle;
+  clear: (timeoutId: CommandTimerHandle) => void;
 };
 
 type AuthRateLimitStorageOptions = {

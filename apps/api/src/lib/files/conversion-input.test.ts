@@ -3,6 +3,7 @@ import nodePath from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import { settledWithin } from "@stll/test-kit";
 
 import {
   checkConversionInput,
@@ -1060,11 +1061,13 @@ describe("document conversion input", () => {
     "<style>@import   </style>",
     "<style>body{background:url(   </style>",
   ])("refuses unfinished CSS references", async (source) => {
-    const result = await Promise.race([
+    const result = await settledWithin(
       checkConversionInput("text/html", encode(source)),
-      Bun.sleep(1000).then(() => "timeout"),
-    ]);
-    expect(result).not.toBe("timeout");
+      {
+        description: "HTML conversion input check to refuse",
+        timeoutMs: 1000,
+      },
+    );
     expect(result).toEqual({
       kind: "refuse",
       reason: { kind: "external_reference" },
@@ -1210,7 +1213,9 @@ describe("document conversion input", () => {
         "application/vnd.oasis.opendocument.text",
         input,
       ),
-    ).toEqual({ kind: "convert" });
+    ).toEqual({
+      kind: "convert",
+    });
   });
 
   test.each(["use", "image"])(
@@ -1502,7 +1507,9 @@ describe("document conversion input", () => {
   ])("converts nested listed RTF fields", async (source) => {
     expect(
       await checkConversionInput("application/rtf", encode(source)),
-    ).toEqual({ kind: "convert" });
+    ).toEqual({
+      kind: "convert",
+    });
   });
 
   test.each([

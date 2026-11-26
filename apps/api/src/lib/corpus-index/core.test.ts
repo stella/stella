@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
+import { deferred } from "@stll/test-kit";
 
 import {
   type IngestRequest,
@@ -154,15 +154,21 @@ describe("splitIngestRequests", () => {
 describe("settleBoth", () => {
   test("a fast failure waits for its sibling before surfacing", async () => {
     let siblingFinished = false;
-    const sibling = sleep(25).then(() => {
+    const siblingGate = deferred<undefined>();
+    const sibling = siblingGate.promise.then(() => {
       siblingFinished = true;
       return "loaded";
     });
 
-    const caught = await settleBoth(
+    const settled = settleBoth(
       Promise.reject(new Error("boom")),
       sibling,
     ).catch((error: unknown) => error);
+    for (let turn = 0; turn < 10; turn += 1) {
+      await Promise.resolve();
+    }
+    siblingGate.resolve(undefined);
+    const caught = await settled;
 
     expect(caught instanceof Error ? caught.message : null).toBe("boom");
     // The point of the helper: the paired corpus read is finished, so the

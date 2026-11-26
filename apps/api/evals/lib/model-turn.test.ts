@@ -2,6 +2,8 @@ import { EventType } from "@tanstack/ai";
 import type { StreamChunk, TokenUsage } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 
+import { createFakeTimers } from "@stll/test-kit";
+
 import { runEvalModelTurn } from "./model-turn";
 
 type TextMessageContentChunk = Extract<
@@ -29,20 +31,19 @@ const runFinishedChunk = (usage: TokenUsage) =>
     usage,
   }) satisfies RunFinishedChunk;
 
-/**
- * Wraps the real timer functions so a test can assert `clearTimer` ran
- * (proof the `finally` clause fired) without a fake, unsafely-typed
- * `Timeout` handle. `timeoutMs` is generous enough in every test that the
- * abort callback never fires before the turn resolves and clears it.
- */
 const fakeTimer = () => {
-  const cleared: ReturnType<typeof setTimeout>[] = [];
+  const timers = createFakeTimers();
+  const cleared: (ReturnType<typeof setTimeout> | number)[] = [];
   return {
+    timers,
     cleared,
-    setTimer: (callback: () => void, ms: number) => setTimeout(callback, ms),
-    clearTimer: (handle: ReturnType<typeof setTimeout>) => {
+    setTimer: (callback: () => void, ms: number) =>
+      timers.setTimeout(callback, ms),
+    clearTimer: (handle: ReturnType<typeof setTimeout> | number) => {
       cleared.push(handle);
-      clearTimeout(handle);
+      if (typeof handle === "number") {
+        timers.clearTimeout(handle);
+      }
     },
   };
 };
@@ -187,7 +188,7 @@ describe("runEvalModelTurn", () => {
       });
     }
 
-    const result = await runEvalModelTurn({
+    const pending = runEvalModelTurn({
       chat: (abortController) => neverFinishes(abortController),
       timeoutMs: 10, // timeout under test
       onChunk: () => {
@@ -196,6 +197,11 @@ describe("runEvalModelTurn", () => {
       setTimer: timer.setTimer,
       clearTimer: timer.clearTimer,
     });
+    for (let turn = 0; turn < 20; turn += 1) {
+      await Promise.resolve();
+    }
+    await timer.timers.advance(10);
+    const result = await pending;
 
     expect(result.error).toBe("model turn exceeded 10 ms and was aborted");
     expect(timer.cleared.length).toBe(1);

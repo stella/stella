@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { settledWithin } from "@stll/test-kit";
+
 import {
   API_SHUTDOWN_OUTCOME,
   shutdownApiServices,
@@ -8,10 +10,10 @@ import {
 const TEST_DEADLINE_MS = 100;
 
 const observeWithinDeadline = async <T>(operation: Promise<T>) =>
-  await Promise.race([
-    operation,
-    Bun.sleep(TEST_DEADLINE_MS).then(() => "test-deadline" as const),
-  ]);
+  await settledWithin(operation, {
+    description: "API service stop to settle",
+    timeoutMs: TEST_DEADLINE_MS,
+  });
 
 describe("API service shutdown", () => {
   test("closes long-lived SSE streams without waiting for HTTP stop first", async () => {

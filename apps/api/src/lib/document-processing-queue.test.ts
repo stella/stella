@@ -1,6 +1,14 @@
 import { Result } from "better-result";
 import { RedisClient } from "bun";
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  jest,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { StoreUnavailableError } from "@stll/redis-config/store-policy";
@@ -399,14 +407,22 @@ describe("lease heartbeat", () => {
       timeoutMs: 5, // timeout under test
     });
 
-    renew();
-    renew();
-    expect(renewalCount).toBe(1);
+    jest.useFakeTimers();
+    try {
+      renew();
+      renew();
+      expect(renewalCount).toBe(1);
 
-    await Bun.sleep(20);
-    renew();
-    expect(renewalCount).toBe(1);
-    expect(errors).toHaveLength(1);
+      jest.advanceTimersByTime(5);
+      for (let turn = 0; turn < 20; turn += 1) {
+        await Promise.resolve();
+      }
+      renew();
+      expect(renewalCount).toBe(1);
+      expect(errors).toHaveLength(1);
+    } finally {
+      jest.useRealTimers();
+    }
     expect(errors.at(0)).toBeInstanceOf(TimeoutError);
     expect(errors.at(0)).toMatchObject({
       label: "document processing lease heartbeat",
@@ -1813,7 +1829,9 @@ describe("createReconciliationProgress", () => {
     const h = sampler(progress);
 
     const outcome = h.sample();
-    await Bun.sleep(5);
+    for (let turn = 0; turn < 20; turn += 1) {
+      await Promise.resolve();
+    }
     expect(h.exits()).toBe(0);
 
     tick.settle(true);
@@ -1832,7 +1850,9 @@ describe("createReconciliationProgress", () => {
     // Every sample lands inside the tick, the alignment that would strand
     // a snapshot-reading sampler forever.
     const outcome = h.sample();
-    await Bun.sleep(5);
+    for (let turn = 0; turn < 20; turn += 1) {
+      await Promise.resolve();
+    }
     tick.settle(false);
     await inFlight;
 
@@ -1848,7 +1868,9 @@ describe("createReconciliationProgress", () => {
     const h = sampler(progress, async () => queueDepth);
 
     const outcome = h.sample();
-    await Bun.sleep(5);
+    for (let turn = 0; turn < 20; turn += 1) {
+      await Promise.resolve();
+    }
     // What the delivery phase does: hand recovered runs to the queue, then
     // report the tick drained. Counting before waiting for that verdict
     // would pair this tick's empty "before" with its drained "after".
@@ -1880,7 +1902,9 @@ describe("createReconciliationProgress", () => {
     );
 
     const outcome = h.sample();
-    await Bun.sleep(5);
+    for (let turn = 0; turn < 20; turn += 1) {
+      await Promise.resolve();
+    }
     // Still measuring: nothing has been decided on the stale verdict.
     expect(h.exits()).toBe(0);
 

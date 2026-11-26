@@ -3,8 +3,8 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { emailOTP } from "better-auth/plugins";
 import { expect, jest, setSystemTime, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestClock } from "@stll/test-kit";
 
 import {
   getEmailOtpMinimumResponseDuration,
@@ -20,6 +20,7 @@ const sendPath = "/email-otp/send-verification-otp";
 
 const createScheduledAuth = async (
   accountState: (typeof accountStates)[number],
+  clock: ReturnType<typeof createTestClock>,
 ) => {
   const timerReady = Promise.withResolvers<undefined>();
   const deliveryReady = Promise.withResolvers<undefined>();
@@ -56,7 +57,7 @@ const createScheduledAuth = async (
               detached.push(operation);
             },
             wait: async (durationMs) => {
-              const scheduled = sleep(durationMs);
+              const scheduled = clock.sleep(durationMs);
               timerReady.resolve(undefined);
               await scheduled;
             },
@@ -112,8 +113,11 @@ const createScheduledAuth = async (
 test("email-code requests share response status, body and scheduled time for each account state", async () => {
   jest.useFakeTimers();
   setSystemTime(new Date("2026-01-01T00:00:00Z"));
+  const clock = createTestClock();
   try {
-    const fixtures = await Promise.all(accountStates.map(createScheduledAuth));
+    const fixtures = await Promise.all(
+      accountStates.map((state) => createScheduledAuth(state, clock)),
+    );
     const startedAt = Date.now();
     const completed: { status: number; body: unknown; elapsed: number }[] = [];
     const responses = fixtures.map(async ({ auth }) => {
@@ -142,9 +146,11 @@ test("email-code requests share response status, body and scheduled time for eac
     const delay = fixtures.at(0)?.delay ?? 0;
     expect(delay).toBeGreaterThan(0);
     jest.advanceTimersByTime(delay - 1);
+    await clock.advance(delay - 1);
     await Promise.resolve(undefined);
     expect(completed).toHaveLength(0);
     jest.advanceTimersByTime(1);
+    await clock.advance(1);
     await Promise.all(responses);
     expect(completed).toEqual(
       Array.from({ length: 3 }, () => ({
