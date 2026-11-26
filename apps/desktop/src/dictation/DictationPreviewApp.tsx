@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { useLayoutMeasurement } from "@stll/ui/effects/dom";
+import { useLayoutMeasurement } from "@stll/ui/effects-dom";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import {

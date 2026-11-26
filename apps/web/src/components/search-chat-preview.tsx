@@ -3,7 +3,7 @@ import { useMemo, useRef, useState } from "react";
 import type { PluggableList } from "unified";
 
 import { useExternalSyncEffect, useKeyedState } from "@stll/ui/effects";
-import { useObservedValue } from "@stll/ui/effects/dom";
+import { useObservedValue } from "@stll/ui/effects-dom";
 import { SEARCH_HIT_MARK, textMarkClass } from "@stll/ui/text-mark";
 
 import {
