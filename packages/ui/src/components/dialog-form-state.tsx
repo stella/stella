@@ -1,6 +1,8 @@
 "use client";
 
-import { createContext, useContext, useId, useLayoutEffect } from "react";
+import { createContext, useContext, useId } from "react";
+
+import { useLayoutSyncEffect } from "../effects/effects";
 
 export type DialogFormSource = {
   dirty: boolean;
@@ -24,7 +26,7 @@ export const DialogFormState = ({
 }) => {
   const registry = useContext(DialogFormContext);
   const id = useId();
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     if (registry === null) {
       return undefined;
     }
@@ -34,7 +36,7 @@ export const DialogFormState = ({
     registry.sources.set(id, { dirty, onDiscard });
     return undefined;
   }, [dirty, id, onDiscard, registry]);
-  useLayoutEffect(
+  useLayoutSyncEffect(
     () => () => {
       registry?.sources.delete(id);
     },
