@@ -28,6 +28,7 @@ import { parseChatLocalRunConversation } from "@stll/api-contract/chat-local-run
 import { CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY } from "@stll/api-contract/chat-local-run-tool";
 import { DESKTOP_RUNNER_INPUT_EVENT } from "@stll/api-contract/desktop-runner";
 import { repoRelativePath } from "@stll/portable-path";
+import { settledWithin, waitFor } from "@stll/test-kit";
 
 import {
   FAKE_CLAUDE_VERSION,
@@ -108,15 +109,14 @@ afterEach(async () => {
 
 /** Wait for another process to write a file, its only readiness signal. */
 const untilWritten = async (file: string, stillRunning: () => boolean) => {
-  const deadline = Date.now() + WAIT_MS;
-  // real-time: the holder is another process and signals readiness by file.
-  while (!existsSync(file) && stillRunning()) {
-    if (Date.now() > deadline) {
-      throw new Error(`timed out waiting for ${file}`);
-    }
-    // real-time: the holder is another process and signals readiness by file.
-    await Bun.sleep(10);
-  }
+  await waitFor(
+    () => (existsSync(file) || !stillRunning() ? true : undefined),
+    {
+      description: `${file} to be written`,
+      intervalMs: 10,
+      timeoutMs: WAIT_MS,
+    },
+  );
 };
 
 type Place = {
@@ -272,19 +272,18 @@ const connect = async (endpoint: string): Promise<Client> => {
       if (found !== undefined) {
         return found;
       }
-      const { promise, resolve, reject } = Promise.withResolvers<T>();
-      const timer = setTimeout(() => {
-        reject(new Error("timed out waiting for a holder message"));
-      }, WAIT_MS);
+      const { promise, resolve } = Promise.withResolvers<T>();
       waiters.add((message) => {
         if (!predicate(message)) {
           return false;
         }
-        clearTimeout(timer);
         resolve(message);
         return true;
       });
-      return promise;
+      return await settledWithin(promise, {
+        description: "a holder message",
+        timeoutMs: WAIT_MS,
+      });
     },
     close: () => {
       socket.destroy();

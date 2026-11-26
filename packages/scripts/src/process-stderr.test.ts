@@ -7,11 +7,17 @@ test("stderr forwarding waits for a slow destination before consuming the next c
   const writes: string[] = [];
   const consumed: string[] = [];
   const completions: (() => void)[] = [];
+  const writtenSignals = [
+    Promise.withResolvers<undefined>(),
+    Promise.withResolvers<undefined>(),
+  ];
   const destination = new Writable({
     highWaterMark: 1,
     write: (chunk, _encoding, callback) => {
+      const index = writes.length;
       writes.push(chunk.toString());
       completions.push(() => callback());
+      writtenSignals[index]?.resolve(undefined);
     },
   });
   const stderr = new ReadableStream<Uint8Array>({
@@ -31,11 +37,13 @@ test("stderr forwarding waits for a slow destination before consuming the next c
       throw new TypeError(message);
     },
   });
-  await Bun.sleep(10);
+  await writtenSignals[0]?.promise;
+  await Promise.resolve();
   expect(writes).toEqual(["a"]);
   expect(consumed).toEqual(["a"]);
   completions.shift()?.();
-  await Bun.sleep(10);
+  await writtenSignals[1]?.promise;
+  await Promise.resolve();
   expect(writes).toEqual(["a", "b"]);
   expect(consumed).toEqual(["a", "b"]);
   completions.shift()?.();
