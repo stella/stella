@@ -316,9 +316,6 @@ describe("shared documentation MCP HTTP server", () => {
         return;
       }
       const canContinue = socket.write(Buffer.alloc(256 * 1024, 120));
-      if (!uploading || !socket.writable || socket.destroyed) {
-        return;
-      }
       if (canContinue) {
         setImmediate(pumpUpload);
       } else {
