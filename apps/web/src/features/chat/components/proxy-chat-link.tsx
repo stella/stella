@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChatLink, hasBundledChatLinkIcon } from "@stll/chat/link";
 import type { ChatLinkIconSource } from "@stll/chat/link";
 import { getChatLinkSite, normalizeChatLink } from "@stll/chat/link-detection";
-import { useIntersecting, useObjectUrl } from "@stll/ui/effects/dom";
+import { useIntersecting, useObjectUrl } from "@stll/ui/effects-dom";
 
 import { linkIconOptions } from "@/features/chat/link-icons";
 

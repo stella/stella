@@ -2,7 +2,7 @@ import type { ComponentProps } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 
-import { useObjectUrl } from "@stll/ui/effects/dom";
+import { useObjectUrl } from "@stll/ui/effects-dom";
 
 import { exactIconOptions } from "@/features/chat/link-icons";
 import { queryView } from "@/lib/query-view.logic";

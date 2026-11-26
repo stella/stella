@@ -3,7 +3,7 @@ import { Suspense, useState } from "react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { useObjectUrl } from "@stll/ui/effects/dom";
+import { useObjectUrl } from "@stll/ui/effects-dom";
 
 import { DefaultPendingComponent } from "@/components/default-pending";
 import { FilePreviewUnavailable } from "@/components/inspector/inspector-pdf-error-fallback";
