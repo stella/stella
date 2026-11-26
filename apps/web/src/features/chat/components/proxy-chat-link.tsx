@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChatLink, hasBundledChatLinkIcon } from "@stll/chat/link";
 import type { ChatLinkIconSource } from "@stll/chat/link";
 import { getChatLinkSite, normalizeChatLink } from "@stll/chat/link-detection";
-import { useExternalSyncEffect } from "@stll/ui/effects";
+import { useObjectUrl } from "@stll/ui/effects/dom";
 
 import { linkIconOptions } from "@/features/chat/link-icons";
 
@@ -42,10 +42,7 @@ export const ProxyChatLink = ({
     icon?.type === "icon"
       ? icon.blob
       : undefined;
-  const [localIcon, setLocalIcon] = useState<{
-    blob: Blob;
-    source: ChatLinkIconSource;
-  } | null>(null);
+  const iconUrl = useObjectUrl(blob);
 
   const observeVisibility = (element: HTMLSpanElement | null) => {
     if (!element || typeof IntersectionObserver === "undefined") {
@@ -61,17 +58,10 @@ export const ProxyChatLink = ({
     return () => observer.disconnect();
   };
 
-  useExternalSyncEffect(() => {
-    if (!blob) {
-      return undefined;
-    }
-    const src = URL.createObjectURL(blob);
-    setLocalIcon({ blob, source: { type: "proxy", src } });
-    return () => URL.revokeObjectURL(src);
-  }, [blob]);
-
-  const iconSource =
-    !isError && localIcon?.blob === blob ? localIcon?.source : undefined;
+  const iconSource: ChatLinkIconSource | undefined =
+    !isError && iconUrl !== undefined
+      ? { type: "proxy", src: iconUrl }
+      : undefined;
   return (
     <span ref={observeVisibility}>
       <ChatLink {...props} iconSource={iconSource} />

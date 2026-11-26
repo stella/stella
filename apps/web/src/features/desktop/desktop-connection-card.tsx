@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useSyncExternalStore } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
@@ -41,7 +41,25 @@ import { detached } from "@/lib/detached";
 import { notifyUserProblem } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 
+const noopSubscribe = () => () => undefined;
 const serverHost = () => window.location.host;
+const noServerHost = () => "";
+
+// The bridge holds the challenge the desktop app left for this tab; the card
+// re-reads it whenever a capture or a connect attempt may have changed it.
+const challengeListeners = new Set<() => void>();
+const subscribeToChallenge = (onChange: () => void) => {
+  challengeListeners.add(onChange);
+  return () => {
+    challengeListeners.delete(onChange);
+  };
+};
+const notifyChallengeChanged = () => {
+  for (const listener of challengeListeners) {
+    listener();
+  }
+};
+const noChallengeOnServer = () => false;
 
 /**
  * The one place a person links stella desktop: it says what was found on
@@ -68,14 +86,18 @@ export const DesktopConnectionCard = () => {
   // can see on this computer.
   const presence =
     presenceView.type === "items" ? presenceView.items : undefined;
-  const [challengeWaiting, setChallengeWaiting] = useState(false);
-  const [host, setHost] = useState("");
+  const challengeWaiting = useSyncExternalStore(
+    subscribeToChallenge,
+    hasDesktopAccountChallenge,
+    noChallengeOnServer,
+  );
+  const host = useSyncExternalStore(noopSubscribe, serverHost, noServerHost);
 
   const handleConnect = async (approval: DesktopLinkApproval) => {
     const outcome = await connect(approval);
     // A failed or unproven approval keeps a challenge that is still valid;
     // an expired or consumed one falls back to the install-or-connect offer.
-    setChallengeWaiting(hasDesktopAccountChallenge());
+    notifyChallengeChanged();
     // A refusal names its own next step in the status below the card.
     if (
       outcome.status === "started" ||
@@ -107,10 +129,8 @@ export const DesktopConnectionCard = () => {
   // the challenge is its own; otherwise the approve button stays.
   useMountEffect(() => {
     captureDesktopAccountLink();
-    const waiting = hasDesktopAccountChallenge();
-    setChallengeWaiting(waiting);
-    setHost(serverHost());
-    if (waiting) {
+    notifyChallengeChanged();
+    if (hasDesktopAccountChallenge()) {
       startConnect("local-proof");
     }
   });

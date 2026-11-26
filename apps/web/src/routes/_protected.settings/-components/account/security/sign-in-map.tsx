@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 
+import { useObjectUrl } from "@stll/ui/effects/dom";
 import { cn } from "@stll/ui/utils";
 
-import { useObjectUrl } from "@/hooks/use-object-url";
 import { sessionSignInMapOptions } from "@/lib/account/session-sign-ins";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { queryView } from "@/lib/query-view.logic";
