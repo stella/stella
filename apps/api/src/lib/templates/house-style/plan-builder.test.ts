@@ -570,6 +570,21 @@ describe("buildTemplatePlan, pages the source starts", () => {
     expect(starts(sectioned.plan)).toEqual(["p2"]);
     expect(notes(sectioned.note, "pageStartNotKept")).toEqual([]);
 
+    // The break stands behind the blank paragraph, in a line of the
+    // source's contents that is left out: the blank paragraph still starts
+    // the page, and nothing is reported as lost.
+    const contents = withFacts(
+      ["SMLOUVA", "Text.", "", "Článek I. Předmět\t2"],
+      { 3: { pageBreakBefore: true, styleName: "toc 1" } },
+    );
+    const later = build({
+      ...contents,
+      blocks: [...contents.blocks, ...cells],
+    });
+    expect(starts(later.plan)).toEqual(["p2"]);
+    expect(later.plan.omit).toEqual([{ blockId: "p3", reason: "sourceToc" }]);
+    expect(notes(later.note, "pageStartNotKept")).toEqual([]);
+
     // Without a blank paragraph in front of the table nothing can start
     // the page, and the note says so.
     const bare = build({

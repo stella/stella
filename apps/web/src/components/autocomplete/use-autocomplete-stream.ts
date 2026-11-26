@@ -1,9 +1,9 @@
-import { useLayoutEffect } from "react";
 import type { RefObject } from "react";
 
 import type { EditorView } from "@tiptap/pm/view";
 
 import { fetchWithTimeout } from "@stll/fetch";
+import { useLayoutSyncEffect } from "@stll/ui/effects";
 
 import type { DocxEditorRef } from "@/components/docx/app-docx-editor";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -120,7 +120,7 @@ export const useAutocompleteStream = ({
     minPrefixChars = DEFAULT_MIN_PREFIX_CHARS,
   } = options;
 
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     const noop = () => {
       /* nothing to clean up */
     };

@@ -77,6 +77,8 @@ export type StormLedger = {
   /** A React commit at `now`, inside the browser task `task`. */
   readonly onCommit: (now: number, task: number) => StormViolation[];
   readonly onStimulus: (now: number, stimulus: StormStimulus) => void;
+  /** Tokens left in the bucket, as of the last commit or stimulus. */
+  readonly headroom: () => number;
   readonly report: () => StormLedgerReport;
 };
 
@@ -162,6 +164,7 @@ export const createStormLedger = (
   return {
     onCommit,
     onStimulus,
+    headroom: () => tokens,
     report: () => ({
       commits,
       stimuli: { ...stimuli },
