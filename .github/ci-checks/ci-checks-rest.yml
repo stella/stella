@@ -439,18 +439,6 @@ checks:
       bun test scripts/failure-as-empty-baseline.test.ts
       bun run check:failure-as-empty
 
-  - name: React state-write baselines
-    continue-on-error: ${{ github.event_name == 'merge_group' }}
-    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/React state-write baselines')) }}
-    env:
-      CI_CHECK_KIND: CONTEXTUAL
-      CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
-      STELLA_VERIFY: check
-      BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
-    run: |
-      bun run check:render-phase-update
-      bun run check:effect-state-write
-
   - name: Oxlint override union guard
     env:
       CI_CHECK_KIND: STATIC

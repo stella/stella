@@ -32,12 +32,11 @@
 // only receives values from it, so the directory is exempt as a whole,
 // never by call site.
 //
-// Existing findings are counted per file in
-// no-effect-state-write-baseline.json and only shrink
-// (scripts/effect-state-write-baseline.ts).
+// Test files are outside the rule (oxlint.config.ts): tests drive React on
+// purpose, and the DOM-test storm check holds them instead.
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import type { ESTree } from "@oxlint/plugins";
 
-import rawBaselineCounts from "./no-effect-state-write-baseline.json" with { type: "json" };
 import {
   getPropertyName,
   isIdentifier,
@@ -46,8 +45,6 @@ import {
   resolveImportedExpressionForEnforcement,
   resolveVariable,
 } from "./utils.ts";
-
-const baselineCounts: Readonly<Record<string, number>> = rawBaselineCounts;
 
 /** The sanctioned effect hooks (`@stll/ui/effects`), exempt by ownership. */
 export const EFFECTS_OWNER_DIRECTORY = "packages/ui/src/effects/";
@@ -153,19 +150,11 @@ export default eslintCompatPlugin({
     "no-effect-state-write": {
       meta: {
         type: "problem",
+        schema: [],
         messages: {
           effectStateWrite:
             "Do not write React state synchronously in an effect or its cleanup: the write re-renders, the render can re-run the effect, and that loop is a render storm. Derive the value during render, make the write in the event handler that causes it, or make it from the external system's own callback (a subscription, observer or timer).",
         },
-        // `census: true` reports every finding, ignoring the per-file counts,
-        // so scripts/effect-state-write-baseline.ts can regenerate them.
-        schema: [
-          {
-            type: "object",
-            properties: { census: { type: "boolean" } },
-            additionalProperties: false,
-          },
-        ],
       },
       createOnce(context) {
         const setters = new Set();
@@ -176,7 +165,7 @@ export default eslintCompatPlugin({
         const helpers = new Map();
         const writers = new Set();
         const helperCalls: {
-          node: unknown;
+          node: ESTree.CallExpression;
           variable: unknown;
           owner: unknown;
         }[] = [];
@@ -290,17 +279,12 @@ export default eslintCompatPlugin({
                 findings.push({ node, messageId: "effectStateWrite" });
               }
             }
-            const options: unknown = context.options[0];
-            const census =
-              typeof options === "object" &&
-              options !== null &&
-              Reflect.get(options, "census") === true;
-            const file = repoRelativeFilename(context);
-            if (file.startsWith(EFFECTS_OWNER_DIRECTORY)) {
+            if (
+              repoRelativeFilename(context).startsWith(EFFECTS_OWNER_DIRECTORY)
+            ) {
               return;
             }
-            const baseline = census ? 0 : (baselineCounts[file] ?? 0);
-            for (const finding of findings.slice(baseline)) {
+            for (const finding of findings) {
               context.report(finding);
             }
           },

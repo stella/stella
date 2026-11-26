@@ -1,7 +1,6 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import { EFFECTS_OWNER_DIRECTORY } from "./no-effect-state-write.ts";
-import rawBaselineCounts from "./no-render-phase-update-baseline.json" with { type: "json" };
 import {
   getPropertyName,
   isIdentifier,
@@ -11,8 +10,6 @@ import {
   resolveVariable,
   stableInitializer,
 } from "./utils.ts";
-
-const baselineCounts: Readonly<Record<string, number>> = rawBaselineCounts;
 
 const FUNCTIONS = new Set([
   "ArrowFunctionExpression",
@@ -231,19 +228,11 @@ export default eslintCompatPlugin({
     "no-render-phase-update": {
       meta: {
         type: "problem",
+        schema: [],
         messages: {
           renderUpdate:
             "Do not navigate, redirect, or update React state during render. Move the action to an event handler or a sanctioned effect wrapper.",
         },
-        // `census: true` reports every finding, ignoring the per-file counts,
-        // so scripts/render-phase-update-baseline.ts can regenerate them.
-        schema: [
-          {
-            type: "object",
-            properties: { census: { type: "boolean" } },
-            additionalProperties: false,
-          },
-        ],
       },
       createOnce(context) {
         const setters = new Map();
@@ -313,18 +302,13 @@ export default eslintCompatPlugin({
             }
           },
           "Program:exit"() {
-            const options: unknown = context.options[0];
-            const census =
-              typeof options === "object" &&
-              options !== null &&
-              Reflect.get(options, "census") === true;
-            const file = repoRelativeFilename(context);
             // `useKeyedState` owns the one keyed reset during render.
-            if (file.startsWith(EFFECTS_OWNER_DIRECTORY)) {
+            if (
+              repoRelativeFilename(context).startsWith(EFFECTS_OWNER_DIRECTORY)
+            ) {
               return;
             }
-            const baseline = census ? 0 : (baselineCounts[file] ?? 0);
-            for (const finding of findings.slice(baseline)) {
+            for (const finding of findings) {
               context.report(finding);
             }
           },
