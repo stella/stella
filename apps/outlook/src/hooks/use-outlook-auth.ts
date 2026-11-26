@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 
 import { Result } from "better-result";
+
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 
 import type { SignInError, SignInFailure } from "@/lib/oauth/errors";
 import { outlookAuth, type PreparedSignIn } from "@/lib/outlook-auth";
@@ -26,20 +28,23 @@ export const useOutlookAuth = () => {
   const preparing = useRef<PreparedAttempt | null>(null);
   const prepared = useRef<PreparedSignIn | null>(null);
 
-  const startPreparing = async (): PreparedAttempt => {
+  const startPreparing = useLatestCallback(async (): PreparedAttempt => {
     prepared.current = null;
     const result = await auth.prepareSignIn();
     if (Result.isOk(result)) {
       prepared.current = result.value;
     }
     return result;
-  };
+  });
 
-  useEffect(() => {
+  // A sign-in attempt consumes the prepared one and always moves
+  // `signInState`, so re-checking on status and sign-in state changes keeps
+  // one attempt prepared while the sign-in screen shows.
+  useExternalSyncEffect(() => {
     if (status === "signed-out" && preparing.current === null) {
       preparing.current = startPreparing();
     }
-  });
+  }, [signInState, startPreparing, status]);
 
   const runSignIn = async (): Promise<Result<void, SignInError>> => {
     const ready = prepared.current;

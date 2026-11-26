@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 
 import type { ChatAnonPair } from "@stll/anonymize-chat";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { HighlightedTextarea } from "@stll/ui/highlighted-textarea";
 import { Label } from "@stll/ui/label";
 
@@ -338,7 +339,7 @@ export const AnonymizeLiveDemo = () => {
 
   const runDebounced = useDebouncedCallback(run, DEBOUNCE_MS);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     runDebounced(text);
   }, [runDebounced, text]);
 

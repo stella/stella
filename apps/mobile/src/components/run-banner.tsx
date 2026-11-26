@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { panic } from "better-result";
 import { GlassView } from "expo-glass-effect";
@@ -16,6 +16,11 @@ import { useTranslations } from "use-intl";
 
 import { CHAT_ACTIVE_RUN_STATE } from "@stll/api-contract/chat";
 import { Button } from "@stll/ui/button";
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useMountEffect,
+} from "@stll/ui/effects";
 import { RunStateMark } from "@stll/ui/run-state-mark";
 import type { RunMarkState } from "@stll/ui/run-state-mark";
 import { Text } from "@stll/ui/text";
@@ -50,18 +55,18 @@ export const RunBanners = () => {
   const onScreen = useThreadOnScreen();
   const openThread = useOpenThread();
   const untitled = useTranslations("chat")("untitled");
-  const dropOnScreen = useEffectEvent((threadId: string) => {
+  const dropOnScreen = useLatestCallback((threadId: string) => {
     dismissBanner(threadId);
   });
 
   const newsOnScreen =
     onScreen !== undefined &&
     banners.some(({ threadId }) => threadId === onScreen);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (newsOnScreen) {
       dropOnScreen(onScreen);
     }
-  }, [newsOnScreen, onScreen]);
+  }, [newsOnScreen, onScreen, dropOnScreen]);
 
   const shown = banners.find(({ threadId }) => threadId !== onScreen);
   if (shown === undefined) {
@@ -162,14 +167,14 @@ const Banner = ({
     clearTimeout(timer.current);
     timer.current = setTimeout(leave, VISIBLE_MS);
   };
-  const show = useEffectEvent((reduced: boolean) => {
+  const show = useLatestCallback((reduced: boolean) => {
     setMotion(reduced ? "reduced" : "full");
     glide(progress, 1).start();
     AccessibilityInfo.announceForAccessibility(`${t(heading)}\n${title}`);
     wait();
   });
 
-  useEffect(() => {
+  useMountEffect(() => {
     let live = true;
     const start = (reduced: boolean) => {
       if (live) {
@@ -185,7 +190,7 @@ const Banner = ({
       live = false;
       clearTimeout(timer.current);
     };
-  }, []);
+  });
 
   const settleBack = () => {
     glide(drag, 0).start();

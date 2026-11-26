@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { randomUUID } from "expo-crypto";
 import type { TextInputSelectionChangeEvent } from "react-native";
@@ -8,6 +8,7 @@ import { editsOf, learnedFixChangesOf } from "@stll/transcript/corrections";
 import type { DictatedSpan } from "@stll/transcript/corrections";
 import { applyLearnedFixChanges } from "@stll/transcript/learned-fixes";
 import type { LearnedFixChange } from "@stll/transcript/learned-fixes";
+import { useLatest } from "@stll/ui/effects";
 
 import { syncLearned } from "@/components/learned-fixes-sync";
 import { useSession } from "@/connection/session-provider";
@@ -34,10 +35,7 @@ export const useDictationField = (
 ) => {
   const locale = useLocale();
   const { state } = useSession();
-  const latest = useRef(value);
-  useEffect(() => {
-    latest.current = value;
-  });
+  const latestRef = useLatest(value);
   // The field's text as last typed or dictated, and its cursor then.
   const cursor = useRef<{ text: string; selection: TextSelection | undefined }>(
     { text: value, selection: undefined },
@@ -61,7 +59,7 @@ export const useDictationField = (
       selection: placed,
     },
     insert: (dictated: Dictated) => {
-      const draft = latest.current;
+      const draft = latestRef.current;
       const { text, start, caret } = insertDictation({
         draft,
         selection:
@@ -70,7 +68,7 @@ export const useDictationField = (
         locale,
       });
       cursor.current = { text, selection: { start: caret, end: caret } };
-      latest.current = text;
+      latestRef.current = text;
       if (caret > start) {
         spans.current.push({ text, start, end: caret });
       }

@@ -4,8 +4,22 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import { attachTestProcessShutdown } from "./process-shutdown";
 import { spawnTestProcess } from "./process-spawn";
+
+const isProcessDeadOrZombie = (pid: number): boolean => {
+  const alive = Result.try(() => process.kill(pid, 0));
+  if (alive.isErr()) {
+    return true;
+  }
+  if (process.platform !== "linux") {
+    return false;
+  }
+  const status = Result.try(() => readFileSync(`/proc/${pid}/status`, "utf-8"));
+  return status.isOk() && /^State:\s+Z\b/mu.test(status.value);
+};
 
 const SIGNAL_EXIT_CODES = { SIGINT: 130, SIGTERM: 143, SIGHUP: 129 } as const;
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP", "exit"] as const) {
@@ -58,7 +72,16 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP", "exit"] as const) {
         }
       }
       // The parent's exit and the kernel's child reap notification can differ by a tick.
-      await Bun.sleep(50);
+      const trackedPids = [childPid, grandchildPid].filter(
+        (pid): pid is number => pid !== undefined,
+      );
+      await waitForExternalState({
+        description: "child and grandchild processes to exit",
+        intervalMs: 10,
+        timeoutMs: 2000,
+        read: () => trackedPids.every(isProcessDeadOrZombie),
+        onTimeout: () => undefined,
+      });
       for (const pid of [childPid, grandchildPid]) {
         if (pid === undefined) {
           throw new TypeError("Fixture readiness must contain both PIDs");
@@ -194,7 +217,13 @@ test("disposing after the test leader exits immediately reaps its surviving long
     await parent.stdin.end();
     await parent.exited;
     expect(parent.exitCode).toBe(0);
-    await Bun.sleep(50);
+    await waitForExternalState({
+      description: "worker process to exit",
+      intervalMs: 10,
+      timeoutMs: 2000,
+      read: () => isProcessDeadOrZombie(worker),
+      onTimeout: () => undefined,
+    });
     const alive = Result.try(() => process.kill(worker, 0));
     const status =
       process.platform === "linux"

@@ -43,8 +43,9 @@ const CLI_DIRECTORY = "packages/cli";
 const COMMAND_TIMEOUT_MS = 180_000;
 // Each pack derives the capability catalog from the API handler graph after
 // building the MCP Apps it imports; this test packs the base once and the
-// head three times.
-const TEST_TIMEOUT_MS = 240_000;
+// head three times. In CI it took about 115 s on a main commit and 245-251 s
+// on a release commit, so the budget leaves room for the slower case.
+const TEST_TIMEOUT_MS = 480_000;
 const RUNTIME_SOURCES = [
   "src/generated/route-map.ts",
   "src/generated/tool-annotations.ts",
