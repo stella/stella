@@ -90,7 +90,7 @@ const readAuthorizationServerMetadata = createSafePublicHandler(
         catch: () =>
           new HandlerError({
             status: 502,
-            code: "metadata_unavailable",
+            code: "upstream_unavailable",
             message: "Authorization server metadata is unavailable",
           }),
       }),
@@ -107,7 +107,7 @@ const readAuthorizationServerMetadata = createSafePublicHandler(
           catch: () =>
             new HandlerError({
               status: 502,
-              code: "metadata_unavailable",
+              code: "upstream_unavailable",
               message: "Authorization server metadata is unavailable",
             }),
         }),
@@ -121,7 +121,7 @@ const readAuthorizationServerMetadata = createSafePublicHandler(
       return Result.err(
         new HandlerError({
           status: errorStatus,
-          code: "metadata_unavailable",
+          code: "upstream_unavailable",
           message:
             detail.trim().slice(0, 256) ||
             "Authorization server metadata is unavailable",
@@ -134,7 +134,7 @@ const readAuthorizationServerMetadata = createSafePublicHandler(
         catch: () =>
           new HandlerError({
             status: 500,
-            code: "invalid_response",
+            code: "upstream_unavailable",
             message: "Authorization server metadata failed response validation",
           }),
       }),
@@ -147,7 +147,7 @@ const readAuthorizationServerMetadata = createSafePublicHandler(
       return Result.err(
         new HandlerError({
           status: 500,
-          code: "invalid_response",
+          code: "upstream_unavailable",
           message: "Authorization server metadata failed response validation",
         }),
       );
