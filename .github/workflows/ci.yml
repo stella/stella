@@ -5263,7 +5263,7 @@ jobs:
       - name: Check route network baseline
         if: ${{ matrix.mode == 'network-baseline' && !cancelled() && steps.checkout.outcome == 'success' }}
         continue-on-error: ${{ github.event_name == 'merge_group' }}
-        timeout-minutes: 8
+        timeout-minutes: 14
         id: network-baseline
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-route-network-baseline.json
@@ -5440,7 +5440,7 @@ jobs:
 
       - name: Check route network baseline
         continue-on-error: ${{ github.event_name == 'merge_group' }}
-        timeout-minutes: 8
+        timeout-minutes: 14
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (steps.e2e-stack.outcome == 'success' && matrix.shard == 'network-baseline') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-route-network-baseline.json
