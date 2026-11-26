@@ -586,7 +586,7 @@ const RESTRICTED_IMPORT_RULES = {
         "never React state; a ref that follows a value uses useLatest (or " +
         "useIsMounted for a mounted flag), all from @stll/ui/effects; a " +
         "value measured from the DOM uses useLayoutMeasurement or " +
-        "useObservedValue from @stll/ui/effects/dom. See the convention: " +
+        "useObservedValue from @stll/ui/effects-dom. See the convention: " +
         "/conventions-use-effect.",
       modules: [packageWithSubpaths("react")],
       restriction: {
