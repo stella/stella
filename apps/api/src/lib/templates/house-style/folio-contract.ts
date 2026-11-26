@@ -148,7 +148,7 @@ export type TemplateInspection = {
 /** A text effect that shows nothing. It can still change how the text is
  *  treated: a run with a 3-D scene, even the default one, is drawn as a
  *  picture. The engine writes its output without such effects. */
-export type TemplateInvisibleEffect = {
+type TemplateInvisibleEffect = {
   part: string;
   effect:
     | "glow"
