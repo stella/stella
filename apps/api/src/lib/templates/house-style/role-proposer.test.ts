@@ -36,7 +36,8 @@ describe("proposeBlockRoles", () => {
       "SMLOUVA O DODÁVCE": "title",
       "Dodavatel: Horák Stavby s.r.": "party",
       "(dále jen „dodavatel“)": "party",
-      a: "party",
+      // The word between two parties is text of the page.
+      a: "body",
       "uzavírají tuto smlouvu:": "recital",
       "Článek I.": "articleHeading",
       "Úvodní ustanovení": "articleHeading",
@@ -149,6 +150,24 @@ describe("proposeBlockRoles", () => {
     expect(roles["Bez čísla a bez zarovnání"]).toBe("continuation");
   });
 
+  test("the line that announces the parties and the word between them are no party's lines", () => {
+    const roles = rolesOf(
+      manifestOf([
+        "KUPNÍ SMLOUVA",
+        "uzavřená mezi:",
+        "Alfa s.r.o., se sídlem Dlouhá 1, Praha, IČO: 00000001",
+        "a",
+        "Beta a.s., se sídlem Krátká 2, Brno, IČO: 00000002",
+        "Článek I.\nPředmět",
+        "1.1\tProdávající dodá zboží.",
+      ]),
+    );
+    expect(roles["uzavřená mezi:"]).toBe("body");
+    expect(roles["a"]).toBe("body");
+    expect(roles["Alfa s.r.o., se sídlem Dlouh"]).toBe("party");
+    expect(roles["Beta a.s., se sídlem Krátká "]).toBe("party");
+  });
+
   test("a bullet whose mark is a letter is a bullet", () => {
     const manifest = manifestOf([
       "SMLOUVA",
@@ -197,7 +216,7 @@ describe("proposeBlockRoles", () => {
         ?.confidence;
     expect(confidenceOf("SMLOUVA O DODÁVCE")).toBe(0.85);
     expect(confidenceOf("Dodavatel:")).toBe(0.85);
-    expect(confidenceOf("a")).toBe(0.6);
+    expect(confidenceOf("a")).toBe(0.5);
     expect(confidenceOf("Článek II.")).toBe(0.95);
     expect(confidenceOf("První ujednání, oddíl II.")).toBe(0.9);
     expect(confidenceOf("V Praze dne")).toBe(0.85);

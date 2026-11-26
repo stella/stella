@@ -1482,6 +1482,9 @@ const alignFrontLines = (context: Context, placed: Placed): void => {
       !block.text.includes("\t")
     ) {
       placed.alignments.set(block.id, alignment);
+      // Set between the margins, not inside the indent of a text style.
+      placement.styleId =
+        context.profile.roles.body?.styleId ?? placement.styleId;
     }
   }
 };

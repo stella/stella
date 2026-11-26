@@ -331,7 +331,9 @@ const findZones = (
     identified - 1 > title &&
     named.kind === "paragraph" &&
     isText(named) &&
-    named.text.trim().length <= TITLE_MAX
+    named.text.trim().length <= TITLE_MAX &&
+    // A line that announces the parties (`uzavřená mezi:`) names none.
+    !PARTY_INTRO.test(named.text.trim())
       ? identified - 1
       : identified;
   const preamble = firstPosition(
@@ -358,6 +360,11 @@ const findZones = (
     firstAnnexHeading,
   };
 };
+
+/** The line that announces the parties: `mezi:`, `by and between`. */
+const PARTY_INTRO = /(?:^|[ \u00A0])(?:mezi|between|zwischen)[ \u00A0]*:?$/iu;
+/** The word that stands alone between two parties. */
+const PARTY_JOINER = /^(?:a|and|und|&)$/iu;
 
 const readFrontMatter = (
   block: DocxBlock,
@@ -396,6 +403,13 @@ const readFrontMatter = (
     });
   }
   if (position >= zones.firstParty) {
+    // The word between two parties is text of the page, not a party's line.
+    if (PARTY_JOINER.test(block.text.trim())) {
+      return reading("body", CONFIDENCE.plain, {
+        role: "party",
+        confidence: CONFIDENCE.alternative,
+      });
+    }
     return PARTY_MARKER.test(block.text)
       ? reading("party", CONFIDENCE.partyMarked)
       : reading("party", CONFIDENCE.partyByPosition, {
