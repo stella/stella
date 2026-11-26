@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.90.1
+
+### Patch Changes
+
+- [#9551](https://github.com/stella/stella/pull/9551) [`9f5cd23`](https://github.com/stella/stella/commit/9f5cd23d8f35f2f5843895b8b19a32513d07f2c0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `useInlineOverflow`, `OutlineRail` and `DialogFormState` reach their pre-paint work through the sanctioned effect hooks; behaviour and timing are unchanged.
+
 ## 0.90.0
 
 ### Minor Changes
