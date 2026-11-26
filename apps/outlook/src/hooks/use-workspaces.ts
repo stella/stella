@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Result } from "better-result";
+
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { readWorkspaces } from "@/api";
 import {
@@ -18,7 +20,7 @@ export const useWorkspaces = (errorFallback: string): UseWorkspaces => {
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     void (async () => {
       const result = await Result.tryPromise({
         catch: (cause) => cause,
