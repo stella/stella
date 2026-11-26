@@ -40,6 +40,9 @@ export const readAtFindok = async (
   }
   return await readPublisher(target.toString(), {
     ...init,
+    refusalScope:
+      init.refusalScope ??
+      (init.fetchStage === "listing" ? "source" : "document"),
     redirect: "error",
   });
 };

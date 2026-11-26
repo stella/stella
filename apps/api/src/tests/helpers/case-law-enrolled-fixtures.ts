@@ -2717,6 +2717,33 @@ export const plNsaFixture = (
   documentUrl = PL_NSA_PARQUET,
 ): EnrolledAdapterFixture => ({
   buildDecision: async () => {
+    if (documentUrl.pathname.endsWith(".json")) {
+      const recorded: unknown = await Bun.file(documentUrl).json();
+      const entry = isUnknownArray(recorded)
+        ? recorded.find(
+            (candidate: unknown) =>
+              isRecord(candidate) &&
+              candidate["case"] === "nsa-wyrok-thesis-collection",
+          )
+        : undefined;
+      const values: unknown = isRecord(entry) ? entry["values"] : undefined;
+      if (!isRecord(values)) {
+        return panic("the pl-nsa fixture holds no recorded NSA judgment");
+      }
+      const shard =
+        PL_NSA_SNAPSHOT.shards[0] ?? panic("the pinned revision has no shard");
+      const built = assemblePlNsaDecision({
+        source: {
+          ...values,
+          glosa_information: ["Glosa aprobująca, OSP 2014 z. 5, poz. 51"],
+          dissenting_opinion:
+            "Nie zgadzam się z rozstrzygnięciem i jego uzasadnieniem.",
+        },
+        position: { shard, row: 93 },
+        snapshot: PL_NSA_SNAPSHOT,
+      });
+      return built.decision;
+    }
     const parquetBytes = new Uint8Array(
       await Bun.file(documentUrl).arrayBuffer(),
     );

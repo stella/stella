@@ -405,6 +405,8 @@ const requestProxy = async ({
     headers: { Accept: "application/json" },
     redirect: "error",
     fetchStage: FETCH_STAGE_BY_PROXY_TASK[task],
+    refusalScope:
+      FETCH_STAGE_BY_PROXY_TASK[task] === "listing" ? "source" : "document",
     adapterKey: ADAPTER_KEYS.PL_SN,
     signal,
     timeoutMs,
