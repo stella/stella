@@ -2388,10 +2388,11 @@ describe("buildTemplatePlan, a memo on a template with a header of fields", () =
     note.items.find(({ kind }) => kind === "headerFieldsFilled");
 
   test("a line that states a field gives its value to the cell beside the template's name of it", () => {
+    // The last line ends in a line break, as a form's line may.
     const manifest = memo(
       "To:\tJane Roe",
       "From: John Doe",
-      "Věc: Posouzení návrhu",
+      "Věc: Posouzení návrhu\n",
     );
     const { plan, note } = build(manifest, "keepSource", {
       profile: memoHeader,

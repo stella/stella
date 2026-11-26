@@ -35,7 +35,7 @@ const fieldOfWord = (word: string): HeadField | null => {
 };
 
 /** A field's name as a cell or a line states it: one word and a colon. */
-const FIELD_NAME = /^(?<word>\p{L}{2,8})[  ]*:$/u;
+const FIELD_NAME = /^(?<word>\p{L}{2,8})[ \u00A0]*:$/u;
 
 /** The field a label names (`To:`, `Věc:`) and the word it names it
  *  with, or null. */
@@ -61,10 +61,12 @@ export type HeadLine = {
 const HEAD_MAX = 12;
 const HEAD_LINE_MAX = 200;
 
+/** One line: a value that goes on behind a line break is no value of one
+ *  field for sure; a break that only ends the line is no part of it. */
 const HEAD_LINE =
-  /^[ \t ]*(?<lead>(?<word>\p{L}{2,8})[  ]*:)[ \t ]*(?<value>\S[^\n]*)$/u;
+  /^[ \t\u00A0]*(?<lead>(?<word>\p{L}{2,8})[ \u00A0]*:)[ \t\u00A0]*(?<value>\S[^\n]*?)\s*$/u;
 /** A further name of a field inside a line's value. */
-const NAME_INSIDE = /(?:^|[ \t ])(?<word>\p{L}{2,8})[  ]*:/gu;
+const NAME_INSIDE = /(?:^|[ \t\u00A0])(?<word>\p{L}{2,8})[ \u00A0]*:/gu;
 
 const namesField = (value: string): boolean =>
   [...value.matchAll(NAME_INSIDE)].some(
