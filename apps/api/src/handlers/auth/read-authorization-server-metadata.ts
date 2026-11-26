@@ -1,11 +1,73 @@
 import { Result } from "better-result";
+import * as v from "valibot";
 
 import { handleOAuthAuthorizationServerMetadataRequest } from "@/api/handlers/auth/metadata";
 import {
   ACCOUNT_ACCESS,
   createSafePublicHandler,
+  safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import { DISCOVERY_METADATA_CACHE_POLICY } from "@/api/lib/security-headers";
+
+const URL_MAX_LENGTH = 2048;
+const TOKEN_MAX_LENGTH = 128;
+const TOKEN_LIST_MAX_LENGTH = 64;
+
+const urlSchema = v.pipe(v.string(), v.maxLength(URL_MAX_LENGTH));
+const tokenSchema = v.pipe(v.string(), v.maxLength(TOKEN_MAX_LENGTH));
+const tokenListSchema = v.pipe(
+  v.array(tokenSchema),
+  v.maxLength(TOKEN_LIST_MAX_LENGTH),
+);
+
+export const authorizationServerMetadataResponseSchema = v.object({
+  issuer: urlSchema,
+  authorization_endpoint: urlSchema,
+  token_endpoint: urlSchema,
+  jwks_uri: v.optional(urlSchema),
+  registration_endpoint: v.optional(urlSchema),
+  scopes_supported: v.optional(tokenListSchema),
+  response_types_supported: tokenListSchema,
+  response_modes_supported: v.optional(tokenListSchema),
+  grant_types_supported: v.optional(tokenListSchema),
+  token_endpoint_auth_methods_supported: v.optional(tokenListSchema),
+  token_endpoint_auth_signing_alg_values_supported: v.optional(tokenListSchema),
+  service_documentation: v.optional(urlSchema),
+  ui_locales_supported: v.optional(tokenListSchema),
+  op_policy_uri: v.optional(urlSchema),
+  op_tos_uri: v.optional(urlSchema),
+  revocation_endpoint: v.optional(urlSchema),
+  revocation_endpoint_auth_methods_supported: v.optional(tokenListSchema),
+  revocation_endpoint_auth_signing_alg_values_supported:
+    v.optional(tokenListSchema),
+  introspection_endpoint: v.optional(urlSchema),
+  introspection_endpoint_auth_methods_supported: v.optional(tokenListSchema),
+  introspection_endpoint_auth_signing_alg_values_supported:
+    v.optional(tokenListSchema),
+  device_authorization_endpoint: v.optional(urlSchema),
+  code_challenge_methods_supported: v.optional(tokenListSchema),
+  authorization_response_iss_parameter_supported: v.optional(v.boolean()),
+  client_id_metadata_document_supported: v.optional(v.boolean()),
+  backchannel_logout_supported: v.optional(v.boolean()),
+  backchannel_logout_session_supported: v.optional(v.boolean()),
+  dpop_signing_alg_values_supported: v.optional(tokenListSchema),
+  userinfo_endpoint: v.optional(urlSchema),
+  acr_values_supported: v.optional(tokenListSchema),
+  subject_types_supported: v.optional(tokenListSchema),
+  id_token_signing_alg_values_supported: v.optional(tokenListSchema),
+  claims_supported: v.optional(tokenListSchema),
+  agent_auth: v.object({
+    skill: urlSchema,
+    identity_endpoint: urlSchema,
+    claim_endpoint: urlSchema,
+    events_endpoint: urlSchema,
+    identity_types_supported: tokenListSchema,
+    identity_assertion: v.object({
+      assertion_types_supported: tokenListSchema,
+    }),
+    events_supported: tokenListSchema,
+  }),
+});
 
 const readAuthorizationServerMetadata = createSafePublicHandler(
   {
@@ -15,6 +77,9 @@ const readAuthorizationServerMetadata = createSafePublicHandler(
     cors: "own",
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "auth_plumbing" },
+    response: safePublicHandlerResponseSchemasWithStatusText(
+      authorizationServerMetadataResponseSchema,
+    ),
   },
   async function* ({ request }) {
     const response = yield* Result.await(
