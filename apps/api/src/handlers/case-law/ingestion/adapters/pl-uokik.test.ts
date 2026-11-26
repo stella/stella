@@ -717,7 +717,7 @@ describe("what the register does not serve", () => {
       });
       const result = await plUokikAdapter.fetchPage(null, {});
       expect(Result.isError(result)).toBe(true);
-      expect(attempts).toBe(status >= 500 ? 3 : 1);
+      expect(attempts).toBe(status === 503 ? 6 : 1);
     },
   );
 

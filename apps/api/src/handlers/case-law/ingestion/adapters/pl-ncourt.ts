@@ -7,6 +7,7 @@ import {
   DECISION_DOCUMENT_ROLE,
   type DecisionDocumentRole,
 } from "@stll/api-contract/decision-document-role";
+import { BodyByteLimitError } from "@stll/fetch/body-reader";
 /**
  * Polish common courts from the Ministry of Justice's judgments API.
  *
@@ -60,6 +61,7 @@ import {
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: The retention check moved from this adapter to the pipeline; no stored field or AST changes.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: typed publisher reads classify HTTP and body failures without changing parsed decision output.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { load } from "@stll/html";
 import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
@@ -86,7 +88,11 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { PL_NCOURT_COURT_NAMES } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt-courts";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
+  readPublisher,
+  unreadPublisherError,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
+import { rethrowCycleStop } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlCommonCourtDecision } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { readPlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
@@ -99,6 +105,11 @@ import {
   sourceTextField,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import {
+  type ReadOutcome,
+  readPresent,
+  readUnavailable,
+} from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
@@ -1503,7 +1514,7 @@ const request = async ({
   path: string;
   signal?: AbortSignal | undefined;
   timeoutMs: number;
-}): Promise<Result<Answered, AdapterFetchError>> => {
+}): Promise<{ outcome: ReadOutcome<Answered>; url: string }> => {
   const target = restrictOutboundUrl({
     hostPolicy: PL_NCOURT_HOST_POLICY,
     rawUrl: apiUrl(path, params),
@@ -1511,35 +1522,70 @@ const request = async ({
   if (target === null) {
     return panic(`ncourt-api request escaped the publisher origin: ${cursor}`);
   }
-  const response = await fetchWithRetry(
-    target.toString(),
-    { headers: { Accept: "text/xml" }, redirect: "error" },
-    {
-      fetchStage,
-      adapterKey: ADAPTER_KEYS.PL_NCOURT,
-      signal,
-      timeoutMs,
-    },
-  );
-  const bytes =
-    response.body === null
-      ? new Uint8Array()
-      : await readCappedBytes(response.body, MAX_RESPONSE_BYTES);
-  if (bytes === null) {
-    return Result.err(
-      publisherError(
-        cursor,
-        `answered more than ${MAX_RESPONSE_BYTES} bytes`,
-        response.status,
-      ),
-    );
-  }
-  return Result.ok({
-    status: response.status,
-    body: new TextDecoder().decode(bytes),
-    url: target.toString(),
-    xml: XML_MEDIA_TYPES.has(mediaTypeOf(response.headers.get("content-type"))),
+  const url = target.toString();
+  const responseOutcome = await readPublisher(url, {
+    headers: { Accept: "text/xml" },
+    redirect: "error",
+    fetchStage,
+    adapterKey: ADAPTER_KEYS.PL_NCOURT,
+    retryPolicy: "publisher-backoff",
+    signal,
+    timeoutMs,
   });
+  if (responseOutcome.type !== "present") {
+    return { outcome: responseOutcome, url };
+  }
+  const { body, headers, status } = responseOutcome.value;
+  if (body === null) {
+    return {
+      outcome: readUnavailable({ kind: "empty-body", status }),
+      url,
+    };
+  }
+  const read = await Result.tryPromise({
+    try: async () => await readCappedBytes(body, MAX_RESPONSE_BYTES),
+    catch: (error: unknown) => error,
+  });
+  if (Result.isError(read)) {
+    rethrowCycleStop(read.error, signal);
+    if (BodyByteLimitError.is(read.error)) {
+      return {
+        outcome: readUnavailable({
+          kind: "too-large",
+          maxBytes: read.error.limit,
+        }),
+        url,
+      };
+    }
+    return {
+      outcome: readUnavailable({ kind: "thrown", error: read.error }),
+      url,
+    };
+  }
+  if (read.value === null) {
+    return {
+      outcome: readUnavailable({
+        kind: "too-large",
+        maxBytes: MAX_RESPONSE_BYTES,
+      }),
+      url,
+    };
+  }
+  if (read.value.length === 0) {
+    return {
+      outcome: readUnavailable({ kind: "empty-body", status }),
+      url,
+    };
+  }
+  return {
+    outcome: readPresent({
+      status,
+      body: new TextDecoder().decode(read.value),
+      url,
+      xml: XML_MEDIA_TYPES.has(mediaTypeOf(headers.get("content-type"))),
+    }),
+    url,
+  };
 };
 
 /**
@@ -1584,13 +1630,23 @@ const listWindow = async ({
     signal,
     timeoutMs,
   });
-  if (Result.isError(requested)) {
-    return requested;
+  if (
+    requested.outcome.type === "absent" &&
+    requested.outcome.evidence === "http-404"
+  ) {
+    return Result.ok({ type: "unreadable-window", url: requested.url });
   }
-  const answered = requested.value;
-  if (answered.status === 404) {
-    return Result.ok({ type: "unreadable-window", url: answered.url });
+  if (requested.outcome.type !== "present") {
+    return Result.err(
+      unreadPublisherError({
+        outcome: requested.outcome,
+        message: "ncourt-api: listing failed",
+        adapterKey: ADAPTER_KEYS.PL_NCOURT,
+        cursor,
+      }),
+    );
   }
+  const answered = requested.outcome.value;
   const listing =
     answered.status === 200 && answered.xml
       ? readPlNcourtListing(answered.body)
@@ -1612,16 +1668,13 @@ const listWindow = async ({
   return Result.ok({ type: "listed", listing, url: answered.url });
 };
 
-/** Detail statuses that say the record is gone, not that the request failed. */
-const GONE_STATUSES = new Set([404, 410]);
-
 /**
  * What asking about one listed judgment produced. A refused, failed or
  * unreadable request is the page's failure, retried with its cursor; only
  * the API's own "not found" is a record that is gone, and a document 404 a
  * record with no document. Both are stored.
  */
-const fetchPlNcourtDecision = async ({
+export const fetchPlNcourtDecision = async ({
   cursor,
   listingXml,
   positionAlias,
@@ -1653,14 +1706,7 @@ const fetchPlNcourtDecision = async ({
     signal,
     timeoutMs: ADAPTER_TIMEOUT.LIST,
   });
-  if (Result.isError(detail)) {
-    return detail;
-  }
-  const record =
-    detail.value.status === 200 && detail.value.xml
-      ? readPlNcourtDetail(detail.value.body)
-      : null;
-  if (record?.type === "not-found" || GONE_STATUSES.has(detail.value.status)) {
+  if (detail.outcome.type === "absent") {
     logger.warn("case_law.ingestion.listed_record_not_found", {
       adapterKey: ADAPTER_KEYS.PL_NCOURT,
       cursor,
@@ -1670,17 +1716,44 @@ const fetchPlNcourtDecision = async ({
       assemblePlNcourtDecision({
         listingXml,
         // A bare 404 states no record; the stored part says it was asked.
-        detailXml:
-          record?.type === "not-found"
-            ? detail.value.body
-            : `<error>${NOT_FOUND_DETAIL}</error>`,
+        detailXml: `<error>${NOT_FOUND_DETAIL}</error>`,
+        contentXml: undefined,
+        positionAlias,
+      }),
+    );
+  }
+  if (detail.outcome.type !== "present") {
+    return Result.err(
+      unreadPublisherError({
+        outcome: detail.outcome,
+        message: "ncourt-api: detail failed",
+        adapterKey: ADAPTER_KEYS.PL_NCOURT,
+        cursor,
+      }),
+    );
+  }
+  const detailAnswer = detail.outcome.value;
+  const record =
+    detailAnswer.status === 200 && detailAnswer.xml
+      ? readPlNcourtDetail(detailAnswer.body)
+      : null;
+  if (record?.type === "not-found") {
+    logger.warn("case_law.ingestion.listed_record_not_found", {
+      adapterKey: ADAPTER_KEYS.PL_NCOURT,
+      cursor,
+      sourceDocumentId: id,
+    });
+    return Result.ok(
+      assemblePlNcourtDecision({
+        listingXml,
+        detailXml: detailAnswer.body,
         contentXml: undefined,
         positionAlias,
       }),
     );
   }
   if (record === null) {
-    return Result.err(notXml(cursor, detail.value));
+    return Result.err(notXml(cursor, detailAnswer));
   }
   const content = await request({
     cursor,
@@ -1690,32 +1763,40 @@ const fetchPlNcourtDecision = async ({
     signal,
     timeoutMs: ADAPTER_TIMEOUT.PAGE,
   });
-  if (Result.isError(content)) {
-    return content;
-  }
-  if (GONE_STATUSES.has(content.value.status)) {
+  if (content.outcome.type === "absent") {
     return Result.ok(
       assemblePlNcourtDecision({
         listingXml,
-        detailXml: detail.value.body,
+        detailXml: detailAnswer.body,
         contentXml: undefined,
         documentStatus: DOCUMENT_NOT_FOUND,
         positionAlias,
       }),
     );
   }
+  if (content.outcome.type !== "present") {
+    return Result.err(
+      unreadPublisherError({
+        outcome: content.outcome,
+        message: "ncourt-api: content failed",
+        adapterKey: ADAPTER_KEYS.PL_NCOURT,
+        cursor,
+      }),
+    );
+  }
+  const contentAnswer = content.outcome.value;
   if (
-    content.value.status !== 200 ||
-    !content.value.xml ||
-    readPlNcourtContent(content.value.body) === null
+    contentAnswer.status !== 200 ||
+    !contentAnswer.xml ||
+    readPlNcourtContent(contentAnswer.body) === null
   ) {
-    return Result.err(notXml(cursor, content.value));
+    return Result.err(notXml(cursor, contentAnswer));
   }
   return Result.ok(
     assemblePlNcourtDecision({
       listingXml,
-      detailXml: detail.value.body,
-      contentXml: content.value.body,
+      detailXml: detailAnswer.body,
+      contentXml: contentAnswer.body,
       positionAlias,
     }),
   );
@@ -2033,35 +2114,52 @@ const buildRows = async (
         aborted: true,
       });
     }
-    const captured = await buildPlainTextItem({
-      adapterKey: ADAPTER_KEYS.PL_NCOURT,
+    const capturedResult = await Result.tryPromise({
+      try: async () =>
+        await buildPlainTextItem({
+          adapterKey: ADAPTER_KEYS.PL_NCOURT,
 
-      rawListing: row.fragment,
-      decisionOf: (result) => {
-        if (result.isErr()) {
-          return undefined;
-        }
-        const outcome = result.value;
-        switch (outcome.type) {
-          case "built":
-            return outcome.decision;
-          case "supplement":
-            return outcome.supplement.document;
-          case "unkeyable":
-            return undefined;
-          default:
-            outcome satisfies never;
-            return panic("Unhandled pl-ncourt decision projection");
-        }
-      },
-      build: async () =>
-        await fetchPlNcourtDecision({
-          cursor,
-          listingXml: row.fragment,
-          positionAlias: row.positionAlias,
-          signal,
+          rawListing: row.fragment,
+          decisionOf: (result) => {
+            if (result.isErr()) {
+              return undefined;
+            }
+            const outcome = result.value;
+            switch (outcome.type) {
+              case "built":
+                return outcome.decision;
+              case "supplement":
+                return outcome.supplement.document;
+              case "unkeyable":
+                return undefined;
+              default:
+                outcome satisfies never;
+                return panic("Unhandled pl-ncourt decision projection");
+            }
+          },
+          build: async () =>
+            await fetchPlNcourtDecision({
+              cursor,
+              listingXml: row.fragment,
+              positionAlias: row.positionAlias,
+              signal,
+            }),
         }),
+      catch: (error: unknown) => error,
     });
+    if (Result.isError(capturedResult)) {
+      if (signal?.aborted) {
+        return Result.ok({
+          decisions,
+          itemBuildFailures,
+          supplements,
+          read: index,
+          aborted: true,
+        });
+      }
+      return await Promise.reject(capturedResult.error);
+    }
+    const captured = capturedResult.value;
     if (captured.type === "item_build_failed") {
       itemBuildFailures += 1;
       decisions.push(captured.decision);
