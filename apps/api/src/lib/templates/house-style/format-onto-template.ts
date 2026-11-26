@@ -26,6 +26,7 @@ import {
 import type { AmbiguityResolver } from "@/api/lib/templates/house-style/ambiguity";
 import { TemplateEngineError } from "@/api/lib/templates/house-style/folio-contract";
 import type {
+  DocxBlockManifest,
   TemplateEngineRefusal,
   TemplatePlan,
   TemplatePlanEngine,
@@ -40,7 +41,10 @@ import type {
 import type { NumberingMode } from "@/api/lib/templates/house-style/plan-numbering";
 import { detectReferences } from "@/api/lib/templates/house-style/reference-detector";
 import { findTopicSuspicions } from "@/api/lib/templates/house-style/reference-suspicions";
-import { proposeBlockRoles } from "@/api/lib/templates/house-style/role-proposer";
+import {
+  isBulleted,
+  proposeBlockRoles,
+} from "@/api/lib/templates/house-style/role-proposer";
 import {
   inferTemplateProfile,
   validateTemplateProfile,
@@ -181,17 +185,27 @@ const numberedBlockIds = ({ body }: TemplatePlan): Set<string> => {
   return ids;
 };
 
-/** Numbered paragraphs whose output label is not the source's. */
+/**
+ * Numbered paragraphs whose output label is not the source's. A bullet is
+ * held to being one, not to its glyph: the same mark reads as another
+ * character in another font.
+ */
 const changedLabels = (
   plan: TemplatePlan,
   { blocks }: TemplatePlanReport,
+  bullets: ReadonlySet<string>,
 ): string[] => {
   const numbered = numberedBlockIds(plan);
   return blocks
     .filter(
       ({ blockId, sourceLabel, outputLabel }) =>
         numbered.has(blockId) &&
+        !bullets.has(blockId) &&
+        // A list level that prints nothing shows no label to hold the
+        // output to: the paragraph's typed label is checked as it is
+        // stripped.
         sourceLabel !== null &&
+        sourceLabel.trim() !== "" &&
         sourceLabel.trim() !== (outputLabel ?? "").trim(),
     )
     .map(({ blockId }) => blockId);
@@ -205,6 +219,7 @@ const changedLabels = (
 const unkeptLabels = (
   mode: NumberingMode,
   { blocks }: TemplatePlanReport,
+  bullets: ReadonlySet<string>,
 ): PlannedLabelIssue[] => {
   const issues: PlannedLabelIssue[] = [];
   for (const block of blocks) {
@@ -216,6 +231,8 @@ const unkeptLabels = (
     const written = (block.labelAsText ?? "").trim();
     if (printed === "" && written === "") {
       issues.push({ blockId: block.blockId, kind: "lost" });
+    } else if (bullets.has(block.blockId) && printed !== "") {
+      // A bullet that is still a bullet kept what it shows.
     } else if (
       (written !== "" && (written !== source || printed !== "")) ||
       (written === "" && mode === "keepSource" && printed !== source)
@@ -225,6 +242,9 @@ const unkeptLabels = (
   }
   return issues;
 };
+
+const bulletIdsOf = ({ blocks }: DocxBlockManifest): Set<string> =>
+  new Set(blocks.filter((block) => isBulleted(block)).map(({ id }) => id));
 
 const sum = (entries: readonly { count: number }[]): number =>
   entries.reduce((total, { count }) => total + count, 0);
@@ -278,6 +298,7 @@ export const formatOntoTemplate = async ({
   }
 
   const index = buildLabelIndex(manifest);
+  const bullets = bulletIdsOf(manifest);
   const roles = proposeBlockRoles({ manifest, index });
   const { references } = detectReferences(manifest, index);
   const suspicions = findTopicSuspicions({ manifest, index, references });
@@ -365,7 +386,7 @@ export const formatOntoTemplate = async ({
     let repaired = false;
     // The house scheme renumbers on purpose.
     for (const blockId of mode === "keepSource"
-      ? changedLabels(built.plan, report)
+      ? changedLabels(built.plan, report, bullets)
       : []) {
       repaired = exclude("numbering", blockId, "labelDiffers") || repaired;
     }
@@ -383,7 +404,7 @@ export const formatOntoTemplate = async ({
       continue;
     }
     // Nothing is left to take back, so what the report shows is final.
-    const unkept = unkeptLabels(mode, report);
+    const unkept = unkeptLabels(mode, report, bullets);
     if (unkept.length > 0) {
       return Result.err(
         new TemplateLabelsNotKeptError({

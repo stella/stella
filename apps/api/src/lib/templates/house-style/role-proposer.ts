@@ -9,7 +9,10 @@ import type {
   DocxBlock,
   DocxBlockManifest,
 } from "@/api/lib/templates/house-style/folio-contract";
-import { buildLabelIndex } from "@/api/lib/templates/house-style/label-index";
+import {
+  buildLabelIndex,
+  printedLabel,
+} from "@/api/lib/templates/house-style/label-index";
 import type {
   LabelEntry,
   LabelIndex,
@@ -124,8 +127,16 @@ const isTitleShaped = ({ styleName, text }: DocxBlock): boolean => {
 };
 
 /** A list bullet as the engine reports it: one mark, no number. */
-export const isBulletMark = (label: string): boolean =>
+const isBulletMark = (label: string): boolean =>
   /^[^\p{L}\p{N}\s%]$/u.test(label.trim());
+
+/** Whether a list prints a bullet in front of the paragraph: the engine
+ *  says so of the level, or the label is a lone mark. */
+export const isBulleted = ({
+  label,
+  numbering,
+}: Pick<DocxBlock, "label" | "numbering">): boolean =>
+  label !== null && (numbering?.bullet === true || isBulletMark(label));
 
 type Reading = Omit<RoleProposal, "blockId" | "mergedIntoBlockId">;
 
@@ -386,8 +397,9 @@ const readUnlabelled = (
   }
   // A list the label index does not count: bullets and dashes, or a label
   // it could not read.
-  if (block.label !== null) {
-    return isBulletMark(block.label)
+  const label = printedLabel(block);
+  if (label !== null) {
+    return isBulleted(block)
       ? reading("bullet", CONFIDENCE.autoLabel)
       : reading("continuation", CONFIDENCE.bullet, {
           role: "letter",
@@ -426,7 +438,7 @@ export const isBlankParagraph = ({
   label,
   inlineObjects = 0,
 }: DocxBlock): boolean =>
-  text.trim() === "" && label === null && inlineObjects === 0;
+  text.trim() === "" && printedLabel({ label }) === null && inlineObjects === 0;
 
 /**
  * Proposes a role for every paragraph of the main story that stands on its

@@ -11,10 +11,6 @@
       "(BuildHIR::lowerExpression) Handle YieldExpression expressions"
     ]
   },
-  "apps/mobile/src/components/changes.tsx::useRevisedLoad": {
-    "memos": 0,
-    "reasons": ["Support spread syntax for hook arguments"]
-  },
   "apps/mobile/src/components/use-open-delivered-file.ts::useOpenDeliveredFile": {
     "memos": 0,
     "reasons": [

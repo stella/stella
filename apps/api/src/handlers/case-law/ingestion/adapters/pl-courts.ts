@@ -41,8 +41,12 @@ import {
 import type { WalkKind } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
 import { plConstitutionalTribunalRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-tk-ruling-keys";
-import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
+// parser-output-unchanged: publisher reads now route through typed readPublisher; served payloads and parsed decisions are unchanged.
+import {
+  PUBLISHER_BODY_MAX_BYTES,
+  readPublisher,
+  unreadPublisherError,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import {
   INGESTION_USER_AGENT,
   isArrayOf,
@@ -996,7 +1000,8 @@ const RATE_LIMITED_STATUS = 429;
 type SaosDetailFetch =
   | { type: "read"; item: SaosItem; payload: string }
   | { type: "empty" }
-  | { type: "refused" }
+  | { type: "rate-limited" }
+  | { type: "refused"; error: AdapterFetchError }
   | { type: "failed" };
 
 /** Report a failed detail read, graded as the upstream being unavailable. */
@@ -1025,52 +1030,70 @@ const fetchDetail = async (
   signal?: AbortSignal,
 ): Promise<SaosDetailFetch> => {
   const url = `${DETAIL_URL}/${id}`;
-  let response: Response;
-  try {
-    response = await fetchPublisher(url, {
-      fetchStage: "document",
-      adapterKey: ADAPTER_KEYS.PL_COURTS,
-      signal,
-      timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-      headers: {
-        Accept: "application/json",
-        "User-Agent": INGESTION_USER_AGENT,
-      },
-    });
-  } catch (error) {
+  const read = await Result.tryPromise({
+    try: async () =>
+      await readPublisher(url, {
+        fetchStage: "document",
+        adapterKey: ADAPTER_KEYS.PL_COURTS,
+        signal,
+        timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+        headers: {
+          Accept: "application/json",
+          "User-Agent": INGESTION_USER_AGENT,
+        },
+      }),
+    catch: (error: unknown) => error,
+  });
+  if (Result.isError(read)) {
     if (signal?.aborted) {
-      throw error;
+      return await Promise.reject(
+        read.error instanceof Error
+          ? read.error
+          : new Error(String(read.error)),
+      );
     }
-    return detailFailed(id, error);
+    if (
+      read.error instanceof AdapterFetchError &&
+      read.error.httpStatus === RATE_LIMITED_STATUS
+    ) {
+      reportDetailRead(id, read.error);
+      return { type: "rate-limited" };
+    }
+    return detailFailed(id, read.error);
   }
-
-  // The status answers these on its own, whatever the body holds.
-  if (response.status === 404 || response.status === 410) {
-    return { type: "empty" };
-  }
-  if (response.status === RATE_LIMITED_STATUS) {
-    reportDetailRead(
-      id,
-      new AdapterFetchError({
-        message: `SAOS detail ${id} refused: HTTP ${RATE_LIMITED_STATUS}`,
+  const outcome = read.value;
+  switch (outcome.type) {
+    case "absent":
+      return { type: "empty" };
+    case "refused": {
+      const error = unreadPublisherError({
+        outcome,
         adapterKey: ADAPTER_KEYS.PL_COURTS,
         cursor: null,
-        httpStatus: RATE_LIMITED_STATUS,
-      }),
-    );
-    return { type: "refused" };
+        message: `SAOS detail ${id} refused`,
+      });
+      reportDetailRead(id, error);
+      return { type: "refused", error };
+    }
+    case "unavailable":
+      return detailFailed(
+        id,
+        outcome.cause.kind === "thrown"
+          ? outcome.cause.error
+          : unreadPublisherError({
+              outcome,
+              adapterKey: ADAPTER_KEYS.PL_COURTS,
+              cursor: null,
+              message: `SAOS detail ${id} unread`,
+            }),
+      );
+    case "present":
+      break;
+    default:
+      outcome satisfies never;
+      return panic(`Unhandled read outcome: ${String(outcome)}`);
   }
-  if (!response.ok) {
-    return detailFailed(
-      id,
-      new AdapterFetchError({
-        message: `SAOS detail ${id} answered HTTP ${response.status}`,
-        adapterKey: ADAPTER_KEYS.PL_COURTS,
-        cursor: null,
-        httpStatus: response.status,
-      }),
-    );
-  }
+  const response = outcome.value;
 
   const body = await Result.tryPromise({
     try: async () =>
@@ -1335,8 +1358,10 @@ type PlCourtsDetailFetch =
   | { type: "listing-only" }
   /** An id was asked about and the publisher answered with no record. */
   | { type: "unavailable" }
-  /** An id was asked about and the publisher refused the request (429). */
-  | { type: "refused" }
+  /** An id was asked about and the publisher rate-limited the request (429). */
+  | { type: "rate-limited" }
+  /** An id was asked about and the publisher refused the request (401/403/451). */
+  | { type: "refused"; error: AdapterFetchError }
   /** An id was asked about and the read failed; it is reported. */
   | { type: "failed" };
 
@@ -1349,6 +1374,7 @@ const detailReadStateOf = (
       return PL_COURTS_DETAIL_READ_STATE.READ;
     case "unavailable":
       return PL_COURTS_DETAIL_READ_STATE.ABSENT;
+    case "rate-limited":
     case "refused":
     case "failed":
       return PL_COURTS_DETAIL_READ_STATE.FAILED;
@@ -1387,8 +1413,10 @@ const fetchDetailForItem = async (
       return { type: "detail", detail: fetched.item, payload: fetched.payload };
     case "empty":
       return { type: "unavailable" };
+    case "rate-limited":
+      return { type: "rate-limited" };
     case "refused":
-      return { type: "refused" };
+      return { type: "refused", error: fetched.error };
     case "failed":
       return { type: "failed" };
     default: {
@@ -1807,10 +1835,10 @@ const parseItemWithDetail = async (
 
   const listingItem = normalizeSaosDumpItem(raw);
   const fetched = await fetchDetailForItem(listingItem, signal);
-  // An item whose detail request the publisher refused is not stored on this
-  // pass: its identity stays unheld, and the reconciliation walk of its
+  // An item whose detail request the publisher rate-limited is not stored on
+  // this pass: its identity stays unheld, and the reconciliation walk of its
   // judgment date builds it once SAOS answers.
-  if (fetched.type === "refused") {
+  if (fetched.type === "rate-limited") {
     return null;
   }
   // Without a detail record the decision is built from the dump row at the
@@ -1922,7 +1950,7 @@ export const listPlCourtsDayPage = async ({
     judgmentDateTo: date,
   }).toString()}`;
 
-  const response = await fetchPublisher(url, {
+  const outcome = await readPublisher(url, {
     fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.PL_COURTS,
     signal,
@@ -1933,14 +1961,17 @@ export const listPlCourtsDayPage = async ({
     },
   });
 
-  if (!response.ok) {
-    throw new AdapterFetchError({
-      message: `SAOS search API error: ${response.status}`,
-      adapterKey: ADAPTER_KEYS.PL_COURTS,
-      cursor: date,
-      httpStatus: response.status,
-    });
+  if (outcome.type !== "present") {
+    return await Promise.reject(
+      unreadPublisherError({
+        outcome,
+        message: "SAOS search API error",
+        adapterKey: ADAPTER_KEYS.PL_COURTS,
+        cursor: date,
+      }),
+    );
   }
+  const response = outcome.value;
 
   // The publisher answers a 200 carrying an HTML maintenance page when the
   // search is under load, and `response.json()` meets that with a raw
@@ -2052,9 +2083,12 @@ const buildPlCourtsFromPayload = async (
   const listingItem = normalizeSaosDumpItem(payload);
   const fetched = await fetchDetailForItem(listingItem, signal);
   switch (fetched.type) {
+    // A typed refusal (401/403/451) propagates so callers see the refusal.
+    case "refused":
+      return await Promise.reject(fetched.error);
     // A read that says nothing about the record is retried on the item's own
     // schedule; the publisher's own answers, record or none, settle it.
-    case "refused":
+    case "rate-limited":
     case "failed":
       return { type: "detail-unavailable" };
     case "unavailable":
@@ -2643,7 +2677,7 @@ export const plCourtsAdapter = defineSourceAdapter({
 
   async getTotalCount(signal) {
     try {
-      const response = await fetchPublisher(
+      const outcome = await readPublisher(
         `${SEARCH_URL}?${new URLSearchParams({
           pageSize: "1",
           pageNumber: String(FIRST_PAGE),
@@ -2662,9 +2696,12 @@ export const plCourtsAdapter = defineSourceAdapter({
         },
       );
 
-      if (!response.ok) {
-        return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
+      if (outcome.type !== "present") {
+        return outcome.type === "unavailable" && outcome.cause.kind === "thrown"
+          ? { type: "probe-failed", errorTag: errorTag(outcome.cause.error) }
+          : sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
+      const response = outcome.value;
 
       const json = await readBodyJsonWithIdleDeadline(response, {
         maxBytes: PUBLISHER_BODY_MAX_BYTES,

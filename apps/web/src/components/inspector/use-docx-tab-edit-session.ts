@@ -101,11 +101,16 @@ export const useDocxTabEditSession = ({
     if (!compatibility) {
       return;
     }
-    detached(
-      handleStartDocxEdit(target.id),
-      "use-docx-tab-edit-session.start-docx-edit",
-    );
+    // The request is consumed here, once; the edit it asks for starts as
+    // the request's own callback after this commit, like a promise
+    // continuation, so its state write does not run inside the effect.
     clearDocxEditRequest();
+    queueMicrotask(() => {
+      detached(
+        handleStartDocxEdit(target.id),
+        "use-docx-tab-edit-session.start-docx-edit",
+      );
+    });
   }, [
     pendingDocxEditTabId,
     tabs,

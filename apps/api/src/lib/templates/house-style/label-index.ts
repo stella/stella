@@ -223,13 +223,29 @@ const readManualLabel = (block: DocxBlock): RawLabel | null => {
   };
 };
 
+/**
+ * The label a list prints in front of a paragraph. Null for a paragraph in
+ * no list, and for one whose list level prints nothing: a heading style
+ * bound to a list for its outline only reads like any unnumbered paragraph,
+ * typed label and all.
+ */
+export const printedLabel = ({
+  label,
+}: Pick<DocxBlock, "label">): string | null =>
+  label === null || label.trim() === "" ? null : label;
+
 const readLabel = (block: DocxBlock): RawLabel | null => {
-  if (block.kind !== "paragraph" || isContentsBlock(block)) {
+  // A bullet's mark is no designator, even when it is a letter (a font's
+  // `o` for the second level of a bulleted list).
+  if (
+    block.kind !== "paragraph" ||
+    isContentsBlock(block) ||
+    block.numbering?.bullet === true
+  ) {
     return null;
   }
-  return block.label === null
-    ? readManualLabel(block)
-    : readAutoLabel(block, block.label);
+  const label = printedLabel(block);
+  return label === null ? readManualLabel(block) : readAutoLabel(block, label);
 };
 
 /** A heading states a title or nothing; a sentence that opens with a
@@ -392,7 +408,7 @@ const nextTitleBlock = (
     next === undefined ||
     next.raw !== null ||
     next.block.kind !== "paragraph" ||
-    next.block.label !== null ||
+    printedLabel(next.block) !== null ||
     next.block.text.trim() === "" ||
     !isTitleText(next.block.text) ||
     isContentsBlock(next.block)

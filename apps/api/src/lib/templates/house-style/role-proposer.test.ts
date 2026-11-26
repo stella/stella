@@ -54,6 +54,40 @@ describe("proposeBlockRoles", () => {
     });
   });
 
+  test("a list level that prints nothing is no label", () => {
+    // A heading style bound to a list for its outline only: the level
+    // prints nothing, the label is typed.
+    const silent = (text: string) => ({
+      text,
+      label: "",
+      numId: 7,
+      styleName: "heading 3",
+      outlineLevel: 2,
+    });
+    const manifest = manifestOf([
+      "SMLOUVA O DÍLO",
+      "Čl. 1",
+      "Předmět smlouvy",
+      numbered("1.", "Zhotovitel provede dílo.", 3),
+      silent(""),
+      silent("Čl. 2"),
+      silent("Účel smlouvy"),
+      numbered("1.", "Účelem smlouvy je úprava práv.", 3),
+    ]);
+    const proposals = proposeBlockRoles({ manifest });
+    const proposalOf = (id: string) =>
+      proposals.find(({ blockId }) => blockId === id);
+    expect(proposalOf("p4")).toBeUndefined();
+    expect(proposalOf("p5")).toMatchObject({
+      role: "articleHeading",
+      mergedIntoBlockId: null,
+    });
+    expect(proposalOf("p6")).toMatchObject({
+      role: "articleHeading",
+      mergedIntoBlockId: "p5",
+    });
+  });
+
   test("between the title and the parties only a line set like a title belongs to it", () => {
     const manifest = manifestOf([
       "SMLOUVA O DÍLO",
@@ -78,6 +112,33 @@ describe("proposeBlockRoles", () => {
       "Tento vzor je pracovní podkl": "body",
       "Objednatel: Horák Stavby s.r": "party",
     });
+  });
+
+  test("a bullet whose mark is a letter is a bullet", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I. Rozsah",
+      numbered("1.", "Dodavatel uvede:", 1),
+      numbered("o", "pevný počet případů,", 2),
+      numbered("o", "proměnný počet případů.", 2),
+    ]);
+    const marked = {
+      ...manifest,
+      blocks: manifest.blocks.map((block) =>
+        block.label === "o" && block.numbering !== null
+          ? {
+              ...block,
+              numbering: { ...block.numbering, bullet: true as const },
+            }
+          : block,
+      ),
+    };
+    expect(rolesOf(marked)).toMatchObject({
+      "pevný počet případů,": "bullet",
+      "proměnný počet případů.": "bullet",
+    });
+    // Without the engine's word for it the mark reads as a letter.
+    expect(rolesOf(manifest)["pevný počet případů,"]).not.toBe("bullet");
   });
 
   test("the proposal of a merged title points at its heading", () => {
