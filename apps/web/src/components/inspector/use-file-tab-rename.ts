@@ -1,4 +1,6 @@
-import { useCallback, useLayoutEffect, useState } from "react";
+import { useState } from "react";
+
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import type {
@@ -20,32 +22,42 @@ export const useFileTabRename = ({ tabs }: UseFileTabRenameOptions) => {
   const [editValue, setEditValue] = useState("");
   const renameEntity = useRenameEntity();
 
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
-  const startRename = useCallback((tab: FileTab) => {
+  const startRename = (tab: FileTab) => {
     setEditValue(splitFileName(tab.label).baseName);
     setEditingTabId(tab.id);
-  }, []);
+  };
 
+  // A rename asked for from outside the strip (a command, a menu) waits in
+  // the store until its tab is here. The render that sees both opens the
+  // editor, so it is open in the commit the request or the tab arrives in;
+  // the request is then cleared, which re-arms the same tab for a later one.
   const pendingRenameTabId = useInspectorCommandStore(
     (s) => s.pendingRenameTabId,
   );
-  useLayoutEffect(() => {
-    if (pendingRenameTabId === null) {
+  const renameTarget =
+    pendingRenameTabId === null
+      ? undefined
+      : tabs.find(
+          (candidate): candidate is FileTab =>
+            candidate.type === "pdf" && candidate.id === pendingRenameTabId,
+        );
+  const requestedTabId = renameTarget?.id ?? null;
+  const [startedTabId, setStartedTabId] = useState<string | null>(null);
+  if (requestedTabId !== startedTabId) {
+    setStartedTabId(requestedTabId);
+    if (renameTarget !== undefined) {
+      startRename(renameTarget);
+    }
+  }
+  useExternalSyncEffect(() => {
+    if (requestedTabId === null) {
       return;
     }
-    const target = tabs.find(
-      (candidate): candidate is FileTab =>
-        candidate.type === "pdf" && candidate.id === pendingRenameTabId,
-    );
-    if (target) {
-      // oxlint-disable-next-line react/set-state-in-effect -- commit-safe store request relay; layout timing opens rename before paint when either the keyed request or async tab arrives
-      startRename(target);
-      const store = useInspectorCommandStore.getState();
-      if (store.pendingRenameTabId === pendingRenameTabId) {
-        store.clearRenameRequest();
-      }
+    const store = useInspectorCommandStore.getState();
+    if (store.pendingRenameTabId === requestedTabId) {
+      store.clearRenameRequest();
     }
-  }, [pendingRenameTabId, tabs, startRename]);
+  }, [requestedTabId]);
 
   const commitRename = (tab: FileTab) => {
     setEditingTabId(null);
