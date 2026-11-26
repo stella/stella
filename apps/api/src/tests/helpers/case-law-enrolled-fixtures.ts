@@ -2762,8 +2762,12 @@ export const plNsaFixture = (
     try {
       return await withTestFetch(
         asFetchMock(
-          async (_input: string | URL | Request, init?: RequestInit) => {
-            if (init?.method === "HEAD") {
+          async (input: string | URL | Request, init?: RequestInit) => {
+            const url = input instanceof Request ? input.url : String(input);
+            if (
+              init?.method === "HEAD" &&
+              url.startsWith("https://huggingface.co/datasets/")
+            ) {
               return await Promise.resolve(
                 new Response(null, {
                   status: 302,
@@ -2772,6 +2776,9 @@ export const plNsaFixture = (
                   },
                 }),
               );
+            }
+            if (url !== "https://cdn.hf.co/pl-nsa-fixture-shard") {
+              return await Promise.resolve(new Response(null, { status: 404 }));
             }
             const range = new Headers(init?.headers).get("range") ?? "";
             const [start, end] = range

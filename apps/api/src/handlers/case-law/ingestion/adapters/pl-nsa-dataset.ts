@@ -858,7 +858,13 @@ const readRepositoryRange = async ({
   }
   const response = outcome.value;
   if (response.status !== 206 || response.body === null) {
-    await response.body?.cancel();
+    const cancelled = await Result.tryPromise({
+      try: async () => await response.body?.cancel(),
+      catch: requestFailure(path),
+    });
+    if (Result.isError(cancelled)) {
+      return cancelled;
+    }
     return Result.err(
       plNsaDatasetError(
         failureOfStatus(response.status),
