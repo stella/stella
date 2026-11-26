@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 import { attachClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/attach-closest-edge";
 import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/extract-closest-edge";
@@ -13,6 +13,7 @@ import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { buttonFaceClassName } from "@stll/ui/control-face";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { ChevronDownIcon, EllipsisVerticalIcon } from "@stll/ui/icons";
 import { InlineDropIndicator } from "@stll/ui/inline-drop-indicator";
 import { splitInlineOverflow } from "@stll/ui/inline-overflow";
@@ -43,18 +44,6 @@ export type { WorkspaceViewSwitcherItem } from "./view-switcher-face";
 const VIEW_DRAG_TYPE = "@stll/workspace-ui/view-switcher/drag-type";
 const VIEW_DRAG_ID = "@stll/workspace-ui/view-switcher/view-id";
 const VIEW_DRAG_INSTANCE = "@stll/workspace-ui/view-switcher/instance";
-
-const useLatestCallback = <Args extends unknown[], Result>(
-  callback: (...args: Args) => Result,
-): ((...args: Args) => Result) => {
-  const latest = useRef(callback);
-  useEffect(() => {
-    latest.current = callback;
-  }, [callback]);
-  // Library-contract memoization: drag registrations require stable callbacks
-  // that still read the latest committed host state.
-  return useCallback((...args: Args) => latest.current(...args), []);
-};
 
 export type WorkspaceViewSwitcherEditing<View> = {
   viewId: string;
@@ -166,7 +155,7 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
     pinnedIndex,
   );
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!stripContainer || !canReorder) {
       return undefined;
     }
@@ -403,7 +392,7 @@ const WorkspaceViewTab = <View extends WorkspaceViewSwitcherItem>({
   }));
   const reorder = useLatestCallback(onReorder);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!tabContainer) {
       return undefined;
     }
