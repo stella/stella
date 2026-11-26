@@ -229,7 +229,7 @@ describe("reformat_into_template", () => {
       dependencies,
     );
 
-    if (result.status !== "success") {
+    if ("egress" in result || result.status !== "success") {
       throw new Error(JSON.stringify(result));
     }
     expect(result.data).toMatchObject({

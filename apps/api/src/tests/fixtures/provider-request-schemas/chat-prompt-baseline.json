@@ -76,6 +76,10 @@
       {
         "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
         "tokens": 36526
+      },
+      {
+        "reason": "reformat_into_template joins chat's write tools",
+        "tokens": 37222
       }
     ],
     "anthropic/extended": [
@@ -154,6 +158,10 @@
       {
         "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
         "tokens": 37017
+      },
+      {
+        "reason": "reformat_into_template joins chat's write tools",
+        "tokens": 37712
       }
     ],
     "bedrock/default": [
@@ -228,6 +236,10 @@
       {
         "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
         "tokens": 36786
+      },
+      {
+        "reason": "reformat_into_template joins chat's write tools",
+        "tokens": 37487
       }
     ],
     "bedrock/extended": [
@@ -302,6 +314,10 @@
       {
         "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
         "tokens": 37459
+      },
+      {
+        "reason": "reformat_into_template joins chat's write tools",
+        "tokens": 37976
       }
     ],
     "google/default": [
@@ -372,6 +388,10 @@
       {
         "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
         "tokens": 35516
+      },
+      {
+        "reason": "reformat_into_template joins chat's write tools",
+        "tokens": 36203
       }
     ],
     "google/extended": [
@@ -438,6 +458,10 @@
       {
         "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
         "tokens": 35993
+      },
+      {
+        "reason": "reformat_into_template joins chat's write tools",
+        "tokens": 36681
       }
     ],
     "mistral/default": [
@@ -512,6 +536,10 @@
       {
         "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
         "tokens": 38219
+      },
+      {
+        "reason": "reformat_into_template joins chat's write tools",
+        "tokens": 38816
       }
     ],
     "mistral/extended": [
@@ -586,6 +614,10 @@
       {
         "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
         "tokens": 38747
+      },
+      {
+        "reason": "reformat_into_template joins chat's write tools",
+        "tokens": 39343
       }
     ],
     "openai/default": [
@@ -660,6 +692,10 @@
       {
         "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
         "tokens": 37794
+      },
+      {
+        "reason": "reformat_into_template joins chat's write tools",
+        "tokens": 38387
       }
     ],
     "openai/extended": [
@@ -734,6 +770,10 @@
       {
         "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
         "tokens": 38310
+      },
+      {
+        "reason": "reformat_into_template joins chat's write tools",
+        "tokens": 38903
       }
     ],
     "openrouter-anthropic/default": [
@@ -808,6 +848,10 @@
       {
         "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
         "tokens": 38204
+      },
+      {
+        "reason": "reformat_into_template joins chat's write tools",
+        "tokens": 38763
       }
     ],
     "openrouter-anthropic/extended": [
@@ -882,6 +926,10 @@
       {
         "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
         "tokens": 38716
+      },
+      {
+        "reason": "reformat_into_template joins chat's write tools",
+        "tokens": 39275
       }
     ],
     "openrouter/default": [
@@ -956,6 +1004,10 @@
       {
         "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
         "tokens": 38204
+      },
+      {
+        "reason": "reformat_into_template joins chat's write tools",
+        "tokens": 38763
       }
     ],
     "openrouter/extended": [
@@ -1030,6 +1082,10 @@
       {
         "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
         "tokens": 38716
+      },
+      {
+        "reason": "reformat_into_template joins chat's write tools",
+        "tokens": 39275
       }
     ]
   },

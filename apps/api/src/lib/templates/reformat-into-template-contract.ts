@@ -26,6 +26,7 @@ export const REFORMAT_NOTE_ITEM_KINDS = [
   "label_kept_as_text",
   "label_converted_to_text",
   "role_without_style",
+  "articles_set_as_text",
   "page_start_not_kept",
   "section_layout_not_kept",
   "line_break_spacing_kept",

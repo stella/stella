@@ -609,7 +609,7 @@ export const handleReformatIntoTemplateTool = async (
     );
   }
   if (Result.isError(reformatted.value)) {
-    const { code, message, details } = reformatted.value.error;
+    const { reason: code, message, details } = reformatted.value.error;
     return structuredErrorResult({
       code: "validation_error",
       message,

@@ -52,11 +52,11 @@ const REFUSAL_DETAILS_MAX = 20;
 
 export class ReformatRefusedError extends TaggedError("ReformatRefusedError")<{
   message: string;
-  code: ReformatRefusalCode;
+  reason: ReformatRefusalCode;
   details: RefusalDetail[];
 }> {
   static {
-    declareFingerprintFields(this, ["code"]);
+    declareFingerprintFields(this, ["reason"]);
   }
 }
 
@@ -220,6 +220,8 @@ const noteItemOf = (
         reason: item.role,
         count: item.blocks,
       };
+    case "articlesSetAsText":
+      return { kind: "articles_set_as_text", count: item.blocks };
     case "pageStartNotKept":
       return {
         kind: "page_start_not_kept",
@@ -333,7 +335,7 @@ export const reformatDocxOntoTemplate = async ({
       Result.err(
         new ReformatRefusedError({
           message: REFUSAL_MESSAGES[code],
-          code,
+          reason: code,
           details: details.slice(0, REFUSAL_DETAILS_MAX),
         }),
       );

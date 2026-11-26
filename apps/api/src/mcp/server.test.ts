@@ -1931,7 +1931,7 @@ describe("handleMcpHttpRequest", () => {
       STELLA_CLI_LATEST_VERSION,
     );
     expect(response.headers.get("x-stella-scope-omitted-tools")).toBe(
-      "save_filled_template",
+      "reformat_into_template save_filled_template",
     );
     // Tests run as a dev deployment, where every feature-gated tool is served.
     expect(response.headers.get("x-stella-feature-omitted-tools")).toBe("");
