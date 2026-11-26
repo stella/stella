@@ -27,8 +27,15 @@ const NO_BLOCKS: readonly FolioAIBlock[] = [];
  */
 const SNAPSHOT_FRAME_BUDGET = 600;
 
+/** The part of the editor this read uses. */
+type BlockSource = Pick<DocxEditorRef, "ensureEditorView"> & {
+  createAIEditSnapshot: () => {
+    readonly blocks: readonly FolioAIBlock[];
+  } | null;
+};
+
 export const useFolioDocumentBlocks = (
-  editorRef: RefObject<DocxEditorRef | null>,
+  editorRef: RefObject<BlockSource | null>,
   enabled: boolean,
 ): readonly FolioAIBlock[] => {
   // Held per `enabled`: switching off drops the read, and switching back on
