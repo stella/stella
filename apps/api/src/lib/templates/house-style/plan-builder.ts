@@ -419,6 +419,7 @@ const placementOf = (
     entry,
     styleId: target?.styleId ?? null,
     level: entry === null && !bulleted ? null : ownLevel,
+    borrowedLevel: own === null ? (target?.numbering ?? null) : null,
     sourceLabel: null,
     pattern: null,
     ordinal: null,

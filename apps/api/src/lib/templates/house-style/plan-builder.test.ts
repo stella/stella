@@ -284,6 +284,29 @@ describe("buildTemplatePlan, list instances", () => {
     });
   });
 
+  test("a spare level that numbers a role without a level of its own takes the indent of the level whose style it borrows", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec.", 1),
+      numbered("1.1.", "Pododstavec.", 2),
+      numbered("1.1.1.", "Podrobnost.", 3),
+    ]);
+    const { plan } = build(manifest);
+    const second = PROFILE.roles.clause2?.numbering;
+    const detail = itemOf(plan, manifest, "Podrobnost");
+    expect(PROFILE.roles.clause3).toBeNull();
+    expect(detail).toMatchObject({ styleId: "Clause2" });
+    expect(
+      plan.numberingPatches?.find(
+        ({ ilvl }) => ilvl === detail?.numbering?.ilvl,
+      )?.indent,
+    ).toEqual({
+      left: second?.indent.left ?? 0,
+      hanging: second?.indent.hanging ?? 0,
+    });
+  });
+
   test("a second format of one level and a bullet take spare levels", () => {
     const manifest = manifestOf([
       "SMLOUVA",

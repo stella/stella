@@ -55,6 +55,10 @@ export type Placement = {
   styleId: string | null;
   /** The level that numbers the block, or would. */
   level: ProfileListLevel | null;
+  /** The level of the role whose style the block borrows, when its own
+   *  role has neither: a spare level that numbers the block takes that
+   *  level's indent. */
+  borrowedLevel: ProfileListLevel | null;
   /** The label as the source prints it, without the blanks around it. */
   sourceLabel: string | null;
   /** What a level must print for the block to keep its label. */
@@ -303,8 +307,9 @@ const assignSpareLevels = (
     if (level !== undefined && pattern !== null) {
       chosen.set(levelKey(level), pattern);
     }
-    if (level !== undefined && first !== undefined && first.level !== null) {
-      standsFor.set(levelKey(level), first.level);
+    const origin = first?.level ?? first?.borrowedLevel ?? null;
+    if (level !== undefined && origin !== null) {
+      standsFor.set(levelKey(level), origin);
     }
     for (const placement of group) {
       if (level === undefined) {
