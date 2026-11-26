@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
@@ -6,6 +6,7 @@ import { panic, Result } from "better-result";
 import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
@@ -64,7 +65,7 @@ export const ShortcutRecorder = ({
   });
   const generation = useRef(0);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const report = () => reportShortcutFailure(telemetryWindow);
     void invoke("shortcut_pause").catch(report);
     return () => {
@@ -73,7 +74,7 @@ export const ShortcutRecorder = ({
     };
   }, [telemetryWindow]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const check = async (candidate: ShortcutKeys) => {
       generation.current += 1;
       const request = generation.current;

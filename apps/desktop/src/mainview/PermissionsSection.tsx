@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { Separator } from "@stll/ui/separator";
 
 import {
@@ -45,7 +46,7 @@ export const PermissionsSection = ({
   // cannot overwrite a newer one.
   const latestRead = useRef(0);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     let disposed = false;
     let timer: number | undefined;
     const refresh = async () => {

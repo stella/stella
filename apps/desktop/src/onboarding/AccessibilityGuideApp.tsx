@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { useMountEffect } from "@stll/ui/effects";
 import { CheckCircle2Icon } from "@stll/ui/icons";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
@@ -26,7 +27,7 @@ const AccessibilityGuideApp = () => {
   const t = useTranslations("onboarding");
   const [status, setStatus] = useState<GuideStatus>("waiting");
 
-  useEffect(() => {
+  useMountEffect(() => {
     let disposed = false;
     const refresh = async () => {
       const result = await Result.tryPromise(async () =>
@@ -53,7 +54,7 @@ const AccessibilityGuideApp = () => {
       disposed = true;
       stopListening();
     };
-  }, []);
+  });
 
   return (
     <main

@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useMountEffect } from "@stll/ui/effects";
 import { Field, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
@@ -48,7 +49,7 @@ const DictationFixApp = () => {
   const saving = useRef(false);
   const locked = outcome.status === "saving";
 
-  useEffect(() => {
+  useMountEffect(() => {
     let disposed = false;
     const read = async () => {
       const result = await Result.tryPromise(async () =>
@@ -82,7 +83,7 @@ const DictationFixApp = () => {
       disposed = true;
       stopListening();
     };
-  }, []);
+  });
 
   const save = async () => {
     if (saving.current) {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
@@ -6,6 +6,7 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { usePrefersReducedMotion } from "@stll/ui/hooks/use-prefers-reduced-motion";
 import {
   Select,
@@ -114,7 +115,7 @@ export const DictationMicrophoneChoice = ({
   const lastShown = useRef(0);
 
   // The list follows devices plugged in or out while the window was away.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     let disposed = false;
     const read = async () => {
       const result = await Result.tryPromise(async () =>
@@ -140,7 +141,7 @@ export const DictationMicrophoneChoice = ({
     };
   }, [telemetryWindow]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (focused && snapshot !== null) {
       trigger.current?.focus();
       trigger.current?.scrollIntoView({ block: "center" });
@@ -150,7 +151,7 @@ export const DictationMicrophoneChoice = ({
 
   // Levels arrive only while a test runs; it stops when the window loses
   // focus or this row goes away.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!testing) {
       return undefined;
     }
