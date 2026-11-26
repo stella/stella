@@ -22,9 +22,24 @@ import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import {
   ACCOUNT_ACCESS,
   createSafePublicHandler,
+  safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { safePublicHandlerErrorResponseSchema } from "@/api/lib/search/public-error-response";
+
+const agentTokenResponseSchema = v.object({
+  access_token: v.pipe(v.string(), v.maxLength(16_384)),
+  token_type: v.literal("Bearer"),
+  expires_in: v.number(),
+  scope: v.pipe(v.string(), v.maxLength(1024)),
+});
+
+const agentTokenErrorResponseSchema = v.object({
+  ...safePublicHandlerErrorResponseSchema.entries,
+  retryAfterMs: v.optional(v.number()),
+  error: v.optional(v.pipe(v.string(), v.maxLength(128))),
+});
 
 /**
  * Profile-specific token exchange hosting two grants better-auth's closed
@@ -44,6 +59,11 @@ const config = {
       assertion: v.pipe(v.string(), v.minLength(1), v.maxLength(8192)),
     }),
   ]),
+  response: {
+    ...safePublicHandlerResponseSchemasWithStatusText(agentTokenResponseSchema),
+    400: agentTokenErrorResponseSchema,
+    403: agentTokenErrorResponseSchema,
+  },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
   cache: { kind: "none" },

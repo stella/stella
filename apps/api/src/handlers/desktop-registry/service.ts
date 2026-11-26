@@ -48,6 +48,8 @@ import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys
 import { getDefaultDesktopRegistry } from "./default-registry";
 
 const SEARCH_LIMIT = 12;
+export const DESKTOP_REGISTRY_RENDERED_TEXT_MAX_LENGTH = 65_536;
+
 const FORMAT_LIMIT = 100;
 const DETAIL_CONCURRENCY = 3;
 
@@ -250,11 +252,17 @@ export const searchDesktopRegistry = async (
   );
   const results: DesktopRegistrySearchResult[] = [];
   const toResult = (hit: BusinessRegistryHit): DesktopRegistrySearchResult => {
-    const rendered = renderLookupOutput(formats.defaultFormat, hit);
+    const rendered = renderLookupOutput(formats.defaultFormat, hit).slice(
+      0,
+      DESKTOP_REGISTRY_RENDERED_TEXT_MAX_LENGTH,
+    );
     return {
       id: hit.id,
       name: hit.name,
-      text: stripLookupMarkdown(rendered),
+      text: stripLookupMarkdown(rendered).slice(
+        0,
+        DESKTOP_REGISTRY_RENDERED_TEXT_MAX_LENGTH,
+      ),
       rendered,
     };
   };
@@ -454,6 +462,15 @@ export const formatDesktopRegistry = async (
       new HandlerError({ status: 404, message: "Company not found" }),
     );
   }
-  const rendered = renderLookupOutput(format?.format ?? null, lookup.hit);
-  return Result.ok({ text: stripLookupMarkdown(rendered), rendered });
+  const rendered = renderLookupOutput(format?.format ?? null, lookup.hit).slice(
+    0,
+    DESKTOP_REGISTRY_RENDERED_TEXT_MAX_LENGTH,
+  );
+  return Result.ok({
+    text: stripLookupMarkdown(rendered).slice(
+      0,
+      DESKTOP_REGISTRY_RENDERED_TEXT_MAX_LENGTH,
+    ),
+    rendered,
+  });
 };
