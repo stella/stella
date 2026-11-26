@@ -223,6 +223,23 @@ describe("proposeBlockRoles", () => {
     });
   });
 
+  test("in a letter or a memo a line that is merely centred does not take the title's place", () => {
+    const manifest = manifestOf([
+      "Confidential",
+      "AGREEMENT IN PRINCIPLE",
+      "We set out below what was agreed at the meeting.",
+    ]);
+    const [marking] = manifest.blocks;
+    if (marking !== undefined) {
+      marking.alignment = "center";
+    }
+    expect(rolesOf(manifest)).toEqual({
+      Confidential: "body",
+      "AGREEMENT IN PRINCIPLE": "title",
+      "We set out below what was ag": "body",
+    });
+  });
+
   test("a capital letter labels a recital only in front of the operative part", () => {
     const manifest = manifestOf([
       "SMLOUVA O DÍLO",

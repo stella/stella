@@ -8,6 +8,7 @@ import {
   englishAgreement,
   germanContract,
   heading,
+  inColumns,
   manifestOf,
   numbered,
   partsContract,
@@ -405,6 +406,27 @@ describe("buildLabelIndex", () => {
       "annex 1",
       "annex 2",
     ]);
+    // A line of the contents that names the first annex takes no number
+    // from it.
+    const listed = {
+      ...manifest,
+      blocks: [
+        {
+          ...manifest.blocks[0],
+          id: "toc",
+          text: "Annex  - Summary",
+          styleName: "toc 1",
+          selfNumbers: [6],
+        },
+        ...manifest.blocks,
+      ],
+    };
+    expect(
+      provisionKey(
+        buildLabelIndex(listed),
+        blockIdOf(manifest, "Příloha č.  Seznam"),
+      ),
+    ).toBe("annex 2");
     const index = buildLabelIndex(manifest);
     const summary = index.entryByBlockId.get(
       blockIdOf(manifest, "Annex  - Summary"),
@@ -447,6 +469,33 @@ describe("buildLabelIndex", () => {
     expect(spaced.blocks[1]?.text.slice(first?.manualLength ?? 0)).toBe(
       "Prodávající prodává zboží.",
     );
+    // A second part typed with a leading zero is a label of that length.
+    const padded = manifestOf([
+      "1. Předmět smlouvy",
+      "1. 01. Prodávající prodává zboží.",
+      "1. 02. Kupující zboží kupuje.",
+    ]);
+    const paddedFirst = buildLabelIndex(padded).entryByBlockId.get(
+      blockIdOf(padded, "1. 01. "),
+    );
+    expect(padded.blocks[1]?.text.slice(paddedFirst?.manualLength ?? 0)).toBe(
+      "Prodávající prodává zboží.",
+    );
+    // Two language versions side by side count each for itself.
+    const sideBySide = inColumns(2, [
+      "1. Předmět smlouvy",
+      "1. Subject matter",
+      "1. 1. Prodávající prodává zboží.",
+      "1. 1. The seller sells the goods.",
+      "1. 2. Kupující zboží kupuje.",
+      "1. 2. The buyer buys the goods.",
+    ]);
+    const columns = buildLabelIndex(sideBySide);
+    for (const start of ["1. 1. Prodávající", "1. 1. The seller"]) {
+      expect(
+        columns.entryByBlockId.get(blockIdOf(sideBySide, start))?.shape.length,
+      ).toBe(5);
+    }
     // No run: one paragraph alone, a gap in the count, another article's
     // number, a date, a word in lower case.
     for (const lines of [
