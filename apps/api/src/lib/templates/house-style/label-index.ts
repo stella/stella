@@ -7,6 +7,7 @@ import { panic } from "better-result";
 
 import {
   countedOrdinal,
+  digitsValue,
   parseLabelShape,
 } from "@/api/lib/templates/house-style/designators";
 import type {
@@ -955,7 +956,7 @@ const readSpacedNumber = (
   const { shape } = raw;
   const first = shape.path?.length === 1 ? shape.path.at(0) : undefined;
   const match = SPACED_SECOND.exec(raw.remainder);
-  const second = Number.parseInt(match?.groups?.["second"] ?? "", 10);
+  const second = digitsValue(match?.groups?.["second"] ?? "");
   if (
     raw.origin !== "manual" ||
     shape.keyword !== null ||
@@ -965,7 +966,7 @@ const readSpacedNumber = (
     shape.close !== "" ||
     first === undefined ||
     match === null ||
-    !Number.isInteger(second)
+    second === null
   ) {
     return null;
   }
@@ -1040,7 +1041,7 @@ const joinSpacedNumbers = (
   };
   for (const [position, raw] of raws.entries()) {
     const block = blocks[position];
-    if (raw === null || raw === undefined || block === undefined) {
+    if (raw === null || block === undefined) {
       continue;
     }
     const spaced = readSpacedNumber(block, raw, position);

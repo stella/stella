@@ -1063,7 +1063,7 @@ const dropLoosePageStarts = (
         (before !== null &&
           FRONT_MATTER_ROLES.has(before.role) &&
           !FRONT_MATTER_ROLES.has(placement.role)));
-    if (droppable && placement !== undefined && flowsOn) {
+    if (droppable && flowsOn) {
       placed.pageStarts.delete(block.id);
       context.items.push({
         kind: "pageStartDropped",
@@ -1072,7 +1072,6 @@ const dropLoosePageStarts = (
       });
     } else if (
       droppable &&
-      placement !== undefined &&
       pageChars >= SHORT_PAGE_CHARS &&
       !opensPage(placement, before)
     ) {

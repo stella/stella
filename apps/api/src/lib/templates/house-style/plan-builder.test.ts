@@ -269,8 +269,10 @@ describe("buildTemplatePlan, annexes a field numbers", () => {
     expect(item).not.toHaveProperty("labelAsText");
     expect(
       built.note.items.filter(
-        ({ kind, blockId }) =>
-          kind.startsWith("label") && blockId === heading.id,
+        (noted) =>
+          noted.kind.startsWith("label") &&
+          "blockId" in noted &&
+          noted.blockId === heading.id,
       ),
     ).toEqual([]);
     // No field can cite a number that a field of the text counts.
@@ -2284,8 +2286,8 @@ describe("buildTemplatePlan, lines that continue a numbered item", () => {
       6: { left: 567, firstLine: 0 },
     });
     const { plan, note } = build(manifest, "keepSource", { roles });
-    const under = PROFILE.roles.roman?.numbering?.indent.left;
-    expect(under ?? 0).toBeGreaterThan(0);
+    const under = PROFILE.roles.roman?.numbering?.indent.left ?? 0;
+    expect(under).toBeGreaterThan(0);
     expect(itemOf(plan, manifest, "k.ú.")?.indent).toEqual({ left: under });
     expect(itemOf(plan, manifest, "budova včetně")?.indent).toEqual({
       left: under,
