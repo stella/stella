@@ -1,5 +1,33 @@
 # @stll/ui
 
+## 0.90.0
+
+### Minor Changes
+
+- [#9499](https://github.com/stella/stella/pull/9499) [`f51823e`](https://github.com/stella/stella/commit/f51823ed31394c53538533189b9284af3e484cb0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `ComposerFrame` (`@stll/ui/composer-frame`): the one composer box, which owns its layout. A compact composer is one bar while its text fits a line, then the text across the box over a control row once it needs a second line, and back to the bar only when the draft is empty; a large one is always text over the control row. The text grows to 320px and then scrolls in its own region, with the scroll area's edge scrollbar and fades, outside the controls and the attachments. The layout tokens (`COMPOSER_COMPACT_ROW_CLASS`, `COMPOSER_COMPACT_TEXT_CELL_CLASS`, `COMPOSER_LARGE_TEXT_WELL_CLASS`, `COMPOSER_LARGE_EDITOR_CLASS`, `COMPOSER_LARGE_ACTION_ROW_CLASS`, `COMPOSER_LEADING_GROUP_CLASS`, `COMPOSER_PLACEHOLDER_CLASS`, `COMPOSER_BOX_FOCUS_CLASS`, `COMPOSER_BOX_ANONYMIZED_CLASS`) and `ComposerPlaceholder` are no longer exported; `@stll/ui/composer` no longer re-exports `COMPOSER_BOX_CLASS`. `DOC_FLOAT_SURFACE_CLASS` moves to `@stll/ui/composer-tokens`. `Textarea`'s `composer` appearance no longer sets a height floor: the frame does.
+
+- [#9493](https://github.com/stella/stella/pull/9493) [`e034ab2`](https://github.com/stella/stella/commit/e034ab28a81e2cfba784c523e00eb20ca17f3b12) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DayCalendarBlock` gains the `scheduled` kind, drawn as an outline, and `DayCalendarColumn` gains an optional `narrow` width, so planned time can be drawn beside recorded time in `@stll/ui/day-calendar`. Code that switches over every block kind needs a case for it. No entrypoint is removed.
+
+- [#9541](https://github.com/stella/stella/pull/9541) [`4d9d313`](https://github.com/stella/stella/commit/4d9d3134c132a0b3c005588624a0dd4096a1f358) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/effects-dom` keeps React state from the DOM without effect loops: `useObservedValue` (the primitive, with an equality guard and a breaker for layout feedback), `useLayoutMeasurement`, `useElementSize`, `useIntersecting` and a shared, reference-counted `useObjectUrl`. `@stll/ui/effects` adds `useNow`, one shared clock per interval.
+
+- [#9529](https://github.com/stella/stella/pull/9529) [`bc0782b`](https://github.com/stella/stella/commit/bc0782b934613f4d8f84d27eb8830f9de8780ed9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The sanctioned React effect hooks are exported from `@stll/ui/effects`: `useMountEffect`, `useExternalSyncEffect`, `useLayoutSyncEffect` and `useMountLayoutEffect` for syncing with systems outside React, `useLatest` and `useLatestCallback` for reading the latest committed value or callback (`useLatestCallback` keeps one identity whether or not the React Compiler runs), `useIsMounted` and `useHasMounted` for mount state, and `useKeyedState` for local state that starts over when a key changes. `@stll/ui/use-latest` now resolves to the same module.
+
+- [#9475](https://github.com/stella/stella/pull/9475) [`be9916a`](https://github.com/stella/stella/commit/be9916ac9072029fc77096077be4ce01d7ee0ef3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DayCalendarBlock` gains the `unrecorded` kind, drawn hatched, for time that should have been recorded and was not. Code that switches over every block kind needs a case for it. No entrypoint is removed.
+
+- [#9443](https://github.com/stella/stella/pull/9443) [`b135cba`](https://github.com/stella/stella/commit/b135cbac718fc41005de7c88cb91878ac588f747) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `MenuRadioItem` takes `appearance="segment"`, which lays a group's choices out as one segmented control: the chosen one is raised and no check mark is drawn.
+
+- [#9500](https://github.com/stella/stella/pull/9500) [`2902ea2`](https://github.com/stella/stella/commit/2902ea2475ee03df9c16889783684686a56ca2f1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the React Native `ComposerFrame` (`@stll/ui/composer-frame` on native) with the web frame's prop contract: one bar while the text fits a line, then the text across the box over a control row, back to the bar only when the draft is empty. Web and native share one layout state machine and one 320 cap token (`COMPOSER_TEXT_REGION_MAX_HEIGHT_CLASS`). The native `Textarea` takes `appearance="composer"`, which grows to the frame's cap and scrolls itself.
+
+### Patch Changes
+
+- [#9434](https://github.com/stella/stella/pull/9434) [`e335127`](https://github.com/stella/stella/commit/e335127269927db46c6035451c66d782ef3af5bc) Thanks [@NavpreetSSidhu](https://github.com/NavpreetSSidhu)! - `FileAudioIcon` marks an audio file.
+
+- [#9535](https://github.com/stella/stella/pull/9535) [`3493d33`](https://github.com/stella/stella/commit/3493d33c38d730aaa95c8ca624b9a54fdea3d23c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `SidebarProvider`, `DetailsGrid`, `EntityActions`, the native `Sheet` and `ConditionBuilder` keep their context values stable across renders, so a re-render of the provider no longer re-renders every consumer in an app that does not use the React Compiler.
+
+- [#9520](https://github.com/stella/stella/pull/9520) [`611c27e`](https://github.com/stella/stella/commit/611c27ee631640a3826786e5da7bc734d6d563df) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `Switch` draws on as a green track and off as a grey track, both under a white thumb, from the new `--switch-track`, `--switch-track-checked` and `--switch-thumb` theme tokens (`bg-switch-track*`, `bg-switch-thumb`). Each track stands at least 3:1 against the page, cards and popovers in every palette. `SwitchFace` and the native `Switch` use the same tokens.
+
+- [#9521](https://github.com/stella/stella/pull/9521) [`353fefb`](https://github.com/stella/stella/commit/353fefbfd02ba80646edff6738ad364384d0df51) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `SettingsRow` starts its footer on the title's edge when the row has media, so every line of the row's text shares one start edge, and takes an optional `target`: the row then carries `data-settings-target`, can take focus from script, and is marked while `data-highlighted` is set, for a settings link that brings it into view.
+
 ## 0.89.2
 
 ### Patch Changes
