@@ -1,5 +1,21 @@
 # @stll/ui
 
+## 0.91.0
+
+### Minor Changes
+
+- [#9568](https://github.com/stella/stella/pull/9568) [`8b35843`](https://github.com/stella/stella/commit/8b3584382e97b6a3c4c80436f849d42eb9384740) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/effects-refs` adds `useComposedRefs`: one ref callback for several refs that keeps its identity while the refs do, so React does not detach and re-attach every member on each render the way a `composeRefs(...)` call during render does.
+
+### Patch Changes
+
+- [#9549](https://github.com/stella/stella/pull/9549) [`3762bf8`](https://github.com/stella/stella/commit/3762bf8c0652749952f215af3e86010237338984) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `KanbanVirtualCell` measures its pinned action with `useLayoutMeasurement` instead of writing the height from its own layout effect. Rows still rest under the action from the first paint, and the reach drops to zero when the action closes the cell. No entrypoint changes.
+
+- [#9587](https://github.com/stella/stella/pull/9587) [`2c8afcc`](https://github.com/stella/stella/commit/2c8afccef1e41d1829a69a75575615329137f564) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Components that sync with the DOM, timers or controllers (kanban boards, outline rail, copy button, color picker, facet bar, workspace shell, outcome screen, run-state mark) reach React effects through the `@stll/ui/effects` wrappers. Behaviour is unchanged.
+
+- [#9574](https://github.com/stella/stella/pull/9574) [`98bdc5c`](https://github.com/stella/stella/commit/98bdc5c5baa038b6f1bcdfca24e38038f4bee0e5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - OutlineRail and ScrollToTop take their tick positions and visibility from the observed-value hook, measured before the first paint and again on resize and scroll.
+
+- [#9583](https://github.com/stella/stella/pull/9583) [`7655d51`](https://github.com/stella/stella/commit/7655d51a49597eecd510b5b212ce8ab8bc88cc61) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `TabsList` reaches its pre-paint work through the sanctioned effect hooks; behaviour and timing are unchanged.
+
 ## 0.90.1
 
 ### Patch Changes
