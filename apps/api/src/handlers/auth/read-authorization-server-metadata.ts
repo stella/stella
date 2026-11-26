@@ -93,9 +93,15 @@ const readAuthorizationServerMetadata = createSafePublicHandler(
       const detail = yield* Result.await(
         Result.tryPromise(async () => await response.text()),
       );
+      let errorStatus: 400 | 404 | 502 = 502;
+      if (response.status === 404) {
+        errorStatus = 404;
+      } else if (response.status === 400) {
+        errorStatus = 400;
+      }
       return Result.err(
         new HandlerError({
-          status: response.status,
+          status: errorStatus,
           code: "metadata_unavailable",
           message:
             detail.trim().slice(0, 256) ||
