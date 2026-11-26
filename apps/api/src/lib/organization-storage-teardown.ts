@@ -283,6 +283,7 @@ export const WORKSPACE_STORAGE_REFERENCE_DISPOSITION = {
   "folio_collab_rooms.yjs_snapshot_file_id": "cleanup-request",
   "office_file_evidence.source_file_id": "field-file-alias",
   "pending_uploads.purpose_data": "cleanup-request",
+  "recording_transcription_runs.source_file_id": "field-file-alias",
   "report_exports.result_s3_key": "cleanup-request",
   "user_files.s3_key": "cleanup-request",
   "user_files.thumbnail_file_id": "cleanup-request",
