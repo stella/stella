@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import type { OnboardingSnapshot } from "../src/onboarding/onboarding-types";
+
 GlobalRegistrator.register({ url: "http://localhost/" });
 
 const { act, cleanup, fireEvent, render } =
@@ -34,7 +36,7 @@ const TRY_IT_STEP = {
   step: "tryIt",
   steps: ["welcome", "howItWorks", "tryIt", "done"],
   trayLocation: null,
-} as const;
+} satisfies OnboardingSnapshot;
 
 const settle = async () => {
   await act(async () => {
