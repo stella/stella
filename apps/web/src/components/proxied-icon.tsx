@@ -2,8 +2,9 @@ import type { ComponentProps } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 
+import { useObjectUrl } from "@stll/ui/effects/dom";
+
 import { exactIconOptions } from "@/features/chat/link-icons";
-import { useObjectUrl } from "@/hooks/use-object-url";
 import { queryView } from "@/lib/query-view.logic";
 
 type ProxiedIconProps = Omit<ComponentProps<"img">, "alt" | "src"> & {

@@ -25,7 +25,11 @@ import {
   AlertDialogTitle,
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
-import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
+import {
+  useExternalSyncEffect,
+  useKeyedState,
+  useLatestCallback,
+} from "@stll/ui/effects";
 import { EntityActions, EntityActionsButton } from "@stll/ui/entity-actions";
 import type { EntityAction } from "@stll/ui/entity-actions";
 import { Form } from "@stll/ui/form";
@@ -335,15 +339,11 @@ const DocumentTypeRow = ({
   const [rowRef, setRowRef] = useState<HTMLLIElement | null>(null);
   const [gripRef, setGripRef] = useState<HTMLButtonElement | null>(null);
   const [isDropTarget, setIsDropTarget] = useState(false);
-  const [draft, setDraft] = useState(type.label);
+  // The rename draft starts over when the label changes upstream (a refetch
+  // after this or another client renames the type); `type.label` is stable
+  // while the user types, so this never clobbers an in-progress edit.
+  const [draft, setDraft] = useKeyedState(type.label, type.label);
   const handleReorder = useLatestCallback(onReorder);
-
-  // Resync the rename draft when the label changes upstream (a refetch after
-  // this or another client renames the type); `type.label` is stable while the
-  // user types, so this never clobbers an in-progress edit.
-  useExternalSyncEffect(() => {
-    setDraft(type.label);
-  }, [type.label]);
 
   useExternalSyncEffect(() => {
     if (!rowRef || !gripRef) {
