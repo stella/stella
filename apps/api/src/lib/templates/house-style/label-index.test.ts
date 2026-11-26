@@ -408,16 +408,16 @@ describe("buildLabelIndex", () => {
     ]);
     // A line of the contents that names the first annex takes no number
     // from it.
+    const [contentsLine] = manifestOf([
+      { text: "Annex  - Summary", styleName: "toc 1" },
+    ]).blocks;
+    if (contentsLine === undefined) {
+      throw new Error("fixture");
+    }
     const listed = {
       ...manifest,
       blocks: [
-        {
-          ...manifest.blocks[0],
-          id: "toc",
-          text: "Annex  - Summary",
-          styleName: "toc 1",
-          selfNumbers: [6],
-        },
+        { ...contentsLine, id: "toc", selfNumbers: [6] },
         ...manifest.blocks,
       ],
     };
