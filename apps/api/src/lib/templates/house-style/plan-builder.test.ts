@@ -1010,6 +1010,30 @@ describe("buildTemplatePlan, citations of a level that prints punctuated words",
   });
 });
 
+describe("buildTemplatePlan, a template with text effects that show nothing", () => {
+  test("the note says that the output is written without them", () => {
+    const manifest = czechContract("Text.");
+    const { note } = build(manifest, "keepSource", {
+      profile: {
+        ...PROFILE,
+        health: [
+          { kind: "numberDrawnAsPicture", abstractNumId: 2, ilvl: 0 },
+          { kind: "numberDrawnAsPicture", abstractNumId: 2, ilvl: 1 },
+          { kind: "textDrawnAsPicture", styleId: "Title" },
+        ],
+      },
+    });
+    expect(
+      note.items.filter(({ kind }) => kind === "invisibleEffectsRemoved"),
+    ).toEqual([{ kind: "invisibleEffectsRemoved", levels: 2, styles: 1 }]);
+    expect(
+      build(manifest).note.items.some(
+        ({ kind }) => kind === "invisibleEffectsRemoved",
+      ),
+    ).toBe(false);
+  });
+});
+
 describe("buildTemplatePlan, what is left unlinked", () => {
   const manifest = czechContract(
     "Viz čl. XX této smlouvy a čl. II odst. 2 této smlouvy.",
