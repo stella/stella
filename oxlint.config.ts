@@ -2567,6 +2567,10 @@ const config = defineConfig({
           (directory) => `${directory}/**/*.{ts,tsx}`,
         ),
       ],
+      // Tests drive React on purpose, including the nested update a test of
+      // the render-storm canary must cause; the DOM-test storm check holds
+      // them instead.
+      excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
       rules: {
         "no-effect-state-write/no-effect-state-write": "error",
       },
