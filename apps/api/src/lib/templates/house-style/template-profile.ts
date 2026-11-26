@@ -827,6 +827,54 @@ const inferHealth = ({
 };
 
 /**
+ * The deeper levels of another list of the template that no style is bound
+ * to: none of the roles' lists, and not the outline's.
+ */
+const inferMarkLevels = (
+  inspection: TemplateInspection,
+  roles: TemplateProfile["roles"],
+  outlineLevel: ProfileListLevel | null,
+): ProfileListLevel[] => {
+  const numIdByList = new Map(
+    inspection.numbering.nums.map(({ numId, abstractNumId }) => [
+      abstractNumId,
+      numId,
+    ]),
+  );
+  const roleLists = new Set(
+    Object.values(roles).flatMap((role) =>
+      role?.numbering ? [role.numbering.abstractNumId] : [],
+    ),
+  );
+  const markList = inspection.numbering.abstractNums.find(
+    ({ abstractNumId, levels }) =>
+      abstractNumId !== outlineLevel?.abstractNumId &&
+      !roleLists.has(abstractNumId) &&
+      numIdByList.has(abstractNumId) &&
+      levels.length > 1 &&
+      levels.every(({ ilvl, pStyle }) => ilvl === 0 || pStyle === null),
+  );
+  const markNumId =
+    markList === undefined
+      ? undefined
+      : numIdByList.get(markList.abstractNumId);
+  if (markList === undefined || markNumId === undefined) {
+    return [];
+  }
+  return markList.levels
+    .filter(({ ilvl }) => ilvl > 0)
+    .map(({ ilvl, numFmt, lvlText, start, indent }) => ({
+      numId: markNumId,
+      ilvl,
+      abstractNumId: markList.abstractNumId,
+      numFmt,
+      lvlText,
+      start,
+      indent,
+    }));
+};
+
+/**
  * Infers a template's profile from its inspection. Deterministic: the same
  * template gives the same profile. Readings carry a confidence and their
  * evidence; a person confirms or corrects them before the profile is stored.
@@ -903,44 +951,7 @@ export const inferTemplateProfile = (
             indent,
           }));
 
-  // Another list of the template whose deeper levels no style is bound to.
-  const numIdByList = new Map(
-    inspection.numbering.nums.map(({ numId, abstractNumId }) => [
-      abstractNumId,
-      numId,
-    ]),
-  );
-  const roleLists = new Set(
-    Object.values(roles).flatMap((role) =>
-      role?.numbering ? [role.numbering.abstractNumId] : [],
-    ),
-  );
-  const markList = inspection.numbering.abstractNums.find(
-    ({ abstractNumId, levels }) =>
-      abstractNumId !== outlineLevel?.abstractNumId &&
-      !roleLists.has(abstractNumId) &&
-      numIdByList.has(abstractNumId) &&
-      levels.length > 1 &&
-      levels.every(({ ilvl, pStyle }) => ilvl === 0 || pStyle === null),
-  );
-  const markNumId =
-    markList === undefined
-      ? undefined
-      : numIdByList.get(markList.abstractNumId);
-  const markLevels: ProfileListLevel[] =
-    markList === undefined || markNumId === undefined
-      ? []
-      : markList.levels
-          .filter(({ ilvl }) => ilvl > 0)
-          .map(({ ilvl, numFmt, lvlText, start, indent }) => ({
-            numId: markNumId,
-            ilvl,
-            abstractNumId: markList.abstractNumId,
-            numFmt,
-            lvlText,
-            start,
-            indent,
-          }));
+  const markLevels = inferMarkLevels(inspection, roles, outlineLevel);
 
   const kinds = [...new Set(inspection.fields.map(({ kind }) => kind))];
   const structural = STRUCTURAL_ROLES.map(

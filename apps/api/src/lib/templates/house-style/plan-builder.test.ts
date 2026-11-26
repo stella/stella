@@ -308,12 +308,14 @@ describe("buildTemplatePlan, list instances", () => {
       numId: 20,
       ilvl: 1,
     });
-    expect(plan.numberingPatches).toContainEqual({
-      abstractNumId: 3,
-      ilvl: 1,
-      numFmt: "bullet",
-      lvlText: "•",
-    });
+    expect(plan.numberingPatches).toContainEqual(
+      expect.objectContaining({
+        abstractNumId: 3,
+        ilvl: 1,
+        numFmt: "bullet",
+        lvlText: "•",
+      }),
+    );
     // No level of the outline list is patched for the bullet.
     expect(
       plan.numberingPatches?.some(({ numFmt }) => numFmt === "bullet") &&

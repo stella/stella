@@ -483,7 +483,7 @@ type NumberOptions = {
   mode: NumberingMode;
   spareLevels: readonly ProfileListLevel[];
   /** Levels outside the outline list, for marks that count nothing. */
-  markLevels?: readonly ProfileListLevel[];
+  markLevels?: readonly ProfileListLevel[] | undefined;
 };
 
 /**
