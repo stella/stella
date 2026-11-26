@@ -1,8 +1,9 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useLatest, useMountLayoutEffect } from "@stll/ui/effects";
 import { Form } from "@stll/ui/form";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -67,13 +68,23 @@ export const AIStep = ({
 
   const [rowStates, setRowStates] = useState<RowStateMap>(INITIAL_ROW_STATES);
   const rowStatesRef = useRef(rowStates);
-  const commitRowStates = (next: RowStateMap) => {
+  // A save settles after an await, against whatever providers are committed
+  // by then.
+  const latestProviders = useLatest(providers);
+  // The preview follows the providers and their row states: it is reported
+  // where either changes, never from an effect watching them.
+  const commitRowStates = (
+    next: RowStateMap,
+    nextProviders: readonly ProviderCredentialDraft[] = latestProviders.current,
+  ) => {
     rowStatesRef.current = next;
     setRowStates(next);
+    onPreviewChange?.(createProviderPreview(nextProviders, next));
   };
-  useLayoutEffect(() => {
+  // The step reports the preview it opens with before it paints.
+  useMountLayoutEffect(() => {
     onPreviewChange?.(createProviderPreview(providers, rowStates));
-  }, [onPreviewChange, providers, rowStates]);
+  });
 
   // Every provider in the list is either explicitly saved (valid)
   // or carries a previously-stored masked key.
@@ -215,10 +226,13 @@ export const AIStep = ({
         resetProviders.set(draft.provider, { status: "idle" });
       }
     }
-    commitRowStates({
-      ...nextRowStates,
-      ...Object.fromEntries(resetProviders),
-    });
+    commitRowStates(
+      {
+        ...nextRowStates,
+        ...Object.fromEntries(resetProviders),
+      },
+      next,
+    );
   };
 
   const rowStatusList: ProviderRowStatus[] = providers.map(
