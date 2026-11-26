@@ -73,14 +73,12 @@ import {
 } from "@/api/handlers/case-law/consts";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+// parser-output-unchanged: publisher reads now route through typed readPublisherText/readPublisherBytes; served payloads and parsed decisions are unchanged.
 import {
-  readBodyText,
+  readPublisherBytes,
+  readPublisherText,
   unreadPublisherError,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import {
-  fetchWithRetry,
-  rethrowCycleStop,
-} from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   huBhgyHeaderLabelsOf,
@@ -96,10 +94,6 @@ import {
   presentTextField,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
-import {
-  readOutcomeOfStatus,
-  readPresent,
-} from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { parseScannedDocx } from "@/api/lib/file-scan/document-parsers";
@@ -412,42 +406,26 @@ const search = async ({
     return panic("eakta.birosag.hu search escaped the publisher origin");
   }
 
-  const response = await fetchWithRetry(
-    target.toString(),
-    {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/x-www-form-urlencoded",
-        "X-Requested-With": "XMLHttpRequest",
-      },
-      body: huBhgySearchBody(query),
-      redirect: "error",
+  const body = await readPublisherText(target.toString(), {
+    fetchStage: "listing",
+    adapterKey: ADAPTER_KEYS.HU_BHGY,
+    signal,
+    timeoutMs: ADAPTER_TIMEOUT.LIST,
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+      "X-Requested-With": "XMLHttpRequest",
     },
-    {
-      fetchStage: "listing",
-      adapterKey: ADAPTER_KEYS.HU_BHGY,
-      signal,
-      timeoutMs: ADAPTER_TIMEOUT.LIST,
-    },
-  );
-  if (!response.ok) {
-    return Result.err(
-      searchError(
-        cursor,
-        `search answered ${response.status}`,
-        response.status,
-      ),
-    );
-  }
-
-  const body = await readBodyText(readPresent(response), signal);
+    body: huBhgySearchBody(query),
+    redirect: "error",
+  });
   if (body.type !== "present") {
     const error = unreadPublisherError({
       outcome: body,
       adapterKey: ADAPTER_KEYS.HU_BHGY,
       cursor,
-      message: "eakta.birosag.hu search body unread",
+      message: "eakta.birosag.hu search failed",
     });
     // Transport failures retain their rejection path and Error identity.
     if (body.type === "unavailable" && body.cause.kind === "thrown") {
@@ -534,28 +512,6 @@ type DocumentRead =
   | { type: "unread"; outcome: UnreadOutcome; error: AdapterFetchError }
   | { type: "halted"; error: AdapterFetchError };
 
-/** The publisher's rate-limit refusal of a request. */
-const RATE_LIMITED_STATUS = 429;
-
-/** The unread outcome of a status that is neither served nor absent. */
-const unreadOutcomeOfStatus = (
-  status: number,
-  retryAfter: string | null,
-): UnreadOutcome => {
-  const outcome = readOutcomeOfStatus(status, "document", retryAfter);
-  switch (outcome.type) {
-    case "refused":
-    case "unavailable":
-      return outcome;
-    case "present":
-    case "absent":
-      return panic(`Download status ${status} is not an unread outcome`);
-    default:
-      outcome satisfies never;
-      return panic(`Unhandled read outcome: ${String(outcome)}`);
-  }
-};
-
 const fetchDocument = async (
   row: HuBhgyRow,
   cursor: string,
@@ -568,72 +524,36 @@ const fetchDocument = async (
   if (target === null) {
     return panic("eakta.birosag.hu download escaped the publisher origin");
   }
-  const requested = await Result.tryPromise({
-    try: async () =>
-      await fetchWithRetry(
-        target.toString(),
-        { redirect: "error" },
-        {
-          fetchStage: "document",
-          adapterKey: ADAPTER_KEYS.HU_BHGY,
-          signal,
-          timeoutMs: ADAPTER_TIMEOUT.PAGE,
-        },
-      ),
-    catch: (error: unknown) => error,
+  const outcome = await readPublisherBytes(target.toString(), {
+    fetchStage: "document",
+    adapterKey: ADAPTER_KEYS.HU_BHGY,
+    signal,
+    timeoutMs: ADAPTER_TIMEOUT.PAGE,
+    redirect: "error",
   });
-  if (Result.isError(requested)) {
-    // A timeout, a reset connection or spent retries: unread like a 5xx, so
-    // the cycle bound applies to it. Cancellation and source stops end the
-    // cycle.
-    rethrowCycleStop(requested.error, signal);
-    return {
-      type: "unread",
-      outcome: {
-        type: "unavailable",
-        cause: { kind: "thrown", error: requested.error },
-      },
-      error: searchError(cursor, "download did not answer"),
-    };
+  switch (outcome.type) {
+    case "present":
+      return { type: "read", document: huBhgyDocumentOf(outcome.value) };
+    case "absent":
+      // The listing states the decision exists and the download does not serve
+      // it: a durable listing-only observation, not a page failure (rule 20).
+      return { type: "read", document: undefined };
+    case "refused":
+    case "unavailable":
+      return {
+        type: "unread",
+        outcome,
+        error: unreadPublisherError({
+          outcome,
+          adapterKey: ADAPTER_KEYS.HU_BHGY,
+          cursor,
+          message: "eakta.birosag.hu download unread",
+        }),
+      };
+    default:
+      outcome satisfies never;
+      return panic(`Unhandled read outcome: ${String(outcome)}`);
   }
-  const response = requested.value;
-  if (response.status === 404 || response.status === 410) {
-    // The listing states the decision exists and the download does not serve
-    // it: a durable listing-only observation, not a page failure (rule 20).
-    return { type: "read", document: undefined };
-  }
-  if (response.status === RATE_LIMITED_STATUS) {
-    // One request, no retry, cursor untouched: the page fails as a halt.
-    const retryAfter = response.headers.get("Retry-After");
-    await response.body?.cancel();
-    return {
-      type: "halted",
-      error: new AdapterFetchError({
-        message: `eakta.birosag.hu: download answered ${response.status}`,
-        adapterKey: ADAPTER_KEYS.HU_BHGY,
-        cursor,
-        httpStatus: response.status,
-        ...(retryAfter === null ? {} : { retryAfter }),
-      }),
-    };
-  }
-  if (!response.ok) {
-    await response.body?.cancel();
-    return {
-      type: "unread",
-      outcome: unreadOutcomeOfStatus(
-        response.status,
-        response.headers.get("Retry-After"),
-      ),
-      error: searchError(
-        cursor,
-        `download answered ${response.status}`,
-        response.status,
-      ),
-    };
-  }
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  return { type: "read", document: huBhgyDocumentOf(bytes) };
 };
 
 // ── Normalization ────────────────────────────────────────
