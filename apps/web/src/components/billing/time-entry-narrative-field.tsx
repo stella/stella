@@ -13,6 +13,7 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import { useLatestCallback } from "@stll/ui/effects";
 import { Label } from "@stll/ui/label";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
@@ -20,7 +21,6 @@ import { stellaToast } from "@stll/ui/toast";
 import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import { SavedTimeNarratives } from "@/components/billing/saved-time-narratives";
 import { matchesComboboxItem } from "@/components/combobox-filter.logic";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useMessageLocale } from "@/i18n/message-locale";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";

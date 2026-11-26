@@ -25,6 +25,7 @@ import {
   CollapsibleTrigger,
 } from "@stll/ui/collapsible";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useExternalSyncEffect, useMountEffect } from "@stll/ui/effects";
 import { CaseLawIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
@@ -43,7 +44,6 @@ import {
 } from "@/components/chat/stella-mcp-app-bridge";
 import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
 import { useTheme } from "@/components/theme-provider";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useMessageLocale } from "@/i18n/message-locale";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";

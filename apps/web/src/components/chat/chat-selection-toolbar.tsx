@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useLatestCallback } from "@stll/ui/effects";
 import { AiActionIcon, ChevronLeftIcon, TextIcon } from "@stll/ui/icons";
 
 import { useChatEditorManager } from "@/components/chat-editor-provider";
@@ -38,7 +39,6 @@ import {
 import type { AnswerFormatEntry } from "@/features/chat/answer-edit/answer-format-panel";
 import { ChatSelectionActions } from "@/features/chat/answer-edit/chat-selection-actions";
 import { useChatSelectionEvents } from "@/features/chat/answer-edit/use-chat-selection-events";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
 /** `ChatThreadMessages` marks every message it renders with its id. */

@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
+import { useMountEffect } from "@stll/ui/effects";
 import { EntityActions } from "@stll/ui/entity-actions";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
@@ -43,7 +44,6 @@ import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { getWeekStart, toISODate } from "@/components/workspaces/entity-utils";
 import { isTaskStatus } from "@/components/workspaces/tasks/task-detail-constants";
 import { useTaskStatusAction } from "@/components/workspaces/tasks/task-status-menu";
-import { useMountEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useSingleFlight } from "@/hooks/use-single-flight";
 import { useTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";

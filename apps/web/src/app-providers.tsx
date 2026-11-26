@@ -7,6 +7,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useRouter, useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { ToastProvider } from "@stll/ui/toast";
 import { TooltipProvider } from "@stll/ui/tooltip";
 
@@ -15,7 +16,6 @@ import { PendingCacheScope } from "@/components/pending-cache";
 import { ThemeProvider } from "@/components/theme-provider";
 import { WebHangRecoveryNotice } from "@/components/web-hang-recovery-notice";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { I18nProvider } from "@/i18n/provider";
 import { AnalyticsProvider } from "@/lib/analytics/analytics-provider";

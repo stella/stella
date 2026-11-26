@@ -15,13 +15,13 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { ArrowLeftIcon, LayoutTemplateIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { TemplateForm } from "@/components/templates/template-form";
 import { useTemplateFillSchema } from "@/components/templates/use-template-fill-schema";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { templatesOptions } from "@/lib/knowledge/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";

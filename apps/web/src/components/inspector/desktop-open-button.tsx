@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { LaptopIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { cn } from "@stll/ui/utils";
@@ -14,7 +15,6 @@ import {
   DesktopRequiredDialog,
   useDesktopActionGate,
 } from "@/features/desktop/desktop-action-gate";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 

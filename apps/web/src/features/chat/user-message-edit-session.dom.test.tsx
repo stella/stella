@@ -60,7 +60,7 @@ const { CHAT_SEND_KEPT, CHAT_SEND_SENT, useChatEditor } =
   await import("@/components/chat-editor-provider");
 const { composerText } = await import("@/components/chat-editor-source");
 const { EditorContent } = await import("@tiptap/react");
-const { useExternalSyncEffect } = await import("@/hooks/use-effect");
+const { useExternalSyncEffect } = await import("@stll/ui/effects");
 const { stellaToast } = await import("@stll/ui/toast");
 const { PASTED_TEXT_ATTACHMENTS_ATTR, readPastedTextAttachments } =
   await import("@/components/chat-pasted-text-extension");

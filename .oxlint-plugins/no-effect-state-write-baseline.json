@@ -29,7 +29,6 @@
   "apps/web/src/components/workspaces/matter-metadata-sheet.tsx": 9,
   "apps/web/src/features/chat/components/proxy-chat-link.tsx": 1,
   "apps/web/src/features/desktop/desktop-connection-card.tsx": 2,
-  "apps/web/src/hooks/use-chrome-query.ts": 1,
   "apps/web/src/hooks/use-external-file-drop.ts": 2,
   "apps/web/src/hooks/use-object-url.ts": 2,
   "apps/web/src/lib/anonymize/use-chat-anonymize.ts": 2,

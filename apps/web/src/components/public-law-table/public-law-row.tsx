@@ -14,6 +14,7 @@ import { useRef } from "react";
 import { flexRender } from "@tanstack/react-table";
 import { row_getCanSelect } from "@tanstack/react-table/static-functions";
 
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -41,7 +42,6 @@ import {
   isPinnedBoundaryColumn,
   selectColId,
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
 
 // Result cells are plain text lines; the number cell and every other cell

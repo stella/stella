@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
@@ -20,7 +21,6 @@ import { useInspectorCommandStore } from "@/components/inspector/inspector-comma
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 import { useSyncJustifications } from "@/components/workspaces/hooks/use-sync-justifications";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import type { Citation } from "@/lib/citations";

@@ -5,6 +5,11 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useMountEffect,
+} from "@stll/ui/effects";
 import { AddCommentIcon, SparklesIcon, Trash2Icon } from "@stll/ui/icons";
 
 import { useSelectionCopyControl } from "@/components/copy-control";
@@ -49,8 +54,6 @@ import {
   selectionToolbarAnchor,
 } from "@/components/selection-toolbar.logic";
 import Tooltip from "@/components/tooltip";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 

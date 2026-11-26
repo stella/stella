@@ -1,6 +1,5 @@
 import { MARK_COLORS } from "@stll/brand";
-
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 const FAVICON_LINK_ID = "stella-unread-favicon";
 

@@ -6,6 +6,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useLatestCallback, useMountEffect } from "@stll/ui/effects";
 import { AddCommentIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -26,8 +27,6 @@ import type {
   PdfSelectionChat,
   PdfSelectionMarking,
 } from "@/components/pdf/pdf-selection-toolbar";
-import { useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";

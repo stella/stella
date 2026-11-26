@@ -169,6 +169,7 @@
     "./desktop-time-entries": "./src/desktop-time-entries.ts",
     "./desktop-rpc": "./src/desktop-rpc.gen.ts",
     "./document-translation": "./src/document-translation.ts",
+    "./recording-transcription": "./src/recording-transcription.ts",
     "./legal-file-formats": "./src/legal-file-formats.ts",
     "./structured-document-formats": "./src/structured-document-formats.ts",
     "./structured-document": "./src/structured-document.ts",

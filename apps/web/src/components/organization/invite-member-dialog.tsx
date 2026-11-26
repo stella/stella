@@ -20,6 +20,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@stll/ui/dialog";
+import { useLatestCallback } from "@stll/ui/effects";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
@@ -38,7 +39,6 @@ import {
   InviteMemberTriggerContent,
 } from "@/components/organization/invite-member-trigger.pending";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { Role } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";

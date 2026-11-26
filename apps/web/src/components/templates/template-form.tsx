@@ -26,6 +26,7 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useMountEffect } from "@stll/ui/effects";
 import { Field, FieldControl, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
 import {
@@ -103,7 +104,6 @@ import {
 } from "@/components/templates/template-form.logic";
 import type { FormValues } from "@/components/templates/template-form.logic";
 import Tooltip from "@/components/tooltip";
-import { useMountEffect } from "@/hooks/use-effect";
 import { useFormattingLocale } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";

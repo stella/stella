@@ -2,7 +2,8 @@ import { useRef } from "react";
 
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
-import { useMountEffect } from "@/hooks/use-effect";
+import { useMountEffect } from "@stll/ui/effects";
+
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";

@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import type { ContextMenuAction } from "@stll/ui/context-menu";
+import { useMountEffect } from "@stll/ui/effects";
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -33,7 +34,6 @@ import {
   type ToolsCatalogueKind,
   ToolsCatalogueView,
 } from "@/features/knowledge/views/tools/tools-catalogue-view";
-import { useMountEffect } from "@/hooks/use-effect";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";

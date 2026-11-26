@@ -11,11 +11,11 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { XIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { DocumentIcon } from "@/components/document-icon";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 type ImagePreviewTriggerProps = {
   alt: string;

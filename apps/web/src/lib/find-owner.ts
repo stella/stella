@@ -3,8 +3,8 @@ import { type RefObject, useLayoutEffect } from "react";
 import { matchesKeyboardEvent } from "@tanstack/react-hotkeys";
 import type { HotkeyChord } from "@tanstack/react-hotkeys";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
+
 import { resolveFindClaim } from "@/lib/find-owner.logic";
 import type {
   FindCandidate,

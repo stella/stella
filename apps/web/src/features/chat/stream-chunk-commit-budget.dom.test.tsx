@@ -74,7 +74,7 @@ const { CHAT_SEND_SENT, useChatEditor } =
   await import("@/components/chat-editor-provider");
 const { buildChatRequestMessage } =
   await import("@/features/chat/lib/build-chat-request-message");
-const { useLatestCallback } = await import("@/hooks/use-latest-callback");
+const { useLatestCallback } = await import("@stll/ui/effects");
 const { toChatThreadId } = await import("@/lib/chat-thread-ref");
 const { ComposerPlusMenu } =
   await import("@/components/chat/composer-plus-menu");

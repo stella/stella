@@ -21,6 +21,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { useChatEditorManager } from "@/components/chat-editor-provider";
@@ -28,8 +29,6 @@ import type { ChatPart } from "@/components/chat/chat-ui-tools-types";
 import { useTheme } from "@/components/theme-provider";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { visualSandboxUrl } from "@/lib/api-url";

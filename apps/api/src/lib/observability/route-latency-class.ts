@@ -491,6 +491,8 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/workspaces/:workspaceId/document-reviews/runs/:runId/export": "crud",
   "GET /v1/workspaces/:workspaceId/document-reviews/sources": "crud",
   "GET /v1/workspaces/:workspaceId/document-translations/runs/:runId": "crud",
+  "GET /v1/workspaces/:workspaceId/recording-transcriptions/runs/:runId":
+    "crud",
   "GET /v1/workspaces/:workspaceId/events": "stream",
   "GET /v1/workspaces/:workspaceId/flows/runs": "crud",
   "GET /v1/workspaces/:workspaceId/flows/runs/:runId": "crud",
@@ -969,6 +971,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/workspaces/:workspaceId/document-reviews/runs": "crud",
   "POST /v1/workspaces/:workspaceId/document-translations/prepare": "crud",
   "POST /v1/workspaces/:workspaceId/document-translations/runs": "crud",
+  "POST /v1/workspaces/:workspaceId/recording-transcriptions/runs": "crud",
   "POST /v1/workspaces/:workspaceId/duplicate": "crud",
   "POST /v1/workspaces/:workspaceId/flows/runs": "crud",
   "POST /v1/workspaces/:workspaceId/flows/runs/:runId/cancel": "crud",

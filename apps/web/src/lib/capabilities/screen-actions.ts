@@ -1,8 +1,8 @@
 import { create } from "zustand";
 
 import type { ResourceName } from "@stll/api-contract";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { CapabilityId } from "@/lib/api-contract";
 
 /** A capability the current screen offers on one resource. */

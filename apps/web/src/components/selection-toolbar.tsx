@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { holdReferencePeeks } from "@stll/decision-reader/reference-peek-layering";
+import { useMountEffect } from "@stll/ui/effects";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -10,7 +11,6 @@ import {
   selectionToolbarPosition,
 } from "@/components/selection-toolbar.logic";
 import type { SelectionToolbarExtent } from "@/components/selection-toolbar.logic";
-import { useMountEffect } from "@/hooks/use-effect";
 
 type SelectionToolbarProps = {
   /** The selected words (or the clicked mark) the bar floats over, in

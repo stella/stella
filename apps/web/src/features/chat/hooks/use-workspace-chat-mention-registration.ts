@@ -4,6 +4,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
 import { useDebouncedCallback } from "use-debounce";
 
+import { useExternalSyncEffect } from "@stll/ui/effects";
+
 import {
   CHAT_MENTION_SOURCE_LABELS,
   useChatEditorExtensions,
@@ -17,7 +19,6 @@ import {
   getMentionViewScope,
   settleLatestMentionSearch,
 } from "@/components/chat-mention-helpers";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { queryView } from "@/lib/query-view.logic";
 import type { WorkspaceEntity } from "@/lib/types";

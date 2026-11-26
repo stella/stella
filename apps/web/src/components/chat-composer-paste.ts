@@ -4,6 +4,7 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { useLatestCallback } from "@stll/ui/effects";
 import { stellaToast } from "@stll/ui/toast";
 
 import { decisionPassageContent } from "@/components/chat-decision-passage";
@@ -11,7 +12,6 @@ import {
   insertCredentialPasteRequest,
   readChatPaste,
 } from "@/components/chat-editor-paste.logic";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 
 /** What an editor that writes a chat message does with the pastes it keeps
  *  apart from its text. */

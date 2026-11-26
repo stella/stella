@@ -16,6 +16,7 @@ import type { ReaderAnnotationTargetType } from "@stll/api-contract/legal-reader
 import { scrollReaderToBlock } from "@stll/decision-reader/reader-landing";
 import type { CitedProvisionTarget } from "@stll/decision-reader/reader-types";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { Form } from "@stll/ui/form";
 import { Building2Icon, PenIcon, Trash2Icon } from "@stll/ui/icons";
 import { Textarea } from "@stll/ui/textarea";
@@ -34,7 +35,6 @@ import {
 } from "@/features/case-law/components/case-viewer/analysis/annotation-visibility-toggle";
 import { ReaderAnswerCard } from "@/features/case-law/components/case-viewer/reader-answer-card";
 import type { ReaderAnswerCardProps } from "@/features/case-law/components/case-viewer/reader-answer-card";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useRelativeTime } from "@/i18n/formatting-context";
 import { forceReflow } from "@/lib/utils";
 

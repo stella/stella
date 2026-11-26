@@ -2,10 +2,9 @@ import { useRef, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { useLatestCallback, useMountEffect } from "@stll/ui/effects";
 import { Textarea } from "@stll/ui/textarea";
 
-import { useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUpdateContact } from "@/lib/contacts/mutations";
 import type { ContactData } from "@/routes/_protected.contacts/-components/types";
 

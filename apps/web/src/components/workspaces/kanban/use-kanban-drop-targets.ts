@@ -6,14 +6,14 @@ import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/clo
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/types";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
+
 import {
   withDragAnnouncementData,
   withDropAnnouncementData,
 } from "@/components/drag-and-drop-live-region.logic";
 import { readKanbanDraggedCards } from "@/components/workspaces/kanban/kanban-selection.logic";
 import type { KanbanDraggedCard } from "@/components/workspaces/kanban/kanban-selection.logic";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import {
   draggable,
   dropTargetForElements,

@@ -342,6 +342,8 @@
         "./capabilities/rates.list.json",
         "./capabilities/rates.resolve.json",
         "./capabilities/rates.update.json",
+        "./capabilities/recording-transcriptions.runs.create.json",
+        "./capabilities/recording-transcriptions.runs.get.json",
         "./capabilities/reports.builtins.clone.json",
         "./capabilities/reports.exports.get.json",
         "./capabilities/reports.exports.list.json",

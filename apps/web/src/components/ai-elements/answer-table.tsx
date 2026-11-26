@@ -12,6 +12,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Dialog, DIALOG_MOBILE_LAYOUT, DialogPopup } from "@stll/ui/dialog";
+import { useLatestCallback } from "@stll/ui/effects";
 import {
   AlignJustifyIcon,
   CopyFromMenuIcon,
@@ -53,7 +54,6 @@ import {
   useCopyControl,
   useCopyControlLabel,
 } from "@/components/copy-control";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 import { downloadFile } from "@/lib/utils";

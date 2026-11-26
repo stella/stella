@@ -4,6 +4,8 @@ import type { Ref } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 
+import { useMountEffect } from "@stll/ui/effects";
+
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
 import { openDecisionConversation } from "@/components/decision-chat-open.logic";
 import {
@@ -12,7 +14,6 @@ import {
 } from "@/components/require-ai-key";
 import type { ChatThreadId } from "@/features/chat/chat-thread-ref-types";
 import { decisionChatThreadOptions } from "@/features/chat/queries";
-import { useMountEffect } from "@/hooks/use-effect";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { SafeId } from "@/lib/safe-id";

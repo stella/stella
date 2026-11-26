@@ -5,12 +5,12 @@ import { Result } from "better-result";
 
 import { Button } from "@stll/ui/button";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
+import { useMountEffect } from "@stll/ui/effects";
 
 import { PageOrganizerCrop } from "@/components/pdf/page-organizer-crop";
 import type { CropPanelPage } from "@/components/pdf/page-organizer-crop";
 import { marginsMmToCrop } from "@/components/pdf/page-organizer-crop.logic";
 import type { NormalizedCrop } from "@/components/pdf/page-organizer.logic";
-import { useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { destroyPDFDocument } from "@/lib/pdf/pdf-cleanup";

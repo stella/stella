@@ -13,6 +13,7 @@ import {
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { useLatestCallback, useMountEffect } from "@stll/ui/effects";
 import { KanbanIcon } from "@stll/ui/icons";
 import type { KanbanGroup } from "@stll/ui/kanban";
 import {
@@ -47,8 +48,6 @@ import {
   windowIncludesAssignees,
 } from "@/components/workspaces/kanban/kanban-view.logic";
 import { useWorkspaceKanbanSchema } from "@/components/workspaces/kanban/use-kanban-schema";
-import { useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";

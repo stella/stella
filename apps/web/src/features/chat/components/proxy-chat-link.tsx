@@ -6,9 +6,9 @@ import { useQuery } from "@tanstack/react-query";
 import { ChatLink, hasBundledChatLinkIcon } from "@stll/chat/link";
 import type { ChatLinkIconSource } from "@stll/chat/link";
 import { getChatLinkSite, normalizeChatLink } from "@stll/chat/link-detection";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { linkIconOptions } from "@/features/chat/link-icons";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 /** Only links from a tool-returned source may fetch a site icon. */
 export type LinkIconSource = { kind: "tool-source" } | { kind: "model-text" };

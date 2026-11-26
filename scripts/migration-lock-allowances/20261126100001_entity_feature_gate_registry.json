@@ -1,0 +1,5 @@
+{
+  "add-constraint": "The previous migration creates both feature gate CHECKs inline, so on a normal deployment the guarded ADD CONSTRAINT statements find them by name and do nothing. Only when a CHECK is absent is it added NOT VALID, without a scan, for the online gate repair to validate; acquisition is bounded by the 2s lock_timeout.",
+  "create-policy": "The feature gate policies are catalog-only additions to the new, still empty recording_transcription_runs table, under 2s lock_timeout.",
+  "create-trigger": "The gate triggers on the new recording_transcription_runs table are catalog-only creations that read no rows. Each acquires SHARE ROW EXCLUSIVE under the 2s lock_timeout and holds it until the migration transaction commits; the table is new and empty, so no writer waits on it."
+}

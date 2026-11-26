@@ -28,6 +28,7 @@ import {
   ComboboxPopup,
 } from "@stll/ui/combobox";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
+import { useLatestCallback } from "@stll/ui/effects";
 import {
   AiActionIcon,
   ChevronDownIcon,
@@ -94,7 +95,6 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import Tooltip from "@/components/tooltip";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
