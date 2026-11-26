@@ -259,10 +259,38 @@ describe("validateTemplateProfile", () => {
     );
     expect(numbered.length).toBeGreaterThan(0);
     expect(numbered.filter(({ numFmt }) => numFmt === "none")).toEqual([]);
-    // The article style keeps its role, without a list.
-    expect(
-      Object.values(roles).filter((role) => role?.styleId === "Article"),
-    ).toEqual([expect.objectContaining({ numbering: null })]);
+    // The article style keeps its role, without a list, and the levels
+    // below it are still the outline's clause depths.
+    expect(roles.articleHeading).toMatchObject({
+      styleId: "Article",
+      numbering: null,
+    });
+    expect(roles.clause1).toMatchObject({ styleId: "Clause1" });
+    expect(roles.clause2).toMatchObject({ styleId: "Clause2" });
+  });
+
+  test("an outline of an unnumbered heading and one counted level keeps both roles", () => {
+    const template = contractTemplate();
+    const outline = template.numbering.abstractNums.at(-1);
+    if (outline !== undefined) {
+      outline.levels = [
+        listLevel(0, "none", "", "Article"),
+        listLevel(1, "decimal", "%2.", "Clause1"),
+      ];
+    }
+    const outlined = new Set(["Clause2", "Letter", "Roman"]);
+    const { roles } = inferTemplateProfile({
+      ...template,
+      styles: template.styles.filter(({ styleId }) => !outlined.has(styleId)),
+      blocks: template.blocks.filter(
+        ({ styleId }) => styleId === null || !outlined.has(styleId),
+      ),
+    });
+    expect(roles.articleHeading).toMatchObject({
+      styleId: "Article",
+      numbering: null,
+    });
+    expect(roles.clause1?.numbering).toMatchObject({ ilvl: 1, lvlText: "%2." });
   });
 
   test("clause depths are levels in a row: a counted level further down is not the next depth", () => {

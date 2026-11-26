@@ -145,14 +145,6 @@ const CONFIDENCE = {
   fallback: 0.3,
 } as const;
 
-/** Whether a list level prints a label: a number or a mark. A level in the
- *  format `none`, or with an empty level text, counts and shows nothing. */
-const printsLabel = ({
-  numFmt,
-  lvlText,
-}: Pick<ProfileListLevel, "numFmt" | "lvlText">): boolean =>
-  numFmt !== "none" && lvlText.trim() !== "";
-
 const NO_BLOCKS: readonly DocxBlock[] = [];
 
 type StyleFacts = {
@@ -162,6 +154,14 @@ type StyleFacts = {
   samples: readonly DocxBlock[];
 };
 
+/** Whether a list level prints a label: a number or a mark. A level in the
+ *  format `none`, or with an empty level text, counts and shows nothing. */
+const printsLabel = ({
+  numFmt,
+  lvlText,
+}: Pick<ProfileListLevel, "numFmt" | "lvlText">): boolean =>
+  numFmt !== "none" && lvlText.trim() !== "";
+
 const target = (
   { style, level }: StyleFacts,
   confidence: number,
@@ -169,7 +169,9 @@ const target = (
 ): ProfileRoleTarget => ({
   styleId: style.styleId,
   alignment: style.alignment,
-  numbering: level,
+  // A level that prints nothing numbers nothing: the style keeps its role
+  // and its place in the outline, without a list.
+  numbering: level !== null && printsLabel(level) ? level : null,
   confidence,
   evidence,
 });
@@ -212,13 +214,7 @@ const collectStyleFacts = ({
         : levelsByAbstract
             .get(abstractNumId)
             ?.find(({ ilvl }) => ilvl === numPr.ilvl);
-    // A level that prints nothing numbers nothing: a style bound to one is
-    // a style without a list.
-    if (
-      abstractNumId === undefined ||
-      level === undefined ||
-      !printsLabel(level)
-    ) {
+    if (abstractNumId === undefined || level === undefined) {
       return null;
     }
     return {
@@ -309,16 +305,23 @@ const clauseChain = (counted: readonly StyleFacts[]): StyleFacts[] => {
   return chain;
 };
 
-/** Reads the outline: counted levels are the heading and the clauses under
- *  it, the lettered level the letter items, the roman level below the
- *  points. */
-const readOutline = (outline: readonly StyleFacts[]): OutlineRoles => {
+/** Sorts the outline's levels: the lettered and roman ones to their roles,
+ *  a top level without a label to the heading, the counted ones in order. */
+const sortOutline = (
+  outline: readonly StyleFacts[],
+): { roles: OutlineRoles; counted: StyleFacts[] } => {
   const roles: OutlineRoles = {};
   const counted: StyleFacts[] = [];
   for (const fact of outline) {
     const numFmt = fact.level?.numFmt ?? "";
     const top = fact.level?.ilvl === 0;
-    if (isLetterFormat(numFmt) && !top) {
+    if (fact.level !== null && !printsLabel(fact.level)) {
+      // The top level of the outline is its heading also when it prints
+      // no number; a level below that prints nothing is no depth of it.
+      if (top) {
+        roles.articleHeading ??= target(fact, CONFIDENCE.level, "listLevel");
+      }
+    } else if (isLetterFormat(numFmt) && !top) {
       roles.letter ??= target(fact, CONFIDENCE.nameAndLevel, "listLevel");
     } else if (isRomanFormat(numFmt) && !top) {
       roles.roman ??= target(fact, CONFIDENCE.nameAndLevel, "listLevel");
@@ -331,6 +334,14 @@ const readOutline = (outline: readonly StyleFacts[]): OutlineRoles => {
       counted.push(fact);
     }
   }
+  return { roles, counted };
+};
+
+/** Reads the outline: counted levels are the heading and the clauses under
+ *  it, the lettered level the letter items, the roman level below the
+ *  points. */
+const readOutline = (outline: readonly StyleFacts[]): OutlineRoles => {
+  const { roles, counted } = sortOutline(outline);
   const first = counted.at(0);
   if (first === undefined) {
     return roles;
@@ -340,7 +351,8 @@ const readOutline = (outline: readonly StyleFacts[]): OutlineRoles => {
   // A level named a paragraph and printing a bare number is a clause; the
   // template then heads its sections outside this list, or not at all.
   const headsArticles =
-    words || NAME.heading.test(name) || !NAME.paragraph.test(name);
+    roles.articleHeading === undefined &&
+    (words || NAME.heading.test(name) || !NAME.paragraph.test(name));
   const clauses = headsArticles ? counted.slice(1) : counted;
   if (headsArticles) {
     roles.articleHeading = target(
@@ -409,13 +421,10 @@ const inferRoles = (
   const outside = facts.filter(({ style }) => !inOutline.has(style.styleId));
   const fromOutline = readOutline(outline);
 
-  // A heading style is in a list or in the document outline. One bound to
-  // a level that prints nothing is still the heading style, without a list.
   const namedHeading = byName(
     outside,
     NAME.heading,
-    ({ level, style }) =>
-      level !== null || style.outlineLvl !== null || style.numPr !== null,
+    ({ level, style }) => level !== null || style.outlineLvl !== null,
   );
   const articleHeading =
     fromOutline.articleHeading ??
