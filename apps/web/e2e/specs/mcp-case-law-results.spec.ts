@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 import type { FrameLocator, Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
@@ -15,6 +15,8 @@ import {
 import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
 import type { mcpWebHandoffLinkOutputSchema } from "@stll/api-contract/mcp-web-handoff";
 import { installBrowserClock } from "@stll/ui/browser-clock";
+
+import { test } from "../helpers/storm-watch-fixture";
 
 test.use({ storageState: { cookies: [], origins: [] } });
 

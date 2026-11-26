@@ -2040,6 +2040,7 @@
         "$TURBO_ROOT$/apps/landing/public/robots.txt",
         "$TURBO_ROOT$/apps/mobile/src/ui-theme.gen.ts",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/guard-rollouts.ts",
         "$TURBO_ROOT$/scripts/network-baseline-scope.ts"
       ]
     },

@@ -1,6 +1,7 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 
 import { findControlsOverText } from "../helpers/control-over-text";
+import { test } from "../helpers/storm-watch-fixture";
 
 test.use({ storageState: { cookies: [], origins: [] } });
 

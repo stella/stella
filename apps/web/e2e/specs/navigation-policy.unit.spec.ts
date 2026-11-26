@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -10,6 +10,8 @@ import {
   type StaticMemberExpression,
   walk,
 } from "@stll/scripts/src/syntax-tree";
+
+import { test } from "../helpers/storm-watch-fixture";
 
 const E2E_ROOT = path.resolve(import.meta.dirname, "..");
 const READINESS_LIFECYCLES = new Set(["commit", "domcontentloaded"]);
