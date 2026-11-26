@@ -1,18 +1,32 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { fileURLToPath } from "node:url";
 
 import { deferred, waitFor } from "@stll/test-kit";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisions } from "@/api/db/schema";
+import {
+  caseLawDecisions,
+  caseLawDecisionSourceIdentities,
+} from "@/api/db/schema";
 import { tryResolveCitationBatch } from "@/api/handlers/case-law/citation-resolution";
-import type { RejectedCaseLawIngestionRecord } from "@/api/handlers/case-law/ingestion/pipeline/batch-types";
+import type {
+  CaseLawIngestionBatchRecord,
+  RejectedCaseLawIngestionRecord,
+} from "@/api/handlers/case-law/ingestion/pipeline/batch-types";
+import {
+  connectOrderingKeys,
+  decisionOrderingKeys,
+  planDecisionOrdering,
+} from "@/api/handlers/case-law/ingestion/pipeline/decision-ordering";
+import { createSourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { CorpusPackError } from "@/api/lib/legal-search/corpus-pack";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import { isRecord } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
   courtListenerIngestFixture,
@@ -28,7 +42,7 @@ import {
   objectStoreCorpus,
   schemaScopedDb,
 } from "@/api/tests/helpers/case-law-ingest-schema";
-import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { type FakeS3Hold, startFakeS3 } from "@/api/tests/helpers/fake-s3";
 
 const databaseUrl = process.env["DATABASE_URL"];
 
@@ -113,20 +127,68 @@ if (!databaseUrl || !enabled) {
       }),
     );
 
-  /** Apply until every batch settles, as a crawl re-reads a held page. */
+  /**
+   * Apply until every batch settles, as a crawl re-reads a held page: each
+   * pass resumes at the batch the previous one held on, under a later
+   * observation.
+   */
   const applyUntilSettled = async (
-    options: Parameters<typeof applyIngestStream>[0],
-  ): Promise<number> => {
+    options: Omit<
+      Parameters<typeof applyIngestStream>[0],
+      "firstOrder" | "fromBatch"
+    >,
+  ): Promise<{ passes: number; applied: AppliedBatch[] }> => {
+    const applied: AppliedBatch[] = [];
+    let fromBatch = 0;
     for (let pass = 1; pass <= 6; pass++) {
-      const applied = await applyIngestStream({
+      const batches = await applyIngestStream({
         ...options,
         firstOrder: BigInt(pass * 10),
+        fromBatch,
       });
-      if (applied.every(({ halt }) => halt === null)) {
-        return pass;
+      applied.push(...batches);
+      const held = batches.findIndex(({ halt }) => halt !== null);
+      if (held === -1) {
+        return { passes: pass, applied };
       }
+      fromBatch += held;
     }
     return panic("The stream did not settle in six passes");
+  };
+
+  const decisionRows = async (scopedDb: ScopedDb): Promise<number> =>
+    await scopedDb(
+      async (tx) =>
+        (
+          await tx
+            .select({ count: sql<number>`count(*)::int` })
+            .from(caseLawDecisions)
+        ).at(0)?.count ?? 0,
+    );
+
+  /** The packs the run's rows reference, and those its store lacks. */
+  const referencedPacks = async (
+    scopedDb: ScopedDb,
+    store: ReturnType<typeof startFakeS3>,
+  ): Promise<{ referenced: number; missing: string[] }> => {
+    const keys = await scopedDb(async (tx) =>
+      executedRows(
+        await tx.execute(
+          sql`SELECT DISTINCT pack_key::text AS key FROM case_law_corpus_pack_refs`,
+        ),
+      ).map((row) =>
+        isRecord(row) && typeof row["key"] === "string"
+          ? row["key"]
+          : panic("Pack reference without a key"),
+      ),
+    );
+    const stored = [...store.objects.keys()];
+    return {
+      referenced: keys.length,
+      missing: keys.filter(
+        (key) => !stored.some((object) => object.endsWith(`/${key}`)),
+      ),
+    };
   };
 
   describe("batch concurrency (postgres)", () => {
@@ -138,70 +200,178 @@ if (!databaseUrl || !enabled) {
         const czech = czechIngestFixture({ count: 240 });
         const sourceId = createSafeId<"caseLawSource">();
         const czechSourceId = createSafeId<"caseLawSource">();
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          // Each run has an object store of its own: pack keys follow
+          // content, so a shared store would let the second run reuse the
+          // first one's objects without uploading its own.
+          const applyTwice = async (concurrency: number, max: number) => {
+            const fakeS3 = startFakeS3();
+            try {
+              return await withRun(
+                { openClient, sourceId, max },
+                async (run) => {
+                  await insertIngestSource(
+                    run.scopedDb,
+                    czechSourceId,
+                    "cz-ns",
+                  );
+                  const first = await applyIngestStream({
+                    scopedDb: run.scopedDb,
+                    sourceId,
+                    decisions,
+                    concurrency,
+                    corpus: landing(),
+                  });
+                  // Decisions that cite each other by docket: the graph
+                  // resolves a citation on write or on its target's arrival.
+                  const cited = await applyIngestStream({
+                    scopedDb: run.scopedDb,
+                    sourceId: czechSourceId,
+                    decisions: czech,
+                    concurrency,
+                    corpus: landing(),
+                  });
+                  // The same pages again: every record is now an unchanged
+                  // observation of a stored row.
+                  const again = await applyIngestStream({
+                    scopedDb: run.scopedDb,
+                    sourceId,
+                    decisions,
+                    concurrency,
+                    corpus: landing(),
+                    firstOrder: 10n,
+                  });
+                  return {
+                    tallies: tallies([...first, ...cited, ...again]),
+                    state: await canonicalCaseLawState(
+                      run.scopedDb,
+                      run.tables,
+                    ),
+                    packs: await referencedPacks(run.scopedDb, fakeS3),
+                  };
+                },
+              );
+            } finally {
+              fakeS3.stop();
+            }
+          };
+          const serial = await applyTwice(1, 2);
+          // Fewer connections than decisions in flight: a decision that
+          // held one connection while it waited for another would hang.
+          const concurrent = await applyTwice(16, 4);
+          expect(serial.tallies.every(({ halt }) => halt === null)).toBe(true);
+          expect(
+            serial.state["case_law_decisions"]?.length ?? 0,
+          ).toBeGreaterThan(400);
+          const citations = serial.state["case_law_citations"] ?? [];
+          expect(citations.length).toBeGreaterThan(400);
+          // Resolved both ways: to a decision written before the citing one
+          // and to one written after it.
+          expect(
+            citations.filter((row) =>
+              row.includes('"cited_decision_id":"decision:'),
+            ).length,
+          ).toBeGreaterThan(400);
+          expect(concurrent.tallies).toEqual(serial.tallies);
+          expect(concurrent.state).toEqual(serial.state);
+          // Every pack the stored rows reference was uploaded by the run
+          // that stored them.
+          for (const { referenced, missing } of [
+            serial.packs,
+            concurrent.packs,
+          ]) {
+            expect(referenced).toBeGreaterThan(0);
+            expect(missing).toEqual([]);
+          }
+        });
+      },
+      10 * 60_000,
+    );
+
+    // timeout: ingests one decision, then reads what a batch's records reach.
+    test(
+      "records naming one stored decision by different aliases are ordered together",
+      async () => {
+        const sourceId = createSafeId<"caseLawSource">();
         const fakeS3 = startFakeS3();
         try {
           await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-            const applyTwice = async (concurrency: number, max: number) =>
-              await withRun({ openClient, sourceId, max }, async (run) => {
-                await insertIngestSource(run.scopedDb, czechSourceId, "cz-ns");
-                const first = await applyIngestStream({
-                  scopedDb: run.scopedDb,
-                  sourceId,
-                  decisions,
-                  concurrency,
-                  corpus: landing(),
-                });
-                // Decisions that cite each other by docket: the graph
-                // resolves a citation on write or on its target's arrival.
-                const cited = await applyIngestStream({
-                  scopedDb: run.scopedDb,
-                  sourceId: czechSourceId,
-                  decisions: czech,
-                  concurrency,
-                  corpus: landing(),
-                });
-                // The same pages again: every record is now an unchanged
-                // observation of a stored row.
-                const again = await applyIngestStream({
-                  scopedDb: run.scopedDb,
-                  sourceId,
-                  decisions,
-                  concurrency,
-                  corpus: landing(),
-                  firstOrder: 10n,
-                });
-                return {
-                  tallies: tallies([...first, ...cited, ...again]),
-                  state: await canonicalCaseLawState(run.scopedDb, run.tables),
-                };
+            await withRun({ openClient, sourceId, max: 2 }, async (run) => {
+              const [stored, elsewhere, unrelated] = courtListenerIngestFixture(
+                { count: 3, namespace: 7105 },
+              );
+              if (
+                stored?.sourceDocumentId === undefined ||
+                elsewhere === undefined ||
+                unrelated === undefined
+              ) {
+                return panic("The fixture lost its records");
+              }
+              await applyIngestStream({
+                scopedDb: run.scopedDb,
+                sourceId,
+                decisions: [stored],
+                concurrency: 1,
+                corpus: landing(),
               });
-            const serial = await applyTwice(1, 2);
-            // Fewer connections than decisions in flight: a decision that
-            // held one connection while it waited for another would hang.
-            const concurrent = await applyTwice(16, 4);
-            expect(serial.tallies.every(({ halt }) => halt === null)).toBe(
-              true,
-            );
-            expect(
-              serial.state["case_law_decisions"]?.length ?? 0,
-            ).toBeGreaterThan(400);
-            const citations = serial.state["case_law_citations"] ?? [];
-            expect(citations.length).toBeGreaterThan(400);
-            // Resolved both ways: to a decision written before the citing one
-            // and to one written after it.
-            expect(
-              citations.filter((row) =>
-                row.includes('"cited_decision_id":"decision:'),
-              ).length,
-            ).toBeGreaterThan(400);
-            expect(concurrent.tallies).toEqual(serial.tallies);
-            expect(concurrent.state).toEqual(serial.state);
+              // An earlier re-key left a second publisher identity
+              // registered for the stored decision.
+              await run.scopedDb(async (tx) => {
+                const row = await tx
+                  .select({ id: caseLawDecisions.id })
+                  .from(caseLawDecisions)
+                  .where(
+                    eq(
+                      caseLawDecisions.sourceDocumentId,
+                      stored.sourceDocumentId ?? "",
+                    ),
+                  )
+                  .limit(1);
+                const decisionId =
+                  row.at(0)?.id ?? panic("The stored decision is missing");
+                await tx.insert(caseLawDecisionSourceIdentities).values({
+                  sourceId,
+                  sourceDocumentId: "reissued-identity",
+                  decisionId,
+                });
+              });
+              // A record under that identity, of another docket, citation
+              // and text: nothing it states meets the stored record.
+              const reissued: IngestionResult = {
+                ...elsewhere,
+                sourceDocumentId: "reissued-identity",
+                sourceDocumentIdAliases: undefined,
+                sourceDocumentIdRepairAliases: undefined,
+              };
+              const records: CaseLawIngestionBatchRecord[] = [
+                stored,
+                reissued,
+                unrelated,
+              ].map((decision) => ({ type: "decision", decision }));
+              const contract = await createSourceContractResolver(run.scopedDb)(
+                sourceId,
+              );
+              const stated = connectOrderingKeys(
+                records.map((record) =>
+                  decisionOrderingKeys(record, sourceId, contract),
+                ),
+              );
+              expect(stated[1]).not.toEqual(stated[0]);
+              const planned = await planDecisionOrdering({
+                records,
+                sourceId,
+                contract,
+                scopedDb: run.scopedDb,
+              });
+              expect(planned?.[1]).toEqual(planned?.[0]);
+              expect(planned?.[2]).not.toEqual(planned?.[0]);
+            });
           });
         } finally {
           fakeS3.stop();
         }
       },
-      10 * 60_000,
+      5 * 60_000,
     );
 
     // timeout: applies the stream serially for a reference, then crashes and resumes a run.
@@ -243,6 +413,14 @@ if (!databaseUrl || !enabled) {
             const resumed = await withRun(
               { openClient, sourceId, max: 8 },
               async (run) => {
+                // The first batch's pack upload, then the second batch's
+                // first raw write, held in the store: the child is killed
+                // while that write is in flight.
+                const firstPack = fakeS3.holdNext({
+                  method: "PUT",
+                  keyIncludes: "/packs/",
+                });
+                let secondBatchWrite: FakeS3Hold | undefined;
                 const child = Bun.spawn({
                   cmd: [
                     process.execPath,
@@ -269,34 +447,46 @@ if (!databaseUrl || !enabled) {
                   stdout: "ignore",
                   stderr: "inherit",
                 });
-                const written = async () =>
-                  await run.scopedDb(
-                    async (tx) =>
-                      (
-                        await tx
-                          .select({ count: sql<number>`count(*)::int` })
-                          .from(caseLawDecisions)
-                      ).at(0)?.count ?? 0,
+                const reach = async (hold: FakeS3Hold, description: string) => {
+                  await waitFor(
+                    () =>
+                      hold.isReached || child.exitCode !== null
+                        ? true
+                        : undefined,
+                    {
+                      description,
+                      intervalMs: 5,
+                      timeoutMs: CRASH_POINT_WAIT_MS,
+                    },
                   );
-                // Killed in the second batch, with decisions in flight.
-                const rows = await waitFor(
-                  async () => {
-                    const counted = await written();
-                    return counted >= 260 || child.exitCode !== null
-                      ? counted
-                      : undefined;
-                  },
-                  {
-                    description: "the killed run to reach its second batch",
-                    intervalMs: 5,
-                    timeoutMs: CRASH_POINT_WAIT_MS,
-                  },
-                );
-                child.kill("SIGKILL");
-                await child.exited;
+                  if (!hold.isReached) {
+                    panic(`The child exited before ${description}`);
+                  }
+                };
+                try {
+                  await reach(firstPack, "the first batch's pack upload");
+                  secondBatchWrite = fakeS3.holdNext({
+                    method: "PUT",
+                    keyIncludes: "/raw/",
+                  });
+                  firstPack.release();
+                  await reach(
+                    secondBatchWrite,
+                    "a raw write of the second batch",
+                  );
+                  child.kill("SIGKILL");
+                } finally {
+                  // Joined whatever stopped the wait: the schema and the
+                  // store outlive the child.
+                  if (child.exitCode === null && child.signalCode === null) {
+                    child.kill("SIGKILL");
+                  }
+                  await child.exited;
+                  firstPack.release();
+                  secondBatchWrite?.release();
+                }
                 expect(child.signalCode).toBe("SIGKILL");
-                expect(rows).toBeGreaterThanOrEqual(260);
-                expect(rows).toBeLessThan(count);
+                expect(await decisionRows(run.scopedDb)).toBeGreaterThan(0);
                 // A new process: nothing carried over but the database.
                 await applyUntilSettled({
                   scopedDb: run.scopedDb,
@@ -379,29 +569,22 @@ if (!databaseUrl || !enabled) {
                       )
                     : await write();
                 });
-                const first = await applyIngestStream({
+                const { passes, applied } = await applyUntilSettled({
                   scopedDb: run.scopedDb,
                   sourceId,
                   decisions,
                   concurrency: 16,
                   corpus,
                 });
+                expect(passes).toBeGreaterThan(1);
                 expect(
-                  first.some(({ halt }) => halt?.type === "retryable"),
+                  applied.some(({ halt }) => halt?.type === "retryable"),
                 ).toBe(true);
                 expect(
-                  first.some(
+                  applied.some(
                     ({ corpusWriteFailures }) => corpusWriteFailures > 0,
                   ),
                 ).toBe(true);
-                const passes = await applyUntilSettled({
-                  scopedDb: run.scopedDb,
-                  sourceId,
-                  decisions,
-                  concurrency: 16,
-                  corpus,
-                });
-                expect(passes).toBeGreaterThanOrEqual(1);
                 const ledgers = await canonicalCaseLawState(
                   run.scopedDb,
                   cleanupLedgers,
@@ -411,10 +594,10 @@ if (!databaseUrl || !enabled) {
                 expect(ledgers["case_law_raw_sweeps"]?.length).toBeGreaterThan(
                   0,
                 );
+                const intents = ledgers["case_law_corpus_upload_intents"] ?? [];
+                expect(intents.length).toBeGreaterThan(0);
                 expect(
-                  (ledgers["case_law_corpus_upload_intents"] ?? []).every(
-                    (row) => row.includes('"status":"cleanup"'),
-                  ),
+                  intents.every((row) => row.includes('"status":"cleanup"')),
                 ).toBe(true);
                 return await canonicalCaseLawState(
                   run.scopedDb,
@@ -449,26 +632,60 @@ if (!databaseUrl || !enabled) {
                 run.schemaName,
               );
               const finished = deferred();
+              const stop = new AbortController();
               const ingest = applyIngestStream({
                 scopedDb: run.scopedDb,
                 sourceId,
                 decisions,
                 concurrency: 16,
                 corpus: landing(),
+                signal: stop.signal,
               }).finally(() => {
                 finished.resolve();
               });
               let admitted = 0;
               let declined = 0;
-              while (!finished.settled()) {
-                const batch = await tryResolveCitationBatch(walk, {
-                  limit: 25,
+              const walked = await Result.tryPromise({
+                try: async () => {
+                  // Counted from the first graph write on: a decision row
+                  // exists only once a graph transaction committed it.
+                  await waitFor(
+                    async () =>
+                      finished.settled() || (await decisionRows(walk)) > 0
+                        ? true
+                        : undefined,
+                    {
+                      description: "the ingest's first graph write",
+                      intervalMs: 5,
+                      timeoutMs: CRASH_POINT_WAIT_MS,
+                    },
+                  );
+                  while (!finished.settled()) {
+                    const batch = await tryResolveCitationBatch(walk, {
+                      limit: 25,
+                    });
+                    // An answer after the ingest finished is not one taken
+                    // against its graph writes.
+                    if (finished.settled()) {
+                      break;
+                    }
+                    if (batch === null) {
+                      declined++;
+                    } else {
+                      admitted++;
+                    }
+                  }
+                },
+                catch: (cause) => cause,
+              });
+              if (Result.isError(walked)) {
+                // The ingest stops and is joined before the schema goes.
+                stop.abort();
+                await Result.tryPromise({
+                  try: async () => await ingest,
+                  catch: (cause) => cause,
                 });
-                if (batch === null) {
-                  declined++;
-                } else {
-                  admitted++;
-                }
+                return panic("The citation walk failed", walked.error);
               }
               const applied = await ingest;
               expect(applied.every(({ halt }) => halt === null)).toBe(true);

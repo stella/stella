@@ -139,6 +139,34 @@ type IngestFixtureOptions = {
   namespace: number;
 };
 
+/** The record a revision repeats, or null for a record of its own. */
+const revisionOfIndex = (index: number): number | null =>
+  index % 97 === 96 && index >= 200 ? index - 200 : null;
+
+/**
+ * The record whose docket and primary citation a record is published
+ * under: its own, the previous record's for a repeat, the revised record's
+ * for a revision.
+ */
+export const fixtureDocketIndex = (index: number): number =>
+  revisionOfIndex(index) ?? (index % 41 === 40 ? index - 1 : index);
+
+/**
+ * The records a fixture record cites, one earlier and one later, by the
+ * primary citation each is published under.
+ */
+export const fixtureCitedIndexes = (
+  index: number,
+  count: number,
+): { earlier: number; later: number } => ({
+  earlier: (index * 37 + 11) % Math.max(index, 1),
+  later: Math.min(index + 1 + (index % 5), count - 1),
+});
+
+/** The primary citation text record `index` is published under. */
+export const fixturePrimaryCitation = (namespace: number, index: number) =>
+  citationText(namespace, fixtureDocketIndex(index));
+
 /** The source records, before the adapter maps them. */
 const courtListenerFixtureRecords = ({
   count,
@@ -146,8 +174,8 @@ const courtListenerFixtureRecords = ({
 }: IngestFixtureOptions): RecordedCluster[] => {
   const templates = recordedClusters();
   return Array.from({ length: count }, (_, index) => {
-    const revisionOf = index % 97 === 96 && index >= 200 ? index - 200 : null;
-    const docketOf = revisionOf ?? (index % 41 === 40 ? index - 1 : index);
+    const revisionOf = revisionOfIndex(index);
+    const docketOf = fixtureDocketIndex(index);
     // A repeat takes the template of the record it repeats, so it carries
     // the same reporters and with them the same primary citation.
     const template =
@@ -156,9 +184,10 @@ const courtListenerFixtureRecords = ({
     const identity = revisionOf ?? index;
     const clusterId = String(namespace * 100_000 + identity);
     const docketId = String(namespace * 100_000 + docketOf);
-    const earlier = (index * 37 + 11) % Math.max(index, 1);
-    const later = Math.min(index + 1 + (index % 5), count - 1);
-    const paragraph = `See ${citationText(namespace, earlier)} (1991); compare ${citationText(namespace, later)}.${
+    const { earlier, later } = fixtureCitedIndexes(index, count);
+    // Cited as each target is published: a repeat or a revision under the
+    // citation of the record it repeats.
+    const paragraph = `See ${fixturePrimaryCitation(namespace, earlier)} (1991); compare ${fixturePrimaryCitation(namespace, later)}.${
       revisionOf === null ? "" : " Opinion revised on rehearing."
     }`;
     const opinions = template.opinions.map((opinion, part) =>

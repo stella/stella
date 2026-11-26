@@ -40,12 +40,35 @@ const { values: options } = parseArgs({
     pool: { type: "string", default: "5" },
   },
 });
-const count = Number(options.count);
+/** A whole number of at least one, or the option is reported and the run ends. */
+const positiveInteger = (name: string, value: string): number => {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    console.error(`--${name} must be a positive integer, got ${value}`);
+    process.exit(1);
+  }
+  return parsed;
+};
+
+const count = positiveInteger("count", options.count);
+const pool = positiveInteger("pool", options.pool);
+const concurrencies = options.concurrency
+  .split(",")
+  .map((value) => positiveInteger("concurrency", value));
 const s3DelayMs = Number(options["s3-ms"]);
-const pool = Number(options.pool);
-const concurrencies = options.concurrency.split(",").map(Number);
+if (!Number.isFinite(s3DelayMs) || s3DelayMs < 0) {
+  console.error(
+    `--s3-ms must be a non-negative number, got ${options["s3-ms"]}`,
+  );
+  process.exit(1);
+}
 
 type TransactionTrace = {
+  /**
+   * What opened the transaction: the corpus settlement (a pack's upload
+   * intents: reserving, releasing or settling them), or a decision's own
+   * work, the batch's ledger write included.
+   */
   phase: "decision" | "settlement";
   start: number;
   end: number;
@@ -67,33 +90,13 @@ const round = (value: number, places = 2) =>
 const measure = async (concurrency: number) => {
   const traces: TransactionTrace[] = [];
   const context = new AsyncLocalStorage<TransactionTrace>();
-  let phase: TransactionTrace["phase"] = "decision";
-  const run = async ({ openClient }: GatedTestClientScope) => {
-    const { db } = openClient({
-      max: pool,
-      logger: {
-        logQuery: (query) => {
-          const trace = context.getStore();
-          if (trace === undefined) {
-            return;
-          }
-          const now = performance.now();
-          // A transaction's statements run one after another: the first one
-          // logged after the lock request is issued once the lock is held.
-          if (trace.graphRequestedAt !== null && trace.graphHeldAt === null) {
-            trace.graphHeldAt = now;
-          }
-          if (query.includes("'citation_resolution_walk'")) {
-            trace.graphRequestedAt = now;
-          }
-        },
-      },
-    });
-    const schemaName = `ingest_measure_${Bun.randomUUIDv7().replaceAll("-", "")}`;
-    await cloneCaseLawSchema(db, schemaName);
+  const measureInSchema = async (
+    db: ReturnType<GatedTestClientScope["openClient"]>["db"],
+    schemaName: string,
+  ) => {
     const scopedDb: ScopedDb = async (callback) => {
       const trace: TransactionTrace = {
-        phase,
+        phase: "decision",
         start: performance.now(),
         end: 0,
         graphRequestedAt: null,
@@ -125,14 +128,7 @@ const measure = async (concurrency: number) => {
         sourceId,
         decisions,
         concurrency,
-        corpus: objectStoreCorpus(async (write) => {
-          const written = await write();
-          phase = "settlement";
-          return written;
-        }),
-        beforeBatch: () => {
-          phase = "decision";
-        },
+        corpus: objectStoreCorpus(),
       });
       const wall = performance.now() - started;
       const graph = traces.filter((trace) => trace.graphRequestedAt !== null);
@@ -160,7 +156,7 @@ const measure = async (concurrency: number) => {
       const holds = graph
         .map((trace) => trace.end - (trace.graphHeldAt ?? trace.end))
         .toSorted((left, right) => left - right);
-      return {
+      const diagnostics = {
         concurrency,
         pool,
         decisions: count,
@@ -175,6 +171,18 @@ const measure = async (concurrency: number) => {
         ),
         s3DelayMs,
         wallSeconds: round(wall / 1000),
+      };
+      // A run that stopped short did less than the whole stream: its rates
+      // would read faster than the work it did.
+      const completed =
+        diagnostics.stops.length === 0 &&
+        sum(applied.map(({ settlements }) => settlements.length)) === count;
+      if (!completed) {
+        return { ...diagnostics, completed };
+      }
+      return {
+        ...diagnostics,
+        completed,
         decisionsPerSecond: round((count / wall) * 1000, 1),
         perDecisionMs: {
           wall: round(wall / count),
@@ -198,6 +206,38 @@ const measure = async (concurrency: number) => {
       };
     } finally {
       fakeS3.stop();
+    }
+  };
+  const run = async ({ openClient }: GatedTestClientScope) => {
+    const { db } = openClient({
+      max: pool,
+      logger: {
+        logQuery: (query) => {
+          const trace = context.getStore();
+          if (trace === undefined) {
+            return;
+          }
+          const now = performance.now();
+          // Only the corpus settlement touches the upload intents.
+          if (query.includes("case_law_corpus_upload_intents")) {
+            trace.phase = "settlement";
+          }
+          // A transaction's statements run one after another: the first one
+          // logged after the lock request is issued once the lock is held.
+          if (trace.graphRequestedAt !== null && trace.graphHeldAt === null) {
+            trace.graphHeldAt = now;
+          }
+          if (query.includes("'citation_resolution_walk'")) {
+            trace.graphRequestedAt = now;
+          }
+        },
+      },
+    });
+    const schemaName = `ingest_measure_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+    await cloneCaseLawSchema(db, schemaName);
+    try {
+      return await measureInSchema(db, schemaName);
+    } finally {
       await dropCaseLawSchema(db, schemaName);
     }
   };
