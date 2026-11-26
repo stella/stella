@@ -785,6 +785,11 @@ const STRUCTURAL_ROLES = [
   "body",
 ] as const satisfies readonly HouseStyleRole[];
 
+/** A list has nine levels; a template has some lists and some styles. A
+ *  template with more findings than this is reported up to here: the
+ *  profile stays readable, and so many say the same thing anyway. */
+const HEALTH_FINDINGS_MAX = 2000;
+
 /** The template's findings, each once, in the order the template has them. */
 const inferHealth = ({
   invisibleEffects = [],
@@ -813,7 +818,7 @@ const inferHealth = ({
       });
     }
   }
-  return [...findings.values()];
+  return [...findings.values()].slice(0, HEALTH_FINDINGS_MAX);
 };
 
 /**
@@ -1069,8 +1074,6 @@ const FIELD_KINDS_MAX = 100;
 const INDENT_MAX = 31_680;
 
 const textSchema = v.pipe(v.string(), v.maxLength(TEXT_MAX));
-/** A list has nine levels; a template has some lists and some styles. */
-const HEALTH_FINDINGS_MAX = 2000;
 const idSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(TEXT_MAX));
 
 /** An indent in twentieths of a point; a negative one reaches into the margin. */

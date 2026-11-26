@@ -413,4 +413,22 @@ describe("validateTemplateProfile", () => {
     ]);
     expect(inferTemplateProfile(template).health).toEqual([]);
   });
+
+  test("a template with very many such findings still gives a profile that reads back", () => {
+    const crowded = inferTemplateProfile({
+      ...contractTemplate(),
+      invisibleEffects: Array.from({ length: 2500 }, (_, index) => ({
+        part: "word/numbering.xml",
+        effect: "scene3d" as const,
+        owner: {
+          kind: "level" as const,
+          abstractNumId: Math.floor(index / 9),
+          ilvl: index % 9,
+        },
+      })),
+    });
+
+    expect(crowded.health).toHaveLength(2000);
+    expect(parseTemplateProfile(crowded).isOk()).toBe(true);
+  });
 });
