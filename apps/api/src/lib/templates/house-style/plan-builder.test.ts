@@ -2089,6 +2089,35 @@ describe("buildTemplatePlan, what a paragraph states for itself", () => {
       kind: "closingKeptTogether",
       blocks: 3,
     });
+    // A table in front of the closing parts it from the text before: that
+    // paragraph is not kept with the table.
+    const fees = inColumns(2, ["Item", "Fee"]);
+    const tabled = {
+      ...manifest,
+      blocks: [
+        ...manifest.blocks.slice(0, 4),
+        ...fees.blocks.map((block) => ({ ...block, id: `fee-${block.id}` })),
+        ...manifest.blocks.slice(4),
+      ].map((block) =>
+        block.cells === undefined
+          ? block
+          : {
+              ...block,
+              cells: block.cells.map((cell) => ({
+                ...cell,
+                blockIds: cell.blockIds.map((id) => `fee-${id}`),
+              })),
+            },
+      ),
+    };
+    expect(
+      sourceItems(build(tabled).plan)
+        .filter(({ keepNext }) => keepNext === true)
+        .map(({ blockId }) => blockId),
+    ).toEqual([
+      blockIdOf(manifest, "Yours faithfully"),
+      blockIdOf(manifest, "Jane Example"),
+    ]);
     // A closing line with text of the letter under it closes nothing.
     const quoted = manifestOf([
       ...letter.slice(0, 5),

@@ -1594,10 +1594,13 @@ const CLOSING_LINE_MAX = 80;
  * line it closes with, and no table.
  */
 const keepClosingTogether = (context: Context, placed: Placed): void => {
-  const lines: DocxBlock[] = [];
+  let lines: DocxBlock[] = [];
   let closesAt = -1;
   for (const block of context.topLevel) {
+    // A table ends what could close with the lines behind it: the
+    // paragraph in front of the table stays with the table, not with them.
     if (block.kind === "table") {
+      lines = [];
       closesAt = -1;
       continue;
     }
