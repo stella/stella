@@ -129,3 +129,42 @@ test("stale client preconditions preserve the latest assignment and skip side ef
   expect(auditEvents).toEqual([]);
   expect(queueAfter).toEqual(queueBefore);
 });
+
+test("a body without writable fields leaves the matter unchanged", async () => {
+  const auditEvents: unknown[] = [];
+  const safeDb = asTestRaw<SafeDb>(
+    createSafeDb(testDb, [workspaceId], ids.orgA, ids.userA1),
+  );
+  const readWorkspace = async () =>
+    await testDb
+      .select({
+        clientId: workspaces.clientId,
+        name: workspaces.name,
+        color: workspaces.color,
+      })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId));
+  const before = await readWorkspace();
+
+  const callUpdate = async (body: { expectedClientId?: SafeId<"contact"> }) =>
+    await Result.gen(() =>
+      updateWorkspaceHandler({
+        actor: { userId: ids.userA1, authority: sessionMemberRole("member") },
+        safeDb,
+        organizationId: ids.orgA,
+        workspaceId,
+        recordAuditEvent: async (_tx, event) => {
+          auditEvents.push(event);
+        },
+        body,
+      }),
+    );
+
+  expect((await callUpdate({})).isOk()).toBe(true);
+  expect((await callUpdate({ expectedClientId: ids.contactA })).isOk()).toBe(
+    true,
+  );
+
+  expect(await readWorkspace()).toEqual(before);
+  expect(auditEvents).toEqual([]);
+});

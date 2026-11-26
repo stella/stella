@@ -579,21 +579,26 @@ export const updateWorkspaceHandler = async function* ({
       (body.clientId !== undefined && row.storedVisibility === null
         ? workspace.visibility
         : undefined);
+    const values = {
+      ...pickDefined(body, [
+        "name",
+        "clientId",
+        "reference",
+        "billingReference",
+        "billingNarrativeLanguage",
+        "color",
+        "documentNamingEnabled",
+        "leadUserId",
+      ]),
+      ...(visibility === undefined ? {} : { visibility }),
+    };
+    // A body that names no writable field leaves the matter as it is.
+    if (Object.keys(values).length === 0) {
+      return { ok: true as const };
+    }
     const updated = await tx
       .update(workspaces)
-      .set({
-        ...pickDefined(body, [
-          "name",
-          "clientId",
-          "reference",
-          "billingReference",
-          "billingNarrativeLanguage",
-          "color",
-          "documentNamingEnabled",
-          "leadUserId",
-        ]),
-        ...(visibility === undefined ? {} : { visibility }),
-      })
+      .set(values)
       .where(and(...conditions))
       .returning({ id: workspaces.id });
 
