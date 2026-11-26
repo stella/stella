@@ -2772,6 +2772,19 @@ export const plNsaFixture = (
           const built = assemblePlNsaDecision({
             source: {
               ...values,
+              // Parquet timestamps decode as UTC Date instances; restore the
+              // Warsaw-offset ISO strings from the recorded row so the stored
+              // raw envelope matches the canonical replay fingerprint.
+              judgment_date: "2013-04-04T00:00:00+02:00",
+              submission_date: "2012-07-17T00:00:00+02:00",
+              related_docket_numbers: [
+                {
+                  judgment_id: "/doc/8466864ADB",
+                  docket_number: "I SA/Wa 1427/11",
+                  judgment_date: "2012-03-08T00:00:00+01:00",
+                  judgment_type: "Wyrok WSA w Warszawie",
+                },
+              ],
               glosa_information: ["Glosa aprobująca, OSP 2014 z. 5, poz. 51"],
               dissenting_opinion:
                 "Nie zgadzam się z rozstrzygnięciem i jego uzasadnieniem.",
