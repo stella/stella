@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, inArray, isNull, lt } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, lt } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { RECORDING_TRANSCRIPTION_RUN_ACTIVE_STATUSES } from "@stll/api-contract/recording-transcription";
@@ -26,6 +26,7 @@ import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { requeueDeterministicJob } from "@/api/lib/bullmq-requeue";
+import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import {
   hasCurrentActiveWorkspaceMemberPermission,
@@ -43,16 +44,18 @@ import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval"
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import {
+  RECONCILE_SCAN_PAGE_SIZE,
+  reconcileCursorTimestamp,
+  reconcileQueuedRuns,
+} from "@/api/lib/queue-reconcile-scan";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { runBackgroundJob } from "@/api/lib/rate-limit/queued-action-admission";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import type { RootRunActor } from "@/api/lib/root-scoped-db";
-import {
-  brandPersistedRecordingTranscriptionRunId,
-  brandPersistedUserId,
-} from "@/api/lib/safe-id-boundaries";
+import { brandPersistedRecordingTranscriptionRunId } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -75,7 +78,6 @@ const WORKER_CONCURRENCY = 2;
 const QUEUE_OPERATION_TIMEOUT_MS = 2000;
 const ORPHAN_RECONCILE_INTERVAL_MS = 5 * 60 * 1000;
 const STUCK_RUNNING_MS = 3 * 60 * 60 * 1000;
-const RECONCILE_BATCH_MAX = 100;
 
 type RecordingTranscriptionRunJobData = {
   runId: string;
@@ -104,16 +106,27 @@ const getQueue = createLazyBullMqQueue<RecordingTranscriptionRunJobData>({
   },
 });
 
-export const enqueueRecordingTranscriptionRun = async ({
+/** One job, described exactly as the queue takes it; the run id is the job
+ *  identity, so a repeated enqueue collapses onto the job in flight. */
+const runJob = ({
   runId,
   workspaceId,
   organizationId,
   userId,
-}: EnqueueRecordingTranscriptionRunArgs): Promise<void> => {
+}: EnqueueRecordingTranscriptionRunArgs) => ({
+  name: JOB_NAME,
+  data: { runId, workspaceId, organizationId, userId },
+  opts: { jobId: createBullMqJobId(workspaceId, runId) },
+});
+
+export const enqueueRecordingTranscriptionRun = async (
+  args: EnqueueRecordingTranscriptionRunArgs,
+): Promise<void> => {
+  const { data, name, opts } = runJob(args);
   await requeueDeterministicJob({
-    data: { runId, workspaceId, organizationId, userId },
-    jobId: createBullMqJobId(workspaceId, runId),
-    name: JOB_NAME,
+    data,
+    jobId: opts.jobId,
+    name,
     queue: getQueue(),
   });
 };
@@ -121,7 +134,7 @@ export const enqueueRecordingTranscriptionRun = async ({
 type RunActor = RootRunActor<"recordingTranscriptionRun">;
 
 /** Transcribing sends the recording to a model; saving files a document. */
-export const RECORDING_TRANSCRIPTION_RUN_PERMISSIONS = {
+const RECORDING_TRANSCRIPTION_RUN_PERMISSIONS = {
   entity: ["create"],
   chat: ["create"],
 } as const satisfies PermissionInput;
@@ -161,9 +174,6 @@ type ClaimedRun = {
 };
 
 const RUN_AUTHORITY_REVOKED = "authority_revoked" as const;
-
-type ActiveRunStage =
-  (typeof RECORDING_TRANSCRIPTION_RUN_ACTIVE_STATUSES)[number];
 
 const unaudited = async () => await Promise.resolve();
 
@@ -239,22 +249,25 @@ const setProgress = async (
 ): Promise<void> => {
   await authorizedWrite(actor, async (tx) => {
     // audit: skip - progress bookkeeping on the run audited at create.
+    // A run the reconciler already settled keeps the progress it settled with.
     await tx
       .update(recordingTranscriptionRuns)
       .set({ durationMs, transcribedMs })
-      .where(eq(recordingTranscriptionRuns.id, actor.runId));
+      .where(
+        and(
+          eq(recordingTranscriptionRuns.id, actor.runId),
+          inArray(recordingTranscriptionRuns.status, [
+            ...RECORDING_TRANSCRIPTION_RUN_ACTIVE_STATUSES,
+          ]),
+        ),
+      );
   });
 };
 
-/** Fails the run from whichever stage it is in. With `stages` narrowed to
- *  the started ones, it fences a redelivered job off a run another worker
- *  already holds: transcribing again would bill the recording twice. */
+/** Fails the run from whichever active stage it is in. */
 const setRunFailed = async (
   actor: RunActor,
   errorCode: RecordingTranscriptionRunErrorCode,
-  stages: readonly [ActiveRunStage, ...ActiveRunStage[]] = [
-    ...RECORDING_TRANSCRIPTION_RUN_ACTIVE_STATUSES,
-  ],
 ): Promise<boolean> =>
   await actor.writeDb(
     async (tx) =>
@@ -264,7 +277,7 @@ const setRunFailed = async (
           spec: RECORDING_TRANSCRIPTION_TRANSITIONS,
           id: actor.runId,
           options: {
-            from: stages,
+            from: [...RECORDING_TRANSCRIPTION_RUN_ACTIVE_STATUSES],
             to: "failed",
             set: { errorCode, finishedAt: new Date() },
           },
@@ -363,8 +376,24 @@ const dictationCaller = async (
       request: new Request("http://recording-transcription.internal/"),
       server: null,
     }),
-    getWorkspaceAccess: async (workspaceId: SafeId<"workspace">) =>
-      await Promise.resolve(workspaceId === matter.id ? matter : null),
+    // Asked before each piece goes to the model, so a requester who loses
+    // the matter mid-run stops the next piece rather than the next write.
+    getWorkspaceAccess: async (workspaceId: SafeId<"workspace">) => {
+      if (workspaceId !== matter.id) {
+        return null;
+      }
+      const authorized = await actor.writeDb(
+        async (tx) =>
+          await hasCurrentActiveWorkspaceMemberPermission({
+            db: tx,
+            organizationId: actor.organizationId,
+            userId: actor.userId,
+            workspaceId: actor.workspaceId,
+            permissions: RECORDING_TRANSCRIPTION_RUN_PERMISSIONS,
+          }),
+      );
+      return authorized ? matter : null;
+    },
   });
 };
 
@@ -409,6 +438,7 @@ const executeRun = async ({
         break;
       }
       if (piece.speech) {
+        // db-await-in-loop: one piece's audio in memory at a time, in order.
         const transcribed = await executeDictation(
           {
             ...caller.value,
@@ -443,6 +473,7 @@ const executeRun = async ({
           });
         }
       }
+      // db-await-in-loop: one ordered progress write per piece.
       await setProgress(actor, { transcribedMs: piece.endMs });
     }
   } finally {
@@ -528,13 +559,9 @@ export const processRecordingTranscriptionRun = async (
     await setRunFailed(actor, "internal");
     return;
   }
+  // Another delivery already claimed the run and may still be running it;
+  // a run whose processor died is failed by the stuck-run sweep instead.
   if (run === null) {
-    if (await setRunFailed(actor, "internal", ["transcribing", "saving"])) {
-      logger.warn("recording_transcription.redelivery_failed_run", {
-        runId: actor.runId,
-        workspaceId: actor.workspaceId,
-      });
-    }
     return;
   }
   const result = await Result.tryPromise({
@@ -551,43 +578,94 @@ export const processRecordingTranscriptionRun = async (
   }
 };
 
+/** The (timestamp, id) keyset the queued sweep's walk pages on. */
+const queuedRunCursorCodec = createTimestampIdCursorCodec({
+  column: recordingTranscriptionRuns.createdAt,
+  brandId: brandPersistedRecordingTranscriptionRunId,
+});
+
+type QueuedRecordingTranscriptionRunRow = {
+  createdCursor: string;
+  id: SafeId<"recordingTranscriptionRun">;
+  organizationId: SafeId<"organization">;
+  requestedBy: string | null;
+  workspaceId: SafeId<"workspace">;
+};
+
+type SettleTarget = "cancelled" | "failed";
+
+/** Pages one settle sweep may walk per tick; the rest waits for the next. */
+const SETTLE_PAGES_MAX = 10;
+
 const reconcileRecordingTranscriptionRuns = async (
   db: BullMqWorkerContext["db"],
 ) => {
   const runningCutoff = new Date(
     Temporal.Now.instant().epochMilliseconds - STUCK_RUNNING_MS,
   );
-  const settle = async (
+  const readSettlePage = async (
     where: SQL | undefined,
-    to: "cancelled" | "failed",
-  ): Promise<number> => {
-    const rows = await db
+    after: SafeId<"recordingTranscriptionRun"> | null,
+  ) =>
+    await db
       .select({ id: recordingTranscriptionRuns.id })
       .from(recordingTranscriptionRuns)
-      .where(where)
-      .limit(RECONCILE_BATCH_MAX);
-    if (rows.length === 0) {
-      return 0;
-    }
-    const moved = await withAggregateTransaction(
-      db,
-      async (tx) =>
-        await transitionBatch({
-          tx,
-          spec: RECORDING_TRANSCRIPTION_TRANSITIONS,
-          ids: rows.map(({ id }) => id),
-          options: {
-            from: [...RECORDING_TRANSCRIPTION_RUN_ACTIVE_STATUSES],
-            to,
-            set: {
-              errorCode: to === "failed" ? "internal" : null,
-              finishedAt: new Date(),
+      .where(
+        and(
+          where,
+          after === null ? undefined : gt(recordingTranscriptionRuns.id, after),
+        ),
+      )
+      .orderBy(asc(recordingTranscriptionRuns.id))
+      .limit(RECONCILE_SCAN_PAGE_SIZE);
+  const settlePage = async (
+    ids: SafeId<"recordingTranscriptionRun">[],
+    to: SettleTarget,
+  ): Promise<number> =>
+    (
+      await withAggregateTransaction(
+        db,
+        async (tx) =>
+          await transitionBatch({
+            tx,
+            spec: RECORDING_TRANSCRIPTION_TRANSITIONS,
+            ids,
+            options: {
+              from: [...RECORDING_TRANSCRIPTION_RUN_ACTIVE_STATUSES],
+              to,
+              set: {
+                errorCode: to === "failed" ? "internal" : null,
+                finishedAt: new Date(),
+              },
             },
-          },
-          recordTransitionAuditEvent: unaudited,
-        }),
-    );
-    return moved.length;
+            recordTransitionAuditEvent: unaudited,
+          }),
+      )
+    ).length;
+  const settle = async (
+    where: SQL | undefined,
+    to: SettleTarget,
+  ): Promise<number> => {
+    let moved = 0;
+    let after: SafeId<"recordingTranscriptionRun"> | null = null;
+    for (let page = 0; page < SETTLE_PAGES_MAX; page += 1) {
+      // db-await-in-loop: a keyset walk, one bounded page per round.
+      const rows = await readSettlePage(where, after);
+      const last = rows.at(-1);
+      if (last === undefined) {
+        break;
+      }
+      // db-await-in-loop: settles the page just read before reading the next.
+      moved += await settlePage(
+        rows.map(({ id }) => id),
+        to,
+      );
+      if (rows.length < RECONCILE_SCAN_PAGE_SIZE) {
+        break;
+      }
+      after = last.id;
+    }
+    return moved;
   };
   const cancelled = await settle(
     and(
@@ -598,34 +676,45 @@ const reconcileRecordingTranscriptionRuns = async (
     ),
     "cancelled",
   );
-  const queued = await db
-    .select({
-      id: recordingTranscriptionRuns.id,
-      organizationId: recordingTranscriptionRuns.organizationId,
-      requestedBy: recordingTranscriptionRuns.requestedBy,
-      workspaceId: recordingTranscriptionRuns.workspaceId,
-    })
-    .from(recordingTranscriptionRuns)
-    .where(eq(recordingTranscriptionRuns.status, "queued"))
-    .orderBy(
-      asc(recordingTranscriptionRuns.createdAt),
-      asc(recordingTranscriptionRuns.id),
-    )
-    .limit(RECONCILE_BATCH_MAX);
-  const handedOff = await Promise.allSettled(
-    queued.flatMap((run) =>
-      run.requestedBy === null
-        ? []
-        : [
-            enqueueRecordingTranscriptionRun({
-              runId: run.id,
-              organizationId: run.organizationId,
-              workspaceId: run.workspaceId,
-              userId: brandPersistedUserId(run.requestedBy),
-            }),
-          ],
-    ),
-  );
+  const queuedAfter = (cursor: QueuedRecordingTranscriptionRunRow | null) =>
+    cursor === null
+      ? undefined
+      : queuedRunCursorCodec.keysetAfter({
+          cursor: {
+            timestamp: reconcileCursorTimestamp(cursor.createdCursor),
+            id: cursor.id,
+          },
+          idColumn: recordingTranscriptionRuns.id,
+          direction: "ascending",
+        });
+  const readQueuedPage = async (
+    cursor: QueuedRecordingTranscriptionRunRow | null,
+  ) =>
+    await db
+      .select({
+        createdCursor: queuedRunCursorCodec.cursorValue,
+        id: recordingTranscriptionRuns.id,
+        organizationId: recordingTranscriptionRuns.organizationId,
+        requestedBy: recordingTranscriptionRuns.requestedBy,
+        workspaceId: recordingTranscriptionRuns.workspaceId,
+      })
+      .from(recordingTranscriptionRuns)
+      .where(
+        and(
+          eq(recordingTranscriptionRuns.status, "queued"),
+          queuedAfter(cursor),
+        ),
+      )
+      .orderBy(
+        asc(recordingTranscriptionRuns.createdAt),
+        asc(recordingTranscriptionRuns.id),
+      )
+      .limit(RECONCILE_SCAN_PAGE_SIZE);
+  const handedOff = await reconcileQueuedRuns({
+    queue: getQueue(),
+    readPage: readQueuedPage,
+    runJob,
+  });
   const failed = await settle(
     and(
       inArray(recordingTranscriptionRuns.status, ["transcribing", "saving"]),
@@ -633,11 +722,7 @@ const reconcileRecordingTranscriptionRuns = async (
     ),
     "failed",
   );
-  return {
-    cancelled,
-    failed,
-    handedOff: handedOff.filter(({ status }) => status === "fulfilled").length,
-  };
+  return { cancelled, failed, handedOff: handedOff.handedOff };
 };
 
 export const initRecordingTranscriptionRunWorker = ({
