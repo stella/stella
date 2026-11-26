@@ -139,6 +139,16 @@ describe("selectReferenceField in the template's scheme", () => {
       instruction: numberWithoutWords,
       expectedText: "XI",
     });
+    // What follows the counter without a word keeps its punctuation and
+    // loses its blanks.
+    expect(read("Part %1 -", [11])).toMatchObject({
+      instruction: numberWithoutWords,
+      expectedText: "XI-",
+    });
+    expect(read("Annex %1:", [11])).toMatchObject({
+      instruction: numberWithoutWords,
+      expectedText: "XI:",
+    });
   });
 
   test("refuses a level whose words stand beside a bracket", () => {
