@@ -1,8 +1,8 @@
-import { useLayoutEffect, useState } from "react";
+import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 
-import { useExternalSyncEffect } from "@stll/ui/effects";
+import { useExternalSyncEffect, useLayoutSyncEffect } from "@stll/ui/effects";
 
 import {
   resolveFileFieldPropertyId,
@@ -89,7 +89,7 @@ export const CurrentFileFieldSync = ({
     }
   }, [closeTab, hasNothingLeftToShow, tab.id]);
 
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     if (activeFileField !== undefined) {
       currentFileFieldIdsByProperty.set(
         activeFileField.propertyId,

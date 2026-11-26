@@ -42,6 +42,9 @@ export type DocxBlock = {
   /** The paragraph is the last of its section: the block after it opens
    *  `sections[sectionIndex + 1]`. */
   endsSection?: true;
+  /** The paragraph alignment in effect (`w:jc`): the paragraph's own, else
+   *  its style's. Absent when neither states one. */
+  alignment?: string;
   cells?: { row: number; col: number; blockIds: string[] }[];
 };
 
@@ -68,6 +71,9 @@ export type DocxBlockManifest = {
    *  `sectionIndex`. Absent from a manifest read before sections were
    *  reported. */
   sections?: DocxSection[];
+  /** Compatibility settings of the document. Absent from a manifest read
+   *  before they were reported, as are the blocks' alignments. */
+  compat?: { doNotExpandShiftReturn: boolean };
   footnotes: { id: string; text: string }[];
   endnotes: { id: string; text: string }[];
   comments: number;
@@ -230,6 +236,9 @@ export type TemplatePlan = {
   references?: TemplatePlanReference[];
   highlights?: TemplatePlanHighlight[];
   fields?: { freezeKinds?: string[]; updateOnOpen?: boolean };
+  /** Compatibility settings switched on in the output's settings, which
+   *  are otherwise the template's. */
+  compat?: { doNotExpandShiftReturn?: boolean };
 };
 
 /** The part of the engine's report the plan is repaired and the formatting
@@ -403,6 +412,7 @@ const blockSchema = v.strictObject({
   pageBreaks: v.exactOptional(v.pipe(v.number(), v.integer(), v.minValue(1))),
   pageBreakBefore: v.exactOptional(v.literal(true)),
   endsSection: v.exactOptional(v.literal(true)),
+  alignment: v.exactOptional(v.string()),
   cells: v.exactOptional(
     v.array(
       v.strictObject({
@@ -442,6 +452,9 @@ const manifestSchema = v.strictObject({
   sha256: v.string(),
   blocks: v.array(blockSchema),
   sections: v.exactOptional(v.array(sectionSchema)),
+  compat: v.exactOptional(
+    v.strictObject({ doNotExpandShiftReturn: v.boolean() }),
+  ),
   footnotes: v.array(noteSchema),
   endnotes: v.array(noteSchema),
   comments: v.pipe(v.number(), v.integer(), v.minValue(0)),

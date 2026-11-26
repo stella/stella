@@ -1,9 +1,13 @@
-import { type RefObject, useLayoutEffect } from "react";
+import type { RefObject } from "react";
 
 import { matchesKeyboardEvent } from "@tanstack/react-hotkeys";
 import type { HotkeyChord } from "@tanstack/react-hotkeys";
 
-import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useLayoutSyncEffect,
+} from "@stll/ui/effects";
 
 import { resolveFindClaim } from "@/lib/find-owner.logic";
 import type {
@@ -35,7 +39,7 @@ const modalBoundaries = new LifecycleRegistry<symbol, true>();
 export const useFindModalBoundary = (open: boolean): void => {
   // The shell commits before the modal chunk arrives. A layout effect closes
   // that gap before another key press, without waiting for DOM isolation.
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     if (!open) {
       return undefined;
     }

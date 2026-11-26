@@ -18,6 +18,9 @@
 // older commit, so reading flags there would report renders that never
 // happened.
 
+import { installCommitHook } from "./commit-hook";
+import type { CommitRoot } from "./commit-hook";
+
 /** Why a component rendered in a commit. */
 export type RenderCause =
   /** First render. */
@@ -72,8 +75,6 @@ export type RenderProbe = {
 /** Where drivers outside the process (Playwright, the Hermes inspector) find the probe. */
 export const RENDER_PROBE_GLOBAL = "__STLL_RENDER_PROBE__";
 
-const DEVTOOLS_HOOK = "__REACT_DEVTOOLS_GLOBAL_HOOK__";
-
 // React's fiber tags for components, and the flag a render sets.
 const FUNCTION_COMPONENT = 0;
 const CLASS_COMPONENT = 1;
@@ -103,24 +104,11 @@ type Fiber = {
   readonly sibling: Fiber | null;
 };
 
-type FiberRoot = { readonly current: Fiber };
-
-type Hook = {
-  supportsFiber?: boolean;
-  renderers?: Map<number, unknown>;
-  inject?: (internals: unknown) => number;
-  onCommitFiberRoot?: (
-    rendererId: number,
-    root: FiberRoot,
-    ...rest: unknown[]
-  ) => void;
-  onCommitFiberUnmount?: (...args: unknown[]) => void;
-  onPostCommitFiberRoot?: (...args: unknown[]) => void;
-  checkDCE?: () => void;
-};
-
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
+
+const isFiber = (value: unknown): value is Fiber =>
+  isRecord(value) && typeof value["tag"] === "number";
 
 const nameOfType = (type: unknown): string | undefined => {
   if (typeof type === "function") {
@@ -252,8 +240,11 @@ export const createRenderProbe = () => {
     return rendered;
   };
 
-  const onCommit = (root: FiberRoot) => {
+  const onCommit = (root: CommitRoot) => {
     const current = root.current;
+    if (!isFiber(current)) {
+      return;
+    }
     const previous = current.alternate;
     const rendered =
       previous === null ? mount(current) : update(current, previous);
@@ -301,9 +292,9 @@ export const installedRenderProbe = (
 ): RenderProbe | undefined => INSTALLED.get(target);
 
 /**
- * Installs the probe as React's DevTools hook, or chains onto the hook the
- * React DevTools extension already installed. Idempotent: a second call
- * returns the installed probe.
+ * Installs the probe on React's DevTools hook (see ./commit-hook.ts), chained
+ * onto a hook the React DevTools extension or the DOM-test storm check
+ * installed first. Idempotent: a second call returns the installed probe.
  */
 export const installRenderProbe = (
   target: object = globalThis,
@@ -314,32 +305,9 @@ export const installRenderProbe = (
   }
   const { probe, onCommit } = createRenderProbe();
   INSTALLED.set(target, probe);
-  const existing: unknown = Reflect.get(target, DEVTOOLS_HOOK);
-  if (isRecord(existing)) {
-    const hook: Hook = existing;
-    const previous = hook.onCommitFiberRoot;
-    hook.onCommitFiberRoot = (rendererId, root, ...rest) => {
-      onCommit(root);
-      previous?.call(hook, rendererId, root, ...rest);
-    };
-  } else {
-    const renderers = new Map<number, unknown>();
-    const hook: Hook = {
-      supportsFiber: true,
-      renderers,
-      inject: (internals) => {
-        const id = renderers.size + 1;
-        renderers.set(id, internals);
-        return id;
-      },
-      onCommitFiberRoot: (_rendererId, root) => {
-        onCommit(root);
-      },
-      onCommitFiberUnmount: () => undefined,
-      onPostCommitFiberRoot: () => undefined,
-    };
-    Reflect.set(target, DEVTOOLS_HOOK, hook);
-  }
+  installCommitHook(target).listen((root) => {
+    onCommit(root);
+  });
   Reflect.set(target, RENDER_PROBE_GLOBAL, probe);
   return probe;
 };
