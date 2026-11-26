@@ -63,6 +63,8 @@ import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-gra
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
+// parser-output-unchanged: typed publisher reads classify HTTP and body failures without changing parsed decision output.
+import { BodyByteLimitError } from "@stll/fetch/body-reader";
 import { load } from "@stll/html";
 import {
   DECISION_IDENTIFIER_TYPES,
@@ -86,7 +88,11 @@ import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/i
 import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
+  readPublisher,
+  unreadPublisherError,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
+import { rethrowCycleStop } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   parsePlUokikDocument,
@@ -276,9 +282,12 @@ const publisherError = (
 
 /** How the fetch layer reports a redirect it was told to refuse. */
 const isRefusedRedirect = (error: unknown): boolean =>
-  error instanceof TypeError &&
-  "code" in error &&
-  error.code === "UnexpectedRedirect";
+  (error instanceof TypeError &&
+    "code" in error &&
+    error.code === "UnexpectedRedirect") ||
+  (error instanceof Error &&
+    error.cause !== undefined &&
+    isRefusedRedirect(error.cause));
 
 type RequestOptions = {
   fetchStage: DocumentFetchStage;
@@ -321,34 +330,109 @@ const request = async ({
   const address = target.toString();
   const requested = await Result.tryPromise({
     try: async () =>
-      await fetchWithRetry(
-        address,
-        { headers: { Accept: accept }, redirect: "error" },
-        { fetchStage, adapterKey: ADAPTER_KEYS.PL_UOKIK, signal, timeoutMs },
-      ),
+      await readPublisher(address, {
+        headers: { Accept: accept },
+        redirect: "error",
+        fetchStage,
+        refusalScope: fetchStage === "listing" ? "source" : "document",
+        adapterKey: ADAPTER_KEYS.PL_UOKIK,
+        retryPolicy: "publisher-backoff",
+        signal,
+        timeoutMs,
+      }),
     catch: (error: unknown) => error,
   });
   if (Result.isError(requested)) {
-    return isRefusedRedirect(requested.error)
-      ? Result.ok({ type: "redirected" })
-      : Result.err(
-          adapterCatch(ADAPTER_KEYS.PL_UOKIK, cursor)(requested.error),
-        );
+    const { error } = requested;
+    if (error instanceof AdapterFetchError) {
+      return Result.err(
+        new AdapterFetchError({
+          message: error.message,
+          adapterKey: ADAPTER_KEYS.PL_UOKIK,
+          cursor,
+          cause: error,
+          ...(error.retryAfter === undefined
+            ? {}
+            : { retryAfter: error.retryAfter }),
+          ...(error.httpStatus === undefined
+            ? {}
+            : { httpStatus: error.httpStatus }),
+          stopKind: error.stopKind,
+        }),
+      );
+    }
+    return Result.err(adapterCatch(ADAPTER_KEYS.PL_UOKIK, cursor)(error));
   }
-  const response = requested.value;
-  if (!response.ok) {
-    await response.body?.cancel();
-    return Result.ok({ type: "status", status: response.status });
+  const outcome = requested.value;
+  if (
+    outcome.type === "unavailable" &&
+    outcome.cause.kind === "thrown" &&
+    isRefusedRedirect(outcome.cause.error)
+  ) {
+    return Result.ok({ type: "redirected" });
   }
-  const bytes =
-    response.body === null
-      ? new Uint8Array()
-      : await readCappedBytes(response.body, maxBytes);
-  return Result.ok(
-    bytes === null
-      ? { type: "too-large" }
-      : { type: "body", bytes, url: address },
-  );
+  if (outcome.type === "absent") {
+    return Result.ok({
+      type: "status",
+      status: outcome.evidence === "http-410" ? 410 : 404,
+    });
+  }
+  if (outcome.type !== "present") {
+    return Result.err(
+      unreadPublisherError({
+        outcome,
+        message: "decyzje.uokik.gov.pl: request failed",
+        adapterKey: ADAPTER_KEYS.PL_UOKIK,
+        cursor,
+      }),
+    );
+  }
+  const { body, status } = outcome.value;
+  if (body === null) {
+    return Result.err(
+      unreadPublisherError({
+        outcome: { type: "unavailable", cause: { kind: "empty-body", status } },
+        message: "decyzje.uokik.gov.pl: request failed",
+        adapterKey: ADAPTER_KEYS.PL_UOKIK,
+        cursor,
+      }),
+    );
+  }
+  const read = await Result.tryPromise({
+    try: async () => await readCappedBytes(body, maxBytes),
+    catch: (error: unknown) => error,
+  });
+  if (Result.isError(read)) {
+    rethrowCycleStop(read.error, signal);
+    if (BodyByteLimitError.is(read.error)) {
+      return Result.ok({ type: "too-large" });
+    }
+    return Result.err(
+      unreadPublisherError({
+        outcome: {
+          type: "unavailable",
+          cause: { kind: "thrown", error: read.error },
+        },
+        message: "decyzje.uokik.gov.pl: request failed",
+        adapterKey: ADAPTER_KEYS.PL_UOKIK,
+        cursor,
+      }),
+    );
+  }
+  if (read.value === null) {
+    return Result.ok({ type: "too-large" });
+  }
+  if (read.value.length === 0) {
+    return Result.err(
+      unreadPublisherError({
+        outcome: { type: "unavailable", cause: { kind: "empty-body", status } },
+        message: "decyzje.uokik.gov.pl: request failed",
+        adapterKey: ADAPTER_KEYS.PL_UOKIK,
+        cursor,
+      }),
+    );
+  }
+  return Result.ok({ type: "body", bytes: read.value, url: address });
 };
 
 // ── The flat view ────────────────────────────────────────
@@ -1776,7 +1860,7 @@ type PlUokikObservation = {
  * assemble it. A refusal that may clear is the page's failure, so the caller
  * holds its cursor and asks again.
  */
-const buildPlUokikDecision = async ({
+export const buildPlUokikDecision = async ({
   cursor,
   entry,
   signal,

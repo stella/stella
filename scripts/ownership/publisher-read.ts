@@ -3,11 +3,6 @@ import type { OwnershipEntry } from "../ownership-types.ts";
 // `readPublisher` and leaves this list; nothing is added to it.
 const UNMIGRATED_PUBLISHER_READERS = [
   "handlers/case-law/ingestion/adapters/pagination.ts",
-  "handlers/case-law/ingestion/adapters/pl-kio.ts",
-  "handlers/case-law/ingestion/adapters/pl-kis.ts",
-  "handlers/case-law/ingestion/adapters/pl-ncourt.ts",
-  "handlers/case-law/ingestion/adapters/pl-tk.ts",
-  "handlers/case-law/ingestion/adapters/pl-uokik.ts",
   "handlers/case-law/ingestion/adapters/sk-collections.ts",
 ] as const;
 

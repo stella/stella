@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 
 import { isPolishConstitutionalDocket } from "@stll/api-contract/decision-docket-grammar";
+import { BodyByteLimitError } from "@stll/fetch/body-reader";
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
@@ -53,6 +54,7 @@ import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import type { AnyNode } from "@stll/html/nodes";
 // parser-output-unchanged: error output projection only; parsed decision fields are unchanged.
+// parser-output-unchanged: typed publisher reads classify HTTP and body failures without changing parsed decision output.
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
@@ -73,10 +75,16 @@ import {
   createPublisherGateSlot,
   publisherRequestIntervalMs,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import {
+  type PublisherReadInit,
+  readPublisher,
+  unreadPublisherError,
+  type UnreadPublisherOutcome,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import type { PublisherRequestGateDependencies } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import {
-  fetchWithRetry,
   parsePublisherRetryAfter,
+  rethrowCycleStop,
 } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
@@ -269,69 +277,146 @@ const requestTk = async ({
   if (target === null) {
     return panic("ipo.trybunal.gov.pl request escaped the publisher origin");
   }
+  const url = target.toString();
+  const requestInit: PublisherReadInit & { protocol: "http2" } = {
+    protocol: "http2",
+    redirect: "error",
+    headers: {
+      Accept: "text/html",
+      ...(cookie === undefined ? {} : { Cookie: cookie }),
+    },
+    fetchStage,
+    adapterKey: ADAPTER_KEYS.PL_TK,
+    refusalMode: "stop-refusal",
+    retryPolicy: "publisher-backoff",
+    signal,
+    timeoutMs: REQUEST_TIMEOUT_MS,
+  };
   const requested = await Result.tryPromise({
     try: async () =>
-      await fetchWithRetry(
-        target.toString(),
-        {
-          protocol: "http2",
-          redirect: "error",
-          headers: {
-            Accept: "text/html",
-            ...(cookie === undefined ? {} : { Cookie: cookie }),
-          },
-        },
-        {
-          fetchStage,
-          adapterKey: ADAPTER_KEYS.PL_TK,
-          refusalMode: "stop-refusal",
-          signal,
-          timeoutMs: REQUEST_TIMEOUT_MS,
-        },
-      ),
+      await readPublisher(url, { ...requestInit, redirect: "error" }),
     catch: (cause) => cause,
   });
   if (Result.isError(requested)) {
-    if (isRefusedRedirect(requested.error)) {
-      return Result.ok({
-        status: REFUSED_REDIRECT_STATUS,
-        body: "",
-        url: target.toString(),
-        setCookies: [],
-      });
+    const { error } = requested;
+    if (error instanceof AdapterFetchError) {
+      return Result.err(
+        new AdapterFetchError({
+          message: `ipo.trybunal.gov.pl: ${path} failed`,
+          adapterKey: ADAPTER_KEYS.PL_TK,
+          cursor,
+          cause: error,
+          ...(error.retryAfter === undefined
+            ? {}
+            : { retryAfter: error.retryAfter }),
+          ...(error.httpStatus === undefined
+            ? {}
+            : { httpStatus: error.httpStatus }),
+          stopKind: error.stopKind,
+        }),
+      );
     }
     return Result.err(
       new AdapterFetchError({
         message: `ipo.trybunal.gov.pl: ${path} failed`,
         adapterKey: ADAPTER_KEYS.PL_TK,
         cursor,
-        cause: requested.error,
-        ...(requested.error instanceof AdapterFetchError &&
-        requested.error.retryAfter !== undefined
-          ? { retryAfter: requested.error.retryAfter }
-          : {}),
-        ...(requested.error instanceof AdapterFetchError &&
-        requested.error.httpStatus !== undefined
-          ? { httpStatus: requested.error.httpStatus }
-          : {}),
+        cause: error,
       }),
     );
   }
-  const response = requested.value;
-  const bytes =
-    response.body === null
-      ? new Uint8Array()
-      : await readCappedBytes(response.body, MAX_RESPONSE_BYTES);
-  if (bytes === null) {
+  const outcome = requested.value;
+  if (
+    outcome.type === "unavailable" &&
+    outcome.cause.kind === "status" &&
+    isRedirect(outcome.cause.status)
+  ) {
+    return Result.ok({
+      status: outcome.cause.status,
+      body: "",
+      url,
+      setCookies: [],
+    });
+  }
+  if (
+    outcome.type === "unavailable" &&
+    outcome.cause.kind === "thrown" &&
+    isRefusedRedirect(outcome.cause.error)
+  ) {
+    return Result.ok({
+      status: REFUSED_REDIRECT_STATUS,
+      body: "",
+      url,
+      setCookies: [],
+    });
+  }
+  if (outcome.type !== "present") {
+    return Result.err(
+      unreadPublisherError({
+        outcome,
+        message: `ipo.trybunal.gov.pl: ${path} failed`,
+        adapterKey: ADAPTER_KEYS.PL_TK,
+        cursor,
+      }),
+    );
+  }
+  const { body, headers, status } = outcome.value;
+  if (body === null) {
+    return Result.err(
+      unreadPublisherError({
+        outcome: { type: "unavailable", cause: { kind: "empty-body", status } },
+        message: `ipo.trybunal.gov.pl: ${path} failed`,
+        adapterKey: ADAPTER_KEYS.PL_TK,
+        cursor,
+      }),
+    );
+  }
+  const read = await Result.tryPromise({
+    try: async () => await readCappedBytes(body, MAX_RESPONSE_BYTES),
+    catch: (error: unknown) => error,
+  });
+  if (Result.isError(read)) {
+    rethrowCycleStop(read.error, signal);
+    const readOutcome: UnreadPublisherOutcome = BodyByteLimitError.is(
+      read.error,
+    )
+      ? {
+          type: "unavailable",
+          cause: { kind: "too-large", maxBytes: read.error.limit },
+        }
+      : {
+          type: "unavailable",
+          cause: { kind: "thrown", error: read.error },
+        };
+    return Result.err(
+      unreadPublisherError({
+        outcome: readOutcome,
+        message: `ipo.trybunal.gov.pl: ${path} failed`,
+        adapterKey: ADAPTER_KEYS.PL_TK,
+        cursor,
+      }),
+    );
+  }
+  if (read.value === null) {
     return Result.err(
       tkError(cursor, `the page ${path} exceeded ${MAX_RESPONSE_BYTES} bytes`),
     );
   }
+  if (read.value.length === 0) {
+    return Result.err(
+      unreadPublisherError({
+        outcome: { type: "unavailable", cause: { kind: "empty-body", status } },
+        message: `ipo.trybunal.gov.pl: ${path} failed`,
+        adapterKey: ADAPTER_KEYS.PL_TK,
+        cursor,
+      }),
+    );
+  }
   return Result.ok({
-    status: response.status,
-    body: new TextDecoder().decode(bytes),
-    url: target.toString(),
-    setCookies: response.headers.getSetCookie(),
+    status,
+    body: new TextDecoder().decode(read.value),
+    url,
+    setCookies: headers.getSetCookie(),
   });
 };
 
@@ -340,7 +425,10 @@ const REFUSED_REDIRECT_STATUS = 302;
 
 /** Bun's refusal of a redirect under `redirect: "error"`. */
 const isRefusedRedirect = (error: unknown): boolean =>
-  isRecord(error) && error["code"] === "UnexpectedRedirect";
+  (isRecord(error) && error["code"] === "UnexpectedRedirect") ||
+  (error instanceof Error &&
+    error.cause !== undefined &&
+    isRefusedRedirect(error.cause));
 
 const isRedirect = (status: number): boolean => status >= 300 && status < 400;
 
@@ -466,6 +554,24 @@ const openSession = async (
       if (Result.isError(parked)) {
         return parked;
       }
+      return landed;
+    }
+    const status =
+      landed.error.httpStatus ??
+      (landed.error.cause instanceof AdapterFetchError
+        ? landed.error.cause.httpStatus
+        : undefined);
+    if (status !== undefined) {
+      return Result.err(
+        new AdapterFetchError({
+          adapterKey: ADAPTER_KEYS.PL_TK,
+          cursor,
+          message: `ipo.trybunal.gov.pl: the portal opened no session (${status})`,
+          httpStatus: status,
+          stopKind: INGESTION_STOP_KIND.SOURCE_UNREACHABLE,
+          cause: landed.error,
+        }),
+      );
     }
     return landed;
   }
