@@ -47,17 +47,15 @@ const noServerHost = () => "";
 
 // The bridge holds the challenge the desktop app left for this tab; the card
 // re-reads it whenever a capture or a connect attempt may have changed it.
-const challengeListeners = new Set<() => void>();
+const CHALLENGE_CHANGED_EVENT = "stella:desktop-account-challenge-changed";
 const subscribeToChallenge = (onChange: () => void) => {
-  challengeListeners.add(onChange);
+  window.addEventListener(CHALLENGE_CHANGED_EVENT, onChange);
   return () => {
-    challengeListeners.delete(onChange);
+    window.removeEventListener(CHALLENGE_CHANGED_EVENT, onChange);
   };
 };
 const notifyChallengeChanged = () => {
-  for (const listener of challengeListeners) {
-    listener();
-  }
+  window.dispatchEvent(new Event(CHALLENGE_CHANGED_EVENT));
 };
 const noChallengeOnServer = () => false;
 

@@ -267,7 +267,7 @@ const ExistingFileOrganizerBody = ({
     useState<SuggestionStatus>("ready");
   const [deleteFolders, setDeleteFolders] = useState<
     FolderDeletionSuggestion[]
-  >(() => cachedForFiles?.deleteFolders ?? []);
+  >(() => (cachedForFiles === null ? [] : cachedForFiles.deleteFolders));
   const suggestionRequestTokenRef = useRef(0);
 
   // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
