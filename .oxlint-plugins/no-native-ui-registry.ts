@@ -214,6 +214,7 @@ export const NO_NATIVE_UI_REGISTRY = {
   "document-identity-badge.logic": notComponent("badge formatting helpers"),
   effects: notComponent("the sanctioned React effect hooks"),
   "effects-dom": notComponent("hooks that keep state observed from the DOM"),
+  "effects-refs": notComponent("a stable composition of refs"),
   "entity-actions": owned(
     "no-raw-context-menu/no-raw-context-menu",
     "hand-written contextmenu handlers are reported there",

@@ -2288,6 +2288,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-route-context-in-panel-tabs.ts",
     "./.oxlint-plugins/no-render-phase-update.ts",
     "./.oxlint-plugins/no-effect-state-write.ts",
+    "./.oxlint-plugins/no-ref-callback-state-write.ts",
     "./.oxlint-plugins/require-schema-form-options.ts",
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-loader-prefetch.ts",
@@ -2569,6 +2570,20 @@ const config = defineConfig({
       ],
       rules: {
         "no-effect-state-write/no-effect-state-write": "error",
+      },
+    },
+    {
+      // A ref callback created during render re-attaches whenever its
+      // identity changes; one that writes state re-renders into a new
+      // identity. Every React surface; tests render once and are out of scope.
+      files: [
+        ".oxlint-plugins/__fixtures__/no-ref-callback-state-write.fixture.tsx",
+        ...PRODUCT_FRONTEND_FILES,
+        ...REACT_SURFACE_FILES_BEYOND_PRODUCT,
+      ],
+      excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
+      rules: {
+        "no-ref-callback-state-write/no-ref-callback-state-write": "error",
       },
     },
     {
