@@ -34,6 +34,7 @@ import type {
 import {
   buildLabelIndex,
   isRunningText,
+  printedLabel,
 } from "@/api/lib/templates/house-style/label-index";
 import type { LabelIndex } from "@/api/lib/templates/house-style/label-index";
 import {
@@ -151,6 +152,10 @@ type FormattingNoteItem =
   /** The source starts a page in front of this block and the output does
    *  not: a table cannot be told to start one. */
   | { kind: "pageStartNotKept"; blockId: string; reason: "table" }
+  /** The source starts a page between an article's heading and the block
+   *  it heads. The output starts it in front of the heading (`blockId`):
+   *  a heading does not end a page. */
+  | { kind: "pageStartMoved"; blockId: string; fromBlockId: string }
   /** A section of the source ends after this block and the next one's
    *  layout is not carried over: it begins on the same page (`continuous`,
    *  `nextColumn`), or its page or its columns are other than the
@@ -424,7 +429,7 @@ const placementOf = (
   };
   if (exclusions.numbering.has(block.id)) {
     placement.keptReason =
-      entry !== null || block.label !== null ? "excluded" : null;
+      entry !== null || printedLabel(block) !== null ? "excluded" : null;
     return placement;
   }
   if (entry === null) {
@@ -775,6 +780,8 @@ const pageStartsOf = (
   let pending = false;
   /** Nothing starts a page in front of the document's first block. */
   let placedAny = false;
+  /** Whether anything was placed in front of the paragraph placed last. */
+  let placedBeforeLast = false;
   /** A kept blank paragraph starts the page in front of the table that
    *  follows: every start between the two is that one. */
   let held = false;
@@ -807,17 +814,100 @@ const pageStartsOf = (
     }
     if (placed.omitted.has(block.id)) {
       pending ||= !held && breaksPage(block);
-    } else if (!placed.mergedInto.has(block.id)) {
+    } else if (placed.mergedInto.has(block.id)) {
+      // A title joined to its heading has no paragraph to start a page:
+      // the heading it joined starts it.
+      const head = placed.mergedInto.get(block.id);
+      if ((pending || block.pageBreakBefore === true) && head !== undefined) {
+        if (placedBeforeLast) {
+          starts.add(head);
+        }
+        context.items.push({
+          kind: "pageStartMoved",
+          blockId: head,
+          fromBlockId: block.id,
+        });
+      }
+      pending = false;
+    } else {
       if ((pending || block.pageBreakBefore === true) && placedAny) {
         starts.add(block.id);
       }
       pending = false;
+      placedBeforeLast = placedAny;
       placedAny = true;
       held = false;
     }
     pending ||= !held && endsPage(context, block);
   }
   return starts;
+};
+
+const HEADING_TEXT_MAX = 160;
+
+/**
+ * Whether a paragraph read as an article's heading is one on the page: a
+ * label with a title, not a numbered paragraph of running text (clause
+ * `1.` of an agreement without headings).
+ */
+const headsText = (
+  { titleOf }: Placed,
+  { role, block, entry }: Placement,
+): boolean => {
+  if (role !== "articleHeading") {
+    return false;
+  }
+  const text = block.text.slice(entry?.manualLength ?? 0).trim();
+  return (
+    titleOf.has(block.id) ||
+    (text.length <= HEADING_TEXT_MAX && !/[.;:,]$/u.test(text))
+  );
+};
+
+/**
+ * Moves a page start that falls between an article's heading and the block
+ * it heads in front of the heading: a heading does not end a page. Several
+ * heading lines in a row (a heading and a title that could not join it)
+ * move as one. Nothing starts a page in front of the document's first
+ * block, so a start behind a heading that opens the document is dropped.
+ */
+const keepHeadingsWithBody = (context: Context, placed: Placed): void => {
+  /** The heading lines placed last, with nothing placed after them. */
+  let headings: string[] = [];
+  let placedBefore = false;
+  let placedBeforeHeadings = false;
+  for (const block of context.topLevel) {
+    if (block.kind === "table") {
+      headings = [];
+      placedBefore = true;
+      continue;
+    }
+    const placement = placed.placementById.get(block.id);
+    if (placement === undefined) {
+      continue;
+    }
+    const first = headings.at(0);
+    if (first !== undefined && placed.pageStarts.has(block.id)) {
+      placed.pageStarts.delete(block.id);
+      if (placedBeforeHeadings) {
+        placed.pageStarts.add(first);
+      }
+      context.items.push({
+        kind: "pageStartMoved",
+        blockId: first,
+        fromBlockId: block.id,
+      });
+    }
+    if (headsText(placed, placement)) {
+      if (headings.length === 0) {
+        placedBeforeHeadings = placedBefore;
+      }
+      headings.push(block.id);
+    } else {
+      headings = [];
+    }
+    placedBefore = true;
+  }
 };
 
 /** A placement for every paragraph that gets one, in document order. */
@@ -863,15 +953,21 @@ const placeParagraphs = (context: Context): Placed => {
       continue;
     }
     const head = proposalById.get(block.id)?.mergedIntoBlockId ?? null;
+    const headBlock = head === null ? undefined : blockById.get(head);
+    // An article's heading takes the page start with it: the page starts
+    // in front of the heading, and the title joins it as on any page.
+    const movesWithHead =
+      headBlock !== undefined &&
+      roleOf(context, headBlock) === "articleHeading";
     if (
       head !== null &&
       lastPlaced === head &&
       !placed.titleOf.has(head) &&
       !exclusions.merges.has(head) &&
-      // A title that starts a page is a line of its own: joined to its
-      // heading it would stay on the page before. So is one behind the end
-      // of a section that stays a section: it belongs to the next.
-      !startsPage.has(block.id) &&
+      // Any other title that starts a page is a line of its own: joined to
+      // its heading it would stay on the page before. So is one behind the
+      // end of a section that stays a section: it belongs to the next.
+      (movesWithHead || !startsPage.has(block.id)) &&
       !context.keptSections.ends.has(head)
     ) {
       placed.mergedInto.set(block.id, head);
@@ -893,6 +989,7 @@ const placeParagraphs = (context: Context): Placed => {
     placed.placementById.set(placement.block.id, placement);
   }
   placed.pageStarts = pageStartsOf(context, placed, pageHolders);
+  keepHeadingsWithBody(context, placed);
   return placed;
 };
 
@@ -1453,10 +1550,10 @@ const markReferences = ({
   // fill the document with false alarms: it is reported, not highlighted.
   // An annex is headed in words, not by a list, so a missing annex is
   // marked either way.
-  const labelled = blocks.filter(
-    ({ kind, label }) =>
-      kind === "paragraph" && label !== null && !isBulletMark(label),
-  );
+  const labelled = blocks.filter((block) => {
+    const label = printedLabel(block);
+    return block.kind === "paragraph" && label !== null && !isBulletMark(label);
+  });
   const unread = labelled.filter(({ id }) => !index.entryByBlockId.has(id));
   const numberingRead =
     unread.length <= labelled.length * UNREAD_LABELS_SHARE_MAX;

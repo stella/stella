@@ -10,8 +10,8 @@ const testFetchState = createTestFetch();
 
 const { createAtCourtsAdapter } =
   await import("@/api/handlers/case-law/ingestion/adapters/at-courts");
-const { fetchWithRetry } =
-  await import("@/api/handlers/case-law/ingestion/adapters/retry");
+const { readGatedResponseText } =
+  await import("@/api/handlers/case-law/ingestion/adapters/publisher-read");
 const { czNsAdapter } =
   await import("@/api/handlers/case-law/ingestion/adapters/cz-ns");
 const { czRegionalAdapter } =
@@ -28,7 +28,17 @@ const { skCourtsAdapter } =
 // reached through the plain retrying request instead.
 const atCourtsAdapter = createAtCourtsAdapter({
   now: () => new Date(),
-  request: fetchWithRetry,
+  readText: async (url, init) =>
+    await readGatedResponseText({
+      request: async () =>
+        await fetch(url, {
+          ...(init.headers !== undefined ? { headers: init.headers } : {}),
+          ...(init.redirect !== undefined ? { redirect: init.redirect } : {}),
+          ...(init.signal !== undefined ? { signal: init.signal } : {}),
+        }),
+      signal: init.signal ?? undefined,
+      refusalScope: init.refusalScope ?? "document",
+    }),
   sleep: async () => {},
 });
 
