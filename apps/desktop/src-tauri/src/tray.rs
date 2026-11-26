@@ -11,6 +11,7 @@ use crate::activity::{
   ActivityRecordingStatus, StoppedHistory, TrayActivity, TrayActivitySnapshot,
 };
 use crate::activity_capture::ActivityStopped;
+use crate::desktop_features::{Feature, in_feature_order};
 use crate::dictation::TrayDictation;
 use crate::dictation_hold_key::KeyNames;
 use crate::dictation_language::{self, Choice};
@@ -510,8 +511,8 @@ fn activity_binding(app: &AppHandle) -> Option<(u64, String)> {
     .account_binding(crate::feature_gate::DesktopFeature::ActivityTimeline)
 }
 
-/// The features the menu has an entry for, in the one order every surface
-/// lists the features in (`fixtures/desktop-feature-order.json`).
+/// The features the menu has an entry for. They appear in the one order
+/// every surface lists the features in (`crate::desktop_features`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TrayFeature {
   Clipboard,
@@ -520,16 +521,18 @@ enum TrayFeature {
 }
 
 impl TrayFeature {
-  const ORDER: [Self; 3] = [Self::Clipboard, Self::Dictation, Self::Activity];
+  const ALL: [Self; 3] = [Self::Clipboard, Self::Dictation, Self::Activity];
 
-  /// The feature's name in `fixtures/desktop-feature-order.json`.
-  #[cfg(test)]
-  const fn name(self) -> &'static str {
+  const fn feature(self) -> Feature {
     match self {
-      Self::Clipboard => "clipboard",
-      Self::Dictation => "dictation",
-      Self::Activity => "activity",
+      Self::Clipboard => Feature::Clipboard,
+      Self::Dictation => Feature::Dictation,
+      Self::Activity => Feature::Activity,
     }
+  }
+
+  fn in_order() -> [Self; 3] {
+    in_feature_order(Self::ALL, |item| Some(item.feature()))
   }
 }
 
@@ -584,7 +587,7 @@ fn build_tray_menu_with_activity(
     KeyNames::CURRENT,
     active_locale(),
   );
-  for feature in TrayFeature::ORDER {
+  for feature in TrayFeature::in_order() {
     match feature {
       TrayFeature::Clipboard => {
         if clipboard_enabled {
@@ -909,29 +912,6 @@ mod tests {
     DesktopEditFileType, DesktopNotificationPreferences, DesktopUpdateSnapshot,
     SessionStatus,
   };
-
-  #[test]
-  fn menu_features_follow_the_one_feature_order() {
-    let contract: serde_json::Value =
-      serde_json::from_str(include_str!("../../fixtures/desktop-feature-order.json"))
-        .unwrap();
-    let order = contract["features"]
-      .as_array()
-      .unwrap()
-      .iter()
-      .map(|feature| feature.as_str().unwrap())
-      .collect::<Vec<_>>();
-    let positions = TrayFeature::ORDER
-      .iter()
-      .map(|feature| order.iter().position(|known| *known == feature.name()))
-      .collect::<Option<Vec<_>>>()
-      .expect("every menu feature names a feature in the contract");
-    assert!(
-      positions.windows(2).all(|pair| pair[0] < pair[1]),
-      "{:?} are not in the order of {order:?}",
-      TrayFeature::ORDER
-    );
-  }
 
   fn init_i18n() {
     crate::i18n::init_en();

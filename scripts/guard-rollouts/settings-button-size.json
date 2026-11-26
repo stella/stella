@@ -1,0 +1,12 @@
+{
+  "id": "settings-button-size",
+  "type": "changed-lines",
+  "expiresAt": "2026-12-03T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--cwd=apps/desktop",
+    "run",
+    "test",
+    "tests/settings-button-size.test.ts"
+  ]
+}

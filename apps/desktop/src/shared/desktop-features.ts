@@ -1,16 +1,30 @@
+import { panic } from "better-result";
+
+import featureOrder from "../../fixtures/desktop-feature-order.json" with { type: "json" };
+
+/** The features the desktop app lists; their order is the contract's. */
+const FEATURES = {
+  activity: true,
+  clipboard: true,
+  dictation: true,
+  documents: true,
+  signing: true,
+} as const;
+
+export type DesktopFeature = keyof typeof FEATURES;
+
+const isDesktopFeature = (value: string): value is DesktopFeature =>
+  Object.hasOwn(FEATURES, value);
+
 /**
  * The desktop features in the one order every surface lists them in: the
- * setup tour's overview and its steps, the Settings sidebar and the tray
- * menu. `fixtures/desktop-feature-order.json` holds the same list for the
- * native tray menu and setup flow; `tests/desktop-feature-order.test.ts`
- * fails when a surface lists them in another order.
+ * setup overview and the Settings sidebar here, the tray menu and the setup
+ * tour on the native side. `fixtures/desktop-feature-order.json` holds the
+ * order for both sides, so no surface keeps one of its own.
  */
-export const DESKTOP_FEATURES = [
-  "documents",
-  "clipboard",
-  "signing",
-  "dictation",
-  "activity",
-] as const;
-
-export type DesktopFeature = (typeof DESKTOP_FEATURES)[number];
+export const DESKTOP_FEATURES: readonly DesktopFeature[] =
+  featureOrder.features.map((feature) =>
+    isDesktopFeature(feature)
+      ? feature
+      : panic(`Unknown desktop feature in the shared order: ${feature}`),
+  );

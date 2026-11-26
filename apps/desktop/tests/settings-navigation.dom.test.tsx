@@ -19,7 +19,7 @@ const { DesktopIntlProvider, defaultMessages } = await import("../src/i18n");
 const { DesktopAppearanceProvider } =
   await import("../src/shared/use-desktop-appearance");
 const { default: App } = await import("../src/mainview/App");
-const { SETTINGS_PAGES } = await import("../src/mainview/settings-pages");
+const { SIDEBAR_PAGES } = await import("../src/mainview/settings-pages");
 
 afterEach(async () => {
   await act(async () => {
@@ -166,7 +166,7 @@ test("the sidebar names every page in order and marks only the open one as curre
   );
   // Signing is a macOS setting; this computer reads as another platform.
   expect(names).toEqual(
-    SETTINGS_PAGES.filter((page) => page !== "signing").map(
+    SIDEBAR_PAGES.filter((page) => page !== "signing").map(
       (page) => pages[page],
     ),
   );

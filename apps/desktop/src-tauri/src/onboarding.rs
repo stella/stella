@@ -4,11 +4,12 @@
 //! logic is a pure function over a small context; this module also owns the
 //! device-level progress and the window.
 
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, LogicalSize, Manager, State, webview::PageLoadEvent};
 
+use crate::desktop_features::{Feature, in_feature_order};
 use crate::device_preference::DevicePreference;
 use crate::feature_gate::{DesktopFeature, FeatureGates};
 use crate::permissions::{
@@ -42,9 +43,9 @@ pub enum Step {
 }
 
 impl Step {
-  /// The tour's order. The steps that set up one feature (Try it for
-  /// clipboard history, Dictation, Activity) come in the one order every
-  /// surface lists the features in, `fixtures/desktop-feature-order.json`.
+  /// Every step. The tour shows them in this order, except that the steps
+  /// that set one feature up take the one order every surface lists the
+  /// features in (`tour`).
   pub const ALL: [Self; 8] = [
     Self::Welcome,
     Self::Connect,
@@ -56,14 +57,12 @@ impl Step {
     Self::Done,
   ];
 
-  /// The feature this step sets up, by its name in
-  /// `fixtures/desktop-feature-order.json`.
-  #[cfg(test)]
-  const fn feature(self) -> Option<&'static str> {
+  /// The feature this step sets up.
+  const fn feature(self) -> Option<Feature> {
     match self {
-      Self::TryIt => Some("clipboard"),
-      Self::Dictation => Some("dictation"),
-      Self::Activity => Some("activity"),
+      Self::TryIt => Some(Feature::Clipboard),
+      Self::Dictation => Some(Feature::Dictation),
+      Self::Activity => Some(Feature::Activity),
       Self::Welcome
       | Self::Connect
       | Self::HowItWorks
@@ -71,6 +70,14 @@ impl Step {
       | Self::Done => None,
     }
   }
+}
+
+/// The tour's steps in order: `Step::ALL`, with the feature steps in the
+/// shared feature order (`crate::desktop_features`).
+fn tour() -> &'static [Step; 8] {
+  static TOUR: LazyLock<[Step; 8]> =
+    LazyLock::new(|| in_feature_order(Step::ALL, Step::feature));
+  &TOUR
 }
 
 /// What decides which steps appear.
@@ -93,8 +100,9 @@ pub struct FlowContext {
 /// except the one on screen: connecting mid-step keeps the Connect step
 /// visible so the user sees it succeed.
 pub fn visible_steps(context: FlowContext, current: Step) -> Vec<Step> {
-  Step::ALL
-    .into_iter()
+  tour()
+    .iter()
+    .copied()
     .filter(|step| {
       *step == current
         || match step {
@@ -161,7 +169,7 @@ pub fn on_screen(stored: Step, shown: Option<Step>, context: FlowContext) -> Ste
 /// A stored resume point may name a step that no longer applies (the account
 /// was linked since); settle on the first visible step at or after it.
 pub fn settle(stored: Step, context: FlowContext) -> Step {
-  let order = |step: Step| Step::ALL.iter().position(|candidate| *candidate == step);
+  let order = |step: Step| tour().iter().position(|candidate| *candidate == step);
   let stored_index = order(stored);
   visible_steps(context, Step::Welcome)
     .into_iter()
@@ -1071,7 +1079,7 @@ mod tests {
       for stored in Step::ALL {
         let settled = settle(stored, context);
         assert!(visible_steps(context, settled).contains(&settled));
-        let order = |step: Step| Step::ALL.iter().position(|s| *s == step);
+        let order = |step: Step| tour().iter().position(|s| *s == step);
         assert!(order(settled) >= order(stored));
       }
     }
@@ -1267,32 +1275,6 @@ mod tests {
     );
     history.granted = vec![Permission::OpenAtLogin];
     assert_eq!(launch_mode(Progress::Completed, &history, &current), None);
-  }
-
-  #[test]
-  fn feature_steps_follow_the_one_feature_order() {
-    let contract: serde_json::Value =
-      serde_json::from_str(include_str!("../../fixtures/desktop-feature-order.json"))
-        .unwrap();
-    let order = contract["features"]
-      .as_array()
-      .unwrap()
-      .iter()
-      .map(|feature| feature.as_str().unwrap())
-      .collect::<Vec<_>>();
-    let steps = Step::ALL
-      .into_iter()
-      .filter_map(Step::feature)
-      .collect::<Vec<_>>();
-    let positions = steps
-      .iter()
-      .map(|feature| order.iter().position(|known| known == feature))
-      .collect::<Option<Vec<_>>>()
-      .expect("every feature step names a feature in the contract");
-    assert!(
-      positions.windows(2).all(|pair| pair[0] < pair[1]),
-      "{steps:?} are not in the order of {order:?}"
-    );
   }
 
   #[test]

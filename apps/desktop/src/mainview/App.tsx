@@ -75,7 +75,7 @@ import { LocalLinkedFoldersSection } from "./LocalLinkedFoldersSection";
 import { LocalSkillFoldersSection } from "./LocalSkillFoldersSection";
 import { PermissionsSection } from "./PermissionsSection";
 import { SettingsPageHeader } from "./settings-layout";
-import { SETTINGS_PAGES, settingsView } from "./settings-pages";
+import { settingsView, SIDEBAR_PAGES } from "./settings-pages";
 import type { SettingsPage } from "./settings-pages";
 import { SettingsSidebar } from "./SettingsSidebar";
 import { ShortcutSetting } from "./ShortcutSetting";
@@ -893,7 +893,7 @@ const App = () => {
         return panic("Unknown settings page");
     }
   };
-  const pages = SETTINGS_PAGES.filter(offers);
+  const pages = SIDEBAR_PAGES.filter(offers);
   const shownPage = pages.includes(activePage) ? activePage : "general";
 
   useEffect(() => {
