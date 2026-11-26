@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
+import { READ_OUTCOME_METADATA_KEY } from "@/api/lib/errors/read-outcome";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import {
   decodeSourceRawEnvelope,
@@ -22,7 +23,9 @@ import {
   createAtCourtsAdapter,
 } from "./at-courts";
 import { AT_RIS_HEADNOTE_METADATA_URL_SCHEMA } from "./at-courts.metadata-urls";
+import type { AtRisReadText } from "./at-ris-throttle";
 import { AT_UMSE_SOURCE } from "./at-umse";
+import { readGatedResponseText } from "./publisher-read";
 
 const SOURCE_ID = "JJT_20260115_OGH0002_0010OB00001_26A0000_000";
 const SECOND_SOURCE_ID = "JJT_20260115_OGH0002_0010OB00001_26A0000_001";
@@ -182,24 +185,33 @@ const isHeadnoteQuery = (url: string): boolean =>
  * publisher gives for a decision with none, so the queue stays about the
  * request under test.
  */
+const readFromResponse =
+  (responder: (url: string) => Promise<Response> | Response): AtRisReadText =>
+  async (url, init) =>
+    await readGatedResponseText({
+      request: async () => await responder(url),
+      signal: init.signal ?? undefined,
+      refusalScope: init.refusalScope ?? "document",
+    });
+
 const queuedRequest = (
   responses: readonly Response[],
-  headnotes: () => Response = emptyHeadnoteListing,
+  headnotes: () => Promise<Response> | Response = emptyHeadnoteListing,
 ) => {
   const queue = [...responses];
   const urls: string[] = [];
-  const request = async (url: string): Promise<Response> => {
+  const readText = readFromResponse(async (url: string): Promise<Response> => {
     urls.push(url);
     if (isHeadnoteQuery(url)) {
-      return headnotes();
+      return await headnotes();
     }
     const response = queue.shift();
     if (response === undefined) {
       throw new TypeError(`Unexpected request: ${url}`);
     }
     return response;
-  };
-  return { request, urls };
+  });
+  return { readText, urls };
 };
 
 /** The slice pages a run asked the publisher for, in order. */
@@ -242,7 +254,7 @@ describe("Austrian RIS adapter", () => {
       new Response(null, { status: 404 }),
     ]);
     const adapter = createAtCourtsAdapter({
-      request: fixtures.request,
+      readText: fixtures.readText,
       sleep: async () => {},
     });
     const page = (await adapter.fetchPage(null, {})).unwrap();
@@ -290,7 +302,7 @@ describe("Austrian RIS adapter", () => {
     const xml = await fixtureXml();
     const firstListing = listingResponse([listingItem()]);
     const verificationListing = listingResponse([listingItem()]);
-    const { request, urls } = queuedRequest([
+    const { readText, urls } = queuedRequest([
       firstListing,
       new Response(xml, { status: 200 }),
       verificationListing,
@@ -298,7 +310,7 @@ describe("Austrian RIS adapter", () => {
     const delays: number[] = [];
     const adapter = createAtCourtsAdapter({
       now: () => new Date("2026-02-01T00:00:00Z"),
-      request,
+      readText,
       sleep: async (delay) => {
         delays.push(delay);
       },
@@ -342,13 +354,13 @@ describe("Austrian RIS adapter", () => {
 
   it("keeps distinct publisher documents that share a docket", async () => {
     const xml = await fixtureXml();
-    const { request } = queuedRequest([
+    const { readText } = queuedRequest([
       listingResponse([listingItem(), listingItem(SECOND_SOURCE_ID)]),
       new Response(xml),
       new Response(xml),
     ]);
     const adapter = createAtCourtsAdapter({
-      request,
+      readText,
       sleep: async () => {},
     });
 
@@ -375,7 +387,7 @@ describe("Austrian RIS adapter", () => {
         "AUSL EKMR",
       ),
     );
-    const { request, urls } = queuedRequest([
+    const { readText, urls } = queuedRequest([
       listingResponse(foreignItems, 101, 1),
       listingResponse([listingItem()], 101, 2),
       new Response(xml),
@@ -384,7 +396,7 @@ describe("Austrian RIS adapter", () => {
     ]);
     const adapter = createAtCourtsAdapter({
       now: () => new Date("2026-02-01T00:00:00Z"),
-      request,
+      readText,
       sleep: async () => {},
     });
 
@@ -406,7 +418,7 @@ describe("Austrian RIS adapter", () => {
   it("restarts a stable slice whose pages contain fewer items than its total", async () => {
     const xml = await fixtureXml();
     const foreignItem = listingItem(undefined, "AUSL EKMR");
-    const { request, urls } = queuedRequest([
+    const { readText, urls } = queuedRequest([
       listingResponse([foreignItem], 101, 1),
       listingResponse([foreignItem], 101, 2),
       listingResponse([listingItem()], 101, 1),
@@ -414,7 +426,7 @@ describe("Austrian RIS adapter", () => {
     ]);
     const adapter = createAtCourtsAdapter({
       now: () => new Date("2026-02-01T00:00:00Z"),
-      request,
+      readText,
       sleep: async () => {},
     });
 
@@ -427,11 +439,11 @@ describe("Austrian RIS adapter", () => {
   });
 
   it("rejects a listing body for a different publisher page", async () => {
-    const { request } = queuedRequest([
+    const { readText } = queuedRequest([
       listingResponse([listingItem()], 101, 2),
     ]);
     const adapter = createAtCourtsAdapter({
-      request,
+      readText,
       sleep: async () => {},
     });
 
@@ -441,7 +453,9 @@ describe("Austrian RIS adapter", () => {
   it("refuses a monthly set beyond the reconciliation page cap", async () => {
     const adapter = createAtCourtsAdapter({
       now: () => new Date("2026-02-01T00:00:00Z"),
-      request: async () => listingResponse([listingItem()], 20_001),
+      readText: readFromResponse(() =>
+        listingResponse([listingItem()], 20_001),
+      ),
       sleep: async () => {},
     });
 
@@ -459,12 +473,12 @@ describe("Austrian RIS adapter", () => {
   it("quarantines an identity-less row without blocking later documents", async () => {
     const xml = await fixtureXml();
     const unkeyable = listingItem(null);
-    const { request } = queuedRequest([
+    const { readText } = queuedRequest([
       listingResponse([unkeyable, listingItem()]),
       new Response(xml),
     ]);
     const adapter = createAtCourtsAdapter({
-      request,
+      readText,
       sleep: async () => {},
     });
 
@@ -484,12 +498,12 @@ describe("Austrian RIS adapter", () => {
   });
 
   it("stores a listing-only row for a permanently missing detail", async () => {
-    const { request } = queuedRequest([
+    const { readText } = queuedRequest([
       listingResponse([listingItem()]),
       new Response(null, { status: 404 }),
     ]);
     const adapter = createAtCourtsAdapter({
-      request,
+      readText,
       sleep: async () => {},
     });
 
@@ -504,19 +518,19 @@ describe("Austrian RIS adapter", () => {
 
   it("throws on transient or unparseable listings and accepts an explicit zero", async () => {
     const transient = createAtCourtsAdapter({
-      request: async () => new Response(null, { status: 503 }),
+      readText: readFromResponse(() => new Response(null, { status: 503 })),
       sleep: async () => {},
     });
     expect((await transient.fetchPage(null, {})).isErr()).toBe(true);
 
     const malformed = createAtCourtsAdapter({
-      request: async () => Response.json({ status: "ok" }),
+      readText: readFromResponse(() => Response.json({ status: "ok" })),
       sleep: async () => {},
     });
     expect((await malformed.fetchPage(null, {})).isErr()).toBe(true);
 
     const empty = createAtCourtsAdapter({
-      request: async () => listingResponse([], 0),
+      readText: readFromResponse(() => listingResponse([], 0)),
       sleep: async () => {},
       now: () => new Date("2026-03-01T00:00:00Z"),
     });
@@ -527,13 +541,13 @@ describe("Austrian RIS adapter", () => {
   });
 
   it("subtracts the publisher's foreign-court subset from its total", async () => {
-    const { request, urls } = queuedRequest([
+    const { readText, urls } = queuedRequest([
       listingResponse([listingItem()], 172_213),
       listingResponse([listingItem(SOURCE_ID, "AUSL EKMR")], 2200),
     ]);
     const delays: number[] = [];
     const adapter = createAtCourtsAdapter({
-      request,
+      readText,
       sleep: async (delay) => {
         delays.push(delay);
       },
@@ -547,9 +561,9 @@ describe("Austrian RIS adapter", () => {
 
   it("rejects cursors outside the monthly snapshot state machine", async () => {
     const adapter = createAtCourtsAdapter({
-      request: async () => {
+      readText: readFromResponse(() => {
         throw new Error("should not fetch");
-      },
+      }),
       sleep: async () => {},
     });
     expect((await adapter.fetchPage("abc", {})).isErr()).toBe(true);
@@ -559,13 +573,13 @@ describe("Austrian RIS adapter", () => {
   it("lists reconciliation pages with the crawl's exact identity rule", async () => {
     const unkeyable = listingItem(null);
     const foreign = listingItem(SECOND_SOURCE_ID, "AUSL EKMR");
-    const { request, urls } = queuedRequest([
+    const { readText, urls } = queuedRequest([
       listingResponse([listingItem(), unkeyable, foreign], 3),
     ]);
     const delays: number[] = [];
     const adapter = createAtCourtsAdapter({
       now: () => new Date("2026-02-01T00:00:00Z"),
-      request,
+      readText,
       sleep: async (delay) => {
         delays.push(delay);
       },
@@ -596,12 +610,12 @@ describe("Austrian RIS adapter", () => {
 
   it("builds reconciliation detail but never stores a hollow listing", async () => {
     const xml = await fixtureXml();
-    const { request } = queuedRequest([
+    const { readText } = queuedRequest([
       new Response(xml),
       new Response(null, { status: 404 }),
     ]);
     const adapter = createAtCourtsAdapter({
-      request,
+      readText,
       sleep: async () => {},
     });
     const reconciliation = requireReconciliation(adapter);
@@ -652,11 +666,14 @@ describe("Austrian RIS adapter", () => {
         throw new TypeError("the listing fixture states no XML address");
       }
       xmlEntry["Url"] = listed;
-      const { request, urls: requested } = queuedRequest([
+      const { readText, urls: requested } = queuedRequest([
         listingResponse([item]),
         new Response(xml),
       ]);
-      const adapter = createAtCourtsAdapter({ request, sleep: async () => {} });
+      const adapter = createAtCourtsAdapter({
+        readText,
+        sleep: async () => {},
+      });
 
       const decision = (await adapter.fetchPage(null, {})).unwrap()
         .decisions[0];
@@ -686,11 +703,11 @@ describe("Austrian RIS adapter", () => {
         },
       },
     ];
-    const { request } = queuedRequest([
+    const { readText } = queuedRequest([
       listingResponse([item]),
       new Response(xml),
     ]);
-    const adapter = createAtCourtsAdapter({ request, sleep: async () => {} });
+    const adapter = createAtCourtsAdapter({ readText, sleep: async () => {} });
 
     const decision = (await adapter.fetchPage(null, {})).unwrap().decisions[0];
 
@@ -701,11 +718,11 @@ describe("Austrian RIS adapter", () => {
 
   it("stores the headnotes the publisher indexes under the decision", async () => {
     const xml = await fixtureXml();
-    const { request, urls } = queuedRequest(
+    const { readText, urls } = queuedRequest(
       [listingResponse([listingItem()]), new Response(xml)],
       () => listingResponse([headnoteItem()]),
     );
-    const adapter = createAtCourtsAdapter({ request, sleep: async () => {} });
+    const adapter = createAtCourtsAdapter({ readText, sleep: async () => {} });
 
     const decision = (await adapter.fetchPage(null, {})).unwrap().decisions[0];
 
@@ -881,4 +898,83 @@ it("RIS related decisions remain display text even when they resemble a URL", as
     ]);
     expect(metadata["metadataUrlDiagnostics"]).toBeUndefined();
   }
+});
+
+describe("Austrian RIS typed publisher read outcomes", () => {
+  it("stores a typed document refusal when the detail endpoint refuses", async () => {
+    const { readText } = queuedRequest([
+      listingResponse([listingItem()]),
+      new Response("", { status: 403 }),
+    ]);
+    const adapter = createAtCourtsAdapter({ readText, sleep: async () => {} });
+
+    const page = (await adapter.fetchPage(null, {})).unwrap();
+    const decision = page.decisions[0];
+    expect(decision?.isListingOnly).toBe(true);
+    expect(decision?.metadata["detailStatus"]).toBe("detail-http-403");
+    expect(decision?.metadata[READ_OUTCOME_METADATA_KEY]).toEqual({
+      type: "refused",
+      status: 403,
+      scope: "document",
+      cause: { kind: "http-status", retryAfter: null },
+    });
+  });
+
+  it("fails the page when the detail endpoint returns an empty 200 or 204", async () => {
+    for (const response of [
+      new Response("", { status: 200 }),
+      new Response(null, { status: 204 }),
+    ]) {
+      const { readText } = queuedRequest([
+        listingResponse([listingItem()]),
+        response,
+      ]);
+      const adapter = createAtCourtsAdapter({
+        readText,
+        sleep: async () => {},
+      });
+      expect((await adapter.fetchPage(null, {})).isErr()).toBe(true);
+    }
+  });
+
+  it("keeps the decision with a typed part outcome when headnotes are refused or unavailable", async () => {
+    const xml = await fixtureXml();
+    const refused = queuedRequest(
+      [listingResponse([listingItem()]), new Response(xml)],
+      () => new Response("", { status: 403 }),
+    );
+    const refusedAdapter = createAtCourtsAdapter({
+      readText: refused.readText,
+      sleep: async () => {},
+    });
+    const refusedDecision = (await refusedAdapter.fetchPage(null, {})).unwrap()
+      .decisions[0];
+    expect(refusedDecision?.isListingOnly).not.toBe(true);
+    expect(refusedDecision?.metadata["headnotes"]).toEqual([]);
+    expect(refusedDecision?.metadata["headnotesReadOutcome"]).toEqual({
+      type: "refused",
+      status: 403,
+      scope: "part",
+      cause: { kind: "http-status", retryAfter: null },
+    });
+
+    const faulted = queuedRequest(
+      [listingResponse([listingItem()]), new Response(xml)],
+      () => new Response("", { status: 500 }),
+    );
+    const faultedAdapter = createAtCourtsAdapter({
+      readText: faulted.readText,
+      sleep: async () => {},
+    });
+    const faultedDecision = (await faultedAdapter.fetchPage(null, {})).unwrap()
+      .decisions[0];
+    expect(faultedDecision?.isListingOnly).not.toBe(true);
+    expect(faultedDecision?.metadata["headnotes"]).toEqual([]);
+    expect(faultedDecision?.metadata["headnotesReadOutcome"]).toEqual({
+      type: "unavailable",
+      scope: "part",
+      cause: { kind: "status", status: 500 },
+      consecutiveCycles: 1,
+    });
+  });
 });

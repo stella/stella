@@ -1,3 +1,4 @@
+// parser-output-unchanged: RIS publisher reads use typed ReadOutcome wrappers; served responses produce identical parsed decisions and metadata.
 // parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: Reconciliation exposes the existing listing total for unfiltered source scopes; decision parsing and listed identities are unchanged.
@@ -25,11 +26,12 @@ import type { AtRisApplicationProfile } from "@/api/handlers/case-law/ingestion/
 import { atRisSourceSurfaces } from "@/api/handlers/case-law/ingestion/adapters/at-ris-source-surfaces";
 import {
   AT_RIS_DOCUMENT_ORIGINS,
-  fetchAtRisWithRetry,
+  type AtRisReadText,
+  readAtRisText,
 } from "@/api/handlers/case-law/ingestion/adapters/at-ris-throttle";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import type { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import { unreadPublisherError } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
 import type { RisDocumentSections } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
@@ -41,6 +43,13 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import type { DecisionTextFields } from "@/api/lib/case-law/decision-text";
+import {
+  isReadRefusal,
+  READ_OUTCOME_METADATA_KEY,
+  type ReadOutcome,
+  type StoredReadOutcome,
+  storedReadUnavailable,
+} from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
@@ -154,7 +163,7 @@ export type AtRisSourceDefinition = {
 
 export type AtRisDependencies = {
   now: () => Date;
-  request: typeof fetchWithRetry;
+  readText: AtRisReadText;
   sleep: (ms: number) => Promise<void>;
 };
 
@@ -199,7 +208,7 @@ export const AT_COURTS_SOURCE = defineAtRisSource({
 
 const DEFAULT_DEPENDENCIES: AtRisDependencies = {
   now: () => new Date(),
-  request: fetchAtRisWithRetry,
+  readText: readAtRisText,
   sleep: Bun.sleep,
 };
 
@@ -967,20 +976,19 @@ const fetchHeadnoteListing = async ({
   decisionDate,
   source,
   signal,
-}: FetchHeadnoteListingOptions): Promise<string | undefined> => {
-  const response = await dependencies.request(
+}: FetchHeadnoteListingOptions): Promise<ReadOutcome<string>> =>
+  await dependencies.readText(
     headnoteListingQuery(source, caseNumber, decisionDate),
-    { headers: { Accept: "application/json" }, redirect: "error" },
     {
+      headers: { Accept: "application/json" },
       fetchStage: "listing",
       adapterKey: source.key,
-      baseDelayMs: REQUEST_INTERVAL_MS,
+      retryPolicy: "publisher-backoff",
       signal,
       timeoutMs: ADAPTER_TIMEOUT.LIST,
+      refusalScope: "part",
     },
   );
-  return response.ok ? await response.text() : undefined;
-};
 
 /** The headnotes a stored answer names for this decision, as the row keeps them. */
 const headnotesOf = (
@@ -1039,6 +1047,7 @@ type BuildListingOnlyOptions = {
   reason: string;
   source: AtRisSourceDefinition;
   rawDetail?: string | undefined;
+  readOutcome?: StoredReadOutcome | undefined;
 };
 
 const buildListingOnly = ({
@@ -1047,6 +1056,7 @@ const buildListingOnly = ({
   reason,
   source,
   rawDetail,
+  readOutcome,
 }: BuildListingOnlyOptions): IngestionResult => {
   const { sourceDocumentId, sourceDocumentIdRepairAliases } = identity;
   const data = readDecisionMetadata(source, item);
@@ -1084,6 +1094,9 @@ const buildListingOnly = ({
           ...decisionMetadata(source, data, NO_SECTIONS),
           court,
           detailStatus: reason,
+          ...(readOutcome === undefined
+            ? {}
+            : { [READ_OUTCOME_METADATA_KEY]: readOutcome }),
         },
         AT_RIS_METADATA_URL_SCHEMA,
       ),
@@ -1146,34 +1159,46 @@ const buildDecision = async ({
     });
   }
 
-  const response = await dependencies.request(
-    xmlUrl,
-    { headers: { Accept: "application/xml" }, redirect: "error" },
-    {
-      fetchStage: "document",
-      adapterKey: source.key,
-      baseDelayMs: REQUEST_INTERVAL_MS,
-      signal,
-      timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-    },
-  );
-  if (response.status === 404 || response.status === 410) {
-    return buildListingOnly({
-      identity,
-      item,
-      reason: `detail-http-${response.status}`,
-      source,
-    });
+  const outcome = await dependencies.readText(xmlUrl, {
+    headers: { Accept: "application/xml" },
+    fetchStage: "document",
+    adapterKey: source.key,
+    retryPolicy: "publisher-backoff",
+    signal,
+    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    refusalScope: "document",
+  });
+  switch (outcome.type) {
+    case "present":
+      break;
+    case "absent":
+      return buildListingOnly({
+        identity,
+        item,
+        reason: `detail-${outcome.evidence}`,
+        source,
+        readOutcome: { type: "absent", evidence: outcome.evidence },
+      });
+    case "refused":
+      return buildListingOnly({
+        identity,
+        item,
+        reason: `detail-http-${outcome.status}`,
+        source,
+        readOutcome: outcome,
+      });
+    case "unavailable":
+      throw unreadPublisherError({
+        outcome,
+        message: "RIS detail request failed",
+        adapterKey: source.key,
+        cursor,
+      });
+    default:
+      outcome satisfies never;
+      return panic(`Unhandled RIS detail read outcome: ${String(outcome)}`);
   }
-  if (!response.ok) {
-    throw new AdapterFetchError({
-      message: `RIS detail request failed: ${response.status}`,
-      adapterKey: source.key,
-      cursor,
-      httpStatus: response.status,
-    });
-  }
-  const xml = await response.text();
+  const xml = outcome.value;
   if (xml.length < MIN_DOCUMENT_LENGTH) {
     return buildListingOnly({
       identity,
@@ -1184,27 +1209,71 @@ const buildDecision = async ({
     });
   }
 
-  const headnoteListing =
-    data.decisionDate === undefined
-      ? undefined
-      : await fetchHeadnoteListing({
-          caseNumber: data.caseNumber,
-          decisionDate: data.decisionDate,
-          dependencies,
-          signal,
-          source,
+  let headnoteListing: string | undefined;
+  let headnotesReadOutcome: StoredReadOutcome | undefined;
+  if (data.decisionDate !== undefined) {
+    const headnotes = await fetchHeadnoteListing({
+      caseNumber: data.caseNumber,
+      decisionDate: data.decisionDate,
+      dependencies,
+      signal,
+      source,
+    });
+    switch (headnotes.type) {
+      case "present":
+        headnoteListing = headnotes.value;
+        break;
+      case "absent":
+        headnotesReadOutcome = {
+          type: "absent",
+          evidence: headnotes.evidence,
+        };
+        break;
+      case "refused":
+        headnotesReadOutcome = headnotes;
+        break;
+      case "unavailable":
+        headnotesReadOutcome = storedReadUnavailable({
+          cause: headnotes.cause,
+          scope: "part",
+          consecutiveCycles: 1,
         });
+        break;
+      default:
+        headnotes satisfies never;
+        return panic(
+          `Unhandled RIS headnote read outcome: ${String(headnotes)}`,
+        );
+    }
+  }
   return assembleAtRisDecision(source, item, {
     documentXml: xml,
     headnoteListing,
+    headnotesReadOutcome,
   });
 };
+
+/** Fetch and build one listed RIS decision through the publisher read path. */
+export const buildAtRisDecision = async (
+  source: AtRisSourceDefinition,
+  item: RisListingItem,
+  signal?: AbortSignal,
+): Promise<IngestionResult> =>
+  await buildDecision({
+    cursor: null,
+    dependencies: DEFAULT_DEPENDENCIES,
+    item,
+    signal,
+    source,
+  });
 
 /** The payloads this publisher serves for one decision, beside its listing. */
 export type AtRisDecisionPayloads = {
   readonly documentXml: string;
   /** The headnote answer, where the crawl received one. */
   readonly headnoteListing?: string | undefined;
+  /** The typed outcome when the headnote query did not return a listing. */
+  readonly headnotesReadOutcome?: StoredReadOutcome | undefined;
 };
 
 /**
@@ -1218,7 +1287,7 @@ export type AtRisDecisionPayloads = {
 export const assembleAtRisDecision = (
   source: AtRisSourceDefinition,
   item: RisListingItem,
-  { documentXml, headnoteListing }: AtRisDecisionPayloads,
+  { documentXml, headnoteListing, headnotesReadOutcome }: AtRisDecisionPayloads,
 ): IngestionResult => {
   const identity = identityOf(source, item);
   const { sourceDocumentId, sourceDocumentIdRepairAliases } = identity;
@@ -1308,6 +1377,9 @@ export const assembleAtRisDecision = (
         {
           ...decisionMetadata(source, data, parsed.sections),
           headnotes: headnotesOf(source, headnoteListing, sourceDocumentId),
+          ...(headnotesReadOutcome === undefined
+            ? {}
+            : { headnotesReadOutcome }),
           ...(parsed.textFidelity === undefined
             ? {}
             : { textFidelity: parsed.textFidelity }),
@@ -1347,26 +1419,27 @@ const fetchListing = async ({
   courtFilter,
 }: FetchListingOptions): Promise<RisListingFetch> => {
   const url = listingQuery(source, slice, page, courtFilter);
-  const response = await dependencies.request(
-    url,
-    { headers: { Accept: "application/json" }, redirect: "error" },
-    {
-      fetchStage: "listing",
-      adapterKey: source.key,
-      baseDelayMs: REQUEST_INTERVAL_MS,
-      signal,
-      timeoutMs: ADAPTER_TIMEOUT.LIST,
-    },
-  );
-  if (!response.ok) {
-    throw new AdapterFetchError({
-      message: `RIS listing request failed: ${response.status}`,
+  const outcome = await dependencies.readText(url, {
+    headers: { Accept: "application/json" },
+    fetchStage: "listing",
+    adapterKey: source.key,
+    retryPolicy: "publisher-backoff",
+    signal,
+    timeoutMs: ADAPTER_TIMEOUT.LIST,
+    refusalScope: "source",
+  });
+  if (outcome.type !== "present") {
+    throw unreadPublisherError({
+      outcome,
+      message: "RIS listing request failed",
       adapterKey: source.key,
       cursor,
-      httpStatus: response.status,
     });
   }
-  const json: unknown = await response.json();
+  const json = Result.try({
+    try: (): unknown => JSON.parse(outcome.value),
+    catch: () => undefined,
+  }).unwrapOr(undefined);
   const parsed = parseListingPage(json);
   if (
     parsed === undefined ||
@@ -1487,11 +1560,19 @@ const buildReconciliationDecision = async (
   if (typeof detailStatus !== "string") {
     return panic("RIS listing-only decision has no detail status");
   }
-  throw new AdapterFetchError({
-    message: `RIS reconciliation could not build detail: ${detailStatus}`,
-    adapterKey: source.key,
-    cursor: null,
-  });
+  const readOutcome = decision.metadata[READ_OUTCOME_METADATA_KEY];
+  throw isReadRefusal(readOutcome)
+    ? unreadPublisherError({
+        outcome: readOutcome,
+        message: "RIS reconciliation could not build detail",
+        adapterKey: source.key,
+        cursor: null,
+      })
+    : new AdapterFetchError({
+        message: `RIS reconciliation could not build detail: ${detailStatus}`,
+        adapterKey: source.key,
+        cursor: null,
+      });
 };
 
 type AtRisSourceAdapter<TKey extends AtRisAdapterKey> = SourceAdapter & {
