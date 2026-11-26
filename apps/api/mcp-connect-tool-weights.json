@@ -454,6 +454,14 @@
       "estimatedTokens": 1089
     },
     {
+      "name": "reformat_into_template",
+      "nameChars": 22,
+      "descriptionChars": 607,
+      "inputSchemaChars": 832,
+      "totalChars": 1461,
+      "estimatedTokens": 557
+    },
+    {
       "name": "remove_matter_member",
       "nameChars": 20,
       "descriptionChars": 107,
@@ -679,7 +687,7 @@
     }
   ],
   "totals": {
-    "characters": 144459,
-    "estimatedTokens": 57364
+    "characters": 145920,
+    "estimatedTokens": 57921
   }
 }

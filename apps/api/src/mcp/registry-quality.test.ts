@@ -339,10 +339,6 @@ test("every read tool permission declaration stays visible in review", () => {
         "reason": "public legislation corpus",
       },
       {
-        "kind": "all",
-        "name": "reformat_into_template",
-      },
-      {
         "kind": "open-read",
         "name": "resolve_case_law_decision",
         "reason": "public law corpus",

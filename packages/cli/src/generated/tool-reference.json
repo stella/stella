@@ -336,6 +336,13 @@
     "title": "Preview template conditions"
   },
   {
+    "access": "write",
+    "command": ["template", "reformat"],
+    "description": "Apply an organisation template's house style to a stored DOCX and save the result as a new document beside it; the source is not changed. The text is carried over verbatim: styles, numbering, headers and footers come from the template, and cross-references become fields. Omit template_id to use the matching template tagged \"house-style\". A document that cannot be reformatted without changing its text (tracked changes, a number the template would not show) is refused and nothing is saved. Returns the new document and a formatting note: counts, references and labels kept as text, and template findings.",
+    "name": "reformat_into_template",
+    "title": "Reformat into template"
+  },
+  {
     "access": "read",
     "command": ["task", "list"],
     "description": "List tasks, or read one task in detail. Pass task_id for one task's fields, assignees, and linked entities. Otherwise pass matter_id to list one matter's tasks, or omit it to list tasks across every matter you can read; filter by status, due date (date_from/date_to, ISO YYYY-MM-DD), or assignee. Soonest due first, undated last. Each task names its matter (id, name, reference).",
