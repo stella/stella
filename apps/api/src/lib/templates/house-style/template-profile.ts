@@ -173,6 +173,7 @@ const CONFIDENCE = {
 } as const;
 
 const NO_BLOCKS: readonly DocxBlock[] = [];
+const NO_LEVELS: readonly ProfileListLevel[] = [];
 
 type StyleFacts = {
   style: TemplateStyle;
@@ -1018,7 +1019,7 @@ const unknownLevelIssues = (
   inspection: TemplateInspection,
   abstractByNum: ReadonlyMap<number, number>,
 ): TemplateProfileIssue[] =>
-  [...profile.spareLevels, ...(profile.markLevels ?? [])].flatMap(
+  [...profile.spareLevels, ...(profile.markLevels ?? NO_LEVELS)].flatMap(
     ({ abstractNumId, numId, ilvl }): TemplateProfileIssue[] => {
       const known = inspection.numbering.abstractNums
         .find((list) => list.abstractNumId === abstractNumId)
