@@ -12,12 +12,11 @@ import { useTranslations } from "use-intl";
 import { copyRichToClipboard, copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import { CopyFeedback, useCopiedFeedback } from "@stll/ui/copy-button";
+import { useLatestCallback, useMountEffect } from "@stll/ui/effects";
 import type { CopyToClipboardIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { nativeCopyMatches } from "@/components/copy-control.logic";
-import { useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";

@@ -1,9 +1,4 @@
-import {
-  expect,
-  type Locator,
-  type Page,
-  test as base,
-} from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import { panic } from "better-result";
 import { setTimeout as delay } from "node:timers/promises";
 import * as v from "valibot";
@@ -11,6 +6,7 @@ import * as v from "valibot";
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { createUploadedDocumentRoute } from "../helpers/document";
 import { openSavedView } from "../helpers/saved-views";
+import { test as base } from "../helpers/storm-watch-fixture";
 import { PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS } from "../helpers/wait-budgets";
 import {
   createTestWorkspace,

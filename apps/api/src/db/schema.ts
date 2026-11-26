@@ -40,6 +40,7 @@ export * from "./schema/document-naming";
 export * from "./schema/document-processing";
 export * from "./schema/bilingual";
 export * from "./schema/document-translations";
+export * from "./schema/recording-transcriptions";
 export * from "./schema/document-reviews";
 export * from "./schema/lists-verification";
 export * from "./schema/model-run-caps";

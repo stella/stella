@@ -21,6 +21,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@stll/ui/dialog";
+import { useLatestCallback } from "@stll/ui/effects";
 import { KeyboardIcon, PlusIcon, RouteIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
@@ -83,7 +84,6 @@ import type {
 import { useQuestionColumnsCountLimit } from "@/features/case-law/research/use-question-column-limit";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useSingleFlight } from "@/hooks/use-single-flight";
 import { useFormatter } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";

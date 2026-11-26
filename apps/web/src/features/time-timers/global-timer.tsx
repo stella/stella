@@ -3,10 +3,10 @@ import type { ComponentType } from "react";
 
 import { useInfiniteQuery } from "@tanstack/react-query";
 
+import { useHasMounted } from "@stll/ui/effects";
 import { ClockIcon } from "@stll/ui/icons";
 
 import { timeTimersOptions } from "@/features/time-timers/queries";
-import { useHasMounted } from "@/hooks/use-chrome-query";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useTimeBillingDecision } from "@/hooks/use-time-billing-preview";
 import { useTimeChromeVisible } from "@/hooks/use-time-chrome-visible";

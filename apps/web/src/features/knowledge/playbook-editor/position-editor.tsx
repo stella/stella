@@ -25,6 +25,7 @@ import {
 } from "@stll/ui/combobox";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import {
   ChevronDownIcon,
   ChevronRightIcon,
@@ -83,8 +84,6 @@ import {
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { Switch } from "@/components/switch";
 import type { ResolvedPositionSource } from "@/features/knowledge/playbook-editor/playbook-editor.logic";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { TranslationKey } from "@/i18n/types";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";

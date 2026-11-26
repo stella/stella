@@ -43,6 +43,7 @@ mod config;
 mod deep_link;
 mod desktop_crash;
 mod desktop_crash_native;
+mod desktop_features;
 mod desktop_runner;
 mod desktop_telemetry;
 mod device_preference;

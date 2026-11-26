@@ -23,6 +23,7 @@ import {
   CollapsibleTrigger,
 } from "@stll/ui/collapsible";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
+import { useExternalSyncEffect, useMountEffect } from "@stll/ui/effects";
 import { formatFileSize } from "@stll/ui/file-size";
 import { AlertTriangleIcon, PaperclipIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -47,7 +48,6 @@ import {
   localizeEmailBodyHtml,
   parseEmailDate,
 } from "@/components/inspector/email-html-viewer.logic";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import {

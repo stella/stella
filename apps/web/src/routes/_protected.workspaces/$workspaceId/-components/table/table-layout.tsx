@@ -8,6 +8,7 @@ import { useTable } from "@tanstack/react-table";
 import { useTranslations } from "use-intl";
 
 import { VIEW_SORTS_MAX } from "@stll/api-contract";
+import { useMountEffect } from "@stll/ui/effects";
 import { SearchXIcon, TableIcon } from "@stll/ui/icons";
 
 import { useAIKeyGate } from "@/components/require-ai-key";
@@ -19,7 +20,6 @@ import { workspaceTableFeatures } from "@/components/workspaces/table/table-feat
 import { DEFAULT_TABLE_COLUMN_MIN_SIZE } from "@/components/workspaces/table/table-schema";
 import { useEntityTableFind } from "@/components/workspaces/table/use-entity-table-find";
 import { WorkspaceTable } from "@/components/workspaces/table/workspace-table/workspace-table";
-import { useMountEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
 import { useUpdateView } from "@/lib/workspaces/mutations/views";

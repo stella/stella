@@ -1,8 +1,7 @@
 import { useState } from "react";
 
 import { Temporal } from "@stll/time";
-
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 /** The longest single timer wait; a longer wait re-arms when it fires. */
 const MAX_TIMER_DELAY_MS = 60 * 60 * 1000;

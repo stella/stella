@@ -19,6 +19,7 @@ import {
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useMountEffect } from "@stll/ui/effects";
 import {
   ArrowLeftIcon,
   ChevronDownIcon,
@@ -55,7 +56,6 @@ import {
 import { MatterOptionLabel } from "@/components/matter-option-label";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
-import { useMountEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { getFormattingLocale } from "@/i18n/i18n-store";

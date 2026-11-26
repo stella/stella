@@ -2361,6 +2361,7 @@ function useMatterCandidates(recordedIds: readonly string[]) {
     type: "loading",
   });
   const candidateRequest = useRef(0);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const refreshCandidates = useCallback(() => {
     const request = ++candidateRequest.current;
     invoke<DesktopMatterCandidatesResponse>("time_entry_candidates")

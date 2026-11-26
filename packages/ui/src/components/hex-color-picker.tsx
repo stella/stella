@@ -18,8 +18,8 @@
 import type * as React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useLatest } from "../effects/effects";
 import { containedHandler } from "../hooks/use-contained-handler";
-import { useLatest } from "../hooks/use-latest";
 import { cn } from "../lib/utils";
 
 // ---------------------------------------------------------------------------

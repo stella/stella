@@ -14,6 +14,7 @@ import {
   CollapsibleTrigger,
 } from "@stll/ui/collapsible";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { Separator } from "@stll/ui/separator";
@@ -35,7 +36,6 @@ import {
   groupSourceEntries,
 } from "@/components/chat/source-chips.logic";
 import { ReferenceIcon } from "@/components/references/reference-chip";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { ChatMessage, ChatSourceDocument } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";

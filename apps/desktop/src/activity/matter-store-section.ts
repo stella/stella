@@ -83,6 +83,7 @@ export function useStoredSection<T>(binding: StoreBinding<T>) {
   // yet.
   const latest = useRef<StoredState<T>>({ type: "loading" });
   const reads = useRef(0);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const reload = useCallback(async () => {
     const request = ++reads.current;
     const next = await binding
@@ -101,6 +102,7 @@ export function useStoredSection<T>(binding: StoreBinding<T>) {
     }
     return next;
   }, [binding]);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const reloadReported = useCallback(() => {
     reload().catch((error: unknown) => {
       report(binding.window, DESKTOP_TELEMETRY_OPERATIONS.activityRead, error);
@@ -115,67 +117,61 @@ export function useStoredSection<T>(binding: StoreBinding<T>) {
         report(binding.window, DESKTOP_TELEMETRY_OPERATIONS.activitySubscribe),
     });
   }, [binding.window, reloadReported]);
-  const save = useCallback(
-    async (current: StoredState<T>, change: (value: T) => T) => {
-      if (current.type !== "ready") {
-        return SAVE_OUTCOMES.notLoaded;
-      }
-      const saved = await binding
-        .write(current.revision, change(current.value))
-        .then((outcome) => v.parse(saveSchema, outcome))
-        .catch((error: unknown) => {
-          report(
-            binding.window,
-            DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
-            error,
-          );
-          return null;
-        });
-      if (saved === null) {
-        return SAVE_OUTCOMES.failed;
-      }
-      if (saved.type === "conflict") {
-        return SAVE_OUTCOMES.conflict;
-      }
-      await reload();
-      return SAVE_OUTCOMES.saved;
-    },
-    [binding, reload],
-  );
+  const save = async (current: StoredState<T>, change: (value: T) => T) => {
+    if (current.type !== "ready") {
+      return SAVE_OUTCOMES.notLoaded;
+    }
+    const saved = await binding
+      .write(current.revision, change(current.value))
+      .then((outcome) => v.parse(saveSchema, outcome))
+      .catch((error: unknown) => {
+        report(
+          binding.window,
+          DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
+          error,
+        );
+        return null;
+      });
+    if (saved === null) {
+      return SAVE_OUTCOMES.failed;
+    }
+    if (saved.type === "conflict") {
+      return SAVE_OUTCOMES.conflict;
+    }
+    await reload();
+    return SAVE_OUTCOMES.saved;
+  };
   // This window's changes apply one at a time, each to the read the one
   // before it left, so they never conflict with each other.
   const pending = useRef<Promise<void>>(Promise.resolve());
   /** Applies `change` to the latest value. When another window saved first
    * it reads again and applies the same change once more; a second conflict
    * drops the change and says so. */
-  const update = useCallback(
-    (change: (value: T) => T) => {
-      pending.current = pending.current
-        .then(async () => {
-          const first = await save(latest.current, change);
-          const outcome =
-            first === SAVE_OUTCOMES.conflict
-              ? await save(await reload(), change)
-              : first;
-          if (outcome === SAVE_OUTCOMES.conflict) {
-            report(binding.window, DESKTOP_TELEMETRY_OPERATIONS.activityUpdate);
-          }
-          setSaveFailed(
-            outcome === SAVE_OUTCOMES.conflict ||
-              outcome === SAVE_OUTCOMES.failed,
-          );
-          return undefined;
-        })
-        .catch((error: unknown) => {
-          report(
-            binding.window,
-            DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
-            error,
-          );
-          setSaveFailed(true);
-        });
-    },
-    [binding.window, reload, save],
-  );
+  const update = (change: (value: T) => T) => {
+    pending.current = pending.current
+      .then(async () => {
+        const first = await save(latest.current, change);
+        const outcome =
+          first === SAVE_OUTCOMES.conflict
+            ? await save(await reload(), change)
+            : first;
+        if (outcome === SAVE_OUTCOMES.conflict) {
+          report(binding.window, DESKTOP_TELEMETRY_OPERATIONS.activityUpdate);
+        }
+        setSaveFailed(
+          outcome === SAVE_OUTCOMES.conflict ||
+            outcome === SAVE_OUTCOMES.failed,
+        );
+        return undefined;
+      })
+      .catch((error: unknown) => {
+        report(
+          binding.window,
+          DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
+          error,
+        );
+        setSaveFailed(true);
+      });
+  };
   return { state, saveFailed, update, retry: reloadReported };
 }

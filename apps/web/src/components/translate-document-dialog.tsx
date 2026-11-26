@@ -25,6 +25,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@stll/ui/dialog";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { LanguagesIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 import { Loader } from "@stll/ui/loader";
@@ -52,9 +53,7 @@ import {
   openDocumentTranslationOutput,
   type TranslationChoice,
 } from "@/components/translate-document-dialog.logic";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLastTranslationTarget } from "@/hooks/use-last-translation-target";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useMessageLocale } from "@/i18n/message-locale";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";

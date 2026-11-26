@@ -88,6 +88,7 @@ import { organizationCreateScalingScenario } from "./organization-create";
 import { organizationSlugScalingScenario } from "./organization-slug";
 import { outboundActionScalingScenarios } from "./outbound-actions";
 import { outlookClientMetadataScalingScenario } from "./outlook-client-metadata";
+import { recordingTranscriptionsScalingScenarios } from "./recording-transcriptions";
 import { savedSearchReadScalingScenario } from "./saved-searches";
 import {
   type HandlerOwner,
@@ -187,6 +188,7 @@ const measuredApiScenarios = [
   memberRoleScalingScenario,
   outlookClientMetadataScalingScenario,
   ...documentAnnotationScalingScenarios,
+  ...recordingTranscriptionsScalingScenarios,
   ...similarDocumentsScalingScenarios,
   markedPdfDownloadScalingScenario,
   myOpenTasksScalingScenario,

@@ -1,4 +1,5 @@
-import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useLatestCallback } from "@stll/ui/effects";
+
 import { consumePDFWheelZoomEvent } from "@/lib/pdf/pdf-zoom.logic";
 
 export const usePDFWheelZoom = (

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { CalendarIcon } from "@stll/ui/icons";
 import {
   KanbanCardShell,
@@ -52,9 +53,7 @@ import {
   STATUS_COLORS,
   STATUS_ICONS,
 } from "@/components/workspaces/tasks/task-detail-constants";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter } from "@/i18n/formatting-context";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";

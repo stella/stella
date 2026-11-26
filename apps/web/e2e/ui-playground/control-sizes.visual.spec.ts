@@ -1,6 +1,7 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 
 import { setPresentationPrefs } from "../helpers/presentation-prefs";
+import { test } from "../helpers/storm-watch-fixture";
 
 const CONTROL_SIZES_SECTION = "control-sizes";
 

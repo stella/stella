@@ -1,4 +1,6 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+
+import { test } from "../helpers/storm-watch-fixture";
 
 const hasOnlyDecimalDigits = (value: string): boolean => {
   if (value === "") {

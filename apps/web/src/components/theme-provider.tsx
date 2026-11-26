@@ -6,7 +6,8 @@ import {
 } from "react";
 import type { PropsWithChildren } from "react";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@stll/ui/effects";
+
 import { useHydrated } from "@/hooks/use-hydrated";
 import { PALETTES, THEMES } from "@/lib/account/presentation-prefs/preferences";
 import type { PresentationPrefs } from "@/lib/account/presentation-prefs/preferences";

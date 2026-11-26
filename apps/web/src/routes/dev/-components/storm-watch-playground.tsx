@@ -1,8 +1,7 @@
 import { type ReactElement, useState } from "react";
 
 import { Button } from "@stll/ui/button";
-
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import type { stormWatchBenches } from "../-visual-metadata";
 

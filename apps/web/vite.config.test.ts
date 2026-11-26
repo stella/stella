@@ -73,7 +73,7 @@ describe("vite config", () => {
     const isExcluded = (filePath: string) =>
       REACT_PLUGIN_EXCLUDE.some((pattern) => pattern.test(filePath));
 
-    expect(isExcluded("/repo/apps/web/src/hooks/use-effect.ts")).toBe(true);
+    expect(isExcluded("/repo/packages/ui/src/effects/effects.ts")).toBe(true);
     expect(isExcluded("/repo/node_modules/example/index.tsx")).toBe(true);
     expect(isExcluded("/repo/apps/web/src/routes/index.tsx")).toBe(false);
   });

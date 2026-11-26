@@ -26,10 +26,9 @@ import {
   openCanonicalYjsRoom,
 } from "@stll/folio-core/controller/canonicalYjsRoom";
 import { Temporal } from "@stll/time";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 
 import { env } from "@/env";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";

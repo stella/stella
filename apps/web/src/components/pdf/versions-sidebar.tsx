@@ -15,6 +15,7 @@ import {
 } from "@stll/ui/alert-dialog";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { openFilePicker } from "@stll/ui/file-picker";
 import { Form } from "@stll/ui/form";
 import {
@@ -35,8 +36,6 @@ import { cn } from "@stll/ui/utils";
 import Tooltip from "@/components/tooltip";
 import { VersionList, VersionRow } from "@/components/versions/version-list";
 import type { VersionDiffSegment } from "@/components/versions/version-list";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toBrowserApiUrl } from "@/lib/api-origins";

@@ -195,6 +195,7 @@ describe("period identity coverage", () => {
       "handlers/lists/verifications/create.ts",
       "handlers/properties/preview.ts",
       "handlers/properties/prompt/suggest.ts",
+      "handlers/recording-transcriptions/runs/create.ts",
       "handlers/search/routes.ts",
       "handlers/search/routes.ts",
       "handlers/skills/drafts/generate.ts",

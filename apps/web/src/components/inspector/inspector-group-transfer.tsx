@@ -14,12 +14,12 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { useLatestCallback } from "@stll/ui/effects";
 
 import { openEntityFileFieldInInspector } from "@/components/chat/entity-open";
 import { planInspectorGroupTransfer } from "@/components/inspector/inspector-group-transfer.logic";
 import { getInspectorTabGroupId } from "@/components/inspector/inspector-groups.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";

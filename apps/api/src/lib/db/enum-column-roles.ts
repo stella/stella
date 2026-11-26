@@ -645,6 +645,9 @@ export const ENUM_COLUMN_ROLES = {
   rate_entries: {
     role: ATTRIBUTE,
   },
+  recording_transcription_runs: {
+    entity_feature_gate: ATTRIBUTE,
+  },
   registration_daily_budget: {
     kind: ATTRIBUTE,
   },

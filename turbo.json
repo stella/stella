@@ -923,7 +923,8 @@
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/packages/**",
         "$TURBO_ROOT$/apps/mobile/src/ui-theme.gen.ts",
-        "$TURBO_ROOT$/apps/web/public/prepaint-init.js"
+        "$TURBO_ROOT$/apps/web/public/prepaint-init.js",
+        "$TURBO_ROOT$/scripts/guard-rollouts.ts"
       ]
     },
     "@stll/cli#codegen:runtime": {
@@ -1410,6 +1411,7 @@
         "$TURBO_ROOT$/packages/portable-path/**",
         "$TURBO_ROOT$/packages/property-testing/**",
         "$TURBO_ROOT$/packages/pst-reader/**",
+        "$TURBO_ROOT$/packages/recording-wasm/**",
         "$TURBO_ROOT$/packages/redis-config/**",
         "$TURBO_ROOT$/packages/runtime-mode/**",
         "$TURBO_ROOT$/packages/sanctions/**",
@@ -1490,6 +1492,7 @@
         "$TURBO_ROOT$/packages/portable-path/**",
         "$TURBO_ROOT$/packages/property-testing/**",
         "$TURBO_ROOT$/packages/pst-reader/**",
+        "$TURBO_ROOT$/packages/recording-wasm/**",
         "$TURBO_ROOT$/packages/runtime-mode/**",
         "$TURBO_ROOT$/packages/sanctions/**",
         "$TURBO_ROOT$/packages/scripts/**",
@@ -1567,6 +1570,7 @@
         "$TURBO_ROOT$/packages/portable-path/**",
         "$TURBO_ROOT$/packages/property-testing/**",
         "$TURBO_ROOT$/packages/pst-reader/**",
+        "$TURBO_ROOT$/packages/recording-wasm/**",
         "$TURBO_ROOT$/packages/runtime-mode/**",
         "$TURBO_ROOT$/packages/scripts/**",
         "$TURBO_ROOT$/packages/sha256/**",
@@ -1652,6 +1656,7 @@
         "$TURBO_ROOT$/packages/playwright-tools/**",
         "$TURBO_ROOT$/packages/portable-path/**",
         "$TURBO_ROOT$/packages/property-testing/**",
+        "$TURBO_ROOT$/packages/recording-wasm/**",
         "$TURBO_ROOT$/packages/redis-config/**",
         "$TURBO_ROOT$/packages/runtime-mode/**",
         "$TURBO_ROOT$/packages/sanctions/**",
@@ -1739,6 +1744,7 @@
         "$TURBO_ROOT$/packages/parameter-store/**",
         "$TURBO_ROOT$/packages/permissions/**",
         "$TURBO_ROOT$/packages/portable-path/**",
+        "$TURBO_ROOT$/packages/recording-wasm/**",
         "$TURBO_ROOT$/packages/redis-config/**",
         "$TURBO_ROOT$/packages/runtime-mode/**",
         "$TURBO_ROOT$/packages/sanctions/**",
@@ -2039,6 +2045,7 @@
         "$TURBO_ROOT$/apps/landing/public/robots.txt",
         "$TURBO_ROOT$/apps/mobile/src/ui-theme.gen.ts",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/guard-rollouts.ts",
         "$TURBO_ROOT$/scripts/network-baseline-scope.ts"
       ]
     },

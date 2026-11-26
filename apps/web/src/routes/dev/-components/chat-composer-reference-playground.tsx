@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { JSONContent } from "@tiptap/core";
 
 import { Button } from "@stll/ui/button";
+import { useMountEffect } from "@stll/ui/effects";
 
 import {
   CHAT_SEND_KEPT,
@@ -12,7 +13,6 @@ import {
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { pastedTextChipContent } from "@/components/chat-pasted-text-extension";
 import { InlinePill } from "@/components/inline-pill";
-import { useMountEffect } from "@/hooks/use-effect";
 import { useChatDraftStore } from "@/lib/chat-draft-store";
 import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";

@@ -107,6 +107,7 @@ export const USER_OWNED_TABLE_NAMES = [
   "playbook_definitions",
   "push_devices",
   "rate_entries",
+  "recording_transcription_runs",
   "report_exports",
   "request_idempotency_receipts",
   "sanctions_contact_matches",

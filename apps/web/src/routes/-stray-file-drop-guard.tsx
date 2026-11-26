@@ -1,4 +1,4 @@
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 const carriesFiles = (event: DragEvent) =>
   event.dataTransfer?.types.includes("Files") === true;

@@ -36,6 +36,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import {
   ChevronDownIcon,
   ChevronUpIcon,
@@ -70,7 +71,6 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 import { InlineEdit } from "@/components/inline-edit";
 import type { ClauseParagraph } from "@/components/templates/clause-editor-types";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";

@@ -6,10 +6,10 @@
 // therefore be load-bearing: removing it may create unstable references that
 // re-fire effects every render, causing loops that typecheck and lint miss.
 //
-// This runs the actual compiler over apps/web/src and every workspace package
-// that ships React components (any `.tsx` source), read from the root
-// manifest's `workspaces` so a new package joins on its own, and guards each
-// bailed-out component or hook independently. Each baseline entry records the
+// This runs the actual compiler over the apps built with it (web, desktop and
+// mobile) and every workspace package that ships React components (any `.tsx`
+// source), read from the root manifest's `workspaces` so a new package joins
+// on its own, and guards each bailed-out component or hook independently. Each baseline entry records the
 // compiler's reasons, which must match the current run. A file-level baseline is not sufficient:
 // a new bailout in an already-listed file or a memo added to one component
 // could otherwise hide a regression in another component.
@@ -52,8 +52,17 @@ type BailoutRecord = { reasons: Set<string>; memos: number };
 type BaselineEntry = { memos: number; reasons: string[] };
 type Baseline = Record<string, BaselineEntry>;
 
-/** The web app's sources; other apps do not build through the compiler. */
-const WEB_APP_ROOT = "apps/web/src";
+/**
+ * Apps whose bundles go through the compiler: web and desktop through Vite
+ * with `REACT_COMPILER_OPTIONS`, mobile through Expo's
+ * `experiments.reactCompiler` (the Babel build of the same compiler, read here
+ * through the Oxc port). The other apps render uncompiled.
+ */
+const COMPILED_APP_ROOTS = [
+  "apps/web/src",
+  "apps/desktop/src",
+  "apps/mobile/src",
+];
 const ROOT_MANIFEST = "package.json";
 const SKIPPED_PATH = /(?:^|\/)(?:node_modules|dist|__tests__)\//u;
 
@@ -123,7 +132,8 @@ const parseBaseline = (raw: unknown): Baseline => {
 
 /**
  * Workspace packages that ship React components: every manifest workspace
- * outside `apps/` with a `.tsx` source. The web app is its own root.
+ * outside `apps/` with a `.tsx` source. Apps are listed in
+ * `COMPILED_APP_ROOTS`.
  */
 const reactPackageRoots = (): string[] =>
   workspacePatterns(JSON.parse(readFileSync(ROOT_MANIFEST, "utf-8")))
@@ -586,7 +596,7 @@ const runSelfTest = (): number => {
   const { diff, diffWorks } = selfTestDiff(firstKey, secondKey);
   const sourceFilterWorks =
     isScannedSource("apps/web/src/components/globe.tsx") &&
-    !isScannedSource("apps/web/src/hooks/use-effect.ts");
+    !isScannedSource("packages/ui/src/effects/effects.ts");
   const roots = reactPackageRoots();
   const packageScopeWorks =
     roots.includes("packages/ui") &&
@@ -645,7 +655,7 @@ const run = (): number => {
   if (mode !== "report" && runSelfTest() !== 0) {
     return 1;
   }
-  const roots = [WEB_APP_ROOT, ...reactPackageRoots()];
+  const roots = [...COMPILED_APP_ROOTS, ...reactPackageRoots()];
   const files = roots.flatMap(sourcesUnder);
   const bailouts = new Map<string, BailoutRecord>();
   for (const file of files) {

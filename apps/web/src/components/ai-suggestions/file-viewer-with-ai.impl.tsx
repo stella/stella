@@ -23,6 +23,7 @@ import {
   setFocusedSuggestionMeta,
 } from "@stll/folio-react";
 import type { AISuggestionPreset, DocxEditorRef } from "@stll/folio-react";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { ChatEditorScope } from "@/components/chat-editor-provider";
 import {
@@ -33,7 +34,6 @@ import type { DocxComments } from "@/components/docx/app-docx-editor";
 import type { DocxEditModeResult } from "@/components/docx/docx-browser-editor.logic";
 import { AIAvailabilityProvider } from "@/components/require-ai-key";
 import type { ChatThreadId } from "@/features/chat/chat-thread-ref-types";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { DocxEditSafety } from "@/lib/chat-edit-mode";
 
 import type { ActiveLegalDocument } from "./active-legal-document";

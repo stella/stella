@@ -12,6 +12,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { analysisRetryAt } from "@/features/case-law/components/case-viewer/analysis/analysis-error.logic";
 import {
@@ -21,7 +22,6 @@ import {
   decisionAnalysisOptions,
 } from "@/features/case-law/queries/decision-analysis";
 import { readClientClockMs } from "@/hooks/client-clock";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useTimePassed } from "@/hooks/use-time-passed";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";

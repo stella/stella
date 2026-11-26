@@ -1,4 +1,4 @@
-import { type APIRequestContext, expect, test } from "@playwright/test";
+import { type APIRequestContext, expect } from "@playwright/test";
 import { panic } from "better-result";
 import { createReadStream } from "node:fs";
 import path from "node:path";
@@ -12,6 +12,7 @@ import {
   establishDeployedJourneyPrerequisites,
   JOURNEY_PREREQUISITE_TIMEOUT_MS,
 } from "../helpers/journey-prerequisites";
+import { test } from "../helpers/storm-watch-fixture";
 import { JOURNEY_TAG } from "../playwright.journeys.config";
 
 const EU_FIXTURE = path.resolve(

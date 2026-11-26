@@ -36,6 +36,8 @@ import {
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import "@stll/folio-react/editor.css";
 
+import { useExternalSyncEffect } from "@stll/ui/effects";
+
 import { useDocxWheelZoom } from "@/components/docx-preview-zoom";
 import { DocxEditor } from "@/components/docx/app-docx-editor";
 import { DocxEditorAiOverlay } from "@/components/docx/docx-editor-ai-overlay";
@@ -51,7 +53,6 @@ import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { RenderStormRegion } from "@/components/render-storm-canary";
 import { StatusMessage } from "@/components/route-components";
 import { UserIdentityAvatar } from "@/components/user-avatar";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { folioUIComponents } from "@/lib/folio-ui-components";
 import "@/components/pdf/peek/peek-docx.css";

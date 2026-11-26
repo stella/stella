@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 
 import { create } from "zustand";
 
-import { useMountEffect } from "@/hooks/use-effect";
+import { useMountEffect } from "@stll/ui/effects";
 
 // Route-scoped header actions slot. The protected shell renders a single
 // `ChromeHeaderActionsSlot` in its top bar and a page publishes its own

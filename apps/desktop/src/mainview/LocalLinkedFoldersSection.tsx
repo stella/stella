@@ -72,7 +72,6 @@ export const LocalLinkedFoldersSection = ({
               },
             );
           }}
-          size="sm"
           variant="outline"
         >
           {t("add")}
@@ -102,7 +101,6 @@ export const LocalLinkedFoldersSection = ({
                 invoke("local_linked_folders_remove", { id }),
               );
             }}
-            size="sm"
             variant="ghost"
           >
             {t("remove")}

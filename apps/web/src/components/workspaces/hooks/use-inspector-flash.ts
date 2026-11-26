@@ -1,7 +1,8 @@
 import { useRef } from "react";
 
+import { useExternalSyncEffect } from "@stll/ui/effects";
+
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 /**
  * Scrolls an element into view and flashes a 2px primary outline on it

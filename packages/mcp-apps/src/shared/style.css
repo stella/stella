@@ -79,9 +79,9 @@
 @source "../../../ui/src/components/tooltip.tsx";
 @source "../../../ui/src/components/truncated-text-face.tsx";
 @source "../../../ui/src/components/truncated-text.tsx";
+@source "../../../ui/src/effects/effects.ts";
 @source "../../../ui/src/hooks/use-contained-handler.ts";
 @source "../../../ui/src/hooks/use-content-dir.ts";
-@source "../../../ui/src/hooks/use-latest.ts";
 @source "../../../ui/src/icons.ts";
 @source "../../../ui/src/inspector/layout-tokens.ts";
 @source "../../../ui/src/lib/button-disposition.ts";

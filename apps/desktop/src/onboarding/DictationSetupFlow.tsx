@@ -16,13 +16,17 @@ import {
 import type { DictationSetupScreen } from "./dictation-setup-steps";
 import { DictationSetupScreenBody } from "./DictationSetupScreens";
 import { moveFrom, shownScreen } from "./setup-screens";
-import { SetupStepper, Unread } from "./SetupScreenParts";
+import { Unread } from "./SetupScreenParts";
+import type { ScreenProgress } from "./StepFooter";
 import type { DictationControls } from "./use-dictation";
 
 /** The step's own actions, for the footer the step draws them in. */
 type DictationSetupActions = {
   onBack: (() => void) | undefined;
   primary: ReactNode;
+  /** Where the screen on view is among the screens; none before they
+   *  load. */
+  screens: ScreenProgress | undefined;
   secondary: ReactNode;
 };
 
@@ -30,7 +34,7 @@ type DictationSetupFlowProps = {
   controls: DictationControls;
   /** What leaving forward is called: Continue in the tour, Done after it. */
   finishLabel: string;
-  /** Names the steps above the title, such as "Dictation". */
+  /** Names the screens, such as "Dictation". */
   label: string;
   /** Before the first screen; absent where nothing comes before. */
   onLeaveBack?: (() => void) | undefined;
@@ -82,6 +86,7 @@ export const DictationSetupFlow = ({
         {renderFooter({
           onBack: onLeaveBack,
           primary: null,
+          screens: undefined,
           secondary: (
             <Button onClick={onLeaveForward} variant="ghost">
               {skipLabel}
@@ -155,13 +160,6 @@ export const DictationSetupFlow = ({
 
   return (
     <>
-      <SetupStepper
-        label={label}
-        names={screens.map((candidate) =>
-          t(`dictationSetup.screens.${candidate}`),
-        )}
-        position={position}
-      />
       <div
         className="motion-safe:animate-swap-in flex min-h-0 flex-1 flex-col"
         data-dictation-screen={screen}
@@ -205,6 +203,13 @@ export const DictationSetupFlow = ({
             {last ? finishLabel : t("continue")}
           </Button>
         ),
+        screens: {
+          label,
+          names: screens.map((candidate) =>
+            t(`dictationSetup.screens.${candidate}`),
+          ),
+          position,
+        },
         secondary,
       })}
     </>

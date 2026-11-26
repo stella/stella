@@ -28,6 +28,7 @@ import {
   resolveDocumentAnchor,
 } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { useMountEffect } from "@stll/ui/effects";
 import { outlineEntryText, OutlineRail } from "@stll/ui/outline-rail";
 import { Separator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -64,7 +65,6 @@ import {
 } from "@/features/statutes/statute-compare-search";
 import type { StatuteCompareSearch } from "@/features/statutes/statute-compare-search";
 import { prepareStatuteReader } from "@/features/statutes/statute-reader-blocks";
-import { useMountEffect } from "@/hooks/use-effect";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { statuteVersionRouteParams } from "@/routes/law/-statute-detail.logic";

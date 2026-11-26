@@ -212,6 +212,7 @@ const ACCOUNT_DELETION_KNOWN_GAPS: readonly KnownGap[] = [
       ],
       ["organization_creation_requests", "user_id", "cascade"],
       ["playbook_definitions", "approved_by", "set null"],
+      ["recording_transcription_runs", "requested_by", "set null"],
       ["report_exports", "requested_by", "set null"],
       ["request_idempotency_receipts", "user_id", "cascade"],
       ["sanctions_contact_matches", "reviewed_by", "set null"],

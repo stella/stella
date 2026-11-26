@@ -72,6 +72,7 @@ import {
   MATCH_REVIEW_TRANSITIONS,
   SCREENING_COVERAGE_TRANSITIONS,
 } from "@/api/lib/lists/sanctions/monitoring-transition-specs";
+import { RECORDING_TRANSCRIPTION_TRANSITIONS } from "@/api/lib/recording-transcription/transitions";
 import { DOCUMENT_NAMING_TRANSITIONS } from "@/api/lib/uploads/document-naming/transitions";
 
 const SHAREPOINT_CONNECTION_TRANSITIONS = defineTransitions(
@@ -628,6 +629,7 @@ export const TRANSITIONS = {
   pendingUploads: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   playbookDefinitions: { unmanaged: UNMANAGED_REASONS.userDecision },
   properties: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  recordingTranscriptionRuns: RECORDING_TRANSCRIPTION_TRANSITIONS,
   reportExports: { unmanaged: UNMANAGED_REASONS.workerRun },
   requestIdempotencyReceipts: REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS,
   sanctionsContactMatches: {

@@ -32,7 +32,7 @@ const { createPresentationPrefsSync } =
 const { initializeBrowserPresentationPrefs } =
   await import("@/lib/account/presentation-prefs/provider");
 const { sessionOptions } = await import("@/lib/auth-queries");
-const { useMountEffect } = await import("@/hooks/use-effect");
+const { useMountEffect } = await import("@stll/ui/effects");
 
 afterAll(async () => {
   await unregisterDomEnvironment();

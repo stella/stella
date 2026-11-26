@@ -1,5 +1,6 @@
+import { useExternalSyncEffect } from "@stll/ui/effects";
+
 import type { TableTreeNode } from "@/components/workspaces/table/types";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useTableStore } from "@/lib/workspaces/table-store";
 
 type UseSyncSelectedEntitiesInput = {

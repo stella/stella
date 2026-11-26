@@ -17,12 +17,12 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { useMountEffect } from "@stll/ui/effects";
 import { Link2Icon, PlusIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 
 import { openSourceBoundEntityFile } from "@/components/chat/entity-open";
 import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
-import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";

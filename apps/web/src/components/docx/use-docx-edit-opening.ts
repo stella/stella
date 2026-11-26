@@ -4,9 +4,9 @@ import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { useTranslations } from "use-intl";
 
 import type { DocxCompatibility } from "@stll/folio-react";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { notifyUserProblem } from "@/lib/errors/user-toast";
 

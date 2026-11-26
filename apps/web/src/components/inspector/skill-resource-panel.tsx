@@ -4,6 +4,7 @@ import { useTranslations } from "use-intl";
 
 import { MarkdownHybridEditor } from "@stll/markdown-editor";
 import { Button } from "@stll/ui/button";
+import { useLatestCallback } from "@stll/ui/effects";
 import { PencilIcon, SaveIcon, XIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Textarea } from "@stll/ui/textarea";
@@ -18,7 +19,6 @@ import {
   toStoredMarkdown,
 } from "@/components/skill-body-markdown";
 import Tooltip from "@/components/tooltip";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { api } from "@/lib/api";
 import { isMarkdownFile, PDF_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";

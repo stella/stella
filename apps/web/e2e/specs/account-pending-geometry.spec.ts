@@ -15,6 +15,7 @@ import { pushRouterPath } from "../helpers/decision-reader";
 import { contractJson, respond } from "../helpers/route-mock";
 import { signInWithEmailOtp } from "../helpers/sign-in";
 import { waitForStableGeometry } from "../helpers/stable-geometry";
+import { newWatchedPage } from "../helpers/storm-watch-fixture";
 import { expect, test } from "../helpers/test";
 
 const clientName = "Geometry app";
@@ -298,7 +299,7 @@ for (const locale of ["en", "cs"] as const) {
         } finally {
           await api.dispose();
         }
-        const cold = await browser.newPage({
+        const cold = await newWatchedPage(browser, {
           baseURL,
           javaScriptEnabled: false,
           locale,

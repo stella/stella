@@ -1,8 +1,8 @@
 import { useTranslations } from "use-intl";
 
+import { useMountEffect } from "@stll/ui/effects";
 import { stellaToast } from "@stll/ui/toast";
 
-import { useMountEffect } from "@/hooks/use-effect";
 import { getWebHangDetector } from "@/lib/analytics/web-hang/web-hang-detector";
 
 export const WebHangRecoveryNotice = ({

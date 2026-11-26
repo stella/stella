@@ -4,9 +4,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMatch } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { useLatestCallback } from "@stll/ui/effects";
+
 import { FileDropZone } from "@/components/file-drop-zone";
 import { SettledQueryViewFeedback } from "@/components/query-view-feedback";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import type { CreateFileEntitiesInput } from "@/lib/workspaces/mutations/create-file-entities-input.logic";

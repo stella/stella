@@ -89,7 +89,7 @@ Smell: an effect whose only job is to reset local state when an id changes.
 
 ## Rule 4 — the two sanctioned wrappers
 
-Both live in `@/hooks/use-effect` and are the only place a raw `useEffect`
+Both live in `@stll/ui/effects` and are the only place a raw `useEffect`
 may be called.
 
 ### `useMountEffect(effect)`
@@ -131,7 +131,7 @@ When a callback must be handed to something that outlives the render that
 created it (a listener registered inside `useExternalSyncEffect`, a query
 context object, an imperative editor/runtime bridge) and it should read the
 **latest committed state** without re-triggering the subscription, wrap it in
-`useLatestCallback` from `@/hooks/use-latest-callback`: stable identity,
+`useLatestCallback` from `@stll/ui/effects`: stable identity,
 always invokes the latest closure, creates no reactivity.
 
 Do not reach for React's `useEffectEvent`: its contract restricts calls to

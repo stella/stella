@@ -2,8 +2,7 @@ import { useRef } from "react";
 import type { RefObject } from "react";
 
 import type { DocxEditorRef } from "@stll/folio-react";
-
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import type { AutosaveStatus } from "./docx-edit-mode.logic";
 

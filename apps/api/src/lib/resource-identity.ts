@@ -182,6 +182,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   bilingualTranslationRow: { type: "non_resource", reason: "subresource" },
   bilingualTranslationRun: { type: "non_resource", reason: "job" },
   documentTranslationRun: { type: "non_resource", reason: "job" },
+  recordingTranscriptionRun: { type: "non_resource", reason: "job" },
   documentTranslationUnit: { type: "non_resource", reason: "subresource" },
   documentReviewFinding: { type: "non_resource", reason: "subresource" },
   documentReviewFindingDecision: {

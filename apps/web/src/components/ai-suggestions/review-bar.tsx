@@ -37,6 +37,11 @@ import { useTranslations } from "use-intl";
 import type { DocxEditorRef } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useMountEffect,
+} from "@stll/ui/effects";
 import { ChevronDownIcon, ChevronUpIcon } from "@stll/ui/icons";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
 import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
@@ -81,9 +86,7 @@ import type {
   DocxEditModeResult,
 } from "@/components/docx/docx-browser-editor.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
 import { formatHotkeyForPlatform } from "@/lib/hotkeys";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";

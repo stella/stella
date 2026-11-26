@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import type { DocxCompatibility } from "@stll/folio-react";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { stellaToast } from "@stll/ui/toast";
 
 import { getDocxEditBlockReason } from "@/components/docx/docx-browser-editor.logic";
@@ -12,7 +13,6 @@ import type {
   FileTab,
   InspectorTab,
 } from "@/components/inspector/inspector-tabs-store";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 

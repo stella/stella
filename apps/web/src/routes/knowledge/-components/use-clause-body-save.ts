@@ -4,9 +4,9 @@ import { useMutation } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
+
 import type { ClauseParagraph } from "@/components/templates/clause-editor-types";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";

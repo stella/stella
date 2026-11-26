@@ -54,6 +54,7 @@ import {
   CollapsibleTrigger,
 } from "@stll/ui/collapsible";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import {
   type EntityAction,
   EntityActions,
@@ -234,8 +235,6 @@ import { SuggestedFollowups } from "@/features/chat/components/suggested-followu
 import type { SuggestedFollowupsProps } from "@/features/chat/components/suggested-followups";
 import type { ChatComputerWait } from "@/features/chat/desktop-launch.logic";
 import { useDesktopLaunch } from "@/features/chat/use-desktop-launch";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";

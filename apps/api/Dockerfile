@@ -310,6 +310,15 @@ RUN mkdir -p /app/bundles/runtime/workers && \
       --target bun \
       --outdir /app/bundles/runtime/workers \
       --public-path /app/runtime/workers/ \
+      --entry-naming recording-reader-worker.js \
+      apps/api/src/lib/recording-transcription/recording-reader-worker.ts && \
+    bun build \
+      --define __STELLA_RELEASE__=true \
+      --minify \
+      --keep-names \
+      --target bun \
+      --outdir /app/bundles/runtime/workers \
+      --public-path /app/runtime/workers/ \
       --entry-naming pdf-worker.js \
       apps/api/src/lib/files/pdf-worker.ts && \
     bun build \
@@ -360,6 +369,8 @@ RUN mkdir -p /app/bundles/runtime/workers && \
       /app/bundles/runtime/workers/heic_decoder_bg.wasm && \
     cp packages/pst-reader/generated/pst_reader_bg.wasm \
       /app/bundles/runtime/workers/pst_reader_bg.wasm && \
+    cp packages/recording-wasm/generated/recording_bg.wasm \
+      /app/bundles/runtime/workers/recording_bg.wasm && \
     cp apps/api/src/lib/ocr-local/latin-v5-dict.txt \
       /app/bundles/runtime/workers/latin-v5-dict.txt
 # Local OCR runtime assets: the onnxruntime native binding, which the

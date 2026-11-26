@@ -1,9 +1,10 @@
 import { useRef } from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 
+import { useMountEffect } from "@stll/ui/effects";
+
 import { selectionToolbarBounds } from "@/components/selection-toolbar.logic";
 import type { SelectionToolbarAnchor } from "@/components/selection-toolbar.logic";
-import { useMountEffect } from "@/hooks/use-effect";
 
 type ChatSelectionEventsOptions = {
   rootRef: RefObject<HTMLElement | null>;
