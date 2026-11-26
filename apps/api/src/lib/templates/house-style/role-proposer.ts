@@ -312,11 +312,17 @@ const findZones = (
     entries.find(({ level, listed }) => level === "annex" && !listed)
       ?.position ?? Number.POSITIVE_INFINITY;
   const isText = (block: DocxBlock) => block.text.trim() !== "";
+  // A letter or a memo has no provisions to end its front matter at, and
+  // only a line shaped as a title is read as one there: a line that is
+  // merely centred (a marking, a date) must not take the title's place.
+  const setAsTitle = Number.isFinite(firstProvision)
+    ? isSetAsTitle
+    : isTitleShaped;
   const shaped = firstPosition(
     blocks,
     0,
     firstProvision,
-    (block) => isText(block) && isSetAsTitle(block),
+    (block) => isText(block) && setAsTitle(block),
   );
   const title = Number.isFinite(shaped)
     ? shaped

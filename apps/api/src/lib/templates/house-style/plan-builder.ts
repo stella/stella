@@ -1105,7 +1105,12 @@ const dropLoosePageStarts = (
       });
     }
     frontMatter &&= placement?.role !== "articleHeading";
-    pageChars = starts || (block.pageBreaks ?? 0) > 0 ? 0 : pageChars;
+    // The page is measured from where the source starts it: a start moved
+    // in front of a heading does not make the heading part of that page.
+    pageChars =
+      starts || block.pageBreakBefore === true || (block.pageBreaks ?? 0) > 0
+        ? 0
+        : pageChars;
     pageChars += [block, ...insideOf(block, context.blockById)].reduce(
       (sum, { text }) => sum + text.trim().length,
       0,
@@ -1280,8 +1285,8 @@ const TEXT_SIZE = 22;
 /** The space between the widest label and the values, in twentieths of a
  *  point. */
 const LABEL_GAP = 170;
-/** A second and a third tab the source typed end one point behind the
- *  first, so a line with several tabs starts its value with the others. */
+/** The tabs a line types in front of its last one end a point apart in
+ *  front of the shared stop, so the last tab of every line ends at it. */
 const TAB_STEP = 20;
 const TAB_STOPS_MAX = 3;
 
@@ -1337,16 +1342,16 @@ const alignPartyLines = (context: Context, placed: Placed): void => {
     if (run.length >= 2) {
       const first =
         Math.max(...run.map(({ labelEnd }) => labelEnd)) + LABEL_GAP;
-      const count = Math.min(
-        Math.max(...run.map(({ tabs }) => tabs)),
-        TAB_STOPS_MAX,
-      );
-      const stops = Array.from(
-        { length: count },
-        (_, index) => first + index * TAB_STEP,
-      );
-      for (const { blockId } of run) {
-        placed.tabStops.set(blockId, stops);
+      for (const { blockId, tabs } of run) {
+        // As many stops as the line has tabs, the last one the shared one.
+        const count = Math.min(Math.max(tabs, 1), TAB_STOPS_MAX);
+        placed.tabStops.set(
+          blockId,
+          Array.from(
+            { length: count },
+            (_, index) => first - (count - 1 - index) * TAB_STEP,
+          ),
+        );
       }
     }
     run = [];
@@ -1607,10 +1612,13 @@ const CLOSING_LINE_MAX = 80;
  * line it closes with, and no table.
  */
 const keepClosingTogether = (context: Context, placed: Placed): void => {
-  const lines: DocxBlock[] = [];
+  let lines: DocxBlock[] = [];
   let closesAt = -1;
   for (const block of context.topLevel) {
+    // A table ends what could close with the lines behind it: the
+    // paragraph in front of the table stays with the table, not with them.
     if (block.kind === "table") {
+      lines = [];
       closesAt = -1;
       continue;
     }
@@ -1908,6 +1916,15 @@ const cellStyleOf = (
 ): string | null =>
   role === "party" ? (profile.roles.body?.styleId ?? styleId) : styleId;
 
+/** The roles of cell paragraphs that are lines of text laid out by their
+ *  table: where the source centres one or sets it at the right, it stays. */
+const CELL_TEXT_ROLES: ReadonlySet<HouseStyleRole> = new Set([
+  "party",
+  "body",
+  "continuation",
+  "signature",
+]);
+
 const tableItem = (
   context: Context,
   { placementById }: Placed,
@@ -1920,12 +1937,19 @@ const tableItem = (
     if (placement !== undefined) {
       const numbering = numberingOf(placement);
       const styleId = cellStyleOf(context, placement);
+      // A line of text keeps its place in the cell whether it was read as
+      // a party's line or not; a provision takes its style's.
+      const alignment =
+        CELL_TEXT_ROLES.has(placement.role) && inner.text.trim() !== ""
+          ? setApartOf(inner)
+          : undefined;
       nested.push({
         blockId: inner.id,
         ...(styleId === null ? {} : { styleId }),
         numbering,
         ...stripOf(placement),
         ...asTextOf(inner, numbering),
+        ...(alignment === undefined ? {} : { alignment }),
       });
     } else if (inner.kind === "paragraph") {
       // A cell paragraph placed with its table takes the style the
