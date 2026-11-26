@@ -321,7 +321,16 @@ export type TemplatePlanSourceItem = {
 type TemplatePlanItem =
   | { kind: "template"; templateBlockIds: string[] }
   | TemplatePlanSourceItem
-  | { kind: "slot"; templateBlockId: string; sourceBlockIds: string[] };
+  | {
+      kind: "slot";
+      templateBlockId: string;
+      sourceBlockIds: string[];
+      /** A lead of the first source block the slot does not take: the name
+       *  of a field that the kept template paragraph named here shows. The
+       *  rest is placed word for word. An engine that does not know the
+       *  option places the block whole. */
+      dropLead?: { text: string; shownByTemplateBlockId: string };
+    };
 
 type TemplatePlanOmitReason =
   "empty" | "sourceToc" | "pageArtifact" | "duplicateLabel";

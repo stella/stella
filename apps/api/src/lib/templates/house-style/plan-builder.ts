@@ -36,6 +36,8 @@ import type {
   TrackedChanges,
   TrackedChangesView,
 } from "@/api/lib/templates/house-style/folio-contract";
+import { readHeadLines } from "@/api/lib/templates/house-style/head-fields";
+import type { HeadField } from "@/api/lib/templates/house-style/head-fields";
 import {
   buildLabelIndex,
   isRunningText,
@@ -270,6 +272,17 @@ export type FormattingNoteItem =
       kind: "letterheadFilled";
       filled: ("addressee" | "date" | "reference")[];
       left: ("addressee" | "date" | "reference")[];
+    }
+  /** The fields of the header the template keeps (a memo's `To:`,
+   *  `From:`): each of `filled` took the value of the document's own line
+   *  for that field, which lost its own name of the field (`from`, as
+   *  typed) for the template's (`to`): `Re` became `Subject`. A field in
+   *  `left` has no such line in the document; its cell is as the template
+   *  has it, to be filled in by hand. */
+  | {
+      kind: "headerFieldsFilled";
+      filled: { field: HeadField; from: string; to: string }[];
+      left: HeadField[];
     }
   /** `blocks` paragraphs whose number the source types with a blank
    *  between its parts (`1. 1.`) are numbered by the list, which prints the
@@ -2084,8 +2097,13 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
       body.push({ kind: "slot", ...slot });
     }
     if (context.headerFill !== null) {
-      const { filled, left } = context.headerFill;
-      items.push({ kind: "letterheadFilled", filled, left });
+      const { filled, left, fields } = context.headerFill;
+      if (profile.header !== undefined) {
+        items.push({ kind: "letterheadFilled", filled, left });
+      }
+      if (fields !== null) {
+        items.push({ kind: "headerFieldsFilled", ...fields });
+      }
     }
   }
   // A heading without a number heads what follows it: the preamble's
@@ -2150,7 +2168,16 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
 type HeaderField = "addressee" | "date" | "reference";
 
 type HeaderFill = {
-  slots: { templateBlockId: string; sourceBlockIds: string[] }[];
+  slots: {
+    templateBlockId: string;
+    sourceBlockIds: string[];
+    dropLead?: { text: string; shownByTemplateBlockId: string };
+  }[];
+  /** The fields of a header of names and values, as filled and as left. */
+  fields: {
+    filled: { field: HeadField; from: string; to: string }[];
+    left: HeadField[];
+  } | null;
   /** Sample lines of the addressee the letter has no line for. */
   emptied: string[];
   filled: HeaderField[];
@@ -2173,7 +2200,13 @@ const fillHeader = ({ profile, topLevel }: Context): HeaderFill | null => {
     return null;
   }
   const head = readLetterHead(topLevel);
-  const fill: HeaderFill = { slots: [], emptied: [], filled: [], left: [] };
+  const fill: HeaderFill = {
+    slots: [],
+    fields: null,
+    emptied: [],
+    filled: [],
+    left: [],
+  };
   const cells = header.addressee;
   const lines = head?.addressee ?? [];
   if (cells.length > 0 && lines.length > 0) {
@@ -2209,11 +2242,68 @@ const fillHeader = ({ profile, topLevel }: Context): HeaderFill | null => {
 };
 
 /**
- * A letter's own head goes into the template's letterhead; its lines are
- * then no paragraphs of the body.
+ * Puts the document's own lines for the fields of a kept header (`To:`,
+ * `From:`, `Date:`, `Re:`) into the empty cells beside the template's names
+ * of those fields. A line gives its value; its own name of the field is
+ * dropped for the template's, which may be another word for the same field
+ * (`Re` for `Subject`, `Věc` for `Subject`). A field the document has no
+ * line for leaves its cell as the template has it. A line a tracked change
+ * the output keeps reaches into (its name of the field, its paragraph mark)
+ * keeps its place in the body.
+ */
+const fillHeaderFields = (
+  { profile, topLevel, blockById }: Context,
+  fill: HeaderFill | null,
+): HeaderFill | null => {
+  const cells = profile.headerFields ?? [];
+  if (cells.length === 0) {
+    return fill;
+  }
+  const lines = readHeadLines(topLevel).filter(({ blockId, lead }) => {
+    const block = blockById.get(blockId);
+    const leadEnd =
+      (block?.text.length ?? 0) -
+      (block?.text.trimStart().length ?? 0) +
+      lead.length;
+    return (
+      block?.revisions?.some(
+        ({ start, paragraphMark }) =>
+          paragraphMark === true || start <= leadEnd,
+      ) !== true
+    );
+  });
+  const filled: { field: HeadField; from: string; to: string }[] = [];
+  const left: HeadField[] = [];
+  const slots: HeaderFill["slots"] = [];
+  for (const { field, name, labelBlockId, valueBlockId } of cells) {
+    const line = lines.find((candidate) => candidate.field === field);
+    if (line === undefined) {
+      left.push(field);
+      continue;
+    }
+    slots.push({
+      templateBlockId: valueBlockId,
+      sourceBlockIds: [line.blockId],
+      dropLead: { text: line.lead, shownByTemplateBlockId: labelBlockId },
+    });
+    filled.push({ field, from: line.word, to: name });
+  }
+  return {
+    slots: [...(fill?.slots ?? []), ...slots],
+    fields: { filled, left },
+    emptied: fill?.emptied ?? [],
+    filled: fill?.filled ?? [],
+    left: fill?.left ?? [],
+  };
+};
+
+/**
+ * A letter's own head goes into the template's letterhead, and a memo's
+ * lines for the fields of its header into the cells beside their names;
+ * these lines are then no paragraphs of the body.
  */
 const takeHeaderLines = (context: Context): void => {
-  context.headerFill = fillHeader(context);
+  context.headerFill = fillHeaderFields(context, fillHeader(context));
   if (context.headerFill === null) {
     return;
   }

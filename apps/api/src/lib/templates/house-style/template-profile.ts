@@ -14,6 +14,11 @@ import type {
   TemplateLevelIndent,
   TemplateStyle,
 } from "@/api/lib/templates/house-style/folio-contract";
+import {
+  HEAD_FIELDS,
+  readFieldName,
+} from "@/api/lib/templates/house-style/head-fields";
+import type { HeadField } from "@/api/lib/templates/house-style/head-fields";
 import { HOUSE_STYLE_ROLES } from "@/api/lib/templates/house-style/role-proposer";
 import type { HouseStyleRole } from "@/api/lib/templates/house-style/role-proposer";
 
@@ -143,6 +148,10 @@ export type TemplateProfile = {
    *  the one that names the file. Absent when the template keeps no such
    *  table, and from a profile made before this was read. */
   header?: TemplateHeader;
+  /** The fields a kept header names beside an empty cell (a memo's `To:`,
+   *  `From:`): the paragraph that names each and the one that takes its
+   *  value. Absent when the template has no such header. */
+  headerFields?: TemplateHeaderField[];
   fields: {
     /** Kinds replaced by their shown text: they prompt, or change on open. */
     freezeKinds: string[];
@@ -739,6 +748,72 @@ export type TemplateHeader = {
   reference: string | null;
 };
 
+export type TemplateHeaderField = {
+  field: HeadField;
+  /** The word the template names the field with: `Subject`. */
+  name: string;
+  /** The paragraph that names the field. */
+  labelBlockId: string;
+  /** The empty paragraph beside it. */
+  valueBlockId: string;
+};
+
+/**
+ * Reads the fields a kept header table names beside an empty cell: a cell
+ * whose one line of text is the name of a field (`To:`), and the cell after
+ * it in its row, which holds one paragraph without text. A field the table
+ * names twice is read at neither place.
+ */
+const inferHeaderFields = (
+  { topLevel, nestedOf }: Structure,
+  keepBefore: readonly string[],
+): TemplateHeaderField[] => {
+  const found: TemplateHeaderField[] = [];
+  for (const table of topLevel) {
+    const nested = nestedOf.get(table.id);
+    if (
+      table.kind !== "table" ||
+      !keepBefore.includes(table.id) ||
+      nested === undefined
+    ) {
+      continue;
+    }
+    const byId = new Map(nested.map((block) => [block.id, block]));
+    const cells = table.cells ?? [];
+    for (const cell of cells) {
+      const beside = cells.find(
+        ({ row, col }) => row === cell.row && col === cell.col + 1,
+      );
+      const [label, ...more] = cell.blockIds.flatMap((id) => {
+        const block = byId.get(id);
+        return block === undefined || block.text.trim() === "" ? [] : [block];
+      });
+      const value =
+        beside?.blockIds.length === 1
+          ? byId.get(beside.blockIds.at(0) ?? "")
+          : undefined;
+      const named = label === undefined ? null : readFieldName(label.text);
+      if (
+        label !== undefined &&
+        more.length === 0 &&
+        named !== null &&
+        value?.kind === "paragraph" &&
+        value.text.trim() === ""
+      ) {
+        found.push({
+          field: named.field,
+          name: named.word,
+          labelBlockId: label.id,
+          valueBlockId: value.id,
+        });
+      }
+    }
+  }
+  return found.filter(
+    ({ field }) => found.filter((other) => other.field === field).length === 1,
+  );
+};
+
 const HEADER_REFERENCE =
   /^(?:file (?:no|number)|reference|our ref|č\.[ \u00A0]?j\.|sp\.[ \u00A0]?zn\.|spisová značka|naše značka|aktenzeichen|unser zeichen)/iu;
 const HEADER_DATE =
@@ -1288,6 +1363,7 @@ export const inferTemplateProfile = (
   );
   const regions = inferRegions({ inspection, structure, roles });
   const header = inferHeader(structure, regions.regions.keepBefore);
+  const headerFields = inferHeaderFields(structure, regions.regions.keepBefore);
   const pageBeforeArticle = startsPageBeforeArticle(
     structure.topLevel,
     roles.articleHeading,
@@ -1315,6 +1391,7 @@ export const inferTemplateProfile = (
       : { frontMatterEndsPage: pageBeforeArticle }),
     ...(tableText === undefined ? {} : { tableText }),
     ...(header === undefined ? {} : { header }),
+    ...(headerFields.length === 0 ? {} : { headerFields }),
     fields: {
       freezeKinds: kinds
         .filter((kind) => VOLATILE_FIELD_KINDS.has(kind))
@@ -1607,6 +1684,19 @@ const profileSchema = v.strictObject({
       date: v.nullable(idSchema),
       reference: v.nullable(idSchema),
     }),
+  ),
+  headerFields: v.exactOptional(
+    v.pipe(
+      v.array(
+        v.strictObject({
+          field: v.picklist(HEAD_FIELDS),
+          name: v.pipe(v.string(), v.minLength(1), v.maxLength(16)),
+          labelBlockId: idSchema,
+          valueBlockId: idSchema,
+        }),
+      ),
+      v.maxLength(HEAD_FIELDS.length),
+    ),
   ),
   fields: v.strictObject({
     freezeKinds: fieldKindsSchema,
