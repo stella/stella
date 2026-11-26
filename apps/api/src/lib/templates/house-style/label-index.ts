@@ -636,7 +636,10 @@ const articleMentionPositions = (
   labelled: readonly LabelledRow[],
 ): Set<number> => {
   const mentions = new Set<number>();
+  /** The headings that are here only because they count on, by ordinal. */
+  const countedOn = new Map<number, number>();
   const scheme = numberedScheme(labelled);
+  const typed: { position: number; ordinal: number | null }[] = [];
   /** The ordinal of the typed article heading read last, when it was one
    *  of these. */
   let counted: number | null = null;
@@ -657,15 +660,32 @@ const articleMentionPositions = (
     const { core, path } = row.raw.shape;
     const ordinal = countedOrdinal(core) ?? path?.at(0) ?? null;
     const heads = path === null || path.length <= 1;
-    if (
-      isArticleMention(numberedArticles, row) ||
-      (heads && counted !== null && ordinal === counted + 1)
-    ) {
+    if (heads) {
+      typed.push({ position: row.position, ordinal });
+    }
+    const mentioned = isArticleMention(numberedArticles, row);
+    if (mentioned || (heads && counted !== null && ordinal === counted + 1)) {
       mentions.add(row.position);
+      if (!mentioned && ordinal !== null) {
+        countedOn.set(row.position, ordinal);
+      }
       // A clause of such an article (`Article 4.2`) counts nothing on.
       counted = heads ? ordinal : counted;
     } else {
       counted = null;
+    }
+  }
+  // Where the document has a typed article of that number of its own, the
+  // heading stays in the index beside it: a citation of the number then
+  // has two places it may mean and is linked to neither, instead of being
+  // linked to the one that happened to be left.
+  for (const [position, ordinal] of countedOn) {
+    if (
+      typed.some(
+        (other) => other.ordinal === ordinal && !mentions.has(other.position),
+      )
+    ) {
+      mentions.delete(position);
     }
   }
   return mentions;

@@ -2447,6 +2447,49 @@ describe("buildTemplatePlan, a typed article behind the document's numbered ones
   });
 });
 
+describe("buildTemplatePlan, a number two typed articles have", () => {
+  test("a heading that counts on stays in the index where the document has a typed article of that number", () => {
+    const manifest = manifestOf([
+      "AGREEMENT",
+      // A typed article of the document's own, out of the numbered run.
+      { text: "Article 3 Notices", styleName: "heading 1", outlineLevel: 0 },
+      "Notices are given in writing.",
+      {
+        ...numbered("1.", "Definitions", 1),
+        styleName: "heading 1",
+        outlineLevel: 0,
+      },
+      numbered("1.1", "In this agreement the following terms apply.", 1),
+      // A part that counts its own articles, up to the same number.
+      { text: "Article 1 Subject", styleName: "heading 5", outlineLevel: 4 },
+      "This contract implements the agreement.",
+      { text: "Article 2 Price", styleName: "heading 5", outlineLevel: 4 },
+      "The price is fixed.",
+      { text: "Article 3 Term", styleName: "heading 5", outlineLevel: 4 },
+      "The term is one year as stated in Article 3.",
+    ]);
+    const index = buildLabelIndex(manifest);
+    // Both articles of that number are in the index, so a citation of it
+    // has two places it may mean.
+    expect(
+      index.entryByBlockId.has(blockIdOf(manifest, "Article 3 Notices")),
+    ).toBe(true);
+    expect(
+      index.entryByBlockId.has(blockIdOf(manifest, "Article 3 Term")),
+    ).toBe(true);
+    expect(
+      index.entryByBlockId.has(blockIdOf(manifest, "Article 2 Price")),
+    ).toBe(false);
+    // And the citation is linked to neither.
+    const { plan } = build(manifest);
+    expect(
+      (plan.references ?? []).filter(
+        ({ blockId }) => blockId === blockIdOf(manifest, "The term is one"),
+      ),
+    ).toEqual([]);
+  });
+});
+
 describe("buildTemplatePlan, an article heading the index does not count", () => {
   test("a heading that opens with an article's name is set as a heading and keeps its typed label", () => {
     const article = (label: string, text: string) => ({
