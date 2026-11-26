@@ -17,7 +17,6 @@ import {
   localRunToolView,
 } from "@stll/api-contract/chat-local-run-steps";
 import { withoutChatStepLedger } from "@stll/api-contract/chat-step-ledger";
-import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
   Collapsible,
@@ -25,7 +24,6 @@ import {
   CollapsibleTrigger,
 } from "@stll/ui/collapsible";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { useExternalSyncEffect } from "@stll/ui/effects";
 import { ChevronRightIcon, CircleHelpIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { StatusMark } from "@stll/ui/status-mark";
@@ -56,14 +54,11 @@ import {
   stepDigestOf,
 } from "@/components/chat/tool-call-step-digest.logic";
 import {
-  advanceToolCallTiming,
-  createToolCallTiming,
-} from "@/components/chat/tool-call-timing.logic";
-import {
   getToolCallTitle,
   toolCallTitleText,
 } from "@/components/chat/tool-call-title.logic";
 import { UnrestoredFieldsNotice } from "@/components/chat/unrestored-fields-notice";
+import { useToolCallTiming } from "@/components/chat/use-tool-call-timing";
 import {
   BUILT_IN_SKILL_ORIGIN,
   INSPECTOR_FOCUS_INTENT,
@@ -568,23 +563,7 @@ const ToolCallCardComponent = ({
       : localRunSubtitleText(localRunTool.subtitle);
 
   const isLoading = isRunningToolPart(part);
-  const [timing, setTiming] = useState(() =>
-    createToolCallTiming({
-      durationMs,
-      isRunning: isLoading,
-      now: Temporal.Now.instant().epochMilliseconds,
-    }),
-  );
-  useExternalSyncEffect(() => {
-    setTiming((current) =>
-      advanceToolCallTiming({
-        current,
-        durationMs,
-        isRunning: isLoading,
-        now: Temporal.Now.instant().epochMilliseconds,
-      }),
-    );
-  }, [durationMs, isLoading]);
+  const timing = useToolCallTiming({ durationMs, isRunning: isLoading });
   const elapsed =
     turnStatus === "finished" &&
     timing.status === "finished" &&

@@ -49,7 +49,6 @@ const LiveTurnStatus = ({
   // The clock is the external system: the line redraws once a second for as
   // long as the turn runs, whether or not anything streams.
   useExternalSyncEffect(() => {
-    setNow(performance.now());
     const interval = setInterval(() => setNow(performance.now()), TICK_MS);
     return () => clearInterval(interval);
   }, []);
