@@ -1944,6 +1944,34 @@ describe("buildTemplatePlan, tables and omissions", () => {
       blockIds: ["p4", "p5", "p6", "p7"],
     });
   });
+
+  test("the template's contents stand in front of the heading that opens the preamble, not under it", () => {
+    const profile = inferTemplateProfile(
+      contractTemplate({ contents: "empty" }),
+    );
+    const manifest = manifestOf([
+      "SMLOUVA O DODÁVCE",
+      "Dodavatel: Horák Stavby s.r.o., se sídlem Dlouhá 1, Praha, IČO: 00000001",
+      "a",
+      "Objednatel: Tiskárna Vltavín a.s., se sídlem Krátká 2, Brno, IČO: 00000002",
+      { text: "Preambule", styleName: "heading 1", outlineLevel: 0 },
+      "Strany uzavírají tuto smlouvu s ohledem na svou dlouhodobou spolupráci.",
+      "Článek I.\nPředmět",
+      numbered("1.", "Dodavatel dodá zboží.", 10),
+    ]);
+    const { plan } = build(manifest, "keepSource", { profile });
+    const preamble = plan.body.findIndex(
+      (item) =>
+        item.kind === "source" &&
+        item.blockId === blockIdOf(manifest, "Preambule"),
+    );
+    expect(plan.body[preamble - 1]).toEqual({
+      kind: "template",
+      templateBlockIds: ["p4", "p5", "p6", "p7"],
+    });
+    // Once: the recital under the heading does not bring them again.
+    expect(plan.body.filter(({ kind }) => kind === "template")).toHaveLength(1);
+  });
 });
 
 describe("buildTemplatePlan invariants", () => {

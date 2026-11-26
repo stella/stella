@@ -1982,9 +1982,12 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
       blockIds: keepBefore,
     });
   }
+  // A heading without a number heads what follows it: the preamble's
+  // heading opens the body with its recitals.
   const opensBody = (role: HouseStyleRole): boolean =>
     role === "articleHeading" ||
     role === "recital" ||
+    role === "heading" ||
     CLAUSE_ROLES.some((clause) => clause === role);
   // The table of contents stands where the template has it: after the
   // front matter, in front of the first recital or article.
