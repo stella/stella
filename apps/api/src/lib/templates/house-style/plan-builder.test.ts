@@ -652,6 +652,43 @@ describe("buildTemplatePlan, pages the source starts", () => {
     expect(starts(plan)).toEqual([]);
   });
 
+  test("a title behind the end of a kept section is not joined to the heading that ends it", () => {
+    const reading = (
+      blockId: string,
+      role: "title" | "articleHeading" | "body",
+      mergedIntoBlockId: string | null = null,
+    ) => ({
+      blockId,
+      role,
+      confidence: 0.9,
+      alternatives: [],
+      mergedIntoBlockId,
+    });
+    // The landscape section is declared continuous: only its page says
+    // that it starts a new one.
+    const manifest = withFacts(
+      ["SMLOUVA", "Článek I.", "Předmět smlouvy", "Text."],
+      {
+        1: { endsSection: true },
+        2: { sectionIndex: 1 },
+        3: { sectionIndex: 1 },
+      },
+      [section(0, "nextPage"), section(1, "continuous", "landscape")],
+    );
+    const { plan } = build(manifest, "keepSource", {
+      roles: [
+        reading("p0", "title"),
+        reading("p1", "articleHeading"),
+        reading("p2", "articleHeading", "p1"),
+        reading("p3", "body"),
+      ],
+    });
+    const heading = itemOf(plan, manifest, "Článek I.");
+    expect(heading?.mergeNext).toBeUndefined();
+    expect(heading?.endsSection).toEqual({});
+    expect(plan.lastSection?.page?.orientation).toBe("landscape");
+  });
+
   test("where a section's end cannot be carried, the pages still start and the note says what is lost", () => {
     // The annex ends in a line of the source's own contents.
     const { plan, note } = build(
@@ -673,6 +710,86 @@ describe("buildTemplatePlan, pages the source starts", () => {
         item.kind === "sectionLayoutNotKept" ? item.pageDiffers : null,
       ),
     ).toEqual([true, false]);
+  });
+
+  test("a title that starts a page is not joined to the heading before it", () => {
+    const reading = (
+      blockId: string,
+      role: "title" | "articleHeading" | "clause1",
+      mergedIntoBlockId: string | null = null,
+    ) => ({
+      blockId,
+      role,
+      confidence: 0.9,
+      alternatives: [],
+      mergedIntoBlockId,
+    });
+    const roles = [
+      reading("p0", "title"),
+      reading("p1", "articleHeading"),
+      reading("p2", "articleHeading", "p1"),
+      reading("p3", "clause1"),
+    ];
+    const texts = ["SMLOUVA", "Článek I.", "Předmět smlouvy", "Odstavec."];
+    const joined = build(manifestOf(texts), "keepSource", { roles });
+    expect(itemOf(joined.plan, manifestOf(texts), "Článek I.")?.mergeNext).toBe(
+      "none",
+    );
+    for (const facts of [
+      // By its own formatting, and by the section that ends in front of it.
+      { 2: { pageBreakBefore: true } } as const,
+      { 1: { endsSection: true }, 2: { sectionIndex: 1 } } as const,
+    ]) {
+      const manifest = withFacts(texts, facts, [
+        section(0, "nextPage"),
+        section(1, "nextPage"),
+      ]);
+      const { plan } = build(manifest, "keepSource", { roles });
+      expect(itemOf(plan, manifest, "Článek I.")?.mergeNext).toBeUndefined();
+      expect(starts(plan)).toEqual(["p2"]);
+    }
+  });
+
+  test("between two tables one blank paragraph stays, and the page starts once", () => {
+    const table = (id: string) =>
+      inColumns(1, ["položka"]).blocks.map((block) => ({
+        ...block,
+        id: `${id}${block.id}`,
+        hash: `h${id}`,
+        ...(block.cells === undefined
+          ? {}
+          : {
+              cells: block.cells.map((cell) => ({
+                ...cell,
+                blockIds: cell.blockIds.map((blockId) => `${id}${blockId}`),
+              })),
+            }),
+      }));
+    for (const [breakAt, expected] of [
+      // The break in the first blank paragraph: the second stays and is
+      // told to start the page.
+      [1, { kept: "p2", starts: ["p2"] }],
+      // The break in the second: it stays with its break.
+      [2, { kept: "p2", starts: [] }],
+    ] as const) {
+      const paragraphs = withFacts(["SMLOUVA", "", ""], {
+        [breakAt]: { pageBreaks: 1 },
+      });
+      const [title, first, second] = paragraphs.blocks;
+      if (title === undefined || first === undefined || second === undefined) {
+        throw new Error("fixture");
+      }
+      const { plan } = build({
+        ...paragraphs,
+        blocks: [title, ...table("a"), first, second, ...table("b")],
+      });
+      expect(
+        sourceItems(plan)
+          .map(({ blockId }) => blockId)
+          .filter((id) => id === "p1" || id === "p2"),
+      ).toEqual([expected.kept]);
+      expect(starts(plan)).toEqual(expected.starts);
+    }
   });
 
   test("a manifest without break facts starts no page", () => {
@@ -716,7 +833,12 @@ describe("buildTemplatePlan, justified lines in front of a manual line break", (
     const { plan, note } = build(withCompat(false), "keepSource", justified);
     expect(plan.compat).toEqual({ doNotExpandShiftReturn: true });
     expect(kept(note)).toEqual([
-      { kind: "lineBreakSpacingKept", reason: "justifiedHere", blocks: 1 },
+      {
+        kind: "lineBreakSpacingKept",
+        reason: "justifiedHere",
+        blocks: 1,
+        alreadyStretched: 0,
+      },
     ]);
   });
 
@@ -731,8 +853,79 @@ describe("buildTemplatePlan, justified lines in front of a manual line break", (
     const { plan, note } = build(withCompat(true, "both"));
     expect(plan.compat).toEqual({ doNotExpandShiftReturn: true });
     expect(kept(note)).toEqual([
-      { kind: "lineBreakSpacingKept", reason: "source", blocks: 0 },
+      {
+        kind: "lineBreakSpacingKept",
+        reason: "source",
+        blocks: 0,
+        alreadyStretched: 0,
+      },
     ]);
+  });
+
+  test("the setting is the document's: a paragraph that was stretched before is counted", () => {
+    const manifest = withCompat(false);
+    const mixed = {
+      ...manifest,
+      blocks: [
+        ...manifest.blocks,
+        ...manifestOf(["Byl\nzarovnán."]).blocks.map((block) => ({
+          ...block,
+          id: "p9",
+          alignment: "both",
+        })),
+      ],
+    };
+    const { plan, note } = build(mixed, "keepSource", justified);
+    expect(plan.compat).toEqual({ doNotExpandShiftReturn: true });
+    expect(kept(note)).toEqual([
+      {
+        kind: "lineBreakSpacingKept",
+        reason: "justifiedHere",
+        blocks: 1,
+        alreadyStretched: 1,
+      },
+    ]);
+  });
+
+  test("a title joined to its heading is read in the heading's style", () => {
+    const reading = (
+      blockId: string,
+      role: "title" | "articleHeading" | "body",
+      mergedIntoBlockId: string | null = null,
+    ) => ({
+      blockId,
+      role,
+      confidence: 0.9,
+      alternatives: [],
+      mergedIntoBlockId,
+    });
+    const article = PROFILE.roles.articleHeading;
+    const headings = {
+      profile: {
+        ...PROFILE,
+        roles: {
+          ...PROFILE.roles,
+          articleHeading:
+            article === null ? null : { ...article, alignment: "both" },
+        },
+      },
+    };
+    const manifest = {
+      ...manifestOf(["SMLOUVA", "Článek I.", "Předmět\nsmlouvy", "Text."]),
+      compat: { doNotExpandShiftReturn: false },
+    };
+    const { plan, note } = build(manifest, "keepSource", {
+      ...headings,
+      roles: [
+        reading("p0", "title"),
+        reading("p1", "articleHeading"),
+        reading("p2", "articleHeading", "p1"),
+        reading("p3", "body"),
+      ],
+    });
+    expect(itemOf(plan, manifest, "Článek I.")?.mergeNext).toBeDefined();
+    expect(plan.compat).toEqual({ doNotExpandShiftReturn: true });
+    expect(kept(note).at(0)).toMatchObject({ blocks: 1 });
   });
 
   test("a manifest without the facts changes nothing", () => {
