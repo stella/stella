@@ -162,6 +162,20 @@ export type TemplatePlanNestedParagraph = {
   labelAsText?: boolean;
 };
 
+/** A section of the output with a page other than the template's, in
+ *  twentieths of a point. Everything else of it is the template's last
+ *  section. */
+export type TemplatePlanSection = {
+  page?: {
+    orientation: "portrait" | "landscape";
+    width: number;
+    height: number;
+    margins?: { top: number; right: number; bottom: number; left: number };
+  };
+  /** How it begins after the section before it; `nextPage` when left out. */
+  start?: "nextPage" | "evenPage" | "oddPage";
+};
+
 export type TemplatePlanSourceItem = {
   kind: "source";
   blockId: string;
@@ -182,6 +196,9 @@ export type TemplatePlanSourceItem = {
   /** Starts the paragraph on a new page. Not for a table, nor for a block
    *  that joins the paragraph before it. */
   pageBreakBefore?: boolean;
+  /** The paragraph is the last of the section described. Not for a table,
+   *  nor for a block that joins the paragraph before it. */
+  endsSection?: TemplatePlanSection;
   /** Table only: the paragraph style of its cells. */
   cellStyleId?: string;
   /** Table only: placement of single paragraphs inside it. */
@@ -238,6 +255,9 @@ export type TemplatePlan = {
   /** Compatibility settings switched on in the output's settings, which
    *  are otherwise the template's. */
   compat?: { doNotExpandShiftReturn?: boolean };
+  /** The section the body ends with, when its page is another than the
+   *  template's. */
+  lastSection?: TemplatePlanSection;
 };
 
 /** The part of the engine's report the plan is repaired and the formatting
