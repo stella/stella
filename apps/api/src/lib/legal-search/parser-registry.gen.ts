@@ -106,7 +106,7 @@ export const PARSER_VERSIONS = {
 
   [ADAPTER_KEYS.CZ_ISIR]: 2,
 
-  [ADAPTER_KEYS.CZ_NS_SBIRKA]: 2,
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: 3,
 
   [ADAPTER_KEYS.CZ_NS]: 35,
 
@@ -250,7 +250,7 @@ export const PARSER_VERSION_SCOPES = {
 
   [ADAPTER_KEYS.CZ_ISIR]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_ISIR], scope: {"type":"all","reason":"the source has never been enabled; there are no stored rows to narrow"} },
 
-  [ADAPTER_KEYS.CZ_NS_SBIRKA]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS_SBIRKA], scope: {"type":"all","reason":"Recognize split and complete report editions from their stored detail HTML; earlier rows do not store the edition layout."} },
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS_SBIRKA], scope: {"type":"all","reason":"Read the collection page's tabs, source line breaks and space runs as one space, as a browser shows them, so no paragraph or heading keeps the page's raw indentation."} },
 
   [ADAPTER_KEYS.CZ_NS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS], scope: {"type":"all","reason":"Read the print page's tabs, source line breaks and space runs as one space, as a browser shows them, so no paragraph or heading keeps the page's raw indentation."} },
 
