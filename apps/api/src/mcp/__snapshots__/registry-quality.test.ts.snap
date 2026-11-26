@@ -562,7 +562,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "query": {
           "type": "string",
           "maxLength": 256,
-          "description": "Find all words (any inflection): matching paragraphs with neighbours, 1-based position, publisher label/null, verbatim enclosing headingPath and deep link. If none, matches.warnings names the words and next query. Replaces paging; no page/full."
+          "description": "Find all words (any inflection): matching paragraphs with neighbours, 1-based position, label, verbatim enclosing headingPath and deep link. matches.numbering court: label is the court's paragraph number; none: never cite position as one. No match: matches.warnings names the words and next query. Replaces paging; no page/full."
         },
         "resume_after": {
           "type": "string",
@@ -8391,7 +8391,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "query": {
           "type": "string",
           "maxLength": 256,
-          "description": "Find all words (any inflection): matching paragraphs with neighbours, 1-based position, publisher label/null, verbatim enclosing headingPath and deep link. If none, matches.warnings names the words and next query. Replaces paging; no page/full."
+          "description": "Find all words (any inflection): matching paragraphs with neighbours, 1-based position, label, verbatim enclosing headingPath and deep link. matches.numbering court: label is the court's paragraph number; none: never cite position as one. No match: matches.warnings names the words and next query. Replaces paging; no page/full."
         },
         "resume_after": {
           "type": "string",
@@ -16956,7 +16956,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "query": {
           "type": "string",
           "maxLength": 256,
-          "description": "Find all words (any inflection): matching paragraphs with neighbours, 1-based position, publisher label/null, verbatim enclosing headingPath and deep link. If none, matches.warnings names the words and next query. Replaces paging; no page/full."
+          "description": "Find all words (any inflection): matching paragraphs with neighbours, 1-based position, label, verbatim enclosing headingPath and deep link. matches.numbering court: label is the court's paragraph number; none: never cite position as one. No match: matches.warnings names the words and next query. Replaces paging; no page/full."
         },
         "resume_after": {
           "type": "string",
@@ -19322,7 +19322,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "query": {
           "type": "string",
           "maxLength": 256,
-          "description": "Find all words (any inflection): matching paragraphs with neighbours, 1-based position, publisher label/null, verbatim enclosing headingPath and deep link. If none, matches.warnings names the words and next query. Replaces paging; no page/full."
+          "description": "Find all words (any inflection): matching paragraphs with neighbours, 1-based position, label, verbatim enclosing headingPath and deep link. matches.numbering court: label is the court's paragraph number; none: never cite position as one. No match: matches.warnings names the words and next query. Replaces paging; no page/full."
         },
         "resume_after": {
           "type": "string",

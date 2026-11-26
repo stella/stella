@@ -4,7 +4,12 @@ import { setTimeout as sleep } from "node:timers/promises";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
-import { persistedDocumentAstSchema } from "@stll/legal-ast/document-ast";
+import { decisionParagraphNumbering } from "@stll/legal-ast/court-paragraph-number";
+import { extractCourtParagraphNumbers } from "@stll/legal-ast/court-paragraph-numbers";
+import {
+  type Block,
+  persistedDocumentAstSchema,
+} from "@stll/legal-ast/document-ast";
 
 import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
@@ -21,6 +26,10 @@ import {
 } from "@/api/lib/legal-search/corpus-tombstones";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 import { emptyAstSchema } from "@/api/lib/legal-search/document-types";
+import {
+  COURT_PARAGRAPH_NUMBERING_CONVENTIONS,
+  type CourtParagraphReader,
+} from "@/api/lib/legal-search/processed-field-inventory";
 import { LIMITS } from "@/api/lib/limits";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -43,6 +52,23 @@ type CorpusAstCensusRow = {
   documentAst: unknown;
 };
 
+/**
+ * The court paragraph numbers of the valid stored decisions, one generic
+ * measure for every source: whether the stored paragraphs carry the court's
+ * numbers (`court`), carry none (`none`), and of those, how many still print
+ * a numbering in their text that the shared extractor would read
+ * (`noneButPrinted`): labels a reparse with the current parser restores. A
+ * source whose `reader` reads numbers and whose `none` dominates an older
+ * parser version holds decisions stored before its parser read them.
+ */
+type CorpusParagraphNumberingCounts = {
+  /** The source's declared reader, or null for a key no source declares. */
+  reader: CourtParagraphReader | null;
+  court: number;
+  none: number;
+  noneButPrinted: number;
+};
+
 type CorpusAstCensusCounts = {
   adapterKey: string;
   parserVersion: number | null;
@@ -51,6 +77,29 @@ type CorpusAstCensusCounts = {
   invalid: number;
   withoutAst: number;
   unreadable: number;
+  paragraphNumbering: CorpusParagraphNumberingCounts;
+};
+
+const DECLARED_READERS: ReadonlyMap<string, CourtParagraphReader> = new Map(
+  Object.entries(COURT_PARAGRAPH_NUMBERING_CONVENTIONS),
+);
+
+const declaredReader = (adapterKey: string): CourtParagraphReader | null =>
+  DECLARED_READERS.get(adapterKey) ?? null;
+
+/** Count one valid stored decision's paragraph numbering. */
+export const countParagraphNumbering = (
+  counts: CorpusParagraphNumberingCounts,
+  blocks: readonly Block[],
+): void => {
+  if (decisionParagraphNumbering(blocks) === "court") {
+    counts.court++;
+    return;
+  }
+  counts.none++;
+  if (extractCourtParagraphNumbers(blocks).type === "numbered") {
+    counts.noneButPrinted++;
+  }
 };
 
 /** Each census read is one bounded page; a slow page fails rather than piling up. */
@@ -161,6 +210,12 @@ export const corpusAstCensus = async ({
           invalid: 0,
           withoutAst: 0,
           unreadable: 0,
+          paragraphNumbering: {
+            reader: declaredReader(row.adapterKey),
+            court: 0,
+            none: 0,
+            noneButPrinted: 0,
+          },
         };
         counts.set(key, count);
       }
@@ -182,10 +237,12 @@ export const corpusAstCensus = async ({
       }
       if (payload.value === null || v.is(emptyAstSchema, payload.value)) {
         count.withoutAst++;
-      } else if (
-        v.safeParse(persistedDocumentAstSchema, payload.value).success
-      ) {
+        continue;
+      }
+      const ast = v.safeParse(persistedDocumentAstSchema, payload.value);
+      if (ast.success) {
         count.valid++;
+        countParagraphNumbering(count.paragraphNumbering, ast.output.blocks);
       } else {
         count.invalid++;
       }

@@ -1,3 +1,4 @@
+// parser-output-unchanged: the paragraph-number reader declarations are read by the conformance suite and typed into the extractor subject; no parser output changes.
 // parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
@@ -206,6 +207,8 @@ export const PROCESSED_FIELD_INVENTORY = {
         "src/handlers/case-law/ingestion/parsers/__fixtures__/cz-nss-10-as-124-2025.html.gz",
         "src/handlers/case-law/ingestion/parsers/__fixtures__/cz-nss-22-as-35-2026.html.gz",
         "src/handlers/case-law/ingestion/parsers/__fixtures__/cz-nss-10-azs-28-2026.html.gz",
+        "src/handlers/case-law/ingestion/parsers/__fixtures__/cz-nss-6-ads-21-2026.html.gz",
+        "src/handlers/case-law/ingestion/parsers/__fixtures__/cz-nss-10-as-245-2016.html.gz",
       ),
     ),
   },
@@ -223,7 +226,7 @@ export const PROCESSED_FIELD_INVENTORY = {
   [ADAPTER_KEYS.SK_COURTS]: {
     "court-paragraph-numbers": skippedField(
       PROCESSED_FIELD_SKIP_REASONS.NOT_EXTRACTED,
-      "general-court decisions can number their reasoning ('1. Okresný súd …' in a seeded decision) and the PDF parser keeps the number as text; it is not run through the shared extractor until a recorded PDF shows its paragraphs number correctly",
+      "general-court decisions can number their reasoning ('1. Okresný súd …' in a seeded decision); the PDF parser runs the shared extractor, and no recorded PDF shows its paragraphs number correctly yet",
       unrecordedEvidence(
         "the two general-court PDFs checked on 2026-10-12 (a district and a regional decision) had unnumbered reasoning; the seeded decision's document was unavailable",
       ),
@@ -373,7 +376,7 @@ export const PROCESSED_FIELD_INVENTORY = {
   [ADAPTER_KEYS.PL_UOKIK]: {
     "court-paragraph-numbers": skippedField(
       PROCESSED_FIELD_SKIP_REASONS.UNASSESSED,
-      "the PDF parser has no paragraph-number handling; the recorded PDFs have not been checked for numbered reasoning",
+      "the PDF parser runs the shared extractor; the recorded PDFs have not been checked for numbered reasoning",
       unrecordedEvidence(
         "the recorded PDFs have not been checked for numbered reasoning",
       ),
@@ -436,3 +439,83 @@ export const PROCESSED_FIELD_INVENTORY = {
     ),
   },
 } as const satisfies Record<ProcessedFieldSourceKey, ProcessedFieldDeclaration>;
+
+/**
+ * How a source's parser reads the court's paragraph numbers. Every source
+ * states one, `none` included, and the conformance suite holds it against
+ * the source's `court-paragraph-numbers` disposition and recordings.
+ */
+export const COURT_PARAGRAPH_READERS = {
+  /**
+   * The parser's last step is `courtParagraphNumbers`, the one extractor of
+   * a leading printed marker (`[N]`, `N.`, `N)`). Only a source declared
+   * here may call it: its subject is typed by this declaration.
+   */
+  LEADING_MARKER: "leading-marker",
+  /**
+   * The publisher marks the number as structure (a cell, an element, an id)
+   * and the parser copies it; no printed marker is read.
+   */
+  PUBLISHER_STRUCTURE: "publisher-structure",
+  /**
+   * The parser strips a leading printed marker with a grammar of its own.
+   * Legacy only: the conformance suite pins the set, which can only shrink.
+   */
+  OWN_MARKER: "own-marker",
+  /** The parser stores no paragraph numbers; every decision reads `none`. */
+  NONE: "none",
+} as const;
+
+export type CourtParagraphReader =
+  (typeof COURT_PARAGRAPH_READERS)[keyof typeof COURT_PARAGRAPH_READERS];
+
+/** Every source's paragraph-number reader. A source added without one does not compile. */
+export const COURT_PARAGRAPH_NUMBERING_CONVENTIONS = {
+  [ADAPTER_KEYS.CZ_REGIONAL]: COURT_PARAGRAPH_READERS.LEADING_MARKER,
+  [ADAPTER_KEYS.CZ_NS]: COURT_PARAGRAPH_READERS.LEADING_MARKER,
+  [ADAPTER_KEYS.CZ_NSS]: COURT_PARAGRAPH_READERS.LEADING_MARKER,
+  [ADAPTER_KEYS.CZ_US]: COURT_PARAGRAPH_READERS.LEADING_MARKER,
+  [ADAPTER_KEYS.CZ_UOHS]: COURT_PARAGRAPH_READERS.LEADING_MARKER,
+  [ADAPTER_KEYS.CZ_ISIR]: COURT_PARAGRAPH_READERS.LEADING_MARKER,
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: COURT_PARAGRAPH_READERS.LEADING_MARKER,
+  [ADAPTER_KEYS.SK_COURTS]: COURT_PARAGRAPH_READERS.LEADING_MARKER,
+  [ADAPTER_KEYS.SK_US]: COURT_PARAGRAPH_READERS.LEADING_MARKER,
+  [ADAPTER_KEYS.PL_COURTS]: COURT_PARAGRAPH_READERS.LEADING_MARKER,
+  [ADAPTER_KEYS.PL_NCOURT]: COURT_PARAGRAPH_READERS.LEADING_MARKER,
+  [ADAPTER_KEYS.PL_UOKIK]: COURT_PARAGRAPH_READERS.LEADING_MARKER,
+  [ADAPTER_KEYS.EU_ECJ]: COURT_PARAGRAPH_READERS.PUBLISHER_STRUCTURE,
+  [ADAPTER_KEYS.UK_FCL]: COURT_PARAGRAPH_READERS.PUBLISHER_STRUCTURE,
+  [ADAPTER_KEYS.PL_TK]: COURT_PARAGRAPH_READERS.PUBLISHER_STRUCTURE,
+  [ADAPTER_KEYS.PL_UODO]: COURT_PARAGRAPH_READERS.PUBLISHER_STRUCTURE,
+  [ADAPTER_KEYS.HU_BHGY]: COURT_PARAGRAPH_READERS.OWN_MARKER,
+  [ADAPTER_KEYS.PL_SN]: COURT_PARAGRAPH_READERS.NONE,
+  [ADAPTER_KEYS.PL_KIO]: COURT_PARAGRAPH_READERS.NONE,
+  [ADAPTER_KEYS.PL_NSA]: COURT_PARAGRAPH_READERS.NONE,
+  [ADAPTER_KEYS.PL_KIS]: COURT_PARAGRAPH_READERS.NONE,
+  [ADAPTER_KEYS.AT_COURTS]: COURT_PARAGRAPH_READERS.NONE,
+  [ADAPTER_KEYS.AT_VFGH]: COURT_PARAGRAPH_READERS.NONE,
+  [ADAPTER_KEYS.AT_VWGH]: COURT_PARAGRAPH_READERS.NONE,
+  [ADAPTER_KEYS.AT_BVWG]: COURT_PARAGRAPH_READERS.NONE,
+  [ADAPTER_KEYS.AT_LVWG]: COURT_PARAGRAPH_READERS.NONE,
+  [ADAPTER_KEYS.AT_ASYLGH]: COURT_PARAGRAPH_READERS.NONE,
+  [ADAPTER_KEYS.AT_UBAS]: COURT_PARAGRAPH_READERS.NONE,
+  [ADAPTER_KEYS.AT_UVS]: COURT_PARAGRAPH_READERS.NONE,
+  [ADAPTER_KEYS.AT_VERG]: COURT_PARAGRAPH_READERS.NONE,
+  [ADAPTER_KEYS.AT_UMSE]: COURT_PARAGRAPH_READERS.NONE,
+  [ADAPTER_KEYS.AT_BKS]: COURT_PARAGRAPH_READERS.NONE,
+  [ADAPTER_KEYS.AT_FINDOK]: COURT_PARAGRAPH_READERS.NONE,
+  [ADAPTER_KEYS.BR_TJDFT]: COURT_PARAGRAPH_READERS.NONE,
+  [ADAPTER_KEYS.BR_TST]: COURT_PARAGRAPH_READERS.NONE,
+  [IMPORT_SOURCE_KEYS.COURTLISTENER]: COURT_PARAGRAPH_READERS.NONE,
+} as const satisfies Record<ProcessedFieldSourceKey, CourtParagraphReader>;
+
+type Conventions = typeof COURT_PARAGRAPH_NUMBERING_CONVENTIONS;
+
+/** The sources whose parsers may run the shared leading-marker extractor. */
+export type LeadingMarkerSourceKey = {
+  [
+    TKey in keyof Conventions
+  ]: Conventions[TKey] extends typeof COURT_PARAGRAPH_READERS.LEADING_MARKER
+    ? TKey
+    : never;
+}[keyof Conventions];

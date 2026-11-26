@@ -1,3 +1,12 @@
+/**
+ * Read-only census of every published decision's stored document, by source
+ * and parser version: whether the reader schema accepts it, and whether its
+ * paragraphs carry the court's own numbers (`paragraphNumbering`). The share
+ * `paragraphNumbering.noneButPrinted / valid` is the decisions whose text
+ * still prints a court numbering while no stored paragraph carries it.
+ *
+ * Usage: bun apps/api/src/scripts/corpus-ast-census.ts
+ */
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import {

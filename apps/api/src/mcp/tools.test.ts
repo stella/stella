@@ -8595,6 +8595,7 @@ describe("OpenAI-compatible MCP tools", () => {
       citations?: unknown;
       matches?: {
         hitCount: number;
+        numbering: "court" | "none";
         paragraphs: {
           hit?: true;
           url?: string;
@@ -8983,6 +8984,7 @@ describe("OpenAI-compatible MCP tools", () => {
               textSource: "ast",
               matches: {
                 hitCount: 1,
+                numbering: "court",
                 paragraphs: [
                   {
                     position: 3,
@@ -9196,6 +9198,8 @@ describe("OpenAI-compatible MCP tools", () => {
               textSource: "fulltext",
               matches: {
                 hitCount: 1,
+                // A printed "23." is a label, but no structure numbers it.
+                numbering: "none",
                 paragraphs: [
                   {
                     position: 1,
@@ -9717,6 +9721,8 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(entry.decision?.matches).toEqual({
       hitCount: 1,
+      // No paragraph carries a court number: positions are not pinpoints.
+      numbering: "none",
       paragraphs: [
         {
           position: 1,

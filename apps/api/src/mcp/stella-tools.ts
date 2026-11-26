@@ -27,6 +27,7 @@ import {
 } from "@stll/api-contract/search";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
+import { decisionParagraphNumbering } from "@stll/legal-ast/court-paragraph-number";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import {
   CASE_LAW_RESULTS_RESOURCE_URI,
@@ -454,7 +455,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         v.string(),
         v.maxLength(LIMITS.caseLawIdentifierMaxLength),
         v.description(
-          "Find all words (any inflection): matching paragraphs with neighbours, 1-based position, publisher label/null, verbatim enclosing headingPath and deep link. If none, matches.warnings names the words and next query. Replaces paging; no page/full.",
+          "Find all words (any inflection): matching paragraphs with neighbours, 1-based position, label, verbatim enclosing headingPath and deep link. matches.numbering court: label is the court's paragraph number; none: never cite position as one. No match: matches.warnings names the words and next query. Replaces paging; no page/full.",
         ),
       ),
     ),
@@ -2181,6 +2182,7 @@ const decisionTextPart = ({
       ...versioning,
       matches: {
         hitCount: found.hitCount,
+        numbering: decisionParagraphNumbering(located ?? []),
         paragraphs: found.paragraphs.map((paragraph) => ({
           position: paragraph.position,
           label: paragraph.label,

@@ -1,3 +1,4 @@
+// parser-output-unchanged: the paragraph-numbering warning names the source by its adapter key; parsed blocks and text are unchanged.
 /**
  * The Supreme Court's official collection (sbirka.nsoud.cz), read from an
  * entry's detail page.
@@ -442,7 +443,7 @@ export const parseCzNsSbirkaText = (
     ...drafts,
   ]);
   const blocks = courtParagraphNumbers(printedBlocks, {
-    parser: SOURCE_SYSTEM,
+    parser: "cz-ns-sbirka",
     caseNumber: identity.caseNumber,
     url: identity.sourceUrl,
   });

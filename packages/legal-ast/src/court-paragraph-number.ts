@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds a reader-side summary of stored numbers; no parser calls it.
 import type { Block } from "./document-ast.js";
 
 /**
@@ -33,3 +34,22 @@ export const courtParagraphNumbersByAnchor = (
   }
   return byAnchor;
 };
+
+/**
+ * How a decision's stored paragraphs can be cited. `court`: at least one
+ * paragraph carries the number its court printed, which is its label and
+ * its `#par=` link. `none`: no paragraph does, because the court numbers
+ * nothing or the stored text was read without its numbers, so a passage is
+ * named only by stella's position, never a pinpoint to cite.
+ */
+export const DECISION_PARAGRAPH_NUMBERING = ["court", "none"] as const;
+
+export type DecisionParagraphNumbering =
+  (typeof DECISION_PARAGRAPH_NUMBERING)[number];
+
+export const decisionParagraphNumbering = (
+  blocks: readonly Parameters<typeof courtParagraphNumber>[0][],
+): DecisionParagraphNumbering =>
+  blocks.some((block) => courtParagraphNumber(block) !== null)
+    ? "court"
+    : "none";
