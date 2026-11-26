@@ -389,6 +389,7 @@ test("merge-group and armed PR proofs always build; merge groups never look up r
   const steps = jobs["desktop-windows-dry-run"]?.steps ?? [];
   for (const name of [
     "Stamp dry-run metadata",
+    "Cache Rust dependencies and build artifacts",
     "Fetch Rust dependencies",
     "Exercise Windows desktop release build",
   ]) {

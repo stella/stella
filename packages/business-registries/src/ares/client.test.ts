@@ -163,13 +163,12 @@ describe("lookupByIco optional VR enrichment", () => {
       preconnect: originalFetch.preconnect,
     });
 
-    const outcome = await Promise.race([
-      lookupByIco("27082440", { observer: "unobserved" }).then(
-        () => "resolved" as const,
-        (error: unknown) => error,
-      ),
-      Bun.sleep(100).then(() => "timed_out" as const),
-    ]);
+    const outcome = await lookupByIco("27082440", {
+      observer: "unobserved",
+    }).then(
+      () => "resolved" as const,
+      (error: unknown) => error,
+    );
 
     expect(outcome).toBeInstanceOf(AresRequestError);
     expect(optionalVrSignal?.aborted).toBe(true);

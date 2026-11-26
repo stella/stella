@@ -13,6 +13,7 @@ import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import { DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH } from "@stll/api-contract/desktop-time-entries";
 import type {
+  DesktopDayEntriesResponse,
   DesktopMatter,
   DesktopMatterCandidatesResponse,
   DesktopMatterResolution,
@@ -125,7 +126,11 @@ import {
   segmentRanges,
   unresolvedMatterIds,
 } from "./day-review-logic";
-import type { DayReviewGroup, MatchedSegment } from "./day-review-logic";
+import type {
+  DayEntriesRead,
+  DayReviewGroup,
+  MatchedSegment,
+} from "./day-review-logic";
 import {
   acceptProposal,
   declineProposal,
@@ -444,6 +449,8 @@ type ActivityDayCalendarProps = {
   onPreferencesChange: (preferences: ActivityCalendarPreferences) => void;
   onCopy: (text: string, onSettled: (copied: boolean) => void) => void;
   onCaptureCommand: CaptureCommandRunner;
+  /** Opens the member's own time for the day in stella web. */
+  onOpenDayTime: () => void;
   onReviewStatusChange: (status: ActivityReviewStatus) => void;
 };
 
@@ -545,12 +552,14 @@ export const ActivityDayCalendar = ({
   onPreferencesChange,
   onCopy,
   onCaptureCommand,
+  onOpenDayTime,
   onReviewStatusChange,
 }: ActivityDayCalendarProps) => {
   const t = useTranslations("activity");
   const format = useFormatter();
   const locale = useLocale();
   const nowMs = Temporal.Now.instant().epochMilliseconds;
+  const elsewhere = useRecordedElsewhere(snapshot, onOpenDayTime);
   const [localDrafts, setLocalDrafts] = useState<DraftedEntries>([]);
   const { submission, submitBatch, errorMessage } = useBatchSubmission({
     date: snapshot.date,
@@ -590,19 +599,7 @@ export const ActivityDayCalendar = ({
       range,
       segments: day.segments,
     });
-  const openSuggestion = (() => {
-    switch (openCard.type) {
-      case "closed":
-        return null;
-      case "suggestion":
-        return suggestions.find(({ id }) => id === openCard.id) ?? null;
-      case "range":
-        return rangeSuggestion(openCard);
-      default:
-        openCard satisfies never;
-        return panic("Unhandled activity card");
-    }
-  })();
+  const openSuggestion = cardSuggestion(openCard, suggestions, rangeSuggestion);
 
   const open = (next: OpenCard, suggestion: ActivitySuggestion) => {
     setOpenCard(next);
@@ -672,6 +669,10 @@ export const ActivityDayCalendar = ({
           timeZone,
         })}
         edit={narratives.editFor(openSuggestion)}
+        recordedElsewhere={{
+          ...elsewhere,
+          draftedEntries: review.draftedEntries,
+        }}
         candidates={review.matters}
         editingDisabledReason={editingDisabledReason}
         timeLabel={summaryLabel(suggestionSummary(openSuggestion))}
@@ -1118,6 +1119,26 @@ const rangeCard = (range: DayCalendarRange): RangeCard => ({
   range,
   type: "range",
 });
+
+/** The suggestion an open card shows: a day's suggestion while it is still
+ * offered, or the range selected on the grid. */
+const cardSuggestion = (
+  openCard: OpenCard,
+  suggestions: readonly ActivitySuggestion[],
+  rangeSuggestion: (card: RangeCard) => ActivitySuggestion,
+) => {
+  switch (openCard.type) {
+    case "closed":
+      return null;
+    case "suggestion":
+      return suggestions.find(({ id }) => id === openCard.id) ?? null;
+    case "range":
+      return rangeSuggestion(openCard);
+    default:
+      openCard satisfies never;
+      return panic("Unhandled activity card");
+  }
+};
 
 const rangeEdges = (openCard: OpenCard) =>
   openCard.type === "range"
@@ -2437,6 +2458,53 @@ function useMatterCandidates(recordedIds: readonly string[]) {
       });
   }, [unresolved]);
   return { candidates, refreshCandidates };
+}
+
+/**
+ * The member's own entries on the day, from every device and the web, for a
+ * card to say what is already recorded on its matter elsewhere. They are
+ * read again whenever the window comes back to the front, as after time was
+ * logged on another computer. The calendar is keyed by day, so a read never
+ * outlives its date.
+ */
+function useRecordedElsewhere(
+  { date, today }: Pick<ActivityDaySnapshot, "date" | "today">,
+  onReview: () => void,
+) {
+  const [dayEntries, setDayEntries] = useState<DayEntriesRead>({
+    type: "loading",
+  });
+  const dayEntriesRequest = useRef(0);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
+  const refresh = useCallback(() => {
+    const request = ++dayEntriesRequest.current;
+    invoke<DesktopDayEntriesResponse>("time_entry_day_entries", { date })
+      .then(({ entries }) => {
+        if (request === dayEntriesRequest.current) {
+          setDayEntries({ type: "ready", entries });
+        }
+        return undefined;
+      })
+      .catch(() => {
+        if (request === dayEntriesRequest.current) {
+          setDayEntries({ type: "failed" });
+        }
+      });
+  }, [date]);
+  useEffect(() => {
+    refresh();
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      dayEntriesRequest.current += 1;
+    };
+  }, [refresh]);
+  return {
+    dayEntries,
+    day: date === today ? "today" : "other",
+    onReview,
+    onRetry: refresh,
+  } as const;
 }
 
 type ReviewSubmissionOptions = {

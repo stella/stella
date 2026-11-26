@@ -60,11 +60,16 @@ type GenerateThreadRecapTextArgs = {
   workspaceId: SafeId<"workspace"> | null;
 };
 
+export type ThreadRecapGenerationOutcome =
+  | { readonly type: "generated"; readonly recap: string }
+  | { readonly type: "empty" }
+  | { readonly type: "failed"; readonly error: unknown };
+
 /**
- * Generate a recap from the thread transcript. Returns null (never
- * throws) when there is nothing to summarise or the model call fails:
- * the recap is a non-critical nicety, so a failure surfaces no recap
- * rather than an error.
+ * Generate a recap from the thread transcript. Returns an explicit outcome
+ * (never throws) so callers can distinguish empty transcripts/output from
+ * model failures without letting a non-critical recap failure block the
+ * thread view.
  */
 export const generateThreadRecapText = async ({
   admission,
@@ -75,10 +80,10 @@ export const generateThreadRecapText = async ({
   promptCachingEnabled,
   threadId,
   workspaceId,
-}: GenerateThreadRecapTextArgs): Promise<string | null> => {
+}: GenerateThreadRecapTextArgs): Promise<ThreadRecapGenerationOutcome> => {
   const transcript = buildRecapTranscript(messages);
   if (!transcript) {
-    return null;
+    return { type: "empty" };
   }
 
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
@@ -116,7 +121,8 @@ export const generateThreadRecapText = async ({
       systemPromptOrigin: "server-built",
     });
 
-    return cleanRecapText(text);
+    const recap = cleanRecapText(text);
+    return recap === null ? { type: "empty" } : { type: "generated", recap };
   } catch (error) {
     aiAnalytics.captureError(error);
     if (isUnanticipatedAIFailure(error)) {
@@ -128,6 +134,6 @@ export const generateThreadRecapText = async ({
         }),
       );
     }
-    return null;
+    return { type: "failed", error };
   }
 };

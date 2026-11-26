@@ -274,3 +274,36 @@ export const desktopCalendarEventsResponseSchema = v.variant("status", [
 export type DesktopCalendarEventsResponse = v.InferOutput<
   typeof desktopCalendarEventsResponseSchema
 >;
+
+/** The most of a member's own entries one work date returns; a day with
+ * more is refused rather than read in part. */
+export const DESKTOP_DAY_ENTRIES_LIMIT = 500;
+
+/** The refusal of a work date with more entries than the limit. */
+export const DESKTOP_DAY_ENTRIES_TOO_MANY_CODE = "desktop_day_entries_too_many";
+
+export const desktopDayEntriesQuerySchema = v.strictObject({
+  /** The member's local calendar date, as entries record `dateWorked`. */
+  date: apiDateSchema,
+});
+
+/**
+ * The member's own client time entries on one work date: matter and minutes,
+ * nothing about when in the day. The desktop tells the entries it created
+ * from those made elsewhere by the entry ids it keeps for the day.
+ */
+export const desktopDayEntriesResponseSchema = v.strictObject({
+  entries: v.pipe(
+    v.array(
+      v.strictObject({
+        id: v.pipe(v.string(), v.maxLength(200)),
+        matterId: v.pipe(v.string(), v.maxLength(200)),
+        durationMinutes: v.pipe(v.number(), v.integer(), v.minValue(0)),
+      }),
+    ),
+    v.maxLength(DESKTOP_DAY_ENTRIES_LIMIT),
+  ),
+});
+export type DesktopDayEntriesResponse = v.InferOutput<
+  typeof desktopDayEntriesResponseSchema
+>;

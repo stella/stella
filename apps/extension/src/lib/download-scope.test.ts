@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
-
 import { judgeDownload, setDownloadScope } from "./download-guard";
 import {
   containControlledTab,
@@ -115,7 +113,9 @@ const savedInTab3 = (id: number): chrome.downloads.DownloadItem => ({
 onContainedTabsChanged(setDownloadScope);
 
 const settle = async () => {
-  await sleep(5);
+  for (let i = 0; i < 8; i += 1) {
+    await Promise.resolve();
+  }
 };
 
 describe("download scope during containment changes", () => {

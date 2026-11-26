@@ -24,9 +24,11 @@ import {
   readFileSync,
   statSync,
 } from "node:fs";
+import { availableParallelism } from "node:os";
 import path from "node:path";
 import { API } from "tsrs/async";
 
+import { mapWithConcurrency } from "@stll/concurrency";
 import { isPathInside, repoRelativePath } from "@stll/portable-path";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
@@ -172,6 +174,27 @@ const run = (command: string[]): string => {
     );
   }
   return result.stdout.toString();
+};
+
+const PROJECT_CONCURRENCY = Math.max(1, Math.min(4, availableParallelism()));
+
+const runAsync = async (command: string[]): Promise<string> => {
+  const child = Bun.spawn(command, {
+    cwd: REPO_ROOT,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ]);
+  if (exitCode !== 0) {
+    panic(
+      `Command failed (${exitCode}): ${command.join(" ")}\n${stderr}${stdout}`,
+    );
+  }
+  return stdout;
 };
 
 const lines = (output: string): string[] =>
@@ -377,32 +400,50 @@ const duplicateBuildInfoErrors = (projects: ProjectBuildInfo[]): string[] => {
 };
 
 const incrementalProjectErrors = async (projects: string[]) => {
+  const checkedProjects = projects.filter(
+    (project) => !INCREMENTAL_EXEMPT_PROJECTS.has(project),
+  );
+  const results = await mapWithConcurrency({
+    limit: PROJECT_CONCURRENCY,
+    items: checkedProjects,
+    operation: async (project) => {
+      const options = await readCompilerOptions(project);
+      if (options.incremental !== true) {
+        return {
+          buildInfo: undefined,
+          errors: [`${project} must enable incremental compilation`],
+        };
+      }
+      const buildInfoFile = options.tsBuildInfoFile;
+      if (typeof buildInfoFile !== "string") {
+        return {
+          buildInfo: undefined,
+          errors: [`${project} must set tsBuildInfoFile to a string path`],
+        };
+      }
+      const relativeBuildInfo = normalizeRepoPath(
+        repoRelativePath(REPO_ROOT, buildInfoFile),
+      );
+      const projectErrors = /(?:^|\/)\.cache\/tsbuildinfo[^/]*\.json$/u.test(
+        relativeBuildInfo,
+      )
+        ? []
+        : [
+            `${project} stores incremental state outside a .cache/tsbuildinfo*.json path: ${relativeBuildInfo}`,
+          ];
+      return {
+        buildInfo: { buildInfoFile, project },
+        errors: projectErrors,
+      };
+    },
+  });
   const buildInfoFiles: ProjectBuildInfo[] = [];
   const errors: string[] = [];
-  for (const project of projects) {
-    if (INCREMENTAL_EXEMPT_PROJECTS.has(project)) {
-      continue;
+  for (const result of results) {
+    errors.push(...result.errors);
+    if (result.buildInfo !== undefined) {
+      buildInfoFiles.push(result.buildInfo);
     }
-    const options = await readCompilerOptions(project);
-    if (options.incremental !== true) {
-      errors.push(`${project} must enable incremental compilation`);
-      continue;
-    }
-
-    const buildInfoFile = options.tsBuildInfoFile;
-    if (typeof buildInfoFile !== "string") {
-      errors.push(`${project} must set tsBuildInfoFile to a string path`);
-      continue;
-    }
-    const relativeBuildInfo = normalizeRepoPath(
-      repoRelativePath(REPO_ROOT, buildInfoFile),
-    );
-    if (!/(?:^|\/)\.cache\/tsbuildinfo[^/]*\.json$/u.test(relativeBuildInfo)) {
-      errors.push(
-        `${project} stores incremental state outside a .cache/tsbuildinfo*.json path: ${relativeBuildInfo}`,
-      );
-    }
-    buildInfoFiles.push({ buildInfoFile, project });
   }
   errors.push(...duplicateBuildInfoErrors(buildInfoFiles));
   return errors;
@@ -664,31 +705,33 @@ const discoverableConfigFiles = (
   return configFiles;
 };
 
-const coveredFilesByProject = (
+const coveredFilesByProject = async (
   projects: string[],
-): Map<string, Set<string>> => {
-  const filesByProject = new Map<string, Set<string>>();
-
-  for (const project of projects) {
-    const projectFiles = new Set<string>();
-    const output = run([
-      process.execPath,
-      TSC_NATIVE,
-      "-p",
-      project,
-      "--listFilesOnly",
-    ]);
-    for (const file of lines(output)) {
-      const relative = repositoryRelativeFile(REPO_ROOT, file, path);
-      if (relative === null) {
-        continue;
+): Promise<Map<string, Set<string>>> => {
+  const entries = await mapWithConcurrency({
+    limit: PROJECT_CONCURRENCY,
+    items: projects,
+    operation: async (project): Promise<[string, Set<string>]> => {
+      const projectFiles = new Set<string>();
+      const output = await runAsync([
+        process.execPath,
+        TSC_NATIVE,
+        "-p",
+        project,
+        "--listFilesOnly",
+      ]);
+      for (const file of lines(output)) {
+        const relative = repositoryRelativeFile(REPO_ROOT, file, path);
+        if (relative === null) {
+          continue;
+        }
+        projectFiles.add(normalizeRepoPath(relative));
       }
-      projectFiles.add(normalizeRepoPath(relative));
-    }
-    filesByProject.set(project, projectFiles);
-  }
+      return [project, projectFiles];
+    },
+  });
 
-  return filesByProject;
+  return new Map(entries);
 };
 
 const repositoryRelativeFile = (
@@ -1036,7 +1079,7 @@ const main = async (): Promise<void> => {
   await assertIncrementalProjectConfigs(projects);
   const repositoryFiles = repositoryTypeScriptFiles();
   const oxcFiles = repositoryOxcFiles();
-  const filesByProject = coveredFilesByProject(projects);
+  const filesByProject = await coveredFilesByProject(projects);
   const covered = coveredFiles(filesByProject);
   const discoverableConfigs = discoverableConfigFiles(projects, filesByProject);
   const sourcesWithoutConfig = findSourcesWithoutDiscoverableConfig(

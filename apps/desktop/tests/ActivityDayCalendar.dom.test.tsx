@@ -102,6 +102,8 @@ const renderDay = async (snapshot: ActivityDaySnapshot) => {
         return [];
       case "activity_get_matter_learning":
         return { type: "unavailable" };
+      case "time_entry_day_entries":
+        return { entries: [] };
       default:
         return null;
     }
@@ -115,6 +117,7 @@ const renderDay = async (snapshot: ActivityDaySnapshot) => {
         onPreferencesChange={noop}
         onCopy={noop}
         onCaptureCommand={noop}
+        onOpenDayTime={noop}
         onReviewStatusChange={noop}
       />
     </DesktopIntlProvider>,

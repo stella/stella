@@ -85,7 +85,8 @@ type ActivityCommand =
   | CaptureModeCommand["command"]
   | "activity_copy_text"
   | "activity_open_settings"
-  | "activity_set_recording_status";
+  | "activity_set_recording_status"
+  | "time_entry_open_day_time";
 
 type RunCommand = (
   command: ActivityCommand,
@@ -540,6 +541,9 @@ const DayContent = ({
       header={header}
       notice={notice}
       onCaptureCommand={onCommand}
+      onOpenDayTime={() =>
+        onCommand("time_entry_open_day_time", { date: snapshot.date })
+      }
       snapshot={snapshot}
       preferences={preferences}
       onPreferencesChange={onPreferencesChange}
@@ -694,6 +698,17 @@ const ActivityApp = () => {
     granularity: 30,
   });
   const errorRead = t("errorRead");
+  const tSettings = useTranslations("settings");
+  // Every other command changes a setting.
+  const commandError = (command: ActivityCommand) => {
+    if (command === "activity_copy_text") {
+      return t("errorCopy");
+    }
+    if (command === "time_entry_open_day_time") {
+      return tSettings("errorOpenStellaWeb");
+    }
+    return t("errorUpdate");
+  };
 
   const runCommand: RunCommand = (command, args, onSuccess, onFailure) => {
     setError(null);
@@ -709,9 +724,7 @@ const ActivityApp = () => {
           DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
           error,
         );
-        setError(
-          command === "activity_copy_text" ? t("errorCopy") : t("errorUpdate"),
-        );
+        setError(commandError(command));
       });
   };
   const openSettings = () => runCommand("activity_open_settings");
