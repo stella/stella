@@ -730,6 +730,9 @@ const pageStartsOf = (
   let pending = false;
   /** Nothing starts a page in front of the document's first block. */
   let placedAny = false;
+  /** A kept blank paragraph starts the page in front of the table that
+   *  follows: every start between the two is that one. */
+  let held = false;
   for (const block of context.topLevel) {
     noteSectionAfter(context, block);
     if (block.kind === "table") {
@@ -742,28 +745,32 @@ const pageStartsOf = (
       }
       pending = false;
       placedAny = true;
-    } else if (holders.has(block.id)) {
-      // The page starts with this paragraph, also where the section it
-      // closes ends in front of the table. With a break of its own among
-      // its runs it needs no telling.
-      const startsHere =
-        pending || block.pageBreakBefore === true || endsPage(context, block);
-      if (startsHere && placedAny && (block.pageBreaks ?? 0) === 0) {
+      held = false;
+      continue;
+    }
+    if (holders.has(block.id)) {
+      // It was kept because the page starts in front of the table, by a
+      // break before it, behind it or in the section it closes. With a
+      // break of its own among its runs it needs no telling.
+      if ((block.pageBreaks ?? 0) === 0) {
         starts.add(block.id);
       }
       pending = false;
       placedAny = true;
+      held = true;
       continue;
-    } else if (placed.omitted.has(block.id)) {
-      pending ||= breaksPage(block);
+    }
+    if (placed.omitted.has(block.id)) {
+      pending ||= !held && breaksPage(block);
     } else if (!placed.mergedInto.has(block.id)) {
       if ((pending || block.pageBreakBefore === true) && placedAny) {
         starts.add(block.id);
       }
       pending = false;
       placedAny = true;
+      held = false;
     }
-    pending ||= endsPage(context, block);
+    pending ||= !held && endsPage(context, block);
   }
   return starts;
 };

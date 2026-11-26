@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { useTranslations } from "use-intl";
@@ -8,6 +8,7 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   useExternalSyncEffect,
   useLatestCallback,
+  useLayoutSyncEffect,
   useMountEffect,
 } from "@stll/ui/effects";
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "@stll/ui/icons";
@@ -359,7 +360,7 @@ export const useInspectorFind = ({
     },
   );
 
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     applyFind({
       activeIndex,
       enabled,

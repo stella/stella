@@ -1,7 +1,6 @@
 import {
   Suspense,
   useCallback,
-  useLayoutEffect,
   useMemo,
   useRef,
   useSyncExternalStore,
@@ -12,7 +11,7 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
-import { useExternalSyncEffect } from "@stll/ui/effects";
+import { useExternalSyncEffect, useLayoutSyncEffect } from "@stll/ui/effects";
 import { matterChromeStyle, resolveMatterColor } from "@stll/ui/matter-colors";
 
 import { clearAnonymization } from "@/components/inspector/anonymize-pdf";
@@ -413,7 +412,7 @@ export const InspectorPanel = ({
   // Commit the latest recency snapshot after the render commits so
   // discarded renders (Strict Mode, Concurrent) don't pollute the
   // ref — only the set actually shown to the user is recorded.
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     pdfRecencyRef.current = Array.from(mountedPdfIds);
   }, [mountedPdfIds]);
 
