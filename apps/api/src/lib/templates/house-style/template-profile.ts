@@ -174,8 +174,6 @@ const VOLATILE_FIELD_KINDS: ReadonlySet<string> = new Set([
   "TIME",
 ]);
 const CONTENTS_FIELD = "TOC";
-/** The page reference each entry of a filled table of contents carries. */
-const CONTENTS_ENTRY_FIELD = "PAGEREF";
 const ANNEX_NUMBER_FIELDS: ReadonlySet<string> = new Set([
   "AUTONUM",
   "AUTONUMLGL",
@@ -807,14 +805,9 @@ const inferRegions = ({
   if (contentsField?.blockId !== undefined) {
     const from = order.indexOf(contentsField.blockId);
     const to = order.indexOf(contentsField.endBlockId ?? contentsField.blockId);
-    const span = new Set(order.slice(from, to + 1));
-    const showsEntries = fields.some(
-      ({ kind, blockId }) =>
-        kind === CONTENTS_ENTRY_FIELD &&
-        blockId !== undefined &&
-        span.has(blockId),
-    );
-    if (from !== -1 && to >= from && !showsEntries) {
+    // A field that shows sample entries is kept too: the engine writes it
+    // without them.
+    if (from !== -1 && to >= from) {
       const caption = topLevel[from - 1];
       // The caption above the field belongs to it. A short line that does
       // not name the contents is sample text of something else.

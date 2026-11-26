@@ -74,11 +74,12 @@ describe("inferTemplateProfile", () => {
     ).toBe(true);
   });
 
-  test("a contents field that shows sample entries is not kept", () => {
+  test("a contents field is kept with its caption, with sample entries or without", () => {
+    // The engine writes a kept field without the entries it caches.
     const filled = inferTemplateProfile(contractTemplate());
-    expect(filled.regions.contents).toEqual([]);
+    expect(filled.regions.contents).toEqual(["p4", "p5", "p6", "p7"]);
     expect(filled.regions.keepBefore).toEqual([]);
-    expect(filled.regions.filler).toContain("p5");
+    expect(filled.regions.filler).not.toContain("p5");
 
     const empty = inferTemplateProfile(contractTemplate({ contents: "empty" }));
     // The caption goes with the field, and the field is kept whole.
