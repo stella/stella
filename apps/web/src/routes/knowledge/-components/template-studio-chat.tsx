@@ -1173,12 +1173,11 @@ const TemplateStudioChatInner = ({
 
   // `suggest_changes` never reaches the approval flow (it is auto-run and
   // queue-only); every other tool approves through the shared handler.
-  const handleApproveForTemplate = async (
-    approvalId: string,
-    toolName: ApprovalToolName,
-  ) => {
-    await handleApprove(approvalId, toolName);
-  };
+  const handleApproveForTemplate = useLatestCallback(
+    async (approvalId: string, toolName: ApprovalToolName) => {
+      await handleApprove(approvalId, toolName);
+    },
+  );
 
   // Auto-run watcher for the queue-only `suggest_changes` tool. The tool
   // is `needsApproval: false`, so it arrives as an `input-complete` client
@@ -1424,29 +1423,56 @@ const TemplateStudioChatInner = ({
     return sent.value;
   }
 
+  // Bailed out of the React Compiler (scripts/react-compiler-bailouts.json),
+  // so the provider values are memoized by hand: a new object per render
+  // would re-render every consumer whenever this component renders.
+  const chatMatters = useMemo(
+    () => ({ createDocumentMattersView }),
+    [createDocumentMattersView],
+  );
+  const chatApproval = useMemo(
+    () => ({
+      activeOrganizationId,
+      approvalIdsAwaitedAtOpen,
+      browserGate,
+      alwaysApprovedTools,
+      conversationApprovedTools,
+      confirmStoredApprovalGrant,
+      handleAllowInConversation,
+      handleAlwaysAllow,
+      handleApprove: handleApproveForTemplate,
+      handleDeny,
+      handleApproveForRun,
+      handleRequestSecret,
+      continueRequestSecret,
+      handleConnectConnector,
+      continueConnectConnector,
+      resolveSecretTarget,
+      secretAvailabilityKey,
+    }),
+    [
+      activeOrganizationId,
+      approvalIdsAwaitedAtOpen,
+      browserGate,
+      alwaysApprovedTools,
+      conversationApprovedTools,
+      confirmStoredApprovalGrant,
+      handleAllowInConversation,
+      handleAlwaysAllow,
+      handleApproveForTemplate,
+      handleDeny,
+      handleApproveForRun,
+      handleRequestSecret,
+      continueRequestSecret,
+      handleConnectConnector,
+      continueConnectConnector,
+      resolveSecretTarget,
+      secretAvailabilityKey,
+    ],
+  );
   return (
-    <ChatMattersContext value={{ createDocumentMattersView }}>
-      <ChatApprovalContext
-        value={{
-          activeOrganizationId,
-          approvalIdsAwaitedAtOpen,
-          browserGate,
-          alwaysApprovedTools,
-          conversationApprovedTools,
-          confirmStoredApprovalGrant,
-          handleAllowInConversation,
-          handleAlwaysAllow,
-          handleApprove: handleApproveForTemplate,
-          handleDeny,
-          handleApproveForRun,
-          handleRequestSecret,
-          continueRequestSecret,
-          handleConnectConnector,
-          continueConnectConnector,
-          resolveSecretTarget,
-          secretAvailabilityKey,
-        }}
-      >
+    <ChatMattersContext value={chatMatters}>
+      <ChatApprovalContext value={chatApproval}>
         {threadVisible && (
           <ChatThreadCard
             onCollapse={() => setPanelOpen(false)}

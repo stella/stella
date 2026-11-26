@@ -667,6 +667,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-constructed-fetch-object.fixture.ts", [
     "no-constructed-fetch-object/no-constructed-fetch-object",
   ]),
+  fixtureRuleOverride("no-constructed-context-value.fixture.tsx", [
+    "no-constructed-context-value/no-constructed-context-value",
+  ]),
   fixtureRuleOverride("no-ad-hoc-text-mark.fixture.tsx", [
     "no-ad-hoc-text-mark/no-ad-hoc-text-mark",
   ]),
@@ -969,6 +972,18 @@ const productUiFiles = [
 const productUiComponentFiles = productUiFiles.map((glob) =>
   glob.replace("*.{ts,tsx}", "*.tsx"),
 );
+
+// The functions the React Compiler bails out of, by file: the keys of
+// scripts/react-compiler-bailouts.json read `<file>::<function>`.
+const reactCompilerBailoutFunctions = new Map<string, string[]>();
+for (const key of Object.keys(reactCompilerBailouts)) {
+  const separator = key.indexOf("::");
+  const file = key.slice(0, separator);
+  reactCompilerBailoutFunctions.set(file, [
+    ...(reactCompilerBailoutFunctions.get(file) ?? []),
+    key.slice(separator + 2),
+  ]);
+}
 
 const browserSurfaceFiles = [
   "apps/web/src/**/*.{ts,tsx}",
@@ -2099,8 +2114,10 @@ const config = defineConfig({
     // Arrow components take their name from the binding.
     "react/display-name": "off",
 
-    // React Compiler memoizes context values in apps/web; the remaining
-    // hits are genuinely reactive values with no static part to hoist.
+    // The React Compiler memoizes context values where it compiles, and this
+    // built-in misses the React 19 `<XContext value>` form for an imported
+    // context. no-constructed-context-value covers the code the compiler does
+    // not reach.
     "react/jsx-no-constructed-context-values": "off",
   },
   ignorePatterns: [
@@ -2224,6 +2241,7 @@ const config = defineConfig({
     "./.oxlint-plugins/one-statement-time-per-row-write.ts",
     "./.oxlint-plugins/no-optional-chain-null-compare.ts",
     "./.oxlint-plugins/no-constructed-fetch-object.ts",
+    "./.oxlint-plugins/no-constructed-context-value.ts",
     "./.oxlint-plugins/no-hand-built-date-range-filter.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
     "./.oxlint-plugins/no-unowned-icon.ts",
@@ -5199,6 +5217,34 @@ const config = defineConfig({
         ),
       ],
       rules: { "no-manual-memo/no-manual-memo": "error" },
+    },
+    // A function the compiler bails out of memoizes nothing, so a context
+    // value built in it is new on every render. Each file with a bailout gets
+    // the check inside the functions the baseline lists.
+    ...[...reactCompilerBailoutFunctions].map(([file, functions]) => ({
+      files: [file],
+      rules: {
+        "no-constructed-context-value/no-constructed-context-value": [
+          "error",
+          { functions },
+        ],
+      },
+    })),
+    {
+      // Sources that render uncompiled somewhere they ship: the landing,
+      // Outlook and playground apps, and the shared packages, which also
+      // render there and in their own tests. Their context values must keep
+      // their identity by hand.
+      files: [
+        "packages/*/src/**/*.tsx",
+        "apps/landing/src/**/*.tsx",
+        "apps/outlook/src/**/*.tsx",
+        "apps/playground/src/**/*.tsx",
+      ],
+      excludeFiles: ["**/*.{test,spec}.tsx", "**/__tests__/**"],
+      rules: {
+        "no-constructed-context-value/no-constructed-context-value": "error",
+      },
     },
     {
       files: [...PRODUCT_FRONTEND_FILES],
