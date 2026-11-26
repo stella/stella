@@ -34,8 +34,12 @@ import type {
 import {
   buildLabelIndex,
   isRunningText,
+  printedLabel,
 } from "@/api/lib/templates/house-style/label-index";
-import type { LabelIndex } from "@/api/lib/templates/house-style/label-index";
+import type {
+  LabelEntry,
+  LabelIndex,
+} from "@/api/lib/templates/house-style/label-index";
 import {
   numberPlacements,
   ordinalOf,
@@ -65,7 +69,9 @@ import type {
   HouseStyleRole,
   RoleProposal,
 } from "@/api/lib/templates/house-style/role-proposer";
+import { LEVEL_ROLES } from "@/api/lib/templates/house-style/template-profile";
 import type {
+  ProfileListLevel,
   ProfileRoleTarget,
   TemplateHealthFinding,
   TemplateProfile,
@@ -144,13 +150,16 @@ type FormattingNoteItem =
    *  list. */
   | { kind: "labelConvertedToText"; blockId: string; reason: LabelKeptReason }
   | { kind: "roleWithoutStyle"; role: HouseStyleRole; blocks: number }
-  /** The document numbers running text like articles. `blocks` such
-   *  paragraphs keep their numbers and are set as clauses, not as
-   *  headings. */
+  /** `blocks` paragraphs numbered like articles are running text: they
+   *  keep their numbers and are set as clauses, not as headings. */
   | { kind: "articlesSetAsText"; blocks: number }
   /** The source starts a page in front of this block and the output does
    *  not: a table cannot be told to start one. */
   | { kind: "pageStartNotKept"; blockId: string; reason: "table" }
+  /** The source starts a page between an article's heading and the block
+   *  it heads. The output starts it in front of the heading (`blockId`):
+   *  a heading does not end a page. */
+  | { kind: "pageStartMoved"; blockId: string; fromBlockId: string }
   /** A section of the source ends after this block and the next one's
    *  layout is not carried over: it begins on the same page (`continuous`,
    *  `nextColumn`), or its page or its columns are other than the
@@ -181,6 +190,17 @@ type FormattingNoteItem =
    *  picture; the output is written without them, so numbers and text are
    *  text. The template's own findings are in its profile. */
   | { kind: "invisibleEffectsRemoved"; levels: number; styles: number }
+  /** The template's style for a numbered level sets it apart from its
+   *  sibling levels (bold, or another size). `blocks` paragraphs of the
+   *  role were placed in the sibling's style instead, on their own level of
+   *  the list. */
+  | {
+      kind: "levelStyleEvened";
+      role: HouseStyleRole;
+      styleId: string;
+      insteadStyleId: string;
+      blocks: number;
+    }
   | {
       kind: "templateBlocksKept";
       region: "keepBefore" | "contents";
@@ -316,10 +336,6 @@ type Context = {
   outline: OutlineLevels;
   /** Blocks placed under a role the template has no style for. */
   stylelessRoles: Map<HouseStyleRole, number>;
-  /** The document numbers its paragraphs at the level of articles: most of
-   *  what reads as an article heading is running text. Such a document
-   *  has clauses where another has headings. */
-  articlesRunOn: boolean;
   items: FormattingNoteItem[];
 };
 
@@ -346,46 +362,79 @@ const insideOf = (
             : [inner, ...insideOf(inner, blockById)];
         });
 
+/**
+ * The style a level the template sets apart from its siblings is placed
+ * in: the sibling's, unless the profile keeps the template's looks.
+ */
+const evenedStyle = (
+  { profile }: Context,
+  role: HouseStyleRole,
+  own: ProfileRoleTarget,
+): ProfileRoleTarget => {
+  if (profile.levelLooks === "asTemplate") {
+    return own;
+  }
+  const finding = (profile.health ?? NO_HEALTH).find(
+    (candidate) =>
+      candidate.kind === "levelSetApart" &&
+      candidate.role === role &&
+      candidate.styleId === own.styleId,
+  );
+  if (finding?.kind !== "levelSetApart") {
+    return own;
+  }
+  const sibling = LEVEL_ROLES.map((level) => profile.roles[level]).find(
+    (target) => target?.styleId === finding.insteadStyleId,
+  );
+  return {
+    ...own,
+    styleId: finding.insteadStyleId,
+    alignment: sibling?.alignment ?? own.alignment,
+  };
+};
+
 const styleTarget = (
-  { profile, stylelessRoles }: Context,
+  context: Context,
   role: HouseStyleRole,
 ): ProfileRoleTarget | null => {
+  const { profile, stylelessRoles } = context;
   const own = profile.roles[role];
   if (own !== null) {
-    return own;
+    return evenedStyle(context, role, own);
   }
   stylelessRoles.set(role, (stylelessRoles.get(role) ?? 0) + 1);
   for (const fallback of STYLE_FALLBACK[role]) {
     const target = profile.roles[fallback];
     if (target !== null) {
-      return target;
+      return evenedStyle(context, fallback, target);
     }
   }
   return null;
 };
 
 /**
- * Whether most of what the document numbers like articles is running text:
- * paragraphs `1.` to `11.` of an agreement without headings. A heading
- * whose title stands in the next paragraph is one.
+ * The level a role without one of its own stands beside: the level of the
+ * role whose style it borrows. A bullet borrows the style of unnumbered
+ * text, which has no level; it hangs where the template's lettered items
+ * do, from the start of the text they belong to.
  */
-const articlesRunOn = (context: Context): boolean => {
-  const { topLevel, index } = context;
-  const articles = topLevel.flatMap((block) => {
-    const entry = index.entryByBlockId.get(block.id);
-    return block.kind === "paragraph" &&
-      entry !== undefined &&
-      roleOf(context, block) === "articleHeading"
-      ? [{ block, entry }]
-      : [];
-  });
-  const running = articles.filter(
-    ({ block, entry }) =>
-      entry.titleBlockId === null &&
-      isRunningText(block.text.slice(entry.manualLength)),
-  );
-  return running.length > articles.length / 2;
-};
+const borrowedLevelOf = (
+  profile: TemplateProfile,
+  target: ProfileRoleTarget | null,
+  bulleted: boolean,
+): ProfileListLevel | null =>
+  target?.numbering ??
+  (bulleted ? (profile.roles.letter?.numbering ?? null) : null);
+
+/**
+ * Whether a paragraph numbered like an article is running text and no
+ * heading: clause `1.` of an agreement without headings, a numbered
+ * paragraph of a schedule. A heading whose title stands in the next
+ * paragraph is one.
+ */
+const runsOn = (block: DocxBlock, entry: LabelEntry | null): boolean =>
+  entry?.titleBlockId === null &&
+  isRunningText(block.text.slice(entry.manualLength));
 
 /** One paragraph's style and what it asks of the numbering. */
 const placementOf = (
@@ -400,7 +449,7 @@ const placementOf = (
   // Running text numbered like an article keeps the article's level, and
   // with it its number, and reads as the clause it is.
   const styleRole =
-    role === "articleHeading" && context.articlesRunOn ? "clause1" : role;
+    role === "articleHeading" && runsOn(block, entry) ? "clause1" : role;
   const target =
     entry === null && ownLevel !== null && NUMBERED_ONLY.has(role)
       ? styleTarget(context, "body")
@@ -413,6 +462,8 @@ const placementOf = (
     entry,
     styleId: target?.styleId ?? null,
     level: entry === null && !bulleted ? null : ownLevel,
+    borrowedLevel:
+      ownLevel === null ? borrowedLevelOf(profile, target, bulleted) : null,
     sourceLabel: null,
     pattern: null,
     ordinal: null,
@@ -424,7 +475,7 @@ const placementOf = (
   };
   if (exclusions.numbering.has(block.id)) {
     placement.keptReason =
-      entry !== null || block.label !== null ? "excluded" : null;
+      entry !== null || printedLabel(block) !== null ? "excluded" : null;
     return placement;
   }
   if (entry === null) {
@@ -775,6 +826,8 @@ const pageStartsOf = (
   let pending = false;
   /** Nothing starts a page in front of the document's first block. */
   let placedAny = false;
+  /** Whether anything was placed in front of the paragraph placed last. */
+  let placedBeforeLast = false;
   /** A kept blank paragraph starts the page in front of the table that
    *  follows: every start between the two is that one. */
   let held = false;
@@ -807,17 +860,143 @@ const pageStartsOf = (
     }
     if (placed.omitted.has(block.id)) {
       pending ||= !held && breaksPage(block);
-    } else if (!placed.mergedInto.has(block.id)) {
+    } else if (placed.mergedInto.has(block.id)) {
+      // A title joined to its heading has no paragraph to start a page:
+      // the heading it joined starts it.
+      const head = placed.mergedInto.get(block.id);
+      if ((pending || block.pageBreakBefore === true) && head !== undefined) {
+        if (placedBeforeLast) {
+          starts.add(head);
+        }
+        context.items.push({
+          kind: "pageStartMoved",
+          blockId: head,
+          fromBlockId: block.id,
+        });
+      }
+      pending = false;
+    } else {
       if ((pending || block.pageBreakBefore === true) && placedAny) {
         starts.add(block.id);
       }
       pending = false;
+      placedBeforeLast = placedAny;
       placedAny = true;
       held = false;
     }
     pending ||= !held && endsPage(context, block);
   }
   return starts;
+};
+
+/** Where the text of a placed paragraph starts, from the left margin. */
+const textStartOf = (
+  { profile }: Context,
+  { entry, level, borrowedLevel, role }: Placement,
+): number => {
+  const numberedAt = level ?? borrowedLevel;
+  if (entry !== null && numberedAt !== null) {
+    return numberedAt.indent.left ?? 0;
+  }
+  // Unnumbered text of a provision stands under the text of its clause.
+  return role === "continuation"
+    ? (profile.roles.clause1?.numbering?.indent.left ?? 0)
+    : 0;
+};
+
+/**
+ * A bullet that borrows its level hangs from the paragraph its list
+ * belongs to: its mark stands where that paragraph's text starts, its text
+ * one hanging step further.
+ */
+const hangBullet = (
+  context: Context,
+  bullet: Placement,
+  lead: Placement | null,
+): void => {
+  const beside = bullet.borrowedLevel;
+  if (beside === null || bullet.pattern?.numFmt !== "bullet" || lead === null) {
+    return;
+  }
+  const step = beside.indent.hanging ?? beside.indent.left ?? 0;
+  if (step <= 0) {
+    return;
+  }
+  bullet.borrowedLevel = {
+    ...beside,
+    indent: {
+      left: textStartOf(context, lead) + step,
+      hanging: step,
+      firstLine: null,
+    },
+  };
+};
+
+const HEADING_TEXT_MAX = 160;
+
+/**
+ * Whether a paragraph read as an article's heading is one on the page: a
+ * label with a title, not a numbered paragraph of running text (clause
+ * `1.` of an agreement without headings).
+ */
+const headsText = (
+  { titleOf }: Placed,
+  { role, block, entry }: Placement,
+): boolean => {
+  if (role !== "articleHeading") {
+    return false;
+  }
+  const text = block.text.slice(entry?.manualLength ?? 0).trim();
+  return (
+    titleOf.has(block.id) ||
+    (text.length <= HEADING_TEXT_MAX && !/[.;:,]$/u.test(text))
+  );
+};
+
+/**
+ * Moves a page start that falls between an article's heading and the block
+ * it heads in front of the heading: a heading does not end a page. Several
+ * heading lines in a row (a heading and a title that could not join it)
+ * move as one. Nothing starts a page in front of the document's first
+ * block, so a start behind a heading that opens the document is dropped.
+ */
+const keepHeadingsWithBody = (context: Context, placed: Placed): void => {
+  /** The heading lines placed last, with nothing placed after them. */
+  let headings: string[] = [];
+  let placedBefore = false;
+  let placedBeforeHeadings = false;
+  for (const block of context.topLevel) {
+    if (block.kind === "table") {
+      headings = [];
+      placedBefore = true;
+      continue;
+    }
+    const placement = placed.placementById.get(block.id);
+    if (placement === undefined) {
+      continue;
+    }
+    const first = headings.at(0);
+    if (first !== undefined && placed.pageStarts.has(block.id)) {
+      placed.pageStarts.delete(block.id);
+      if (placedBeforeHeadings) {
+        placed.pageStarts.add(first);
+      }
+      context.items.push({
+        kind: "pageStartMoved",
+        blockId: first,
+        fromBlockId: block.id,
+      });
+    }
+    if (headsText(placed, placement)) {
+      if (headings.length === 0) {
+        placedBeforeHeadings = placedBefore;
+      }
+      headings.push(block.id);
+    } else {
+      headings = [];
+    }
+    placedBefore = true;
+  }
 };
 
 /** A placement for every paragraph that gets one, in document order. */
@@ -841,9 +1020,12 @@ const placeParagraphs = (context: Context): Placed => {
   };
   /** The paragraph placed last at the top level; a table ends the run. */
   let lastPlaced: string | null = null;
+  /** The paragraph in front of a list of bullets. */
+  let lead: Placement | null = null;
   for (const block of topLevel) {
     if (block.kind === "table") {
       lastPlaced = null;
+      lead = null;
       for (const inner of insideOf(block, blockById)) {
         const role = inner.kind === "paragraph" ? roleOf(context, inner) : null;
         // A cell paragraph without a reading is placed with its table.
@@ -863,15 +1045,21 @@ const placeParagraphs = (context: Context): Placed => {
       continue;
     }
     const head = proposalById.get(block.id)?.mergedIntoBlockId ?? null;
+    const headBlock = head === null ? undefined : blockById.get(head);
+    // An article's heading takes the page start with it: the page starts
+    // in front of the heading, and the title joins it as on any page.
+    const movesWithHead =
+      headBlock !== undefined &&
+      roleOf(context, headBlock) === "articleHeading";
     if (
       head !== null &&
       lastPlaced === head &&
       !placed.titleOf.has(head) &&
       !exclusions.merges.has(head) &&
-      // A title that starts a page is a line of its own: joined to its
-      // heading it would stay on the page before. So is one behind the end
-      // of a section that stays a section: it belongs to the next.
-      !startsPage.has(block.id) &&
+      // Any other title that starts a page is a line of its own: joined to
+      // its heading it would stay on the page before. So is one behind the
+      // end of a section that stays a section: it belongs to the next.
+      (movesWithHead || !startsPage.has(block.id)) &&
       !context.keptSections.ends.has(head)
     ) {
       placed.mergedInto.set(block.id, head);
@@ -886,6 +1074,11 @@ const placeParagraphs = (context: Context): Placed => {
       placement.level = null;
       placement.keptReason = null;
     }
+    if (placement.pattern?.numFmt === "bullet") {
+      hangBullet(context, placement, lead);
+    } else {
+      lead = placement;
+    }
     placed.placements.push(placement);
     lastPlaced = block.id;
   }
@@ -893,6 +1086,7 @@ const placeParagraphs = (context: Context): Placed => {
     placed.placementById.set(placement.block.id, placement);
   }
   placed.pageStarts = pageStartsOf(context, placed, pageHolders);
+  keepHeadingsWithBody(context, placed);
   return placed;
 };
 
@@ -1453,10 +1647,10 @@ const markReferences = ({
   // fill the document with false alarms: it is reported, not highlighted.
   // An annex is headed in words, not by a list, so a missing annex is
   // marked either way.
-  const labelled = blocks.filter(
-    ({ kind, label }) =>
-      kind === "paragraph" && label !== null && !isBulletMark(label),
-  );
+  const labelled = blocks.filter((block) => {
+    const label = printedLabel(block);
+    return block.kind === "paragraph" && label !== null && !isBulletMark(label);
+  });
   const unread = labelled.filter(({ id }) => !index.entryByBlockId.has(id));
   const numberingRead =
     unread.length <= labelled.length * UNREAD_LABELS_SHARE_MAX;
@@ -1580,7 +1774,7 @@ const markReferences = ({
 /** Labels that stay text or are lost, suspected references and roles the
  *  template has no style for. */
 const noteReadings = (
-  { items, stylelessRoles, articlesRunOn: articlesRunOnFlag }: Context,
+  { items, stylelessRoles }: Context,
   { placements }: Placed,
   references: readonly DetectedReference[],
   suspicions: readonly ReferenceSuspicion[],
@@ -1627,9 +1821,10 @@ const noteReadings = (
   for (const [role, count] of stylelessRoles) {
     items.push({ kind: "roleWithoutStyle", role, blocks: count });
   }
-  const asText = articlesRunOnFlag
-    ? placements.filter(({ role }) => role === "articleHeading").length
-    : 0;
+  const asText = placements.filter(
+    ({ role, block, entry }) =>
+      role === "articleHeading" && runsOn(block, entry),
+  ).length;
   if (asText > 0) {
     items.push({ kind: "articlesSetAsText", blocks: asText });
   }
@@ -1810,11 +2005,9 @@ export const buildTemplatePlan = ({
       ),
     },
     stylelessRoles: new Map(),
-    articlesRunOn: false,
     items: [],
   };
 
-  context.articlesRunOn = articlesRunOn(context);
   context.keptSections = sectionsToKeep(context);
   const placed = placeParagraphs(context);
   const { patches, levelsByList } = numberPlacements({
@@ -1850,13 +2043,30 @@ export const buildTemplatePlan = ({
   noteReadings(context, placed, references, suspicions);
 
   const health = profile.health ?? NO_HEALTH;
-  if (health.length > 0) {
-    context.items.push({
-      kind: "invisibleEffectsRemoved",
-      levels: health.filter(({ kind }) => kind === "numberDrawnAsPicture")
-        .length,
-      styles: health.filter(({ kind }) => kind === "textDrawnAsPicture").length,
-    });
+  const drawn = {
+    levels: health.filter(({ kind }) => kind === "numberDrawnAsPicture").length,
+    styles: health.filter(({ kind }) => kind === "textDrawnAsPicture").length,
+  };
+  if (drawn.levels > 0 || drawn.styles > 0) {
+    context.items.push({ kind: "invisibleEffectsRemoved", ...drawn });
+  }
+  for (const finding of health) {
+    const evened =
+      finding.kind === "levelSetApart" && profile.levelLooks !== "asTemplate"
+        ? placed.placements.filter(
+            ({ role, styleId }) =>
+              role === finding.role && styleId === finding.insteadStyleId,
+          ).length
+        : 0;
+    if (finding.kind === "levelSetApart" && evened > 0) {
+      context.items.push({
+        kind: "levelStyleEvened",
+        role: finding.role,
+        styleId: finding.styleId,
+        insteadStyleId: finding.insteadStyleId,
+        blocks: evened,
+      });
+    }
   }
   const lineBreakSpacing = keepsLineBreakSpacing(
     context,

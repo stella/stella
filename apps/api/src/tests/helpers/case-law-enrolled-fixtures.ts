@@ -34,8 +34,8 @@ import { AT_ASYLGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-
 import { AT_BKS_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-bks";
 import { AT_BVWG_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-bvwg";
 import {
-  assembleAtRisDecision,
   AT_COURTS_SOURCE,
+  buildAtRisDecision,
 } from "@/api/handlers/case-law/ingestion/adapters/at-courts";
 import type { AtRisSourceDefinition } from "@/api/handlers/case-law/ingestion/adapters/at-courts";
 import {
@@ -81,20 +81,13 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import { buildCzUsListedRecord } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import type { ListedDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
-import {
-  ecjRawParts,
-  euEcjAdapter,
-} from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
+import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import type { EcjSparqlBinding } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
-import {
-  assembleHuBhgyDecision,
-  huBhgyDocumentOf,
-  huBhgyRawPartsOf,
-  normalizeHuBhgyRow,
-} from "@/api/handlers/case-law/ingestion/adapters/hu-bhgy";
+import { huBhgyAdapter } from "@/api/handlers/case-law/ingestion/adapters/hu-bhgy";
 import {
   buildPlDecision,
   normalizeSaosDumpItem,
+  plCourtsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { assemblePlKioDecision as uncheckedAssemblePlKioDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
 import {
@@ -114,12 +107,7 @@ import {
   plTkRawPartsOf,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
 import type { PlTkListingRow } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
-import {
-  assemblePlUodoDecision,
-  normalizePlUodoRow,
-  plUodoBodyFrom,
-  plUodoRawPartsOf,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
+import { plUodoAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
 import {
   assemblePlUokikDecision as uncheckedAssemblePlUokikDecision,
   assemblePlUokikRuling,
@@ -943,10 +931,24 @@ const plCourtsDecision = (
  * every run.
  */
 export const plCourtsFixture = (): EnrolledAdapterFixture => ({
-  buildDecision: async () =>
-    await Promise.resolve(
-      plCourtsDecision("listing-dump", PL_COURTS_DUMP_KEYS),
-    ),
+  buildDecision: async () => {
+    const listingRow = plCourtsListingRow(PL_COURTS_DUMP_KEYS);
+    const built = await withTestFetch(
+      asFetchMock(
+        async () =>
+          await Promise.resolve(
+            new Response(PL_COURTS_DETAIL_PAYLOAD, {
+              headers: { "Content-Type": "application/json; charset=utf-8" },
+            }),
+          ),
+      ),
+      async () =>
+        await plCourtsAdapter.reconciliation.buildDecision(listingRow),
+    );
+    return built.type === "built"
+      ? built.decision
+      : panic(`the pl-courts fixture built ${built.type}`);
+  },
 });
 
 /**
@@ -1439,55 +1441,81 @@ export const euEcjFixture = (
   return {
     rawFieldValues,
     buildDecision: async () => {
+      const html = await readGzipText(documentUrl);
       const notice = await readGzipText(
         new URL("eu-ecj-notice-en.xml.gz", EU_ECJ_ADAPTER_FIXTURES),
       );
       const formex = await readGzipText(
         new URL(`${EU_ECJ_CELEX}.en.fmx.xml.gz`, EU_ECJ_PARSER_FIXTURES),
       );
-      const parts = ecjRawParts({
-        binding: { ...EU_ECJ_BINDING },
-        html: await readGzipText(documentUrl),
-        notice,
-        formex,
-      });
-
-      for (const field of await euEcjAdapter.sourceFields.listSourceFields(
-        parts,
-      )) {
-        if (field.startsWith("notice.")) {
-          rawFieldValues[field] = notice;
+      const built = await withTestFetch(
+        asFetchMock(
+          async (input: string | URL | Request, init?: RequestInit) => {
+            const url = new URL(
+              input instanceof Request ? input.url : String(input),
+            );
+            if (url.pathname.endsWith("/sparql")) {
+              return await Promise.resolve(
+                new Response(
+                  JSON.stringify({
+                    results: { bindings: [{ ...EU_ECJ_BINDING }] },
+                  }),
+                  {
+                    headers: {
+                      "Content-Type": "application/sparql-results+json",
+                    },
+                  },
+                ),
+              );
+            }
+            if (url.pathname.includes("/resource/celex/")) {
+              return await Promise.resolve(
+                new Response(notice, {
+                  headers: { "Content-Type": "application/xml; charset=utf-8" },
+                }),
+              );
+            }
+            const headers = new Headers(
+              input instanceof Request ? input.headers : init?.headers,
+            );
+            const accept = headers.get("accept") ?? "";
+            if (accept.includes("fmx4") || url.pathname.endsWith("/DOC_1")) {
+              return await Promise.resolve(
+                new Response(formex, {
+                  headers: { "Content-Type": "application/xml; charset=utf-8" },
+                }),
+              );
+            }
+            return await Promise.resolve(
+              new Response(html, {
+                headers: {
+                  "Content-Type": "application/xhtml+xml; charset=utf-8",
+                },
+              }),
+            );
+          },
+        ),
+        async () =>
+          await euEcjAdapter.reconciliation.buildDecision({
+            celex: EU_ECJ_CELEX,
+            language: "EN",
+          }),
+      );
+      if (built.type !== "built") {
+        return panic(`eu-ecj fixture did not build: ${built.type}`);
+      }
+      const parts = decodeSourceRawEnvelope(built.decision.sourceRaw ?? "");
+      if (parts !== null) {
+        for (const field of await euEcjAdapter.sourceFields.listSourceFields(
+          parts,
+        )) {
+          if (field.startsWith("notice.")) {
+            rawFieldValues[field] = notice;
+          }
         }
       }
       rawFieldValues["formex.body"] = formex;
-
-      const reparsed = await euEcjAdapter.reparseStoredRaw?.({
-        raw: new TextEncoder().encode(encodeSourceRawEnvelope(parts)),
-        contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-        caseNumber: "C-128/22",
-        sourceDocumentId: `${EU_ECJ_CELEX}:en`,
-        language: "en",
-        // What the crawl read off the ECLI before the notice stated it, so the
-        // fixture proves the notice replaces the inference rather than agreeing
-        // with a value handed to it.
-        court: "",
-        ecli: EU_ECJ_BINDING.ecli.value,
-        decisionDate: EU_ECJ_BINDING.date.value,
-        decisionType: "judgment",
-        sourceUrl: `https://eur-lex.europa.eu/legal-content/EN/ALL/?uri=CELEX:${EU_ECJ_CELEX}`,
-        documentUrl: `https://publications.europa.eu/resource/cellar/${EU_ECJ_EXPRESSION}.05`,
-        metadata: {
-          celex: EU_ECJ_CELEX,
-          manifestationUri: EU_ECJ_BINDING.manifestation.value,
-          languageUri: EU_ECJ_BINDING.language.value,
-          cdmType: EU_ECJ_BINDING.type.value,
-        },
-      });
-      return reparsed?.type === "parsed"
-        ? reparsed.result
-        : panic(
-            `eu-ecj fixture did not re-parse: ${reparsed?.type ?? "adapter has no reparseStoredRaw"}`,
-          );
+      return built.decision;
     },
   };
 };
@@ -2279,15 +2307,29 @@ export const atRisFixture = (
     ),
   },
   buildDecision: async () =>
-    await Promise.resolve(
-      assembleAtRisDecision(
-        AT_RIS_SOURCES[adapter],
-        atRisListingItem(adapter),
-        {
-          documentXml: atRisDocumentXml(adapter),
-          headnoteListing: atRisHeadnoteListing(adapter),
-        },
-      ),
+    await withTestFetch(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (url.pathname.startsWith("/Dokumente/")) {
+          return await Promise.resolve(
+            new Response(atRisDocumentXml(adapter), {
+              headers: { "Content-Type": "application/xml" },
+            }),
+          );
+        }
+        return await Promise.resolve(
+          new Response(atRisHeadnoteListing(adapter), {
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }),
+      async () =>
+        await buildAtRisDecision(
+          AT_RIS_SOURCES[adapter],
+          atRisListingItem(adapter),
+        ),
     ),
 });
 
@@ -2455,22 +2497,25 @@ export const huBhgyFixture = (
   },
   buildDecision: async () => {
     const bytes = new Uint8Array(await Bun.file(documentUrl).arrayBuffer());
-    const document =
-      huBhgyDocumentOf(bytes) ??
-      panic("the hu-bhgy fixture is not a decision file");
     // Exercise a non-empty restriction; the captured listing leaves it null.
     const row = {
       ...HU_BHGY_LISTING_ROW,
       NemHivatkozhatoSzoveg: "Nem hivatkozható",
     };
-    const built = await assembleHuBhgyDecision({
-      row: normalizeHuBhgyRow(row),
-      document,
-      rawParts: huBhgyRawPartsOf(row, document),
-    });
-    return built.type === "unkeyable"
-      ? panic("hu-bhgy fixture did not build")
-      : built.decision;
+    const built = await withTestFetch(
+      asFetchMock(
+        async () =>
+          await Promise.resolve(
+            new Response(bytes, {
+              headers: { "Content-Type": "application/octet-stream" },
+            }),
+          ),
+      ),
+      async () => await huBhgyAdapter.reconciliation.buildDecision(row),
+    );
+    return built.type === "built"
+      ? built.decision
+      : panic(`hu-bhgy fixture did not build: ${built.type}`);
   },
 });
 
@@ -2930,16 +2975,18 @@ export const plUodoFixture = (
       return panic("the pl-uodo listing fixture lost its decision");
     }
     const listing = plUodoUnionRow(captured);
-    const row = normalizePlUodoRow(listing);
-    const body = plUodoBodyFrom(
-      row,
-      new Uint8Array(await Bun.file(documentUrl).arrayBuffer()),
+    const bytes = new Uint8Array(await Bun.file(documentUrl).arrayBuffer());
+    const built = await withTestFetch(
+      asFetchMock(
+        async () =>
+          await Promise.resolve(
+            new Response(bytes, {
+              headers: { "Content-Type": "application/xml; charset=utf-8" },
+            }),
+          ),
+      ),
+      async () => await plUodoAdapter.reconciliation.buildDecision(listing),
     );
-    const built = assemblePlUodoDecision({
-      row,
-      body,
-      rawParts: plUodoRawPartsOf(listing, body),
-    });
     return built.type === "built"
       ? built.decision
       : panic(`pl-uodo fixture did not build: ${built.type}`);

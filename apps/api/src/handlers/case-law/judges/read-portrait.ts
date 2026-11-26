@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import {
+  PORTRAIT_MAX_BYTES,
   readJudgePortraitObject,
   readJudgePortraitPointer,
 } from "@/api/handlers/case-law/judges/portrait";
@@ -9,10 +10,13 @@ import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import {
   ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
+  safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+
+const portraitResponseSchema = v.pipe(v.blob(), v.maxSize(PORTRAIT_MAX_BYTES));
 
 const config = {
   contract: "patch",
@@ -24,6 +28,9 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "public_indexing" },
   params: v.object({ judgeId: resourceIdSchema("caseLawJudge") }),
+  response: safePublicHandlerResponseSchemasWithStatusText(
+    portraitResponseSchema,
+  ),
 } satisfies PublicHandlerConfig;
 
 /**
@@ -35,7 +42,7 @@ const config = {
  */
 const readJudgePortrait = createSafeBoundedPublicHandler(
   config,
-  async function* ({ params: { judgeId }, request }) {
+  async function* ({ params: { judgeId }, request, set }) {
     const pointer = yield* Result.await(
       Result.tryPromise(
         async () =>
@@ -60,16 +67,14 @@ const readJudgePortrait = createSafeBoundedPublicHandler(
       );
     }
 
-    return Result.ok(
-      new Response(portrait.bytes, {
-        headers: {
-          "Content-Disposition": "inline",
-          "Content-Type": pointer.contentType,
-          "X-Content-Type-Options": "nosniff",
-          ...(portrait.etag === null ? {} : { ETag: portrait.etag }),
-        },
-      }),
-    );
+    set.headers["Content-Disposition"] = "inline";
+    set.headers["Content-Type"] = pointer.contentType;
+    set.headers["X-Content-Type-Options"] = "nosniff";
+    if (portrait.etag !== null) {
+      set.headers["ETag"] = portrait.etag;
+    }
+
+    return Result.ok(new Blob([portrait.bytes], { type: pointer.contentType }));
   },
 );
 

@@ -55,6 +55,10 @@ export type Placement = {
   styleId: string | null;
   /** The level that numbers the block, or would. */
   level: ProfileListLevel | null;
+  /** The level of the role whose style the block borrows, when its own
+   *  role has neither: a spare level that numbers the block takes that
+   *  level's indent. */
+  borrowedLevel: ProfileListLevel | null;
   /** The label as the source prints it, without the blanks around it. */
   sourceLabel: string | null;
   /** What a level must print for the block to keep its label. */
@@ -287,31 +291,45 @@ const assignSpareLevels = (
     if (wanted !== undefined && formatKey(pattern) === formatKey(wanted)) {
       continue;
     }
-    const group = displaced.get(formatKey(pattern));
+    // Paragraphs that print one format at different indents (bullets
+    // under a clause and bullets under an item) take a level each.
+    const key = `${formatKey(pattern)}\u0000${String(
+      level === null ? (placement.borrowedLevel?.indent.left ?? "") : "",
+    )}`;
+    const group = displaced.get(key);
     if (group === undefined) {
-      displaced.set(formatKey(pattern), [placement]);
+      displaced.set(key, [placement]);
     } else {
       group.push(placement);
     }
   }
   const spare = [...spareLevels];
+  /** The spare level that prints a format: where the levels run out, a
+   *  later group of the same format joins it rather than lose its mark. */
+  const levelByFormat = new Map<string, ProfileListLevel>();
   const marks = [...markLevels];
   for (const group of [...displaced.values()].toSorted(
     (left, right) => right.length - left.length,
   )) {
     const first = group.at(0);
     const pattern = first?.pattern ?? null;
+    const format = pattern === null ? "" : formatKey(pattern);
     // A bullet counts nothing: it takes a level outside the outline list
     // while there is one, and leaves the outline's to formats that count.
-    const level =
+    const fresh =
       pattern?.numFmt === "bullet"
         ? (marks.shift() ?? spare.shift())
         : spare.shift();
-    if (level !== undefined && pattern !== null) {
-      chosen.set(levelKey(level), pattern);
+    const level = fresh ?? levelByFormat.get(format);
+    if (fresh !== undefined) {
+      levelByFormat.set(format, fresh);
     }
-    if (level !== undefined && first !== undefined && first.level !== null) {
-      standsFor.set(levelKey(level), first.level);
+    if (fresh !== undefined && pattern !== null) {
+      chosen.set(levelKey(fresh), pattern);
+    }
+    const origin = first?.level ?? first?.borrowedLevel ?? null;
+    if (fresh !== undefined && origin !== null) {
+      standsFor.set(levelKey(fresh), origin);
     }
     for (const placement of group) {
       if (level === undefined) {

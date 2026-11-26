@@ -51,7 +51,6 @@ import { createSha256, sha256Hex as hashContent } from "@stll/sha256/bun";
  *
  * Reconciliation slices are decision years, which the search filters on.
  */
-import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 import {
@@ -64,7 +63,11 @@ import { plAdministrativeCourtRulingKeys } from "@/api/handlers/case-law/ingesti
 import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+// parser-output-unchanged: publisher reads now route through typed readPublisherBytes; served payloads and parsed decisions are unchanged.
+import {
+  readPublisherBytes,
+  unreadPublisherError,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlUodoDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/pl-uodo";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
@@ -982,30 +985,27 @@ const search = async ({
     return panic(ESCAPED_ORIGIN);
   }
   const url = target.toString();
-  const response = await fetchWithRetry(
-    url,
-    { headers: { Accept: "application/json" }, redirect: "error" },
-    {
-      fetchStage: "listing",
-      adapterKey: ADAPTER_KEYS.PL_UODO,
-      signal,
-      timeoutMs: ADAPTER_TIMEOUT.LIST,
-    },
-  );
-  if (!response.ok) {
+  const outcome = await readPublisherBytes(url, {
+    fetchStage: "listing",
+    refusalScope: "source",
+    adapterKey: ADAPTER_KEYS.PL_UODO,
+    signal,
+    timeoutMs: ADAPTER_TIMEOUT.LIST,
+    headers: { Accept: "application/json" },
+    redirect: "error",
+  });
+  if (outcome.type !== "present") {
     return Result.err(
-      publisherError(
+      unreadPublisherError({
+        outcome,
+        adapterKey: ADAPTER_KEYS.PL_UODO,
         cursor,
-        `search answered ${response.status}`,
-        response.status,
-      ),
+        message: "uodo.gov.pl search failed",
+      }),
     );
   }
-  const bytes =
-    response.body === null
-      ? new Uint8Array()
-      : await readCappedBytes(response.body, SEARCH_MAX_BYTES);
-  if (bytes === null) {
+  const bytes = outcome.value;
+  if (bytes.length > SEARCH_MAX_BYTES) {
     return Result.err(
       publisherError(cursor, `search answered over ${SEARCH_MAX_BYTES} bytes`),
     );
@@ -1066,12 +1066,6 @@ const PL_UODO_BODY_STATUSES: ReadonlySet<string> = new Set(
 
 const isBodyStatus = (value: unknown): value is PlUodoBodyStatus =>
   typeof value === "string" && PL_UODO_BODY_STATUSES.has(value);
-
-/** Answers that say the body is not there, as opposed to not there now. */
-const PERMANENT_BODY_ANSWERS: Readonly<Record<number, PlUodoBodyStatus>> = {
-  404: PL_UODO_BODY_STATUS.NOT_FOUND,
-  410: PL_UODO_BODY_STATUS.GONE,
-};
 
 /** The body resource a decision's record names, when it names one. */
 export const plUodoBodyResourceOf = (
@@ -1175,44 +1169,69 @@ const fetchBody = async ({
   if (target === null) {
     return panic(ESCAPED_ORIGIN);
   }
-  const requested = await Result.tryPromise({
-    try: async () =>
-      await fetchWithRetry(
-        target.toString(),
-        { headers: { Accept: "application/xml" }, redirect: "error" },
-        {
-          fetchStage: "document",
-          adapterKey: ADAPTER_KEYS.PL_UODO,
-          signal,
-          timeoutMs: ADAPTER_TIMEOUT.PAGE,
-        },
-      ),
-    catch: (error: unknown) => error,
+  const outcome = await readPublisherBytes(target.toString(), {
+    fetchStage: "document",
+    adapterKey: ADAPTER_KEYS.PL_UODO,
+    signal,
+    timeoutMs: ADAPTER_TIMEOUT.PAGE,
+    headers: { Accept: "application/xml" },
+    redirect: "error",
   });
-  if (Result.isError(requested)) {
-    return isRefusedRedirect(requested.error)
-      ? Result.ok({ type: "absent", status: PL_UODO_BODY_STATUS.REDIRECTED })
-      : Result.err(adapterCatch(ADAPTER_KEYS.PL_UODO, cursor)(requested.error));
+  switch (outcome.type) {
+    case "absent":
+      return Result.ok({
+        type: "absent",
+        status:
+          outcome.evidence === "http-410"
+            ? PL_UODO_BODY_STATUS.GONE
+            : PL_UODO_BODY_STATUS.NOT_FOUND,
+      });
+    case "refused":
+      return Result.err(
+        unreadPublisherError({
+          outcome,
+          adapterKey: ADAPTER_KEYS.PL_UODO,
+          cursor,
+          message: "uodo.gov.pl body refused",
+        }),
+      );
+    case "unavailable":
+      if (
+        outcome.cause.kind === "thrown" &&
+        isRefusedRedirect(outcome.cause.error)
+      ) {
+        return Result.ok({
+          type: "absent",
+          status: PL_UODO_BODY_STATUS.REDIRECTED,
+        });
+      }
+      if (outcome.cause.kind === "too-large") {
+        logger.warn("case_law.ingestion.document_too_large", {
+          adapterKey: ADAPTER_KEYS.PL_UODO,
+          caseNumber: row.refname ?? "",
+          maxBytes: BODY_MAX_BYTES,
+        });
+        return Result.ok({
+          type: "absent",
+          status: PL_UODO_BODY_STATUS.TOO_LARGE,
+        });
+      }
+      return Result.err(
+        unreadPublisherError({
+          outcome,
+          adapterKey: ADAPTER_KEYS.PL_UODO,
+          cursor,
+          message: "uodo.gov.pl body unread",
+        }),
+      );
+    case "present":
+      break;
+    default:
+      outcome satisfies never;
+      return panic(`Unhandled read outcome: ${String(outcome)}`);
   }
-  const response = requested.value;
-  const permanent = PERMANENT_BODY_ANSWERS[response.status];
-  if (permanent !== undefined) {
-    return Result.ok({ type: "absent", status: permanent });
-  }
-  if (!response.ok) {
-    return Result.err(
-      publisherError(
-        cursor,
-        `body answered ${response.status}`,
-        response.status,
-      ),
-    );
-  }
-  const bytes =
-    response.body === null
-      ? new Uint8Array()
-      : await readCappedBytes(response.body, BODY_MAX_BYTES);
-  if (bytes === null) {
+  const bytes = outcome.value;
+  if (bytes.length > BODY_MAX_BYTES) {
     // A body past the ceiling is as unreadable on the next cycle as on this
     // one, so the decision is kept as its record rather than holding the page.
     logger.warn("case_law.ingestion.document_too_large", {

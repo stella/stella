@@ -67,14 +67,6 @@ export const PRUNABLE_BASELINE_WRITERS = [
     baselines: [{ path: BASELINE_PATHS.sqlPerf, collection: [] }],
   },
   {
-    write: ["bun", "scripts/render-phase-update-baseline.ts", "--write"],
-    baselines: [{ path: BASELINE_PATHS.renderPhaseUpdate, collection: [] }],
-  },
-  {
-    write: ["bun", "scripts/effect-state-write-baseline.ts", "--write"],
-    baselines: [{ path: BASELINE_PATHS.effectStateWrite, collection: [] }],
-  },
-  {
     write: ["bun", "scripts/transfer-read-guard.ts", "--write"],
     baselines: [{ path: BASELINE_PATHS.transferRead, collection: [] }],
   },
