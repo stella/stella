@@ -148,6 +148,7 @@ import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { logDocumentParseFailure } from "./document-parse-failure";
+import { readCappedPublisherBytes } from "./read-capped-publisher-bytes";
 
 // ── Publisher boundary ───────────────────────────────────
 

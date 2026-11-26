@@ -133,6 +133,7 @@ import { isRecord } from "@/api/lib/type-guards";
 
 import { logDocumentParseFailure } from "./document-parse-failure";
 import { PL_KIS_METADATA_URL_SCHEMA } from "./pl-kis.metadata-urls";
+import { readCappedPublisherBytes } from "./read-capped-publisher-bytes";
 
 // ── Publisher boundary ───────────────────────────────────
 
