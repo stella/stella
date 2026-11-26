@@ -530,6 +530,14 @@ if (!databaseUrl || !enabled) {
         ];
         const compared = (tables: readonly string[]) =>
           tables.filter((table) => !cleanupLedgers.includes(table));
+        // A held batch is read again under a later observation, as a crawl
+        // reads a held page again, so its rows carry that observation's
+        // order; everything else they hold compares.
+        const exclude = {
+          case_law_decisions: ["source_observation_order"],
+          case_law_decision_source_identities: ["source_observation_order"],
+          case_law_ingestion_failure_evidence: ["observation_order"],
+        };
         try {
           await withGatedTestClients(databaseUrl, async ({ openClient }) => {
             const reference = await withRun(
@@ -545,6 +553,7 @@ if (!databaseUrl || !enabled) {
                 return await canonicalCaseLawState(
                   run.scopedDb,
                   compared(run.tables),
+                  exclude,
                 );
               },
             );
@@ -603,6 +612,7 @@ if (!databaseUrl || !enabled) {
                 return await canonicalCaseLawState(
                   run.scopedDb,
                   compared(run.tables),
+                  exclude,
                 );
               },
             );
