@@ -1,4 +1,4 @@
-import { useLayoutEffect } from "react";
+import { useLayoutSyncEffect } from "@stll/ui/effects";
 
 import { readPersistedInspectorPaneOpen } from "@/components/inspector/inspector-broadcast";
 import { initializeInspectorTabBroadcast } from "@/components/inspector/inspector-tabs-store";
@@ -22,7 +22,7 @@ export const useInspectorTabPersistence = ({
   userId,
 }: InspectorBroadcastScope) => {
   const owner = useStorageOwner();
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     if (owner.kind !== "user" || owner.userId !== userId) {
       return undefined;
     }

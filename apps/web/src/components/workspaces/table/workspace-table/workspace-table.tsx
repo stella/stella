@@ -4,7 +4,6 @@ import {
   type RefObject,
   useCallback,
   useDeferredValue,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -16,7 +15,7 @@ import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/adapter/el
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
-import { useExternalSyncEffect } from "@stll/ui/effects";
+import { useExternalSyncEffect, useLayoutSyncEffect } from "@stll/ui/effects";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -589,7 +588,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
     updateWrapperWidth,
   ]);
 
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     const element = tableWrapperRef.current;
     if (!element) {
       return;
