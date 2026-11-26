@@ -3680,11 +3680,11 @@ const config = defineConfig({
       // prefer-nullish-coalescing: wants every `if (x === null) x = ...`
       // rewritten as `??=`, the exact syntax that costs the memoization.
       //
-      // Resolution: keep the `if` spelling where the compiler runs, which is
-      // apps/web/src alone; everything else keeps the stricter rule. Options are
-      // restated in full because oxlint resolves overrides by replacement, not
-      // merge.
-      files: ["apps/web/src/**/*.{ts,tsx}"],
+      // Resolution: keep the `if` spelling in the apps the compiler builds with
+      // the repo's options (web and desktop); everything else keeps the
+      // stricter rule. Options are restated in full because oxlint resolves
+      // overrides by replacement, not merge.
+      files: ["apps/web/src/**/*.{ts,tsx}", "apps/desktop/src/**/*.{ts,tsx}"],
       rules: {
         "typescript/prefer-nullish-coalescing": [
           "error",
@@ -5189,7 +5189,7 @@ const config = defineConfig({
       // The React Compiler memoizes every function it compiles. A file holding
       // a function it skips keeps its manual memoization until the bailout is
       // fixed; `scripts/rc-bailouts.ts --check` guards those functions.
-      files: ["apps/web/src/**/*.{ts,tsx}"],
+      files: ["apps/web/src/**/*.{ts,tsx}", "apps/desktop/src/**/*.{ts,tsx}"],
       excludeFiles: [
         "apps/web/src/**/*.{test,spec}.{ts,tsx}",
         "apps/web/src/hooks/use-effect.ts",
@@ -5327,12 +5327,13 @@ const config = defineConfig({
       },
     },
     {
-      // Sources the React Compiler compiles: the web and MCP app bundles
-      // with the workspace packages they import, and the Expo app. The
-      // compiler skips a `use*` function that calls no hook.
+      // Sources the React Compiler compiles: the web, desktop and MCP app
+      // bundles with the workspace packages they import, and the Expo app.
+      // The compiler skips a `use*` function that calls no hook.
       files: [
         ...PRODUCT_FRONTEND_FILES,
         "packages/*/src/**/*.{ts,tsx}",
+        "apps/desktop/src/**/*.{ts,tsx}",
         "apps/mobile/src/**/*.{ts,tsx}",
       ],
       excludeFiles: [

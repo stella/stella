@@ -50,6 +50,7 @@
     "@playwright/test": "^1.65.1",
     "@stll/agent-engine": "workspace:*",
     "@stll/property-testing": "workspace:*",
+    "@stll/scripts": "workspace:*",
     "@stll/sha256": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
@@ -60,6 +61,7 @@
     "@vitejs/plugin-react": "catalog:",
     "bun-types": "catalog:",
     "fast-check": "catalog:",
+    "oxc-transform-react": "catalog:",
     "tailwindcss": "catalog:",
     "vite": "catalog:"
   },
