@@ -8,7 +8,9 @@
 // take opaque callbacks and dependency arrays, and every identity they hand
 // out is kept stable by hand, so they behave the same compiled or not (the
 // desktop app, the package's own tests and outside consumers run them
-// uncompiled). Full rationale: /conventions-use-effect.
+// uncompiled). The wrappers forward their callers' dependency arrays
+// verbatim, so exhaustive-deps is off here by configuration (oxlint.config.ts)
+// and on at every call site. Full rationale: /conventions-use-effect.
 import {
   useEffect,
   useLayoutEffect,
@@ -33,7 +35,6 @@ import { Temporal } from "temporal-polyfill/full";
  * with a `key` instead of adding a dependency here.
  */
 export const useMountEffect = (effect: EffectCallback): void => {
-  // oxlint-disable-next-line react/exhaustive-deps -- mount-only by design; `effect` is intentionally excluded so it runs exactly once
   useEffect(effect, []);
 };
 
@@ -47,7 +48,6 @@ export const useExternalSyncEffect = (
   effect: EffectCallback,
   deps: DependencyList,
 ): void => {
-  // oxlint-disable-next-line react/exhaustive-deps -- the wrapper forwards the caller's deps verbatim; correctness of `deps` is the caller's contract
   useEffect(effect, deps);
 };
 
@@ -62,13 +62,11 @@ export const useLayoutSyncEffect = (
   effect: EffectCallback,
   deps: DependencyList,
 ): void => {
-  // oxlint-disable-next-line react/exhaustive-deps -- the wrapper forwards the caller's deps verbatim; correctness of `deps` is the caller's contract
   useLayoutEffect(effect, deps);
 };
 
 /** The mount-only layout twin: a registration or host write before paint. */
 export const useMountLayoutEffect = (effect: EffectCallback): void => {
-  // oxlint-disable-next-line react/exhaustive-deps -- mount-only by design; `effect` is intentionally excluded so it runs exactly once
   useLayoutEffect(effect, []);
 };
 
@@ -97,13 +95,19 @@ export const useLatest = <T>(value: T): RefObject<T> => {
  * render and effect lifecycle: query contexts, imperative editor bridges,
  * external emitters, listeners registered by an effect.
  *
- * Never call it during render; between a render and its commit it still
- * calls the previous `fn`.
+ * Never call it during render. It switches to the new `fn` on passive-effect
+ * timing: until the commit's passive effects run, it still calls the previous
+ * one. Layout timing would let a child's layout effect call a callback from
+ * a render that has not finished committing, which feeds loops in editors
+ * that call back synchronously.
  */
 export const useLatestCallback = <A extends unknown[], R>(
   fn: (...args: A) => R,
 ): ((...args: A) => R) => {
-  const latest = useLatest(fn);
+  const latest = useRef(fn);
+  useEffect(() => {
+    latest.current = fn;
+  }, [fn]);
   const [stable] = useState(
     () =>
       (...args: A): R =>
