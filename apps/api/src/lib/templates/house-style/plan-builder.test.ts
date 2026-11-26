@@ -789,7 +789,7 @@ describe("buildTemplatePlan, pages the source starts", () => {
       expect(starts(plan)).toEqual(["p1"]);
       expect(
         note.items.filter(({ kind }) => kind === "pageStartMoved"),
-      ).toEqual([{ kind: "pageStartMoved", blockId: "p1", fromBlockId: "p3" }]);
+      ).toEqual([{ kind: "pageStartMoved", blockId: "p1", fromBlockId: "p2" }]);
 
       // An annex may be headed on a page of its own: its title stays a
       // line of the page it starts.
@@ -812,6 +812,31 @@ describe("buildTemplatePlan, pages the source starts", () => {
       ).toBeUndefined();
       expect(starts(kept.plan)).toEqual(["p3"]);
     }
+
+    // In front of a table, which cannot be told to start a page, the
+    // heading still starts it.
+    const cells = inColumns(1, ["položka"]).blocks.map((block) => ({
+      ...block,
+      id: `c${block.id}`,
+      ...(block.cells === undefined
+        ? {}
+        : {
+            cells: block.cells.map((cell) => ({
+              ...cell,
+              blockIds: cell.blockIds.map((id) => `c${id}`),
+            })),
+          }),
+    }));
+    const headed = withFacts(texts.slice(0, 3), {
+      2: { pageBreakBefore: true },
+    });
+    const beforeTable = build(
+      { ...headed, blocks: [...headed.blocks, ...cells] },
+      "keepSource",
+      { roles: roles.slice(0, 3) },
+    );
+    expect(starts(beforeTable.plan)).toEqual(["p1"]);
+    expect(notes(beforeTable.note, "pageStartNotKept")).toEqual([]);
   });
 
   test("between two tables one blank paragraph stays, and the page starts once", () => {

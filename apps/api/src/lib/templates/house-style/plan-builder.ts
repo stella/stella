@@ -737,6 +737,8 @@ const pageStartsOf = (
   let pending = false;
   /** Nothing starts a page in front of the document's first block. */
   let placedAny = false;
+  /** Whether anything was placed in front of the paragraph placed last. */
+  let placedBeforeLast = false;
   /** A kept blank paragraph starts the page in front of the table that
    *  follows: every start between the two is that one. */
   let held = false;
@@ -771,13 +773,25 @@ const pageStartsOf = (
       pending ||= !held && breaksPage(block);
     } else if (placed.mergedInto.has(block.id)) {
       // A title joined to its heading has no paragraph to start a page:
-      // its start waits for the block after the heading.
-      pending ||= block.pageBreakBefore === true;
+      // the heading it joined starts it.
+      const head = placed.mergedInto.get(block.id);
+      if ((pending || block.pageBreakBefore === true) && head !== undefined) {
+        if (placedBeforeLast) {
+          starts.add(head);
+        }
+        context.items.push({
+          kind: "pageStartMoved",
+          blockId: head,
+          fromBlockId: block.id,
+        });
+      }
+      pending = false;
     } else {
       if ((pending || block.pageBreakBefore === true) && placedAny) {
         starts.add(block.id);
       }
       pending = false;
+      placedBeforeLast = placedAny;
       placedAny = true;
       held = false;
     }
