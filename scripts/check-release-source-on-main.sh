@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Accepts a release source commit only when protected main carries it:
 #   (1) the commit is an ancestor of origin/main; or
-#   (2) a release ref vX.Y.Z is given, and the commit is the head of exactly
-#       one pull request merged into main from that release's branch in this
-#       repository (scripts/release-branch.sh names it), whose merge commit is
-#       an ancestor of origin/main. Release branches are squash-merged, so
-#       their head is not on main itself.
+#   (2) a release ref vX.Y.Z is given, and exactly one pull request merged
+#       into main from that release's branch in this repository
+#       (scripts/release-branch.sh names it) carries the commit: its head is
+#       the commit or descends from it, and its merge commit is an ancestor of
+#       origin/main. Release branches are squash-merged, so their head is not
+#       on main itself.
 # Anything else, including a failed GitHub API read, refuses.
 #
 # Usage: check-release-source-on-main.sh <sha> [<release-ref vX.Y.Z>]
@@ -44,21 +45,32 @@ branch=$(release_branch "$version") \
 pulls=$(bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/commits/${sha}/pulls") \
   || refuse "Could not list the pull requests of release source ${sha}."
 
-merge_commit=$(jq -er --arg sha "$sha" --arg repo "$GITHUB_REPOSITORY" --arg branch "$branch" '
+release_pull=$(jq -er --arg repo "$GITHUB_REPOSITORY" --arg branch "$branch" '
   if type == "array" and length == 1
     and (.[0].merged_at | type) == "string"
     and .[0].base.ref == "main"
     and .[0].base.repo.full_name == $repo
     and .[0].head.ref == $branch
     and .[0].head.repo.full_name == $repo
-    and .[0].head.sha == $sha
-  then .[0].merge_commit_sha | strings
+  then "\(.[0].merge_commit_sha | strings) \(.[0].head.sha | strings)"
   else empty
-  end' <<< "$pulls" 2>/dev/null) || merge_commit=''
+  end' <<< "$pulls" 2>/dev/null) || release_pull=''
+merge_commit=${release_pull%% *}
+pull_head=${release_pull#* }
 
-if [[ "$merge_commit" =~ ^[0-9a-f]{40}$ ]] \
-  && git merge-base --is-ancestor "$merge_commit" "refs/remotes/${main}" 2>/dev/null; then
+carried="Release source ${sha} is not carried by protected main through ${branch}."
+[[ "$merge_commit" =~ ^[0-9a-f]{40}$ && "$pull_head" =~ ^[0-9a-f]{40}$ ]] \
+  || refuse "$carried"
+git merge-base --is-ancestor "$merge_commit" "refs/remotes/${main}" 2>/dev/null \
+  || refuse "$carried"
+if [[ "$pull_head" == "$sha" ]]; then
   exit 0
 fi
 
-refuse "Release source ${sha} is not carried by protected main through ${branch}."
+# The release branch can move after its release commit (a merge of main, a
+# refreshed manifest), so the merged head may be a descendant. Branch rules
+# forbid force pushes on release/v*, and the pull request carried every later
+# commit into main, so the release commit stays covered by that merge.
+status=$(bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/compare/${sha}...${pull_head}" --jq .status) \
+  || refuse "Could not compare release source ${sha} with the merged head ${pull_head}."
+[[ "$status" == "ahead" ]] || refuse "$carried"
