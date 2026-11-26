@@ -742,7 +742,12 @@ describe("buildTemplatePlan, justified lines in front of a manual line break", (
     const { plan, note } = build(withCompat(false), "keepSource", justified);
     expect(plan.compat).toEqual({ doNotExpandShiftReturn: true });
     expect(kept(note)).toEqual([
-      { kind: "lineBreakSpacingKept", reason: "justifiedHere", blocks: 1 },
+      {
+        kind: "lineBreakSpacingKept",
+        reason: "justifiedHere",
+        blocks: 1,
+        alreadyStretched: 0,
+      },
     ]);
   });
 
@@ -757,8 +762,79 @@ describe("buildTemplatePlan, justified lines in front of a manual line break", (
     const { plan, note } = build(withCompat(true, "both"));
     expect(plan.compat).toEqual({ doNotExpandShiftReturn: true });
     expect(kept(note)).toEqual([
-      { kind: "lineBreakSpacingKept", reason: "source", blocks: 0 },
+      {
+        kind: "lineBreakSpacingKept",
+        reason: "source",
+        blocks: 0,
+        alreadyStretched: 0,
+      },
     ]);
+  });
+
+  test("the setting is the document's: a paragraph that was stretched before is counted", () => {
+    const manifest = withCompat(false);
+    const mixed = {
+      ...manifest,
+      blocks: [
+        ...manifest.blocks,
+        ...manifestOf(["Byl\nzarovnán."]).blocks.map((block) => ({
+          ...block,
+          id: "p9",
+          alignment: "both",
+        })),
+      ],
+    };
+    const { plan, note } = build(mixed, "keepSource", justified);
+    expect(plan.compat).toEqual({ doNotExpandShiftReturn: true });
+    expect(kept(note)).toEqual([
+      {
+        kind: "lineBreakSpacingKept",
+        reason: "justifiedHere",
+        blocks: 1,
+        alreadyStretched: 1,
+      },
+    ]);
+  });
+
+  test("a title joined to its heading is read in the heading's style", () => {
+    const reading = (
+      blockId: string,
+      role: "title" | "articleHeading" | "body",
+      mergedIntoBlockId: string | null = null,
+    ) => ({
+      blockId,
+      role,
+      confidence: 0.9,
+      alternatives: [],
+      mergedIntoBlockId,
+    });
+    const article = PROFILE.roles.articleHeading;
+    const headings = {
+      profile: {
+        ...PROFILE,
+        roles: {
+          ...PROFILE.roles,
+          articleHeading:
+            article === null ? null : { ...article, alignment: "both" },
+        },
+      },
+    };
+    const manifest = {
+      ...manifestOf(["SMLOUVA", "Článek I.", "Předmět\nsmlouvy", "Text."]),
+      compat: { doNotExpandShiftReturn: false },
+    };
+    const { plan, note } = build(manifest, "keepSource", {
+      ...headings,
+      roles: [
+        reading("p0", "title"),
+        reading("p1", "articleHeading"),
+        reading("p2", "articleHeading", "p1"),
+        reading("p3", "body"),
+      ],
+    });
+    expect(itemOf(plan, manifest, "Článek I.")?.mergeNext).toBeDefined();
+    expect(plan.compat).toEqual({ doNotExpandShiftReturn: true });
+    expect(kept(note).at(0)).toMatchObject({ blocks: 1 });
   });
 
   test("a manifest without the facts changes nothing", () => {

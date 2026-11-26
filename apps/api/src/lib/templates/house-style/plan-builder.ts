@@ -150,11 +150,14 @@ type FormattingNoteItem =
    *  manual line break, which the template's settings would stretch to the
    *  margin: because the source's settings kept it (`source`), or because
    *  `blocks` paragraphs with such a break are justified here and were not
-   *  in the source, or got their break by being joined (`justifiedHere`). */
+   *  in the source, or got their break by being joined (`justifiedHere`).
+   *  The setting is the document's: `alreadyStretched` paragraphs showed
+   *  the stretched line in the source and lose it with the others. */
   | {
       kind: "lineBreakSpacingKept";
       reason: "source" | "justifiedHere";
       blocks: number;
+      alreadyStretched: number;
     }
   | {
       kind: "templateBlocksKept";
@@ -987,6 +990,41 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
 
 const JUSTIFIED: ReadonlySet<string> = new Set(["both", "distribute"]);
 
+/** One paragraph of the output: the blocks it is made of, its style, and
+ *  whether a line break joins them. */
+type OutputParagraph = {
+  blockIds: string[];
+  styleId: string | undefined;
+  joinedByBreak: boolean;
+};
+
+/** The paragraphs a plan's body writes. A heading and the title joined to
+ *  it are one paragraph, in the heading's style. */
+const outputParagraphs = (body: TemplatePlan["body"]): OutputParagraph[] => {
+  const paragraphs: OutputParagraph[] = [];
+  let open: OutputParagraph | null = null;
+  for (const item of body) {
+    if (item.kind !== "source") {
+      open = null;
+      continue;
+    }
+    if (open === null) {
+      open = { blockIds: [], styleId: item.styleId, joinedByBreak: false };
+      paragraphs.push(open);
+    }
+    open.blockIds.push(item.blockId);
+    for (const { blockId, styleId } of item.nested ?? NO_NESTED) {
+      paragraphs.push({ blockIds: [blockId], styleId, joinedByBreak: false });
+    }
+    if (item.mergeNext === undefined) {
+      open = null;
+    } else {
+      open.joinedByBreak ||= item.mergeNext === "lineBreak";
+    }
+  }
+  return paragraphs;
+};
+
 /**
  * Whether the output has to keep the spacing of justified lines that end in
  * a manual line break, with the note that says why. A word processor
@@ -996,6 +1034,12 @@ const JUSTIFIED: ReadonlySet<string> = new Set(["both", "distribute"]);
  * settings had it, or a paragraph with such a break is justified by the
  * template's style and was not justified before, or got the break by being
  * joined to its heading. A manifest without these facts changes nothing.
+ *
+ * The setting is the whole document's. Where it is switched on for one
+ * paragraph, a paragraph that was justified with such a break in the source,
+ * and showed the stretched line there, loses the stretch too: one look for
+ * all such lines, and the one nobody sets on purpose goes. The note counts
+ * those paragraphs.
  */
 const keepsLineBreakSpacing = (
   { blockById, profile, items }: Context,
@@ -1005,32 +1049,32 @@ const keepsLineBreakSpacing = (
   if (compat === undefined) {
     return false;
   }
-  const alignmentOf = (styleId: string | undefined): string | null =>
-    styleId === undefined
-      ? (profile.defaultAlignment ?? null)
-      : (Object.values(profile.roles).find(
-          (target) => target?.styleId === styleId,
-        )?.alignment ?? null);
-  const stretched = (
-    blockId: string,
-    styleId: string | undefined,
-    joinedByBreak: boolean,
-  ): boolean => {
-    const block = blockById.get(blockId);
-    return (
-      block !== undefined &&
-      JUSTIFIED.has(alignmentOf(styleId) ?? "") &&
-      (joinedByBreak ||
-        (block.text.includes("\n") && !JUSTIFIED.has(block.alignment ?? "")))
+  const justifies = (styleId: string | undefined): boolean =>
+    JUSTIFIED.has(
+      (styleId === undefined
+        ? profile.defaultAlignment
+        : Object.values(profile.roles).find(
+            (target) => target?.styleId === styleId,
+          )?.alignment) ?? "",
     );
-  };
-  const blocks = body
-    .flatMap((item) => (item.kind === "source" ? [item] : []))
-    .flatMap(({ blockId, styleId, mergeNext, nested = NO_NESTED }) => [
-      stretched(blockId, styleId, mergeNext === "lineBreak"),
-      ...nested.map((inner) => stretched(inner.blockId, inner.styleId, false)),
-    ])
-    .filter(Boolean).length;
+  let blocks = 0;
+  let alreadyStretched = 0;
+  for (const { blockIds, styleId, joinedByBreak } of outputParagraphs(body)) {
+    const broken = blockIds
+      .map((id) => blockById.get(id))
+      .filter((block) => block?.text.includes("\n") === true);
+    if (!justifies(styleId) || (!joinedByBreak && broken.length === 0)) {
+      continue;
+    }
+    const wasStretched =
+      !joinedByBreak &&
+      broken.every((block) => JUSTIFIED.has(block?.alignment ?? ""));
+    if (wasStretched) {
+      alreadyStretched += 1;
+    } else {
+      blocks += 1;
+    }
+  }
   if (!compat.doNotExpandShiftReturn && blocks === 0) {
     return false;
   }
@@ -1038,6 +1082,7 @@ const keepsLineBreakSpacing = (
     kind: "lineBreakSpacingKept",
     reason: compat.doNotExpandShiftReturn ? "source" : "justifiedHere",
     blocks,
+    alreadyStretched: compat.doNotExpandShiftReturn ? 0 : alreadyStretched,
   });
   return true;
 };
