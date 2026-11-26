@@ -86,10 +86,11 @@ import {
   DOCUMENT_REVIEW_RUN_EXECUTOR,
 } from "@/api/lib/document-review/run-contract";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
+import type { CorpusRevisionRetrieval } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   corpusIndexProjectionAppendIsUnblocked,
   corpusIndexProjectionCleanupIsDue,
-  corpusIndexProjectionIntentIsOutstanding,
+  corpusIndexProjectionIntentHoldsAppend,
   corpusIndexProjectionNeedsWork,
 } from "@/api/lib/legal-search/corpus-index-projection-sql";
 import { LIMITS } from "@/api/lib/limits";
@@ -4454,18 +4455,27 @@ const appendIsUnblocked = corpusIndexProjectionAppendIsUnblocked(
   corpusIndexProjectionStates,
 );
 
-const noOutstandingIntent = sql`NOT EXISTS (
+/**
+ * No other revision of the entity holds its append back
+ * (`CORPUS_INDEX_INTENT_APPEND_GATE`): under `stored` retrieval a revision
+ * whose exact delete is in flight does not, under `query_only` every
+ * outstanding one does.
+ */
+const noRevisionHoldsAppend = (retrieval: CorpusRevisionRetrieval) =>
+  sql`NOT EXISTS (
       SELECT 1
       FROM ${corpusIndexProjectionIntents} outstanding
       WHERE outstanding.family = ${corpusIndexProjectionStates.family}
         AND outstanding.generation = ${corpusIndexProjectionStates.generation}
         AND outstanding.entity_id = ${corpusIndexProjectionStates.entityId}
-        AND ${corpusIndexProjectionIntentIsOutstanding(sql`outstanding.status`)}
+        AND ${corpusIndexProjectionIntentHoldsAppend(sql`outstanding.status`, retrieval)}
     )`;
 
 type CorpusProjectionReservationQueueOptions = {
   family: CorpusFamily;
   generation: string;
+  /** The generation's `corpusIndexRevisionRetrieval`, from its manifest. */
+  revisionRetrieval: CorpusRevisionRetrieval;
   limit: number;
   eligibilityAt: Date;
   scopedEntityIds: readonly string[] | null;
@@ -4503,6 +4513,7 @@ export const corpusProjectionReservationQueue = (
   {
     family,
     generation,
+    revisionRetrieval,
     limit,
     eligibilityAt,
     scopedEntityIds,
@@ -4577,7 +4588,7 @@ export const corpusProjectionReservationQueue = (
         inArray(corpusIndexGenerations.status, ["building", "serving"]),
         pendingDesiredState,
         appendIsUnblocked,
-        noOutstandingIntent,
+        noRevisionHoldsAppend(revisionRetrieval),
       ),
     )
     .orderBy(asc(runnableAt), asc(corpusIndexProjectionStates.entityId))
