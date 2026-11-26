@@ -315,6 +315,7 @@ When a screen needs a look the components lack, add it once here and in
 | Number with a unit; stepping number                                | `NumberInput suffix`; it reads as a spin button with its bounds                                                                                                                                               |
 | Screen a finished flow ends on (connected, signed in, declined)    | `OutcomeScreen` (`tone`, `counterpart`, `details`), with `OutcomeScreenFace` while loading                                                                                                                    |
 | Effect, latest value, mount state, state reset on a key            | `@stll/ui/effects`: `useMountEffect`, `useExternalSyncEffect`, `useLayoutSyncEffect`, `useKeyedState`; DOM-observed state: `@stll/ui/effects-dom` (`useLayoutMeasurement`, `useIntersecting`, `useObjectUrl`) |
+| Several refs on one element                                        | `@stll/ui/effects-refs`: `useComposedRefs` (stable while its refs are; never `composeRefs` during render)                                                                                                     |
 | A small control renders small type itself; do not add `text-xs` to |
 | a `sm` button, select, or input.                                   |
 
