@@ -12,8 +12,8 @@ GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { useState } = await import("react");
 const { cleanup, fireEvent, render, act } =
   await import("@testing-library/react");
-const { useMountEffect } = await import("@/hooks/use-effect");
-const { useLatestCallback } = await import("@/hooks/use-latest-callback");
+const { useMountEffect } = await import("@stll/ui/effects");
+const { useLatestCallback } = await import("@stll/ui/effects");
 const { usePlaybookSaveQueue, usePlaybookDetailSaveSubscription } =
   await import("./use-playbook-save-queue");
 const { QueryClient } = await import("@tanstack/react-query");

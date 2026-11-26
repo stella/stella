@@ -22,6 +22,7 @@ import {
 } from "@stll/folio-react";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import type { LucideIcon } from "@stll/ui/icons";
 import {
   BracesIcon,
@@ -34,7 +35,6 @@ import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";

@@ -16,9 +16,9 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { useMountEffect } from "@stll/ui/effects";
 import { Label } from "@stll/ui/label";
 
-import { useMountEffect } from "@/hooks/use-effect";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { resourceMutation } from "@/lib/workspace-realtime";

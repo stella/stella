@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 /**
  * A `blob:` URL for an image read through an authenticated client. The URL

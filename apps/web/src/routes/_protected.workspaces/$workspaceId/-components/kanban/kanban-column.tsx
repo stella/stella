@@ -20,6 +20,7 @@ import {
   DEFAULT_PRESETS,
 } from "@stll/ui/color-picker";
 import { FaceLabelPending } from "@stll/ui/control-face";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { EntityActions } from "@stll/ui/entity-actions";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
@@ -55,7 +56,6 @@ import {
   useKanbanColumnDrag,
   useKanbanEntityDropTarget,
 } from "@/components/workspaces/kanban/use-kanban-drop-targets";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { PropertyOptionColor } from "@/lib/api-contract";

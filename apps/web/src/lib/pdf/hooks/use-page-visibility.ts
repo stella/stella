@@ -3,7 +3,8 @@ import type { RefCallback, RefObject } from "react";
 
 import { useThrottledCallback } from "use-debounce";
 
-import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useLatestCallback } from "@stll/ui/effects";
+
 import { PAGE_ID_ATTRIBUTE } from "@/lib/pdf/consts";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 

@@ -1,7 +1,8 @@
 import type { RefObject } from "react";
 
+import { useMountEffect } from "@stll/ui/effects";
+
 import { keepReadingPosition } from "@/components/legal-reader/reader-position";
-import { useMountEffect } from "@/hooks/use-effect";
 import { usePresentationPrefs } from "@/lib/account/presentation-prefs/provider";
 
 export const useReaderProvisionMode = (

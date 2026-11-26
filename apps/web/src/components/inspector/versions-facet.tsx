@@ -17,6 +17,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useMountEffect } from "@stll/ui/effects";
 import { ArrowLeftIcon } from "@stll/ui/icons";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
@@ -26,7 +27,6 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { VersionsSidebar } from "@/components/pdf/versions-sidebar";
 import type { Version } from "@/components/pdf/versions-sidebar";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";

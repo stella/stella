@@ -17,6 +17,7 @@ import {
   type ChatRunTarget,
 } from "@stll/api-contract/chat-run-target";
 import type { ChatSendIntent } from "@stll/api-contract/chat-send-intent";
+import { useLatestCallback } from "@stll/ui/effects";
 
 import {
   CHAT_RUN_ON_CLOUD_ONLY,
@@ -52,7 +53,6 @@ import {
   rememberRunTarget,
 } from "@/features/chat/run-on-preference-store";
 import { useDesktopLaunch } from "@/features/chat/use-desktop-launch";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { type QueryView, queryView } from "@/lib/query-view.logic";

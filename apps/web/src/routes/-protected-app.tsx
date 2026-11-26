@@ -38,6 +38,8 @@ import "@/features/inbox/signal-inspector-registration";
 import "@/features/knowledge/playbook-editor/playbook-draft-view-registration";
 import "@/features/statutes/provision-inspector-registration";
 import "@/features/statutes/statute-inspector-registration";
+import { useExternalSyncEffect, useMountEffect } from "@stll/ui/effects";
+
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
 import { useTrailEndsAtMatter } from "@/components/breadcrumbs/use-trail-ends-at-matter";
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
@@ -77,7 +79,6 @@ import { MakeSkillReviewDialog } from "@/features/chat/make-skill-review-dialog"
 import { PlaybookPaneLeaveConfirmation } from "@/features/knowledge/playbook-editor/playbook-pane-leave-confirmation";
 import { GlobalTimer } from "@/features/time-timers/global-timer";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";

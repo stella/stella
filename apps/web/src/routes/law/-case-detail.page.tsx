@@ -9,6 +9,11 @@ import {
 import { DECISION_ANCHOR_RESOLUTION } from "@stll/api-contract/case-law-anchor-redirects";
 import { decisionHasNoDocument } from "@stll/decision-reader/decision-body-state.logic";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useMountEffect,
+} from "@stll/ui/effects";
 
 import { useRequireAccount } from "@/components/auth/use-require-account";
 import type { DecisionReaderAIGate } from "@/components/authenticated-decision-tools";
@@ -41,8 +46,6 @@ import { decisionCaseListLink } from "@/features/case-law/decision-case-list-lin
 import { useHeldDecisionAnchors } from "@/features/case-law/use-held-decision-anchors";
 import { useRecordOpenedLawDocument } from "@/features/law-search-history/law-search-history-query";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";

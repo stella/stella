@@ -2,11 +2,11 @@ import { useState } from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 
 import type { DocxCompatibility } from "@stll/folio-react";
+import { useLatestCallback } from "@stll/ui/effects";
 
 import type { DocxEditorSlotBindings } from "@/components/docx/docx-editor-host.logic";
 import type { DocxBrowserEditorActions } from "@/components/docx/use-docx-browser-editor-actions";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 
 type UseDocxEditorBindingsOptions = {
   docxActionsRef: RefObject<Map<string, DocxBrowserEditorActions>>;

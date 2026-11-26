@@ -9,6 +9,7 @@
 import { useRef, useState } from "react";
 import type { RefObject } from "react";
 
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { FileSearchIcon } from "@stll/ui/icons";
 
 import type { DocxEditorRef } from "@/components/docx/app-docx-editor";
@@ -24,8 +25,6 @@ import type {
   CitationCheckMenu,
   TextSelection,
 } from "@/components/docx/citation-check/use-docx-citation-check";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
 
 const CHECK_CITATION_CONTEXT_ID = "stella.check-citation";

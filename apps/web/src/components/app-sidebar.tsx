@@ -36,6 +36,12 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
+  useExternalSyncEffect,
+  useHasMounted,
+  useLatestCallback,
+  useMountEffect,
+} from "@stll/ui/effects";
+import {
   ContextMenuSurface,
   type ContextMenuSurfaceOpenEvent,
   type EntityAction,
@@ -139,12 +145,10 @@ import {
   useGuideDrawerStore,
 } from "@/features/guides/guide-drawer-store";
 import type { GuideWorkspaceListState } from "@/features/guides/guide-help-drawer";
-import { useChromeQuery, useHasMounted } from "@/hooks/use-chrome-query";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { useInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { useInlineRename } from "@/hooks/use-inline-rename";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useTimeBillingChromeEnabled } from "@/hooks/use-time-billing-preview";
 import { useTimeChromeVisible } from "@/hooks/use-time-chrome-visible";

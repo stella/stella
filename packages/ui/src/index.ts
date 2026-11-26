@@ -75,7 +75,7 @@ export * from "./components/truncated-text";
 export * from "./data-table";
 export * from "./hooks/use-contained-handler";
 export * from "./hooks/use-content-dir";
-export * from "./hooks/use-latest";
+export { useLatest } from "./effects/effects";
 export * from "./hooks/use-mobile";
 export * from "./hooks/use-viewport-width";
 export * from "./inspector";

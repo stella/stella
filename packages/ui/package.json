@@ -213,7 +213,7 @@
     "./use-contained-handler": "./src/hooks/use-contained-handler.ts",
     "./use-content-dir": "./src/hooks/use-content-dir.ts",
     "./use-inline-overflow": "./src/hooks/use-inline-overflow.ts",
-    "./use-latest": "./src/hooks/use-latest.ts",
+    "./use-latest": "./src/effects/effects.ts",
     "./use-mobile": "./src/hooks/use-mobile.ts",
     "./use-prefers-reduced-motion": "./src/hooks/use-prefers-reduced-motion.ts",
     "./use-viewport-width": "./src/hooks/use-viewport-width.ts",
@@ -312,7 +312,8 @@
     "./lib/overlay-layer": "./src/lib/overlay-layer.ts",
     "./lib/utils": "./src/lib/utils.ts",
     "./lib/week": "./src/lib/week.ts",
-    "./date-range-filter": "./src/components/date-range-filter.tsx"
+    "./date-range-filter": "./src/components/date-range-filter.tsx",
+    "./effects": "./src/effects/effects.ts"
   },
   "publishConfig": {
     "access": "public"

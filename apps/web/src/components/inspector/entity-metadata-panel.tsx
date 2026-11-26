@@ -20,6 +20,7 @@ import { useTranslations } from "use-intl";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { CheckIcon, SparklesIcon as Sparkles } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
@@ -34,7 +35,6 @@ import { CreateProperty } from "@/components/workspaces/create-property";
 import { EditableField } from "@/components/workspaces/editable-field";
 import { Justification } from "@/components/workspaces/justification";
 import { WorkflowQueryFeedback } from "@/components/workspaces/workflow-query-feedback";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { queryView } from "@/lib/query-view.logic";

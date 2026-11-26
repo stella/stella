@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-import { useMountEffect } from "@/hooks/use-effect";
+import { useMountEffect } from "@stll/ui/effects";
 
 /**
  * One-shot attention pulse.

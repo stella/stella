@@ -5,10 +5,10 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { FollowUpIcon } from "@stll/ui/icons";
 
 import type { ChatThreadId } from "@/features/chat/chat-thread-ref-types";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { FollowupSurface } from "@/lib/analytics/types";
 

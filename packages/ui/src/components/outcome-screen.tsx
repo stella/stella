@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-import { useLatest } from "../hooks/use-latest";
+import { useLatest } from "../effects/effects";
 import { OutcomeScreenView } from "./outcome-screen-view";
 import type { OutcomeScreenViewProps } from "./outcome-screen-view";
 

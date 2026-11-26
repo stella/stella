@@ -7,12 +7,15 @@ import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
 import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useMountEffect,
+} from "@stll/ui/effects";
 import { EntityActions } from "@stll/ui/entity-actions";
 import { PlusIcon } from "@stll/ui/icons";
 
 import { EmptyScreen } from "@/components/empty-screen";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormattingLocale } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";

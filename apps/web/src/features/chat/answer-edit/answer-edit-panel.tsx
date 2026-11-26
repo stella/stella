@@ -9,14 +9,17 @@ import * as v from "valibot";
 import type { CHAT_ANSWER_EDIT_STATES } from "@stll/api-contract/chat-message-revisions";
 import { CHAT_MESSAGE_EDIT_INSTRUCTION_MAX_LENGTH } from "@stll/api-contract/chat-message-revisions";
 import { Button } from "@stll/ui/button";
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useMountEffect,
+} from "@stll/ui/effects";
 import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
 import { ReviewDiffText } from "@stll/ui/review-diff-text";
 
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";

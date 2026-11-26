@@ -3,6 +3,7 @@ import type * as React from "react";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useTranslations } from "use-intl";
 
+import { useHasMounted } from "@stll/ui/effects";
 import {
   PanelTrigger,
   Sidebar as SidebarShell,
@@ -28,7 +29,6 @@ import {
   useSidebarLayout,
 } from "@stll/ui/sidebar";
 
-import { useHasMounted } from "@/hooks/use-chrome-query";
 import { usePersistedSidebarOpen } from "@/hooks/use-persisted-sidebar-open";
 import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";

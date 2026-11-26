@@ -2,7 +2,8 @@ import type { RefObject } from "react";
 
 import { useShallow } from "zustand/react/shallow";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@stll/ui/effects";
+
 import { SCROLL_AREA_VIEWPORT_SELECTOR } from "@/lib/pdf/consts";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 

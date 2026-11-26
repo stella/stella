@@ -1,6 +1,7 @@
+import { useExternalSyncEffect } from "@stll/ui/effects";
+
 import { commandShortcutRowsFromSkillPages } from "@/components/chat-editor-slash-items";
 import type { SkillLastEdit } from "@/components/chat-editor-slash-items";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";

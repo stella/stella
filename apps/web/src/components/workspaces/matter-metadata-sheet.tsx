@@ -20,6 +20,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { CopyPlusIcon, DuplicateIcon, TrashIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Separator } from "@stll/ui/separator";
@@ -35,7 +36,6 @@ import { MembersSection } from "@/components/workspaces/members-section";
 import { PartiesSection } from "@/components/workspaces/parties-section";
 import { ReferenceChangeConfirmation } from "@/components/workspaces/reference-change-confirmation";
 import { VisibilitySection } from "@/components/workspaces/visibility-section";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";

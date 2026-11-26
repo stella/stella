@@ -2,6 +2,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { useMountEffect } from "@stll/ui/effects";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
@@ -11,7 +12,6 @@ import {
 import type { PublicLawAskScope } from "@/components/public-law-search";
 import type { CaseLawEmptyState } from "@/features/case-law/search-warnings.logic";
 import type { CaseLawRefine } from "@/features/case-law/use-case-law-refine";
-import { useMountEffect } from "@/hooks/use-effect";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useActionCapabilities } from "@/lib/organization/feature-access/capability-actions";
 

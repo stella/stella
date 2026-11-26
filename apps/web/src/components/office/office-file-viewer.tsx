@@ -7,6 +7,7 @@ import type {
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 import { contentDir } from "@stll/ui/use-content-dir";
@@ -33,7 +34,6 @@ import {
   DesktopRequiredDialog,
   useDesktopActionGate,
 } from "@/features/desktop/desktop-action-gate";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { TOOLBAR_ROW_HEIGHT_PX } from "@/lib/consts";
 import { detached } from "@/lib/detached";

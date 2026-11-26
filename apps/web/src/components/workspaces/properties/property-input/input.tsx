@@ -5,6 +5,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
 import { useTranslations } from "use-intl";
 
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { FieldError } from "@stll/ui/field";
 
 import { AIPromptInput } from "@/components/ai-prompt-input/ai-prompt-input";
@@ -14,7 +15,6 @@ import {
   createCustomMention,
   createSuggestion,
 } from "@/components/workspaces/properties/property-input/custom-mention";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePropertyDisplayName } from "@/lib/workspaces/property-display-name";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 

@@ -3,7 +3,8 @@ import type { PropsWithChildren, RefObject } from "react";
 
 import { Result } from "better-result";
 
-import { useMountEffect } from "@/hooks/use-effect";
+import { useMountEffect } from "@stll/ui/effects";
+
 import { getTranslator } from "@/i18n/translator";
 import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import type { PresentationPrefs } from "@/lib/account/presentation-prefs/preferences";

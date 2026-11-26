@@ -16,6 +16,7 @@ import {
 } from "@stll/api-contract/chat-local-run-question";
 import type { ChatLocalRunQuestion } from "@stll/api-contract/chat-run-target";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { Form } from "@stll/ui/form";
 import { HelpCircleIcon, PencilIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
@@ -29,8 +30,6 @@ import { unsentOwnWords } from "@/components/chat/local-run-question.logic";
 import { SecretInput } from "@/components/secret-input";
 import type { LocalRunAnswerDelivery } from "@/features/chat/chat-runtime";
 import type { ChatThreadRef } from "@/features/chat/chat-thread-ref-types";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import {
   useFormattingLocale,
   useStepsMarkerStyle,

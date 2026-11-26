@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
-import { useMountEffect } from "@/hooks/use-effect";
+import { useMountEffect } from "@stll/ui/effects";
+
 import { detached } from "@/lib/detached";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { loadAuthContextForRootRedirect } from "@/routes/-auth-context";

@@ -5,8 +5,8 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { queryView } from "@/lib/query-view.logic";
 import type { WorkspaceJustification } from "@/lib/types";
 import { useQueryViewError, useQueryViewErrors } from "@/lib/use-query-view";

@@ -3,6 +3,7 @@ import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
 
+import { useMountEffect } from "@stll/ui/effects";
 import { cn } from "@stll/ui/utils";
 
 import type { KanbanSelection } from "@/components/workspaces/kanban/kanban-selection";
@@ -16,7 +17,6 @@ import type {
   ViewportPoint,
   ViewportRect,
 } from "@/components/workspaces/kanban/kanban-selection.logic";
-import { useMountEffect } from "@/hooks/use-effect";
 import { KANBAN_SELECTION_SURFACE_CLASS } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.pending";
 
 /**

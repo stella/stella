@@ -5,6 +5,7 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { stellaToast } from "@stll/ui/toast";
 
 import type {
@@ -36,8 +37,6 @@ import type { ReaderAnnotation } from "@/components/legal-reader/annotations/rea
 import { useOptimisticAnnotationMutations } from "@/components/legal-reader/annotations/use-optimistic-annotation-mutations";
 import { useReaderAnnotationHistory } from "@/components/legal-reader/annotations/use-reader-annotation-history";
 import type { ReaderAnnotationController } from "@/components/legal-reader/annotations/use-reader-annotation-history";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useSessionStorage } from "@/hooks/use-session-storage";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import {

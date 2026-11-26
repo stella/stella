@@ -10,10 +10,10 @@ import { useCallback, useState } from "react";
 import type { RefObject } from "react";
 
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { WorkspaceGroup } from "@/lib/workspaces/types";
 
 type AlphabetIndexProps = {

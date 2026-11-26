@@ -1,7 +1,7 @@
 import type { Editor } from "@tiptap/react";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
+
 import { warmupChatAnonymizeWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
 import {
   clearChatAnonDecorationOwner,
