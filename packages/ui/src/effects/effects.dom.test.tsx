@@ -101,14 +101,14 @@ describe("mount latches", () => {
   });
 
   test("useIsMounted reports the mount and the unmount", () => {
-    let isMounted: (() => boolean) | null = null;
+    const probe: { isMounted: (() => boolean) | null } = { isMounted: null };
     const Probe = () => {
-      isMounted = useIsMounted();
+      probe.isMounted = useIsMounted();
       return null;
     };
     const { unmount } = render(<Probe />);
-    expect(isMounted?.()).toBe(true);
+    expect(probe.isMounted?.()).toBe(true);
     unmount();
-    expect(isMounted?.()).toBe(false);
+    expect(probe.isMounted?.()).toBe(false);
   });
 });
