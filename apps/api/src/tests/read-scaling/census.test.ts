@@ -50,6 +50,7 @@ import { decisionAnchorRedirectsScalingScenario } from "./decision-anchor-redire
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
 import { desktopCalendarEventsScalingScenario } from "./desktop-calendar-events";
+import { desktopDayEntriesScalingScenario } from "./desktop-day-entries";
 import { desktopRunnerUpgradeScalingScenario } from "./desktop-runner-upgrade";
 import {
   desktopDictationCleanupModelsScalingScenario,
@@ -209,6 +210,7 @@ const measuredApiScenarios = [
   softLawSearchScalingScenario,
   softLawReadScalingScenario,
   ...sharepointBrowseScalingScenarios,
+  desktopDayEntriesScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>

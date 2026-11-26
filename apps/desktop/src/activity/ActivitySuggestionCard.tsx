@@ -53,13 +53,14 @@ import type {
   RangeEdge,
   RangeMatterBasis,
 } from "./activity-calendar-logic";
-import { appTotals, calendarDate } from "./activity-logic";
+import { appTotals, calendarDate, MINUTE_MS } from "./activity-logic";
 import type { ActivityDaySnapshot } from "./activity-types";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import { DRAFT_FAILURE_RECOVERY } from "./billing-draft-logic";
 import type { CardDraft, DraftFailureKind } from "./billing-draft-logic";
 import type { DraftConsentStatus } from "./billing-draft-transport";
-import type { MatchedSegment } from "./day-review-logic";
+import { recordedElsewhere } from "./day-review-logic";
+import type { DayEntriesRead, MatchedSegment } from "./day-review-logic";
 import { DraftConsent } from "./DraftConsent";
 import { useMatchReasonLabel } from "./matter-rule-label";
 import { MatterPicker } from "./MatterPicker";
@@ -115,10 +116,23 @@ export type SuggestionTimes =
       type: "selected";
     };
 
+/** Time on the card's matter that day from another computer or the web,
+ * with what the member can do about it. It warns; accepting stays open. */
+type RecordedElsewhereNotice = {
+  dayEntries: DayEntriesRead;
+  /** The entries this computer created for the day. */
+  draftedEntries: readonly ActivityDaySnapshot["draftedEntries"][number][];
+  /** How the copy names the reviewed day. */
+  day: "today" | "other";
+  onReview: () => void;
+  onRetry: () => void;
+};
+
 type ActivitySuggestionCardProps = {
   suggestion: ActivitySuggestion;
   times: SuggestionTimes;
   edit: SuggestionEdit;
+  recordedElsewhere: RecordedElsewhereNotice;
   candidates: readonly DesktopTimeEntryMatterCandidate[];
   editingDisabledReason?: string | undefined;
   timeLabel: string;
@@ -187,6 +201,7 @@ export const ActivitySuggestionCard = ({
   suggestion,
   times,
   edit,
+  recordedElsewhere: recordedElsewhereNotice,
   candidates,
   editingDisabledReason,
   timeLabel,
@@ -384,6 +399,10 @@ export const ActivitySuggestionCard = ({
           {edit.matter !== null && edit.matter.id === suggestion.matter?.id ? (
             <MatchReasonNote suggestion={suggestion} />
           ) : null}
+          <RecordedElsewhereNote
+            matterId={edit.matter?.id ?? null}
+            notice={recordedElsewhereNotice}
+          />
           <Slivers
             editingDisabledReason={editingDisabledReason}
             onInclude={onIncludeSlivers}
@@ -1139,6 +1158,60 @@ const StructureProposal = ({
       </Button>
     </section>
   );
+};
+
+/** Says the card's matter already has time that day from another computer
+ * or the web, so the same minutes are not billed twice. */
+const RecordedElsewhereNote = ({
+  matterId,
+  notice: { dayEntries, draftedEntries, day, onReview, onRetry },
+}: {
+  matterId: string | null;
+  notice: RecordedElsewhereNotice;
+}) => {
+  const t = useTranslations("activity");
+  const durationLabel = useDurationLabel();
+  const status = recordedElsewhere({ dayEntries, draftedEntries, matterId });
+  switch (status.type) {
+    case "none":
+      return null;
+    case "recorded":
+      return (
+        <div
+          className="bg-muted/60 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border px-2.5 py-2 text-xs"
+          data-activity-recorded-elsewhere=""
+          role="status"
+        >
+          <span className="text-pretty">
+            {t(
+              day === "today"
+                ? "recordedElsewhereToday"
+                : "recordedElsewhereOnDay",
+              { duration: durationLabel(status.minutes * MINUTE_MS) },
+            )}
+          </span>
+          <Button onClick={onReview} size="xs" variant="outline">
+            {t("recordedElsewhereReview")}
+          </Button>
+        </div>
+      );
+    case "unknown":
+      return (
+        <div
+          className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs"
+          data-activity-recorded-elsewhere=""
+          role="status"
+        >
+          {t("recordedElsewhereUnknown")}
+          <Button onClick={onRetry} size="xs" variant="ghost">
+            {t("retry")}
+          </Button>
+        </div>
+      );
+    default:
+      status satisfies never;
+      return panic("Unknown recorded-elsewhere status");
+  }
 };
 
 /** The user's own earlier entries the draft followed, so its wording can be
