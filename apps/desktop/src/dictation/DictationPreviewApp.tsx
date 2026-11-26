@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { useMountEffect } from "@stll/ui/effects";
 import { useLayoutMeasurement } from "@stll/ui/effects-dom";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
@@ -58,7 +59,7 @@ const DictationPreviewApp = () => {
   const t = useTranslations("dictation.preview");
   const [snapshot, setSnapshot] = useState<PreviewSnapshot>(HIDDEN);
 
-  useEffect(() => {
+  useMountEffect(() => {
     let disposed = false;
     const refresh = async () => {
       const result = await Result.tryPromise(async () =>
@@ -96,7 +97,7 @@ const DictationPreviewApp = () => {
       disposed = true;
       stopListening();
     };
-  }, []);
+  });
 
   // The top edge fades only once older lines have left it. Measured before
   // paint whenever the text changes or the box resizes.

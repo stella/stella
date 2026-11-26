@@ -1,11 +1,10 @@
-import { useEffect, useRef } from "react";
-
 import { Result } from "better-result";
 import { File } from "expo-file-system";
 import { useLocale } from "use-intl";
 
 import { applyLearnedFixes } from "@stll/transcript/corrections";
 import type { LearnedFix } from "@stll/transcript/corrections";
+import { useExternalSyncEffect, useLatest } from "@stll/ui/effects";
 
 import {
   discardRecording,
@@ -46,13 +45,10 @@ export const KeyboardDictationHost = () => {
   const locale = useLocale();
   // The latest language for cleanup, without starting the jobs over: a
   // dictation under way keeps its pieces.
-  const cleanupLocale = useRef(locale);
-  useEffect(() => {
-    cleanupLocale.current = locale;
-  });
+  const cleanupLocale = useLatest(locale);
   const source = state.status === "signed-in" ? state.source : null;
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!keyboardDictationAvailable()) {
       return undefined;
     }
@@ -89,7 +85,7 @@ export const KeyboardDictationHost = () => {
     const stop = onKeyboardDictation("onCapture", drain);
     drain();
     return stop;
-  }, [source]);
+  }, [source, cleanupLocale]);
 
   return null;
 };

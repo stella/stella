@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic } from "better-result";
@@ -12,6 +12,7 @@ import {
   CollapsibleTrigger,
 } from "@stll/ui/collapsible";
 import { DayCalendar } from "@stll/ui/day-calendar";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -626,7 +627,7 @@ const useActivityDay = (
   const requestId = useRef(0);
   const errorRead = t("errorRead");
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     let disposed = false;
     const readDay = () => {
       requestId.current += 1;

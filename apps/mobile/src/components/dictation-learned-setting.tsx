@@ -1,11 +1,4 @@
-import {
-  Suspense,
-  use,
-  useEffect,
-  useEffectEvent,
-  useState,
-  useTransition,
-} from "react";
+import { Suspense, use, useState, useTransition } from "react";
 
 import { randomUUID } from "expo-crypto";
 import { View } from "react-native";
@@ -16,6 +9,7 @@ import type {
   LearnedFixChange,
 } from "@stll/transcript/learned-fixes";
 import { Button } from "@stll/ui/button";
+import { useLatestCallback, useMountEffect } from "@stll/ui/effects";
 import { Switch } from "@stll/ui/switch";
 import { Text } from "@stll/ui/text";
 
@@ -62,12 +56,12 @@ export const DictationLearnedSetting = ({
   };
 
   // Once per opening, after the fixes kept here show; each change syncs on its own.
-  const syncOnOpen = useEffectEvent(() => {
+  const syncOnOpen = useLatestCallback(() => {
     startSaving(syncAndShow);
   });
-  useEffect(() => {
+  useMountEffect(() => {
     syncOnOpen();
-  }, []);
+  });
 
   /** Changes the fixes as kept now, not as last shown, then syncs and shows them. */
   const save = (change: LearnedFixChange) => {

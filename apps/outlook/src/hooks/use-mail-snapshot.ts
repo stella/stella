@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { Result } from "better-result";
+
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { isAttachmentReadError, OutlookError } from "@/lib/outlook-error";
 import {
@@ -80,7 +82,7 @@ export const useMailSnapshot = ({
     [attachmentErrorFallback, errorFallback],
   );
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     let active = true;
     queueMicrotask(() => {
       if (active) {

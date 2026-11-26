@@ -1,11 +1,4 @@
-import {
-  Suspense,
-  use,
-  useEffect,
-  useEffectEvent,
-  useRef,
-  useState,
-} from "react";
+import { Suspense, use, useRef, useState } from "react";
 
 import { panic, Result } from "better-result";
 import { Alert, View } from "react-native";
@@ -13,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { QUEUED_MESSAGE_FILES_ON_REMOVE } from "@stll/api-contract/chat-queue";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { Text } from "@stll/ui/text";
 
 import { useChanged, useRevisedLoad } from "@/components/changes";
@@ -139,16 +133,16 @@ const LoadedQueue = ({
   // itself: one that leaves otherwise was sent by the server.
   const seen = useRef(new Set<string>());
   const removedHere = useRef(new Set<string>());
-  const sentByServer = useEffectEvent(onSentByServer);
+  const sentByServer = useLatestCallback(onSentByServer);
   const idle = thread === "idle";
   // What the thread does when a Send now that was not taken goes on.
   const threadNow = useRef(thread);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     threadNow.current = thread;
   }, [thread]);
   // The message whose actions are shown, under it.
   const [opened, setOpened] = useState<string | null>(null);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (queue === null) {
       return;
     }
@@ -166,7 +160,7 @@ const LoadedQueue = ({
     if (left.some((id) => !removedHere.current.has(id))) {
       sentByServer();
     }
-  }, [ids, idle, queue]);
+  }, [ids, idle, queue, sentByServer]);
 
   if (result.isErr()) {
     if (result.error._tag === "SignedOutError") {

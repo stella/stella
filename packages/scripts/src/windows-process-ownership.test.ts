@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { JSCallback, linkSymbols } from "bun:ffi";
-import { expect, test } from "bun:test";
+import { expect, jest, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -250,6 +250,7 @@ test("job peak remains enforceable after the leader and launcher exit, without a
     job.api,
   ).unwrap();
   const failures: string[] = [];
+  jest.useFakeTimers();
   const watchdog = watchTestProcessMemory({
     child: {
       pid: 42,
@@ -280,7 +281,7 @@ test("job peak remains enforceable after the leader and launcher exit, without a
   try {
     expect(watchdog.peakBytes()).toBe(700);
     job.allocate();
-    await Bun.sleep(30);
+    jest.advanceTimersByTime(30);
     expect(watchdog.peakBytes()).toBe(900);
     expect(failures).toHaveLength(1);
     expect(job.terminated()).toBe(1);
@@ -290,6 +291,7 @@ test("job peak remains enforceable after the leader and launcher exit, without a
   } finally {
     await watchdog.stop();
     owner.signal("SIGKILL").unwrap();
+    jest.useRealTimers();
   }
 });
 

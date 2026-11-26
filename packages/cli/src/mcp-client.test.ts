@@ -172,19 +172,12 @@ describe("fetchToolsListRaw authenticated omission evidence", () => {
     });
 
     try {
-      const result = await Promise.race([
-        fetchToolsListRaw({
-          serverUrl: server.url.origin,
-          token: "test-token",
-          timeoutMs: 100,
-        }),
-        Bun.sleep(500).then(() => "hung" as const),
-      ]);
+      const result = await fetchToolsListRaw({
+        serverUrl: server.url.origin,
+        token: "test-token",
+        timeoutMs: 100,
+      });
 
-      expect(result).not.toBe("hung");
-      if (result === "hung") {
-        throw new Error("tools/list buffered the persistent SSE body");
-      }
       expect(Result.isError(result)).toBe(true);
       if (Result.isError(result)) {
         expect(result.error.message).toContain(
@@ -250,6 +243,8 @@ describe("resources/read content policy", () => {
 describe("tools/call timeout policy", () => {
   test("a tool-specific finite deadline can exceed the generic deadline", async () => {
     const replayHeaders: (string | null)[] = [];
+    let holdResponses = true;
+    const held: (() => void)[] = [];
     const server = Bun.serve({
       port: 0,
       fetch: async (request) => {
@@ -262,7 +257,14 @@ describe("tools/call timeout policy", () => {
         if (lifecycle !== null) {
           return lifecycle;
         }
-        await Bun.sleep(20);
+        if (holdResponses) {
+          await new Promise<void>((resolve) => {
+            held.push(resolve);
+            request.signal.addEventListener("abort", () => resolve(), {
+              once: true,
+            });
+          });
+        }
         return Response.json({
           jsonrpc: "2.0",
           id: 1,
@@ -281,12 +283,16 @@ describe("tools/call timeout policy", () => {
       expect(Result.isError(await callTool({ ...input, timeoutMs: 1 }))).toBe(
         true,
       );
+      holdResponses = false;
       expect(Result.isOk(await callTool({ ...input, timeoutMs: 100 }))).toBe(
         true,
       );
       expect(replayHeaders.length).toBeGreaterThan(0);
       expect(replayHeaders.every((header) => header === null)).toBe(true);
     } finally {
+      for (const release of held) {
+        release();
+      }
       void server.stop(true);
     }
   });
@@ -295,9 +301,10 @@ describe("tools/call timeout policy", () => {
 describe("metadata operation timeout policy", () => {
   test("forwards a caller deadline to tool and resource SDK operations", async () => {
     const replayHeaders: (string | null)[] = [];
-    const delayedResponseMs = 150;
     const shortTimeoutMs = 50;
     const longTimeoutMs = 500;
+    let holdResponses = true;
+    const held: (() => void)[] = [];
     const targetMethods: string[] = [];
     const server = Bun.serve({
       port: 0,
@@ -316,7 +323,14 @@ describe("metadata operation timeout policy", () => {
         if (body.method !== undefined) {
           targetMethods.push(body.method);
         }
-        await Bun.sleep(delayedResponseMs);
+        if (holdResponses) {
+          await new Promise<void>((resolve) => {
+            held.push(resolve);
+            request.signal.addEventListener("abort", () => resolve(), {
+              once: true,
+            });
+          });
+        }
         let result: Record<string, unknown>;
         if (body.method === "tools/list") {
           result = { tools: [] };
@@ -336,6 +350,7 @@ describe("metadata operation timeout policy", () => {
     };
     try {
       let methodCount = targetMethods.length;
+      holdResponses = true;
       expect(
         Result.isError(
           await listTools({ ...connection, timeoutMs: shortTimeoutMs }),
@@ -343,6 +358,7 @@ describe("metadata operation timeout policy", () => {
       ).toBe(true);
       expect(targetMethods.slice(methodCount)).toContain("tools/list");
       methodCount = targetMethods.length;
+      holdResponses = false;
       expect(
         Result.isOk(
           await listTools({ ...connection, timeoutMs: longTimeoutMs }),
@@ -350,6 +366,7 @@ describe("metadata operation timeout policy", () => {
       ).toBe(true);
       expect(targetMethods.slice(methodCount)).toContain("tools/list");
       methodCount = targetMethods.length;
+      holdResponses = true;
       expect(
         Result.isError(
           await listResources({ ...connection, timeoutMs: shortTimeoutMs }),
@@ -357,6 +374,7 @@ describe("metadata operation timeout policy", () => {
       ).toBe(true);
       expect(targetMethods.slice(methodCount)).toContain("resources/list");
       methodCount = targetMethods.length;
+      holdResponses = false;
       expect(
         Result.isOk(
           await listResources({ ...connection, timeoutMs: longTimeoutMs }),
@@ -364,6 +382,7 @@ describe("metadata operation timeout policy", () => {
       ).toBe(true);
       expect(targetMethods.slice(methodCount)).toContain("resources/list");
       methodCount = targetMethods.length;
+      holdResponses = true;
       expect(
         Result.isError(
           await readResource({
@@ -375,6 +394,7 @@ describe("metadata operation timeout policy", () => {
       ).toBe(true);
       expect(targetMethods.slice(methodCount)).toContain("resources/read");
       methodCount = targetMethods.length;
+      holdResponses = false;
       expect(
         Result.isOk(
           await readResource({
@@ -388,6 +408,9 @@ describe("metadata operation timeout policy", () => {
       expect(replayHeaders.length).toBeGreaterThan(0);
       expect(replayHeaders.every((header) => header === null)).toBe(true);
     } finally {
+      for (const release of held) {
+        release();
+      }
       void server.stop(true);
     }
   });

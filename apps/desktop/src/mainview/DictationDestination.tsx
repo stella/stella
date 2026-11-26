@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Badge } from "@stll/ui/badge";
+import { useMountEffect } from "@stll/ui/effects";
 import { TriangleAlertIcon } from "@stll/ui/icons";
 import {
   Select,
@@ -67,7 +68,7 @@ export type CloudModelOffer = {
 export const useCloudModels = (): CloudModelOffer => {
   const [models, setModels] = useState<ModelsState>({ status: "loading" });
 
-  useEffect(() => {
+  useMountEffect(() => {
     let disposed = false;
     // A named function, not one invoked in place: an inline call is read as
     // running before the cleanup below can ever set `disposed`.
@@ -88,7 +89,7 @@ export const useCloudModels = (): CloudModelOffer => {
     return () => {
       disposed = true;
     };
-  }, []);
+  });
 
   const offered =
     models.status === "loaded" &&

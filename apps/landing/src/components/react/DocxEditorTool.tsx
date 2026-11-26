@@ -1,11 +1,12 @@
 import "@stll/folio-react/standalone.css";
-import { type ChangeEvent, useEffect, useRef, useState } from "react";
+import { type ChangeEvent, useRef, useState } from "react";
 
 import { IntlProvider } from "use-intl";
 
 import { DocxEditor } from "@stll/folio-react";
 import { getFolioMessages } from "@stll/folio-react/messages";
 import { Button } from "@stll/ui/button";
+import { useMountEffect } from "@stll/ui/effects";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
 // A real Word .docx (Y Combinator's post-money SAFE, published free to use) so
@@ -40,7 +41,7 @@ export const DocxEditorTool = () => {
   const [source, setSource] = useState<EditorSource>({ kind: "loading" });
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  useMountEffect(() => {
     let cancelled = false;
     const load = async () => {
       try {
@@ -61,7 +62,7 @@ export const DocxEditorTool = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  });
 
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const input = event.currentTarget;

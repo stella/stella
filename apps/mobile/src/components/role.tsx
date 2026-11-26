@@ -1,4 +1,4 @@
-import { createContext, use, useEffect, useEffectEvent, useState } from "react";
+import { createContext, use, useState } from "react";
 
 import { Result } from "better-result";
 import { AppState, View } from "react-native";
@@ -6,6 +6,11 @@ import { useTranslations } from "use-intl";
 
 import type { PermissionInput } from "@stll/permissions/role-grants";
 import { Button } from "@stll/ui/button";
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useMountEffect,
+} from "@stll/ui/effects";
 import { Text } from "@stll/ui/text";
 
 import type { AccessTokenSource } from "@/connection/session";
@@ -46,7 +51,7 @@ export const RoleProvider = ({ children }: React.PropsWithChildren) => {
     readonly read: RoleRead;
   } | null>(null);
 
-  const settle = useEffectEvent(
+  const settle = useLatestCallback(
     (
       readFor: AccessTokenSource,
       readOn: number,
@@ -65,7 +70,7 @@ export const RoleProvider = ({ children }: React.PropsWithChildren) => {
       });
     },
   );
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     // A read that settles after the sign-in changed is dropped.
     const live = { current: true };
     if (source !== null) {
@@ -79,7 +84,7 @@ export const RoleProvider = ({ children }: React.PropsWithChildren) => {
     return () => {
       live.current = false;
     };
-  }, [attempt, source]);
+  }, [attempt, source, settle]);
 
   // A read settled for an earlier sign-in says nothing of this one.
   const read: RoleRead =
@@ -93,8 +98,8 @@ export const RoleProvider = ({ children }: React.PropsWithChildren) => {
   };
 
   // Coming back to the foreground may find the connection back.
-  const retryAfterFailure = useEffectEvent(retry);
-  useEffect(() => {
+  const retryAfterFailure = useLatestCallback(retry);
+  useMountEffect(() => {
     const subscription = AppState.addEventListener("change", (next) => {
       if (next === "active") {
         retryAfterFailure();
@@ -103,7 +108,7 @@ export const RoleProvider = ({ children }: React.PropsWithChildren) => {
     return () => {
       subscription.remove();
     };
-  }, []);
+  });
 
   return (
     <RoleContext value={{ read, retry, retrying }}>{children}</RoleContext>

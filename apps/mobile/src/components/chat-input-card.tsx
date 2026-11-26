@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useState } from "react";
+import { useState } from "react";
 
 import { Result } from "better-result";
 import { View } from "react-native";
@@ -45,6 +45,7 @@ import {
   humanizeIdentifier,
 } from "@stll/api-contract/chat-tool-input-rows";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { Input } from "@stll/ui/input";
 import { Text } from "@stll/ui/text";
 
@@ -220,15 +221,15 @@ const StepsCard = ({
 
   // A turn that only waits for its drafts asks the person nothing: they are
   // compiled and sent at once.
-  const sendDrafts = useEffectEvent(() => {
+  const sendDrafts = useLatestCallback(() => {
     send({});
   });
   const onlyDrafts = approvals.length === 0 && asks.length === 0;
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (onlyDrafts) {
       sendDrafts();
     }
-  }, [onlyDrafts]);
+  }, [onlyDrafts, sendDrafts]);
 
   return (
     <View className="gap-4">
