@@ -430,14 +430,20 @@ const roleOf = (
  * Two tables with nothing between them are one table to a word processor,
  * and a document's last block has to be a paragraph.
  */
-const tableSeparators = (context: Context): Set<string> => {
+const tableSeparators = (
+  context: Context,
+  pageHolders: ReadonlySet<string>,
+): Set<string> => {
   const { topLevel, index } = context;
   const separators = new Set<string>();
   /** Whether only blank paragraphs came since the last table. */
   let afterTable = false;
   let firstBlank: string | null = null;
+  /** A blank paragraph of the gap stays anyway, to start the page: it
+   *  parts the tables, and one kept paragraph per gap is enough. */
+  let held = false;
   const keep = () => {
-    if (afterTable && firstBlank !== null) {
+    if (afterTable && firstBlank !== null && !held) {
       separators.add(firstBlank);
     }
   };
@@ -446,6 +452,7 @@ const tableSeparators = (context: Context): Set<string> => {
       keep();
       afterTable = true;
       firstBlank = null;
+      held = false;
       continue;
     }
     if (!afterTable || index.contentsBlockIds.has(block.id)) {
@@ -453,6 +460,7 @@ const tableSeparators = (context: Context): Set<string> => {
     }
     if (roleOf(context, block) === null && isBlankParagraph(block)) {
       firstBlank ??= block.id;
+      held ||= pageHolders.has(block.id);
       continue;
     }
     afterTable = false;
@@ -519,6 +527,33 @@ const pageHoldersBeforeTables = (context: Context): Set<string> => {
     pending ||= endsPage(context, block);
   }
   return holders;
+};
+
+/**
+ * The blocks in front of which the source starts a page, by its facts
+ * alone and before anything is placed: a page break in a blank paragraph
+ * or in a line of the source's contents passes to the block after it, as
+ * does a section that ends on a new page.
+ */
+const pageStartsInSource = (context: Context): Set<string> => {
+  const starts = new Set<string>();
+  let pending = false;
+  for (const block of context.topLevel) {
+    const passesOn =
+      block.kind === "paragraph" &&
+      (isBlankParagraph(block) || context.index.contentsBlockIds.has(block.id));
+    if (passesOn) {
+      pending ||= breaksPage(block);
+    } else {
+      if (pending || block.pageBreakBefore === true) {
+        starts.add(block.id);
+      }
+      pending = false;
+    }
+    const next = sectionAfter(context, block);
+    pending ||= next !== undefined && NEW_PAGE_STARTS.has(next.start);
+  }
+  return starts;
 };
 
 /** Whether a section's page is another than the document's first has. */
@@ -589,7 +624,9 @@ const pageStartsOf = (
       // The page starts with this paragraph, also where the section it
       // closes ends in front of the table. With a break of its own among
       // its runs it needs no telling.
-      if ((block.pageBreaks ?? 0) === 0) {
+      const startsHere =
+        pending || block.pageBreakBefore === true || endsPage(context, block);
+      if (startsHere && placedAny && (block.pageBreaks ?? 0) === 0) {
         starts.add(block.id);
       }
       pending = false;
@@ -613,7 +650,11 @@ const pageStartsOf = (
 const placeParagraphs = (context: Context): Placed => {
   const { topLevel, blockById, index, exclusions, proposalById } = context;
   const pageHolders = pageHoldersBeforeTables(context);
-  const kept = new Set([...tableSeparators(context), ...pageHolders]);
+  const kept = new Set([
+    ...tableSeparators(context, pageHolders),
+    ...pageHolders,
+  ]);
+  const startsPage = pageStartsInSource(context);
   const placed: Placed = {
     placements: [],
     placementById: new Map(),
@@ -650,7 +691,10 @@ const placeParagraphs = (context: Context): Placed => {
       head !== null &&
       lastPlaced === head &&
       !placed.titleOf.has(head) &&
-      !exclusions.merges.has(head)
+      !exclusions.merges.has(head) &&
+      // A title that starts a page is a line of its own: joined to its
+      // heading it would stay on the page before.
+      !startsPage.has(block.id)
     ) {
       placed.mergedInto.set(block.id, head);
       placed.titleOf.set(head, block);
