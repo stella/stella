@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import type { RefObject } from "react";
 
 import { useTranslations } from "use-intl";
@@ -87,6 +87,13 @@ type Selected = {
   rect: DOMRect;
 };
 
+// The container's document, read from the container itself once it has
+// mounted: `null` on the server and in the first render, then the document
+// (the store's mount check re-reads it after the commit that attaches it).
+// It never changes for a mounted container, so there is nothing to subscribe to.
+const noDocumentChanges = () => () => undefined;
+const noDocument = () => null;
+
 /**
  * What a reader can do with words selected in a matter PDF: copy them with
  * the document's citation, hand them to the document's chat, or highlight
@@ -111,7 +118,12 @@ export const PdfSelectionToolbar = ({
     barRef.current = node;
     onAttach?.(node);
   };
-  const [doc, setDoc] = useState<Document | null>(null);
+  // The viewer's document, learned once mounted.
+  const doc = useSyncExternalStore(
+    noDocumentChanges,
+    () => rootRef.current?.ownerDocument ?? null,
+    noDocument,
+  );
   const [selected, setSelected] = useState<Selected | null>(null);
   const [copyOpen, setCopyOpen] = useState(false);
   const [style, setStyle] = useState<ReaderAnnotationStyle>("highlight");
@@ -135,7 +147,6 @@ export const PdfSelectionToolbar = ({
       return undefined;
     }
     const ownerDoc = root.ownerDocument;
-    setDoc(ownerDoc);
     let frame = 0;
     let dragActive = false;
     const isOnBar = (node: Node): boolean =>

@@ -3,11 +3,12 @@ import { Suspense, useState } from "react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { useObjectUrl } from "@stll/ui/effects-dom";
+
 import { DefaultPendingComponent } from "@/components/default-pending";
 import { FilePreviewUnavailable } from "@/components/inspector/inspector-pdf-error-fallback";
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 import { RecoverableViewerBoundary } from "@/components/viewer/recoverable-viewer-boundary";
-import { useObjectUrl } from "@/hooks/use-object-url";
 import { fileOptions } from "@/lib/files/queries";
 
 type AudioFileViewerProps = {

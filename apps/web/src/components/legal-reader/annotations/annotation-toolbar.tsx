@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode, RefObject } from "react";
 
 import { panic } from "better-result";
@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   useExternalSyncEffect,
+  useKeyedState,
   useLatestCallback,
   useMountEffect,
 } from "@stll/ui/effects";
@@ -110,6 +111,13 @@ type ReaderSelectionSnapshot = {
 
 const NO_SELECTED_SPANS: readonly SelectionAnchor[] = [];
 
+// The container's document, read from the container itself once it has
+// mounted: `null` on the server and in the first render, then the document
+// (the store's mount check re-reads it after the commit that attaches it).
+// It never changes for a mounted container, so there is nothing to subscribe to.
+const noDocumentChanges = () => () => undefined;
+const noDocument = () => null;
+
 /**
  * What a reader can do with selected words in a decision or a statute: send
  * them to the AI with the document attached, mark them in a colour and style,
@@ -143,11 +151,19 @@ export const AnnotationToolbar = ({
     barRef.current = node;
   };
   const [selected, setSelected] = useState<Selected | null>(null);
-  const [activeGeometry, setActiveGeometry] =
-    useState<ReturnType<typeof selectionToolbarAnchor>>(null);
+  // A mark's geometry belongs to that mark: it starts over (none) when the
+  // active mark changes, until the effect below measures the new one.
+  const activeAnnotationId = activeAnnotation?.id ?? null;
+  const [activeGeometry, setActiveGeometry] = useKeyedState<ReturnType<
+    typeof selectionToolbarAnchor
+  > | null>(activeAnnotationId, null);
   // The reader's document, learned once mounted: the only browser handle the
-  // bar holds, so nothing here reads a ref while rendering.
-  const [doc, setDoc] = useState<Document | null>(null);
+  // bar holds.
+  const doc = useSyncExternalStore(
+    noDocumentChanges,
+    () => scrollContainerRef.current?.ownerDocument ?? null,
+    noDocument,
+  );
   const [style, setStyle] = useState<AnnotationStyle>("highlight");
   const [copyOpen, setCopyOpen] = useState(false);
   // The bar copies the words selected in the reader while it is showing.
@@ -193,7 +209,6 @@ export const AnnotationToolbar = ({
       return undefined;
     }
     const ownerDoc = root.ownerDocument;
-    setDoc(ownerDoc);
     let frame = 0;
     let readerDragActive = false;
     let restoringReaderSelection = false;
@@ -457,11 +472,9 @@ export const AnnotationToolbar = ({
   });
 
   // A mark follows its visible words when this reader or an ancestor scrolls.
-  const activeAnnotationId = activeAnnotation?.id ?? null;
   useExternalSyncEffect(() => {
     const root = scrollContainerRef.current;
     if (activeAnnotationId === null || root === null) {
-      setActiveGeometry(null);
       return undefined;
     }
     const updateGeometry = () => {
@@ -477,17 +490,19 @@ export const AnnotationToolbar = ({
       setActiveGeometry(selectionToolbarAnchor({ range, root }));
     };
     const ownerDoc = root.ownerDocument;
-    updateGeometry();
+    // The first measurement waits for the frame, like every later one.
+    const firstFrame = requestAnimationFrame(updateGeometry);
     ownerDoc.addEventListener("scroll", updateGeometry, true);
     ownerDoc.defaultView?.addEventListener("resize", updateGeometry);
     const observer = new ResizeObserver(updateGeometry);
     observer.observe(root);
     return () => {
+      cancelAnimationFrame(firstFrame);
       observer.disconnect();
       ownerDoc.removeEventListener("scroll", updateGeometry, true);
       ownerDoc.defaultView?.removeEventListener("resize", updateGeometry);
     };
-  }, [activeAnnotationId, scrollContainerRef]);
+  }, [activeAnnotationId, scrollContainerRef, setActiveGeometry]);
 
   const clearSelection = () => {
     doc?.getSelection()?.removeAllRanges();

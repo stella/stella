@@ -21,6 +21,7 @@ import { isStrippableLabel } from "@/api/lib/templates/house-style/folio-contrac
 import type {
   DocxBlock,
   DocxBlockManifest,
+  DocxSection,
   TemplatePlan,
   TemplatePlanHighlight,
   TemplatePlanNestedParagraph,
@@ -138,6 +139,34 @@ type FormattingNoteItem =
    *  list. */
   | { kind: "labelConvertedToText"; blockId: string; reason: LabelKeptReason }
   | { kind: "roleWithoutStyle"; role: HouseStyleRole; blocks: number }
+  /** The source starts a page in front of this block and the output does
+   *  not: a table cannot be told to start one. */
+  | { kind: "pageStartNotKept"; blockId: string; reason: "table" }
+  /** A section of the source ends after this block and the next one's
+   *  layout is not carried over: it begins on the same page (`continuous`,
+   *  `nextColumn`), or its page or its columns are other than the
+   *  document's first section has. A section that begins on a new page
+   *  still begins one. */
+  | {
+      kind: "sectionLayoutNotKept";
+      afterBlockId: string;
+      start: DocxSection["start"];
+      pageDiffers: boolean;
+      columns: number;
+    }
+  /** The output keeps the spacing of a justified line that ends in a
+   *  manual line break, which the template's settings would stretch to the
+   *  margin: because the source's settings kept it (`source`), or because
+   *  `blocks` paragraphs with such a break are justified here and were not
+   *  in the source, or got their break by being joined (`justifiedHere`).
+   *  The setting is the document's: `alreadyStretched` paragraphs showed
+   *  the stretched line in the source and lose it with the others. */
+  | {
+      kind: "lineBreakSpacingKept";
+      reason: "source" | "justifiedHere";
+      blocks: number;
+      alreadyStretched: number;
+    }
   | {
       kind: "templateBlocksKept";
       region: "keepBefore" | "contents";
@@ -154,6 +183,9 @@ export type FormattingNote = {
     numbered: number;
     /** Paragraphs whose automatic label is written as text. */
     labelsConvertedToText: number;
+    /** Paragraphs told to start a page, for a page the source started by a
+     *  break that is not placed. */
+    pageStarts: number;
     numberingPatches: number;
     referencesLinked: number;
     referencesUnlinked: number;
@@ -184,6 +216,7 @@ export const NO_EXCLUSIONS: PlanExclusions = {
 
 /** A table whose cells the plan places as they are. */
 const NO_NESTED: readonly TemplatePlanNestedParagraph[] = [];
+const NO_SECTIONS: readonly DocxSection[] = [];
 
 const CLAUSE_ROLES = ["clause1", "clause2", "clause3"] as const;
 
@@ -251,6 +284,8 @@ type Context = {
   /** The table a cell paragraph sits in. */
   tableOf: ReadonlyMap<string, string>;
   topLevel: readonly DocxBlock[];
+  /** The source's sections; empty when the manifest does not report them. */
+  sections: readonly DocxSection[];
   index: LabelIndex;
   profile: TemplateProfile;
   mode: NumberingMode;
@@ -385,6 +420,8 @@ type Placed = {
   /** The heading a joined title paragraph ends up in. */
   mergedInto: Map<string, string>;
   omitted: Map<string, "empty" | "sourceToc">;
+  /** Placed paragraphs that start a page. */
+  pageStarts: Set<string>;
 };
 
 const roleOf = (
@@ -404,14 +441,20 @@ const roleOf = (
  * Two tables with nothing between them are one table to a word processor,
  * and a document's last block has to be a paragraph.
  */
-const tableSeparators = (context: Context): Set<string> => {
+const tableSeparators = (
+  context: Context,
+  pageHolders: ReadonlySet<string>,
+): Set<string> => {
   const { topLevel, index } = context;
   const separators = new Set<string>();
   /** Whether only blank paragraphs came since the last table. */
   let afterTable = false;
   let firstBlank: string | null = null;
+  /** A blank paragraph of the gap stays anyway, to start the page: it
+   *  parts the tables, and one kept paragraph per gap is enough. */
+  let held = false;
   const keep = () => {
-    if (afterTable && firstBlank !== null) {
+    if (afterTable && firstBlank !== null && !held) {
       separators.add(firstBlank);
     }
   };
@@ -420,6 +463,7 @@ const tableSeparators = (context: Context): Set<string> => {
       keep();
       afterTable = true;
       firstBlank = null;
+      held = false;
       continue;
     }
     if (!afterTable || index.contentsBlockIds.has(block.id)) {
@@ -427,6 +471,7 @@ const tableSeparators = (context: Context): Set<string> => {
     }
     if (roleOf(context, block) === null && isBlankParagraph(block)) {
       firstBlank ??= block.id;
+      held ||= pageHolders.has(block.id);
       continue;
     }
     afterTable = false;
@@ -435,16 +480,199 @@ const tableSeparators = (context: Context): Set<string> => {
   return separators;
 };
 
+const NEW_PAGE_STARTS: ReadonlySet<DocxSection["start"]> = new Set([
+  "nextPage",
+  "evenPage",
+  "oddPage",
+]);
+
+/** The section that begins after `block`, when `block` ends one. */
+const sectionAfter = (
+  { sections }: Context,
+  block: DocxBlock,
+): DocxSection | undefined =>
+  block.endsSection === true
+    ? sections.find(({ index }) => index === block.sectionIndex + 1)
+    : undefined;
+
+/** Whether the block after `block` opens a section on a new page. */
+const endsPage = (context: Context, block: DocxBlock): boolean => {
+  const next = sectionAfter(context, block);
+  return next !== undefined && NEW_PAGE_STARTS.has(next.start);
+};
+
+/** Whether a paragraph that is left out starts a page by what it holds. */
+const breaksPage = ({ pageBreaks = 0, pageBreakBefore }: DocxBlock): boolean =>
+  pageBreaks > 0 || pageBreakBefore === true;
+
+/**
+ * The blank paragraphs that stay because the source starts a page in front
+ * of a table: a table cannot be told to start one, so the last blank
+ * paragraph in front of it stays and starts the page, by the break it holds
+ * or by being told to.
+ */
+const pageHoldersBeforeTables = (context: Context): Set<string> => {
+  const { topLevel, index } = context;
+  const holders = new Set<string>();
+  let pending = false;
+  let placedAny = false;
+  let lastBlank: string | null = null;
+  for (const block of topLevel) {
+    if (block.kind === "table") {
+      if (pending && placedAny && lastBlank !== null) {
+        holders.add(lastBlank);
+      }
+      pending = false;
+      placedAny = true;
+      lastBlank = null;
+    } else if (index.contentsBlockIds.has(block.id)) {
+      pending ||= breaksPage(block);
+    } else if (roleOf(context, block) === null && isBlankParagraph(block)) {
+      pending ||= breaksPage(block);
+      lastBlank = block.id;
+    } else {
+      pending = false;
+      placedAny = true;
+      lastBlank = null;
+    }
+    pending ||= endsPage(context, block);
+  }
+  return holders;
+};
+
+/**
+ * The blocks in front of which the source starts a page, by its facts
+ * alone and before anything is placed: a page break in a blank paragraph
+ * or in a line of the source's contents passes to the block after it, as
+ * does a section that ends on a new page.
+ */
+const pageStartsInSource = (context: Context): Set<string> => {
+  const starts = new Set<string>();
+  let pending = false;
+  for (const block of context.topLevel) {
+    const passesOn =
+      block.kind === "paragraph" &&
+      (isBlankParagraph(block) || context.index.contentsBlockIds.has(block.id));
+    if (passesOn) {
+      pending ||= breaksPage(block);
+    } else {
+      if (pending || block.pageBreakBefore === true) {
+        starts.add(block.id);
+      }
+      pending = false;
+    }
+    const next = sectionAfter(context, block);
+    pending ||= next !== undefined && NEW_PAGE_STARTS.has(next.start);
+  }
+  return starts;
+};
+
+/** Whether a section's page is another than the document's first has. */
+const pageDiffersFrom = (
+  base: DocxSection | undefined,
+  { orientation, size }: DocxSection,
+): boolean =>
+  base !== undefined &&
+  (base.orientation !== orientation ||
+    base.size.width !== size.width ||
+    base.size.height !== size.height);
+
+/** Notes the section that begins after `block` when its layout does not
+ *  come along: it begins on the same page, or its page or columns are
+ *  other than the document's first section has. */
+const noteSectionAfter = (context: Context, block: DocxBlock): void => {
+  const next = sectionAfter(context, block);
+  if (next === undefined) {
+    return;
+  }
+  const base = context.sections.at(0);
+  const pageDiffers = pageDiffersFrom(base, next);
+  if (
+    !NEW_PAGE_STARTS.has(next.start) ||
+    pageDiffers ||
+    next.columns !== (base?.columns ?? 1)
+  ) {
+    context.items.push({
+      kind: "sectionLayoutNotKept",
+      afterBlockId: block.id,
+      start: next.start,
+      pageDiffers,
+      columns: next.columns,
+    });
+  }
+};
+
+/**
+ * The placed paragraphs in front of which the source starts a page by
+ * something the plan does not place: a page break in a paragraph that is
+ * left out, the paragraph's own formatting, or a section that begins on a
+ * new page. A paragraph that is placed carries the breaks among its runs
+ * itself.
+ */
+const pageStartsOf = (
+  context: Context,
+  placed: Placed,
+  holders: ReadonlySet<string>,
+): Set<string> => {
+  const starts = new Set<string>();
+  /** A page start waits for the next block that is placed. */
+  let pending = false;
+  /** Nothing starts a page in front of the document's first block. */
+  let placedAny = false;
+  for (const block of context.topLevel) {
+    noteSectionAfter(context, block);
+    if (block.kind === "table") {
+      if (pending && placedAny) {
+        context.items.push({
+          kind: "pageStartNotKept",
+          blockId: block.id,
+          reason: "table",
+        });
+      }
+      pending = false;
+      placedAny = true;
+    } else if (holders.has(block.id)) {
+      // The page starts with this paragraph, also where the section it
+      // closes ends in front of the table. With a break of its own among
+      // its runs it needs no telling.
+      const startsHere =
+        pending || block.pageBreakBefore === true || endsPage(context, block);
+      if (startsHere && placedAny && (block.pageBreaks ?? 0) === 0) {
+        starts.add(block.id);
+      }
+      pending = false;
+      placedAny = true;
+      continue;
+    } else if (placed.omitted.has(block.id)) {
+      pending ||= breaksPage(block);
+    } else if (!placed.mergedInto.has(block.id)) {
+      if ((pending || block.pageBreakBefore === true) && placedAny) {
+        starts.add(block.id);
+      }
+      pending = false;
+      placedAny = true;
+    }
+    pending ||= endsPage(context, block);
+  }
+  return starts;
+};
+
 /** A placement for every paragraph that gets one, in document order. */
 const placeParagraphs = (context: Context): Placed => {
   const { topLevel, blockById, index, exclusions, proposalById } = context;
-  const separators = tableSeparators(context);
+  const pageHolders = pageHoldersBeforeTables(context);
+  const kept = new Set([
+    ...tableSeparators(context, pageHolders),
+    ...pageHolders,
+  ]);
+  const startsPage = pageStartsInSource(context);
   const placed: Placed = {
     placements: [],
     placementById: new Map(),
     titleOf: new Map(),
     mergedInto: new Map(),
     omitted: new Map(),
+    pageStarts: new Set(),
   };
   /** The paragraph placed last at the top level; a table ends the run. */
   let lastPlaced: string | null = null;
@@ -465,7 +693,7 @@ const placeParagraphs = (context: Context): Placed => {
       continue;
     }
     const role = roleOf(context, block);
-    if (role === null && isBlankParagraph(block) && !separators.has(block.id)) {
+    if (role === null && isBlankParagraph(block) && !kept.has(block.id)) {
       placed.omitted.set(block.id, "empty");
       continue;
     }
@@ -474,7 +702,10 @@ const placeParagraphs = (context: Context): Placed => {
       head !== null &&
       lastPlaced === head &&
       !placed.titleOf.has(head) &&
-      !exclusions.merges.has(head)
+      !exclusions.merges.has(head) &&
+      // A title that starts a page is a line of its own: joined to its
+      // heading it would stay on the page before.
+      !startsPage.has(block.id)
     ) {
       placed.mergedInto.set(block.id, head);
       placed.titleOf.set(head, block);
@@ -494,6 +725,7 @@ const placeParagraphs = (context: Context): Placed => {
   for (const placement of placed.placements) {
     placed.placementById.set(placement.block.id, placement);
   }
+  placed.pageStarts = pageStartsOf(context, placed, pageHolders);
   return placed;
 };
 
@@ -643,6 +875,8 @@ type ParagraphItemOptions = {
   placement: Placement;
   title: DocxBlock | undefined;
   breaks: boolean;
+  /** Whether the paragraph starts a page. */
+  pageStart: boolean;
 };
 
 /** A paragraph's item and, for a split heading, its title's bare item. */
@@ -651,6 +885,7 @@ const paragraphItems = ({
   placement,
   title,
   breaks,
+  pageStart,
 }: ParagraphItemOptions): TemplatePlanSourceItem[] => {
   const { block } = placement;
   const stripped = stripOf(placement);
@@ -676,6 +911,7 @@ const paragraphItems = ({
     ...stripped,
     ...asTextOf(block, numbering),
     ...(title === undefined ? {} : { mergeNext }),
+    ...(pageStart ? { pageBreakBefore: true } : {}),
   };
   return title === undefined
     ? [item]
@@ -752,11 +988,111 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
       placement,
       title: titleOf.get(block.id),
       breaks,
+      pageStart: placed.pageStarts.has(block.id),
     });
     placedCount += paragraph.length;
     body.push(...paragraph);
   }
   return { body, placedCount, contentsKept };
+};
+
+const JUSTIFIED: ReadonlySet<string> = new Set(["both", "distribute"]);
+
+/** One paragraph of the output: the blocks it is made of, its style, and
+ *  whether a line break joins them. */
+type OutputParagraph = {
+  blockIds: string[];
+  styleId: string | undefined;
+  joinedByBreak: boolean;
+};
+
+/** The paragraphs a plan's body writes. A heading and the title joined to
+ *  it are one paragraph, in the heading's style. */
+const outputParagraphs = (body: TemplatePlan["body"]): OutputParagraph[] => {
+  const paragraphs: OutputParagraph[] = [];
+  let open: OutputParagraph | null = null;
+  for (const item of body) {
+    if (item.kind !== "source") {
+      open = null;
+      continue;
+    }
+    if (open === null) {
+      open = { blockIds: [], styleId: item.styleId, joinedByBreak: false };
+      paragraphs.push(open);
+    }
+    open.blockIds.push(item.blockId);
+    for (const { blockId, styleId } of item.nested ?? NO_NESTED) {
+      paragraphs.push({ blockIds: [blockId], styleId, joinedByBreak: false });
+    }
+    if (item.mergeNext === undefined) {
+      open = null;
+    } else {
+      open.joinedByBreak ||= item.mergeNext === "lineBreak";
+    }
+  }
+  return paragraphs;
+};
+
+/**
+ * Whether the output has to keep the spacing of justified lines that end in
+ * a manual line break, with the note that says why. A word processor
+ * stretches such a line to the margin unless the document's settings say
+ * otherwise, and the output's settings are the template's. The setting is
+ * switched on only where that changes how the document looked: its own
+ * settings had it, or a paragraph with such a break is justified by the
+ * template's style and was not justified before, or got the break by being
+ * joined to its heading. A manifest without these facts changes nothing.
+ *
+ * The setting is the whole document's. Where it is switched on for one
+ * paragraph, a paragraph that was justified with such a break in the source,
+ * and showed the stretched line there, loses the stretch too: one look for
+ * all such lines, and the one nobody sets on purpose goes. The note counts
+ * those paragraphs.
+ */
+const keepsLineBreakSpacing = (
+  { blockById, profile, items }: Context,
+  compat: DocxBlockManifest["compat"],
+  body: TemplatePlan["body"],
+): boolean => {
+  if (compat === undefined) {
+    return false;
+  }
+  const justifies = (styleId: string | undefined): boolean =>
+    JUSTIFIED.has(
+      (styleId === undefined
+        ? profile.defaultAlignment
+        : Object.values(profile.roles).find(
+            (target) => target?.styleId === styleId,
+          )?.alignment) ?? "",
+    );
+  let blocks = 0;
+  let alreadyStretched = 0;
+  for (const { blockIds, styleId, joinedByBreak } of outputParagraphs(body)) {
+    const broken = blockIds
+      .map((id) => blockById.get(id))
+      .filter((block) => block?.text.includes("\n") === true);
+    if (!justifies(styleId) || (!joinedByBreak && broken.length === 0)) {
+      continue;
+    }
+    const wasStretched =
+      !joinedByBreak &&
+      broken.every((block) => JUSTIFIED.has(block?.alignment ?? ""));
+    if (wasStretched) {
+      alreadyStretched += 1;
+    } else {
+      blocks += 1;
+    }
+  }
+  if (!compat.doNotExpandShiftReturn && blocks === 0) {
+    return false;
+  }
+  items.push({
+    kind: "lineBreakSpacingKept",
+    reason: compat.doNotExpandShiftReturn ? "source" : "justifiedHere",
+    blocks,
+    alreadyStretched: compat.doNotExpandShiftReturn ? 0 : alreadyStretched,
+  });
+  return true;
 };
 
 type Marks = {
@@ -1277,6 +1613,7 @@ export const buildTemplatePlan = ({
     blockById: new Map(blocks.map((block) => [block.id, block])),
     tableOf,
     topLevel: blocks.filter(({ id }) => !tableOf.has(id)),
+    sections: manifest.sections ?? NO_SECTIONS,
     index,
     profile,
     mode,
@@ -1325,6 +1662,12 @@ export const buildTemplatePlan = ({
   );
   noteReadings(context, placed, references, suspicions);
 
+  const lineBreakSpacing = keepsLineBreakSpacing(
+    context,
+    manifest.compat,
+    body,
+  );
+
   const plan: TemplatePlan = {
     version: 1,
     sourceSha256: manifest.sha256,
@@ -1340,6 +1683,7 @@ export const buildTemplatePlan = ({
       // kept table of contents would show the template's sample entries.
       updateOnOpen: marks.references.length > 0 || contentsKept,
     },
+    ...(lineBreakSpacing ? { compat: { doNotExpandShiftReturn: true } } : {}),
   };
   return {
     plan,
@@ -1350,6 +1694,7 @@ export const buildTemplatePlan = ({
         omitted: placed.omitted.size,
         numbered: placed.placements.filter(({ numbered }) => numbered).length,
         labelsConvertedToText,
+        pageStarts: placed.pageStarts.size,
         numberingPatches: patches.length,
         referencesLinked: marks.references.length,
         referencesUnlinked: context.items.filter(

@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { createChatPastedTextPart } from "@stll/api-contract/chat";
-import { useMountEffect } from "@stll/ui/effects";
+import { useHasMounted, useMountEffect } from "@stll/ui/effects";
 
 import { createChatComposerDocument } from "@/components/chat-editor-markdown.logic";
 import {
@@ -104,7 +104,9 @@ const SentMessage = ({ state }: { state: "collapsed" | "expanded" }) => {
 };
 
 export const ChatLongPastePlayground = () => {
-  const [ready, setReady] = useState(false);
+  // False until the seeding below has run: the mount effects all finish
+  // before the render this latch causes.
+  const ready = useHasMounted();
   // Seed only the bench's threads before mounting the real editors; never
   // replace a user's draft or generate attachment ids through clipboard events.
   useMountEffect(() => {
@@ -123,7 +125,6 @@ export const ChatLongPastePlayground = () => {
       ),
       updatedAt: 0,
     });
-    setReady(true);
     return () => {
       store.clearDraft(getChatThreadKey(DRAFT_THREADS.collapsed));
       store.clearDraft(getChatThreadKey(DRAFT_THREADS.expanded));
