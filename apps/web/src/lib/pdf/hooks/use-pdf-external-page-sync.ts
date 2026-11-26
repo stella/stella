@@ -1,5 +1,7 @@
-import { useLayoutEffect, useRef } from "react";
+import { useRef } from "react";
 import type { RefObject } from "react";
+
+import { useLayoutSyncEffect } from "@stll/ui/effects";
 
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 
@@ -17,7 +19,7 @@ export const usePDFExternalPageSync = ({
   const setScrollTo = usePDFStore((s) => s.setScrollTo);
   const prevPageRef = useRef(page);
 
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     if (page === prevPageRef.current) {
       return;
     }
