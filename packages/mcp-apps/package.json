@@ -57,7 +57,6 @@
     "@stll/html": "workspace:*",
     "@stll/portable-path": "workspace:*",
     "@stll/property-testing": "workspace:*",
-    "@stll/render-probe": "workspace:*",
     "@stll/scripts": "workspace:*",
     "@stll/test-kit": "0.4.3",
     "@stll/typescript-config": "workspace:*",

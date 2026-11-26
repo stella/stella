@@ -32,7 +32,6 @@
   "devDependencies": {
     "@happy-dom/global-registrator": "21.0.4",
     "@stll/property-testing": "workspace:*",
-    "@stll/render-probe": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@types/react": "catalog:react19",
     "bun-types": "catalog:",
