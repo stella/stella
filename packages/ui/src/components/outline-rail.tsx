@@ -18,7 +18,6 @@ import {
   type ReactNode,
   type RefObject,
   useCallback,
-  useEffect,
   useId,
   useMemo,
   useRef,
@@ -27,7 +26,13 @@ import {
 
 import { Temporal } from "temporal-polyfill/full";
 
-import { useLatest, useLayoutSyncEffect } from "../effects/effects";
+import { useObservedValue } from "../effects/dom";
+import {
+  useExternalSyncEffect,
+  useLatest,
+  useLayoutSyncEffect,
+  useMountEffect,
+} from "../effects/effects";
 import { ChevronRightIcon as ChevronRight } from "../icons";
 import { DOCUMENT_PANEL_SAFE_BOTTOM } from "../lib/panel-inset";
 import { cn } from "../lib/utils";
@@ -139,6 +144,10 @@ const HOVER_OPEN_DWELL_MS = 150;
 // recursive walk, so the one to scroll to is found in the committed DOM
 // rather than held in a ref the walk would have to thread through.
 const ACTIVE_ROW_ATTRIBUTE = "data-outline-active";
+
+/** Each item's tick position, in % of the scroll height, by item id. */
+type TickPositions = Readonly<Record<string, number>>;
+const NO_TICK_POSITIONS: TickPositions = {};
 
 /** The entry as one line of text: label, then its title when it has one. */
 export const outlineEntryText = (item: OutlineItem): string =>
@@ -505,9 +514,6 @@ export const OutlineRail = ({
   if (items !== stableItems) {
     setStableItems(items);
   }
-  const [pctById, setPctById] = useState<ReadonlyMap<string, number>>(
-    new Map(),
-  );
   const [derivedActive, setDerivedActive] = useState<string | null>(null);
   const [hovered, setHovered] = useState(false);
   const [focusWithin, setFocusWithin] = useState(false);
@@ -522,13 +528,14 @@ export const OutlineRail = ({
   const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const manualLockUntil = useRef(0);
   const panelRef = useRef<HTMLDivElement>(null);
-  const railRef = useRef<HTMLDivElement>(null);
+  const [railElement, setRailElement] = useState<HTMLDivElement | null>(null);
   const focusedTickRef = useRef<HTMLButtonElement>(null);
   // Hold onJump and the scroll-time resolver in refs so the active-tracking
-  // scroll listener reads the latest without re-subscribing. recalc instead
-  // depends on resolvePct directly, so ticks recompute when the resolver's
-  // output changes (e.g. Folio's docSize); React Compiler keeps the adapters'
-  // inline resolvers referentially stable between unrelated renders.
+  // scroll listener reads the latest without re-subscribing. The tick
+  // measurement instead depends on resolvePct directly, so ticks recompute
+  // when the resolver's output changes (e.g. Folio's docSize); React Compiler
+  // keeps the adapters' inline resolvers referentially stable between
+  // unrelated renders.
   const resolvePctRef = useLatest(resolvePct);
   const onJumpRef = useLatest(onJump);
 
@@ -592,42 +599,40 @@ export const OutlineRail = ({
     return cap;
   }, [items, maxLevel]);
 
-  const recalc = useCallback(() => {
-    const container = scrollContainerRef.current;
-    if (!container) {
-      return;
-    }
-    const next = new Map<string, number>();
-    for (const item of items) {
-      const pct = resolvePct(item.id, container);
-      if (pct !== null) {
-        next.set(item.id, pct);
+  // Each item's tick position, measured before the first paint, again
+  // whenever the items or the resolver change (e.g. Folio's docSize), and
+  // whenever the scroll container resizes. The container is the caller's;
+  // the rail element owns the subscription, so it runs once both mounted.
+  const pctById = useObservedValue<HTMLDivElement, TickPositions>(
+    railElement,
+    (_rail, emit) => {
+      const container = scrollContainerRef.current;
+      if (!container) {
+        return () => undefined;
       }
-    }
-    setPctById(next);
-  }, [items, scrollContainerRef, resolvePct]);
-
-  // Keep the latest recalc (like onJump and resolvePct above) in a ref so
-  // async consumers (scroll listener, ResizeObserver, click handlers) read the
-  // current one without re-subscribing.
-  const recalcRef = useLatest(recalc);
-
-  useEffect(() => {
-    recalc();
-  }, [recalc]);
-
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) {
-      return undefined;
-    }
-    const observer = new ResizeObserver(() => recalcRef.current());
-    observer.observe(container);
-    return () => observer.disconnect();
-  }, [recalcRef, scrollContainerRef]);
+      const measure = () => {
+        const next: [string, number][] = [];
+        for (const item of items) {
+          const pct = resolvePct(item.id, container);
+          if (pct !== null) {
+            next.push([item.id, pct]);
+          }
+        }
+        emit(Object.fromEntries(next));
+      };
+      measure();
+      const observer = new ResizeObserver(measure);
+      observer.observe(container);
+      return () => observer.disconnect();
+    },
+    [items, resolvePct, scrollContainerRef],
+    NO_TICK_POSITIONS,
+  );
+  const tickPct = (id: string): number | undefined =>
+    Object.hasOwn(pctById, id) ? pctById[id] : undefined;
 
   // Derived active tracking (skipped when caller controls `activeId`).
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (activeId !== undefined) {
       return undefined;
     }
@@ -811,20 +816,17 @@ export const OutlineRail = ({
     setFocusWithin(false);
   }, []);
 
-  useEffect(
-    () => () => {
-      if (closeTimer.current !== null) {
-        clearTimeout(closeTimer.current);
-      }
-      if (openTimer.current !== null) {
-        clearTimeout(openTimer.current);
-      }
-    },
-    [],
-  );
+  useMountEffect(() => () => {
+    if (closeTimer.current !== null) {
+      clearTimeout(closeTimer.current);
+    }
+    if (openTimer.current !== null) {
+      clearTimeout(openTimer.current);
+    }
+  });
 
   const visibleTicks = items.flatMap((item) => {
-    const pct = pctById.get(item.id);
+    const pct = tickPct(item.id);
     return pct !== undefined &&
       (item.portraits !== undefined || item.level <= railLevelCap)
       ? [{ item, pct }]
@@ -848,7 +850,7 @@ export const OutlineRail = ({
   const visibleTickIds = new Set(visibleTicks.map(({ item }) => item.id));
   const ghostPct =
     hoveredId !== null && !visibleTickIds.has(hoveredId)
-      ? pctById.get(hoveredId)
+      ? tickPct(hoveredId)
       : undefined;
   const ghostItem =
     ghostPct === undefined
@@ -859,7 +861,7 @@ export const OutlineRail = ({
     <div
       aria-label={ariaLabel}
       className={OUTLINE_PRESENTATION_CLASS[presentation]}
-      ref={railRef}
+      ref={setRailElement}
       role="group"
       style={{
         marginBlockEnd: bottomInset ?? DOCUMENT_PANEL_SAFE_BOTTOM,
@@ -913,7 +915,7 @@ export const OutlineRail = ({
                       onBlur={(event) => {
                         // Focus moving to another tick or into the panel keeps
                         // the outline open; leaving the rail closes it.
-                        if (!railRef.current?.contains(event.relatedTarget)) {
+                        if (!railElement?.contains(event.relatedTarget)) {
                           closePanel();
                         }
                       }}
@@ -1010,7 +1012,7 @@ export const OutlineRail = ({
           onBlurCapture={(event) => {
             // Focus leaving the rail from inside the panel closes it the same
             // way leaving from a tick does; moving within the rail keeps it.
-            if (!railRef.current?.contains(event.relatedTarget)) {
+            if (!railElement?.contains(event.relatedTarget)) {
               closePanel();
               return;
             }
@@ -1031,10 +1033,10 @@ export const OutlineRail = ({
             const tickSelector = `button[aria-controls="${CSS.escape(panelId)}"]`;
             const returnTick =
               focusedTickRef.current ??
-              railRef.current?.querySelector<HTMLButtonElement>(
+              railElement?.querySelector<HTMLButtonElement>(
                 `${tickSelector}[aria-current="true"]`,
               ) ??
-              railRef.current?.querySelector<HTMLButtonElement>(tickSelector);
+              railElement?.querySelector<HTMLButtonElement>(tickSelector);
             returnTick?.focus();
             closePanel();
           }}

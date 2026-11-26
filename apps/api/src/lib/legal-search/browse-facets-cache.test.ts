@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
+import { createTestClock, deferred } from "@stll/test-kit";
+
 import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import {
   createBrowseFacetsCache,
@@ -219,15 +221,13 @@ test("retries once the failure window closes", async () => {
 });
 
 test("a slow failure is held from the moment it settles", async () => {
+  const clock = createTestClock();
+  const releaseLoad = deferred<undefined>();
   let calls = 0;
   const read = createTtlResultCache({
     load: async (query: string) => {
       calls += 1;
-      // Longer than the hold: a hold counted from the start would have
-      // expired before the failure even arrived. Both numbers are far above
-      // scheduler jitter, so the second read lands inside the hold on a busy
-      // machine rather than intermittently outside it.
-      await Bun.sleep(200);
+      await releaseLoad.promise;
       return Result.err(
         new LegalBrowseFacetsError({ message: `${query} down` }),
       );
@@ -236,9 +236,15 @@ test("a slow failure is held from the moment it settles", async () => {
     ttlMs: 60_000,
     failureTtlMs: 100,
     maxEntries: 3,
+    now: () => clock.now(),
   });
 
-  await read("engine");
+  const first = read("engine");
+  // Longer than the hold: a hold counted from the start would have expired
+  // before the failure even arrived.
+  await clock.advance(200);
+  releaseLoad.resolve(undefined);
+  await first;
   await read("engine");
 
   expect(calls).toBe(1);

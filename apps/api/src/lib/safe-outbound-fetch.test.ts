@@ -6,7 +6,7 @@ import type { RequestListener } from "node:http";
 
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
-import { settledWithin, waitFor } from "@stll/test-kit";
+import { deferred, settledWithin, waitFor } from "@stll/test-kit";
 
 import {
   fetchStreamWithResolvedAddress,
@@ -351,9 +351,9 @@ describe("fetchWithResolvedAddress", () => {
       (_request, response) => {
         response.writeHead(200);
         response.write("partial");
-        setTimeout(() => {
+        setImmediate(() => {
           response.end("complete");
-        }, 150);
+        });
       },
       async (port) => {
         const result = await fetchWithResolvedAddress({
@@ -377,10 +377,13 @@ describe("fetchWithResolvedAddress", () => {
   });
 
   test("aborts a byte response that stops sending its body", async () => {
+    const partialWritten = deferred<undefined>();
     await withHttpServer(
       (_request, response) => {
         response.writeHead(200);
-        response.write("partial");
+        response.write("partial", () => {
+          partialWritten.resolve(undefined);
+        });
       },
       async (port) => {
         const controller = new AbortController();
@@ -392,9 +395,8 @@ describe("fetchWithResolvedAddress", () => {
           timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           url: new URL(`http://example.test:${port}/stalled`),
         });
-        setTimeout(() => {
-          controller.abort();
-        }, 10);
+        await partialWritten.promise;
+        controller.abort();
         const result = await pending;
         expect(Result.isError(result)).toBe(true);
       },

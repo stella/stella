@@ -6,8 +6,11 @@
 
 "use client";
 
-import { type RefObject, useEffect, useState } from "react";
+import { type RefObject, useState } from "react";
 
+import { useObservedValue } from "../effects/dom";
+import { useLatestCallback } from "../effects/effects";
+import { containedEventHandler } from "../hooks/use-contained-handler";
 import { cn } from "../lib/utils";
 
 export type ScrollToTopProps = {
@@ -24,18 +27,28 @@ export const ScrollToTop = ({
   label = "Scroll to top",
   className,
 }: ScrollToTopProps) => {
-  const [visible, setVisible] = useState(false);
+  const [button, setButton] = useState<HTMLButtonElement | null>(null);
+  // The scroll container is the caller's; the button owns the subscription,
+  // so it runs once both have mounted.
+  const visible = useObservedValue<HTMLButtonElement, boolean>(
+    button,
+    (_button, emit) => {
+      const container = scrollContainerRef.current;
+      if (!container) {
+        return () => undefined;
+      }
+      const onScroll = () => emit(container.scrollTop > threshold);
+      onScroll();
+      container.addEventListener("scroll", onScroll, { passive: true });
+      return () => container.removeEventListener("scroll", onScroll);
+    },
+    [scrollContainerRef, threshold],
+    false,
+  );
 
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) {
-      return undefined;
-    }
-    const onScroll = () => setVisible(container.scrollTop > threshold);
-    onScroll();
-    container.addEventListener("scroll", onScroll, { passive: true });
-    return () => container.removeEventListener("scroll", onScroll);
-  }, [scrollContainerRef, threshold]);
+  const scrollToTop = useLatestCallback(() => {
+    scrollContainerRef.current?.scrollTo({ top: 0, behavior: "instant" });
+  });
 
   return (
     <button
@@ -47,9 +60,8 @@ export const ScrollToTop = ({
           : "pointer-events-none translate-y-2 opacity-0",
         className,
       )}
-      onClick={() =>
-        scrollContainerRef.current?.scrollTo({ top: 0, behavior: "instant" })
-      }
+      onClick={containedEventHandler(scrollToTop)}
+      ref={setButton}
       type="button"
     >
       <svg

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { waitFor } from "@stll/test-kit";
 import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
@@ -569,20 +570,16 @@ describe("public corpus active request capacity", () => {
       [searchPaths[1].path, server.fetch(request(searchPaths[1]))],
       [aggregatePaths[1].path, server.fetch(request(aggregatePaths[1]))],
     ]);
-    await Bun.sleep(10);
+    const first = await waitFor(() => pending.at(0), {
+      description: "first request to be admitted",
+    });
     expect(pending).toHaveLength(1);
-    const first = pending.at(0);
-    if (first === undefined) {
-      throw new TypeError("Missing admitted request");
-    }
     first.finish();
     expect((await answers.get(first.path))?.status).toBe(200);
-    await Bun.sleep(10);
+    const second = await waitFor(() => pending.at(1), {
+      description: "waiting request to be admitted after first finishes",
+    });
     expect(pending).toHaveLength(2);
-    const second = pending.at(1);
-    if (second === undefined) {
-      throw new TypeError("Missing waiting request");
-    }
     expect(new Set([first.path, second.path])).toEqual(new Set(answers.keys()));
     second.finish();
     expect((await answers.get(second.path))?.status).toBe(200);

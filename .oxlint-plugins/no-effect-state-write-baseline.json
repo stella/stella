@@ -1,13 +1,3 @@
 {
-  "apps/desktop/src/activity/ActivityDayCalendar.tsx": 1,
-  "apps/desktop/src/dictation/DictationPreviewApp.tsx": 1,
-  "apps/desktop/src/onboarding/TryItStep.tsx": 2,
-  "apps/desktop/src/transcribe/TranscribeCleanup.tsx": 1,
-  "apps/web/src/components/render-storm-canary.dom.test.tsx": 1,
-  "apps/web/src/components/route-components.tsx": 4,
-  "apps/web/src/components/search-chat-preview.tsx": 2,
-  "apps/web/src/components/search-dialog.tsx": 1,
-  "apps/web/src/components/workspaces/copy-to-matter-dialog.tsx": 1,
-  "apps/web/src/components/workspaces/matter-metadata-sheet.tsx": 9,
-  "packages/ui/src/kanban/virtual-cell.tsx": 1
+  "apps/web/src/components/render-storm-canary.dom.test.tsx": 1
 }

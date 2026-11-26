@@ -1005,14 +1005,8 @@ const App = () => {
 
   useEffect(() => {
     let disposed = false;
-    const refresh = () => {
+    const loadAccount = () => {
       const request = ++accountGeneration.current;
-      snapshotGeneration.current += 1;
-      snapshotRevision.current += 1;
-      latestEdit.current += 1;
-      confirmedSnapshot.current = null;
-      setState(null);
-      snapshotRefresh.current();
       void invoke<
         Exclude<DesktopAccountState, { status: "loading" | "unavailable" }>
       >("account_get_state")
@@ -1028,13 +1022,26 @@ const App = () => {
           }
         });
     };
+    // Another account's snapshot must not stay on screen: drop it and fetch
+    // the snapshot and the account again.
+    const refresh = () => {
+      snapshotGeneration.current += 1;
+      snapshotRevision.current += 1;
+      latestEdit.current += 1;
+      confirmedSnapshot.current = null;
+      setState(null);
+      snapshotRefresh.current();
+      loadAccount();
+    };
     const stopListening = subscribeDesktopEvent({
       event: "desktop-account-changed",
       handler: refresh,
       onError: reportSubscriptionFailure,
     });
     accountRefresh.current = refresh;
-    refresh();
+    // On mount there is no snapshot to drop yet, and the state effect above
+    // is already fetching the first one.
+    loadAccount();
     window.addEventListener("focus", refresh);
     return () => {
       disposed = true;

@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { chunkDocument } from "@/api/lib/corpus-index/chunking";
@@ -14,6 +13,12 @@ import {
  * The fixture is asserted against `chunkDocument` rather than a hand-copied
  * string, so a returned passage is the chunker's passage by construction.
  */
+
+const flushMicrotasks = async (): Promise<void> => {
+  for (let turn = 0; turn < 20; turn += 1) {
+    await Promise.resolve();
+  }
+};
 
 const paragraph = (index: number, plainText: string): Block => ({
   id: `p${index}`,
@@ -91,7 +96,9 @@ describe("selectCorpusPassage", () => {
   test("reports an anchor no passage opens", () => {
     expect(
       selectCorpusPassage({ ast, text: fallbackText, anchorId: "p9-anchor" }),
-    ).toEqual({ status: "anchor_not_found" });
+    ).toEqual({
+      status: "anchor_not_found",
+    });
   });
 
   test("falls back to the plain text when the AST is unusable", () => {
@@ -181,8 +188,8 @@ describe("readCorpusPassages", () => {
       source: pending,
       concurrency: 2,
     });
-    // A macrotask turn, so every read the pool starts has reached the gate.
-    await sleep(0);
+    // Let every read the pool starts reach the gate.
+    await flushMicrotasks();
     release();
     await results;
 

@@ -17,7 +17,6 @@ import {
   CHAT_TURN_INTENT,
 } from "@stll/api-contract";
 import type { ChatLocalFilesUndoRead } from "@stll/api-contract/chat-local-files-undo";
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { ChatEditorController } from "@/components/chat-editor-provider";
@@ -788,7 +787,9 @@ describe("a new message while an edit is open", () => {
     // it, so the composer keeps it.
     expect(await sendNewMessage(page)).toEqual(CHAT_SEND_KEPT);
     // real-time: give a send that should not happen the time to start.
-    await sleep(50);
+    for (let i = 0; i < 4; i += 1) {
+      await Promise.resolve();
+    }
     expect(server.posted).toEqual([]);
 
     testing.fireEvent.click(

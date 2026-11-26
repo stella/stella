@@ -5,8 +5,13 @@ import type { RouteComponent } from "@tanstack/react-router";
 import { plugin } from "bun";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
+const flushMicrotasks = async (turns = 4) => {
+  for (let i = 0; i < turns; i += 1) {
+    await Promise.resolve();
+  }
+};
 
 // A DOM for this file only: the frames and sections mount, fetch and react to
 // session changes, which a static render cannot show. Everything that touches
@@ -470,7 +475,7 @@ const MEMBER_WAIT = { timeout: 10_000 };
 
 const settle = async () => {
   await testing.act(async () => {
-    await sleep(50);
+    await flushMicrotasks();
   });
 };
 
@@ -644,7 +649,7 @@ describe("Knowledge for every visitor, on one live client", () => {
         respond();
       }
       await refetchForA;
-      await sleep(20);
+      await flushMicrotasks();
     });
     expect(
       cachedKeys(queryClient).filter((key) => key.includes("org-a")),

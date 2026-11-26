@@ -43,6 +43,8 @@ const { IntlProvider } = await import("use-intl");
 const { act, cleanup, renderHook, waitFor } =
   await import("@testing-library/react");
 const { useFileTabRename } = await import("./use-file-tab-rename");
+const { useInspectorCommandStore } = await import("./inspector-command-store");
+const { useLayoutSyncEffect } = await import("@stll/ui/effects");
 const { useRenameEntity } = await import("@/lib/workspaces/mutations/entities");
 const { useInspectorTabsStore, initializeInspectorTabBroadcast } =
   await import("./inspector-tabs-store");
@@ -117,18 +119,30 @@ const tab = (id: string) =>
       (candidate): candidate is FileTab =>
         candidate.type === "pdf" && candidate.entityId === id,
     );
+type RenameCommit = { editingTabId: string | null; tabIds: string[] };
+
 const mount = (
   inspectorStore: StoreApi<InspectorTabsStore> = useInspectorTabsStore,
   refetch?: () => Promise<string[]>,
+  onCommit?: (commit: RenameCommit) => void,
 ) => {
   const client = new QueryClient({
     defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
   });
+  const useMounted = () => {
+    const tabs = useInspectorTabsStore((s) => s.tabs);
+    const fileRename = useFileTabRename({ tabs });
+    useLayoutSyncEffect(() => {
+      onCommit?.({
+        editingTabId: fileRename.editingTabId,
+        tabIds: tabs.map((candidate) => candidate.id),
+      });
+    }, [fileRename.editingTabId, tabs]);
+    return fileRename;
+  };
   const hook = renderHook(
     () => ({
-      fileRename: useFileTabRename({
-        tabs: useInspectorTabsStore((s) => s.tabs),
-      }),
+      fileRename: useMounted(),
       entities: useQuery({
         queryKey: entitiesKeys.all("matter"),
         queryFn: async () => (await refetch?.()) ?? [],
@@ -209,6 +223,39 @@ afterAll(async () => {
     setImmediate(resolve);
   });
   await unregisterDomEnvironment();
+});
+
+describe("requested file rename", () => {
+  test("opens in the commit that first shows its tab and can be asked for again", () => {
+    const target = file("A");
+    const commits: RenameCommit[] = [];
+    const { result } = mount(undefined, undefined, (commit) => {
+      commits.push(commit);
+    });
+
+    // Asked for before the tab is open: the request waits for it.
+    act(() => useInspectorCommandStore.getState().requestRename(target.id));
+    expect(result.current.fileRename.editingTabId).toBeNull();
+    expect(useInspectorCommandStore.getState().pendingRenameTabId).toBe(
+      target.id,
+    );
+
+    act(() => useInspectorTabsStore.getState().openFile(target));
+    expect(result.current.fileRename.editingTabId).toBe(target.id);
+    expect(result.current.fileRename.editValue).toBe("A");
+    expect(useInspectorCommandStore.getState().pendingRenameTabId).toBeNull();
+    expect(
+      commits.filter(
+        (commit) =>
+          commit.tabIds.includes(target.id) && commit.editingTabId === null,
+      ),
+    ).toEqual([]);
+
+    // Closing the editor and asking again opens it again.
+    act(() => result.current.fileRename.setEditingTabId(null));
+    act(() => useInspectorCommandStore.getState().requestRename(target.id));
+    expect(result.current.fileRename.editingTabId).toBe(target.id);
+  });
 });
 
 describe("confirmed file rename state", () => {

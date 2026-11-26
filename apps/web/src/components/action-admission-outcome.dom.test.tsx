@@ -5,14 +5,12 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import arabicMessages from "@/i18n/langs/ar.json";
 import englishMessages from "@/i18n/langs/en.json";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
-const { act } = await import("react");
 const { cleanup, fireEvent, render } = await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { createTranslator } = await import("use-intl/core");
@@ -33,9 +31,6 @@ afterEach(() => {
 });
 afterAll(async () => {
   cleanup();
-  await act(async () => {
-    await sleep(50);
-  });
   await unregisterDomEnvironment();
 });
 

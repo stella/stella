@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { panic } from "better-result";
 import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { cn } from "@stll/ui/utils";
 
 import { Keycaps } from "../shared/Keycaps";
@@ -50,19 +51,84 @@ export const TryItStep = ({ onBack, onContinue, snapshot }: StepProps) => {
   const layout = useKeyboardLayout();
   const [shortcut, setShortcut] = useClipboardShortcut(reportOnboardingFailure);
   const [recordingRequested, setRecordingRequested] = useState(false);
-  const [held, setHeld] = useState<ShortcutModifier[]>([]);
-  const [feedback, setFeedback] = useState<TryFeedback>({ type: "idle" });
-  const [focused, setFocused] = useState(() => document.hasFocus());
   const stopRecording = () => setRecordingRequested(false);
 
   const recording =
     recordingRequested || shortcut?.registration === "unavailable";
   const keys = shortcut?.keys ?? null;
 
-  useEffect(() => {
-    if (recording || !keys) {
-      return undefined;
-    }
+  const label = (value: ShortcutKeys) =>
+    formatShortcut({ keys: value, layout, locale, platform: DESKTOP_PLATFORM });
+
+  return (
+    <>
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+        <h1 className="text-xl font-semibold">{t("tryTitle")}</h1>
+        {keys ? (
+          <p className="text-muted-foreground max-w-md text-sm leading-relaxed">
+            {t("tryBody", { shortcut: label(keys) })}
+          </p>
+        ) : null}
+        {shortcut?.registration === "unavailable" ? (
+          <p
+            className="text-destructive-foreground max-w-md text-sm"
+            role="alert"
+          >
+            {shortcutT("unavailable", { shortcut: label(shortcut.keys) })}
+          </p>
+        ) : null}
+        {recording && shortcut ? (
+          <div className="w-full max-w-md text-start">
+            <ShortcutRecorder
+              current={shortcut.keys}
+              layout={layout}
+              onCancel={stopRecording}
+              onSaved={(next) => {
+                setShortcut(next);
+                setRecordingRequested(false);
+              }}
+              window={DESKTOP_TELEMETRY_WINDOWS.onboarding}
+            />
+          </div>
+        ) : null}
+        {!recording && keys ? (
+          // Keyed by the shortcut, so a new one starts with nothing held.
+          <ShortcutTryout
+            key={shortcutId(keys)}
+            keys={keys}
+            layout={layout}
+            onChange={() => setRecordingRequested(true)}
+          />
+        ) : null}
+      </div>
+      <StepFooter
+        onBack={onBack}
+        primary={<Button onClick={onContinue}>{t("continue")}</Button>}
+        snapshot={snapshot}
+      />
+    </>
+  );
+};
+
+type ShortcutTryoutProps = {
+  keys: ShortcutKeys;
+  layout: KeyboardLayout | null;
+  onChange: () => void;
+};
+
+/**
+ * The keycaps and hint while the user tries `keys`. Mounted only while
+ * the shortcut is not being recorded, and keyed by it, so held keys and a
+ * hint never carry over to a new shortcut or a later try.
+ */
+const ShortcutTryout = ({ keys, layout, onChange }: ShortcutTryoutProps) => {
+  const t = useTranslations("onboarding");
+  const locale = useLocale();
+  const [held, setHeld] = useState<ShortcutModifier[]>([]);
+  const [feedback, setFeedback] = useState<TryFeedback>({ type: "idle" });
+  const [focused, setFocused] = useState(() => document.hasFocus());
+
+  useExternalSyncEffect(() => {
     const focusTimer = window.setTimeout(() => {
       setFocused(document.hasFocus());
     }, 0);
@@ -119,89 +185,49 @@ export const TryItStep = ({ onBack, onContinue, snapshot }: StepProps) => {
     return () => {
       window.clearTimeout(hintTimer);
       window.clearTimeout(focusTimer);
-      setHeld([]);
-      setFeedback({ type: "idle" });
       window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("keyup", onKeyUp, true);
       window.removeEventListener("blur", onBlur);
       window.removeEventListener("focus", onFocus);
     };
-  }, [keys, recording]);
-
-  const label = (value: ShortcutKeys) =>
-    formatShortcut({ keys: value, layout, locale, platform: DESKTOP_PLATFORM });
+  }, [keys]);
 
   return (
     <>
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
-        <h1 className="text-xl font-semibold">{t("tryTitle")}</h1>
-        {keys ? (
-          <p className="text-muted-foreground max-w-md text-sm leading-relaxed">
-            {t("tryBody", { shortcut: label(keys) })}
-          </p>
-        ) : null}
-        {shortcut?.registration === "unavailable" ? (
-          <p
-            className="text-destructive-foreground max-w-md text-sm"
-            role="alert"
-          >
-            {shortcutT("unavailable", { shortcut: label(shortcut.keys) })}
-          </p>
-        ) : null}
-        {recording && shortcut ? (
-          <div className="w-full max-w-md text-start">
-            <ShortcutRecorder
-              current={shortcut.keys}
-              layout={layout}
-              onCancel={stopRecording}
-              onSaved={(next) => {
-                setShortcut(next);
-                setRecordingRequested(false);
-              }}
-              window={DESKTOP_TELEMETRY_WINDOWS.onboarding}
-            />
-          </div>
-        ) : null}
-        {!recording && keys ? (
-          <>
-            <div
-              className={cn(
-                "rounded-2xl border border-dashed p-4 transition-opacity motion-reduce:transition-none",
-                focused ? "opacity-100" : "opacity-50",
-              )}
-            >
-              <Keycaps
-                caps={liveKeycaps({ feedback, held, keys, layout, locale })}
-                size="lg"
-              />
-            </div>
-            <p
-              aria-live="polite"
-              className={cn(
-                "min-h-10 max-w-md text-sm",
-                isHint(feedback) && focused
-                  ? "text-destructive-foreground"
-                  : "text-muted-foreground",
-              )}
-            >
-              {focused
-                ? feedbackMessage({ feedback, keys, layout, locale, t })
-                : t("tryUnfocused")}
-            </p>
-            <Button onClick={() => setRecordingRequested(true)} variant="ghost">
-              {t("tryChange")}
-            </Button>
-          </>
-        ) : null}
+      <div
+        className={cn(
+          "rounded-2xl border border-dashed p-4 transition-opacity motion-reduce:transition-none",
+          focused ? "opacity-100" : "opacity-50",
+        )}
+      >
+        <Keycaps
+          caps={liveKeycaps({ feedback, held, keys, layout, locale })}
+          size="lg"
+        />
       </div>
-      <StepFooter
-        onBack={onBack}
-        primary={<Button onClick={onContinue}>{t("continue")}</Button>}
-        snapshot={snapshot}
-      />
+      <p
+        aria-live="polite"
+        className={cn(
+          "min-h-10 max-w-md text-sm",
+          isHint(feedback) && focused
+            ? "text-destructive-foreground"
+            : "text-muted-foreground",
+        )}
+      >
+        {focused
+          ? feedbackMessage({ feedback, keys, layout, locale, t })
+          : t("tryUnfocused")}
+      </p>
+      <Button onClick={onChange} variant="ghost">
+        {t("tryChange")}
+      </Button>
     </>
   );
 };
+
+/** One string per shortcut, whatever order its modifiers come in. */
+const shortcutId = (keys: ShortcutKeys) =>
+  [...orderModifiers(keys.modifiers, DESKTOP_PLATFORM), keys.code].join("+");
 
 function isHint(feedback: TryFeedback) {
   return (

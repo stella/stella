@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
 
+import { useObservedValue } from "../effects/dom";
+import { useLayoutSyncEffect } from "../effects/effects";
+import { useComposedRefs } from "../effects/refs";
 import { hasTabOrderChanged, revealActiveTab } from "../lib/tab-order";
-import { cn, composeRefs } from "../lib/utils";
+import { cn } from "../lib/utils";
 import {
   TABS_INDICATOR_DEFAULT_CLASS,
   TABS_LIST_BASE_CLASS,
@@ -14,11 +17,6 @@ import {
 } from "./tabs-classes";
 
 type TabsVariant = "default" | "underline";
-
-// Layout effects never run while rendering on the server, so fall back to
-// `useEffect` there to avoid React's server-side layout-effect warning.
-const useIsoLayoutEffect =
-  typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 const Tabs = ({ className, ...props }: TabsPrimitive.Root.Props) => (
   <TabsPrimitive.Root
@@ -40,28 +38,35 @@ const TabsList = ({
 }: TabsPrimitive.List.Props & {
   variant?: TabsVariant;
 }) => {
-  const listRef = useRef<HTMLDivElement | null>(null);
+  const [list, setList] = useState<HTMLDivElement | null>(null);
+  const composedListRef = useComposedRefs(setList, ref);
   const tabOrderRef = useRef<readonly Element[]>([]);
-  const [, setRemeasureToken] = useState(0);
+  const reordersRef = useRef(0);
 
   // Re-render once the new order is committed so Base UI's render-time
   // measurement sees where the active tab actually is. `hasTabOrderChanged`
-  // explains which case the library misses.
-  useIsoLayoutEffect(() => {
-    const tabs = listRef.current ? [...listRef.current.children] : [];
-    const previousTabs = tabOrderRef.current;
-    tabOrderRef.current = tabs;
-
-    if (hasTabOrderChanged(previousTabs, tabs)) {
-      setRemeasureToken((token) => token + 1);
-    }
-  });
+  // explains which case the library misses. Only a new `children` can move
+  // the tabs, so the order is read again whenever it changes; the count of
+  // reorders is the value, so an unchanged order renders nothing.
+  useObservedValue<HTMLDivElement, number>(
+    list,
+    (observed, emit) => {
+      const tabs = [...observed.children];
+      if (hasTabOrderChanged(tabOrderRef.current, tabs)) {
+        reordersRef.current += 1;
+      }
+      tabOrderRef.current = tabs;
+      emit(reordersRef.current);
+      return () => undefined;
+    },
+    [children],
+    0,
+  );
 
   // Base UI reveals the active tab on mount and on focus only, so a strip
   // narrowed later, by a pane docking beside it, would strand it off-screen
   // behind a hidden scrollbar.
-  useIsoLayoutEffect(() => {
-    const list = listRef.current;
+  useLayoutSyncEffect(() => {
     if (list === null || typeof ResizeObserver === "undefined") {
       return undefined;
     }
@@ -72,7 +77,7 @@ const TabsList = ({
     return () => {
       observer.disconnect();
     };
-  }, []);
+  }, [list]);
 
   return (
     <TabsPrimitive.List
@@ -106,7 +111,7 @@ const TabsList = ({
         className,
       )}
       data-slot="tabs-list"
-      ref={composeRefs(listRef, ref)}
+      ref={composedListRef}
       {...props}
     >
       {children}

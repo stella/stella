@@ -2,7 +2,6 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { EventType } from "@tanstack/ai";
 import { plugin } from "bun";
 import { afterAll, afterEach, expect, test } from "bun:test";
-import { setTimeout as sleep } from "node:timers/promises";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
@@ -133,9 +132,6 @@ afterEach(() => {
 });
 afterAll(async () => {
   // Drain scheduled React work before removing the DOM.
-  await testing.act(async () => {
-    await sleep(50);
-  });
   await unregisterDomEnvironment();
 });
 

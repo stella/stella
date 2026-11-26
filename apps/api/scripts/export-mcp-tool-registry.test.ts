@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import { settledWithin } from "@stll/test-kit";
+
 const IMPORT_TIMEOUT_MS = 10_000;
 
 test(
@@ -17,27 +19,17 @@ test(
         stderr: "ignore",
       },
     );
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    const outcome = await Promise.race([
-      child.exited.then((exitCode) => ({ exitCode, type: "exit" as const })),
-      new Promise<{ type: "timeout" }>((resolve) => {
-        timeoutId = setTimeout(
-          () => resolve({ type: "timeout" as const }),
-          IMPORT_TIMEOUT_MS,
-        );
-      }),
-    ]);
-    clearTimeout(timeoutId);
-
-    if (outcome.type === "timeout") {
+    try {
+      const exitCode = await settledWithin(child.exited, {
+        description: "static MCP tool registry import to exit",
+        timeoutMs: IMPORT_TIMEOUT_MS,
+      });
+      expect(exitCode).toBe(0);
+    } catch (error) {
       child.kill();
       await child.exited;
-      throw new Error(
-        "static MCP tool registry import did not exit within 10s",
-      );
+      throw error;
     }
-
-    expect(outcome.exitCode).toBe(0);
   },
   IMPORT_TIMEOUT_MS + 2000,
 );

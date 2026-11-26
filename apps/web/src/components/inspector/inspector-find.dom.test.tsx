@@ -4,9 +4,14 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, mock, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
+const flushMicrotasks = async (turns = 4) => {
+  for (let i = 0; i < turns; i += 1) {
+    await Promise.resolve();
+  }
+};
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
@@ -82,7 +87,7 @@ Object.defineProperty(globalThis, "IntersectionObserver", {
   value: OnScreenObserver,
 });
 
-const { useRef } = await import("react");
+const { Profiler, useRef } = await import("react");
 const { act, cleanup, fireEvent, render, waitFor, within } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
@@ -171,22 +176,27 @@ const Reader = ({
   );
 };
 
-const renderReaders = (readers: ReaderOptions[]) => {
+const renderReaders = (
+  readers: ReaderOptions[],
+  { onCommit }: { onCommit?: () => void } = {},
+) => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   const view = (options: ReaderOptions[]) => (
-    <QueryClientProvider client={client}>
-      <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <FormattingProvider locale="en" timeZone="UTC">
-          <WebReaderPresentationProvider>
-            {options.map((reader) => (
-              <Reader key={reader.name} {...reader} />
-            ))}
-          </WebReaderPresentationProvider>
-        </FormattingProvider>
-      </IntlProvider>
-    </QueryClientProvider>
+    <Profiler id="readers" onRender={() => onCommit?.()}>
+      <QueryClientProvider client={client}>
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <FormattingProvider locale="en" timeZone="UTC">
+            <WebReaderPresentationProvider>
+              {options.map((reader) => (
+                <Reader key={reader.name} {...reader} />
+              ))}
+            </WebReaderPresentationProvider>
+          </FormattingProvider>
+        </IntlProvider>
+      </QueryClientProvider>
+    </Profiler>
   );
   const screen = render(view(readers));
   return {
@@ -330,6 +340,37 @@ test("typing replaces search terms and Escape removes every reader highlight", a
     expect(screen.queryByRole("searchbox") === null).toBe(true),
   );
   expect([...highlights.keys()]).toEqual([]);
+});
+
+test("a typed query commits once, already counted", async () => {
+  let commits = 0;
+  const screen = renderReaders(
+    [{ initialQuery: "odpovědnost", name: "statute" }],
+    {
+      onCommit: () => {
+        commits += 1;
+      },
+    },
+  );
+  // Opening with search terms counts the text on the first frame.
+  await waitFor(() =>
+    expect(screen.getByText(matchCounter(1, 2))).toBeTruthy(),
+  );
+  const input = screen.getByRole("searchbox", {
+    name: messages.folio.findReplace.findText,
+  });
+
+  commits = 0;
+  fireEvent.change(input, { target: { value: "náhrada" } });
+  expect(screen.getByText(matchCounter(1, 1))).toBeTruthy();
+  expect(activeRange("statute")?.toString()).toBe("Náhrada");
+  expect(commits).toBe(1);
+
+  commits = 0;
+  fireEvent.change(input, { target: { value: "nenalezeno" } });
+  expect(screen.getByText(messages.common.noResults)).toBeTruthy();
+  expect(highlightText("stella-inspector-find-statute")).toEqual([]);
+  expect(commits).toBe(1);
 });
 
 test("closing one reader clears its highlights while the neighboring reader retains its query", async () => {
@@ -692,7 +733,7 @@ test("a query with no matches does not scroll when later text introduces a match
     note.textContent = "Pozdější znění přidalo shodu.";
     text.append(note);
     await act(async () => {
-      await sleep(0);
+      await flushMicrotasks();
     });
     await waitFor(() =>
       expect(screen.getByText(matchCounter(1, 1))).toBeTruthy(),
@@ -731,7 +772,7 @@ test("Next and Previous take the reader back to a lone match, while repaints lea
     note.textContent = "Poznámka pod textem.";
     text.append(note);
     await act(async () => {
-      await sleep(0);
+      await flushMicrotasks();
     });
     expect(scrolledTo).toHaveLength(1);
 
@@ -777,7 +818,7 @@ test("removing the active match from the text moves the active mark but not the 
       expect(screen.getByText(matchCounter(1, 1))).toBeTruthy(),
     );
     await act(async () => {
-      await sleep(0);
+      await flushMicrotasks();
     });
     expect(activeRange("decision")?.toString()).toBe("Odpovědnosti");
     expect(scrolledTo).toHaveLength(scrolls);

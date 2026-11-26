@@ -1,7 +1,6 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
@@ -36,9 +35,6 @@ afterEach(() => {
 });
 
 afterAll(async () => {
-  await act(async () => {
-    await sleep(50);
-  });
   await unregisterDomEnvironment();
 });
 
@@ -211,7 +207,9 @@ test("external members never request organization access", async () => {
   const view = renderBanner(queryClient);
   try {
     await act(async () => {
-      await sleep(30);
+      for (let i = 0; i < 4; i += 1) {
+        await Promise.resolve();
+      }
     });
     expect(requests).toBe(0);
     expect(view.queryByRole("status")).toBeNull();

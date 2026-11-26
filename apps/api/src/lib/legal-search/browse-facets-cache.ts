@@ -42,6 +42,7 @@ type TtlResultCacheOptions<TQuery, TValue, TError> = {
    * only ever touches probing traffic.
    */
   maxEntries: number;
+  now?: () => number;
 };
 
 type CacheEntry<TValue, TError> = {
@@ -59,12 +60,13 @@ export const createTtlResultCache = <TQuery, TValue, TError>({
   ttlMs,
   failureTtlMs,
   maxEntries,
+  now: nowMs = () => Temporal.Now.instant().epochMilliseconds,
 }: TtlResultCacheOptions<TQuery, TValue, TError>) => {
   const entries = new Map<string, CacheEntry<TValue, TError>>();
 
   return async (query: TQuery): Promise<Result<TValue, TError>> => {
     const key = keyOf(query);
-    const now = Temporal.Now.instant().epochMilliseconds;
+    const now = nowMs();
 
     const cached = entries.get(key);
     if (cached && cached.expiresAt > now) {
@@ -97,8 +99,7 @@ export const createTtlResultCache = <TQuery, TValue, TError>({
       if (failureTtlMs === undefined) {
         entries.delete(key);
       } else {
-        entry.expiresAt =
-          Temporal.Now.instant().epochMilliseconds + failureTtlMs;
+        entry.expiresAt = nowMs() + failureTtlMs;
       }
     }
     return result;

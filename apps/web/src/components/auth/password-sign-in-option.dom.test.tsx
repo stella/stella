@@ -2,7 +2,6 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import { AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE } from "@stll/auth-model";
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { SignInMode } from "./sign-in-mode";
@@ -44,7 +43,6 @@ afterEach(() => {
   globalThis.fetch = stubFetch(null);
 });
 afterAll(async () => {
-  await sleep(0);
   globalThis.fetch = originalFetch;
   await unregisterDomEnvironment();
 });

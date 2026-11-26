@@ -1101,6 +1101,66 @@ describe("buildTemplatePlan, citations of a level that prints punctuated words",
   });
 });
 
+describe("buildTemplatePlan, a template with text effects that show nothing", () => {
+  test("the note says that the output is written without them", () => {
+    const manifest = czechContract("Text.");
+    const { note } = build(manifest, "keepSource", {
+      profile: {
+        ...PROFILE,
+        health: [
+          { kind: "numberDrawnAsPicture", abstractNumId: 2, ilvl: 0 },
+          { kind: "numberDrawnAsPicture", abstractNumId: 2, ilvl: 1 },
+          { kind: "textDrawnAsPicture", styleId: "Title" },
+        ],
+      },
+    });
+    expect(
+      note.items.filter(({ kind }) => kind === "invisibleEffectsRemoved"),
+    ).toEqual([{ kind: "invisibleEffectsRemoved", levels: 2, styles: 1 }]);
+    expect(
+      build(manifest).note.items.some(
+        ({ kind }) => kind === "invisibleEffectsRemoved",
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("buildTemplatePlan, running text numbered like articles", () => {
+  const running = (label: string, name: string) =>
+    `${label}\t${name}. Strana, která informace přijímá, je nesmí bez souhlasu druhé strany nikomu zpřístupnit ani použít k jinému účelu.`;
+  const manifest = manifestOf([
+    "DOHODA O MLČENLIVOSTI",
+    running("1.", "Důvěrné informace"),
+    running("2.", "Výjimky"),
+    running("3.", "Trvání"),
+    "4.\tZávěrečná ustanovení",
+    "4.1\tDohoda se řídí českým právem.",
+  ]);
+
+  test("they keep the article's level and are set as clauses", () => {
+    const { plan, note } = build(manifest, "houseScheme");
+    const first = itemOf(plan, manifest, "1.");
+    expect(first).toMatchObject({
+      styleId: "Clause1",
+      numbering: { ilvl: PROFILE.roles.articleHeading?.numbering?.ilvl },
+    });
+    // The one real heading among them is set like its siblings.
+    expect(itemOf(plan, manifest, "4.\tZávěrečná")?.styleId).toBe("Clause1");
+    expect(
+      note.items.filter(({ kind }) => kind === "articlesSetAsText"),
+    ).toEqual([{ kind: "articlesSetAsText", blocks: 4 }]);
+  });
+
+  test("a document with headings keeps them", () => {
+    const headed = czechContract("Text.");
+    const { plan, note } = build(headed);
+    expect(itemOf(plan, headed, "Článek II.")?.styleId).toBe("Article");
+    expect(note.items.some(({ kind }) => kind === "articlesSetAsText")).toBe(
+      false,
+    );
+  });
+});
+
 describe("buildTemplatePlan, what is left unlinked", () => {
   const manifest = czechContract(
     "Viz čl. XX této smlouvy a čl. II odst. 2 této smlouvy.",

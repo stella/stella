@@ -5,6 +5,7 @@ import type * as React from "react";
 
 import { Field as FieldPrimitive } from "@base-ui/react/field";
 
+import { useExternalSyncEffect, useLatestCallback } from "../effects/effects";
 import { useContentDir } from "../hooks/use-content-dir";
 import { CONTROL_SIZE } from "../lib/control-size";
 import type { ControlSize } from "../lib/control-size";
@@ -110,16 +111,19 @@ const Textarea = ({
   };
   // A native form reset restores the text without an input or change event,
   // so an uncontrolled count rereads the field once the reset has run.
-  const syncCountOnFormReset = (control: HTMLSpanElement | null) => {
+  const [control, setControl] = useState<HTMLSpanElement | null>(null);
+  const countsUncontrolled = counted && value === undefined;
+  const trackValue = useLatestCallback(contentDir.trackValue);
+  useExternalSyncEffect(() => {
     const textarea = control?.querySelector("textarea");
     const form = textarea?.form;
-    if (!counted || value !== undefined || !textarea || !form) {
+    if (!countsUncontrolled || !textarea || !form) {
       return undefined;
     }
     const handleReset = () => {
       // `reset` is dispatched before the form restores its fields.
       setTimeout(() => {
-        contentDir.trackValue(textarea.value);
+        trackValue(textarea.value);
         setTypedLength(textarea.value.length);
       }, 0);
     };
@@ -127,7 +131,7 @@ const Textarea = ({
     return () => {
       form.removeEventListener("reset", handleReset);
     };
-  };
+  }, [control, countsUncontrolled, trackValue]);
   const textareaStyle: TextareaStyle | undefined =
     maxRows === undefined
       ? style
@@ -150,7 +154,7 @@ const Textarea = ({
       data-appearance={appearance}
       data-size={size}
       data-slot="textarea-control"
-      ref={syncCountOnFormReset}
+      ref={setControl}
     >
       <FieldPrimitive.Control
         id={id}

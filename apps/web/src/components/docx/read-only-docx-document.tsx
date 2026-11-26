@@ -1,8 +1,10 @@
-import { lazy, useLayoutEffect, useRef } from "react";
+import { lazy, useRef } from "react";
 
 import type { DocxEditorRef } from "@stll/folio-react";
-import { composeRefs } from "@stll/ui/utils";
+import { useComposedRefs } from "@stll/ui/effects-refs";
 import "@stll/folio-react/editor.css";
+
+import { useLayoutSyncEffect } from "@stll/ui/effects";
 
 import {
   useDocxFitZoom,
@@ -36,11 +38,11 @@ export const ReadOnlyDocxDocument = ({
     fit: { type: "editor" },
     scaleOffset,
   });
-  // The compiler keeps this ref callback stable, so React does not detach
-  // and re-attach the fit-zoom ResizeObserver every render.
-  const composedContainerRef = composeRefs(containerRef, fitZoomRef);
+  // A stable ref callback, so React does not detach and re-attach the
+  // fit-zoom observer every render.
+  const composedContainerRef = useComposedRefs(containerRef, fitZoomRef);
 
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     editorRef.current?.setZoom(targetZoom);
   }, [targetZoom]);
   useDocxWheelZoom(containerRef, editorRef);
