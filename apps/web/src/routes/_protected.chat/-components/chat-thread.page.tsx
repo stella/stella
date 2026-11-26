@@ -21,7 +21,7 @@ import {
 } from "@stll/api-contract/chat-send-intent";
 import { Button, buttonVariants } from "@stll/ui/button";
 import {
-  useExternalSyncEffect,
+  useKeyedState,
   useLatestCallback,
   useMountEffect,
 } from "@stll/ui/effects";
@@ -96,7 +96,6 @@ import { GuideNudge } from "@/features/guides/guide-nudge";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { api } from "@/lib/api";
-import { optionalArray } from "@/lib/arrays";
 import { roleOptions } from "@/lib/auth-queries";
 import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";
 import {
@@ -225,30 +224,18 @@ export const ChatThreadPage = ({
   const canManageOrganization =
     hasOrganizationManagementAccess(currentUserRole);
 
-  // Local copy of the persisted contextMatterIds, seeded from the
-  // server and re-seeded whenever the page navigates to a different
-  // thread. The picker mutates this directly; the transport pulls
-  // the latest value via getContextMatterIds on every send, and
-  // the server persists the new set on receipt — so we don't need
-  // a dedicated PATCH round-trip just to widen scope.
-  const [contextMatterIds, setContextMatterIds] = useState<string[] | null>(
-    null,
-  );
-  // Track which thread our local state was seeded for so we can
-  // detect navigation between two `/chat/$threadId` routes inside
-  // the same mounted component and reset before the next send.
-  const [seededForThreadKey, setSeededForThreadKey] = useState<string | null>(
-    null,
-  );
   const threadKey = getChatThreadKey(threadRef);
+  // The picker's context matters for this thread, or null while the
+  // persisted set applies. Navigating between two `/chat/$threadId` routes
+  // inside the same mounted component starts it over before the next send.
+  // The transport pulls the latest value via getContextMatterIds on every
+  // send, and the server persists the new set on receipt — so we don't need
+  // a dedicated PATCH round-trip just to widen scope.
+  const [contextMatterIds, setContextMatterIds] = useKeyedState<
+    string[] | null
+  >(threadKey, null);
   const anonymized = useChatAnonymized(threadRef);
   const [composerFocused, setComposerFocused] = useState(false);
-  const getContextMatterIds = useLatestCallback(() =>
-    resolveChatContextMatterIds(
-      threadRef,
-      seededForThreadKey === threadKey ? optionalArray(contextMatterIds) : [],
-    ),
-  );
   const getSendMode = useLatestCallback(() => getChatSendMode(threadRef));
   const cachedSkill = useThreadActiveSkill(threadRef);
 
@@ -262,6 +249,11 @@ export const ChatThreadPage = ({
     context: { allowMissingThread: true },
   });
   const { data } = useSuspenseQuery(threadQueryOptions);
+  const selectedContextMatterIds = resolveChatContextMatterIds(
+    threadRef,
+    contextMatterIds ?? data.contextMatterIds,
+  );
+  const getContextMatterIds = useLatestCallback(() => selectedContextMatterIds);
   const activeSkill = resolveThreadActiveSkill(data, cachedSkill);
   const getActiveSkill = useLatestCallback(() => activeSkill);
   // The skill is known only after the read above, and the cache key never
@@ -288,22 +280,6 @@ export const ChatThreadPage = ({
     data,
     key: threadRef,
   });
-  const selectedContextMatterIds = resolveChatContextMatterIds(
-    threadRef,
-    seededForThreadKey === threadKey
-      ? optionalArray(contextMatterIds)
-      : data.contextMatterIds,
-  );
-  useExternalSyncEffect(() => {
-    if (seededForThreadKey === threadKey) {
-      return;
-    }
-    setSeededForThreadKey(threadKey);
-    setContextMatterIds(
-      resolveChatContextMatterIds(threadRef, data.contextMatterIds),
-    );
-  }, [data.contextMatterIds, seededForThreadKey, threadKey, threadRef]);
-
   // Surface a 402 usage-limit response from the metered
   // chat handler as a usage-state modal instead of an inline
   // stack trace. `useQuery` (not Suspense) keeps the chat shell

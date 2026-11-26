@@ -727,7 +727,7 @@ const SURFACE_SHOWS = {
     return [thread?.title ?? null];
   },
   "thread-recap": async (orgAIConfig) => {
-    const recap = await generateThreadRecapText({
+    const outcome = await generateThreadRecapText({
       messages: chatMessagesOf(TRANSCRIPT),
       organizationId: ids.orgA,
       admission: testModelAdmission(ids.orgA),
@@ -737,7 +737,7 @@ const SURFACE_SHOWS = {
       threadId: await seedThread(),
       workspaceId: null,
     });
-    return recap === null ? [] : [recap];
+    return outcome.type === "generated" ? [outcome.recap] : [];
   },
   "follow-up-suggestions": async (orgAIConfig) => {
     const answer: unknown = await getSuggestedPrompts.handler(

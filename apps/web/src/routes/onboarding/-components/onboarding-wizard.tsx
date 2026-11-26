@@ -2,7 +2,6 @@ import {
   addTransitionType,
   startTransition,
   useCallback,
-  useLayoutEffect,
   useMemo,
   useState,
 } from "react";
@@ -152,8 +151,17 @@ export const OnboardingWizard = () => {
     browserRegion: browserRegion || undefined,
     detectedCountry: sessionData?.user.detectedCountry,
   });
-  const [jurisdictionSuggestionApplied, setJurisdictionSuggestionApplied] =
-    useState(false);
+  // Until the user picks, skips or confirms jurisdictions, the step offers
+  // the best suggestion for where they practise (it sharpens as the session
+  // loads).
+  const [jurisdictionsChosen, setJurisdictionsChosen] = useState(false);
+  const suggestedCountryCode = suggestedCountryCodes.at(0);
+  const practiceJurisdictions: PracticeJurisdiction[] =
+    jurisdictionsChosen ||
+    data.practiceJurisdictions.length > 0 ||
+    !suggestedCountryCode
+      ? data.practiceJurisdictions
+      : [{ countryCode: suggestedCountryCode, isPrimary: true }];
 
   const [isCreating, setIsCreating] = useState(false);
 
@@ -182,72 +190,40 @@ export const OnboardingWizard = () => {
       ),
     [unavailableNativeToolBackendSlugs],
   );
-  useLayoutEffect(() => {
-    if (step !== "catalogue") {
-      return;
-    }
-    // oxlint-disable-next-line react/set-state-in-effect -- commit-safe parent-owned reconciliation; the functional update rechecks current selections so stale renders cannot overwrite user edits
-    setData((currentData) => {
-      const practiceCountryCodes = new Set(
-        currentData.practiceJurisdictions.map((jurisdiction) =>
-          jurisdiction.countryCode.toUpperCase(),
-        ),
-      );
-      const recommendedSlugs =
-        recommendedSlugsForJurisdictions(practiceCountryCodes);
-      const recommendedEntries = onboardingCatalogueEntries.filter(
-        (entry) =>
-          (entry.kind !== "native-tool" ||
-            isToggleableNativeToolBackendSlug(entry.backendSlug)) &&
-          !(entry.kind === "native-tool" && entry.pinned) &&
-          recommendedSlugs.has(entry.slug),
-      );
-      const autoSelectionPlan = createCatalogueAutoSelectionPlan({
-        recommendedEntries,
-        removedSlugs: catalogueRemovedSlugs,
-        selectedSlugs: currentData.catalogueSlugs,
-      });
-      if (autoSelectionPlan.addedSlugs.length === 0) {
-        return currentData;
-      }
-      return {
-        ...currentData,
-        catalogueSlugs: [...autoSelectionPlan.selectedSlugs],
-      };
-    });
-  }, [catalogueRemovedSlugs, onboardingCatalogueEntries, step]);
-
-  const suggestedCountryCode = suggestedCountryCodes.at(0);
-  useLayoutEffect(() => {
-    if (jurisdictionSuggestionApplied || !suggestedCountryCode) {
-      return;
-    }
-    // oxlint-disable-next-line react/set-state-in-effect -- commit-safe one-shot latch for an async suggestion; user edits are rechecked in the functional data update below
-    setJurisdictionSuggestionApplied(true);
-    setData((currentData) => {
-      if (currentData.practiceJurisdictions.length > 0) {
-        return currentData;
-      }
-      return {
-        ...currentData,
-        practiceJurisdictions: [
-          { countryCode: suggestedCountryCode, isPrimary: true },
-        ],
-      };
-    });
-  }, [jurisdictionSuggestionApplied, suggestedCountryCode]);
+  // The selection is what the user kept, plus every stella entry recommended
+  // for their jurisdictions that they have not removed.
+  const recommendedSlugs = recommendedSlugsForJurisdictions(
+    new Set(
+      practiceJurisdictions.map((jurisdiction) =>
+        jurisdiction.countryCode.toUpperCase(),
+      ),
+    ),
+  );
+  const catalogueSlugs = createCatalogueAutoSelectionPlan({
+    recommendedEntries: onboardingCatalogueEntries.filter(
+      (entry) =>
+        (entry.kind !== "native-tool" ||
+          isToggleableNativeToolBackendSlug(entry.backendSlug)) &&
+        !(entry.kind === "native-tool" && entry.pinned) &&
+        recommendedSlugs.has(entry.slug),
+    ),
+    removedSlugs: catalogueRemovedSlugs,
+    selectedSlugs: data.catalogueSlugs,
+  }).selectedSlugs;
 
   const continueFromJurisdiction = () => {
     setData((currentData) => ({
       ...currentData,
+      practiceJurisdictions,
       catalogueSlugs: [
         ...reconcileCatalogueSlugsForJurisdictions({
           entries: onboardingCatalogueEntries,
-          practiceJurisdictions: currentData.practiceJurisdictions,
+          practiceJurisdictions,
           selectedSlugs: currentData.catalogueSlugs,
         }),
       ],
     }));
+    setJurisdictionsChosen(true);
     setCatalogueFocusedSlug(null);
     navigateStep("catalogue");
   };
@@ -542,11 +518,11 @@ export const OnboardingWizard = () => {
   if (step === "jurisdiction") {
     preview = (
       <JurisdictionGlobePreview
-        onChange={(practiceJurisdictions) => {
-          setData((d) => ({ ...d, practiceJurisdictions }));
-          setJurisdictionSuggestionApplied(true);
+        onChange={(chosen) => {
+          setData((d) => ({ ...d, practiceJurisdictions: chosen }));
+          setJurisdictionsChosen(true);
         }}
-        selected={data.practiceJurisdictions}
+        selected={practiceJurisdictions}
       />
     );
   } else if (step === "catalogue") {
@@ -556,14 +532,14 @@ export const OnboardingWizard = () => {
         )
       : undefined;
     if (focusedEntry) {
-      const installed = data.catalogueSlugs.includes(focusedEntry.slug);
+      const installed = catalogueSlugs.includes(focusedEntry.slug);
       preview = (
         <CatalogueDetailPreview
           entry={focusedEntry}
           installed={installed}
           onCancel={() => setCatalogueFocusedSlug(null)}
           onConfirm={() => {
-            const next = new Set(data.catalogueSlugs);
+            const next = new Set(catalogueSlugs);
             if (installed) {
               next.delete(focusedEntry.slug);
               setCatalogueSlugRemoved(focusedEntry.slug, true);
@@ -581,7 +557,7 @@ export const OnboardingWizard = () => {
         <CatalogueStackPreview
           entries={onboardingCatalogueEntries}
           onFocus={setCatalogueFocusedSlug}
-          selectedSlugs={data.catalogueSlugs}
+          selectedSlugs={catalogueSlugs}
         />
       );
     }
@@ -628,11 +604,11 @@ export const OnboardingWizard = () => {
           preview={preview}
         >
           <JurisdictionStep
-            selected={data.practiceJurisdictions}
+            selected={practiceJurisdictions}
             suggestedCountryCodes={suggestedCountryCodes}
-            onChange={(practiceJurisdictions) => {
-              setData((d) => ({ ...d, practiceJurisdictions }));
-              setJurisdictionSuggestionApplied(true);
+            onChange={(chosen) => {
+              setData((d) => ({ ...d, practiceJurisdictions: chosen }));
+              setJurisdictionsChosen(true);
             }}
             onNext={continueFromJurisdiction}
             onSkip={() => {
@@ -641,7 +617,7 @@ export const OnboardingWizard = () => {
                 catalogueSlugs: [],
                 practiceJurisdictions: [],
               }));
-              setJurisdictionSuggestionApplied(true);
+              setJurisdictionsChosen(true);
               setCatalogueFocusedSlug(null);
               navigateStep("catalogue");
             }}
@@ -681,12 +657,12 @@ export const OnboardingWizard = () => {
               }
             }}
             onSkip={() => {
-              markCatalogueSlugsRemoved(data.catalogueSlugs);
+              markCatalogueSlugsRemoved(catalogueSlugs);
               setData((d) => ({ ...d, catalogueSlugs: [] }));
               navigateStep("ai");
             }}
-            practiceJurisdictions={data.practiceJurisdictions}
-            selectedSlugs={data.catalogueSlugs}
+            practiceJurisdictions={practiceJurisdictions}
+            selectedSlugs={catalogueSlugs}
             unavailableNativeToolBackendSlugs={
               unavailableNativeToolBackendSlugs
             }
@@ -707,7 +683,12 @@ export const OnboardingWizard = () => {
             onEmailCountChange={setPreviewEmailCount}
             userEmail={userEmail}
             onNext={({ emails }) => {
-              const finalData = { ...data, emails };
+              const finalData = {
+                ...data,
+                practiceJurisdictions,
+                catalogueSlugs: [...catalogueSlugs],
+                emails,
+              };
               setData(finalData);
               detached(
                 creationFlight.run(async () => await executeSetup(finalData)),

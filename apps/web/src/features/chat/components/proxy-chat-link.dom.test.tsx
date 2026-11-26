@@ -214,7 +214,7 @@ test("requests one site icon only for visible tool-source links", async () => {
   }
 });
 
-test("loads visible host icons once through the authenticated API and cleans local URLs", async () => {
+test("loads visible host icons once through the authenticated API and shares one local URL until the last link lets go", async () => {
   const originalFetch = globalThis.fetch;
   const originalCreateObjectURL = Object.getOwnPropertyDescriptor(
     URL,
@@ -309,14 +309,11 @@ test("loads visible host icons once through the authenticated API and cleans loc
     ]);
     expect(requests.every(({ url }) => !url.includes("favicon"))).toBe(true);
 
-    await waitFor(() => expect(created).toHaveLength(2));
-    const firstCreated = created.at(0);
-    const secondCreated = created.at(1);
-    if (!firstCreated || !secondCreated) {
-      throw new TypeError("Expected both link object URLs");
+    await waitFor(() => expect(created).toHaveLength(1));
+    const sharedCreated = created.at(0);
+    if (!sharedCreated) {
+      throw new TypeError("Expected the shared link object URL");
     }
-    expect(firstCreated.url).not.toBe(secondCreated.url);
-    expect(firstCreated.blob).toBe(secondCreated.blob);
     for (const { blob } of created) {
       expect(blob.type).toBe("image/png");
       expect(blob.size).toBe(4);
@@ -328,11 +325,12 @@ test("loads visible host icons once through the authenticated API and cleans loc
     expect(links).toHaveLength(4);
     expect(links[0]?.getAttribute("href")).toBe("https://example.com/one");
     expect(links[1]?.getAttribute("href")).toBe("https://example.com/two");
+    // Both links show the one site icon through the same object URL.
     expect(links[0]?.querySelector("img")?.getAttribute("src")).toBe(
-      firstCreated.url,
+      sharedCreated.url,
     );
     expect(links[1]?.querySelector("img")?.getAttribute("src")).toBe(
-      secondCreated.url,
+      sharedCreated.url,
     );
     expect(links[2]?.querySelector("img")).toBeNull();
     expect(
@@ -354,8 +352,11 @@ test("loads visible host icons once through the authenticated API and cleans loc
     ).toBe(true);
     expect(links[0]?.getAttribute("href")).toBe("https://example.com/one");
 
+    expect(revoked).toEqual([]);
+    // Revoked a microtask after the last link holding it unmounts.
     view.unmount();
-    expect(revoked).toEqual(created.map(({ url }) => url));
+    await Promise.resolve();
+    expect(revoked).toEqual([sharedCreated.url]);
   } finally {
     view.unmount();
     queryClient.clear();

@@ -127,7 +127,7 @@ test("whitespace-only pasted text has a translated title", () => {
   expect(view.getByText(en.chat.pastedText.title)).toBeDefined();
 });
 
-test("draft image attachments render a thumbnail preview and revoke their object URL on unmount", () => {
+test("draft image attachments render a thumbnail preview and revoke their object URL on unmount", async () => {
   const originalCreateObjectURL = URL.createObjectURL;
   const originalRevokeObjectURL = URL.revokeObjectURL;
   const revoked: string[] = [];
@@ -191,6 +191,9 @@ test("draft image attachments render a thumbnail preview and revoke their object
     expect(removed).toEqual(["img-1"]);
 
     view.unmount();
+    // The shared URL is revoked a microtask after its last holder lets go.
+    expect(revoked).toEqual([]);
+    await Promise.resolve();
     expect(revoked).toEqual(["blob:draft-image-preview"]);
   } finally {
     URL.createObjectURL = originalCreateObjectURL;

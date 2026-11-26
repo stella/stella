@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { UIEvent } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -8,7 +8,12 @@ import { useTranslations } from "use-intl";
 import { isTaskStatus } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
-import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
+import {
+  useExternalSyncEffect,
+  useKeyedState,
+  useLatestCallback,
+  useLayoutSyncEffect,
+} from "@stll/ui/effects";
 import { CalendarIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -215,8 +220,11 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
 
   // Current viewport date (month/week navigation state)
   const [viewDate, setViewDate] = useState(appToday);
-  const [monthWindowStart, setMonthWindowStart] = useState(() =>
-    getCenteredMonthWindowStart(appToday()),
+  // The window of months the month mode renders. Switching modes starts it
+  // over around the month in view, which may have moved in another mode;
+  // within month mode only anchored shifts and jumps move it.
+  const [monthWindowStart, setMonthWindowStart] = useKeyedState(mode, () =>
+    getCenteredMonthWindowStart(startOfUTCMonth(viewDate)),
   );
   const monthScrollRef = useRef<HTMLDivElement>(null);
   const monthAnchorRefs = useRef<Map<string, HTMLElement> | null>(null);
@@ -449,21 +457,19 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     }
   };
 
-  useLayoutEffect(() => {
+  // A switch into month mode scrolls to the month in view; it primes the
+  // target here, in the layout phase, for the sibling scroll effect below.
+  useLayoutSyncEffect(() => {
     if (mode !== "month") {
       return;
     }
 
-    const target = startOfUTCMonth(getCurrentViewDate());
-    const key = getUTCMonthKey(target);
-    pendingScrollMonthKey.current = key;
-    // oxlint-disable-next-line react/set-state-in-effect -- layout effect priming the scroll target and month window on a mode switch; must stay in the layout phase to coordinate with the sibling scroll effect
-    setMonthWindowStart((start) =>
-      getMonthWindowStartContaining(start, target),
+    pendingScrollMonthKey.current = getUTCMonthKey(
+      startOfUTCMonth(getCurrentViewDate()),
     );
   }, [mode, getCurrentViewDate]);
 
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     const container = monthScrollRef.current;
     if (!container) {
       return;

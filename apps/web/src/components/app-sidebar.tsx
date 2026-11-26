@@ -1173,7 +1173,6 @@ export const MatterItem = ({
   const acknowledgePinAttention = usePinnedStore(
     (s) => s.acknowledgePinAttention,
   );
-  const [pinFlashSequence, setPinFlashSequence] = useState<number | null>(null);
   const t = useTranslations();
   const { state, setOpen, isMobile } = useSidebar();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -1249,13 +1248,11 @@ export const MatterItem = ({
   const isCollapsed = state === "collapsed" && !isMobile;
   const runCounts = useRunCounts(runs);
 
-  useExternalSyncEffect(() => {
-    if (!isPinned || pinAttention === null) {
-      return;
-    }
-    setPinFlashSequence(pinAttention.sequence);
-    acknowledgePinAttention(pinAttention.sequence);
-  }, [acknowledgePinAttention, isPinned, pinAttention, ws.id]);
+  // A pin that asks for attention flashes the row while it is pending; the
+  // flash acknowledges it when it has played, so a later mount does not
+  // replay it.
+  const pinFlashSequence =
+    isPinned && pinAttention !== null ? pinAttention.sequence : null;
 
   const handleReorder = useLatestCallback(
     (draggedId: string, targetId: string) => {
@@ -1504,6 +1501,9 @@ export const MatterItem = ({
                 aria-hidden
                 className="bg-primary/12 animate-attention-flash-twice pointer-events-none absolute inset-0 opacity-0 motion-reduce:animate-none"
                 key={pinFlashSequence}
+                onAnimationEnd={() => {
+                  acknowledgePinAttention(pinFlashSequence);
+                }}
               />
             )}
             {/* Collapsed rail: the icon is the whole item, so it stays

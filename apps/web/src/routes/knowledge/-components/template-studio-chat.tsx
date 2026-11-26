@@ -1,4 +1,4 @@
-import { Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
@@ -61,6 +61,7 @@ import { COMPOSER_TEXT_CLASS } from "@stll/ui/composer";
 import {
   useExternalSyncEffect,
   useLatestCallback,
+  useLayoutSyncEffect,
   useMountEffect,
 } from "@stll/ui/effects";
 import { Loader } from "@stll/ui/loader";
@@ -400,19 +401,12 @@ const TemplateStudioChatInner = ({
   // The page queues bilingual-mirror proposals through the store; this
   // surface places them because it is the Studio's only suggestion
   // decoration writer (a second writer would clobber the decorations).
-  const pendingMirrorRequests = useTemplateStudioStore(
-    (s) => s.pendingMirrorRequests,
-  );
   const clearMirrorRequests = useTemplateStudioStore(
     (s) => s.clearMirrorRequests,
   );
-  useExternalSyncEffect(() => {
+  const placeMirrorRequests = useLatestCallback((view: EditorView) => {
+    const { pendingMirrorRequests } = useTemplateStudioStore.getState();
     if (pendingMirrorRequests.length === 0) {
-      return;
-    }
-    const view = getView() ?? editorView;
-    if (!view) {
-      // Keep the queue; the effect re-runs once the live view arrives.
       return;
     }
     const specs = pendingMirrorRequests.map(({ spec, onAccepted }) => ({
@@ -432,13 +426,40 @@ const TemplateStudioChatInner = ({
       setSuggestions((prev) => [...prev, ...created]);
     }
     clearMirrorRequests();
-  }, [
-    pendingMirrorRequests,
-    editorView,
-    getView,
-    clearMirrorRequests,
-    mirrorAcceptHandlers,
-  ]);
+  });
+  // A proposal queued while the live view is up lands as it arrives; one
+  // queued before this surface mounted, or before the view existed, keeps
+  // its place in the queue until the view is there.
+  useExternalSyncEffect(() => {
+    let active = true;
+    if (useTemplateStudioStore.getState().pendingMirrorRequests.length > 0) {
+      detached(
+        awaitView().then((view) => {
+          if (active && view) {
+            placeMirrorRequests(view);
+          }
+          return undefined;
+        }),
+        "template-studio-chat.place-queued-mirrors",
+      );
+    }
+    const unsubscribe = useTemplateStudioStore.subscribe((state, previous) => {
+      if (
+        state.pendingMirrorRequests === previous.pendingMirrorRequests ||
+        state.pendingMirrorRequests.length === 0
+      ) {
+        return;
+      }
+      const view = getView() ?? editorView;
+      if (view) {
+        placeMirrorRequests(view);
+      }
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [awaitView, editorView, getView, placeMirrorRequests]);
 
   // Push suggestion decorations into the live editor. This surface is
   // the only decoration writer in the Studio, so empty pushes (after
@@ -1360,7 +1381,7 @@ const TemplateStudioChatInner = ({
     setPanelOpen(false);
     onNewThread();
   };
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     const scrollElement = threadScrollRef.current;
     if (!scrollElement) {
       return;

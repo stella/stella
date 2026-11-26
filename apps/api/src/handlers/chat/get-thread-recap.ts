@@ -198,13 +198,13 @@ const getThreadRecap = createSafeRootHandler(config, async function* (ctx) {
 
   // Only a cache miss spends a model call, so only a cache miss draws an
   // action; a refusal answers like any other admission refusal.
-  const { recap } = yield* Result.await(
+  const { recapOutcome } = yield* Result.await(
     Result.gen(() =>
       admitFiniteAction({
         actionKind: "chat.thread-recap",
         ctx,
         async *handler({ modelAdmission }) {
-          const generated = yield* Result.await(
+          const outcome = yield* Result.await(
             generateThreadRecapText({
               admission: modelAdmission,
               messages: recapMessages,
@@ -214,22 +214,24 @@ const getThreadRecap = createSafeRootHandler(config, async function* (ctx) {
               promptCachingEnabled,
               threadId,
               workspaceId: persistedWorkspaceId,
-            }).then((text) => Result.ok(text)),
+            }).then((result) => Result.ok(result)),
           );
-          return Result.ok({ recap: generated });
+          return Result.ok({ recapOutcome: outcome });
         },
       }),
     ),
   );
 
-  if (!recap) {
-    // Deliberately not cached: a null means either an empty
-    // transcript (no model call was spent) or a transient
-    // generation failure we'd rather retry on the next revisit than
-    // suppress. Successful recaps cache below, so a thread only ever
-    // spends one model call per message tail in the common case.
+  if (recapOutcome.type !== "generated") {
+    // Deliberately not cached: "empty" means either an empty
+    // transcript (no model call was spent) or empty model output, and
+    // "failed" is a transient generation failure we'd rather retry on
+    // the next revisit than suppress. Successful recaps cache below, so
+    // a thread only ever spends one model call per message tail in the
+    // common case.
     return Result.ok<ThreadRecapResult>({ recap: null });
   }
+  const { recap } = recapOutcome;
 
   // Cache best-effort: a write failure should not fail the read, so
   // the recap still reaches the user (it just regenerates next time).
