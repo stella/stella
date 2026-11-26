@@ -8,13 +8,7 @@ import {
 } from "react";
 import type { ComponentProps } from "react";
 
-import {
-  queryOptions,
-  useQueries,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
-import type { UseQueryResult } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -113,10 +107,7 @@ import {
 } from "@/components/chat/create-document-draft.logic";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { pendingLocalRunApprovalIds } from "@/components/chat/local-run-request.logic";
-import type {
-  CreateDocumentDestination,
-  NeedsMatterMatter,
-} from "@/components/chat/needs-matter-card";
+import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { buildEditedUserMessage } from "@/components/chat/user-message-edit.logic";
 import type {
@@ -385,16 +376,6 @@ const openCreatedDocumentInInspector = async (
 };
 
 const EMPTY_CHAT_QUEUE: ChatQueue = { hold: null, items: [] };
-
-/**
- * The create-document matter list as one view. `useQuery` returns a new result
- * object on every render, so a view built from it would be new every time and
- * re-render every `ChatMattersContext` consumer with its owner; a module-level
- * `combine` keeps one view until the list or its status changes.
- */
-const createDocumentMattersViewOf = ([matters]: readonly [
-  UseQueryResult<readonly NeedsMatterMatter[]>,
-]) => queryView(matters);
 
 export const useChatSession = ({
   exceptionScope: { handlerId: exceptionHandlerId },
@@ -1953,23 +1934,20 @@ export const useChatSession = ({
     [chat, replayFromTruncation, timingSurface],
   );
 
-  const createDocumentMattersView = useQueries({
-    queries: [
-      queryOptions({
-        ...workspacesNavigationOptions({ organizationId, userId }),
-        select: (navigation) =>
-          navigation.workspaces.map((matter) => ({
-            id: matter.id,
-            name: matter.name,
-            color: matter.color,
-            client: matter.client?.displayName
-              ? { displayName: matter.client.displayName }
-              : null,
-          })),
-      }),
-    ],
-    combine: createDocumentMattersViewOf,
-  });
+  const createDocumentMattersView = queryView(
+    useQuery({
+      ...workspacesNavigationOptions({ organizationId, userId }),
+      select: (navigation) =>
+        navigation.workspaces.map((matter) => ({
+          id: matter.id,
+          name: matter.name,
+          color: matter.color,
+          client: matter.client?.displayName
+            ? { displayName: matter.client.displayName }
+            : null,
+        })),
+    }),
+  );
 
   const handledDocumentDeletionToolCallIdsRef = useRef(new Set<string>());
   const handledDocxReplacementToolCallIdsRef = useRef(new Set<string>());
