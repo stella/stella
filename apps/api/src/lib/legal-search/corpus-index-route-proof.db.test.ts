@@ -7,9 +7,9 @@
  * transaction, a page read across a revocation or by a second runner is never
  * recorded, an open pass too old to prove is started over while a young one
  * is resumed, and only declared, attested routes can be walked at all. A
- * census page may name more revisions than a delete batch, a pass begun at
- * one page size proves the same at another, and a census that times out
- * halves the page.
+ * pass split into key ranges proves exactly what one cursor does, each key
+ * walked once; a range on another incarnation, a revocation, or an age taken
+ * from its earliest range applies to every range of the pass.
  */
 import { panic, Result } from "better-result";
 import {
@@ -53,6 +53,7 @@ import {
   type CorpusIndexRouteCensusPageSize,
   type CorpusIndexRouteProofAdmission,
   type CorpusIndexRouteProofAdvance,
+  type CorpusIndexRouteProofPage,
   type CorpusIndexRouteProofWorkUnit,
   initialCorpusIndexRouteCensusPageSize,
   isCorpusIndexReadTimeout,
@@ -72,6 +73,7 @@ import {
   resetLogSinkForTesting,
   setLogSinkForTesting,
 } from "@/api/lib/observability/logger";
+import { isRecord } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -285,21 +287,27 @@ const governor: CorpusIndexRouteProofAdmission = async (unit, work) => {
   return await work();
 };
 
-const advance = async (
+const advancePage = async (
   route: CorpusIndexRoute = ROUTE,
-  limit: number = PAGE,
-): Promise<CorpusIndexRouteProofAdvance> => {
+  { range = 0, ranges = 1, limit = PAGE } = {},
+): Promise<CorpusIndexRouteProofPage> => {
   const advanced = await advanceCorpusIndexRouteProof({
     runInTransaction,
     client: engineClient,
     admit: governor,
     route,
+    range,
+    ranges,
     limit,
   });
   return Result.isOk(advanced)
-    ? advanced.value.advance
+    ? advanced.value
     : panic(`Route census failed: ${advanced.error.message}`);
 };
+
+const advance = async (
+  route: CorpusIndexRoute = ROUTE,
+): Promise<CorpusIndexRouteProofAdvance> => (await advancePage(route)).advance;
 
 const stepName = (step: CorpusIndexRouteProofAdvance): string =>
   "expectation" in step ? `${step.expectation}:${step.type}` : step.type;
@@ -369,19 +377,93 @@ const allCurrentVerdict = (verdict: CorpusIndexGenerationRouteProofs) =>
     ? verdict
     : panic(`Expected all current, got ${verdict.type}`);
 
-const passRow = async (indexId: string = ROUTE.indexId) =>
-  (
-    await db
-      .select({
-        passNumber: corpusIndexRouteProofs.passNumber,
-        passExpectation: corpusIndexRouteProofs.passExpectation,
-        passCursor: corpusIndexRouteProofs.passCursor,
-        passInspected: corpusIndexRouteProofs.passInspected,
-        passIndexIncarnation: corpusIndexRouteProofs.passIndexIncarnation,
-      })
-      .from(corpusIndexRouteProofs)
-      .where(eq(corpusIndexRouteProofs.indexId, indexId))
-  ).at(0) ?? panic(`The route ${indexId} has no proof row`);
+/** The ranges the row holds for its pass under way; none before they are laid out. */
+const rangesOfRow = ({
+  passId,
+  passRanges,
+}: {
+  passId: string;
+  passRanges: unknown;
+}): Record<string, unknown>[] =>
+  isRecord(passRanges) &&
+  passRanges["passId"] === passId &&
+  Array.isArray(passRanges["ranges"])
+    ? passRanges["ranges"].filter(isRecord)
+    : [];
+
+const routePass = async (indexId: string = ROUTE.indexId) => {
+  const row =
+    (
+      await db
+        .select({
+          passNumber: corpusIndexRouteProofs.passNumber,
+          passId: corpusIndexRouteProofs.passId,
+          passRanges: corpusIndexRouteProofs.passRanges,
+          passIndexIncarnation: corpusIndexRouteProofs.passIndexIncarnation,
+        })
+        .from(corpusIndexRouteProofs)
+        .where(eq(corpusIndexRouteProofs.indexId, indexId))
+    ).at(0) ?? panic(`The route ${indexId} has no proof row`);
+  return { ...row, ranges: rangesOfRow(row) };
+};
+
+/**
+ * The route's pass and where its first range stands: at its beginning before
+ * the pass's first page lays the ranges out.
+ */
+const passRow = async (indexId: string = ROUTE.indexId) => {
+  const { passNumber, passIndexIncarnation, ranges } = await routePass(indexId);
+  const first = ranges.at(0);
+  return {
+    passNumber,
+    passExpectation: first?.["expectation"] ?? "present",
+    passCursor: first?.["cursor"] ?? null,
+    passInspected: first?.["inspected"] ?? 0,
+    passIndexIncarnation,
+  };
+};
+
+/**
+ * Move the route's pass back `hours` on the database clock: the instant it
+ * was begun and the start of every range, or with `ranges` the start of
+ * those ranges alone.
+ */
+const agePass = async (
+  hours: number,
+  { ranges }: { ranges?: readonly number[] } = {},
+) => {
+  const moved =
+    ranges === undefined
+      ? sql`true`
+      : sql`(laid.position - 1) = ANY(${sql.raw(`ARRAY[${ranges.map(String).join(",") || "-1"}]::bigint[]`)})`;
+  await db.execute(sql`
+    UPDATE corpus_index_route_proofs
+    SET pass_started_at = ${
+      ranges === undefined
+        ? sql`pass_started_at - ${hoursInterval(hours)}`
+        : sql`pass_started_at`
+    },
+      pass_ranges = CASE WHEN pass_ranges IS NULL THEN NULL ELSE jsonb_set(
+        pass_ranges,
+        '{ranges}',
+        (
+          SELECT jsonb_agg(
+            CASE WHEN ${moved}
+              THEN laid.value || jsonb_build_object(
+                'startedAt',
+                (laid.value ->> 'startedAt')::timestamptz - ${hoursInterval(hours)}
+              )
+              ELSE laid.value
+            END
+            ORDER BY laid.position
+          )
+          FROM jsonb_array_elements(pass_ranges -> 'ranges')
+            WITH ORDINALITY AS laid(value, position)
+        )
+      ) END
+    WHERE index_id = ${ROUTE.indexId}
+  `);
+};
 
 const present = (incarnation: string) =>
   ({ type: "present", incarnation }) as const;
@@ -813,7 +895,8 @@ describe("route readiness proof", () => {
           present(incarnation),
         ),
     );
-    const pass = started.type === "pass" ? started.pass : panic("No pass");
+    const { pass, range } =
+      started.type === "pass" ? started : panic("No pass");
     await withdrawEnrolled();
     await attestEnrolled();
     expect(
@@ -822,6 +905,7 @@ describe("route readiness proof", () => {
           await recordCorpusIndexRouteCensusPageTx(tx, {
             route: ENROLLED,
             pass,
+            range,
             incarnation,
             inspected: 1,
             nextCursor: null,
@@ -901,7 +985,7 @@ describe("route readiness proof", () => {
             present(incarnation),
           ),
       );
-      return started.type === "pass" ? started.pass : panic("No pass");
+      return started.type === "pass" ? started : panic("No pass");
     };
     const pass = await start();
     const record = async (
@@ -913,7 +997,8 @@ describe("route readiness proof", () => {
         async (tx) =>
           await recordCorpusIndexRouteCensusPageTx(tx, {
             route: ROUTE,
-            pass: recorded,
+            pass: recorded.pass,
+            range: recorded.range,
             incarnation: at,
             inspected: 1,
             nextCursor: complete ? null : entityId(0),
@@ -929,7 +1014,7 @@ describe("route readiness proof", () => {
         await revokeCorpusIndexRouteProofTx(tx, ROUTE, "present_drift"),
     );
     const fresh = await start();
-    expect(fresh).toMatchObject({ expectation: "present", cursor: null });
+    expect(fresh.range).toMatchObject({ expectation: "present", cursor: null });
     // Read on another incarnation than the pass is bound to.
     expect(await record(fresh, false, `${ROUTE.indexId}:01JOTHER`)).toEqual({
       type: "superseded",
@@ -1002,10 +1087,10 @@ describe("route readiness proof", () => {
     // The next pass walked one page, then nothing picked it up for longer
     // than the maximum age.
     expect((await advance()).type).toBe("advanced");
+    await agePass(PAST_MAX_AGE_HOURS);
     await db
       .update(corpusIndexRouteProofs)
       .set({
-        passStartedAt: sql`pass_started_at - ${hoursInterval(PAST_MAX_AGE_HOURS)}`,
         provenPassStartedAt: sql`proven_pass_started_at - ${hoursInterval(PAST_MAX_AGE_HOURS)}`,
       })
       .where(eq(corpusIndexRouteProofs.indexId, ROUTE.indexId));
@@ -1073,12 +1158,7 @@ describe("route readiness proof", () => {
     expect((await advance()).type).toBe("advanced");
     const started = await passId();
     // Old, but still young enough for its end to prove the route.
-    await db
-      .update(corpusIndexRouteProofs)
-      .set({
-        passStartedAt: sql`pass_started_at - ${hoursInterval(CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS - 1)}`,
-      })
-      .where(eq(corpusIndexRouteProofs.indexId, ROUTE.indexId));
+    await agePass(CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS - 1);
 
     expect(stepName(await advance())).toBe("present:advanced");
     expect(await passRow()).toMatchObject({
@@ -1114,7 +1194,7 @@ describe("route readiness proof", () => {
           present(`${ROUTE.indexId}:01JFIRST`),
         ),
     );
-    const stale = started.type === "pass" ? started.pass : panic("No pass");
+    const stale = started.type === "pass" ? started : panic("No pass");
     await dropGeneration();
     expect(await db.select().from(corpusIndexRouteProofs)).toEqual([]);
     await registerGeneration();
@@ -1126,20 +1206,22 @@ describe("route readiness proof", () => {
           present(`${ROUTE.indexId}:01JFIRST`),
         ),
     );
-    const fresh = restarted.type === "pass" ? restarted.pass : panic("No pass");
+    const fresh = restarted.type === "pass" ? restarted : panic("No pass");
     // Same number, same phase, same cursor: only the pass id tells them apart.
-    expect(fresh).toMatchObject({
-      number: stale.number,
-      expectation: stale.expectation,
-      cursor: stale.cursor,
+    expect(fresh.pass.number).toBe(stale.pass.number);
+    expect(fresh.range).toMatchObject({
+      index: stale.range.index,
+      expectation: stale.range.expectation,
+      cursor: stale.range.cursor,
     });
-    expect(fresh.id).not.toBe(stale.id);
+    expect(fresh.pass.id).not.toBe(stale.pass.id);
     expect(
       await runInTransaction(
         async (tx) =>
           await recordCorpusIndexRouteCensusPageTx(tx, {
             route: ROUTE,
-            pass: stale,
+            pass: stale.pass,
+            range: stale.range,
             incarnation: `${ROUTE.indexId}:01JFIRST`,
             inspected: 1,
             nextCursor: null,
@@ -1288,13 +1370,453 @@ const seedAppliedMany = async (indices: readonly number[]) => {
   }
 };
 
+/**
+ * Walk a pass split into `ranges` ranges one page at a time, taking the
+ * ranges round robin as workers would, until it proves the route; each step
+ * named `range:phase:outcome`.
+ */
+const advanceRangesUntilProven = async (ranges: number): Promise<string[]> => {
+  const steps: string[] = [];
+  for (let page = 0; page < 200; page += 1) {
+    const range = page % ranges;
+    // db-await-in-loop: each page reads the cursors the pages before recorded
+    const { advance: step } = await advancePage(ROUTE, { range, ranges });
+    if (step.type !== "range_idle") {
+      steps.push(`${String(range)}:${stepName(step)}`);
+    }
+    if (step.type === "proven") {
+      return steps;
+    }
+  }
+  return panic(`The split pass did not end: ${steps.join(", ")}`);
+};
+
+/** Start one page of `range` of a pass split into `ranges`. */
+const startRange = async (range: number, ranges: number) => {
+  const started = await runInTransaction(
+    async (tx) =>
+      await startCorpusIndexRouteCensusPageTx(
+        tx,
+        ROUTE,
+        present(incarnations.get(ROUTE.indexId) ?? panic("No incarnation")),
+        { range, ranges },
+      ),
+  );
+  return started.type === "pass" ? started : panic(`No pass: ${started.type}`);
+};
+
+/** The earliest start of the route's ranges, in epoch microseconds. */
+const earliestRangeStartUs = async () => {
+  const [row] = executedRowsOf(
+    await db.execute(sql`
+      SELECT (extract(epoch FROM min((laid.value ->> 'startedAt')::timestamptz))
+        * 1000000)::bigint::text AS earliest
+      FROM corpus_index_route_proofs,
+        jsonb_array_elements(pass_ranges -> 'ranges') AS laid(value)
+      WHERE index_id = ${ROUTE.indexId}
+    `),
+  );
+  return isRecord(row) && typeof row["earliest"] === "string"
+    ? row["earliest"]
+    : panic("The route has no ranges");
+};
+
+const executedRowsOf = (result: unknown): unknown[] =>
+  isRecord(result) && Array.isArray(result["rows"]) ? result["rows"] : [];
+
+describe("a route pass split into key ranges", () => {
+  test("proves exactly what one cursor proves, each revision read once", async () => {
+    for (const index of Array.from({ length: 12 }, (_, at) => at)) {
+      // db-await-in-loop: a twelve-decision fixture
+      await seedApplied(index);
+    }
+    await seedSettled(12);
+    await seedSettled(13);
+    await seedWithdrawn(14);
+    const every = Array.from({ length: 15 }, (_, at) =>
+      revisionId(at),
+    ).toSorted();
+
+    const split = await advanceRangesUntilProven(4);
+    // Four ranges each ended both phases; the last to end proved the route.
+    expect(split.at(-1)).toMatch(/:absent:proven$/u);
+    expect(
+      split.filter((step) => step.endsWith(":absent:range_completed")),
+    ).toHaveLength(3);
+    const splitProof = await statusOf();
+    expect(splitProof).toMatchObject({
+      type: "current",
+      inspected: 15,
+      incarnation: `${ROUTE.indexId}:01JFIRST`,
+    });
+    // Every revision, applied or deleted, was read once and only once.
+    expect(asked.toSorted()).toEqual(every);
+
+    // The next pass is as small as this one's proof: one range, one cursor.
+    asked = [];
+    await advanceUntilProven();
+    expect((await routePass()).ranges).toEqual([]);
+    expect(await statusOf()).toMatchObject({
+      type: "current",
+      inspected: 15,
+      incarnation: `${ROUTE.indexId}:01JFIRST`,
+    });
+    expect(asked.toSorted()).toEqual(every);
+  });
+
+  test("a range that ends on another incarnation proves nothing, and every range starts over", async () => {
+    for (const index of [0, 1, 2, 3, 4, 5]) {
+      // db-await-in-loop: a six-decision fixture
+      await seedApplied(index);
+    }
+    const second = `${ROUTE.indexId}:01JSECOND`;
+    const third = `${ROUTE.indexId}:01JTHIRD`;
+    const untilRangeEnds = async (range: number) => {
+      for (let page = 0; page < 20; page += 1) {
+        // db-await-in-loop: each page reads the cursor the previous recorded
+        const { advance: step } = await advancePage(ROUTE, {
+          range,
+          ranges: 2,
+        });
+        if (step.type === "range_completed" || step.type === "superseded") {
+          return step.type;
+        }
+      }
+      return panic(`Range ${String(range)} did not end`);
+    };
+    expect(await untilRangeEnds(0)).toBe("range_completed");
+    expect((await routePass()).ranges.at(0)).toMatchObject({ completed: true });
+
+    // Recreated before the other range's page: that page revokes, and the
+    // range that had ended walks again on the new index.
+    incarnations.set(ROUTE.indexId, second);
+    expect(
+      (await advancePage(ROUTE, { range: 1, ranges: 2 })).advance.type,
+    ).toBe("advanced");
+    const restarted = await routePass();
+    expect(restarted.passIndexIncarnation).toBe(second);
+    expect(restarted.ranges.at(0)).toMatchObject({
+      completed: false,
+      cursor: null,
+      inspected: 0,
+    });
+    expect(await statusOf()).toEqual({ type: "never_proven" });
+
+    // Recreated between a range's last census read and its end: that range
+    // does not end, so the pass proves nothing.
+    expect(await untilRangeEnds(0)).toBe("range_completed");
+    expect(
+      (await advancePage(ROUTE, { range: 1, ranges: 2 })).advance.type,
+    ).toBe("phase_completed");
+    switchIncarnation = {
+      atRead: reads.incarnation + 2,
+      indexId: ROUTE.indexId,
+      to: third,
+    };
+    expect(
+      (await advancePage(ROUTE, { range: 1, ranges: 2 })).advance.type,
+    ).toBe("superseded");
+    expect(await statusOf()).toEqual({ type: "never_proven" });
+
+    // The pass on the new index proves the route on it alone.
+    await advanceRangesUntilProven(2);
+    expect(await statusOf()).toMatchObject({
+      type: "current",
+      incarnation: third,
+      inspected: 6,
+    });
+  });
+
+  test("a revocation during the pass restarts every range, and a page read before it is not recorded", async () => {
+    for (const index of [0, 1, 2, 3, 4, 5, 6, 7]) {
+      // db-await-in-loop: an eight-decision fixture
+      await seedApplied(index);
+    }
+    expect(
+      (await advancePage(ROUTE, { range: 0, ranges: 2 })).advance.type,
+    ).toBe("advanced");
+    for (let page = 0; page < 10; page += 1) {
+      // db-await-in-loop: each page reads the cursor the previous recorded
+      const { advance: step } = await advancePage(ROUTE, {
+        range: 1,
+        ranges: 2,
+      });
+      if (step.type === "range_completed") {
+        break;
+      }
+    }
+    const before = await routePass();
+    expect(before.ranges.map((range) => range["completed"])).toEqual([
+      false,
+      true,
+    ]);
+
+    const late = await startRange(0, 2);
+    await runInTransaction(
+      async (tx) =>
+        await revokeCorpusIndexRouteProofTx(tx, ROUTE, "present_drift"),
+    );
+    expect(
+      await runInTransaction(
+        async (tx) =>
+          await recordCorpusIndexRouteCensusPageTx(tx, {
+            route: ROUTE,
+            pass: late.pass,
+            range: late.range,
+            incarnation: `${ROUTE.indexId}:01JFIRST`,
+            inspected: 2,
+            nextCursor: entityId(3),
+            complete: false,
+          }),
+      ),
+    ).toEqual({ type: "superseded" });
+
+    // The next page lays the new pass out: every range at its beginning.
+    const fresh = await startRange(0, 2);
+    expect(fresh.pass.number).toBe(before.passNumber + 1);
+    expect(
+      (fresh.pass.ranges ?? panic("The pass has no ranges")).map(
+        ({ completed, cursor, inspected }) => ({
+          completed,
+          cursor,
+          inspected,
+        }),
+      ),
+    ).toEqual([
+      { completed: false, cursor: null, inspected: 0 },
+      { completed: false, cursor: null, inspected: 0 },
+    ]);
+    await advanceRangesUntilProven(2);
+    expect(await statusOf()).toMatchObject({ type: "current", inspected: 8 });
+  });
+
+  test("two pages read on one range record once, and the range that ends last proves the route once", async () => {
+    for (const index of [0, 1, 2, 3]) {
+      // db-await-in-loop: a four-decision fixture
+      await seedApplied(index);
+    }
+    const first = await startRange(0, 2);
+    const second = await startRange(0, 2);
+    const record = async (
+      started: Awaited<ReturnType<typeof startRange>>,
+      complete: boolean,
+    ) =>
+      await runInTransaction(
+        async (tx) =>
+          await recordCorpusIndexRouteCensusPageTx(tx, {
+            route: ROUTE,
+            pass: started.pass,
+            range: started.range,
+            incarnation: `${ROUTE.indexId}:01JFIRST`,
+            // The range's first phase holds two decisions.
+            inspected: started.range.through === null ? 0 : 2,
+            nextCursor: started.range.through,
+            complete,
+          }),
+      );
+    expect(await record(first, true)).toEqual({ type: "phase_completed" });
+    expect(await record(second, true)).toEqual({ type: "superseded" });
+    expect((await routePass()).ranges.at(0)).toMatchObject({
+      expectation: "absent",
+      inspected: 2,
+    });
+
+    // Both ranges at their last page, read before either ends.
+    for (const range of [0, 1]) {
+      for (let page = 0; page < 10; page += 1) {
+        // db-await-in-loop: each page reads the cursor the previous recorded
+        const ready = await startRange(range, 2);
+        if (ready.range.expectation === "absent") {
+          break;
+        }
+        // db-await-in-loop: one page of the range's present phase
+        await advancePage(ROUTE, { range, ranges: 2 });
+      }
+    }
+    const zero = await startRange(0, 2);
+    const one = await startRange(1, 2);
+    expect(await record(one, true)).toEqual({ type: "range_completed" });
+    expect(await statusOf()).toEqual({ type: "never_proven" });
+    expect(await record(zero, true)).toEqual({ type: "proven" });
+    expect(await record(zero, true)).toEqual({ type: "superseded" });
+    expect(await statusOf()).toMatchObject({ type: "current", inspected: 4 });
+  });
+
+  test("a pass's age is its earliest range's: one range too old to prove restarts the pass, and a proof starts there", async () => {
+    for (const index of [0, 1, 2, 3, 4, 5, 6, 7]) {
+      // db-await-in-loop: an eight-decision fixture
+      await seedApplied(index);
+    }
+    expect(
+      (await advancePage(ROUTE, { range: 0, ranges: 2 })).advance.type,
+    ).toBe("advanced");
+    // Only the other range started past the maximum age; the pass row and
+    // the walked range are young.
+    await agePass(PAST_MAX_AGE_HOURS, { ranges: [1] });
+    const restarts: Record<string, unknown>[] = [];
+    setLogSinkForTesting(({ message, attributes }) => {
+      if (message === "corpus_index.route_proof_pass_restarted") {
+        restarts.push({ ...attributes });
+      }
+    });
+    try {
+      expect(
+        (await advancePage(ROUTE, { range: 0, ranges: 2 })).advance.type,
+      ).toBe("advanced");
+    } finally {
+      resetLogSinkForTesting();
+    }
+    expect(restarts).toEqual([
+      expect.objectContaining({
+        reason: "pass_too_old_to_prove",
+        passNumber: 2,
+        abandonedPassNumber: 1,
+        abandonedPassAgeHours: PAST_MAX_AGE_HOURS,
+      }),
+    ]);
+
+    // The new pass's one range started an hour before the other: its proof
+    // is as old as that range.
+    await agePass(1, { ranges: [1] });
+    const earliest = await earliestRangeStartUs();
+    await advanceRangesUntilProven(2);
+    expect(await statusOf()).toMatchObject({
+      type: "current",
+      provenPassStartedAtUs: earliest,
+    });
+    // An hour old under a bound of one hour is already expired.
+    expect((await statusOf(ROUTE.indexId, { maxAgeHours: 1 })).type).toBe(
+      "expired",
+    );
+  });
+});
+
+/**
+ * The route's pass as a single cursor left it mid-walk, begun `hours` ago:
+ * its phase, its cursor and what it walked, with no ranges laid out.
+ */
+const standSingleCursorPass = async ({
+  hours,
+  expectation,
+  cursor,
+  through,
+  inspected,
+}: {
+  hours: number;
+  expectation: "present" | "absent";
+  cursor: string | null;
+  through: string;
+  inspected: number;
+}) => {
+  await db.insert(corpusIndexRouteProofs).values({
+    family: ROUTE.family,
+    generation: ROUTE.generation,
+    indexId: ROUTE.indexId,
+    passStartedAt: sql`clock_timestamp() - ${hoursInterval(hours)}`,
+    passExpectation: expectation,
+    passCursor: cursor,
+    passThrough: through,
+    passInspected: inspected,
+    passIndexIncarnation: `${ROUTE.indexId}:01JFIRST`,
+  });
+};
+
+describe("a pass a single cursor began walking", () => {
+  test("is split after its cursor, keeps its start and its count, and proves what the cursor would have", async () => {
+    for (const index of Array.from({ length: 10 }, (_, at) => at)) {
+      // db-await-in-loop: a ten-decision fixture
+      await seedApplied(index);
+    }
+    await seedSettled(10);
+    // Thirty hours in, the cursor has walked the first four decisions.
+    await standSingleCursorPass({
+      hours: 30,
+      expectation: "present",
+      cursor: entityId(3),
+      through: entityId(9),
+      inspected: 4,
+    });
+
+    const steps = await advanceRangesUntilProven(3);
+    expect(steps.at(-1)).toMatch(/:absent:proven$/u);
+    // Only what the cursor had not reached was read again.
+    expect(asked.toSorted()).toEqual(
+      [4, 5, 6, 7, 8, 9, 10].map(revisionId).toSorted(),
+    );
+    expect(await statusOf()).toMatchObject({ type: "current", inspected: 11 });
+    // The same pass proved the route, and its proof is as old as the pass.
+    expect(
+      await db
+        .select({ provenPassNumber: corpusIndexRouteProofs.provenPassNumber })
+        .from(corpusIndexRouteProofs)
+        .where(eq(corpusIndexRouteProofs.indexId, ROUTE.indexId)),
+    ).toEqual([{ provenPassNumber: 1 }]);
+    expect((await statusOf(ROUTE.indexId, { maxAgeHours: 29 })).type).toBe(
+      "expired",
+    );
+    expect((await statusOf(ROUTE.indexId, { maxAgeHours: 31 })).type).toBe(
+      "current",
+    );
+  });
+
+  test("past its present phase is split over the deleted revisions after its cursor", async () => {
+    for (const index of [0, 1, 2]) {
+      // db-await-in-loop: a three-decision fixture
+      await seedApplied(index);
+    }
+    for (const index of [10, 11, 12]) {
+      // db-await-in-loop: three deleted revisions
+      await seedSettled(index);
+    }
+    await standSingleCursorPass({
+      hours: 2,
+      expectation: "absent",
+      cursor: revisionId(10),
+      through: revisionId(12),
+      inspected: 4,
+    });
+
+    await advanceRangesUntilProven(2);
+    // Neither the applied revisions nor the deleted one walked are read again.
+    expect(asked.toSorted()).toEqual([11, 12].map(revisionId).toSorted());
+    expect(await statusOf()).toMatchObject({ type: "current", inspected: 6 });
+  });
+
+  test("begun at 128 revisions a page continues at a larger size, on the same pass, to the same proof", async () => {
+    const indices = Array.from({ length: 300 }, (_, at) => at);
+    await seedAppliedMany(indices);
+    await seedSettled(400);
+    const every = [...indices, 400].map(revisionId).toSorted();
+
+    expect((await advancePage(ROUTE, { limit: 128 })).advance).toMatchObject({
+      type: "advanced",
+      inspected: 128,
+    });
+    const steps: string[] = [];
+    for (let page = 0; page < 10; page += 1) {
+      // db-await-in-loop: each page reads the cursor the previous recorded
+      const { advance: step } = await advancePage(ROUTE, {
+        limit: CORPUS_INDEX_ROUTE_CENSUS_PAGE_MAX,
+      });
+      steps.push(stepName(step));
+      if (step.type === "proven") {
+        break;
+      }
+    }
+    expect(steps).toEqual(["present:phase_completed", "absent:proven"]);
+    expect(asked.toSorted()).toEqual(every);
+    expect(await statusOf()).toMatchObject({ type: "current", inspected: 301 });
+  });
+});
+
 describe("census page size", () => {
   test("a census page names more revisions than a delete batch", async () => {
     const indices = Array.from({ length: 200 }, (_, at) => at);
     await seedAppliedMany(indices);
-    expect(
-      await advance(ROUTE, CORPUS_INDEX_ROUTE_CENSUS_PAGE_MAX),
-    ).toMatchObject({
+    const { advance: step } = await advancePage(ROUTE, {
+      limit: CORPUS_INDEX_ROUTE_CENSUS_PAGE_MAX,
+    });
+    expect(step).toMatchObject({
       type: "phase_completed",
       expectation: "present",
       inspected: 200,
@@ -1304,46 +1826,6 @@ describe("census page size", () => {
     expect(admitted).toEqual([
       { step: "census", revisions: CORPUS_INDEX_ROUTE_CENSUS_PAGE_MAX },
     ]);
-  });
-
-  test("a pass begun at 128 revisions a page continues at a larger size, on the same pass, to the same proof", async () => {
-    const indices = Array.from({ length: 300 }, (_, at) => at);
-    await seedAppliedMany(indices);
-    await seedSettled(400);
-    const every = [...indices, 400].map(revisionId).toSorted();
-
-    // The pass walks one page at the size a run before this one used.
-    expect(await advance(ROUTE, 128)).toMatchObject({
-      type: "advanced",
-      inspected: 128,
-    });
-    const begun = await passRow();
-    expect(begun).toMatchObject({ passNumber: 1, passInspected: 128 });
-
-    // A run at a larger size resumes it from its cursor: same pass, no key
-    // read twice, and the proof counts every revision once.
-    const steps: string[] = [];
-    for (let page = 0; page < 10; page += 1) {
-      // db-await-in-loop: each page reads the cursor the previous recorded
-      const step = await advance(ROUTE, CORPUS_INDEX_ROUTE_CENSUS_PAGE_MAX);
-      steps.push(stepName(step));
-      if (step.type === "proven") {
-        break;
-      }
-    }
-    expect(steps).toEqual(["present:phase_completed", "absent:proven"]);
-    expect(asked.toSorted()).toEqual(every);
-    expect(await statusOf()).toMatchObject({
-      type: "current",
-      inspected: 301,
-      incarnation: `${ROUTE.indexId}:01JFIRST`,
-    });
-    expect(
-      await db
-        .select({ provenPassNumber: corpusIndexRouteProofs.provenPassNumber })
-        .from(corpusIndexRouteProofs)
-        .where(eq(corpusIndexRouteProofs.indexId, ROUTE.indexId)),
-    ).toEqual([{ provenPassNumber: begun.passNumber }]);
   });
 
   test("a page that times out halves, and the walk goes on at the smaller size", async () => {
@@ -1377,14 +1859,10 @@ describe("census page size", () => {
         break;
       }
     }
-    // 128 and 64 time out and record nothing; 32 walks the hundred in four
-    // pages, each revision read once.
+    // 128 and 64 time out; 32 walks the hundred in four pages.
     expect(limits).toEqual([128, 64, 32, 32, 32, 32]);
     expect(asked.toSorted()).toEqual(indices.map(revisionId).toSorted());
-    expect(await passRow()).toMatchObject({
-      passNumber: 1,
-      passExpectation: "absent",
-    });
+    expect(await passRow()).toMatchObject({ passExpectation: "absent" });
   });
 
   test("the size halves on a slow or timed-out census, doubles after fast full pages, and stays in its bounds", () => {

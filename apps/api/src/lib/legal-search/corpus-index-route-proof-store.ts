@@ -39,14 +39,30 @@
  * table. A census page costs a few primary-key reads and one primary-key
  * update here, beside the census page itself.
  *
+ * How a pass is split. Its first page lays the route's keys out in
+ * `CorpusIndexRouteCensusRange`s, disjoint and together covering every key:
+ * each range has its own bounds in both phases (entity ids for `present`,
+ * revision ids for `absent`), its own cursor, and walks both phases on its
+ * own. The ranges live in the pass's row (`pass_ranges`), bound to the pass
+ * id, so the pass and all its ranges move in one row write: a revocation or
+ * a restart starts every range over at once, and the page that ends the last
+ * range writes the proof in the same row. The proof holds only when every
+ * range of the same pass ended both phases on the pass's one incarnation,
+ * and its start is the earliest start of its ranges. The argument above holds
+ * per range: a revision entering a walked set carried its own observation,
+ * wherever its key falls. Range bounds only spread the work; no key is
+ * outside every range, so how evenly they split it never changes the proof.
+ *
  * Every write is a compare-and-set on the row's own pass identity (number,
- * id, phase, cursor, incarnation), so two runners walking one route never
- * both advance it, two runners picking up one pass too old to prove restart
- * it once, and a revocation that lands while a page is read, or while a pass
- * is restarted, wins.
+ * id, incarnation) and, for a page, on its range's phase and cursor, so two
+ * runners walking one range never both advance it, two runners picking up
+ * one pass too old to prove restart it once, and a revocation that lands
+ * while a page is read, or while a pass is restarted, wins.
  */
 import { panic, Result } from "better-result";
 import { and, eq, type SQL, sql } from "drizzle-orm";
+
+import { isUuid } from "@stll/uuid-codec";
 
 import {
   corpusIndexGenerations,
@@ -73,6 +89,8 @@ import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-ma
 import {
   CORPUS_INDEX_ROUTE_CENSUS_EXPECTATIONS,
   CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS,
+  CORPUS_INDEX_ROUTE_PROOF_RANGE_MIN_ROWS,
+  CORPUS_INDEX_ROUTE_PROOF_RANGES_MAX,
   CORPUS_INDEX_ROUTE_PROOF_REVOKE_REASONS,
   type CorpusIndexRouteCensusExpectation,
   type CorpusIndexRoutePassRestartReason,
@@ -86,27 +104,54 @@ export type CorpusIndexRoute = {
   indexId: string;
 };
 
+/** The keys one range walks in one phase: after `after`, up to `upto`; null is open. */
+type CorpusIndexRouteRangeBounds = {
+  after: string | null;
+  upto: string | null;
+};
+
+/**
+ * One key range of a route's census pass, walked by its own cursor through
+ * both phases. `index` is its place among the pass's ranges, in key order.
+ * `through` is the last key its current phase walks, taken when the phase
+ * began and never past `upto`; null when the phase has nothing to walk.
+ * `completed` is true once it walked `absent` to its end.
+ */
+export type CorpusIndexRouteCensusRange = {
+  index: number;
+  bounds: Record<
+    CorpusIndexRouteCensusExpectation,
+    CorpusIndexRouteRangeBounds
+  >;
+  startedAt: string;
+  expectation: CorpusIndexRouteCensusExpectation;
+  cursor: string | null;
+  through: string | null;
+  inspected: number;
+  completed: boolean;
+};
+
 /**
  * Where a route's census pass stands. `number` orders passes and `id`
- * identifies one, so a page read for a pass never matches another; the start
- * is in epoch microseconds, PostgreSQL's precision. `through` is the last key
- * the current phase walks, null when the phase has nothing to walk.
+ * identifies one, so a page read for a pass never matches another. The start
+ * is in epoch microseconds, PostgreSQL's precision: the earliest start of the
+ * pass's ranges, or the instant the pass was begun while it has none yet.
  * `incarnation` is the engine index the pass read first, null before that.
  * `elapsedMs` is the pass's age when the row was read, on the database clock
- * its start was taken on. `lastProof` is the route's last
- * clean pass, null before one completes: its number tells how many passes
- * have restarted since, its count how far the pass under way has to go.
+ * its start was taken on. `ranges` are its ranges, null until its first page
+ * lays them out; `inspected` sums what they walked. `lastProof` is the
+ * route's last clean pass, null before one completes: its number tells how
+ * many passes have restarted since, its count how far the pass under way has
+ * to go.
  */
 export type CorpusIndexRouteCensusPass = {
   number: number;
   id: string;
-  through: string | null;
   startedAtUs: string;
-  expectation: CorpusIndexRouteCensusExpectation;
-  cursor: string | null;
-  inspected: number;
   incarnation: string | null;
   elapsedMs: number;
+  inspected: number;
+  ranges: CorpusIndexRouteCensusRange[] | null;
   lastProof: { number: number; inspected: number } | null;
 };
 
@@ -135,13 +180,28 @@ const isRoute = ({ family, generation, indexId }: CorpusIndexRoute): SQL =>
     AND ${proofs.generation} = ${generation}
     AND ${proofs.indexId} = ${indexId}`;
 
+const OPEN_BOUNDS: CorpusIndexRouteRangeBounds = { after: null, upto: null };
+
+/** The keys of `column` within `bounds`, as a condition. */
+const withinBounds = (
+  column: SQL,
+  { after, upto }: CorpusIndexRouteRangeBounds,
+): SQL =>
+  sql`${after === null ? sql`true` : sql`${column} > ${after}::uuid`}
+    AND ${upto === null ? sql`true` : sql`${column} <= ${upto}::uuid`}`;
+
 /**
- * The last applied revision's entity the `present` phase walks: the largest
- * key of the applied-census index when the phase begins. The bound only lets
- * the phase end under inflow; what is applied later, at any key, carried its
- * own presence proof.
+ * The first or last applied revision's entity on the route within `bounds`.
+ * The last one is what the `present` phase of a range walks through: the
+ * largest key of the applied-census index in the range when the phase begins.
+ * The bound only lets the phase end under inflow; what is applied later, at
+ * any key, carried its own presence proof.
  */
-const presentThrough = ({ family, generation, indexId }: CorpusIndexRoute) =>
+const appliedEdge = (
+  { family, generation, indexId }: CorpusIndexRoute,
+  edge: "first" | "last",
+  bounds: CorpusIndexRouteRangeBounds = OPEN_BOUNDS,
+) =>
   sql`(
     SELECT ${states.entityId}
     FROM ${states}
@@ -150,34 +210,99 @@ const presentThrough = ({ family, generation, indexId }: CorpusIndexRoute) =>
       AND ${states.appliedIndexId} = ${indexId}
       AND ${states.appliedAction} = 'upsert'
       AND ${states.appliedRevision} IS NOT NULL
-    ORDER BY ${states.entityId} DESC
+      AND ${withinBounds(sql`${states.entityId}`, bounds)}
+    ORDER BY ${states.entityId} ${sql.raw(edge === "first" ? "ASC" : "DESC")}
     LIMIT 1
   )`;
 
+const presentThrough = (
+  route: CorpusIndexRoute,
+  bounds: CorpusIndexRouteRangeBounds = OPEN_BOUNDS,
+) => appliedEdge(route, "last", bounds);
+
 /**
- * The last deleted revision the `absent` phase walks: the larger of the
- * largest settled and the largest withdrawn revision id of the index when the
- * phase begins. As for `presentThrough`, a revision settled or withdrawn
- * later carried its own observation of absence.
+ * The first or last deleted revision on the route within `bounds`: the
+ * smaller, or the larger, of the first or last settled and withdrawn
+ * revision id. The last one is what the `absent` phase of a range walks
+ * through; as for `presentThrough`, a revision settled or withdrawn later
+ * carried its own observation of absence.
  */
-const absentThrough = ({ family, generation, indexId }: CorpusIndexRoute) => {
-  const largest = (status: "settled" | "withdrawn") => sql`(
+const deletedEdge = (
+  { family, generation, indexId }: CorpusIndexRoute,
+  edge: "first" | "last",
+  bounds: CorpusIndexRouteRangeBounds = OPEN_BOUNDS,
+) => {
+  const order = sql.raw(edge === "first" ? "ASC" : "DESC");
+  const extreme = (status: "settled" | "withdrawn") => sql`(
       SELECT ${intents.id} AS id
       FROM ${intents}
       WHERE ${intents.family} = ${family}
         AND ${intents.generation} = ${generation}
         AND ${intents.indexId} = ${indexId}
         AND ${intents.status} = ${sql.raw(`'${status}'`)}
-      ORDER BY ${intents.id} DESC
+        AND ${withinBounds(sql`${intents.id}`, bounds)}
+      ORDER BY ${intents.id} ${order}
       LIMIT 1
     )`;
   return sql`(
     SELECT deleted.id
-    FROM (${largest("settled")} UNION ALL ${largest("withdrawn")}) AS deleted
-    ORDER BY deleted.id DESC
+    FROM (${extreme("settled")} UNION ALL ${extreme("withdrawn")}) AS deleted
+    ORDER BY deleted.id ${order}
     LIMIT 1
   )`;
 };
+
+const absentThrough = (
+  route: CorpusIndexRoute,
+  bounds: CorpusIndexRouteRangeBounds = OPEN_BOUNDS,
+) => deletedEdge(route, "last", bounds);
+
+/** The bound a range's phase walks through, taken when the phase begins. */
+const phaseThrough = (
+  route: CorpusIndexRoute,
+  expectation: CorpusIndexRouteCensusExpectation,
+  bounds: CorpusIndexRouteRangeBounds,
+) =>
+  expectation === "present"
+    ? presentThrough(route, bounds)
+    : absentThrough(route, bounds);
+
+/**
+ * The ranges of the row's pass under way, or null when none are laid out for
+ * it: a range set bound to another pass id belongs to a pass that ended.
+ */
+const currentRanges = sql`CASE
+    WHEN ${proofs.passRanges} ->> 'passId' = ${proofs.passId}::text
+    THEN ${proofs.passRanges} -> 'ranges'
+  END`;
+
+/**
+ * The start of the row's pass under way: the earliest start of its ranges,
+ * since a pass observes nothing before they are laid out, or the instant it
+ * was begun while it has none.
+ */
+const passStart = sql`COALESCE(
+    (
+      SELECT min((laid.value ->> 'startedAt')::timestamptz)
+      FROM jsonb_array_elements(${currentRanges}) AS laid(value)
+    ),
+    ${proofs.passStartedAt}
+  )`;
+
+/**
+ * Revisions the pass under way has found as recorded: what its single cursor
+ * walked before the pass was split (`carried`), and what every range walked.
+ */
+const passInspected = sql`((
+    SELECT COALESCE(sum((laid.value ->> 'inspected')::bigint), 0)
+    FROM jsonb_array_elements(${currentRanges}) AS laid(value)
+  ) + COALESCE(
+    CASE
+      WHEN ${proofs.passRanges} ->> 'passId' = ${proofs.passId}::text
+      THEN (${proofs.passRanges} ->> 'carried')::bigint
+    END,
+    0
+  ))`;
 
 const requiredText = (row: unknown, key: string): string =>
   isRecord(row) && typeof row[key] === "string"
@@ -223,29 +348,92 @@ const revokeReason = (value: string): CorpusIndexRouteProofRevokeReason =>
 /** The pass columns, as every read of a proof row selects them. */
 const passColumns = sql`${proofs.passNumber}::int AS pass_number,
   ${proofs.passId}::text AS pass_id,
-  ${proofs.passThrough}::text AS pass_through,
-  ${epochMicros(sql`${proofs.passStartedAt}`)}::text AS started_at_us,
-  ${proofs.passExpectation} AS expectation,
-  ${proofs.passCursor}::text AS cursor,
-  ${proofs.passInspected}::int AS inspected,
+  ${epochMicros(passStart)}::text AS started_at_us,
   ${proofs.passIndexIncarnation} AS incarnation,
-  floor(extract(epoch FROM clock_timestamp() - ${proofs.passStartedAt}) * 1000)::float8
+  floor(extract(epoch FROM clock_timestamp() - ${passStart}) * 1000)::float8
     AS elapsed_ms,
+  ${passInspected}::int AS inspected,
+  (${currentRanges})::text AS ranges,
   ${proofs.provenPassNumber}::int AS last_proof_number,
   ${proofs.provenInspected}::int AS last_proof_inspected`;
+
+const MALFORMED_RANGES = "Malformed route proof ranges";
+
+const rangeKey = (value: unknown): string | null => {
+  if (value === null) {
+    return null;
+  }
+  return typeof value === "string" && isUuid(value)
+    ? value
+    : panic(MALFORMED_RANGES);
+};
+
+const rangeOf = (
+  value: unknown,
+  index: number,
+): CorpusIndexRouteCensusRange => {
+  if (!isRecord(value)) {
+    return panic(MALFORMED_RANGES);
+  }
+  const { inspected, completed, startedAt, expectation } = value;
+  if (
+    typeof inspected !== "number" ||
+    !Number.isSafeInteger(inspected) ||
+    inspected < 0 ||
+    typeof completed !== "boolean" ||
+    typeof startedAt !== "string" ||
+    typeof expectation !== "string"
+  ) {
+    return panic(MALFORMED_RANGES);
+  }
+  return {
+    index,
+    bounds: {
+      present: {
+        after: rangeKey(value["presentAfter"]),
+        upto: rangeKey(value["presentUpto"]),
+      },
+      absent: {
+        after: rangeKey(value["absentAfter"]),
+        upto: rangeKey(value["absentUpto"]),
+      },
+    },
+    startedAt,
+    expectation: censusExpectation(expectation),
+    cursor: rangeKey(value["cursor"]),
+    through: rangeKey(value["through"]),
+    inspected,
+    completed,
+  };
+};
+
+const rangesOf = (
+  text: string | null,
+): CorpusIndexRouteCensusRange[] | null => {
+  if (text === null) {
+    return null;
+  }
+  const parsed: unknown = JSON.parse(text);
+  if (
+    !Array.isArray(parsed) ||
+    parsed.length === 0 ||
+    parsed.length > CORPUS_INDEX_ROUTE_PROOF_RANGES_MAX
+  ) {
+    return panic(MALFORMED_RANGES);
+  }
+  return parsed.map(rangeOf);
+};
 
 const passOf = (row: unknown): CorpusIndexRouteCensusPass => {
   const lastProofNumber = isRecord(row) ? row["last_proof_number"] : undefined;
   return {
     number: requiredCount(row, "pass_number"),
     id: requiredText(row, "pass_id"),
-    through: nullableText(row, "pass_through"),
     startedAtUs: requiredText(row, "started_at_us"),
-    expectation: censusExpectation(requiredText(row, "expectation")),
-    cursor: nullableText(row, "cursor"),
-    inspected: requiredCount(row, "inspected"),
     incarnation: nullableText(row, "incarnation"),
     elapsedMs: requiredMilliseconds(row, "elapsed_ms"),
+    inspected: requiredCount(row, "inspected"),
+    ranges: rangesOf(nullableText(row, "ranges")),
     lastProof:
       lastProofNumber === null
         ? null
@@ -308,6 +496,7 @@ export const revokeCorpusIndexRouteProofTx = async (
       pass_cursor = NULL,
       pass_inspected = 0,
       pass_index_incarnation = EXCLUDED.pass_index_incarnation,
+      pass_ranges = NULL,
       updated_at = EXCLUDED.updated_at
   `,
   );
@@ -495,12 +684,41 @@ export type CorpusIndexRouteCensusStart =
   | {
       type: "pass";
       pass: CorpusIndexRouteCensusPass;
+      /** The range this page walks, its phase's bound taken. */
+      range: CorpusIndexRouteCensusRange;
+      /**
+       * Whether PostgreSQL records nothing applied on the whole route: read
+       * only for a range whose `present` phase has nothing to walk, false
+       * otherwise.
+       */
+      routeHoldsNothing: boolean;
       /** The open pass this page started over instead of resuming. */
+      restarted: CorpusIndexRoutePassRestart | null;
+    }
+  /**
+   * The range asked for has nothing to walk in the pass under way: it ended
+   * both phases, the pass has fewer ranges, or the pass moved while its
+   * ranges were laid out. Nothing was walked; `pass` is the pass as read.
+   */
+  | {
+      type: "range_idle";
+      pass: CorpusIndexRouteCensusPass;
       restarted: CorpusIndexRoutePassRestart | null;
     }
   | { type: "refused"; refusal: CorpusIndexRouteRefusal }
   /** The engine holds no index under the route's id. */
   | { type: "index_missing" };
+
+/**
+ * Which range a page walks, and how many ranges a pass this page lays out may
+ * have at most. One range is the whole route walked by a single cursor.
+ */
+export type CorpusIndexRouteCensusPageRequest = {
+  range: number;
+  ranges: number;
+};
+
+const SINGLE_RANGE: CorpusIndexRouteCensusPageRequest = { range: 0, ranges: 1 };
 
 /**
  * Start the route's open pass over from its beginning, on the incarnation the
@@ -526,12 +744,13 @@ const restartPassTooOldToProveTx = async (
       pass_cursor = NULL,
       pass_inspected = 0,
       pass_index_incarnation = ${incarnation},
+      pass_ranges = NULL,
       updated_at = clock_reading.at
     FROM (SELECT clock_timestamp() AS at) AS clock_reading
     WHERE ${isRoute(route)}
       AND ${proofs.passNumber} = ${pass.number}
       AND ${proofs.passId} = ${pass.id}::uuid
-      AND NOT ${startedWithinMaxAge(sql`${proofs.passStartedAt}`)}
+      AND NOT ${startedWithinMaxAge(passStart)}
     RETURNING ${proofs.indexId}
   `,
   );
@@ -547,20 +766,269 @@ const restartPassTooOldToProveTx = async (
     : null;
 };
 
+const UUID_SPACE_END = 2n ** 128n - 1n;
+
+const uuidValue = (uuid: string): bigint =>
+  BigInt(`0x${uuid.replaceAll("-", "")}`);
+
+const uuidOfValue = (value: bigint): string => {
+  const hex = value.toString(16).padStart(32, "0");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+};
+
 /**
- * Start a census page of an admitted route: the route's pass, begun at the
- * database clock if the route has none, bound to the engine incarnation read
- * just before. A pass that already read another incarnation walked an index
- * that is no longer there: the proof is revoked and a new pass starts on this
- * one. A pass that started too long ago to prove the route is started over
- * (`pass_too_old_to_prove`). A replay converges on the row the first call
- * wrote.
+ * `count` disjoint key ranges, in key order, that together hold every key:
+ * the first is open below, the last open above, and the inner bounds are
+ * spread evenly between the first and the last key the phase holds now (over
+ * the whole key space while it holds fewer than two). How evenly they split
+ * the keys only spreads the work: inflow lands in whichever range holds its
+ * key, and every key is in exactly one.
+ */
+const splitCorpusIndexRouteKeys = (
+  first: string | null,
+  last: string | null,
+  count: number,
+  /** Keys up to this one were walked already: the first range starts after it. */
+  after: string | null = null,
+): CorpusIndexRouteRangeBounds[] => {
+  if (
+    !Number.isSafeInteger(count) ||
+    count < 1 ||
+    count > CORPUS_INDEX_ROUTE_PROOF_RANGES_MAX
+  ) {
+    return panic(`Route proof range count out of bounds: ${count}`);
+  }
+  const floor = after === null ? null : uuidValue(after);
+  const low = floor ?? (first === null ? null : uuidValue(first));
+  const high = last === null ? null : uuidValue(last);
+  const [from, to] = ((): [bigint, bigint] => {
+    if (low !== null && high !== null && low < high) {
+      return [low, high];
+    }
+    return [floor ?? 0n, UUID_SPACE_END];
+  })();
+  const inner = Array.from({ length: count - 1 }, (_, position) =>
+    uuidOfValue(from + ((to - from) * BigInt(position + 1)) / BigInt(count)),
+  );
+  return Array.from({ length: count }, (_, position) => ({
+    after: position === 0 ? after : (inner[position - 1] ?? null),
+    upto: position === count - 1 ? null : (inner[position] ?? null),
+  }));
+};
+
+/**
+ * How many ranges a new pass is split into: one on a route that records
+ * nothing, at most `requested`, and no more than its last clean pass's
+ * revisions fill at `CORPUS_INDEX_ROUTE_PROOF_RANGE_MIN_ROWS` each.
+ */
+const rangeCount = ({
+  requested,
+  lastProof,
+  holdsNothing,
+}: {
+  requested: number;
+  lastProof: CorpusIndexRouteCensusPass["lastProof"];
+  holdsNothing: boolean;
+}): number => {
+  if (holdsNothing) {
+    return 1;
+  }
+  if (lastProof === null) {
+    return requested;
+  }
+  return Math.min(
+    requested,
+    Math.max(
+      1,
+      Math.ceil(lastProof.inspected / CORPUS_INDEX_ROUTE_PROOF_RANGE_MIN_ROWS),
+    ),
+  );
+};
+
+/** Read the route's pass row; it exists once the page's start inserted it. */
+const readPassTx = async (
+  tx: Transaction,
+  route: CorpusIndexRoute,
+): Promise<{ pass: CorpusIndexRouteCensusPass; tooOldToProve: boolean }> => {
+  const row =
+    executedRows(
+      await tx.execute(sql`
+        SELECT ${passColumns},
+          NOT ${startedWithinMaxAge(passStart)} AS too_old_to_prove
+        FROM ${proofs}
+        WHERE ${isRoute(route)}
+      `),
+    ).at(0) ?? panic(`Route proof row was lost: ${route.indexId}`);
+  return {
+    pass: passOf(row),
+    tooOldToProve: isRecord(row) && row["too_old_to_prove"] === true,
+  };
+};
+
+/**
+ * Lay the pass's keys out in ranges, each starting at this instant in its
+ * `present` phase. A compare-and-set on the pass with no ranges yet: when
+ * another runner laid them out first, or the pass moved, theirs stand.
+ *
+ * A pass a single cursor began walking (`pass_cursor`, `pass_expectation`)
+ * keeps that walk: only the keys after its cursor in its phase are laid out,
+ * the ranges start where the pass began and carry what it walked. That is
+ * the same proof the single cursor would have ended: the keys up to its
+ * cursor were read during this pass, on the incarnation the pass is bound to
+ * (a page that reads another revokes the pass before it lays anything out),
+ * and a revision entering a walked set since carried its own observation.
+ */
+const layOutRangesTx = async (
+  tx: Transaction,
+  route: CorpusIndexRoute,
+  pass: CorpusIndexRouteCensusPass,
+  requested: number,
+): Promise<void> => {
+  const edges =
+    executedRows(
+      await tx.execute(sql`
+        SELECT ${appliedEdge(route, "first")}::text AS present_first,
+          ${appliedEdge(route, "last")}::text AS present_last,
+          ${deletedEdge(route, "first")}::text AS absent_first,
+          ${deletedEdge(route, "last")}::text AS absent_last,
+          ${proofs.passExpectation} AS walked_expectation,
+          ${proofs.passCursor}::text AS walked_cursor,
+          ${proofs.passInspected}::int AS walked_inspected
+        FROM ${proofs}
+        WHERE ${isRoute(route)}
+      `),
+    ).at(0) ?? panic(`Route proof row was lost: ${route.indexId}`);
+  const presentFirst = nullableText(edges, "present_first");
+  const absentFirst = nullableText(edges, "absent_first");
+  // What a single cursor walked of this pass before it was split; a pass
+  // begun split, or not walked yet, holds the cursor at its start.
+  const walked = {
+    expectation: censusExpectation(requiredText(edges, "walked_expectation")),
+    cursor: nullableText(edges, "walked_cursor"),
+    inspected: requiredCount(edges, "walked_inspected"),
+  };
+  const carried = walked.cursor !== null || walked.expectation === "absent";
+  const count = rangeCount({
+    requested,
+    lastProof: pass.lastProof,
+    holdsNothing: presentFirst === null && absentFirst === null,
+  });
+  const present = splitCorpusIndexRouteKeys(
+    presentFirst,
+    nullableText(edges, "present_last"),
+    count,
+    carried && walked.expectation === "present" ? walked.cursor : null,
+  );
+  const absent = splitCorpusIndexRouteKeys(
+    absentFirst,
+    nullableText(edges, "absent_last"),
+    count,
+    carried && walked.expectation === "absent" ? walked.cursor : null,
+  );
+  const layout = present.map((presentBounds, position) => {
+    const absentBounds = absent[position] ?? panic("Lost a range's bounds");
+    return {
+      presentAfter: presentBounds.after,
+      presentUpto: presentBounds.upto,
+      absentAfter: absentBounds.after,
+      absentUpto: absentBounds.upto,
+      expectation: carried ? walked.expectation : "present",
+      cursor: null,
+      through: null,
+      inspected: 0,
+      completed: false,
+    };
+  });
+  await writeRouteProofTx(
+    tx,
+    sql`
+    UPDATE ${proofs}
+    SET pass_ranges = jsonb_build_object(
+        'passId', ${proofs.passId}::text,
+        'carried', ${carried ? walked.inspected : 0}::bigint,
+        'ranges', (
+          SELECT jsonb_agg(
+            laid.value || jsonb_build_object(
+              'startedAt',
+              ${carried ? sql`${proofs.passStartedAt}` : sql`clock_reading.at`}
+            )
+            ORDER BY laid.position
+          )
+          FROM jsonb_array_elements(${JSON.stringify(layout)}::text::jsonb)
+            WITH ORDINALITY AS laid(value, position)
+        )
+      ),
+      updated_at = clock_reading.at
+    FROM (SELECT clock_timestamp() AS at) AS clock_reading
+    WHERE ${isRoute(route)}
+      AND ${proofs.passNumber} = ${pass.number}
+      AND ${proofs.passId} = ${pass.id}::uuid
+      AND ${currentRanges} IS NULL
+  `,
+  );
+};
+
+/** One range of the row's pass, as stored. */
+const rangeAt = (index: number): SQL =>
+  sql`(${proofs.passRanges} -> 'ranges' -> ${index}::int)`;
+
+/** The row's ranges with `fields` merged into the one at `index`. */
+const withRange = (index: number, fields: SQL): SQL =>
+  sql`jsonb_set(
+    ${proofs.passRanges},
+    ARRAY['ranges', ${String(index)}::text],
+    ${rangeAt(index)} || ${fields}
+  )`;
+
+/**
+ * The row still holds the pass and the range exactly as the page read them:
+ * the same pass, on `incarnation`, the range in the same phase at the same
+ * cursor and not ended.
+ */
+const rangeIs = (
+  route: CorpusIndexRoute,
+  pass: CorpusIndexRouteCensusPass,
+  range: CorpusIndexRouteCensusRange,
+  incarnation: string,
+): SQL =>
+  sql`${isRoute(route)}
+    AND ${proofs.passNumber} = ${pass.number}
+    AND ${proofs.passId} = ${pass.id}::uuid
+    AND ${proofs.passIndexIncarnation} = ${incarnation}
+    AND ${proofs.passRanges} ->> 'passId' = ${pass.id}::text
+    AND ${rangeAt(range.index)} ->> 'expectation' = ${range.expectation}::text
+    AND (${rangeAt(range.index)} ->> 'cursor')
+      IS NOT DISTINCT FROM ${range.cursor}::text
+    AND ${rangeAt(range.index)} -> 'completed' = 'false'::jsonb`;
+
+/**
+ * Start a census page of one range of an admitted route: the route's pass,
+ * begun at the database clock if the route has none, bound to the engine
+ * incarnation read just before and laid out in ranges by its first page. A
+ * pass that already read another incarnation walked an index that is no
+ * longer there: the proof is revoked and a new pass starts on this one, every
+ * range over. A pass that started too long ago to prove the route is started
+ * over (`pass_too_old_to_prove`). A range whose phase has not begun takes its
+ * bound now. A replay converges on the row the first call wrote.
  */
 export const startCorpusIndexRouteCensusPageTx = async (
   tx: Transaction,
   route: CorpusIndexRoute,
   observed: CorpusIndexIncarnation,
+  request: CorpusIndexRouteCensusPageRequest = SINGLE_RANGE,
 ): Promise<CorpusIndexRouteCensusStart> => {
+  if (
+    !Number.isSafeInteger(request.ranges) ||
+    request.ranges < 1 ||
+    request.ranges > CORPUS_INDEX_ROUTE_PROOF_RANGES_MAX ||
+    !Number.isSafeInteger(request.range) ||
+    request.range < 0 ||
+    request.range >= CORPUS_INDEX_ROUTE_PROOF_RANGES_MAX
+  ) {
+    return panic(
+      `Route census page request out of bounds: range ${request.range} of ${request.ranges}`,
+    );
+  }
   const admission = await admitRouteTx(tx, route);
   if (admission.type === "refused") {
     return admission;
@@ -583,6 +1051,7 @@ export const startCorpusIndexRouteCensusPageTx = async (
         pass_cursor = NULL,
         pass_inspected = 0,
         pass_index_incarnation = NULL,
+        pass_ranges = NULL,
         updated_at = clock_reading.at
       FROM (SELECT clock_timestamp() AS at) AS clock_reading
       WHERE ${isRoute(route)} AND ${proofs.passIndexIncarnation} IS NOT NULL
@@ -590,6 +1059,32 @@ export const startCorpusIndexRouteCensusPageTx = async (
     );
     return { type: "index_missing" };
   }
+  const { pass: laidOut, restarted } = await openPassTx(
+    tx,
+    route,
+    observed.incarnation,
+    request.ranges,
+  );
+  return {
+    ...(await openRangeTx(tx, route, laidOut, request.range)),
+    restarted,
+  };
+};
+
+/**
+ * The route's pass, begun if the route has none, bound to `incarnation`
+ * and laid out in ranges: a pass that read another incarnation is revoked
+ * and begun again, one too old to prove is started over.
+ */
+const openPassTx = async (
+  tx: Transaction,
+  route: CorpusIndexRoute,
+  observedIncarnation: string,
+  requestedRanges: number,
+): Promise<{
+  pass: CorpusIndexRouteCensusPass;
+  restarted: CorpusIndexRoutePassRestart | null;
+}> => {
   await writeRouteProofTx(
     tx,
     sql`
@@ -599,104 +1094,138 @@ export const startCorpusIndexRouteCensusPageTx = async (
     VALUES (
       ${route.family}, ${route.generation}, ${route.indexId},
       clock_timestamp(), 'present', ${presentThrough(route)},
-      ${observed.incarnation}
+      ${observedIncarnation}
     )
     ON CONFLICT ON CONSTRAINT corpus_index_route_proofs_pkey DO NOTHING
   `,
   );
-  const read = async () => {
-    const row =
-      executedRows(
-        await tx.execute(sql`
-          SELECT ${passColumns},
-            NOT ${startedWithinMaxAge(sql`${proofs.passStartedAt}`)}
-              AS too_old_to_prove
-          FROM ${proofs}
-          WHERE ${isRoute(route)}
-        `),
-      ).at(0) ?? panic(`Route proof row was lost: ${route.indexId}`);
-    return {
-      pass: passOf(row),
-      tooOldToProve: isRecord(row) && row["too_old_to_prove"] === true,
-    };
-  };
-  const { pass: found, tooOldToProve } = await read();
+  const { pass: found, tooOldToProve } = await readPassTx(tx, route);
   const replaced =
-    found.incarnation !== null && found.incarnation !== observed.incarnation;
+    found.incarnation !== null && found.incarnation !== observedIncarnation;
   if (replaced) {
     await revokeCorpusIndexRouteProofTx(tx, route, "index_replaced", {
-      incarnation: observed.incarnation,
+      incarnation: observedIncarnation,
     });
   }
   // A revocation above already started a new pass. Otherwise a pass too old
   // to prove starts over; if another writer moved it first, its pass stands.
   const restarted =
     !replaced && tooOldToProve
-      ? await restartPassTooOldToProveTx(tx, route, found, observed.incarnation)
+      ? await restartPassTooOldToProveTx(tx, route, found, observedIncarnation)
       : null;
   const resumed =
     !replaced && tooOldToProve && restarted === null
-      ? (await read()).pass
+      ? (await readPassTx(tx, route)).pass
       : found;
-  // A phase not yet begun takes its bound now, when its first page is read:
-  // a pass created on an empty route still walks what was applied before it
-  // read anything. The pass's first engine read binds its incarnation.
-  const pass =
-    replaced ||
-    restarted !== null ||
-    resumed.cursor === null ||
-    resumed.incarnation === null
-      ? passOf(
-          (
-            await writeRouteProofTx(
-              tx,
-              sql`
-            UPDATE ${proofs}
-            SET pass_index_incarnation = COALESCE(
-                ${proofs.passIndexIncarnation}, ${observed.incarnation}
-              ),
-              pass_through = CASE WHEN ${proofs.passCursor} IS NULL
-                THEN CASE ${proofs.passExpectation}
-                  WHEN 'present' THEN ${presentThrough(route)}
-                  ELSE ${absentThrough(route)}
-                END
-                ELSE ${proofs.passThrough}
-              END,
-              updated_at = clock_timestamp()
-            WHERE ${isRoute(route)}
-            RETURNING ${passColumns}
-          `,
-            )
-          ).at(0) ?? panic(`Route proof row was lost: ${route.indexId}`),
-        )
-      : resumed;
-  return { type: "pass", pass, restarted };
+  // The pass's first engine read binds its incarnation.
+  const unbound =
+    replaced || restarted !== null || resumed.incarnation === null;
+  if (unbound) {
+    await writeRouteProofTx(
+      tx,
+      sql`
+      UPDATE ${proofs}
+      SET pass_index_incarnation = COALESCE(
+          ${proofs.passIndexIncarnation}, ${observedIncarnation}
+        ),
+        updated_at = clock_timestamp()
+      WHERE ${isRoute(route)}
+    `,
+    );
+  }
+  const bound = unbound ? (await readPassTx(tx, route)).pass : resumed;
+  if (bound.ranges !== null) {
+    return { pass: bound, restarted };
+  }
+  // The pass's first page lays its keys out in ranges.
+  await layOutRangesTx(tx, route, bound, requestedRanges);
+  return { pass: (await readPassTx(tx, route)).pass, restarted };
 };
 
-/** What one clean census page did to the route's pass. */
+/**
+ * One range of the pass, its phase's bound taken if the phase has not begun:
+ * a range laid out on an empty route still walks what was applied before it
+ * read anything. Idle when the pass has no such range, the range ended, or
+ * the pass moved meanwhile.
+ */
+const openRangeTx = async (
+  tx: Transaction,
+  route: CorpusIndexRoute,
+  laidOut: CorpusIndexRouteCensusPass,
+  index: number,
+): Promise<
+  | {
+      type: "pass";
+      pass: CorpusIndexRouteCensusPass;
+      range: CorpusIndexRouteCensusRange;
+      routeHoldsNothing: boolean;
+    }
+  | { type: "range_idle"; pass: CorpusIndexRouteCensusPass }
+> => {
+  const asked = laidOut.ranges?.[index];
+  if (asked === undefined || asked.completed) {
+    return { type: "range_idle", pass: laidOut };
+  }
+  const incarnation =
+    laidOut.incarnation ??
+    panic("A bound route census pass has no incarnation");
+  if (asked.cursor === null) {
+    await writeRouteProofTx(
+      tx,
+      sql`
+      UPDATE ${proofs}
+      SET pass_ranges = ${withRange(
+        asked.index,
+        sql`jsonb_build_object('through', ${phaseThrough(
+          route,
+          asked.expectation,
+          asked.bounds[asked.expectation],
+        )}::text)`,
+      )},
+        updated_at = clock_timestamp()
+      WHERE ${rangeIs(route, laidOut, asked, incarnation)}
+    `,
+    );
+  }
+  const pass =
+    asked.cursor === null ? (await readPassTx(tx, route)).pass : laidOut;
+  const range = pass.ranges?.[index];
+  if (pass.id !== laidOut.id || range === undefined || range.completed) {
+    return { type: "range_idle", pass };
+  }
+  const holdsNothing =
+    range.expectation === "present" && range.through === null
+      ? executedRows(
+          await tx.execute(
+            sql`SELECT ${presentThrough(route)} IS NULL AS holds_nothing`,
+          ),
+        ).at(0)
+      : null;
+  return {
+    type: "pass",
+    pass,
+    range,
+    routeHoldsNothing:
+      isRecord(holdsNothing) && holdsNothing["holds_nothing"] === true,
+  };
+};
+
+/** What one clean census page did to its range and the route's pass. */
 export type CorpusIndexRouteCensusStep =
   | { type: "advanced" }
   | { type: "phase_completed" }
+  /** The range ended both phases; another range of the pass has not. */
+  | { type: "range_completed" }
+  /** The range ended both phases, the last of its pass: the route is proven. */
   | { type: "proven" }
   /**
-   * The pass moved since it was read: another runner, a revocation, or an
-   * engine incarnation other than the one the pass is bound to.
+   * The pass or the range moved since it was read: another runner, a
+   * revocation, or an engine incarnation other than the one the pass is
+   * bound to.
    */
   | { type: "superseded" }
   /** The route stopped being one that may be walked; nothing recorded. */
   | { type: "refused"; refusal: CorpusIndexRouteRefusal };
-
-const passIs = (
-  route: CorpusIndexRoute,
-  pass: CorpusIndexRouteCensusPass,
-  incarnation: string,
-): SQL =>
-  sql`${isRoute(route)}
-    AND ${proofs.passNumber} = ${pass.number}
-    AND ${proofs.passId} = ${pass.id}::uuid
-    AND ${proofs.passExpectation} = ${pass.expectation}
-    AND ${proofs.passCursor} IS NOT DISTINCT FROM ${pass.cursor}::uuid
-    AND ${proofs.passIndexIncarnation} = ${incarnation}`;
 
 /**
  * A pass proves a registered group's route only if it started no earlier
@@ -711,25 +1240,28 @@ const startedAfterAttestation = (
   gate.type === "manifest"
     ? sql`true`
     : sql`NOT EXISTS (
-        SELECT 1 FROM ${enrollments}
+        SELECT 1
+        FROM ${enrollments}, (SELECT ${passStart} AS started_at) AS proving
         WHERE ${enrollmentKey(route, [gate.indexGroup])}
-          AND (attested_at IS NULL
-            OR attested_at > corpus_index_route_proofs.pass_started_at)
+          AND (attested_at IS NULL OR attested_at > proving.started_at)
       )`;
 
 /**
- * Record one census page that found no drift. A page short of its phase's end
- * moves the cursor; the end of `present` moves on to `absent`; the end of
- * `absent` makes the pass the route's proof and starts the next pass at the
- * same instant, on the same incarnation. `incarnation` is what the engine
- * reported for this page; at the end of `absent` it must be read after the
- * page's census, so the proof's last observation and its incarnation agree.
+ * Record one census page of one range that found no drift. A page short of
+ * its phase's end moves the range's cursor; the end of `present` moves the
+ * range on to `absent`; the end of `absent` ends the range. The range that
+ * ends last makes the pass the route's proof, in the same row write as its
+ * own end, and starts the next pass at the same instant, on the same
+ * incarnation. `incarnation` is what the engine reported for this page; at
+ * the end of a range's `absent` it must be read after the page's census, so
+ * the range's last observation and the pass's incarnation agree.
  */
 export const recordCorpusIndexRouteCensusPageTx = async (
   tx: Transaction,
   {
     route,
     pass,
+    range,
     incarnation,
     inspected,
     nextCursor,
@@ -737,6 +1269,7 @@ export const recordCorpusIndexRouteCensusPageTx = async (
   }: {
     route: CorpusIndexRoute;
     pass: CorpusIndexRouteCensusPass;
+    range: CorpusIndexRouteCensusRange;
     incarnation: string;
     inspected: number;
     nextCursor: string | null;
@@ -750,60 +1283,98 @@ export const recordCorpusIndexRouteCensusPageTx = async (
   if (admission.type === "refused") {
     return admission;
   }
-  const step = ((): Exclude<
-    CorpusIndexRouteCensusStep,
-    { type: "superseded" | "refused" }
-  > => {
+  const step = ((): "advanced" | "phase_completed" | "range_completed" => {
     if (!complete) {
-      return { type: "advanced" };
+      return "advanced";
     }
-    return pass.expectation === "present"
-      ? { type: "phase_completed" }
-      : { type: "proven" };
+    return range.expectation === "present"
+      ? "phase_completed"
+      : "range_completed";
   })();
-  const set = (() => {
-    switch (step.type) {
+  const walked = sql`(${rangeAt(range.index)} ->> 'inspected')::bigint + ${inspected}::bigint`;
+  const fields = (() => {
+    switch (step) {
       case "advanced":
-        return sql`pass_cursor = ${nextCursor}::uuid,
-          pass_inspected = ${proofs.passInspected} + ${inspected}`;
+        return sql`jsonb_build_object(
+          'cursor', ${nextCursor}::uuid::text, 'inspected', ${walked})`;
       case "phase_completed":
-        return sql`pass_expectation = 'absent',
-          pass_cursor = NULL,
-          pass_through = ${absentThrough(route)},
-          pass_inspected = ${proofs.passInspected} + ${inspected}`;
-      case "proven":
-        // The finished pass's own number, start and incarnation, as the row
-        // holds them; the next pass keeps the incarnation it was read on.
-        return sql`proven_pass_number = pass_number,
-          proven_pass_started_at = pass_started_at,
-          proven_at = clock_reading.at,
-          proven_inspected = ${proofs.passInspected} + ${inspected},
-          proven_index_incarnation = pass_index_incarnation,
-          pass_number = ${proofs.passNumber} + 1,
-          pass_id = gen_random_uuid(),
-          pass_started_at = clock_reading.at,
-          pass_through = ${presentThrough(route)},
-          pass_expectation = 'present',
-          pass_cursor = NULL,
-          pass_inspected = 0`;
+        return sql`jsonb_build_object(
+          'expectation', 'absent'::text,
+          'cursor', NULL::text,
+          'through', ${absentThrough(route, range.bounds.absent)}::text,
+          'inspected', ${walked})`;
+      case "range_completed":
+        return sql`jsonb_build_object('completed', true, 'inspected', ${walked})`;
       default:
         step satisfies never;
         return panic("Unhandled route census step");
     }
   })();
+  // Concurrent pages of other ranges update the same row: each re-reads the
+  // row a concurrent one committed before applying its own range, so the
+  // last range to end sees every other one ended.
   const updated = await writeRouteProofTx(
     tx,
     sql`
       UPDATE ${proofs}
-      SET ${set},
+      SET pass_ranges = ${withRange(range.index, fields)},
+        updated_at = clock_timestamp()
+      WHERE ${rangeIs(route, pass, range, incarnation)}
+      RETURNING NOT EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(${proofs.passRanges} -> 'ranges') AS laid(value)
+        WHERE laid.value -> 'completed' <> 'true'::jsonb
+      ) AS all_completed
+    `,
+  );
+  const row = updated.at(0);
+  if (row === undefined) {
+    return { type: "superseded" };
+  }
+  if (
+    step !== "range_completed" ||
+    !isRecord(row) ||
+    row["all_completed"] !== true
+  ) {
+    return { type: step };
+  }
+  // Every range of the pass ended both phases on its incarnation: the pass's
+  // own number, start (its earliest range's) and incarnation become the
+  // proof; the next pass keeps the incarnation it was read on.
+  const proven = await writeRouteProofTx(
+    tx,
+    sql`
+      UPDATE ${proofs}
+      SET proven_pass_number = pass_number,
+        proven_pass_started_at = ${passStart},
+        proven_at = clock_reading.at,
+        proven_inspected = ${passInspected},
+        proven_index_incarnation = pass_index_incarnation,
+        pass_number = ${proofs.passNumber} + 1,
+        pass_id = gen_random_uuid(),
+        pass_started_at = clock_reading.at,
+        pass_through = ${presentThrough(route)},
+        pass_expectation = 'present',
+        pass_cursor = NULL,
+        pass_inspected = 0,
+        pass_ranges = NULL,
         updated_at = clock_reading.at
       FROM (SELECT clock_timestamp() AS at) AS clock_reading
-      WHERE ${passIs(route, pass, incarnation)}
-        AND ${step.type === "proven" ? startedAfterAttestation(route, admission.gate) : sql`true`}
+      WHERE ${isRoute(route)}
+        AND ${proofs.passId} = ${pass.id}::uuid
+        AND ${startedAfterAttestation(route, admission.gate)}
       RETURNING ${proofs.indexId}
     `,
   );
-  return updated.length === 1 ? step : { type: "superseded" };
+  if (proven.length === 1) {
+    return { type: "proven" };
+  }
+  // A pass older than its group's attestation proves nothing; never so while
+  // every new attestation revokes, so a writer that forgot is caught here.
+  await revokeCorpusIndexRouteProofTx(tx, route, "group_attested", {
+    incarnation,
+  });
+  return { type: "superseded" };
 };
 
 /**

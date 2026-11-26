@@ -24,6 +24,11 @@
  * (`pass_too_old_to_prove`, logged as `corpus_index.route_proof_pass_restarted`),
  * since its end could only write an expired proof.
  *
+ * A pass is split into key ranges (the store), and a page walks one of them,
+ * so several runners, or several workers of one runner, walk one large route
+ * at once; each range ends both phases on its own, and the range that ends
+ * last proves the route.
+ *
  * Page size. A page names its revisions in one engine aggregation, bounded by
  * the aggregation timeout (`CORPUS_INDEX_AGGREGATION_TIMEOUT_MS`), not by the
  * delete batch. Production pages of 128 revisions took 0.9 to 2.7 s at the
@@ -31,13 +36,12 @@
  * caller's to adapt (`nextCorpusIndexRouteCensusPageSize`): it starts at the
  * measured 128, halves on a census that timed out or took over half the
  * timeout, and doubles, up to `CORPUS_INDEX_ROUTE_CENSUS_PAGE_MAX`, after a
- * run of full pages that each took under a quarter of it. A page's size is
- * not part of its pass: the cursor alone says where the pass resumes, so a
- * pass begun at one size continues at any other.
+ * run of full pages that each took under a quarter of it.
  *
  * Every page logs `corpus_index.route_proof_page` (pages, revisions, elapsed
  * on the database clock, estimated remaining, restarts since the last clean
- * pass, the census time), so production measures what a pass costs.
+ * pass, the range and the census time), so production measures what a pass
+ * costs.
  */
 import { panic, Result } from "better-result";
 
@@ -61,6 +65,7 @@ import type { CorpusIndexRouteCensusExpectation } from "@/api/lib/legal-search/c
 import {
   type CorpusIndexRoute,
   type CorpusIndexRouteCensusPass,
+  type CorpusIndexRouteCensusRange,
   type CorpusIndexRouteCensusStep,
   type CorpusIndexRoutePassRestart,
   type CorpusIndexRouteRefusal,
@@ -106,7 +111,7 @@ export const initialCorpusIndexRouteCensusPageSize =
  *   slower than half the timeout halves, a full page faster than a quarter
  *   of it counts toward doubling, anything else keeps the size.
  */
-type CorpusIndexRouteCensusOutcome =
+export type CorpusIndexRouteCensusOutcome =
   { type: "timed_out" } | { type: "read"; censusMs: number; revisions: number };
 
 export const nextCorpusIndexRouteCensusPageSize = (
@@ -180,6 +185,11 @@ export type CorpusIndexRouteProofAdvance =
       expectation: CorpusIndexRouteCensusExpectation;
       repaired: number;
     }
+  /**
+   * The range asked for has nothing to walk in the pass under way; nothing
+   * was walked (the store's `range_idle`).
+   */
+  | { type: "range_idle" }
   /** The route may not be walked now (`CorpusIndexRouteRefusal`). */
   | { type: "refused"; refusal: CorpusIndexRouteRefusal }
   /** The engine holds no index under the route's id; nothing is proven. */
@@ -191,9 +201,22 @@ export type CorpusIndexRouteProofAdvance =
    */
   | { type: "unknown_documents"; documents: number };
 
-/** What one page did, with how long its census read took. */
+/**
+ * The ranges of a route's pass as one page read them: the pass's number, how
+ * many ranges it has (null before its first page lays them out), and which
+ * have ended both phases, this page's own included.
+ */
+type CorpusIndexRouteRangeLayout = {
+  passNumber: number;
+  count: number | null;
+  completed: number[];
+};
+
+/** What one page did, with what the caller paces the next pages by. */
 export type CorpusIndexRouteProofPage = {
   advance: CorpusIndexRouteProofAdvance;
+  /** The pass's ranges as the page found them; null when no pass was read. */
+  layout: CorpusIndexRouteRangeLayout | null;
   /** How long the page's census took; null when it read none. */
   censusMs: number | null;
 };
@@ -213,7 +236,7 @@ const projectionRevisions = (revisions: readonly string[]) =>
       panic(`Census drift names a malformed revision: ${revision}`),
   );
 
-/** Repair a page's drift by the repair that owns its kind. */
+/** Repair one batch of a page's drift by the repair that owns its kind. */
 const repairDriftTx = async (
   tx: Transaction,
   route: CorpusIndexRoute,
@@ -258,7 +281,20 @@ type AdvanceOptions = {
   >;
   admit: CorpusIndexRouteProofAdmission;
   route: CorpusIndexRoute;
+  /** Which range of the pass this page walks (default the first). */
+  range?: number;
+  /** How many ranges a pass this page lays out may have (default one). */
+  ranges?: number;
   limit?: number;
+};
+
+type PageOptions = Omit<
+  AdvanceOptions,
+  "admit" | "limit" | "range" | "ranges"
+> & {
+  limit: number;
+  range: number;
+  ranges: number;
 };
 
 /**
@@ -271,6 +307,7 @@ type AdvanceOptions = {
 const logCensusPage = ({
   route,
   pass,
+  range,
   limit,
   pageMs,
   censusMs,
@@ -278,6 +315,7 @@ const logCensusPage = ({
 }: {
   route: CorpusIndexRoute;
   pass: CorpusIndexRouteCensusPass;
+  range: CorpusIndexRouteCensusRange;
   limit: number;
   pageMs: number;
   censusMs: number | null;
@@ -309,8 +347,11 @@ const logCensusPage = ({
     generation: route.generation,
     index: route.indexId,
     passNumber: pass.number,
-    phase: pass.expectation,
+    phase: range.expectation,
     outcome,
+    range: range.index,
+    ranges: pass.ranges?.length ?? 1,
+    rangeRows: range.inspected + pageRows,
     pageLimit: limit,
     pageRows,
     pageMs,
@@ -355,14 +396,29 @@ const logPassRestart = ({
   });
 };
 
-const walkPage = async (
-  {
-    runInTransaction,
-    client,
-    route,
-    limit,
-  }: Omit<AdvanceOptions, "admit" | "limit"> & { limit: number },
+/** The layout a page read, with `ended` among its completed ranges. */
+const layoutOf = (
   pass: CorpusIndexRouteCensusPass,
+  ended: number | null,
+): CorpusIndexRouteRangeLayout => {
+  const { ranges } = pass;
+  if (ranges === null) {
+    return { passNumber: pass.number, count: null, completed: [] };
+  }
+  return {
+    passNumber: pass.number,
+    count: ranges.length,
+    completed: ranges.flatMap(({ index, completed }) =>
+      completed || index === ended ? [index] : [],
+    ),
+  };
+};
+
+const walkPage = async (
+  { runInTransaction, client, route, limit }: PageOptions,
+  pass: CorpusIndexRouteCensusPass,
+  range: CorpusIndexRouteCensusRange,
+  routeHoldsNothing: boolean,
 ): Promise<{
   walked: Result<CensusPage, CorpusIndexError>;
   censusMs: number | null;
@@ -370,19 +426,23 @@ const walkPage = async (
   const done = (
     advance: CorpusIndexRouteProofAdvance,
     censusMs: number | null,
-  ) => ({ walked: Result.ok({ type: "done", advance } as const), censusMs });
+  ) => ({
+    walked: Result.ok({ type: "done", advance } as const),
+    censusMs,
+  });
   const failed = (error: CorpusIndexError, censusMs: number | null) => ({
     walked: Result.err(error),
     censusMs,
   });
   const incarnation =
     pass.incarnation ?? panic("A started route census pass has no incarnation");
-  // A phase that began with nothing to walk still reads the engine: an empty
-  // `present` phase proves the index holds no document at all, so a route
-  // PostgreSQL records as empty is never proven without looking. An empty
-  // `absent` phase has nothing that must be missing; the incarnation reads
-  // around it are its look at the engine.
-  if (pass.through === null && pass.expectation === "present") {
+  // A range whose phase began with nothing to walk still reads the engine
+  // when the whole route records nothing applied: an empty `present` phase
+  // then proves the index holds no document at all, so a route PostgreSQL
+  // records as empty is never proven without looking. An empty `absent`
+  // phase has nothing that must be missing; the incarnation reads around it
+  // are its look at the engine.
+  if (range.through === null && routeHoldsNothing) {
     const counted = await client.search({
       observer: "unobserved",
       indexId: route.indexId,
@@ -401,25 +461,25 @@ const walkPage = async (
   }
   const censusStartedAt = performance.now();
   const page =
-    pass.through === null
+    range.through === null
       ? Result.ok({
           driftRevisions: [],
           inspected: 0,
           nextCursor: null,
           complete: true,
         })
-      : await CENSUS_PAGES[pass.expectation]({
+      : await CENSUS_PAGES[range.expectation]({
           runInTransaction,
           client,
           family: route.family,
           generation: route.generation,
           indexId: route.indexId,
-          after: pass.cursor,
-          through: pass.through,
+          after: range.cursor ?? range.bounds[range.expectation].after,
+          through: range.through,
           limit,
         });
   const censusMs =
-    pass.through === null
+    range.through === null
       ? null
       : Math.round(performance.now() - censusStartedAt);
   if (page.isErr()) {
@@ -430,7 +490,7 @@ const walkPage = async (
     return {
       walked: Result.ok({
         type: "drift",
-        expectation: pass.expectation,
+        expectation: range.expectation,
         revisions: driftRevisions,
       }),
       censusMs,
@@ -439,10 +499,12 @@ const walkPage = async (
   // A page ending on the phase's last key ends the phase without one more
   // empty page.
   const complete =
-    page.value.complete || (nextCursor !== null && nextCursor === pass.through);
-  // The pass's end reads the incarnation once more, after its last census
-  // read: the same uid at the start and the end means one index throughout.
-  const ending = complete && pass.expectation === "absent";
+    page.value.complete ||
+    (nextCursor !== null && nextCursor === range.through);
+  // A range's end reads the incarnation once more, after its last census
+  // read: the same uid at the pass's start and every range's end means one
+  // index throughout.
+  const ending = complete && range.expectation === "absent";
   const endObserved = ending
     ? await client.readIndexIncarnation(route.indexId, "unobserved")
     : Result.ok({ type: "present", incarnation } as const);
@@ -459,6 +521,7 @@ const walkPage = async (
       await recordCorpusIndexRouteCensusPageTx(tx, {
         route,
         pass,
+        range,
         incarnation: endIncarnation,
         inspected,
         nextCursor,
@@ -468,22 +531,25 @@ const walkPage = async (
   return done(
     step.type === "refused"
       ? step
-      : { ...step, expectation: pass.expectation, inspected },
+      : { ...step, expectation: range.expectation, inspected },
     censusMs,
   );
 };
 
-const censusPage = async ({
-  runInTransaction,
-  client,
-  route,
-  limit,
-}: Omit<AdvanceOptions, "admit" | "limit"> & { limit: number }): Promise<{
+const censusPage = async (
+  options: PageOptions,
+): Promise<{
   walked: Result<CensusPage, CorpusIndexError>;
+  layout: CorpusIndexRouteRangeLayout | null;
   censusMs: number | null;
 }> => {
-  const done = (advance: CorpusIndexRouteProofAdvance) => ({
+  const { runInTransaction, client, route, limit, range, ranges } = options;
+  const done = (
+    advance: CorpusIndexRouteProofAdvance,
+    layout: CorpusIndexRouteRangeLayout | null,
+  ) => ({
     walked: Result.ok({ type: "done", advance } as const),
+    layout,
     censusMs: null,
   });
   const observed = await client.readIndexIncarnation(
@@ -491,14 +557,33 @@ const censusPage = async ({
     "unobserved",
   );
   if (observed.isErr()) {
-    return { walked: Result.err(observed.error), censusMs: null };
+    return { walked: Result.err(observed.error), layout: null, censusMs: null };
   }
   const started = await runInTransaction(
     async (tx) =>
-      await startCorpusIndexRouteCensusPageTx(tx, route, observed.value),
+      await startCorpusIndexRouteCensusPageTx(tx, route, observed.value, {
+        range,
+        ranges,
+      }),
   );
-  if (started.type !== "pass") {
-    return done(started);
+  switch (started.type) {
+    case "refused":
+    case "index_missing":
+      return done(started, null);
+    case "range_idle":
+      if (started.restarted !== null) {
+        logPassRestart({
+          route,
+          pass: started.pass,
+          restarted: started.restarted,
+        });
+      }
+      return done({ type: "range_idle" }, layoutOf(started.pass, null));
+    case "pass":
+      break;
+    default:
+      started satisfies never;
+      return panic("Unhandled route census start");
   }
   const { pass, restarted } = started;
   if (restarted !== null) {
@@ -506,29 +591,41 @@ const censusPage = async ({
   }
   const pageStartedAt = performance.now();
   const { walked, censusMs } = await walkPage(
-    { runInTransaction, client, route, limit },
+    options,
     pass,
+    started.range,
+    started.routeHoldsNothing,
   );
   logCensusPage({
     route,
     pass,
+    range: started.range,
     limit,
     pageMs: Math.round(performance.now() - pageStartedAt),
     censusMs,
     walked,
   });
-  return { walked, censusMs };
+  const ended =
+    walked.isOk() &&
+    walked.value.type === "done" &&
+    (walked.value.advance.type === "range_completed" ||
+      walked.value.advance.type === "proven")
+      ? started.range.index
+      : null;
+  return { walked, layout: layoutOf(pass, ended), censusMs };
 };
 
 /**
- * Walk one census page of the route's pass, `limit` revisions, and repair
- * what drift it found.
+ * Walk one census page of one range of the route, and repair what drift it
+ * found. One range of one is the whole route walked by a single cursor.
  */
 export const advanceCorpusIndexRouteProof = async ({
   runInTransaction,
   client,
   admit,
   route,
+  range = 0,
+  ranges = 1,
   limit = CORPUS_INDEX_ROUTE_CENSUS_PAGE_INITIAL,
 }: AdvanceOptions): Promise<
   Result<CorpusIndexRouteProofPage, CorpusIndexError>
@@ -542,18 +639,27 @@ export const advanceCorpusIndexRouteProof = async ({
   }
   const page = await admit(
     { step: "census", revisions: limit },
-    async () => await censusPage({ runInTransaction, client, route, limit }),
+    async () =>
+      await censusPage({
+        runInTransaction,
+        client,
+        route,
+        limit,
+        range,
+        ranges,
+      }),
   );
   if (page.walked.isErr()) {
     return Result.err(page.walked.error);
   }
-  const { censusMs } = page;
+  const { layout, censusMs } = page;
   if (page.walked.value.type === "done") {
-    return Result.ok({ advance: page.walked.value.advance, censusMs });
+    return Result.ok({ advance: page.walked.value.advance, layout, censusMs });
   }
   const { expectation } = page.walked.value;
   // One repair batch per page: the repair revokes the proof and the pass
-  // starts over, so drift past the batch is found again by the new pass.
+  // starts over, so drift past the batch is found again by the new pass,
+  // whose first page of that range reads the same keys.
   const revisions = page.walked.value.revisions.slice(
     0,
     CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
@@ -567,6 +673,7 @@ export const advanceCorpusIndexRouteProof = async ({
   );
   return Result.ok({
     advance: { type: "drift_repaired", expectation, repaired },
+    layout,
     censusMs,
   });
 };
