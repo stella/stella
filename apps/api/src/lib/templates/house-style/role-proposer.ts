@@ -127,8 +127,16 @@ const isTitleShaped = ({ styleName, text }: DocxBlock): boolean => {
 };
 
 /** A list bullet as the engine reports it: one mark, no number. */
-export const isBulletMark = (label: string): boolean =>
+const isBulletMark = (label: string): boolean =>
   /^[^\p{L}\p{N}\s%]$/u.test(label.trim());
+
+/** Whether a list prints a bullet in front of the paragraph: the engine
+ *  says so of the level, or the label is a lone mark. */
+export const isBulleted = ({
+  label,
+  numbering,
+}: Pick<DocxBlock, "label" | "numbering">): boolean =>
+  label !== null && (numbering?.bullet === true || isBulletMark(label));
 
 type Reading = Omit<RoleProposal, "blockId" | "mergedIntoBlockId">;
 
@@ -391,7 +399,7 @@ const readUnlabelled = (
   // it could not read.
   const label = printedLabel(block);
   if (label !== null) {
-    return isBulletMark(label)
+    return isBulleted(block)
       ? reading("bullet", CONFIDENCE.autoLabel)
       : reading("continuation", CONFIDENCE.bullet, {
           role: "letter",

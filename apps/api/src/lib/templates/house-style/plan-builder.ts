@@ -63,7 +63,7 @@ import type { ReferenceSuspicion } from "@/api/lib/templates/house-style/referen
 import {
   HOUSE_STYLE_ROLES,
   isBlankParagraph,
-  isBulletMark,
+  isBulleted,
 } from "@/api/lib/templates/house-style/role-proposer";
 import type {
   HouseStyleRole,
@@ -455,7 +455,7 @@ const placementOf = (
       ? styleTarget(context, "body")
       : styleTarget(context, styleRole);
   const mark = (block.label ?? "").trim();
-  const bulleted = entry === null && isBulletMark(mark);
+  const bulleted = entry === null && isBulleted(block);
   const placement: Placement = {
     block,
     role,
@@ -1647,10 +1647,12 @@ const markReferences = ({
   // fill the document with false alarms: it is reported, not highlighted.
   // An annex is headed in words, not by a list, so a missing annex is
   // marked either way.
-  const labelled = blocks.filter((block) => {
-    const label = printedLabel(block);
-    return block.kind === "paragraph" && label !== null && !isBulletMark(label);
-  });
+  const labelled = blocks.filter(
+    (block) =>
+      block.kind === "paragraph" &&
+      printedLabel(block) !== null &&
+      !isBulleted(block),
+  );
   const unread = labelled.filter(({ id }) => !index.entryByBlockId.has(id));
   const numberingRead =
     unread.length <= labelled.length * UNREAD_LABELS_SHARE_MAX;
