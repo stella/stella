@@ -1,8 +1,13 @@
 import { expect, test } from "bun:test";
 
+import { nextMacrotask } from "@stll/concurrency/event-loop";
+
 import { createCleanupRunner } from "../src/transcribe/TranscribeCleanup";
 
 type Answer = { instructions: string[]; markdown: string } | null;
+
+/** One macrotask: every promise the runner chained has settled. */
+const settled = nextMacrotask;
 
 /** A cleanup endpoint that answers only when the test says so. */
 const endpoint = () => {
@@ -19,8 +24,7 @@ const endpoint = () => {
         answer: async (value) => {
           resolve(value);
           // Let the runner take the answer and send the next part.
-          await Promise.resolve();
-          await Promise.resolve();
+          await settled();
         },
       });
     });
@@ -105,4 +109,30 @@ test("nothing goes before cleanup starts", () => {
   runner.start();
   expect(runner.getSnapshot().started).toBe(true);
   expect(requests).toHaveLength(1);
+});
+
+test("a request that throws leaves the part failed, so it can be tried again", async () => {
+  let calls = 0;
+  const runner = createCleanupRunner({
+    job: 1,
+    autoStart: true,
+    clean: async () => {
+      calls += 1;
+      if (calls === 1) {
+        throw new Error("connection lost");
+      }
+      return await Promise.resolve({ instructions: [], markdown: "A" });
+    },
+  });
+  runner.attach({ paragraphs: [paragraph("a")], finished: true });
+  await settled();
+  expect(runner.getSnapshot().parts.map((part) => part.status)).toEqual([
+    "failed",
+  ]);
+
+  runner.retry(0);
+  await settled();
+  expect(runner.getSnapshot().parts.map((part) => part.status)).toEqual([
+    "done",
+  ]);
 });

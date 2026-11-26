@@ -208,7 +208,12 @@ export const createCleanupRunner = ({
     text: string,
     previous: string | null,
   ): Promise<void> => {
-    const answer = await clean(job, text, previous);
+    // A request that throws counts as a lost part: shown as transcribed,
+    // with Try again, never left running.
+    const result = await Result.tryPromise(async () =>
+      clean(job, text, previous),
+    );
+    const answer = Result.isOk(result) ? result.value : null;
     setParts((parts) =>
       parts.map((entry, at) =>
         at === index

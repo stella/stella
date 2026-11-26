@@ -54,27 +54,36 @@ export const CopyToMatterDialog = ({
   sourceWorkspaceId,
   entities,
   initialTargetWorkspaceId,
-}: CopyToMatterDialogProps) => (
-  <Dialog onOpenChange={() => onOpenChange(false)} open={open}>
-    <DialogPopup className="max-w-lg">
-      {/* The popup's content mounts each time the dialog opens, and is keyed
-          by the preset, so every drop starts from its own target matter. */}
-      <CopyToMatterForm
-        entities={entities}
-        initialTargetWorkspaceId={initialTargetWorkspaceId ?? null}
-        key={initialTargetWorkspaceId ?? ""}
-        onOpenChange={onOpenChange}
-        sourceWorkspaceId={sourceWorkspaceId}
-      />
-    </DialogPopup>
-  </Dialog>
-);
+}: CopyToMatterDialogProps) => {
+  // Held here, above the form, so a transfer still running after the dialog
+  // closes or its preset changes keeps the next form from starting another.
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  return (
+    <Dialog onOpenChange={() => onOpenChange(false)} open={open}>
+      <DialogPopup className="max-w-lg">
+        {/* The popup's content mounts each time the dialog opens, and is keyed
+            by the preset, so every drop starts from its own target matter. */}
+        <CopyToMatterForm
+          entities={entities}
+          initialTargetWorkspaceId={initialTargetWorkspaceId ?? null}
+          isSubmitting={isSubmitting}
+          key={initialTargetWorkspaceId ?? ""}
+          onOpenChange={onOpenChange}
+          onSubmittingChange={setIsSubmitting}
+          sourceWorkspaceId={sourceWorkspaceId}
+        />
+      </DialogPopup>
+    </Dialog>
+  );
+};
 
 type CopyToMatterFormProps = Omit<
   CopyToMatterDialogProps,
   "open" | "initialTargetWorkspaceId"
 > & {
   initialTargetWorkspaceId: string | null;
+  isSubmitting: boolean;
+  onSubmittingChange: (submitting: boolean) => void;
 };
 
 const CopyToMatterForm = ({
@@ -82,6 +91,8 @@ const CopyToMatterForm = ({
   sourceWorkspaceId,
   entities,
   initialTargetWorkspaceId,
+  isSubmitting,
+  onSubmittingChange: setIsSubmitting,
 }: CopyToMatterFormProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -96,7 +107,6 @@ const CopyToMatterForm = ({
         }
       : null,
   );
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const resolveTarget = useResolveMatterTarget();
 
   const transferEntities = getCopyToMatterRootEntities(entities);

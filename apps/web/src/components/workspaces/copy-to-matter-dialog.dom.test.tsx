@@ -302,6 +302,44 @@ test("every opening starts over from the preset target matter", async () => {
   await waitFor(() => {
     expect(isDisabled(submit(messages.common.copy))).toBe(true);
   });
+
+  // A transfer still running when the dialog closes keeps the next opening
+  // from starting another one until it ends.
+  const response = Promise.withResolvers<Response>();
+  const started = Promise.withResolvers<undefined>();
+  transferResponse = async () => {
+    started.resolve(undefined);
+    return await response.promise;
+  };
+  const add = spyOn(stellaToast, "add").mockReturnValue("transfer");
+  try {
+    fireEvent.click(view.getByTestId("open-with-preset"));
+    await waitFor(() => {
+      expect(isDisabled(submit(messages.common.copy))).toBe(false);
+    });
+    click(messages.common.copy);
+    await started.promise;
+    fireEvent.click(view.getByTestId("close"));
+    await waitFor(() => {
+      expect(
+        view.queryByText(messages.workspaces.copyToMatter.title) === null,
+      ).toBe(true);
+    });
+    fireEvent.click(view.getByTestId("open-with-preset"));
+    await waitFor(() => {
+      expect(isDisabled(submit(messages.common.loading))).toBe(true);
+    });
+    await act(async () => {
+      response.resolve(Response.json({ entityId: "copied-item" }));
+    });
+    // The finished transfer closes the dialog; the next opening may copy.
+    fireEvent.click(view.getByTestId("open-with-preset"));
+    await waitFor(() => {
+      expect(isDisabled(submit(messages.common.copy))).toBe(false);
+    });
+  } finally {
+    add.mockRestore();
+  }
   view.unmount();
   queryClient.clear();
 });

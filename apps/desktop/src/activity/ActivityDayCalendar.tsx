@@ -2453,7 +2453,8 @@ function useReviewSubmission({
   const pendingKey = pendingBatch?.idempotencyKey ?? null;
   const updateSubmission = (next: Submission) => {
     store.update(next);
-    onReviewStatusChange(next.type);
+    // The store may have turned a retry whose batch is gone into editing.
+    onReviewStatusChange(store.getSnapshot().type);
   };
   useExternalSyncEffect(() => {
     store.observePending(pendingKey);

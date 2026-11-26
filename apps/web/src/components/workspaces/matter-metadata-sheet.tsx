@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Activity, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -39,6 +39,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import {
   useDeleteWorkspace,
   useDuplicateWorkspace,
@@ -66,23 +67,25 @@ export const MatterMetadataPanel = ({
   workspaceId,
   onDeleted,
 }: MatterMetadataPanelProps) => {
-  const workspaceQuery = useQuery(workspaceOptions(workspaceId));
-  const workspace = workspaceQuery.data;
-  if (!workspace) {
+  // A failed background refetch keeps the cached matter (`items` with a
+  // refetch error), and the form stays as it is: its drafts, dialogs and
+  // pending saves and deletions go on.
+  const workspaceView = queryView(useQuery(workspaceOptions(workspaceId)), {
+    isEmpty: () => false,
+  });
+  if (workspaceView.type !== "items") {
     return null;
   }
+  const workspace = workspaceView.items;
   // Keyed by the matter, so its drafts, dialogs and confirmations start
-  // over when the panel shows another one. A failed background refetch
-  // hides the form without unmounting it, so an edit in progress survives.
+  // over when the panel shows another one.
   return (
-    <Activity mode={workspaceQuery.isError ? "hidden" : "visible"}>
-      <MatterMetadataForm
-        key={workspaceId}
-        onDeleted={onDeleted}
-        workspace={workspace}
-        workspaceId={workspaceId}
-      />
-    </Activity>
+    <MatterMetadataForm
+      key={workspaceId}
+      onDeleted={onDeleted}
+      workspace={workspace}
+      workspaceId={workspaceId}
+    />
   );
 };
 

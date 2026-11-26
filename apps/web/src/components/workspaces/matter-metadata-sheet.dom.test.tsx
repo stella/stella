@@ -147,7 +147,7 @@ test("the name follows the saved matter until edited, survives a failed refetch,
     expect(nameValue()).toBe("Draft name");
   });
 
-  // A background refetch that fails hides the form but keeps the draft.
+  // A background refetch that fails keeps the form, and the draft, on screen.
   await act(async () => {
     queryClient
       .getQueryCache()
@@ -155,8 +155,12 @@ test("the name follows the saved matter until edited, survives a failed refetch,
       ?.setState({ error: new Error("offline"), status: "error" });
   });
   await waitFor(() => {
-    expect(nameShown()).toBe(false);
+    expect(
+      queryClient.getQueryState(workspacesKeys.byId("matter-one"))?.status,
+    ).toBe("error");
   });
+  expect(nameShown()).toBe(true);
+  expect(nameValue()).toBe("Draft name");
   await act(async () => {
     queryClient.setQueryData(
       workspacesKeys.byId("matter-one"),
