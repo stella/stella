@@ -37,7 +37,7 @@ const { createPlaybookBaseline, hasPlaybookDraftChanges } =
 const { resolveServerFollow, draftToAdopt } =
   await import("./playbook-editor-sync.logic");
 const { usePlaybookSaveQueue } = await import("./use-playbook-save-queue");
-const { useMountEffect } = await import("@/hooks/use-effect");
+const { useMountEffect } = await import("@stll/ui/effects");
 const { hasUnsavedWork } = await import("@/hooks/use-unsaved-work");
 const { useState } = await import("react");
 const { PLAYBOOK_DRAFT_VIEW } =

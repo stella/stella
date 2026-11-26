@@ -18,6 +18,7 @@ import type {
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { formatFileSize } from "@stll/ui/file-size";
 import {
   AlertTriangleIcon,
@@ -49,7 +50,6 @@ import type { FilePartActions } from "@/components/file-parts/use-file-part-acti
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
 import type { ZoomDirection } from "@/components/inspector/zoom-controls";
 import { PeekPdfControls } from "@/components/pdf/peek/peek-pdf-viewer";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { APIError, isPreviewUnavailableError } from "@/lib/errors/api";

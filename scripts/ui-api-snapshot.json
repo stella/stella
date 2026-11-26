@@ -1144,6 +1144,17 @@
       "DocumentMark",
       "isDocumentMarkKind"
     ],
+    "./effects": [
+      "useExternalSyncEffect",
+      "useHasMounted",
+      "useIsMounted",
+      "useKeyedState",
+      "useLatest",
+      "useLatestCallback",
+      "useLayoutSyncEffect",
+      "useMountEffect",
+      "useMountLayoutEffect"
+    ],
     "./entity-actions": [
       "ContextMenuSurface",
       "EntityActions",

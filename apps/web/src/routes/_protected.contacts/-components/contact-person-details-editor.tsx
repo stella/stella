@@ -3,10 +3,9 @@ import { useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useLatestCallback, useMountEffect } from "@stll/ui/effects";
 import { stellaToast } from "@stll/ui/toast";
 
-import { useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUpdateContact } from "@/lib/contacts/mutations";
 import { notifyUserProblem } from "@/lib/errors/user-toast";
 import { DetailSection } from "@/routes/_protected.contacts/-components/detail-section.pending";

@@ -16,6 +16,7 @@ import {
   type StatuteQueryIntent,
 } from "@stll/api-contract/statute-query-intent";
 import { createStatuteRouteParams } from "@stll/api-contract/statute-route";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import {
   LANDING_ROW_CLASS,
   LANDING_SECTION_HEADING_CLASS,
@@ -40,7 +41,6 @@ import { useLawHistory } from "@/features/law-search-history/law-search-history-
 import { StatuteSignalText } from "@/features/statutes/components/statute-signal-text";
 import { openStatuteMatch } from "@/features/statutes/open-statute-match";
 import { legislationShelfOptions } from "@/features/statutes/queries/statutes";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { caseLawCountryName } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";

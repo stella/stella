@@ -13,7 +13,7 @@ const { act } = await import("@testing-library/react");
 const { createRoot } = await import("react-dom/client");
 const { createMemoryHistory, createRootRoute, createRouter, RouterProvider } =
   await import("@tanstack/react-router");
-const { useMountEffect } = await import("@/hooks/use-effect");
+const { useMountEffect } = await import("@stll/ui/effects");
 const { reportErrorOnce, resetReportedErrorsForTests } =
   await import("@/lib/analytics/reported-error");
 const { createRootCaughtErrorHandler } =

@@ -15,6 +15,7 @@ import type {
 } from "@stll/api-contract/notifications";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { BellIcon } from "@stll/ui/icons";
 import {
   Popover,
@@ -27,7 +28,6 @@ import { cn } from "@stll/ui/utils";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterRefLink } from "@/components/matter-ref-link";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useRelativeTime } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";

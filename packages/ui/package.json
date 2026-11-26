@@ -312,7 +312,8 @@
     "./lib/overlay-layer": "./src/lib/overlay-layer.ts",
     "./lib/utils": "./src/lib/utils.ts",
     "./lib/week": "./src/lib/week.ts",
-    "./date-range-filter": "./src/components/date-range-filter.tsx"
+    "./date-range-filter": "./src/components/date-range-filter.tsx",
+    "./effects": "./src/effects/effects.ts"
   },
   "publishConfig": {
     "access": "public"

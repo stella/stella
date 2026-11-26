@@ -15,6 +15,7 @@ import { useTable } from "@tanstack/react-table";
 import { useTranslations } from "use-intl";
 
 import { ENTITY_KINDS, VIEW_SORTS_MAX } from "@stll/api-contract";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { SearchXIcon, TableIcon } from "@stll/ui/icons";
 import type { KanbanGroup } from "@stll/ui/kanban";
 import {
@@ -69,7 +70,6 @@ import {
   tableEndFillerCellStyle,
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
 import { WorkspaceTable } from "@/components/workspaces/table/workspace-table/workspace-table";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { queryView } from "@/lib/query-view.logic";
 import type { EntityKind, WorkspaceView } from "@/lib/types";

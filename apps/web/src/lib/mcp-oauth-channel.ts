@@ -5,9 +5,8 @@ import * as v from "valibot";
 
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Temporal } from "@stll/time";
+import { useLatestCallback, useMountEffect } from "@stll/ui/effects";
 
-import { useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { requireBrowserStorage } from "@/lib/account/browser-storage";
 import { MCP_OAUTH_REQUEST_STORAGE_KEY } from "@/lib/account/storage-keys";
 import { getAnalytics } from "@/lib/analytics/provider";

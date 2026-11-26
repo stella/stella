@@ -1767,7 +1767,7 @@ const config = defineConfig({
     // useMountEffect is deliberately dependency-less and stays unregistered.
     "react/exhaustive-deps": [
       "error",
-      { additionalHooks: "(useExternalSyncEffect)" },
+      { additionalHooks: "(useExternalSyncEffect|useLayoutSyncEffect)" },
     ],
     // Ultracite configures only named components as arrows, leaving Oxlint's
     // function-expression default for memo callbacks in conflict with
@@ -5177,12 +5177,15 @@ const config = defineConfig({
       },
     },
     {
-      files: ["apps/web/src/hooks/use-effect.ts"],
+      files: ["packages/ui/src/effects/**"],
       rules: {
         // These generic wrappers intentionally accept opaque callbacks and
         // dependency arrays. Their call sites own dependency correctness, so
         // the compiler cannot analyze them as ordinary component hooks.
         ...reactCompilerRulesOff,
+        // They forward the caller's dependency array verbatim; exhaustive-deps
+        // checks every call site instead (`additionalHooks`).
+        "react/exhaustive-deps": "off",
       },
     },
     {
@@ -5192,7 +5195,6 @@ const config = defineConfig({
       files: ["apps/web/src/**/*.{ts,tsx}", "apps/desktop/src/**/*.{ts,tsx}"],
       excludeFiles: [
         "apps/web/src/**/*.{test,spec}.{ts,tsx}",
-        "apps/web/src/hooks/use-effect.ts",
         ...new Set(
           Object.keys(reactCompilerBailouts).map((key) =>
             key.slice(0, key.indexOf("::")),
@@ -5340,7 +5342,7 @@ const config = defineConfig({
         "**/*.{test,spec}.{ts,tsx}",
         "**/__tests__/**",
         // The compiler's own exclusion (REACT_COMPILER_EXCLUDE).
-        "**/src/hooks/use-effect.ts",
+        "packages/ui/src/effects/**",
       ],
       rules: {
         "no-hookless-use-function/no-hookless-use-function": "error",

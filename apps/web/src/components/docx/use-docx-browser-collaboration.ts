@@ -4,9 +4,9 @@ import type { RefObject } from "react";
 import { panic } from "better-result";
 
 import type { DocxEditorCollaboration } from "@stll/folio-react";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { env } from "@/env";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { getDisplayName } from "@/lib/get-display-name";
 

@@ -1,8 +1,9 @@
 import { useRef } from "react";
 import type { RefObject } from "react";
 
+import { useExternalSyncEffect } from "@stll/ui/effects";
+
 import { WORKSPACE_TABLE_SCROLL_SLOT } from "@/components/workspaces/table/workspace-grid";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 const RESULTS_SCROLLER_SELECTOR = `[data-slot="${WORKSPACE_TABLE_SCROLL_SLOT}"]`;
 /** The page's first result: the row the table numbers first. */

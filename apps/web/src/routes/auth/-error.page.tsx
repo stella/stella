@@ -9,6 +9,7 @@ import * as v from "valibot";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { useMountEffect } from "@stll/ui/effects";
 import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
 
@@ -19,7 +20,6 @@ import {
   signInAttemptHeaders,
 } from "@/components/auth/email-delivery.logic";
 import { OTPPanel } from "@/components/auth/otp-panel";
-import { useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
 import { detached } from "@/lib/detached";

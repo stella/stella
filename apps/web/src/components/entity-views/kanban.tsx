@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 
 import { isTaskStatus, TASK_STATUS } from "@stll/api-contract";
 import { UserText } from "@stll/ui/bidi-text";
+import { useMountEffect } from "@stll/ui/effects";
 import {
   buildKanbanBoardMatrix,
   KANBAN_BOARD_AUTO_SCROLL_SOURCES,
@@ -23,7 +24,6 @@ import { SignalCard } from "@/components/inbox/signal-card";
 import { MatterRefLink } from "@/components/matter-ref-link";
 import { KanbanCard } from "@/components/workspaces/kanban/kanban-card";
 import { useKanbanEntityDropTarget } from "@/components/workspaces/kanban/use-kanban-drop-targets";
-import { useMountEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";

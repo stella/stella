@@ -1,4 +1,5 @@
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@stll/ui/effects";
+
 import { startKeyActionTimer } from "@/lib/analytics/key-action-timing";
 import type { KeyActionTimer } from "@/lib/analytics/key-action-timing";
 import { getAnalytics } from "@/lib/analytics/provider";

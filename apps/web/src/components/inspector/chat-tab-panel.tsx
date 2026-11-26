@@ -32,6 +32,11 @@ import {
   CHAT_SEND_INTENT,
 } from "@stll/api-contract/chat-send-intent";
 import { Button } from "@stll/ui/button";
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useMountEffect,
+} from "@stll/ui/effects";
 import type { ContextMenuSurfaceOpenEvent } from "@stll/ui/entity-actions";
 import { Maximize2Icon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
@@ -118,9 +123,7 @@ import {
   useMakeSkillFromChat,
   useSaveDraftedSkill,
 } from "@/features/chat/use-make-skill-from-chat";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";

@@ -4,9 +4,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { useMountEffect } from "@stll/ui/effects";
+
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
-import { useMountEffect } from "@/hooks/use-effect";
 import {
   captureSessionQueryOwner,
   isCurrentSessionQueryOwner,

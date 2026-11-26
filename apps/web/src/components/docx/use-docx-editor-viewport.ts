@@ -1,11 +1,11 @@
 import type { RefObject } from "react";
 
 import type { DocxEditorRef } from "@stll/folio-react";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { composeRefs } from "@stll/ui/utils";
 
 import { useDocxFitZoom } from "@/components/docx-preview-zoom";
 import { useDocxFind } from "@/components/docx/use-docx-find";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { DocumentTimingSurface } from "@/lib/analytics/types";
 import { useFindSurface } from "@/lib/find-owner";
 

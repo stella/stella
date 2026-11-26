@@ -1,5 +1,7 @@
 import { useReducer, useRef } from "react";
 
+import { useMountEffect } from "@stll/ui/effects";
+
 import { useChatEditorManager } from "@/components/chat-editor-provider";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import type { PastedTextAttrs } from "@/components/chat-pasted-text-extension";
@@ -10,7 +12,6 @@ import {
 } from "@/components/chat/side-panel-chat-status.logic";
 import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { useMountEffect } from "@/hooks/use-effect";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 

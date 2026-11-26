@@ -1,8 +1,8 @@
 import { PROVISION_PLACEMENT_FAILURE_KIND } from "@stll/api-contract/provision-placement";
 import type { ProvisionPlacementFailure } from "@stll/api-contract/provision-placement";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-surfaces";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { Analytics } from "@/lib/analytics/types";
 

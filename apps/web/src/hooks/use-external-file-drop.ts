@@ -5,13 +5,12 @@ import { containsFiles } from "@atlaskit/pragmatic-drag-and-drop/utils/contains-
 import { useTranslations } from "use-intl";
 
 import type { HandlerExceptionScope } from "@stll/errors";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 
 import {
   collectDroppedFileTree,
   type DroppedFileTree,
 } from "@/hooks/external-file-drop.logic";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";

@@ -20,6 +20,7 @@ import { useTranslations } from "use-intl";
 
 import { sleep } from "@stll/concurrency/sleep";
 import type { DocxEditorRef, FolioAIEditApplyMode } from "@stll/folio-react";
+import { useLatestCallback } from "@stll/ui/effects";
 import { stellaToast } from "@stll/ui/toast";
 
 import {
@@ -67,7 +68,6 @@ import type {
   DocxEditModeResult,
 } from "@/components/docx/docx-browser-editor.logic";
 import { getWordEditAuthorName } from "@/features/chat/hooks/use-chat-user-context";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";

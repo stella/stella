@@ -2,9 +2,9 @@ import { useRef } from "react";
 import type { RefObject } from "react";
 
 import type { DocxEditorRef } from "@stll/folio-react";
+import { useExternalSyncEffect, useMountEffect } from "@stll/ui/effects";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { deviceStorage } from "@/lib/account/browser-storage";
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
 

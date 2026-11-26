@@ -5,11 +5,11 @@ import type { ErrorComponentProps } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { RefreshCwIcon } from "@stll/ui/icons";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import {
   leaveErrorToBoundary,

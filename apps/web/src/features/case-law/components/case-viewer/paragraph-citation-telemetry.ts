@@ -1,7 +1,7 @@
 import type { AnalysisAnchorRange } from "@stll/legal-ast/analysis";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { Analytics } from "@/lib/analytics/types";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";

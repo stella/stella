@@ -5,6 +5,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useMountEffect } from "@stll/ui/effects";
 import {
   CircleCheckIcon,
   ExternalLinkIcon,
@@ -29,7 +30,6 @@ import { DesktopConnectionStatus } from "@/features/desktop/desktop-connection-s
 import type { DesktopLinkApproval } from "@/features/desktop/desktop-connection-store.logic";
 import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
 import { useDesktopAccountConnection } from "@/features/desktop/use-desktop-account-connection";
-import { useMountEffect } from "@/hooks/use-effect";
 import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desktop-platform";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import {

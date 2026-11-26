@@ -9,6 +9,7 @@ import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-re
 import type { PublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { isPublicCountry } from "@stll/api-contract/public-country-capability";
 import type { PublicCountry } from "@stll/api-contract/public-country-capability";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import {
   CHAT_MENTION_SOURCE_LABELS,
@@ -20,7 +21,6 @@ import type {
 } from "@/components/chat-mention-extension";
 import { useMentionProviders } from "@/components/chat-mention-providers";
 import { buildSourceMentionOptions } from "@/features/chat/chat-source-mentions";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";

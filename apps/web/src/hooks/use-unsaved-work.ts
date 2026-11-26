@@ -3,7 +3,7 @@ import type { ShouldBlockFn } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { create } from "zustand";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 // The single owner of "local work a reload or navigation would lose".
 // Editors report dirtiness through `useUnsavedWork`; route blocking and the

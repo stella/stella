@@ -27,6 +27,11 @@ import {
 } from "@stll/ui/breadcrumb";
 import { Button } from "@stll/ui/button";
 import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useMountEffect,
+} from "@stll/ui/effects";
+import {
   ContextMenuSurface,
   type ContextMenuSurfaceOpenEvent,
   EntityActions,
@@ -70,8 +75,6 @@ import {
 import { flashElement } from "@/components/workspaces/hooks/use-inspector-flash";
 import { RowActions } from "@/components/workspaces/row-actions";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import {

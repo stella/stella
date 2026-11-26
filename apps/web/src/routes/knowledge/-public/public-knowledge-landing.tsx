@@ -2,13 +2,13 @@ import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useMountEffect } from "@stll/ui/effects";
 
 import { usePublicSignInRequest } from "@/components/public-sign-in-request";
 import { publicKnowledgeSource } from "@/features/knowledge/public/public-knowledge";
 import { KnowledgeLandingView } from "@/features/knowledge/views/knowledge-landing-view";
 import type { KnowledgeLandingCard } from "@/features/knowledge/views/knowledge-landing-view";
 import { knowledgeSectionDescriptionKey } from "@/features/knowledge/views/knowledge-landing.pending";
-import { useMountEffect } from "@/hooks/use-effect";
 import { knowledgeSections } from "@/lib/knowledge/navigation";
 import { normalizeRedirectTo } from "@/lib/redirect";
 

@@ -13,6 +13,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { useLatestCallback } from "@stll/ui/effects";
 import { DownloadIcon, PlugIcon, RefreshCwIcon } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
 import { MenuItem } from "@stll/ui/menu";
@@ -34,7 +35,6 @@ import { DESKTOP_LINK_REFUSAL_MESSAGE } from "@/features/desktop/desktop-link-re
 import type { DesktopPresenceType } from "@/features/desktop/desktop-presence";
 import { useDesktopPresence } from "@/features/desktop/desktop-presence";
 import { useDesktopAccountConnection } from "@/features/desktop/use-desktop-account-connection";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detectDesktopPlatform } from "@/lib/desktop-downloads";
 import { detached } from "@/lib/detached";
 

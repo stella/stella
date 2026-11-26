@@ -8,7 +8,7 @@ import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/adapter/el
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import {
   type DragAnnouncementDestination,

@@ -2,9 +2,9 @@ import { useRef, useState } from "react";
 
 import createGlobe from "cobe";
 
+import { useExternalSyncEffect, useMountEffect } from "@stll/ui/effects";
 import { cn } from "@stll/ui/utils";
 
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { createVisibleFrameLoop } from "@/routes/onboarding/-components/visible-frame-loop";
 
 export type GlobeMarker = {

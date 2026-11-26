@@ -117,6 +117,8 @@ import type {
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { queryView } from "@/lib/query-view.logic";
 import "@/components/chat/create-document-draft-inspector";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
+
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { entityReferenceHref } from "@/components/references/reference.logic";
 import { chatKeys } from "@/features/chat/chat-query-contract";
@@ -199,8 +201,6 @@ import {
 } from "@/features/chat/queries";
 import { getChatTurnPhase } from "@/features/chat/turn-notifications.logic";
 import { useChatTurnNotifications } from "@/features/chat/use-chat-turn-notifications";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import type { ChatTimingSurface } from "@/lib/analytics/types";
 import { api, chatConnectorReceipt } from "@/lib/api";

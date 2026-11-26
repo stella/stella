@@ -1,11 +1,10 @@
 import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { cn } from "@stll/ui/utils";
 
 import { withDropAnnouncementData } from "@/components/drag-and-drop-live-region.logic";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { dropTargetForElements } from "@/lib/drag-and-drop/element-registration";
 import type { WorkspaceGroup } from "@/lib/workspaces/types";
 import { ClientGroupHeader } from "@/routes/_protected.workspaces/-components/client-group-header";

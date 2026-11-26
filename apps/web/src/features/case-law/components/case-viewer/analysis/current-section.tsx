@@ -8,13 +8,13 @@ import {
   scrollReaderToBlock,
 } from "@stll/decision-reader/reader-landing";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { ChevronUpIcon } from "@stll/ui/icons";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { FlatAnalysisHeading } from "@/features/case-law/components/case-viewer/analysis/types";
 import { getCategoryVar } from "@/features/case-law/components/case-viewer/analysis/types";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { forceReflow } from "@/lib/utils";
 
 /** How far a heading may sit below the bar's line and still be "current". */

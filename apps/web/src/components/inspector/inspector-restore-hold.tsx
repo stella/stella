@@ -1,5 +1,6 @@
+import { useExternalSyncEffect } from "@stll/ui/effects";
+
 import { holdInspectorRestoreSettle } from "@/components/inspector/inspector-broadcast";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 /**
  * Keeps a restored inspector from counting as settled while this viewer is

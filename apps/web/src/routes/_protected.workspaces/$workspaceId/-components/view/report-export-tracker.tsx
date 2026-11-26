@@ -4,10 +4,9 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { stellaToast } from "@stll/ui/toast";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { APIError } from "@/lib/errors/api";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";

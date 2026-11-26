@@ -5,13 +5,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import { useMountEffect } from "@stll/ui/effects";
+
 import { ProtectedPendingInspectorScopeContext } from "@/components/inspector/protected-pending-inspector-scope";
 import { useLeafRouteInspectorEntry } from "@/components/inspector/route-inspector-entry";
 import { StellaWordmark } from "@/components/stella-wordmark";
 import { mountBrowserExtensionBridge } from "@/features/chat/browser-control/browser-extension-bridge";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import type { ClientAuthStatus } from "@/hooks/use-client-auth-status";
-import { useMountEffect } from "@/hooks/use-effect";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";

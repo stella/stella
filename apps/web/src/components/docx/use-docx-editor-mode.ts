@@ -1,8 +1,7 @@
 import { useState } from "react";
 
 import type { EditorMode } from "@stll/folio-react";
-
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 /**
  * The editing mode the reader picked in Folio. Folio's own "viewing" mode is

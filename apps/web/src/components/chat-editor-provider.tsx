@@ -35,6 +35,7 @@ import {
 } from "@stll/api-contract/chat-send-intent";
 import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
 import { ChatComposerLinks } from "@stll/chat/link-editor";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { openFilePicker as openBrowserFilePicker } from "@stll/ui/file-picker";
 
 import {
@@ -82,8 +83,6 @@ import type { MountedEditors } from "@/components/mounted-editors.logic";
 import { seedReferenceHints } from "@/components/references/reference-hints";
 import { useRequiredRouteProvider } from "@/components/route-provider-scope/route-provider-scope";
 import { chatDraftHasModelContent } from "@/features/chat/lib/chat-message-model-content";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";

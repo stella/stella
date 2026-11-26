@@ -25,6 +25,7 @@ import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 import { euProvisionSourceUrl } from "@stll/legal-atlas/eu-provision-citations";
 import { PROVISION_CITATION_GRAMMARS } from "@stll/legal-atlas/provision-citation-grammars";
 import type { SupportedProvisionCitationGrammar } from "@stll/legal-atlas/provision-citation-grammars";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import type { ProvisionRow } from "@/features/case-law/components/case-viewer/provisions-cited.logic";
 import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-surfaces";
@@ -41,7 +42,6 @@ import {
 import type { ResolvedCitedStatute } from "@/features/case-law/queries/provisions";
 import { useProvisionPartRenderer } from "@/features/case-law/use-provision-part-renderer";
 import { useProvisionPlacementTelemetry } from "@/features/case-law/use-provision-placement-telemetry";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { optionalArray } from "@/lib/arrays";
 import { decisionDateToIso } from "@/lib/decision-date";
