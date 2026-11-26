@@ -1743,6 +1743,7 @@ const parseResultPage = ({
         )?.groups?.["url"];
       // A malformed or withdrawn text action does not erase the stable
       // ResultDetail record identity exposed by the listing.
+      // parser-output-unchanged: [cz-us] URL.parse preserves identical sz extraction without throwing on malformed URLs.
       const parsedTextUrl = rawUrl ? URL.parse(rawUrl) : null;
       const sz = parsedTextUrl
         ? persistableNalusComponent(
