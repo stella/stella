@@ -5,11 +5,13 @@ import {
   beforeEach,
   describe,
   expect,
+  jest,
   mock,
   spyOn,
   test,
 } from "bun:test";
 
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 import { Temporal } from "@stll/time";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -1554,32 +1556,40 @@ describe("Inspector tab broadcast", () => {
   });
 
   test("a restore that settles leaves the next start unchanged", async () => {
-    installFakeBroadcastChannel();
-    const scope = { organizationId: "org-1", userId: "user-1" };
-    const recovered = spyOn(getAnalytics(), "captureInspectorRestoreRecovered");
-    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
-    openFullscreenFileTab();
-    useInspectorTabsStore.setState({ minimized: false });
+    jest.useFakeTimers();
+    try {
+      installFakeBroadcastChannel();
+      const scope = { organizationId: "org-1", userId: "user-1" };
+      const recovered = spyOn(
+        getAnalytics(),
+        "captureInspectorRestoreRecovered",
+      );
+      cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+      openFullscreenFileTab();
+      useInspectorTabsStore.setState({ minimized: false });
 
-    cleanupInspectorBroadcast();
-    useInspectorTabsStore.setState({ tabs: [], activeId: null });
-    startNewPageLoadForTest();
-    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
-    // The page stays responsive past the settle delay.
-    await Bun.sleep(2200);
+      cleanupInspectorBroadcast();
+      useInspectorTabsStore.setState({ tabs: [], activeId: null });
+      startNewPageLoadForTest();
+      cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+      // The page stays responsive past the settle delay.
+      jest.advanceTimersByTime(2200);
 
-    cleanupInspectorBroadcast();
-    useInspectorTabsStore.setState({
-      tabs: [],
-      activeId: null,
-      minimized: false,
-    });
-    startNewPageLoadForTest();
-    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
-    expect(useInspectorTabsStore.getState().minimized).toBe(false);
-    expect(useInspectorTabsStore.getState().tabs).toHaveLength(1);
-    expect(recovered).not.toHaveBeenCalled();
-    recovered.mockRestore();
+      cleanupInspectorBroadcast();
+      useInspectorTabsStore.setState({
+        tabs: [],
+        activeId: null,
+        minimized: false,
+      });
+      startNewPageLoadForTest();
+      cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+      expect(useInspectorTabsStore.getState().minimized).toBe(false);
+      expect(useInspectorTabsStore.getState().tabs).toHaveLength(1);
+      expect(recovered).not.toHaveBeenCalled();
+      recovered.mockRestore();
+    } finally {
+      restoreRealTimers();
+    }
   });
 
   test("another start in the same page while its restore settles keeps the pane open", () => {
@@ -1649,83 +1659,99 @@ describe("Inspector tab broadcast", () => {
   });
 
   test("a viewer still loading past the settle delay keeps the flag", async () => {
-    installFakeBroadcastChannel();
-    const scope = { organizationId: "org-1", userId: "user-1" };
-    const recovered = spyOn(getAnalytics(), "captureInspectorRestoreRecovered");
-    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
-    openFullscreenFileTab();
-    useInspectorTabsStore.setState({ minimized: false });
+    jest.useFakeTimers();
+    try {
+      installFakeBroadcastChannel();
+      const scope = { organizationId: "org-1", userId: "user-1" };
+      const recovered = spyOn(
+        getAnalytics(),
+        "captureInspectorRestoreRecovered",
+      );
+      cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+      openFullscreenFileTab();
+      useInspectorTabsStore.setState({ minimized: false });
 
-    cleanupInspectorBroadcast();
-    useInspectorTabsStore.setState({ tabs: [], activeId: null });
-    startNewPageLoadForTest();
-    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
-    // The restored viewer mounts and its document is still downloading.
-    const release = holdInspectorRestoreSettle();
-    await Bun.sleep(2200);
+      cleanupInspectorBroadcast();
+      useInspectorTabsStore.setState({ tabs: [], activeId: null });
+      startNewPageLoadForTest();
+      cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+      // The restored viewer mounts and its document is still downloading.
+      const release = holdInspectorRestoreSettle();
+      jest.advanceTimersByTime(2200);
 
-    // It stalled after the delay: the next start must still recover.
-    cleanupInspectorBroadcast();
-    useInspectorTabsStore.setState({
-      tabs: [],
-      activeId: null,
-      minimized: false,
-    });
-    startNewPageLoadForTest();
-    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
-    expect(useInspectorTabsStore.getState().minimized).toBe(true);
-    expect(recovered).toHaveBeenCalledTimes(1);
-    release();
-    recovered.mockRestore();
+      // It stalled after the delay: the next start must still recover.
+      cleanupInspectorBroadcast();
+      useInspectorTabsStore.setState({
+        tabs: [],
+        activeId: null,
+        minimized: false,
+      });
+      startNewPageLoadForTest();
+      cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+      expect(useInspectorTabsStore.getState().minimized).toBe(true);
+      expect(recovered).toHaveBeenCalledTimes(1);
+      release();
+      recovered.mockRestore();
+    } finally {
+      restoreRealTimers();
+    }
   });
 
   test("a viewer hold an earlier page load never released does not hold the next one", async () => {
-    installFakeBroadcastChannel();
-    const pagehide = new EventTarget();
-    const addListener = spyOn(
-      globalThis,
-      "addEventListener",
-    ).mockImplementation(
-      (...args: Parameters<typeof globalThis.addEventListener>) => {
-        pagehide.addEventListener(...args);
-      },
-    );
-    const scope = { organizationId: "org-1", userId: "user-1" };
-    const recovered = spyOn(getAnalytics(), "captureInspectorRestoreRecovered");
-    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
-    openFullscreenFileTab();
-    useInspectorTabsStore.setState({ minimized: false });
+    jest.useFakeTimers();
+    try {
+      installFakeBroadcastChannel();
+      const pagehide = new EventTarget();
+      const addListener = spyOn(
+        globalThis,
+        "addEventListener",
+      ).mockImplementation(
+        (...args: Parameters<typeof globalThis.addEventListener>) => {
+          pagehide.addEventListener(...args);
+        },
+      );
+      const scope = { organizationId: "org-1", userId: "user-1" };
+      const recovered = spyOn(
+        getAnalytics(),
+        "captureInspectorRestoreRecovered",
+      );
+      cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+      openFullscreenFileTab();
+      useInspectorTabsStore.setState({ minimized: false });
 
-    // The restored viewer is still downloading when the page reloads.
-    cleanupInspectorBroadcast();
-    useInspectorTabsStore.setState({ tabs: [], activeId: null });
-    startNewPageLoadForTest();
-    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
-    const releaseEarlierPage = holdInspectorRestoreSettle();
-    pagehide.dispatchEvent(new Event("pagehide"));
+      // The restored viewer is still downloading when the page reloads.
+      cleanupInspectorBroadcast();
+      useInspectorTabsStore.setState({ tabs: [], activeId: null });
+      startNewPageLoadForTest();
+      cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+      const releaseEarlierPage = holdInspectorRestoreSettle();
+      pagehide.dispatchEvent(new Event("pagehide"));
 
-    // The next load restores and stays responsive past the settle delay.
-    cleanupInspectorBroadcast();
-    useInspectorTabsStore.setState({ tabs: [], activeId: null });
-    startNewPageLoadForTest();
-    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
-    await Bun.sleep(2200);
+      // The next load restores and stays responsive past the settle delay.
+      cleanupInspectorBroadcast();
+      useInspectorTabsStore.setState({ tabs: [], activeId: null });
+      startNewPageLoadForTest();
+      cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+      jest.advanceTimersByTime(2200);
 
-    // Its restore settled, so the start after it reopens the pane, and the
-    // late release from the first page changes nothing.
-    releaseEarlierPage();
-    cleanupInspectorBroadcast();
-    useInspectorTabsStore.setState({
-      tabs: [],
-      activeId: null,
-      minimized: false,
-    });
-    startNewPageLoadForTest();
-    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
-    expect(useInspectorTabsStore.getState().minimized).toBe(false);
-    expect(recovered).not.toHaveBeenCalled();
-    recovered.mockRestore();
-    addListener.mockRestore();
+      // Its restore settled, so the start after it reopens the pane, and the
+      // late release from the first page changes nothing.
+      releaseEarlierPage();
+      cleanupInspectorBroadcast();
+      useInspectorTabsStore.setState({
+        tabs: [],
+        activeId: null,
+        minimized: false,
+      });
+      startNewPageLoadForTest();
+      cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+      expect(useInspectorTabsStore.getState().minimized).toBe(false);
+      expect(recovered).not.toHaveBeenCalled();
+      recovered.mockRestore();
+      addListener.mockRestore();
+    } finally {
+      restoreRealTimers();
+    }
   });
 
   test("keeps each window's own file tab lane across syncs", () => {

@@ -15,15 +15,24 @@ const OFFICE =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 const WORD = "application/vnd.openxmlformats-officedocument.wordprocessingml";
 
-type Parts = { body: string; styles: string; numbering: string };
+const UPRIGHT = '<w:pgSz w:w="11906" w:h="16838"/>';
+const TURNED = '<w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/>';
 
-const docx = async ({ body, styles, numbering }: Parts) => {
+type Parts = {
+  body: string;
+  styles: string;
+  numbering: string;
+  /** The page of the body's last section; upright without one. */
+  page?: string;
+};
+
+const docx = async ({ body, styles, numbering, page = UPRIGHT }: Parts) => {
   const zip = new ZipArchive();
   const parts = {
     "[Content_Types].xml": `${XML}<Types xmlns="${PACKAGE}/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="${WORD}.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="${WORD}.styles+xml"/><Override PartName="/word/numbering.xml" ContentType="${WORD}.numbering+xml"/></Types>`,
     "_rels/.rels": `${XML}<Relationships xmlns="${PACKAGE}/relationships"><Relationship Id="rId1" Type="${OFFICE}/officeDocument" Target="word/document.xml"/></Relationships>`,
     "word/_rels/document.xml.rels": `${XML}<Relationships xmlns="${PACKAGE}/relationships"><Relationship Id="rId1" Type="${OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="${OFFICE}/numbering" Target="numbering.xml"/></Relationships>`,
-    "word/document.xml": `${XML}<w:document ${W}><w:body>${body}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr></w:body></w:document>`,
+    "word/document.xml": `${XML}<w:document ${W}><w:body>${body}<w:sectPr>${page}</w:sectPr></w:body></w:document>`,
     "word/styles.xml": `${XML}<w:styles ${W}>${styles}</w:styles>`,
     "word/numbering.xml": `${XML}<w:numbering ${W}>${numbering}</w:numbering>`,
   };
@@ -35,6 +44,7 @@ const docx = async ({ body, styles, numbering }: Parts) => {
 
 const paragraph = (text: string, properties = ""): string =>
   `<w:p>${properties === "" ? "" : `<w:pPr>${properties}</w:pPr>`}<w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
+const PAGE_BREAK = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
 const styled = (styleId: string): string => `<w:pStyle w:val="${styleId}"/>`;
 const listed = (numId: number, ilvl: number): string =>
   `<w:numPr><w:ilvl w:val="${String(ilvl)}"/><w:numId w:val="${String(numId)}"/></w:numPr>`;
@@ -149,6 +159,83 @@ describe("folioTemplatePlanEngine", () => {
       expect.objectContaining({ kind: "labelConvertedToText" }),
     );
     expect(formatted.note.counts.labelsConvertedToText).toBe(1);
+  });
+
+  test("reads where a document starts a page, how a paragraph is aligned and what its sections are", async () => {
+    const manifest = (
+      await folioTemplatePlanEngine.analyze(
+        await docx({
+          body: [
+            paragraph("Cover"),
+            PAGE_BREAK,
+            paragraph("A centred line.", '<w:jc w:val="center"/>'),
+            paragraph("A page of its own.", "<w:pageBreakBefore/>"),
+            paragraph(
+              "The last line of the upright part.",
+              `<w:sectPr>${UPRIGHT}</w:sectPr>`,
+            ),
+            paragraph("A wide list."),
+          ].join(""),
+          styles: "",
+          numbering: "",
+          page: TURNED,
+        }),
+      )
+    ).unwrap();
+    expect(manifest.blocks.at(1)).toMatchObject({ text: "", pageBreaks: 1 });
+    expect(manifest.blocks.at(2)?.alignment).toBe("center");
+    expect(manifest.blocks.at(3)?.pageBreakBefore).toBe(true);
+    expect(manifest.blocks.at(4)?.endsSection).toBe(true);
+    expect(manifest.sections?.map(({ orientation }) => orientation)).toEqual([
+      "portrait",
+      "landscape",
+    ]);
+  });
+
+  test("a formatted document starts its pages where the source does and keeps a turned page", async () => {
+    const formatted = (
+      await formatOntoTemplate({
+        engine: folioTemplatePlanEngine,
+        source: await docx({
+          body: [
+            paragraph("SERVICES AGREEMENT"),
+            paragraph("Article 1"),
+            paragraph("Scope"),
+            paragraph("The supplier provides the services.", listed(1, 0)),
+            PAGE_BREAK,
+            paragraph("Article 2"),
+            paragraph("Fees"),
+            paragraph(
+              "The customer pays the fee.",
+              `${listed(1, 0)}<w:sectPr>${UPRIGHT}</w:sectPr>`,
+            ),
+            paragraph("A wide list of the fees."),
+          ].join(""),
+          styles:
+            '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>',
+          numbering: list(0, level(0, "decimal", "%1.")) + instance(1, 0),
+          page: TURNED,
+        }),
+        template: await template(),
+        mode: "keepSource",
+        resolveAmbiguities: resolveAmbiguitiesByRule,
+      })
+    ).unwrap();
+    const output = (
+      await folioTemplatePlanEngine.analyze(formatted.docx)
+    ).unwrap();
+    // The blank paragraph that held the break is left out; the heading
+    // after it starts the page.
+    expect(formatted.note.counts.pageStarts).toBe(1);
+    expect(
+      output.blocks.find(({ text }) => text === "Fees")?.pageBreakBefore,
+    ).toBe(true);
+    // The part on a turned page stays on one.
+    expect(formatted.note.counts.sectionsKept).toBe(2);
+    expect(output.sections?.map(({ orientation }) => orientation)).toEqual([
+      "portrait",
+      "landscape",
+    ]);
   });
 
   test("reads the highlight colours a document uses, whichever quote its XML writes", async () => {

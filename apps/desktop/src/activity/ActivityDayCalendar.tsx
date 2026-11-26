@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
@@ -28,6 +28,7 @@ import type {
   DayCalendarGranularity,
   DayCalendarRange,
 } from "@stll/ui/day-calendar.logic";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { PhoneIcon } from "@stll/ui/icons";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import {
@@ -2290,7 +2291,7 @@ function useForgetInaccessible({
           .sort()
           .join(" ")
       : "";
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (forgotten === "") {
       return;
     }
@@ -2403,7 +2404,7 @@ function useMatterCandidates(recordedIds: readonly string[]) {
         }
       });
   }, []);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     refreshCandidates();
     return () => {
       candidateRequest.current += 1;
@@ -2419,7 +2420,7 @@ function useMatterCandidates(recordedIds: readonly string[]) {
           resolved: candidates.resolved,
         }).join(" ")
       : "";
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (unresolved === "") {
       return;
     }
@@ -2484,7 +2485,7 @@ function useRecordedElsewhere(
         }
       });
   }, [date]);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     refresh();
     window.addEventListener("focus", refresh);
     return () => {
@@ -2509,45 +2510,96 @@ function useReviewSubmission({
   pendingBatch,
   onReviewStatusChange,
 }: ReviewSubmissionOptions) {
-  const durablePendingKey = useRef(pendingBatch?.idempotencyKey ?? null);
-  const [submission, setSubmission] = useState<Submission>(() => {
-    if (!pendingBatch) {
-      return { type: "editing" };
-    }
-    return {
-      type: "retry",
-      idempotencyKey: pendingBatch.idempotencyKey,
-      items: pendingBatch.entries.map((entry, index) => ({
-        entry,
-        ranges: pendingBatch.ranges.at(index) ?? [],
-      })),
-    };
-  });
+  const [store] = useState(() => createReviewSubmission(pendingBatch));
+  const submission = useSyncExternalStore(store.subscribe, store.getSnapshot);
+  const pendingKey = pendingBatch?.idempotencyKey ?? null;
   const updateSubmission = (next: Submission) => {
-    setSubmission(next);
-    onReviewStatusChange(next.type);
+    store.update(next);
+    // The store may have turned a retry whose batch is gone into editing.
+    onReviewStatusChange(store.getSnapshot().type);
   };
-  useEffect(() => {
-    if (pendingBatch !== null) {
-      durablePendingKey.current = pendingBatch.idempotencyKey;
-    }
-    if (
-      pendingBatch === null &&
-      submission.type === "retry" &&
-      durablePendingKey.current === submission.idempotencyKey
-    ) {
-      durablePendingKey.current = null;
-      setSubmission({ type: "editing" });
-      onReviewStatusChange("editing");
+  useExternalSyncEffect(() => {
+    store.observePending(pendingKey);
+  }, [pendingKey, store]);
+  useExternalSyncEffect(() => {
+    onReviewStatusChange(submission.type);
+  }, [onReviewStatusChange, submission]);
+  return { submission, updateSubmission };
+}
+
+type ReviewSubmissionStore = {
+  subscribe: (onChange: () => void) => () => void;
+  getSnapshot: () => Submission;
+  update: (next: Submission) => void;
+  /** The key of the pending batch the day snapshot carries, or null. */
+  observePending: (pendingKey: string | null) => void;
+};
+
+/**
+ * The review's submission state, kept outside React so it can follow the
+ * pending batch the day snapshot carries. A retry goes back to editing once
+ * the batch it retries has been stored and is then gone (sent, or discarded
+ * from settings); a retry whose batch was never stored stays.
+ */
+const createReviewSubmission = (
+  pendingBatch: ActivityDaySnapshot["pendingBatch"],
+): ReviewSubmissionStore => {
+  let submission: Submission = pendingBatch
+    ? {
+        type: "retry",
+        idempotencyKey: pendingBatch.idempotencyKey,
+        items: pendingBatch.entries.map((entry, index) => ({
+          entry,
+          ranges: pendingBatch.ranges.at(index) ?? [],
+        })),
+      }
+    : { type: "editing" };
+  let pendingKey = pendingBatch?.idempotencyKey ?? null;
+  // The last pending batch the snapshot carried, while it can still matter.
+  let durablePendingKey = pendingKey;
+  const listeners = new Set<() => void>();
+  const reconcile = () => {
+    if (pendingKey !== null) {
+      durablePendingKey = pendingKey;
       return;
     }
     if (
-      pendingBatch === null &&
-      (submission.type === "editing" || submission.type === "saved")
+      submission.type === "retry" &&
+      durablePendingKey === submission.idempotencyKey
     ) {
-      durablePendingKey.current = null;
+      durablePendingKey = null;
+      submission = { type: "editing" };
+      return;
     }
-    onReviewStatusChange(submission.type);
-  }, [onReviewStatusChange, pendingBatch, submission]);
-  return { submission, updateSubmission };
-}
+    if (submission.type === "editing" || submission.type === "saved") {
+      durablePendingKey = null;
+    }
+  };
+  const notify = () => {
+    for (const listener of listeners) {
+      listener();
+    }
+  };
+  return {
+    subscribe: (onChange) => {
+      listeners.add(onChange);
+      return () => {
+        listeners.delete(onChange);
+      };
+    },
+    getSnapshot: () => submission,
+    update: (next) => {
+      submission = next;
+      reconcile();
+      notify();
+    },
+    observePending: (next) => {
+      const before = submission;
+      pendingKey = next;
+      reconcile();
+      if (submission !== before) {
+        notify();
+      }
+    },
+  };
+};

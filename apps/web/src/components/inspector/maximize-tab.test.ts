@@ -2,8 +2,6 @@ import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import type { useNavigate } from "@tanstack/react-router";
 import { beforeEach, describe, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
-
 import type { ChatTab } from "@/components/inspector/inspector-store-types";
 import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
 import { chatThreadOptions } from "@/features/chat/queries";
@@ -119,7 +117,9 @@ describe("move a chat tab to the main view", () => {
     const unsubscribe = inspectorObserver.subscribe(() => {});
 
     moveToMain(chatTab({ contextMatterIds: ["m1"] }), queryClient);
-    await sleep(0);
+    for (let i = 0; i < 4; i += 1) {
+      await Promise.resolve();
+    }
 
     const state = queryClient.getQueryState(threadOptions.queryKey);
     expect(state?.isInvalidated).toBe(true);

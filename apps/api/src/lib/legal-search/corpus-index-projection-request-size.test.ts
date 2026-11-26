@@ -55,12 +55,8 @@ type Tails = ReturnType<
  */
 const runCycle = async ({
   leaseExpiresAtMs,
-  requestMs,
-  readMs = 1,
 }: {
   leaseExpiresAtMs: number;
-  requestMs: number;
-  readMs?: number;
 }): Promise<CycleResult> => {
   let tails: Tails = new Map();
   const sizes: number[] = [];
@@ -70,7 +66,7 @@ const runCycle = async ({
     limit: READ_CONCURRENCY,
     lookAhead: READ_CONCURRENCY,
     operation: async (index) => {
-      await Bun.sleep(readMs);
+      await Promise.resolve();
       return index;
     },
   });
@@ -97,7 +93,7 @@ const runCycle = async ({
     for (const tail of advanced.flush) {
       sizes.push(tail.entries.length);
     }
-    await Bun.sleep(requestMs);
+    await Promise.resolve();
     if (advanced.leaseMarginReached) {
       return { sizes, consumed };
     }
@@ -119,7 +115,6 @@ describe("append request sizing", () => {
   test("every request but the last fills to the byte cap", async () => {
     const { sizes, consumed } = await runCycle({
       leaseExpiresAtMs: Date.now() + 15 * 60_000,
-      requestMs: 5,
     });
 
     expect(consumed).toBe(REVISIONS);

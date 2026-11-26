@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { UI_COLORS } from "@/ui-theme.gen";
 
@@ -40,7 +40,7 @@ const declareThemeTokens = () => {
  * the app's appearance, as the web app sets it on its root.
  */
 export const useDomAppearance = (appearance: DomAppearance) => {
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     declareThemeTokens();
     document.documentElement.classList.toggle("dark", appearance === "dark");
   }, [appearance]);

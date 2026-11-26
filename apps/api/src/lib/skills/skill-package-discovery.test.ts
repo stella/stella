@@ -1,8 +1,6 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
-
 import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { LIMITS } from "@/api/lib/limits";
@@ -75,7 +73,9 @@ const safeOutboundFetchBytesMock: typeof safeOutboundFetchBytes = async ({
         );
       }
       activeRawRequests += 1;
-      await sleep(5);
+      for (let turn = 0; turn < 20; turn += 1) {
+        await Promise.resolve();
+      }
       activeRawRequests -= 1;
     }
     if (requestUrl.pathname.endsWith("/invalid/SKILL.md")) {

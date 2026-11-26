@@ -12,7 +12,6 @@ import {
 import * as v from "valibot";
 
 import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -26,7 +25,7 @@ let respondLatest: (request: Request) => Promise<Response> | Response = () => {
 let fetchBoundary: Mock<typeof globalThis.fetch>;
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
-const { act, cleanup, fireEvent, render, waitFor } =
+const { cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
@@ -170,9 +169,6 @@ afterEach(() => {
 afterAll(async () => {
   // A settled mutation leaves React work scheduled; let it run while the DOM
   // globals still exist.
-  await act(async () => {
-    await sleep(50);
-  });
   fetchBoundary.mockRestore();
   await unregisterDomEnvironment();
 });

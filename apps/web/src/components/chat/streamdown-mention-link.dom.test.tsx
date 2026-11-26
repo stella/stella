@@ -2,7 +2,6 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import type { ChatSourceCitationTarget } from "@stll/api-contract";
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
@@ -221,7 +220,9 @@ test("an assistant link absent from the source store requests no site icon", asy
   try {
     renderChip("https://encoded-data.attacker.example/page");
     await act(async () => {
-      await sleep(0);
+      for (let i = 0; i < 4; i += 1) {
+        await Promise.resolve();
+      }
     });
     expect(requests.filter((url) => url.includes("link-icons"))).toEqual([]);
   } finally {

@@ -90,6 +90,7 @@ import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import {
+  projectCanonicalChatUIMessages,
   selectUnresolvedFolioAgentDocToolCallParts,
   SUGGEST_CHANGES_TOOL_NAME,
 } from "@/components/chat/chat-ui-tools";
@@ -339,21 +340,18 @@ const TemplateStudioChatInner = ({
       return undefined;
     }
     ensureView();
+    // Every check runs from a timer, the first one at once: a view that
+    // became ready after the render is picked up on the next task. Once
+    // ready, this effect's cleanup stops the timers.
     const probe = () => {
       if (editorRef.current?.createAIEditSnapshot()) {
         setEditorReady(true);
-        return true;
       }
-      return false;
     };
-    if (probe()) {
-      return undefined;
-    }
+    const first = window.setTimeout(probe, 0);
     const id = window.setInterval(() => {
       ensureView();
-      if (probe()) {
-        window.clearInterval(id);
-      }
+      probe();
     }, 80);
     // Never gate the input forever; `canSubmitNow` re-checks the
     // snapshot at submit time anyway.
@@ -362,6 +360,7 @@ const TemplateStudioChatInner = ({
       setEditorReady(true);
     }, 3000);
     return () => {
+      window.clearTimeout(first);
       window.clearInterval(id);
       window.clearTimeout(fallback);
     };
@@ -956,7 +955,11 @@ const TemplateStudioChatInner = ({
    * StrictMode double-invocations are no-ops.
    */
   const placeStreamedOperations = useLatestCallback(
-    (toolCallId: string, operations: readonly DocxEditOperation[]) => {
+    (
+      toolCallId: string,
+      operations: readonly DocxEditOperation[],
+      currentMessages: PersistedChatMessage[],
+    ) => {
       const record = streamingPlacements.get(toolCallId) ?? {
         outcomes: new Map<number, OperationPlacementOutcome>(),
       };
@@ -974,7 +977,7 @@ const TemplateStudioChatInner = ({
       }
       streamingPlacements.set(toolCallId, record);
       const blockTextById = collectOperationBlockTexts();
-      const fieldMetaByPath = collectSuggestedFieldMeta(messages);
+      const fieldMetaByPath = collectSuggestedFieldMeta(currentMessages);
       const occupiedRanges: (typeof suggestions)[number]["range"][] = [];
       for (const suggestion of suggestions) {
         if (suggestion.status === "pending") {
@@ -1021,9 +1024,11 @@ const TemplateStudioChatInner = ({
 
   // Watch the latest assistant message for streaming apply-tool input
   // and surface completed ops immediately; placements for calls that
-  // end denied are discarded.
-  useExternalSyncEffect(() => {
-    const message = messages.at(-1);
+  // end denied are discarded. The runtime calls back with each change it
+  // publishes, so the placements go out with the messages that carry them.
+  const placeFromLatestMessage = useLatestCallback(() => {
+    const current = chat.getSnapshot().messages;
+    const [message] = projectCanonicalChatUIMessages(current.slice(-1));
     if (!message || message.role !== "assistant") {
       return;
     }
@@ -1037,7 +1042,7 @@ const TemplateStudioChatInner = ({
       if (part.state === "input-streaming") {
         const operations = extractCompletedStreamingOperations(part.input);
         if (operations.length > 0) {
-          placeStreamedOperations(part.id, operations);
+          placeStreamedOperations(part.id, operations, current);
         }
         continue;
       }
@@ -1045,7 +1050,11 @@ const TemplateStudioChatInner = ({
         discardStreamedPlacements(part.id);
       }
     }
-  }, [messages, placeStreamedOperations, discardStreamedPlacements]);
+  });
+  useExternalSyncEffect(
+    () => chat.subscribe(placeFromLatestMessage),
+    [chat, placeFromLatestMessage],
+  );
 
   /**
    * Client executor for `suggest_changes`: convert the parsed operations

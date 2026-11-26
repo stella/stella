@@ -41,7 +41,11 @@ import {
 } from "@stll/ui/command";
 import { DIALOG_MOBILE_LAYOUT } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
+import {
+  useExternalSyncEffect,
+  useKeyedState,
+  useLatestCallback,
+} from "@stll/ui/effects";
 import {
   AiActionIcon,
   ChevronRightIcon,
@@ -767,10 +771,14 @@ export const SearchDialog = ({
   // the preview's Open button can relabel itself while the modifier is
   // down) and additionally read off the activating click itself, which
   // covers a modifier already held before the dialog opened.
-  const [locationModifierHeld, setLocationModifierHeld] = useState(false);
+  // Keyed by `open`, so it starts released every time the dialog opens or
+  // closes.
+  const [locationModifierHeld, setLocationModifierHeld] = useKeyedState(
+    open,
+    false,
+  );
   useExternalSyncEffect(() => {
     if (!open) {
-      setLocationModifierHeld(false);
       return undefined;
     }
     const syncModifier = (event: KeyboardEvent) => {
@@ -787,7 +795,7 @@ export const SearchDialog = ({
       window.removeEventListener("keyup", syncModifier, true);
       window.removeEventListener("blur", resetModifier);
     };
-  }, [open]);
+  }, [open, setLocationModifierHeld]);
   const [query, setQuery] = useState("");
   const [selectedSearchScope, setSearchScope] = useState<SearchScope>("all");
   const searchScope = resolveSearchScope(selectedSearchScope, publicLawEnabled);

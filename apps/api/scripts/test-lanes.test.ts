@@ -19,6 +19,12 @@ afterEach(() => {
   mock.restore();
 });
 
+const flushMicrotasks = async (): Promise<void> => {
+  for (let turn = 0; turn < 20; turn += 1) {
+    await Promise.resolve();
+  }
+};
+
 const GIB = 1024 * 1024 * 1024;
 
 const HEAVY_BUDGET_MB = 3072;
@@ -92,7 +98,7 @@ const controlledRun = () => {
     settlers.delete(name);
     resolve(exitCode);
     // Let the lane observe the settlement and start its next batch.
-    await Bun.sleep(0);
+    await flushMicrotasks();
   };
   return {
     get maxConcurrent() {
@@ -364,7 +370,7 @@ describe("orderBatchesForLanes", () => {
             settlers.delete(current);
             active.delete(current);
             settle();
-            await Bun.sleep(0);
+            await flushMicrotasks();
           }
           expect(settlers.size).toBe(0);
           const outcomes = await done;
@@ -392,7 +398,7 @@ describe("runInLanes", () => {
       batch(TEST_BATCH_KIND.db, name),
     );
     const done = runInLanes({ batches, lanes: 2, runBatch: run.runBatch });
-    await Bun.sleep(0);
+    await flushMicrotasks();
 
     expect(run.started).toEqual(["a", "b"]);
     await run.settle("b");
@@ -416,7 +422,7 @@ describe("runInLanes", () => {
       batch(TEST_BATCH_KIND.regular, "regular-1"),
     ];
     const done = runInLanes({ batches, lanes: 3, runBatch: run.runBatch });
-    await Bun.sleep(0);
+    await flushMicrotasks();
 
     // heavy-2 must wait for heavy-1; the regular batch takes the free lane.
     expect(run.started).toEqual(["heavy-1", "regular-1"]);
@@ -431,19 +437,21 @@ describe("runInLanes", () => {
   });
 
   test("with several lanes, runs every batch after a failure and reports outcomes in start order", async () => {
-    const exitCodes: Record<string, number> = { a: 0, b: 3, c: 0, d: 7 };
-    const outcomes = await runInLanes({
+    const run = controlledRun();
+    const done = runInLanes({
       batches: ["a", "b", "c", "d"].map((name) =>
         batch(TEST_BATCH_KIND.regular, name),
       ),
       lanes: 2,
-      runBatch: async ({ name }) => {
-        // Later batches finish first, so completion order differs from start
-        // order.
-        await Bun.sleep(name === "a" || name === "b" ? 20 : 0);
-        return exitCodes[name] ?? 0;
-      },
+      runBatch: run.runBatch,
     });
+    await flushMicrotasks();
+    // Finish batches out of start order (b before a, d before c).
+    await run.settle("b", 3);
+    await run.settle("c", 0);
+    await run.settle("d", 7);
+    await run.settle("a", 0);
+    const outcomes = await done;
 
     expect(
       outcomes.map(({ batch: { name }, exitCode }) => [name, exitCode]),
@@ -511,7 +519,7 @@ describe("runInLanes", () => {
       runBatch: run.runBatch,
       signal: shutdown.signal,
     });
-    await Bun.sleep(0);
+    await flushMicrotasks();
 
     expect(run.started).toEqual(["a", "b"]);
     shutdown.abort();

@@ -239,10 +239,19 @@ export const ReviewMarginNotes = ({
 
   // A note that arrives, leaves, or changes height has to be re-placed even
   // when nothing scrolled. Keyed by value so a re-render alone does not
-  // re-measure the column.
+  // re-measure the column; placed on the next frame like every other pass,
+  // so the edge counts reach React from the frame loop, not from the commit.
   const noteKey = notes.map((note) => note.id).join("|");
   useExternalSyncEffect(() => {
-    relayout();
+    if (!columnMounted) {
+      return undefined;
+    }
+    const frame = requestAnimationFrame(() => {
+      relayout();
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+    };
   }, [columnMounted, noteKey, relayout]);
 
   if (!columnMounted) {

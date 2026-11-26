@@ -1165,6 +1165,7 @@
       "useObjectUrl",
       "useObservedValue"
     ],
+    "./effects-refs": ["useComposedRefs"],
     "./entity-actions": [
       "ContextMenuSurface",
       "EntityActions",

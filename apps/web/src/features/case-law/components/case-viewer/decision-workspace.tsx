@@ -28,11 +28,8 @@ import {
 } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import {
-  useExternalSyncEffect,
-  useLatestCallback,
-  useMountEffect,
-} from "@stll/ui/effects";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
+import { useObservedValue } from "@stll/ui/effects-dom";
 import { ScrollTextIcon, SparklesIcon, UserRoundIcon } from "@stll/ui/icons";
 import { InspectorRailIconButton } from "@stll/ui/inspector";
 import { Loader } from "@stll/ui/loader";
@@ -567,25 +564,27 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     ),
     blocks: astBlocks,
   });
-  const [answerPlacement, setAnswerPlacement] = useState<"gutter" | "inline">(
+  // Answers sit in the notes column while it has room, and inline once the
+  // layout collapses it to nothing.
+  const answerPlacement = useObservedValue<HTMLDivElement, "gutter" | "inline">(
+    viewportElement,
+    (viewport, emit) => {
+      const aside = viewport.querySelector<HTMLElement>(
+        "[data-reader-notes-column]",
+      );
+      if (!aside) {
+        return () => undefined;
+      }
+      const measure = () =>
+        emit(aside.getBoundingClientRect().width > 0 ? "gutter" : "inline");
+      measure();
+      const observer = new ResizeObserver(measure);
+      observer.observe(aside);
+      return () => observer.disconnect();
+    },
+    [],
     "gutter",
   );
-  useMountEffect(() => {
-    const aside = mainRef.current?.querySelector<HTMLElement>(
-      "[data-reader-notes-column]",
-    );
-    if (!aside) {
-      return undefined;
-    }
-    const measure = () =>
-      setAnswerPlacement(
-        aside.getBoundingClientRect().width > 0 ? "gutter" : "inline",
-      );
-    const observer = new ResizeObserver(measure);
-    observer.observe(aside);
-    measure();
-    return () => observer.disconnect();
-  });
   const openAnswer = useLatestCallback((id: string) => {
     annotations.clearActive();
     answers.activateAnswer(id);
@@ -1236,7 +1235,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                       <CurrentSection
                         anchorById={analysisOutline.anchorById}
                         headings={flatAnalysisHeadings}
-                        scrollContainerRef={mainRef}
+                        scrollContainer={viewportElement}
                       />
                     )}
                   {showAiNotes && isAnalyzing && (

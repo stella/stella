@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useId, useState } from "react";
+import { useId, useState } from "react";
 
+import { useObservedValue } from "../effects/dom";
+import { useExternalSyncEffect } from "../effects/effects";
 import { cn } from "../lib/utils";
 import { withoutDirectionalControls } from "./bidi-text";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
@@ -12,40 +14,61 @@ type IdentityTextProps = {
   className?: string;
 };
 
+const UNMEASURED = { overflow: false, hasFocusOwner: false };
+
+const focusOwnerOf = (node: HTMLElement): Element | null =>
+  node.parentElement?.closest("a[href],button,[tabindex]") ?? null;
+
 /** Discloses clipped names on hover and when their owning control receives focus. */
 export const IdentityText = ({ children, className }: IdentityTextProps) => {
   const triggerId = useId();
-  const [overflow, setOverflow] = useState(false);
-  const [hasFocusOwner, setHasFocusOwner] = useState(false);
+  const [node, setNode] = useState<HTMLSpanElement | null>(null);
   const [open, setOpen] = useState(false);
   const name = withoutDirectionalControls(children);
-  const textRef = useCallback((node: HTMLSpanElement | null) => {
-    if (node === null) {
+  const { overflow, hasFocusOwner } = useObservedValue<
+    HTMLSpanElement,
+    { overflow: boolean; hasFocusOwner: boolean }
+  >(
+    node,
+    (observed, emit) => {
+      const hasOwner = focusOwnerOf(observed) !== null;
+      const measure = () =>
+        emit({
+          overflow: observed.scrollWidth > observed.clientWidth,
+          hasFocusOwner: hasOwner,
+        });
+      const observer = new ResizeObserver(measure);
+      observer.observe(observed);
+      const contentObserver = new MutationObserver(measure);
+      contentObserver.observe(observed, {
+        childList: true,
+        characterData: true,
+        subtree: true,
+      });
+      measure();
+      return () => {
+        observer.disconnect();
+        contentObserver.disconnect();
+      };
+    },
+    [],
+    UNMEASURED,
+  );
+  // The owning control's focus opens the hint, its blur closes it.
+  useExternalSyncEffect(() => {
+    const focusOwner = node === null ? null : focusOwnerOf(node);
+    if (focusOwner === null) {
       return undefined;
     }
-    const measure = () => setOverflow(node.scrollWidth > node.clientWidth);
-    const observer = new ResizeObserver(measure);
-    observer.observe(node);
-    const contentObserver = new MutationObserver(measure);
-    contentObserver.observe(node, {
-      childList: true,
-      characterData: true,
-      subtree: true,
-    });
-    measure();
-    const focusOwner = node.parentElement?.closest("a[href],button,[tabindex]");
-    setHasFocusOwner(focusOwner !== null && focusOwner !== undefined);
     const show = () => setOpen(true);
     const hide = () => setOpen(false);
-    focusOwner?.addEventListener("focus", show);
-    focusOwner?.addEventListener("blur", hide);
+    focusOwner.addEventListener("focus", show);
+    focusOwner.addEventListener("blur", hide);
     return () => {
-      observer.disconnect();
-      contentObserver.disconnect();
-      focusOwner?.removeEventListener("focus", show);
-      focusOwner?.removeEventListener("blur", hide);
+      focusOwner.removeEventListener("focus", show);
+      focusOwner.removeEventListener("blur", hide);
     };
-  }, []);
+  }, [node]);
 
   return (
     <Tooltip
@@ -73,7 +96,7 @@ export const IdentityText = ({ children, className }: IdentityTextProps) => {
             )}
             dir="auto"
             hint={false}
-            ref={textRef}
+            ref={setNode}
             role={overflow && !hasFocusOwner ? "button" : undefined}
             tabIndex={overflow && !hasFocusOwner ? 0 : undefined}
           />

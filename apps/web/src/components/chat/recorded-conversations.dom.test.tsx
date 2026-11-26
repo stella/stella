@@ -15,12 +15,17 @@ import path from "node:path";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import { compareCodeUnit } from "@stll/collation";
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { ChatRouteHandoffMessage } from "@/features/chat/chat-runtime";
 import type { ChatToolGrantsResponse } from "@/features/chat/chat-tool-grants";
 import { browserStorage } from "@/lib/account/browser-storage";
+
+const flushMicrotasks = async (turns = 4) => {
+  for (let i = 0; i < turns; i += 1) {
+    await Promise.resolve();
+  }
+};
 
 const localArea = () =>
   browserStorage("local") ?? panic("Test requires local browser storage");
@@ -74,8 +79,6 @@ beforeAll(() => {
 });
 
 afterAll(async () => {
-  // Let React's scheduled work drain before the DOM goes away.
-  await sleep(50);
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", actEnvironment);
   globalThis.fetch = originalFetch;
   await unregisterDomEnvironment();
@@ -324,7 +327,7 @@ const createRecordedServer = (
       },
       pull: async (controller) => {
         // One event per read, a task apart, as a network delivers them.
-        await sleep(0);
+        await flushMicrotasks();
         if (!open) {
           return;
         }
@@ -530,7 +533,7 @@ const { act, fireEvent, waitFor, within } = testing;
 const flush = async () => {
   for (let round = 0; round < 5; round += 1) {
     await act(async () => {
-      await sleep(10);
+      await flushMicrotasks();
     });
   }
 };
@@ -961,7 +964,7 @@ const performAction = async ({
             catch: (cause: unknown) => cause,
           }),
         );
-        await sleep(0);
+        await flushMicrotasks();
       });
       return;
     }
@@ -1013,7 +1016,7 @@ const performAction = async ({
             catch: (cause: unknown) => cause,
           }),
         );
-        await sleep(0);
+        await flushMicrotasks();
       });
       return;
     }
