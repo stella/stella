@@ -16,9 +16,10 @@ on:
     branches: [main]
     types: [closed]
 
+# A pull request closes once, so cancelling a superseded run never drops one.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref }}
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 permissions: {}
 

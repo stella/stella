@@ -109,6 +109,7 @@
     "route-scale-nightly.yml/build": "main",
     "route-scale-nightly.yml/measure": "main",
     "network-baseline-request.yml/request": "pr-fast",
+    "release-npm-catch-up.yml/publish-cli": "pr-fast",
     "typecheck-base.yml/record": "main",
     "deploy-staging.yml/resolve": "main",
     "deploy-staging.yml/staging-health": "main",
