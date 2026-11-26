@@ -343,7 +343,18 @@ const exemptAfter = (watermark: Temporal.Instant): SQL => {
 };
 
 /**
- * The candidate's revisions whose delete may be in flight, by entity.
+ * Revisions being deleted the stored-revision at-risk walk reads at most, in
+ * the delete-unproven index's order: twenty times the walk cap, so the scan
+ * stays a bounded index range under the statement budget however long the
+ * delete backlog grows. A scan that reaches it leaves the reading
+ * `at_least`, which is undecided, never a pass.
+ */
+export const CORPUS_INDEX_FLIP_AT_RISK_SCAN_CAP =
+  20 * CORPUS_INDEX_FLIP_WALK_CAP;
+
+/**
+ * The candidate's revisions whose delete may be in flight, by entity, as the
+ * walk's CTEs and the count the reading caps on.
  *
  * - `query_only`: every such revision, in queue order up to the cap.
  * - `stored`: readers are given only the revision a state names, so a
@@ -352,12 +363,16 @@ const exemptAfter = (watermark: Temporal.Instant): SQL => {
  *   (`CORPUS_INDEX_INTENT_APPEND_GATE`); one walked entity counts once
  *   against the cap however many of its revisions are being deleted. Such a
  *   generation appends a replacement beside the old copy's delete, so those
- *   deletes can outnumber the cap while every replacement is applied.
+ *   deletes can outnumber the cap while every replacement is applied. The
+ *   scan reads the index range in order up to its own cap
+ *   (`CORPUS_INDEX_FLIP_AT_RISK_SCAN_CAP`), probing each revision's state by
+ *   primary key, and a scan that reaches it counts as a walk past the cap.
+ *   Measured on 50,000 such deletes, the walk took about 0.1 s.
  */
 const atRiskWalk = (
   { family, candidate }: CorpusIndexFlipPair,
   walkLimit: number,
-): SQL => {
+): { ctes: SQL; walked: SQL } => {
   const retrieval = corpusIndexRevisionRetrieval(
     requireCorpusIndexManifest(family, candidate),
   );
@@ -366,38 +381,61 @@ const atRiskWalk = (
   const queueOrder = sql`coalesce(${intents.cleanupStartedAt}, ${intents.updatedAt})`;
   switch (retrieval.type) {
     case "query_only":
-      return sql`
+      return {
+        ctes: sql`at_risk_walk AS MATERIALIZED (
       SELECT ${intents.entityId} AS entity_id
       FROM ${intents}
       WHERE ${unproven}
       ORDER BY ${queueOrder}, ${intents.id}
       LIMIT ${walkLimit}
-    `;
-    case "stored":
-      return sql`
+    ),`,
+        walked: sql`(SELECT count(*) FROM at_risk_walk)::int`,
+      };
+    case "stored": {
+      const scanLimit = CORPUS_INDEX_FLIP_AT_RISK_SCAN_CAP + 1;
+      return {
+        ctes: sql`at_risk_scan AS MATERIALIZED (
+      SELECT ${intents.entityId} AS entity_id,
+        ${queueOrder} AS queued_at,
+        ${intents.id} AS revision_id
+      FROM ${intents}
+      WHERE ${unproven}
+      ORDER BY ${queueOrder}, ${intents.id}
+      LIMIT ${scanLimit}
+    ),
+    at_risk_walk AS MATERIALIZED (
       SELECT per_entity.entity_id
       FROM (
-        SELECT DISTINCT ON (${intents.entityId})
-          ${intents.entityId} AS entity_id,
-          ${queueOrder} AS queued_at,
-          ${intents.id} AS revision_id
-        FROM ${intents}
-        WHERE ${unproven}
-          AND NOT EXISTS (
-            SELECT 1
-            FROM ${states} superseding
-            WHERE superseding.family = ${intents.family}
-              AND superseding.generation = ${intents.generation}
-              AND superseding.entity_id = ${intents.entityId}
-              AND superseding.applied_action = 'upsert'
-              AND superseding.applied_revision IS NOT NULL
-              AND superseding.applied_revision <> ${intents.id}
-          )
-        ORDER BY ${intents.entityId}, ${queueOrder}, ${intents.id}
+        SELECT DISTINCT ON (scanned.entity_id)
+          scanned.entity_id, scanned.queued_at, scanned.revision_id
+        FROM at_risk_scan scanned
+        -- A lateral read with a LIMIT, so each scanned revision costs one
+        -- probe of the states' primary key and the plan never reads the
+        -- generation's states whole to join them.
+        LEFT JOIN LATERAL (
+          SELECT ${states.appliedAction} AS applied_action,
+            ${states.appliedRevision} AS applied_revision
+          FROM ${states}
+          WHERE ${generationOf(states, family, candidate)}
+            AND ${states.entityId} = scanned.entity_id
+          LIMIT 1
+        ) superseding ON true
+        WHERE NOT coalesce((
+          superseding.applied_action = 'upsert'
+          AND superseding.applied_revision IS NOT NULL
+          AND superseding.applied_revision <> scanned.revision_id
+        ), false)
+        ORDER BY scanned.entity_id, scanned.queued_at, scanned.revision_id
       ) AS per_entity
       ORDER BY per_entity.queued_at, per_entity.revision_id
       LIMIT ${walkLimit}
-    `;
+    ),`,
+        walked: sql`CASE
+        WHEN (SELECT count(*) FROM at_risk_scan) >= ${scanLimit} THEN ${walkLimit}
+        ELSE (SELECT count(*) FROM at_risk_walk)
+      END::int`,
+      };
+    }
     default:
       retrieval satisfies never;
       return panic(`Unhandled revision retrieval: ${String(retrieval)}`);
@@ -416,6 +454,7 @@ export const corpusIndexFlipRegressionQuery = (
 ): SQL => {
   const { family, serving, candidate } = pair;
   const walkLimit = CORPUS_INDEX_FLIP_WALK_CAP + 1;
+  const atRisk = atRiskWalk(pair, walkLimit);
   return sql`
     WITH pending_walk AS MATERIALIZED (
       SELECT ${states.entityId} AS entity_id
@@ -441,7 +480,7 @@ export const corpusIndexFlipRegressionQuery = (
       ORDER BY ${states.entityId}
       LIMIT ${walkLimit}
     ),
-    at_risk_walk AS MATERIALIZED (${atRiskWalk(pair, walkLimit)}),
+    ${atRisk.ctes}
     walked AS (
       SELECT entity_id FROM pending_walk
       UNION SELECT entity_id FROM blocked_walk
@@ -473,7 +512,7 @@ export const corpusIndexFlipRegressionQuery = (
       (SELECT count(*) FROM pending_walk)::int AS pending_walked,
       (SELECT count(*) FROM blocked_walk)::int AS blocked_walked,
       (SELECT count(*) FROM absent_walk)::int AS absent_walked,
-      (SELECT count(*) FROM at_risk_walk)::int AS at_risk_walked,
+      ${atRisk.walked} AS at_risk_walked,
       (SELECT count(*) FROM behind WHERE behind.exempt)::int AS exempt,
       coalesce((
         SELECT json_agg(json_build_object(
