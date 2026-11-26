@@ -82,7 +82,7 @@ import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 /** Applying the template, retries included; well inside the tool budget. */
-export const REFORMAT_INTO_TEMPLATE_TIMEOUT_MS = 60_000;
+const REFORMAT_INTO_TEMPLATE_TIMEOUT_MS = 60_000;
 
 const reformatIntoTemplateArgsSchema = nullAsAbsent(
   v.strictObject({

@@ -15,6 +15,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { declareFingerprintFields } from "@stll/errors";
 import { stripUnicodeMarks } from "@stll/text-normalize";
 
+import { arrayOrEmpty } from "@/api/lib/array";
 import { resolveAmbiguitiesByRule } from "@/api/lib/templates/house-style/ambiguity";
 import type { AmbiguityResolver } from "@/api/lib/templates/house-style/ambiguity";
 import type {
@@ -332,7 +333,7 @@ export const reformatDocxOntoTemplate = async ({
       : leaveDecisionsOpen,
   });
   const blocks = new Map(
-    (manifest?.blocks ?? []).map((block) => [block.id, block]),
+    arrayOrEmpty(manifest?.blocks).map((block) => [block.id, block]),
   );
 
   if (formatted.isErr()) {
@@ -414,7 +415,7 @@ export const reformatDocxOntoTemplate = async ({
           : { source: null, output: null },
       items: items.slice(0, NOTE_ITEMS_MAX),
       itemsOmitted: Math.max(0, items.length - NOTE_ITEMS_MAX),
-      templateHealth: (profile.health ?? []).map(templateHealthOf),
+      templateHealth: arrayOrEmpty(profile.health).map(templateHealthOf),
     },
   });
 };
@@ -488,7 +489,7 @@ export const selectHouseStyleTemplate = <TCandidate extends TemplateCandidate>({
           [
             template.name,
             // Every candidate carries the marker tag; it tells none apart.
-            ...(template.tags ?? []).filter(
+            ...arrayOrEmpty(template.tags).filter(
               (tag) => tag !== HOUSE_STYLE_TEMPLATE_TAG,
             ),
             template.whenToUse ?? "",
