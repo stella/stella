@@ -1,8 +1,12 @@
-import { createContext, startTransition, use, useRef, useState } from "react";
+import { createContext, startTransition, use, useState } from "react";
 
 import { panic } from "better-result";
 
-import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
+import {
+  useExternalSyncEffect,
+  useKeyedState,
+  useLatestCallback,
+} from "@stll/ui/effects";
 
 /**
  * What the app can change, each of which some list shows: from a sheet or a
@@ -15,6 +19,16 @@ type Changes = {
   /** How many times each kind has changed here; a list keyed on it loads afresh. */
   readonly revisions: Readonly<Record<ChangeKind, number>>;
   readonly changed: (kind: ChangeKind) => void;
+  /** Calls `listener` whenever something of one of `kinds` changes here. */
+  readonly subscribe: (
+    kinds: readonly ChangeKind[],
+    listener: () => void,
+  ) => () => void;
+};
+
+type ChangeListener = {
+  readonly kinds: ReadonlySet<ChangeKind>;
+  readonly listener: () => void;
 };
 
 const ChangesContext = createContext<Changes | null>(null);
@@ -35,15 +49,31 @@ const NONE: Readonly<Record<ChangeKind, number>> = {
  */
 export const ChangesProvider = ({ children }: React.PropsWithChildren) => {
   const [revisions, setRevisions] = useState(NONE);
+  const [listeners] = useState(() => new Set<ChangeListener>());
   // A transition, so the lists that reload keep showing what they have
-  // until the new load settles, rather than falling back to a spinner.
+  // until the new load settles, rather than falling back to a spinner. The
+  // lists reload from this event, in the same transition.
   const changed = (kind: ChangeKind) => {
     startTransition(() => {
       setRevisions((current) => ({ ...current, [kind]: current[kind] + 1 }));
+      for (const { kinds, listener } of listeners) {
+        if (kinds.has(kind)) {
+          listener();
+        }
+      }
     });
   };
+  const subscribe = (kinds: readonly ChangeKind[], listener: () => void) => {
+    const entry = { kinds: new Set(kinds), listener };
+    listeners.add(entry);
+    return () => {
+      listeners.delete(entry);
+    };
+  };
   return (
-    <ChangesContext value={{ changed, revisions }}>{children}</ChangesContext>
+    <ChangesContext value={{ changed, revisions, subscribe }}>
+      {children}
+    </ChangesContext>
   );
 };
 
@@ -72,19 +102,17 @@ export const useRevisedLoad = <T,>(
   start: () => Promise<T>,
   kinds: readonly ChangeKind[],
 ): readonly [Promise<T>, (load: Promise<T>) => void] => {
-  const revision = useRevision(...kinds);
+  const { subscribe } = useChanges();
   const [load, setLoad] = useState(start);
-  const loadedFor = useRef(revision);
+  // Called from `changed`, inside its transition.
   const reload = useLatestCallback(() => {
-    startTransition(() => {
-      setLoad(start());
-    });
+    setLoad(start());
   });
-  useExternalSyncEffect(() => {
-    if (loadedFor.current !== revision) {
-      loadedFor.current = revision;
-      reload();
-    }
-  }, [revision, reload]);
+  // `kinds` is a fresh rest array each render; keep one per distinct list.
+  const [watched] = useKeyedState(kinds.join(","), kinds);
+  useExternalSyncEffect(
+    () => subscribe(watched, reload),
+    [watched, subscribe, reload],
+  );
   return [load, setLoad] as const;
 };
