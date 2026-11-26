@@ -628,6 +628,65 @@ describe("buildTemplatePlan, pages the source starts", () => {
   });
 });
 
+describe("buildTemplatePlan, justified lines in front of a manual line break", () => {
+  const body = PROFILE.roles.body;
+  /** The template with its body style justified. */
+  const justified = {
+    profile: {
+      ...PROFILE,
+      roles: {
+        ...PROFILE.roles,
+        body: body === null ? null : { ...body, alignment: "both" },
+      },
+    },
+  };
+  const texts = ["SMLOUVA", "První řádek\ndruhý řádek.", "Jeden řádek."];
+  const withCompat = (
+    doNotExpandShiftReturn: boolean,
+    alignment?: string,
+  ): DocxBlockManifest => {
+    const manifest = manifestOf(texts);
+    return {
+      ...manifest,
+      blocks: manifest.blocks.map((block) => ({
+        ...block,
+        ...(alignment === undefined ? {} : { alignment }),
+      })),
+      compat: { doNotExpandShiftReturn },
+    };
+  };
+  const kept = (note: ReturnType<typeof build>["note"]) =>
+    note.items.filter(({ kind }) => kind === "lineBreakSpacingKept");
+
+  test("a line break that meets justified text only in the output keeps its spacing", () => {
+    const { plan, note } = build(withCompat(false), "keepSource", justified);
+    expect(plan.compat).toEqual({ doNotExpandShiftReturn: true });
+    expect(kept(note)).toEqual([
+      { kind: "lineBreakSpacingKept", reason: "justifiedHere", blocks: 1 },
+    ]);
+  });
+
+  test("text that was justified before, and a template that does not justify, change nothing", () => {
+    const before = build(withCompat(false, "both"), "keepSource", justified);
+    expect(before.plan.compat).toBeUndefined();
+    expect(kept(before.note)).toEqual([]);
+    expect(build(withCompat(false)).plan.compat).toBeUndefined();
+  });
+
+  test("a source whose own settings kept the spacing keeps it", () => {
+    const { plan, note } = build(withCompat(true, "both"));
+    expect(plan.compat).toEqual({ doNotExpandShiftReturn: true });
+    expect(kept(note)).toEqual([
+      { kind: "lineBreakSpacingKept", reason: "source", blocks: 0 },
+    ]);
+  });
+
+  test("a manifest without the facts changes nothing", () => {
+    const { plan } = build(manifestOf(texts), "keepSource", justified);
+    expect(plan.compat).toBeUndefined();
+  });
+});
+
 describe("buildTemplatePlan, what is left unlinked", () => {
   const manifest = czechContract(
     "Viz čl. XX této smlouvy a čl. II odst. 2 této smlouvy.",

@@ -146,6 +146,16 @@ type FormattingNoteItem =
       pageDiffers: boolean;
       columns: number;
     }
+  /** The output keeps the spacing of a justified line that ends in a
+   *  manual line break, which the template's settings would stretch to the
+   *  margin: because the source's settings kept it (`source`), or because
+   *  `blocks` paragraphs with such a break are justified here and were not
+   *  in the source, or got their break by being joined (`justifiedHere`). */
+  | {
+      kind: "lineBreakSpacingKept";
+      reason: "source" | "justifiedHere";
+      blocks: number;
+    }
   | {
       kind: "templateBlocksKept";
       region: "keepBefore" | "contents";
@@ -931,6 +941,63 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
   return { body, placedCount, contentsKept };
 };
 
+const JUSTIFIED: ReadonlySet<string> = new Set(["both", "distribute"]);
+
+/**
+ * Whether the output has to keep the spacing of justified lines that end in
+ * a manual line break, with the note that says why. A word processor
+ * stretches such a line to the margin unless the document's settings say
+ * otherwise, and the output's settings are the template's. The setting is
+ * switched on only where that changes how the document looked: its own
+ * settings had it, or a paragraph with such a break is justified by the
+ * template's style and was not justified before, or got the break by being
+ * joined to its heading. A manifest without these facts changes nothing.
+ */
+const keepsLineBreakSpacing = (
+  { blockById, profile, items }: Context,
+  compat: DocxBlockManifest["compat"],
+  body: TemplatePlan["body"],
+): boolean => {
+  if (compat === undefined) {
+    return false;
+  }
+  const alignmentOf = (styleId: string | undefined): string | null =>
+    styleId === undefined
+      ? (profile.defaultAlignment ?? null)
+      : (Object.values(profile.roles).find(
+          (target) => target?.styleId === styleId,
+        )?.alignment ?? null);
+  const stretched = (
+    blockId: string,
+    styleId: string | undefined,
+    joinedByBreak: boolean,
+  ): boolean => {
+    const block = blockById.get(blockId);
+    return (
+      block !== undefined &&
+      JUSTIFIED.has(alignmentOf(styleId) ?? "") &&
+      (joinedByBreak ||
+        (block.text.includes("\n") && !JUSTIFIED.has(block.alignment ?? "")))
+    );
+  };
+  const blocks = body
+    .flatMap((item) => (item.kind === "source" ? [item] : []))
+    .flatMap(({ blockId, styleId, mergeNext, nested = NO_NESTED }) => [
+      stretched(blockId, styleId, mergeNext === "lineBreak"),
+      ...nested.map((inner) => stretched(inner.blockId, inner.styleId, false)),
+    ])
+    .filter(Boolean).length;
+  if (!compat.doNotExpandShiftReturn && blocks === 0) {
+    return false;
+  }
+  items.push({
+    kind: "lineBreakSpacingKept",
+    reason: compat.doNotExpandShiftReturn ? "source" : "justifiedHere",
+    blocks,
+  });
+  return true;
+};
+
 type Marks = {
   references: TemplatePlanReference[];
   highlights: TemplatePlanHighlight[];
@@ -1436,6 +1503,12 @@ export const buildTemplatePlan = ({
   );
   noteReadings(context, placed, references, suspicions);
 
+  const lineBreakSpacing = keepsLineBreakSpacing(
+    context,
+    manifest.compat,
+    body,
+  );
+
   const plan: TemplatePlan = {
     version: 1,
     sourceSha256: manifest.sha256,
@@ -1451,6 +1524,7 @@ export const buildTemplatePlan = ({
       // kept table of contents would show the template's sample entries.
       updateOnOpen: marks.references.length > 0 || contentsKept,
     },
+    ...(lineBreakSpacing ? { compat: { doNotExpandShiftReturn: true } } : {}),
   };
   return {
     plan,

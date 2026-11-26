@@ -84,6 +84,10 @@ export type TemplateProfile = {
   fillerStrings: string[];
   /** How the template numbers an annex heading; null when it shows none. */
   annex: { numbering: "list" | "field" | "typed" } | null;
+  /** The alignment of the template's default paragraph style, which a
+   *  paragraph placed without a style takes; null when it states none.
+   *  Absent from a profile inferred before it was read. */
+  defaultAlignment?: string | null;
   confidence: number;
 };
 
@@ -788,6 +792,10 @@ export const inferTemplateProfile = (
     },
     fillerStrings: inferFillerStrings(inspection.blocks),
     annex,
+    defaultAlignment:
+      inspection.styles.find(
+        ({ type, isDefault }) => type === "paragraph" && isDefault,
+      )?.alignment ?? null,
     // A template without sample text shows no role in use, and one whose
     // body runs in columns is not filled by column yet.
     confidence:
@@ -1029,6 +1037,7 @@ const profileSchema = v.strictObject({
   annex: v.nullable(
     v.strictObject({ numbering: v.picklist(["list", "field", "typed"]) }),
   ),
+  defaultAlignment: v.exactOptional(v.nullable(textSchema)),
   confidence: confidenceSchema,
 });
 
