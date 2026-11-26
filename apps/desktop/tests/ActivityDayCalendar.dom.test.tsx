@@ -175,6 +175,7 @@ test("a stored retry goes back to editing once its pending batch is gone", async
         onPreferencesChange={noop}
         onCopy={noop}
         onCaptureCommand={noop}
+        onOpenDayTime={noop}
         onReviewStatusChange={(status) => {
           statuses.push(status);
         }}
