@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { ComponentProps } from "react";
 
+import { useMountEffect } from "../effects/effects";
 import { CheckIcon, CopyToClipboardIcon } from "../icons";
 import { cn } from "../lib/utils";
 import { Button } from "./button";
@@ -112,14 +113,11 @@ export const useCopiedFeedback = () => {
     setCopied(false);
   }, []);
 
-  useEffect(
-    () => () => {
-      if (resetTimerRef.current !== null) {
-        clearTimeout(resetTimerRef.current);
-      }
-    },
-    [],
-  );
+  useMountEffect(() => () => {
+    if (resetTimerRef.current !== null) {
+      clearTimeout(resetTimerRef.current);
+    }
+  });
 
   return { copied, confirm, reset };
 };

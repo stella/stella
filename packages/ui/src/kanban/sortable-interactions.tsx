@@ -34,6 +34,7 @@ import type {
 import { useSortable } from "@dnd-kit/sortable";
 
 import { Button } from "../components/button";
+import { useExternalSyncEffect, useMountEffect } from "../effects/effects";
 import { GripVerticalIcon } from "../icons";
 import { BOARD_DRAG_OVERLAY_Z_INDEX } from "../lib/overlay-layer";
 import { cn } from "../lib/utils";
@@ -558,16 +559,16 @@ export const KanbanSortableBoard = ({
   // dnd-kit registers child droppables after commit. Keep the sensor list
   // stable, but hold sortable sources and virtual cells disabled until that
   // registration pass has completed.
-  React.useEffect(() => {
+  useMountEffect(() => {
     const frame = requestAnimationFrame(() => {
       setInteractionReady(true);
     });
     return () => {
       cancelAnimationFrame(frame);
     };
-  }, []);
+  });
 
-  React.useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!interactionReady || interactionReadyNotified.current) {
       return;
     }
