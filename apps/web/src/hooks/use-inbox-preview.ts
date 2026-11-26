@@ -1,5 +1,6 @@
+import { useHasMounted } from "@stll/ui/effects";
+
 import { env } from "@/env";
-import { useHasMounted } from "@/hooks/use-chrome-query";
 import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { publicShellPreviewEntryVisible } from "@/lib/beta-features.logic";
 import { useDevStore } from "@/lib/dev-store";

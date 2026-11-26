@@ -18,6 +18,11 @@ import { knownUnscannedContentReasons } from "@stll/api-contract/file-scan-warni
 import { sleep } from "@stll/concurrency/sleep";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useMountEffect,
+} from "@stll/ui/effects";
 import { CheckIcon, PencilIcon, TextIcon, XIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 import { StatusMark } from "@stll/ui/status-mark";
@@ -68,8 +73,6 @@ import {
   type LocalFilesUndoProblem,
 } from "@/features/chat/local-files-undo.logic";
 import { readClientClockMs } from "@/hooks/client-clock";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import { useFormatter } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";

@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { apiDeleteStatus, apiGet, apiUploadDocx } from "../helpers/api";
+import { newWatchedContext } from "../helpers/storm-watch-fixture";
 import { expect, test } from "../helpers/test";
 import { PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS } from "../helpers/wait-budgets";
 import {
@@ -126,7 +127,7 @@ test.describe("lockless DOCX collaboration", () => {
       `/entities/${testWorkspace.id}/entity/${uploaded.entityId}/field/${fileField.id}/file`,
     );
 
-    collaboratorContext = await browser.newContext({
+    collaboratorContext = await newWatchedContext(browser, {
       baseURL: WEB_BASE_URL,
       storageState: STORAGE_STATE,
     });
@@ -256,7 +257,7 @@ test.describe("lockless DOCX collaboration", () => {
         throw new Error("Published entity has no matching DOCX file field.");
       }
       expect(publishedFileField.id).not.toBe(fileField.id);
-      collaboratorContext = await browser.newContext({
+      collaboratorContext = await newWatchedContext(browser, {
         baseURL: WEB_BASE_URL,
         storageState: STORAGE_STATE,
       });

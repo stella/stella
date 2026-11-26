@@ -7,10 +7,10 @@ import {
   SHAREPOINT_OAUTH_CALLBACK_REASONS,
   type SharepointOAuthCallbackReason,
 } from "@stll/api-contract/sharepoint";
+import { useMountEffect } from "@stll/ui/effects";
 import { stellaToast } from "@stll/ui/toast";
 
 import { sharepointKeys } from "@/features/sharepoint/sharepoint-queries";
-import { useMountEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 import { notifyUserProblem } from "@/lib/errors/user-toast";

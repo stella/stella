@@ -41,6 +41,7 @@ import {
 } from "@stll/ui/command";
 import { DIALOG_MOBILE_LAYOUT } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import {
   AiActionIcon,
   ChevronRightIcon,
@@ -152,8 +153,6 @@ import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context"
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import { invalidateGroupedChatThreads } from "@/features/chat/queries";
 import { useCommandActions } from "@/features/command-palette/hooks/use-command-actions";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormattingLocale } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";

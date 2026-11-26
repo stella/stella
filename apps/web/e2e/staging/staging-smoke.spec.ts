@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 import * as v from "valibot";
 
 import { setFixedBrowserTime } from "@stll/ui/browser-clock";
@@ -12,6 +12,7 @@ import { openGlobalSearchDatePicker } from "../helpers/global-search";
 import { setPresentationPrefs } from "../helpers/presentation-prefs";
 import { contractJson, respond } from "../helpers/route-mock";
 import { STAGING_CHECKS } from "../helpers/staging-state";
+import { test } from "../helpers/storm-watch-fixture";
 
 const MACOS_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +

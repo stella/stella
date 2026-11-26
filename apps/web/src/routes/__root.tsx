@@ -16,6 +16,7 @@ import {
 } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import { useExternalSyncEffect, useMountEffect } from "@stll/ui/effects";
 import { cn } from "@stll/ui/utils";
 
 import { AppProviders } from "@/app-providers";
@@ -25,7 +26,6 @@ import {
   DefaultNotFoundComponent,
 } from "@/components/route-components";
 import { RouteProviderScopeBoundary } from "@/components/route-provider-scope/route-provider-scope";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { ClientDocumentPresentationBoot } from "@/i18n/client-document-presentation-boot";
 import {
   documentPresentationSnapshot,

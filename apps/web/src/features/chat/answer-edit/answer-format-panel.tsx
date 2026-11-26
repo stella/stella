@@ -10,6 +10,7 @@ import {
   CHAT_MESSAGE_LINK_INTENT,
 } from "@stll/api-contract/chat-message-revisions";
 import { Button } from "@stll/ui/button";
+import { useLatestCallback } from "@stll/ui/effects";
 import { BoldIcon, ItalicIcon, LinkIcon, TextIcon } from "@stll/ui/icons";
 import {
   Select,
@@ -19,7 +20,6 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { TranslationKey } from "@/i18n/types";
 
 import type { AnswerEditAnchor } from "./answer-edit-api";

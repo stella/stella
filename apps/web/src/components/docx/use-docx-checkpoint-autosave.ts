@@ -4,9 +4,12 @@ import type { RefObject } from "react";
 import { useDebouncedCallback } from "use-debounce";
 
 import type { DocxEditorRef } from "@stll/folio-react";
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useMountEffect,
+} from "@stll/ui/effects";
 
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { startKeyActionTimer } from "@/lib/analytics/key-action-timing";
 import { getAnalytics } from "@/lib/analytics/provider";
 import type { DocumentTimingSurface } from "@/lib/analytics/types";

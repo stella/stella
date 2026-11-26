@@ -19,6 +19,11 @@
 // subscription, an observer, a timer, a promise), which run when that system
 // says so, not on every render.
 //
+// Owned: packages/ui/src/effects/ is the one place that writes state from
+// effects (the mount latch, measured values, keyed resets); every caller
+// only receives values from it, so the directory is exempt as a whole,
+// never by call site.
+//
 // Existing findings are counted per file in
 // no-effect-state-write-baseline.json and only shrink
 // (scripts/effect-state-write-baseline.ts).
@@ -36,6 +41,9 @@ import {
 
 const baselineCounts: Readonly<Record<string, number>> = rawBaselineCounts;
 
+/** The sanctioned effect hooks (`@stll/ui/effects`), exempt by ownership. */
+export const EFFECTS_OWNER_DIRECTORY = "packages/ui/src/effects/";
+
 const FUNCTIONS = new Set([
   "ArrowFunctionExpression",
   "FunctionDeclaration",
@@ -50,6 +58,8 @@ export const EFFECT_HOOKS = new Set([
   "useIsomorphicLayoutEffect",
   "useMountEffect",
   "useExternalSyncEffect",
+  "useLayoutSyncEffect",
+  "useMountLayoutEffect",
 ]);
 /** Calls that run their callback before returning, inside the effect. */
 const SYNCHRONOUS_RUNNERS = new Set(["startTransition", "flushSync"]);
@@ -174,6 +184,9 @@ export default eslintCompatPlugin({
               options !== null &&
               Reflect.get(options, "census") === true;
             const file = repoRelativeFilename(context);
+            if (file.startsWith(EFFECTS_OWNER_DIRECTORY)) {
+              return;
+            }
             const baseline = census ? 0 : (baselineCounts[file] ?? 0);
             for (const finding of findings.slice(baseline)) {
               context.report(finding);

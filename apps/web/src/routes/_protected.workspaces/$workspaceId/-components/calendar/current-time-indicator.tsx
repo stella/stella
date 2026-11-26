@@ -1,8 +1,7 @@
 import { useState } from "react";
 
 import { Temporal } from "@stll/time";
-
-import { useMountEffect } from "@/hooks/use-effect";
+import { useMountEffect } from "@stll/ui/effects";
 
 /**
  * Red horizontal line showing the current time of day.

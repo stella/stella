@@ -3,11 +3,11 @@ import { useRef } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 
 import { SearchMatchControls } from "@/components/search-match-controls";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 import type { DocxFind } from "./use-docx-find";
 

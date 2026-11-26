@@ -36,8 +36,12 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import type { BlockGestureKind } from "@/features/knowledge/views/templates/directive-kinds";
 import "@stll/folio-react/editor.css";
 
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useMountEffect,
+} from "@stll/ui/effects";
+
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";

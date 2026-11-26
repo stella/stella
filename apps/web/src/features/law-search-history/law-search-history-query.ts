@@ -18,10 +18,9 @@ import {
 import { buildSearchHistoryTitle } from "@stll/api-contract/search-history-title";
 import type { SearchHistoryTitleParts } from "@stll/api-contract/search-history-title";
 import { Temporal } from "@stll/time";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { browserStateStorage } from "@/lib/account/browser-storage";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import { api } from "@/lib/api";

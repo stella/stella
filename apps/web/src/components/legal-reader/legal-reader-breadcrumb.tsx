@@ -7,8 +7,7 @@ import {
   scrollReaderToBlock,
 } from "@stll/decision-reader/reader-landing";
 import type { Block } from "@stll/legal-ast/document-ast";
-
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { ReaderBreadcrumb } from "./reader-breadcrumb";
 import { readerBreadcrumbPaths } from "./reader-breadcrumb-paths";

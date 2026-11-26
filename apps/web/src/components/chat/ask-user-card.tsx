@@ -33,6 +33,7 @@ import {
 import { rehypeChatLinks } from "@stll/chat/link-markdown";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { Form } from "@stll/ui/form";
 import { CheckIcon, HelpCircleIcon, PencilIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
@@ -57,7 +58,6 @@ import type {
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { rehypeScopeAnswerIds } from "@/components/chat/rehype-scope-answer-ids";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import {
   useFormattingLocale,
   useStepsMarkerStyle,

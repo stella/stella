@@ -50,10 +50,16 @@ export const SettingsSidebar = ({
     <aside
       className={cn(
         "bg-sidebar text-sidebar-foreground border-sidebar-border flex w-51 shrink-0 flex-col gap-3 overflow-hidden border-e px-4 pb-3",
-        topInset === "titleBar" ? "pt-11" : "pt-3",
+        // The account at the top keeps the window's edge inset.
+        topInset === "titleBar" ? "pt-11" : "pt-4",
       )}
     >
-      <SidebarIdentity accountState={accountState} />
+      <SidebarIdentity
+        accountState={accountState}
+        onOpen={() => {
+          onSelect("general");
+        }}
+      />
       <nav aria-label={t("title")} className="flex flex-col gap-2">
         <SidebarPages current={current} onSelect={onSelect} pages={before} />
         {after.length > 0 ? (
@@ -122,11 +128,14 @@ const SidebarPages = ({
   );
 };
 
-/** Who this computer is linked as, and how that link is doing. */
+/** Who this computer is linked as, and how that link is doing. A press
+ *  opens General, where the account is. */
 const SidebarIdentity = ({
   accountState,
+  onOpen,
 }: {
   accountState: DesktopAccountState;
+  onOpen: () => void;
 }) => {
   const t = useTranslations("settings");
   const display = accountDisplay(accountState);
@@ -135,10 +144,15 @@ const SidebarIdentity = ({
   return (
     // No end padding: the status line gets the room to name the usual host
     // whole, and the avatar stays in line with the page icons below.
-    <div className="flex min-w-0 items-center gap-2 py-1.5 ps-2">
+    <Button
+      className="h-auto w-full min-w-0 justify-start gap-2 py-1.5 ps-2 pe-0 text-start font-normal sm:h-auto"
+      data-sidebar-account=""
+      onClick={onOpen}
+      variant="ghost"
+    >
       <AccountAvatar display={display} />
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <TruncatedText className="text-sm font-semibold" render={<p />}>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <TruncatedText className="block text-sm font-semibold">
           {display.name ?? t("stellaDesktop")}
         </TruncatedText>
         {tone === null ? null : (
@@ -170,7 +184,7 @@ const SidebarIdentity = ({
             </span>
           </ListItemStatus>
         )}
-      </div>
-    </div>
+      </span>
+    </Button>
   );
 };

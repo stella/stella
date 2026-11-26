@@ -3,6 +3,7 @@ import { useId } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useMountEffect } from "@stll/ui/effects";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
@@ -35,7 +36,6 @@ import {
   stampSizeCheck,
 } from "@/components/inspector/pdf-signing-stamp.logic";
 import { type BoxDragAdjustment, useBoxDrag } from "@/hooks/use-box-drag";
-import { useMountEffect } from "@/hooks/use-effect";
 import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import { resolveAppTimeZone } from "@/i18n/time-zone";
 import type { TranslationKey } from "@/i18n/types";

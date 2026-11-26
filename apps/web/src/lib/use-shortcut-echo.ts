@@ -3,9 +3,8 @@ import { panic } from "better-result";
 import { create } from "zustand";
 
 import { Temporal } from "@stll/time";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { isEditableEventTarget } from "@/lib/hotkeys";
 import type { ShortcutBinding, ShortcutId } from "@/lib/hotkeys";
 

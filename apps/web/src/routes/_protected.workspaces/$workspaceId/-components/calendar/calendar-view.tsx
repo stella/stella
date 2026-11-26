@@ -8,6 +8,7 @@ import { useTranslations } from "use-intl";
 import { isTaskStatus } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { CalendarIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -16,8 +17,6 @@ import {
   QueryViewFeedback,
   SettledQueryViewFeedback,
 } from "@/components/query-view-feedback";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormattingLocale } from "@/i18n/formatting-context";
 import { getFirstWeekday, getWeekendDays } from "@/i18n/week";
 import { getAnalytics } from "@/lib/analytics/provider";

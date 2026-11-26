@@ -18,6 +18,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@stll/ui/dialog";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { PlusIcon, RouteIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
@@ -57,7 +58,6 @@ import {
   docTypeGateLabel,
   resolveDocumentTypeClassifier,
 } from "@/components/workspaces/table/group-columns";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useSingleFlight } from "@/hooks/use-single-flight";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";

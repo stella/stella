@@ -5,6 +5,7 @@ import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { CommandIcon, SkillIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup } from "@stll/ui/popover";
 import { TruncatedText } from "@stll/ui/truncated-text";
@@ -15,7 +16,6 @@ import {
   groupSlashItemsBySection,
   type SlashSectionKey,
 } from "@/components/chat/prompt-slash-list.logic";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 
 // Prompts and SKILL.md skills are one user-facing concept ("skills"), so

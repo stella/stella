@@ -27,6 +27,10 @@ export const MEMBER_RUN_QUEUES = [
     module: "apps/api/src/lib/bilingual/run-queue.ts",
   },
   {
+    queue: "recording-transcriptions",
+    module: "apps/api/src/lib/recording-transcription/run-queue.ts",
+  },
+  {
     queue: "report-exports",
     module: "apps/api/src/handlers/reports/report-export-queue.ts",
   },
@@ -209,6 +213,13 @@ export const QUEUE_AUTHORITY = {
     worker: "apps/api/src/lib/push/push-delivery-worker.ts",
     reason:
       "Alerts a notification's recipient on their own registered devices; the job names only the notification, and the recipient's current membership decides whether it is still theirs to see before anything is sent.",
+  },
+  "recording-transcriptions": {
+    authority: "member-run",
+    worker: "apps/api/src/lib/recording-transcription/run-queue.ts",
+    revocationTest:
+      "apps/api/src/lib/recording-transcription/run-worker-inputs.integration.test.ts",
+    reason: "A transcription the requesting member started.",
   },
   "report-exports": {
     authority: "member-run",

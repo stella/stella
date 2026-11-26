@@ -24,7 +24,7 @@ test("allows sanctioned wrappers and unrelated local effect functions", async ()
   expect(
     await lintSingleRule(
       "no-raw-use-effect",
-      'import { useMountEffect, useExternalSyncEffect } from "@/hooks/use-effect";\nuseMountEffect(() => {});\nuseExternalSyncEffect(() => {}, []);\nconst useEffect = (effect: () => void) => effect();\nuseEffect(() => {});',
+      'import { useMountEffect, useExternalSyncEffect } from "@stll/ui/effects";\nuseMountEffect(() => {});\nuseExternalSyncEffect(() => {}, []);\nconst useEffect = (effect: () => void) => effect();\nuseEffect(() => {});',
     ),
   ).toEqual([]);
 });
@@ -34,7 +34,7 @@ test("allows the effect wrapper owner to call React", async () => {
     await lintSingleRule(
       "no-raw-use-effect",
       'import { useEffect } from "react";\nuseEffect(() => {});',
-      { cwd: "scratch", sourcePath: "apps/web/src/hooks/use-effect.ts" },
+      { cwd: "scratch", sourcePath: "packages/ui/src/effects/effects.ts" },
     ),
   ).toEqual([]);
 });
@@ -44,7 +44,7 @@ test("keeps copies of the effect owner restricted", async () => {
     await lintSingleRule(
       "no-raw-use-effect",
       'import { useEffect } from "react";\nuseEffect(() => {});',
-      { cwd: "scratch", sourcePath: "apps/web/src/hooks/use-effect.copy.ts" },
+      { cwd: "scratch", sourcePath: "packages/ui/src/effects/effects.copy.ts" },
     ),
   ).toEqual([2]);
 });
@@ -54,7 +54,7 @@ test("keeps the owner basename restricted in another directory", async () => {
     await lintSingleRule(
       "no-raw-use-effect",
       'import { useEffect } from "react";\nuseEffect(() => {});',
-      { cwd: "scratch", sourcePath: "apps/web/src/other/use-effect.ts" },
+      { cwd: "scratch", sourcePath: "apps/web/src/other/effects.ts" },
     ),
   ).toEqual([2]);
 });

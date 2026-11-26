@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { FacetBar } from "@/components/inspector/inspector-facet-bar";
@@ -8,7 +9,6 @@ import type {
   FileFacet,
   FileTab,
 } from "@/components/inspector/inspector-store-types";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { DOCX_MIME, isEmailFile } from "@/lib/consts";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";

@@ -3,13 +3,14 @@ import { useState } from "react";
 import { PDF } from "@libpdf/core";
 import { Result } from "better-result";
 
+import { useMountEffect } from "@stll/ui/effects";
+
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
 import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
 import {
   PeekPdfControls,
   PeekPdfViewport,
 } from "@/components/pdf/peek/peek-pdf-viewer";
-import { useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 

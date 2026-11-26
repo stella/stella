@@ -27,6 +27,7 @@ import {
   rejectAllChanges,
 } from "@stll/folio-core/prosemirror/commands/comments";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import {
   AiActionIcon,
   BoldIcon,
@@ -52,8 +53,6 @@ import type {
   ClauseBody,
   ClauseParagraph,
 } from "@/components/templates/clause-editor-types";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";

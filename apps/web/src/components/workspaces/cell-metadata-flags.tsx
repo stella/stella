@@ -8,6 +8,7 @@ import { isReviewFlag, REVIEW_FLAG } from "@stll/api-contract";
 import type { ReviewFlag } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { useMountEffect } from "@stll/ui/effects";
 import {
   CheckCircle2Icon,
   LockIcon,
@@ -35,7 +36,6 @@ import {
   cellOverrideKey,
   useCellMetadataOverridesStore,
 } from "@/components/workspaces/cell-metadata-overrides-store";
-import { useMountEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";

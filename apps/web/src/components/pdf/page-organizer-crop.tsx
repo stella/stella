@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useMountEffect } from "@stll/ui/effects";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 import { NumberInput } from "@stll/ui/number-input";
@@ -28,7 +29,6 @@ import { cn } from "@stll/ui/utils";
 
 import { useBoxDrag } from "@/hooks/use-box-drag";
 import type { BoxDragAdjustment } from "@/hooks/use-box-drag";
-import { useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import type { PageInfo } from "@/lib/pdf/pdf-context";

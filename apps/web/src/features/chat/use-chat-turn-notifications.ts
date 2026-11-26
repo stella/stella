@@ -3,6 +3,8 @@ import { useRef } from "react";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { useExternalSyncEffect } from "@stll/ui/effects";
+
 import {
   CHAT_TURN_NOTIFICATIONS_STORAGE_KEY,
   getChatTurnNotification,
@@ -11,7 +13,6 @@ import type {
   ChatTurnNotificationKind,
   ChatTurnPhase,
 } from "@/features/chat/turn-notifications.logic";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLocalStorageFlag } from "@/hooks/use-local-storage-flag";
 import type { TranslationKey } from "@/i18n/types";
 import {

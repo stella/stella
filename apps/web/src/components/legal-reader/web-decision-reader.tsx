@@ -22,13 +22,13 @@ import type {
 import { visibleDecisionBlocks } from "@stll/legal-ast/case-law-reader";
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { citationOccurrencesByDecision } from "@/components/legal-reader/citation-occurrences.logic";
 import { CitedDecisionSourceText } from "@/components/legal-reader/cited-decision-link";
 import { WebReaderProvider } from "@/components/legal-reader/web-reader-provider";
 import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-surfaces";
 import { useProvisionPlacementTelemetry } from "@/features/case-law/use-provision-placement-telemetry";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { revealEnclosingDisclosures } from "@/lib/platform/reveal-disclosures";
 

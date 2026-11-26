@@ -15,9 +15,8 @@ import { useRef, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { useMountEffect } from "@stll/ui/effects";
 import { Menu, MenuItem, MenuPopup } from "@stll/ui/menu";
-
-import { useMountEffect } from "@/hooks/use-effect";
 
 const MIN_SELECTION_CHARS = 2;
 const MAX_SELECTION_CHARS = 200;

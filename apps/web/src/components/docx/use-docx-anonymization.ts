@@ -4,12 +4,12 @@ import { useQuery } from "@tanstack/react-query";
 import type { EditorView } from "@tiptap/pm/view";
 
 import type { FolioAnonymizationTerm } from "@stll/folio-react";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import {
   useInspectorAnonymizationStore,
   useIsAnonymizationActive,
 } from "@/components/inspector/inspector-anonymization-store";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";

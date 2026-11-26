@@ -5,6 +5,7 @@ import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useMountEffect } from "@stll/ui/effects";
 import { DictateIcon, SquareIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 
@@ -13,7 +14,6 @@ import type { DictationRecording } from "@/components/chat/chat-dictation-audio"
 import type { ComposerContextMenuProps } from "@/components/chat/composer-plus-menu";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
-import { useMountEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 

@@ -28,6 +28,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { Form } from "@stll/ui/form";
 import {
   BookmarkIcon,
@@ -50,7 +51,6 @@ import {
   toSavedSearchCriteria,
 } from "@/components/saved-searches.logic";
 import type { SearchFilters } from "@/components/search-filters.logic";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";

@@ -32,7 +32,7 @@ const ACTIVITY_STEP = {
   linked: true,
   mode: { type: "tour" },
   step: "activity",
-  steps: ["welcome", "howItWorks", "activity", "permissions", "done"],
+  steps: ["welcome", "howItWorks", "permissions", "activity", "done"],
   trayLocation: null,
 } as const satisfies OnboardingSnapshot;
 

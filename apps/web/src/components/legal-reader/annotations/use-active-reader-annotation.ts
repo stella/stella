@@ -1,9 +1,10 @@
 import { useState } from "react";
 import type { RefObject } from "react";
 
+import { useExternalSyncEffect } from "@stll/ui/effects";
+
 import type { ReaderAnnotation } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { isPendingAnnotationId } from "@/components/legal-reader/annotations/use-optimistic-annotation-mutations";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 type ActiveReaderAnnotation = {
   activeAnnotation: ReaderAnnotation | null;

@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { createChatPastedTextPart } from "@stll/api-contract/chat";
+import { useMountEffect } from "@stll/ui/effects";
 
 import { createChatComposerDocument } from "@/components/chat-editor-markdown.logic";
 import {
@@ -13,7 +14,6 @@ import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
-import { useMountEffect } from "@/hooks/use-effect";
 import { useChatDraftStore } from "@/lib/chat-draft-store";
 import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";

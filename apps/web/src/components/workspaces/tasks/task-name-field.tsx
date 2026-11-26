@@ -1,10 +1,10 @@
 import { useTranslations } from "use-intl";
 
 import { ENTITY_NAME_MAX_LENGTH } from "@stll/api-contract";
+import { useMountEffect } from "@stll/ui/effects";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 
 import { InspectorTitle } from "@/components/inspector/inspector-title";
-import { useMountEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";

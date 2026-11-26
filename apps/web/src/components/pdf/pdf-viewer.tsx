@@ -2,6 +2,8 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { produce } from "immer";
 
+import { useExternalSyncEffect } from "@stll/ui/effects";
+
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import {
   PdfSignPlacementBar,
@@ -18,7 +20,6 @@ import {
   PDF_VIEWPORT_CONTENT_CLASS,
 } from "@/components/pdf/pdf-viewer.pending";
 import { DefaultPendingComponent } from "@/components/route-components";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { fileOptions } from "@/lib/files/queries";
 import { resolvePDFInvertColors } from "@/lib/pdf/pdf-color-mode";

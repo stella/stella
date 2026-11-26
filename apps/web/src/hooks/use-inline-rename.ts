@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
-import { useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useLatestCallback, useMountEffect } from "@stll/ui/effects";
+
 import { detached } from "@/lib/detached";
 
 /**

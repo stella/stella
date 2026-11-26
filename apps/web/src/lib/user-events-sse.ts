@@ -13,11 +13,10 @@ import {
 } from "@stll/api-contract";
 import type { UserEventRead, UserRealtimeEvent } from "@stll/api-contract";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 
 import { activeChatRunsOptions } from "@/features/chat/active-runs";
 import { chatKeys } from "@/features/chat/chat-query-contract";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import {
   captureSessionQueryOwner,
   isObservedSessionQueryOwner,

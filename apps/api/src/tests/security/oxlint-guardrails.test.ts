@@ -283,7 +283,7 @@ describe("custom oxlint guardrails", () => {
 
     // The sanctioned wrapper module is the row's owner.
     expect(tableSource).toContain(
-      'owners: ["apps/web/src/hooks/use-effect.ts"]',
+      'owners: ["packages/ui/src/effects/effects.ts"]',
     );
 
     // A failing call must point the reader/agent at the source of truth.

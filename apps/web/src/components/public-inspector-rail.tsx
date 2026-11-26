@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useTranslations } from "use-intl";
 
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { PanelRightIcon } from "@stll/ui/icons";
 import {
   InspectorDock,
@@ -19,7 +20,6 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { useSharedInspectorPaneWidth } from "@/components/inspector/pane-width-storage";
 import { useSidebarInlineSize } from "@/components/sidebar";
 import Tooltip from "@/components/tooltip";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 /**
  * Public twin of the inspector side rail: same geometry and chrome as the

@@ -32,6 +32,7 @@ export const ActivityStep = ({ onBack, onContinue, snapshot }: StepProps) => {
           backDisabledReason={actions.backDisabledReason}
           onBack={actions.onBack}
           primary={actions.primary}
+          screens={actions.screens}
           secondary={actions.secondary}
           snapshot={snapshot}
         />

@@ -1,9 +1,10 @@
 import { useRef, useState } from "react";
 import type { CSSProperties, PointerEvent } from "react";
 
+import { useExternalSyncEffect } from "@stll/ui/effects";
+
 import { manualRedactionCatalog } from "@/components/pdf/manual-redaction/manual-redaction-catalog";
 import { useManualRedactionStore } from "@/components/pdf/manual-redaction/manual-redaction-store";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import {
   isManualRedactionPageRectUnchanged,
   manualRedactionFromDrag,

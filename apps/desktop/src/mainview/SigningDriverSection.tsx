@@ -67,7 +67,6 @@ export const SigningDriverSection = ({
               return undefined;
             });
           }}
-          size="sm"
           variant="outline"
         >
           {t("choose")}
@@ -80,7 +79,6 @@ export const SigningDriverSection = ({
             onClick={() => {
               void send(async () => invoke("signing_driver_remove"));
             }}
-            size="sm"
             variant="ghost"
           >
             {t("remove")}

@@ -17,6 +17,7 @@ import {
   renderDeterministicFieldValue,
 } from "@stll/template-conditions";
 import { Button } from "@stll/ui/button";
+import { useMountEffect } from "@stll/ui/effects";
 import {
   AlertTriangleIcon,
   BookmarkIcon,
@@ -64,7 +65,6 @@ import {
 } from "@/components/templates/template-form";
 import { ARRAY_INDEX_KEY_PREFIX } from "@/components/templates/template-form.logic";
 import Tooltip from "@/components/tooltip";
-import { useMountEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
