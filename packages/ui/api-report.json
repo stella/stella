@@ -13270,55 +13270,10 @@
     },
     "./use-latest": {
       "type": "module",
-      "file": "./src/effects/effects.d.ts",
+      "file": "./src/hooks/use-latest.d.ts",
       "exports": [
         {
-          "name": "StateKey",
-          "kind": "type",
-          "space": "type"
-        },
-        {
-          "name": "useExternalSyncEffect",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "useHasMounted",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "useIsMounted",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "useKeyedState",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
           "name": "useLatest",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "useLatestCallback",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "useLayoutSyncEffect",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "useMountEffect",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "useMountLayoutEffect",
           "kind": "variable",
           "space": "value"
         }
@@ -13650,6 +13605,7 @@
     "./src/hooks/use-contained-handler.d.ts": "import type * as React from \"react\";\ntype ContainmentRoot = {\n    contains: (target: Node) => boolean;\n};\nexport declare const containedHandler: <E extends {\n    target: unknown;\n}>(ref: React.RefObject<ContainmentRoot | null> | null | undefined, handler: ((event: E) => void) | undefined) => (event: E) => void;\nexport declare const containedEventHandler: <E extends {\n    currentTarget: unknown;\n    target: unknown;\n}>(handler: (event: E) => void) => (event: E) => void;\nexport {};\n",
     "./src/hooks/use-content-dir.d.ts": "type FieldValue = number | readonly string[] | string | undefined;\ntype UseContentDirArgs = {\n    defaultValue: FieldValue;\n    dir: string | undefined;\n    value: FieldValue;\n};\ntype UseContentDirResult = {\n    dir: \"auto\" | \"ltr\" | \"rtl\" | undefined;\n    trackValue: (text: string) => void;\n};\nexport declare const isStructuredInputType: (type: string | undefined) => boolean;\nexport declare const contentDir: (value: FieldValue) => \"auto\" | undefined;\nexport declare const useContentDir: ({ dir, value, defaultValue, }: UseContentDirArgs) => UseContentDirResult;\nexport {};\n",
     "./src/hooks/use-inline-overflow.d.ts": "export declare const INLINE_OVERFLOW_ITEM_ATTRIBUTE = \"data-inline-overflow-item\";\nexport declare const INLINE_OVERFLOW_TRIGGER_ATTRIBUTE = \"data-inline-overflow-trigger\";\ntype UseInlineOverflowOptions = {\n    activeIndex: number;\n    itemKeys: readonly string[];\n};\nexport declare const useInlineOverflow: ({ activeIndex, itemKeys, }: UseInlineOverflowOptions) => {\n    container: HTMLElement | null;\n    containerRef: import(\"react\").Dispatch<import(\"react\").SetStateAction<HTMLElement | null>>;\n    measureRef: import(\"react\").Dispatch<import(\"react\").SetStateAction<HTMLElement | null>>;\n    measured: boolean;\n    visibleCount: number;\n};\nexport {};\n",
+    "./src/hooks/use-latest.d.ts": "export { useLatest } from \"../effects/effects\";\n",
     "./src/hooks/use-mobile.d.ts": "export declare function useIsMobile(): boolean;\n",
     "./src/hooks/use-prefers-reduced-motion.d.ts": "export declare const usePrefersReducedMotion: () => boolean;\n",
     "./src/hooks/use-viewport-width.d.ts": "export declare function useViewportWidth(): number;\n",
