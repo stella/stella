@@ -1741,18 +1741,16 @@ const parseResultPage = ({
         /ShowLink\("(?<url>https?:\/\/[^"]+GetText\.aspx\?sz=[^"]+)"/u.exec(
           linkAction ?? "",
         )?.groups?.["url"];
-      let sz: string | undefined;
-      if (rawUrl) {
-        try {
-          sz = persistableNalusComponent(
+      // A malformed or withdrawn text action does not erase the stable
+      // ResultDetail record identity exposed by the listing.
+      // parser-output-unchanged: [cz-us] URL.parse preserves identical sz extraction without throwing on malformed URLs.
+      const parsedTextUrl = rawUrl ? URL.parse(rawUrl) : null;
+      const sz = parsedTextUrl
+        ? persistableNalusComponent(
             "nalus-sz",
-            new URL(rawUrl).searchParams.get("sz") || undefined,
-          );
-        } catch {
-          // A malformed or withdrawn text action does not erase the stable
-          // ResultDetail record identity exposed by the listing.
-        }
-      }
+            parsedTextUrl.searchParams.get("sz") || undefined,
+          )
+        : undefined;
       const listingHtml = `${primary.toString()}${actions.toString()}`;
       const ecli = persistableNalusComponent(
         "nalus-ecli",

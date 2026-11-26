@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, gt, gte, lte, or, sql } from "drizzle-orm";
+import { and, asc, gt, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
@@ -12,6 +12,10 @@ import { timeDailyTargets, timeEntries, workspaces } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { leftTodayMinutes } from "@/api/lib/billing/daily-target";
+import {
+  ownTimeEntriesScope,
+  timeEntryMatterJoin,
+} from "@/api/lib/billing/own-time-entries";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   paginationCursorSchema,
@@ -31,7 +35,6 @@ import type {
 } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedTimeEntryId } from "@/api/lib/safe-id-boundaries";
-import { visibleWorkspaceSql } from "@/api/lib/workspaces/visible-workspace-sql";
 
 const myTimeEntryColumns = {
   id: timeEntries.id,
@@ -237,32 +240,18 @@ const listMyTimeEntries = createSafeRootHandler(
     const limit = normalizeTenantPageLimit(
       query.limit ?? LIMITS.timeEntriesPageSizeDefault,
     );
-    const dayScope = and(
-      eq(timeEntries.organizationId, session.activeOrganizationId),
-      eq(timeEntries.userId, user.id),
-      gte(timeEntries.dateWorked, query.date),
-      lte(timeEntries.dateWorked, query.endDate ?? query.date),
-      or(
-        eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.INTERNAL),
-        and(
-          eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
-          eq(workspaces.organizationId, session.activeOrganizationId),
-          visibleWorkspaceSql(),
-        ),
-      ),
-    );
+    const dayScope = ownTimeEntriesScope({
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+      date: query.date,
+      endDate: query.endDate ?? query.date,
+    });
     const day = yield* Result.await(
       safeDb(async (tx) => {
         const rows = await tx
           .select(myTimeEntryColumns)
           .from(timeEntries)
-          .leftJoin(
-            workspaces,
-            and(
-              eq(timeEntries.workspaceId, workspaces.id),
-              eq(timeEntries.organizationId, workspaces.organizationId),
-            ),
-          )
+          .leftJoin(workspaces, timeEntryMatterJoin())
           .where(and(dayScope, cursor ? gt(timeEntries.id, cursor) : undefined))
           .orderBy(asc(timeEntries.id))
           .limit(limit + 1);
@@ -279,13 +268,7 @@ const listMyTimeEntries = createSafeRootHandler(
           )`,
           })
           .from(timeEntries)
-          .leftJoin(
-            workspaces,
-            and(
-              eq(timeEntries.workspaceId, workspaces.id),
-              eq(timeEntries.organizationId, workspaces.organizationId),
-            ),
-          )
+          .leftJoin(workspaces, timeEntryMatterJoin())
           .where(dayScope);
         const days = await tx
           .select({
@@ -300,13 +283,7 @@ const listMyTimeEntries = createSafeRootHandler(
               ),
           })
           .from(timeEntries)
-          .leftJoin(
-            workspaces,
-            and(
-              eq(timeEntries.workspaceId, workspaces.id),
-              eq(timeEntries.organizationId, workspaces.organizationId),
-            ),
-          )
+          .leftJoin(workspaces, timeEntryMatterJoin())
           .where(dayScope)
           // One row per work date of a range of at most timeRangeDaysMax days.
           .groupBy(timeEntries.dateWorked);

@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "The Activity day review reads the member's entries on the day again when its window comes back to the front. That read is an effect dependency and the retry action, so it keeps its useCallback with the reason apps/desktop uses for the same case: react-hooks/exhaustive-deps cannot see compiler memoization."
+}

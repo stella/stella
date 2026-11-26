@@ -925,7 +925,7 @@ export const reconcileCaseLawCorpusUploadIntents = async ({
           { currentKeys, activeKeys, referencedPackKeys },
         );
         if (plan.type === "defer") {
-          return null;
+          return { type: "deferred" } as const;
         }
         const released = await Result.tryPromise({
           try: async () =>
@@ -944,7 +944,7 @@ export const reconcileCaseLawCorpusUploadIntents = async ({
               step: "reconcileCaseLawCorpusUploadIntents.reclaim",
             }),
           );
-          return null;
+          return { type: "failed", error: released.error } as const;
         }
         switch (released.value.type) {
           case "released":
@@ -954,15 +954,15 @@ export const reconcileCaseLawCorpusUploadIntents = async ({
             // and no later attempt could reclaim it. The outcome is read
             // rather than discarded, because a row kept here is retried for
             // ever.
-            return row.id;
+            return { type: "cleaned", id: row.id } as const;
           default:
             released.value satisfies never;
             return panic(`Unhandled reclaim: ${String(released.value)}`);
         }
       }),
     );
-    const cleanedIds = cleanupResults.filter(
-      (id): id is SafeId<"caseLawCorpusUploadIntent"> => id !== null,
+    const cleanedIds = cleanupResults.flatMap((outcome) =>
+      outcome.type === "cleaned" ? [outcome.id] : [],
     );
     if (cleanedIds.length === 0) {
       return 0;

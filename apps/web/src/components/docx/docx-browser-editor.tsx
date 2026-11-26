@@ -388,13 +388,15 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
       />
     ) : undefined;
 
-  const { lastStyleLabel, lastStyleLabelStyle } =
-    useRetainedStylePickerLabel(containerRef);
-
   const blockingError = getDocxEditorBlockingError({
     collaborationState,
     state,
   });
+  const editorShown =
+    blockingError === null &&
+    previewFile !== null &&
+    editorBuffer !== undefined;
+  const retainedStyle = useRetainedStylePickerLabel(containerRef, editorShown);
   if (blockingError !== null) {
     return (
       <DocxEditorBlockingErrorMessage error={blockingError} onClose={onClose} />
@@ -405,8 +407,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     <DocxEditorLoadingFallback
       scaleOffset={scaleOffset}
       showActionBar={showActionBar}
-      stylePickerLabel={lastStyleLabel}
-      stylePickerLabelStyle={lastStyleLabelStyle}
+      stylePickerLabel={retainedStyle.lastStyleLabel}
+      stylePickerLabelStyle={retainedStyle.lastStyleLabelStyle}
       toolbarExtra={toolbarExtra}
       zoom={targetZoom}
     />

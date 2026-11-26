@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useExternalSyncEffect } from "@stll/ui/effects";
+import { useLayoutSyncEffect } from "@stll/ui/effects";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import type {
@@ -27,37 +27,42 @@ export const useFileTabRename = ({ tabs }: UseFileTabRenameOptions) => {
     setEditingTabId(tab.id);
   };
 
-  // A rename asked for from outside the strip (a command, a menu) waits in
-  // the store until its tab is here. The render that sees both opens the
-  // editor, so it is open in the commit the request or the tab arrives in;
-  // the request is then cleared, which re-arms the same tab for a later one.
+  // A rename request opens the editor in the render that first sees both the
+  // request and its tab (the tab may arrive after the request), so it is open
+  // before paint and without an extra commit. Remembering which request was
+  // opened keeps a re-render from opening it again; the record goes when the
+  // request does, so the same tab can be asked for again later.
   const pendingRenameTabId = useInspectorCommandStore(
     (s) => s.pendingRenameTabId,
   );
-  const renameTarget =
+  const pendingRenameTarget =
     pendingRenameTabId === null
       ? undefined
       : tabs.find(
           (candidate): candidate is FileTab =>
             candidate.type === "pdf" && candidate.id === pendingRenameTabId,
         );
-  const requestedTabId = renameTarget?.id ?? null;
-  const [startedTabId, setStartedTabId] = useState<string | null>(null);
-  if (requestedTabId !== startedTabId) {
-    setStartedTabId(requestedTabId);
-    if (renameTarget !== undefined) {
-      startRename(renameTarget);
+  const pendingRenameTargetId = pendingRenameTarget?.id ?? null;
+  const [openedRenameTargetId, setOpenedRenameTargetId] = useState<
+    string | null
+  >(null);
+  if (openedRenameTargetId !== pendingRenameTargetId) {
+    setOpenedRenameTargetId(pendingRenameTargetId);
+    if (pendingRenameTarget !== undefined) {
+      setEditValue(splitFileName(pendingRenameTarget.label).baseName);
+      setEditingTabId(pendingRenameTarget.id);
     }
   }
-  useExternalSyncEffect(() => {
-    if (requestedTabId === null) {
+  // The request is answered once its editor is open.
+  useLayoutSyncEffect(() => {
+    if (pendingRenameTargetId === null) {
       return;
     }
     const store = useInspectorCommandStore.getState();
-    if (store.pendingRenameTabId === requestedTabId) {
+    if (store.pendingRenameTabId === pendingRenameTargetId) {
       store.clearRenameRequest();
     }
-  }, [requestedTabId]);
+  }, [pendingRenameTargetId]);
 
   const commitRename = (tab: FileTab) => {
     setEditingTabId(null);

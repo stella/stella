@@ -306,9 +306,12 @@ export const checkBudgetP95Seconds = (
     return DEFAULT_UNBUDGETED_CHECK_WEIGHT_SECONDS;
   }
   const p95 = budget.p95Seconds;
+  // An unmeasured check has only its timeout ceiling (often 15-30 min); using
+  // that ceiling as a bin-packing weight lets unmeasured checks outweigh the
+  // heaviest measured checks and skew partition balance.
   return budget.samples > 0 && p95 !== undefined && p95 > 0
     ? p95
-    : budget.minutes * 60;
+    : Math.min(budget.minutes * 60, DEFAULT_UNBUDGETED_CHECK_WEIGHT_SECONDS);
 };
 
 /** A pooled check's measured peak memory; a check without one cannot run. */

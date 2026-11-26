@@ -11,8 +11,8 @@ use crate::{
   feature_gate::{DesktopFeature, FeatureGates},
   local_window::{ActivityAccountFeature, ActivityCaller, LocalCaller},
   time_entry_submit::{
-    self, CandidatesResponse, ConfirmedBatch, ConfirmedTimeEntry, CreatedEntry, Matter,
-    MatterResolution,
+    self, CandidatesResponse, ConfirmedBatch, ConfirmedTimeEntry, CreatedEntry,
+    DayEntriesResponse, Matter, MatterResolution,
   },
 };
 
@@ -145,6 +145,53 @@ pub async fn time_entry_candidates(
   require_account(&caller, &gates, &account)?;
   drop(account);
   Ok(candidates)
+}
+
+/// The member's own entries on a reviewed day, so a suggestion can say what
+/// another device or the web already recorded on its matter.
+#[tauri::command]
+pub async fn time_entry_day_entries(
+  caller: ActivityCaller,
+  gates: State<'_, FeatureGates>,
+  accounts: State<'_, AccountState>,
+  date: String,
+) -> Result<DayEntriesResponse, String> {
+  let day = activity::parse_date(&date)?;
+  let account = linked_account(&caller, &gates, &accounts).await?;
+  let entries =
+    time_entry_submit::day_entries(&account, &activity::format_date(day)).await?;
+  require_account(&caller, &gates, &account)?;
+  drop(account);
+  Ok(entries)
+}
+
+/// The member's own week in stella web, opened on the reviewed day, where
+/// the entries recorded elsewhere are listed.
+fn day_time_url(web_origin: &str, date: &str) -> Result<String, String> {
+  let day = activity::parse_date(date)?;
+  Ok(format!(
+    "{web_origin}/time?date={}",
+    activity::format_date(day)
+  ))
+}
+
+#[tauri::command]
+pub async fn time_entry_open_day_time(
+  caller: ActivityCaller,
+  app: AppHandle,
+  gates: State<'_, FeatureGates>,
+  accounts: State<'_, AccountState>,
+  date: String,
+) -> Result<(), String> {
+  use tauri_plugin_opener::OpenerExt;
+
+  let account = linked_account(&caller, &gates, &accounts).await?;
+  let url = day_time_url(&account.web_origin, &date)?;
+  drop(account);
+  app
+    .opener()
+    .open_url(url, None::<&str>)
+    .map_err(crate::logging::with_cause_logged(REFUSAL))
 }
 
 #[tauri::command]
@@ -303,6 +350,17 @@ mod tests {
       entries: batch.entries.into_iter().take(100).collect(),
     };
     assert_eq!(validate_confirmation(&accepted, date), Ok(()));
+  }
+
+  #[test]
+  fn day_time_links_open_only_a_calendar_date_on_the_linked_web_origin() {
+    assert_eq!(
+      day_time_url("https://example.test", "2026-10-07"),
+      Ok("https://example.test/time?date=2026-10-07".into())
+    );
+    for refused in ["2026-10-07&view=approvals", "../settings", "2026-02-30", ""] {
+      assert!(day_time_url("https://example.test", refused).is_err());
+    }
   }
 
   #[test]

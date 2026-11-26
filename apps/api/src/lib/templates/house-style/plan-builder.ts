@@ -28,6 +28,7 @@ import type {
   TemplatePlanNumbering,
   TemplatePlanNumberingPatch,
   TemplatePlanReference,
+  TemplatePlanSection,
   TemplatePlanSourceItem,
 } from "@/api/lib/templates/house-style/folio-contract";
 import { buildLabelIndex } from "@/api/lib/templates/house-style/label-index";
@@ -186,6 +187,9 @@ export type FormattingNote = {
     /** Paragraphs told to start a page, for a page the source started by a
      *  break that is not placed. */
     pageStarts: number;
+    /** Sections of the source that stay sections, for a page other than
+     *  the first section's. */
+    sectionsKept: number;
     numberingPatches: number;
     referencesLinked: number;
     referencesUnlinked: number;
@@ -286,6 +290,9 @@ type Context = {
   topLevel: readonly DocxBlock[];
   /** The source's sections; empty when the manifest does not report them. */
   sections: readonly DocxSection[];
+  /** The sections of the source that stay sections: their last paragraph
+   *  and what the plan says of each, and the one the body ends with. */
+  keptSections: KeptSections;
   index: LabelIndex;
   profile: TemplateProfile;
   mode: NumberingMode;
@@ -297,6 +304,13 @@ type Context = {
   stylelessRoles: Map<HouseStyleRole, number>;
   items: FormattingNoteItem[];
 };
+
+type KeptSections = {
+  ends: ReadonlyMap<string, TemplatePlanSection>;
+  last: TemplatePlanSection | undefined;
+};
+
+const NO_KEPT_SECTIONS: KeptSections = { ends: new Map(), last: undefined };
 
 /** Every paragraph inside a table, cells of nested tables included. */
 const insideOf = (
@@ -495,10 +509,15 @@ const sectionAfter = (
     ? sections.find(({ index }) => index === block.sectionIndex + 1)
     : undefined;
 
-/** Whether the block after `block` opens a section on a new page. */
+/** Whether the block after `block` opens a section on a new page that
+ *  nothing else starts: a section that stays a section starts its own. */
 const endsPage = (context: Context, block: DocxBlock): boolean => {
   const next = sectionAfter(context, block);
-  return next !== undefined && NEW_PAGE_STARTS.has(next.start);
+  return (
+    next !== undefined &&
+    NEW_PAGE_STARTS.has(next.start) &&
+    !context.keptSections.ends.has(block.id)
+  );
 };
 
 /** Whether a paragraph that is left out starts a page by what it holds. */
@@ -577,6 +596,96 @@ const pageDiffersFrom = (
     base.size.width !== size.width ||
     base.size.height !== size.height);
 
+/** The page of a section for a plan, when it is another than the first
+ *  section's: `undefined` when it is the same, null when the section does
+ *  not state the size of its page. */
+const plannedPage = (
+  base: DocxSection | undefined,
+  section: DocxSection,
+): TemplatePlanSection["page"] | null => {
+  if (!pageDiffersFrom(base, section)) {
+    return undefined;
+  }
+  const { width, height } = section.size;
+  if (width === null || height === null) {
+    return null;
+  }
+  const { top, right, bottom, left } = section.margins;
+  return {
+    orientation: section.orientation,
+    width,
+    height,
+    ...(top === null || right === null || bottom === null || left === null
+      ? {}
+      : { margins: { top, right, bottom, left } }),
+  };
+};
+
+/** A section of a plan: the page when it is another, and an even or odd
+ *  start, which the default does not give. */
+const plannedSection = (
+  page: TemplatePlanSection["page"],
+  start: DocxSection["start"] | undefined,
+): TemplatePlanSection => ({
+  ...(page === undefined ? {} : { page }),
+  ...(start === "evenPage" || start === "oddPage" ? { start } : {}),
+});
+
+/**
+ * The sections of the source that stay sections in the output: those whose
+ * page is another than the first section's (a landscape annex), and their
+ * neighbours, which have to end where such a page begins. Every other
+ * section end becomes a page start, or nothing, so a section of the output
+ * can span several of the source: it begins as the first of them does. A
+ * section ends with the paragraph that ended it in the source; when one of
+ * those cannot carry it (it is a line of the source's contents, or joins
+ * its heading), no section is kept and the note lists what was lost.
+ */
+const sectionsToKeep = (context: Context): KeptSections => {
+  const { sections, topLevel, index, proposalById } = context;
+  const base = sections.at(0);
+  const differs = sections.map((section) => pageDiffersFrom(base, section));
+  if (!differs.includes(true)) {
+    return NO_KEPT_SECTIONS;
+  }
+  const ends = new Map<string, TemplatePlanSection>();
+  /** The source section the output section in progress began with. */
+  let opened = base;
+  for (const [position, section] of sections.entries()) {
+    const page = plannedPage(base, section);
+    if (page === null) {
+      return NO_KEPT_SECTIONS;
+    }
+    if (position === sections.length - 1) {
+      const last = plannedSection(page, opened?.start);
+      return { ends, last: Object.keys(last).length === 0 ? undefined : last };
+    }
+    if (!(differs[position] === true || differs[position + 1] === true)) {
+      continue;
+    }
+    const carrier = topLevel.find(
+      (block) =>
+        block.kind === "paragraph" &&
+        block.endsSection === true &&
+        block.sectionIndex === section.index,
+    );
+    if (
+      carrier === undefined ||
+      index.contentsBlockIds.has(carrier.id) ||
+      (proposalById.get(carrier.id)?.mergedIntoBlockId ?? null) !== null
+    ) {
+      return NO_KEPT_SECTIONS;
+    }
+    // The document's first section begins the document, whatever it says.
+    ends.set(
+      carrier.id,
+      plannedSection(page, ends.size === 0 ? undefined : opened?.start),
+    );
+    opened = sections[position + 1];
+  }
+  return NO_KEPT_SECTIONS;
+};
+
 /** Notes the section that begins after `block` when its layout does not
  *  come along: it begins on the same page, or its page or columns are
  *  other than the document's first section has. */
@@ -586,9 +695,11 @@ const noteSectionAfter = (context: Context, block: DocxBlock): void => {
     return;
   }
   const base = context.sections.at(0);
-  const pageDiffers = pageDiffersFrom(base, next);
+  // A section that stays a section keeps its page and its start.
+  const kept = context.keptSections.ends.has(block.id);
+  const pageDiffers = !kept && pageDiffersFrom(base, next);
   if (
-    !NEW_PAGE_STARTS.has(next.start) ||
+    (!kept && !NEW_PAGE_STARTS.has(next.start)) ||
     pageDiffers ||
     next.columns !== (base?.columns ?? 1)
   ) {
@@ -619,6 +730,9 @@ const pageStartsOf = (
   let pending = false;
   /** Nothing starts a page in front of the document's first block. */
   let placedAny = false;
+  /** A kept blank paragraph starts the page in front of the table that
+   *  follows: every start between the two is that one. */
+  let held = false;
   for (const block of context.topLevel) {
     noteSectionAfter(context, block);
     if (block.kind === "table") {
@@ -631,28 +745,32 @@ const pageStartsOf = (
       }
       pending = false;
       placedAny = true;
-    } else if (holders.has(block.id)) {
-      // The page starts with this paragraph, also where the section it
-      // closes ends in front of the table. With a break of its own among
-      // its runs it needs no telling.
-      const startsHere =
-        pending || block.pageBreakBefore === true || endsPage(context, block);
-      if (startsHere && placedAny && (block.pageBreaks ?? 0) === 0) {
+      held = false;
+      continue;
+    }
+    if (holders.has(block.id)) {
+      // It was kept because the page starts in front of the table, by a
+      // break before it, behind it or in the section it closes. With a
+      // break of its own among its runs it needs no telling.
+      if ((block.pageBreaks ?? 0) === 0) {
         starts.add(block.id);
       }
       pending = false;
       placedAny = true;
+      held = true;
       continue;
-    } else if (placed.omitted.has(block.id)) {
-      pending ||= breaksPage(block);
+    }
+    if (placed.omitted.has(block.id)) {
+      pending ||= !held && breaksPage(block);
     } else if (!placed.mergedInto.has(block.id)) {
       if ((pending || block.pageBreakBefore === true) && placedAny) {
         starts.add(block.id);
       }
       pending = false;
       placedAny = true;
+      held = false;
     }
-    pending ||= endsPage(context, block);
+    pending ||= !held && endsPage(context, block);
   }
   return starts;
 };
@@ -661,9 +779,11 @@ const pageStartsOf = (
 const placeParagraphs = (context: Context): Placed => {
   const { topLevel, blockById, index, exclusions, proposalById } = context;
   const pageHolders = pageHoldersBeforeTables(context);
+  // A blank paragraph that ends a section which stays one carries it.
   const kept = new Set([
     ...tableSeparators(context, pageHolders),
     ...pageHolders,
+    ...context.keptSections.ends.keys(),
   ]);
   const startsPage = pageStartsInSource(context);
   const placed: Placed = {
@@ -704,8 +824,10 @@ const placeParagraphs = (context: Context): Placed => {
       !placed.titleOf.has(head) &&
       !exclusions.merges.has(head) &&
       // A title that starts a page is a line of its own: joined to its
-      // heading it would stay on the page before.
-      !startsPage.has(block.id)
+      // heading it would stay on the page before. So is one behind the end
+      // of a section that stays a section: it belongs to the next.
+      !startsPage.has(block.id) &&
+      !context.keptSections.ends.has(head)
     ) {
       placed.mergedInto.set(block.id, head);
       placed.titleOf.set(head, block);
@@ -877,6 +999,8 @@ type ParagraphItemOptions = {
   breaks: boolean;
   /** Whether the paragraph starts a page. */
   pageStart: boolean;
+  /** The section the paragraph is the last of, when it stays a section. */
+  endsSection: TemplatePlanSection | undefined;
 };
 
 /** A paragraph's item and, for a split heading, its title's bare item. */
@@ -886,6 +1010,7 @@ const paragraphItems = ({
   title,
   breaks,
   pageStart,
+  endsSection,
 }: ParagraphItemOptions): TemplatePlanSourceItem[] => {
   const { block } = placement;
   const stripped = stripOf(placement);
@@ -912,6 +1037,7 @@ const paragraphItems = ({
     ...asTextOf(block, numbering),
     ...(title === undefined ? {} : { mergeNext }),
     ...(pageStart ? { pageBreakBefore: true } : {}),
+    ...(endsSection === undefined ? {} : { endsSection }),
   };
   return title === undefined
     ? [item]
@@ -989,6 +1115,7 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
       title: titleOf.get(block.id),
       breaks,
       pageStart: placed.pageStarts.has(block.id),
+      endsSection: context.keptSections.ends.get(block.id),
     });
     placedCount += paragraph.length;
     body.push(...paragraph);
@@ -1614,6 +1741,7 @@ export const buildTemplatePlan = ({
     tableOf,
     topLevel: blocks.filter(({ id }) => !tableOf.has(id)),
     sections: manifest.sections ?? NO_SECTIONS,
+    keptSections: NO_KEPT_SECTIONS,
     index,
     profile,
     mode,
@@ -1630,6 +1758,7 @@ export const buildTemplatePlan = ({
     items: [],
   };
 
+  context.keptSections = sectionsToKeep(context);
   const placed = placeParagraphs(context);
   const { patches, levelsByList } = numberPlacements({
     placements: placed.placements,
@@ -1684,6 +1813,9 @@ export const buildTemplatePlan = ({
       updateOnOpen: marks.references.length > 0 || contentsKept,
     },
     ...(lineBreakSpacing ? { compat: { doNotExpandShiftReturn: true } } : {}),
+    ...(context.keptSections.last === undefined
+      ? {}
+      : { lastSection: context.keptSections.last }),
   };
   return {
     plan,
@@ -1695,6 +1827,9 @@ export const buildTemplatePlan = ({
         numbered: placed.placements.filter(({ numbered }) => numbered).length,
         labelsConvertedToText,
         pageStarts: placed.pageStarts.size,
+        sectionsKept:
+          context.keptSections.ends.size +
+          (context.keptSections.last === undefined ? 0 : 1),
         numberingPatches: patches.length,
         referencesLinked: marks.references.length,
         referencesUnlinked: context.items.filter(
