@@ -5,6 +5,8 @@ import { Button } from "@stll/ui/button";
 import { useBillingDraftSettings } from "../activity/billing-draft-settings";
 import type { Permission } from "../shared/permissions";
 import { ActivitySetupFlow } from "./ActivitySetupFlow";
+import { IntroductionLabel } from "./SetupScreenParts";
+import { StepFooter } from "./StepFooter";
 import { useActivitySetup } from "./use-activity-setup";
 
 type IntroduceViewProps = {
@@ -24,45 +26,44 @@ export const IntroduceView = ({
   const controls = useActivitySetup();
   const drafts = useBillingDraftSettings(true);
   return (
-    <ActivitySetupFlow
-      controls={controls}
-      drafts={drafts}
-      finishLabel={t("done")}
-      label={t("introduceActivityTitle")}
-      onLeaveForward={onDismiss}
-      permissions={activityPermissions}
-      recordingBody={t("introduceActivityBody")}
-      renderFooter={({
-        backDisabledReason,
-        onBack,
-        primary,
-        recording,
-        secondary,
-      }) => (
-        <div className="mt-auto flex items-center gap-2 pt-5">
-          {onBack === undefined ? null : (
-            <Button
-              disabled={backDisabledReason !== undefined}
-              disabledReason={backDisabledReason}
-              onClick={onBack}
-              variant="ghost"
-            >
-              {t("back")}
-            </Button>
-          )}
-          <span className="flex-1" />
-          {/* The last screen has nothing left to skip; the day itself is in
-              the Activity window. */}
-          {secondary ??
-            (recording ? (
-              <Button onClick={onOpenActivity} variant="ghost">
-                {t("openActivity")}
-              </Button>
-            ) : null)}
-          {primary}
-        </div>
-      )}
-      skipLabel={t("later")}
-    />
+    <>
+      {/* Opened on its own, outside the tour: says what arrived. */}
+      <IntroductionLabel>{t("introduceActivityTitle")}</IntroductionLabel>
+      <ActivitySetupFlow
+        controls={controls}
+        drafts={drafts}
+        finishLabel={t("done")}
+        label={t("introduceActivityTitle")}
+        onLeaveForward={onDismiss}
+        permissions={activityPermissions}
+        recordingBody={t("introduceActivityBody")}
+        renderFooter={({
+          backDisabledReason,
+          onBack,
+          primary,
+          recording,
+          screens,
+          secondary,
+        }) => (
+          <StepFooter
+            backDisabledReason={backDisabledReason}
+            onBack={onBack}
+            primary={primary}
+            screens={screens}
+            secondary={
+              // The last screen has nothing left to skip; the day itself is in
+              // the Activity window.
+              secondary ??
+              (recording ? (
+                <Button onClick={onOpenActivity} variant="ghost">
+                  {t("openActivity")}
+                </Button>
+              ) : null)
+            }
+          />
+        )}
+        skipLabel={t("later")}
+      />
+    </>
   );
 };

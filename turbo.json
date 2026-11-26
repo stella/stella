@@ -923,7 +923,8 @@
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/packages/**",
         "$TURBO_ROOT$/apps/mobile/src/ui-theme.gen.ts",
-        "$TURBO_ROOT$/apps/web/public/prepaint-init.js"
+        "$TURBO_ROOT$/apps/web/public/prepaint-init.js",
+        "$TURBO_ROOT$/scripts/guard-rollouts.ts"
       ]
     },
     "@stll/cli#codegen:runtime": {

@@ -52,7 +52,6 @@ export const HarnessInstallLine = ({
           onClick={() => {
             onCancel(operationId);
           }}
-          size="sm"
           variant="outline"
         >
           {t("cancel")}
@@ -72,7 +71,7 @@ export const HarnessInstallLine = ({
             ? null
             : ` ${t("install.activeStays", { version: state.active })}`}
         </p>
-        <Button onClick={onInstall} size="sm" variant="outline">
+        <Button onClick={onInstall} variant="outline">
           {t("install.retry")}
         </Button>
       </div>
@@ -83,9 +82,7 @@ export const HarnessInstallLine = ({
       <p className="text-muted-foreground min-w-0 flex-1 text-sm">
         {t("install.notInstalled", { name })}
       </p>
-      <Button onClick={onInstall} size="sm">
-        {t("install.install")}
-      </Button>
+      <Button onClick={onInstall}>{t("install.install")}</Button>
     </div>
   );
 };

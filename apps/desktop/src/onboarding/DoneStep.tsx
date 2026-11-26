@@ -3,10 +3,8 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { CheckCircle2Icon } from "@stll/ui/icons";
 
-import { PermissionsSection } from "../mainview/PermissionsSection";
 import type { DesktopPlatform } from "../shared/shortcut-keys";
 import { DESKTOP_PLATFORM } from "../shared/use-clipboard-shortcut";
-import { DESKTOP_TELEMETRY_WINDOWS } from "../telemetry/desktop-telemetry";
 import type { OnboardingSnapshot } from "./onboarding-types";
 import { StepFooter } from "./StepFooter";
 import { TrayLocationPreview } from "./TrayLocationPreview";
@@ -17,9 +15,6 @@ const DONE_BODY = {
   windows: "doneBodyWindows",
 } as const satisfies Record<DesktopPlatform, string>;
 
-/** Asked again here: the app reaches the user through them once set up. */
-const DONE_PERMISSIONS = ["notifications"] as const;
-
 type DoneStepProps = {
   onFinish: () => void;
   onOpenSettings: () => void;
@@ -27,8 +22,9 @@ type DoneStepProps = {
 };
 
 /**
- * The last step: where the app lives (its icon, drawn where the OS reports
- * it) and the notifications it uses from now on, with their live status.
+ * The last step: where the app lives, its icon drawn where the OS reports
+ * it. Permissions, notifications among them, have their own step before
+ * this one and their own page in Settings.
  */
 export const DoneStep = ({
   onFinish,
@@ -51,15 +47,6 @@ export const DoneStep = ({
         <p className="text-muted-foreground max-w-md text-sm leading-relaxed text-pretty">
           {t(DONE_BODY[DESKTOP_PLATFORM])}
         </p>
-        <div
-          className="bg-card mt-2 w-full max-w-md overflow-hidden rounded-xl border text-start empty:hidden"
-          data-done-permissions=""
-        >
-          <PermissionsSection
-            only={DONE_PERMISSIONS}
-            window={DESKTOP_TELEMETRY_WINDOWS.onboarding}
-          />
-        </div>
       </div>
       <StepFooter
         primary={<Button onClick={onFinish}>{t("done")}</Button>}

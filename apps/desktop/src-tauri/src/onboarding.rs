@@ -4,11 +4,12 @@
 //! logic is a pure function over a small context; this module also owns the
 //! device-level progress and the window.
 
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, LogicalSize, Manager, State, webview::PageLoadEvent};
 
+use crate::desktop_features::{Feature, in_feature_order};
 use crate::device_preference::DevicePreference;
 use crate::feature_gate::{DesktopFeature, FeatureGates};
 use crate::permissions::{
@@ -34,24 +35,49 @@ pub enum Step {
   Welcome,
   Connect,
   HowItWorks,
-  Activity,
   Permissions,
   TryIt,
   Dictation,
+  Activity,
   Done,
 }
 
 impl Step {
+  /// Every step. The tour shows them in this order, except that the steps
+  /// that set one feature up take the one order every surface lists the
+  /// features in (`tour`).
   pub const ALL: [Self; 8] = [
     Self::Welcome,
     Self::Connect,
     Self::HowItWorks,
-    Self::Activity,
     Self::Permissions,
     Self::TryIt,
     Self::Dictation,
+    Self::Activity,
     Self::Done,
   ];
+
+  /// The feature this step sets up.
+  const fn feature(self) -> Option<Feature> {
+    match self {
+      Self::TryIt => Some(Feature::Clipboard),
+      Self::Dictation => Some(Feature::Dictation),
+      Self::Activity => Some(Feature::Activity),
+      Self::Welcome
+      | Self::Connect
+      | Self::HowItWorks
+      | Self::Permissions
+      | Self::Done => None,
+    }
+  }
+}
+
+/// The tour's steps in order: `Step::ALL`, with the feature steps in the
+/// shared feature order (`crate::desktop_features`).
+fn tour() -> &'static [Step; 8] {
+  static TOUR: LazyLock<[Step; 8]> =
+    LazyLock::new(|| in_feature_order(Step::ALL, Step::feature));
+  &TOUR
 }
 
 /// What decides which steps appear.
@@ -74,8 +100,9 @@ pub struct FlowContext {
 /// except the one on screen: connecting mid-step keeps the Connect step
 /// visible so the user sees it succeed.
 pub fn visible_steps(context: FlowContext, current: Step) -> Vec<Step> {
-  Step::ALL
-    .into_iter()
+  tour()
+    .iter()
+    .copied()
     .filter(|step| {
       *step == current
         || match step {
@@ -142,7 +169,7 @@ pub fn on_screen(stored: Step, shown: Option<Step>, context: FlowContext) -> Ste
 /// A stored resume point may name a step that no longer applies (the account
 /// was linked since); settle on the first visible step at or after it.
 pub fn settle(stored: Step, context: FlowContext) -> Step {
-  let order = |step: Step| Step::ALL.iter().position(|candidate| *candidate == step);
+  let order = |step: Step| tour().iter().position(|candidate| *candidate == step);
   let stored_index = order(stored);
   visible_steps(context, Step::Welcome)
     .into_iter()
@@ -954,8 +981,21 @@ mod tests {
   fn after_try_it(context: FlowContext) -> Step {
     if context.dictation_available {
       Step::Dictation
+    } else if context.activity_available {
+      Step::Activity
     } else {
       Step::Done
+    }
+  }
+
+  /// The feature step Done follows when clipboard history is on.
+  fn last_feature_step(context: FlowContext) -> Step {
+    if context.activity_available {
+      Step::Activity
+    } else if context.dictation_available {
+      Step::Dictation
+    } else {
+      Step::TryIt
     }
   }
   const INPUTS: [Input; 3] = [Input::Continue, Input::Back, Input::ShortcutPressed];
@@ -976,19 +1016,14 @@ mod tests {
   }
 
   #[test]
-  fn done_is_reached_only_through_try_it_or_dictation_after_it() {
+  fn done_is_reached_only_through_the_last_feature_step() {
     for context in CONTEXTS {
       for walk in walks(8) {
         let mut step = Step::Welcome;
         for input in walk {
           let next = next_step(step, input, context);
           if next == Step::Done && step != Step::Done {
-            let expected = if context.dictation_available {
-              Step::Dictation
-            } else {
-              Step::TryIt
-            };
-            assert_eq!(step, expected, "{context:?}");
+            assert_eq!(step, last_feature_step(context), "{context:?}");
           }
           step = next;
         }
@@ -1044,7 +1079,7 @@ mod tests {
       for stored in Step::ALL {
         let settled = settle(stored, context);
         assert!(visible_steps(context, settled).contains(&settled));
-        let order = |step: Step| Step::ALL.iter().position(|s| *s == step);
+        let order = |step: Step| tour().iter().position(|s| *s == step);
         assert!(order(settled) >= order(stored));
       }
     }
@@ -1114,12 +1149,12 @@ mod tests {
           assert_ne!(step, Step::TryIt, "{context:?}");
         }
       }
-      let before_done = if context.dictation_available {
+      let before_done = if context.activity_available {
+        Step::Activity
+      } else if context.dictation_available {
         Step::Dictation
       } else if context.has_permission_rows {
         Step::Permissions
-      } else if context.activity_available {
-        Step::Activity
       } else {
         Step::HowItWorks
       };
@@ -1243,22 +1278,7 @@ mod tests {
   }
 
   #[test]
-  fn activity_is_explained_after_how_it_works_and_before_permissions() {
-    for context in CONTEXTS
-      .into_iter()
-      .filter(|context| context.activity_available)
-    {
-      let steps = visible_steps(context, Step::Welcome);
-      let position = |step: Step| steps.iter().position(|s| *s == step);
-      assert_eq!(
-        position(Step::Activity),
-        position(Step::HowItWorks).map(|index| index + 1)
-      );
-    }
-  }
-
-  #[test]
-  fn dictation_is_offered_after_try_it_and_right_before_done() {
+  fn dictation_is_offered_right_after_try_it() {
     for context in CONTEXTS
       .into_iter()
       .filter(|context| context.dictation_available)
@@ -1269,7 +1289,16 @@ mod tests {
         position(Step::Dictation),
         position(Step::TryIt).map(|index| index + 1)
       );
-      assert_eq!(last_before_done(context), Step::Dictation);
+    }
+  }
+
+  #[test]
+  fn activity_is_offered_last_right_before_done() {
+    for context in CONTEXTS
+      .into_iter()
+      .filter(|context| context.activity_available)
+    {
+      assert_eq!(last_before_done(context), Step::Activity);
     }
   }
 
