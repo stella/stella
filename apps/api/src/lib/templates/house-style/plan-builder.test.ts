@@ -307,6 +307,37 @@ describe("buildTemplatePlan, list instances", () => {
     });
   });
 
+  test("bullets hang from the paragraph in front of their list, a level for each indent", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Úvodní věta s výčtem:",
+      numbered("•", "odrážka pod úvodní větou", 4),
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec s výčtem:", 1),
+      numbered("•", "odrážka pod odstavcem", 5),
+      numbered("•", "druhá odrážka pod odstavcem", 5),
+    ]);
+    const { plan } = build(manifest);
+    const levelOf = (start: string) =>
+      plan.numberingPatches?.find(
+        ({ ilvl }) => ilvl === itemOf(plan, manifest, start)?.numbering?.ilvl,
+      );
+    const clauseText = PROFILE.roles.clause1?.numbering?.indent.left ?? 0;
+    const step = PROFILE.roles.letter?.numbering?.indent.hanging ?? 0;
+    expect(step).toBeGreaterThan(0);
+    // Under text at the margin the mark stands at the margin.
+    expect(levelOf("odrážka pod úvodní")?.indent).toEqual({
+      left: step,
+      hanging: step,
+    });
+    // Under a clause it stands where the clause's text starts.
+    expect(levelOf("odrážka pod odstavcem")?.indent).toEqual({
+      left: clauseText + step,
+      hanging: step,
+    });
+    expect(levelOf("druhá odrážka")).toBe(levelOf("odrážka pod odstavcem"));
+  });
+
   test("a second format of one level and a bullet take spare levels", () => {
     const manifest = manifestOf([
       "SMLOUVA",
@@ -336,13 +367,13 @@ describe("buildTemplatePlan, list instances", () => {
           numFmt: "lowerLetter",
           indent: { left: 2268, hanging: 567 },
         },
-        // A bullet hangs where the lettered items do.
+        // The bullet hangs from the text of the item in front of it.
         {
           abstractNumId: 4,
           ilvl: 6,
           numFmt: "bullet",
           lvlText: "•",
-          indent: { left: 2268, hanging: 567 },
+          indent: { left: 2835, hanging: 567 },
         },
       ]),
     );

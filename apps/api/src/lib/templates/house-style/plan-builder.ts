@@ -435,7 +435,7 @@ const placementOf = (
     styleId: target?.styleId ?? null,
     level: entry === null && !bulleted ? null : ownLevel,
     borrowedLevel:
-      own === null ? borrowedLevelOf(profile, target, bulleted) : null,
+      ownLevel === null ? borrowedLevelOf(profile, target, bulleted) : null,
     sourceLabel: null,
     pattern: null,
     ordinal: null,
@@ -843,6 +843,49 @@ const pageStartsOf = (
   return starts;
 };
 
+/** Where the text of a placed paragraph starts, from the left margin. */
+const textStartOf = (
+  { profile }: Context,
+  { entry, level, borrowedLevel, role }: Placement,
+): number => {
+  const numberedAt = level ?? borrowedLevel;
+  if (entry !== null && numberedAt !== null) {
+    return numberedAt.indent.left ?? 0;
+  }
+  // Unnumbered text of a provision stands under the text of its clause.
+  return role === "continuation"
+    ? (profile.roles.clause1?.numbering?.indent.left ?? 0)
+    : 0;
+};
+
+/**
+ * A bullet that borrows its level hangs from the paragraph its list
+ * belongs to: its mark stands where that paragraph's text starts, its text
+ * one hanging step further.
+ */
+const hangBullet = (
+  context: Context,
+  bullet: Placement,
+  lead: Placement | null,
+): void => {
+  const beside = bullet.borrowedLevel;
+  if (beside === null || bullet.pattern?.numFmt !== "bullet" || lead === null) {
+    return;
+  }
+  const step = beside.indent.hanging ?? beside.indent.left ?? 0;
+  if (step <= 0) {
+    return;
+  }
+  bullet.borrowedLevel = {
+    ...beside,
+    indent: {
+      left: textStartOf(context, lead) + step,
+      hanging: step,
+      firstLine: null,
+    },
+  };
+};
+
 /** A placement for every paragraph that gets one, in document order. */
 const placeParagraphs = (context: Context): Placed => {
   const { topLevel, blockById, index, exclusions, proposalById } = context;
@@ -864,9 +907,12 @@ const placeParagraphs = (context: Context): Placed => {
   };
   /** The paragraph placed last at the top level; a table ends the run. */
   let lastPlaced: string | null = null;
+  /** The paragraph in front of a list of bullets. */
+  let lead: Placement | null = null;
   for (const block of topLevel) {
     if (block.kind === "table") {
       lastPlaced = null;
+      lead = null;
       for (const inner of insideOf(block, blockById)) {
         const role = inner.kind === "paragraph" ? roleOf(context, inner) : null;
         // A cell paragraph without a reading is placed with its table.
@@ -908,6 +954,11 @@ const placeParagraphs = (context: Context): Placed => {
       placement.numbered = false;
       placement.level = null;
       placement.keptReason = null;
+    }
+    if (placement.pattern?.numFmt === "bullet") {
+      hangBullet(context, placement, lead);
+    } else {
+      lead = placement;
     }
     placed.placements.push(placement);
     lastPlaced = block.id;
