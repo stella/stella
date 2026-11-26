@@ -284,6 +284,60 @@ describe("buildTemplatePlan, list instances", () => {
     });
   });
 
+  test("a spare level that numbers a role without a level of its own takes the indent of the level whose style it borrows", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec.", 1),
+      numbered("1.1.", "Pododstavec.", 2),
+      numbered("1.1.1.", "Podrobnost.", 3),
+    ]);
+    const { plan } = build(manifest);
+    const second = PROFILE.roles.clause2?.numbering;
+    const detail = itemOf(plan, manifest, "Podrobnost");
+    expect(PROFILE.roles.clause3).toBeNull();
+    expect(detail).toMatchObject({ styleId: "Clause2" });
+    expect(
+      plan.numberingPatches?.find(
+        ({ ilvl }) => ilvl === detail?.numbering?.ilvl,
+      )?.indent,
+    ).toEqual({
+      left: second?.indent.left ?? 0,
+      hanging: second?.indent.hanging ?? 0,
+    });
+  });
+
+  test("bullets hang from the paragraph in front of their list, a level for each indent", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Úvodní věta s výčtem:",
+      numbered("•", "odrážka pod úvodní větou", 4),
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec s výčtem:", 1),
+      numbered("•", "odrážka pod odstavcem", 5),
+      numbered("•", "druhá odrážka pod odstavcem", 5),
+    ]);
+    const { plan } = build(manifest);
+    const levelOf = (start: string) =>
+      plan.numberingPatches?.find(
+        ({ ilvl }) => ilvl === itemOf(plan, manifest, start)?.numbering?.ilvl,
+      );
+    const clauseText = PROFILE.roles.clause1?.numbering?.indent.left ?? 0;
+    const step = PROFILE.roles.letter?.numbering?.indent.hanging ?? 0;
+    expect(step).toBeGreaterThan(0);
+    // Under text at the margin the mark stands at the margin.
+    expect(levelOf("odrážka pod úvodní")?.indent).toEqual({
+      left: step,
+      hanging: step,
+    });
+    // Under a clause it stands where the clause's text starts.
+    expect(levelOf("odrážka pod odstavcem")?.indent).toEqual({
+      left: clauseText + step,
+      hanging: step,
+    });
+    expect(levelOf("druhá odrážka")).toBe(levelOf("odrážka pod odstavcem"));
+  });
+
   test("a second format of one level and a bullet take spare levels", () => {
     const manifest = manifestOf([
       "SMLOUVA",
@@ -313,7 +367,14 @@ describe("buildTemplatePlan, list instances", () => {
           numFmt: "lowerLetter",
           indent: { left: 2268, hanging: 567 },
         },
-        { abstractNumId: 4, ilvl: 6, numFmt: "bullet", lvlText: "•" },
+        // The bullet hangs from the text of the item in front of it.
+        {
+          abstractNumId: 4,
+          ilvl: 6,
+          numFmt: "bullet",
+          lvlText: "•",
+          indent: { left: 2835, hanging: 567 },
+        },
       ]),
     );
     expect(note.items.filter(({ kind }) => kind.startsWith("label"))).toEqual(
@@ -1120,6 +1181,81 @@ describe("buildTemplatePlan, a template with text effects that show nothing", ()
     expect(
       build(manifest).note.items.some(
         ({ kind }) => kind === "invisibleEffectsRemoved",
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("buildTemplatePlan, a level the template sets apart from its siblings", () => {
+  const manifest = manifestOf([
+    "SMLOUVA",
+    "Článek I. Předmět",
+    numbered("1.1.", "První ujednání."),
+    numbered("1.1.1.", "Podrobnost prvního ujednání."),
+    numbered("1.1.1.1.", "Podrobnost podrobnosti."),
+  ]);
+  const apart = {
+    ...PROFILE,
+    health: [
+      {
+        kind: "levelSetApart",
+        role: "clause2",
+        styleId: "Clause2",
+        bold: true,
+        size: 24,
+        insteadStyleId: "Clause1",
+      },
+    ],
+  } satisfies typeof PROFILE;
+  const placedAs = (profile: typeof PROFILE, start: string) => {
+    const item = itemOf(
+      build(manifest, "houseScheme", { profile }).plan,
+      manifest,
+      start,
+    );
+    return { styleId: item?.styleId, ilvl: item?.numbering?.ilvl };
+  };
+
+  test("its paragraphs take the sibling's style on their own level, and the note says so", () => {
+    // The template's own placement, for comparison.
+    expect(placedAs(PROFILE, "Podrobnost prvního")).toEqual({
+      styleId: "Clause2",
+      ilvl: 2,
+    });
+    expect(placedAs(apart, "Podrobnost prvního")).toEqual({
+      styleId: "Clause1",
+      ilvl: 2,
+    });
+    // A deeper level that borrows the style borrows the sibling's too.
+    expect(placedAs(apart, "Podrobnost podrobnosti").styleId).toBe("Clause1");
+    expect(placedAs(apart, "První ujednání")).toEqual({
+      styleId: "Clause1",
+      ilvl: 1,
+    });
+    expect(
+      build(manifest, "keepSource", { profile: apart }).note.items.filter(
+        ({ kind }) => kind === "levelStyleEvened",
+      ),
+    ).toEqual([
+      {
+        kind: "levelStyleEvened",
+        role: "clause2",
+        styleId: "Clause2",
+        insteadStyleId: "Clause1",
+        blocks: 1,
+      },
+    ]);
+  });
+
+  test("a profile that keeps the template's looks keeps the style", () => {
+    const kept = {
+      ...apart,
+      levelLooks: "asTemplate",
+    } satisfies typeof PROFILE;
+    expect(placedAs(kept, "Podrobnost prvního").styleId).toBe("Clause2");
+    expect(
+      build(manifest, "keepSource", { profile: kept }).note.items.some(
+        ({ kind }) => kind === "levelStyleEvened",
       ),
     ).toBe(false);
   });
