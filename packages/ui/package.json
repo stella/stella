@@ -313,7 +313,8 @@
     "./lib/utils": "./src/lib/utils.ts",
     "./lib/week": "./src/lib/week.ts",
     "./date-range-filter": "./src/components/date-range-filter.tsx",
-    "./effects": "./src/effects/effects.ts"
+    "./effects": "./src/effects/effects.ts",
+    "./effects-dom": "./src/effects/dom.ts"
   },
   "publishConfig": {
     "access": "public"
