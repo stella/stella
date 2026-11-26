@@ -24,18 +24,30 @@ const exchange = async (
   transfer: ArrayBuffer[] = [],
 ): Promise<RecordingReaderReply> =>
   await new Promise((resolve, reject) => {
-    const onMessage = (event: MessageEvent<RecordingReaderReply>) => {
+    const settle = () => {
+      worker.removeEventListener("message", onMessage);
       worker.removeEventListener("error", onError);
+      worker.removeEventListener("close", onClose);
+    };
+    const onMessage = (event: MessageEvent<RecordingReaderReply>) => {
+      settle();
       resolve(event.data);
     };
     const onError = (event: ErrorEvent) => {
-      worker.removeEventListener("message", onMessage);
+      settle();
       reject(
         event.error instanceof Error ? event.error : new Error(event.message),
       );
     };
-    worker.addEventListener("message", onMessage, { once: true });
-    worker.addEventListener("error", onError, { once: true });
+    // A worker that exits without replying would otherwise leave the caller
+    // waiting for a piece forever.
+    const onClose = () => {
+      settle();
+      reject(new Error("Recording reader worker stopped without replying"));
+    };
+    worker.addEventListener("message", onMessage);
+    worker.addEventListener("error", onError);
+    worker.addEventListener("close", onClose);
     worker.postMessage(message, transfer);
   });
 

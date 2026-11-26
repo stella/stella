@@ -44,6 +44,7 @@ import {
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
 
+import { openRecordingReader } from "./recording-reader";
 import { toneWav } from "./tone-wav.test-helper";
 
 const BUCKET = process.env["S3_BUCKET"] ?? "stella";
@@ -116,6 +117,36 @@ type SpyOn<T extends object, K extends keyof T> = ReturnType<
 let settingsSpy: SpyOn<typeof aiConfigLoader, "loadOrgSettingsForAuth">;
 let transcribeSpy: SpyOn<typeof dictation, "executeDictation">;
 let writeSpy: SpyOn<typeof entityWriter, "createEntityFromBuffer">;
+
+const speechPieceIndices = async (
+  bytes: Uint8Array,
+  extension: string,
+): Promise<number[]> => {
+  const reader = await openRecordingReader({
+    bytes: bytes.slice().buffer,
+    extension,
+  });
+  if (Result.isError(reader)) {
+    panic("The fixture recording is unreadable");
+  }
+  const indices: number[] = [];
+  try {
+    for (;;) {
+      const read = await reader.value.next();
+      if (Result.isError(read)) {
+        panic("The fixture recording stopped reading");
+      }
+      if (read.value === null) {
+        return indices;
+      }
+      if (read.value.speech) {
+        indices.push(read.value.index);
+      }
+    }
+  } finally {
+    await reader.value.close();
+  }
+};
 
 const readRun = async () =>
   (
@@ -252,7 +283,13 @@ describe("recording transcription run", () => {
     const keys = transcribeSpy.mock.calls.map(
       ([ctx]) => ctx.usageKey?.idempotencyKey,
     );
-    expect(keys.length).toBeGreaterThan(0);
+    // Every speech piece the reader hands out is sent once, under its own
+    // run and piece key.
+    expect(keys).toEqual(
+      (await speechPieceIndices(toneWav(30), "wav")).map(
+        (index) => `recording-transcription:${runId}:${index}`,
+      ),
+    );
     expect(new Set(keys).size).toBe(keys.length);
     expect(writeSpy).toHaveBeenCalledTimes(1);
   });

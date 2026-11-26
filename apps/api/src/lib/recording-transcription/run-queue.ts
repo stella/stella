@@ -246,11 +246,12 @@ const setProgress = async (
     durationMs,
     transcribedMs,
   }: { durationMs?: number | null; transcribedMs: number },
-): Promise<void> => {
+): Promise<boolean> =>
   await authorizedWrite(actor, async (tx) => {
     // audit: skip - progress bookkeeping on the run audited at create.
-    // A run the reconciler already settled keeps the progress it settled with.
-    await tx
+    // A run the reconciler already settled keeps the progress it settled with,
+    // and the worker learns here that it no longer holds the run.
+    const updated = await tx
       .update(recordingTranscriptionRuns)
       .set({ durationMs, transcribedMs })
       .where(
@@ -260,9 +261,46 @@ const setProgress = async (
             ...RECORDING_TRANSCRIPTION_RUN_ACTIVE_STATUSES,
           ]),
         ),
-      );
+      )
+      .returning({ id: recordingTranscriptionRuns.id });
+    return updated.length > 0;
   });
-};
+
+const runIsActive = async (actor: RunActor, tx: Transaction) =>
+  (
+    await tx
+      .select({ id: recordingTranscriptionRuns.id })
+      .from(recordingTranscriptionRuns)
+      .where(
+        and(
+          eq(recordingTranscriptionRuns.id, actor.runId),
+          inArray(recordingTranscriptionRuns.status, [
+            ...RECORDING_TRANSCRIPTION_RUN_ACTIVE_STATUSES,
+          ]),
+        ),
+      )
+      .limit(1)
+  ).length > 0;
+
+/** Fails a run no delivery has claimed. A delivery that failed before
+ *  claiming its run must not settle a run another delivery may hold. */
+const setUnclaimedRunFailed = async (actor: RunActor): Promise<boolean> =>
+  await actor.writeDb(
+    async (tx) =>
+      (
+        await transition({
+          tx,
+          spec: RECORDING_TRANSCRIPTION_TRANSITIONS,
+          id: actor.runId,
+          options: {
+            from: ["queued"],
+            to: "failed",
+            set: { errorCode: "internal", finishedAt: new Date() },
+          },
+          recordTransitionAuditEvent: unaudited,
+        })
+      ).type === "transitioned",
+  );
 
 /** Fails the run from whichever active stage it is in. */
 const setRunFailed = async (
@@ -377,22 +415,23 @@ const dictationCaller = async (
       server: null,
     }),
     // Asked before each piece goes to the model, so a requester who loses
-    // the matter mid-run stops the next piece rather than the next write.
+    // the matter, or a run the reconciler settled, stops the next piece
+    // rather than the next write.
     getWorkspaceAccess: async (workspaceId: SafeId<"workspace">) => {
       if (workspaceId !== matter.id) {
         return null;
       }
-      const authorized = await actor.writeDb(
+      const allowed = await actor.writeDb(
         async (tx) =>
-          await hasCurrentActiveWorkspaceMemberPermission({
+          (await hasCurrentActiveWorkspaceMemberPermission({
             db: tx,
             organizationId: actor.organizationId,
             userId: actor.userId,
             workspaceId: actor.workspaceId,
             permissions: RECORDING_TRANSCRIPTION_RUN_PERMISSIONS,
-          }),
+          })) && (await runIsActive(actor, tx)),
       );
-      return authorized ? matter : null;
+      return allowed ? matter : null;
     },
   });
 };
@@ -424,10 +463,14 @@ const executeRun = async ({
   }
   const paragraphs: TranscriptParagraph[] = [];
   try {
-    await setProgress(actor, {
-      durationMs: reader.value.durationMs,
-      transcribedMs: 0,
-    });
+    if (
+      !(await setProgress(actor, {
+        durationMs: reader.value.durationMs,
+        transcribedMs: 0,
+      }))
+    ) {
+      return "internal";
+    }
     for (;;) {
       const read = await reader.value.next();
       if (Result.isError(read)) {
@@ -473,8 +516,11 @@ const executeRun = async ({
           });
         }
       }
+      // A settled run stops reading; failing it again changes nothing.
       // db-await-in-loop: one ordered progress write per piece.
-      await setProgress(actor, { transcribedMs: piece.endMs });
+      if (!(await setProgress(actor, { transcribedMs: piece.endMs }))) {
+        return "internal";
+      }
     }
   } finally {
     await reader.value.close();
@@ -756,7 +802,7 @@ export const initRecordingTranscriptionRunWorker = ({
     if (job) {
       detached(
         async () =>
-          setRunFailed(brandActor(job.data), "internal").catch(
+          setUnclaimedRunFailed(brandActor(job.data)).catch(
             (markError: unknown) =>
               observeFailure(markError, { sink: runFailure }),
           ),
