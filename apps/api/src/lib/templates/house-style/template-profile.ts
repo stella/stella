@@ -288,19 +288,31 @@ type OutlineRoles = Partial<
 >;
 
 /**
- * The clause depths among counted levels: levels in a row. `1.1.` stands
- * directly under `1.`, `1.1.1.` directly under that; a counted level
- * further down the list, past the lettered and roman ones, is not the next
- * clause depth.
+ * The clause depths among counted levels: levels in a row, the first one
+ * directly under the heading. `1.1.` stands directly under `1.`, `1.1.1.`
+ * directly under that; a counted level further down the list, past a
+ * lettered or roman one, is not the next clause depth. `printing` are the
+ * levels of the outline that print a label, in order: a level that prints
+ * nothing does not part two depths.
  */
-const clauseChain = (counted: readonly StyleFacts[]): StyleFacts[] => {
+const clauseChain = (
+  counted: readonly StyleFacts[],
+  printing: readonly number[],
+  heading: StyleFacts | null,
+): StyleFacts[] => {
+  const positionOf = (fact: StyleFacts | undefined): number | undefined =>
+    fact?.level === null || fact === undefined
+      ? undefined
+      : printing.indexOf(fact.level.ilvl);
   const chain: StyleFacts[] = [];
+  let above = heading === null ? undefined : positionOf(heading);
   for (const fact of counted) {
-    const above = chain.at(-1)?.level?.ilvl;
-    if (above !== undefined && fact.level?.ilvl !== above + 1) {
+    const position = positionOf(fact);
+    if (above !== undefined && position !== above + 1) {
       break;
     }
     chain.push(fact);
+    above = position;
   }
   return chain;
 };
@@ -309,9 +321,10 @@ const clauseChain = (counted: readonly StyleFacts[]): StyleFacts[] => {
  *  a top level without a label to the heading, the counted ones in order. */
 const sortOutline = (
   outline: readonly StyleFacts[],
-): { roles: OutlineRoles; counted: StyleFacts[] } => {
+): { roles: OutlineRoles; counted: StyleFacts[]; printing: number[] } => {
   const roles: OutlineRoles = {};
   const counted: StyleFacts[] = [];
+  const printing = new Set<number>();
   for (const fact of outline) {
     const numFmt = fact.level?.numFmt ?? "";
     const top = fact.level?.ilvl === 0;
@@ -321,7 +334,12 @@ const sortOutline = (
       if (top) {
         roles.articleHeading ??= target(fact, CONFIDENCE.level, "listLevel");
       }
-    } else if (isLetterFormat(numFmt) && !top) {
+      continue;
+    }
+    if (fact.level !== null) {
+      printing.add(fact.level.ilvl);
+    }
+    if (isLetterFormat(numFmt) && !top) {
       roles.letter ??= target(fact, CONFIDENCE.nameAndLevel, "listLevel");
     } else if (isRomanFormat(numFmt) && !top) {
       roles.roman ??= target(fact, CONFIDENCE.nameAndLevel, "listLevel");
@@ -334,14 +352,18 @@ const sortOutline = (
       counted.push(fact);
     }
   }
-  return { roles, counted };
+  return {
+    roles,
+    counted,
+    printing: [...printing].toSorted((left, right) => left - right),
+  };
 };
 
 /** Reads the outline: counted levels are the heading and the clauses under
  *  it, the lettered level the letter items, the roman level below the
  *  points. */
 const readOutline = (outline: readonly StyleFacts[]): OutlineRoles => {
-  const { roles, counted } = sortOutline(outline);
+  const { roles, counted, printing } = sortOutline(outline);
   const first = counted.at(0);
   if (first === undefined) {
     return roles;
@@ -364,9 +386,11 @@ const readOutline = (outline: readonly StyleFacts[]): OutlineRoles => {
       "listLevel",
     );
   }
-  const [first1, first2, first3] = clauseChain(clauses).map((fact) =>
-    target(fact, CONFIDENCE.nameAndLevel, "listLevel"),
-  );
+  const [first1, first2, first3] = clauseChain(
+    clauses,
+    printing,
+    headsArticles ? first : null,
+  ).map((fact) => target(fact, CONFIDENCE.nameAndLevel, "listLevel"));
   if (first1 !== undefined) {
     roles.clause1 = first1;
   }

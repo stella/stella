@@ -320,6 +320,39 @@ describe("validateTemplateProfile", () => {
     expect(shallow.roles.clause3).toBeNull();
   });
 
+  test("the first clause depth stands directly under the heading", () => {
+    const template = contractTemplate();
+    const outline = template.numbering.abstractNums.at(-1);
+    if (outline !== undefined) {
+      // A lettered level between the heading and the counted level.
+      outline.levels = [
+        listLevel(0, "decimal", "Art. %1", "Article"),
+        listLevel(1, "lowerLetter", "%2)", "Letter"),
+        listLevel(2, "decimal", "%1.%3.", "Clause1"),
+      ];
+    }
+    const dropped = new Set(["Clause2", "Roman"]);
+    const { roles } = inferTemplateProfile({
+      ...template,
+      styles: template.styles
+        .filter(({ styleId }) => !dropped.has(styleId))
+        .map((style) => {
+          if (style.styleId === "Letter") {
+            return { ...style, numPr: { numId: 18, ilvl: 1 } };
+          }
+          return style.styleId === "Clause1"
+            ? { ...style, numPr: { numId: 18, ilvl: 2 } }
+            : style;
+        }),
+      blocks: template.blocks.filter(
+        ({ styleId }) => styleId === null || !dropped.has(styleId),
+      ),
+    });
+    expect(roles.articleHeading).toMatchObject({ styleId: "Article" });
+    expect(roles.letter).toMatchObject({ styleId: "Letter" });
+    expect(roles.clause1).toBeNull();
+  });
+
   test("two styles on one level of the outline do not shift the clause depths", () => {
     const template = contractTemplate();
     template.styles.push({
