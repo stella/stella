@@ -49,6 +49,10 @@ export const REPLAY_CAPABLE_ROUTES = [
     method: "POST",
     path: "/v1/work-obligations/:workspaceId/:entityId/acknowledge",
   },
+  {
+    method: "POST",
+    path: "/v1/workspaces/:workspaceId/recording-transcriptions/runs",
+  },
   { method: "PUT", path: "/v1/billing-codes/:workspaceId" },
   { method: "PUT", path: "/v1/client-invoices/:clientId" },
   { method: "PUT", path: "/v1/contacts" },

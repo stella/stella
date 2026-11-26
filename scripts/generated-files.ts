@@ -224,6 +224,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/push/push-devices.ts",
     "apps/api/src/lib/push/timer-activity-actions.ts",
     "apps/api/src/lib/push/timer-activity-devices.ts",
+    "apps/api/src/lib/recording-transcription/*",
     "apps/api/src/lib/smoke-session/journey-prerequisites.ts",
     "apps/api/src/lib/smoke-session/store.ts",
     "apps/api/src/lib/templates/lookup-formats/resolve-default.ts",
