@@ -1,6 +1,13 @@
 "use client";
 
-import { createContext, use, useId, useState } from "react";
+import {
+  createContext,
+  use,
+  useCallback,
+  useId,
+  useMemo,
+  useState,
+} from "react";
 import type { CSSProperties } from "react";
 
 import { mergeProps } from "@base-ui/react/merge-props";
@@ -152,33 +159,45 @@ const SidebarProvider = ({
   );
   const requestedOpen = openProp ?? uncontrolledOpen;
   const open = resolveSidebarOpen({ forceCollapsed, requestedOpen });
-  const setOpen = (value: boolean | ((v: boolean) => boolean)) => {
-    const openState =
-      typeof value === "function" ? value(requestedOpen) : value;
-    if (setOpenProp) {
-      setOpenProp(openState);
-    } else {
-      setUncontrolledOpen(openState);
-    }
-  };
+  // The context value and its callbacks keep their identity across renders,
+  // so a render of the provider re-renders only the consumers whose sidebar
+  // state changed; hosts outside the React Compiler get the same.
+  const setOpen = useCallback(
+    (value: boolean | ((v: boolean) => boolean)) => {
+      const openState =
+        typeof value === "function" ? value(requestedOpen) : value;
+      if (setOpenProp) {
+        setOpenProp(openState);
+      } else {
+        setUncontrolledOpen(openState);
+      }
+    },
+    [requestedOpen, setOpenProp],
+  );
 
   // Helper to toggle the sidebar.
-  const toggleSidebar = () =>
-    isMobile ? setOpenMobile(nextOpenMobile) : setOpen(nextRequestedOpen);
+  const toggleSidebar = useCallback(
+    () =>
+      isMobile ? setOpenMobile(nextOpenMobile) : setOpen(nextRequestedOpen),
+    [isMobile, setOpen],
+  );
 
   // We add a state so that we can do data-state="expanded" or "collapsed".
   // This makes it easier to style the sidebar with Tailwind classes.
   const state = deriveSidebarState(open);
 
-  const contextValue: SidebarContextProps = {
-    state,
-    open,
-    setOpen,
-    isMobile,
-    openMobile,
-    setOpenMobile,
-    toggleSidebar,
-  };
+  const contextValue = useMemo<SidebarContextProps>(
+    () => ({
+      state,
+      open,
+      setOpen,
+      isMobile,
+      openMobile,
+      setOpenMobile,
+      toggleSidebar,
+    }),
+    [state, open, setOpen, isMobile, openMobile, toggleSidebar],
+  );
 
   const wrapperStyle: SidebarStyle = {
     "--sidebar-width": SIDEBAR_WIDTH,
