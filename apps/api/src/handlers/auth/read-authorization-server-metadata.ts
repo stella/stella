@@ -7,6 +7,7 @@ import {
   createSafePublicHandler,
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { DISCOVERY_METADATA_CACHE_POLICY } from "@/api/lib/security-headers";
 
 const URL_MAX_LENGTH = 2048;
@@ -81,14 +82,39 @@ const readAuthorizationServerMetadata = createSafePublicHandler(
       authorizationServerMetadataResponseSchema,
     ),
   },
-  async function* ({ request }) {
+  async function* ({ request, set }) {
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
           await handleOAuthAuthorizationServerMetadataRequest(request),
       ),
     );
-    return Result.ok(response);
+    if (!response.ok) {
+      return Result.ok(response);
+    }
+    const payload: unknown = yield* Result.await(
+      Result.tryPromise(async () => await response.json()),
+    );
+    const parsed = v.safeParse(
+      authorizationServerMetadataResponseSchema,
+      payload,
+    );
+    if (!parsed.success) {
+      return Result.err(
+        new HandlerError({
+          status: 500,
+          code: "invalid_response",
+          message: "Authorization server metadata failed response validation",
+        }),
+      );
+    }
+    for (const [key, value] of response.headers.entries()) {
+      if (key.toLowerCase() !== "content-length") {
+        set.headers[key] = value;
+      }
+    }
+    set.status = response.status;
+    return Result.ok(parsed.output);
   },
 );
 
