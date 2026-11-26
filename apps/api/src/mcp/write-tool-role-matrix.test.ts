@@ -172,9 +172,13 @@ const ADDITIONAL_REST_OPERATIONS: Readonly<
   ],
   reformat_into_template: [
     {
-      endpoints: [capability("templates.fill"), capability("entities.upload")],
+      endpoints: [
+        capability("entities.versions.get"),
+        capability("templates.fill"),
+        capability("entities.upload"),
+      ],
       reason:
-        "Applying a template and saving the output beside the source is a template use followed by a new document.",
+        "Applying a template to a document reads the version, uses the template and saves the output as a new document.",
     },
   ],
   save_site_notes: [

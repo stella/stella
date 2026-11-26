@@ -327,7 +327,7 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
     },
     reformat_into_template: {
       command: ["template", "reformat"],
-      additionalScopes: ["templates"],
+      additionalScopes: ["templates", "read"],
       // The tool's own budget, with room for the response.
       requestTimeoutMs: 120_000,
       scope: "documents_write",

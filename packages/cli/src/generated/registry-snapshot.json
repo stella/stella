@@ -6756,7 +6756,7 @@
   {
     "cli": {
       "command": ["template", "reformat"],
-      "additionalScopes": ["templates"],
+      "additionalScopes": ["templates", "read"],
       "requestTimeoutMs": 120000,
       "scope": "documents_write"
     },

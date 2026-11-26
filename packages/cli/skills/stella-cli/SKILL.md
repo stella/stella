@@ -159,7 +159,7 @@ requires (request it at `stella auth login --scopes`).
 | template | `stella template fill` | templates |  |
 | template | `stella template list` | templates | paginated |
 | template | `stella template preview-conditions` | templates |  |
-| template | `stella template reformat` | documents_write + templates |  |
+| template | `stella template reformat` | documents_write + templates + read |  |
 | template | `stella template save-filled new-document` | documents_write + templates | destructive (needs `--yes` off a TTY) |
 | template | `stella template save-filled new-version` | documents_write + templates | destructive (needs `--yes` off a TTY) |
 | time-entry | `stella time-entry delete` | billing_write | destructive (needs `--yes` off a TTY) |

@@ -139,11 +139,16 @@ export const REFORMAT_INTO_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
   accountAccess: "standard",
   permissions: {
     type: "all",
-    permissions: { template: ["use"], entity: ["create"] },
+    permissions: {
+      template: ["use"],
+      entity: ["create"],
+      workspace: ["read"],
+    },
   },
   nonDestructiveReason:
     "The output is saved as a new document; the source and its versions are only read.",
-  additionalScopes: ["stella:templates"],
+  // The note quotes the source, so reading it takes the read grant too.
+  additionalScopes: ["stella:templates", "stella:read"],
   anonymized: { exposure: "excluded", reason: "write" },
   name: "reformat_into_template",
   scope: "stella:documents_write",
@@ -519,6 +524,7 @@ export const handleReformatIntoTemplateTool = async (
     !hasEffectiveAuthority(context, {
       template: ["use"],
       entity: ["create"],
+      workspace: ["read"],
     })
   ) {
     return errorResult("Forbidden");

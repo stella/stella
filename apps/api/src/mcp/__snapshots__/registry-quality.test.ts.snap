@@ -2671,7 +2671,8 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
     "name": "reformat_into_template",
     "scope": "stella:documents_write",
     "additionalScopes": [
-      "stella:templates"
+      "stella:templates",
+      "stella:read"
     ],
     "access": "write",
     "annotationReasons": {
@@ -10557,7 +10558,8 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "reformat_into_template",
     "scope": "stella:documents_write",
     "additionalScopes": [
-      "stella:templates"
+      "stella:templates",
+      "stella:read"
     ],
     "access": "write",
     "annotationReasons": {
