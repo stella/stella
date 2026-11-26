@@ -194,7 +194,7 @@
     ]
   },
   "apps/web/src/features/statutes/components/statute-compare-view.tsx::VirtualCompareGroups": {
-    "memos": 1,
+    "memos": 0,
     "reasons": ["Use of incompatible library"]
   },
   "apps/web/src/features/workspaces/team-avatars.tsx::TeamAvatars": {
@@ -210,7 +210,7 @@
     ]
   },
   "apps/web/src/lib/pdf/pdf-viewport.tsx::PDFViewerContent": {
-    "memos": 2,
+    "memos": 1,
     "reasons": ["(BuildHIR::lowerExpression) Handle Import expressions"]
   },
   "apps/web/src/routes/-protected-app.tsx::ProtectedAppFrame": {

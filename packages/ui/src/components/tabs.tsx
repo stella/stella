@@ -4,8 +4,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
 
+import { useComposedRefs } from "../effects/refs";
 import { hasTabOrderChanged, revealActiveTab } from "../lib/tab-order";
-import { cn, composeRefs } from "../lib/utils";
+import { cn } from "../lib/utils";
 import {
   TABS_INDICATOR_DEFAULT_CLASS,
   TABS_LIST_BASE_CLASS,
@@ -41,6 +42,7 @@ const TabsList = ({
   variant?: TabsVariant;
 }) => {
   const listRef = useRef<HTMLDivElement | null>(null);
+  const composedListRef = useComposedRefs(listRef, ref);
   const tabOrderRef = useRef<readonly Element[]>([]);
   const [, setRemeasureToken] = useState(0);
 
@@ -106,7 +108,7 @@ const TabsList = ({
         className,
       )}
       data-slot="tabs-list"
-      ref={composeRefs(listRef, ref)}
+      ref={composedListRef}
       {...props}
     >
       {children}

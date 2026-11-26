@@ -21,7 +21,8 @@ import "@stll/folio-react/editor.css";
 
 import "./peek-docx.css";
 import { useExternalSyncEffect, useMountEffect } from "@stll/ui/effects";
-import { cn, composeRefs } from "@stll/ui/utils";
+import { useComposedRefs } from "@stll/ui/effects-refs";
+import { cn } from "@stll/ui/utils";
 
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import {
@@ -561,7 +562,7 @@ const PeekDocxViewer = ({
   });
   // Stable ref callback so React doesn't detach/re-attach the fit-zoom
   // ResizeObserver every render.
-  const composedContainerRef = composeRefs(containerRef, fitZoomRef);
+  const composedContainerRef = useComposedRefs(containerRef, fitZoomRef);
   useDocxBlockScroll({ editorRef, fieldId });
   const searchTextKey =
     searchText === undefined ? undefined : searchTextQueryKey(searchText);

@@ -31,7 +31,7 @@ export const TYPECHECK_BUDGET_EXCLUSIONS = [
   },
   {
     name: "@stll/api",
-    measuredTime: "1651.9 s",
+    measuredTime: "36.2 s",
     measuredMemory: "1.10 GB",
   },
 ] as const satisfies readonly TypecheckBudgetExclusion[];
@@ -91,7 +91,7 @@ export const runSelectedPackages = async (
     );
     if (budgetExclusion !== undefined) {
       report(
-        `pre-push-typecheck: ${workspace.name} skipped (${budgetExclusion.measuredTime}, ${budgetExclusion.measuredMemory} measured; over the pre-push budget); CI checks it`,
+        `pre-push-typecheck: ${workspace.name} skipped (${budgetExclusion.measuredTime}, ${budgetExclusion.measuredMemory} measured; over the pre-push budget); run typecheck:changed locally or let CI check it`,
       );
       continue;
     }

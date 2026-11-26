@@ -32,6 +32,12 @@ import { detached } from "@/lib/detached";
 type InlineRenameState =
   { mode: "view" } | { mode: "edit"; draft: string; error?: string };
 
+type CommitPlan =
+  | { kind: "skip" }
+  | { kind: "close" }
+  | { kind: "invalid"; draft: string; error: string }
+  | { kind: "send"; value: string };
+
 type CommitHelpers = {
   /**
    * Re-enters edit mode with the rejected draft and surfaces an
@@ -109,15 +115,14 @@ export const useInlineRename = ({
     setState({ mode: "view" });
   };
 
-  const commit = async () => {
+  // What committing the current draft does, decided without touching state.
+  const planCommit = (): CommitPlan => {
     if (state.mode !== "edit" || cancelledRef.current || committedRef.current) {
-      cancelledRef.current = false;
-      return;
+      return { kind: "skip" };
     }
     const trimmed = state.draft.trim();
     if (trimmed === initial) {
-      setState({ mode: "view" });
-      return;
+      return { kind: "close" };
     }
     // Run client-side validation before the empty-string
     // short-circuit so callers that care about required fields
@@ -125,8 +130,7 @@ export const useInlineRename = ({
     // into "stay in edit mode with an inline error" semantics.
     const validationError = validate?.(trimmed) ?? null;
     if (validationError !== null) {
-      setState({ mode: "edit", draft: state.draft, error: validationError });
-      return;
+      return { kind: "invalid", draft: state.draft, error: validationError };
     }
     if (!trimmed && validate === undefined) {
       // No validator opted in; preserve the default "empty draft
@@ -134,20 +138,20 @@ export const useInlineRename = ({
       // Callers that supply `validate` (even if it returns `null`)
       // are saying "I will handle the empty case myself" so we
       // forward the empty string through to `onCommit`.
-      setState({ mode: "view" });
-      return;
+      return { kind: "close" };
     }
-    // Optimistically exit edit mode; if `onCommit` invokes
-    // `setError` we flip straight back to edit with the rejected
-    // draft. `setError` updates state directly so it works for
-    // both awaited promises and fire-and-forget patterns such as
-    // TanStack Query's `.mutate({ onError })`, whose callback may
-    // run after `commit()` has already returned.
+    return { kind: "send", value: trimmed };
+  };
+
+  // Hands the value to `onCommit`. `setError` updates state directly so
+  // it works for both awaited promises and fire-and-forget patterns such
+  // as TanStack Query's `.mutate({ onError })`, whose callback may run
+  // after `commit()` has already returned.
+  const send = async (value: string) => {
     generationRef.current += 1;
     const generation = generationRef.current;
-    setState({ mode: "view" });
     committedRef.current = true;
-    const result = onCommit(trimmed, {
+    const result = onCommit(value, {
       setError: (message: string) => {
         // Ignore stale callbacks from a previous edit cycle the
         // user has already moved past (cancelled, started over,
@@ -156,7 +160,7 @@ export const useInlineRename = ({
           return;
         }
         committedRef.current = false;
-        setState({ mode: "edit", draft: trimmed, error: message });
+        setState({ mode: "edit", draft: value, error: message });
       },
     });
     if (result instanceof Promise) {
@@ -164,9 +168,41 @@ export const useInlineRename = ({
     }
   };
 
+  const commit = async () => {
+    const plan = planCommit();
+    switch (plan.kind) {
+      case "skip": {
+        cancelledRef.current = false;
+        return;
+      }
+      case "close": {
+        setState({ mode: "view" });
+        return;
+      }
+      case "invalid": {
+        setState({ mode: "edit", draft: plan.draft, error: plan.error });
+        return;
+      }
+      case "send": {
+        // Optimistically exit edit mode; if `onCommit` invokes
+        // `setError` we flip straight back to edit with the rejected
+        // draft.
+        setState({ mode: "view" });
+        await send(plan.value);
+        return;
+      }
+    }
+  };
+
+  // An editor that leaves the page has no state left to show: only a
+  // draft that a commit would send goes out.
   const flush = useLatestCallback(() => {
-    if (commitOnUnmount) {
-      detached(commit(), "inline-rename.unmount");
+    if (!commitOnUnmount) {
+      return;
+    }
+    const plan = planCommit();
+    if (plan.kind === "send") {
+      detached(send(plan.value), "inline-rename.unmount");
     }
   });
   useMountEffect(() => () => flush());

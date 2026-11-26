@@ -166,25 +166,32 @@ const DocumentView = ({
     }
     const target = new Uint8Array(size);
     const chunks = chunksOf(size);
-    // One slice after another, so a single bridge message stays small.
-    const load = async (index: number): Promise<void> => {
+    // One slice after another, so a single bridge message stays small. The
+    // whole file, or null once the effect is cancelled.
+    const load = async (index: number): Promise<Uint8Array | null> => {
       const chunk = chunks[index];
       if (cancelled) {
-        return;
+        return null;
       }
       if (chunk === undefined) {
-        setBytes(target);
-        return;
+        return target;
       }
       const [offset, length] = chunk;
       decodeChunkInto(await read(offset, length), target, offset);
-      await load(index + 1);
+      return await load(index + 1);
     };
-    load(0).catch((error: unknown) => {
-      if (!cancelled) {
-        loadFailed(error);
-      }
-    });
+    load(0)
+      .then((loaded) => {
+        if (loaded !== null && !cancelled) {
+          setBytes(loaded);
+        }
+        return undefined;
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          loadFailed(error);
+        }
+      });
     return () => {
       cancelled = true;
     };

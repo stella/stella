@@ -15,6 +15,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { useObservedValue } from "@stll/ui/effects-dom";
 import { TextMark } from "@stll/ui/text-mark";
 import type { TextMarkOptions } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
@@ -233,30 +234,37 @@ export const ReviewStandardPassages = ({
  * removes the height cap, so a fresh measurement would say "fits" and take
  * the toggle away mid-read.
  *
- * A callback ref rather than an effect: the measured node only appears once
- * its side has passages, and it must be measured exactly once per node
- * lifetime regardless of what re-renders the parent.
+ * The node is held in state: it only appears once its side has passages, and
+ * it is observed once per node lifetime regardless of what re-renders the
+ * parent, which is also how long the sticky answer lasts.
  */
-const useCollapsedOverflow = () => {
-  const [overflows, setOverflows] = useState(false);
-  const contentRef = (node: HTMLElement | null) => {
-    if (node === null) {
-      return undefined;
-    }
-    const measure = () => {
-      setOverflows(
-        (previous) => previous || node.scrollHeight > node.clientHeight,
-      );
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(node);
-    return () => {
-      observer.disconnect();
-    };
+const observeCollapsedOverflow = (
+  node: HTMLElement,
+  emit: (overflows: boolean) => void,
+) => {
+  let overflowed = false;
+  const measure = () => {
+    overflowed ||= node.scrollHeight > node.clientHeight;
+    emit(overflowed);
   };
+  measure();
+  const observer = new ResizeObserver(measure);
+  observer.observe(node);
+  return () => {
+    observer.disconnect();
+  };
+};
 
-  return { contentRef, overflows };
+const useCollapsedOverflow = () => {
+  const [content, setContent] = useState<HTMLElement | null>(null);
+  const overflows = useObservedValue<HTMLElement, boolean>(
+    content,
+    observeCollapsedOverflow,
+    [],
+    false,
+  );
+
+  return { contentRef: setContent, overflows };
 };
 
 type PassageParagraphProps = {

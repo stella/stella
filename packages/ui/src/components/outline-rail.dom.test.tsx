@@ -438,3 +438,42 @@ test("a changed person reaches the panel when the items are rebuilt", async () =
     await cleanup(root, container, scrollContainer);
   }
 });
+
+test("a tick shows once the resolver places its heading, and goes when it no longer does", async () => {
+  const container = document.createElement("div");
+  const scrollContainer = document.createElement("div");
+  document.body.append(container, scrollContainer);
+  const root = createRoot(container);
+  const resolved: [string, HTMLElement][] = [];
+  const renderWith = async (resolvePct: (id: string) => number | null) =>
+    await act(async () => {
+      root.render(
+        <OutlineRail
+          items={items}
+          onJump={() => undefined}
+          presentation="rail"
+          resolvePct={(id, scrolled) => {
+            resolved.push([id, scrolled]);
+            return resolvePct(id);
+          }}
+          scrollContainerRef={{ current: scrollContainer }}
+        />,
+      );
+    });
+  const ticks = () =>
+    [
+      ...container.querySelectorAll<HTMLButtonElement>("button[aria-label]"),
+    ].map((tick) => tick.getAttribute("aria-label"));
+  try {
+    await renderWith((id) => (id === "introduction" ? 10 : 80));
+    expect(ticks()).toEqual(["Introduction", "Analysis"]);
+    expect(resolved.every(([, scrolled]) => scrolled === scrollContainer)).toBe(
+      true,
+    );
+
+    await renderWith((id) => (id === "introduction" ? 30 : null));
+    expect(ticks()).toEqual(["Introduction"]);
+  } finally {
+    await cleanup(root, container, scrollContainer);
+  }
+});
