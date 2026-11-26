@@ -46,6 +46,7 @@ import {
   EFFECTS_OWNER_DIRECTORY,
   isStateHook,
 } from "./no-effect-state-write.ts";
+import type { AstNode } from "./utils.ts";
 import {
   getPropertyName,
   isIdentifier,
@@ -142,15 +143,21 @@ const isUseCallback = (node) =>
 const isComposerCall = (node, names) =>
   node?.type === "CallExpression" && names.has(calleeName(node.callee) ?? "");
 
+/** A call's arguments; none for anything that is not a call. */
+const callArguments = (node: AstNode | null): readonly unknown[] =>
+  Array.isArray(node?.arguments) ? node.arguments : [];
+
+const isFunctionValue = (node: AstNode | null): node is AstNode =>
+  node !== null && FUNCTION_VALUES.has(node.type);
+
 // The scope of one linted file: the state setters it declares and the
 // context that resolves its identifiers.
 type FileScope = { context; setters: Set<unknown> };
 
 const singleDefinition = (scope: FileScope, identifier) => {
   const variable = resolveVariable(scope.context, identifier);
-  return variable?.defs.length === 1
-    ? { variable, definition: variable.defs[0] }
-    : null;
+  const definition = variable?.defs.length === 1 ? variable.defs.at(0) : null;
+  return variable && definition ? { variable, definition } : null;
 };
 
 // The local function an identifier names: a function declaration, a
@@ -177,12 +184,12 @@ const localFunction = (scope: FileScope, identifier) => {
     return null;
   }
   const init = unwrapExpression(definition.node.init);
-  if (FUNCTION_VALUES.has(init?.type)) {
+  if (isFunctionValue(init)) {
     return init;
   }
   if (isUseCallback(init)) {
-    const callback = unwrapExpression(init.arguments[0]);
-    return FUNCTION_VALUES.has(callback?.type) ? callback : null;
+    const callback = unwrapExpression(callArguments(init)[0]);
+    return isFunctionValue(callback) ? callback : null;
   }
   return null;
 };
@@ -218,10 +225,10 @@ const refFunctions = (scope: FileScope, expression, seen = new Set()) => {
       break;
   }
   if (isUseCallback(node)) {
-    return inner(node.arguments[0]);
+    return inner(callArguments(node)[0]);
   }
   if (isComposerCall(node, REF_COMPOSERS)) {
-    return node.arguments.flatMap(inner);
+    return callArguments(node).flatMap(inner);
   }
   if (!isIdentifierReference(node)) {
     return [];
@@ -382,10 +389,10 @@ export default eslintCompatPlugin({
         const scope: FileScope = { context, setters: new Set() };
         // Calls whose callee is a plain identifier, resolved at Program:exit
         // once every setter and local function is known.
-        const identifierCalls = [];
+        const identifierCalls: unknown[] = [];
         // Expressions that hold a ref.
-        const refSites = [];
-        const composerCalls = [];
+        const refSites: unknown[] = [];
+        const composerCalls: unknown[] = [];
         return {
           Program() {
             scope.setters.clear();
