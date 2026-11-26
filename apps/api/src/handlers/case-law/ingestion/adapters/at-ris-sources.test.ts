@@ -11,6 +11,7 @@ import { AT_UVS_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-uvs
 import { AT_VERG_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-verg";
 import { AT_VFGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vfgh";
 import { AT_VWGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vwgh";
+import { readGatedResponseText } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 
 const SOURCES = [
@@ -199,24 +200,29 @@ describe("Austrian official RIS court sources", () => {
       ];
       const adapter = createAtRisSourceAdapter(source, {
         now: () => new Date("2026-02-01T00:00:00Z"),
-        request: async (url) => {
-          urls.push(url);
-          // Every decision asks for the headnotes indexed under it; these
-          // fixtures are about the application, identity and document path,
-          // so the answer is the one a decision without headnotes gets.
-          if (
-            new URL(url).searchParams.get(
-              "Dokumenttyp.SucheInRechtssaetzen",
-            ) === "true"
-          ) {
-            return emptyHeadnoteListing(source.application);
-          }
-          const response = responses.shift();
-          if (response === undefined) {
-            throw new Error(`Unexpected RIS request: ${url}`);
-          }
-          return response;
-        },
+        readText: async (url, init) =>
+          await readGatedResponseText({
+            request: async () => {
+              urls.push(url);
+              // Every decision asks for the headnotes indexed under it; these
+              // fixtures are about the application, identity and document path,
+              // so the answer is the one a decision without headnotes gets.
+              if (
+                new URL(url).searchParams.get(
+                  "Dokumenttyp.SucheInRechtssaetzen",
+                ) === "true"
+              ) {
+                return emptyHeadnoteListing(source.application);
+              }
+              const response = responses.shift();
+              if (response === undefined) {
+                throw new Error(`Unexpected RIS request: ${url}`);
+              }
+              return response;
+            },
+            signal: init.signal ?? undefined,
+            refusalScope: init.refusalScope ?? "document",
+          }),
         sleep: async () => {},
       });
 
