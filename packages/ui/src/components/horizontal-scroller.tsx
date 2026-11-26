@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import type { ComponentProps, UIEvent } from "react";
+import { useState } from "react";
+import type { ComponentProps } from "react";
 
+import { useObservedValue } from "../effects/dom";
+import { useExternalSyncEffect } from "../effects/effects";
 import { containedEventHandler } from "../hooks/use-contained-handler";
 import { ChevronLeftIcon, ChevronRightIcon } from "../icons";
 import {
@@ -43,79 +45,72 @@ export const HorizontalScroller = ({
   ...props
 }: HorizontalScrollerProps) => {
   const [viewport, setViewport] = useState<HTMLDivElement | null>(null);
-  const [state, setState] = useState<ScrollState>({
-    canScrollEnd: false,
-    canScrollStart: false,
-  });
-
-  const measure = useCallback((node: HTMLDivElement) => {
-    writeScrollEdgeFade(node);
-    const rowWidth = rowContentWidth(node.parentElement) ?? node.clientWidth;
-    setState(
-      fitsRow(node.scrollWidth, rowWidth)
-        ? { canScrollEnd: false, canScrollStart: false }
-        : scrollState(
-            node.scrollLeft,
-            node.scrollWidth,
-            node.clientWidth,
-            getComputedStyle(node).direction === "rtl" ? "rtl" : "ltr",
-          ),
-    );
-  }, []);
-
-  const viewportRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      setViewport(node);
-      if (!node) {
-        return undefined;
-      }
-      // Overflow changes when the viewport resizes and also when its content
-      // does at a fixed viewport size (an item added, removed or relabelled),
-      // so the viewport and the content row are both observed.
-      const observer = new ResizeObserver(() => measure(node));
+  // Overflow changes when the viewport resizes, when its content does at a
+  // fixed viewport size (an item added, removed or relabelled), and as it
+  // scrolls, so the viewport, the content row and scrolling are observed.
+  const state = useObservedValue<HTMLDivElement, ScrollState>(
+    viewport,
+    (node, emit) => {
+      const measure = () => {
+        writeScrollEdgeFade(node);
+        emit(measureScrollState(node));
+      };
+      const observer = new ResizeObserver(measure);
       observer.observe(node);
       if (node.firstElementChild !== null) {
         observer.observe(node.firstElementChild);
       }
-      measure(node);
-      // A vertical wheel scrolls the row sideways. React registers wheel
-      // handlers as passive, where preventDefault is ignored and the page
-      // would scroll as well, so this listener is native and not passive.
-      const onWheel = (event: WheelEvent) => {
-        // Ctrl+wheel is pinch-to-zoom on trackpads: leave it to the page.
-        if (
-          event.ctrlKey ||
-          event.deltaX !== 0 ||
-          event.deltaY === 0 ||
-          node.scrollWidth <= node.clientWidth
-        ) {
-          return;
-        }
-        // Down means towards later items: inline end, which is negative
-        // scrollLeft in a right-to-left row. At the edge the wheel is asked
-        // to move past, the gesture belongs to the page again.
-        const rtl = getComputedStyle(node).direction === "rtl";
-        const { canScrollEnd, canScrollStart } = scrollState(
-          node.scrollLeft,
-          node.scrollWidth,
-          node.clientWidth,
-          rtl ? "rtl" : "ltr",
-        );
-        if (event.deltaY > 0 ? !canScrollEnd : !canScrollStart) {
-          return;
-        }
-        event.preventDefault();
-        const delta = wheelDeltaPixels(event, node);
-        node.scrollBy({ left: rtl ? -delta : delta });
-      };
-      node.addEventListener("wheel", onWheel, { passive: false });
+      node.addEventListener("scroll", measure, { passive: true });
+      measure();
       return () => {
         observer.disconnect();
-        node.removeEventListener("wheel", onWheel);
+        node.removeEventListener("scroll", measure);
       };
     },
-    [measure],
+    [],
+    NO_SCROLL,
   );
+
+  // A vertical wheel scrolls the row sideways. React registers wheel
+  // handlers as passive, where preventDefault is ignored and the page
+  // would scroll as well, so this listener is native and not passive.
+  useExternalSyncEffect(() => {
+    if (viewport === null) {
+      return undefined;
+    }
+    const node = viewport;
+    const onWheel = (event: WheelEvent) => {
+      // Ctrl+wheel is pinch-to-zoom on trackpads: leave it to the page.
+      if (
+        event.ctrlKey ||
+        event.deltaX !== 0 ||
+        event.deltaY === 0 ||
+        node.scrollWidth <= node.clientWidth
+      ) {
+        return;
+      }
+      // Down means towards later items: inline end, which is negative
+      // scrollLeft in a right-to-left row. At the edge the wheel is asked
+      // to move past, the gesture belongs to the page again.
+      const rtl = getComputedStyle(node).direction === "rtl";
+      const { canScrollEnd, canScrollStart } = scrollState(
+        node.scrollLeft,
+        node.scrollWidth,
+        node.clientWidth,
+        rtl ? "rtl" : "ltr",
+      );
+      if (event.deltaY > 0 ? !canScrollEnd : !canScrollStart) {
+        return;
+      }
+      event.preventDefault();
+      const delta = wheelDeltaPixels(event, node);
+      node.scrollBy({ left: rtl ? -delta : delta });
+    };
+    node.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      node.removeEventListener("wheel", onWheel);
+    };
+  }, [viewport]);
 
   const scroll = (inlineDirection: -1 | 1) => {
     if (!viewport) {
@@ -127,9 +122,6 @@ export const HorizontalScroller = ({
       left: viewport.clientWidth * 0.8 * inlineDirection * (rtl ? -1 : 1),
     });
   };
-
-  const onScroll = (event: UIEvent<HTMLDivElement>) =>
-    measure(event.currentTarget);
 
   const overflows = state.canScrollStart || state.canScrollEnd;
 
@@ -172,8 +164,7 @@ export const HorizontalScroller = ({
           SCROLL_EDGE_FADE_CLASS,
           viewportClassName,
         )}
-        onScroll={onScroll}
-        ref={viewportRef}
+        ref={setViewport}
       >
         <div className={cn("w-max min-w-full", contentClassName)}>
           {children}
@@ -200,6 +191,21 @@ export const HorizontalScroller = ({
       )}
     </div>
   );
+};
+
+const NO_SCROLL: ScrollState = { canScrollEnd: false, canScrollStart: false };
+
+// The controls' state for the viewport as it is now laid out.
+const measureScrollState = (node: HTMLDivElement): ScrollState => {
+  const rowWidth = rowContentWidth(node.parentElement) ?? node.clientWidth;
+  return fitsRow(node.scrollWidth, rowWidth)
+    ? NO_SCROLL
+    : scrollState(
+        node.scrollLeft,
+        node.scrollWidth,
+        node.clientWidth,
+        getComputedStyle(node).direction === "rtl" ? "rtl" : "ltr",
+      );
 };
 
 export const scrollState = (

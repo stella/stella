@@ -6,7 +6,7 @@
  * reader's own words on a passage, signed with their avatar.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { panic } from "better-result";
@@ -17,6 +17,7 @@ import { scrollReaderToBlock } from "@stll/decision-reader/reader-landing";
 import type { CitedProvisionTarget } from "@stll/decision-reader/reader-types";
 import { Button } from "@stll/ui/button";
 import { useExternalSyncEffect } from "@stll/ui/effects";
+import { useObservedValue } from "@stll/ui/effects-dom";
 import { Form } from "@stll/ui/form";
 import { Building2Icon, PenIcon, Trash2Icon } from "@stll/ui/icons";
 import { Textarea } from "@stll/ui/textarea";
@@ -38,7 +39,7 @@ import type { ReaderAnswerCardProps } from "@/features/case-law/components/case-
 import { useRelativeTime } from "@/i18n/formatting-context";
 import { forceReflow } from "@/lib/utils";
 
-import type { AnchoredNote, NotePlacement } from "./margin-notes.logic";
+import type { NotePlacement } from "./margin-notes.logic";
 import {
   gutterIsAvailable,
   notePlacementPresentation,
@@ -194,6 +195,11 @@ export const InlineCommentNote = ({ item }: { item: CommentMarginItem }) => (
   </div>
 );
 
+/** Pixel measurements keyed by what they measure. */
+type MeasuredRecord = Readonly<Record<string, number>>;
+
+const NO_HEIGHTS: MeasuredRecord = {};
+
 type PositionedItem = MarginItem & {
   top: number;
   /** Where the note's text anchor actually is; `top` may sit lower when
@@ -231,68 +237,120 @@ const GutterNotes = ({
   items: MarginItem[];
   scrollContainerRef: RefObject<HTMLElement | null>;
 }) => {
-  const [positioned, setPositioned] = useState<PositionedItem[]>([]);
-  const containerRef = useRef<HTMLDivElement>(null);
-  // Lazy state singleton (mutated in place, identity stable): avoids both
-  // the render-scope ref write (React Compiler bailout) and per-render
-  // allocation.
-  const [heights] = useState(() => new Map<string, number>());
-
-  // Added/removed from scroll + resize listeners by reference.
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
-  const recalc = useCallback(() => {
-    const sc = scrollContainerRef.current;
-    const wrapper = containerRef.current;
-    if (!sc || !wrapper || items.length === 0) {
-      return;
-    }
-
-    const wrapperRect = wrapper.getBoundingClientRect();
-    const region = { width: wrapperRect.width };
-    // The stylesheet collapses the gutter on narrow viewports; measuring it
-    // rather than repeating the breakpoint keeps one owner for the decision.
-    if (!gutterIsAvailable(region)) {
-      // Already empty stays the same array: the scroll listener still runs
-      // while the gutter is collapsed, and a fresh `[]` would re-render on
-      // every frame of it.
-      setPositioned((previous) => (previous.length === 0 ? previous : []));
-      return;
-    }
-
-    const anchored: AnchoredNote<MarginItem>[] = [];
-    for (const item of items) {
-      const el = resolveItemAnchor(sc, item);
-      if (!el) {
-        continue;
+  const [container, setContainer] = useState<HTMLDivElement | null>(null);
+  // The notes' region width and where each item's text anchor sits in it
+  // (`top:<id>`), read again as the reader scrolls or the window resizes, and
+  // for every new set of items.
+  const anchors = useObservedValue<HTMLDivElement, MeasuredRecord | null>(
+    container,
+    (wrapper, emit) => {
+      const sc = scrollContainerRef.current;
+      if (sc === null) {
+        return () => undefined;
       }
-      anchored.push({
-        anchorTop: el.getBoundingClientRect().top - wrapperRect.top,
-        height: heights.get(item.id) ?? UNMEASURED_NOTE_HEIGHT_PX,
-        note: item,
-      });
-    }
-
-    const result: PositionedItem[] = [];
-    for (const { anchorTop, note, top } of placeGutterNotes({
-      notes: anchored,
-      region,
-    })) {
-      result.push({ ...note, anchorTop, top });
-    }
-    setPositioned(result);
-  }, [scrollContainerRef, items, heights]);
-
-  const measureRef = (el: HTMLElement | null, id: string) => {
-    if (!el) {
-      return;
-    }
-    const h = el.offsetHeight;
-    if (heights.get(id) !== h) {
-      heights.set(id, h);
-      // Commit measured placement before an activated answer's reveal frame.
-      recalc();
-    }
-  };
+      const measure = () => {
+        const wrapperRect = wrapper.getBoundingClientRect();
+        emit(
+          Object.fromEntries([
+            ["width", wrapperRect.width],
+            ...items.flatMap((item) => {
+              const el = resolveItemAnchor(sc, item);
+              return el === null
+                ? []
+                : [
+                    [
+                      `top:${item.id}`,
+                      el.getBoundingClientRect().top - wrapperRect.top,
+                    ] as const,
+                  ];
+            }),
+          ]),
+        );
+      };
+      measure();
+      sc.addEventListener("scroll", measure, { passive: true });
+      globalThis.addEventListener("resize", measure);
+      return () => {
+        sc.removeEventListener("scroll", measure);
+        globalThis.removeEventListener("resize", measure);
+      };
+    },
+    [scrollContainerRef, items],
+    null,
+  );
+  const region = { width: anchors?.["width"] ?? 0 };
+  // The stylesheet collapses the gutter on narrow viewports; measuring it
+  // rather than repeating the breakpoint keeps one owner for the decision.
+  const anchored =
+    anchors !== null && gutterIsAvailable(region)
+      ? items.flatMap((item) => {
+          const anchorTop = anchors[`top:${item.id}`];
+          return anchorTop === undefined ? [] : [{ anchorTop, item }];
+        })
+      : [];
+  const noteIds = anchored.map(({ item }) => item.id).join("\u0000");
+  // Each rendered note's own height, which decides where the next one
+  // starts. Measured before paint whenever the items or the set of notes
+  // change (an activated answer's reveal frame reads the placement), and
+  // again when a note resizes or swaps its element (a comment opened for
+  // editing).
+  const heights = useObservedValue<HTMLDivElement, MeasuredRecord>(
+    container,
+    (wrapper, emit) => {
+      const observed = new Set<Element>();
+      let observer: ResizeObserver | null = null;
+      const measure = () => {
+        const measured: (readonly [string, number])[] = [];
+        const present = new Set<Element>();
+        for (const slot of wrapper.children) {
+          const id =
+            slot instanceof HTMLElement ? slot.dataset["marginNoteId"] : null;
+          const note = slot.firstElementChild;
+          if (
+            id === undefined ||
+            id === null ||
+            !(note instanceof HTMLElement)
+          ) {
+            continue;
+          }
+          measured.push([id, note.offsetHeight]);
+          present.add(note);
+          if (!observed.has(note)) {
+            observed.add(note);
+            observer?.observe(note);
+          }
+        }
+        for (const note of observed) {
+          if (!present.has(note)) {
+            observed.delete(note);
+            observer?.unobserve(note);
+          }
+        }
+        emit(Object.fromEntries(measured));
+      };
+      observer =
+        typeof ResizeObserver === "undefined"
+          ? null
+          : new ResizeObserver(measure);
+      const swaps = new MutationObserver(measure);
+      swaps.observe(wrapper, { childList: true, subtree: true });
+      measure();
+      return () => {
+        observer?.disconnect();
+        swaps.disconnect();
+      };
+    },
+    [items, noteIds],
+    NO_HEIGHTS,
+  );
+  const positioned: PositionedItem[] = placeGutterNotes({
+    notes: anchored.map(({ anchorTop, item }) => ({
+      anchorTop,
+      height: heights[item.id] ?? UNMEASURED_NOTE_HEIGHT_PX,
+      note: item,
+    })),
+    region,
+  }).map(({ anchorTop, note, top }) => ({ ...note, anchorTop, top }));
 
   // Hovering annotated TEXT lights its notes and slightly dims the rest of
   // the margin, mirroring the note→text hover. One listener pair on the
@@ -305,7 +363,6 @@ const GutterNotes = ({
     if (!sc) {
       return undefined;
     }
-    recalc();
     const onPointerOver = (event: Event) => {
       const target = event.target;
       const block =
@@ -315,17 +372,13 @@ const GutterNotes = ({
       );
     };
     const onPointerLeave = () => setTextHoverAnchor(null);
-    sc.addEventListener("scroll", recalc, { passive: true });
     sc.addEventListener("pointerover", onPointerOver, { passive: true });
     sc.addEventListener("pointerleave", onPointerLeave, { passive: true });
-    globalThis.addEventListener("resize", recalc);
     return () => {
-      sc.removeEventListener("scroll", recalc);
       sc.removeEventListener("pointerover", onPointerOver);
       sc.removeEventListener("pointerleave", onPointerLeave);
-      globalThis.removeEventListener("resize", recalc);
     };
-  }, [scrollContainerRef, recalc]);
+  }, [scrollContainerRef]);
 
   const scrollTo = (item: MarginItem) => {
     const sc = scrollContainerRef.current;
@@ -364,7 +417,7 @@ const GutterNotes = ({
   };
 
   return (
-    <div className="absolute inset-0" ref={containerRef}>
+    <div className="absolute inset-0" ref={setContainer}>
       {positioned.map((item) => {
         // A note pushed away from its paragraph gets a bracket bridging the
         // gap while the note is hovered: along the gutter from the
@@ -412,7 +465,6 @@ const GutterNotes = ({
         <MarginNote
           item={item}
           key={item.id}
-          measureRef={measureRef}
           onHover={(on) => noteHover(item, on)}
           onJump={() => scrollTo(item)}
           placement={{ type: "gutter", top: item.top }}
@@ -425,7 +477,6 @@ const GutterNotes = ({
 
 type MarginNoteProps = {
   item: MarginItem;
-  measureRef?: ((el: HTMLElement | null, id: string) => void) | undefined;
   onHover?: ((on: boolean) => void) | undefined;
   onJump?: (() => void) | undefined;
   placement: NotePlacement;
@@ -438,38 +489,27 @@ type MarginNoteProps = {
  */
 const MarginNote = (props: MarginNoteProps) => (
   // `MARGIN_NOTE_KIND_ATTRIBUTE`, which the notes column's click reads.
-  <div className="contents" data-margin-note={props.item.kind}>
+  <div
+    className="contents"
+    data-margin-note={props.item.kind}
+    data-margin-note-id={props.item.id}
+  >
     <MarginNoteBody {...props} />
   </div>
 );
 
 const MarginNoteBody = ({
   item,
-  measureRef,
   onHover,
   onJump,
   placement,
   presence = "normal",
 }: MarginNoteProps) => {
-  const observeSize = (el: HTMLElement | null) => {
-    if (el === null || measureRef === undefined) {
-      return undefined;
-    }
-    measureRef(el, item.id);
-    const observer = new ResizeObserver(() => measureRef(el, item.id));
-    observer.observe(el);
-    return () => observer.disconnect();
-  };
-
   switch (item.kind) {
     case "provision": {
       const position = notePlacementPresentation(placement);
       return (
-        <div
-          className={position.className}
-          style={position.style}
-          ref={observeSize}
-        >
+        <div className={position.className} style={position.style}>
           <CitedProvisionExpansion
             citations={item.citations}
             placement={placement.type}
@@ -483,7 +523,6 @@ const MarginNoteBody = ({
         <div
           className={position.className}
           style={position.style}
-          ref={observeSize}
           onMouseEnter={() => onHover?.(true)}
           onMouseLeave={() => onHover?.(false)}
         >
@@ -495,7 +534,6 @@ const MarginNoteBody = ({
       return (
         <CommentNote
           item={item}
-          measureRef={measureRef}
           onHover={onHover}
           onJump={onJump}
           placement={placement}
@@ -508,19 +546,13 @@ const MarginNoteBody = ({
         <ComposerNote
           draft={NEW_COMMENT_DRAFT}
           item={item}
-          measureRef={measureRef}
           placement={placement}
         />
       );
     }
     case "example": {
       return (
-        <ExampleNote
-          item={item}
-          measureRef={measureRef}
-          placement={placement}
-          presence={presence}
-        />
+        <ExampleNote item={item} placement={placement} presence={presence} />
       );
     }
     case "card":
@@ -528,7 +560,6 @@ const MarginNoteBody = ({
       return (
         <AnalysisNote
           item={item}
-          measureRef={measureRef}
           onHover={onHover}
           onJump={onJump}
           placement={placement}
@@ -547,8 +578,6 @@ type NotePresence = "normal" | "highlighted" | "dimmed";
 
 type NoteProps<T extends MarginItem> = {
   item: T;
-  /** Gutter only: the note's own height decides where the next one starts. */
-  measureRef?: ((el: HTMLElement | null, id: string) => void) | undefined;
   onHover?: ((on: boolean) => void) | undefined;
   /** Gutter only: an inline note already sits at its anchor. */
   onJump?: (() => void) | undefined;
@@ -613,7 +642,6 @@ const NoteHeading = ({ heading }: { heading: string | undefined }) =>
  */
 const ExampleNote = ({
   item,
-  measureRef,
   placement,
   presence,
 }: Omit<
@@ -626,7 +654,6 @@ const ExampleNote = ({
       "text-foreground-muted border-s-[3px] py-1 ps-2.5 text-start",
       notePlacementPresentation(placement).className,
     )}
-    ref={(el) => measureRef?.(el, item.id)}
     style={analysisNoteStyle({ item, placement, presence })}
   >
     <NoteHeading heading={item.heading} />
@@ -644,7 +671,6 @@ const ExampleNote = ({
 
 const AnalysisNote = ({
   item,
-  measureRef,
   onHover,
   onJump,
   placement,
@@ -673,7 +699,6 @@ const AnalysisNote = ({
           "text-foreground-muted border-s-[3px] py-1 ps-2.5 text-start",
           position.className,
         )}
-        ref={(el) => measureRef?.(el, item.id)}
         style={style}
       >
         {body}
@@ -687,12 +712,11 @@ const AnalysisNote = ({
     <Button
       className={cn("block", position.className)}
       onBlur={() => onHover?.(false)}
-      // oxlint-disable-next-line require-contained-handler/require-contained-handler -- measure callback ref, no portal-bearing descendants
+      // oxlint-disable-next-line require-contained-handler/require-contained-handler -- no portal-bearing descendants
       onClick={onJump}
       onFocus={containedHandler(null, () => onHover?.(true))}
       onMouseEnter={() => onHover?.(true)}
       onMouseLeave={() => onHover?.(false)}
-      ref={(el) => measureRef?.(el, item.id)}
       style={position.style}
       variant="plain"
     >
@@ -727,12 +751,10 @@ const NEW_COMMENT_DRAFT = { type: "new" } as const satisfies ComposerDraft;
 const ComposerNote = ({
   draft,
   item,
-  measureRef,
   placement,
 }: {
   draft: ComposerDraft;
   item: ComposerMarginItem;
-  measureRef?: ((el: HTMLElement | null, id: string) => void) | undefined;
   placement: NotePlacement;
 }) => {
   const t = useTranslations();
@@ -756,7 +778,6 @@ const ComposerNote = ({
         event.preventDefault();
         submit();
       }}
-      ref={(el) => measureRef?.(el, item.id)}
       style={position.style}
     >
       <div
@@ -850,7 +871,6 @@ const EditedMark = ({ updatedAt }: { updatedAt: string }) => {
  */
 const CommentNote = ({
   item,
-  measureRef,
   onHover,
   onJump,
   placement,
@@ -894,7 +914,6 @@ const CommentNote = ({
             stopEditing();
           },
         }}
-        measureRef={measureRef}
         placement={placement}
       />
     );
@@ -913,7 +932,6 @@ const CommentNote = ({
       )}
       onMouseEnter={() => onHover?.(true)}
       onMouseLeave={() => onHover?.(false)}
-      ref={(el) => measureRef?.(el, item.id)}
       style={{
         ...position.style,
         borderInlineStartColor: stripe,
