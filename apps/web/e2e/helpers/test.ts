@@ -3,6 +3,12 @@ import type { ConsoleMessage, Page } from "@playwright/test";
 
 import { checkStormWatch, installStormWatch } from "./storm-watch";
 
+// What the dev render-storm canary logs, for refusing patterns that would
+// excuse a storm.
+const RENDER_STORM_MESSAGES = [
+  "[render-storm] sustained render storm detected: ~120 commits/sec",
+] as const;
+
 export type BrowserErrorCollector = {
   entries: () => string[];
   assertEmpty: (label: string) => void;
@@ -113,6 +119,17 @@ export const createBrowserErrorCollector = (
   // a later matching pass could miss an entry an earlier one matched.
   const stateless = (pattern: RegExp) =>
     new RegExp(pattern.source, pattern.flags.replace(/[gy]/gu, ""));
+  // Storms are the storm watch's to judge, and no spec may excuse one.
+  const excusable = (pattern: RegExp) => {
+    if (
+      RENDER_STORM_MESSAGES.some((message) => stateless(pattern).test(message))
+    ) {
+      throw new TypeError(
+        `${String(pattern)} would excuse a render storm; fix the loop the storm watch names instead`,
+      );
+    }
+    return stateless(pattern);
+  };
 
   return {
     add: (message) => {
@@ -120,10 +137,10 @@ export const createBrowserErrorCollector = (
     },
     entries: () => [...errors],
     expectCaptured: (pattern) => {
-      expectedPatterns.push(stateless(pattern));
+      expectedPatterns.push(excusable(pattern));
     },
     tolerate: ({ pattern }) => {
-      toleratedPatterns.push(stateless(pattern));
+      toleratedPatterns.push(excusable(pattern));
     },
     assertEmpty: (label) => {
       const collected = errors.splice(0);

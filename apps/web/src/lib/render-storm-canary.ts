@@ -38,6 +38,17 @@ declare global {
   var __stellaRenderCommitCount: number | undefined;
 }
 
+/**
+ * Where the e2e storm watch (apps/web/e2e/helpers/storm-watch-browser.ts)
+ * installs itself. Under the watch every commit is judged by what caused it,
+ * which a rate cannot tell, so the canary leaves storms to the watch there.
+ */
+export const STORM_WATCH_GLOBAL = "__STLL_STORM_WATCH__";
+
+/** Whether this page runs under the e2e storm watch. */
+export const isUnderStormWatch = (): boolean =>
+  Reflect.has(globalThis, STORM_WATCH_GLOBAL);
+
 export const RENDER_COMMIT_COUNT_GLOBAL =
   "__stellaRenderCommitCount" satisfies keyof typeof globalThis;
 
