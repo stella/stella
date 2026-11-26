@@ -510,6 +510,73 @@ describe("validateTemplateProfile", () => {
     });
   });
 
+  test("lists the deeper levels of another list of the template for marks", () => {
+    const template = contractTemplate();
+    const withList = {
+      ...template,
+      numbering: {
+        abstractNums: [
+          ...template.numbering.abstractNums,
+          {
+            abstractNumId: 9,
+            levels: [0, 1, 2].map((ilvl) => ({
+              ilvl,
+              numFmt: "decimal",
+              lvlText: `%${String(ilvl + 1)}.`,
+              start: 1,
+              suff: "tab" as const,
+              pStyle: null,
+              indent: { left: 360 * (ilvl + 1), hanging: 360, firstLine: null },
+            })),
+          },
+        ],
+        nums: [...template.numbering.nums, { numId: 30, abstractNumId: 9 }],
+      },
+    };
+    const listed = inferTemplateProfile(withList);
+    expect(
+      listed.markLevels?.map(({ numId, ilvl, abstractNumId }) => [
+        numId,
+        ilvl,
+        abstractNumId,
+      ]),
+    ).toEqual([
+      [30, 1, 9],
+      [30, 2, 9],
+    ]);
+    expect(validateTemplateProfile(listed, withList)).toEqual([]);
+    expect(parseTemplateProfile(listed).isOk()).toBe(true);
+    expect(inferTemplateProfile(template).markLevels).toEqual([]);
+
+    // A level a paragraph of the template is numbered by, or a style is
+    // bound to, is taken: giving it a mark would change what those print.
+    const first = withList.blocks.at(0);
+    const used = {
+      ...withList,
+      blocks:
+        first === undefined
+          ? withList.blocks
+          : [
+              { ...first, numbering: { numId: 30, ilvl: 1, abstractNumId: 9 } },
+              ...withList.blocks.slice(1),
+            ],
+      styles: [
+        ...withList.styles,
+        {
+          styleId: "ListedTwo",
+          name: "Listed Two",
+          type: "paragraph" as const,
+          basedOn: null,
+          numPr: { numId: 30, ilvl: 2 },
+          outlineLvl: null,
+          alignment: null,
+          isDefault: false,
+        },
+      ],
+    };
+    expect(inferTemplateProfile(used).markLevels).toEqual([]);
+  });
+
   test("a template with very many such findings still gives a profile that reads back", () => {
     const crowded = inferTemplateProfile({
       ...contractTemplate(),

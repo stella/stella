@@ -2016,6 +2016,7 @@ export const buildTemplatePlan = ({
     placements: placed.placements,
     mode,
     spareLevels: profile.spareLevels,
+    markLevels: profile.markLevels,
   });
   const breaks = breaksHeadings(placed);
   settleBrokenHeadings(context, placed, patches, breaks);

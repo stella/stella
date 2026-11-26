@@ -103,6 +103,11 @@ export type TemplateProfile = {
   /** Levels of the outline list no style uses, below the roles' own. A
    *  format the roles' levels do not print is patched onto one of them. */
   spareLevels: ProfileListLevel[];
+  /** Levels of the template's other lists that no style uses. A bullet
+   *  counts nothing, so its mark need not stand in the outline list: it is
+   *  patched onto one of these first, and the outline's spare levels stay
+   *  for formats that count. Absent from a profile inferred before them. */
+  markLevels?: ProfileListLevel[];
   /** Top-level template blocks by what becomes of them. */
   regions: {
     /** Kept in front of the document: a letterhead, a memo header. */
@@ -204,6 +209,7 @@ const CONFIDENCE = {
 
 const NO_BLOCKS: readonly DocxBlock[] = [];
 const NO_FINDINGS: readonly TemplateHealthFinding[] = [];
+const NO_LEVELS: readonly ProfileListLevel[] = [];
 
 type StyleFacts = {
   style: TemplateStyle;
@@ -951,6 +957,91 @@ const inferHealth = (
 };
 
 /**
+ * The list levels something of the template stands on: a style bound to
+ * one, or a paragraph of the template numbered by one (a numbered line in
+ * a letterhead the output keeps). Giving such a level another mark would
+ * change what those print.
+ */
+const occupiedLevels = ({
+  styles,
+  blocks,
+  numbering: { nums },
+}: TemplateInspection): Set<string> => {
+  const listOf = new Map(
+    nums.map(({ numId, abstractNumId }) => [numId, abstractNumId]),
+  );
+  const occupied = new Set<string>();
+  for (const { numPr } of styles) {
+    const list = numPr === null ? undefined : listOf.get(numPr.numId);
+    if (numPr !== null && list !== undefined) {
+      occupied.add(`${String(list)}:${String(numPr.ilvl)}`);
+    }
+  }
+  for (const { numbering } of blocks) {
+    if (numbering !== null) {
+      occupied.add(
+        `${String(numbering.abstractNumId)}:${String(numbering.ilvl)}`,
+      );
+    }
+  }
+  return occupied;
+};
+
+/**
+ * The deeper levels of another list of the template that nothing stands
+ * on: none of the roles' lists, not the outline's, no level a style is
+ * bound to or a paragraph of the template is numbered by.
+ */
+const inferMarkLevels = (
+  inspection: TemplateInspection,
+  roles: TemplateProfile["roles"],
+  outlineLevel: ProfileListLevel | null,
+): ProfileListLevel[] => {
+  const numIdByList = new Map(
+    inspection.numbering.nums.map(({ numId, abstractNumId }) => [
+      abstractNumId,
+      numId,
+    ]),
+  );
+  const roleLists = new Set(
+    Object.values(roles).flatMap((role) =>
+      role?.numbering ? [role.numbering.abstractNumId] : [],
+    ),
+  );
+  const markList = inspection.numbering.abstractNums.find(
+    ({ abstractNumId, levels }) =>
+      abstractNumId !== outlineLevel?.abstractNumId &&
+      !roleLists.has(abstractNumId) &&
+      numIdByList.has(abstractNumId) &&
+      levels.length > 1 &&
+      levels.every(({ ilvl, pStyle }) => ilvl === 0 || pStyle === null),
+  );
+  const markNumId =
+    markList === undefined
+      ? undefined
+      : numIdByList.get(markList.abstractNumId);
+  if (markList === undefined || markNumId === undefined) {
+    return [];
+  }
+  const occupied = occupiedLevels(inspection);
+  return markList.levels
+    .filter(
+      ({ ilvl }) =>
+        ilvl > 0 &&
+        !occupied.has(`${String(markList.abstractNumId)}:${String(ilvl)}`),
+    )
+    .map(({ ilvl, numFmt, lvlText, start, indent }) => ({
+      numId: markNumId,
+      ilvl,
+      abstractNumId: markList.abstractNumId,
+      numFmt,
+      lvlText,
+      start,
+      indent,
+    }));
+};
+
+/**
  * Infers a template's profile from its inspection. Deterministic: the same
  * template gives the same profile. Readings carry a confidence and their
  * evidence; a person confirms or corrects them before the profile is stored.
@@ -1027,6 +1118,8 @@ export const inferTemplateProfile = (
             indent,
           }));
 
+  const markLevels = inferMarkLevels(inspection, roles, outlineLevel);
+
   const kinds = [...new Set(inspection.fields.map(({ kind }) => kind))];
   const structural = STRUCTURAL_ROLES.map(
     (role) => roles[role]?.confidence ?? 0,
@@ -1037,6 +1130,7 @@ export const inferTemplateProfile = (
     layout: columnTable ? "parallelColumns" : "flow",
     roles,
     spareLevels,
+    markLevels,
     ...inferRegions({ inspection, structure, roles }),
     headings: {
       article: joinOf(
@@ -1084,6 +1178,23 @@ export type TemplateProfileIssue = {
   role?: HouseStyleRole;
   blockId?: string;
 };
+
+/** An issue for every spare or mark level the template does not have. */
+const unknownLevelIssues = (
+  profile: TemplateProfile,
+  inspection: TemplateInspection,
+  abstractByNum: ReadonlyMap<number, number>,
+): TemplateProfileIssue[] =>
+  [...profile.spareLevels, ...(profile.markLevels ?? NO_LEVELS)].flatMap(
+    ({ abstractNumId, numId, ilvl }): TemplateProfileIssue[] => {
+      const known = inspection.numbering.abstractNums
+        .find((list) => list.abstractNumId === abstractNumId)
+        ?.levels.some((level) => level.ilvl === ilvl);
+      return known === true && abstractByNum.get(numId) === abstractNumId
+        ? []
+        : [{ severity: "error", code: "unknownListLevel" }];
+    },
+  );
 
 /**
  * Checks a profile against the template it is used with: a stored profile
@@ -1159,14 +1270,7 @@ export const validateTemplateProfile = (
     levelUsers.set(key, role);
   }
 
-  for (const { abstractNumId, numId, ilvl } of profile.spareLevels) {
-    const known = inspection.numbering.abstractNums
-      .find((list) => list.abstractNumId === abstractNumId)
-      ?.levels.some((level) => level.ilvl === ilvl);
-    if (known !== true || abstractByNum.get(numId) !== abstractNumId) {
-      issues.push({ severity: "error", code: "unknownListLevel" });
-    }
-  }
+  issues.push(...unknownLevelIssues(profile, inspection, abstractByNum));
 
   const { topLevel } = readStructure(inspection.blocks);
   const order = topLevel.map(({ id }) => id);
@@ -1298,6 +1402,9 @@ const profileSchema = v.strictObject({
     body: roleTargetSchema,
   } satisfies Record<HouseStyleRole, typeof roleTargetSchema>),
   spareLevels: v.pipe(v.array(listLevelSchema), v.maxLength(LEVELS_MAX)),
+  markLevels: v.exactOptional(
+    v.pipe(v.array(listLevelSchema), v.maxLength(LEVELS_MAX)),
+  ),
   regions: v.strictObject({
     keepBefore: blockIdsSchema,
     contents: blockIdsSchema,
