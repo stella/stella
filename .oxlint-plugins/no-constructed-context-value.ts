@@ -35,8 +35,10 @@
 import type { Context, ESTree } from "@oxlint/plugins";
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 import {
   type AstNode,
+  filenameForContext,
   isAstNode,
   isIdentifierReference,
   jsxName,
@@ -45,6 +47,7 @@ import {
   unwrapExpression,
 } from "./utils.ts";
 
+const RULE_NAME = "no-constructed-context-value";
 const CONTEXT_SUFFIX = "Context";
 const MODULE_TRANSFORM = "<module-transform>";
 const FUNCTION_TYPES: ReadonlySet<string> = new Set([
@@ -323,8 +326,15 @@ export default eslintCompatPlugin({
           "Program:exit"() {
             for (const { node, kind, start } of findings) {
               if (
-                covered === null ||
-                coveredRanges.some(([from, to]) => start >= from && start < to)
+                (covered === null ||
+                  coveredRanges.some(
+                    ([from, to]) => start >= from && start < to,
+                  )) &&
+                guardEnforcesLine({
+                  guard: RULE_NAME,
+                  file: filenameForContext(context),
+                  line: context.sourceCode.getLocFromIndex(start).line,
+                })
               ) {
                 context.report({
                   node,

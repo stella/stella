@@ -5221,15 +5221,17 @@ const config = defineConfig({
     // A function the compiler bails out of memoizes nothing, so a context
     // value built in it is new on every render. Each file with a bailout gets
     // the check inside the functions the baseline lists.
-    ...[...reactCompilerBailoutFunctions].map(([file, functions]) => ({
-      files: [file],
-      rules: {
-        "no-constructed-context-value/no-constructed-context-value": [
-          "error",
-          { functions },
-        ],
-      },
-    })),
+    ...[...reactCompilerBailoutFunctions].map(
+      ([file, functions]): OxlintOverride => ({
+        files: [file],
+        rules: {
+          "no-constructed-context-value/no-constructed-context-value": [
+            "error",
+            { functions },
+          ],
+        },
+      }),
+    ),
     {
       // Sources that render uncompiled somewhere they ship: the landing,
       // Outlook and playground apps, and the shared packages, which also
