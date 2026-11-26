@@ -125,8 +125,14 @@ const renderLevelText = (
   for (const part of levelText.split(PLACEHOLDER)) {
     if (!PLACEHOLDER.test(part)) {
       // A literal with words is dropped whole: it holds nothing a field
-      // would keep, or the level is not cited at all.
-      rendered += withoutWords && WORDS.test(part) ? "" : part;
+      // would keep, or the level is not cited at all. Of the others the
+      // field keeps the punctuation and drops the blanks: `Part %1 -`
+      // gives `B-`.
+      if (!withoutWords) {
+        rendered += part;
+      } else if (!WORDS.test(part)) {
+        rendered += part.replaceAll(/\s+/gu, "");
+      }
       continue;
     }
     // `%1` is level 0.
