@@ -7,7 +7,6 @@ import {
   DECISION_DOCUMENT_ROLE,
   type DecisionDocumentRole,
 } from "@stll/api-contract/decision-document-role";
-import { BodyByteLimitError } from "@stll/fetch/body-reader";
 /**
  * Polish common courts from the Ministry of Justice's judgments API.
  *
@@ -70,7 +69,6 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
-import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 import {
@@ -92,7 +90,6 @@ import {
   readPublisher,
   unreadPublisherError,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import { rethrowCycleStop } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlCommonCourtDecision } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { readPlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
@@ -105,11 +102,7 @@ import {
   sourceTextField,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
-import {
-  type ReadOutcome,
-  readPresent,
-  readUnavailable,
-} from "@/api/lib/errors/read-outcome";
+import { type ReadOutcome, readPresent } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
@@ -1527,6 +1520,7 @@ const request = async ({
     headers: { Accept: "text/xml" },
     redirect: "error",
     fetchStage,
+    refusalScope: fetchStage === "listing" ? "source" : "document",
     adapterKey: ADAPTER_KEYS.PL_NCOURT,
     retryPolicy: "publisher-backoff",
     signal,
@@ -1536,51 +1530,19 @@ const request = async ({
     return { outcome: responseOutcome, url };
   }
   const { body, headers, status } = responseOutcome.value;
-  if (body === null) {
-    return {
-      outcome: readUnavailable({ kind: "empty-body", status }),
-      url,
-    };
-  }
-  const read = await Result.tryPromise({
-    try: async () => await readCappedBytes(body, MAX_RESPONSE_BYTES),
-    catch: (error: unknown) => error,
+  const bytesOutcome = await readCappedPublisherBytes({
+    body,
+    status,
+    maxBytes: MAX_RESPONSE_BYTES,
+    signal,
   });
-  if (Result.isError(read)) {
-    rethrowCycleStop(read.error, signal);
-    if (BodyByteLimitError.is(read.error)) {
-      return {
-        outcome: readUnavailable({
-          kind: "too-large",
-          maxBytes: read.error.limit,
-        }),
-        url,
-      };
-    }
-    return {
-      outcome: readUnavailable({ kind: "thrown", error: read.error }),
-      url,
-    };
-  }
-  if (read.value === null) {
-    return {
-      outcome: readUnavailable({
-        kind: "too-large",
-        maxBytes: MAX_RESPONSE_BYTES,
-      }),
-      url,
-    };
-  }
-  if (read.value.length === 0) {
-    return {
-      outcome: readUnavailable({ kind: "empty-body", status }),
-      url,
-    };
+  if (bytesOutcome.type !== "present") {
+    return { outcome: bytesOutcome, url };
   }
   return {
     outcome: readPresent({
       status,
-      body: new TextDecoder().decode(read.value),
+      body: new TextDecoder().decode(bytesOutcome.value),
       url,
       xml: XML_MEDIA_TYPES.has(mediaTypeOf(headers.get("content-type"))),
     }),
@@ -2157,7 +2119,11 @@ const buildRows = async (
           aborted: true,
         });
       }
-      return await Promise.reject(capturedResult.error);
+      return await Promise.reject(
+        capturedResult.error instanceof Error
+          ? capturedResult.error
+          : new Error(String(capturedResult.error)),
+      );
     }
     const captured = capturedResult.value;
     if (captured.type === "item_build_failed") {

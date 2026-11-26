@@ -1318,6 +1318,7 @@ const receive = async ({
           },
     redirect: "error",
     fetchStage,
+    refusalScope: fetchStage === "listing" ? "source" : "document",
     adapterKey: ADAPTER_KEYS.PL_KIO,
     retryPolicy: "publisher-backoff",
     signal,

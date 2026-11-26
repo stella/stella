@@ -59,13 +59,11 @@ import { panic, Result } from "better-result";
  * months (`undated|<boundary id>|<page>`) and the ledger holds it as a slice
  * of its own, ahead of the first month.
  */
-import { BodyByteLimitError } from "@stll/fetch/body-reader";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { createSha256, sha256Hex as hashContent } from "@stll/sha256/bun";
-import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
@@ -75,7 +73,6 @@ import {
   readPublisher,
   unreadPublisherError,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import { rethrowCycleStop } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   parsePlKisDocumentHtml,
@@ -93,11 +90,7 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import type { TextField } from "@/api/lib/case-law/decision-text";
-import {
-  type ReadOutcome,
-  readPresent,
-  readUnavailable,
-} from "@/api/lib/errors/read-outcome";
+import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
@@ -692,6 +685,7 @@ const fetchEureka = async (
     ...(init.body === undefined ? {} : { body: init.body }),
     redirect: "error",
     fetchStage,
+    refusalScope: fetchStage === "listing" ? "source" : "document",
     adapterKey: ADAPTER_KEYS.PL_KIS,
     retryPolicy: "publisher-backoff",
     signal,
@@ -701,48 +695,15 @@ const fetchEureka = async (
     return { outcome: responseOutcome, url };
   }
   const { body, status } = responseOutcome.value;
-  if (body === null) {
-    return {
-      outcome: readUnavailable({ kind: "empty-body", status }),
-      url,
-    };
-  }
-  const read = await Result.tryPromise({
-    try: async () => await readCappedBytes(body, MAX_RESPONSE_BYTES),
-    catch: (error: unknown) => error,
-  });
-  if (Result.isError(read)) {
-    rethrowCycleStop(read.error, signal);
-    if (BodyByteLimitError.is(read.error)) {
-      return {
-        outcome: readUnavailable({
-          kind: "too-large",
-          maxBytes: read.error.limit,
-        }),
-        url,
-      };
-    }
-    return {
-      outcome: readUnavailable({ kind: "thrown", error: read.error }),
-      url,
-    };
-  }
-  if (read.value === null) {
-    return {
-      outcome: readUnavailable({
-        kind: "too-large",
-        maxBytes: MAX_RESPONSE_BYTES,
-      }),
-      url,
-    };
-  }
-  if (read.value.length === 0) {
-    return {
-      outcome: readUnavailable({ kind: "empty-body", status }),
-      url,
-    };
-  }
-  return { outcome: readPresent(read.value), url };
+  return {
+    outcome: await readCappedPublisherBytes({
+      body,
+      status,
+      maxBytes: MAX_RESPONSE_BYTES,
+      signal,
+    }),
+    url,
+  };
 };
 
 const requestError = (

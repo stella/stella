@@ -334,6 +334,7 @@ const request = async ({
         headers: { Accept: accept },
         redirect: "error",
         fetchStage,
+        refusalScope: fetchStage === "listing" ? "source" : "document",
         adapterKey: ADAPTER_KEYS.PL_UOKIK,
         retryPolicy: "publisher-backoff",
         signal,
@@ -356,7 +357,7 @@ const request = async ({
           ...(error.httpStatus === undefined
             ? {}
             : { httpStatus: error.httpStatus }),
-          ...(error.stopKind === undefined ? {} : { stopKind: error.stopKind }),
+          stopKind: error.stopKind,
         }),
       );
     }

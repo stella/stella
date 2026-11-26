@@ -312,7 +312,7 @@ const requestTk = async ({
           ...(error.httpStatus === undefined
             ? {}
             : { httpStatus: error.httpStatus }),
-          ...(error.stopKind === undefined ? {} : { stopKind: error.stopKind }),
+          stopKind: error.stopKind,
         }),
       );
     }
@@ -554,6 +554,24 @@ const openSession = async (
       if (Result.isError(parked)) {
         return parked;
       }
+      return landed;
+    }
+    const status =
+      landed.error.httpStatus ??
+      (landed.error.cause instanceof AdapterFetchError
+        ? landed.error.cause.httpStatus
+        : undefined);
+    if (status !== undefined) {
+      return Result.err(
+        new AdapterFetchError({
+          adapterKey: ADAPTER_KEYS.PL_TK,
+          cursor,
+          message: `ipo.trybunal.gov.pl: the portal opened no session (${status})`,
+          httpStatus: status,
+          stopKind: INGESTION_STOP_KIND.SOURCE_UNREACHABLE,
+          cause: landed.error,
+        }),
+      );
     }
     return landed;
   }
