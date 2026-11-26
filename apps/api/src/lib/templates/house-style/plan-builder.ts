@@ -369,8 +369,7 @@ const styleTarget = (
  * paragraph is one.
  */
 const runsOn = (block: DocxBlock, entry: LabelEntry | null): boolean =>
-  entry !== null &&
-  entry.titleBlockId === null &&
+  entry?.titleBlockId === null &&
   isRunningText(block.text.slice(entry.manualLength));
 
 /** One paragraph's style and what it asks of the numbering. */
