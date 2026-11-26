@@ -645,7 +645,8 @@ const batchOrdering = async ({
   const keys = planned.value;
   return {
     limit: concurrency,
-    keysOf: (_record, index) => keys[index] ?? [],
+    keysOf: (_record, index) =>
+      keys[index] ?? panic("A batch record lost its ordering key"),
   };
 };
 

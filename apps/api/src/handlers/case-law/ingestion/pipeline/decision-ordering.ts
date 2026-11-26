@@ -179,7 +179,7 @@ export const decisionOrderingKeys = (
  * Rows a batch reads to tell which stored decisions its records reach. A
  * batch naming more than this many is not split: it is written serially.
  */
-export const STORED_ORDERING_ROW_LIMIT = 4096;
+const STORED_ORDERING_ROW_LIMIT = 4096;
 
 type StoredDecisionRow = {
   id: SafeId<"caseLawDecision">;

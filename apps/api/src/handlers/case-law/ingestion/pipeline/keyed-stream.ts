@@ -80,7 +80,7 @@ export const streamKeyedInOrder = async function* <Item, Value>({
       const [outcome] = await Promise.allSettled([value]);
       hold(keys, -1);
       inFlight -= 1;
-      if (outcome?.status === "rejected") {
+      if (outcome.status === "rejected") {
         // The consumer receives this rejection at its index; nothing starts
         // in the meantime, so the slot it frees stays empty.
         closed = true;
