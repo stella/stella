@@ -1702,6 +1702,8 @@ const containsValue = (value: unknown, wanted: string): boolean => {
 const refersToCaller = (handler: string) =>
   REFERS_TO_CALLER.test(readSource(nodePath.join(API_HANDLERS, handler)));
 
+const SOURCE_SCAN_TIMEOUT_MS = 15_000;
+
 describe("per-user reads", () => {
   test("every read endpoint that refers to the caller is classified", () => {
     const unclassified = [...readHandlers()]
@@ -1720,31 +1722,44 @@ describe("per-user reads", () => {
     expect(missing).toEqual([]);
   });
 
-  test("every auth client list or get call is classified", () => {
-    const found = new Set(
-      listFiles(WEB_SOURCE).flatMap((path) =>
-        callChains(readSource(path), ["authClient"], path)
-          .map((chain) => chain.split("(")[0] ?? chain)
-          .filter((chain) => /\.(?:list|get)[A-Za-z]*$/u.test(chain)),
-      ),
-    );
+  // timeout: scans every apps/web source file, 2-5s under CI concurrency.
+  test(
+    "every auth client list or get call is classified",
+    () => {
+      const found = new Set(
+        listFiles(WEB_SOURCE).flatMap((path) =>
+          callChains(readSource(path), ["authClient"], path)
+            .map((chain) => chain.split("(")[0] ?? chain)
+            .filter((chain) => /\.(?:list|get)[A-Za-z]*$/u.test(chain)),
+        ),
+      );
 
-    expect([...found].toSorted()).toEqual(
-      Object.keys(AUTH_CLIENT_READS).toSorted(),
-    );
-  });
+      expect([...found].toSorted()).toEqual(
+        Object.keys(AUTH_CLIENT_READS).toSorted(),
+      );
+    },
+    SOURCE_SCAN_TIMEOUT_MS,
+  );
 
-  test("cached per-user reads are called only from the listed modules", () => {
-    const callers = webCallers();
-    for (const [handler, read] of Object.entries(ALL_READS)) {
-      const calledFrom = [
-        ...new Set(callsOf(read).flatMap((call) => callers.get(call) ?? [])),
-      ].toSorted();
-      const listed = "files" in read ? read.files.toSorted() : [];
+  // timeout: scans every apps/web source file, 2-5s under CI concurrency.
+  test(
+    "cached per-user reads are called only from the listed modules",
+    () => {
+      const callers = webCallers();
+      for (const [handler, read] of Object.entries(ALL_READS)) {
+        const calledFrom = [
+          ...new Set(callsOf(read).flatMap((call) => callers.get(call) ?? [])),
+        ].toSorted();
+        const listed = "files" in read ? read.files.toSorted() : [];
 
-      expect({ handler, calledFrom }).toEqual({ handler, calledFrom: listed });
-    }
-  });
+        expect({ handler, calledFrom }).toEqual({
+          handler,
+          calledFrom: listed,
+        });
+      }
+    },
+    SOURCE_SCAN_TIMEOUT_MS,
+  );
 
   test("their key factories put the user id in the key", () => {
     for (const [handler, read] of Object.entries(ALL_READS)) {
