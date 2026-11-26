@@ -835,7 +835,7 @@ describe("walking a month", () => {
     const seen = await stubPublisher({ listingStatus: 503 });
     const page = await plKioAdapter.fetchPage("2025-09:0+0", {});
     expect(Result.isError(page)).toBe(true);
-    expect(listingRequests(seen)).toHaveLength(3);
+    expect(listingRequests(seen)).toHaveLength(6);
   });
 
   test("a page yielding fewer rows than its count promises fails rather than advancing", async () => {
@@ -1083,7 +1083,7 @@ describe("walking a month", () => {
         if (url.endsWith("/Home/Details/30306")) {
           return html(courtless);
         }
-        return url.includes("/Home/Details/") ? html(plain) : html("");
+        return url.includes("/Home/Details/") ? html(plain) : html("<p>ok</p>");
       }),
     );
 
@@ -1153,7 +1153,7 @@ describe("walking the tail past the present month", () => {
         }
         return url.includes("/Home/Details/")
           ? html(await fixtureText("pl-kio-detail-13694.html"))
-          : html("");
+          : html("<p>ok</p>");
       }),
     );
     return seen;

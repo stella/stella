@@ -209,7 +209,7 @@ export const createCorpusFlipFixture = (runInTransaction: Runner) => {
         if (step.isErr() || page > 50) {
           panic(`Route census failed on ${indexId}`);
         }
-        if (step.value.type === "proven") {
+        if (step.value.advance.type === "proven") {
           break;
         }
       }

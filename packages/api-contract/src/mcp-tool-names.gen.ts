@@ -32,6 +32,7 @@ export const STELLA_MCP_TOOL_NAMES = [
   "create_template",
   "configure_template_fields",
   "preview_template_conditions",
+  "reformat_into_template",
   "list_documents",
   "read_document",
   "save_document",

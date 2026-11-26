@@ -23,7 +23,15 @@ export type DocxBlock = {
   /** Rendered automatic list label (`1.`, `a)`, `(ii)`, `Čl. 3`); null when
    *  the paragraph is not auto-numbered. Never part of `text`. */
   label: string | null;
-  numbering: { numId: number; ilvl: number; abstractNumId: number } | null;
+  /** `bullet`: the level prints a bullet, so the label is a mark,
+   *  whatever character stands for it, and no designator. Absent from a
+   *  manifest read before it was reported. */
+  numbering: {
+    numId: number;
+    ilvl: number;
+    abstractNumId: number;
+    bullet?: true;
+  } | null;
   styleId: string | null;
   styleName: string | null;
   outlineLevel: number | null;
@@ -113,6 +121,15 @@ export type TemplateStyle = {
   /** The paragraph alignment the style states (`w:jc`), inheritance
    *  resolved; null when none is stated. */
   alignment: string | null;
+  /** Whether the style sets its text in bold, inheritance and the
+   *  document's defaults resolved. Absent, like `size`, from an inspection
+   *  read before the look was reported. */
+  bold?: boolean;
+  /** The font size the style gives its text, in half-points, inheritance
+   *  and the document's defaults resolved; null when none states one. */
+  size?: number | null;
+  /** Whether the style keeps its paragraph with the next one. */
+  keepNext?: boolean;
   isDefault: boolean;
 };
 
@@ -436,6 +453,7 @@ const blockNumberingSchema = v.strictObject({
   numId: v.pipe(v.number(), v.integer()),
   ilvl: v.pipe(v.number(), v.integer(), v.minValue(0)),
   abstractNumId: v.pipe(v.number(), v.integer()),
+  bullet: v.exactOptional(v.literal(true)),
 });
 
 const blockSchema = v.strictObject({

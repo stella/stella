@@ -63,13 +63,15 @@ import type { ReferenceSuspicion } from "@/api/lib/templates/house-style/referen
 import {
   HOUSE_STYLE_ROLES,
   isBlankParagraph,
-  isBulletMark,
+  isBulleted,
 } from "@/api/lib/templates/house-style/role-proposer";
 import type {
   HouseStyleRole,
   RoleProposal,
 } from "@/api/lib/templates/house-style/role-proposer";
+import { LEVEL_ROLES } from "@/api/lib/templates/house-style/template-profile";
 import type {
+  ProfileListLevel,
   ProfileRoleTarget,
   TemplateHealthFinding,
   TemplateProfile,
@@ -188,6 +190,17 @@ type FormattingNoteItem =
    *  picture; the output is written without them, so numbers and text are
    *  text. The template's own findings are in its profile. */
   | { kind: "invisibleEffectsRemoved"; levels: number; styles: number }
+  /** The template's style for a numbered level sets it apart from its
+   *  sibling levels (bold, or another size). `blocks` paragraphs of the
+   *  role were placed in the sibling's style instead, on their own level of
+   *  the list. */
+  | {
+      kind: "levelStyleEvened";
+      role: HouseStyleRole;
+      styleId: string;
+      insteadStyleId: string;
+      blocks: number;
+    }
   | {
       kind: "templateBlocksKept";
       region: "keepBefore" | "contents";
@@ -349,23 +362,69 @@ const insideOf = (
             : [inner, ...insideOf(inner, blockById)];
         });
 
+/**
+ * The style a level the template sets apart from its siblings is placed
+ * in: the sibling's, unless the profile keeps the template's looks.
+ */
+const evenedStyle = (
+  { profile }: Context,
+  role: HouseStyleRole,
+  own: ProfileRoleTarget,
+): ProfileRoleTarget => {
+  if (profile.levelLooks === "asTemplate") {
+    return own;
+  }
+  const finding = (profile.health ?? NO_HEALTH).find(
+    (candidate) =>
+      candidate.kind === "levelSetApart" &&
+      candidate.role === role &&
+      candidate.styleId === own.styleId,
+  );
+  if (finding?.kind !== "levelSetApart") {
+    return own;
+  }
+  const sibling = LEVEL_ROLES.map((level) => profile.roles[level]).find(
+    (target) => target?.styleId === finding.insteadStyleId,
+  );
+  return {
+    ...own,
+    styleId: finding.insteadStyleId,
+    alignment: sibling?.alignment ?? own.alignment,
+  };
+};
+
 const styleTarget = (
-  { profile, stylelessRoles }: Context,
+  context: Context,
   role: HouseStyleRole,
 ): ProfileRoleTarget | null => {
+  const { profile, stylelessRoles } = context;
   const own = profile.roles[role];
   if (own !== null) {
-    return own;
+    return evenedStyle(context, role, own);
   }
   stylelessRoles.set(role, (stylelessRoles.get(role) ?? 0) + 1);
   for (const fallback of STYLE_FALLBACK[role]) {
     const target = profile.roles[fallback];
     if (target !== null) {
-      return target;
+      return evenedStyle(context, fallback, target);
     }
   }
   return null;
 };
+
+/**
+ * The level a role without one of its own stands beside: the level of the
+ * role whose style it borrows. A bullet borrows the style of unnumbered
+ * text, which has no level; it hangs where the template's lettered items
+ * do, from the start of the text they belong to.
+ */
+const borrowedLevelOf = (
+  profile: TemplateProfile,
+  target: ProfileRoleTarget | null,
+  bulleted: boolean,
+): ProfileListLevel | null =>
+  target?.numbering ??
+  (bulleted ? (profile.roles.letter?.numbering ?? null) : null);
 
 /**
  * Whether a paragraph numbered like an article is running text and no
@@ -396,13 +455,15 @@ const placementOf = (
       ? styleTarget(context, "body")
       : styleTarget(context, styleRole);
   const mark = (block.label ?? "").trim();
-  const bulleted = entry === null && isBulletMark(mark);
+  const bulleted = entry === null && isBulleted(block);
   const placement: Placement = {
     block,
     role,
     entry,
     styleId: target?.styleId ?? null,
     level: entry === null && !bulleted ? null : ownLevel,
+    borrowedLevel:
+      ownLevel === null ? borrowedLevelOf(profile, target, bulleted) : null,
     sourceLabel: null,
     pattern: null,
     ordinal: null,
@@ -828,6 +889,49 @@ const pageStartsOf = (
   return starts;
 };
 
+/** Where the text of a placed paragraph starts, from the left margin. */
+const textStartOf = (
+  { profile }: Context,
+  { entry, level, borrowedLevel, role }: Placement,
+): number => {
+  const numberedAt = level ?? borrowedLevel;
+  if (entry !== null && numberedAt !== null) {
+    return numberedAt.indent.left ?? 0;
+  }
+  // Unnumbered text of a provision stands under the text of its clause.
+  return role === "continuation"
+    ? (profile.roles.clause1?.numbering?.indent.left ?? 0)
+    : 0;
+};
+
+/**
+ * A bullet that borrows its level hangs from the paragraph its list
+ * belongs to: its mark stands where that paragraph's text starts, its text
+ * one hanging step further.
+ */
+const hangBullet = (
+  context: Context,
+  bullet: Placement,
+  lead: Placement | null,
+): void => {
+  const beside = bullet.borrowedLevel;
+  if (beside === null || bullet.pattern?.numFmt !== "bullet" || lead === null) {
+    return;
+  }
+  const step = beside.indent.hanging ?? beside.indent.left ?? 0;
+  if (step <= 0) {
+    return;
+  }
+  bullet.borrowedLevel = {
+    ...beside,
+    indent: {
+      left: textStartOf(context, lead) + step,
+      hanging: step,
+      firstLine: null,
+    },
+  };
+};
+
 const HEADING_TEXT_MAX = 160;
 
 /**
@@ -916,9 +1020,12 @@ const placeParagraphs = (context: Context): Placed => {
   };
   /** The paragraph placed last at the top level; a table ends the run. */
   let lastPlaced: string | null = null;
+  /** The paragraph in front of a list of bullets. */
+  let lead: Placement | null = null;
   for (const block of topLevel) {
     if (block.kind === "table") {
       lastPlaced = null;
+      lead = null;
       for (const inner of insideOf(block, blockById)) {
         const role = inner.kind === "paragraph" ? roleOf(context, inner) : null;
         // A cell paragraph without a reading is placed with its table.
@@ -966,6 +1073,11 @@ const placeParagraphs = (context: Context): Placed => {
       placement.numbered = false;
       placement.level = null;
       placement.keptReason = null;
+    }
+    if (placement.pattern?.numFmt === "bullet") {
+      hangBullet(context, placement, lead);
+    } else {
+      lead = placement;
     }
     placed.placements.push(placement);
     lastPlaced = block.id;
@@ -1535,10 +1647,12 @@ const markReferences = ({
   // fill the document with false alarms: it is reported, not highlighted.
   // An annex is headed in words, not by a list, so a missing annex is
   // marked either way.
-  const labelled = blocks.filter((block) => {
-    const label = printedLabel(block);
-    return block.kind === "paragraph" && label !== null && !isBulletMark(label);
-  });
+  const labelled = blocks.filter(
+    (block) =>
+      block.kind === "paragraph" &&
+      printedLabel(block) !== null &&
+      !isBulleted(block),
+  );
   const unread = labelled.filter(({ id }) => !index.entryByBlockId.has(id));
   const numberingRead =
     unread.length <= labelled.length * UNREAD_LABELS_SHARE_MAX;
@@ -1930,13 +2044,30 @@ export const buildTemplatePlan = ({
   noteReadings(context, placed, references, suspicions);
 
   const health = profile.health ?? NO_HEALTH;
-  if (health.length > 0) {
-    context.items.push({
-      kind: "invisibleEffectsRemoved",
-      levels: health.filter(({ kind }) => kind === "numberDrawnAsPicture")
-        .length,
-      styles: health.filter(({ kind }) => kind === "textDrawnAsPicture").length,
-    });
+  const drawn = {
+    levels: health.filter(({ kind }) => kind === "numberDrawnAsPicture").length,
+    styles: health.filter(({ kind }) => kind === "textDrawnAsPicture").length,
+  };
+  if (drawn.levels > 0 || drawn.styles > 0) {
+    context.items.push({ kind: "invisibleEffectsRemoved", ...drawn });
+  }
+  for (const finding of health) {
+    const evened =
+      finding.kind === "levelSetApart" && profile.levelLooks !== "asTemplate"
+        ? placed.placements.filter(
+            ({ role, styleId }) =>
+              role === finding.role && styleId === finding.insteadStyleId,
+          ).length
+        : 0;
+    if (finding.kind === "levelSetApart" && evened > 0) {
+      context.items.push({
+        kind: "levelStyleEvened",
+        role: finding.role,
+        styleId: finding.styleId,
+        insteadStyleId: finding.insteadStyleId,
+        blocks: evened,
+      });
+    }
   }
   const lineBreakSpacing = keepsLineBreakSpacing(
     context,

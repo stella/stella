@@ -235,7 +235,13 @@ export const printedLabel = ({
   label === null || label.trim() === "" ? null : label;
 
 const readLabel = (block: DocxBlock): RawLabel | null => {
-  if (block.kind !== "paragraph" || isContentsBlock(block)) {
+  // A bullet's mark is no designator, even when it is a letter (a font's
+  // `o` for the second level of a bulleted list).
+  if (
+    block.kind !== "paragraph" ||
+    isContentsBlock(block) ||
+    block.numbering?.bullet === true
+  ) {
     return null;
   }
   const label = printedLabel(block);

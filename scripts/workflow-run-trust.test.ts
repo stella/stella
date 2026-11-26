@@ -991,6 +991,11 @@ const ALERT_ONLY_TOKEN_DISPATCHES: Record<string, string[]> = {
     "network-baseline-record.yml",
   ],
   "release.yml#Dispatch release-health.yml": ["release-health.yml"],
+  // A failed catch-up publication still stops the next cut at its
+  // npm-publish-lag gate.
+  "release-npm-catch-up.yml#Dispatch the CLI publication when npm lacks it": [
+    "publish-npm.yml",
+  ],
 };
 
 // Built, not written literally: a `${...}` in a plain string reads as a

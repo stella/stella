@@ -1,0 +1,96 @@
+name: Release npm catch-up
+
+defaults:
+  run:
+    shell: bash
+
+# Stable CLI publication runs when the final release run completes, and it
+# refuses until the release pull request has landed on main. When that pull
+# request lands later, nothing else retries the publication and the next
+# release cut stops at its npm-publish-lag gate. Once a release pull request
+# merges and its final tag exists, this dispatches the manual CLI publication
+# for that tag if npm does not serve the tag's CLI version yet. Before the final
+# tag exists, the final release run publishes on its own.
+on:
+  pull_request:
+    branches: [main]
+    types: [closed]
+
+# A pull request closes once, so cancelling a superseded run never drops one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  publish-cli:
+    if: >-
+      github.event.pull_request.merged == true
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && startsWith(github.event.pull_request.head.ref, 'release/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Dispatch the CLI publication when npm lacks it
+        timeout-minutes: 3
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        with:
+          retries: 3
+          script: |
+            // scripts/release-branch.sh owns this name.
+            const match = /^release\/v(\d+\.\d+\.\d+)$/u.exec(process.env.HEAD_REF ?? "");
+            if (match === null) {
+              core.info(`${process.env.HEAD_REF} is not a release branch.`);
+              return;
+            }
+            const tag = `v${match[1]}`;
+            try {
+              await github.rest.git.getRef({ ...context.repo, ref: `tags/${tag}` });
+            } catch (error) {
+              if (error.status === 404) {
+                core.info(`${tag} is not tagged yet; its final release run publishes the CLI.`);
+                return;
+              }
+              throw error;
+            }
+            const { data: manifest } = await github.rest.repos.getContent({
+              ...context.repo,
+              path: "packages/cli/package.json",
+              ref: `refs/tags/${tag}`,
+            });
+            const { version } = JSON.parse(
+              Buffer.from(manifest.content, manifest.encoding).toString("utf8"),
+            );
+            if (typeof version !== "string" || !/^\d+\.\d+\.\d+$/u.test(version)) {
+              throw new Error(`${tag} carries no stable CLI version.`);
+            }
+            const registry = `https://registry.npmjs.org/@stll%2fcli/${version}`;
+            let status = 0;
+            for (let attempt = 1; attempt <= 3; attempt += 1) {
+              const response = await fetch(registry, {
+                signal: AbortSignal.timeout(20_000),
+              }).catch(() => null);
+              status = response?.status ?? 0;
+              if (status === 200 || status === 404) break;
+              await new Promise((resolve) => setTimeout(resolve, attempt * 5_000));
+            }
+            if (status === 200) {
+              core.info(`npm already serves @stll/cli@${version} (${tag}).`);
+              return;
+            }
+            if (status !== 404) {
+              throw new Error(`npm did not answer for @stll/cli@${version} (status ${status}).`);
+            }
+            await github.rest.actions.createWorkflowDispatch({
+              ...context.repo,
+              workflow_id: "publish-npm.yml",
+              ref: "main",
+              inputs: { package: "cli", publish: "true", release_ref: tag },
+            });
+            core.notice(`Dispatched the @stll/cli@${version} publication for ${tag}.`);

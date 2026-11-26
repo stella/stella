@@ -6755,6 +6755,223 @@
   },
   {
     "cli": {
+      "command": ["template", "reformat"],
+      "additionalScopes": ["templates", "read"],
+      "requestTimeoutMs": 120000,
+      "scope": "documents_write"
+    },
+    "name": "reformat_into_template",
+    "description": "Apply an organisation template's house style to a stored DOCX and save the result as a new document beside it; the source is not changed. The text is carried over verbatim: styles, numbering, headers and footers come from the template, and a cross-reference whose target is certain becomes a field. Omit template_id to use the matching template tagged \"house-style\". A document that cannot be reformatted without changing its text (tracked changes, a number the template would not show) is refused and nothing is saved. Returns the new document and a formatting note: counts, what stayed text, template findings.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["entity_id"],
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Document entity ID to reformat"
+        },
+        "version_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Reformat this version instead of the current one"
+        },
+        "template_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Template ID from list_templates; omit to use the organisation's template tagged \"house-style\" that fits the document"
+        },
+        "numbering": {
+          "enum": ["keep_source", "house_scheme"],
+          "type": "string",
+          "description": "keep_source (default) keeps every number the document shows; house_scheme renumbers in the template's scheme"
+        },
+        "accept_suggested_decisions": {
+          "type": "boolean",
+          "description": "Link a cross-reference whose target the rules clearly prefer; by default an uncertain one stays text"
+        }
+      }
+    },
+    "outputSchema": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "entityId": {
+              "type": "string"
+            },
+            "entityVersionId": {
+              "type": "string"
+            },
+            "fileName": {
+              "type": "string"
+            },
+            "template": {
+              "type": "object",
+              "properties": {
+                "templateId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "selection": {
+                  "examples": ["given", "automatic"],
+                  "type": "string"
+                }
+              },
+              "required": ["templateId", "name", "selection"]
+            },
+            "note": {
+              "type": "object",
+              "properties": {
+                "numbering": {
+                  "examples": ["keep_source", "house_scheme"],
+                  "type": "string"
+                },
+                "counts": {
+                  "type": "object",
+                  "properties": {
+                    "paragraphsPlaced": {
+                      "type": "integer"
+                    },
+                    "paragraphsOmitted": {
+                      "type": "integer"
+                    },
+                    "paragraphsNumbered": {
+                      "type": "integer"
+                    },
+                    "labelsWrittenAsText": {
+                      "type": "integer"
+                    },
+                    "referencesLinked": {
+                      "type": "integer"
+                    },
+                    "referencesKeptAsText": {
+                      "type": "integer"
+                    },
+                    "referencesHighlighted": {
+                      "type": "integer"
+                    },
+                    "footnotes": {
+                      "type": "integer"
+                    },
+                    "endnotes": {
+                      "type": "integer"
+                    },
+                    "fieldsFrozen": {
+                      "type": "integer"
+                    },
+                    "fillerLeft": {
+                      "type": "integer"
+                    },
+                    "commentsDropped": {
+                      "type": "integer"
+                    },
+                    "sectionBreaksDropped": {
+                      "type": "integer"
+                    },
+                    "repairs": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "paragraphsPlaced",
+                    "paragraphsOmitted",
+                    "paragraphsNumbered",
+                    "labelsWrittenAsText",
+                    "referencesLinked",
+                    "referencesKeptAsText",
+                    "referencesHighlighted",
+                    "footnotes",
+                    "endnotes",
+                    "fieldsFrozen",
+                    "fillerLeft",
+                    "commentsDropped",
+                    "sectionBreaksDropped",
+                    "repairs"
+                  ]
+                },
+                "pages": {
+                  "type": "object",
+                  "properties": {
+                    "source": {
+                      "type": ["integer", "null"]
+                    },
+                    "output": {
+                      "type": ["integer", "null"]
+                    }
+                  },
+                  "required": ["source", "output"]
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "itemsOmitted": {
+                  "type": "integer"
+                },
+                "templateHealth": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                }
+              },
+              "required": [
+                "numbering",
+                "counts",
+                "pages",
+                "items",
+                "itemsOmitted",
+                "templateHealth"
+              ]
+            }
+          },
+          "required": [
+            "entityId",
+            "entityVersionId",
+            "fileName",
+            "template",
+            "note"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "applied": {
+              "examples": [true],
+              "type": "boolean"
+            },
+            "resultOmitted": {
+              "examples": [true],
+              "type": "boolean"
+            },
+            "reason": {
+              "examples": ["result_too_large"],
+              "type": "string"
+            }
+          },
+          "required": ["applied", "resultOmitted", "reason"]
+        }
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "title": "Reformat into template",
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    }
+  },
+  {
+    "cli": {
       "command": ["document", "list"],
       "scope": "read",
       "itemsKey": "documents"

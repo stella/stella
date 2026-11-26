@@ -127,6 +127,10 @@
               "cache_control": null
             },
             {
+              "name": "reformat_into_template",
+              "cache_control": null
+            },
+            {
               "name": "save_document",
               "cache_control": null
             },
@@ -380,6 +384,10 @@
             },
             {
               "name": "configure_template_fields",
+              "cache_control": null
+            },
+            {
+              "name": "reformat_into_template",
               "cache_control": null
             },
             {

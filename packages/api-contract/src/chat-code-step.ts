@@ -79,6 +79,7 @@ const SCRIPT_READ_AREA = {
   read_provision_history: "legislation",
   read_statute: "legislation",
   read_statute_provisions: "legislation",
+  reformat_into_template: "other",
   remove_matter_member: "other",
   resolve_case_law_decision: "caseLaw",
   resolve_law_citation: "legislation",
