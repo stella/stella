@@ -251,22 +251,39 @@ describe("folioTemplatePlanEngine", () => {
     ).toEqual(["cyan", "yellow"]);
   });
 
-  test("names the refusal of a document with tracked changes", async () => {
+  test("formats one view of a document with tracked changes: accepted unless the caller asks for the rejected one", async () => {
     const tracked = await docx({
-      body: `<w:p><w:ins w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:t>Inserted.</w:t></w:r></w:ins></w:p>`,
+      body: `<w:p><w:r><w:t xml:space="preserve">Kept </w:t></w:r><w:ins w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:t>inserted</w:t></w:r></w:ins><w:del w:id="2" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:delText>deleted</w:delText></w:r></w:del><w:r><w:t>.</w:t></w:r></w:p>`,
       styles: "",
       numbering: "",
     });
-    const result = await formatOntoTemplate({
-      engine: folioTemplatePlanEngine,
-      source: tracked,
-      template: await template(),
-      mode: "keepSource",
-      resolveAmbiguities: resolveAmbiguitiesByRule,
-    });
-    expect(result.isErr() && result.error).toMatchObject({
-      _tag: "TemplateEngineError",
-      reason: "tracked-changes",
-    });
+    const textOf = async (view?: "accept" | "reject") => {
+      const formatted = (
+        await formatOntoTemplate({
+          engine: folioTemplatePlanEngine,
+          source: tracked,
+          template: await template(),
+          mode: "keepSource",
+          resolveAmbiguities: resolveAmbiguitiesByRule,
+          ...(view === undefined ? {} : { trackedChanges: view }),
+        })
+      ).unwrap();
+      expect(formatted.plan.trackedChanges).toBe(view ?? "accept");
+      expect(formatted.note.items.at(0)).toMatchObject({
+        kind: "trackedChangesResolved",
+        view: view ?? "accept",
+        stated: view !== undefined,
+      });
+      const output = (
+        await folioTemplatePlanEngine.analyze(formatted.docx)
+      ).unwrap();
+      // The output states no change of its own.
+      expect(output.trackedChanges).toBe(0);
+      return output.blocks
+        .map(({ text }) => text)
+        .filter((text) => text !== "");
+    };
+    expect(await textOf()).toContain("Kept inserted.");
+    expect(await textOf("reject")).toContain("Kept deleted.");
   });
 });
