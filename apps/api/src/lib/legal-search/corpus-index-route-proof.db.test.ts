@@ -20,6 +20,8 @@ import {
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerations,
@@ -46,6 +48,7 @@ import {
   type CorpusIndexRouteProofAdvance,
   type CorpusIndexRouteProofWorkUnit,
 } from "@/api/lib/legal-search/corpus-index-route-proof";
+import { CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS } from "@/api/lib/legal-search/corpus-index-route-proof-contract";
 import {
   checkCorpusIndexRouteProofIncarnations,
   type CorpusIndexGenerationRouteProofs,
@@ -295,6 +298,13 @@ const readVerdict = async (options?: { maxAgeHours?: number }) =>
   await runInTransaction(
     async (tx) => await readCorpusIndexRouteProofsTx(tx, ROUTE, options),
   );
+
+/** An interval of `hours` hours, to move a fixture's clock columns back. */
+const hoursInterval = (hours: number) =>
+  sql`make_interval(secs => ${Math.round(hours * 3600)})`;
+
+/** Hours past the maximum age: a pass started this long ago proves nothing. */
+const PAST_MAX_AGE_HOURS = CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS + 1;
 
 /** The judged status of one declared route. */
 const statusOf = async (indexId: string = ROUTE.indexId) => {
@@ -908,14 +918,48 @@ describe("route readiness proof", () => {
   test("a proof expires counted from the start of its pass, not its end", async () => {
     await seedApplied(0);
     await advanceUntilProven();
-    // A pass that took 25 hours ended a minute ago.
-    await db
-      .update(corpusIndexRouteProofs)
-      .set({
-        provenPassStartedAt: sql`proven_pass_started_at - INTERVAL '25 hours'`,
-      })
-      .where(eq(corpusIndexRouteProofs.indexId, ROUTE.indexId));
+    // A pass that took this many hours ended a moment ago.
+    const passTook = async (hours: number) =>
+      await db
+        .update(corpusIndexRouteProofs)
+        .set({
+          provenPassStartedAt: sql`clock_timestamp() - ${hoursInterval(hours)}`,
+        })
+        .where(eq(corpusIndexRouteProofs.indexId, ROUTE.indexId));
+    await passTook(CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS - 0.1);
+    expect((await statusOf()).type).toBe("current");
+    // A reader may tighten the bound below the proof's age.
+    expect(
+      (
+        await readVerdict({
+          maxAgeHours: CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS - 1,
+        })
+      ).type,
+    ).toBe("not_ready");
+    await passTook(CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS + 0.1);
     expect((await statusOf()).type).toBe("expired");
+  });
+
+  test("a reader may never loosen the bound past the maximum age", async () => {
+    await seedApplied(0);
+    await advanceUntilProven();
+    expect(
+      (
+        await readVerdict({
+          maxAgeHours: CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS,
+        })
+      ).type,
+    ).toBe("all_current");
+    for (const maxAgeHours of [
+      CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS + 0.1,
+      0,
+      Number.POSITIVE_INFINITY,
+    ]) {
+      // db-await-in-loop: each bound is refused before any query runs
+      expect(await rejectionOf(readVerdict({ maxAgeHours }))).toMatchObject({
+        message: expect.stringContaining("Route proof age outside its bound"),
+      });
+    }
   });
 
   test("an open pass too old to prove is started over without revoking, and the pass that follows proves the route fresh", async () => {
@@ -924,13 +968,14 @@ describe("route readiness proof", () => {
       await seedApplied(index);
     }
     await advanceUntilProven();
-    // The next pass walked one page, then nothing picked it up for 25 hours.
+    // The next pass walked one page, then nothing picked it up for longer
+    // than the maximum age.
     expect((await advance()).type).toBe("advanced");
     await db
       .update(corpusIndexRouteProofs)
       .set({
-        passStartedAt: sql`pass_started_at - INTERVAL '25 hours'`,
-        provenPassStartedAt: sql`proven_pass_started_at - INTERVAL '25 hours'`,
+        passStartedAt: sql`pass_started_at - ${hoursInterval(PAST_MAX_AGE_HOURS)}`,
+        provenPassStartedAt: sql`proven_pass_started_at - ${hoursInterval(PAST_MAX_AGE_HOURS)}`,
       })
       .where(eq(corpusIndexRouteProofs.indexId, ROUTE.indexId));
     expect((await statusOf()).type).toBe("expired");
@@ -958,7 +1003,7 @@ describe("route readiness proof", () => {
           passNumber: 3,
           abandonedPassNumber: 2,
           abandonedPassRows: 2,
-          abandonedPassAgeHours: 25,
+          abandonedPassAgeHours: PAST_MAX_AGE_HOURS,
         }),
       ]);
       // A restart is not a revocation: the old proof still reads expired.
@@ -999,7 +1044,9 @@ describe("route readiness proof", () => {
     // Old, but still young enough for its end to prove the route.
     await db
       .update(corpusIndexRouteProofs)
-      .set({ passStartedAt: sql`pass_started_at - INTERVAL '23 hours'` })
+      .set({
+        passStartedAt: sql`pass_started_at - ${hoursInterval(CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS - 1)}`,
+      })
       .where(eq(corpusIndexRouteProofs.indexId, ROUTE.indexId));
 
     expect(stepName(await advance())).toBe("present:advanced");
