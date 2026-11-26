@@ -237,6 +237,10 @@ export type FormattingNoteItem =
    *  as headings (a provision that is only a title, a heading of the source
    *  placed as text) stay on the page of that paragraph. */
   | { kind: "linesKeptWithNext"; blocks: number }
+  /** A letter's closing was kept together: `blocks` paragraphs (the end of
+   *  the text, the line the letter closes with, the signatory's lines) stay
+   *  on one page, so no name stands alone on a last page. */
+  | { kind: "closingKeptTogether"; blocks: number }
   /** `blocks` paragraphs whose number is text hang like the paragraphs the
    *  list numbers on their level: the number stands out, the text is
    *  aligned under itself. */
@@ -647,6 +651,8 @@ type Placed = {
   pageStarts: Set<string>;
   /** Placed paragraphs that stay on the page of the one after them. */
   keptWithNext: Set<string>;
+  /** The paragraphs of a letter's closing that stay with the next one. */
+  closingLines: Set<string>;
   /** The tab stops placed paragraphs get of their own. */
   tabStops: Map<string, number[]>;
   /** Where the lines of a paragraph set under an item start. */
@@ -1584,6 +1590,60 @@ const keepLinesWithBody = (context: Context, placed: Placed): void => {
   }
 };
 
+/** The line a letter closes with: `S pozdravem`, `Yours sincerely`, `Mit
+ *  freundlichen Grüßen`, with or without its comma. */
+const VALEDICTION =
+  /^(?:s[ \u00A0](?:(?:přátelským|uctivým|srdečným)[ \u00A0])?(?:pozdravem|pozdravom)|s[ \u00A0](?:veškerou[ \u00A0])?úctou|s[ \u00A0]přáním[ \u00A0].{1,40}|yours[ \u00A0](?:sincerely|faithfully|truly)|(?:kind|best|warm)[ \u00A0]regards|sincerely(?:[ \u00A0]yours)?|mit[ \u00A0](?:freundlichen|besten|herzlichen)[ \u00A0]grüßen|hochachtungsvoll)[,.!]?$/iu;
+/** The lines a closing has at most under the line it closes with, and how
+ *  long such a line is: a name, a function, a firm. */
+const CLOSING_LINES_MAX = 6;
+const CLOSING_LINE_MAX = 80;
+
+/**
+ * A letter's closing stays on one page: the line the letter closes with,
+ * the signatory's lines under it, and the end of the paragraph in front of
+ * them. Otherwise a name can stand alone on a last page. A closing is read
+ * only at the end of the document: nothing but a few short lines follows the
+ * line it closes with, and no table.
+ */
+const keepClosingTogether = (context: Context, placed: Placed): void => {
+  const lines: DocxBlock[] = [];
+  let closesAt = -1;
+  for (const block of context.topLevel) {
+    if (block.kind === "table") {
+      closesAt = -1;
+      continue;
+    }
+    if (!placed.placementById.has(block.id)) {
+      continue;
+    }
+    if (VALEDICTION.test(block.text.trim())) {
+      closesAt = lines.length;
+    }
+    lines.push(block);
+  }
+  const under = closesAt === -1 ? [] : lines.slice(closesAt + 1);
+  if (
+    closesAt === -1 ||
+    under.length > CLOSING_LINES_MAX ||
+    under.some(({ text }) => text.trim().length > CLOSING_LINE_MAX)
+  ) {
+    return;
+  }
+  // The paragraph in front of the closing keeps its last lines with it.
+  for (const [position, line] of lines.entries()) {
+    const next = lines[position + 1];
+    if (
+      position >= closesAt - 1 &&
+      next !== undefined &&
+      !placed.pageStarts.has(next.id) &&
+      !context.keptSections.ends.has(line.id)
+    ) {
+      placed.closingLines.add(line.id);
+    }
+  }
+};
+
 /** A placement for every paragraph that gets one, in document order. */
 const placeParagraphs = (context: Context): Placed => {
   const { topLevel, blockById, index, exclusions, proposalById } = context;
@@ -1603,6 +1663,7 @@ const placeParagraphs = (context: Context): Placed => {
     omitted: new Map(),
     pageStarts: new Set(),
     keptWithNext: new Set(),
+    closingLines: new Set(),
     tabStops: new Map(),
     itemIndents: new Map(),
     alignments: new Map(),
@@ -1678,6 +1739,7 @@ const placeParagraphs = (context: Context): Placed => {
   keepHeadingsWithBody(context, placed);
   dropLoosePageStarts(context, placed, pageHolders);
   keepLinesWithBody(context, placed);
+  keepClosingTogether(context, placed);
   alignPartyLines(context, placed);
   indentContinuations(context, placed);
   alignFrontLines(context, placed);
@@ -2048,7 +2110,8 @@ const buildBody = (context: Context, placed: Placed, breaks: boolean): Body => {
       title: titleOf.get(block.id),
       breaks,
       pageStart: placed.pageStarts.has(block.id),
-      keepNext: placed.keptWithNext.has(block.id),
+      keepNext:
+        placed.keptWithNext.has(block.id) || placed.closingLines.has(block.id),
       tabStops: placed.tabStops.get(block.id),
       itemIndent: placed.itemIndents.get(block.id),
       alignment: placed.alignments.get(block.id),
@@ -2784,7 +2847,7 @@ const noteLanguages = (
 /** Says how many paragraphs were kept with the next and how many hang. */
 const noteParagraphOptions = (
   { items }: Context,
-  { keptWithNext, tabStops, itemIndents }: Placed,
+  { keptWithNext, closingLines, tabStops, itemIndents }: Placed,
   body: TemplatePlan["body"],
 ): void => {
   if (itemIndents.size > 0) {
@@ -2792,6 +2855,9 @@ const noteParagraphOptions = (
   }
   if (keptWithNext.size > 0) {
     items.push({ kind: "linesKeptWithNext", blocks: keptWithNext.size });
+  }
+  if (closingLines.size > 0) {
+    items.push({ kind: "closingKeptTogether", blocks: closingLines.size });
   }
   const hung = body.filter(
     (item) => item.kind === "source" && item.indent?.hanging !== undefined,
