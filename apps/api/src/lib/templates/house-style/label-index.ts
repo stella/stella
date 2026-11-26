@@ -144,6 +144,12 @@ const readAutoLabel = (block: DocxBlock, label: string): RawLabel | null => {
   };
 };
 
+/** A month's name behind a number and a period: the day of a date
+ *  (`24. Juni 2021`, `1. Januar`), not a label. Czech writes its months in
+ *  lower case, which no label is followed by anyway. */
+const MONTH_NAME =
+  /^(?:januar|jänner|februar|märz|april|mai|juni|juli|august|september|oktober|november|dezember|january|february|march|may|june|july|october|december)(?![\p{L}])/iu;
+
 /** A typed label is taken only when it is set off the way a label is; a
  *  sentence may open with a number (`10 dnů`, `1. ledna`). */
 const isTypedLabel = (shape: LabelShape, after: string): boolean => {
@@ -172,7 +178,7 @@ const isTypedLabel = (shape: LabelShape, after: string): boolean => {
       dotted ||
       bracketed ||
       blank.includes("\t") ||
-      (shape.period && !/^\p{Ll}/u.test(next))
+      (shape.period && !/^\p{Ll}/u.test(next) && !MONTH_NAME.test(next))
     );
   }
   if (shape.numeral === "upperRoman" || shape.numeral === "upperAmbiguous") {

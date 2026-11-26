@@ -122,6 +122,8 @@ describe("buildLabelIndex", () => {
       numbered("1.", "Text.", 1),
       "10 dnů před zahájením prací oznámí dodavatel termín.",
       "1. ledna 2030 nabývá smlouva účinnosti.",
+      "24. Juni 2021 mit gemeinsamen Bestimmungen für die Fonds.",
+      "1. January 2030 is the effective date.",
       "Článek 5 této smlouvy se použije obdobně.",
       "Příloha č. 1 této smlouvy obsahuje ceník.",
       "V Praze dne 1. 1. 2030",
