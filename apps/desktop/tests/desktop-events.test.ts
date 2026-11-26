@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
-
 beforeEach(() => {
   listenMock.mockReset();
 });
@@ -23,7 +21,9 @@ const noop = () => {};
 
 /** Lets the subscription promise and any teardown promise settle. */
 const settle = async () => {
-  await sleep(0);
+  for (let i = 0; i < 4; i += 1) {
+    await Promise.resolve();
+  }
 };
 
 describe("subscribeDesktopEvent", () => {

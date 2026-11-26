@@ -1,7 +1,6 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, jest, test } from "bun:test";
 
 import { BROWSER_CONTROL_LIMITS } from "@stll/api-contract/browser-control";
-import { sleep } from "@stll/concurrency/sleep";
 
 import { sortCommittedNavigation, sortNavigationTarget } from "./opened-tabs";
 import {
@@ -200,11 +199,17 @@ describe("controlled tab containment", () => {
   });
 
   test("a tab with no evidence of its owner stays confined, however long", async () => {
-    const { state } = await startControl();
-    await sleep(1200);
+    jest.useFakeTimers();
+    try {
+      const { state } = await startControl();
+      jest.advanceTimersByTime(1200);
+      await Promise.resolve();
 
-    expect(await readTabOwner(4)).toBe("unknown");
-    expect(confines(state.rules, 4)).toBe(true);
+      expect(await readTabOwner(4)).toBe("unknown");
+      expect(confines(state.rules, 4)).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test("a page the user opened, typed into or started from a new tab is theirs", async () => {
@@ -228,11 +233,21 @@ describe("controlled tab containment", () => {
 
   test("a late report that a controlled page opened the tab confines it, in either order", async () => {
     const { session, state } = await startControl();
-    // The user's evidence arrives first, the source report much later.
-    await sortCommittedNavigation(typed(9));
-    expect(await readTabOwner(9)).toBe("user");
-    await sleep(1200);
-    await sortNavigationTarget({ sourceTabId: CONTROLLED, tabId: 9, url: "" });
+    jest.useFakeTimers();
+    try {
+      // The user's evidence arrives first, the source report much later.
+      await sortCommittedNavigation(typed(9));
+      expect(await readTabOwner(9)).toBe("user");
+      jest.advanceTimersByTime(1200);
+      await Promise.resolve();
+      await sortNavigationTarget({
+        sourceTabId: CONTROLLED,
+        tabId: 9,
+        url: "",
+      });
+    } finally {
+      jest.useRealTimers();
+    }
 
     // Confined, but the user had it first, so it is not chat's.
     expect(await readTabOwner(9)).toBe("confined");

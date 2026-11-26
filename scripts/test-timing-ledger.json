@@ -420,39 +420,9 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
-    "id": "no-real-time-wait::apps/desktop/tests/desktop-events.test.ts::settle::@stll/concurrency/sleep#sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
     "id": "no-real-time-wait::apps/extension/e2e/containment.spec.ts::<module>::waitForTimeout",
     "count": 3,
     "reason": "Predates the rule: a fixed Playwright wait; wait on a locator, response or event instead."
-  },
-  {
-    "id": "no-real-time-wait::apps/extension/src/lib/download-guard.test.ts::<module>::@stll/concurrency/sleep#sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::apps/extension/src/lib/download-guard.test.ts::releaseReads::@stll/concurrency/sleep#sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::apps/extension/src/lib/download-guard.test.ts::settle::@stll/concurrency/sleep#sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::apps/extension/src/lib/download-scope.test.ts::settle::@stll/concurrency/sleep#sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::apps/extension/src/lib/tab-containment.test.ts::<module>::@stll/concurrency/sleep#sleep",
-    "count": 2,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
     "id": "no-real-time-wait::apps/web/e2e/journeys/inspector-layout.spec.ts::expectInteractive::node:timers/promises#setTimeout",
@@ -830,11 +800,6 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
-    "id": "no-real-time-wait::packages/business-registries/src/ares/client.test.ts::<module>::Bun.sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
     "id": "no-real-time-wait::packages/cli/src/mcp-client.test.ts::<module>::Bun.sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
@@ -852,11 +817,6 @@
   {
     "id": "no-real-time-wait::packages/concurrency/src/index.test.ts::operation::Bun.sleep",
     "count": 10,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::packages/errors/src/detached.test.ts::settle::@stll/concurrency/sleep#sleep",
-    "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
