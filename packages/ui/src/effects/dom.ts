@@ -118,10 +118,20 @@ export const useObservedValue = <E extends Element, T extends Flat>(
       return undefined;
     }
     const breaker = createOscillationBreaker();
+    // The subscription drops a value equal to the last one it admitted and
+    // runs the breaker once per real change, outside React's updater (which
+    // StrictMode may call twice); the updater stays pure.
+    let admitted: { readonly value: T } | null = null;
     return latestObserve.current(element, (next) => {
+      if (admitted !== null && flatEqual(admitted.value, next)) {
+        return;
+      }
+      if (!breaker.admit(next)) {
+        return;
+      }
+      admitted = { value: next };
       setSlot((current) =>
-        (current.element === element && flatEqual(current.value, next)) ||
-        !breaker.admit(next)
+        current.element === element && flatEqual(current.value, next)
           ? current
           : { element, value: next },
       );
@@ -207,7 +217,11 @@ export const useIntersecting = (
       }
       const observer = new IntersectionObserver(
         (entries) => {
-          const intersecting = entries.some((entry) => entry.isIntersecting);
+          // One delivery can hold several crossings: live observation follows
+          // the latest; `once` only needs to know the element got in at all.
+          const intersecting = once
+            ? entries.some((entry) => entry.isIntersecting)
+            : (entries.at(-1)?.isIntersecting ?? false);
           emit(intersecting);
           if (intersecting && once) {
             observer.disconnect();

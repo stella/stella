@@ -10,12 +10,13 @@ const previousActEnvironment: unknown = Reflect.get(
 );
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 const { act, cleanup, render } = await import("@testing-library/react");
-const { useState } = await import("react");
+const { StrictMode, useState } = await import("react");
 const {
   createOscillationBreaker,
   flatEqual,
   useLayoutMeasurement,
   useObjectUrl,
+  useObservedValue,
 } = await import("./dom");
 
 // A ResizeObserver the test drives by hand.
@@ -153,6 +154,50 @@ describe("useObjectUrl", () => {
       expect(revoked[0]).toBe(hrefs[0] ?? "");
     } finally {
       URL.revokeObjectURL = originalRevoke;
+    }
+  });
+});
+
+describe("useObservedValue", () => {
+  test("holds a layout feedback alternation under StrictMode", () => {
+    const errors: unknown[] = [];
+    const originalReportError = globalThis.reportError;
+    globalThis.reportError = (error: unknown) => {
+      errors.push(error);
+    };
+    const probe: { emit: ((value: number) => void) | null } = { emit: null };
+    try {
+      const Observed = () => {
+        const [element, setElement] = useState<HTMLDivElement | null>(null);
+        const value = useObservedValue<HTMLDivElement, number>(
+          element,
+          (_observed, emit) => {
+            probe.emit = emit;
+            return () => undefined;
+          },
+          [],
+          0,
+        );
+        return <div data-value={value} ref={setElement} />;
+      };
+      const { container } = render(
+        <StrictMode>
+          <Observed />
+        </StrictMode>,
+      );
+      act(() => {
+        for (let index = 0; index < 12; index += 1) {
+          probe.emit?.(index % 2 === 0 ? 100 : 117);
+        }
+      });
+      expect(errors).toHaveLength(1);
+      const held = container.querySelector("div")?.dataset["value"];
+      act(() => {
+        probe.emit?.(held === "100" ? 117 : 100);
+      });
+      expect(container.querySelector("div")?.dataset["value"]).toBe(held);
+    } finally {
+      globalThis.reportError = originalReportError;
     }
   });
 });
