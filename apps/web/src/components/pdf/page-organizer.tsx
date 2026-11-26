@@ -350,14 +350,13 @@ type PageThumbnailProps = {
 const PageThumbnail = ({ cleanScan, page, pageInfo }: PageThumbnailProps) => {
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
-  const [shouldRender, setShouldRender] = useState(false);
+  // Without IntersectionObserver every thumbnail renders at once.
+  const [shouldRender, setShouldRender] = useState(
+    () => typeof IntersectionObserver === "undefined",
+  );
 
   useExternalSyncEffect(() => {
     if (!container || shouldRender) {
-      return undefined;
-    }
-    if (typeof IntersectionObserver === "undefined") {
-      setShouldRender(true);
       return undefined;
     }
     const observer = new IntersectionObserver(
