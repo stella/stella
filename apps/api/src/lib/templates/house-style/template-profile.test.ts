@@ -370,4 +370,47 @@ describe("validateTemplateProfile", () => {
     expect(roles.clause2?.numbering).toMatchObject({ ilvl: 2 });
     expect(roles.clause3).toBeNull();
   });
+
+  test("reports text that a 3-D scene showing nothing turns into a picture", () => {
+    const template = contractTemplate();
+    const level = (abstractNumId: number, ilvl: number) =>
+      ({ kind: "level", abstractNumId, ilvl }) as const;
+    const { health } = inferTemplateProfile({
+      ...template,
+      invisibleEffects: [
+        { part: "word/numbering.xml", effect: "glow", owner: level(2, 0) },
+        { part: "word/numbering.xml", effect: "scene3d", owner: level(2, 0) },
+        { part: "word/numbering.xml", effect: "props3d", owner: level(2, 0) },
+        { part: "word/numbering.xml", effect: "scene3d", owner: level(2, 3) },
+        {
+          part: "word/styles.xml",
+          effect: "scene3d",
+          owner: { kind: "style", styleId: "Title" },
+        },
+        {
+          part: "word/styles.xml",
+          effect: "shadow",
+          owner: { kind: "style", styleId: "Body" },
+        },
+        {
+          part: "word/styles.xml",
+          effect: "scene3d",
+          owner: { kind: "defaults" },
+        },
+        {
+          part: "word/header1.xml",
+          effect: "scene3d",
+          owner: { kind: "text" },
+        },
+      ],
+    });
+
+    expect(health).toEqual([
+      { kind: "numberDrawnAsPicture", abstractNumId: 2, ilvl: 0 },
+      { kind: "numberDrawnAsPicture", abstractNumId: 2, ilvl: 3 },
+      { kind: "textDrawnAsPicture", styleId: "Title" },
+      { kind: "textDrawnAsPicture", styleId: null },
+    ]);
+    expect(inferTemplateProfile(template).health).toEqual([]);
+  });
 });

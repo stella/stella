@@ -64,6 +64,7 @@ import type {
 } from "@/api/lib/templates/house-style/role-proposer";
 import type {
   ProfileRoleTarget,
+  TemplateHealthFinding,
   TemplateProfile,
 } from "@/api/lib/templates/house-style/template-profile";
 
@@ -168,6 +169,11 @@ type FormattingNoteItem =
       blocks: number;
       alreadyStretched: number;
     }
+  /** The template carries text effects that show nothing on `levels` list
+   *  levels and `styles` styles, which would have their text drawn as a
+   *  picture; the output is written without them, so numbers and text are
+   *  text. The template's own findings are in its profile. */
+  | { kind: "invisibleEffectsRemoved"; levels: number; styles: number }
   | {
       kind: "templateBlocksKept";
       region: "keepBefore" | "contents";
@@ -221,6 +227,7 @@ export const NO_EXCLUSIONS: PlanExclusions = {
 /** A table whose cells the plan places as they are. */
 const NO_NESTED: readonly TemplatePlanNestedParagraph[] = [];
 const NO_SECTIONS: readonly DocxSection[] = [];
+const NO_HEALTH: readonly TemplateHealthFinding[] = [];
 
 const CLAUSE_ROLES = ["clause1", "clause2", "clause3"] as const;
 
@@ -1784,6 +1791,15 @@ export const buildTemplatePlan = ({
   );
   noteReadings(context, placed, references, suspicions);
 
+  const health = profile.health ?? NO_HEALTH;
+  if (health.length > 0) {
+    context.items.push({
+      kind: "invisibleEffectsRemoved",
+      levels: health.filter(({ kind }) => kind === "numberDrawnAsPicture")
+        .length,
+      styles: health.filter(({ kind }) => kind === "textDrawnAsPicture").length,
+    });
+  }
   const lineBreakSpacing = keepsLineBreakSpacing(
     context,
     manifest.compat,

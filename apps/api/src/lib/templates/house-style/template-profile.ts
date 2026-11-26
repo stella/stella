@@ -46,6 +46,21 @@ export type ProfileRoleTarget = {
 /** How a heading and its title share a paragraph in the template's sample. */
 type HeadingJoin = "sameLine" | "lineBreak";
 
+/**
+ * Something in the template a firm may want to mend at its source. The
+ * output is right either way; the finding says what the template itself
+ * does when a document is made from it by hand.
+ *
+ * `numberDrawnAsPicture`, `textDrawnAsPicture`: the run properties of a
+ * list level, or of a style or the document defaults, carry a 3-D scene
+ * that shows nothing. A word processor draws such text as a picture: in an
+ * exported document the number or the text cannot be found, copied or read
+ * aloud. Clearing the 3-D format on the level or style mends it.
+ */
+export type TemplateHealthFinding =
+  | { kind: "numberDrawnAsPicture"; abstractNumId: number; ilvl: number }
+  | { kind: "textDrawnAsPicture"; styleId: string | null };
+
 export type TemplateProfile = {
   version: 1;
   templateSha256: string;
@@ -88,6 +103,9 @@ export type TemplateProfile = {
    *  paragraph placed without a style takes; null when it states none.
    *  Absent from a profile inferred before it was read. */
   defaultAlignment?: string | null;
+  /** What the template could have mended at its source. Absent from a
+   *  profile inferred before the template was read for it. */
+  health?: TemplateHealthFinding[];
   confidence: number;
 };
 
@@ -767,6 +785,37 @@ const STRUCTURAL_ROLES = [
   "body",
 ] as const satisfies readonly HouseStyleRole[];
 
+/** The template's findings, each once, in the order the template has them. */
+const inferHealth = ({
+  invisibleEffects = [],
+}: TemplateInspection): TemplateHealthFinding[] => {
+  const findings = new Map<string, TemplateHealthFinding>();
+  for (const { effect, owner } of invisibleEffects) {
+    // Of the effects that show nothing only the 3-D scene changes how the
+    // text is written out.
+    if (effect !== "scene3d") {
+      continue;
+    }
+    if (owner.kind === "level") {
+      if (owner.abstractNumId !== null && owner.ilvl !== null) {
+        const { abstractNumId, ilvl } = owner;
+        findings.set(`level ${String(abstractNumId)} ${String(ilvl)}`, {
+          kind: "numberDrawnAsPicture",
+          abstractNumId,
+          ilvl,
+        });
+      }
+    } else if (owner.kind === "style" || owner.kind === "defaults") {
+      const styleId = owner.kind === "style" ? owner.styleId : null;
+      findings.set(`style ${styleId ?? ""}`, {
+        kind: "textDrawnAsPicture",
+        styleId,
+      });
+    }
+  }
+  return [...findings.values()];
+};
+
 /**
  * Infers a template's profile from its inspection. Deterministic: the same
  * template gives the same profile. Readings carry a confidence and their
@@ -875,6 +924,7 @@ export const inferTemplateProfile = (
       inspection.styles.find(
         ({ type, isDefault }) => type === "paragraph" && isDefault,
       )?.alignment ?? null,
+    health: inferHealth(inspection),
     // A template without sample text shows no role in use, and one whose
     // body runs in columns is not filled by column yet.
     confidence:
@@ -1019,6 +1069,8 @@ const FIELD_KINDS_MAX = 100;
 const INDENT_MAX = 31_680;
 
 const textSchema = v.pipe(v.string(), v.maxLength(TEXT_MAX));
+/** A list has nine levels; a template has some lists and some styles. */
+const HEALTH_FINDINGS_MAX = 2000;
 const idSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(TEXT_MAX));
 
 /** An indent in twentieths of a point; a negative one reaches into the margin. */
@@ -1117,6 +1169,24 @@ const profileSchema = v.strictObject({
     v.strictObject({ numbering: v.picklist(["list", "field", "typed"]) }),
   ),
   defaultAlignment: v.exactOptional(v.nullable(textSchema)),
+  health: v.exactOptional(
+    v.pipe(
+      v.array(
+        v.variant("kind", [
+          v.strictObject({
+            kind: v.literal("numberDrawnAsPicture"),
+            abstractNumId: v.pipe(v.number(), v.integer()),
+            ilvl: v.pipe(v.number(), v.integer(), v.minValue(0)),
+          }),
+          v.strictObject({
+            kind: v.literal("textDrawnAsPicture"),
+            styleId: v.nullable(textSchema),
+          }),
+        ]),
+      ),
+      v.maxLength(HEALTH_FINDINGS_MAX),
+    ),
+  ),
   confidence: confidenceSchema,
 });
 
