@@ -75,11 +75,13 @@ export const AIStep = ({
   // where either changes, never from an effect watching them.
   const commitRowStates = (
     next: RowStateMap,
-    nextProviders: readonly ProviderCredentialDraft[] = latestProviders.current,
+    nextProviders?: readonly ProviderCredentialDraft[],
   ) => {
     rowStatesRef.current = next;
     setRowStates(next);
-    onPreviewChange?.(createProviderPreview(nextProviders, next));
+    onPreviewChange?.(
+      createProviderPreview(nextProviders ?? latestProviders.current, next),
+    );
   };
   // The step reports the preview it opens with before it paints.
   useMountLayoutEffect(() => {
