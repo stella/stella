@@ -1144,11 +1144,11 @@ describe("buildTemplatePlan, running text numbered like articles", () => {
       styleId: "Clause1",
       numbering: { ilvl: PROFILE.roles.articleHeading?.numbering?.ilvl },
     });
-    // The one real heading among them is set like its siblings.
-    expect(itemOf(plan, manifest, "4.\tZávěrečná")?.styleId).toBe("Clause1");
+    // The heading among them stays a heading.
+    expect(itemOf(plan, manifest, "4.\tZávěrečná")?.styleId).toBe("Article");
     expect(
       note.items.filter(({ kind }) => kind === "articlesSetAsText"),
-    ).toEqual([{ kind: "articlesSetAsText", blocks: 4 }]);
+    ).toEqual([{ kind: "articlesSetAsText", blocks: 3 }]);
   });
 
   test("a document with headings keeps them", () => {
