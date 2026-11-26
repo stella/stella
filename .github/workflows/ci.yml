@@ -1027,7 +1027,13 @@ jobs:
           CHANGED_PATHS: ${{ runner.temp }}/api-test-changed-paths
           SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
-        run: bash scripts/ci/plan-query-perf-scope.sh
+        run: |
+          if [[ "$HEAVY_ONLY" == true ]]; then
+            echo "query_perf_required=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          QUERY_PERF_CHANGED_PATHS="$CHANGED_PATHS" QUERY_PERF_SCOPE_UNKNOWN="$SCOPE_UNKNOWN" \
+            bun scripts/query-perf-scope.ts >> "$GITHUB_OUTPUT"
 
       # One install serves every planner. The API test planners keep full
       # coverage when it is unavailable; heavy and thin-queue job derivation
@@ -1079,7 +1085,12 @@ jobs:
           CHANGED_PATHS: ${{ runner.temp }}/api-test-changed-paths
         # Every failure answers "changed": an unanswered question must not skip
         # the migration jobs, nor fail the plan for every pull request.
-        run: bash scripts/ci/select-schema-import-changes.sh
+        run: |
+          if answer=$(timeout --kill-after=10s 120s bun scripts/schema-import-changes.ts); then
+            echo "$answer" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Select schema import changes without the import graph
         id: schema-imports-fallback
@@ -1093,7 +1104,14 @@ jobs:
           CHANGED_PATHS: ${{ runner.temp }}/api-test-changed-paths
         # Any API or package source may reach the schema. grep exits 1 only for
         # "no match"; a missing list counts as changed.
-        run: bash scripts/ci/select-schema-import-changes-fallback.sh
+        run: |
+          status=0
+          grep -zEq '^(apps/api|packages)/.*\.tsx?$' "$CHANGED_PATHS" || status=$?
+          if [[ "$status" == 1 ]]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Combine migration job selection
         id: migration-scope
@@ -1102,7 +1120,14 @@ jobs:
           MIGRATION_PATHS: ${{ steps.changed-files.outputs.database_migrations_required }}
           SCHEMA_IMPORTS: ${{ steps.schema-imports.outputs.changed }}
           SCHEMA_IMPORTS_FALLBACK: ${{ steps.schema-imports-fallback.outputs.changed }}
-        run: bash scripts/ci/combine-migration-selection.sh
+        run: |
+          required=false
+          for answer in "$MIGRATION_PATHS" "$SCHEMA_IMPORTS" "$SCHEMA_IMPORTS_FALLBACK"; do
+            if [[ "$answer" == true ]]; then
+              required=true
+            fi
+          done
+          echo "database_migrations_required=$required" >> "$GITHUB_OUTPUT"
 
       - name: Require planner dependencies for job derivation
         if: steps.completed-depth.outputs.run_required != 'false' && (inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin')) && steps.planner-deps.outcome != 'success'
@@ -1200,12 +1225,28 @@ jobs:
           BASE_SHA: ${{ steps.target-base.outputs.base_sha }}
           EVENT_NAME: ${{ github.event_name }}
           API_SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
-        run: bash scripts/ci/select-root-check-inputs.sh
+        run: |
+          if ! timeout --kill-after=10s 120s bun scripts/ci-root-checks.ts; then
+            echo "::warning::Root check planning unavailable; retaining all checks."
+          fi
 
       - name: Refine Legal Atlas API source scope
         id: legal-atlas-scope
         if: steps.completed-depth.outputs.run_required != 'false' && steps.planner-deps.outcome == 'success' && steps.api-test-deps.outcome == 'success' && steps.changed-files.outputs.legal_atlas_image_required == 'true'
-        run: bash scripts/ci/refine-legal-atlas-scope.sh
+        run: |
+          changed_files=()
+          while IFS= read -r -d '' file; do
+            changed_files+=("$file")
+          done < "$RUNNER_TEMP/api-test-changed-paths"
+          # An unknown diff is already broad; an empty list must preserve it.
+          required=true
+          if (( ${#changed_files[@]} > 0 )); then
+            required=$(timeout --kill-after=10s 120s bun scripts/legal-atlas-image-scope.ts "${changed_files[@]}") || required=true
+          fi
+          if [[ "$required" != false ]]; then
+            required=true
+          fi
+          echo "api_source_required=$required" >> "$GITHUB_OUTPUT"
 
       - name: Select affected API test files
         id: api-test-selection
@@ -1292,7 +1333,16 @@ jobs:
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         env:
           MATCHED_KEY: ${{ steps.api-test-duration-cache.outputs.cache-matched-key }}
-        run: bash scripts/ci/resolve-api-test-durations.sh
+        run: |
+          key="$MATCHED_KEY"
+          [[ -n "$key" ]] || key="api-test-durations-$GITHUB_RUN_ID"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          if [[ -f "$RUNNER_TEMP/api-test-durations.json" ]]; then
+            echo "hash=$(sha256sum "$RUNNER_TEMP/api-test-durations.json" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          else
+            echo "hash=missing" >> "$GITHUB_OUTPUT"
+          fi
+          echo "API_TEST_DURATIONS_FILE=$RUNNER_TEMP/api-test-durations.json" >> "$GITHUB_ENV"
 
       - name: Upload planned API test durations
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
@@ -1366,7 +1416,27 @@ jobs:
         shell: bash
         env:
           SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
-        run: bash scripts/ci/select-changed-pr-e2e-shards.sh
+        run: |
+          set -euo pipefail
+          : "${RUNNER_TEMP:?RUNNER_TEMP must name the runner temporary directory}"
+          # An unknown change set selects every leg.
+          changed_files=()
+          [[ "${SCOPE_UNKNOWN:-false}" != true ]] || changed_files+=(--all)
+          if [[ -s "$RUNNER_TEMP/api-test-changed-paths" ]]; then
+            while IFS= read -r -d '' file; do
+              changed_files+=("$file")
+            done < "$RUNNER_TEMP/api-test-changed-paths"
+          fi
+          plan=$(bun scripts/e2e-spec-shards.ts select "${changed_files[@]}")
+          printf '%s\n' "$plan" > "$RUNNER_TEMP/e2e-pr-selection.json"
+          matrix=$(jq -c .matrix <<< "$plan")
+          mode=$(jq -r .status <<< "$plan")
+          specs=$(jq -c .specs <<< "$plan")
+          {
+            echo "matrix=$matrix"
+            echo "mode=$mode"
+            echo "specs=$specs"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Plan changed PR e2e shards
         id: e2e-pr-plan
@@ -1438,7 +1508,46 @@ jobs:
           HEAVY_PROOF_JOBS: &armed_proof_jobs '["migration-upgrade-rehearsal","release-typecheck","web-image-smoke","mobile-build","landing-build","route-smoke","stack-redaction-browsers","e2e-vite-canary","marketing-screenshots","api-image-smoke","legal-atlas-image","desktop-windows-dry-run","windows-scripts"]'
           CHANGED_SCOPE_PATH: ${{ runner.temp }}/changed-scope.json
           MERGE_GROUP_HEAVY_KEEP: '["migration-upgrade-rehearsal","e2e-report"]'
-        run: bash scripts/ci/resolve-suites-run.sh
+        run: |
+          armed_delta=false
+          if [[ "${NORMAL_REUSED:-}" == true && "${SUITE_DEPTH:-}" == fast && "${ROUTE_SMOKE_REQUIRED:-}" != true && "${MARKETING_REQUIRED:-}" != true ]]; then
+            armed_delta=true
+            RUN_REQUIRED=false
+          fi
+          heavy_proof=false
+          if [[ "${RUN_REQUIRED:-true}" != false || "$armed_delta" == true ]]; then
+            case "$EVENT_NAME" in
+              pull_request) [[ "${ARMED:-false}" != true ]] || heavy_proof=true ;;
+              merge_group)
+                heavy_proof=true
+                # The exact bound source payloads must cover every suite this
+                # group now requires; missing planner inputs retain all suites.
+                if [[ "${ARMED_PROOF:-}" == complete ]] && jq -ne \
+                  --argjson scopes "$ARMED_JOB_SCOPES" --slurpfile plans "$CHANGED_SCOPE_PATH" --argjson eligible "$HEAVY_PROOF_JOBS" \
+                  --argjson proven "$ARMED_PROOF_JOBS" --argjson keep "$MERGE_GROUP_HEAVY_KEEP" \
+                  --arg marketing "${MARKETING_REQUIRED:-false}" '
+                    ($plans[0] + {marketing_screenshots_required: $marketing}) as $planned
+                    | ($scopes | type == "object" and length > 0)
+                    and (($scopes | keys) == ($eligible | sort))
+                    and all($scopes[]; if . == null then true
+                      elif type == "string" then . as $scope | ($planned[$scope] == "true" or $planned[$scope] == "false")
+                      else false end)
+                    and ($proven | type == "array" and all(.[]; type == "string"))
+                    and all($scopes | to_entries[];
+                      (.key as $job | $keep | index($job)) != null
+                      or (.value != null and $planned[.value] == "false")
+                      or (.key as $job | $proven | index($job)) != null)' > /dev/null; then
+                  heavy_proof=false
+                fi
+                ;;
+              *) heavy_proof=true ;;
+            esac
+          fi
+          {
+            echo "run_required=$RUN_REQUIRED"
+            echo "armed_delta=$armed_delta"
+            echo "heavy_proof=$heavy_proof"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Plan API test files and shards
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
@@ -3071,9 +3180,16 @@ jobs:
           && needs.ci-plan.outputs.package_checks_required == 'true'
         # A file, not an environment variable: a large diff exceeds the size
         # limit of one variable and the step cannot start.
-        env:
-          CHANGED_FILES: ${{ needs.ci-plan.outputs.changed_files }}
-        run: bash scripts/ci/repeat-changed-tests.sh
+        run: |
+          # A changed test repeats in this shard, which never generates the API
+          # runtime; tests that bundle or import the API read it like their own
+          # jobs do.
+          bun --cwd=packages/cli run codegen:runtime
+          bun --cwd=apps/api run generate:capability-runtime
+          cat > "$RUNNER_TEMP/changed-files.json" <<'CHANGED_FILES_JSON'
+          ${{ needs.ci-plan.outputs.changed_files }}
+          CHANGED_FILES_JSON
+          CHANGED_FILES_PATH="$RUNNER_TEMP/changed-files.json" bun scripts/flake-gate.ts --blocking
 
       - name: Upload quarantined test outcomes
         if: >-
@@ -4133,7 +4249,16 @@ jobs:
         env:
           TARGET_BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
           PUSH_BEFORE_SHA: ${{ github.event.before }}
-        run: bash scripts/ci/select-statute-recall-base.sh
+        run: |
+          base="${TARGET_BASE_SHA:-$PUSH_BEFORE_SHA}"
+          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
+            bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags --depth=1 origin main
+            base="$(git rev-parse FETCH_HEAD)"
+          else
+            bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags --depth=1 origin "$base"
+          fi
+          git cat-file -e "$base^{commit}"
+          echo "STATUTE_RECALL_BASE_REF=$base" >> "$GITHUB_ENV"
 
       - name: Run corpus engine suites
         if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
@@ -5815,7 +5940,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Install smoke dependencies
-        run: bash scripts/ci/install-api-smoke-deps.sh
+        run: bun .workflow-tooling/scripts/ci-install.ts "$RUNNER_TEMP/bun-install/smoke.log" --frozen-lockfile --ignore-scripts --filter @stll/scripts
         env:
           NPM_TOKEN: ""
 
@@ -5830,7 +5955,12 @@ jobs:
       - name: Build final API release image
         env:
           CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
-        run: bash scripts/ci/build-api-release-image.sh
+        run: |
+          set -euo pipefail
+          bun .workflow-tooling/scripts/ci-service-images.ts --build apps/api/Dockerfile -- --progress=plain --file apps/api/Dockerfile \
+            --build-arg "STELLA_VERSION=$(tr -d '[:space:]' < VERSION)" \
+            --build-arg "STELLA_COMMIT_SHA=$(git rev-parse HEAD)" \
+            --tag stella-api-release:ci . 2>&1 | tee "$RUNNER_TEMP/api-image-build.log"
 
       - name: Pull API smoke service images
         timeout-minutes: 2
