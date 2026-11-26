@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
@@ -12,6 +12,7 @@ import {
 } from "@stll/api-contract/desktop-dictation-cleanup";
 import type { DesktopDictationCleanupModels } from "@stll/api-contract/desktop-dictation-cleanup";
 import { BidiText } from "@stll/ui/bidi-text";
+import { useMountEffect } from "@stll/ui/effects";
 import {
   Select,
   SelectItem,
@@ -33,7 +34,7 @@ type ModelsState =
 /** Reads the organization's cleanup models once. */
 const useCleanupModels = (): ModelsState => {
   const [state, setState] = useState<ModelsState>({ status: "loading" });
-  useEffect(() => {
+  useMountEffect(() => {
     let disposed = false;
     // A named function, not one invoked in place: an inline call is read as
     // running before the cleanup below can ever set `disposed`.
@@ -57,7 +58,7 @@ const useCleanupModels = (): ModelsState => {
     return () => {
       disposed = true;
     };
-  }, []);
+  });
   return state;
 };
 

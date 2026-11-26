@@ -1,6 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 
 import { Result } from "better-result";
+
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { discardShare, readShare } from "@/native/share-inbox";
 import type { PickedFile } from "@/state/chat-attachments";
@@ -25,7 +27,7 @@ export const useSharedDraft = ({
 }) => {
   const taken = useRef<string | undefined>(undefined);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (shareId === undefined || taken.current === shareId) {
       return;
     }

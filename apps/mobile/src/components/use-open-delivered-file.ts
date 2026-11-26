@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { Result } from "better-result";
 import { Alert } from "react-native";
 import { useTranslations } from "use-intl";
+
+import { useMountEffect } from "@stll/ui/effects";
 
 import {
   discardOpenedFile,
@@ -29,12 +31,12 @@ export const useOpenDeliveredFile = (
   const [opening, setOpening] = useState<string | null>(null);
   const inFlight = useRef(false);
   const mounted = useRef(true);
-  useEffect(() => {
+  useMountEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
     };
-  }, []);
+  });
 
   // Each await can outlive the screen; read the ref afresh after every one.
   const isMounted = () => mounted.current;

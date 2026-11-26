@@ -1,9 +1,10 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { Result } from "better-result";
 import { AppState } from "react-native";
 
 import { CHAT_THREAD_READ_STATE } from "@stll/api-contract/chat";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 
 import { writeFailure } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
@@ -43,7 +44,7 @@ export const useMarkChatReadWhileOpen = ({
   const marked = useRef<string | null>(null);
   const [failure, setFailure] = useState<WriteFailure | null>(null);
 
-  const mark = useEffectEvent((key: string) => {
+  const mark = useLatestCallback((key: string) => {
     marked.current = key;
     void setChatThreadReadState({
       fetch,
@@ -65,7 +66,7 @@ export const useMarkChatReadWhileOpen = ({
     });
   });
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (answer === "streaming" || revision === null) {
       return undefined;
     }
@@ -87,7 +88,7 @@ export const useMarkChatReadWhileOpen = ({
     return () => {
       subscription.remove();
     };
-  }, [answer, matterId, revision, threadId]);
+  }, [answer, matterId, revision, threadId, mark]);
 
   return failure;
 };

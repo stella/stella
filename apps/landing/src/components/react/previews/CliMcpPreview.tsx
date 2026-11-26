@@ -3,11 +3,11 @@ import {
   type FocusEvent,
   type PointerEvent,
   type ReactNode,
-  useEffect,
   useRef,
   useState,
 } from "react";
 
+import { useExternalSyncEffect, useMountEffect } from "@stll/ui/effects";
 import { StellaMark } from "@stll/ui/stella-mark";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
@@ -89,7 +89,7 @@ export const CliMcpPreview = ({
     showCompanions,
   });
 
-  useEffect(() => {
+  useMountEffect(() => {
     const element = story.current;
     if (!element) {
       return undefined;
@@ -102,9 +102,9 @@ export const CliMcpPreview = ({
     observer.observe(element);
 
     return () => observer.disconnect();
-  }, []);
+  });
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (
       !isAutoPlaying ||
       !isInViewport ||
@@ -120,7 +120,7 @@ export const CliMcpPreview = ({
     return () => window.clearTimeout(timeout);
   }, [isAutoPlaying, isInViewport, storyPhase.durationMs, storyPhase.id]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (
       !showCompanions ||
       !isInViewport ||
@@ -137,7 +137,7 @@ export const CliMcpPreview = ({
     return () => window.clearTimeout(timeout);
   }, [isInViewport, showCompanions, teamsLoopFrame]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (
       !showCompanions ||
       !isInViewport ||

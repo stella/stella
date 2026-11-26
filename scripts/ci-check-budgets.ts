@@ -58,7 +58,8 @@ export const MINIMUM_BUDGET_SECONDS: Readonly<
   // Each derives capability catalogs from private revision exports, building
   // the MCP Apps first, inside per-test timeouts of their own.
   "ci-checks-rest": {
-    "Test CLI runtime package parity": 600,
+    // Its pack (480 s) and merge (600 s) tests run in one step.
+    "Test CLI runtime package parity": 1200,
     "Release CLI coupling guard": 600,
     "CLI contract changeset guard": 600,
   },

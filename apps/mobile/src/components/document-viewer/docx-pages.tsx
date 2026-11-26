@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { IntlProvider } from "use-intl";
 import type { AbstractIntlMessages } from "use-intl";
@@ -20,6 +20,11 @@ import ptBR from "@stll/folio-react/messages/pt-BR";
 import sk from "@stll/folio-react/messages/sk";
 import { resolveUiLocale } from "@stll/locales";
 import type { UiLocale } from "@stll/locales";
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useMountEffect,
+} from "@stll/ui/effects";
 
 import "@stll/folio-react/editor.css";
 
@@ -155,7 +160,7 @@ export const DocxPages = ({
         onFailed(String(error));
       });
   };
-  const saveAsked = useEffectEvent(() => {
+  const saveAsked = useLatestCallback(() => {
     save(true);
   });
 
@@ -171,21 +176,18 @@ export const DocxPages = ({
   };
 
   const askedToSave = useRef(saveRequest);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (saveRequest !== askedToSave.current) {
       askedToSave.current = saveRequest;
       saveAsked();
     }
-  }, [saveRequest]);
+  }, [saveRequest, saveAsked]);
 
-  useEffect(
-    () => () => {
-      if (pause.current !== null) {
-        clearTimeout(pause.current);
-      }
-    },
-    [],
-  );
+  useMountEffect(() => () => {
+    if (pause.current !== null) {
+      clearTimeout(pause.current);
+    }
+  });
   // folio's fit over the width it fitted, read once, while folio still
   // fits the page itself: at the first paint, or else at the first zoom.
   const fitPerPixel = useRef<number | null>(null);
@@ -205,12 +207,12 @@ export const DocxPages = ({
     }
   };
 
-  const painted = useEffectEvent(() => {
+  const painted = useLatestCallback(() => {
     readFit();
     onReady();
   });
 
-  useEffect(() => {
+  useMountEffect(() => {
     const resized = () => {
       setWidth(document.documentElement.clientWidth);
     };
@@ -218,9 +220,9 @@ export const DocxPages = ({
     return () => {
       window.removeEventListener("resize", resized);
     };
-  }, []);
+  });
 
-  const applyZoom = useEffectEvent((atWidth: number, atZoom: number) => {
+  const applyZoom = useLatestCallback((atWidth: number, atZoom: number) => {
     readFit();
     const target = docxZoomTarget({
       fitPerPixel: fitPerPixel.current,
@@ -235,11 +237,11 @@ export const DocxPages = ({
     editor.current?.setZoom(target);
   });
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     applyZoom(width, zoom);
-  }, [width, zoom]);
+  }, [width, zoom, applyZoom]);
 
-  useEffect(() => {
+  useMountEffect(() => {
     declareFolioFonts();
     // folio paints the first page once it has laid the document out.
     const observer = new MutationObserver(() => {
@@ -254,7 +256,7 @@ export const DocxPages = ({
     return () => {
       observer.disconnect();
     };
-  }, []);
+  });
 
   return (
     <IntlProvider locale={uiLocale} messages={messages}>
