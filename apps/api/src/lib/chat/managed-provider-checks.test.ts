@@ -4,7 +4,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, jest, mock, spyOn, test } from "bun:test";
 
 import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
-import { sleep } from "@stll/concurrency/sleep";
+import { deferred } from "@stll/test-kit";
 import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
@@ -473,7 +473,7 @@ test("termination aborts stalled catalog requests within the service deadline", 
     await started.promise;
     expect(signals).toHaveLength(2);
     expect(signals.every((signal) => !signal.aborted)).toBe(true);
-    const deadlineMs = 31;
+    const timeout = deferred<undefined>();
     const outcome = shutdownApiServices({
       closeManagedProviderChecks: close,
       closeBackgroundWorkers: async () => undefined,
@@ -489,11 +489,11 @@ test("termination aborts stalled catalog requests within the service deadline", 
       stopChatTurnAdopter: () => undefined,
       stopScheduler: () => undefined,
       stopSse: () => undefined,
-      timeout: sleep(deadlineMs),
+      timeout: timeout.promise,
     });
     expect(httpStopped).toBe(true);
     expect(signals.every((signal) => signal.aborted)).toBe(true);
-    jest.advanceTimersByTime(deadlineMs);
+    timeout.resolve(undefined);
     expect(await outcome).toBe(API_SHUTDOWN_OUTCOME.timedOut);
     await refresh;
     for (const residency of MANAGED_AI_RESIDENCIES) {

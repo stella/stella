@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
 import { attachClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/attach-closest-edge";
@@ -22,6 +22,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { EntityActions } from "@stll/ui/entity-actions";
 import type { EntityAction } from "@stll/ui/entity-actions";
 import { Form } from "@stll/ui/form";
@@ -560,13 +561,13 @@ const ClipboardGroupRow = ({
   const rowRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
   const [over, setOver] = useState<InlineDropPosition | null>(null);
-  const drop = useEffectEvent(
+  const drop = useLatestCallback(
     (draggedId: string, position: InlineDropPosition) =>
       onDrop({ draggedId, position, targetId: group.id }),
   );
-  const canDrag = useEffectEvent(() => !disabled);
+  const canDrag = useLatestCallback(() => !disabled);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const element = rowRef.current;
     if (element === null) {
       return undefined;
@@ -608,7 +609,7 @@ const ClipboardGroupRow = ({
         },
       }),
     );
-  }, [group.id]);
+  }, [canDrag, drop, group.id]);
 
   // One list for the right-click menu and the row's "…" button.
   const actions = [

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import type { InvokeArgs } from "@tauri-apps/api/core";
@@ -24,6 +24,7 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import { useMountEffect } from "@stll/ui/effects";
 import { Kbd } from "@stll/ui/kbd";
 import {
   Select,
@@ -270,7 +271,7 @@ const DictationPage = ({
   const [removeFailed, setRemoveFailed] = useState(false);
   const order = useRef<SnapshotOrder>({ shown: 0, started: 0 });
 
-  useEffect(() => {
+  useMountEffect(() => {
     let disposed = false;
     const refresh = async () => {
       const ticket = takeTicket(order.current);
@@ -302,7 +303,7 @@ const DictationPage = ({
       disposed = true;
       stopListening();
     };
-  }, []);
+  });
 
   if (read === "failed") {
     return <DictationReadFailed onRetry={onRetry} />;

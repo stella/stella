@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useLayoutEffect, useRef } from "react";
+import { lazy, Suspense, useCallback, useRef } from "react";
 import type { ReactNode, RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
@@ -20,7 +20,11 @@ import { Separator } from "@stll/ui/separator";
 import "@stll/folio-react/editor.css";
 
 import "./peek-docx.css";
-import { useExternalSyncEffect, useMountEffect } from "@stll/ui/effects";
+import {
+  useExternalSyncEffect,
+  useLayoutSyncEffect,
+  useMountEffect,
+} from "@stll/ui/effects";
 import { useComposedRefs } from "@stll/ui/effects-refs";
 import { cn } from "@stll/ui/utils";
 
@@ -670,7 +674,7 @@ const PeekDocxViewer = ({
   };
 
   // Sync scaleOffset from inspector +/- buttons to Folio zoom
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     editorRef.current?.setZoom(targetZoom);
   }, [targetZoom]);
   useDocxWheelZoom(containerRef, editorRef);

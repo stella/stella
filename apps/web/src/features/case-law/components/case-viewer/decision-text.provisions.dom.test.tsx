@@ -9,7 +9,6 @@ import {
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
-import { sleep } from "@stll/concurrency/sleep";
 import type { DecisionProvisionAnchor } from "@stll/decision-reader/reader-types";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -65,7 +64,6 @@ afterEach(async () => {
 
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  await sleep(0);
   await unregisterDomEnvironment();
 });
 

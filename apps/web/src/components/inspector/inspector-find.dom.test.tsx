@@ -4,9 +4,14 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, mock, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
+const flushMicrotasks = async (turns = 4) => {
+  for (let i = 0; i < turns; i += 1) {
+    await Promise.resolve();
+  }
+};
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
@@ -728,7 +733,7 @@ test("a query with no matches does not scroll when later text introduces a match
     note.textContent = "Pozdější znění přidalo shodu.";
     text.append(note);
     await act(async () => {
-      await sleep(0);
+      await flushMicrotasks();
     });
     await waitFor(() =>
       expect(screen.getByText(matchCounter(1, 1))).toBeTruthy(),
@@ -767,7 +772,7 @@ test("Next and Previous take the reader back to a lone match, while repaints lea
     note.textContent = "Poznámka pod textem.";
     text.append(note);
     await act(async () => {
-      await sleep(0);
+      await flushMicrotasks();
     });
     expect(scrolledTo).toHaveLength(1);
 
@@ -813,7 +818,7 @@ test("removing the active match from the text moves the active mark but not the 
       expect(screen.getByText(matchCounter(1, 1))).toBeTruthy(),
     );
     await act(async () => {
-      await sleep(0);
+      await flushMicrotasks();
     });
     expect(activeRange("decision")?.toString()).toBe("Odpovědnosti");
     expect(scrolledTo).toHaveLength(scrolls);

@@ -7,9 +7,21 @@ import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import {
   ACCOUNT_ACCESS,
   createSafePublicHandler,
+  safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import { normalizeEmail } from "@/api/lib/email/normalized-email";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+
+const agentClaimResponseSchema = v.object({
+  registration_id: v.pipe(v.string(), v.maxLength(128)),
+  registration_type: v.pipe(v.string(), v.maxLength(64)),
+  user_code: v.pipe(v.string(), v.maxLength(64)),
+  verification_uri: v.pipe(v.string(), v.maxLength(2048)),
+  verification_uri_complete: v.pipe(v.string(), v.maxLength(2048)),
+  expires_in: v.number(),
+  interval: v.number(),
+  claim_token: v.pipe(v.string(), v.maxLength(512)),
+});
 
 const config = {
   contract: "patch",
@@ -17,6 +29,9 @@ const config = {
     claim_token: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
     email: v.pipe(v.string(), v.email(), v.maxLength(320)),
   }),
+  response: safePublicHandlerResponseSchemasWithStatusText(
+    agentClaimResponseSchema,
+  ),
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
   cache: { kind: "none" },

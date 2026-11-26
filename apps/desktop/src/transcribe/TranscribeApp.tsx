@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -13,6 +13,7 @@ import {
   paragraphsToHtml,
 } from "@stll/transcript/cleanup";
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect, useMountEffect } from "@stll/ui/effects";
 import { formatFileSize } from "@stll/ui/file-size";
 import { InfoIcon, TriangleAlertIcon, WavesIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -169,7 +170,7 @@ const TranscribeApp = () => {
       disposed = true;
     };
   }, []);
-  useEffect(() => loadSnapshot(), [loadSnapshot]);
+  useExternalSyncEffect(() => loadSnapshot(), [loadSnapshot]);
 
   // The model a recording would go to, read before a file can be chosen
   // for stella AI: the window shows it, with its warning where its provider
@@ -203,12 +204,12 @@ const TranscribeApp = () => {
     loadModel();
   }, [loadModel]);
   const cloudAvailable = snapshot?.cloudAvailable === true;
-  useEffect(
+  useExternalSyncEffect(
     () => (cloudAvailable ? loadModel() : undefined),
     [cloudAvailable, loadModel],
   );
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     let starting = false;
     // A file announced while another start is on its way; native code
     // starts only the one it holds, so the newest is tried next.
@@ -505,7 +506,7 @@ const ChooseScreen = ({
   const [dragging, setDragging] = useState(false);
   const [choosing, setChoosing] = useState(false);
   const [chooseFailed, setChooseFailed] = useState(false);
-  useEffect(() => {
+  useMountEffect(() => {
     let disposed = false;
     let unlisten: (() => void) | undefined;
     void getCurrentWebview()
@@ -527,7 +528,7 @@ const ChooseScreen = ({
       disposed = true;
       unlisten?.();
     };
-  }, []);
+  });
   const usable = usableFor({ snapshot, destination, model });
   const destinationDisabledReason = (() => {
     if (usable) {

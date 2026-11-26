@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { epochMilliseconds } from "@/connection/clock";
 
@@ -8,7 +10,7 @@ import { epochMilliseconds } from "@/connection/clock";
  */
 export const useNow = (ticking: boolean): number => {
   const [now, setNow] = useState(epochMilliseconds);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!ticking) {
       return undefined;
     }

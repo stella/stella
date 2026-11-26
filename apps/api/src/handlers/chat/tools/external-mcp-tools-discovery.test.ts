@@ -2,8 +2,6 @@ import type { AnyServerTool } from "@tanstack/ai";
 import type { MCPClient } from "@tanstack/ai-mcp";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
-
 import type { SafeDb } from "@/api/db/safe-db";
 import { loadExternalMcpToolsForUser } from "@/api/handlers/chat/tools/external-mcp-tools";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -13,6 +11,12 @@ import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const flushMicrotasks = async (): Promise<void> => {
+  for (let turn = 0; turn < 20; turn += 1) {
+    await Promise.resolve();
+  }
+};
 
 const loadActiveMcpConnectionsForUserMock = mock();
 const createMcpClientForConnectionMock = mock();
@@ -264,7 +268,7 @@ describe("loadExternalMcpToolsForUser client lifecycle", () => {
       // otherwise this test could not distinguish "client known" from
       // "client not yet created" at the moment the timeout fires.
       void operation();
-      await sleep(0);
+      await flushMicrotasks();
       throw new TimeoutError({
         message: `${opts.label} exceeded ${opts.timeoutMs}ms`,
         label: opts.label,

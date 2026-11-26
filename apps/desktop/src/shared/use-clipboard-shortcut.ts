@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
+
+import { useExternalSyncEffect, useMountEffect } from "@stll/ui/effects";
 
 import { subscribeDesktopEvent } from "./desktop-events";
 import {
@@ -23,7 +25,7 @@ export const useClipboardShortcut = (onError: () => void) => {
     null,
   );
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     let disposed = false;
     const refresh = async () => {
       const result = await Result.tryPromise(async () =>
@@ -76,7 +78,7 @@ const hasLayoutMap = (
 export const useKeyboardLayout = () => {
   const [layout, setLayout] = useState<KeyboardLayout | null>(null);
 
-  useEffect(() => {
+  useMountEffect(() => {
     if (!hasLayoutMap(navigator)) {
       return undefined;
     }
@@ -92,7 +94,7 @@ export const useKeyboardLayout = () => {
     return () => {
       disposed = true;
     };
-  }, []);
+  });
 
   return layout;
 };

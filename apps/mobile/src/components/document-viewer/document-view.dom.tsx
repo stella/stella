@@ -1,10 +1,11 @@
 "use dom";
 
-import { useEffect, useEffectEvent, useState } from "react";
+import { useState } from "react";
 
 import type { DOMProps } from "expo/dom";
 
 import { compileLegalSourceToDocx } from "@stll/docx-core";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 
 import { useDomAppearance } from "@/components/dom-theme";
 import type { DomAppearance } from "@/components/dom-theme";
@@ -130,16 +131,16 @@ const DocumentView = ({
 }: DocumentViewProps) => {
   const [bytes, setBytes] = useState<Uint8Array | null>(null);
 
-  const read = useEffectEvent(
+  const read = useLatestCallback(
     async (offset: number, length: number) => await readChunk(offset, length),
   );
-  const loadFailed = useEffectEvent((error: unknown) => {
+  const loadFailed = useLatestCallback((error: unknown) => {
     onFailed(String(error));
   });
 
   useDomAppearance(appearance);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     allowZoom();
     let cancelled = false;
     if (draftSource !== undefined) {
@@ -195,7 +196,7 @@ const DocumentView = ({
     return () => {
       cancelled = true;
     };
-  }, [size, draftSource, draftTitle]);
+  }, [size, draftSource, draftTitle, read, loadFailed]);
 
   const ready = () => {
     onReady();

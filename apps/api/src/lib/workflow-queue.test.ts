@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
-
 import { toSafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { isTransientRedisConnectionError } from "@/api/lib/redis-client";
@@ -78,7 +76,9 @@ describe("workflow entity targeting", () => {
 // The runner hands its tick off to a floating promise chain, so an assertion
 // has to wait for that chain to settle rather than for the call to return.
 const settle = async (): Promise<void> => {
-  await sleep(0);
+  for (let turn = 0; turn < 20; turn += 1) {
+    await Promise.resolve();
+  }
 };
 
 describe("workflow reconcile failures", () => {

@@ -1,11 +1,4 @@
-import {
-  createContext,
-  use,
-  useEffect,
-  useEffectEvent,
-  useRef,
-  useState,
-} from "react";
+import { createContext, use, useRef, useState } from "react";
 
 import { panic, Result } from "better-result";
 import { fetch as streamingFetch } from "expo/fetch";
@@ -15,6 +8,7 @@ import { USER_EVENT_READ, USER_EVENT_READS } from "@stll/api-contract";
 import type { UserEventRead, UserRealtimeEvent } from "@stll/api-contract";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { sleep } from "@stll/concurrency/sleep";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 
 import { useChanged } from "@/components/changes";
 import type { AccessTokenSource } from "@/connection/session";
@@ -156,7 +150,7 @@ const useRunsStream = (
         : current,
     );
   };
-  const forgetBaseline = useEffectEvent(() => {
+  const forgetBaseline = useLatestCallback(() => {
     update(({ runs }) => ({
       banners: NO_BANNERS,
       baseline: undefined,
@@ -179,20 +173,20 @@ const useRunsStream = (
       changed("chatQueues");
     },
   } satisfies Record<UserEventRead, () => void>;
-  const onEvent = useEffectEvent(({ type }: UserRealtimeEvent) => {
+  const onEvent = useLatestCallback(({ type }: UserRealtimeEvent) => {
     for (const stale of USER_EVENT_READS[type]) {
       readsAgain[stale]();
     }
   });
-  const onResync = useEffectEvent(reread);
-  const onReopen = useEffectEvent(() => {
+  const onResync = useLatestCallback(reread);
+  const onReopen = useLatestCallback(() => {
     changed("chats");
   });
-  const signOut = useEffectEvent((refused: AccessTokenSource) => {
+  const signOut = useLatestCallback((refused: AccessTokenSource) => {
     end(refused);
   });
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (source === undefined) {
       return undefined;
     }
@@ -279,7 +273,7 @@ const useRunsStream = (
       subscription.remove();
       connection?.abort();
     };
-  }, [source]);
+  }, [source, onEvent, onReopen, forgetBaseline, signOut, onResync]);
 
   return {
     banners: reading.banners,

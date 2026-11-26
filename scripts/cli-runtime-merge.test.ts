@@ -322,5 +322,7 @@ test.skipIf(!process.env["CI"])(
       rmSync(temporary, { recursive: true, force: true });
     }
   },
-  300_000,
+  // It reached 300 s on a release commit in CI (2026-11-26), where the CLI
+  // pack tests beside it do about twice the work they do on main.
+  600_000,
 );

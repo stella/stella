@@ -4,13 +4,7 @@
 // needs (`Map.prototype.getOrInsertComputed` and others the modern build
 // assumes).
 import "pdfjs-dist/legacy/build/pdf.worker.mjs";
-import {
-  useEffect,
-  useEffectEvent,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { Result } from "better-result";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
@@ -20,6 +14,7 @@ import type {
 } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 import { NEUTRAL_COLORS } from "@stll/brand";
+import { useLayoutSyncEffect } from "@stll/ui/effects";
 import { useComposedRefs } from "@stll/ui/effects-refs";
 
 import { anchoredScroll, canvasScale, scaledScroll } from "./zoom";
@@ -160,7 +155,7 @@ export const PdfPages = ({
   const scrolling = useRef<HTMLDivElement | null>(null);
   const scrolled = useRef({ top: 0, left: 0 });
   const shownZoom = useRef(zoom);
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     const previous = shownZoom.current;
     shownZoom.current = zoom;
     const box = scrolling.current;

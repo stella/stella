@@ -1,7 +1,6 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 // The shared toast's behaviour in a real DOM. React DOM decides at import time
@@ -57,7 +56,9 @@ const mount = async () => {
 // Base UI renders an added toast on its next tick.
 const settle = async () => {
   await act(async () => {
-    await sleep(20);
+    for (let i = 0; i < 4; i += 1) {
+      await Promise.resolve();
+    }
   });
 };
 

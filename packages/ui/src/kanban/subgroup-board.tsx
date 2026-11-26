@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { DragEvent, ReactElement, ReactNode, Ref } from "react";
 
 import { DirectionalIcon } from "../components/directional-icon";
+import { useExternalSyncEffect, useMountEffect } from "../effects/effects";
 import { ChevronDownIcon } from "../icons";
 import { cn } from "../lib/utils";
 import { createBandPeekController } from "./band-peek";
@@ -268,7 +269,7 @@ export const KanbanSubgroupBoard = <TRow,>({
   // server-rendered markup carries a usable offset.
   const headerRef = useRef<HTMLDivElement>(null);
   const [headerHeight, setHeaderHeight] = useState(0);
-  useEffect(() => {
+  useMountEffect(() => {
     const header = headerRef.current;
     if (header === null) {
       return undefined;
@@ -278,16 +279,16 @@ export const KanbanSubgroupBoard = <TRow,>({
     });
     observer.observe(header);
     return () => observer.disconnect();
-  }, []);
+  });
   // The peek's timing rules live in one controller (see `band-peek.ts`); the
   // board only mirrors which band it reports open.
   const [peek] = useState(() =>
     createBandPeekController({ onChange: setPeekingBandId }),
   );
-  useEffect(() => () => peek.dispose(), [peek]);
+  useExternalSyncEffect(() => () => peek.dispose(), [peek]);
   // A drop or a cancelled drag ends the peek wherever the card was; the
   // open band may never see a leave for it.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const end = () => peek.dragEnded();
     window.addEventListener("dragend", end);
     window.addEventListener("drop", end);
@@ -301,7 +302,7 @@ export const KanbanSubgroupBoard = <TRow,>({
   // the host does not drive drags at all, so no comparison against the
   // previous id ever runs.
   const previousDragOverBandId = useRef<string | null>(null);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (
       dragOverBandId === undefined ||
       isDragging === false ||
@@ -326,7 +327,7 @@ export const KanbanSubgroupBoard = <TRow,>({
       }
     }
   }, [dragOverBandId, isDragging, peek, peekingBandId]);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (isDragging === false) {
       previousDragOverBandId.current = null;
       peek.dragEnded();
@@ -420,7 +421,7 @@ export const KanbanSubgroupBoard = <TRow,>({
     (peekedBand === null || !isBandCollapsedNow(peekedBand))
       ? peekingBandId
       : null;
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (staleBandId !== null) {
       peek.bandExpanded(staleBandId);
     }
@@ -948,7 +949,10 @@ const FoldedBandSlot = ({
 }: FoldedBandSlotProps) => {
   // A slot that leaves the DOM mid-delay (its band expanded or disappeared)
   // takes its pending peek with it.
-  useEffect(() => () => peek.slotUnmounted(band.id), [peek, band.id]);
+  useExternalSyncEffect(
+    () => () => peek.slotUnmounted(band.id),
+    [peek, band.id],
+  );
   return (
     <div
       className={className}

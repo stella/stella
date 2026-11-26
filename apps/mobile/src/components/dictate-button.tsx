@@ -1,11 +1,10 @@
-import { useEffect, useEffectEvent } from "react";
-
 import { panic } from "better-result";
 import { useRouter } from "expo-router";
 import { Alert, View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect, useLatestCallback } from "@stll/ui/effects";
 import { Text } from "@stll/ui/text";
 
 import { HOLD_TO_TALK_MS, useDictation } from "@/components/use-dictation";
@@ -50,12 +49,12 @@ export const DictateButton = ({
   const dictation = useDictation(onText, { disabled, field, matterId });
   const status = useDictationStatus(dictation);
   const busy = dictation.phase !== "idle";
-  const reportBusy = useEffectEvent((value: boolean) => {
+  const reportBusy = useLatestCallback((value: boolean) => {
     onBusyChange?.(value);
   });
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     reportBusy(busy);
-  }, [busy]);
+  }, [busy, reportBusy]);
 
   return (
     <View className="gap-1">

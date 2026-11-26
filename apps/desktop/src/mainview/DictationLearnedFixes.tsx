@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useMountEffect } from "@stll/ui/effects";
 import {
   SettingsRow,
   settingsRowIds,
@@ -45,7 +46,7 @@ export const DictationLearnedFixes = ({ shortcut }: { shortcut: string }) => {
     setStored(await readLearned());
   };
 
-  useEffect(() => {
+  useMountEffect(() => {
     let disposed = false;
     const reread = async () => {
       const next = await readLearned();
@@ -65,7 +66,7 @@ export const DictationLearnedFixes = ({ shortcut }: { shortcut: string }) => {
       disposed = true;
       stopListening();
     };
-  }, []);
+  });
 
   /** Runs a change; its answer is the list it leaves. */
   const run = async (change: () => Promise<unknown>) => {

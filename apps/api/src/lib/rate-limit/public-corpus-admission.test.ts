@@ -1,7 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
-
 import {
   type AdmissionClass,
   createPublicCorpusAdmission,
@@ -40,9 +38,18 @@ const ask = async (
   } = {},
 ) => await admission.acquire({ routeClass, client, waitMs, signal });
 
+const flushMicrotasks = async (): Promise<void> => {
+  for (let turn = 0; turn < 20; turn += 1) {
+    await Promise.resolve();
+  }
+};
+
 const settled = async <T>(promise: Promise<T>) => {
   const marker = Symbol("pending");
-  const result = await Promise.race([promise, sleep(5).then(() => marker)]);
+  const result = await Promise.race([
+    promise,
+    flushMicrotasks().then(() => marker),
+  ]);
   return result === marker ? "pending" : result;
 };
 

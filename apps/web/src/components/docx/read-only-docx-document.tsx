@@ -1,8 +1,10 @@
-import { lazy, useLayoutEffect, useRef } from "react";
+import { lazy, useRef } from "react";
 
 import type { DocxEditorRef } from "@stll/folio-react";
 import { useComposedRefs } from "@stll/ui/effects-refs";
 import "@stll/folio-react/editor.css";
+
+import { useLayoutSyncEffect } from "@stll/ui/effects";
 
 import {
   useDocxFitZoom,
@@ -40,7 +42,7 @@ export const ReadOnlyDocxDocument = ({
   // fit-zoom observer every render.
   const composedContainerRef = useComposedRefs(containerRef, fitZoomRef);
 
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     editorRef.current?.setZoom(targetZoom);
   }, [targetZoom]);
   useDocxWheelZoom(containerRef, editorRef);

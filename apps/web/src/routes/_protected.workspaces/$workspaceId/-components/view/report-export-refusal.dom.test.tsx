@@ -5,7 +5,6 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json";
@@ -14,7 +13,6 @@ import { toSafeId } from "@/lib/safe-id";
 import type { ReportExportRequest } from "./export-report-dialog.logic";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
-const { act } = await import("react");
 const { cleanup, fireEvent, render } = await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { toAPIError } = await import("@/lib/errors/api");
@@ -23,9 +21,6 @@ const { ReportExportRefusal } = await import("./report-export-refusal");
 afterEach(cleanup);
 afterAll(async () => {
   cleanup();
-  await act(async () => {
-    await sleep(50);
-  });
   await unregisterDomEnvironment();
 });
 

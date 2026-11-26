@@ -113,6 +113,23 @@ const isTitleText = (text: string): boolean => {
   return trimmed.length <= HEADING_TITLE_MAX && !SENTENCE_END.test(trimmed);
 };
 
+const RUNNING_WORDS_MIN = 8;
+
+/**
+ * Whether the text behind a provision's label is text of its own and no
+ * title: it runs past a title's length, or it ends like a sentence and is
+ * long enough to be one (`Notices. Each notice is given in writing and
+ * takes effect when it is received.`).
+ */
+export const isRunningText = (text: string): boolean => {
+  const trimmed = text.replace(/^[\s:–—.-]+/u, "").trim();
+  return (
+    trimmed.length > HEADING_TITLE_MAX ||
+    (SENTENCE_END.test(trimmed) &&
+      trimmed.split(/\s+/u).length >= RUNNING_WORDS_MIN)
+  );
+};
+
 type RawLabel = {
   origin: "auto" | "manual";
   shape: LabelShape;
