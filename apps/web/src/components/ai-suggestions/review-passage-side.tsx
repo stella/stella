@@ -238,23 +238,28 @@ export const ReviewStandardPassages = ({
  * it is observed once per node lifetime regardless of what re-renders the
  * parent, which is also how long the sticky answer lasts.
  */
+const observeCollapsedOverflow = (
+  node: HTMLElement,
+  emit: (overflows: boolean) => void,
+) => {
+  let overflowed = false;
+  const measure = () => {
+    overflowed ||= node.scrollHeight > node.clientHeight;
+    emit(overflowed);
+  };
+  measure();
+  const observer = new ResizeObserver(measure);
+  observer.observe(node);
+  return () => {
+    observer.disconnect();
+  };
+};
+
 const useCollapsedOverflow = () => {
   const [content, setContent] = useState<HTMLElement | null>(null);
   const overflows = useObservedValue<HTMLElement, boolean>(
     content,
-    (node, emit) => {
-      let overflowed = false;
-      const measure = () => {
-        overflowed ||= node.scrollHeight > node.clientHeight;
-        emit(overflowed);
-      };
-      measure();
-      const observer = new ResizeObserver(measure);
-      observer.observe(node);
-      return () => {
-        observer.disconnect();
-      };
-    },
+    observeCollapsedOverflow,
     [],
     false,
   );
