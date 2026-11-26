@@ -246,6 +246,43 @@ describe("formatOntoTemplate", () => {
     ).toEqual([]);
   });
 
+  test("a bullet whose mark reads as another character in the output is still kept", async () => {
+    // The same bullet is another glyph in another font: the engine reports
+    // the output's mark as it renders it.
+    const bulletId = blockIdOf(manifest, "první případ;");
+    const bulleted = {
+      ...manifest,
+      blocks: manifest.blocks.map((block) =>
+        block.id === bulletId
+          ? {
+              ...block,
+              label: "o",
+              numbering: {
+                numId: 9,
+                ilvl: 1,
+                abstractNumId: 9,
+                bullet: true as const,
+              },
+            }
+          : block,
+      ),
+    };
+    const engine = fakeEngine(bulleted, [{ labelDiffers: [bulletId] }]);
+    const formatted = (
+      await formatOntoTemplate({
+        engine,
+        source: SOURCE,
+        template: TEMPLATE,
+        mode: "keepSource",
+        resolveAmbiguities: resolveAmbiguitiesByRule,
+      })
+    ).unwrap();
+    expect(formatted.outcome).toMatchObject({ attempts: 1, repairs: [] });
+    expect(numberingOf(engine.plans.at(0), bulletId)).toMatchObject({
+      numbering: expect.objectContaining({ ilvl: expect.any(Number) }),
+    });
+  });
+
   test("leaves a reference as text when the engine cannot say what its field shows", async () => {
     const engine = fakeEngine(manifest, [{ fieldUnverified: [article] }]);
     const formatted = (await format(engine)).unwrap();
