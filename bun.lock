@@ -1558,6 +1558,9 @@
     "packages/render-probe": {
       "name": "@stll/render-probe",
       "version": "0.0.0",
+      "dependencies": {
+        "better-result": "catalog:",
+      },
       "devDependencies": {
         "@happy-dom/global-registrator": "21.0.4",
         "@stll/typescript-config": "workspace:*",
