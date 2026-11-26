@@ -20,8 +20,10 @@ import { normalizeUnicode } from "@stll/text-normalize";
  * concern, applied to the stem this module returns.
  */
 
+import { foldLatinLetters } from "@/api/lib/legal-search/morphology/latin-fold";
 import {
   stemSlovak,
+  stemSlovakFolded,
   stemSlovakUpstream,
 } from "@/api/lib/legal-search/morphology/slovak";
 import { SNOWBALL_RELEASE } from "@/api/lib/legal-search/morphology/snowball/base-stemmer";
@@ -31,6 +33,12 @@ import { DutchStemmer } from "@/api/lib/legal-search/morphology/snowball/dutch.g
 import { EnglishStemmer } from "@/api/lib/legal-search/morphology/snowball/english.gen";
 import { EstonianStemmer } from "@/api/lib/legal-search/morphology/snowball/estonian.gen";
 import { FinnishStemmer } from "@/api/lib/legal-search/morphology/snowball/finnish.gen";
+import {
+  type FoldedCollision,
+  type FoldedPrelude,
+  foldedSnowballStemmer,
+  type SnowballStemmerClass,
+} from "@/api/lib/legal-search/morphology/snowball/folded-stemmer";
 import { FrenchStemmer } from "@/api/lib/legal-search/morphology/snowball/french.gen";
 import { GermanStemmer } from "@/api/lib/legal-search/morphology/snowball/german.gen";
 import { GreekStemmer } from "@/api/lib/legal-search/morphology/snowball/greek.gen";
@@ -304,3 +312,92 @@ export const stemLegalTerm = (
     const stem = STEMMERS[language].stem(normalized);
     return stem === "" ? normalized : stem;
   });
+
+/**
+ * Both readings of a folded word (see {@link FoldedCollision}), as two
+ * stemmers over one algorithm.
+ */
+const foldedReadings = (
+  Stemmer: SnowballStemmerClass,
+  prelude?: FoldedPrelude,
+): readonly ((term: string) => string)[] =>
+  (["plain", "accented"] as const satisfies readonly FoldedCollision[]).map(
+    (collision) => foldedSnowballStemmer(Stemmer, { collision, prelude }).stem,
+  );
+
+/**
+ * Each language's stemmers for a word typed without its diacritics: the same
+ * algorithm with its tables folded (`./snowball/folded-stemmer`, and
+ * `stemSlovakFolded`), so `najemniho` stems to `najemn`, the folded form of
+ * what `nájemního` stems to and so of what the index holds.
+ *
+ * Greek has none: its letters are not Latin, which the index's fold does not
+ * touch, so a Greek word typed without its tonos is a different word to the
+ * engine and to the stemmer alike.
+ */
+const FOLDED_STEMMERS = {
+  cs: foldedReadings(CzechStemmer),
+  da: foldedReadings(DanishStemmer),
+  de: foldedReadings(GermanStemmer),
+  el: [],
+  en: foldedReadings(EnglishStemmer),
+  es: foldedReadings(SpanishStemmer),
+  et: foldedReadings(EstonianStemmer),
+  fi: foldedReadings(FinnishStemmer),
+  fr: foldedReadings(FrenchStemmer, { rewrites: "ëï", markers: "H" }),
+  ga: foldedReadings(IrishStemmer),
+  hu: foldedReadings(HungarianStemmer),
+  it: foldedReadings(ItalianStemmer),
+  lt: foldedReadings(LithuanianStemmer),
+  nl: foldedReadings(DutchStemmer),
+  pl: foldedReadings(PolishStemmer),
+  pt: foldedReadings(PortugueseStemmer, { rewrites: "ãõ", markers: "~" }),
+  ro: foldedReadings(RomanianStemmer, { rewrites: "şţ", markers: "" }),
+  sk: (["plain", "accented"] as const).map(
+    (reading) => (term: string) => stemSlovakFolded(term, reading),
+  ),
+  sv: foldedReadings(SwedishStemmer),
+} as const satisfies Record<
+  MorphologyLanguage,
+  readonly ((term: string) => string)[]
+>;
+
+/**
+ * Every stem a document in one of `languages` may hold for a word the reader
+ * typed, for a query to ask for.
+ *
+ * First the word's own stem in each language, in order: exactly what
+ * {@link stemLegalTerm} returns, so a query only ever gains leaves. Then, for
+ * a word typed without any diacritic, its stems under each language's folded
+ * stemmers, which read it as the accented word the reader left the marks off
+ * (`najemniho` as `nájemního`). A word typed with a diacritic is taken as
+ * written: folding it would only lose what the reader said. A folded stem
+ * that, folded, equals one already listed is dropped: the engine folds the
+ * field and the query alike, so it would be the same leaf twice.
+ *
+ * At most three per language: the stem, and one per reading of the folded
+ * word. Query side only; the corpus is stemmed by {@link stemLegalTerm}.
+ */
+export const queryStems = (
+  term: string,
+  languages: readonly MorphologyLanguage[],
+): readonly string[] => {
+  const stems = [
+    ...new Set(languages.map((language) => stemLegalTerm(term, language))),
+  ];
+  const normalized = normalizeUnicode(term, "NFC").toLowerCase();
+  if (foldLatinLetters(normalized) !== normalized) {
+    return stems;
+  }
+  const seen = new Set(stems.map(foldLatinLetters));
+  for (const language of languages) {
+    for (const stemFolded of FOLDED_STEMMERS[language]) {
+      const candidate = stemFolded(normalized) || normalized;
+      if (!seen.has(candidate)) {
+        seen.add(candidate);
+        stems.push(candidate);
+      }
+    }
+  }
+  return stems;
+};

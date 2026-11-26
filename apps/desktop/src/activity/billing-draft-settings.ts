@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -11,6 +10,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
 
 import type { DesktopBillingDraftEffectiveMode } from "@stll/api-contract/desktop-billing-drafts";
+import { useLayoutSyncEffect } from "@stll/ui/effects";
 
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
@@ -143,7 +143,7 @@ export const useBillingDraftSettings = (
       preference: loaded.preference,
     };
   })();
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     if (!enabled) {
       consent.invalidate();
     }

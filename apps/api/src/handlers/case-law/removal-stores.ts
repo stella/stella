@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { eq, or } from "drizzle-orm";
 
 import {
+  caseLawCitationArrivals,
   caseLawCitationDoctrineReviews,
   caseLawCitationReviews,
   caseLawCitations,
@@ -52,6 +53,16 @@ export const CASE_LAW_REMOVAL_STORES = {
   citation_authority: {
     type: "remove",
     erase: invalidateRemovedCitationAuthorityTx,
+  },
+  // An erased decision's identifiers answer no citation, so the arrivals
+  // they queued are withdrawn with them rather than drained.
+  case_law_citation_arrivals: {
+    type: "remove",
+    erase: async (tx: Transaction, id: SafeId<"caseLawDecision">) =>
+      // audit: skip — derived rows belong to the canonical redaction audit.
+      await tx
+        .delete(caseLawCitationArrivals)
+        .where(eq(caseLawCitationArrivals.decisionId, id)),
   },
   case_law_citations: {
     type: "remove",

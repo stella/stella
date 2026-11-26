@@ -8,6 +8,8 @@ import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
+import { CITATION_ARRIVAL_DRAIN_OWNER } from "@/api/handlers/case-law/citation-arrivals";
+import type { CitationArrivalDrainOwner } from "@/api/handlers/case-law/citation-arrivals";
 import {
   CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS,
   createCaseLawDecisionSlugCandidate,
@@ -78,7 +80,11 @@ const recordingDb = (
 
 const newLog = (): TransactionLog => ({ started: 0, failures: [] });
 
-const ingest = async (input: IngestionResult, scoped: ScopedDb = scopedDb) =>
+const ingest = async (
+  input: IngestionResult,
+  scoped: ScopedDb = scopedDb,
+  citationArrivals?: CitationArrivalDrainOwner,
+) =>
   (
     await processDecision({
       input,
@@ -86,6 +92,7 @@ const ingest = async (input: IngestionResult, scoped: ScopedDb = scopedDb) =>
       sourceId,
       scopedDb: scoped,
       observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      citationArrivals,
     })
   ).unwrap();
 
@@ -205,7 +212,13 @@ describe("case-law decision slug allocation", () => {
   test("a publisher identity taken by a concurrent insert still fails the row write", async () => {
     const publisherId = "identity-race";
     const probe = newLog();
-    await ingest(decisionAt("3T/5/2023", "identity-probe"), recordingDb(probe));
+    // The arrivals are left to a page's drain, so the attempt's own
+    // transactions are the whole log.
+    await ingest(
+      decisionAt("3T/5/2023", "identity-probe"),
+      recordingDb(probe),
+      CITATION_ARRIVAL_DRAIN_OWNER.PAGE,
+    );
     // The row write is the last transaction of an insert that met nothing.
     const rowWriteTransaction = probe.started;
 
@@ -227,7 +240,11 @@ describe("case-law decision slug allocation", () => {
         );
     });
 
-    const outcome = await ingest(decisionAt("3T/5/2023", publisherId), racing);
+    const outcome = await ingest(
+      decisionAt("3T/5/2023", publisherId),
+      racing,
+      CITATION_ARRIVAL_DRAIN_OWNER.PAGE,
+    );
 
     expect(log.failures).toHaveLength(1);
     expect(

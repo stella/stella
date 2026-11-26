@@ -1204,6 +1204,23 @@ const SEEDS = {
     },
     writerLock: { id: ID, table: "case_law_decisions" },
   },
+  "citation-identifier-match-key": {
+    kind: "row-work",
+    ...repairedWhen(
+      "citation-identifier-match-key",
+      "SELECT identifier_match_key IS NOT DISTINCT FROM '21 Cdo 1234/19' AS repaired FROM case_law_citations WHERE id = $1",
+    ),
+    seed: async (client) => {
+      // A citation stored before its key existed: the key's trigger pauses
+      // while the row is written, so the row waits for the repair.
+      await withoutFixtureGuards(client, ["case_law_citations"], async () => {
+        await client.unsafe(
+          `INSERT INTO case_law_citations (id, citing_decision_id, citation_text, citation_key) VALUES ('${ID}', '${ID_2}', '21 Cdo 1234/2019', '21 Cdo 1234/2019')`,
+        );
+      });
+    },
+    writerLock: { id: ID, table: "case_law_citations" },
+  },
   case_law_source_string_config: {
     kind: "row-work",
     ...repairedWhen(
