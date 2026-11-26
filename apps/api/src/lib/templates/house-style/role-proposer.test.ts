@@ -54,6 +54,40 @@ describe("proposeBlockRoles", () => {
     });
   });
 
+  test("a list level that prints nothing is no label", () => {
+    // A heading style bound to a list for its outline only: the level
+    // prints nothing, the label is typed.
+    const silent = (text: string) => ({
+      text,
+      label: "",
+      numId: 7,
+      styleName: "heading 3",
+      outlineLevel: 2,
+    });
+    const manifest = manifestOf([
+      "SMLOUVA O DÍLO",
+      "Čl. 1",
+      "Předmět smlouvy",
+      numbered("1.", "Zhotovitel provede dílo.", 3),
+      silent(""),
+      silent("Čl. 2"),
+      silent("Účel smlouvy"),
+      numbered("1.", "Účelem smlouvy je úprava práv.", 3),
+    ]);
+    const proposals = proposeBlockRoles({ manifest });
+    const proposalOf = (id: string) =>
+      proposals.find(({ blockId }) => blockId === id);
+    expect(proposalOf("p4")).toBeUndefined();
+    expect(proposalOf("p5")).toMatchObject({
+      role: "articleHeading",
+      mergedIntoBlockId: null,
+    });
+    expect(proposalOf("p6")).toMatchObject({
+      role: "articleHeading",
+      mergedIntoBlockId: "p5",
+    });
+  });
+
   test("the proposal of a merged title points at its heading", () => {
     const manifest = czechContract("Text.");
     const proposals = proposeBlockRoles({ manifest });
