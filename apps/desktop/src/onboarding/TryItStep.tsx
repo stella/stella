@@ -121,11 +121,7 @@ type ShortcutTryoutProps = {
  * the shortcut is not being recorded, and keyed by it, so held keys and a
  * hint never carry over to a new shortcut or a later try.
  */
-export const ShortcutTryout = ({
-  keys,
-  layout,
-  onChange,
-}: ShortcutTryoutProps) => {
+const ShortcutTryout = ({ keys, layout, onChange }: ShortcutTryoutProps) => {
   const t = useTranslations("onboarding");
   const locale = useLocale();
   const [held, setHeld] = useState<ShortcutModifier[]>([]);
