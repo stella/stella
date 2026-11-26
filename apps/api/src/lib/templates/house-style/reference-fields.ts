@@ -241,6 +241,9 @@ type LabelFieldRequest = {
   levelText: string;
   /** The label the target prints in the output. */
   label: string;
+  /** Whether the output keeps the source's designators. The field then
+   *  has to show exactly the number the citation prints. */
+  keepsSourceNumbers: boolean;
 };
 
 type LabelField = ReferenceField & {
@@ -279,6 +282,11 @@ const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
  * stays text. A letter-case format changes the whole result, so a
  * lower-case citation of a roman number (`čl. IV`) stays text too, and so
  * does a citation whose blank is not the level text's.
+ *
+ * The field replaces word and number and nothing behind them, so the label
+ * may print nothing after its number but a closing period, which the field
+ * drops: for a level `Čl. %1 bis` the citation's own `bis` would stay
+ * behind the field's.
  */
 export const selectLabelField = ({
   text,
@@ -286,6 +294,7 @@ export const selectLabelField = ({
   end,
   levelText,
   label,
+  keepsSourceNumbers,
 }: LabelFieldRequest): Result<LabelField, ReferenceFieldError> => {
   const shown = withoutClosingPeriods(label.trim());
   const words = levelText.slice(0, Math.max(0, levelText.indexOf("%")));
@@ -293,6 +302,16 @@ export const selectLabelField = ({
     return fail("unrenderable-level", "The label does not start with words");
   }
   const numeral = shown.slice(words.length);
+  const afterNumber = levelText.slice(levelText.lastIndexOf("%") + 2);
+  if (
+    withoutClosingPeriods(afterNumber) !== "" ||
+    (keepsSourceNumbers && numeral !== text.slice(start, end))
+  ) {
+    return fail(
+      "designator-mismatch",
+      "The label prints more than the citation's word and number",
+    );
+  }
   const wordStart = start - words.length;
   const cited = wordStart < 0 ? "" : text.slice(wordStart, start);
   const before = wordStart <= 0 ? "" : text.charAt(wordStart - 1);

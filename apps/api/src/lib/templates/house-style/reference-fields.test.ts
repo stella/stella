@@ -204,6 +204,7 @@ describe("selectLabelField", () => {
     designator: string,
     label: string,
     levelText = "Čl. %1",
+    keepsSourceNumbers = false,
   ) => {
     const start = text.lastIndexOf(designator);
     return selectLabelField({
@@ -212,6 +213,7 @@ describe("selectLabelField", () => {
       end: start + designator.length,
       levelText,
       label,
+      keepsSourceNumbers,
     });
   };
 
@@ -263,6 +265,31 @@ describe("selectLabelField", () => {
       start: 6,
       text: "renumbered",
     });
+  });
+
+  test("a label that prints more behind its number than a closing period has no such field", () => {
+    for (const [text, label, levelText] of [
+      // The citation's own "bis" would stay behind the field's.
+      ["podle čl. 3 bis této smlouvy", "Čl. 3 bis", "Čl. %1 bis"],
+      ["podle čl. 3 této smlouvy", "Čl. 3)", "Čl. %1)"],
+    ] as const) {
+      const field = cite(text, "3", label, levelText);
+      expect(field.isErr() && field.error.reason).toBe("designator-mismatch");
+    }
+  });
+
+  test("keeping the source's numbers, the field must print the cited number", () => {
+    const field = cite(
+      "podle čl. 7 této smlouvy",
+      "7",
+      "Čl. 2",
+      "Čl. %1",
+      true,
+    );
+    expect(field.isErr() && field.error.reason).toBe("designator-mismatch");
+    expect(
+      cite("podle čl. 2 této smlouvy", "2", "Čl. 2", "Čl. %1", true).isOk(),
+    ).toBe(true);
   });
 
   test.each([

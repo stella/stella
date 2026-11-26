@@ -758,18 +758,27 @@ const labelFieldOf = (
   citation: Citation,
   levelText: string,
   label: string | null,
+  keepsSourceNumbers: boolean,
 ): Field | UnlinkedReason => {
   if (label === null) {
     return "punctuatedLevelWords";
   }
-  const field = selectLabelField({ ...citation, levelText, label });
+  const field = selectLabelField({
+    ...citation,
+    levelText,
+    label,
+    keepsSourceNumbers,
+  });
   if (field.isOk()) {
     const { instruction, expectedText, start } = field.value;
     return { instruction, expectedText, start };
   }
   const { reason } = field.error;
-  return reason === "case-not-reproducible" || reason === "blank-differs"
-    ? LABEL_FIELD_REASONS[reason]
+  if (reason === "case-not-reproducible" || reason === "blank-differs") {
+    return LABEL_FIELD_REASONS[reason];
+  }
+  return reason === "designator-mismatch"
+    ? "designatorMismatch"
     : "punctuatedLevelWords";
 };
 
@@ -813,6 +822,7 @@ const fieldOf = (
     citation,
     own.lvlText,
     mode === "keepSource" ? sourceLabel : plannedLabelOf(target, levelsByList),
+    mode === "keepSource",
   );
 };
 
