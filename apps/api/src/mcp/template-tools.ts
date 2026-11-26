@@ -129,6 +129,11 @@ import {
   uuidInputSchema,
 } from "@/api/mcp/input-schemas";
 import {
+  handleReformatIntoTemplateTool,
+  REFORMAT_INTO_TEMPLATE_OUTPUT_CONTRACT,
+  REFORMAT_INTO_TEMPLATE_TOOL_DEFINITION,
+} from "@/api/mcp/reformat-into-template-tool";
+import {
   TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA,
   TEMPLATE_UNDECIDED_CONDITION_OUTPUT_SCHEMA,
   toFillConditionDecision,
@@ -653,6 +658,7 @@ const TEMPLATE_TOOL_DEFINITIONS = [
   CREATE_TEMPLATE_TOOL_DEFINITION,
   CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION,
   PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION,
+  REFORMAT_INTO_TEMPLATE_TOOL_DEFINITION,
 ] as const satisfies readonly McpToolDefinition[];
 
 const handleListTemplatesTool: TypedMcpToolHandler<
@@ -2924,6 +2930,7 @@ export const TEMPLATE_TOOL_HANDLERS = {
   fill_template: handleFillTemplateTool,
   list_templates: handleListTemplatesTool,
   preview_template_conditions: handlePreviewTemplateConditionsTool,
+  reformat_into_template: handleReformatIntoTemplateTool,
   save_filled_template: handleSaveFilledTemplateTool,
 } satisfies Record<
   (typeof TEMPLATE_TOOL_DEFINITIONS)[number]["name"],
@@ -2947,6 +2954,7 @@ export const TEMPLATE_TOOL_SET = defineMcpToolSet(
     preview_template_conditions: defineMcpToolOutput(
       PREVIEW_TEMPLATE_CONDITIONS_OUTPUT_SCHEMA,
     ),
+    reformat_into_template: REFORMAT_INTO_TEMPLATE_OUTPUT_CONTRACT,
     save_filled_template: defineMcpToolOutput(
       SAVE_FILLED_TEMPLATE_OUTPUT_SCHEMA,
     ),

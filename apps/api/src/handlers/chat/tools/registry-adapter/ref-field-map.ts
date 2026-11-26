@@ -40,6 +40,7 @@ import {
   READ_PROVISION_HISTORY_PROJECTION,
   READ_STATUTE_PROJECTION,
   READ_STATUTE_PROVISIONS_PROJECTION,
+  REFORMAT_INTO_TEMPLATE_PROJECTION,
   REMOVE_MATTER_MEMBER_PROJECTION,
   RUN_PLAYBOOK_PROJECTION,
   SAVE_CLAUSE_PROJECTION,
@@ -618,6 +619,13 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
   // cannot PUT bytes. Chat already has first-class template/document flows;
   // projecting this would duplicate that surface and its approval UX.
   save_filled_template: { chatProjectable: false },
+  reformat_into_template: {
+    chatProjectable: true,
+    // `entity_id` is the source document's ref; the template and version ids
+    // are handles that pass through.
+    inputRefs: [{ kind: "entity", param: "entity_id" }],
+    projection: REFORMAT_INTO_TEMPLATE_PROJECTION,
+  },
   create_template: {
     chatProjectable: true,
     // The returned `templateId` is an org template handle, not a chat ref.

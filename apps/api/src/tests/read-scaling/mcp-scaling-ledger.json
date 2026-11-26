@@ -235,6 +235,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "reformat_into_template",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "remove_matter_member",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },

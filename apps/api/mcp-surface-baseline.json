@@ -277,6 +277,10 @@
       "default": {"title": 23, "description": 799, "inputSchema": 1956, "outputSchema": 1381, "annotations": 101, "payloadUtf8Bytes": 4414},
       "law": {"title": 23, "description": 799, "inputSchema": 1956, "outputSchema": 1381, "annotations": 101, "payloadUtf8Bytes": 4414}
     },
+    "reformat_into_template": {
+      "advanced": {"title": 22, "description": 607, "inputSchema": 832, "outputSchema": 2035, "annotations": 124, "payloadUtf8Bytes": 3774},
+      "default": {"title": 22, "description": 607, "inputSchema": 832, "outputSchema": 2035, "annotations": 124, "payloadUtf8Bytes": 3774}
+    },
     "remove_matter_member": {
       "advanced": {"title": 20, "description": 107, "inputSchema": 423, "outputSchema": 398, "annotations": 121, "payloadUtf8Bytes": 1219},
       "default": {"title": 20, "description": 107, "inputSchema": 423, "outputSchema": 398, "annotations": 121, "payloadUtf8Bytes": 1219}
