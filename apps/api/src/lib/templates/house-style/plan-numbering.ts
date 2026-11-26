@@ -271,6 +271,7 @@ const assignSpareLevels = (
   candidates: readonly Placement[],
   chosen: Map<string, LabelPattern>,
   spareLevels: readonly ProfileListLevel[],
+  markLevels: readonly ProfileListLevel[],
 ): Map<string, ProfileListLevel> => {
   /** The role level whose paragraphs a spare level takes over, by spare
    *  level: they keep that level's indent. */
@@ -294,12 +295,18 @@ const assignSpareLevels = (
     }
   }
   const spare = [...spareLevels];
+  const marks = [...markLevels];
   for (const group of [...displaced.values()].toSorted(
     (left, right) => right.length - left.length,
   )) {
-    const level = spare.shift();
     const first = group.at(0);
     const pattern = first?.pattern ?? null;
+    // A bullet counts nothing: it takes a level outside the outline list
+    // while there is one, and leaves the outline's to formats that count.
+    const level =
+      pattern?.numFmt === "bullet"
+        ? (marks.shift() ?? spare.shift())
+        : spare.shift();
     if (level !== undefined && pattern !== null) {
       chosen.set(levelKey(level), pattern);
     }
@@ -475,6 +482,8 @@ type NumberOptions = {
   placements: readonly Placement[];
   mode: NumberingMode;
   spareLevels: readonly ProfileListLevel[];
+  /** Levels outside the outline list, for marks that count nothing. */
+  markLevels?: readonly ProfileListLevel[];
 };
 
 /**
@@ -486,6 +495,7 @@ export const numberPlacements = ({
   placements,
   mode,
   spareLevels,
+  markLevels = [],
 }: NumberOptions): Numbered => {
   const candidates = placements.filter(({ numbered }) => numbered);
   const chosen =
@@ -505,6 +515,7 @@ export const numberPlacements = ({
         ),
     chosen,
     spareLevels,
+    markLevels,
   );
   const usedLevels = new Map<string, ProfileListLevel>();
   for (const placement of candidates) {

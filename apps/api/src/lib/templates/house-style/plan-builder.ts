@@ -66,6 +66,7 @@ import type {
   RoleProposal,
 } from "@/api/lib/templates/house-style/role-proposer";
 import type {
+  ProfileListLevel,
   ProfileRoleTarget,
   TemplateHealthFinding,
   TemplateProfile,
@@ -235,6 +236,7 @@ export const NO_EXCLUSIONS: PlanExclusions = {
 const NO_NESTED: readonly TemplatePlanNestedParagraph[] = [];
 const NO_SECTIONS: readonly DocxSection[] = [];
 const NO_HEALTH: readonly TemplateHealthFinding[] = [];
+const NO_LEVELS: readonly ProfileListLevel[] = [];
 
 const CLAUSE_ROLES = ["clause1", "clause2", "clause3"] as const;
 
@@ -1821,6 +1823,7 @@ export const buildTemplatePlan = ({
     placements: placed.placements,
     mode,
     spareLevels: profile.spareLevels,
+    markLevels: profile.markLevels ?? NO_LEVELS,
   });
   const breaks = breaksHeadings(placed);
   settleBrokenHeadings(context, placed, patches, breaks);

@@ -414,6 +414,45 @@ describe("validateTemplateProfile", () => {
     expect(inferTemplateProfile(template).health).toEqual([]);
   });
 
+  test("lists the deeper levels of another list of the template for marks", () => {
+    const template = contractTemplate();
+    const withList = {
+      ...template,
+      numbering: {
+        abstractNums: [
+          ...template.numbering.abstractNums,
+          {
+            abstractNumId: 9,
+            levels: [0, 1, 2].map((ilvl) => ({
+              ilvl,
+              numFmt: "decimal",
+              lvlText: `%${String(ilvl + 1)}.`,
+              start: 1,
+              suff: "tab" as const,
+              pStyle: null,
+              indent: { left: 360 * (ilvl + 1), hanging: 360, firstLine: null },
+            })),
+          },
+        ],
+        nums: [...template.numbering.nums, { numId: 30, abstractNumId: 9 }],
+      },
+    };
+    const listed = inferTemplateProfile(withList);
+    expect(
+      listed.markLevels?.map(({ numId, ilvl, abstractNumId }) => [
+        numId,
+        ilvl,
+        abstractNumId,
+      ]),
+    ).toEqual([
+      [30, 1, 9],
+      [30, 2, 9],
+    ]);
+    expect(validateTemplateProfile(listed, withList)).toEqual([]);
+    expect(parseTemplateProfile(listed).isOk()).toBe(true);
+    expect(inferTemplateProfile(template).markLevels).toEqual([]);
+  });
+
   test("a template with very many such findings still gives a profile that reads back", () => {
     const crowded = inferTemplateProfile({
       ...contractTemplate(),

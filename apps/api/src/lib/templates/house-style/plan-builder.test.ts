@@ -284,6 +284,46 @@ describe("buildTemplatePlan, list instances", () => {
     });
   });
 
+  test("a bullet takes a level outside the outline list where the template has one", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec:", 1),
+      numbered("•", "odrážka", 4),
+      numbered("(a)", "případ psaný jinak;", 3),
+    ]);
+    const markLevel = {
+      numId: 20,
+      ilvl: 1,
+      abstractNumId: 3,
+      numFmt: "decimal",
+      lvlText: "%2.",
+      start: 1,
+      indent: { left: 720, hanging: 360, firstLine: null },
+    };
+    const { plan } = build(manifest, "keepSource", {
+      profile: { ...PROFILE, markLevels: [markLevel] },
+    });
+    expect(itemOf(plan, manifest, "odrážka")?.numbering).toMatchObject({
+      numId: 20,
+      ilvl: 1,
+    });
+    expect(plan.numberingPatches).toContainEqual({
+      abstractNumId: 3,
+      ilvl: 1,
+      numFmt: "bullet",
+      lvlText: "•",
+    });
+    // No level of the outline list is patched for the bullet.
+    expect(
+      plan.numberingPatches?.some(({ numFmt }) => numFmt === "bullet") &&
+        plan.numberingPatches.every(
+          ({ abstractNumId, numFmt }) =>
+            numFmt !== "bullet" || abstractNumId === 3,
+        ),
+    ).toBe(true);
+  });
+
   test("a second format of one level and a bullet take spare levels", () => {
     const manifest = manifestOf([
       "SMLOUVA",
