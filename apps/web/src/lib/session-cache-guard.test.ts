@@ -149,7 +149,7 @@ const nextNavigation = async (
       publicHref: `${location.pathname}${hash === "" ? "" : `#${hash}`}`,
     },
   });
-  let result: "stay" | "redirect" | "pending" | unknown = "pending";
+  let result: unknown = "pending";
   void (async () => {
     try {
       await guard;
