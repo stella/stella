@@ -120,13 +120,14 @@ export const REFORMAT_INTO_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     "Apply an organisation template's house style to a stored DOCX and save " +
     "the result as a new document beside it; the source is not changed. " +
     "The text is carried over verbatim: styles, numbering, headers and " +
-    "footers come from the template, and cross-references become fields. " +
+    "footers come from the template, and a cross-reference whose target is " +
+    "certain becomes a field. " +
     "Omit template_id to use the matching template tagged " +
     `"${HOUSE_STYLE_TEMPLATE_TAG}". A document that cannot be reformatted ` +
     "without changing its text (tracked changes, a number the template " +
     "would not show) is refused and nothing is saved. Returns the new " +
-    "document and a formatting note: counts, references and labels kept as " +
-    "text, and template findings.",
+    "document and a formatting note: counts, what stayed text, template " +
+    "findings.",
   inputSchema: reformatIntoTemplateArgsSchema,
   annotations: {
     title: "Reformat into template",
@@ -240,30 +241,29 @@ const loadSourceDocument = async ({
       ),
     };
   }
+  // Counted before the encryption check: with an encrypted agreement beside
+  // a readable exhibit, the exhibit is not the document to reformat.
   const docxFields = version.fields.flatMap(({ content, propertyId }) =>
-    content.type === "file" &&
-    content.mimeType === DOCX_MIME_TYPE &&
-    !content.encrypted
+    content.type === "file" && content.mimeType === DOCX_MIME_TYPE
       ? [{ content, propertyId }]
       : [],
   );
-  const [only] = docxFields;
-  if (only === undefined || docxFields.length > 1) {
+  const [first] = docxFields;
+  const only = first?.content.encrypted === false ? first : undefined;
+  const several = docxFields.length > 1;
+  if (only === undefined || several) {
     return {
       status: "error",
       response: structuredErrorResult({
         code: "validation_error",
-        message:
-          only === undefined
-            ? "This version holds no readable DOCX file"
-            : "This version holds several DOCX files",
+        message: several
+          ? "This version holds several DOCX files"
+          : "This version holds no readable DOCX file",
         issues: [
           {
             path: versionId === undefined ? "entity_id" : "version_id",
             message:
-              only === undefined
-                ? "Reformat a document version that holds one .docx file"
-                : "Reformat a document version that holds exactly one .docx file",
+              "Reformat a document version that holds exactly one unencrypted .docx file",
           },
         ],
       }),
@@ -369,7 +369,7 @@ const templateChoiceResult = (
       return selection.template;
     case "none":
       return notFoundResult(
-        `No document template is tagged "${HOUSE_STYLE_TEMPLATE_TAG}"`,
+        `No document template tagged "${HOUSE_STYLE_TEMPLATE_TAG}" fits this document`,
         `Pass template_id from list_templates, or tag the organisation's house-style template "${HOUSE_STYLE_TEMPLATE_TAG}".`,
       );
     case "ambiguous":
@@ -563,7 +563,9 @@ export const handleReformatIntoTemplateTool = async (
     const picked = templateChoiceResult(
       selectHouseStyleTemplate({
         candidates: await dependencies.listHouseStyleTemplates(context),
-        documentName: `${owner.name} ${source.fileName}`,
+        // The extension is no word of the name: it would match a template
+        // that happens to say "docx".
+        documentName: `${owner.name} ${source.fileName.replace(DOCX_EXT_RE, "")}`,
       }),
     );
     if ("status" in picked) {

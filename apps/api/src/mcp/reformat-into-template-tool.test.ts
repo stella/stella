@@ -287,7 +287,8 @@ describe("reformat_into_template", () => {
 
   test("asks for the template when several fit the document equally", async () => {
     const { context, created, dependencies } = await harness({
-      candidates: ["First", "Second"].map((name, index) => ({
+      // Only the file extension would match the first.
+      candidates: ["DOCX Letter", "Memo"].map((name, index) => ({
         id: toSafeId<"template">(
           `00000000-0000-4000-8000-00000000001${String(index)}`,
         ),
