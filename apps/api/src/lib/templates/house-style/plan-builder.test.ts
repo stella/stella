@@ -2177,6 +2177,21 @@ describe("buildTemplatePlan, the lines of the parties", () => {
       shared - 20,
       shared,
     ]);
+    // A source that tabbed its values into place over default stops types
+    // more tabs on a short label: each line still ends its last one there.
+    const tabbed = manifestOf([
+      "SMLOUVA",
+      "Univerzita Příkladná",
+      "se sídlem:\t\t\t\tOvocný trh 1, Praha 1",
+      "IČO:\t\t\t\t\t00000001",
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec.", 1),
+    ]);
+    const lines = build(tabbed, "keepSource", { profile: measured }).plan;
+    const seat = itemOf(lines, tabbed, "se sídlem")?.tabStops ?? [];
+    const number = itemOf(lines, tabbed, "IČO")?.tabStops ?? [];
+    expect([seat.length, number.length]).toEqual([4, 5]);
+    expect(seat.at(-1)).toBe(number.at(-1));
     // A line without a label and a tab has nothing to align.
     expect(itemOf(plan, manifest, "(dále jen")).not.toHaveProperty("tabStops");
     expect(itemOf(plan, manifest, "Univerzita")).not.toHaveProperty("tabStops");

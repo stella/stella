@@ -1266,7 +1266,9 @@ const LABEL_GAP = 170;
 /** The tabs a line types in front of its last one end a point apart in
  *  front of the shared stop, so the last tab of every line ends at it. */
 const TAB_STEP = 20;
-const TAB_STOPS_MAX = 3;
+/** As many stops as fit in the gap behind the widest label: a source that
+ *  tabbed its values into place over default stops types that many. */
+const TAB_STOPS_MAX = 8;
 
 type LabelledLine = { blockId: string; labelEnd: number; tabs: number };
 
