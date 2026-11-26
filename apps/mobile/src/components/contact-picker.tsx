@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 
 import { Result } from "better-result";
 import { randomUUID } from "expo-crypto";
@@ -8,6 +8,7 @@ import { useTranslations } from "use-intl";
 import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import type { ContactType } from "@stll/api-contract/workspace-contacts";
 import { Button } from "@stll/ui/button";
+import { useMountEffect } from "@stll/ui/effects";
 import { Input } from "@stll/ui/input";
 import { Loader } from "@stll/ui/loader";
 import { Separator } from "@stll/ui/separator";
@@ -79,12 +80,9 @@ export const ContactPicker = ({
   const tickets = useRef(0);
   const pause = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  useEffect(
-    () => () => {
-      clearTimeout(pause.current);
-    },
-    [],
-  );
+  useMountEffect(() => () => {
+    clearTimeout(pause.current);
+  });
 
   const search = (text: string) => {
     setQuery(text);

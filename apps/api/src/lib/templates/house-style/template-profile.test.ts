@@ -414,6 +414,102 @@ describe("validateTemplateProfile", () => {
     expect(inferTemplateProfile(template).health).toEqual([]);
   });
 
+  test("finds a numbered level whose style sets it apart from its siblings", () => {
+    const template = contractTemplate();
+    const withLooks = (
+      looks: Record<string, { bold: boolean; size: number | null }>,
+    ) => ({
+      ...template,
+      styles: template.styles.map((style) => ({
+        ...style,
+        bold: false,
+        size: 22,
+        keepNext: false,
+        ...looks[style.styleId],
+      })),
+    });
+    // The second clause level in bold and a size up, under plain siblings.
+    const apart = inferTemplateProfile(
+      withLooks({
+        Article: { bold: true, size: 22 },
+        Clause2: { bold: true, size: 24 },
+      }),
+    );
+    expect(apart.health).toEqual([
+      {
+        kind: "levelSetApart",
+        role: "clause2",
+        styleId: "Clause2",
+        bold: true,
+        size: 24,
+        insteadStyleId: "Clause1",
+      },
+    ]);
+    // The template's own target stays in the profile.
+    expect(apart.roles.clause2?.styleId).toBe("Clause2");
+    expect(parseTemplateProfile(apart).isOk()).toBe(true);
+
+    // An item level takes an item's style.
+    expect(
+      inferTemplateProfile(withLooks({ Roman: { bold: false, size: 18 } }))
+        .health,
+    ).toMatchObject([{ role: "roman", insteadStyleId: "Letter" }]);
+    // Levels that all look alike, a template that sets every level in
+    // bold, and an inspection without the looks: nothing is found.
+    expect(inferTemplateProfile(withLooks({})).health).toEqual([]);
+    expect(
+      inferTemplateProfile(
+        withLooks({
+          Clause1: { bold: true, size: 22 },
+          Clause2: { bold: true, size: 22 },
+          Letter: { bold: true, size: 22 },
+          Roman: { bold: true, size: 22 },
+          Body: { bold: true, size: 22 },
+        }),
+      ).health,
+    ).toEqual([]);
+    expect(inferTemplateProfile(template).health).toEqual([]);
+    // Two looks with as many styles each (two plain clause styles, two
+    // bold item styles, the body in a third size): no look is the
+    // template's own, and nothing is found.
+    expect(
+      inferTemplateProfile(
+        withLooks({
+          Letter: { bold: true, size: 22 },
+          Roman: { bold: true, size: 22 },
+          Body: { bold: false, size: 20 },
+        }),
+      ).health,
+    ).toEqual([]);
+  });
+
+  test("a finding that names a style the template lacks is refused", () => {
+    const template = contractTemplate();
+    const inferred = inferTemplateProfile(template);
+    expect(
+      validateTemplateProfile(
+        {
+          ...inferred,
+          health: [
+            {
+              kind: "levelSetApart",
+              role: "clause2",
+              styleId: "Clause2",
+              bold: true,
+              size: 24,
+              insteadStyleId: "Missing",
+            },
+          ],
+        },
+        template,
+      ),
+    ).toContainEqual({
+      severity: "error",
+      code: "unknownStyle",
+      role: "clause2",
+    });
+  });
+
   test("a template with very many such findings still gives a profile that reads back", () => {
     const crowded = inferTemplateProfile({
       ...contractTemplate(),

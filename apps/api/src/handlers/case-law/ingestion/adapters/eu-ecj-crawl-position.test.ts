@@ -321,7 +321,7 @@ describe("eu-ecj crawl position within a date", () => {
     const cutAt = 3;
     installCellar((variant) =>
       variant.sourceDocumentId === ordered[cutAt]
-        ? Promise.resolve(new Response("Forbidden", { status: 403 }))
+        ? Promise.resolve(new Response("Bad Request", { status: 400 }))
         : undefined,
     );
     // The budget runs out right after the publisher refuses the manifestation,

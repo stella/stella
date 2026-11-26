@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { Result } from "better-result";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
@@ -20,6 +20,11 @@ import type {
   SignedFileBinding,
 } from "@stll/api-contract/signature";
 import { Button } from "@stll/ui/button";
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useMountEffect,
+} from "@stll/ui/effects";
 import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
@@ -209,14 +214,14 @@ const OpenedDocument = ({
   // screen has gone; an answer sent to a removed web view throws, so none is.
   const mounted = useRef(true);
 
-  useEffect(() => {
+  useMountEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
     };
-  }, []);
+  });
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (source === null) {
       return undefined;
     }
@@ -249,7 +254,7 @@ const OpenedDocument = ({
       Alert.alert(t("failedTitle"), t("failure.failed"));
     }
   };
-  const preview = useEffectEvent(showPreview);
+  const preview = useLatestCallback(showPreview);
 
   // Any other file opens in Quick Look straight away; closing it returns here,
   // where it can be opened again.
@@ -257,11 +262,11 @@ const OpenedDocument = ({
     phase.status === "open" && phase.file.viewer === "quick-look"
       ? phase.opened
       : null;
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (quickLook !== null) {
       void preview(quickLook);
     }
-  }, [quickLook]);
+  }, [quickLook, preview]);
 
   // A Word document is editable from the start; the first tap into its
   // text opens it for editing.

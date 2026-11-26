@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
@@ -2297,7 +2291,7 @@ function useForgetInaccessible({
           .sort()
           .join(" ")
       : "";
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (forgotten === "") {
       return;
     }
@@ -2410,7 +2404,7 @@ function useMatterCandidates(recordedIds: readonly string[]) {
         }
       });
   }, []);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     refreshCandidates();
     return () => {
       candidateRequest.current += 1;
@@ -2426,7 +2420,7 @@ function useMatterCandidates(recordedIds: readonly string[]) {
           resolved: candidates.resolved,
         }).join(" ")
       : "";
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (unresolved === "") {
       return;
     }
@@ -2491,7 +2485,7 @@ function useRecordedElsewhere(
         }
       });
   }, [date]);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     refresh();
     window.addEventListener("focus", refresh);
     return () => {

@@ -284,6 +284,60 @@ describe("buildTemplatePlan, list instances", () => {
     });
   });
 
+  test("a spare level that numbers a role without a level of its own takes the indent of the level whose style it borrows", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec.", 1),
+      numbered("1.1.", "Pododstavec.", 2),
+      numbered("1.1.1.", "Podrobnost.", 3),
+    ]);
+    const { plan } = build(manifest);
+    const second = PROFILE.roles.clause2?.numbering;
+    const detail = itemOf(plan, manifest, "Podrobnost");
+    expect(PROFILE.roles.clause3).toBeNull();
+    expect(detail).toMatchObject({ styleId: "Clause2" });
+    expect(
+      plan.numberingPatches?.find(
+        ({ ilvl }) => ilvl === detail?.numbering?.ilvl,
+      )?.indent,
+    ).toEqual({
+      left: second?.indent.left ?? 0,
+      hanging: second?.indent.hanging ?? 0,
+    });
+  });
+
+  test("bullets hang from the paragraph in front of their list, a level for each indent", () => {
+    const manifest = manifestOf([
+      "SMLOUVA",
+      "Úvodní věta s výčtem:",
+      numbered("•", "odrážka pod úvodní větou", 4),
+      "Článek I.\nPrvní",
+      numbered("1.", "Odstavec s výčtem:", 1),
+      numbered("•", "odrážka pod odstavcem", 5),
+      numbered("•", "druhá odrážka pod odstavcem", 5),
+    ]);
+    const { plan } = build(manifest);
+    const levelOf = (start: string) =>
+      plan.numberingPatches?.find(
+        ({ ilvl }) => ilvl === itemOf(plan, manifest, start)?.numbering?.ilvl,
+      );
+    const clauseText = PROFILE.roles.clause1?.numbering?.indent.left ?? 0;
+    const step = PROFILE.roles.letter?.numbering?.indent.hanging ?? 0;
+    expect(step).toBeGreaterThan(0);
+    // Under text at the margin the mark stands at the margin.
+    expect(levelOf("odrážka pod úvodní")?.indent).toEqual({
+      left: step,
+      hanging: step,
+    });
+    // Under a clause it stands where the clause's text starts.
+    expect(levelOf("odrážka pod odstavcem")?.indent).toEqual({
+      left: clauseText + step,
+      hanging: step,
+    });
+    expect(levelOf("druhá odrážka")).toBe(levelOf("odrážka pod odstavcem"));
+  });
+
   test("a second format of one level and a bullet take spare levels", () => {
     const manifest = manifestOf([
       "SMLOUVA",
@@ -313,7 +367,14 @@ describe("buildTemplatePlan, list instances", () => {
           numFmt: "lowerLetter",
           indent: { left: 2268, hanging: 567 },
         },
-        { abstractNumId: 4, ilvl: 6, numFmt: "bullet", lvlText: "•" },
+        // The bullet hangs from the text of the item in front of it.
+        {
+          abstractNumId: 4,
+          ilvl: 6,
+          numFmt: "bullet",
+          lvlText: "•",
+          indent: { left: 2835, hanging: 567 },
+        },
       ]),
     );
     expect(note.items.filter(({ kind }) => kind.startsWith("label"))).toEqual(
@@ -496,6 +557,44 @@ describe("buildTemplatePlan, pages the source starts", () => {
     expect(plan.omit).toEqual([{ blockId: "p2", reason: "empty" }]);
     expect(starts(plan)).toEqual(["p3"]);
     expect(note.counts.pageStarts).toBe(1);
+  });
+
+  test("a page start between an article's heading and its text moves in front of the heading", () => {
+    const { plan, note } = build(
+      withFacts(
+        [
+          "SMLOUVA",
+          "Článek I. Předmět",
+          "První ujednání.",
+          "Článek II. Cena",
+          "",
+          "Druhé ujednání.",
+        ],
+        { 4: { pageBreaks: 1 } },
+      ),
+    );
+    expect(starts(plan)).toEqual(["p3"]);
+    expect(note.items.filter(({ kind }) => kind === "pageStartMoved")).toEqual([
+      { kind: "pageStartMoved", blockId: "p3", fromBlockId: "p5" },
+    ]);
+    expect(note.counts.pageStarts).toBe(1);
+  });
+
+  test("a page start behind running text numbered like an article stays where it is", () => {
+    const { plan, note } = build(
+      withFacts(
+        [
+          "SMLOUVA",
+          "1.\tStrany se dohodly, že veškeré informace, které si předají, zůstanou důvěrné po dobu pěti let.",
+          "Příloha č. 1",
+        ],
+        { 2: { pageBreakBefore: true } },
+      ),
+    );
+    expect(starts(plan)).toEqual(["p2"]);
+    expect(note.items.some(({ kind }) => kind === "pageStartMoved")).toBe(
+      false,
+    );
   });
 
   test("a paragraph's own page start is carried, except on the document's first block", () => {
@@ -727,10 +826,10 @@ describe("buildTemplatePlan, pages the source starts", () => {
     ).toEqual([true, false]);
   });
 
-  test("a title that starts a page is not joined to the heading before it", () => {
+  test("a title that starts a page takes an article's heading with it, and is no part of another heading", () => {
     const reading = (
       blockId: string,
-      role: "title" | "articleHeading" | "clause1",
+      role: "title" | "articleHeading" | "annexHeading" | "clause1" | "body",
       mergedIntoBlockId: string | null = null,
     ) => ({
       blockId,
@@ -750,19 +849,72 @@ describe("buildTemplatePlan, pages the source starts", () => {
     expect(itemOf(joined.plan, manifestOf(texts), "Článek I.")?.mergeNext).toBe(
       "none",
     );
-    for (const facts of [
+    for (const [facts, annexFacts] of [
       // By its own formatting, and by the section that ends in front of it.
-      { 2: { pageBreakBefore: true } } as const,
-      { 1: { endsSection: true }, 2: { sectionIndex: 1 } } as const,
-    ]) {
+      [{ 2: { pageBreakBefore: true } }, { 3: { pageBreakBefore: true } }],
+      [
+        { 1: { endsSection: true }, 2: { sectionIndex: 1 } },
+        { 2: { endsSection: true }, 3: { sectionIndex: 1 } },
+      ],
+    ] as const) {
       const manifest = withFacts(texts, facts, [
         section(0, "nextPage"),
         section(1, "nextPage"),
       ]);
-      const { plan } = build(manifest, "keepSource", { roles });
-      expect(itemOf(plan, manifest, "Článek I.")?.mergeNext).toBeUndefined();
-      expect(starts(plan)).toEqual(["p2"]);
+      // The article's heading and its title start the page together.
+      const { plan, note } = build(manifest, "keepSource", { roles });
+      expect(itemOf(plan, manifest, "Článek I.")?.mergeNext).toBe("none");
+      expect(starts(plan)).toEqual(["p1"]);
+      expect(
+        note.items.filter(({ kind }) => kind === "pageStartMoved"),
+      ).toEqual([{ kind: "pageStartMoved", blockId: "p1", fromBlockId: "p2" }]);
+
+      // An annex may be headed on a page of its own: its title stays a
+      // line of the page it starts.
+      const annexTexts = ["SMLOUVA", "Text.", "Příloha č. 1", "Ceník", "Ceny."];
+      const annex = withFacts(annexTexts, annexFacts, [
+        section(0, "nextPage"),
+        section(1, "nextPage"),
+      ]);
+      const kept = build(annex, "keepSource", {
+        roles: [
+          reading("p0", "title"),
+          reading("p1", "body"),
+          reading("p2", "annexHeading"),
+          reading("p3", "annexHeading", "p2"),
+          reading("p4", "body"),
+        ],
+      });
+      expect(
+        itemOf(kept.plan, annex, "Příloha č. 1")?.mergeNext,
+      ).toBeUndefined();
+      expect(starts(kept.plan)).toEqual(["p3"]);
     }
+
+    // In front of a table, which cannot be told to start a page, the
+    // heading still starts it.
+    const cells = inColumns(1, ["položka"]).blocks.map((block) => ({
+      ...block,
+      id: `c${block.id}`,
+      ...(block.cells === undefined
+        ? {}
+        : {
+            cells: block.cells.map((cell) => ({
+              ...cell,
+              blockIds: cell.blockIds.map((id) => `c${id}`),
+            })),
+          }),
+    }));
+    const headed = withFacts(texts.slice(0, 3), {
+      2: { pageBreakBefore: true },
+    });
+    const beforeTable = build(
+      { ...headed, blocks: [...headed.blocks, ...cells] },
+      "keepSource",
+      { roles: roles.slice(0, 3) },
+    );
+    expect(starts(beforeTable.plan)).toEqual(["p1"]);
+    expect(notes(beforeTable.note, "pageStartNotKept")).toEqual([]);
   });
 
   test("between two tables one blank paragraph stays, and the page starts once", () => {
@@ -1031,6 +1183,117 @@ describe("buildTemplatePlan, a template with text effects that show nothing", ()
         ({ kind }) => kind === "invisibleEffectsRemoved",
       ),
     ).toBe(false);
+  });
+});
+
+describe("buildTemplatePlan, a level the template sets apart from its siblings", () => {
+  const manifest = manifestOf([
+    "SMLOUVA",
+    "Článek I. Předmět",
+    numbered("1.1.", "První ujednání."),
+    numbered("1.1.1.", "Podrobnost prvního ujednání."),
+    numbered("1.1.1.1.", "Podrobnost podrobnosti."),
+  ]);
+  const apart = {
+    ...PROFILE,
+    health: [
+      {
+        kind: "levelSetApart",
+        role: "clause2",
+        styleId: "Clause2",
+        bold: true,
+        size: 24,
+        insteadStyleId: "Clause1",
+      },
+    ],
+  } satisfies typeof PROFILE;
+  const placedAs = (profile: typeof PROFILE, start: string) => {
+    const item = itemOf(
+      build(manifest, "houseScheme", { profile }).plan,
+      manifest,
+      start,
+    );
+    return { styleId: item?.styleId, ilvl: item?.numbering?.ilvl };
+  };
+
+  test("its paragraphs take the sibling's style on their own level, and the note says so", () => {
+    // The template's own placement, for comparison.
+    expect(placedAs(PROFILE, "Podrobnost prvního")).toEqual({
+      styleId: "Clause2",
+      ilvl: 2,
+    });
+    expect(placedAs(apart, "Podrobnost prvního")).toEqual({
+      styleId: "Clause1",
+      ilvl: 2,
+    });
+    // A deeper level that borrows the style borrows the sibling's too.
+    expect(placedAs(apart, "Podrobnost podrobnosti").styleId).toBe("Clause1");
+    expect(placedAs(apart, "První ujednání")).toEqual({
+      styleId: "Clause1",
+      ilvl: 1,
+    });
+    expect(
+      build(manifest, "keepSource", { profile: apart }).note.items.filter(
+        ({ kind }) => kind === "levelStyleEvened",
+      ),
+    ).toEqual([
+      {
+        kind: "levelStyleEvened",
+        role: "clause2",
+        styleId: "Clause2",
+        insteadStyleId: "Clause1",
+        blocks: 1,
+      },
+    ]);
+  });
+
+  test("a profile that keeps the template's looks keeps the style", () => {
+    const kept = {
+      ...apart,
+      levelLooks: "asTemplate",
+    } satisfies typeof PROFILE;
+    expect(placedAs(kept, "Podrobnost prvního").styleId).toBe("Clause2");
+    expect(
+      build(manifest, "keepSource", { profile: kept }).note.items.some(
+        ({ kind }) => kind === "levelStyleEvened",
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("buildTemplatePlan, running text numbered like articles", () => {
+  const running = (label: string, name: string) =>
+    `${label}\t${name}. Strana, která informace přijímá, je nesmí bez souhlasu druhé strany nikomu zpřístupnit ani použít k jinému účelu.`;
+  const manifest = manifestOf([
+    "DOHODA O MLČENLIVOSTI",
+    running("1.", "Důvěrné informace"),
+    running("2.", "Výjimky"),
+    running("3.", "Trvání"),
+    "4.\tZávěrečná ustanovení",
+    "4.1\tDohoda se řídí českým právem.",
+  ]);
+
+  test("they keep the article's level and are set as clauses", () => {
+    const { plan, note } = build(manifest, "houseScheme");
+    const first = itemOf(plan, manifest, "1.");
+    expect(first).toMatchObject({
+      styleId: "Clause1",
+      numbering: { ilvl: PROFILE.roles.articleHeading?.numbering?.ilvl },
+    });
+    // The heading among them stays a heading.
+    expect(itemOf(plan, manifest, "4.\tZávěrečná")?.styleId).toBe("Article");
+    expect(
+      note.items.filter(({ kind }) => kind === "articlesSetAsText"),
+    ).toEqual([{ kind: "articlesSetAsText", blocks: 3 }]);
+  });
+
+  test("a document with headings keeps them", () => {
+    const headed = czechContract("Text.");
+    const { plan, note } = build(headed);
+    expect(itemOf(plan, headed, "Článek II.")?.styleId).toBe("Article");
+    expect(note.items.some(({ kind }) => kind === "articlesSetAsText")).toBe(
+      false,
+    );
   });
 });
 

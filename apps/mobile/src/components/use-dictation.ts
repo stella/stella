@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useEffectEvent,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 
 import { panic, Result } from "better-result";
 import {
@@ -27,6 +21,12 @@ import { useLocale } from "use-intl";
 import { applyLearnedFixes } from "@stll/transcript/corrections";
 import type { LearnedFix } from "@stll/transcript/corrections";
 import { respell } from "@stll/transcript/spelling";
+import {
+  useExternalSyncEffect,
+  useLatest,
+  useLatestCallback,
+  useMountEffect,
+} from "@stll/ui/effects";
 
 import {
   discardRecording,
@@ -276,7 +276,7 @@ export const useDictation = (
     });
   };
 
-  const onStatus = (status: RecordingStatus) => {
+  const onStatus = useLatestCallback((status: RecordingStatus) => {
     if (!status.isFinished) {
       return;
     }
@@ -305,11 +305,11 @@ export const useDictation = (
           setPhase("idle");
         }
       });
-  };
-
-  useEffect(() => {
-    handleStatus.current = onStatus;
   });
+
+  useExternalSyncEffect(() => {
+    handleStatus.current = onStatus;
+  }, [onStatus]);
 
   const stop = async (how: StopMeaning) => {
     meaning.current = how;
@@ -553,13 +553,9 @@ const useKeptControls = ({
   const [owner] = useState(randomUUID);
   // The latest `onText` and whether the field takes text, for a dictation
   // that ends after a render changed them.
-  const deliver = useRef(onText);
-  const taking = useRef(!disabled);
-  useEffect(() => {
-    deliver.current = onText;
-    taking.current = !disabled;
-  });
-  useEffect(
+  const deliver = useLatest(onText);
+  const taking = useLatest(!disabled);
+  useExternalSyncEffect(
     () =>
       kept?.own(owner, (dictated) => {
         if (taking.current) {
@@ -567,7 +563,7 @@ const useKeptControls = ({
         }
         return taking.current;
       }),
-    [kept, owner],
+    [kept, owner, deliver, taking],
   );
   const views = useSyncExternalStore(
     kept?.subscribe ?? NO_SUBSCRIPTION,
@@ -980,12 +976,12 @@ const useCutAtPauses = (
   onReading: (reading: Reading) => void,
 ) => {
   // A new reading, not a new render, is what calls it.
-  const read = useEffectEvent(onReading);
-  useEffect(() => {
+  const read = useLatestCallback(onReading);
+  useExternalSyncEffect(() => {
     if (isRecording) {
       read({ durationMillis, metering });
     }
-  }, [durationMillis, isRecording, metering]);
+  }, [durationMillis, isRecording, metering, read]);
 };
 
 /**
@@ -994,8 +990,8 @@ const useCutAtPauses = (
  * open.
  */
 const useSystemStops = (onStop: () => void) => {
-  const handle = useEffectEvent(onStop);
-  useEffect(() => {
+  const handle = useLatestCallback(onStop);
+  useMountEffect(() => {
     const subscriptions = watchDictationDevice({
       onInterruption: () => {
         handle();
@@ -1009,7 +1005,7 @@ const useSystemStops = (onStop: () => void) => {
         subscription.remove();
       }
     };
-  }, []);
+  });
 };
 
 /** One matter's names for the model, read once per matter while the composer is open; none when they cannot be read. */
@@ -1037,8 +1033,8 @@ const useMatterTerms = () => {
  */
 const useDropOnClose = (recorder: AudioRecorder, onClose: () => void) => {
   // Only a new recorder, or the composer closing, lets go.
-  const close = useEffectEvent(onClose);
-  useEffect(
+  const close = useLatestCallback(onClose);
+  useExternalSyncEffect(
     () => () => {
       close();
       if (!recorder.isRecording) {
@@ -1056,7 +1052,7 @@ const useDropOnClose = (recorder: AudioRecorder, onClose: () => void) => {
         return stopped.isOk() && released.isOk() && removed;
       })();
     },
-    [recorder],
+    [recorder, close],
   );
 };
 

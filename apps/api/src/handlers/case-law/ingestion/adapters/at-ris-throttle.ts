@@ -1,13 +1,18 @@
+// parser-output-unchanged: typed publisher read wrapper preserves the RIS origin/path policy and served response text.
 import { panic } from "better-result";
 
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
+  type PublisherReadInit,
+  readPublisherText,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
+import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 /**
  * Every RIS request, pinned to the publisher's own origins and paths.
  *
  * The pacing is not here: `publisher-policy.ts` states what a RIS request
- * costs and `fetchWithRetry` reserves it. What this module still owns is
+ * costs and `fetchPublisher` reserves it. What this module still owns is
  * rule 21 — a `sourceUrl` replayed from storage reaches this function, and
  * nothing it carries may decide where the request goes.
  */
@@ -33,11 +38,12 @@ const RIS_HOST_POLICY = {
 } as const;
 const RIS_PATH_PREFIXES = ["/ris/api/v2.6/Judikatur", "/Dokumente/"] as const;
 
-export const fetchAtRisWithRetry: typeof fetchWithRetry = async (
-  url,
-  init,
-  options,
-) => {
+export type AtRisReadText = (
+  url: string,
+  init: PublisherReadInit,
+) => Promise<ReadOutcome<string>>;
+
+export const readAtRisText: AtRisReadText = async (url, init) => {
   const target = restrictOutboundUrl({
     hostPolicy: RIS_HOST_POLICY,
     pathPrefixes: RIS_PATH_PREFIXES,
@@ -46,9 +52,5 @@ export const fetchAtRisWithRetry: typeof fetchWithRetry = async (
   if (target === null) {
     return panic("RIS request escaped the publisher origin or path");
   }
-  return await fetchWithRetry(
-    target.toString(),
-    { ...init, redirect: "error" },
-    options,
-  );
+  return await readPublisherText(target, { ...init, redirect: "error" });
 };

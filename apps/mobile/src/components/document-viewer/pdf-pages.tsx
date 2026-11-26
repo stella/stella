@@ -4,13 +4,7 @@
 // needs (`Map.prototype.getOrInsertComputed` and others the modern build
 // assumes).
 import "pdfjs-dist/legacy/build/pdf.worker.mjs";
-import {
-  useEffect,
-  useEffectEvent,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { useRef, useState } from "react";
 
 import { Result } from "better-result";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
@@ -20,6 +14,11 @@ import type {
 } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 import { NEUTRAL_COLORS } from "@stll/brand";
+import {
+  useExternalSyncEffect,
+  useLatestCallback,
+  useLayoutSyncEffect,
+} from "@stll/ui/effects";
 import { useComposedRefs } from "@stll/ui/effects-refs";
 
 import { anchoredScroll, canvasScale, scaledScroll } from "./zoom";
@@ -70,7 +69,7 @@ export const PdfPages = ({
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
   const painted = useRef(false);
 
-  const failed = useEffectEvent((error: unknown) => {
+  const failed = useLatestCallback((error: unknown) => {
     onFailed(String(error));
   });
   const pageFailed = (error: unknown) => {
@@ -83,7 +82,7 @@ export const PdfPages = ({
     }
   };
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     // pdf.js takes ownership of the bytes it is given.
     const task = getDocument({ data: bytes.slice() });
     const open = async () => {
@@ -98,9 +97,9 @@ export const PdfPages = ({
     return () => {
       void task.destroy();
     };
-  }, [bytes]);
+  }, [bytes, failed]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (pdf === null) {
       return undefined;
     }
@@ -152,7 +151,7 @@ export const PdfPages = ({
       current = false;
       window.removeEventListener("resize", resized);
     };
-  }, [pdf]);
+  }, [pdf, failed]);
 
   // A new zoom keeps the point at the middle of the screen on the same spot
   // of the same page. The offsets are read as the person scrolls, before a
@@ -160,7 +159,7 @@ export const PdfPages = ({
   const scrolling = useRef<HTMLDivElement | null>(null);
   const scrolled = useRef({ top: 0, left: 0 });
   const shownZoom = useRef(zoom);
-  useLayoutEffect(() => {
+  useLayoutSyncEffect(() => {
     const previous = shownZoom.current;
     shownZoom.current = zoom;
     const box = scrolling.current;
@@ -243,10 +242,10 @@ const PdfPage = ({
   onFailed: (error: unknown) => void;
 }) => {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const painted = useEffectEvent(onPainted);
-  const failed = useEffectEvent(onFailed);
+  const painted = useLatestCallback(onPainted);
+  const failed = useLatestCallback(onFailed);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const element = canvas.current;
     if (element === null || scroller === null) {
       return undefined;
@@ -323,7 +322,7 @@ const PdfPage = ({
       far.disconnect();
       drawing.task?.cancel();
     };
-  }, [pdf, number, width, scroller]);
+  }, [pdf, number, width, scroller, painted, failed]);
 
   return (
     <canvas

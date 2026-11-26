@@ -9,7 +9,10 @@ import type {
   DocxBlock,
   DocxBlockManifest,
 } from "@/api/lib/templates/house-style/folio-contract";
-import { buildLabelIndex } from "@/api/lib/templates/house-style/label-index";
+import {
+  buildLabelIndex,
+  printedLabel,
+} from "@/api/lib/templates/house-style/label-index";
 import type {
   LabelEntry,
   LabelIndex,
@@ -350,10 +353,18 @@ const readFrontMatter = (
           confidence: CONFIDENCE.alternative,
         });
   }
-  return reading("title", CONFIDENCE.subtitle, {
-    role: "body",
-    confidence: CONFIDENCE.beforeTitle,
-  });
+  // Between the title and the parties a line belongs to the title when it
+  // is set like one: centred, or in capitals. Anything else there is text
+  // (a note on how to fill the form in, a sentence that opens the deed).
+  return block.alignment === "center" || isTitleShaped(block)
+    ? reading("title", CONFIDENCE.subtitle, {
+        role: "body",
+        confidence: CONFIDENCE.beforeTitle,
+      })
+    : reading("body", CONFIDENCE.plain, {
+        role: "title",
+        confidence: CONFIDENCE.weakAlternative,
+      });
 };
 
 const readUnlabelled = (
@@ -378,8 +389,9 @@ const readUnlabelled = (
   }
   // A list the label index does not count: bullets and dashes, or a label
   // it could not read.
-  if (block.label !== null) {
-    return isBulletMark(block.label)
+  const label = printedLabel(block);
+  if (label !== null) {
+    return isBulletMark(label)
       ? reading("bullet", CONFIDENCE.autoLabel)
       : reading("continuation", CONFIDENCE.bullet, {
           role: "letter",
@@ -418,7 +430,7 @@ export const isBlankParagraph = ({
   label,
   inlineObjects = 0,
 }: DocxBlock): boolean =>
-  text.trim() === "" && label === null && inlineObjects === 0;
+  text.trim() === "" && printedLabel({ label }) === null && inlineObjects === 0;
 
 /**
  * Proposes a role for every paragraph of the main story that stands on its

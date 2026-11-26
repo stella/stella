@@ -113,6 +113,23 @@ const isTitleText = (text: string): boolean => {
   return trimmed.length <= HEADING_TITLE_MAX && !SENTENCE_END.test(trimmed);
 };
 
+const RUNNING_WORDS_MIN = 8;
+
+/**
+ * Whether the text behind a provision's label is text of its own and no
+ * title: it runs past a title's length, or it ends like a sentence and is
+ * long enough to be one (`Notices. Each notice is given in writing and
+ * takes effect when it is received.`).
+ */
+export const isRunningText = (text: string): boolean => {
+  const trimmed = text.replace(/^[\s:–—.-]+/u, "").trim();
+  return (
+    trimmed.length > HEADING_TITLE_MAX ||
+    (SENTENCE_END.test(trimmed) &&
+      trimmed.split(/\s+/u).length >= RUNNING_WORDS_MIN)
+  );
+};
+
 type RawLabel = {
   origin: "auto" | "manual";
   shape: LabelShape;
@@ -212,13 +229,23 @@ const readManualLabel = (block: DocxBlock): RawLabel | null => {
   };
 };
 
+/**
+ * The label a list prints in front of a paragraph. Null for a paragraph in
+ * no list, and for one whose list level prints nothing: a heading style
+ * bound to a list for its outline only reads like any unnumbered paragraph,
+ * typed label and all.
+ */
+export const printedLabel = ({
+  label,
+}: Pick<DocxBlock, "label">): string | null =>
+  label === null || label.trim() === "" ? null : label;
+
 const readLabel = (block: DocxBlock): RawLabel | null => {
   if (block.kind !== "paragraph" || isContentsBlock(block)) {
     return null;
   }
-  return block.label === null
-    ? readManualLabel(block)
-    : readAutoLabel(block, block.label);
+  const label = printedLabel(block);
+  return label === null ? readManualLabel(block) : readAutoLabel(block, label);
 };
 
 /** A heading states a title or nothing; a sentence that opens with a
@@ -381,7 +408,7 @@ const nextTitleBlock = (
     next === undefined ||
     next.raw !== null ||
     next.block.kind !== "paragraph" ||
-    next.block.label !== null ||
+    printedLabel(next.block) !== null ||
     next.block.text.trim() === "" ||
     !isTitleText(next.block.text) ||
     isContentsBlock(next.block)

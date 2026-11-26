@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useMountEffect } from "@stll/ui/effects";
 
 import { DESKTOP_PLATFORM } from "../shared/use-clipboard-shortcut";
 import {
@@ -30,7 +31,7 @@ export const DictationInputFix = () => {
     null,
   );
 
-  useEffect(() => {
+  useMountEffect(() => {
     let disposed = false;
     const read = async () => {
       const result = await Result.tryPromise(async () =>
@@ -49,7 +50,7 @@ export const DictationInputFix = () => {
     return () => {
       disposed = true;
     };
-  }, []);
+  });
 
   if (snapshot === null) {
     return null;

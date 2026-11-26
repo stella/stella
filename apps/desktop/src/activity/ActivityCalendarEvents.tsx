@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic } from "better-result";
@@ -11,6 +11,7 @@ import type {
   DayCalendarBlock,
   DayCalendarColumn,
 } from "@stll/ui/day-calendar";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import type {
   ActivityCalendarDay,
@@ -56,7 +57,7 @@ function useCalendarDay({ date, timeZone, source }: CalendarDayOptions) {
     key: string;
     state: Extract<CalendarDayState, { type: "failed" | "read" }>;
   } | null>(null);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (source === "off") {
       return undefined;
     }

@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { Result } from "better-result";
 import { File, Paths } from "expo-file-system";
 import { usePreventRemove } from "expo-router/react-navigation";
 import { Alert } from "react-native";
 import { useTranslations } from "use-intl";
+
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import { decodeChunkInto } from "@/components/document-viewer/chunks";
 import type { AccessTokenSource } from "@/connection/session";
@@ -523,7 +525,7 @@ export const useDocumentEditing = ({
 
   // A screen gone mid-edit, by a path that is not a navigation, still gives
   // the lock back or keeps its checkpoint for the next edit.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     alive.current = true;
     return () => {
       alive.current = false;

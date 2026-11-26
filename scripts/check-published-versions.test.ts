@@ -305,12 +305,18 @@ const run = async ({
   bumpedAt?: number;
 } = {}) => {
   const requests: string[] = [];
+  const held: (() => void)[] = [];
   const server = Bun.serve({
     port: 0,
     async fetch(request) {
       requests.push(new URL(request.url).pathname);
       if (delay) {
-        await Bun.sleep(delay);
+        await new Promise<void>((resolve) => {
+          held.push(resolve);
+          request.signal.addEventListener("abort", () => resolve(), {
+            once: true,
+          });
+        });
       }
       return new Response(body, { status });
     },
@@ -329,6 +335,9 @@ const run = async ({
     expect(JSON.stringify(result)).not.toContain(SENTINEL);
     return result;
   } finally {
+    for (const release of held) {
+      release();
+    }
     await server.stop(true);
   }
 };

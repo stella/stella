@@ -54,6 +54,66 @@ describe("proposeBlockRoles", () => {
     });
   });
 
+  test("a list level that prints nothing is no label", () => {
+    // A heading style bound to a list for its outline only: the level
+    // prints nothing, the label is typed.
+    const silent = (text: string) => ({
+      text,
+      label: "",
+      numId: 7,
+      styleName: "heading 3",
+      outlineLevel: 2,
+    });
+    const manifest = manifestOf([
+      "SMLOUVA O DÍLO",
+      "Čl. 1",
+      "Předmět smlouvy",
+      numbered("1.", "Zhotovitel provede dílo.", 3),
+      silent(""),
+      silent("Čl. 2"),
+      silent("Účel smlouvy"),
+      numbered("1.", "Účelem smlouvy je úprava práv.", 3),
+    ]);
+    const proposals = proposeBlockRoles({ manifest });
+    const proposalOf = (id: string) =>
+      proposals.find(({ blockId }) => blockId === id);
+    expect(proposalOf("p4")).toBeUndefined();
+    expect(proposalOf("p5")).toMatchObject({
+      role: "articleHeading",
+      mergedIntoBlockId: null,
+    });
+    expect(proposalOf("p6")).toMatchObject({
+      role: "articleHeading",
+      mergedIntoBlockId: "p5",
+    });
+  });
+
+  test("between the title and the parties only a line set like a title belongs to it", () => {
+    const manifest = manifestOf([
+      "SMLOUVA O DÍLO",
+      "uzavřená podle § 2586 občanského zákoníku",
+      "č. 12/2026",
+      "Tento vzor je pracovní podklad. Před použitím jej upravte podle povahy díla, vyplňte žlutě označená místa a ověřte, že odpovídá zadání.",
+      "Objednatel: Horák Stavby s.r.o., se sídlem Dlouhá 1, Praha",
+      numbered("1.", "Zhotovitel provede dílo.", 3),
+    ]);
+    const centred = {
+      ...manifest,
+      blocks: manifest.blocks.map((block) =>
+        block.id === "p1" || block.id === "p2"
+          ? { ...block, alignment: "center" }
+          : block,
+      ),
+    };
+    expect(rolesOf(centred)).toMatchObject({
+      "SMLOUVA O DÍLO": "title",
+      "uzavřená podle § 2586 občans": "title",
+      "č. 12/2026": "title",
+      "Tento vzor je pracovní podkl": "body",
+      "Objednatel: Horák Stavby s.r": "party",
+    });
+  });
+
   test("the proposal of a merged title points at its heading", () => {
     const manifest = czechContract("Text.");
     const proposals = proposeBlockRoles({ manifest });
@@ -96,7 +156,7 @@ describe("proposeBlockRoles", () => {
     });
     expect(rolesOf(czechDecimalContract("Text."))).toMatchObject({
       "RÁMCOVÁ DOHODA": "title",
-      "uzavřená mezi stranami:": "title",
+      "uzavřená mezi stranami:": "body",
       "Nadpis 1": "articleHeading",
       "Znění 1.1.": "clause1",
     });

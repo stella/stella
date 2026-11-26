@@ -1,4 +1,4 @@
-import { useEffect, useImperativeHandle, useRef, useState } from "react";
+import { useImperativeHandle, useRef, useState } from "react";
 import type { Ref } from "react";
 
 import {
@@ -20,6 +20,7 @@ import { panic } from "better-result";
 import "@neftaly/editcontext-polyfill";
 import { useDebouncedCallback } from "use-debounce";
 
+import { useExternalSyncEffect } from "@stll/ui/effects";
 import { useLatest } from "@stll/ui/use-latest";
 import { cn } from "@stll/ui/utils";
 
@@ -214,7 +215,7 @@ export const MarkdownHybridEditor = ({
   // editor's life, and the engine owns its state after the seed. Later values
   // reach the engine through the latest-value refs above and the sync effects
   // below.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const { allowsImageSource: allowsSource, commentMode } = mountChoices;
     const host = hostRef.current;
     if (!host) {
@@ -328,19 +329,19 @@ export const MarkdownHybridEditor = ({
   ]);
 
   // Pushes the host's lock into the engine whenever it changes.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     hostReadOnly.set(readOnly, undefined);
     model.readonlyMode.set(readOnly, undefined);
   }, [hostReadOnly, model, readOnly]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     model.baseline.set(
       baseline === undefined ? undefined : new StringValue(baseline),
       undefined,
     );
   }, [model, baseline]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     pushedCommentIds.current = new Set(comments.map((comment) => comment.id));
     commentsModel.set(
       comments.map((comment) => ({

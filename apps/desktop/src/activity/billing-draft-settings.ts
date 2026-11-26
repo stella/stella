@@ -1,16 +1,10 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
 
 import type { DesktopBillingDraftEffectiveMode } from "@stll/api-contract/desktop-billing-drafts";
-import { useLayoutSyncEffect } from "@stll/ui/effects";
+import { useExternalSyncEffect, useLayoutSyncEffect } from "@stll/ui/effects";
 
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
@@ -258,7 +252,7 @@ export const useBillingDraftSettings = (
     });
   }, [enabled, consent, setConsent]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     reload();
     return () => {
       request.current += 1;
