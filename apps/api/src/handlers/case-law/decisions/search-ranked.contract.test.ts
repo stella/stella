@@ -35,6 +35,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { buildCaseLawProjectionDocuments } from "@/api/lib/legal-search/corpus-index-projection-builder";
 import { readCaseLawRankingSignals } from "@/api/lib/legal-search/corpus-index-projection-ranking-signals";
+import type { DecisionRankingArm } from "@/api/lib/legal-search/corpus-ranked-decision-query";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -145,10 +146,13 @@ const search = async (
     country = "CZE",
     query = QUESTION,
     language,
+    arm,
   }: {
     country?: "CZE" | "EU";
     query?: string;
     language?: string;
+    /** The unstrict arm; unset ranks with the default. */
+    arm?: DecisionRankingArm;
   } = {},
 ) => {
   const groups = new Set(
@@ -179,6 +183,7 @@ const search = async (
     observer: "unobserved",
     dependencies: {
       configuredVariant: "off",
+      ...(arm === undefined ? {} : { rankingArm: arm }),
       loadCourtWeights: async () => courtWeightMapFromSeed(),
       readSourceRegistry: async () =>
         Result.ok({ excludedSourceIds: [], nameById: new Map() }),
@@ -398,9 +403,9 @@ describe.skipIf(!runEngineTests)(
 
     // timeout: one search is real engine round trips plus PGlite reads.
     test(
-      "the decision holding ten of eleven words comes first and names the one it lacks",
+      "under the any arm, the decision holding ten of eleven words comes first and names the one it lacks",
       async () => {
-        const result = await search(false);
+        const result = await search(false, { arm: "any" });
         const first = result.hits.at(0);
         expect(first?.decisionId).toBe(FIXTURES.tenOfEleven.id);
         expect(first?.missingTerms).toEqual(["odklonil"]);
@@ -432,6 +437,20 @@ describe.skipIf(!runEngineTests)(
           result.termDecisionCounts?.terms.find(({ term }) => term === "zisk")
             ?.count,
         ).toBe(2);
+      },
+      ENGINE_TIMEOUT_MS,
+    );
+
+    // timeout: one search is real engine round trips plus PGlite reads.
+    test(
+      "by default a decision must hold at least half the words",
+      async () => {
+        const result = await search(false);
+        // Ten of eleven qualifies; three of eleven does not.
+        expect(result.hits.map(({ decisionId }) => decisionId)).toEqual([
+          FIXTURES.tenOfEleven.id,
+        ]);
+        expect(result.hits.at(0)?.missingTerms).toEqual(["odklonil"]);
       },
       ENGINE_TIMEOUT_MS,
     );
@@ -483,6 +502,7 @@ describe.skipIf(!runEngineTests)(
       async () => {
         const result = await search(false, {
           query: "zástava hypotéka leasing",
+          arm: "any",
         });
         const hit = result.hits.find(
           ({ decisionId }) => decisionId === FIXTURES.cut.id,
@@ -492,6 +512,22 @@ describe.skipIf(!runEngineTests)(
         expect(hit?.matchedTerms).toEqual(["zástava", "hypotéka"]);
         expect(hit?.missingTerms).toEqual(["leasing"]);
         expect(hit?.match).toBe("some_terms");
+      },
+      ENGINE_TIMEOUT_MS,
+    );
+
+    // timeout: one search is real engine round trips plus PGlite reads.
+    test(
+      "by default a cut decision ranks only by the words its kept prefix holds",
+      async () => {
+        const result = await search(false, {
+          query: "zástava hypotéka leasing",
+        });
+        // Its prefix holds one of three words, under the half the default
+        // asks of the decision field; the tail's word does not count there.
+        expect(
+          result.hits.some(({ decisionId }) => decisionId === FIXTURES.cut.id),
+        ).toBe(false);
       },
       ENGINE_TIMEOUT_MS,
     );
