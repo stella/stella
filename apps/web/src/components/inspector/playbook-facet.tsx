@@ -3771,13 +3771,23 @@ const ReviewResultList = ({
   );
   const listRef = useRef<HTMLUListElement>(null);
   // Keyed on ids, not on the derived list: the list is a new array every
-  // render, and an effect keyed on it re-opened the focused card on the very
-  // render that collapsed it. Focus moving is the only thing that opens.
+  // render, and keying on it re-opened the focused card on the very render
+  // that collapsed it. Focus moving is the only thing that opens, adjusted
+  // during render so the card is open in the commit the focus arrives in.
   const focusedItemId =
     focusedSuggestionId === null
       ? null
       : (orderedItems.find((item) => item.suggestionId === focusedSuggestionId)
           ?.id ?? null);
+  const [openedFocusedItemId, setOpenedFocusedItemId] = useState<string | null>(
+    null,
+  );
+  if (focusedItemId !== openedFocusedItemId) {
+    setOpenedFocusedItemId(focusedItemId);
+    if (focusedItemId !== null) {
+      openCard(focusedItemId);
+    }
+  }
   useExternalSyncEffect(() => {
     if (focusedSuggestionId === null) {
       return;
@@ -3787,9 +3797,6 @@ const ReviewResultList = ({
         `[data-suggestion-id="${CSS.escape(focusedSuggestionId)}"]`,
       )
       ?.scrollIntoView({ block: "nearest" });
-    if (focusedItemId !== null) {
-      openCard(focusedItemId);
-    }
   }, [focusedSuggestionId, focusedItemId]);
 
   return (
