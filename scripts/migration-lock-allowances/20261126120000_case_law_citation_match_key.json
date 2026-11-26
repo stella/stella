@@ -1,0 +1,7 @@
+{
+  "add-column": "The nullable identifier_match_key column has no default, so no stored citation row is rewritten. ACCESS EXCLUSIVE covers the catalog change only, under 1s lock_timeout and 5s statement_timeout.",
+  "create-trigger": "Creating the row trigger reads and rewrites no stored citation; SHARE ROW EXCLUSIVE is held only for the catalog change, under 1s lock_timeout and 5s statement_timeout.",
+  "create-table-references": "The foreign key to case_law_decisions is created with the empty arrival table: a catalog-only SHARE ROW EXCLUSIVE on case_law_decisions with no row scan, bounded by 1s lock_timeout; a lost wait rolls the migration back for the runner's lock-retry ladder.",
+  "row-level-security": "ENABLE and FORCE RLS apply to the arrival table created empty in the same migration, before anything writes it, under 1s lock_timeout and 5s statement_timeout.",
+  "create-policy": "The ingestion policy applies to the arrival table created empty in the same migration, before anything writes it, under 1s lock_timeout."
+}

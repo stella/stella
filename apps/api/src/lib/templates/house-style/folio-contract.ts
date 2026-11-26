@@ -1,7 +1,8 @@
-// Local copy of the block-manifest and template-plan contract that the DOCX
-// engine exposes. Replace this file with the `@stll/folio-core/server` import
-// once the release carrying `analyzeDocxBlocks` and `applyTemplatePlan` is
-// pinned; nothing else in this directory restates these shapes.
+// The block-manifest and template-plan contract the steps in this directory
+// read and write: the part of the DOCX engine's shapes they use, with a
+// table's paragraphs listed flat. `folio-engine.ts` implements it over the
+// engine package and is where the compiler holds the two against each
+// other; nothing else in this directory imports the package.
 
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";

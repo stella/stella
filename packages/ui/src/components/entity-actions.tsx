@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, use, useRef, useState } from "react";
+import { createContext, use, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent, ReactNode, Ref } from "react";
 import { createPortal } from "react-dom";
 
@@ -251,7 +251,10 @@ export const EntityActions = ({
   const [hasOpened, setHasOpened] = useState(false);
   const [anchor, setAnchor] = useState<CursorAnchor | null>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
-  const context: EntityActionsContextValue = { actions, heading, label };
+  const context = useMemo<EntityActionsContextValue>(
+    () => ({ actions, heading, label }),
+    [actions, heading, label],
+  );
   const hasActions = actions.length > 0;
 
   const target = (

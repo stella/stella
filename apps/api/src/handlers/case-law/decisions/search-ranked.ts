@@ -29,7 +29,7 @@ import {
   type RankedDecisionWord,
 } from "@/api/lib/legal-search/corpus-ranked-decision-query";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
-import { stemLegalTerm } from "@/api/lib/legal-search/morphology/stem";
+import { queryStems } from "@/api/lib/legal-search/morphology/stem";
 import {
   PUBLIC_READ_TIMEOUT_CODE,
   publicReadTimeoutError,
@@ -228,12 +228,23 @@ const unique = (leaves: readonly string[]): string[] => [
 
 /**
  * One word's leaves on the decision field: the form typed (which is what a
- * decision in a language with no stemmer holds) and its stem under every
+ * decision in a language with no stemmer holds) and its stems under every
  * stemmer the searched documents were written with (what each of those
  * holds), and the same for each single-word legal alternative. A multi-word
  * alternative is a phrase, which the field cannot answer; its words stay
- * with the passages. Publisher leaves name the word in the keywords as typed
- * and in the headnote's stems.
+ * with the passages. Publisher leaves name the word in the keywords and the
+ * headnote as typed and in the headnote's stems.
+ *
+ * The stems are `queryStems`: the typed form's own stem, plus what the same
+ * algorithm with folded tables makes of it, because the index holds folded
+ * stems of accented text and a reader who left the diacritics out
+ * (`najemniho`) would otherwise ask for a stem no document holds
+ * (`najemnih` beside the indexed `najemn`).
+ *
+ * The typed form also goes to the opening passage's surface text, bare, as
+ * the passage scan sends it: the engine folds that text, so a word typed
+ * without its diacritics still matches the decision's title and opening
+ * exactly as typed, whatever its stem.
  *
  * The stemmers are the searched documents' (`documentStems`), never the one
  * language the reader is taken to write in: a search with no language (no
@@ -254,10 +265,8 @@ const wordLeaves = (
   },
 ): RankedDecisionWord => {
   const stems = fields.documentStems;
-  const stemmed = (form: string): string[] =>
-    stems === null
-      ? []
-      : stems.languages.map((language) => stemLegalTerm(form, language));
+  const stemmed = (form: string): readonly string[] =>
+    stems === null ? [] : queryStems(form, stems.languages);
   const forms = [
     token.value,
     ...(legalAlternatives === null
@@ -266,14 +275,15 @@ const wordLeaves = (
     ).filter((alternative) => corpusTokens(alternative).length === 1),
   ];
   const decisionLeaves = unique(
-    forms.flatMap((form) =>
-      [form, ...stemmed(form)].map(
+    forms.flatMap((form) => [
+      ...[form, ...stemmed(form)].map(
         (term) => `${decisionField}:${quoteCorpusValue(term)}`,
       ),
-    ),
+      quoteCorpusValue(form),
+    ]),
   );
   const boostedLeaves = unique([
-    ...fields.keywordFields.map(
+    ...[...fields.keywordFields, ...fields.surfaceFields].map(
       (field) => `${field}:${quoteCorpusValue(token.value)}`,
     ),
     ...(stems === null
@@ -287,9 +297,10 @@ const wordLeaves = (
 
 /**
  * One word's leaves on the passages: the forms typed, on the surface text a
- * bare term reaches, and their stems on each passage's stem field under every
- * stemmer the searched documents were written with. The passages of a
- * decision hold all its text whatever happened to its decision field.
+ * bare term reaches, and their stems (`queryStems`, as on the decision field)
+ * on each passage's stem field under every stemmer the searched documents
+ * were written with. The passages of a decision hold all its text whatever
+ * happened to its decision field.
  */
 const passageWordLeaves = (
   token: CorpusQueryToken,
@@ -314,9 +325,8 @@ const passageWordLeaves = (
       quoteCorpusValue(form),
       ...(stems === null
         ? []
-        : stems.languages.map(
-            (language) =>
-              `${stems.textField}:${quoteCorpusValue(stemLegalTerm(form, language))}`,
+        : queryStems(form, stems.languages).map(
+            (stem) => `${stems.textField}:${quoteCorpusValue(stem)}`,
           )),
     ]),
   );
