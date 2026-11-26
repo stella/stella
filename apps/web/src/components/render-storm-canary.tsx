@@ -11,7 +11,11 @@ import type {
   RenderStormMonitor,
   RenderStormPhase,
 } from "@/lib/render-storm-canary";
-import { createRenderStormMonitor } from "@/lib/render-storm-canary";
+import {
+  createRenderStormMonitor,
+  isUnderStormWatch,
+  RENDER_STORM_CANARY_TAG,
+} from "@/lib/render-storm-canary";
 
 const RENDER_STORM_CANARY_PROFILER_ID = "render-storm-canary";
 
@@ -21,12 +25,12 @@ const RENDER_STORM_REPORTED_REGIONS = 5;
  * Dev-only render-loop detector. Wraps the app root in a React `<Profiler>`
  * that counts commits per second; a sustained storm (see the lib module
  * "render-storm-canary" under apps/web/src/lib for thresholds and
- * calibration) emits a single `console.error`, which the e2e
- * `browserErrors` fixture (apps/web/e2e/helpers/test.ts) turns into a CI
- * failure on ANY spec, not just one dedicated to a specific past
- * regression. Damped near-loops (hundreds of re-renders/sec that never
+ * calibration) emits a single `console.error` for whoever has the dev
+ * console open. Damped near-loops (hundreds of re-renders/sec that never
  * trip React's own "Maximum update depth exceeded" throw) ship silently
- * without this.
+ * without a detector. In e2e runs the storm watch
+ * (apps/web/e2e/helpers/storm-watch.ts) is that detector instead, and the
+ * canary stays silent there; it still counts commits for budget specs.
  *
  * `import.meta.env.DEV` is statically replaced at build time, so the
  * unreachable branch below (and everything it alone references —
@@ -115,8 +119,14 @@ const formatRegionBreakdown = (
 };
 
 const emitRenderStormError = (details: RenderStormDetails) => {
+  // In e2e runs the storm watch judges each commit by its cause and fails the
+  // test itself; a rate would also flag input a test drives faster than a
+  // person (menus opened back to back).
+  if (isUnderStormWatch()) {
+    return;
+  }
   emitDevCanaryError(
-    "render-storm",
+    RENDER_STORM_CANARY_TAG,
     `sustained render storm detected: ~${details.commitsPerSecond} commits/sec ` +
       `(phases: ${formatPhaseBreakdown(details.phaseCounts)}; ` +
       `regions: ${formatRegionBreakdown(details.regionCounts)}). A component is re-rendering ` +

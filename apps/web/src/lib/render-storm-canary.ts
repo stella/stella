@@ -29,6 +29,9 @@ const createEmptyPhaseCounts = (): RenderStormPhaseCounts => ({
 // above real streaming traffic while staying well below the loop floor.
 export const RENDER_STORM_THRESHOLD_COMMITS_PER_SECOND = 80;
 
+/** The `[tag]` every canary message starts with (see @/lib/dev-canary). */
+export const RENDER_STORM_CANARY_TAG = "render-storm";
+
 /**
  * The global the dev-only canary counts every commit of the app in, for e2e
  * specs that hold a surface to a commit budget tighter than the storm
@@ -36,7 +39,21 @@ export const RENDER_STORM_THRESHOLD_COMMITS_PER_SECOND = 80;
  */
 declare global {
   var __stellaRenderCommitCount: number | undefined;
+  /** The e2e storm watch, when a test installed it (see STORM_WATCH_GLOBAL). */
+  var __STLL_STORM_WATCH__: unknown;
 }
+
+/**
+ * Where the e2e storm watch (apps/web/e2e/helpers/storm-watch-browser.ts)
+ * installs itself. Under the watch every commit is judged by what caused it,
+ * which a rate cannot tell, so the canary leaves storms to the watch there.
+ */
+export const STORM_WATCH_GLOBAL =
+  "__STLL_STORM_WATCH__" satisfies keyof typeof globalThis;
+
+/** Whether this page runs under the e2e storm watch. */
+export const isUnderStormWatch = (): boolean =>
+  globalThis.__STLL_STORM_WATCH__ !== undefined;
 
 export const RENDER_COMMIT_COUNT_GLOBAL =
   "__stellaRenderCommitCount" satisfies keyof typeof globalThis;

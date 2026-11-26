@@ -18,9 +18,9 @@ import {
 // The storm watch: every page the shared fixture opens counts its React
 // commits against their outside causes (./storm-watch-browser.ts), on
 // development and production builds alike. At the end of each test the page
-// must also go quiet. `report` (the default while the limits are
-// calibrated) records the result on the test; `enforce` fails the test;
-// `off` skips the watch.
+// must also go quiet. `enforce` (the default) fails the test; `report`
+// only records the result on it, for calibrating the limits; `off` skips the
+// watch. The result is recorded on every test either way.
 type StormWatchMode = "off" | "report" | "enforce";
 
 class RenderStormError extends TaggedError("RenderStormError")<{
@@ -29,7 +29,7 @@ class RenderStormError extends TaggedError("RenderStormError")<{
 
 const stormWatchMode = (): StormWatchMode => {
   const requested = e2eEnv.stormWatch;
-  return requested === "off" || requested === "enforce" ? requested : "report";
+  return requested === "off" || requested === "report" ? requested : "enforce";
 };
 
 /** The annotation type calibration reads from Playwright's JSON report. */
