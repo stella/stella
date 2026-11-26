@@ -20,9 +20,6 @@ reviews:
     ignore_title_keywords:
       - "wip"
       - "draft"
-      # Release pull requests carry only files the release cut generates, and
-      # main requires every review thread resolved before they can land.
-      - "chore: release v"
     ignore_usernames:
       - "dependabot[bot]"
       - "github-actions[bot]"
