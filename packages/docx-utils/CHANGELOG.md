@@ -1,5 +1,11 @@
 # @stll/docx-utils
 
+## 0.3.3
+
+### Patch Changes
+
+- [#9539](https://github.com/stella/stella/pull/9539) [`2d12d35`](https://github.com/stella/stella/commit/2d12d35df5dc3406ae6014cd473f17849c8d5761) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Build on `@stll/docx-core` 0.45.1.
+
 ## 0.3.2
 
 ### Patch Changes
