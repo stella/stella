@@ -2055,7 +2055,30 @@ jobs:
       - name: Start the only reachable network canary
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         id: canary
-        run: bash scripts/ci/start-network-canary.sh
+        run: |
+          bun build packages/agent-engine/scripts/mcp-canary-server.ts \
+            --target=node \
+            --outfile="$RUNNER_TEMP/mcp-canary-server.mjs"
+          docker run --detach \
+            --name "$NETWORK_CANARY_CONTAINER" \
+            --network "$AGENT_ENGINE_DOCKER_NETWORK" \
+            --network-alias stella-agent-network-canary \
+            --read-only \
+            --cap-drop=ALL \
+            --security-opt=no-new-privileges \
+            --tmpfs /state:rw,noexec,nosuid,size=1m,mode=1777 \
+            --volume "$RUNNER_TEMP/mcp-canary-server.mjs:/workspace/mcp-canary-server.mjs:ro" \
+            "$AGENT_ENGINE_DOCKER_IMAGE" \
+            node /workspace/mcp-canary-server.mjs
+          for _ in {1..40}; do
+            if docker exec "$NETWORK_CANARY_CONTAINER" node -e \
+              'fetch("http://127.0.0.1:8787/health", { signal: AbortSignal.timeout(1000) }).then(async (response) => process.exit(response.ok && await response.text() === "sandbox-network-canary" ? 0 : 1), () => process.exit(1))'; then
+              exit 0
+            fi
+            sleep 0.1
+          done
+          docker logs "$NETWORK_CANARY_CONTAINER"
+          exit 1
 
       - name: Exercise Docker provider isolation and cleanup
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
@@ -4755,7 +4778,11 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           REPO: ${{ github.repository }}
-        run: bash scripts/ci/verify-changed-tests-fail-on-base.sh
+        run: |
+          body_file="$RUNNER_TEMP/pull-request-body.md"
+          bash "$GH_RETRY_SCRIPT" api "repos/$REPO/pulls/$PR_NUMBER" --jq '.body // ""' > "$body_file"
+          # The checkout is the test merge: its first parent is the base.
+          bun scripts/fix-tests-on-base.ts --base HEAD^1 --title "$PR_TITLE" --body-file "$body_file"
 
   # Typecheck-cost baseline guard. What silently rots is the compiler's
   # workload: an annotation-heavy or inference-exploding pattern in a hot
@@ -6026,7 +6053,12 @@ jobs:
         id: base-contexts
         env:
           CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
-        run: bash scripts/ci/resolve-legal-atlas-base-images.sh
+        run: |
+          echo 'contexts<<CI_IMAGE_CONTEXTS' >> "$GITHUB_OUTPUT"
+          bun .workflow-tooling/scripts/ci-service-images.ts --pull apps/legal-atlas-runner/Dockerfile
+          bun .workflow-tooling/scripts/ci-service-images.ts --build-contexts apps/legal-atlas-runner/Dockerfile >> "$GITHUB_OUTPUT"
+          echo 'CI_IMAGE_CONTEXTS' >> "$GITHUB_OUTPUT"
+          rm -rf .workflow-tooling
 
       - name: Build legal-atlas-runner image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
