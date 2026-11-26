@@ -1027,13 +1027,7 @@ jobs:
           CHANGED_PATHS: ${{ runner.temp }}/api-test-changed-paths
           SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
-        run: |
-          if [[ "$HEAVY_ONLY" == true ]]; then
-            echo "query_perf_required=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          QUERY_PERF_CHANGED_PATHS="$CHANGED_PATHS" QUERY_PERF_SCOPE_UNKNOWN="$SCOPE_UNKNOWN" \
-            bun scripts/query-perf-scope.ts >> "$GITHUB_OUTPUT"
+        run: bash scripts/ci/plan-query-perf-scope.sh
 
       # One install serves every planner. The API test planners keep full
       # coverage when it is unavailable; heavy and thin-queue job derivation
@@ -1085,12 +1079,7 @@ jobs:
           CHANGED_PATHS: ${{ runner.temp }}/api-test-changed-paths
         # Every failure answers "changed": an unanswered question must not skip
         # the migration jobs, nor fail the plan for every pull request.
-        run: |
-          if answer=$(timeout --kill-after=10s 120s bun scripts/schema-import-changes.ts); then
-            echo "$answer" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
+        run: bash scripts/ci/select-schema-import-changes.sh
 
       - name: Select schema import changes without the import graph
         id: schema-imports-fallback
@@ -1104,14 +1093,7 @@ jobs:
           CHANGED_PATHS: ${{ runner.temp }}/api-test-changed-paths
         # Any API or package source may reach the schema. grep exits 1 only for
         # "no match"; a missing list counts as changed.
-        run: |
-          status=0
-          grep -zEq '^(apps/api|packages)/.*\.tsx?$' "$CHANGED_PATHS" || status=$?
-          if [[ "$status" == 1 ]]; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
+        run: bash scripts/ci/select-schema-import-changes-fallback.sh
 
       - name: Combine migration job selection
         id: migration-scope
@@ -1120,14 +1102,7 @@ jobs:
           MIGRATION_PATHS: ${{ steps.changed-files.outputs.database_migrations_required }}
           SCHEMA_IMPORTS: ${{ steps.schema-imports.outputs.changed }}
           SCHEMA_IMPORTS_FALLBACK: ${{ steps.schema-imports-fallback.outputs.changed }}
-        run: |
-          required=false
-          for answer in "$MIGRATION_PATHS" "$SCHEMA_IMPORTS" "$SCHEMA_IMPORTS_FALLBACK"; do
-            if [[ "$answer" == true ]]; then
-              required=true
-            fi
-          done
-          echo "database_migrations_required=$required" >> "$GITHUB_OUTPUT"
+        run: bash scripts/ci/combine-migration-selection.sh
 
       - name: Require planner dependencies for job derivation
         if: steps.completed-depth.outputs.run_required != 'false' && (inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin')) && steps.planner-deps.outcome != 'success'
@@ -1225,28 +1200,12 @@ jobs:
           BASE_SHA: ${{ steps.target-base.outputs.base_sha }}
           EVENT_NAME: ${{ github.event_name }}
           API_SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
-        run: |
-          if ! timeout --kill-after=10s 120s bun scripts/ci-root-checks.ts; then
-            echo "::warning::Root check planning unavailable; retaining all checks."
-          fi
+        run: bash scripts/ci/select-root-check-inputs.sh
 
       - name: Refine Legal Atlas API source scope
         id: legal-atlas-scope
         if: steps.completed-depth.outputs.run_required != 'false' && steps.planner-deps.outcome == 'success' && steps.api-test-deps.outcome == 'success' && steps.changed-files.outputs.legal_atlas_image_required == 'true'
-        run: |
-          changed_files=()
-          while IFS= read -r -d '' file; do
-            changed_files+=("$file")
-          done < "$RUNNER_TEMP/api-test-changed-paths"
-          # An unknown diff is already broad; an empty list must preserve it.
-          required=true
-          if (( ${#changed_files[@]} > 0 )); then
-            required=$(timeout --kill-after=10s 120s bun scripts/legal-atlas-image-scope.ts "${changed_files[@]}") || required=true
-          fi
-          if [[ "$required" != false ]]; then
-            required=true
-          fi
-          echo "api_source_required=$required" >> "$GITHUB_OUTPUT"
+        run: bash scripts/ci/refine-legal-atlas-scope.sh
 
       - name: Select affected API test files
         id: api-test-selection
@@ -1333,16 +1292,7 @@ jobs:
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         env:
           MATCHED_KEY: ${{ steps.api-test-duration-cache.outputs.cache-matched-key }}
-        run: |
-          key="$MATCHED_KEY"
-          [[ -n "$key" ]] || key="api-test-durations-$GITHUB_RUN_ID"
-          echo "key=$key" >> "$GITHUB_OUTPUT"
-          if [[ -f "$RUNNER_TEMP/api-test-durations.json" ]]; then
-            echo "hash=$(sha256sum "$RUNNER_TEMP/api-test-durations.json" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
-          else
-            echo "hash=missing" >> "$GITHUB_OUTPUT"
-          fi
-          echo "API_TEST_DURATIONS_FILE=$RUNNER_TEMP/api-test-durations.json" >> "$GITHUB_ENV"
+        run: bash scripts/ci/resolve-api-test-durations.sh
 
       - name: Upload planned API test durations
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
@@ -1416,27 +1366,7 @@ jobs:
         shell: bash
         env:
           SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
-        run: |
-          set -euo pipefail
-          : "${RUNNER_TEMP:?RUNNER_TEMP must name the runner temporary directory}"
-          # An unknown change set selects every leg.
-          changed_files=()
-          [[ "${SCOPE_UNKNOWN:-false}" != true ]] || changed_files+=(--all)
-          if [[ -s "$RUNNER_TEMP/api-test-changed-paths" ]]; then
-            while IFS= read -r -d '' file; do
-              changed_files+=("$file")
-            done < "$RUNNER_TEMP/api-test-changed-paths"
-          fi
-          plan=$(bun scripts/e2e-spec-shards.ts select "${changed_files[@]}")
-          printf '%s\n' "$plan" > "$RUNNER_TEMP/e2e-pr-selection.json"
-          matrix=$(jq -c .matrix <<< "$plan")
-          mode=$(jq -r .status <<< "$plan")
-          specs=$(jq -c .specs <<< "$plan")
-          {
-            echo "matrix=$matrix"
-            echo "mode=$mode"
-            echo "specs=$specs"
-          } >> "$GITHUB_OUTPUT"
+        run: bash scripts/ci/select-changed-pr-e2e-shards.sh
 
       - name: Plan changed PR e2e shards
         id: e2e-pr-plan
@@ -1508,46 +1438,7 @@ jobs:
           HEAVY_PROOF_JOBS: &armed_proof_jobs '["migration-upgrade-rehearsal","release-typecheck","web-image-smoke","mobile-build","landing-build","route-smoke","stack-redaction-browsers","e2e-vite-canary","marketing-screenshots","api-image-smoke","legal-atlas-image","desktop-windows-dry-run","windows-scripts"]'
           CHANGED_SCOPE_PATH: ${{ runner.temp }}/changed-scope.json
           MERGE_GROUP_HEAVY_KEEP: '["migration-upgrade-rehearsal","e2e-report"]'
-        run: |
-          armed_delta=false
-          if [[ "${NORMAL_REUSED:-}" == true && "${SUITE_DEPTH:-}" == fast && "${ROUTE_SMOKE_REQUIRED:-}" != true && "${MARKETING_REQUIRED:-}" != true ]]; then
-            armed_delta=true
-            RUN_REQUIRED=false
-          fi
-          heavy_proof=false
-          if [[ "${RUN_REQUIRED:-true}" != false || "$armed_delta" == true ]]; then
-            case "$EVENT_NAME" in
-              pull_request) [[ "${ARMED:-false}" != true ]] || heavy_proof=true ;;
-              merge_group)
-                heavy_proof=true
-                # The exact bound source payloads must cover every suite this
-                # group now requires; missing planner inputs retain all suites.
-                if [[ "${ARMED_PROOF:-}" == complete ]] && jq -ne \
-                  --argjson scopes "$ARMED_JOB_SCOPES" --slurpfile plans "$CHANGED_SCOPE_PATH" --argjson eligible "$HEAVY_PROOF_JOBS" \
-                  --argjson proven "$ARMED_PROOF_JOBS" --argjson keep "$MERGE_GROUP_HEAVY_KEEP" \
-                  --arg marketing "${MARKETING_REQUIRED:-false}" '
-                    ($plans[0] + {marketing_screenshots_required: $marketing}) as $planned
-                    | ($scopes | type == "object" and length > 0)
-                    and (($scopes | keys) == ($eligible | sort))
-                    and all($scopes[]; if . == null then true
-                      elif type == "string" then . as $scope | ($planned[$scope] == "true" or $planned[$scope] == "false")
-                      else false end)
-                    and ($proven | type == "array" and all(.[]; type == "string"))
-                    and all($scopes | to_entries[];
-                      (.key as $job | $keep | index($job)) != null
-                      or (.value != null and $planned[.value] == "false")
-                      or (.key as $job | $proven | index($job)) != null)' > /dev/null; then
-                  heavy_proof=false
-                fi
-                ;;
-              *) heavy_proof=true ;;
-            esac
-          fi
-          {
-            echo "run_required=$RUN_REQUIRED"
-            echo "armed_delta=$armed_delta"
-            echo "heavy_proof=$heavy_proof"
-          } >> "$GITHUB_OUTPUT"
+        run: bash scripts/ci/resolve-suites-run.sh
 
       - name: Plan API test files and shards
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
@@ -2040,11 +1931,7 @@ jobs:
         id: image
         env:
           CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
-        run: >-
-          bun .workflow-tooling/scripts/ci-service-images.ts --build packages/agent-engine/docker/sandbox.Dockerfile --
-          --file packages/agent-engine/docker/sandbox.Dockerfile
-          --tag "$AGENT_ENGINE_DOCKER_IMAGE"
-          packages/agent-engine/docker
+        run: bash scripts/ci/build-sandbox-image.sh
 
       - &logout_ghcr
         name: Log out of GitHub Container Registry
@@ -2059,30 +1946,7 @@ jobs:
       - name: Start the only reachable network canary
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         id: canary
-        run: |
-          bun build packages/agent-engine/scripts/mcp-canary-server.ts \
-            --target=node \
-            --outfile="$RUNNER_TEMP/mcp-canary-server.mjs"
-          docker run --detach \
-            --name "$NETWORK_CANARY_CONTAINER" \
-            --network "$AGENT_ENGINE_DOCKER_NETWORK" \
-            --network-alias stella-agent-network-canary \
-            --read-only \
-            --cap-drop=ALL \
-            --security-opt=no-new-privileges \
-            --tmpfs /state:rw,noexec,nosuid,size=1m,mode=1777 \
-            --volume "$RUNNER_TEMP/mcp-canary-server.mjs:/workspace/mcp-canary-server.mjs:ro" \
-            "$AGENT_ENGINE_DOCKER_IMAGE" \
-            node /workspace/mcp-canary-server.mjs
-          for _ in {1..40}; do
-            if docker exec "$NETWORK_CANARY_CONTAINER" node -e \
-              'fetch("http://127.0.0.1:8787/health", { signal: AbortSignal.timeout(1000) }).then(async (response) => process.exit(response.ok && await response.text() === "sandbox-network-canary" ? 0 : 1), () => process.exit(1))'; then
-              exit 0
-            fi
-            sleep 0.1
-          done
-          docker logs "$NETWORK_CANARY_CONTAINER"
-          exit 1
+        run: bash scripts/ci/start-network-canary.sh
 
       - name: Exercise Docker provider isolation and cleanup
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
@@ -2094,22 +1958,12 @@ jobs:
       - name: Assert provider left no sandbox containers
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         id: assert-cleanup
-        run: |
-          mapfile -t container_ids < <(
-            docker ps --all --no-trunc --quiet --filter "ancestor=$AGENT_ENGINE_DOCKER_IMAGE"
-          )
-          if [[ "${#container_ids[@]}" -ne 1 || "${container_ids[0]}" != "$(docker inspect --format '{{.Id}}' "$NETWORK_CANARY_CONTAINER")" ]]; then
-            echo "::error title=Sandbox cleanup failed::Unexpected sandbox image container survived the integration suite."
-            docker ps --all --filter "ancestor=$AGENT_ENGINE_DOCKER_IMAGE"
-            exit 1
-          fi
+        run: bash scripts/ci/assert-no-sandbox-containers.sh
 
       - name: Cleanup Docker resources
         id: cleanup
         if: always() && needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
-        run: |
-          docker ps --all --quiet --filter "ancestor=$AGENT_ENGINE_DOCKER_IMAGE" | xargs --no-run-if-empty docker rm --force
-          docker network rm "$AGENT_ENGINE_DOCKER_NETWORK" 2>/dev/null || true
+        run: bash scripts/ci/cleanup-docker-resources.sh
 
       - name: Check image dependency trees and production runner
         id: api-deps
@@ -3189,9 +3043,7 @@ jobs:
         timeout-minutes: 5
         env:
           STELLA_BROWSER_E2E_EXECUTABLE: /opt/google/chrome/chrome
-        run: |
-          command -v dbus-run-session
-          dbus-run-session -- xvfb-run -a bun test packages/agent-engine/src/sidecar/browser/hosts.e2e.test.ts
+        run: bash scripts/ci/test-browser-host.sh
 
       - name: Upload failed API or rest test output
         if: failure() && steps.test-api-or-rest.outcome == 'failure'
@@ -3219,16 +3071,9 @@ jobs:
           && needs.ci-plan.outputs.package_checks_required == 'true'
         # A file, not an environment variable: a large diff exceeds the size
         # limit of one variable and the step cannot start.
-        run: |
-          # A changed test repeats in this shard, which never generates the API
-          # runtime; tests that bundle or import the API read it like their own
-          # jobs do.
-          bun --cwd=packages/cli run codegen:runtime
-          bun --cwd=apps/api run generate:capability-runtime
-          cat > "$RUNNER_TEMP/changed-files.json" <<'CHANGED_FILES_JSON'
-          ${{ needs.ci-plan.outputs.changed_files }}
-          CHANGED_FILES_JSON
-          CHANGED_FILES_PATH="$RUNNER_TEMP/changed-files.json" bun scripts/flake-gate.ts --blocking
+        env:
+          CHANGED_FILES: ${{ needs.ci-plan.outputs.changed_files }}
+        run: bash scripts/ci/repeat-changed-tests.sh
 
       - name: Upload quarantined test outcomes
         if: >-
@@ -3561,15 +3406,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           LEG_SPECS: ${{ toJSON(matrix.specs) }}
           LEG: ${{ matrix.suite }}
-        run: |
-          if [[ "$EVENT_NAME" != "pull_request" ]]; then
-            bun --filter @stll/ui test:browser
-            exit 0
-          fi
-          listed=$(bun scripts/ci-browser-suites.ts specs ui-components)
-          [[ -n "$listed" ]] || { echo "No changed specs in this suite."; exit 0; }
-          mapfile -t specs <<< "$listed"
-          bun --filter @stll/ui test:browser -- "${specs[@]}"
+        run: bash scripts/ci/run-browser-suite.sh ui-components @stll/ui test:browser
 
       - name: Test desktop browser interactions
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (startsWith(matrix.suite, 'desktop-') && steps.desktop-browser-tests.outputs.required == 'true') }}
@@ -3609,15 +3446,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           LEG_SPECS: ${{ toJSON(matrix.specs) }}
           LEG: ${{ matrix.suite }}
-        run: |
-          if [[ "$EVENT_NAME" != "pull_request" ]]; then
-            bun --filter @stll/extension test:e2e
-            exit 0
-          fi
-          listed=$(bun scripts/ci-browser-suites.ts specs extension)
-          [[ -n "$listed" ]] || { echo "No changed specs in this suite."; exit 0; }
-          mapfile -t specs <<< "$listed"
-          bun --filter @stll/extension test:e2e -- "${specs[@]}"
+        run: bash scripts/ci/run-browser-suite.sh extension @stll/extension test:e2e
 
       - name: Upload browser test timings
         if: always()
@@ -4057,15 +3886,7 @@ jobs:
       - name: Verify planned Postgres test durations
         env:
           EXPECTED_HASH: ${{ needs.ci-plan.outputs.postgres_test_durations_hash }}
-        run: |
-          file="$RUNNER_TEMP/postgres-test-durations.json"
-          if [[ "$EXPECTED_HASH" == missing ]]; then
-            [[ ! -f "$file" ]] || { echo "Postgres test duration plan unexpectedly exists" >&2; exit 1; }
-          else
-            [[ -f "$file" ]] || { echo "Postgres test duration plan is missing" >&2; exit 1; }
-            actual_hash=$(sha256sum "$file" | cut -d ' ' -f 1)
-            [[ "$actual_hash" == "$EXPECTED_HASH" ]] || { echo "Postgres test duration plan hash mismatch" >&2; exit 1; }
-          fi
+        run: bash scripts/ci/verify-postgres-test-durations.sh
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -4115,11 +3936,7 @@ jobs:
           RUSTFS_SECRET_KEY: stella-rustfs-dev-secret
         # The restricted owner and the bucket a local stack has, then the
         # committed migrations; `db:push` would skip the policies they create.
-        run: |
-          curl --fail --silent --show-error --aws-sigv4 "aws:amz:us-east-1:s3" \
-            --user "$RUSTFS_ACCESS_KEY:$RUSTFS_SECRET_KEY" \
-            --request PUT http://127.0.0.1:9000/stella
-          (cd apps/api && bun run src/db/migrate.ts)
+        run: bash scripts/ci/prepare-dev-seed-db.sh
 
       - name: Apply the local dev seed
         if: matrix.shard == 1 && needs.ci-plan.outputs.dev_seed_required == 'true'
@@ -4316,16 +4133,7 @@ jobs:
         env:
           TARGET_BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
           PUSH_BEFORE_SHA: ${{ github.event.before }}
-        run: |
-          base="${TARGET_BASE_SHA:-$PUSH_BEFORE_SHA}"
-          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
-            bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags --depth=1 origin main
-            base="$(git rev-parse FETCH_HEAD)"
-          else
-            bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags --depth=1 origin "$base"
-          fi
-          git cat-file -e "$base^{commit}"
-          echo "STATUTE_RECALL_BASE_REF=$base" >> "$GITHUB_ENV"
+        run: bash scripts/ci/select-statute-recall-base.sh
 
       - name: Run corpus engine suites
         if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
@@ -4507,26 +4315,12 @@ jobs:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         # `push --explain` exits with "[i] No changes detected" when the
         # migrated schema already matches schema.ts. Any pending diff fails CI.
-        run: |
-          OUT=$(bun --bun drizzle-kit push --explain 2>&1)
-          echo "$OUT"
-          grep -q "No changes detected" <<<"$OUT" || {
-            echo "::error::Migrated schema does not match schema.ts. Either commit a generated migration that closes the gap, or fix the migration files."
-            exit 1
-          }
+        run: bash ../../scripts/ci/verify-schema-parity.sh
 
       - name: Verify __drizzle_migrations recorded all migrations
         env:
           PGPASSWORD: stella
-        run: |
-          set -euo pipefail
-          EXPECTED=$(find apps/api/drizzle -mindepth 1 -maxdepth 1 -type d -name '20*' | wc -l | tr -d ' ')
-          APPLIED=$(psql -h 127.0.0.1 -U stella_owner -d stella -tAc "SELECT count(*) FROM drizzle.__drizzle_migrations")
-          echo "Expected $EXPECTED migrations, drizzle.__drizzle_migrations has $APPLIED"
-          [ "$EXPECTED" = "$APPLIED" ] || {
-            echo "::error::Migration count mismatch: $APPLIED applied, $EXPECTED on disk."
-            exit 1
-          }
+        run: bash scripts/ci/verify-drizzle-migrations-recorded.sh
 
       - name: Rehearse interrupted Better Auth constraints migration
         env:
@@ -4836,11 +4630,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           REPO: ${{ github.repository }}
-        run: |
-          body_file="$RUNNER_TEMP/pull-request-body.md"
-          bash "$GH_RETRY_SCRIPT" api "repos/$REPO/pulls/$PR_NUMBER" --jq '.body // ""' > "$body_file"
-          # The checkout is the test merge: its first parent is the base.
-          bun scripts/fix-tests-on-base.ts --base HEAD^1 --title "$PR_TITLE" --body-file "$body_file"
+        run: bash scripts/ci/verify-changed-tests-fail-on-base.sh
 
   # Typecheck-cost baseline guard. What silently rots is the compiler's
   # workload: an annotation-heavy or inference-exploding pattern in a hot
@@ -4919,9 +4709,7 @@ jobs:
 
       - name: Startup bundle gates
         # Blocking: the startup graph's gates (scripts/bundle-startup-gates.ts).
-        run: |
-          bun scripts/bundle-baseline.ts --self-test
-          bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check
+        run: bash scripts/ci/web-startup-bundle-gates.sh
 
       - name: Bundle duplicate content guard
         # Blocking: a chunk that repeats a large block of identical content
@@ -4939,32 +4727,7 @@ jobs:
         # runner image's stricter boundary.
         env:
           NPM_TOKEN: ""
-        run: |
-          set -euo pipefail
-          # Reproduce apps/web/Dockerfile's deps-prod stage exactly. Wipe
-          # node_modules first (a plain --production reinstall only skips ADDING
-          # devDeps; it does not prune ones the build install already placed),
-          # and scope to @stll/web — an unfiltered install pulls other apps' deps
-          # and could mask a package the web runtime reaches but @stll/web never
-          # declared. dist/ and .env are untouched.
-          rm -rf node_modules
-          bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/web-production.log" --filter @stll/web --production --frozen-lockfile --ignore-scripts
-          cd apps/web
-          PORT=3199 HOST=127.0.0.1 bun dist/runtime.js &
-          server_pid=$!
-          ready=
-          for _ in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:3199/health >/dev/null 2>&1; then
-              ready=1
-              break
-            fi
-            sleep 1
-          done
-          kill "$server_pid" 2>/dev/null || true
-          if [[ "$ready" != "1" ]]; then
-            echo "web SSR runtime failed to boot under --production deps" >&2
-            exit 1
-          fi
+        run: bash scripts/ci/web-prod-deps-boot-smoke.sh
 
       - *upload_failed_bun_install_logs
 
@@ -5044,23 +4807,7 @@ jobs:
       - *logout_ghcr
 
       - name: Boot runner container
-        run: |
-          set -euo pipefail
-          docker run --detach --name web-runner \
-            --publish 127.0.0.1:3199:3002 stella-web-runner:ci
-          ready=
-          for _ in $(seq 1 60); do
-            if curl -fsS http://127.0.0.1:3199/health >/dev/null 2>&1; then
-              ready=1
-              break
-            fi
-            sleep 1
-          done
-          docker logs web-runner
-          if [[ "$ready" != "1" ]]; then
-            echo "web runner image failed to serve /health" >&2
-            exit 1
-          fi
+        run: bash scripts/ci/boot-web-runner-container.sh
 
       - name: Cleanup runner container
         if: always()
@@ -5279,8 +5026,7 @@ jobs:
 
       - name: Explain network baseline failure
         if: matrix.mode == 'network-baseline' && failure() && steps.network-baseline.outcome == 'failure'
-        run: |
-          echo "::error::Network baseline failed. Fix unintended regressions; for intentional route changes, add the baseline:record label to this PR, then review the recorded budgets and resolve the recorder's review thread."
+        run: bash scripts/ci/explain-network-baseline-failure.sh
 
       - name: Configure flaky-test quarantine for phone layouts
         if: matrix.mode == 'phone-layouts' && !cancelled() && steps.e2e-stack.outcome == 'success'
@@ -5693,31 +5439,11 @@ jobs:
 
       - name: Wait for web dev server
         if: steps.e2e-stack.outcome == 'success'
-        run: |
-          for i in {1..60}; do
-            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3000 > /dev/null 2>&1; then
-              echo "Web up after ${i}s"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "::error::Web never came up"
-          tail -200 /tmp/web.log || true
-          exit 1
+        run: bash scripts/ci/wait-for-web-dev-server.sh
 
       - name: Wait for collaboration server
         if: steps.e2e-stack.outcome == 'success'
-        run: |
-          for i in {1..60}; do
-            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3002/readyz > /dev/null 2>&1; then
-              echo "Collaboration server up after ${i}s"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "::error::Collaboration server never came up"
-          tail -200 /tmp/collab.log || true
-          exit 1
+        run: bash scripts/ci/wait-for-collab-server.sh
 
       - *ghcr_browser_image_login
 
@@ -5758,7 +5484,7 @@ jobs:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-lockless-collaboration-browser-suite.json
           E2E_EXPECT_DEV_ROUTES: "true"
           E2E_OUTPUT_DIR: test-results-collab
-        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:collab -- --project chromium
+        run: bash scripts/ci/run-lockless-collab-suite.sh
 
       - name: Show API errors after a Vite canary failure
         if: failure() && steps.e2e-stack.outcome != 'skipped'
@@ -5768,13 +5494,7 @@ jobs:
       # restart would make the apparent canary result nondeterministic.
       - name: Guard against mid-test Vite re-optimize
         if: always() && steps.e2e-stack.outcome == 'success'
-        run: |
-          if grep -q "optimized dependencies changed. reloading" /tmp/web.log; then
-            echo "::error::Vite re-optimized dependencies mid-session and forced a reload. Add the lazy/runtime dependency named below to optimizeDeps.include in apps/web/vite.config.ts."
-            grep -nE "new dependencies optimized|optimized dependencies changed" /tmp/web.log || true
-            exit 1
-          fi
-          echo "No mid-session dep re-optimize detected."
+        run: bash scripts/ci/guard-vite-reoptimize.sh
 
       - name: Stop web dev server
         if: always() && steps.e2e-stack.outcome == 'success'
@@ -5871,23 +5591,10 @@ jobs:
         run: bun --filter @stll/landing build
 
       - name: Start landing preview server
-        run: |
-          cd apps/landing
-          nohup bun --bun astro preview --port 4321 > /tmp/landing.log 2>&1 &
-          echo $! > /tmp/landing.pid
+        run: bash scripts/ci/start-landing-preview.sh
 
       - name: Wait for landing
-        run: |
-          for i in {1..60}; do
-            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:4321 > /dev/null 2>&1; then
-              echo "Landing up after ${i}s"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "::error::Landing preview never came up"
-          tail -200 /tmp/landing.log || true
-          exit 1
+        run: bash scripts/ci/wait-for-landing.sh
 
       - *ghcr_browser_image_login
 
@@ -5909,11 +5616,7 @@ jobs:
 
       - name: Stop landing preview server
         if: always()
-        run: |
-          if [[ -f /tmp/landing.pid ]]; then
-            kill "$(cat /tmp/landing.pid)" || true
-            rm -f /tmp/landing.pid
-          fi
+        run: bash scripts/ci/stop-landing-preview.sh
 
       - name: Upload failure diagnostics
         if: failure()
@@ -6112,7 +5815,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Install smoke dependencies
-        run: bun .workflow-tooling/scripts/ci-install.ts "$RUNNER_TEMP/bun-install/smoke.log" --frozen-lockfile --ignore-scripts --filter @stll/scripts
+        run: bash scripts/ci/install-api-smoke-deps.sh
         env:
           NPM_TOKEN: ""
 
@@ -6127,21 +5830,14 @@ jobs:
       - name: Build final API release image
         env:
           CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
-        run: |
-          set -euo pipefail
-          bun .workflow-tooling/scripts/ci-service-images.ts --build apps/api/Dockerfile -- --progress=plain --file apps/api/Dockerfile \
-            --build-arg "STELLA_VERSION=$(tr -d '[:space:]' < VERSION)" \
-            --build-arg "STELLA_COMMIT_SHA=$(git rev-parse HEAD)" \
-            --tag stella-api-release:ci . 2>&1 | tee "$RUNNER_TEMP/api-image-build.log"
+        run: bash scripts/ci/build-api-release-image.sh
 
       - name: Pull API smoke service images
         timeout-minutes: 2
         env:
           POSTGRES_IMAGE: ${{ needs.ci-plan.outputs.postgres }}
           REDIS_IMAGE: ${{ needs.ci-plan.outputs.redis }}
-        run: |
-          bash .workflow-tooling/scripts/retry.sh docker pull "$POSTGRES_IMAGE"
-          bash .workflow-tooling/scripts/retry.sh docker pull "$REDIS_IMAGE"
+        run: bash scripts/ci/pull-api-smoke-images.sh
 
       - *logout_ghcr
 
@@ -6200,12 +5896,7 @@ jobs:
         id: base-contexts
         env:
           CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
-        run: |
-          echo 'contexts<<CI_IMAGE_CONTEXTS' >> "$GITHUB_OUTPUT"
-          bun .workflow-tooling/scripts/ci-service-images.ts --pull apps/legal-atlas-runner/Dockerfile
-          bun .workflow-tooling/scripts/ci-service-images.ts --build-contexts apps/legal-atlas-runner/Dockerfile >> "$GITHUB_OUTPUT"
-          echo 'CI_IMAGE_CONTEXTS' >> "$GITHUB_OUTPUT"
-          rm -rf .workflow-tooling
+        run: bash scripts/ci/resolve-legal-atlas-base-images.sh
 
       - name: Build legal-atlas-runner image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -6287,29 +5978,7 @@ jobs:
         id: tools
         continue-on-error: true
         shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $tools = @{}
-          $tools.bun = (& bun --version) -join "`n"
-          if ($LASTEXITCODE -ne 0) { throw "Bun version unavailable" }
-          $tools.rust = (& rustc -vV) -join "`n"
-          if ($LASTEXITCODE -ne 0) { throw "Rust version unavailable" }
-          $tools.cargo = (& cargo -V) -join "`n"
-          if ($LASTEXITCODE -ne 0) { throw "Cargo version unavailable" }
-          $tools.node = (& node --version) -join "`n"
-          if ($LASTEXITCODE -ne 0) { throw "Node version unavailable" }
-          $tools.tauri = (& bun run --cwd apps/desktop tauri --version) -join "`n"
-          if ($LASTEXITCODE -ne 0) { throw "Tauri version unavailable" }
-          $tools.image = $env:ImageVersion
-          $tools.os = $env:ImageOS
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $vs = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json | ConvertFrom-Json) | Select-Object -First 1
-          if (-not $vs) { throw "Visual Studio version unavailable" }
-          $tools.visualStudio = $vs.installationVersion
-          $tools.msvc = (Get-ChildItem "$($vs.installationPath)\VC\Tools\MSVC" -Directory | Sort-Object Name | ForEach-Object Name) -join ','
-          $tools.sdk = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\Lib\10.*" -Directory | Sort-Object Name | ForEach-Object Name) -join ','
-          if ($tools.Values | Where-Object { [string]::IsNullOrWhiteSpace($_) }) { throw "Incomplete Windows toolchain" }
-          $tools | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/windows-tools.json" -Encoding utf8
+        run: ./scripts/ci/resolve-windows-toolchain.ps1
 
       - name: Look up successful queue dry-run receipt
         id: receipt
@@ -6416,7 +6085,7 @@ jobs:
       - name: Test dev runner and process tree cleanup
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         shell: pwsh
-        run: bun test packages/scripts/src/dev-runner.test.ts packages/scripts/src/process-shutdown.test.ts packages/scripts/src/process-memory.test.ts packages/scripts/src/windows-process-ownership.test.ts packages/scripts/src/process-spawn.test.ts scripts/ci-install.test.ts
+        run: ./scripts/ci/test-windows-scripts.ps1
 
       - *merge_group_cancel
 
@@ -6480,11 +6149,7 @@ jobs:
 
       - name: Record fresh WebAssembly checksums
         if: failure() && steps.wasm-check.outcome == 'failure'
-        run: |
-          if [[ -d "$RUNNER_TEMP/scan-engine-wasm" ]]; then
-            (cd "$RUNNER_TEMP/scan-engine-wasm" && sha256sum ./*) > "$RUNNER_TEMP/scan-engine-wasm.sha256"
-            rustc -vV > "$RUNNER_TEMP/scan-engine-wasm.toolchain"
-          fi
+        run: bash scripts/ci/record-wasm-checksums.sh
 
       - name: Upload fresh WebAssembly on mismatch
         if: failure() && steps.wasm-check.outcome == 'failure'
@@ -6512,10 +6177,10 @@ jobs:
         timeout-minutes: 10
         env:
           CARGO_NET_RETRY: "5"
-        run: for p in scan-engine heic-decoder pst-reader recording-wasm; do bash .github/actions/cargo-deny/fetch.sh packages/$p/Cargo.toml; done
+        run: bash scripts/ci/fetch-wasm-license-inputs.sh
 
       - name: License audit
-        run: for p in scan-engine heic-decoder pst-reader recording-wasm; do cargo deny --offline --manifest-path packages/$p/Cargo.toml check --config packages/$p/deny.toml --hide-inclusion-graph bans licenses sources; done
+        run: bash scripts/ci/wasm-license-audit.sh
 
       - name: Save Rust build cache
         if: success()
@@ -6635,33 +6300,7 @@ jobs:
       - name: Install signing test certificates
         if: matrix.os == 'windows'
         shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $prefix = $env:STELLA_SIGNING_FIXTURE_PREFIX
-          $store = 'Cert:\CurrentUser\My'
-          $documents = '2.5.29.37={text}1.3.6.1.5.5.7.3.4'
-          $loginOnly = '2.5.29.37={text}1.3.6.1.5.5.7.3.2'
-          $common = @{
-            CertStoreLocation = $store
-            Type = 'Custom'
-            Provider = 'Microsoft Software Key Storage Provider'
-            KeyExportPolicy = 'NonExportable'
-            NotAfter = (Get-Date).AddDays(2)
-          }
-          $rsa = @{ KeyAlgorithm = 'RSA'; KeyLength = 2048 }
-          New-SelfSignedCertificate @common @rsa -Subject "CN=$prefix-rsa" -KeyUsage DigitalSignature, NonRepudiation -TextExtension @($documents) | Out-Null
-          New-SelfSignedCertificate @common -Subject "CN=$prefix-ec" -KeyAlgorithm ECDSA_nistP256 -CurveExport CurveName -KeyUsage DigitalSignature -TextExtension @($documents) | Out-Null
-          New-SelfSignedCertificate @common @rsa -Subject "CN=$prefix-client-auth" -KeyUsage DigitalSignature -TextExtension @($loginOnly) | Out-Null
-          $expired = $common.Clone()
-          $expired.NotBefore = (Get-Date).AddDays(-10)
-          $expired.NotAfter = (Get-Date).AddDays(-1)
-          New-SelfSignedCertificate @expired @rsa -Subject "CN=$prefix-expired" -KeyUsage DigitalSignature -TextExtension @($documents) | Out-Null
-          # Keep only the public half of this one: a certificate whose key is gone.
-          $keyed = New-SelfSignedCertificate @common @rsa -Subject "CN=$prefix-no-key" -KeyUsage DigitalSignature -TextExtension @($documents)
-          $public = Join-Path $env:RUNNER_TEMP "$prefix-no-key.cer"
-          Export-Certificate -Cert $keyed -FilePath $public | Out-Null
-          Remove-Item -Path $keyed.PSPath -DeleteKey
-          Import-Certificate -FilePath $public -CertStoreLocation $store | Out-Null
+        run: ./scripts/ci/install-signing-test-certs.ps1
 
       - name: Test signer against the certificate store
         if: matrix.os == 'windows'
@@ -6671,12 +6310,7 @@ jobs:
       - name: Remove signing test certificates
         if: always() && matrix.os == 'windows'
         shell: pwsh
-        run: |
-          Get-ChildItem Cert:\CurrentUser\My |
-            Where-Object Subject -like "CN=$env:STELLA_SIGNING_FIXTURE_PREFIX-*" |
-            ForEach-Object {
-              if ($_.HasPrivateKey) { Remove-Item -Path $_.PSPath -DeleteKey } else { Remove-Item -Path $_.PSPath }
-            }
+        run: ./scripts/ci/remove-signing-test-certs.ps1
 
       - name: Setup Bun for the desktop transport smoke
         if: matrix.os == 'macos'
@@ -6696,19 +6330,7 @@ jobs:
       - name: Smoke native desktop transport against the local API contract
         if: matrix.os == 'macos'
         shell: bash
-        run: |
-          url_file="$RUNNER_TEMP/desktop-smoke-url"
-          bun apps/api/scripts/desktop-registry-transport-smoke-server.ts "$url_file" &
-          server_pid=$!
-          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
-          for _ in {1..100}; do
-            test -s "$url_file" && break
-            kill -0 "$server_pid" 2>/dev/null || { wait "$server_pid"; exit 1; }
-            sleep 0.1
-          done
-          test -s "$url_file"
-          STELLA_DESKTOP_SMOKE_API_URL="$(cat "$url_file")" cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib --target ${{ matrix.target }} --frozen registry::tests::native_desktop_transport_reaches_api_authentication -- --ignored --exact
-          wait "$server_pid"
+        run: bash scripts/ci/smoke-desktop-transport.sh "${{ matrix.target }}"
 
       - name: Install cargo-deny
         timeout-minutes: 10
@@ -6729,7 +6351,7 @@ jobs:
 
       - name: License audit
         if: matrix.os == 'macos'
-        run: cargo deny --offline --manifest-path apps/desktop/src-tauri/Cargo.toml check --config apps/desktop/src-tauri/deny.toml --hide-inclusion-graph bans licenses sources
+        run: bash scripts/ci/desktop-license-audit.sh
 
       - name: Docs
         shell: pwsh
