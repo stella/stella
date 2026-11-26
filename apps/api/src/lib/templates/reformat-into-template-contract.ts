@@ -41,4 +41,5 @@ export const REFORMAT_NOTE_ITEM_KINDS = [
 export const REFORMAT_TEMPLATE_HEALTH_KINDS = [
   "number_drawn_as_picture",
   "text_drawn_as_picture",
+  "other",
 ] as const;

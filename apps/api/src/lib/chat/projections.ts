@@ -3096,6 +3096,7 @@ export const REFORMAT_INTO_TEMPLATE_PROJECTION = v.strictObject({
         kind: v.picklist(REFORMAT_TEMPLATE_HEALTH_KINDS),
         styleId: v.optional(v.string()),
         level: v.optional(count()),
+        reason: v.optional(v.string()),
       }),
     ),
   }),

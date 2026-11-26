@@ -27,7 +27,6 @@ import type {
 import { formatOntoTemplate } from "@/api/lib/templates/house-style/format-onto-template";
 import type { FormattingNote } from "@/api/lib/templates/house-style/plan-builder";
 import type { NumberingMode } from "@/api/lib/templates/house-style/plan-numbering";
-import type { TemplateHealthFinding } from "@/api/lib/templates/house-style/template-profile";
 import {
   HOUSE_STYLE_TEMPLATE_TAG,
   type REFORMAT_NOTE_ITEM_KINDS,
@@ -119,6 +118,8 @@ type ReformatTemplateHealth = {
   kind: (typeof REFORMAT_TEMPLATE_HEALTH_KINDS)[number];
   styleId?: string;
   level?: number;
+  /** The formatter's name for a finding of kind `other`. */
+  reason?: string;
 };
 
 /** Note items returned; a long document's remainder is counted. */
@@ -299,21 +300,22 @@ const noteItemOf = (
   }
 };
 
-const templateHealthOf = (
-  finding: TemplateHealthFinding,
-): ReformatTemplateHealth => {
-  switch (finding.kind) {
-    case "numberDrawnAsPicture":
-      return { kind: "number_drawn_as_picture", level: finding.ilvl };
-    case "textDrawnAsPicture":
-      return finding.styleId === null
-        ? { kind: "text_drawn_as_picture" }
-        : { kind: "text_drawn_as_picture", styleId: finding.styleId };
-    default: {
-      finding satisfies never;
-      return panic("Unhandled template health finding");
-    }
+/** The template findings this layer words; a newer one passes as `other`
+ *  with its name, as note items do. */
+const templateHealthOf = (finding: {
+  kind: string;
+}): ReformatTemplateHealth => {
+  if (finding.kind === "numberDrawnAsPicture") {
+    return "ilvl" in finding && typeof finding.ilvl === "number"
+      ? { kind: "number_drawn_as_picture", level: finding.ilvl }
+      : { kind: "number_drawn_as_picture" };
   }
+  if (finding.kind === "textDrawnAsPicture") {
+    return "styleId" in finding && typeof finding.styleId === "string"
+      ? { kind: "text_drawn_as_picture", styleId: finding.styleId }
+      : { kind: "text_drawn_as_picture" };
+  }
+  return { kind: "other", reason: finding.kind };
 };
 
 type ReformatOptions = {
