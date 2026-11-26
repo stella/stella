@@ -2314,11 +2314,6 @@
     "owner": "agent-engine",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "packages/agent-engine/src/sidecar/sidecar.test.ts": {
-    "count": 2,
-    "owner": "agent-engine",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "packages/api-contract/src/generated-visual.test.ts": {
     "count": 1,
     "owner": "api-contract",

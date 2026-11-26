@@ -291,26 +291,58 @@ describe("shared documentation MCP HTTP server", () => {
     const { port } = new URL(baseUrl);
     // Half-open: the client does not close its side when the server's FIN
     // arrives, so only the server's linger bound can end the connection.
+    // Upload bytes keep arriving after the answer, as from a client that does
+    // not read until it has sent everything.
+    let uploading = true;
+    let sentBytes = 0;
+    const maxUploadBytes = 50 * 1024 * 1024;
+    const chunkBytes = 256 * 1024;
+    const stopUploading = () => {
+      uploading = false;
+    };
     const socket = connect(
       { port: Number(port), host: "127.0.0.1", allowHalfOpen: true },
       () => {
         socket.write(
           `POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\ncontent-type: application/json\r\ncontent-length: ${100 * 1024 * 1024}\r\n\r\n`,
         );
-        // Ten MiB of a declared hundred: past the drain bound, and the upload never completes.
-        socket.write(Buffer.alloc(10 * 1024 * 1024, 120));
+        // Ten MiB of a declared hundred: past the drain bound, and capped at 50 MiB so the upload never completes.
+        const initialBytes = 10 * 1024 * 1024;
+        sentBytes += initialBytes;
+        if (socket.write(Buffer.alloc(initialBytes, 120))) {
+          setImmediate(pumpUpload);
+        } else {
+          socket.once("drain", pumpUpload);
+        }
       },
     );
-    // Upload bytes keep arriving after the answer, as from a client that does
-    // not read until it has sent everything.
-    const keepUploading = setInterval(() => {
-      if (socket.writable) {
-        socket.write(Buffer.alloc(256 * 1024, 120));
+    const pumpUpload = () => {
+      if (
+        !uploading ||
+        !socket.writable ||
+        socket.destroyed ||
+        sentBytes >= maxUploadBytes
+      ) {
+        return;
       }
-    }, 20);
+      const remaining = maxUploadBytes - sentBytes;
+      const nextBytes = Math.min(chunkBytes, remaining);
+      sentBytes += nextBytes;
+      const canContinue = socket.write(Buffer.alloc(nextBytes, 120));
+      if (canContinue) {
+        setImmediate(pumpUpload);
+      } else {
+        socket.once("drain", pumpUpload);
+      }
+    };
     const socketClosed = new Promise<void>((resolve) => {
+      socket.once("end", () => {
+        if (uploading && socket.writable && !socket.destroyed) {
+          socket.write(Buffer.alloc(1024, 120));
+        }
+      });
       socket.once("close", () => {
-        clearInterval(keepUploading);
+        stopUploading();
         resolve();
       });
     });
@@ -338,7 +370,7 @@ describe("shared documentation MCP HTTP server", () => {
       // upload open never closes it and fails on the test's default timeout.
       await socketClosed;
     } finally {
-      clearInterval(keepUploading);
+      stopUploading();
       socket.destroy();
     }
   });

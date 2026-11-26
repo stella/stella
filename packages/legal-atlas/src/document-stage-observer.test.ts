@@ -90,34 +90,41 @@ describe("document telemetry containment", () => {
 
   test("one shared budget bounds slow successful calls and stops a hanging callback", async () => {
     for (const delayMs of [1, 100]) {
-      const budget = createDocumentObserverBudget();
-      budget.remainingMs = 20;
-      const reported: DocumentTelemetryObserverFailure[] = [];
-      let calls = 0;
-      const safe = createSafeDocumentStageObserver(
-        async () => {
-          calls += 1;
-          await Bun.sleep(delayMs);
-        },
-        {
-          budget,
-          reportFailure: (failure) => {
-            reported.push(failure);
+      let now = 0;
+      const nowSpy = spyOn(performance, "now").mockImplementation(() => now);
+      try {
+        const budget = createDocumentObserverBudget();
+        budget.remainingMs = 20;
+        const reported: DocumentTelemetryObserverFailure[] = [];
+        let calls = 0;
+        const safe = createSafeDocumentStageObserver(
+          async () => {
+            calls += 1;
+            now += delayMs;
+            await Promise.resolve();
           },
-        },
-      );
-      for (let fetch = 0; fetch < 100; fetch++) {
-        await safe(observation);
+          {
+            budget,
+            reportFailure: (failure) => {
+              reported.push(failure);
+            },
+          },
+        );
+        for (let fetch = 0; fetch < 100; fetch++) {
+          await safe(observation);
+        }
+        expect(calls).toBeLessThan(100);
+        expect(reported).toEqual([
+          {
+            event: DOCUMENT_FETCH_EVENT.observerFailed,
+            source: observation.source,
+            observer: "callback",
+            reason: "circuit_open",
+          },
+        ]);
+      } finally {
+        nowSpy.mockRestore();
       }
-      expect(calls).toBeLessThan(100);
-      expect(reported).toEqual([
-        {
-          event: DOCUMENT_FETCH_EVENT.observerFailed,
-          source: observation.source,
-          observer: "callback",
-          reason: "circuit_open",
-        },
-      ]);
     }
   });
 
