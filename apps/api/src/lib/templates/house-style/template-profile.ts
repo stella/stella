@@ -1012,6 +1012,23 @@ export type TemplateProfileIssue = {
   blockId?: string;
 };
 
+/** An issue for every spare or mark level the template does not have. */
+const unknownLevelIssues = (
+  profile: TemplateProfile,
+  inspection: TemplateInspection,
+  abstractByNum: ReadonlyMap<number, number>,
+): TemplateProfileIssue[] =>
+  [...profile.spareLevels, ...(profile.markLevels ?? [])].flatMap(
+    ({ abstractNumId, numId, ilvl }): TemplateProfileIssue[] => {
+      const known = inspection.numbering.abstractNums
+        .find((list) => list.abstractNumId === abstractNumId)
+        ?.levels.some((level) => level.ilvl === ilvl);
+      return known === true && abstractByNum.get(numId) === abstractNumId
+        ? []
+        : [{ severity: "error", code: "unknownListLevel" }];
+    },
+  );
+
 /**
  * Checks a profile against the template it is used with: a stored profile
  * outlives edits to its template, and a corrected one may name a style the
@@ -1073,17 +1090,7 @@ export const validateTemplateProfile = (
     levelUsers.set(key, role);
   }
 
-  for (const { abstractNumId, numId, ilvl } of [
-    ...profile.spareLevels,
-    ...(profile.markLevels ?? []),
-  ]) {
-    const known = inspection.numbering.abstractNums
-      .find((list) => list.abstractNumId === abstractNumId)
-      ?.levels.some((level) => level.ilvl === ilvl);
-    if (known !== true || abstractByNum.get(numId) !== abstractNumId) {
-      issues.push({ severity: "error", code: "unknownListLevel" });
-    }
-  }
+  issues.push(...unknownLevelIssues(profile, inspection, abstractByNum));
 
   const { topLevel } = readStructure(inspection.blocks);
   const order = topLevel.map(({ id }) => id);
