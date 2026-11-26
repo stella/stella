@@ -616,7 +616,8 @@ const batchOrdering = async ({
   resolveSourceContract,
   concurrency,
 }: BatchOrderingOptions): Promise<BatchOrdering> => {
-  if (concurrency <= 1) {
+  // A record alone has nothing to overlap with, and needs no read to say so.
+  if (concurrency <= 1 || records.length <= 1) {
     return SERIAL_ORDERING;
   }
   const contract = await Result.tryPromise({
