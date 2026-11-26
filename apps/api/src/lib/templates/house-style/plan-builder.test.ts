@@ -598,34 +598,52 @@ describe("buildTemplatePlan, pages the source starts", () => {
     ]);
   });
 
-  test("a section that begins on a new page begins one; its layout is noted when it is another", () => {
-    const { plan, note } = build(
-      withFacts(
-        ["SMLOUVA", "Text.", "Příloha č. 1", "Tabulka.", "Dodatek.", "Konec."],
-        {
-          1: { endsSection: true },
-          2: { sectionIndex: 1 },
-          3: { sectionIndex: 1, endsSection: true },
-          4: { sectionIndex: 2, endsSection: true },
-          5: { sectionIndex: 3 },
-        },
-        [
-          section(0, "nextPage"),
-          section(1, "nextPage", "landscape"),
-          section(2, "oddPage"),
-          section(3, "continuous"),
-        ],
-      ),
-    );
-    expect(starts(plan)).toEqual(["p2", "p4"]);
-    expect(notes(note, "sectionLayoutNotKept")).toEqual([
+  const sectioned = (facts: Readonly<Record<number, Partial<DocxBlock>>>) =>
+    withFacts(
+      ["SMLOUVA", "Text.", "Příloha č. 1", "Tabulka.", "Dodatek.", "Konec."],
       {
-        kind: "sectionLayoutNotKept",
-        afterBlockId: "p1",
-        start: "nextPage",
-        pageDiffers: true,
-        columns: 1,
+        1: { endsSection: true },
+        2: { sectionIndex: 1 },
+        3: { sectionIndex: 1, endsSection: true },
+        4: { sectionIndex: 2, endsSection: true },
+        5: { sectionIndex: 3 },
+        ...facts,
       },
+      [
+        section(0, "nextPage"),
+        section(1, "nextPage", "landscape"),
+        section(2, "oddPage"),
+        section(3, "continuous"),
+      ],
+    );
+  const ends = (plan: TemplatePlan) =>
+    sourceItems(plan).flatMap(({ blockId, endsSection }) =>
+      endsSection === undefined ? [] : [[blockId, endsSection] as const],
+    );
+
+  test("a section whose page is another stays a section, and so do the ends around it", () => {
+    const { plan, note } = build(sectioned({}));
+    // Portrait up to p1, landscape up to p3, then the rest: it begins on
+    // an odd page as the section after the annex did.
+    expect(ends(plan)).toEqual([
+      ["p1", {}],
+      [
+        "p3",
+        {
+          page: {
+            orientation: "landscape",
+            width: 16_838,
+            height: 11_906,
+            margins: { top: 1417, right: 1417, bottom: 1417, left: 1417 },
+          },
+        },
+      ],
+    ]);
+    expect(plan.lastSection).toEqual({ start: "oddPage" });
+    // The sections start their own pages; nothing else has to.
+    expect(starts(plan)).toEqual([]);
+    expect(note.counts.sectionsKept).toBe(3);
+    expect(notes(note, "sectionLayoutNotKept")).toEqual([
       {
         kind: "sectionLayoutNotKept",
         afterBlockId: "p4",
@@ -634,6 +652,79 @@ describe("buildTemplatePlan, pages the source starts", () => {
         columns: 1,
       },
     ]);
+  });
+
+  test("a blank paragraph that ends such a section stays to carry it", () => {
+    const blank = withFacts(
+      ["SMLOUVA", "Text.", "", "Příloha č. 1"],
+      { 2: { endsSection: true }, 3: { sectionIndex: 1 } },
+      [section(0, "nextPage"), section(1, "nextPage", "landscape")],
+    );
+    const { plan } = build(blank);
+    expect(plan.omit).toEqual([]);
+    expect(ends(plan)).toEqual([["p2", {}]]);
+    expect(plan.lastSection?.page?.orientation).toBe("landscape");
+    expect(starts(plan)).toEqual([]);
+  });
+
+  test("a title behind the end of a kept section is not joined to the heading that ends it", () => {
+    const reading = (
+      blockId: string,
+      role: "title" | "articleHeading" | "body",
+      mergedIntoBlockId: string | null = null,
+    ) => ({
+      blockId,
+      role,
+      confidence: 0.9,
+      alternatives: [],
+      mergedIntoBlockId,
+    });
+    // The landscape section is declared continuous: only its page says
+    // that it starts a new one.
+    const manifest = withFacts(
+      ["SMLOUVA", "Článek I.", "Předmět smlouvy", "Text."],
+      {
+        1: { endsSection: true },
+        2: { sectionIndex: 1 },
+        3: { sectionIndex: 1 },
+      },
+      [section(0, "nextPage"), section(1, "continuous", "landscape")],
+    );
+    const { plan } = build(manifest, "keepSource", {
+      roles: [
+        reading("p0", "title"),
+        reading("p1", "articleHeading"),
+        reading("p2", "articleHeading", "p1"),
+        reading("p3", "body"),
+      ],
+    });
+    const heading = itemOf(plan, manifest, "Článek I.");
+    expect(heading?.mergeNext).toBeUndefined();
+    expect(heading?.endsSection).toEqual({});
+    expect(plan.lastSection?.page?.orientation).toBe("landscape");
+  });
+
+  test("where a section's end cannot be carried, the pages still start and the note says what is lost", () => {
+    // The annex ends in a line of the source's own contents.
+    const { plan, note } = build(
+      sectioned({
+        3: {
+          sectionIndex: 1,
+          endsSection: true,
+          text: "Článek I. Předmět\t2",
+          styleName: "toc 1",
+        },
+      }),
+    );
+    expect(ends(plan)).toEqual([]);
+    expect(plan.lastSection).toBeUndefined();
+    expect(starts(plan)).toEqual(["p2", "p4"]);
+    expect(note.counts.sectionsKept).toBe(0);
+    expect(
+      notes(note, "sectionLayoutNotKept").map((item) =>
+        item.kind === "sectionLayoutNotKept" ? item.pageDiffers : null,
+      ),
+    ).toEqual([true, false]);
   });
 
   test("a title that starts a page is not joined to the heading before it", () => {
