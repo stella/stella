@@ -265,11 +265,11 @@ const createFakeChrome = () => {
           return tab ? { ...tab } : undefined;
         }
         log.push(`update:${url}`);
-        setTimeout(() => {
+        setImmediate(() => {
           emit(tabId, { status: "loading" });
           emit(tabId, { url });
-          setTimeout(() => emit(tabId, { status: "complete" }), 20);
-        }, 20);
+          setImmediate(() => emit(tabId, { status: "complete" }));
+        });
         const tab = tabs.get(tabId);
         return tab ? { ...tab } : undefined;
       },
@@ -946,10 +946,10 @@ describe("outcome of a dispatched action", () => {
       if (snapshots === 1) {
         // The form submits after the settle grace, while this read runs.
         emit(CONTROLLED_TAB_ID, { status: "loading" });
-        setTimeout(() => {
+        setImmediate(() => {
           emit(CONTROLLED_TAB_ID, { url: nextUrl });
           emit(CONTROLLED_TAB_ID, { status: "complete" });
-        }, 150);
+        });
         return [{ frameId: 0, result: frameSnapshot("Invoice") }];
       }
       return [{ frameId: 0, result: frameSnapshot("Receipt", nextUrl) }];

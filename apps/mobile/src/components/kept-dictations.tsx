@@ -1,4 +1,4 @@
-import { createContext, use, useEffect, useState } from "react";
+import { createContext, use, useState } from "react";
 
 import { panic } from "better-result";
 import { randomUUID } from "expo-crypto";
@@ -6,6 +6,7 @@ import { AppState } from "react-native";
 
 import { applyLearnedFixes } from "@stll/transcript/corrections";
 import { respell } from "@stll/transcript/spelling";
+import { useExternalSyncEffect } from "@stll/ui/effects";
 
 import {
   finalText,
@@ -107,7 +108,7 @@ const AccountKeptDictations = ({
     }),
   );
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     // What an earlier run kept that cannot be listed stays on the phone for
     // the next launch to find.
     void (async () => {

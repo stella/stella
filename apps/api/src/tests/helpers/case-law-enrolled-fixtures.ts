@@ -39,8 +39,8 @@ import { AT_ASYLGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-
 import { AT_BKS_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-bks";
 import { AT_BVWG_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-bvwg";
 import {
-  assembleAtRisDecision,
   AT_COURTS_SOURCE,
+  buildAtRisDecision,
 } from "@/api/handlers/case-law/ingestion/adapters/at-courts";
 import type { AtRisSourceDefinition } from "@/api/handlers/case-law/ingestion/adapters/at-courts";
 import { createAtFindokAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-findok";
@@ -2283,15 +2283,29 @@ export const atRisFixture = (
     ),
   },
   buildDecision: async () =>
-    await Promise.resolve(
-      assembleAtRisDecision(
-        AT_RIS_SOURCES[adapter],
-        atRisListingItem(adapter),
-        {
-          documentXml: atRisDocumentXml(adapter),
-          headnoteListing: atRisHeadnoteListing(adapter),
-        },
-      ),
+    await withTestFetch(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (url.pathname.startsWith("/Dokumente/")) {
+          return await Promise.resolve(
+            new Response(atRisDocumentXml(adapter), {
+              headers: { "Content-Type": "application/xml" },
+            }),
+          );
+        }
+        return await Promise.resolve(
+          new Response(atRisHeadnoteListing(adapter), {
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }),
+      async () =>
+        await buildAtRisDecision(
+          AT_RIS_SOURCES[adapter],
+          atRisListingItem(adapter),
+        ),
     ),
 });
 

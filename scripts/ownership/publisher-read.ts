@@ -2,7 +2,6 @@ import type { OwnershipEntry } from "../ownership-types.ts";
 // Case-law modules that still call the raw publisher fetch. Each migrates to
 // `readPublisher` and leaves this list; nothing is added to it.
 const UNMIGRATED_PUBLISHER_READERS = [
-  "handlers/case-law/ingestion/adapters/at-ris-throttle.ts",
   "handlers/case-law/ingestion/adapters/eu-ecj.ts",
   "handlers/case-law/ingestion/adapters/hu-bhgy.ts",
   "handlers/case-law/ingestion/adapters/pagination.ts",
@@ -40,11 +39,6 @@ export default {
         path: `apps/api/src/${file}`,
         reason: "Reads its publisher raw; pending migration to readPublisher.",
       })),
-      {
-        path: "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts",
-        reason:
-          "Types the injected publisher fetch of its RIS walk; sends no request itself.",
-      },
     ],
   },
 } as const satisfies OwnershipEntry;

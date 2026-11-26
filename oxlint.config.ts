@@ -2271,6 +2271,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-crypto-random-uuid.ts",
     "./.oxlint-plugins/s3-object-boundary.ts",
     "./.oxlint-plugins/no-raw-use-effect.ts",
+    "./.oxlint-plugins/no-raw-use-layout-effect.ts",
     "./.oxlint-plugins/mobile-window-overlay-owner.ts",
     "./.oxlint-plugins/tooltip-provider-owner.ts",
     "./.oxlint-plugins/copy-feedback-owner.ts",
@@ -3232,6 +3233,17 @@ const config = defineConfig({
       // otherwise scoped to apps/web/src, which the fixtures dir is not.
       files: [".oxlint-plugins/__fixtures__/no-raw-use-effect.fixture.tsx"],
       rules: { "no-raw-use-effect/no-raw-use-effect": "error" },
+    },
+    {
+      // Exercise no-raw-use-layout-effect against its regression fixture; the
+      // rule is otherwise scoped to the React surfaces, which the fixtures dir
+      // is not.
+      files: [
+        ".oxlint-plugins/__fixtures__/no-raw-use-layout-effect.fixture.tsx",
+      ],
+      rules: {
+        "no-raw-use-layout-effect/no-raw-use-layout-effect": "error",
+      },
     },
     {
       // Every Bun SQL client and bun-sql drizzle database comes from the
@@ -5364,6 +5376,20 @@ const config = defineConfig({
         "no-ref-mirror/no-ref-mirror": "error",
         "require-use-shallow/require-use-shallow": "error",
         "require-stable-snapshot/require-stable-snapshot": "error",
+      },
+    },
+    {
+      // Layout and insertion effects go through the wrappers in
+      // packages/ui/src/effects (the owner row in restricted-import.ts) on
+      // every React surface. Tests drive React directly and stay out.
+      files: [...PRODUCT_FRONTEND_FILES, ...REACT_SURFACE_FILES_BEYOND_PRODUCT],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "**/fixtures/**",
+      ],
+      rules: {
+        "no-raw-use-layout-effect/no-raw-use-layout-effect": "error",
       },
     },
     {

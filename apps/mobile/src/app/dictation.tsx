@@ -1,11 +1,4 @@
-import {
-  Suspense,
-  use,
-  useEffect,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
+import { Suspense, use, useRef, useState, useTransition } from "react";
 
 import { panic, Result } from "better-result";
 import { randomUUID } from "expo-crypto";
@@ -15,6 +8,7 @@ import { ScrollView, View } from "react-native";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { useExternalSyncEffect, useMountEffect } from "@stll/ui/effects";
 import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 import { Textarea } from "@stll/ui/textarea";
@@ -60,14 +54,11 @@ const DictationScreen = () => {
   // a retry while the sheet is open, and goes as the sheet closes. A retry
   // remounts the loader, so this outlives each try.
   const failed = useRef(false);
-  useEffect(
-    () => () => {
-      if (failed.current) {
-        void discardQuickDictation().catch(() => undefined);
-      }
-    },
-    [],
-  );
+  useMountEffect(() => () => {
+    if (failed.current) {
+      void discardQuickDictation().catch(() => undefined);
+    }
+  });
   return state.status === "signed-in" ? (
     <DictationLoader
       key={attempt}
@@ -155,13 +146,13 @@ const LoadedDictation = ({
   const read = use(reading);
   const failed = read.type === "failed";
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (read.type === "failed" && read.signedOut) {
       end(source);
     }
   }, [end, read, source]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (failed) {
       onFailed();
     }
@@ -263,18 +254,15 @@ const DictationText = ({ initial }: { initial: string }) => {
   const prepared = useRef<File | null>(null);
   const empty = text.trim() === "";
 
-  useEffect(
-    () => () => {
-      const file = prepared.current;
-      if (file?.exists === true) {
-        // Best effort: the cache folder is the system's to clear too.
-        Result.try(() => {
-          file.delete();
-        }).unwrapOr(undefined);
-      }
-    },
-    [],
-  );
+  useMountEffect(() => () => {
+    const file = prepared.current;
+    if (file?.exists === true) {
+      // Best effort: the cache folder is the system's to clear too.
+      Result.try(() => {
+        file.delete();
+      }).unwrapOr(undefined);
+    }
+  });
 
   const saveToMatter = () => {
     setFailed(false);
