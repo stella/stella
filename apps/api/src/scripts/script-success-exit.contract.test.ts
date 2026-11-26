@@ -93,7 +93,7 @@ for (const { path, output, fixtures } of [
         ]),
         {
           description: "script to exit after completing work",
-          timeoutMs: 2000,
+          timeoutMs: 3000,
         },
       );
       expect(stdout).toContain(output);

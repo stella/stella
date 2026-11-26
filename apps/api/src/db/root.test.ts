@@ -57,7 +57,7 @@ if (!databaseUrl || !runPostgresTests) {
                 ]),
                 {
                   description: "held transaction to be ready",
-                  timeoutMs: queryTimeoutMs,
+                  timeoutMs: queryTimeoutMs, // timeout: bounded DB pool probe budget
                 },
               );
 
@@ -68,7 +68,7 @@ if (!databaseUrl || !runPostgresTests) {
                 ),
                 {
                   description: "peer pool probe query to settle",
-                  timeoutMs: queryTimeoutMs,
+                  timeoutMs: queryTimeoutMs, // timeout: bounded DB pool probe budget
                 },
               );
 
