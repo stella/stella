@@ -3790,29 +3790,29 @@ const crawlEcjVariants = async ({
         return { type: "failed", error: attempted.error };
       }
       settledThrough = variant.key;
-      if (unread.outcome.type === "refused") {
-        collectedUnread.push(unread);
-        continue;
+      if (unread.outcome.type !== "refused") {
+        return crawled(false, [unread]);
       }
-      return crawled(false, [unread]);
+      collectedUnread.push(unread);
+    } else {
+      const built = attempted.value;
+      if (
+        built.type === "built" &&
+        built.value === undefined &&
+        budgetSpent(signal)
+      ) {
+        // A build the budget cut short can come back empty without having
+        // tried every manifestation, which is not the variant yielding nothing.
+        return crawled(false);
+      }
+      if (built.type === "item_build_failed") {
+        itemBuildFailures++;
+        decisions.push(built.decision);
+      } else if (built.value !== undefined) {
+        decisions.push(built.value);
+      }
+      settledThrough = variant.key;
     }
-    const built = attempted.value;
-    if (
-      built.type === "built" &&
-      built.value === undefined &&
-      budgetSpent(signal)
-    ) {
-      // A build the budget cut short can come back empty without having
-      // tried every manifestation, which is not the variant yielding nothing.
-      return crawled(false);
-    }
-    if (built.type === "item_build_failed") {
-      itemBuildFailures++;
-      decisions.push(built.decision);
-    } else if (built.value !== undefined) {
-      decisions.push(built.value);
-    }
-    settledThrough = variant.key;
   }
   return crawled(true);
 };
