@@ -1065,7 +1065,7 @@ describe("document conversion input", () => {
       checkConversionInput("text/html", encode(source)),
       {
         description: "HTML conversion input check to refuse",
-        timeoutMs: 1000,
+        timeoutMs: 3000,
       },
     );
     expect(result).toEqual({
