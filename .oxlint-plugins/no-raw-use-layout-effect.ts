@@ -14,7 +14,11 @@ export default eslintCompatPlugin({
     "no-raw-use-layout-effect": {
       meta: restrictedImportMeta("no-raw-use-layout-effect"),
       createOnce(context) {
-        return restrictedImportVisitors(context, "no-raw-use-layout-effect");
+        // First-week rollout: only lines a change touched
+        // (scripts/guard-rollouts/no-raw-use-layout-effect.json).
+        return restrictedImportVisitors(context, "no-raw-use-layout-effect", {
+          rollout: "no-raw-use-layout-effect",
+        });
       },
     },
   },
