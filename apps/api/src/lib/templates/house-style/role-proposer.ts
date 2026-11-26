@@ -443,21 +443,29 @@ const isTypedArticleHeading = (block: DocxBlock): boolean => {
   );
 };
 
+/** The longest line read as a heading without a number. */
+const SECTION_HEADING_MAX = 100;
+/** What no heading is: a label and its value, a link, a blank to fill in. */
+const NOT_A_HEADING = /:[ \u00A0]*\S|https?:\/\/|www\.|^\[|^\(.*\)$/su;
+
 /**
  * Whether a paragraph without a number heads a part of the document: a
- * short line that is no sentence and that the source sets as a heading or
- * centres (`Preambule`, `Definice`, `Závěrečná ustanovení` over unnumbered
- * text). A line in brackets names something for the text that follows.
+ * short line that is no sentence and that the source centres or sets as a
+ * heading of its first level (`Preambule`, `Definice`, `Závěrečná
+ * ustanovení` over unnumbered text). A heading further down the source's
+ * outline stays text: a template has one look for such a heading, not a
+ * scale of them. A line in brackets names something for the text that
+ * follows.
  */
 const isSectionHeading = (block: DocxBlock): boolean => {
   const line = block.text.trim();
   return (
     printedLabel(block) === null &&
-    (block.outlineLevel !== null || block.alignment === "center") &&
-    line.length <= TITLE_MAX &&
+    (block.outlineLevel === 0 || block.alignment === "center") &&
+    line.length <= SECTION_HEADING_MAX &&
     /\p{L}{2}/u.test(line) &&
     !/[.;:,]$/u.test(line) &&
-    !/^\(.*\)$/su.test(line) &&
+    !NOT_A_HEADING.test(line) &&
     !SIGNATURE_MARKER.test(line)
   );
 };
