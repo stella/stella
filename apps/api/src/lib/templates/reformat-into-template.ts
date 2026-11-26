@@ -18,6 +18,7 @@ import { stripUnicodeMarks } from "@stll/text-normalize";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { resolveAmbiguitiesByRule } from "@/api/lib/templates/house-style/ambiguity";
 import type { AmbiguityResolver } from "@/api/lib/templates/house-style/ambiguity";
+import { TemplateEngineError } from "@/api/lib/templates/house-style/folio-contract";
 import type {
   DocxBlock,
   DocxBlockManifest,
@@ -361,6 +362,17 @@ export const reformatDocxOntoTemplate = async ({
   const recording: TemplatePlanEngine = {
     ...engine,
     analyze: async (docx, options) => {
+      // The formatter reads a document that tracks changes again in one
+      // view. Nobody chose a view here, so it is refused by name instead of
+      // being formatted with every change accepted.
+      if (options?.trackedChanges !== undefined) {
+        return Result.err(
+          new TemplateEngineError({
+            message: "The document has tracked changes and no view was chosen.",
+            reason: "tracked-changes",
+          }),
+        );
+      }
       const analyzed = await engine.analyze(docx, options);
       if (analyzed.isOk()) {
         lastRead = analyzed.value;

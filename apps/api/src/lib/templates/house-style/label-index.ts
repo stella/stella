@@ -138,7 +138,7 @@ export const isRunningText = (text: string): boolean => {
   );
 };
 
-export type LabelOrigin = "auto" | "manual" | "field";
+type LabelOrigin = "auto" | "manual" | "field";
 
 type RawLabel = {
   origin: LabelOrigin;
