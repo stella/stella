@@ -405,21 +405,6 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
-    "id": "no-real-time-wait::apps/collab/src/server.test.ts::<module>::new Promise(setTimeout)",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::apps/collab/src/server.test.ts::runDocker::Bun.sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::apps/collab/src/server.test.ts::runDocker::new Promise(setTimeout)",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
     "id": "no-real-time-wait::apps/extension/e2e/containment.spec.ts::<module>::waitForTimeout",
     "count": 3,
     "reason": "Predates the rule: a fixed Playwright wait; wait on a locator, response or event instead."
@@ -800,67 +785,12 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
-    "id": "no-real-time-wait::packages/cli/src/mcp-client.test.ts::<module>::Bun.sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::packages/cli/src/mcp-client.test.ts::fetch::Bun.sleep",
-    "count": 2,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::packages/concurrency/src/index.test.ts::<module>::Bun.sleep",
-    "count": 4,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::packages/concurrency/src/index.test.ts::operation::Bun.sleep",
-    "count": 10,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::packages/legal-atlas/src/document-stage-observer.test.ts::<module>::Bun.sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
     "id": "no-real-time-wait::packages/property-testing/src/assert-property.test.ts::<module>::Bun.sleep",
     "count": 2,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
-    "id": "no-real-time-wait::packages/scripts/src/process-memory.test.ts::<module>::Bun.sleep",
-    "count": 2,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::packages/scripts/src/process-shutdown.test.ts::<module>::Bun.sleep",
-    "count": 2,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
     "id": "no-real-time-wait::packages/scripts/src/process-spawn.test.ts::<module>::Bun.sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::packages/scripts/src/process-stderr.test.ts::<module>::Bun.sleep",
-    "count": 2,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::packages/scripts/src/windows-process-ownership.test.ts::<module>::Bun.sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::scripts/check-journeys.test.ts::fetch::Bun.sleep",
-    "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::scripts/check-published-versions.test.ts::fetch::Bun.sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
