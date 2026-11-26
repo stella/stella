@@ -37204,6 +37204,7 @@
       "dependsOn": [
         "pkg:cargo/bitflags@2.13.2",
         "pkg:cargo/dispatch2@0.3.1",
+        "pkg:cargo/libc@0.2.191",
         "pkg:cargo/objc2-core-foundation@0.3.2",
         "pkg:cargo/objc2-io-surface@0.3.2",
         "pkg:cargo/objc2@0.6.5"
