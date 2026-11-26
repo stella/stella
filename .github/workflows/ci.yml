@@ -2040,11 +2040,7 @@ jobs:
         id: image
         env:
           CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
-        run: >-
-          bun .workflow-tooling/scripts/ci-service-images.ts --build packages/agent-engine/docker/sandbox.Dockerfile --
-          --file packages/agent-engine/docker/sandbox.Dockerfile
-          --tag "$AGENT_ENGINE_DOCKER_IMAGE"
-          packages/agent-engine/docker
+        run: bash scripts/ci/build-sandbox-image.sh
 
       - &logout_ghcr
         name: Log out of GitHub Container Registry
@@ -2094,22 +2090,12 @@ jobs:
       - name: Assert provider left no sandbox containers
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         id: assert-cleanup
-        run: |
-          mapfile -t container_ids < <(
-            docker ps --all --no-trunc --quiet --filter "ancestor=$AGENT_ENGINE_DOCKER_IMAGE"
-          )
-          if [[ "${#container_ids[@]}" -ne 1 || "${container_ids[0]}" != "$(docker inspect --format '{{.Id}}' "$NETWORK_CANARY_CONTAINER")" ]]; then
-            echo "::error title=Sandbox cleanup failed::Unexpected sandbox image container survived the integration suite."
-            docker ps --all --filter "ancestor=$AGENT_ENGINE_DOCKER_IMAGE"
-            exit 1
-          fi
+        run: bash scripts/ci/assert-no-sandbox-containers.sh
 
       - name: Cleanup Docker resources
         id: cleanup
         if: always() && needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
-        run: |
-          docker ps --all --quiet --filter "ancestor=$AGENT_ENGINE_DOCKER_IMAGE" | xargs --no-run-if-empty docker rm --force
-          docker network rm "$AGENT_ENGINE_DOCKER_NETWORK" 2>/dev/null || true
+        run: bash scripts/ci/cleanup-docker-resources.sh
 
       - name: Check image dependency trees and production runner
         id: api-deps
@@ -3189,9 +3175,7 @@ jobs:
         timeout-minutes: 5
         env:
           STELLA_BROWSER_E2E_EXECUTABLE: /opt/google/chrome/chrome
-        run: |
-          command -v dbus-run-session
-          dbus-run-session -- xvfb-run -a bun test packages/agent-engine/src/sidecar/browser/hosts.e2e.test.ts
+        run: bash scripts/ci/test-browser-host.sh
 
       - name: Upload failed API or rest test output
         if: failure() && steps.test-api-or-rest.outcome == 'failure'
@@ -4057,15 +4041,7 @@ jobs:
       - name: Verify planned Postgres test durations
         env:
           EXPECTED_HASH: ${{ needs.ci-plan.outputs.postgres_test_durations_hash }}
-        run: |
-          file="$RUNNER_TEMP/postgres-test-durations.json"
-          if [[ "$EXPECTED_HASH" == missing ]]; then
-            [[ ! -f "$file" ]] || { echo "Postgres test duration plan unexpectedly exists" >&2; exit 1; }
-          else
-            [[ -f "$file" ]] || { echo "Postgres test duration plan is missing" >&2; exit 1; }
-            actual_hash=$(sha256sum "$file" | cut -d ' ' -f 1)
-            [[ "$actual_hash" == "$EXPECTED_HASH" ]] || { echo "Postgres test duration plan hash mismatch" >&2; exit 1; }
-          fi
+        run: bash scripts/ci/verify-postgres-test-durations.sh
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -4115,11 +4091,7 @@ jobs:
           RUSTFS_SECRET_KEY: stella-rustfs-dev-secret
         # The restricted owner and the bucket a local stack has, then the
         # committed migrations; `db:push` would skip the policies they create.
-        run: |
-          curl --fail --silent --show-error --aws-sigv4 "aws:amz:us-east-1:s3" \
-            --user "$RUSTFS_ACCESS_KEY:$RUSTFS_SECRET_KEY" \
-            --request PUT http://127.0.0.1:9000/stella
-          (cd apps/api && bun run src/db/migrate.ts)
+        run: bash scripts/ci/prepare-dev-seed-db.sh
 
       - name: Apply the local dev seed
         if: matrix.shard == 1 && needs.ci-plan.outputs.dev_seed_required == 'true'
@@ -4507,26 +4479,12 @@ jobs:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         # `push --explain` exits with "[i] No changes detected" when the
         # migrated schema already matches schema.ts. Any pending diff fails CI.
-        run: |
-          OUT=$(bun --bun drizzle-kit push --explain 2>&1)
-          echo "$OUT"
-          grep -q "No changes detected" <<<"$OUT" || {
-            echo "::error::Migrated schema does not match schema.ts. Either commit a generated migration that closes the gap, or fix the migration files."
-            exit 1
-          }
+        run: bash ../../scripts/ci/verify-schema-parity.sh
 
       - name: Verify __drizzle_migrations recorded all migrations
         env:
           PGPASSWORD: stella
-        run: |
-          set -euo pipefail
-          EXPECTED=$(find apps/api/drizzle -mindepth 1 -maxdepth 1 -type d -name '20*' | wc -l | tr -d ' ')
-          APPLIED=$(psql -h 127.0.0.1 -U stella_owner -d stella -tAc "SELECT count(*) FROM drizzle.__drizzle_migrations")
-          echo "Expected $EXPECTED migrations, drizzle.__drizzle_migrations has $APPLIED"
-          [ "$EXPECTED" = "$APPLIED" ] || {
-            echo "::error::Migration count mismatch: $APPLIED applied, $EXPECTED on disk."
-            exit 1
-          }
+        run: bash scripts/ci/verify-drizzle-migrations-recorded.sh
 
       - name: Rehearse interrupted Better Auth constraints migration
         env:
@@ -4919,9 +4877,7 @@ jobs:
 
       - name: Startup bundle gates
         # Blocking: the startup graph's gates (scripts/bundle-startup-gates.ts).
-        run: |
-          bun scripts/bundle-baseline.ts --self-test
-          bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check
+        run: bash scripts/ci/web-startup-bundle-gates.sh
 
       - name: Bundle duplicate content guard
         # Blocking: a chunk that repeats a large block of identical content
@@ -4939,32 +4895,7 @@ jobs:
         # runner image's stricter boundary.
         env:
           NPM_TOKEN: ""
-        run: |
-          set -euo pipefail
-          # Reproduce apps/web/Dockerfile's deps-prod stage exactly. Wipe
-          # node_modules first (a plain --production reinstall only skips ADDING
-          # devDeps; it does not prune ones the build install already placed),
-          # and scope to @stll/web — an unfiltered install pulls other apps' deps
-          # and could mask a package the web runtime reaches but @stll/web never
-          # declared. dist/ and .env are untouched.
-          rm -rf node_modules
-          bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/web-production.log" --filter @stll/web --production --frozen-lockfile --ignore-scripts
-          cd apps/web
-          PORT=3199 HOST=127.0.0.1 bun dist/runtime.js &
-          server_pid=$!
-          ready=
-          for _ in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:3199/health >/dev/null 2>&1; then
-              ready=1
-              break
-            fi
-            sleep 1
-          done
-          kill "$server_pid" 2>/dev/null || true
-          if [[ "$ready" != "1" ]]; then
-            echo "web SSR runtime failed to boot under --production deps" >&2
-            exit 1
-          fi
+        run: bash scripts/ci/web-prod-deps-boot-smoke.sh
 
       - *upload_failed_bun_install_logs
 
@@ -5044,23 +4975,7 @@ jobs:
       - *logout_ghcr
 
       - name: Boot runner container
-        run: |
-          set -euo pipefail
-          docker run --detach --name web-runner \
-            --publish 127.0.0.1:3199:3002 stella-web-runner:ci
-          ready=
-          for _ in $(seq 1 60); do
-            if curl -fsS http://127.0.0.1:3199/health >/dev/null 2>&1; then
-              ready=1
-              break
-            fi
-            sleep 1
-          done
-          docker logs web-runner
-          if [[ "$ready" != "1" ]]; then
-            echo "web runner image failed to serve /health" >&2
-            exit 1
-          fi
+        run: bash scripts/ci/boot-web-runner-container.sh
 
       - name: Cleanup runner container
         if: always()
@@ -5279,8 +5194,7 @@ jobs:
 
       - name: Explain network baseline failure
         if: matrix.mode == 'network-baseline' && failure() && steps.network-baseline.outcome == 'failure'
-        run: |
-          echo "::error::Network baseline failed. Fix unintended regressions; for intentional route changes, add the baseline:record label to this PR, then review the recorded budgets and resolve the recorder's review thread."
+        run: bash scripts/ci/explain-network-baseline-failure.sh
 
       - name: Configure flaky-test quarantine for phone layouts
         if: matrix.mode == 'phone-layouts' && !cancelled() && steps.e2e-stack.outcome == 'success'
@@ -5693,31 +5607,11 @@ jobs:
 
       - name: Wait for web dev server
         if: steps.e2e-stack.outcome == 'success'
-        run: |
-          for i in {1..60}; do
-            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3000 > /dev/null 2>&1; then
-              echo "Web up after ${i}s"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "::error::Web never came up"
-          tail -200 /tmp/web.log || true
-          exit 1
+        run: bash scripts/ci/wait-for-web-dev-server.sh
 
       - name: Wait for collaboration server
         if: steps.e2e-stack.outcome == 'success'
-        run: |
-          for i in {1..60}; do
-            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3002/readyz > /dev/null 2>&1; then
-              echo "Collaboration server up after ${i}s"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "::error::Collaboration server never came up"
-          tail -200 /tmp/collab.log || true
-          exit 1
+        run: bash scripts/ci/wait-for-collab-server.sh
 
       - *ghcr_browser_image_login
 
@@ -5768,13 +5662,7 @@ jobs:
       # restart would make the apparent canary result nondeterministic.
       - name: Guard against mid-test Vite re-optimize
         if: always() && steps.e2e-stack.outcome == 'success'
-        run: |
-          if grep -q "optimized dependencies changed. reloading" /tmp/web.log; then
-            echo "::error::Vite re-optimized dependencies mid-session and forced a reload. Add the lazy/runtime dependency named below to optimizeDeps.include in apps/web/vite.config.ts."
-            grep -nE "new dependencies optimized|optimized dependencies changed" /tmp/web.log || true
-            exit 1
-          fi
-          echo "No mid-session dep re-optimize detected."
+        run: bash scripts/ci/guard-vite-reoptimize.sh
 
       - name: Stop web dev server
         if: always() && steps.e2e-stack.outcome == 'success'
@@ -5871,23 +5759,10 @@ jobs:
         run: bun --filter @stll/landing build
 
       - name: Start landing preview server
-        run: |
-          cd apps/landing
-          nohup bun --bun astro preview --port 4321 > /tmp/landing.log 2>&1 &
-          echo $! > /tmp/landing.pid
+        run: bash scripts/ci/start-landing-preview.sh
 
       - name: Wait for landing
-        run: |
-          for i in {1..60}; do
-            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:4321 > /dev/null 2>&1; then
-              echo "Landing up after ${i}s"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "::error::Landing preview never came up"
-          tail -200 /tmp/landing.log || true
-          exit 1
+        run: bash scripts/ci/wait-for-landing.sh
 
       - *ghcr_browser_image_login
 
@@ -5909,11 +5784,7 @@ jobs:
 
       - name: Stop landing preview server
         if: always()
-        run: |
-          if [[ -f /tmp/landing.pid ]]; then
-            kill "$(cat /tmp/landing.pid)" || true
-            rm -f /tmp/landing.pid
-          fi
+        run: bash scripts/ci/stop-landing-preview.sh
 
       - name: Upload failure diagnostics
         if: failure()
@@ -6139,9 +6010,7 @@ jobs:
         env:
           POSTGRES_IMAGE: ${{ needs.ci-plan.outputs.postgres }}
           REDIS_IMAGE: ${{ needs.ci-plan.outputs.redis }}
-        run: |
-          bash .workflow-tooling/scripts/retry.sh docker pull "$POSTGRES_IMAGE"
-          bash .workflow-tooling/scripts/retry.sh docker pull "$REDIS_IMAGE"
+        run: bash scripts/ci/pull-api-smoke-images.sh
 
       - *logout_ghcr
 
@@ -6287,29 +6156,7 @@ jobs:
         id: tools
         continue-on-error: true
         shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $tools = @{}
-          $tools.bun = (& bun --version) -join "`n"
-          if ($LASTEXITCODE -ne 0) { throw "Bun version unavailable" }
-          $tools.rust = (& rustc -vV) -join "`n"
-          if ($LASTEXITCODE -ne 0) { throw "Rust version unavailable" }
-          $tools.cargo = (& cargo -V) -join "`n"
-          if ($LASTEXITCODE -ne 0) { throw "Cargo version unavailable" }
-          $tools.node = (& node --version) -join "`n"
-          if ($LASTEXITCODE -ne 0) { throw "Node version unavailable" }
-          $tools.tauri = (& bun run --cwd apps/desktop tauri --version) -join "`n"
-          if ($LASTEXITCODE -ne 0) { throw "Tauri version unavailable" }
-          $tools.image = $env:ImageVersion
-          $tools.os = $env:ImageOS
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $vs = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json | ConvertFrom-Json) | Select-Object -First 1
-          if (-not $vs) { throw "Visual Studio version unavailable" }
-          $tools.visualStudio = $vs.installationVersion
-          $tools.msvc = (Get-ChildItem "$($vs.installationPath)\VC\Tools\MSVC" -Directory | Sort-Object Name | ForEach-Object Name) -join ','
-          $tools.sdk = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\Lib\10.*" -Directory | Sort-Object Name | ForEach-Object Name) -join ','
-          if ($tools.Values | Where-Object { [string]::IsNullOrWhiteSpace($_) }) { throw "Incomplete Windows toolchain" }
-          $tools | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/windows-tools.json" -Encoding utf8
+        run: ./scripts/ci/resolve-windows-toolchain.ps1
 
       - name: Look up successful queue dry-run receipt
         id: receipt
@@ -6416,7 +6263,7 @@ jobs:
       - name: Test dev runner and process tree cleanup
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         shell: pwsh
-        run: bun test packages/scripts/src/dev-runner.test.ts packages/scripts/src/process-shutdown.test.ts packages/scripts/src/process-memory.test.ts packages/scripts/src/windows-process-ownership.test.ts packages/scripts/src/process-spawn.test.ts scripts/ci-install.test.ts
+        run: ./scripts/ci/test-windows-scripts.ps1
 
       - *merge_group_cancel
 
@@ -6480,11 +6327,7 @@ jobs:
 
       - name: Record fresh WebAssembly checksums
         if: failure() && steps.wasm-check.outcome == 'failure'
-        run: |
-          if [[ -d "$RUNNER_TEMP/scan-engine-wasm" ]]; then
-            (cd "$RUNNER_TEMP/scan-engine-wasm" && sha256sum ./*) > "$RUNNER_TEMP/scan-engine-wasm.sha256"
-            rustc -vV > "$RUNNER_TEMP/scan-engine-wasm.toolchain"
-          fi
+        run: bash scripts/ci/record-wasm-checksums.sh
 
       - name: Upload fresh WebAssembly on mismatch
         if: failure() && steps.wasm-check.outcome == 'failure'
@@ -6512,10 +6355,10 @@ jobs:
         timeout-minutes: 10
         env:
           CARGO_NET_RETRY: "5"
-        run: for p in scan-engine heic-decoder pst-reader recording-wasm; do bash .github/actions/cargo-deny/fetch.sh packages/$p/Cargo.toml; done
+        run: bash scripts/ci/fetch-wasm-license-inputs.sh
 
       - name: License audit
-        run: for p in scan-engine heic-decoder pst-reader recording-wasm; do cargo deny --offline --manifest-path packages/$p/Cargo.toml check --config packages/$p/deny.toml --hide-inclusion-graph bans licenses sources; done
+        run: bash scripts/ci/wasm-license-audit.sh
 
       - name: Save Rust build cache
         if: success()
@@ -6635,33 +6478,7 @@ jobs:
       - name: Install signing test certificates
         if: matrix.os == 'windows'
         shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $prefix = $env:STELLA_SIGNING_FIXTURE_PREFIX
-          $store = 'Cert:\CurrentUser\My'
-          $documents = '2.5.29.37={text}1.3.6.1.5.5.7.3.4'
-          $loginOnly = '2.5.29.37={text}1.3.6.1.5.5.7.3.2'
-          $common = @{
-            CertStoreLocation = $store
-            Type = 'Custom'
-            Provider = 'Microsoft Software Key Storage Provider'
-            KeyExportPolicy = 'NonExportable'
-            NotAfter = (Get-Date).AddDays(2)
-          }
-          $rsa = @{ KeyAlgorithm = 'RSA'; KeyLength = 2048 }
-          New-SelfSignedCertificate @common @rsa -Subject "CN=$prefix-rsa" -KeyUsage DigitalSignature, NonRepudiation -TextExtension @($documents) | Out-Null
-          New-SelfSignedCertificate @common -Subject "CN=$prefix-ec" -KeyAlgorithm ECDSA_nistP256 -CurveExport CurveName -KeyUsage DigitalSignature -TextExtension @($documents) | Out-Null
-          New-SelfSignedCertificate @common @rsa -Subject "CN=$prefix-client-auth" -KeyUsage DigitalSignature -TextExtension @($loginOnly) | Out-Null
-          $expired = $common.Clone()
-          $expired.NotBefore = (Get-Date).AddDays(-10)
-          $expired.NotAfter = (Get-Date).AddDays(-1)
-          New-SelfSignedCertificate @expired @rsa -Subject "CN=$prefix-expired" -KeyUsage DigitalSignature -TextExtension @($documents) | Out-Null
-          # Keep only the public half of this one: a certificate whose key is gone.
-          $keyed = New-SelfSignedCertificate @common @rsa -Subject "CN=$prefix-no-key" -KeyUsage DigitalSignature -TextExtension @($documents)
-          $public = Join-Path $env:RUNNER_TEMP "$prefix-no-key.cer"
-          Export-Certificate -Cert $keyed -FilePath $public | Out-Null
-          Remove-Item -Path $keyed.PSPath -DeleteKey
-          Import-Certificate -FilePath $public -CertStoreLocation $store | Out-Null
+        run: ./scripts/ci/install-signing-test-certs.ps1
 
       - name: Test signer against the certificate store
         if: matrix.os == 'windows'
@@ -6671,12 +6488,7 @@ jobs:
       - name: Remove signing test certificates
         if: always() && matrix.os == 'windows'
         shell: pwsh
-        run: |
-          Get-ChildItem Cert:\CurrentUser\My |
-            Where-Object Subject -like "CN=$env:STELLA_SIGNING_FIXTURE_PREFIX-*" |
-            ForEach-Object {
-              if ($_.HasPrivateKey) { Remove-Item -Path $_.PSPath -DeleteKey } else { Remove-Item -Path $_.PSPath }
-            }
+        run: ./scripts/ci/remove-signing-test-certs.ps1
 
       - name: Setup Bun for the desktop transport smoke
         if: matrix.os == 'macos'
@@ -6696,19 +6508,7 @@ jobs:
       - name: Smoke native desktop transport against the local API contract
         if: matrix.os == 'macos'
         shell: bash
-        run: |
-          url_file="$RUNNER_TEMP/desktop-smoke-url"
-          bun apps/api/scripts/desktop-registry-transport-smoke-server.ts "$url_file" &
-          server_pid=$!
-          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
-          for _ in {1..100}; do
-            test -s "$url_file" && break
-            kill -0 "$server_pid" 2>/dev/null || { wait "$server_pid"; exit 1; }
-            sleep 0.1
-          done
-          test -s "$url_file"
-          STELLA_DESKTOP_SMOKE_API_URL="$(cat "$url_file")" cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib --target ${{ matrix.target }} --frozen registry::tests::native_desktop_transport_reaches_api_authentication -- --ignored --exact
-          wait "$server_pid"
+        run: bash scripts/ci/smoke-desktop-transport.sh "${{ matrix.target }}"
 
       - name: Install cargo-deny
         timeout-minutes: 10
@@ -6729,7 +6529,7 @@ jobs:
 
       - name: License audit
         if: matrix.os == 'macos'
-        run: cargo deny --offline --manifest-path apps/desktop/src-tauri/Cargo.toml check --config apps/desktop/src-tauri/deny.toml --hide-inclusion-graph bans licenses sources
+        run: bash scripts/ci/desktop-license-audit.sh
 
       - name: Docs
         shell: pwsh
