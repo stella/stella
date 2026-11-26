@@ -9,7 +9,13 @@
 // out is kept stable by hand, so they behave the same compiled or not (the
 // desktop app, the package's own tests and outside consumers run them
 // uncompiled). Full rationale: /conventions-use-effect.
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type {
   DependencyList,
   Dispatch,
@@ -17,6 +23,8 @@ import type {
   RefObject,
   SetStateAction,
 } from "react";
+
+import { Temporal } from "temporal-polyfill/full";
 
 /**
  * Setup/teardown synchronization with an external system, once per mount.
@@ -178,3 +186,79 @@ export const useKeyedState = <T>(
   }
   return [slot.value, setValue];
 };
+
+// One shared clock per interval: every component reading `useNow(ms)` ticks
+// from the same timer, which runs only while one of them is mounted.
+type Clock = {
+  now: number;
+  readonly listeners: Set<() => void>;
+  timer: ReturnType<typeof setInterval> | null;
+};
+const clocks = new Map<number, Clock>();
+const clockSubscriptions = new Map<
+  number,
+  (onChange: () => void) => () => void
+>();
+
+const clockFor = (intervalMs: number): Clock => {
+  const existing = clocks.get(intervalMs);
+  if (existing) {
+    return existing;
+  }
+  const created: Clock = {
+    now: Temporal.Now.instant().epochMilliseconds,
+    listeners: new Set(),
+    timer: null,
+  };
+  clocks.set(intervalMs, created);
+  return created;
+};
+
+// Starts the clock's timer and hands the handle back to the subscription
+// that owns it, which clears it when the last listener leaves.
+const startClock = (
+  clock: Clock,
+  intervalMs: number,
+): ReturnType<typeof setInterval> =>
+  setInterval(() => {
+    clock.now = Temporal.Now.instant().epochMilliseconds;
+    for (const listener of clock.listeners) {
+      listener();
+    }
+  }, intervalMs);
+
+const subscribeClock = (intervalMs: number) => {
+  const existing = clockSubscriptions.get(intervalMs);
+  if (existing) {
+    return existing;
+  }
+  const subscribe = (onChange: () => void) => {
+    const clock = clockFor(intervalMs);
+    clock.listeners.add(onChange);
+    if (clock.timer === null) {
+      clock.now = Temporal.Now.instant().epochMilliseconds;
+      clock.timer = startClock(clock, intervalMs);
+    }
+    return () => {
+      clock.listeners.delete(onChange);
+      if (clock.listeners.size === 0 && clock.timer !== null) {
+        clearInterval(clock.timer);
+        clock.timer = null;
+      }
+    };
+  };
+  clockSubscriptions.set(intervalMs, subscribe);
+  return subscribe;
+};
+
+/**
+ * The current time in epoch milliseconds, redrawn every `intervalMs` while the
+ * component is mounted: for elapsed times and relative timestamps. Replaces
+ * an effect that sets "now" on mount and on every tick.
+ */
+export const useNow = (intervalMs: number): number =>
+  useSyncExternalStore(
+    subscribeClock(intervalMs),
+    () => clockFor(intervalMs).now,
+    () => clockFor(intervalMs).now,
+  );
