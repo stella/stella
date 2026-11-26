@@ -17,6 +17,7 @@ import {
   decisionStorageLockKeys,
   fallbackEcliComparisonKey,
 } from "@/api/lib/case-law/fallback-decision-identity";
+import { readBounded } from "@/api/lib/db/read-bounded";
 
 /**
  * What a docket is compared on here: its slug, which folds case, spacing and
@@ -181,6 +182,9 @@ export const decisionOrderingKeys = (
  */
 const STORED_ORDERING_ROW_LIMIT = 4096;
 
+/** What a read the batch has nothing to look up by returns. */
+const NOTHING_READ = { type: "complete", rows: [] } as const;
+
 type StoredDecisionRow = {
   id: SafeId<"caseLawDecision">;
   sourceDocumentId: string | null;
@@ -256,55 +260,58 @@ const readStoredDecisionKeys = async (
     return [];
   }
   return await scopedDb(async (tx) => {
-    const claims =
+    const claimRead =
       identities.length === 0
-        ? []
-        : await tx
-            .select({
-              decisionId: canonicalDecisionIdSql(
-                caseLawDecisionSourceIdentities.decisionId,
-              ),
-              sourceDocumentId:
-                caseLawDecisionSourceIdentities.sourceDocumentId,
-            })
-            .from(caseLawDecisionSourceIdentities)
-            .where(
-              and(
-                eq(caseLawDecisionSourceIdentities.sourceId, sourceId),
-                inArray(
+        ? NOTHING_READ
+        : await readBounded(
+            tx
+              .select({
+                decisionId: canonicalDecisionIdSql(
+                  caseLawDecisionSourceIdentities.decisionId,
+                ),
+                sourceDocumentId:
                   caseLawDecisionSourceIdentities.sourceDocumentId,
-                  identities,
+              })
+              .from(caseLawDecisionSourceIdentities)
+              .where(
+                and(
+                  eq(caseLawDecisionSourceIdentities.sourceId, sourceId),
+                  inArray(
+                    caseLawDecisionSourceIdentities.sourceDocumentId,
+                    identities,
+                  ),
                 ),
               ),
-            )
-            .limit(STORED_ORDERING_ROW_LIMIT + 1);
-    const fallbackClaims =
+            STORED_ORDERING_ROW_LIMIT,
+          );
+    const fallbackRead =
       fallbackIdentityKeys.length === 0
-        ? []
-        : await tx
-            .select({
-              decisionId: canonicalDecisionIdSql(
-                caseLawDecisionFallbackIdentities.decisionId,
-              ),
-              identityKey: caseLawDecisionFallbackIdentities.identityKey,
-            })
-            .from(caseLawDecisionFallbackIdentities)
-            .where(
-              and(
-                eq(caseLawDecisionFallbackIdentities.sourceId, sourceId),
-                inArray(
-                  caseLawDecisionFallbackIdentities.identityKey,
-                  fallbackIdentityKeys,
+        ? NOTHING_READ
+        : await readBounded(
+            tx
+              .select({
+                decisionId: canonicalDecisionIdSql(
+                  caseLawDecisionFallbackIdentities.decisionId,
+                ),
+                identityKey: caseLawDecisionFallbackIdentities.identityKey,
+              })
+              .from(caseLawDecisionFallbackIdentities)
+              .where(
+                and(
+                  eq(caseLawDecisionFallbackIdentities.sourceId, sourceId),
+                  inArray(
+                    caseLawDecisionFallbackIdentities.identityKey,
+                    fallbackIdentityKeys,
+                  ),
                 ),
               ),
-            )
-            .limit(STORED_ORDERING_ROW_LIMIT + 1);
-    if (
-      claims.length > STORED_ORDERING_ROW_LIMIT ||
-      fallbackClaims.length > STORED_ORDERING_ROW_LIMIT
-    ) {
+            STORED_ORDERING_ROW_LIMIT,
+          );
+    if (claimRead.type === "overflow" || fallbackRead.type === "overflow") {
       return null;
     }
+    const claims = claimRead.rows;
+    const fallbackClaims = fallbackRead.rows;
     const claimedIds = [
       ...new Set([
         ...claims.map(({ decisionId }) => decisionId),
