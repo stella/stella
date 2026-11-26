@@ -573,6 +573,28 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.MCP_CONNECTOR],
   },
+  // The member removes research notes the agent kept about a website, one
+  // by one or a whole website's; the Settings list refreshes.
+  removeBrowserSiteNote: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/chat/browser-site-notes/:noteId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.USER],
+  },
+  removeBrowserSiteNotesForSite: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/chat/browser-site-notes/sites",
+      },
+    ],
+    resources: [RESOURCE_TYPE.USER],
+  },
   // The member lets chat turns work in a folder linked on their computer;
   // the computers' report, which lists the folder's approval, refreshes.
   approveLocalFolder: {

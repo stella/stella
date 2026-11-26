@@ -77,6 +77,7 @@ export type SafeIdType =
   | "chatThreadCompaction"
   | "chatThread"
   | "chatBrowserSiteGrant"
+  | "chatBrowserSiteNote"
   | "chatToolGrant"
   | "fileChatThread"
   | "templateChatThread"

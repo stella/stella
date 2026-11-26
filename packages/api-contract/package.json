@@ -64,6 +64,7 @@
     "./browser-control": "./src/browser-control.ts",
     "./browser-downloads": "./src/browser-downloads.ts",
     "./browser-site-grants": "./src/browser-site-grants.ts",
+    "./browser-site-notes": "./src/browser-site-notes.ts",
     "./browser-step-gate": "./src/browser-step-gate.ts",
     "./citation-check": "./src/citation-check.ts",
     "./conflict-checks": "./src/conflict-checks.ts",

@@ -430,6 +430,14 @@
       "estimatedTokens": 919
     },
     {
+      "name": "read_site_notes",
+      "nameChars": 15,
+      "descriptionChars": 379,
+      "inputSchemaChars": 235,
+      "totalChars": 629,
+      "estimatedTokens": 230
+    },
+    {
       "name": "read_statute",
       "nameChars": 12,
       "descriptionChars": 800,
@@ -532,6 +540,14 @@
       "inputSchemaChars": 6303,
       "totalChars": 6712,
       "estimatedTokens": 2763
+    },
+    {
+      "name": "save_site_notes",
+      "nameChars": 15,
+      "descriptionChars": 699,
+      "inputSchemaChars": 2358,
+      "totalChars": 3072,
+      "estimatedTokens": 1221
     },
     {
       "name": "save_task",
@@ -663,7 +679,7 @@
     }
   ],
   "totals": {
-    "characters": 140758,
-    "estimatedTokens": 55913
+    "characters": 144459,
+    "estimatedTokens": 57364
   }
 }

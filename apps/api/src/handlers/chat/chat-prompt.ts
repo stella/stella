@@ -131,6 +131,8 @@ import { formatDecisionForPrompt } from "@/api/lib/case-law/analysis-prompt";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
+import { browserSiteNotesPromptSection } from "@/api/lib/chat/browser-site-notes/agent-surface";
+import { listNotedBrowserOrigins } from "@/api/lib/chat/browser-site-notes/store";
 import {
   chatCacheStablePrefixSchema,
   chatOrganizationPromptLayerSchema,
@@ -1222,6 +1224,37 @@ const buildActiveCorpusSections = async (
     return Result.ok({ decisionSection, statuteSection });
   });
 
+/**
+ * The websites the member keeps research notes for, named only when a turn
+ * can browse and some exist: on stella's models when the browser tool is
+ * offered, and on the member's computer, whose agent reaches the notes over
+ * the stella MCP server.
+ */
+const buildSiteNotesSection = async (
+  promptTarget: ChatPromptTarget,
+  browserExtension: TurnBrowserExtension,
+  safeDb: SafeDb,
+  {
+    organizationId,
+    userId,
+  }: {
+    organizationId: SafeId<"organization"> | undefined;
+    userId: SafeId<"user"> | undefined;
+  },
+): Promise<Result<string, SafeDbError>> => {
+  const browses =
+    promptTarget.type === "local_run" ||
+    browserExtensionPolicy(browserExtension).toolOffered;
+  if (!browses || organizationId === undefined || userId === undefined) {
+    return Result.ok("");
+  }
+  const origins = await listNotedBrowserOrigins({
+    owner: { organizationId, userId },
+    safeDb,
+  });
+  return origins.map(browserSiteNotesPromptSection);
+};
+
 export const buildChatSystemPromptParts = async ({
   browserExtension = DEFAULT_BROWSER_EXTENSION,
   caseLawDb = caseLawPublicReadDb,
@@ -1403,6 +1436,12 @@ export const buildChatSystemPromptParts = async ({
 
     const appendedUntrusted = [
       browserExtensionPromptLine(browserExtension),
+      yield* Result.await(
+        buildSiteNotesSection(promptTarget, browserExtension, safeDb, {
+          organizationId,
+          userId,
+        }),
+      ),
       decisionSection.prompt,
       statuteSection,
       externalSection,

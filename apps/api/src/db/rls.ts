@@ -1412,6 +1412,46 @@ export const chatBrowserSiteGrantPolicies = () => [
   }),
 ];
 
+// Research notes about a website are the member's own in the active org, like
+// their website approvals. Unlike an approval a note is edited in place: a
+// confirmation moves its time and a replacement rewrites its text. The owner
+// role reaches every row for member offboarding.
+const chatBrowserSiteNoteCheck = sql`(
+  ${organizationCheck} AND ${userCheck}
+)`;
+
+const chatBrowserSiteNoteOwnerCheck = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_browser_site_notes'::regclass)`;
+
+export const chatBrowserSiteNotePolicies = () => [
+  p.pgPolicy("chat_browser_site_note_owner", {
+    for: "all",
+    to: "public",
+    using: chatBrowserSiteNoteOwnerCheck,
+    withCheck: chatBrowserSiteNoteOwnerCheck,
+  }),
+  p.pgPolicy("chat_browser_site_note_select", {
+    for: "select",
+    to: stella,
+    using: chatBrowserSiteNoteCheck,
+  }),
+  p.pgPolicy("chat_browser_site_note_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: chatBrowserSiteNoteCheck,
+  }),
+  p.pgPolicy("chat_browser_site_note_update", {
+    for: "update",
+    to: stella,
+    using: chatBrowserSiteNoteCheck,
+    withCheck: chatBrowserSiteNoteCheck,
+  }),
+  p.pgPolicy("chat_browser_site_note_delete", {
+    for: "delete",
+    to: stella,
+    using: chatBrowserSiteNoteCheck,
+  }),
+];
+
 const workspaceViewTemplateCheck = sql`(
   ${organizationCheck} AND ${userCheck}
 )`;

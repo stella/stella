@@ -189,6 +189,16 @@ export const NATIVE_CHAT_TOOL_DELEGATIONS = {
     reason:
       "The memories create handler is internal to assistant chat, absent from the capability catalog; persistExplicitMemory owns persistence.",
   },
+  read_site_notes: {
+    type: "waiver",
+    reason:
+      "Reads the member's own website notes through the store the stella MCP tool and Settings share; no capability writes them.",
+  },
+  save_site_notes: {
+    type: "waiver",
+    reason:
+      "The agent's website notes have no REST create route; the shared site-notes store owns persistence and audit for chat and the stella MCP tool alike.",
+  },
   save_skill_package: { type: "capability", delegatesTo: "skills.create" },
   "search-chat-history": {
     type: "waiver",

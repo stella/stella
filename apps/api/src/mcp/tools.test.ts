@@ -1962,6 +1962,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "list_clauses",
       "list_playbooks",
       "list_reader_annotations",
+      "read_site_notes",
       "list_time_entries",
       "resolve_rate",
       "list_invoices",
@@ -13918,6 +13919,88 @@ describe("OpenAI-compatible MCP tools", () => {
  * that path still cannot silently swallow a typo. Exercised against fabricated
  * schemas, which is the case the registry itself cannot produce.
  */
+describe("research website note tools", () => {
+  const note = {
+    id: toSafeId<"chatBrowserSiteNote">("01990000-0000-7000-8000-0000000000a1"),
+    kind: "works" as const,
+    step: "search form",
+    text: "The advanced form filters by court and date.",
+    confirmedAt: "2026-11-25T10:00:00.000Z",
+  };
+
+  test("read_site_notes answers one website's notes by its origin", async () => {
+    const read = mock(async () => Result.ok([note]));
+    const result = await handleMcpToolCall({
+      args: { url: "https://research.example.org/search?q=1" },
+      context: createContext({
+        testDependencies: { readBrowserSiteNotes: read },
+      }),
+      toolName: "read_site_notes",
+    });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toEqual({
+      origin: "https://research.example.org",
+      notes: [note],
+    });
+    expect(read).toHaveBeenCalledWith(
+      expect.objectContaining({ origin: "https://research.example.org" }),
+    );
+  });
+
+  test("save_site_notes answers the website's notes and each refused change", async () => {
+    const output = {
+      origin: "https://research.example.org",
+      notes: [note],
+      issues: [
+        {
+          index: 1,
+          code: "site_note_email" as const,
+          reason: "A site note cannot name an e-mail address.",
+        },
+      ],
+      pruned: [],
+    };
+    const result = await handleMcpToolCall({
+      args: {
+        url: "https://research.example.org/search",
+        changes: [
+          {
+            type: "add",
+            kind: "works",
+            step: "search form",
+            text: "The advanced form filters by court and date.",
+          },
+          {
+            type: "add",
+            kind: "works",
+            step: "contact",
+            text: "Write to helpdesk@example.org.",
+          },
+        ],
+      },
+      context: createContext({
+        testDependencies: {
+          saveBrowserSiteNotes: async () =>
+            Result.ok({ type: "saved" as const, output }),
+        },
+      }),
+      toolName: "save_site_notes",
+    });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toEqual(output);
+  });
+
+  test("an address that is not HTTPS is a validation error naming the fix", async () => {
+    const result = await handleMcpToolCall({
+      args: { url: "http://research.example.org/" },
+      context: createContext(),
+      toolName: "read_site_notes",
+    });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain("validation_error");
+  });
+});
+
 describe("undeclared-argument backstop", () => {
   const fakeToolSchema = {
     type: "object",

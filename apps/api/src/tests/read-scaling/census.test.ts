@@ -24,6 +24,7 @@ import {
 import { chatActiveRunsScalingScenario } from "./chat-active-runs";
 import { chatBackgroundTasksScalingScenario } from "./chat-background-tasks";
 import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
+import { browserSiteNotesScalingScenario } from "./chat-browser-site-notes";
 import { chatLimitReminderScalingScenario } from "./chat-limit-reminder";
 import { chatLocalFilesUndoScalingScenario } from "./chat-local-files-undo";
 import { chatLocalRunStepContentScalingScenario } from "./chat-local-run-step-content";
@@ -156,6 +157,7 @@ const measuredApiScenarios = [
   chatQueueReadScalingScenario,
   chatQueuedMessageReadScalingScenario,
   browserSiteGrantsScalingScenario,
+  browserSiteNotesScalingScenario,
   conflictCheckListScalingScenario,
   conflictCheckReadScalingScenario,
   chatMcpAppBundleScalingScenario,

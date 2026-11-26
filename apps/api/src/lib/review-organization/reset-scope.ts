@@ -156,6 +156,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "chat_secrets",
   "chat_threads",
   "chat_browser_site_grants",
+  "chat_browser_site_notes",
   "chat_limit_reminders",
   "chat_tool_grants",
   "chat_turns",
@@ -271,9 +272,14 @@ export const REVIEW_RESET_SHARED_STATEMENTS: readonly (readonly (typeof REVIEW_R
       "desktop_runners",
     ],
     // The member's own chat settings: standing approvals for websites and
-    // for tools, and usage limit reminders, all keyed on the same member and
-    // organization.
-    ["chat_browser_site_grants", "chat_limit_reminders", "chat_tool_grants"],
+    // for tools, the agent's notes about websites, and usage limit
+    // reminders, all keyed on the same member and organization.
+    [
+      "chat_browser_site_grants",
+      "chat_browser_site_notes",
+      "chat_limit_reminders",
+      "chat_tool_grants",
+    ],
     // A chat's command receipts, run logs and queue: rows of the
     // organization's chats that the owner removes directly, in one statement.
     [

@@ -48,6 +48,8 @@ export type AppOnlyWriteId =
   | "case-law.citations.check"
   | "chat.browser-site-grants.create"
   | "chat.browser-site-grants.delete"
+  | "chat.browser-site-notes.delete"
+  | "chat.browser-site-notes.sites.delete"
   | "chat.local-runners.folder-approval.update"
   | "chat.mcp-apps.call"
   | "chat.queue.create"

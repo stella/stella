@@ -21,6 +21,7 @@ import {
   BILLING_STATUS,
   billingDraftUserSettings,
   chatBrowserSiteGrants,
+  chatBrowserSiteNotes,
   chatLimitReminders,
   chatToolGrants,
   contacts,
@@ -1652,12 +1653,13 @@ const clearMemberConnectorAuthorization = async ({
         eq(outboundActions.status, "pending"),
       ),
     );
-  // The member's own chat settings: tool grants, limit reminders and browser
-  // site approvals.
+  // The member's own chat settings: tool grants, limit reminders, browser
+  // site approvals and the agent's notes about websites.
   for (const table of [
     chatToolGrants,
     chatLimitReminders,
     chatBrowserSiteGrants,
+    chatBrowserSiteNotes,
   ] as const) {
     await tx
       .delete(table)
@@ -1943,6 +1945,7 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS: readonly (readonly [
   [chatToolGrants.userId, "cleared"],
   [chatLimitReminders.userId, "cleared"],
   [chatBrowserSiteGrants.userId, "cleared"],
+  [chatBrowserSiteNotes.userId, "cleared"],
   [invitation.inviterId, "cleared"],
   [correspondence.assigneeId, "cleared"],
   // Revoked by `removeOrganizationMemberWithAuthArtifacts`.
