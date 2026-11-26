@@ -8,7 +8,7 @@ import { panic, Result, TaggedError } from "better-result";
  *   bun run src/scripts/corpus-generation.ts serve --family case_law --generation case_law_v10 [--replacing case_law_v7 --actor <id> --reason <text> --apply]
  *   bun run src/scripts/corpus-generation.ts parity --family case_law --generation case_law_v10 [--exempt-minutes 20] [--coverage-pages 2000] [--coverage-from <entity|start>] [--list]
  *   bun run src/scripts/corpus-generation.ts seed --family case_law --generation case_law_v10 [--pages 1000]
- *   bun run src/scripts/corpus-generation.ts prove --family case_law --generation case_law_v10 [--hours 11] [--until-current] [--concurrency 4]
+ *   bun run src/scripts/corpus-generation.ts prove --family case_law --generation case_law_v10 [--hours 11] [--until-current] [--only-requested] [--concurrency 4]
  *   bun run src/scripts/corpus-generation.ts retire --family case_law --generation case_law_v8 [--defer-cleanup] [--actor <id> --reason <text> --apply]
  *
  * `serve` runs the guarded flip (`corpus-index-generation-flip.ts`), the one
@@ -43,9 +43,12 @@ import { panic, Result, TaggedError } from "better-result";
  * `prove` keeps the route proofs a flip reads current
  * (`corpus-index-route-proof-runner.ts`): it walks every route of the named
  * generation, the serving one and the one the latest flip demoted (while it
- * is building), one census page at a time under the database-load brake,
- * until its hours are spent (or, with `--until-current`, until every route is
- * current). It takes no maintenance lane: it writes route proofs and the
+ * is building), or with `--only-requested` the named generation's alone, one
+ * census page at a time under the database-load brake, until its hours are
+ * spent. With `--until-current` it walks only the routes whose proof is not
+ * current (on the database clock, as the flip judges it), walking again any
+ * proof revoked or expired meanwhile, and stops once every route is current.
+ * It takes no maintenance lane: it writes route proofs and the
  * projection's own drift repairs, never canonical rows, and holding the lane
  * for hours would starve the replay ticks. It never runs inside a flip: each
  * of its transactions joins the projection mutation fence the flip holds
@@ -211,7 +214,9 @@ Commands:
   prove                  Keep the route proofs a flip reads current: walk
                          every route of the generation, the serving one and
                          the one the latest flip demoted (while building),
-                         page by page, until the hours are spent. Resumable.
+                         or only the generation's (--only-requested), page
+                         by page, until the hours are spent or, with
+                         --until-current, every route is current. Resumable.
                          Stop it before a flip.
   retire                 Retire a building generation for good: no writer
                          projects it again, its engine indexes and its
@@ -263,8 +268,12 @@ Options (seed):
 
 Options (prove):
   --hours <n>            Hours to walk (default and most ${String(PROVE_MAX_HOURS)}).
-  --until-current        Stop as soon as every route of every proven
-                         generation is current.
+  --until-current        Walk only the routes whose proof is not current
+                         (again once one is revoked or expires), and stop as
+                         soon as every route of every proven generation is
+                         current.
+  --only-requested       Prove the named generation alone: not the serving
+                         one, nor the one the latest flip demoted.
   --concurrency <n>      Routes walked at once (default ${String(PROVE_DEFAULT_CONCURRENCY)}, at most ${String(PROVE_MAX_CONCURRENCY)}).
 
 Exit codes (serve): 0 flipped (or, dry run, every check passed), 3 parity
@@ -392,6 +401,7 @@ type CorpusGenerationCommand =
       target: DeclaredTarget;
       hours: number;
       untilCurrent: boolean;
+      onlyRequested: boolean;
       concurrency: number;
     }
   | {
@@ -485,6 +495,7 @@ type CommandValues = {
   "defer-cleanup"?: boolean | undefined;
   hours?: string | undefined;
   "until-current"?: boolean | undefined;
+  "only-requested"?: boolean | undefined;
   concurrency?: string | undefined;
 };
 
@@ -500,8 +511,9 @@ const proveOptionRefusal = (
   }
   return values.hours !== undefined ||
     values["until-current"] === true ||
+    values["only-requested"] === true ||
     values.concurrency !== undefined
-    ? "--hours, --until-current and --concurrency belong to prove."
+    ? "--hours, --until-current, --only-requested and --concurrency belong to prove."
     : null;
 };
 
@@ -682,6 +694,7 @@ const parseCorpusGenerationCommand = (
           "defer-cleanup": { type: "boolean" },
           hours: { type: "string" },
           "until-current": { type: "boolean" },
+          "only-requested": { type: "boolean" },
           concurrency: { type: "string" },
         },
       }),
@@ -815,6 +828,7 @@ const parseCorpusGenerationCommand = (
         target: target.value,
         hours,
         untilCurrent: values["until-current"] === true,
+        onlyRequested: values["only-requested"] === true,
         concurrency,
       });
     }
@@ -1897,7 +1911,7 @@ const proveRunExit = (
     case "nothing_to_walk":
       return {
         code: PROVE_EXIT.setAside,
-        line: "every route is set aside (see above); nothing was left to walk",
+        line: "every route not current is set aside (see above); nothing was left to walk",
       };
     case "braked":
       return {
@@ -1944,8 +1958,9 @@ const describeProofs = (
   });
 
 /**
- * Walk the route proofs of the generation, the serving one and the kept one
- * until the hours are spent (`runCorpusIndexRouteProofs`). Every page records
+ * Walk the route proofs of the generation, and unless `--only-requested` the
+ * serving one and the kept one, until the hours are spent or, with
+ * `--until-current`, every route is current (`runCorpusIndexRouteProofs`). Every page records
  * its pass in the database, so a stopped or crashed run resumes there.
  */
 const runProve = async (
@@ -1954,11 +1969,12 @@ const runProve = async (
     target,
     hours,
     untilCurrent,
+    onlyRequested,
     concurrency,
   }: Extract<CorpusGenerationCommand, { type: "prove" }>,
 ): Promise<Result<number, CorpusGenerationRefusal>> => {
   write(
-    `prove ${target.family}/${target.generation} (at most ${String(hours)} h${untilCurrent ? ", until every route is current" : ""})`,
+    `prove ${target.family}/${target.generation} (at most ${String(hours)} h${untilCurrent ? ", until every route is current" : ""}${onlyRequested ? ", this generation only" : ""})`,
   );
   write(declaredLine(target));
   const budgetMs = hours * 3_600_000;
@@ -1980,6 +1996,7 @@ const runProve = async (
       pace: brake.pace,
       target,
       budget: { endsAt, pages: PROVE_MAX_PAGES },
+      onlyRequested,
       untilCurrent,
       concurrency,
       fencePatienceMs: PROVE_PATIENCE_MS,
