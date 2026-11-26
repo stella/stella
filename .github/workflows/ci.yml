@@ -6323,6 +6323,19 @@ jobs:
           CHANNEL: prod
         run: bun scripts/desktop-release-step.ts stamp
 
+      - name: Cache Rust dependencies and build artifacts
+        if: github.event_name == 'merge_group' || github.event_name == 'pull_request' || steps.receipt.outputs.reused != 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+            ~/.cargo/git/db
+            apps/desktop/src-tauri/target
+          key: ${{ runner.os }}-desktop-rust-${{ github.job }}-${{ matrix.target }}-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-desktop-rust-${{ github.job }}-${{ matrix.target }}-
+
       # The build action compiles offline; the locked crates download here,
       # retried as a unit. Both targets: an ARM64 build's scripts run on x64.
       - name: Fetch Rust dependencies
