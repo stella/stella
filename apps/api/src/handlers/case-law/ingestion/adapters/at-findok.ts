@@ -1,3 +1,4 @@
+// parser-output-unchanged: [at-findok] migrated publisher transport to readAtFindok/readPublisher; served response parsing is unchanged.
 // parser-output-unchanged: source-fields-at: Inventory targets describe already retained source values without changing parsed decisions.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.

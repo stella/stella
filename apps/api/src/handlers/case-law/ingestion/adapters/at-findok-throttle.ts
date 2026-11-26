@@ -1,3 +1,4 @@
+// parser-output-unchanged: [at-findok] migrated throttle wrapper to readPublisher; served response parsing is unchanged.
 import { panic } from "better-result";
 
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";

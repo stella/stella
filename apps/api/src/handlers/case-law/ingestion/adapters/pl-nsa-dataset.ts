@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-nsa] migrated shard range and redirect transport to readPublisher; served response parsing is unchanged.
 import { panic, Result } from "better-result";
 import type { AsyncBuffer, FileMetaData } from "hyparquet";
 // parser-output-unchanged: Transport failures retain their typed cause; successfully read dataset records parse unchanged.

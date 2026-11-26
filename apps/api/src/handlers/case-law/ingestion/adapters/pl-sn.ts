@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-sn] migrated proxy request transport to readPublisher; served response parsing is unchanged.
 // parser-output-unchanged: Bounded publisher envelope reads preserve valid response text, parsed decisions and cursor values.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
