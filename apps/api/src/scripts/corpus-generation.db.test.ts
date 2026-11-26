@@ -46,6 +46,7 @@ import {
   corpusIndexManifestDigest,
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS } from "@/api/lib/legal-search/corpus-index-route-proof-contract";
 import {
   CorpusGenerationLaneBusyError,
   runCorpusGenerationCommand,
@@ -727,7 +728,12 @@ describe("corpus generation operator command", () => {
       ["serve", "--family", "case_law"],
       caseLaw("serve", "case_law_v7", "--limit", "1"),
       caseLaw("serve", "case_law_v7", "--list"),
-      caseLaw("serve", "case_law_v7", "--max-proof-age-hours", "25"),
+      caseLaw(
+        "serve",
+        "case_law_v7",
+        "--max-proof-age-hours",
+        String(CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS + 1),
+      ),
       caseLaw("parity", "case_law_v10", "--replacing", "case_law_v7"),
       caseLaw("parity", "case_law_v10", "--apply"),
       caseLaw("parity", "case_law_v10", "--exempt-minutes", "1441"),

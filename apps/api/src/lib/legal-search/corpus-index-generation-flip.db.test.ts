@@ -47,6 +47,7 @@ import {
   lockActiveCorpusProjectionSourceByIdTx,
   synchronizeLockedCaseLawProjectionBatchTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS } from "@/api/lib/legal-search/corpus-index-route-proof-contract";
 import { readCorpusIndexRouteSeedingsTx } from "@/api/lib/legal-search/corpus-index-route-seeding";
 import { isPgError } from "@/api/lib/pg-error";
 import {
@@ -152,7 +153,7 @@ const request = (
   // A fixture's changes are all younger than any watermark: none is lag.
   exemptMinutes: 0,
   coverage: { pageSize: 2, pageBudget: 100 },
-  maxProofAgeHours: 24,
+  maxProofAgeHours: CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS,
   ...overrides,
 });
 
